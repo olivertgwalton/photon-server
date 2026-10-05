@@ -9,10 +9,12 @@ const (
 	TaskSweepJobs     TaskKey = "sweep_jobs"
 	// TaskBackupDatabase dumps the database for pg_restore.
 	TaskBackupDatabase TaskKey = "backup_database"
+	// TaskRefreshMetadata matches again the titles whose libraries say it is time.
+	TaskRefreshMetadata TaskKey = "refresh_metadata"
 )
 
 func TaskKeys() []TaskKey {
-	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase}
+	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata}
 }
 
 type TaskResult string

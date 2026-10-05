@@ -53,4 +53,6 @@ type Library struct {
 	// RemoteExtras are the kinds of video it keeps links to from its providers.
 	RemoteExtras []ExtraKind
 	Monitor      Monitor
+	// RefreshDays is how often its titles are matched again, in days; zero is never.
+	RefreshDays int
 }

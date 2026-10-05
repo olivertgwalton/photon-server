@@ -91,3 +91,22 @@ func backupTask(d backup.Dumper, logger *slog.Logger) task.Task {
 		},
 	}
 }
+
+// refreshAt is when the titles due a fresh match are queued: the small hours, as Plex's scheduled
+// maintenance runs.
+const refreshAt = 3 * time.Hour
+
+// refreshTask queues a match of every title its library says is due one.
+func refreshTask(st *store.Store, logger *slog.Logger) task.Task {
+	return task.Task{
+		Key:      domain.TaskRefreshMetadata,
+		Triggers: []task.Trigger{{Kind: task.TriggerDaily, At: refreshAt}},
+		Run: func(ctx context.Context) error {
+			n, err := st.RefreshStale(ctx)
+			if n > 0 {
+				logger.InfoContext(ctx, "titles queued to be matched again", slog.Int64("titles", n))
+			}
+			return err
+		},
+	}
+}

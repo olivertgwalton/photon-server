@@ -43,12 +43,13 @@ type adminLibraryJSON struct {
 	Sources      []domain.FieldSource `json:"sources"`
 	RemoteExtras []domain.ExtraKind   `json:"remote_extras"`
 	Monitor      domain.Monitor       `json:"monitor"`
+	RefreshDays  int                  `json:"refresh_days"`
 }
 
 func adminLibrary(l domain.Library) adminLibraryJSON {
 	return adminLibraryJSON{
 		ID: l.ID, Name: l.Name, Kind: l.Kind, Root: l.Root, Sources: nonNil(l.Sources),
-		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor,
+		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
 	}
 }
 
@@ -123,11 +124,16 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 		Sources      []domain.FieldSource `json:"sources"`
 		RemoteExtras []domain.ExtraKind   `json:"remote_extras"`
 		Monitor      domain.Monitor       `json:"monitor"`
+		RefreshDays  *int                 `json:"refresh_days"`
 	}
 	if !a.decode(w, r, &req) {
 		return
 	}
-	change := store.LibraryChange{Name: req.Name, Sources: req.Sources, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor}
+	change := store.LibraryChange{Name: req.Name, Sources: req.Sources, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays}
+	if d := req.RefreshDays; d != nil && (*d < 0 || *d > 365) {
+		writeProblem(w, a.logger, codeInvalidBody, "refresh_days is from 0, never, to 365")
+		return
+	}
 	if err := validChange(change); err != nil {
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())
 		return

@@ -52,6 +52,7 @@ func newItem(db *gorm.DB, opts ...gen.DOOption) item {
 	_item.Studios = field.NewField(tableName, "studios")
 	_item.ReleasedAsc = field.NewTime(tableName, "released_asc")
 	_item.ReleasedDesc = field.NewTime(tableName, "released_desc")
+	_item.IdentifiedAt = field.NewTime(tableName, "identified_at")
 
 	_item.fillFieldMap()
 
@@ -86,6 +87,7 @@ type item struct {
 	Studios       field.Field
 	ReleasedAsc   field.Time
 	ReleasedDesc  field.Time
+	IdentifiedAt  field.Time
 
 	fieldMap map[string]field.Expr
 }
@@ -126,6 +128,7 @@ func (i *item) updateTableName(table string) *item {
 	i.Studios = field.NewField(table, "studios")
 	i.ReleasedAsc = field.NewTime(table, "released_asc")
 	i.ReleasedDesc = field.NewTime(table, "released_desc")
+	i.IdentifiedAt = field.NewTime(table, "identified_at")
 
 	i.fillFieldMap()
 
@@ -150,7 +153,7 @@ func (i *item) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (i *item) fillFieldMap() {
-	i.fieldMap = make(map[string]field.Expr, 24)
+	i.fieldMap = make(map[string]field.Expr, 25)
 	i.fieldMap["id"] = i.ID
 	i.fieldMap["library_id"] = i.LibraryID
 	i.fieldMap["kind"] = i.Kind
@@ -175,6 +178,7 @@ func (i *item) fillFieldMap() {
 	i.fieldMap["studios"] = i.Studios
 	i.fieldMap["released_asc"] = i.ReleasedAsc
 	i.fieldMap["released_desc"] = i.ReleasedDesc
+	i.fieldMap["identified_at"] = i.IdentifiedAt
 }
 
 func (i item) clone(db *gorm.DB) item {

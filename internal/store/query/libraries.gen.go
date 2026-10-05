@@ -33,6 +33,7 @@ func newLibrary(db *gorm.DB, opts ...gen.DOOption) library {
 	_library.Kind = field.NewString(tableName, "kind")
 	_library.Root = field.NewString(tableName, "root")
 	_library.Monitor = field.NewString(tableName, "monitor")
+	_library.RefreshDays = field.NewInt16(tableName, "refresh_days")
 	_library.CreatedAt = field.NewTime(tableName, "created_at")
 
 	_library.fillFieldMap()
@@ -43,13 +44,14 @@ func newLibrary(db *gorm.DB, opts ...gen.DOOption) library {
 type library struct {
 	libraryDo libraryDo
 
-	ALL       field.Asterisk
-	ID        field.Field
-	Name      field.String
-	Kind      field.String
-	Root      field.String
-	Monitor   field.String
-	CreatedAt field.Time
+	ALL         field.Asterisk
+	ID          field.Field
+	Name        field.String
+	Kind        field.String
+	Root        field.String
+	Monitor     field.String
+	RefreshDays field.Int16
+	CreatedAt   field.Time
 
 	fieldMap map[string]field.Expr
 }
@@ -71,6 +73,7 @@ func (l *library) updateTableName(table string) *library {
 	l.Kind = field.NewString(table, "kind")
 	l.Root = field.NewString(table, "root")
 	l.Monitor = field.NewString(table, "monitor")
+	l.RefreshDays = field.NewInt16(table, "refresh_days")
 	l.CreatedAt = field.NewTime(table, "created_at")
 
 	l.fillFieldMap()
@@ -96,12 +99,13 @@ func (l *library) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (l *library) fillFieldMap() {
-	l.fieldMap = make(map[string]field.Expr, 6)
+	l.fieldMap = make(map[string]field.Expr, 7)
 	l.fieldMap["id"] = l.ID
 	l.fieldMap["name"] = l.Name
 	l.fieldMap["kind"] = l.Kind
 	l.fieldMap["root"] = l.Root
 	l.fieldMap["monitor"] = l.Monitor
+	l.fieldMap["refresh_days"] = l.RefreshDays
 	l.fieldMap["created_at"] = l.CreatedAt
 }
 

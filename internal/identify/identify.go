@@ -38,7 +38,7 @@ func Handler(st *store.Store, providers *provider.Registry, log *slog.Logger) jo
 				rate(ctx, st, r, id, sub, log)
 			}
 		}
-		return nil
+		return st.Identified(ctx, id)
 	}
 }
 
