@@ -47,6 +47,20 @@ func (fakeAuth) ApprovePairing(context.Context, domain.Session, string) (auth.De
 	return auth.Device{}, auth.ErrPairingNotFound
 }
 
+func (fakeAuth) SwitchProfile(_ context.Context, _ domain.Session, target uuid.UUID, secret string) (domain.Profile, error) {
+	if target == oliver.ID && secret != "correct horse" {
+		return domain.Profile{}, auth.ErrWrongSecret
+	}
+	return oliver, nil
+}
+
+func (fakeAuth) SetPIN(_ context.Context, _ uuid.UUID, pin string) error {
+	if pin != "" && len(pin) < 4 {
+		return auth.ErrPINNotDigits
+	}
+	return nil
+}
+
 func (fakeAuth) PollPairing(_ context.Context, deviceCode string) (kv.PairingState, string, domain.Profile, error) {
 	if deviceCode == "BCDFGHJK.secret" {
 		return kv.PairingPending, "", domain.Profile{}, nil
@@ -140,5 +154,19 @@ func TestPollingAnswersInRFC8628Terms(t *testing.T) {
 		if err := json.NewDecoder(rec.Body).Decode(&p); err != nil || rec.Code != http.StatusBadRequest || p.Code != want {
 			t.Errorf("poll %q: %d %q (err %v), want 400 %q", code, rec.Code, p.Code, err, want)
 		}
+	}
+}
+
+func TestSwitchingNeedsTheLocksSecret(t *testing.T) {
+	body := `{"profile_id":"` + oliver.ID.String() + `","secret":"guess"}`
+	if rec := serve(t, http.MethodPut, "/api/v1/session/profile", goodToken, body); rec.Code != http.StatusForbidden {
+		t.Errorf("a wrong secret: status %d, want 403", rec.Code)
+	}
+	body = `{"profile_id":"` + oliver.ID.String() + `","secret":"correct horse"}`
+	if rec := serve(t, http.MethodPut, "/api/v1/session/profile", goodToken, body); rec.Code != http.StatusOK {
+		t.Errorf("the right secret: status %d, want 200", rec.Code)
+	}
+	if rec := serve(t, http.MethodPut, "/api/v1/me/pin", goodToken, `{"pin":"12"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("a two-digit PIN: status %d, want 400", rec.Code)
 	}
 }
