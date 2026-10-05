@@ -20,11 +20,18 @@ func NewSigner(key []byte) Signer { return Signer{key: key} }
 
 // Sign answers path with its expiry and signature as query parameters.
 func (s Signer) Sign(path string, until time.Time) string {
-	exp := strconv.FormatInt(until.Unix(), 10)
-	return path + "?" + url.Values{"exp": {exp}, "sig": {s.mac(path, exp)}}.Encode()
+	exp, sig := s.Token(path, until)
+	return path + "?" + url.Values{"exp": {exp}, "sig": {sig}}.Encode()
 }
 
-// Valid reports whether sig signs path until exp, and exp is still to come.
+// Token signs a subject until an expiry, for an address that carries them in its path: an HLS
+// playlist's segments are addressed relative to it, so all of them are signed with it.
+func (s Signer) Token(subject string, until time.Time) (exp, sig string) {
+	exp = strconv.FormatInt(until.Unix(), 10)
+	return exp, s.mac(subject, exp)
+}
+
+// Valid reports whether sig signs path (or a Token's subject) until exp, and exp is still to come.
 func (s Signer) Valid(path, exp, sig string, now time.Time) bool {
 	until, err := strconv.ParseInt(exp, 10, 64)
 	if err != nil || now.Unix() > until {

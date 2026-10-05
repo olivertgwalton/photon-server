@@ -30,10 +30,13 @@ type progressStore interface {
 type Sessions struct {
 	live  sessionStore
 	saved progressStore
+	ended func(uuid.UUID)
 }
 
-func NewSessions(live sessionStore, saved progressStore) *Sessions {
-	return &Sessions{live: live, saved: saved}
+// NewSessions keeps playbacks in live and places in saved, and calls ended as a playback stops,
+// to let go of what it held.
+func NewSessions(live sessionStore, saved progressStore, ended func(uuid.UUID)) *Sessions {
+	return &Sessions{live: live, saved: saved, ended: ended}
 }
 
 // Start opens a playback of a copy of a title.
@@ -70,6 +73,7 @@ func (s *Sessions) Stop(ctx context.Context, profile, id uuid.UUID, position tim
 	if err != nil {
 		return "", err
 	}
+	s.ended(id)
 	return reach, s.live.EndPlayback(ctx, id)
 }
 

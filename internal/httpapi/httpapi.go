@@ -32,6 +32,8 @@ const (
 	// signedAddress is a route reached by an address the server signed, for players that send
 	// no headers of their own.
 	signedAddress access = "signed_address"
+	// signedPath is an HLS route whose path carries its playback's signature.
+	signedPath access = "signed_path"
 )
 
 type route struct {
@@ -73,6 +75,8 @@ type Services struct {
 	Watching  watching
 	Playing   playing
 	Playbacks playbacks
+	Remuxing  remuxing
+	HLS       hlsFiles
 	// Signer signs the addresses titles play from.
 	Signer  playback.Signer
 	Artwork pictureCache
@@ -98,6 +102,8 @@ func New(logger *slog.Logger, info Info, svc Services) *API {
 			h = a.requireSession(h)
 		case signedAddress:
 			h = a.requireSignature(h)
+		case signedPath:
+			h = a.requireSignedPath(h)
 		}
 		a.mux.Handle(r.pattern, h)
 	}
@@ -135,6 +141,7 @@ func (a *API) routes() []route {
 		{pattern: "POST /api/v1/titles/{id}/play", access: signedIn, handle: a.play},
 		{pattern: "POST /api/v1/playback/{id}/progress", access: signedIn, handle: a.playbackProgress},
 		{pattern: "POST /api/v1/playback/{id}/stop", access: signedIn, handle: a.playbackStop},
+		{pattern: "GET /api/v1/hls/{playback}/{exp}/{sig}/{file}", access: signedPath, handle: a.hlsFile},
 		{pattern: "GET /api/v1/parts/{id}/stream", access: signedAddress, query: []string{"exp", "sig"}, handle: a.partStream},
 		{pattern: "GET /api/v1/home", access: signedIn, query: []string{"limit"}, handle: a.home},
 		{pattern: "GET /api/v1/search", access: signedIn, query: []string{"q", "library", "limit"}, handle: a.search},

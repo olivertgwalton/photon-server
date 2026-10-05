@@ -20,6 +20,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
 	"github.com/olivertgwalton/photon-server/internal/identify"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
@@ -114,12 +115,17 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	pictureCache, err := artwork.Open(filepath.Join(cmp.Or(os.Getenv("PHOTON_CACHE_DIR"), filepath.Join(cacheDir, "photon-server")), "artwork"))
+	cacheRoot := cmp.Or(os.Getenv("PHOTON_CACHE_DIR"), filepath.Join(cacheDir, "photon-server"))
+	pictureCache, err := artwork.Open(filepath.Join(cacheRoot, "artwork"))
 	if err != nil {
 		return err
 	}
 	defer pictureCache.Close()
 	signingKey, err := st.SigningKey(ctx)
+	if err != nil {
+		return err
+	}
+	remuxer, err := hls.NewRemuxer(tools.FFmpeg.Path, filepath.Join(cacheRoot, "hls"), logger)
 	if err != nil {
 		return err
 	}
@@ -139,7 +145,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	srv := &http.Server{
 		Addr: cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st), Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Limits: cache, TrustedProxies: trusted,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Limits: cache, TrustedProxies: trusted,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -161,6 +167,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	var wg sync.WaitGroup
 	wg.Go(func() { scheduler.Run(background) })
 	wg.Go(func() { worker.Run(background) })
+	wg.Go(func() { sweepRemuxes(background, remuxer) })
 	wg.Go(func() {
 		if err := watcher.Run(background); err != nil {
 			logger.WarnContext(ctx, "libraries are scanned on schedule only", slog.Any("err", err))
@@ -201,5 +208,19 @@ func ready(st *store.Store, cache *kv.KV) func(context.Context) error {
 			errs = append(errs, fmt.Errorf("valkey: %w", err))
 		}
 		return errors.Join(errs...)
+	}
+}
+
+// sweepRemuxes ends the remuxes of players that went away without stopping.
+func sweepRemuxes(ctx context.Context, r *hls.Remuxer) {
+	t := time.NewTicker(30 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			r.Sweep()
+		}
 	}
 }

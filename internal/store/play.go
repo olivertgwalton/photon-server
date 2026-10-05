@@ -5,6 +5,7 @@ import (
 	"errors"
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
 	"gorm.io/gorm"
 
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -41,4 +42,14 @@ func (s *Store) Playable(ctx context.Context, item, version uuid.UUID) (uuid.UUI
 		out[n] = PlayPart{ID: uuid.UUID(pt.ID), OffsetMS: pt.OffsetMS, DurationMS: pt.DurationMS}
 	}
 	return uuid.UUID(row.ID), out, nil
+}
+
+// Keyframes answers a part's video keyframe times, or false where they have not been indexed yet.
+func (s *Store) Keyframes(ctx context.Context, part uuid.UUID) ([]int64, bool, error) {
+	var pts []int64
+	err := s.pool.QueryRow(ctx, `SELECT pts_ms FROM keyframes WHERE part_id = $1`, part.String()).Scan(&pts)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, nil
+	}
+	return pts, err == nil, err
 }
