@@ -43,7 +43,8 @@ type Report struct {
 	Skipped   int
 }
 
-func (s *Scanner) Scan(ctx context.Context, lib domain.Library) (Report, error) {
+// Scan reads a library's folders again, telling progress after each.
+func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(domain.ScanProgress)) (Report, error) {
 	root, err := os.OpenRoot(lib.Root)
 	if err != nil {
 		return Report{}, err
@@ -52,9 +53,14 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library) (Report, error) 
 
 	var report Report
 	var folders, present []string
+	// The root is known before it is read; each folder read makes its subfolders known.
+	told := domain.ScanProgress{Library: lib.ID, Phase: domain.ScanReading, Known: 1}
 	for folder, err := range library.Walk(root) {
+		told.Done++
+		told.Known += len(folder.Folders)
 		if err != nil {
 			s.log.WarnContext(ctx, "folder not read", slog.String("folder", folder.Path), slog.Any("err", err))
+			progress(told)
 			continue
 		}
 		report.Folders++
@@ -70,6 +76,7 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library) (Report, error) 
 		}
 		if bytes.Equal(known, folder.Fingerprint[:]) {
 			report.Unchanged++
+			progress(told)
 			continue
 		}
 		switch lib.Kind {
@@ -81,7 +88,11 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library) (Report, error) 
 		if err != nil {
 			return report, fmt.Errorf("%s: %w", folder.Path, err)
 		}
+		progress(told)
 	}
+	// A folder holding a .ignore file was known and never read.
+	told.Phase, told.Known = domain.ScanRemoving, told.Done
+	progress(told)
 	return report, s.store.FinishScan(ctx, lib.ID, folders, present)
 }
 

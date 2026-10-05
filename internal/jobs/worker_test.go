@@ -40,11 +40,11 @@ func (q *memoryQueue) CompleteJob(_ context.Context, id int64) error {
 	return nil
 }
 
-func (q *memoryQueue) FailJob(_ context.Context, job store.Job, _ error) error {
+func (q *memoryQueue) FailJob(_ context.Context, job store.Job, _ error) (bool, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.failed = append(q.failed, job.ID)
-	return nil
+	return false, nil
 }
 
 func (q *memoryQueue) ExtendLease(_ context.Context, _ int64, lease time.Duration) error {
@@ -53,6 +53,8 @@ func (q *memoryQueue) ExtendLease(_ context.Context, _ int64, lease time.Duratio
 	q.leaseUntil = time.Now().Add(lease)
 	return nil
 }
+
+func ignore(context.Context, domain.Event) {}
 
 func TestWorkerRunsJobsWithinItsSlots(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -75,7 +77,7 @@ func TestWorkerRunsJobsWithinItsSlots(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 3, map[domain.JobKind]Handler{domain.JobKeyframes: handler})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 3, map[domain.JobKind]Handler{domain.JobKeyframes: handler}, ignore)
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -98,7 +100,7 @@ func TestWorkerReportsFailures(t *testing.T) {
 		failing := func(context.Context, uuid.UUID) error { return errors.New("no video stream") }
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobKeyframes: failing})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobKeyframes: failing}, ignore)
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -129,7 +131,7 @@ func TestALongJobKeepsItsLease(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobKeyframes: long})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobKeyframes: long}, ignore)
 		go func() {
 			w.Run(ctx)
 			close(done)

@@ -90,8 +90,8 @@ func TestFailedJobsBackOffThenDie(t *testing.T) {
 		if err != nil || len(jobs) != 1 {
 			t.Fatalf("attempt %d: claimed %d (err %v)", attempt, len(jobs), err)
 		}
-		if err := s.FailJob(t.Context(), jobs[0], errors.New("unreadable")); err != nil {
-			t.Fatal(err)
+		if dead, err := s.FailJob(t.Context(), jobs[0], errors.New("unreadable")); err != nil || dead != (attempt == maxAttempts) {
+			t.Fatalf("attempt %d: dead %v, %v; want dead on the last", attempt, dead, err)
 		}
 		if again, _ := s.ClaimJobs(t.Context(), kinds, node, time.Minute, 1); len(again) != 0 {
 			t.Fatalf("attempt %d: a failed job was claimable before its backoff", attempt)
@@ -191,7 +191,7 @@ func TestAJobAskedForWhileRunningRunsAgain(t *testing.T) {
 	ask()
 	for job := claim(); len(job) > 0; job = claim() {
 		job[0].Attempts = maxAttempts
-		if err := s.FailJob(ctx, job[0], errors.New("tmdb is down")); err != nil {
+		if _, err := s.FailJob(ctx, job[0], errors.New("tmdb is down")); err != nil {
 			t.Fatal(err)
 		}
 	}

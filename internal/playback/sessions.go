@@ -32,13 +32,15 @@ type Sessions struct {
 	live  sessionStore
 	saved progressStore
 	ended func(uuid.UUID)
+	raise func(context.Context, domain.Event)
 	node  uuid.UUID
 }
 
 // NewSessions keeps playbacks in live and places in saved, and calls ended as a playback stops,
-// to let go of what it held. Each playback started is node's to serve.
-func NewSessions(live sessionStore, saved progressStore, ended func(uuid.UUID), node uuid.UUID) *Sessions {
-	return &Sessions{live: live, saved: saved, ended: ended, node: node}
+// to let go of what it held; raise says as one starts, pauses, resumes and stops. Each playback
+// started is node's to serve.
+func NewSessions(live sessionStore, saved progressStore, ended func(uuid.UUID), raise func(context.Context, domain.Event), node uuid.UUID) *Sessions {
+	return &Sessions{live: live, saved: saved, ended: ended, raise: raise, node: node}
 }
 
 // Start opens a playback of a copy of a title.
@@ -48,7 +50,11 @@ func (s *Sessions) Start(ctx context.Context, profile, item, version uuid.UUID, 
 		ID: uuid.NewV7(), Profile: profile, Item: item, Version: version, Method: method,
 		State: domain.StatePlaying, Started: now, Updated: now, Node: s.node,
 	}
-	return p, s.live.SavePlayback(ctx, p, sessionLife)
+	if err := s.live.SavePlayback(ctx, p, sessionLife); err != nil {
+		return p, err
+	}
+	s.raise(ctx, event(domain.EventPlaybackStarted, p))
+	return p, nil
 }
 
 // Progress records where a profile's playback has got to, and how far through the title that is.
@@ -61,8 +67,19 @@ func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position
 	if err != nil {
 		return "", err
 	}
+	was := p.State
 	p.Position, p.State, p.Updated = position, state, time.Now()
-	return reach, s.live.SavePlayback(ctx, p, sessionLife)
+	if err := s.live.SavePlayback(ctx, p, sessionLife); err != nil {
+		return "", err
+	}
+	switch {
+	case was == state:
+	case state == domain.StatePaused:
+		s.raise(ctx, event(domain.EventPlaybackPaused, p))
+	case state == domain.StatePlaying:
+		s.raise(ctx, event(domain.EventPlaybackResumed, p))
+	}
+	return reach, nil
 }
 
 // Stop ends a profile's playback where it stopped, and keeps it in the history.
@@ -79,7 +96,18 @@ func (s *Sessions) Stop(ctx context.Context, profile, id uuid.UUID, position tim
 		return "", err
 	}
 	s.ended(id)
-	return reach, s.live.EndPlayback(ctx, id)
+	if err := s.live.EndPlayback(ctx, id); err != nil {
+		return "", err
+	}
+	p.Position = position
+	s.raise(ctx, event(domain.EventPlaybackStopped, p))
+	return reach, nil
+}
+
+func event(kind domain.EventKind, p domain.Playback) domain.Event {
+	return domain.Event{Kind: kind, Profile: p.Profile, Item: p.Item, Details: map[string]any{
+		"playback_id": p.ID, "method": p.Method, "position_ms": p.Position.Milliseconds(),
+	}}
 }
 
 // Abandon ends a playback whose stream could not be opened, before any of it was watched.

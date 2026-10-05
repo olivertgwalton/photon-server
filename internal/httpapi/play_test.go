@@ -375,7 +375,7 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 	}
 	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
 	api := New(slog.New(slog.DiscardHandler), Info{}, Services{
-		Auth: fakeAuth{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer.Close, uuid.NewV7()),
+		Auth: fakeAuth{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer.Close, func(context.Context, domain.Event) {}, uuid.NewV7()),
 		Remuxing: remuxOpener{remuxer}, HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {

@@ -22,6 +22,19 @@ type Job struct {
 	Attempts int
 }
 
+// About is the title, season or library a job is about, where its subject is one; a part's
+// keyframes or previews and a download's conversion are neither.
+func (j Job) About() (item, library uuid.UUID) {
+	switch j.Kind {
+	case domain.JobIdentify, domain.JobMarkers:
+		return j.Subject, uuid.UUID{}
+	case domain.JobScanLibrary:
+		return uuid.UUID{}, j.Subject
+	case domain.JobKeyframes, domain.JobPreviews, domain.JobConvert:
+	}
+	return uuid.UUID{}, uuid.UUID{}
+}
+
 // enqueue adds a job inside the transaction whose write made it necessary, so the job and its
 // cause commit together. A job already queued for the subject stands; one running will run again
 // once it ends, since it may have read the subject before this write; a dead one gets a fresh
@@ -90,15 +103,16 @@ func (s *Store) CompleteJob(ctx context.Context, id int64) error {
 }
 
 // FailJob queues a job again after a backoff that doubles with each attempt, up to an hour, or
-// marks it dead once it has had maxAttempts and its subject has not changed since it was claimed.
-func (s *Store) FailJob(ctx context.Context, job Job, runErr error) error {
+// marks it dead once it has had maxAttempts and its subject has not changed since it was claimed,
+// answering whether it did.
+func (s *Store) FailJob(ctx context.Context, job Job, runErr error) (bool, error) {
 	j := s.q.Job
 	q := j.WithContext(ctx).Where(j.ID.Eq(job.ID))
 	if job.Attempts >= maxAttempts {
 		dead, err := j.WithContext(ctx).Where(j.ID.Eq(job.ID), j.State.Eq(string(domain.JobRunning))).
 			UpdateSimple(j.State.Value(string(domain.JobDead)), j.LeaseUntil.Null(), j.LastError.Value(runErr.Error()))
 		if err != nil || dead.RowsAffected > 0 {
-			return err
+			return err == nil, err
 		}
 	}
 	backoff := min(time.Minute<<job.Attempts, time.Hour)
@@ -106,7 +120,21 @@ func (s *Store) FailJob(ctx context.Context, job Job, runErr error) error {
 		j.State.Value(string(domain.JobQueued)), j.LeaseUntil.Null(), j.NodeID.Null(),
 		j.RunAfter.Value(time.Now().Add(backoff)), j.LastError.Value(runErr.Error()),
 	)
-	return err
+	return false, err
+}
+
+// RunningJobs answers the jobs being run now, on every node, the oldest first.
+func (s *Store) RunningJobs(ctx context.Context) ([]Job, error) {
+	j := s.q.Job
+	rows, err := j.WithContext(ctx).Where(j.State.In(string(domain.JobRunning), string(domain.JobRerun))).Order(j.ID).Find()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Job, len(rows))
+	for i, r := range rows {
+		out[i] = Job{ID: r.ID, Kind: r.Kind, Subject: uuid.UUID(r.Subject), Attempts: int(r.Attempts)}
+	}
+	return out, nil
 }
 
 // ExtendLease keeps a running job's lease while its worker is at it.

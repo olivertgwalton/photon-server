@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"slices"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -34,7 +35,7 @@ func scanLibraries(ctx context.Context, logger *slog.Logger, databaseURL string,
 			continue
 		}
 		matched++
-		r, err := scanner.Scan(ctx, lib)
+		r, err := scanner.Scan(ctx, lib, func(domain.ScanProgress) {})
 		if err != nil {
 			return fmt.Errorf("%s: %w", lib.Name, err)
 		}
