@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -28,14 +29,27 @@ func (fakeCatalogue) Wall(_ context.Context, lib uuid.UUID, p store.WallPage) ([
 		return nil, 0, store.ErrNotFound
 	}
 	title := string(p.Sort) + " " + string(p.Order) + " " + strconv.Itoa(p.Offset) + "+" + strconv.Itoa(p.Limit)
+	if f := p.Filter; f.MinRating > 0 || len(f.Genres) > 0 || len(f.Marks) > 0 || len(f.Years) > 0 {
+		title += fmt.Sprintf(" %v %v %v %s>=%v", f.Genres, f.Marks, f.Years, f.RatingSite, f.MinRating)
+	}
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: title, ReleaseDate: time.Date(1995, 12, 15, 0, 0, 0, 0, time.UTC)}}, 120, nil
 }
 
-func (fakeCatalogue) Letters(_ context.Context, lib uuid.UUID) ([]store.Letter, error) {
+func (fakeCatalogue) Letters(_ context.Context, lib, _ uuid.UUID, f store.WallFilter) ([]store.Letter, error) {
 	if lib != films {
 		return nil, store.ErrNotFound
 	}
+	if f.StartsWith != "" {
+		return []store.Letter{{Letter: f.StartsWith, Count: 1}}, nil
+	}
 	return []store.Letter{{Letter: "#", Count: 2}, {Letter: "A", Count: 7}}, nil
+}
+
+func (fakeCatalogue) Facets(_ context.Context, lib uuid.UUID) (store.Facets, error) {
+	if lib != films {
+		return store.Facets{}, store.ErrNotFound
+	}
+	return store.Facets{Genres: []string{"Crime"}}, nil
 }
 
 func (fakeCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage, error) {
@@ -128,11 +142,17 @@ func TestWall(t *testing.T) {
 		{"?sort=added", http.StatusOK, "added desc 0+50"},
 		{"?sort=released", http.StatusOK, "released desc 0+50"},
 		{"?sort=added&order=asc&limit=200&offset=60", http.StatusOK, "added asc 60+200"},
-		{"?sort=rating", http.StatusBadRequest, ""},
+		{"?sort=popularity", http.StatusBadRequest, ""},
 		{"?order=up", http.StatusBadRequest, ""},
 		{"?limit=201", http.StatusBadRequest, ""},
 		{"?offset=-1", http.StatusBadRequest, ""},
 		{"?after=cursor", http.StatusBadRequest, ""},
+		{"?genre=Drama,Comedy&genre=War&mark=unwatched&year=1999&min_rating=70", http.StatusOK, "title asc 0+50 [Drama Comedy War] [unwatched] [1999] imdb>=70"},
+		{"?mark=seen", http.StatusBadRequest, ""},
+		{"?resolution=8k", http.StatusBadRequest, ""},
+		{"?min_rating=101", http.StatusBadRequest, ""},
+		{"?starts_with=ab", http.StatusBadRequest, ""},
+		{"?sort=rating&rating_site=letterboxd", http.StatusOK, "rating desc 0+50"},
 	} {
 		rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/titles"+tc.query, goodToken, "")
 		if rec.Code != tc.wantStatus {
@@ -162,5 +182,12 @@ func TestWall(t *testing.T) {
 	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/letters", goodToken, ""); rec.Code != http.StatusOK ||
 		!strings.Contains(rec.Body.String(), `[{"letter":"#","count":2},{"letter":"A","count":7}]`) {
 		t.Errorf("letters: %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/letters?starts_with=m", goodToken, ""); !strings.Contains(rec.Body.String(), `"letter":"M"`) {
+		t.Errorf("letters narrowed: %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/facets", goodToken, ""); rec.Code != http.StatusOK ||
+		!strings.Contains(rec.Body.String(), `"genres":["Crime"]`) || !strings.Contains(rec.Body.String(), `"marks":["watched","unwatched","in_progress","favourite"]`) {
+		t.Errorf("facets: %d %s", rec.Code, rec.Body)
 	}
 }

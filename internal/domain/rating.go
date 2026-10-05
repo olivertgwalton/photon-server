@@ -1,5 +1,10 @@
 package domain
 
+import (
+	"fmt"
+	"slices"
+)
+
 // RatingSite is who a rating is of: the site whose readers or critics gave it.
 type RatingSite string
 
@@ -19,6 +24,13 @@ func RatingSites() []RatingSite {
 	return []RatingSite{
 		SiteIMDb, SiteTMDB, SiteRottenTomatoes, SiteRottenTomatoesAudience, SiteMetacritic, SiteLetterboxd, SiteTrakt,
 	}
+}
+
+func ParseRatingSite(s string) (RatingSite, error) {
+	if r := RatingSite(s); slices.Contains(RatingSites(), r) {
+		return r, nil
+	}
+	return "", fmt.Errorf("rating site %q is not one of %v", s, RatingSites())
 }
 
 // Rating is what a site's readers or critics make of a title, scored out of 100 whatever scale the

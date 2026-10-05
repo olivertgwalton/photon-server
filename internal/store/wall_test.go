@@ -106,12 +106,12 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 		t.Errorf("past the end: %d of %d, %v; want none of 7", len(past), total, err)
 	}
 	// Alien, Brazil, Heat and heat, Memento, Ran, Zodiac.
-	letters, err := s.Letters(ctx, lib.ID)
+	letters, err := s.Letters(ctx, lib.ID, uuid.UUID{}, WallFilter{})
 	want := []Letter{{"A", 1}, {"B", 1}, {"H", 2}, {"M", 1}, {"R", 1}, {"Z", 1}}
 	if err != nil || !slices.Equal(letters, want) {
 		t.Errorf("letters = %v, %v; want %v", letters, err, want)
 	}
-	if _, err := s.Letters(ctx, uuid.NewV7()); !errors.Is(err, ErrNotFound) {
+	if _, err := s.Letters(ctx, uuid.NewV7(), uuid.UUID{}, WallFilter{}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("letters of an unknown library: %v, want ErrNotFound", err)
 	}
 	if _, _, err := s.Wall(ctx, uuid.NewV7(), WallPage{Sort: domain.SortTitle, Limit: 3}); !errors.Is(err, ErrNotFound) {

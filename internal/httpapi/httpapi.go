@@ -146,9 +146,10 @@ func (a *API) routes() []route {
 		{pattern: "GET /api/v1/libraries", access: signedIn, handle: a.libraries},
 		{
 			pattern: "GET /api/v1/libraries/{id}/titles", access: signedIn,
-			query: []string{"sort", "order", "offset", "limit"}, handle: a.wall,
+			query: append([]string{"sort", "order", "offset", "limit"}, wallFilterParameters...), handle: a.wall,
 		},
-		{pattern: "GET /api/v1/libraries/{id}/letters", access: signedIn, handle: a.letters},
+		{pattern: "GET /api/v1/libraries/{id}/letters", access: signedIn, query: wallFilterParameters, handle: a.letters},
+		{pattern: "GET /api/v1/libraries/{id}/facets", access: signedIn, handle: a.facets},
 		{pattern: "GET /api/v1/titles/{id}", access: signedIn, handle: a.title},
 		{pattern: "PUT /api/v1/titles/{id}/progress", access: signedIn, handle: a.progress},
 		{pattern: "PUT /api/v1/titles/{id}/watched", access: signedIn, handle: a.mark(watching.MarkWatched)},
