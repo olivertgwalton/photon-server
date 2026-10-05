@@ -18,6 +18,7 @@ import (
 const libraryUsage = `usage:
   photon-server library add -name NAME -kind movies|shows ROOT
   photon-server library set -name NAME [-sources nfo,tmdb,tvdb] [-extras trailer,featurette|none]
+                                       [-monitor realtime|off]
   photon-server library list`
 
 func library(ctx context.Context, logger *slog.Logger, databaseURL string, out io.Writer, args []string) error {
@@ -76,10 +77,11 @@ func setLibrary(ctx context.Context, st *store.Store, out io.Writer, args []stri
 	name := fs.String("name", "", "the library's name")
 	sources := fs.String("sources", "", "where its metadata comes from, most trusted first")
 	extras := fs.String("extras", "", "the kinds of video it keeps providers' links to, or none")
+	monitor := fs.String("monitor", "", "realtime to scan it as its files change, off for the schedule alone")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *name == "" || (*sources == "" && *extras == "") || fs.NArg() != 0 {
+	if *name == "" || (*sources == "" && *extras == "" && *monitor == "") || fs.NArg() != 0 {
 		return errors.New(libraryUsage)
 	}
 	var change store.LibraryChange
@@ -94,10 +96,15 @@ func setLibrary(ctx context.Context, st *store.Store, out io.Writer, args []stri
 			return err
 		}
 	}
+	if *monitor != "" {
+		if change.Monitor, err = domain.ParseMonitor(*monitor); err != nil {
+			return err
+		}
+	}
 	if err := st.SetLibrary(ctx, *name, change); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(out, "%s changed; its titles are matched again\n", *name)
+	_, err = fmt.Fprintf(out, "%s changed\n", *name)
 	return err
 }
 
@@ -107,9 +114,9 @@ func listLibraries(ctx context.Context, st *store.Store, out io.Writer) error {
 		return err
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "NAME\tKIND\tSOURCES\tEXTRAS\tROOT\tID")
+	_, _ = fmt.Fprintln(w, "NAME\tKIND\tSOURCES\tEXTRAS\tMONITOR\tROOT\tID")
 	for _, l := range libs {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%v\t%v\t%s\t%s\n", l.Name, l.Kind, l.Sources, l.RemoteExtras, l.Root, l.ID)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%v\t%v\t%s\t%s\t%s\n", l.Name, l.Kind, l.Sources, l.RemoteExtras, l.Monitor, l.Root, l.ID)
 	}
 	return w.Flush()
 }

@@ -6,10 +6,12 @@ const (
 	JobKeyframes JobKind = "keyframes"
 	// JobIdentify matches a film or show to a metadata provider.
 	JobIdentify JobKind = "identify"
+	// JobScanLibrary reads a library's folders again; one job per library at a time.
+	JobScanLibrary JobKind = "scan_library"
 )
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes, JobIdentify}
+	return []JobKind{JobKeyframes, JobIdentify, JobScanLibrary}
 }
 
 type JobState string

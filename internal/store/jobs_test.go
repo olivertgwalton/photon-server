@@ -183,3 +183,37 @@ func TestAJobAskedForWhileRunningRunsAgain(t *testing.T) {
 		t.Errorf("a dead job asked for again: claimed %+v, want it on a first attempt", revived)
 	}
 }
+
+func TestAScanWaitsForItsLibraryToGoQuiet(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	due := func() int {
+		t.Helper()
+		jobs, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobScanLibrary}, uuid.NewV7(), time.Minute, 5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(jobs)
+	}
+	for range 3 {
+		if err := s.ScanLibrary(ctx, lib.ID, time.Hour); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := due(); n != 0 {
+		t.Errorf("%d scans due while the library is still changing, want none", n)
+	}
+	if n, _ := s.q.Job.WithContext(ctx).Count(); n != 1 {
+		t.Errorf("%d jobs for three changes, want one", n)
+	}
+	if err := s.ScanLibrary(ctx, lib.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	if n := due(); n != 1 {
+		t.Errorf("%d scans due once the delay has passed, want 1", n)
+	}
+}

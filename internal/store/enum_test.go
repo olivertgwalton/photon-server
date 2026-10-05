@@ -25,6 +25,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 	s := migrated(t)
 	for constraint, want := range map[string][]string{
 		"library_kind":       names(domain.LibraryKinds()),
+		"monitor":            names(domain.Monitors()),
 		"item_kind":          names(domain.ItemKinds()),
 		"id_provider":        names(domain.Providers()),
 		"id_source":          names(domain.IDSources()),

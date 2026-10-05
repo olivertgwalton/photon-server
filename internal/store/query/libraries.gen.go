@@ -32,6 +32,7 @@ func newLibrary(db *gorm.DB, opts ...gen.DOOption) library {
 	_library.Name = field.NewString(tableName, "name")
 	_library.Kind = field.NewString(tableName, "kind")
 	_library.Root = field.NewString(tableName, "root")
+	_library.Monitor = field.NewString(tableName, "monitor")
 	_library.CreatedAt = field.NewTime(tableName, "created_at")
 
 	_library.fillFieldMap()
@@ -47,6 +48,7 @@ type library struct {
 	Name      field.String
 	Kind      field.String
 	Root      field.String
+	Monitor   field.String
 	CreatedAt field.Time
 
 	fieldMap map[string]field.Expr
@@ -68,6 +70,7 @@ func (l *library) updateTableName(table string) *library {
 	l.Name = field.NewString(table, "name")
 	l.Kind = field.NewString(table, "kind")
 	l.Root = field.NewString(table, "root")
+	l.Monitor = field.NewString(table, "monitor")
 	l.CreatedAt = field.NewTime(table, "created_at")
 
 	l.fillFieldMap()
@@ -93,11 +96,12 @@ func (l *library) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (l *library) fillFieldMap() {
-	l.fieldMap = make(map[string]field.Expr, 5)
+	l.fieldMap = make(map[string]field.Expr, 6)
 	l.fieldMap["id"] = l.ID
 	l.fieldMap["name"] = l.Name
 	l.fieldMap["kind"] = l.Kind
 	l.fieldMap["root"] = l.Root
+	l.fieldMap["monitor"] = l.Monitor
 	l.fieldMap["created_at"] = l.CreatedAt
 }
 

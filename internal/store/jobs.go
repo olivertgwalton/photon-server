@@ -27,13 +27,25 @@ type Job struct {
 // once it ends, since it may have read the subject before this write; a dead one gets a fresh
 // set of attempts, as its subject has changed.
 func enqueue(ctx context.Context, tx *query.Query, kind domain.JobKind, subject model.UUID) error {
+	return enqueueAfter(ctx, tx, kind, subject, 0)
+}
+
+// enqueueAfter is enqueue for a job due after a quiet delay: asking again before it is due moves it
+// later, so a burst of causes is answered once, when the burst ends.
+func enqueueAfter(ctx context.Context, tx *query.Query, kind domain.JobKind, subject model.UUID, delay time.Duration) error {
 	// GORM refuses expressions in an upsert's assignments.
 	return tx.Job.WithContext(ctx).UnderlyingDB().Exec(`
-		INSERT INTO jobs (kind, subject) VALUES (?, ?)
+		INSERT INTO jobs (kind, subject, run_after) VALUES (?, ?, now() + ?::interval)
 		ON CONFLICT (kind, subject) DO UPDATE SET
 			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
-			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END`,
-		kind, subject).Error
+			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END,
+			run_after = CASE WHEN jobs.state IN ('queued', 'dead') THEN excluded.run_after ELSE jobs.run_after END`,
+		kind, subject, delay.String()).Error
+}
+
+// ScanLibrary asks for a library to be scanned once delay has passed with no further asking.
+func (s *Store) ScanLibrary(ctx context.Context, lib uuid.UUID, delay time.Duration) error {
+	return enqueueAfter(ctx, s.q, domain.JobScanLibrary, model.UUID(lib), delay)
 }
 
 // ClaimJobs leases up to limit queued jobs of the given kinds to node. Workers that ask together
