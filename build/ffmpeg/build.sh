@@ -111,7 +111,7 @@ fetch() {
   local name="$1" version url archive
   read -r _ version url < <(grep "^$name " "$here/sources.txt")
   archive="$downloads/$name-$version.tar.${url##*.tar.}"
-  [[ -f "$archive" ]] || curl -fsSL -o "$archive" "$url"
+  [[ -f "$archive" ]] || curl -fsSL --retry 5 --retry-all-errors -o "$archive" "$url"
   (cd "$downloads" && grep " $(basename "$archive")$" "$here/sources.sha256" | shasum -a 256 -c --quiet)
   rm -rf "$work/src/$name" && mkdir -p "$work/src/$name"
   tar -xf "$archive" -C "$work/src/$name" --strip-components 1
