@@ -32,22 +32,26 @@ func Providers() []Provider {
 type IDSource string
 
 const (
-	IDFromNFO  IDSource = "nfo"
-	IDFromPath IDSource = "path"
+	// IDFromMatch is an id the server found by matching a title to a provider.
+	IDFromMatch IDSource = "match"
+	IDFromNFO   IDSource = "nfo"
+	IDFromPath  IDSource = "path"
 )
 
 func IDSources() []IDSource {
-	return []IDSource{IDFromNFO, IDFromPath}
+	return []IDSource{IDFromMatch, IDFromNFO, IDFromPath}
 }
 
 // Rank puts an id the reader typed into a folder or file name above one an NFO carries, since
-// NFOs are mostly written by other tools.
+// NFOs are mostly written by other tools, and both above a match.
 func (s IDSource) Rank() int {
 	switch s {
-	case IDFromNFO:
+	case IDFromMatch:
 		return 1
-	case IDFromPath:
+	case IDFromNFO:
 		return 2
+	case IDFromPath:
+		return 3
 	}
 	return 0
 }

@@ -19,6 +19,11 @@ The server listens on `:8640` (`PHOTON_LISTEN`) and names itself after the host 
 Behind a reverse proxy, list the proxy's addresses in `PHOTON_TRUSTED_PROXIES` (for example
 `172.16.0.0/12,127.0.0.1`); `X-Forwarded-For` is ignored from anyone else.
 
+Titles are described by their file names, then any Kodi NFO beside them. With a TMDB API read
+access token in `PHOTON_TMDB_TOKEN`, films and shows are also matched on TMDB, in
+`PHOTON_METADATA_LANGUAGE` (default `en-US`, whose region picks certificates). What a reader edits
+or an NFO says is never replaced by a match.
+
 The first admin is made on the command line, before anyone can sign in:
 
 ```sh
@@ -31,6 +36,10 @@ Integration tests create and drop a database per test on the server `TEST_DATABA
 
 See [CLAUDE.md](CLAUDE.md): one concern per branch, each PR a short series of small commits,
 squash-merged into `main` once CI passes.
+
+## Metadata
+
+This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 ## Licence
 

@@ -2,10 +2,14 @@ package domain
 
 type JobKind string
 
-const JobKeyframes JobKind = "keyframes"
+const (
+	JobKeyframes JobKind = "keyframes"
+	// JobIdentify matches a film or show to a metadata provider.
+	JobIdentify JobKind = "identify"
+)
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes}
+	return []JobKind{JobKeyframes, JobIdentify}
 }
 
 type JobState string
