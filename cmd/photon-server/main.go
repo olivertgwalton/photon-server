@@ -15,6 +15,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -60,6 +61,13 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	tools, err := media.FindTools(ctx)
+	if err != nil {
+		return err
+	}
+	logger.InfoContext(ctx, "media tools",
+		slog.String("ffmpeg", tools.FFmpeg.Path), slog.String("ffmpeg_version", tools.FFmpeg.Version),
+		slog.String("ffprobe", tools.FFprobe.Path), slog.String("ffprobe_version", tools.FFprobe.Version))
 	st, err := store.Open(ctx, databaseURL, logger)
 	if err != nil {
 		return err
