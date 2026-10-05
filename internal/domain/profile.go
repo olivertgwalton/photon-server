@@ -37,3 +37,24 @@ type Session struct {
 	ID      uuid.UUID
 	Profile Profile
 }
+
+// ProfileLock is what switching to a profile asks for.
+type ProfileLock string
+
+const (
+	LockNone     ProfileLock = "none"
+	LockPIN      ProfileLock = "pin"
+	LockPassword ProfileLock = "password"
+)
+
+// Lock is what a profile asks for: an admin its password always, so a household profile cannot
+// become an admin by switching; anyone else their PIN, if they set one.
+func Lock(role Role, hasPIN bool) ProfileLock {
+	switch {
+	case role == RoleAdmin:
+		return LockPassword
+	case hasPIN:
+		return LockPIN
+	}
+	return LockNone
+}

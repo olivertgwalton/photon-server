@@ -125,3 +125,60 @@ func (s *Store) ProfileByID(ctx context.Context, id uuid.UUID) (domain.Profile, 
 	}
 	return profile(*row), nil
 }
+
+// Secrets are a profile's stored hashes, empty where unset.
+type Secrets struct {
+	Password string
+	PIN      string
+}
+
+type ProfileListing struct {
+	Profile domain.Profile
+	Lock    domain.ProfileLock
+}
+
+func (s *Store) Profiles(ctx context.Context) ([]ProfileListing, error) {
+	p := s.q.Profile
+	rows, err := p.WithContext(ctx).Order(p.Name).Find()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ProfileListing, len(rows))
+	for i, r := range rows {
+		out[i] = ProfileListing{Profile: profile(*r), Lock: domain.Lock(r.Role, r.PinHash != nil)}
+	}
+	return out, nil
+}
+
+func (s *Store) ProfileSecrets(ctx context.Context, id uuid.UUID) (domain.Profile, Secrets, error) {
+	p := s.q.Profile
+	row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return domain.Profile{}, Secrets{}, ErrNotFound
+	}
+	if err != nil {
+		return domain.Profile{}, Secrets{}, err
+	}
+	var sec Secrets
+	if row.PasswordHash != nil {
+		sec.Password = *row.PasswordHash
+	}
+	if row.PinHash != nil {
+		sec.PIN = *row.PinHash
+	}
+	return profile(*row), sec, nil
+}
+
+// SetPINHash sets a profile's PIN, or clears it when hash is empty.
+func (s *Store) SetPINHash(ctx context.Context, id uuid.UUID, hash string) error {
+	p := s.q.Profile
+	_, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).UpdateSimple(nullable(p.PinHash, hash))
+	return err
+}
+
+// SetSessionProfile moves a device's session to another profile.
+func (s *Store) SetSessionProfile(ctx context.Context, session, profile uuid.UUID) error {
+	d := s.q.DeviceSession
+	_, err := d.WithContext(ctx).Where(d.ID.Eq(model.UUID(session))).UpdateSimple(d.ProfileID.Value(model.UUID(profile)))
+	return err
+}
