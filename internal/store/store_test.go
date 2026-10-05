@@ -12,6 +12,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"gorm.io/gorm"
 
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
@@ -95,7 +96,7 @@ func TestServerIDSurvivesReopening(t *testing.T) {
 // Every model field must have a column of the same name in the migrated schema.
 func TestModelsMatchSchema(t *testing.T) {
 	s := migrated(t)
-	db := s.q.Server.WithContext(t.Context()).UnderlyingDB()
+	db := s.q.Server.WithContext(t.Context()).UnderlyingDB().Session(&gorm.Session{NewDB: true})
 	for _, m := range model.All() {
 		stmt := db.Model(m).Statement
 		if err := stmt.Parse(m); err != nil {
