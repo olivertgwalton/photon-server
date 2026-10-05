@@ -8,10 +8,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -40,6 +42,47 @@ func (f fakePlaying) PartFile(_ context.Context, part uuid.UUID) (string, string
 	return f.root, "Lawrence/Lawrence cd1.mkv", nil
 }
 
+var playbackID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000c1")
+
+// fakePlaybacks knows one playback, Oliver's.
+type fakePlaybacks struct{}
+
+func (fakePlaybacks) Start(_ context.Context, profile, item, version uuid.UUID, method domain.PlayMethod) (domain.Playback, error) {
+	return domain.Playback{ID: playbackID, Profile: profile, Item: item, Version: version, Method: method}, nil
+}
+
+func (fakePlaybacks) Progress(_ context.Context, profile, id uuid.UUID, _ time.Duration, _ domain.PlayState) (domain.Reach, error) {
+	if id != playbackID || profile != oliver.ID {
+		return "", playback.ErrNoPlayback
+	}
+	return domain.ReachResumable, nil
+}
+
+func (f fakePlaybacks) Stop(ctx context.Context, profile, id uuid.UUID, at time.Duration) (domain.Reach, error) {
+	return f.Progress(ctx, profile, id, at, domain.StatePlaying)
+}
+
+func TestAPlaybackReportsWhereItIs(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Playbacks: fakePlaybacks{}})
+	for _, tc := range []struct {
+		target, body string
+		want         int
+	}{
+		{"/api/v1/playback/" + playbackID.String() + "/progress", `{"position_ms": 60000, "state": "paused"}`, http.StatusOK},
+		{"/api/v1/playback/" + playbackID.String() + "/progress", `{"position_ms": 60000, "state": "rewinding"}`, http.StatusBadRequest},
+		{"/api/v1/playback/" + playbackID.String() + "/stop", `{"position_ms": 61000}`, http.StatusOK},
+		{"/api/v1/playback/" + uuid.NewV7().String() + "/stop", `{"position_ms": 1}`, http.StatusNotFound},
+	} {
+		req := httptest.NewRequest(http.MethodPost, tc.target, strings.NewReader(tc.body))
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Errorf("%s %s: %d, want %d", tc.target, tc.body, rec.Code, tc.want)
+		}
+	}
+}
+
 func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "Lawrence"), 0o755); err != nil {
@@ -49,7 +92,7 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), Info{}, Services{
-		Auth: fakeAuth{}, Playing: fakePlaying{root: root}, Signer: playback.NewSigner([]byte("key")),
+		Auth: fakeAuth{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{}, Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
@@ -60,7 +103,8 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+goodToken)
 	rec := do(req)
 	var got struct {
-		Parts []struct {
+		PlaybackID uuid.UUID `json:"playback_id"`
+		Parts      []struct {
 			URL      string `json:"url"`
 			OffsetMS int64  `json:"offset_ms"`
 		} `json:"parts"`
@@ -69,7 +113,7 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Parts) != 2 || got.Parts[1].OffsetMS != 3_600_000 || time.Until(got.ExpiresAt) < 23*time.Hour {
+	if got.PlaybackID != playbackID || len(got.Parts) != 2 || got.Parts[1].OffsetMS != 3_600_000 || time.Until(got.ExpiresAt) < 23*time.Hour {
 		t.Fatalf("play = %+v, want both parts, the second an hour in, good for a day", got)
 	}
 
