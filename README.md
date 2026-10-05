@@ -57,6 +57,14 @@ of everything queued; `"all"` asks about every season and episode under it too. 
 provider's pictures are replaced with what it has now, and edits, locks and NFOs stand. Reading
 its files again is the library scan's job.
 
+A title's pictures are the files beside it first (`poster.jpg`, `fanart.jpg`…), then each
+provider's best ten of a kind, in the library's order. An admin chooses another, as with Jellyfin's
+Edit Images and Plex's poster chooser: `GET /api/v1/admin/titles/{id}/artwork/candidates?kind=poster`
+lists what the providers had at the last match, each served like any picture at
+`/api/v1/artwork/{id}`, and `PUT /api/v1/admin/titles/{id}/artwork/poster` with `{"id": "…"}`
+makes one the title's own, above the files and through every refresh, until `DELETE` on the same
+address gives it back.
+
 Metadata providers are plugins: `GET /api/v1/admin/providers` lists each with what it can do (describe
 titles, rate them) and what it needs set. TMDB gives its own score; MDBList gives IMDb's, Rotten
 Tomatoes' critics and audience, Metacritic's, Letterboxd's and Trakt's once an admin sets its free

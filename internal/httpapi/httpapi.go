@@ -394,6 +394,22 @@ func (a *API) routes() []route {
 			body:    refreshJSON{}, status: http.StatusAccepted, handle: a.refresh,
 		},
 		{
+			pattern: "GET /api/v1/admin/titles/{id}/artwork/candidates", access: admin,
+			summary: "List the pictures of a kind each provider has for a title, to choose from",
+			query:   []param{artworkKindParam},
+			status:  http.StatusOK, reply: listJSON[artworkCandidateJSON]{}, handle: a.artworkCandidates,
+		},
+		{
+			pattern: "PUT /api/v1/admin/titles/{id}/artwork/{kind}", access: admin,
+			summary: "Choose a title's picture of a kind from its candidates, over every source",
+			path:    []param{artworkKindParam}, body: chooseArtworkJSON{}, status: http.StatusNoContent, handle: a.chooseArtwork,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/titles/{id}/artwork/{kind}", access: admin,
+			summary: "Give a title's picture of a kind back to its sources",
+			path:    []param{artworkKindParam}, status: http.StatusNoContent, handle: a.forgetArtwork,
+		},
+		{
 			pattern: "PUT /api/v1/admin/versions/{id}/markers", access: admin,
 			summary: "Say where a copy's intro, credits, recap and preview are, or that a part has none, over what was found",
 			body:    markersJSON{}, status: http.StatusNoContent, handle: a.setMarkers,

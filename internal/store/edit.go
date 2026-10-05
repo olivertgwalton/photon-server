@@ -171,12 +171,12 @@ func (s *Store) SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.
 			return err
 		}
 		// What providers said under the old numbers: their claims, stills and credits. What files
-		// and NFOs say, and a reader's edits, stand.
+		// and NFOs say, and a reader's edits and chosen pictures, stand.
 		below := `SELECT s.id FROM items s WHERE s.parent_id = @show
 			UNION SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id WHERE s.parent_id = @show`
 		for _, q := range []string{
 			`DELETE FROM item_fields WHERE item_id IN (` + below + `) AND source NOT IN ('file', 'nfo', 'user')`,
-			`DELETE FROM artwork WHERE item_id IN (` + below + `) AND source <> 'file'`,
+			`DELETE FROM artwork WHERE item_id IN (` + below + `) AND source NOT IN ('file', 'user')`,
 			`DELETE FROM credits WHERE item_id IN (` + below + `) AND source <> 'nfo'`,
 			// Each episode is titled as its file again, so its season is asked about again.
 			`INSERT INTO item_fields (item_id, field, source) SELECT id, 'title', 'file' FROM items

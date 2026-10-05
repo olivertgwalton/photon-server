@@ -16,9 +16,10 @@ func ArtworkKinds() []ArtworkKind {
 	return []ArtworkKind{ArtworkPoster, ArtworkBackdrop, ArtworkLogo, ArtworkThumb, ArtworkBanner}
 }
 
-// ArtworkSources are where pictures come from: files beside the title, then the providers.
+// ArtworkSources are where pictures come from: an admin's choice of a provider's, files beside the
+// title, then the providers.
 func ArtworkSources() []FieldSource {
-	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB}
+	return []FieldSource{SourceUser, SourceFile, SourceTMDB, SourceTVDB}
 }
 
 // Artwork is one picture of a title: a file in the library (Path, relative to its root) or a
