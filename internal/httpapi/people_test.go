@@ -70,7 +70,7 @@ func TestAPersonsPageSaysWhoTheyAreOnceAMonth(t *testing.T) {
 	}
 	down := &describer{fail: true}
 	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, People: &fakePeople{}, PersonDescriber: down})
-	if rec := get(api, weaver); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"credits":[{"kind":"actor","role":"Ripley","id"`) {
+	if rec := get(api, weaver); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"credits":[{"credit":"actor","role":"Ripley","id"`) || !strings.Contains(rec.Body.String(), `"kind":"movie"`) {
 		t.Errorf("with the provider down: %d %s, want the page as known", rec.Code, rec.Body)
 	}
 	up := &describer{}
