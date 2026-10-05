@@ -37,3 +37,22 @@ func (k *KV) Allow(ctx context.Context, key string, l Limit) (time.Duration, err
 	}).AsInt64()
 	return time.Duration(wait) * time.Microsecond, err
 }
+
+type limiter interface {
+	Allow(ctx context.Context, key string, l Limit) (time.Duration, error)
+}
+
+// Wait blocks until key's allowance lets one more request through.
+func Wait(ctx context.Context, l limiter, key string, limit Limit) error {
+	for {
+		wait, err := l.Allow(ctx, key, limit)
+		if err != nil || wait == 0 {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(wait):
+		}
+	}
+}

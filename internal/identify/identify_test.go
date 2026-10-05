@@ -3,11 +3,11 @@ package identify
 import (
 	"testing"
 
-	"github.com/olivertgwalton/photon-server/internal/tmdb"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 func TestPick(t *testing.T) {
-	found := []tmdb.Match{
+	found := []domain.Candidate{
 		{ID: 1, Title: "The Thing", Year: 2011},
 		{ID: 2, Title: "The Thing", Year: 1982},
 		{ID: 3, Title: "Le Fabuleux Destin d'Amélie Poulain", OriginalTitle: "Amélie", Year: 2001},

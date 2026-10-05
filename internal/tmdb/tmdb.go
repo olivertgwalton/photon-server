@@ -60,19 +60,8 @@ func New(token, language string, limits limiter) *Client {
 }
 
 func (c *Client) get(ctx context.Context, path string, query url.Values, into any) error {
-	for {
-		wait, err := c.limits.Allow(ctx, "tmdb", limit)
-		if err != nil {
-			return err
-		}
-		if wait == 0 {
-			break
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(wait):
-		}
+	if err := kv.Wait(ctx, c.limits, "tmdb", limit); err != nil {
+		return err
 	}
 	if query == nil {
 		query = url.Values{}
@@ -98,14 +87,6 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, into an
 	return fmt.Errorf("tmdb %s: %s", path, resp.Status)
 }
 
-// Match is a search or lookup result.
-type Match struct {
-	ID            int
-	Title         string
-	OriginalTitle string
-	Year          int
-}
-
 type result struct {
 	ID            int    `json:"id"`
 	Title         string `json:"title"`
@@ -116,15 +97,15 @@ type result struct {
 	FirstAirDate  string `json:"first_air_date"`
 }
 
-func (r result) match() Match {
-	return Match{
+func (r result) match() domain.Candidate {
+	return domain.Candidate{
 		ID: r.ID, Title: cmp.Or(r.Title, r.Name), OriginalTitle: cmp.Or(r.OriginalTitle, r.OriginalName),
 		Year: year(date(cmp.Or(r.ReleaseDate, r.FirstAirDate))),
 	}
 }
 
-func matches(rs []result) []Match {
-	out := make([]Match, len(rs))
+func matches(rs []result) []domain.Candidate {
+	out := make([]domain.Candidate, len(rs))
 	for i, r := range rs {
 		out[i] = r.match()
 	}
@@ -132,7 +113,7 @@ func matches(rs []result) []Match {
 }
 
 // Search answers TMDB's ranking of titles named title, released in year where it is not zero.
-func (c *Client) Search(ctx context.Context, kind Kind, title string, year int) ([]Match, error) {
+func (c *Client) Search(ctx context.Context, kind Kind, title string, year int) ([]domain.Candidate, error) {
 	q := url.Values{"query": {title}, "include_adult": {"false"}}
 	if year != 0 {
 		q.Set(map[Kind]string{Movie: "year", Show: "first_air_date_year"}[kind], strconv.Itoa(year))
@@ -147,7 +128,7 @@ func (c *Client) Search(ctx context.Context, kind Kind, title string, year int) 
 }
 
 // Find answers the titles of kind that another provider's id names.
-func (c *Client) Find(ctx context.Context, kind Kind, provider domain.Provider, id string) ([]Match, error) {
+func (c *Client) Find(ctx context.Context, kind Kind, provider domain.Provider, id string) ([]domain.Candidate, error) {
 	source := map[domain.Provider]string{domain.ProviderIMDb: "imdb_id", domain.ProviderTVDB: "tvdb_id"}[provider]
 	if source == "" {
 		return nil, fmt.Errorf("tmdb: cannot find by %s id", provider)

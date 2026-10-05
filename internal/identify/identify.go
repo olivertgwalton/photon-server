@@ -96,7 +96,7 @@ func resolve(ctx context.Context, c *tmdb.Client, kind tmdb.Kind, sub store.Subj
 // pick takes the first result, in TMDB's order, whose title or original title is the one asked
 // for and whose year is within one of the one asked for. Anything looser is left unmatched rather
 // than risk a wrong match.
-func pick(found []tmdb.Match, title string, year int) int {
+func pick(found []domain.Candidate, title string, year int) int {
 	want := normalise(title)
 	for _, m := range found {
 		named := normalise(m.Title) == want || normalise(m.OriginalTitle) == want
