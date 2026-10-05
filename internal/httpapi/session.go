@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -51,16 +53,36 @@ func (a *API) internal(w http.ResponseWriter, r *http.Request, err error) {
 	writeProblem(w, a.logger, codeInternal, "")
 }
 
-const maxBody = 64 << 10
+const (
+	maxBody = 64 << 10
+	// bodyWithin is how long a client has to send a body, so one sending it a byte at a time, as
+	// anyone may to sign in, does not hold its request open for good.
+	bodyWithin = 10 * time.Second
+)
 
 // decode reads a JSON body into v, refusing an unknown field as an unknown query parameter is.
 func (a *API) decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody))
+	rc := http.NewResponseController(w)
+	// Not every ResponseWriter has a connection to time: a test's recorder has none.
+	_ = rc.SetReadDeadline(time.Now().Add(bodyWithin))
+	body := http.MaxBytesReader(w, r.Body, maxBody)
+	dec := json.NewDecoder(body)
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
+	err := dec.Decode(v)
+	if err == nil {
+		// What follows the value is read within the deadline too, not by the server once the
+		// handler is done.
+		_, err = io.Copy(io.Discard, body)
+	}
+	if err != nil {
+		// The deadline stands, so what is left of the body is read within it or the connection
+		// closed.
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())
 		return false
 	}
+	// A deadline left set would end the request's context as it passed, as a server's ReadTimeout
+	// does, and a handler may outlast it.
+	_ = rc.SetReadDeadline(time.Time{})
 	return true
 }
 
