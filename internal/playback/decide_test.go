@@ -79,14 +79,14 @@ func TestDecide(t *testing.T) {
 			want: Decision{
 				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep),
 				Audio:   &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 8, BitrateKbps: 640}},
-				Reasons: []Reason{ContainerNotSupported, AudioCodecNotSupported},
+				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported, domain.AudioCodecNotSupported},
 			},
 		},
 		{
 			name: "the AC-3 dub asked for is copied", profile: appleTV, audio: new(2),
 			want: Decision{
 				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 2},
-				Reasons: []Reason{ContainerNotSupported},
+				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported},
 			},
 		},
 		{
@@ -94,19 +94,19 @@ func TestDecide(t *testing.T) {
 			want: Decision{
 				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep),
 				Audio:   &domain.AudioPlan{Stream: 2, Encode: &domain.AudioEncode{Codec: "aac", Channels: 2, BitrateKbps: 256}},
-				Reasons: []Reason{ContainerNotSupported, AudioChannelsNotSupported},
+				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported, domain.AudioChannelsNotSupported},
 			},
 		},
 		{
 			name: "an HDR10 client gets Dolby Vision's base layer", profile: hdr10Only, audio: new(2),
 			want: Decision{
 				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionStrip), Audio: &domain.AudioPlan{Stream: 2},
-				Reasons: []Reason{ContainerNotSupported},
+				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported},
 			},
 		},
 		{
 			name: "an SDR client cannot be sent HDR as it is", profile: sdrOnly, audio: new(2),
-			want: Decision{Reasons: []Reason{ContainerNotSupported, VideoRangeNotSupported}}, err: ErrNoCompatibleStream,
+			want: Decision{Reasons: []domain.TranscodeReason{domain.ContainerNotSupported, domain.VideoRangeNotSupported}}, err: ErrNoCompatibleStream,
 		},
 		{
 			name: "a bitrate over the client's limit is encoded to fit it, with the audio's share taken first", profile: capped,
@@ -116,14 +116,14 @@ func TestDecide(t *testing.T) {
 					Codec: "h264", Width: 3840, Height: 2160, BitrateKbps: 20_000 - 640, ToneMap: true,
 				}},
 				Audio:   &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 8, BitrateKbps: 640}},
-				Reasons: []Reason{BitrateExceedsLimit},
+				Reasons: []domain.TranscodeReason{domain.BitrateExceedsLimit},
 			},
 		},
 		{
 			name: "under a limit it fits, a remux copies audio of a bitrate nobody knows", profile: cappedRemux,
 			want: Decision{
 				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 1},
-				Reasons: []Reason{ContainerNotSupported},
+				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported},
 			},
 		},
 		{
@@ -134,12 +134,12 @@ func TestDecide(t *testing.T) {
 					Codec: "h264", Width: 1920, Height: 1080, BitrateKbps: 40_000 * 10 / 6, ToneMap: true,
 				}},
 				Audio:   &domain.AudioPlan{Stream: 2},
-				Reasons: []Reason{ContainerNotSupported, VideoRangeNotSupported},
+				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported, domain.VideoRangeNotSupported},
 			},
 		},
 		{
 			name: "audio no encoder writes for the client", profile: silent,
-			want: Decision{Reasons: []Reason{ContainerNotSupported, AudioCodecNotSupported}}, err: ErrNoCompatibleStream,
+			want: Decision{Reasons: []domain.TranscodeReason{domain.ContainerNotSupported, domain.AudioCodecNotSupported}}, err: ErrNoCompatibleStream,
 		},
 		{name: "an audio stream the copy lacks", profile: everything, audio: new(3), err: ErrNoSuchAudio},
 		{name: "a subtitle stream the copy lacks", profile: everything, subtitle: new(1), err: ErrNoSuchSubtitle},
@@ -154,7 +154,7 @@ func TestDecide(t *testing.T) {
 				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
 					Codec: "h264", Width: 3840, Height: 2160, BitrateKbps: 40_000 * 10 / 6, ToneMap: true, Burn: new(4),
 				}},
-				Audio: &domain.AudioPlan{Stream: 1}, Reasons: []Reason{SubtitleCodecNotSupported},
+				Audio: &domain.AudioPlan{Stream: 1}, Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported},
 			},
 		},
 		{
@@ -178,13 +178,13 @@ func TestVideoLimits(t *testing.T) {
 	h264 := media.Stream{Kind: domain.StreamVideo, Codec: "h264", Profile: "High 10", Level: 51, Width: 1920, Height: 1080, BitDepth: 10}
 	for _, tc := range []struct {
 		support VideoSupport
-		want    []Reason
+		want    []domain.TranscodeReason
 	}{
 		{VideoSupport{Codec: "h264"}, nil},
-		{VideoSupport{Codec: "hevc"}, []Reason{VideoCodecNotSupported}},
-		{VideoSupport{Codec: "h264", Profiles: []string{"high", "main"}}, []Reason{VideoProfileNotSupported}},
-		{VideoSupport{Codec: "h264", Profiles: []string{"high 10"}, MaxLevel: 41}, []Reason{VideoLevelNotSupported}},
-		{VideoSupport{Codec: "h264", MaxWidth: 1280, MaxBitDepth: 8}, []Reason{VideoResolutionNotSupported, VideoBitDepthNotSupported}},
+		{VideoSupport{Codec: "hevc"}, []domain.TranscodeReason{domain.VideoCodecNotSupported}},
+		{VideoSupport{Codec: "h264", Profiles: []string{"high", "main"}}, []domain.TranscodeReason{domain.VideoProfileNotSupported}},
+		{VideoSupport{Codec: "h264", Profiles: []string{"high 10"}, MaxLevel: 41}, []domain.TranscodeReason{domain.VideoLevelNotSupported}},
+		{VideoSupport{Codec: "h264", MaxWidth: 1280, MaxBitDepth: 8}, []domain.TranscodeReason{domain.VideoResolutionNotSupported, domain.VideoBitDepthNotSupported}},
 	} {
 		p := Profile{Video: []VideoSupport{tc.support}}
 		if got := p.videoReasons(h264); !cmp.Equal(got, tc.want) {

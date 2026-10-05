@@ -124,3 +124,28 @@ func ParseAcceleration(s string) (Acceleration, bool) {
 	}
 	return "", false
 }
+
+// TranscodeReason is why a copy cannot reach a client as it is, in Jellyfin's TranscodeReason terms.
+type TranscodeReason string
+
+const (
+	ContainerNotSupported       TranscodeReason = "container_not_supported"
+	VideoCodecNotSupported      TranscodeReason = "video_codec_not_supported"
+	VideoProfileNotSupported    TranscodeReason = "video_profile_not_supported"
+	VideoLevelNotSupported      TranscodeReason = "video_level_not_supported"
+	VideoResolutionNotSupported TranscodeReason = "video_resolution_not_supported"
+	VideoBitDepthNotSupported   TranscodeReason = "video_bit_depth_not_supported"
+	VideoRangeNotSupported      TranscodeReason = "video_range_not_supported"
+	AudioCodecNotSupported      TranscodeReason = "audio_codec_not_supported"
+	AudioChannelsNotSupported   TranscodeReason = "audio_channels_not_supported"
+	BitrateExceedsLimit         TranscodeReason = "bitrate_exceeds_limit"
+	SubtitleCodecNotSupported   TranscodeReason = "subtitle_codec_not_supported"
+)
+
+func TranscodeReasons() []TranscodeReason {
+	return []TranscodeReason{
+		ContainerNotSupported, VideoCodecNotSupported, VideoProfileNotSupported, VideoLevelNotSupported,
+		VideoResolutionNotSupported, VideoBitDepthNotSupported, VideoRangeNotSupported, AudioCodecNotSupported,
+		AudioChannelsNotSupported, BitrateExceedsLimit, SubtitleCodecNotSupported,
+	}
+}

@@ -123,22 +123,22 @@ type playJSON struct {
 // playbackJSON is a playback opened: its parts and subtitles played as they are, or its playlist,
 // at addresses relative to the server.
 type playbackJSON struct {
-	PlaybackID uuid.UUID         `json:"playback_id"`
-	Method     domain.PlayMethod `json:"method"`
-	VersionID  uuid.UUID         `json:"version_id"`
-	Video      *videoJSON        `json:"video,omitzero"`
-	Audio      *audioJSON        `json:"audio,omitzero"`
-	Reasons    []playback.Reason `json:"reasons,omitzero"`
-	Parts      []partJSON        `json:"parts,omitzero"`
-	Subtitles  []subtitleJSON    `json:"subtitles,omitzero"`
-	Playlist   string            `json:"playlist,omitzero"`
-	ExpiresAt  time.Time         `json:"expires_at"`
+	PlaybackID uuid.UUID                `json:"playback_id"`
+	Method     domain.PlayMethod        `json:"method"`
+	VersionID  uuid.UUID                `json:"version_id"`
+	Video      *videoJSON               `json:"video,omitzero"`
+	Audio      *audioJSON               `json:"audio,omitzero"`
+	Reasons    []domain.TranscodeReason `json:"reasons,omitzero"`
+	Parts      []partJSON               `json:"parts,omitzero"`
+	Subtitles  []subtitleJSON           `json:"subtitles,omitzero"`
+	Playlist   string                   `json:"playlist,omitzero"`
+	ExpiresAt  time.Time                `json:"expires_at"`
 }
 
 // refusalJSON is a copy nothing the client plays can be made of, and why.
 type refusalJSON struct {
 	problem
-	Reasons []playback.Reason `json:"reasons"`
+	Reasons []domain.TranscodeReason `json:"reasons"`
 }
 
 // play opens a playback of a film or episode as the client's profile decides: its copy's files in
