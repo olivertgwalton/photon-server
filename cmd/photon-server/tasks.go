@@ -54,7 +54,7 @@ func scanLibrary(st *store.Store, scanner *scan.Scanner, hub *events.Hub, logger
 			return err
 		}
 		started := time.Now()
-		r, err := scanner.Scan(ctx, lib, hub.Scanning(ctx))
+		r, err := scanner.Scan(ctx, lib, hub.Scanning(ctx), func(c store.Changed) { hub.Changed(ctx, lib.ID, c) })
 		hub.Scanned(ctx, lib.ID)
 		if err != nil {
 			return fmt.Errorf("%s: %w", lib.Name, err)

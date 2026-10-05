@@ -86,7 +86,7 @@ func (f *fixture) put(rel, seed string) {
 
 func (f *fixture) scan() Report {
 	f.t.Helper()
-	r, err := f.scanner.Scan(f.t.Context(), f.lib, func(domain.ScanProgress) {})
+	r, err := f.scanner.Scan(f.t.Context(), f.lib, func(domain.ScanProgress) {}, func(store.Changed) {})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestOneFileInTwoLibrariesIsACopyInEach(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.scanner.Scan(t.Context(), lib, func(domain.ScanProgress) {}); err != nil {
+	if _, err := f.scanner.Scan(t.Context(), lib, func(domain.ScanProgress) {}, func(store.Changed) {}); err != nil {
 		t.Fatal(err)
 	}
 	if n := f.count(`SELECT count(DISTINCT i.library_id) FROM versions v JOIN items i ON i.id = v.item_id`); n != 2 {
@@ -619,7 +619,7 @@ func TestAScanTellsHowFarItHasGot(t *testing.T) {
 	f.put("Alien (1979)/Alien (1979).mkv", "alien")
 	f.put("Ignored/.ignore", "x")
 	var told []domain.ScanProgress
-	if _, err := f.scanner.Scan(t.Context(), f.lib, func(p domain.ScanProgress) { told = append(told, p) }); err != nil {
+	if _, err := f.scanner.Scan(t.Context(), f.lib, func(p domain.ScanProgress) { told = append(told, p) }, func(store.Changed) {}); err != nil {
 		t.Fatal(err)
 	}
 	want := []domain.ScanProgress{
@@ -630,5 +630,47 @@ func TestAScanTellsHowFarItHasGot(t *testing.T) {
 	}
 	if !slices.Equal(told, want) {
 		t.Errorf("told %+v, want %+v", told, want)
+	}
+}
+
+func TestAScanTellsWhichTitlesItChanged(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	f.put("Heat (1995)/Heat (1995).mkv", "heat")
+	f.put("Alien (1979)/Alien (1979).mkv", "alien")
+	scan := func() map[domain.TitleChange][]string {
+		t.Helper()
+		got := map[domain.TitleChange][]string{}
+		_, err := f.scanner.Scan(t.Context(), f.lib, func(domain.ScanProgress) {}, func(c store.Changed) {
+			for change, ids := range c {
+				for _, id := range ids {
+					var title string
+					if err := f.db.QueryRow(t.Context(), `SELECT title FROM items WHERE id = $1`, id.String()).Scan(&title); err != nil {
+						t.Fatal(err)
+					}
+					got[change] = append(got[change], title)
+				}
+			}
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, titles := range got {
+			slices.Sort(titles)
+		}
+		return got
+	}
+	if got := scan(); !slices.Equal(got[domain.TitleAdded], []string{"Alien", "Heat"}) || len(got) != 1 {
+		t.Errorf("first scan told %v, want Alien and Heat added", got)
+	}
+	f.put("Heat (1995)/Heat (1995) - 1080p.mkv", "heat-hd")
+	if err := os.RemoveAll(filepath.Join(f.root, "Alien (1979)")); err != nil {
+		t.Fatal(err)
+	}
+	// Alien's copy is missing, kept for a disk that comes back.
+	if got := scan(); !slices.Equal(got[domain.TitleUpdated], []string{"Alien", "Heat"}) || len(got[domain.TitleAdded])+len(got[domain.TitleRemoved]) != 0 {
+		t.Errorf("second scan told %v, want Heat and Alien updated", got)
+	}
+	if got := scan(); len(got[domain.TitleUpdated])+len(got[domain.TitleAdded])+len(got[domain.TitleRemoved]) != 0 {
+		t.Errorf("an unchanged library told %v, want nothing", got)
 	}
 }

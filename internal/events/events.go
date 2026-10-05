@@ -24,6 +24,9 @@ const (
 	// scanProgressEvery is the most often a scan tells how far it has got, besides each change of
 	// phase.
 	scanProgressEvery = time.Second
+	// changeWindow is how long a library's changed titles are gathered before they are told, so a
+	// scan of hundreds of files is a handful of events, as Jellyfin gathers its LibraryChanged.
+	changeWindow = 3 * time.Second
 	// scanLife is how long a scan's progress is kept unless it is told again, so a node that dies
 	// mid-scan leaves none behind.
 	scanLife = 2 * time.Minute
@@ -44,10 +47,15 @@ type Hub struct {
 	mu      sync.Mutex
 	streams map[chan domain.Event]struct{}
 	closed  bool
+	// changed is each library's titles changed and not yet told.
+	changed map[uuid.UUID]store.Changed
 }
 
 func New(st *store.Store, k *kv.KV, server Server, log *slog.Logger) *Hub {
-	return &Hub{store: st, kv: k, server: server, log: log, streams: map[chan domain.Event]struct{}{}}
+	return &Hub{
+		store: st, kv: k, server: server, log: log,
+		streams: map[chan domain.Event]struct{}{}, changed: map[uuid.UUID]store.Changed{},
+	}
 }
 
 // Raise keeps an event in the activity log if it is a kind the log keeps, queues it for the
@@ -220,6 +228,46 @@ func (h *Hub) Scanning(ctx context.Context) func(domain.ScanProgress) {
 			"phase": p.Phase, "done": p.Done, "known": p.Known,
 		}})
 	}
+}
+
+// Changed gathers a library's changed titles, telling them as one library.changed once
+// changeWindow has passed since the first. It never waits on anything.
+func (h *Hub) Changed(ctx context.Context, lib uuid.UUID, titles store.Changed) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	gathered, waiting := h.changed[lib]
+	for change, ids := range titles {
+		if len(ids) == 0 {
+			continue
+		}
+		if !waiting {
+			gathered, waiting = store.Changed{}, true
+			h.changed[lib] = gathered
+			time.AfterFunc(changeWindow, func() { h.tellChanged(context.WithoutCancel(ctx), lib) })
+		}
+		gathered[change] = append(gathered[change], ids...)
+	}
+}
+
+func (h *Hub) tellChanged(ctx context.Context, lib uuid.UUID) {
+	h.mu.Lock()
+	gathered := h.changed[lib]
+	delete(h.changed, lib)
+	h.mu.Unlock()
+	// A title is told once, under the change that says most of it.
+	told := map[uuid.UUID]bool{}
+	details := map[string]any{}
+	for _, change := range domain.TitleChanges() {
+		ids := []uuid.UUID{}
+		for _, id := range gathered[change] {
+			if !told[id] {
+				told[id] = true
+				ids = append(ids, id)
+			}
+		}
+		details[string(change)] = ids
+	}
+	h.Raise(ctx, domain.Event{Kind: domain.EventLibraryChanged, Library: lib, Details: details})
 }
 
 // Scanned forgets a scan's progress once it has ended.

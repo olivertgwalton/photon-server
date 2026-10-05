@@ -43,8 +43,9 @@ type Report struct {
 	Skipped   int
 }
 
-// Scan reads a library's folders again, telling progress after each.
-func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(domain.ScanProgress)) (Report, error) {
+// Scan reads a library's folders again, telling progress after each, and what each changed of the
+// library's titles.
+func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(domain.ScanProgress), changed func(store.Changed)) (Report, error) {
 	root, err := os.OpenRoot(lib.Root)
 	if err != nil {
 		return Report{}, err
@@ -79,31 +80,38 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(do
 			progress(told)
 			continue
 		}
+		var saved store.Saved
 		switch lib.Kind {
 		case domain.LibraryMovies:
-			err = s.saveFilms(ctx, root, lib, folder, &report)
+			saved, err = s.saveFilms(ctx, root, lib, folder, &report)
 		case domain.LibraryShows:
-			err = s.saveEpisodes(ctx, root, lib, folder, &report)
+			saved, err = s.saveEpisodes(ctx, root, lib, folder, &report)
 		}
 		if err != nil {
 			return report, fmt.Errorf("%s: %w", folder.Path, err)
 		}
+		s.unowned(ctx, &report, saved.Unowned)
+		changed(saved.Titles)
 		progress(told)
 	}
 	// A folder holding a .ignore file was known and never read.
 	told.Phase, told.Known = domain.ScanRemoving, told.Done
 	progress(told)
-	return report, s.store.FinishScan(ctx, lib.ID, folders, present)
+	titles, err := s.store.FinishScan(ctx, lib.ID, folders, present)
+	if err == nil {
+		changed(titles)
+	}
+	return report, err
 }
 
-func (s *Scanner) saveFilms(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, report *Report) error {
+func (s *Scanner) saveFilms(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, report *Report) (store.Saved, error) {
 	var films []store.Film
 	plans := planFilms(folder)
 	pics := picturesIn(folder.Path, fileNames(folder))
 	for _, f := range plans {
 		copies, err := s.copies(ctx, root, lib, folder.Path, f.versions, report)
 		if err != nil {
-			return err
+			return store.Saved{}, err
 		}
 		if len(copies) == 0 {
 			continue
@@ -129,11 +137,9 @@ func (s *Scanner) saveFilms(ctx context.Context, root *os.Root, lib domain.Libra
 		return store.Owner{Kind: domain.ItemMovie, Folder: folder.Path, Title: filmNamed(e.ownerName, films)}
 	})
 	if err != nil {
-		return err
+		return store.Saved{}, err
 	}
-	unowned, err := s.store.SaveFolder(ctx, lib.ID, folder.Path, folder.Fingerprint[:], films, extras)
-	s.unowned(ctx, report, unowned)
-	return err
+	return s.store.SaveFolder(ctx, lib.ID, folder.Path, folder.Fingerprint[:], films, extras)
 }
 
 // filmNamed is the title of the film an extra's name gives: the folder's only film, else the one
@@ -175,7 +181,7 @@ func (s *Scanner) unowned(ctx context.Context, report *Report, paths []string) {
 	}
 }
 
-func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, report *Report) error {
+func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, report *Report) (store.Saved, error) {
 	series, season := seriesOf(folder.Path)
 	var show store.Show
 	if series != "" {
@@ -216,7 +222,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 		for _, e := range plans {
 			copies, err := s.copies(ctx, root, lib, folder.Path, e.versions, report)
 			if err != nil {
-				return err
+				return store.Saved{}, err
 			}
 			if len(copies) == 0 {
 				continue
@@ -259,11 +265,9 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 		return o
 	})
 	if err != nil {
-		return err
+		return store.Saved{}, err
 	}
-	unowned, err := s.store.SaveShowFolder(ctx, lib.ID, folder.Path, folder.Fingerprint[:], show, episodes, extras)
-	s.unowned(ctx, report, unowned)
-	return err
+	return s.store.SaveShowFolder(ctx, lib.ID, folder.Path, folder.Fingerprint[:], show, episodes, extras)
 }
 
 var errNoEpisode = errors.New("its name says no season or episode")

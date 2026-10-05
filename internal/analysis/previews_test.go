@@ -122,7 +122,7 @@ func (f *fixture) film(seed string) (title, part uuid.UUID) {
 	if _, err := f.st.SaveFolder(f.t.Context(), f.lib.ID, "", key[:], []store.Film{film}, nil); err != nil {
 		f.t.Fatal(err)
 	}
-	if err := f.st.FinishScan(f.t.Context(), f.lib.ID, []string{""}, []string{rel}); err != nil {
+	if _, err := f.st.FinishScan(f.t.Context(), f.lib.ID, []string{""}, []string{rel}); err != nil {
 		f.t.Fatal(err)
 	}
 	var t, p string
@@ -303,7 +303,7 @@ func (f *fixture) age(part uuid.UUID) {
 // missingFor scans the library with the film's file gone, then dates its going d ago.
 func (f *fixture) missingFor(d time.Duration) {
 	f.t.Helper()
-	if err := f.st.FinishScan(f.t.Context(), f.lib.ID, []string{""}, nil); err != nil {
+	if _, err := f.st.FinishScan(f.t.Context(), f.lib.ID, []string{""}, nil); err != nil {
 		f.t.Fatal(err)
 	}
 	if _, err := f.db.Exec(f.t.Context(), `UPDATE versions SET missing_since = now() - $1::interval`, d.String()); err != nil {
