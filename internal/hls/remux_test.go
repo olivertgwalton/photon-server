@@ -118,6 +118,54 @@ func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
 	}
 }
 
+// A long film played through keeps only its last minute of segments on disk; one asked for again
+// is made again.
+func TestSegmentsFarBehindThePlayerAreRemoved(t *testing.T) {
+	dir := t.TempDir()
+	r, err := NewRemuxer(fakeFFmpeg(t), dir, t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keyframes []time.Duration
+	for k := range 15 {
+		keyframes = append(keyframes, time.Duration(2*k)*time.Second)
+	}
+	part := Source{
+		Open:  func() (*os.File, error) { return os.Open("testdata/fragments.mp4") },
+		Part:  Part{Duration: 30 * time.Second, Keyframes: keyframes},
+		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
+	}
+	// Five parts of five segments each.
+	playback := uuid.NewV7()
+	if err := r.Open(playback, Copy{Parts: []Source{part, part, part, part, part}}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { r.Close(playback) })
+	get := func(n int) {
+		t.Helper()
+		f, err := r.Segment(t.Context(), playback, n)
+		if err != nil {
+			t.Fatalf("segment %d: %v", n, err)
+		}
+		_ = f.Close()
+	}
+	for n := range 25 {
+		get(n)
+	}
+	kept := func(n int) bool {
+		_, err := os.Stat(filepath.Join(dir, playback.String(), segmentName(n)))
+		return err == nil
+	}
+	if kept(0) || !kept(24-behind) || !kept(24) {
+		t.Errorf("after segment 24: segment 0 kept %t, %d kept %t, 24 kept %t; want only the last %d kept",
+			kept(0), 24-behind, kept(24-behind), kept(24), behind)
+	}
+	get(0)
+	if !kept(0) {
+		t.Error("segment 0 asked for again was not made again")
+	}
+}
+
 // A process stopped uncleanly leaves its playbacks' segments; the next one starts without them,
 // and keeps the subtitles it read before.
 func TestARemuxerStartsWithNothingLeftOver(t *testing.T) {
