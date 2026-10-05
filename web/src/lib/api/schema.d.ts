@@ -219,6 +219,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a folder's subfolders on the server, or the folders to start from, for choosing a library's
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description An absolute path; without one, the folders to start from. */
+                    path?: string;
+                    /** @description show lists folders whose names start with a dot, hidden by default. */
+                    hidden?: components["schemas"]["HiddenFolders"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FolderList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/history": {
         parameters: {
             query?: never;
@@ -560,6 +605,46 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/playbacks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Stop anyone's playback, keeping where it had got to
+         * @description Admin only.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -988,6 +1073,46 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/v1/admin/server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Say how this node was set up, what it reaches, and the cluster's nodes
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Server"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/tasks": {
         parameters: {
             query?: never;
@@ -1111,6 +1236,123 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
+        trace?: never;
+    };
+    "/api/v1/admin/titles/{id}/artwork/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the pictures of a kind each provider has for a title, to choose from
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description The kind of picture. */
+                    kind?: components["schemas"]["ArtworkKind"];
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ArtworkCandidateList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/titles/{id}/artwork/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose a title's picture of a kind from its candidates, over every source
+         * @description Admin only.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    /** @description The kind of picture. */
+                    kind: components["schemas"]["ArtworkKind"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChooseArtwork"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        /**
+         * Give a title's picture of a kind back to its sources
+         * @description Admin only.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    /** @description The kind of picture. */
+                    kind: components["schemas"]["ArtworkKind"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/admin/titles/{id}/candidates": {
@@ -1293,6 +1535,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/titles/{id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask a title's providers about it again now: a season or episode as its show
+         * @description Admin only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Refresh"];
+                };
+            };
+            responses: {
+                /** @description Accepted */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/versions/{id}/markers": {
         parameters: {
             query?: never;
@@ -1302,7 +1588,7 @@ export interface paths {
         };
         get?: never;
         /**
-         * Say where a copy's intro, credits, recap and preview are, over what was found
+         * Say where a copy's intro, credits, recap and preview are, or that a part has none, over what was found
          * @description Admin only.
          */
         put: {
@@ -2371,6 +2657,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change the profile's password, signing out its other devices */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PasswordChange"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/pin": {
         parameters: {
             query?: never;
@@ -3370,6 +3695,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/titles/{id}/next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The episode to play next: after an episode, or where the profile is in a show or season */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Card"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/titles/{id}/play": {
         parameters: {
             query?: never;
@@ -3459,7 +3823,28 @@ export interface paths {
             };
         };
         post?: never;
-        delete?: never;
+        /** Remove a title, or a show's or season's episodes, from Continue Watching, keeping what was watched */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -3601,6 +3986,8 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        Acceleration: "software" | "videotoolbox" | "vaapi" | "qsv" | "nvenc";
         Access: {
             libraries: string[];
             max_age: number | null;
@@ -3659,6 +4046,18 @@ export interface components {
         Approval: {
             user_code: string;
         };
+        ArtworkCandidate: {
+            chosen: boolean;
+            height?: number;
+            /** Format: uuid */
+            id: string;
+            language?: string;
+            source: components["schemas"]["FieldSource"];
+            width?: number;
+        };
+        ArtworkCandidateList: {
+            items: components["schemas"]["ArtworkCandidate"][];
+        };
         /** @enum {string} */
         ArtworkKind: "poster" | "backdrop" | "logo" | "thumb" | "banner";
         Audio: {
@@ -3671,6 +4070,14 @@ export interface components {
         AudioSupport: {
             codec: string;
             max_channels?: number;
+        };
+        Backend: {
+            reachable: boolean;
+            version?: string;
+        };
+        BrowsedFolder: {
+            name: string;
+            path: string;
         };
         Candidate: {
             id: string;
@@ -3696,6 +4103,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["ItemKind"];
+            origin?: components["schemas"]["CollectionOrigin"];
             /** Format: uuid */
             poster?: string;
             /** Format: date */
@@ -3725,6 +4133,10 @@ export interface components {
             start_ms: number;
             title?: string;
         };
+        ChooseArtwork: {
+            /** Format: uuid */
+            id: string;
+        };
         ClientProfile: {
             audio: components["schemas"]["AudioSupport"][];
             containers: string[];
@@ -3732,6 +4144,8 @@ export interface components {
             subtitles?: string[];
             video: components["schemas"]["VideoSupport"][];
         };
+        /** @enum {string} */
+        CollectionOrigin: "tmdb" | "user";
         Created: {
             /** Format: uuid */
             id: string;
@@ -3749,6 +4163,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["ItemKind"];
+            origin?: components["schemas"]["CollectionOrigin"];
             /** Format: uuid */
             poster?: string;
             /** Format: date */
@@ -3803,6 +4218,8 @@ export interface components {
             items: components["schemas"]["DeviceListing"][];
         };
         /** @enum {string} */
+        Discovery: "broadcast" | "off";
+        /** @enum {string} */
         DolbyVisionHandling: "keep" | "strip";
         Download: {
             /** Format: date-time */
@@ -3853,6 +4270,10 @@ export interface components {
             title?: string;
             year?: number;
         };
+        Encoder: {
+            acceleration: components["schemas"]["Acceleration"];
+            device?: string;
+        };
         Entry: {
             /** Format: date-time */
             added_at: string;
@@ -3867,6 +4288,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["ItemKind"];
+            origin?: components["schemas"]["CollectionOrigin"];
             /** Format: uuid */
             poster?: string;
             /** Format: date */
@@ -3949,6 +4371,23 @@ export interface components {
         /** @enum {string} */
         Field: "title" | "sort_title" | "original_title" | "overview" | "tagline" | "certificate" | "release_date" | "year" | "genres" | "studios";
         FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "mdblist") | unknown;
+        Folder: {
+            /** Format: int64 */
+            free_bytes?: number | null;
+            path: string;
+        };
+        FolderList: {
+            items: components["schemas"]["BrowsedFolder"][];
+            parent?: string;
+            path?: string;
+            truncated?: boolean;
+        };
+        Folders: {
+            backups: components["schemas"]["Folder"];
+            cache: components["schemas"]["Folder"];
+        };
+        /** @enum {string} */
+        HiddenFolders: "hide" | "show";
         HistoryEntry: {
             /** Format: uuid */
             id: string;
@@ -4046,6 +4485,10 @@ export interface components {
             /** Format: int64 */
             start_ms: number;
         };
+        MarkerAbsent: {
+            kind: components["schemas"]["MarkerKind"];
+            part: number;
+        };
         /** @enum {string} */
         MarkerKind: "intro" | "credits" | "recap" | "preview";
         MarkerRef: {
@@ -4059,6 +4502,7 @@ export interface components {
         /** @enum {string} */
         MarkerSource: "user" | "chapter" | "fingerprint";
         Markers: {
+            absent?: components["schemas"]["MarkerAbsent"][];
             markers: components["schemas"]["Marker"][];
         };
         MetadataProvider: {
@@ -4080,7 +4524,17 @@ export interface components {
         Name: {
             name: string;
         };
+        Node: {
+            address: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_seen: string;
+        };
         NowPlaying: {
+            acceleration?: components["schemas"]["Acceleration"];
+            audio?: components["schemas"]["PlaybackAudio"] | null;
+            device: components["schemas"]["PlaybackDevice"];
             /** Format: uuid */
             id: string;
             method: components["schemas"]["PlayMethod"];
@@ -4088,17 +4542,17 @@ export interface components {
             node_id: string;
             /** Format: int64 */
             position_ms: number;
-            /** Format: uuid */
-            profile_id: string;
+            profile: components["schemas"]["PlaybackProfile"];
+            reasons?: components["schemas"]["TranscodeReason"][];
             /** Format: date-time */
             started_at: string;
             state: components["schemas"]["PlayState"];
-            /** Format: uuid */
-            title_id: string;
+            subtitle?: components["schemas"]["PlaybackSubtitle"] | null;
+            title: components["schemas"]["PlaybackTitle"];
             /** Format: date-time */
             updated_at: string;
-            /** Format: uuid */
-            version_id: string;
+            version: components["schemas"]["PlaybackVersion"];
+            video?: components["schemas"]["PlaybackVideo"] | null;
         };
         NowPlayingList: {
             items: components["schemas"]["NowPlaying"][];
@@ -4135,6 +4589,10 @@ export interface components {
             sheets: number;
             thumbnails: number;
             width: number;
+        };
+        PasswordChange: {
+            current: string;
+            new: string;
         };
         Person: {
             biography?: string;
@@ -4186,16 +4644,90 @@ export interface components {
             /** Format: uuid */
             playback_id: string;
             playlist?: string;
-            reasons?: components["schemas"]["Reason"][];
+            reasons?: components["schemas"]["TranscodeReason"][];
             subtitles?: components["schemas"]["Subtitle"][];
             /** Format: uuid */
             version_id: string;
             video?: components["schemas"]["Video"] | null;
         };
+        PlaybackAudio: {
+            bitrate_kbps?: number;
+            channels?: number;
+            codec: string;
+            encode?: components["schemas"]["PlaybackEncode"] | null;
+            language?: string;
+            stream: number;
+        };
+        PlaybackDevice: {
+            address: string;
+            client: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        PlaybackEncode: {
+            bitrate_kbps?: number;
+            channels?: number;
+            codec: string;
+            height?: number;
+            tone_mapped?: boolean;
+            width?: number;
+        };
+        PlaybackProfile: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
         PlaybackProgress: {
             /** Format: int64 */
             position_ms: number;
             state: components["schemas"]["PlayState"];
+        };
+        PlaybackSubtitle: {
+            burned?: boolean;
+            codec: string;
+            language?: string;
+            stream: number;
+        };
+        PlaybackTitle: {
+            /** Format: uuid */
+            backdrop?: string;
+            episode_end?: number | null;
+            episode_number?: number | null;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ItemKind"];
+            /** Format: uuid */
+            poster?: string;
+            season_number?: number | null;
+            show?: string;
+            /** Format: uuid */
+            show_id?: string;
+            /** Format: uuid */
+            thumb?: string;
+            title: string;
+            year?: number;
+        };
+        PlaybackVersion: {
+            bitrate_kbps?: number;
+            container: string;
+            /** Format: int64 */
+            duration_ms: number;
+            edition?: string;
+            /** Format: uuid */
+            id: string;
+            label?: string;
+        };
+        PlaybackVideo: {
+            bitrate_kbps?: number;
+            codec: string;
+            dolby_vision?: components["schemas"]["DolbyVisionHandling"];
+            encode?: components["schemas"]["PlaybackEncode"] | null;
+            height?: number;
+            profile?: string;
+            range?: components["schemas"]["Range"];
+            stream: number;
+            width?: number;
         };
         Playlist: {
             /** Format: int64 */
@@ -4280,12 +4812,15 @@ export interface components {
         Reached: {
             reach: components["schemas"]["Reach"];
         };
+        Refresh: {
+            mode: components["schemas"]["RefreshMode"];
+        };
         /** @enum {string} */
-        Reason: "container_not_supported" | "video_codec_not_supported" | "video_profile_not_supported" | "video_level_not_supported" | "video_resolution_not_supported" | "video_bit_depth_not_supported" | "video_range_not_supported" | "audio_codec_not_supported" | "audio_channels_not_supported" | "bitrate_exceeds_limit" | "subtitle_codec_not_supported";
+        RefreshMode: "missing" | "all";
         Refusal: {
             code: components["schemas"]["ProblemCode"];
             detail?: string;
-            reasons: components["schemas"]["Reason"][];
+            reasons: components["schemas"]["TranscodeReason"][];
             status: number;
             title: string;
         };
@@ -4336,6 +4871,30 @@ export interface components {
             state?: components["schemas"]["TitleState"];
             title: string;
             year?: number;
+        };
+        Server: {
+            arch: string;
+            chromaprint: boolean;
+            discovery: components["schemas"]["Discovery"];
+            encoder: components["schemas"]["Encoder"];
+            ffmpeg: components["schemas"]["Tool"];
+            ffprobe: components["schemas"]["Tool"];
+            folders: components["schemas"]["Folders"];
+            id: string;
+            listen: string;
+            metadata_language: string;
+            name: string;
+            /** Format: uuid */
+            node_id: string;
+            nodes: components["schemas"]["Node"][];
+            os: string;
+            postgres: components["schemas"]["Backend"];
+            /** Format: date-time */
+            started_at: string;
+            transcode_limit?: number;
+            trusted_proxies: string[];
+            valkey: components["schemas"]["Backend"];
+            version: string;
         };
         SetEpisodeOrder: {
             order: components["schemas"]["EpisodeOrder"];
@@ -4442,6 +5001,7 @@ export interface components {
                 [key: string]: string;
             };
             kind: components["schemas"]["ItemKind"];
+            origin?: components["schemas"]["CollectionOrigin"];
             original_title?: string;
             overview?: string;
             ratings?: components["schemas"]["RatingRef"][];
@@ -4476,8 +5036,15 @@ export interface components {
             /** Format: date-time */
             watched_at?: string | null;
         };
+        Tool: {
+            path: string;
+            version: string;
+        };
+        /** @enum {string} */
+        TranscodeReason: "container_not_supported" | "video_codec_not_supported" | "video_profile_not_supported" | "video_level_not_supported" | "video_resolution_not_supported" | "video_bit_depth_not_supported" | "video_range_not_supported" | "audio_codec_not_supported" | "audio_channels_not_supported" | "bitrate_exceeds_limit" | "subtitle_codec_not_supported";
         Transcodes: {
             active: number;
+            conversions: number;
             limit?: number;
         };
         Trickplay: {
