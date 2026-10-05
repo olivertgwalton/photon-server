@@ -137,6 +137,8 @@ type Services struct {
 	// Activity is the log of what has happened, and Events tells it, and more, as it happens.
 	Activity activityLog
 	Events   eventHub
+	// Audience says which of the events each profile is told.
+	Audience audience
 	// Webhooks are the addresses told of events.
 	Webhooks webhooks
 	// NowPlaying is every playback going on, across the cluster.
@@ -653,6 +655,11 @@ func (a *API) routes() []route {
 			pattern: "GET /api/v1/admin/events", access: admin,
 			summary: "Stream a snapshot of what is going on, then each event as it happens, as Server-Sent Events",
 			status:  http.StatusOK, reply: eventStream(), handle: a.adminEvents,
+		},
+		{
+			pattern: "GET /api/v1/events", access: signedIn,
+			summary: "Stream what changes of the libraries, titles and state the profile sees, as Server-Sent Events",
+			status:  http.StatusOK, reply: feedStream(), handle: a.events,
 		},
 		{
 			pattern: "GET /api/v1/admin/webhooks", access: admin, summary: "List the webhooks, without their secrets",

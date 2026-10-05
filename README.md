@@ -181,6 +181,16 @@ every node, then each event as it happens, named by its kind (`task.finished`, `
 `playback.paused`…), with a comment every 15 seconds so proxies leave it open. It asks nginx not
 to buffer it; another proxy may need buffering turned off for its path.
 
+Clients keep their pages right without polling through `GET /api/v1/events`, the same kind of
+stream for any signed-in profile, as Jellyfin's WebSocket and Plex's notifications do: a `hello`
+with the scans going on, then `library.changed` (a library's titles `added`, `updated` and
+`removed`, gathered for three seconds, so a scan of hundreds of files is a handful of events),
+`title.updated` (matched, edited or given another picture), `scan.progress`, and
+`userdata.changed` for the profile's own progress, marks, favourites and playlists from any
+device. A profile is told only of libraries and titles it may see. Nothing is kept to resend, so
+a client that reconnects asks again for what it shows, and one whose device switches profile
+opens the stream again.
+
 Webhooks are told of events as Plex's are: `POST /api/v1/admin/webhooks` with a `url` and the
 `events` it wants (plays started, paused, resumed and stopped, sign-ins, profiles and libraries
 added and removed, scans, titles added, failed tasks and backups) answers a `secret`, once. Each

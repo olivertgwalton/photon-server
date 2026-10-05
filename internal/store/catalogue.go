@@ -415,7 +415,7 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present 
 			}
 		}
 		// Only a version whose part went missing, or came back, is written.
-		updated, err := returnedIDs(ctx, tx, `
+		updated, err := queryIDs(ctx, tx, `
 			UPDATE versions v SET missing_since = CASE WHEN v.missing_since IS NULL THEN now() END
 			WHERE v.library_id = $1 AND (v.missing_since IS NULL) = EXISTS (SELECT 1 FROM parts p
 				WHERE p.version_id = v.id AND NOT EXISTS (SELECT 1 FROM part_files f WHERE f.part_id = p.id))
@@ -434,7 +434,7 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present 
 			`DELETE FROM items i USING collections c WHERE c.item_id = i.id AND i.library_id = $1
 				AND c.origin <> 'user' AND NOT EXISTS (SELECT 1 FROM collection_members m WHERE m.collection_id = c.item_id)`,
 		} {
-			removed, err := returnedIDs(ctx, tx, sql+` RETURNING i.id::text`, lib.String())
+			removed, err := queryIDs(ctx, tx, sql+` RETURNING i.id::text`, lib.String())
 			if err != nil {
 				return err
 			}
@@ -446,9 +446,12 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present 
 	return changed, err
 }
 
-// returnedIDs answers the ids a statement returns.
-func returnedIDs(ctx context.Context, tx pgx.Tx, sql string, args ...any) ([]uuid.UUID, error) {
-	rows, err := tx.Query(ctx, sql, args...)
+// queryIDs answers the ids a statement returns, as text.
+func queryIDs(ctx context.Context, q interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}, sql string, args ...any,
+) ([]uuid.UUID, error) {
+	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
