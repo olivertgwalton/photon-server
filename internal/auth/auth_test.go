@@ -291,3 +291,57 @@ func TestAnAdminWithoutAPasswordCannotBeSwitchedTo(t *testing.T) {
 		t.Errorf("switched to a password-less admin (err %v)", err)
 	}
 }
+
+func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
+	svc, st := newService(t)
+	addOliver(t, st)
+	hash, err := HashPassword(t.Context(), "sam's password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddProfile(t.Context(), "Sam", domain.RoleMember, hash); err != nil {
+		t.Fatal(err)
+	}
+	signIn := func(name, password, device string) domain.Session {
+		t.Helper()
+		token, _, err := svc.SignIn(t.Context(), name, password, Device{Name: device, Client: "Photon"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := svc.Authenticate(t.Context(), token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	admin := signIn("Oliver", "correct horse", "Mac")
+	sam := signIn("Sam", "sam's password", "Sam's phone")
+	samTV := signIn("Sam", "sam's password", "Sam's TV")
+
+	count := func(s domain.Session) int {
+		t.Helper()
+		list, err := svc.Devices(t.Context(), s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(list)
+	}
+	if n := count(admin); n != 3 {
+		t.Errorf("the admin sees %d devices, want 3", n)
+	}
+	if n := count(sam); n != 2 {
+		t.Errorf("Sam sees %d devices, want Sam's 2", n)
+	}
+	if err := svc.SignOutDevice(t.Context(), sam, admin.ID); !errors.Is(err, ErrDeviceNotFound) {
+		t.Errorf("Sam signed out the admin's device (err %v)", err)
+	}
+	if err := svc.SignOutDevice(t.Context(), sam, samTV.ID); err != nil {
+		t.Errorf("Sam could not sign out Sam's own TV: %v", err)
+	}
+	if err := svc.SignOutDevice(t.Context(), admin, sam.ID); err != nil {
+		t.Errorf("the admin could not sign out Sam's phone: %v", err)
+	}
+	if n := count(admin); n != 1 {
+		t.Errorf("%d devices left, want the admin's own", n)
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 const goodToken = "pst_good"
@@ -59,6 +60,14 @@ func (fakeAuth) SetPIN(_ context.Context, _ uuid.UUID, pin string) error {
 		return auth.ErrPINNotDigits
 	}
 	return nil
+}
+
+func (fakeAuth) Devices(context.Context, domain.Session) ([]store.DeviceListing, error) {
+	return nil, nil
+}
+
+func (fakeAuth) SignOutDevice(context.Context, domain.Session, uuid.UUID) error {
+	return auth.ErrDeviceNotFound
 }
 
 func (fakeAuth) PollPairing(_ context.Context, deviceCode string) (kv.PairingState, string, domain.Profile, error) {
