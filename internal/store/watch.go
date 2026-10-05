@@ -45,16 +45,17 @@ func (s *Store) SaveProgress(ctx context.Context, profile, item uuid.UUID, posit
 	if reach == domain.ReachEnd {
 		return reach, s.watched(ctx, profile, []*model.Item{row})
 	}
-	keep := int64(0)
+	state := &model.WatchState{ProfileID: model.UUID(profile), ItemID: row.ID}
+	set := []string{"position_ms"}
+	// A peek at the start is not a play, as Jellyfin's is not: it moves nothing up Next Up.
 	if reach == domain.ReachResumable {
-		keep = position.Milliseconds()
+		state.PositionMS, state.LastPlayedAt = position.Milliseconds(), new(time.Now())
+		set = append(set, "last_played_at")
 	}
 	err = s.q.WatchState.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "profile_id"}, {Name: "item_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"position_ms", "last_played_at"}),
-	}).Create(&model.WatchState{
-		ProfileID: model.UUID(profile), ItemID: row.ID, PositionMS: keep, LastPlayedAt: new(time.Now()),
-	})
+		DoUpdates: clause.AssignmentColumns(set),
+	}).Create(state)
 	return reach, err
 }
 

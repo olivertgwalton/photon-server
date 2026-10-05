@@ -255,3 +255,84 @@ func TestNextEpisode(t *testing.T) {
 		t.Errorf("a show the profile may not see: %v, want ErrNotFound", err)
 	}
 }
+
+func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var eps []Episode
+	for _, se := range [][2]int{{1, 1}, {1, 2}, {1, 3}, {2, 1}} {
+		rel := fmt.Sprintf("Wire/S%dE%d.mkv", se[0], se[1])
+		eps = append(eps, Episode{
+			Season: se[0], Episodes: []int{se[1]}, Title: fmt.Sprintf("S%dE%d", se[0], se[1]), Folder: "Wire", ByNumber: true,
+			Copies: []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{Duration: time.Hour}}}}},
+		})
+	}
+	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
+		t.Fatal(err)
+	}
+	i := s.q.Item
+	episode := func(season, n int) uuid.UUID {
+		t.Helper()
+		row, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode)), i.SeasonNumber.Eq(season), i.EpisodeNumber.Eq(n)).Take()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return uuid.UUID(row.ID)
+	}
+	show, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextUp := func() []string {
+		t.Helper()
+		rows, err := s.Home(ctx, profile.ID, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, r := range rows {
+			if r.Kind == domain.RowNextUp {
+				for _, c := range r.Cards {
+					out = append(out, c.Title)
+				}
+			}
+		}
+		return out
+	}
+
+	// S1E2 skipped, then S1E1 watched again after S1E3.
+	for _, e := range []uuid.UUID{episode(1, 1), episode(1, 3), episode(1, 1)} {
+		if err := s.MarkWatched(ctx, profile.ID, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := nextUp(); len(got) != 1 || got[0] != "S2E1" {
+		t.Errorf("next up = %v, want S2E1, after the furthest episode watched", got)
+	}
+	if c, err := s.Next(ctx, profile.ID, uuid.UUID(show.ID)); err != nil || c.Title != "S2E1" {
+		t.Errorf("the show's next = %q, %v; want S2E1", c.Title, err)
+	}
+
+	before, err := s.Title(ctx, profile.ID, episode(1, 3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveProgress(ctx, profile.ID, episode(1, 3), time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	after, err := s.Title(ctx, profile.ID, episode(1, 3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.State.LastPlayedAt.Equal(*before.State.LastPlayedAt) {
+		t.Errorf("a peek at the start moved last played from %v to %v, want it left", before.State.LastPlayedAt, after.State.LastPlayedAt)
+	}
+}
