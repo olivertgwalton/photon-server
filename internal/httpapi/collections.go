@@ -43,11 +43,7 @@ func (a *API) libraryCollections(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, struct {
-		Items  []cardJSON `json:"items"`
-		Offset int        `json:"offset"`
-		Total  int64      `json:"total"`
-	}{cardsJSON(cards), offset, total})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[cardJSON]{cardsJSON(cards), offset, total})
 }
 
 // members answers a collection's titles.
@@ -60,15 +56,17 @@ func (a *API) members(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": cardsJSON(cards)})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
+}
+
+type addCollectionJSON struct {
+	LibraryID uuid.UUID `json:"library_id"`
+	Title     string    `json:"title"`
 }
 
 // addCollection makes an admin's collection in a library.
 func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		LibraryID uuid.UUID `json:"library_id"`
-		Title     string    `json:"title"`
-	}
+	var req addCollectionJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -85,7 +83,7 @@ func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, map[string]uuid.UUID{"id": id})
+	writeJSON(w, a.logger, "application/json", http.StatusCreated, createdJSON{ID: id})
 }
 
 // setMembers replaces an admin's collection's titles, in the order given.
@@ -94,9 +92,7 @@ func (a *API) setMembers(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req struct {
-		ItemIDs []uuid.UUID `json:"item_ids"`
-	}
+	var req itemIDsJSON
 	if !a.decode(w, r, &req) {
 		return
 	}

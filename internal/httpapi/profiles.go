@@ -15,6 +15,16 @@ type profileListingJSON struct {
 	Lock domain.ProfileLock `json:"lock"`
 }
 
+type switchJSON struct {
+	ProfileID string `json:"profile_id"`
+	// Secret is the PIN or password the profile's lock asks for.
+	Secret string `json:"secret,omitzero"`
+}
+
+type pinJSON struct {
+	PIN string `json:"pin"`
+}
+
 func (a *API) profiles(w http.ResponseWriter, r *http.Request) {
 	list, err := a.svc.Profiles.Profiles(r.Context())
 	if err != nil {
@@ -25,14 +35,11 @@ func (a *API) profiles(w http.ResponseWriter, r *http.Request) {
 	for i, p := range list {
 		out[i] = profileListingJSON{profileJSON: profileOf(p.Profile), Lock: p.Lock}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": out})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[profileListingJSON]{Items: out})
 }
 
 func (a *API) switchProfile(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ProfileID string `json:"profile_id"`
-		Secret    string `json:"secret"`
-	}
+	var req switchJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -58,9 +65,7 @@ func (a *API) switchProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) setPIN(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		PIN string `json:"pin"`
-	}
+	var req pinJSON
 	if !a.decode(w, r, &req) {
 		return
 	}

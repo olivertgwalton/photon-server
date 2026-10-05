@@ -66,7 +66,7 @@ func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
 	for i, l := range libs {
 		out[i] = libraryJSON{ID: l.ID, Name: l.Name, Kind: l.Kind}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": out})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[libraryJSON]{Items: out})
 }
 
 func (a *API) wall(w http.ResponseWriter, r *http.Request) {
@@ -106,11 +106,7 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, struct {
-		Items  []cardJSON `json:"items"`
-		Offset int        `json:"offset"`
-		Total  int64      `json:"total"`
-	}{cardsJSON(cards), page.Offset, total})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[cardJSON]{cardsJSON(cards), page.Offset, total})
 }
 
 // letters answers how many of a library's titles sort under each letter, in title order, so a
@@ -130,15 +126,16 @@ func (a *API) letters(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	type letterJSON struct {
-		Letter string `json:"letter"`
-		Count  int    `json:"count"`
-	}
 	out := make([]letterJSON, len(letters))
 	for i, l := range letters {
 		out[i] = letterJSON(l)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": out})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[letterJSON]{Items: out})
+}
+
+type letterJSON struct {
+	Letter string `json:"letter"`
+	Count  int    `json:"count"`
 }
 
 func cardsJSON(cards []store.Card) []cardJSON {
@@ -151,6 +148,17 @@ func cardsJSON(cards []store.Card) []cardJSON {
 		}
 	}
 	return out
+}
+
+type personRefJSON struct {
+	ID    uuid.UUID `json:"id"`
+	Name  string    `json:"name"`
+	Photo uuid.UUID `json:"photo,omitzero"`
+}
+
+type searchJSON struct {
+	Items  []cardJSON      `json:"items"`
+	People []personRefJSON `json:"people"`
 }
 
 func (a *API) search(w http.ResponseWriter, r *http.Request) {
@@ -183,16 +191,11 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	type personJSON struct {
-		ID    uuid.UUID `json:"id"`
-		Name  string    `json:"name"`
-		Photo uuid.UUID `json:"photo,omitzero"`
-	}
-	people := make([]personJSON, len(found))
+	people := make([]personRefJSON, len(found))
 	for i, p := range found {
-		people[i] = personJSON(p)
+		people[i] = personRefJSON(p)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": cardsJSON(cards), "people": people})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, searchJSON{Items: cardsJSON(cards), People: people})
 }
 
 func (a *API) title(w http.ResponseWriter, r *http.Request) {
@@ -214,6 +217,15 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 
 const defaultHomeLimit = 20
 
+type homeRowJSON struct {
+	Kind  domain.HomeRow `json:"kind"`
+	Items []cardJSON     `json:"items"`
+}
+
+type homeJSON struct {
+	Rows []homeRowJSON `json:"rows"`
+}
+
 // home answers the profile's home page: its rows with anything in them, in the order to show.
 func (a *API) home(w http.ResponseWriter, r *http.Request) {
 	limit := defaultHomeLimit
@@ -229,20 +241,28 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	type rowJSON struct {
-		Kind  domain.HomeRow `json:"kind"`
-		Items []cardJSON     `json:"items"`
-	}
-	out := make([]rowJSON, len(rows))
+	out := homeJSON{Rows: make([]homeRowJSON, len(rows))}
 	for i, row := range rows {
-		out[i] = rowJSON{Kind: row.Kind, Items: cardsJSON(row.Cards)}
+		out.Rows[i] = homeRowJSON{Kind: row.Kind, Items: cardsJSON(row.Cards)}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"rows": out})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
 
 // wallFilterParameters are what a wall, and its letters, are narrowed by: each list repeated or
 // comma-separated, any of its values.
-var wallFilterParameters = []string{"starts_with", "mark", "genre", "year", "certificate", "studio", "resolution", "range", "rating_site", "min_rating", "person"}
+var wallFilterParameters = []param{
+	{"starts_with", "", "A letter, or # for anything before A."},
+	{"mark", []domain.Mark{}, ""},
+	{"genre", []string{}, ""},
+	{"year", []int{}, ""},
+	{"certificate", []string{}, ""},
+	{"studio", []string{}, ""},
+	{"resolution", []domain.Resolution{}, ""},
+	{"range", []domain.Range{}, ""},
+	{"rating_site", domain.RatingSite(""), "The site min_rating and the rating sort go by, IMDb by default."},
+	{"min_rating", 0.0, "A score from 0 to 100."},
+	{"person", []uuid.UUID{}, "People credited."},
+}
 
 func wallFilter(q url.Values) (store.WallFilter, error) {
 	var f store.WallFilter
@@ -301,6 +321,17 @@ func parseAll[T any](values []string, parse func(string) (T, error)) ([]T, error
 	return out, nil
 }
 
+type facetsJSON struct {
+	Genres       []string            `json:"genres"`
+	Years        []int               `json:"years"`
+	Certificates []string            `json:"certificates"`
+	Studios      []string            `json:"studios"`
+	Resolutions  []domain.Resolution `json:"resolutions"`
+	Ranges       []domain.Range      `json:"ranges"`
+	RatingSites  []domain.RatingSite `json:"rating_sites"`
+	Marks        []domain.Mark       `json:"marks"`
+}
+
 // facets answers the values a library's titles have, which its wall can be narrowed to.
 func (a *API) facets(w http.ResponseWriter, r *http.Request) {
 	lib, err := uuid.Parse(r.PathValue("id"))
@@ -312,16 +343,7 @@ func (a *API) facets(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, struct {
-		Genres       []string            `json:"genres"`
-		Years        []int               `json:"years"`
-		Certificates []string            `json:"certificates"`
-		Studios      []string            `json:"studios"`
-		Resolutions  []domain.Resolution `json:"resolutions"`
-		Ranges       []domain.Range      `json:"ranges"`
-		RatingSites  []domain.RatingSite `json:"rating_sites"`
-		Marks        []domain.Mark       `json:"marks"`
-	}{
+	writeJSON(w, a.logger, "application/json", http.StatusOK, facetsJSON{
 		nonNil(f.Genres), nonNil(f.Years), nonNil(f.Certificates), nonNil(f.Studios), nonNil(f.Resolutions),
 		nonNil(f.Ranges), nonNil(f.RatingSites), domain.Marks(),
 	})
@@ -337,5 +359,5 @@ func (a *API) similar(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": cardsJSON(cards)})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
 }

@@ -70,16 +70,19 @@ func (a *API) adminLibraries(w http.ResponseWriter, r *http.Request) {
 	for i, l := range libs {
 		out[i] = adminLibrary(l)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": out})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[adminLibraryJSON]{Items: out})
+}
+
+type addLibraryJSON struct {
+	Name string             `json:"name"`
+	Kind domain.LibraryKind `json:"kind"`
+	// Root is an absolute path to a folder on the server.
+	Root string `json:"root"`
 }
 
 // addLibrary adds a library of a folder on the server and scans it at once.
 func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name string             `json:"name"`
-		Kind domain.LibraryKind `json:"kind"`
-		Root string             `json:"root"`
-	}
+	var req addLibraryJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -112,6 +115,16 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusCreated, adminLibrary(lib))
 }
 
+// libraryChangeJSON changes what it sets and leaves the rest.
+type libraryChangeJSON struct {
+	Name         string               `json:"name,omitzero"`
+	Sources      []domain.FieldSource `json:"sources,omitzero"`
+	RemoteExtras []domain.ExtraKind   `json:"remote_extras,omitzero"`
+	Monitor      domain.Monitor       `json:"monitor,omitzero"`
+	// RefreshDays is how often its metadata is refreshed, 0 for never.
+	RefreshDays *int `json:"refresh_days,omitzero"`
+}
+
 // setLibrary changes what is sent of a library: its name, whether it is watched, where its
 // metadata comes from, and the kinds of video it keeps providers' links to.
 func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
@@ -119,13 +132,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req struct {
-		Name         string               `json:"name"`
-		Sources      []domain.FieldSource `json:"sources"`
-		RemoteExtras []domain.ExtraKind   `json:"remote_extras"`
-		Monitor      domain.Monitor       `json:"monitor"`
-		RefreshDays  *int                 `json:"refresh_days"`
-	}
+	var req libraryChangeJSON
 	if !a.decode(w, r, &req) {
 		return
 	}

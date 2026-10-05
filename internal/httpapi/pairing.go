@@ -20,6 +20,14 @@ type pairingStartJSON struct {
 	ExpiresInMS    int64  `json:"expires_in_ms"`
 }
 
+type approvalJSON struct {
+	UserCode string `json:"user_code"`
+}
+
+type pollJSON struct {
+	DeviceCode string `json:"device_code"`
+}
+
 func (a *API) startPairing(w http.ResponseWriter, r *http.Request) {
 	var req deviceJSON
 	if !a.decode(w, r, &req) {
@@ -44,9 +52,7 @@ func (a *API) startPairing(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) approvePairing(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		UserCode string `json:"user_code"`
-	}
+	var req approvalJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -66,9 +72,7 @@ func (a *API) approvePairing(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) pollPairing(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DeviceCode string `json:"device_code"`
-	}
+	var req pollJSON
 	if !a.decode(w, r, &req) {
 		return
 	}

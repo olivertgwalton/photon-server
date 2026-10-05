@@ -29,7 +29,7 @@ type settingJSON struct {
 	Value string `json:"value,omitzero"`
 }
 
-type providerJSON struct {
+type metadataProviderJSON struct {
 	ID           domain.FieldSource `json:"id"`
 	Name         string             `json:"name"`
 	Kinds        []domain.ItemKind  `json:"kinds"`
@@ -43,7 +43,7 @@ type providerJSON struct {
 // what each needs, as Jellyfin's plugin settings show them.
 func (a *API) adminProviders(w http.ResponseWriter, r *http.Request) {
 	all := a.svc.Providers.All()
-	out := make([]providerJSON, 0, len(all))
+	out := make([]metadataProviderJSON, 0, len(all))
 	for _, p := range all {
 		j, err := a.provider(r.Context(), p)
 		if err != nil {
@@ -52,7 +52,11 @@ func (a *API) adminProviders(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, j)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": out})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[metadataProviderJSON]{Items: out})
+}
+
+type providerChangeJSON struct {
+	Settings map[string]string `json:"settings"`
 }
 
 // setProvider changes a provider's settings: each value given replaces what was set, and "" clears
@@ -63,9 +67,7 @@ func (a *API) setProvider(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	var req struct {
-		Settings map[string]string `json:"settings"`
-	}
+	var req providerChangeJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -87,9 +89,9 @@ func (a *API) setProvider(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, j)
 }
 
-func (a *API) provider(ctx context.Context, p provider.Provider) (providerJSON, error) {
+func (a *API) provider(ctx context.Context, p provider.Provider) (metadataProviderJSON, error) {
 	info := p.Info()
-	j := providerJSON{ID: info.ID, Name: info.Name, Kinds: info.Kinds, Capabilities: []string{}, Settings: []settingJSON{}, Ready: true}
+	j := metadataProviderJSON{ID: info.ID, Name: info.Name, Kinds: info.Kinds, Capabilities: []string{}, Settings: []settingJSON{}, Ready: true}
 	if _, ok := p.(provider.Describer); ok {
 		j.Capabilities = append(j.Capabilities, "describe")
 	}
@@ -101,7 +103,7 @@ func (a *API) provider(ctx context.Context, p provider.Provider) (providerJSON, 
 	}
 	set, err := a.svc.ProviderSettings.ProviderSettings(ctx, info.ID)
 	if err != nil {
-		return providerJSON{}, err
+		return metadataProviderJSON{}, err
 	}
 	for _, s := range info.Settings {
 		v := set[s.Key]

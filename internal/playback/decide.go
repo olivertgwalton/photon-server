@@ -65,6 +65,14 @@ const (
 	SubtitleCodecNotSupported   Reason = "subtitle_codec_not_supported"
 )
 
+func Reasons() []Reason {
+	return []Reason{
+		ContainerNotSupported, VideoCodecNotSupported, VideoProfileNotSupported, VideoLevelNotSupported,
+		VideoResolutionNotSupported, VideoBitDepthNotSupported, VideoRangeNotSupported, AudioCodecNotSupported,
+		AudioChannelsNotSupported, BitrateExceedsLimit, SubtitleCodecNotSupported,
+	}
+}
+
 var (
 	// ErrNoCompatibleStream is a copy that cannot be made into anything the client plays.
 	ErrNoCompatibleStream = errors.New("playback: nothing the client plays can be made of this copy")

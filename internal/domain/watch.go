@@ -14,6 +14,10 @@ const (
 	ReachEnd Reach = "end"
 )
 
+func Reaches() []Reach {
+	return []Reach{ReachStart, ReachResumable, ReachEnd}
+}
+
 const (
 	minResume        = 5
 	maxResume        = 90

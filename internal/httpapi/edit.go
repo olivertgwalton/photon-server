@@ -23,25 +23,27 @@ type editing interface {
 	IdentifySubject(ctx context.Context, id uuid.UUID) (store.Subject, bool, error)
 }
 
+type editJSON struct {
+	Title         string         `json:"title,omitzero"`
+	SortTitle     string         `json:"sort_title,omitzero"`
+	OriginalTitle string         `json:"original_title,omitzero"`
+	Overview      string         `json:"overview,omitzero"`
+	Tagline       string         `json:"tagline,omitzero"`
+	Certificate   string         `json:"certificate,omitzero"`
+	ReleaseDate   string         `json:"release_date,omitzero"`
+	Year          int            `json:"year,omitzero"`
+	Genres        []string       `json:"genres,omitzero"`
+	Studios       []string       `json:"studios,omitzero"`
+	Locked        []domain.Field `json:"locked,omitzero"`
+}
+
 // editTitle writes what an admin says of a title, field by field; what it locks no source changes.
 func (a *API) editTitle(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r)
 	if !ok {
 		return
 	}
-	var req struct {
-		Title         string         `json:"title"`
-		SortTitle     string         `json:"sort_title"`
-		OriginalTitle string         `json:"original_title"`
-		Overview      string         `json:"overview"`
-		Tagline       string         `json:"tagline"`
-		Certificate   string         `json:"certificate"`
-		ReleaseDate   string         `json:"release_date"`
-		Year          int            `json:"year"`
-		Genres        []string       `json:"genres"`
-		Studios       []string       `json:"studios"`
-		Locked        []domain.Field `json:"locked"`
-	}
+	var req editJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -90,6 +92,14 @@ func (a *API) resetEdits(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+type candidateJSON struct {
+	ID            string `json:"id"`
+	Title         string `json:"title"`
+	OriginalTitle string `json:"original_title,omitzero"`
+	Year          int    `json:"year,omitzero"`
+	Poster        string `json:"poster,omitzero"`
+}
+
 // candidates lists what a provider has by a name, the title's own unless another is asked for, for
 // an admin choosing its match, as Plex's Fix Match and Jellyfin's Identify do.
 func (a *API) candidates(w http.ResponseWriter, r *http.Request) {
@@ -128,18 +138,16 @@ func (a *API) candidates(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	type candidateJSON struct {
-		ID            string `json:"id"`
-		Title         string `json:"title"`
-		OriginalTitle string `json:"original_title,omitzero"`
-		Year          int    `json:"year,omitzero"`
-		Poster        string `json:"poster,omitzero"`
-	}
 	out := make([]candidateJSON, len(offered))
 	for i, c := range offered {
 		out[i] = candidateJSON{ID: strconv.Itoa(c.ID), Title: c.Title, OriginalTitle: c.OriginalTitle, Year: c.Year, Poster: c.Poster}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": out})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[candidateJSON]{Items: out})
+}
+
+type pinMatchJSON struct {
+	Provider domain.Provider `json:"provider"`
+	ID       string          `json:"id"`
 }
 
 // pinMatch fixes a film or show to the title a provider has by the id given, and matches it again.
@@ -148,10 +156,7 @@ func (a *API) pinMatch(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req struct {
-		Provider domain.Provider `json:"provider"`
-		ID       string          `json:"id"`
-	}
+	var req pinMatchJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -170,6 +175,10 @@ func (a *API) pinMatch(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+type setEpisodeOrderJSON struct {
+	Order domain.EpisodeOrder `json:"order"`
+}
+
 // setEpisodeOrder says the order a show's episode files are numbered in, as Plex's and Jellyfin's
 // per-show episode ordering does, and matches its episodes again in it.
 func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
@@ -177,9 +186,7 @@ func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req struct {
-		Order domain.EpisodeOrder `json:"order"`
-	}
+	var req setEpisodeOrderJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -198,6 +205,17 @@ func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// markerJSON is a stretch of a copy, on its whole timeline.
+type markerJSON struct {
+	Kind    domain.MarkerKind `json:"kind"`
+	StartMS int64             `json:"start_ms"`
+	EndMS   int64             `json:"end_ms"`
+}
+
+type markersJSON struct {
+	Markers []markerJSON `json:"markers"`
+}
+
 // setMarkers says where a copy's intro, credits, recap and preview are, on its whole timeline as
 // its chapters are, over whatever its chapters or fingerprints say; none clears what was said.
 func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
@@ -205,13 +223,7 @@ func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req struct {
-		Markers []struct {
-			Kind    domain.MarkerKind `json:"kind"`
-			StartMS int64             `json:"start_ms"`
-			EndMS   int64             `json:"end_ms"`
-		} `json:"markers"`
-	}
+	var req markersJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
