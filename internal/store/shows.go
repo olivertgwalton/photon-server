@@ -143,6 +143,8 @@ func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID mod
 			return err
 		}
 		// The show's match describes its episodes, so a new one asks for it again.
+		// ponytail: one added while that match runs is not described until the next is queued;
+		// a metadata refresh task closes the gap.
 		if err := enqueue(ctx, tx, domain.JobIdentify, showID); err != nil {
 			return err
 		}
