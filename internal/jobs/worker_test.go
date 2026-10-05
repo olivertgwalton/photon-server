@@ -172,3 +172,28 @@ func TestALongJobKeepsItsLease(t *testing.T) {
 		}
 	})
 }
+
+// A deploy stops jobs part way; each goes back in the queue at once, its attempt given back,
+// rather than waiting out its lease.
+func TestAJobCutShortByShutdownIsQueuedAgainAtOnce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := &memoryQueue{pending: []store.Job{{ID: 7, Kind: domain.JobScanLibrary}}}
+		scanning := func(ctx context.Context, _ uuid.UUID) error {
+			<-ctx.Done()
+			return ctx.Err()
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobScanLibrary: scanning}, ignore)
+		go func() {
+			w.Run(ctx)
+			close(done)
+		}()
+		synctest.Sleep(10 * time.Second)
+		cancel()
+		<-done
+		if len(q.postponed) != 1 || q.postponed[0] != 7 || len(q.failed) != 0 {
+			t.Errorf("postponed %v, failed %v; want job 7 queued again", q.postponed, q.failed)
+		}
+	})
+}

@@ -22,6 +22,8 @@ const (
 	lease = 10 * time.Minute
 	// notNow is how long a job with no room to run waits before it is claimed again.
 	notNow = 30 * time.Second
+	// recordTimeout bounds writing a job's outcome once the worker is stopping.
+	recordTimeout = 5 * time.Second
 )
 
 // ErrNotNow is a handler's answer for a job that cannot run on its node yet: it is queued again for
@@ -91,25 +93,27 @@ func (w *Worker) run(ctx context.Context, job store.Job) {
 	w.raise(ctx, event(domain.EventJobStarted, job, nil))
 	runErr := w.handlers[job.Kind](ctx, job.Subject)
 	close(done)
-	// A job cut short by shutdown is left to the lease sweep rather than counted as a failure.
-	if ctx.Err() != nil {
-		return
-	}
+	// The outcome is written even as the worker stops, so no job waits out its lease for a sweep.
+	record, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordTimeout)
+	defer cancel()
 	var err error
 	switch {
+	case runErr != nil && ctx.Err() != nil:
+		// Cut short by shutdown, which is no fault of its subject's: any node takes it now.
+		err = w.queue.PostponeJob(record, job, 0)
 	case errors.Is(runErr, ErrNotNow):
-		err = w.queue.PostponeJob(ctx, job, notNow)
+		err = w.queue.PostponeJob(record, job, notNow)
 	case runErr != nil:
 		log.WarnContext(ctx, "job failed", slog.Int("attempt", job.Attempts), slog.Any("err", runErr))
 		var dead bool
-		dead, err = w.queue.FailJob(ctx, job, runErr)
+		dead, err = w.queue.FailJob(record, job, runErr)
 		kind := domain.EventJobFailed
 		if dead {
 			kind = domain.EventJobDead
 		}
 		w.raise(ctx, event(kind, job, runErr))
 	default:
-		err = w.queue.CompleteJob(ctx, job.ID)
+		err = w.queue.CompleteJob(record, job.ID)
 		w.raise(ctx, event(domain.EventJobFinished, job, nil))
 	}
 	if err != nil {
