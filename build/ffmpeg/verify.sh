@@ -32,8 +32,9 @@ src=(-f lavfi -i testsrc2=size=320x240:rate=24:duration=1 -f lavfi -i sine=durat
 ff "${src[@]}" -c:v libx264 -c:a libopus "$work/x264.mkv" || fail "libx264 and libopus encode"
 ff "${src[@]}" -c:v libsvtav1 -c:a libmp3lame "$work/av1.mkv" || fail "libsvtav1 and libmp3lame encode"
 ff -c:v libdav1d -i "$work/av1.mkv" -f null - || fail "libdav1d decode"
-ff -i "$work/x264.mkv" -vf "zscale=transfer=linear,format=gbrpf32le,zscale=transfer=bt709,format=yuv420p" \
-  -f null - || fail "zimg"
+# The way a tone map runs: to linear light and back, the source's colour stated, as zimg needs it.
+ff -i "$work/x264.mkv" -vf "zscale=tin=bt709:min=bt709:pin=bt709:rin=tv:t=linear:npl=100,format=gbrpf32le,\
+zscale=p=bt709:t=bt709:m=bt709:r=tv,format=yuv420p" -f null - || fail "zimg"
 cat >"$work/subs.ass" <<'ASS'
 [Script Info]
 ScriptType: v4.00+
