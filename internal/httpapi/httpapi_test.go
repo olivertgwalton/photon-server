@@ -17,8 +17,9 @@ import (
 func newAPI(readiness error) *API {
 	info := Info{ID: "0199b3c0-0000-7000-8000-000000000000", Name: "den", Version: "v0.1.0"}
 	return New(slog.New(slog.DiscardHandler), info, Services{
-		Ready: func(context.Context) error { return readiness },
-		Auth:  fakeAuth{},
+		Ready:  func(context.Context) error { return readiness },
+		Auth:   fakeAuth{},
+		Limits: &fakeLimiter{},
 	})
 }
 

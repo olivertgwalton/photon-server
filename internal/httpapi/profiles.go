@@ -41,6 +41,9 @@ func (a *API) switchProfile(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "profile_id is not an id")
 		return
 	}
+	if !a.allowed(w, r, switchesPerSession, "switch:session:"+sessionOf(r).ID.String()) {
+		return
+	}
 	profile, err := a.svc.Auth.SwitchProfile(r.Context(), sessionOf(r), target, req.Secret)
 	switch {
 	case errors.Is(err, store.ErrNotFound):

@@ -19,6 +19,7 @@ const (
 	codeInternal           problemCode = "internal"
 	codePairingNotFound    problemCode = "pairing_not_found"
 	codeWrongSecret        problemCode = "wrong_secret"
+	codeRateLimited        problemCode = "rate_limited"
 	// RFC 8628's own error names, so a client that knows the RFC needs no mapping.
 	codeAuthorizationPending problemCode = "authorization_pending"
 	codeSlowDown             problemCode = "slow_down"
@@ -41,6 +42,8 @@ func (c problemCode) status() int {
 		return http.StatusUnauthorized
 	case codeWrongSecret:
 		return http.StatusForbidden
+	case codeRateLimited:
+		return http.StatusTooManyRequests
 	case codeInternal:
 		return http.StatusInternalServerError
 	case codePairingNotFound:

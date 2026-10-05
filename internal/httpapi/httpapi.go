@@ -4,8 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"slices"
 	"strings"
+	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
@@ -48,6 +50,10 @@ type authenticator interface {
 	SignOutDevice(ctx context.Context, session domain.Session, device uuid.UUID) error
 }
 
+type limiter interface {
+	Allow(ctx context.Context, key string, l kv.Limit) (time.Duration, error)
+}
+
 type profileLister interface {
 	Profiles(ctx context.Context) ([]store.ProfileListing, error)
 }
@@ -58,6 +64,9 @@ type Services struct {
 	Ready    func(context.Context) error
 	Auth     authenticator
 	Profiles profileLister
+	Limits   limiter
+	// TrustedProxies are the peers whose X-Forwarded-For names the client. None by default.
+	TrustedProxies []netip.Prefix
 }
 
 type API struct {
