@@ -35,11 +35,13 @@ type Episode struct {
 	Copies   []Copy
 }
 
-// SaveShowFolder writes a folder of a series' episodes and remembers its fingerprint, in one
-// transaction.
-func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, show Show, episodes []Episode) error {
-	return s.q.Transaction(func(tx *query.Query) error {
-		if len(episodes) > 0 {
+// SaveShowFolder writes a folder of a series' episodes and extras and remembers its fingerprint,
+// in one transaction. It answers the paths of extras no single title owns.
+func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, show Show, episodes []Episode, extras []Extra) ([]string, error) {
+	var unowned []string
+	err := s.q.Transaction(func(tx *query.Query) error {
+		// A series' extras folder can come before any of its episodes, and its extras need the show.
+		if len(episodes) > 0 || (len(extras) > 0 && show.Folder != "") {
 			showID, err := ensureShow(ctx, tx, lib, show)
 			if err != nil {
 				return err
@@ -50,10 +52,15 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 				}
 			}
 		}
+		var err error
+		if unowned, err = saveExtras(ctx, tx, lib, extras); err != nil {
+			return err
+		}
 		return tx.Folder.WithContext(ctx).Save(&model.Folder{
 			LibraryID: model.UUID(lib), Path: path, Fingerprint: fingerprint,
 		})
 	})
+	return unowned, err
 }
 
 func ensureShow(ctx context.Context, tx *query.Query, lib uuid.UUID, show Show) (model.UUID, error) {
@@ -158,7 +165,7 @@ func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID mod
 // episodeItem is the episode a copy belongs to: the episode of a copy already known, else, for an
 // episode read from a canonical form, the episode of its season with the same numbers or date.
 func episodeItem(ctx context.Context, tx *query.Query, lib uuid.UUID, e Episode, row model.Item) (model.UUID, error) {
-	if id, ok, err := knownItem(ctx, tx, lib, e.Copies); err != nil || ok {
+	if id, ok, err := knownItem(ctx, tx, lib, domain.ItemEpisode, e.Copies); err != nil || ok {
 		return id, err
 	}
 	if !e.ByNumber {

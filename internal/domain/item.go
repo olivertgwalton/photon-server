@@ -7,10 +7,12 @@ const (
 	ItemShow    ItemKind = "show"
 	ItemSeason  ItemKind = "season"
 	ItemEpisode ItemKind = "episode"
+	// ItemExtra is a trailer, featurette or the like, belonging to its parent title.
+	ItemExtra ItemKind = "extra"
 )
 
 func ItemKinds() []ItemKind {
-	return []ItemKind{ItemMovie, ItemShow, ItemSeason, ItemEpisode}
+	return []ItemKind{ItemMovie, ItemShow, ItemSeason, ItemEpisode, ItemExtra}
 }
 
 // Provider is a metadata source whose ids a title can carry.

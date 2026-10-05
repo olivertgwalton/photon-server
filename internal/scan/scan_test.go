@@ -279,8 +279,8 @@ func TestScanShows(t *testing.T) {
 	f.put("The Wire (2002) [tvdbid-79126]/Extras/Making Of.mkv", "extra")
 	f.put("Stray.mkv", "stray")
 
-	if r := f.scan(); r.Probed != 5 {
-		t.Errorf("first scan probed %d files, want 5", r.Probed)
+	if r := f.scan(); r.Probed != 6 {
+		t.Errorf("first scan probed %d files, want 5 episodes and 1 extra", r.Probed)
 	}
 	for _, c := range []struct {
 		what string
@@ -288,6 +288,7 @@ func TestScanShows(t *testing.T) {
 		want int
 	}{
 		{"shows", `SELECT count(*) FROM items WHERE kind = 'show' AND title = 'The Wire' AND year = 2002`, 1},
+		{"the show's extra", `SELECT count(*) FROM items e JOIN items s ON s.id = e.parent_id WHERE e.kind = 'extra' AND s.kind = 'show'`, 1},
 		{"seasons 0, 1 and 2", `SELECT count(*) FROM items s JOIN items sh ON sh.id = s.parent_id
 			WHERE s.kind = 'season' AND sh.kind = 'show' AND s.season_number IN (0, 1, 2)`, 3},
 		{"episodes", `SELECT count(*) FROM items e JOIN items s ON s.id = e.parent_id WHERE e.kind = 'episode' AND s.kind = 'season'`, 4},
@@ -330,5 +331,72 @@ func TestExternalSubtitles(t *testing.T) {
 	}
 	if n := f.count(`SELECT count(*) FROM subtitle_files WHERE language = 'de'`); n != 1 {
 		t.Error("the added German subtitle was not recorded")
+	}
+}
+
+func TestExtrasBelongToTheirTitles(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	f.put("Heat (1995)/Heat (1995).mkv", "heat")
+	f.put("Heat (1995)/Heat (1995)-trailer.mkv", "heat-trailer")
+	f.put("Heat (1995)/Featurettes/Making Of.mkv", "heat-making")
+	f.put("Heat (1995)/Sample/heat-sample.mkv", "heat-sample")
+	f.put("Collection/Alien (1979).mkv", "alien")
+	f.put("Collection/Aliens (1986).mkv", "aliens")
+	f.put("Collection/Trailers/Teaser.mkv", "teaser")
+
+	r := f.scan()
+	if r.Skipped != 1 {
+		t.Errorf("left out %d files, want the trailer no single film owns", r.Skipped)
+	}
+	for _, c := range []struct {
+		what string
+		sql  string
+		want int
+	}{
+		{"Heat's trailer", `SELECT count(*) FROM items e JOIN items m ON m.id = e.parent_id
+			WHERE e.kind = 'extra' AND e.extra_kind = 'trailer' AND e.title = 'Trailer' AND m.title = 'Heat'`, 1},
+		{"Heat's featurette", `SELECT count(*) FROM items e JOIN items m ON m.id = e.parent_id
+			WHERE e.extra_kind = 'featurette' AND e.title = 'Making Of' AND m.title = 'Heat'`, 1},
+		{"extras with a playable copy", `SELECT count(*) FROM items e JOIN versions v ON v.item_id = e.id WHERE e.kind = 'extra'`, 2},
+		{"films", `SELECT count(*) FROM items WHERE kind = 'movie'`, 3},
+		{"anything made of the sample", `SELECT count(*) FROM items WHERE title ILIKE '%sample%'`, 0},
+	} {
+		if n := f.count(c.sql); n != c.want {
+			t.Errorf("%s: %d, want %d", c.what, n, c.want)
+		}
+	}
+	if r := f.scan(); r.Probed != 0 {
+		t.Errorf("rescanning probed %d files", r.Probed)
+	}
+}
+
+func TestShowExtrasBelongToShowSeasonOrEpisode(t *testing.T) {
+	f := newFixture(t, domain.LibraryShows)
+	f.put("The Wire/Season 1/The Wire S01E01.mkv", "e1")
+	f.put("The Wire/Season 1/The Wire S01E01-deleted.mkv", "e1-deleted")
+	f.put("The Wire/Season 1/Featurettes/Making Season One.mkv", "s1-making")
+	f.put("The Wire/Extras/Interview.mkv", "interview")
+	f.scan()
+	for owner, want := range map[string]string{"episode": "deleted_scene", "season": "featurette", "show": "other"} {
+		sql := `SELECT count(*) FROM items e JOIN items o ON o.id = e.parent_id
+			WHERE e.kind = 'extra' AND o.kind = '` + owner + `' AND e.extra_kind = '` + want + `'`
+		if n := f.count(sql); n != 1 {
+			t.Errorf("the %s owns %d %s extras, want 1", owner, n, want)
+		}
+	}
+}
+
+func TestAnExtraThatIsAFilmsCopyLeavesTheFilmAlone(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	f.put("Heat (1995)/Heat (1995).mkv", "heat")
+	f.put("Alien (1979)/Alien (1979).mkv", "alien")
+	f.put("Alien (1979)/Featurettes/Heat Preview.mkv", "heat")
+	f.scan()
+	if n := f.count(`SELECT count(*) FROM items WHERE kind = 'movie'`); n != 2 {
+		t.Errorf("%d films, want Heat and Alien still films", n)
+	}
+	if n := f.count(`SELECT count(*) FROM part_files f JOIN parts p ON p.id = f.part_id
+		JOIN versions v ON v.id = p.version_id JOIN items i ON i.id = v.item_id WHERE i.title = 'Heat'`); n != 2 {
+		t.Errorf("Heat is read from %d places, want its own and the featurette's", n)
 	}
 }

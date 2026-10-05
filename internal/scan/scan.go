@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
@@ -93,17 +94,70 @@ func (s *Scanner) saveFilms(ctx context.Context, root *os.Root, lib domain.Libra
 			})
 		}
 	}
-	return s.store.SaveFolder(ctx, lib.ID, folder.Path, folder.Fingerprint[:], films)
+	plans, inExtrasFolder := extrasIn(folder)
+	extras, err := s.extras(ctx, root, lib, folder, plans, report, func(e extraPlan) store.Owner {
+		if inExtrasFolder {
+			return store.Owner{Kind: domain.ItemMovie, Folder: path.Dir(folder.Path)}
+		}
+		return store.Owner{Kind: domain.ItemMovie, Folder: folder.Path, Title: filmNamed(e.ownerName, films)}
+	})
+	if err != nil {
+		return err
+	}
+	unowned, err := s.store.SaveFolder(ctx, lib.ID, folder.Path, folder.Fingerprint[:], films, extras)
+	s.unowned(ctx, report, unowned)
+	return err
+}
+
+// filmNamed is the title of the film an extra's name gives: the folder's only film, else the one
+// whose copy the name matches, else the title the name reads as.
+func filmNamed(name string, films []store.Film) string {
+	if len(films) == 1 {
+		return films[0].Title
+	}
+	for _, f := range films {
+		for _, c := range f.Copies {
+			if strings.EqualFold(stem(path.Base(c.Parts[0].RelPath)), name) {
+				return f.Title
+			}
+		}
+	}
+	return naming.CleanName(name).Title
+}
+
+// extras reads each planned extra's copy, probing it if new, and names its owner.
+func (s *Scanner) extras(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, plans []extraPlan, report *Report, owner func(extraPlan) store.Owner) ([]store.Extra, error) {
+	var extras []store.Extra
+	for _, e := range plans {
+		c, ok, err := s.copy(ctx, root, lib, folder.Path, e.copy, report)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			extras = append(extras, store.Extra{Kind: e.kind, Title: e.title, Folder: folder.Path, Owner: owner(e), Copy: c})
+		}
+	}
+	return extras, nil
+}
+
+var errNoOwner = errors.New("no single title it could belong to")
+
+func (s *Scanner) unowned(ctx context.Context, report *Report, paths []string) {
+	for _, p := range paths {
+		s.skip(ctx, report, p, errNoOwner)
+	}
 }
 
 func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, report *Report) error {
-	seriesFolder, season, ok := showFolder(folder.Path)
+	series, season := seriesOf(folder.Path)
+	var show store.Show
+	if series != "" {
+		name := naming.SeriesName(series)
+		show = store.Show{Title: name.Title, Year: name.Year, Folder: series, IDs: ids(name.IDs)}
+	}
 	var episodes []store.Episode
-	show := store.Show{}
-	if ok {
-		name := naming.SeriesName(seriesFolder)
-		show = store.Show{Title: name.Title, Year: name.Year, Folder: seriesFolder, IDs: ids(name.IDs)}
-		plans, unread := planEpisodes(folder, season, name.Title)
+	if holdsEpisodes(folder.Path) {
+		plans, unread := planEpisodes(folder, season, show.Title)
 		for _, rel := range unread {
 			s.skip(ctx, report, rel, errNoEpisode)
 		}
@@ -120,7 +174,31 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 			}
 		}
 	}
-	return s.store.SaveShowFolder(ctx, lib.ID, folder.Path, folder.Fingerprint[:], show, episodes)
+	plans, inExtrasFolder := extrasIn(folder)
+	extras, err := s.extras(ctx, root, lib, folder, plans, report, func(e extraPlan) store.Owner {
+		o := store.Owner{Kind: domain.ItemShow, Folder: series}
+		if season != nil {
+			o.Kind, o.Season = domain.ItemSeason, *season
+		}
+		if ep, ok := naming.ParseEpisode(e.ownerName, ""); !inExtrasFolder && ok && ep.Confidence == naming.ConfidenceHigh && len(ep.Episodes) > 0 {
+			o.Kind, o.Episode = domain.ItemEpisode, ep.Episodes[0]
+			switch {
+			case ep.Season != nil:
+				o.Season = *ep.Season
+			case season != nil:
+				o.Season = *season
+			default:
+				o.Season = 1
+			}
+		}
+		return o
+	})
+	if err != nil {
+		return err
+	}
+	unowned, err := s.store.SaveShowFolder(ctx, lib.ID, folder.Path, folder.Fingerprint[:], show, episodes, extras)
+	s.unowned(ctx, report, unowned)
+	return err
 }
 
 var errNoEpisode = errors.New("its name says no season or episode")

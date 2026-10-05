@@ -24,26 +24,18 @@ type episodePlan struct {
 	versions []copyPlan
 }
 
-// showFolder splits a folder of a shows library into its series folder and the season its path
-// names, if any. Files at the library root and anything under an extras folder belong to no show.
-func showFolder(rel string) (series string, season *int, ok bool) {
+// holdsEpisodes reports whether a folder of a shows library can hold episodes: not the library
+// root, and nothing under an extras folder.
+func holdsEpisodes(rel string) bool {
 	if rel == "." {
-		return "", nil, false
+		return false
 	}
-	parts := strings.Split(rel, "/")
-	series = parts[0]
-	seriesName := naming.SeriesName(series).Title
-	for _, p := range parts[1:] {
+	for _, p := range strings.Split(rel, "/")[1:] {
 		if _, extras := naming.ExtraFolder(p); extras {
-			return "", nil, false
+			return false
 		}
 	}
-	for _, p := range slices.Backward(parts[1:]) {
-		if n, ok := naming.ParseSeason(p, seriesName); ok {
-			return series, &n, true
-		}
-	}
-	return series, nil, true
+	return true
 }
 
 // planEpisodes reads one folder of a series. A file's own season wins over its folder's, and an
@@ -112,4 +104,20 @@ func episodeTitle(ep naming.Episode) string {
 		return "Episode " + strconv.Itoa(ep.Episodes[0])
 	}
 	return ep.AirDate.Format(time.DateOnly)
+}
+
+// seriesOf is the series folder a folder of a shows library is under, and the season its path
+// names, extras folders included.
+func seriesOf(rel string) (series string, season *int) {
+	if rel == "." {
+		return "", nil
+	}
+	parts := strings.Split(rel, "/")
+	name := naming.SeriesName(parts[0]).Title
+	for _, p := range slices.Backward(parts[1:]) {
+		if n, ok := naming.ParseSeason(p, name); ok {
+			return parts[0], &n
+		}
+	}
+	return parts[0], nil
 }

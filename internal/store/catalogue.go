@@ -81,18 +81,25 @@ func (s *Store) FolderFingerprint(ctx context.Context, lib uuid.UUID, path strin
 	return row.Fingerprint, nil
 }
 
-// SaveFolder writes a scanned folder's films and remembers its fingerprint, in one transaction.
-func (s *Store) SaveFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, films []Film) error {
-	return s.q.Transaction(func(tx *query.Query) error {
+// SaveFolder writes a scanned folder's films and extras and remembers its fingerprint, in one
+// transaction. It answers the paths of extras no single title owns.
+func (s *Store) SaveFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, films []Film, extras []Extra) ([]string, error) {
+	var unowned []string
+	err := s.q.Transaction(func(tx *query.Query) error {
 		for _, f := range films {
 			if err := saveFilm(ctx, tx, lib, f); err != nil {
 				return fmt.Errorf("%s: %w", f.Title, err)
 			}
 		}
+		var err error
+		if unowned, err = saveExtras(ctx, tx, lib, extras); err != nil {
+			return err
+		}
 		return tx.Folder.WithContext(ctx).Save(&model.Folder{
 			LibraryID: model.UUID(lib), Path: path, Fingerprint: fingerprint,
 		})
 	})
+	return unowned, err
 }
 
 func saveFilm(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) error {
@@ -122,7 +129,7 @@ func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) (mode
 		item.Year = &f.Year
 	}
 	i := tx.Item
-	id, known, err := knownItem(ctx, tx, lib, f.Copies)
+	id, known, err := knownItem(ctx, tx, lib, domain.ItemMovie, f.Copies)
 	if err != nil {
 		return model.UUID{}, err
 	}
@@ -146,16 +153,20 @@ func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) (mode
 	return item.ID, err
 }
 
-// knownItem is the title of the first copy the catalogue already holds.
-func knownItem(ctx context.Context, tx *query.Query, lib uuid.UUID, copies []Copy) (model.UUID, bool, error) {
-	v := tx.Version
+// knownItem is the title of kind holding the first of copies the catalogue already has. A copy
+// held by a title of another kind does not count: a film's copy first met as an extra is
+// reclaimed by the film, and the emptied extra goes at the end of the scan.
+func knownItem(ctx context.Context, tx *query.Query, lib uuid.UUID, kind domain.ItemKind, copies []Copy) (model.UUID, bool, error) {
+	v, i := tx.Version, tx.Item
 	for _, c := range copies {
-		known, err := v.WithContext(ctx).Where(v.LibraryID.Eq(model.UUID(lib)), v.Fingerprint.Eq(c.ContentKey)).Take()
-		if err == nil {
-			return known.ItemID, true, nil
-		}
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
+		var row struct{ ItemID model.UUID }
+		err := v.WithContext(ctx).Select(v.ItemID).Join(i, i.ID.EqCol(v.ItemID)).
+			Where(v.LibraryID.Eq(model.UUID(lib)), v.Fingerprint.Eq(c.ContentKey), i.Kind.Eq(string(kind))).Scan(&row)
+		if err != nil {
 			return model.UUID{}, false, err
+		}
+		if row.ItemID != (model.UUID{}) {
+			return row.ItemID, true, nil
 		}
 	}
 	return model.UUID{}, false, nil
@@ -183,16 +194,7 @@ func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.
 		if err != nil {
 			return err
 		}
-		for idx, part := range c.Parts {
-			row, err := p.WithContext(ctx).Where(p.VersionID.Eq(known.ID), p.Idx.Eq(int16(idx))).Take()
-			if err != nil {
-				return err
-			}
-			if err := locate(ctx, tx, lib, row.ID, part); err != nil {
-				return err
-			}
-		}
-		return saveSubtitles(ctx, tx, lib, known.ID, c.Subtitles)
+		return addPlaces(ctx, tx, lib, known.ID, c)
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
@@ -244,6 +246,21 @@ func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.
 		}
 	}
 	return saveSubtitles(ctx, tx, lib, version.ID, c.Subtitles)
+}
+
+// addPlaces records where a known copy's parts and subtitles are found this time.
+func addPlaces(ctx context.Context, tx *query.Query, lib uuid.UUID, versionID model.UUID, c Copy) error {
+	p := tx.Part
+	for idx, part := range c.Parts {
+		row, err := p.WithContext(ctx).Where(p.VersionID.Eq(versionID), p.Idx.Eq(int16(idx))).Take()
+		if err != nil {
+			return err
+		}
+		if err := locate(ctx, tx, lib, row.ID, part); err != nil {
+			return err
+		}
+	}
+	return saveSubtitles(ctx, tx, lib, versionID, c.Subtitles)
 }
 
 // saveSubtitles records a copy's subtitle files. A path already known moves to this copy, so a
@@ -363,7 +380,7 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present 
 			return err
 		}
 		for _, sql := range []string{
-			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode')
+			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode', 'extra')
 				AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.item_id = i.id)`,
 			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'season'
 				AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,

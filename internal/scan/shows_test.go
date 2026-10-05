@@ -6,29 +6,30 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestShowFolder(t *testing.T) {
+func TestSeriesAndSeasonOfAFolder(t *testing.T) {
 	tests := []struct {
 		rel, series string
 		season      int // -1: the path names none
-		ok          bool
+		episodes    bool
 	}{
-		{rel: ".", ok: false},
-		{rel: "The Wire (2002)", series: "The Wire (2002)", season: -1, ok: true},
-		{rel: "The Wire (2002)/Season 2", series: "The Wire (2002)", season: 2, ok: true},
-		{rel: "The Wire (2002)/Specials", series: "The Wire (2002)", season: 0, ok: true},
-		{rel: "The Wire (2002)/Season 2/Disc 1", series: "The Wire (2002)", season: 2, ok: true},
-		{rel: "The Wire (2002)/Extras", ok: false},
-		{rel: "The Wire (2002)/Season 1/Featurettes", ok: false},
+		{rel: ".", season: -1},
+		{rel: "The Wire (2002)", series: "The Wire (2002)", season: -1, episodes: true},
+		{rel: "The Wire (2002)/Season 2", series: "The Wire (2002)", season: 2, episodes: true},
+		{rel: "The Wire (2002)/Specials", series: "The Wire (2002)", season: 0, episodes: true},
+		{rel: "The Wire (2002)/Season 2/Disc 1", series: "The Wire (2002)", season: 2, episodes: true},
+		{rel: "The Wire (2002)/Extras", series: "The Wire (2002)", season: -1},
+		{rel: "The Wire (2002)/Season 1/Featurettes", series: "The Wire (2002)", season: 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.rel, func(t *testing.T) {
-			series, season, ok := showFolder(tt.rel)
+			series, season := seriesOf(tt.rel)
 			got := -1
 			if season != nil {
 				got = *season
 			}
-			if ok != tt.ok || (ok && (series != tt.series || got != tt.season)) {
-				t.Errorf("showFolder(%q) = %q, %d, %v; want %q, %d, %v", tt.rel, series, got, ok, tt.series, tt.season, tt.ok)
+			if series != tt.series || got != tt.season || holdsEpisodes(tt.rel) != tt.episodes {
+				t.Errorf("%q: series %q, season %d, holds episodes %v; want %q, %d, %v",
+					tt.rel, series, got, holdsEpisodes(tt.rel), tt.series, tt.season, tt.episodes)
 			}
 		})
 	}
