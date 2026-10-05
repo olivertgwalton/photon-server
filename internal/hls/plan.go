@@ -18,6 +18,16 @@ type Part struct {
 	Keyframes []time.Duration
 }
 
+// Forced is the keyframes an encode of a part is told to make, one every SegmentLength, so its
+// segments are all that long.
+func Forced(duration time.Duration) []time.Duration {
+	var k []time.Duration
+	for t := time.Duration(0); t < duration; t += SegmentLength {
+		k = append(k, t)
+	}
+	return k
+}
+
 // Segment is one segment of the playlist: which part it is cut from, and where it starts and ends
 // in that part's own time.
 type Segment struct {
