@@ -91,3 +91,35 @@ func (a *API) writePIN(w http.ResponseWriter, r *http.Request, pin string) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+type passwordChangeJSON struct {
+	Current string `json:"current"`
+	New     string `json:"new"`
+}
+
+// changePassword is a profile changing its own password, as Jellyfin's profile page does. It is
+// limited as signing in is, since it answers whether a password is right.
+func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
+	var req passwordChangeJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	session := sessionOf(r)
+	if !a.allowed(w, r, signInsPerAddress, a.addrKey(r, "password")) ||
+		!a.allowed(w, r, signInsPerName, "password:profile:"+session.Profile.ID.String()) {
+		return
+	}
+	err := a.svc.Auth.ChangePassword(r.Context(), session, req.Current, req.New)
+	switch {
+	case errors.Is(err, auth.ErrWrongSecret):
+		writeProblem(w, a.logger, codeWrongSecret, "")
+	case errors.Is(err, auth.ErrPasswordTooShort):
+		writeProblem(w, a.logger, codeInvalidBody, err.Error())
+	case errors.Is(err, auth.ErrNoPassword):
+		writeProblem(w, a.logger, codeConflict, err.Error())
+	case err != nil:
+		a.internal(w, r, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
