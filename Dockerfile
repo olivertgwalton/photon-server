@@ -27,11 +27,12 @@ ARG FFMPEG_SHA256_arm64=7bc8e8d0986f7f4693f63e9728570f671f07b6e21c05d5465dd7ce46
 # The GPU runtimes jellyfin-ffmpeg loads: VAAPI drivers for Intel and AMD, Vulkan for libplacebo
 # (Mesa's, with a CPU device where there is no GPU), and on amd64 Quick Sync's runtime and Intel's
 # OpenCL for tone mapping. NVIDIA's come from the host through its container toolkit. Fonts are
-# for subtitles burned into a transcode.
+# for subtitles burned into a transcode. pg_dump backs the database up; it must be no older than
+# the server it dumps.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl xz-utils mesa-va-drivers libvulkan1 mesa-vulkan-drivers \
-      fonts-noto-core fonts-noto-cjk \
+      fonts-noto-core fonts-noto-cjk postgresql-client-18 \
  && if [ "$TARGETARCH" = amd64 ]; then \
       apt-get install -y --no-install-recommends intel-media-va-driver-non-free libmfx-gen1.2 intel-opencl-icd; \
     fi \
@@ -47,8 +48,8 @@ COPY deploy/ffmpeg-NOTICE /usr/share/licenses/jellyfin-ffmpeg/NOTICE
 COPY --from=build /out/photon-server /usr/local/bin/photon-server
 COPY --from=web /web/build /usr/local/share/photon-server/web
 COPY LICENSE /usr/share/licenses/photon-server/LICENSE
-ENV PHOTON_CACHE_DIR=/var/cache/photon-server
-RUN install -d -o 10001 -g 10001 /var/cache/photon-server
+ENV PHOTON_CACHE_DIR=/var/cache/photon-server PHOTON_BACKUP_DIR=/var/lib/photon-server/backups
+RUN install -d -o 10001 -g 10001 /var/cache/photon-server /var/lib/photon-server/backups
 USER 10001:10001
 EXPOSE 8640
 ENTRYPOINT ["photon-server"]

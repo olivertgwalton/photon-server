@@ -295,7 +295,8 @@ tried again with the job queue's backoff, five times, and then shows among the d
 /api/v1/admin/webhooks/{id}/test` sends it a `webhook.test`.
 
 The database is dumped every three days with `pg_dump` (`PHOTON_PG_DUMP`, no older than the
-Postgres it dumps) into `PHOTON_BACKUP_DIR` (by default the user config folder's `photon-server/backups`), keeping
+Postgres it dumps) into `PHOTON_BACKUP_DIR` (by default the user config folder's `photon-server/backups`; the image's
+`/var/lib/photon-server/backups`, a volume of its own in `deploy/compose.yml`), keeping
 the newest three. Put one back into an empty database with
 `pg_restore --no-owner -d postgres://… photon-….dump`.
 
