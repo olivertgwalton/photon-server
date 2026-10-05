@@ -54,10 +54,13 @@ func TestSearchAsksForTheYearByKind(t *testing.T) {
 
 func TestDetailsTakeTheCountrysCertificate(t *testing.T) {
 	c := serve(t, map[string]string{
-		"/movie/348?append_to_response=release_dates%2Cexternal_ids%2Cvideos&include_video_language=en%2Cnull&language=en-GB": `{
+		"/movie/348?append_to_response=release_dates%2Cexternal_ids%2Cvideos%2Cimages&include_image_language=en%2Cnull&include_video_language=en%2Cnull&language=en-GB": `{
 			"id":348,"title":"Alien","original_title":"Alien","overview":"In space.","tagline":"Scream.",
 			"release_date":"1979-05-25","genres":[{"name":"Horror"}],"production_companies":[{"name":"Brandywine"}],"networks":[{"name":"Brandywine"}],
 			"external_ids":{"imdb_id":"tt0078748"},
+			"images":{
+				"posters":[{"file_path":"/plain.jpg","vote_average":9},{"file_path":"/english.jpg","iso_639_1":"en","width":2000,"height":3000,"vote_average":5}],
+				"backdrops":[{"file_path":"/lettered.jpg","iso_639_1":"en","vote_average":9},{"file_path":"/clean.jpg","vote_average":4}]},
 			"videos":{"results":[
 				{"type":"Trailer","site":"YouTube","key":"fan","name":"Fan cut","official":false,"published_at":"2020-01-01T00:00:00.000Z"},
 				{"type":"Opening Credits","site":"YouTube","key":"titles","name":"Titles","official":true,"published_at":"2019-01-01T00:00:00.000Z"},
@@ -75,6 +78,12 @@ func TestDetailsTakeTheCountrysCertificate(t *testing.T) {
 		ReleaseDate: time.Date(1979, 5, 25, 0, 0, 0, 0, time.UTC), Year: 1979,
 		Genres: []string{"Horror"}, Studios: []string{"Brandywine"},
 		IDs: map[domain.Provider]string{domain.ProviderTMDB: "348", domain.ProviderIMDb: "tt0078748"},
+		Artwork: []domain.Artwork{
+			{Kind: domain.ArtworkPoster, URL: imageURL + "/english.jpg", Language: "en", Width: 2000, Height: 3000},
+			{Kind: domain.ArtworkPoster, URL: imageURL + "/plain.jpg"},
+			{Kind: domain.ArtworkBackdrop, URL: imageURL + "/clean.jpg"},
+			{Kind: domain.ArtworkBackdrop, URL: imageURL + "/lettered.jpg", Language: "en"},
+		},
 		Videos: []domain.RemoteVideo{
 			{Kind: domain.ExtraTrailer, Site: "YouTube", Key: "studio", Name: "Trailer", Language: "en", Published: time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)},
 			{Kind: domain.ExtraOther, Site: "YouTube", Key: "titles", Name: "Titles", Published: time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC)},

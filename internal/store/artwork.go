@@ -31,6 +31,22 @@ func saveFolderArtwork(ctx context.Context, tx *query.Query, item model.UUID, fo
 	return createArtwork(ctx, tx, rows)
 }
 
+// saveProviderArtwork replaces what a provider has for a title with what it has now.
+func saveProviderArtwork(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, pictures []domain.Artwork) error {
+	a := tx.Artwork
+	if _, err := a.WithContext(ctx).Where(a.ItemID.Eq(item), a.Source.Eq(string(source))).Delete(); err != nil {
+		return err
+	}
+	rows := make([]*model.Artwork, len(pictures))
+	for n, p := range pictures {
+		rows[n] = &model.Artwork{
+			ItemID: item, Source: source, Kind: p.Kind, Place: p.URL, Position: n,
+			Language: optional(p.Language), Width: optionalInt(p.Width), Height: optionalInt(p.Height),
+		}
+	}
+	return createArtwork(ctx, tx, rows)
+}
+
 func createArtwork(ctx context.Context, tx *query.Query, rows []*model.Artwork) error {
 	if len(rows) == 0 {
 		return nil
