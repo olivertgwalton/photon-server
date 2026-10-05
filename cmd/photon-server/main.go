@@ -45,8 +45,10 @@ func run(logger *slog.Logger, args []string) error {
 		return serve(ctx, logger, databaseURL)
 	case len(args) == 1 && args[0] == "migrate":
 		return store.Migrate(ctx, databaseURL, logger)
+	case args[0] == "library":
+		return library(ctx, logger, databaseURL, os.Stdout, args[1:])
 	}
-	return fmt.Errorf("usage: photon-server [migrate], got %q", args)
+	return fmt.Errorf("usage: photon-server [migrate | library], got %q", args)
 }
 
 func requiredEnv(name string) (string, error) {

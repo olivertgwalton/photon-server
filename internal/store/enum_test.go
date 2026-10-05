@@ -1,0 +1,45 @@
+//go:build integration
+
+package store
+
+import (
+	"regexp"
+	"slices"
+	"testing"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
+)
+
+func names[T ~string](values []T) []string {
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = string(v)
+	}
+	return out
+}
+
+var quoted = regexp.MustCompile(`'([^']*)'`)
+
+// Every enum column's CHECK constraint, named after its Go type, allows exactly the Go constants.
+func TestEnumConstraintsMatchGo(t *testing.T) {
+	s := migrated(t)
+	for constraint, want := range map[string][]string{
+		"library_kind": names(domain.LibraryKinds()),
+	} {
+		var def string
+		err := s.pool.QueryRow(t.Context(),
+			"SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = $1", constraint).Scan(&def)
+		if err != nil {
+			t.Fatalf("%s: %v", constraint, err)
+		}
+		var got []string
+		for _, m := range quoted.FindAllStringSubmatch(def, -1) {
+			got = append(got, m[1])
+		}
+		slices.Sort(got)
+		slices.Sort(want)
+		if !slices.Equal(got, want) {
+			t.Errorf("%s: database allows %v, Go has %v", constraint, got, want)
+		}
+	}
+}
