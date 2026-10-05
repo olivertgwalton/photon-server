@@ -20,6 +20,7 @@ type Show struct {
 	Year   int
 	Folder string
 	IDs    map[domain.Provider]string
+	NFO    *domain.Metadata
 }
 
 type Episode struct {
@@ -29,6 +30,7 @@ type Episode struct {
 	Title    string
 	Folder   string
 	IDs      map[domain.Provider]string
+	NFO      *domain.Metadata
 	// ByNumber lets the episode join one already known by its season and numbers. It is false for
 	// an episode read from a bare number, which joins nothing but its own copies.
 	ByNumber bool
@@ -40,8 +42,8 @@ type Episode struct {
 func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, show Show, episodes []Episode, extras []Extra) ([]string, error) {
 	var unowned []string
 	err := s.q.Transaction(func(tx *query.Query) error {
-		// A series' extras folder can come before any of its episodes, and its extras need the show.
-		if len(episodes) > 0 || (len(extras) > 0 && show.Folder != "") {
+		// A series' own folder, holding its NFO and extras, comes before any of its episodes.
+		if len(episodes) > 0 || ((len(extras) > 0 || show.NFO != nil) && show.Folder != "") {
 			showID, err := ensureShow(ctx, tx, lib, show)
 			if err != nil {
 				return err
@@ -82,10 +84,7 @@ func ensureShow(ctx context.Context, tx *query.Query, lib uuid.UUID, show Show) 
 	if err != nil {
 		return model.UUID{}, err
 	}
-	if err := fromFiles(ctx, tx, row.ID, show.Title, show.Year); err != nil {
-		return model.UUID{}, err
-	}
-	return row.ID, saveIDs(ctx, tx, row.ID, show.IDs)
+	return row.ID, describe(ctx, tx, row.ID, show.Title, show.Year, show.IDs, show.NFO)
 }
 
 func ensureSeason(ctx context.Context, tx *query.Query, lib uuid.UUID, showID model.UUID, folder string, number int) (model.UUID, error) {
@@ -110,7 +109,7 @@ func ensureSeason(ctx context.Context, tx *query.Query, lib uuid.UUID, showID mo
 	if err := i.WithContext(ctx).Create(&row); err != nil {
 		return model.UUID{}, err
 	}
-	return row.ID, fromFiles(ctx, tx, row.ID, title, 0)
+	return row.ID, describe(ctx, tx, row.ID, title, 0, nil, nil)
 }
 
 func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID model.UUID, e Episode) error {
@@ -149,10 +148,7 @@ func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID mod
 			return err
 		}
 	}
-	if err := fromFiles(ctx, tx, row.ID, e.Title, 0); err != nil {
-		return err
-	}
-	if err := saveIDs(ctx, tx, row.ID, e.IDs); err != nil {
+	if err := describe(ctx, tx, row.ID, e.Title, 0, e.IDs, e.NFO); err != nil {
 		return err
 	}
 	for _, c := range e.Copies {

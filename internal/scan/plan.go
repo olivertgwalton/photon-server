@@ -13,6 +13,8 @@ import (
 type film struct {
 	name     naming.Name
 	versions []copyPlan
+	// nfos are the names its NFO may have, in the order Jellyfin looks for them.
+	nfos []string
 }
 
 // copyPlan is one copy: its files in play order, and what tells it apart from its siblings.
@@ -51,16 +53,23 @@ func planFilms(f library.Folder) []film {
 			for i := range v {
 				v[i].subtitles = subtitlesFor(f.Files, copyStem(v[i].parts), strings.TrimSpace(naming.StripTags(folder)), len(v) == 1)
 			}
-			return []film{{name: naming.CleanName(folder), versions: v}}
+			return []film{{name: naming.CleanName(folder), versions: v, nfos: []string{nfoOf(v[0].parts), "movie.nfo"}}}
 		}
 	}
 	films := make([]film, 0, len(copies))
 	for _, c := range copies {
 		n := naming.CleanName(stem(c[0].Name))
 		subs := subtitlesFor(f.Files, copyStem(c), "", len(copies) == 1)
-		films = append(films, film{name: n, versions: []copyPlan{{parts: c, edition: n.Edition, subtitles: subs}}})
+		films = append(films, film{
+			name: n, versions: []copyPlan{{parts: c, edition: n.Edition, subtitles: subs}}, nfos: []string{nfoOf(c)},
+		})
 	}
 	return films
+}
+
+// nfoOf is the NFO named after a copy's first file.
+func nfoOf(parts []library.File) string {
+	return stem(parts[0].Name) + ".nfo"
 }
 
 // copyStem is the name a copy's subtitles are named after: its file's stem, or for a copy split

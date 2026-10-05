@@ -26,6 +26,7 @@ type Film struct {
 	Year   int
 	Folder string
 	IDs    map[domain.Provider]string
+	NFO    *domain.Metadata
 	Copies []Copy
 }
 
@@ -107,9 +108,6 @@ func saveFilm(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) error
 	if err != nil {
 		return err
 	}
-	if err := saveIDs(ctx, tx, itemID, f.IDs); err != nil {
-		return err
-	}
 	for _, c := range f.Copies {
 		if err := saveCopy(ctx, tx, lib, itemID, c); err != nil {
 			return err
@@ -144,14 +142,14 @@ func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) (mode
 			if err := i.WithContext(ctx).Create(&item); err != nil {
 				return model.UUID{}, err
 			}
-			return item.ID, fromFiles(ctx, tx, item.ID, f.Title, f.Year)
+			return item.ID, describe(ctx, tx, item.ID, f.Title, f.Year, f.IDs, f.NFO)
 		}
 	}
 	_, err = i.WithContext(ctx).Where(i.ID.Eq(item.ID)).Select(i.ScanTitle, i.Folder).Updates(&item)
 	if err != nil {
 		return model.UUID{}, err
 	}
-	return item.ID, fromFiles(ctx, tx, item.ID, f.Title, f.Year)
+	return item.ID, describe(ctx, tx, item.ID, f.Title, f.Year, f.IDs, f.NFO)
 }
 
 // knownItem is the title of kind holding the first of copies the catalogue already has. A copy
@@ -171,18 +169,6 @@ func knownItem(ctx context.Context, tx *query.Query, lib uuid.UUID, kind domain.
 		}
 	}
 	return model.UUID{}, false, nil
-}
-
-func saveIDs(ctx context.Context, tx *query.Query, itemID model.UUID, ids map[domain.Provider]string) error {
-	for provider, value := range ids {
-		err := tx.ExternalID.WithContext(ctx).Save(&model.ExternalID{
-			ItemID: itemID, Provider: provider, Value: value, Source: domain.IDFromPath,
-		})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.UUID, c Copy) error {

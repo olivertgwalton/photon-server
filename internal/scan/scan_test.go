@@ -400,3 +400,57 @@ func TestAnExtraThatIsAFilmsCopyLeavesTheFilmAlone(t *testing.T) {
 		t.Errorf("Heat is read from %d places, want its own and the featurette's", n)
 	}
 }
+
+func (f *fixture) write(rel, content string) {
+	f.t.Helper()
+	if err := os.WriteFile(filepath.Join(f.root, rel), []byte(content), 0o644); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+func (f *fixture) title(sql string) string {
+	f.t.Helper()
+	var s string
+	if err := f.db.QueryRow(f.t.Context(), sql).Scan(&s); err != nil {
+		f.t.Fatal(err)
+	}
+	return s
+}
+
+func TestNFOsDescribeTheirTitles(t *testing.T) {
+	f := newFixture(t, domain.LibraryShows)
+	f.put("the wire/Season 1/the.wire.s01e01.mkv", "e1")
+	f.write("the wire/tvshow.nfo", `<tvshow><title>The Wire</title><uniqueid type="tvdb">79126</uniqueid></tvshow>`)
+	f.write("the wire/Season 1/the.wire.s01e01.nfo", `<episodedetails><title>The Target</title><plot>Baltimore.</plot></episodedetails>`)
+	f.scan()
+	if got := f.title(`SELECT title FROM items WHERE kind = 'show'`); got != "The Wire" {
+		t.Errorf("show title = %q, want tvshow.nfo's", got)
+	}
+	if got := f.title(`SELECT title || ': ' || overview FROM items WHERE kind = 'episode'`); got != "The Target: Baltimore." {
+		t.Errorf("episode = %q, want its NFO's title and plot", got)
+	}
+	if n := f.count(`SELECT count(*) FROM external_ids WHERE provider = 'tvdb' AND value = '79126' AND source = 'nfo'`); n != 1 {
+		t.Error("the show's TVDB id from its NFO was not kept")
+	}
+
+	f.write("the wire/tvshow.nfo", `<tvshow><title>The Wire (HBO)</title></tvshow>`)
+	f.scan()
+	if got := f.title(`SELECT title FROM items WHERE kind = 'show'`); got != "The Wire (HBO)" {
+		t.Errorf("after editing tvshow.nfo, show title = %q", got)
+	}
+}
+
+func TestFilmNFO(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	f.put("Alien (1979)/Alien (1979) - 1080p.mkv", "alien")
+	f.write("Alien (1979)/movie.nfo", `<movie><title>Alien</title><mpaa>Rated R</mpaa></movie>`)
+	f.put("Heat (1995).mkv", "heat")
+	f.write("Heat (1995).nfo", `<movie><title>Heat</title><tagline>A Los Angeles crime saga.</tagline></movie>`)
+	f.scan()
+	if got := f.title(`SELECT certificate FROM items WHERE title = 'Alien'`); got != "R" {
+		t.Errorf("Alien's certificate = %q, want movie.nfo's", got)
+	}
+	if got := f.title(`SELECT tagline FROM items WHERE title = 'Heat'`); got != "A Los Angeles crime saga." {
+		t.Errorf("Heat's tagline = %q, want its own NFO's", got)
+	}
+}
