@@ -1,0 +1,4 @@
+The ffmpeg and ffprobe in this image are jellyfin-ffmpeg's portable builds, unmodified, from
+https://github.com/jellyfin/jellyfin-ffmpeg/releases. They are licensed GPL-3.0-or-later; their
+complete source is jellyfin-ffmpeg at the tag of the version this image installs, at
+https://github.com/jellyfin/jellyfin-ffmpeg, with the libraries its builder/ scripts name.
