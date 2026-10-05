@@ -33,6 +33,7 @@ func newTaskState(db *gorm.DB, opts ...gen.DOOption) taskState {
 	_taskState.FinishedAt = field.NewTime(tableName, "finished_at")
 	_taskState.Result = field.NewString(tableName, "result")
 	_taskState.Error = field.NewString(tableName, "error")
+	_taskState.RequestedAt = field.NewTime(tableName, "requested_at")
 
 	_taskState.fillFieldMap()
 
@@ -42,12 +43,13 @@ func newTaskState(db *gorm.DB, opts ...gen.DOOption) taskState {
 type taskState struct {
 	taskStateDo taskStateDo
 
-	ALL        field.Asterisk
-	Key        field.String
-	StartedAt  field.Time
-	FinishedAt field.Time
-	Result     field.String
-	Error      field.String
+	ALL         field.Asterisk
+	Key         field.String
+	StartedAt   field.Time
+	FinishedAt  field.Time
+	Result      field.String
+	Error       field.String
+	RequestedAt field.Time
 
 	fieldMap map[string]field.Expr
 }
@@ -69,6 +71,7 @@ func (t *taskState) updateTableName(table string) *taskState {
 	t.FinishedAt = field.NewTime(table, "finished_at")
 	t.Result = field.NewString(table, "result")
 	t.Error = field.NewString(table, "error")
+	t.RequestedAt = field.NewTime(table, "requested_at")
 
 	t.fillFieldMap()
 
@@ -95,12 +98,13 @@ func (t *taskState) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (t *taskState) fillFieldMap() {
-	t.fieldMap = make(map[string]field.Expr, 5)
+	t.fieldMap = make(map[string]field.Expr, 6)
 	t.fieldMap["key"] = t.Key
 	t.fieldMap["started_at"] = t.StartedAt
 	t.fieldMap["finished_at"] = t.FinishedAt
 	t.fieldMap["result"] = t.Result
 	t.fieldMap["error"] = t.Error
+	t.fieldMap["requested_at"] = t.RequestedAt
 }
 
 func (t taskState) clone(db *gorm.DB) taskState {

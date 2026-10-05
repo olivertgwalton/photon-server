@@ -35,3 +35,20 @@ func (t Trigger) due(last, now time.Time) bool {
 	}
 	return false
 }
+
+// next answers when a trigger next fires after a task last started at last, given it has not by
+// now.
+func (t Trigger) next(last, now time.Time) time.Time {
+	switch t.Kind {
+	case TriggerEvery:
+		return last.Add(t.Every)
+	case TriggerDaily:
+		y, m, d := now.Date()
+		today := time.Date(y, m, d, 0, 0, 0, 0, now.Location()).Add(t.At)
+		if now.Before(today) {
+			return today
+		}
+		return today.AddDate(0, 0, 1)
+	}
+	return time.Time{}
+}
