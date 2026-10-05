@@ -161,3 +161,10 @@ func migrationsDir() fs.FS {
 }
 
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
+
+// Version answers the Postgres server's version.
+func (s *Store) Version(ctx context.Context) (string, error) {
+	var v string
+	err := s.pool.QueryRow(ctx, "SHOW server_version").Scan(&v)
+	return v, err
+}

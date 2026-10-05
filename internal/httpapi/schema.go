@@ -24,6 +24,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.Capability]():          values(domain.Capabilities()),
 	reflect.TypeFor[domain.CollectionOrigin]():    values(domain.CollectionOrigins()),
 	reflect.TypeFor[domain.CreditKind]():          values(domain.CreditKinds()),
+	reflect.TypeFor[domain.Discovery]():           values(domain.Discoveries()),
 	reflect.TypeFor[domain.DolbyVisionHandling](): values(domain.DolbyVisionHandlings()),
 	reflect.TypeFor[domain.DownloadState]():       values(domain.DownloadStates()),
 	reflect.TypeFor[domain.EpisodeOrder]():        values(domain.EpisodeOrders()),

@@ -91,6 +91,7 @@ func requiredEnv(name string) (string, error) {
 }
 
 func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
+	started := time.Now()
 	valkeyURL, err := requiredEnv("PHOTON_VALKEY_URL")
 	if err != nil {
 		return err
@@ -166,13 +167,13 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	// node is this process among the cluster's.
+	node := uuid.NewV7()
 	info := httpapi.Info{
 		ID:      id.String(),
 		Name:    cmp.Or(os.Getenv("PHOTON_NAME"), hostname),
 		Version: version,
 	}
-	// node is this process among the cluster's.
-	node := uuid.NewV7()
 	conversions, err := playback.NewConversions(st, cache, remuxer, tools.FFmpeg.Path, hw, filepath.Join(cacheRoot, "downloads"), node)
 	if err != nil {
 		return err
@@ -197,10 +198,15 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 			return st.ProviderSettings(ctx, domain.SourceMDBList)
 		}, cache),
 	)
+	listen := cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen)
+	setup := httpapi.Setup{
+		Started: started, Node: node, Listen: listen, Tools: tools, Encoder: hw, Discovery: discoveryMode,
+		MetadataLanguage: lang, CacheDir: cacheRoot, BackupDir: dumper.Dir,
+	}
 	srv := &http.Server{
-		Addr: cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
+		Addr: listen,
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close, hub.Raise, node), Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Webhooks: st, TrustedProxies: trusted,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close, hub.Raise, node), Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Webhooks: st, TrustedProxies: trusted, Setup: setup, Postgres: st, Valkey: cache,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
