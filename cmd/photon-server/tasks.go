@@ -178,3 +178,24 @@ func previewsTask(st *store.Store, previews *analysis.Previews, logger *slog.Log
 		},
 	}
 }
+
+// downloadsKept is how long a download stays once its file is ready, or its conversion failed,
+// unless it is removed first: a week covers a device that is away or off for one before it
+// fetches, and is as long as a converted file holds disk nobody may want.
+const downloadsKept = 7 * 24 * time.Hour
+
+// sweepDownloadsTask forgets the downloads kept past downloadsKept and the conversions no
+// download needs; each node then prunes their files.
+func sweepDownloadsTask(st *store.Store, logger *slog.Logger) task.Task {
+	return task.Task{
+		Key:      domain.TaskSweepDownloads,
+		Triggers: []task.Trigger{{Kind: task.TriggerEvery, Every: time.Hour}},
+		Run: func(ctx context.Context) error {
+			n, err := st.ExpireDownloads(ctx, time.Now().Add(-downloadsKept))
+			if n > 0 {
+				logger.InfoContext(ctx, "downloads expired", slog.Int64("downloads", n))
+			}
+			return err
+		},
+	}
+}

@@ -170,6 +170,10 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	// node is this process among the cluster's.
 	node := uuid.NewV7()
+	conversions, err := playback.NewConversions(st, cache, tools.FFmpeg.Path, hw, filepath.Join(cacheRoot, "downloads"), node)
+	if err != nil {
+		return err
+	}
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return err
@@ -178,7 +182,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		PGDump: cmp.Or(os.Getenv("PHOTON_PG_DUMP"), "pg_dump"), URL: databaseURL,
 		Dir: cmp.Or(os.Getenv("PHOTON_BACKUP_DIR"), filepath.Join(configDir, "photon-server", "backups")),
 	}
-	scheduler := task.NewScheduler(st, logger, node, scanTask(st), sweepTask(st, logger), backupTask(dumper, logger), refreshTask(st, logger), sweepArtworkTask(st, pictureCache, logger), markersTask(st, tools, logger), previewsTask(st, previews, logger))
+	scheduler := task.NewScheduler(st, logger, node, scanTask(st), sweepTask(st, logger), backupTask(dumper, logger), refreshTask(st, logger), sweepArtworkTask(st, pictureCache, logger), markersTask(st, tools, logger), previewsTask(st, previews, logger), sweepDownloadsTask(st, logger))
 	lang := cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US")
 	// TMDB runs before TheTVDB, as its match may give TheTVDB an id to find a show by.
 	providers := provider.NewRegistry(
@@ -191,7 +195,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	srv := &http.Server{
 		Addr: cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close, node), Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Limits: cache, TrustedProxies: trusted,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close, node), Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, TrustedProxies: trusted,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -209,13 +213,20 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	previewer := jobs.NewWorker(st, logger, node, 1, map[domain.JobKind]jobs.Handler{
 		domain.JobPreviews: analysis.MakePreviews(st, tools, previews, logger),
 	})
+	// Conversions have slots of their own, so a long one never holds up a scan, and a node's are
+	// few, so they never starve its playbacks.
+	converter := jobs.NewWorker(st, logger, node, playback.MaxConversions, map[domain.JobKind]jobs.Handler{
+		domain.JobConvert: conversions.Convert,
+	})
 	watcher := watch.New(st, logger)
 	background, stopBackground := context.WithCancel(ctx)
 	var wg sync.WaitGroup
 	wg.Go(func() { scheduler.Run(background) })
 	wg.Go(func() { worker.Run(background) })
 	wg.Go(func() { previewer.Run(background) })
+	wg.Go(func() { converter.Run(background) })
 	wg.Go(func() { sweepRemuxes(background, remuxer) })
+	wg.Go(func() { pruneConversions(background, conversions, logger) })
 	if address := os.Getenv("PHOTON_NODE_ADDRESS"); address != "" {
 		wg.Go(func() { advertise(background, cache, node, address, logger) })
 	}
@@ -371,6 +382,26 @@ func sweepRemuxes(ctx context.Context, r *hls.Remuxer) {
 			return
 		case <-t.C:
 			r.Sweep()
+		}
+	}
+}
+
+// pruneEvery is how often a node removes the converted files no download needs any more.
+const pruneEvery = 10 * time.Minute
+
+// pruneConversions prunes at start, which clears what a node stopped mid-conversion left, and
+// every pruneEvery after.
+func pruneConversions(ctx context.Context, c *playback.Conversions, logger *slog.Logger) {
+	t := time.NewTicker(pruneEvery)
+	defer t.Stop()
+	for {
+		if err := c.Prune(ctx); err != nil && ctx.Err() == nil {
+			logger.WarnContext(ctx, "converted files not pruned", slog.Any("err", err))
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
 		}
 	}
 }
