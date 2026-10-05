@@ -33,7 +33,9 @@ var ErrNoRemux = errors.New("hls: no such remux")
 type Source struct {
 	Open  func() (*os.File, error)
 	Part  Part
-	Audio int // the file's audio stream to copy, by its position among the file's audio streams
+	// Audio is the file's stream to copy as the audio, by its index in the file; nil is its first
+	// audio stream.
+	Audio *int
 }
 
 // Remuxer runs the remuxes of copies played as HLS, one per playback, each writing its segments
@@ -316,19 +318,26 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	return err
 }
 
-// args copies a file's first video and one of its audio streams into fragmented MP4 on stdout,
+// args copies a file's first video and one audio stream into fragmented MP4 on stdout,
 // from the keyframe at start, on the file's own clock (see clockOffset).
-func args(start time.Duration, audio int) []string {
+func args(start time.Duration, audio *int) []string {
 	return []string{
 		"-hide_banner", "-loglevel", "error", "-nostdin",
 		"-protocol_whitelist", "fd", "-fd", "3",
 		"-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts", "-i", "fd:",
-		"-map", "0:v:0", "-map", "0:a:" + strconv.Itoa(audio) + "?", "-c", "copy",
+		"-map", "0:v:0", "-map", audioMap(audio), "-c", "copy",
 		"-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+default_base_moof+delay_moov+frag_discont+skip_trailer",
 		"-use_editlist", "0", "-avoid_negative_ts", "disabled",
 		"-output_ts_offset", strconv.FormatFloat(clockOffset.Seconds(), 'f', 0, 64),
 		"-fflags", "+bitexact", "-",
 	}
+}
+
+func audioMap(stream *int) string {
+	if stream == nil {
+		return "0:a:0?"
+	}
+	return "0:" + strconv.Itoa(*stream)
 }
 
 // cut reads ffmpeg's output and keeps the plan's segments of the run's part from run.at onwards.
