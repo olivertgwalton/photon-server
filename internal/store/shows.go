@@ -67,10 +67,7 @@ func ensureShow(ctx context.Context, tx *query.Query, lib uuid.UUID, show Show) 
 	i := tx.Item
 	row := model.Item{
 		LibraryID: model.UUID(lib), Kind: domain.ItemShow,
-		Title: show.Title, SortTitle: sortTitle(show.Title), Folder: show.Folder,
-	}
-	if show.Year != 0 {
-		row.Year = &show.Year
+		ScanTitle: show.Title, Title: show.Title, SortTitle: sortTitle(show.Title), Folder: show.Folder,
 	}
 	known, err := i.WithContext(ctx).Where(
 		i.LibraryID.Eq(model.UUID(lib)), i.Kind.Eq(string(domain.ItemShow)), i.Folder.Eq(show.Folder),
@@ -78,11 +75,14 @@ func ensureShow(ctx context.Context, tx *query.Query, lib uuid.UUID, show Show) 
 	switch {
 	case err == nil:
 		row.ID = known.ID
-		_, err = i.WithContext(ctx).Where(i.ID.Eq(row.ID)).Select(i.Title, i.SortTitle, i.Year).Updates(&row)
+		_, err = i.WithContext(ctx).Where(i.ID.Eq(row.ID)).Select(i.ScanTitle).Updates(&row)
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		err = i.WithContext(ctx).Create(&row)
 	}
 	if err != nil {
+		return model.UUID{}, err
+	}
+	if err := fromFiles(ctx, tx, row.ID, show.Title, show.Year); err != nil {
 		return model.UUID{}, err
 	}
 	return row.ID, saveIDs(ctx, tx, row.ID, show.IDs)
@@ -105,10 +105,12 @@ func ensureSeason(ctx context.Context, tx *query.Query, lib uuid.UUID, showID mo
 	}
 	row := model.Item{
 		LibraryID: model.UUID(lib), Kind: domain.ItemSeason, ParentID: &showID, SeasonNumber: &number,
-		Title: title, SortTitle: fmt.Sprintf("%06d", number), Folder: folder,
+		ScanTitle: title, Title: title, SortTitle: sortTitle(title), Folder: folder,
 	}
-	err = i.WithContext(ctx).Create(&row)
-	return row.ID, err
+	if err := i.WithContext(ctx).Create(&row); err != nil {
+		return model.UUID{}, err
+	}
+	return row.ID, fromFiles(ctx, tx, row.ID, title, 0)
 }
 
 func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID model.UUID, e Episode) error {
@@ -118,21 +120,17 @@ func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID mod
 	}
 	row := model.Item{
 		LibraryID: model.UUID(lib), Kind: domain.ItemEpisode, ParentID: &seasonID, SeasonNumber: &e.Season,
-		Title: e.Title, SortTitle: sortTitle(e.Title), Folder: e.Folder,
+		ScanTitle: e.Title, Title: e.Title, SortTitle: sortTitle(e.Title), Folder: e.Folder,
 	}
 	if len(e.Episodes) > 0 {
 		first, last := e.Episodes[0], e.Episodes[len(e.Episodes)-1]
 		row.EpisodeNumber = &first
-		row.SortTitle = fmt.Sprintf("%06d", first)
 		if last != first {
 			row.EpisodeEnd = &last
 		}
 	}
 	if !e.AirDate.IsZero() {
 		row.AirDate = &e.AirDate
-		if row.EpisodeNumber == nil {
-			row.SortTitle = e.AirDate.Format(time.DateOnly)
-		}
 	}
 	row.ID, err = episodeItem(ctx, tx, lib, e, row)
 	if err != nil {
@@ -145,11 +143,14 @@ func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID mod
 		}
 	} else {
 		_, err := i.WithContext(ctx).Where(i.ID.Eq(row.ID)).Select(
-			i.ParentID, i.SeasonNumber, i.EpisodeNumber, i.EpisodeEnd, i.AirDate, i.Title, i.SortTitle, i.Folder,
+			i.ParentID, i.SeasonNumber, i.EpisodeNumber, i.EpisodeEnd, i.AirDate, i.ScanTitle, i.Folder,
 		).Updates(&row)
 		if err != nil {
 			return err
 		}
+	}
+	if err := fromFiles(ctx, tx, row.ID, e.Title, 0); err != nil {
+		return err
 	}
 	if err := saveIDs(ctx, tx, row.ID, e.IDs); err != nil {
 		return err

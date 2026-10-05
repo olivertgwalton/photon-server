@@ -95,7 +95,7 @@ func one(q query.IItemDo) (model.UUID, error) {
 func saveExtra(ctx context.Context, tx *query.Query, lib uuid.UUID, owner model.UUID, e Extra) error {
 	row := model.Item{
 		LibraryID: model.UUID(lib), Kind: domain.ItemExtra, ParentID: &owner, ExtraKind: &e.Kind,
-		Title: e.Title, SortTitle: sortTitle(e.Title), Folder: e.Folder,
+		ScanTitle: e.Title, Title: e.Title, SortTitle: sortTitle(e.Title), Folder: e.Folder,
 	}
 	v, i := tx.Version, tx.Item
 	version, err := v.WithContext(ctx).Where(v.LibraryID.Eq(model.UUID(lib)), v.Fingerprint.Eq(e.Copy.ContentKey)).Take()
@@ -118,11 +118,14 @@ func saveExtra(ctx context.Context, tx *query.Query, lib uuid.UUID, owner model.
 	}
 	if known {
 		row.ID = id
-		_, err = i.WithContext(ctx).Where(i.ID.Eq(id)).Select(i.ParentID, i.ExtraKind, i.Title, i.SortTitle, i.Folder).Updates(&row)
+		_, err = i.WithContext(ctx).Where(i.ID.Eq(id)).Select(i.ParentID, i.ExtraKind, i.ScanTitle, i.Folder).Updates(&row)
 	} else {
 		err = i.WithContext(ctx).Create(&row)
 	}
 	if err != nil {
+		return err
+	}
+	if err := fromFiles(ctx, tx, row.ID, e.Title, 0); err != nil {
 		return err
 	}
 	return saveCopy(ctx, tx, lib, row.ID, e.Copy)
