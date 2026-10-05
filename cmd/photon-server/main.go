@@ -16,7 +16,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/task"
 )
 
 const (
@@ -102,6 +104,18 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		IdleTimeout:       2 * time.Minute,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
 	}
+
+	scheduler := task.NewScheduler(st, logger, scanTask(st, scan.New(st, tools, logger), logger))
+	scheduling, stopScheduling := context.WithCancel(ctx)
+	scheduled := make(chan struct{})
+	go func() {
+		scheduler.Run(scheduling)
+		close(scheduled)
+	}()
+	defer func() {
+		stopScheduling()
+		<-scheduled
+	}()
 
 	served := make(chan error, 1)
 	go func() { served <- srv.ListenAndServe() }()
