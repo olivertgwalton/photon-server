@@ -233,3 +233,14 @@ func TestEveryProblemCodeIsListed(t *testing.T) {
 		t.Errorf("problem codes (-declared +listed):\n%s", diff)
 	}
 }
+
+// The description a client generates its types from offline is the one the server serves.
+func TestTheOfflineDescriptionIsTheServedOne(t *testing.T) {
+	offline, err := Describe(Info{Version: "v0.1.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if served := fetchDescription(t, newAPI(nil)); string(offline) != string(served) {
+		t.Error("Describe differs from GET /api/v1/openapi.json")
+	}
+}

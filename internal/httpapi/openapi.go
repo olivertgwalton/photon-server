@@ -40,6 +40,12 @@ var (
 
 var wildcard = regexp.MustCompile(`\{(\w+)\}`)
 
+// Describe answers the API's OpenAPI description for a server of this version, as
+// GET /api/v1/openapi.json does, with no server behind it.
+func Describe(info Info) ([]byte, error) {
+	return describe(info, new(API).routes())
+}
+
 // describe answers the API's OpenAPI description, from its routes.
 func describe(info Info, routes []route) ([]byte, error) {
 	s := newSchemas()

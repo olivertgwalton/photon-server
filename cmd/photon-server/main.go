@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -64,6 +65,9 @@ func run(logger *slog.Logger, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if len(args) == 1 && args[0] == "openapi" {
+		return writeDescription(os.Stdout)
+	}
 	databaseURL, err := requiredEnv("PHOTON_DATABASE_URL")
 	if err != nil {
 		return err
@@ -80,7 +84,18 @@ func run(logger *slog.Logger, args []string) error {
 	case args[0] == "profile":
 		return profileCommand(ctx, logger, databaseURL, os.Stdout, args[1:])
 	}
-	return fmt.Errorf("usage: photon-server [migrate | library | scan | profile], got %q", args)
+	return fmt.Errorf("usage: photon-server [migrate | library | scan | profile | openapi], got %q", args)
+}
+
+// writeDescription writes the API's OpenAPI description, so a client's types are generated
+// without a server or database.
+func writeDescription(w io.Writer) error {
+	doc, err := httpapi.Describe(httpapi.Info{Version: version})
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(append(doc, '\n'))
+	return err
 }
 
 func requiredEnv(name string) (string, error) {

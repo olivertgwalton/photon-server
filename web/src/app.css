@@ -1,0 +1,194 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn-svelte/tailwind.css";
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/manrope";
+@import "@fontsource-variable/jetbrains-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * photon's palette: a dark ground and the ink that sits on it. Nothing else.
+ *
+ * There is no accent colour. A media server's pages are walls of other
+ * people's posters, already the most saturated thing on any screen, and an
+ * accent of our own would only compete with them. So a fill is near-white, a
+ * rule is ink, and every colour on the page belongs to a title.
+ *
+ * One direction only: this is watched in a dark room.
+ */
+:root {
+	/* Ground */
+	--ground: oklch(0.1468 0.0086 285.29); /* #0a0a0e */
+	--raise: oklch(0.2102 0.01 276.56); /* #17181d */
+
+	/* Ink */
+	--ink: oklch(0.973 0.004 286);
+	--ink-2: oklch(0.782 0.008 286);
+	--ink-3: oklch(0.66 0.011 286);
+
+	/* Signal: what a filled control is made of. It is the ink, laid down as a
+	   surface instead of a mark, and it carries the ground back on top. */
+	--signal: var(--ink);
+	--signal-ink: var(--ground);
+
+	--line: oklch(1 0 0 / 12%);
+	--line-strong: oklch(1 0 0 / 22%);
+
+	/* shadcn tokens, bound to the palette */
+	--background: var(--ground);
+	--foreground: var(--ink);
+	--card: var(--raise);
+	--card-foreground: var(--ink);
+	--popover: var(--raise);
+	--popover-foreground: var(--ink);
+	--primary: var(--signal);
+	--primary-foreground: var(--signal-ink);
+	--secondary: oklch(1 0 0 / 8%);
+	--secondary-foreground: var(--ink);
+	--muted: oklch(1 0 0 / 6%);
+	--muted-foreground: var(--ink-3);
+	--accent: oklch(1 0 0 / 10%);
+	--accent-foreground: var(--ink);
+	--destructive: oklch(0.704 0.191 22.216);
+	--border: var(--line);
+	--input: var(--line-strong);
+	--ring: var(--signal);
+	--radius: 0.625rem;
+
+	--sidebar: var(--ground);
+	--sidebar-foreground: var(--ink-2);
+	--sidebar-primary: var(--signal);
+	--sidebar-primary-foreground: var(--signal-ink);
+	--sidebar-accent: oklch(1 0 0 / 8%);
+	--sidebar-accent-foreground: var(--ink);
+	--sidebar-border: var(--line);
+	--sidebar-ring: var(--signal);
+}
+
+@theme inline {
+	--font-heading:
+		"Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+	--font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+	--font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+
+	--color-ground: var(--ground);
+	--color-raise: var(--raise);
+	--color-ink: var(--ink);
+	--color-ink-2: var(--ink-2);
+	--color-ink-3: var(--ink-3);
+	--color-signal: var(--signal);
+	--color-signal-ink: var(--signal-ink);
+	--color-line: var(--line);
+	--color-line-strong: var(--line-strong);
+
+	--color-ring: var(--ring);
+	--color-input: var(--input);
+	--color-border: var(--border);
+	--color-destructive: var(--destructive);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-accent: var(--accent);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-muted: var(--muted);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-secondary: var(--secondary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-primary: var(--primary);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-popover: var(--popover);
+	--color-card-foreground: var(--card-foreground);
+	--color-card: var(--card);
+	--color-foreground: var(--foreground);
+	--color-background: var(--background);
+
+	--color-sidebar: var(--sidebar);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-ring: var(--sidebar-ring);
+
+	--radius-sm: calc(var(--radius) * 0.6);
+	--radius-md: calc(var(--radius) * 0.8);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) * 1.4);
+	--radius-2xl: calc(var(--radius) * 1.8);
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+
+	html {
+		@apply font-sans;
+		color-scheme: dark;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	body {
+		@apply bg-ground text-ink-2 antialiased;
+		font-synthesis-weight: none;
+	}
+
+	::selection {
+		background: color-mix(in oklab, var(--ink) 26%, transparent);
+		color: var(--ink);
+	}
+
+	:focus-visible {
+		@apply outline-signal outline-2 outline-offset-2;
+	}
+
+	h1,
+	h2,
+	h3,
+	h4 {
+		@apply font-heading text-ink;
+		text-wrap: balance;
+	}
+
+	p {
+		text-wrap: pretty;
+	}
+}
+
+/*
+ * Reduce Motion, and outside every layer deliberately: an unlayered rule beats
+ * a layered one whatever the specificity, so this settles the animation and
+ * transition utilities without a single `!important`.
+ */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms;
+		animation-iteration-count: 1;
+		transition-duration: 0.01ms;
+		scroll-behavior: auto;
+	}
+}
+
+/*
+ * Type. The website's voice at an app's size: a page is read at a glance and
+ * scanned, never declaimed, so nothing here is larger than a page's own name.
+ */
+@layer components {
+	/* A page's name. */
+	.title {
+		@apply font-heading text-ink text-2xl font-bold tracking-tight md:text-3xl;
+	}
+
+	/* A row's or a section's name. */
+	.heading {
+		@apply font-heading text-ink text-lg font-bold tracking-tight;
+	}
+
+	/* The small line that names a block: mono, a label on the design rather
+	   than something to be read as prose. */
+	.label {
+		@apply text-ink-3 font-mono text-[0.6875rem] font-bold tracking-[0.16em] uppercase;
+	}
+}
