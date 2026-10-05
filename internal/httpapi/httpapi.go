@@ -122,6 +122,7 @@ func (a *API) routes() []route {
 		{pattern: "DELETE /api/v1/titles/{id}/watched", access: signedIn, handle: a.mark(watching.MarkUnwatched)},
 		{pattern: "PUT /api/v1/titles/{id}/favourite", access: signedIn, handle: a.mark(watching.Favourite)},
 		{pattern: "DELETE /api/v1/titles/{id}/favourite", access: signedIn, handle: a.mark(watching.Unfavourite)},
+		{pattern: "GET /api/v1/home", access: signedIn, query: []string{"limit"}, handle: a.home},
 		{pattern: "GET /api/v1/search", access: signedIn, query: []string{"q", "library", "limit"}, handle: a.search},
 		{pattern: "GET /api/v1/artwork/{id}", access: public, query: []string{"width"}, handle: a.artwork},
 	}

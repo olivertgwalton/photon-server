@@ -44,6 +44,41 @@ func (fakeCatalogue) Search(_ context.Context, q store.SearchQuery) ([]store.Car
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: q.Text + " " + q.Library.String()}}, nil
 }
 
+func (fakeCatalogue) Home(_ context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error) {
+	if profile != oliver.ID {
+		return nil, nil
+	}
+	cards := make([]store.Card, limit)
+	for i := range cards {
+		cards[i] = store.Card{ID: films, Kind: domain.ItemEpisode, Title: "Pilot", Show: &store.TitleRef{ID: films, Title: "The Wire"}}
+	}
+	return []store.HomeRow{{Kind: domain.RowNextUp, Cards: cards}}, nil
+}
+
+func TestHome(t *testing.T) {
+	rec := serve(t, http.MethodGet, "/api/v1/home?limit=2", goodToken, "")
+	var got struct {
+		Rows []struct {
+			Kind  string `json:"kind"`
+			Items []struct {
+				Title string `json:"title"`
+				Show  struct {
+					Title string `json:"title"`
+				} `json:"show"`
+			} `json:"items"`
+		} `json:"rows"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Rows) != 1 || got.Rows[0].Kind != "next_up" || len(got.Rows[0].Items) != 2 || got.Rows[0].Items[0].Show.Title != "The Wire" {
+		t.Errorf("home = %+v, want the signed-in profile's next up, two episodes of The Wire", got)
+	}
+	if rec := serve(t, http.MethodGet, "/api/v1/home?limit=0", goodToken, ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("limit=0: %d, want 400", rec.Code)
+	}
+}
+
 func TestSearch(t *testing.T) {
 	for _, tc := range []struct {
 		query      string
