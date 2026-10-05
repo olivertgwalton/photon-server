@@ -158,6 +158,8 @@ type named struct {
 }
 
 type details struct {
+	VoteAverage float64 `json:"vote_average"`
+	VoteCount   int     `json:"vote_count"`
 	result
 	Overview            string  `json:"overview"`
 	Tagline             string  `json:"tagline"`
@@ -213,6 +215,9 @@ func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadat
 		ReleaseDate: released, Year: year(released),
 		Genres: names(d.Genres), Studios: names(append(d.ProductionCompanies, d.Networks...)),
 		IDs: map[domain.Provider]string{domain.ProviderTMDB: strconv.Itoa(id)},
+	}
+	if d.VoteCount > 0 {
+		out.Ratings = []domain.Rating{{Site: domain.SiteTMDB, Score: d.VoteAverage * 10, Votes: d.VoteCount}}
 	}
 	if d.ExternalIDs.IMDb != "" {
 		out.IDs[domain.ProviderIMDb] = d.ExternalIDs.IMDb

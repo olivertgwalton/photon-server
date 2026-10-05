@@ -56,7 +56,7 @@ func TestDetailsTakeTheCountrysCertificate(t *testing.T) {
 	c := serve(t, map[string]string{
 		"/movie/348?append_to_response=release_dates%2Cexternal_ids%2Cvideos%2Cimages&include_image_language=en%2Cnull&include_video_language=en%2Cnull&language=en-GB": `{
 			"id":348,"title":"Alien","original_title":"Alien","overview":"In space.","tagline":"Scream.",
-			"release_date":"1979-05-25","genres":[{"name":"Horror"}],"production_companies":[{"name":"Brandywine"}],"networks":[{"name":"Brandywine"}],
+			"release_date":"1979-05-25","vote_average":8.2,"vote_count":15000,"genres":[{"name":"Horror"}],"production_companies":[{"name":"Brandywine"}],"networks":[{"name":"Brandywine"}],
 			"external_ids":{"imdb_id":"tt0078748"},
 			"images":{
 				"posters":[{"file_path":"/plain.jpg","vote_average":9},{"file_path":"/english.jpg","iso_639_1":"en","width":2000,"height":3000,"vote_average":5}],
@@ -77,7 +77,8 @@ func TestDetailsTakeTheCountrysCertificate(t *testing.T) {
 		Title: "Alien", OriginalTitle: "Alien", Overview: "In space.", Tagline: "Scream.", Certificate: "18",
 		ReleaseDate: time.Date(1979, 5, 25, 0, 0, 0, 0, time.UTC), Year: 1979,
 		Genres: []string{"Horror"}, Studios: []string{"Brandywine"},
-		IDs: map[domain.Provider]string{domain.ProviderTMDB: "348", domain.ProviderIMDb: "tt0078748"},
+		IDs:     map[domain.Provider]string{domain.ProviderTMDB: "348", domain.ProviderIMDb: "tt0078748"},
+		Ratings: []domain.Rating{{Site: domain.SiteTMDB, Score: 82, Votes: 15000}},
 		Artwork: []domain.Artwork{
 			{Kind: domain.ArtworkPoster, URL: imageURL + "/english.jpg", Language: "en", Width: 2000, Height: 3000},
 			{Kind: domain.ArtworkPoster, URL: imageURL + "/plain.jpg"},

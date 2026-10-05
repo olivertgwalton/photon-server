@@ -73,6 +73,10 @@ type Services struct {
 	Profiles  profileLister
 	Catalogue catalogue
 	Libraries libraryAdmin
+	// Providers are the metadata providers the server has, and ProviderSettings what an admin set
+	// of them.
+	Providers        providerList
+	ProviderSettings providerSettings
 	// ProfileAdmin adds, changes and removes the household's profiles.
 	ProfileAdmin profileAdmin
 	Tasks        tasks
@@ -165,6 +169,8 @@ func (a *API) routes() []route {
 		{pattern: "POST /api/v1/admin/profiles", access: admin, handle: a.addProfile},
 		{pattern: "PATCH /api/v1/admin/profiles/{id}", access: admin, handle: a.setProfile},
 		{pattern: "DELETE /api/v1/admin/profiles/{id}", access: admin, handle: a.removeProfile},
+		{pattern: "GET /api/v1/admin/providers", access: admin, handle: a.adminProviders},
+		{pattern: "PATCH /api/v1/admin/providers/{id}", access: admin, handle: a.setProvider},
 		{pattern: "GET /api/v1/admin/tasks", access: admin, handle: a.adminTasks},
 		{pattern: "POST /api/v1/admin/tasks/{key}/run", access: admin, handle: a.runTask},
 		{pattern: "GET /api/v1/admin/jobs", access: admin, handle: a.adminJobs},
