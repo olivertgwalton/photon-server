@@ -15,6 +15,9 @@ type Metadata struct {
 	Genres        []string
 	Studios       []string
 	IDs           map[Provider]string
+	// Locked fields are claimed at this source's rank even where it gives no value, so no lower
+	// source fills them.
+	Locked []Field
 }
 
 // SeasonMetadata is what a source says about a season and its episodes, by episode number.

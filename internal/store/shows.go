@@ -21,6 +21,8 @@ type Show struct {
 	Folder string
 	IDs    map[domain.Provider]string
 	NFO    *domain.Metadata
+	// Seasons is what NFOs say about the show's seasons, by number.
+	Seasons map[int]domain.Metadata
 }
 
 type Episode struct {
@@ -48,9 +50,40 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 			if err != nil {
 				return err
 			}
+			seasons := map[int]model.UUID{}
 			for _, e := range episodes {
-				if err := saveEpisode(ctx, tx, lib, showID, e); err != nil {
+				seasonID, ok := seasons[e.Season]
+				if !ok {
+					var said *domain.Metadata
+					if m, ok := show.Seasons[e.Season]; ok {
+						said = &m
+					}
+					if seasonID, err = ensureSeason(ctx, tx, lib, showID, e.Folder, e.Season, said); err != nil {
+						return err
+					}
+					seasons[e.Season] = seasonID
+				}
+				if err := saveEpisode(ctx, tx, lib, showID, seasonID, e); err != nil {
 					return fmt.Errorf("%s season %d %v: %w", show.Title, e.Season, e.Episodes, err)
+				}
+			}
+			// A season named by tvshow.nfo keeps its episodes in a folder of its own.
+			i := tx.Item
+			for number, said := range show.Seasons {
+				if _, done := seasons[number]; done {
+					continue
+				}
+				row, err := i.WithContext(ctx).Where(
+					i.ParentID.Eq(showID), i.Kind.Eq(string(domain.ItemSeason)), i.SeasonNumber.Eq(number),
+				).Take()
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					continue
+				}
+				if err != nil {
+					return err
+				}
+				if err := applyMetadata(ctx, tx, row.ID, domain.SourceNFO, said); err != nil {
+					return err
 				}
 			}
 		}
@@ -89,36 +122,29 @@ func ensureShow(ctx context.Context, tx *query.Query, lib uuid.UUID, show Show) 
 	return row.ID, describe(ctx, tx, row.ID, show.Title, show.Year, show.IDs, show.NFO)
 }
 
-func ensureSeason(ctx context.Context, tx *query.Query, lib uuid.UUID, showID model.UUID, folder string, number int) (model.UUID, error) {
-	i := tx.Item
-	known, err := i.WithContext(ctx).Where(
-		i.ParentID.Eq(showID), i.Kind.Eq(string(domain.ItemSeason)), i.SeasonNumber.Eq(number),
-	).Take()
-	if err == nil {
-		return known.ID, nil
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return model.UUID{}, err
-	}
+func ensureSeason(ctx context.Context, tx *query.Query, lib uuid.UUID, showID model.UUID, folder string, number int, nfo *domain.Metadata) (model.UUID, error) {
 	title := fmt.Sprintf("Season %d", number)
 	if number == 0 {
 		title = "Specials"
 	}
-	row := model.Item{
-		LibraryID: model.UUID(lib), Kind: domain.ItemSeason, ParentID: &showID, SeasonNumber: &number,
-		ScanTitle: title, Title: title, SortTitle: sortTitle(title), Folder: folder,
+	i := tx.Item
+	row, err := i.WithContext(ctx).Where(
+		i.ParentID.Eq(showID), i.Kind.Eq(string(domain.ItemSeason)), i.SeasonNumber.Eq(number),
+	).Take()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		row = &model.Item{
+			LibraryID: model.UUID(lib), Kind: domain.ItemSeason, ParentID: &showID, SeasonNumber: &number,
+			ScanTitle: title, Title: title, SortTitle: sortTitle(title), Folder: folder,
+		}
+		err = i.WithContext(ctx).Create(row)
 	}
-	if err := i.WithContext(ctx).Create(&row); err != nil {
+	if err != nil {
 		return model.UUID{}, err
 	}
-	return row.ID, describe(ctx, tx, row.ID, title, 0, nil, nil)
+	return row.ID, describe(ctx, tx, row.ID, title, 0, nil, nfo)
 }
 
-func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID model.UUID, e Episode) error {
-	seasonID, err := ensureSeason(ctx, tx, lib, showID, e.Folder, e.Season)
-	if err != nil {
-		return err
-	}
+func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID, seasonID model.UUID, e Episode) error {
 	row := model.Item{
 		LibraryID: model.UUID(lib), Kind: domain.ItemEpisode, ParentID: &seasonID, SeasonNumber: &e.Season,
 		ScanTitle: e.Title, Title: e.Title, SortTitle: sortTitle(e.Title), Folder: e.Folder,
@@ -133,6 +159,7 @@ func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID mod
 	if !e.AirDate.IsZero() {
 		row.AirDate = &e.AirDate
 	}
+	var err error
 	row.ID, err = episodeItem(ctx, tx, lib, e, row)
 	if err != nil {
 		return err
