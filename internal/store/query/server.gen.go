@@ -30,6 +30,7 @@ func newServer(db *gorm.DB, opts ...gen.DOOption) server {
 	_server.ALL = field.NewAsterisk(tableName)
 	_server.ID = field.NewField(tableName, "id")
 	_server.CreatedAt = field.NewTime(tableName, "created_at")
+	_server.SigningKey = field.NewBytes(tableName, "signing_key")
 
 	_server.fillFieldMap()
 
@@ -39,9 +40,10 @@ func newServer(db *gorm.DB, opts ...gen.DOOption) server {
 type server struct {
 	serverDo serverDo
 
-	ALL       field.Asterisk
-	ID        field.Field
-	CreatedAt field.Time
+	ALL        field.Asterisk
+	ID         field.Field
+	CreatedAt  field.Time
+	SigningKey field.Bytes
 
 	fieldMap map[string]field.Expr
 }
@@ -60,6 +62,7 @@ func (s *server) updateTableName(table string) *server {
 	s.ALL = field.NewAsterisk(table)
 	s.ID = field.NewField(table, "id")
 	s.CreatedAt = field.NewTime(table, "created_at")
+	s.SigningKey = field.NewBytes(table, "signing_key")
 
 	s.fillFieldMap()
 
@@ -84,9 +87,10 @@ func (s *server) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (s *server) fillFieldMap() {
-	s.fieldMap = make(map[string]field.Expr, 2)
+	s.fieldMap = make(map[string]field.Expr, 3)
 	s.fieldMap["id"] = s.ID
 	s.fieldMap["created_at"] = s.CreatedAt
+	s.fieldMap["signing_key"] = s.SigningKey
 }
 
 func (s server) clone(db *gorm.DB) server {
