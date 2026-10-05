@@ -21,7 +21,10 @@ func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.Library
 		if err := tx.Library.WithContext(ctx).Create(&row); err != nil {
 			return err
 		}
-		return saveSources(ctx, tx, row.ID, domain.DefaultSources())
+		if err := saveSources(ctx, tx, row.ID, domain.DefaultSources()); err != nil {
+			return err
+		}
+		return saveRemoteExtras(ctx, tx, row.ID, domain.DefaultRemoteExtras())
 	})
 	if errors.Is(err, gorm.ErrDuplicatedKey) {
 		return domain.Library{}, ErrLibraryExists
@@ -29,7 +32,7 @@ func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.Library
 	if err != nil {
 		return domain.Library{}, fmt.Errorf("adding library: %w", err)
 	}
-	return library(row, domain.DefaultSources()), nil
+	return library(row, domain.DefaultSources(), domain.DefaultRemoteExtras()), nil
 }
 
 func (s *Store) Libraries(ctx context.Context) ([]domain.Library, error) {
@@ -46,19 +49,33 @@ func (s *Store) Libraries(ctx context.Context) ([]domain.Library, error) {
 	for _, t := range taken {
 		sources[t.LibraryID] = append(sources[t.LibraryID], t.Source)
 	}
+	ex := s.q.LibraryRemoteExtra
+	kept, err := ex.WithContext(ctx).Order(ex.Kind).Find()
+	if err != nil {
+		return nil, err
+	}
+	extras := map[model.UUID][]domain.ExtraKind{}
+	for _, k := range kept {
+		extras[k.LibraryID] = append(extras[k.LibraryID], k.Kind)
+	}
 	libs := make([]domain.Library, len(rows))
 	for i, r := range rows {
-		libs[i] = library(*r, sources[r.ID])
+		libs[i] = library(*r, sources[r.ID], extras[r.ID])
 	}
 	return libs, nil
 }
 
-// SetLibrarySources changes where a library's metadata comes from and in what order. Its folders
-// are read again at the next scan and its titles matched again, so the new order applies to
-// everything already there.
-func (s *Store) SetLibrarySources(ctx context.Context, name string, sources []domain.FieldSource) (domain.Library, error) {
-	var lib domain.Library
-	err := s.q.Transaction(func(tx *query.Query) error {
+// LibraryChange is what to change about a library; a nil list is left as it is.
+type LibraryChange struct {
+	Sources      []domain.FieldSource
+	RemoteExtras []domain.ExtraKind
+}
+
+// SetLibrary changes where a library's metadata comes from, in what order, and which kinds of
+// video it keeps providers' links to. Its titles are matched again; with new sources its folders
+// are read again at the next scan too, so the new order reaches everything already there.
+func (s *Store) SetLibrary(ctx context.Context, name string, change LibraryChange) error {
+	return s.q.Transaction(func(tx *query.Query) error {
 		l := tx.Library
 		row, err := l.WithContext(ctx).Where(l.Name.Eq(name)).Take()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -67,15 +84,26 @@ func (s *Store) SetLibrarySources(ctx context.Context, name string, sources []do
 		if err != nil {
 			return err
 		}
-		ls := tx.LibrarySource
-		if _, err := ls.WithContext(ctx).Where(ls.LibraryID.Eq(row.ID)).Delete(); err != nil {
-			return err
+		if change.Sources != nil {
+			ls := tx.LibrarySource
+			if _, err := ls.WithContext(ctx).Where(ls.LibraryID.Eq(row.ID)).Delete(); err != nil {
+				return err
+			}
+			if err := saveSources(ctx, tx, row.ID, change.Sources); err != nil {
+				return err
+			}
+			if _, err := tx.Folder.WithContext(ctx).Where(tx.Folder.LibraryID.Eq(row.ID)).Delete(); err != nil {
+				return err
+			}
 		}
-		if err := saveSources(ctx, tx, row.ID, sources); err != nil {
-			return err
-		}
-		if _, err := tx.Folder.WithContext(ctx).Where(tx.Folder.LibraryID.Eq(row.ID)).Delete(); err != nil {
-			return err
+		if change.RemoteExtras != nil {
+			ex := tx.LibraryRemoteExtra
+			if _, err := ex.WithContext(ctx).Where(ex.LibraryID.Eq(row.ID)).Delete(); err != nil {
+				return err
+			}
+			if err := saveRemoteExtras(ctx, tx, row.ID, change.RemoteExtras); err != nil {
+				return err
+			}
 		}
 		i := tx.Item
 		titles, err := i.WithContext(ctx).Where(
@@ -89,10 +117,19 @@ func (s *Store) SetLibrarySources(ctx context.Context, name string, sources []do
 				return err
 			}
 		}
-		lib = library(*row, sources)
 		return nil
 	})
-	return lib, err
+}
+
+func saveRemoteExtras(ctx context.Context, tx *query.Query, lib model.UUID, kinds []domain.ExtraKind) error {
+	if len(kinds) == 0 {
+		return nil
+	}
+	rows := make([]*model.LibraryRemoteExtra, len(kinds))
+	for n, k := range kinds {
+		rows[n] = &model.LibraryRemoteExtra{LibraryID: lib, Kind: k}
+	}
+	return tx.LibraryRemoteExtra.WithContext(ctx).Create(rows...)
 }
 
 func saveSources(ctx context.Context, tx *query.Query, lib model.UUID, sources []domain.FieldSource) error {
@@ -106,6 +143,8 @@ func saveSources(ctx context.Context, tx *query.Query, lib model.UUID, sources [
 	return tx.LibrarySource.WithContext(ctx).Create(rows...)
 }
 
-func library(r model.Library, sources []domain.FieldSource) domain.Library {
-	return domain.Library{ID: uuid.UUID(r.ID), Name: r.Name, Kind: r.Kind, Root: r.Root, Sources: sources}
+func library(r model.Library, sources []domain.FieldSource, extras []domain.ExtraKind) domain.Library {
+	return domain.Library{
+		ID: uuid.UUID(r.ID), Name: r.Name, Kind: r.Kind, Root: r.Root, Sources: sources, RemoteExtras: extras,
+	}
 }

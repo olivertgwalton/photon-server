@@ -17,47 +17,51 @@ import (
 
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
-		db:            db,
-		Chapter:       newChapter(db, opts...),
-		DeviceSession: newDeviceSession(db, opts...),
-		ExternalID:    newExternalID(db, opts...),
-		Folder:        newFolder(db, opts...),
-		Item:          newItem(db, opts...),
-		ItemField:     newItemField(db, opts...),
-		Job:           newJob(db, opts...),
-		Library:       newLibrary(db, opts...),
-		LibrarySource: newLibrarySource(db, opts...),
-		Part:          newPart(db, opts...),
-		PartFile:      newPartFile(db, opts...),
-		Profile:       newProfile(db, opts...),
-		Server:        newServer(db, opts...),
-		Stream:        newStream(db, opts...),
-		SubtitleFile:  newSubtitleFile(db, opts...),
-		TaskState:     newTaskState(db, opts...),
-		Version:       newVersion(db, opts...),
+		db:                 db,
+		Chapter:            newChapter(db, opts...),
+		DeviceSession:      newDeviceSession(db, opts...),
+		ExternalID:         newExternalID(db, opts...),
+		Folder:             newFolder(db, opts...),
+		Item:               newItem(db, opts...),
+		ItemField:          newItemField(db, opts...),
+		Job:                newJob(db, opts...),
+		Library:            newLibrary(db, opts...),
+		LibraryRemoteExtra: newLibraryRemoteExtra(db, opts...),
+		LibrarySource:      newLibrarySource(db, opts...),
+		Part:               newPart(db, opts...),
+		PartFile:           newPartFile(db, opts...),
+		Profile:            newProfile(db, opts...),
+		RemoteVideo:        newRemoteVideo(db, opts...),
+		Server:             newServer(db, opts...),
+		Stream:             newStream(db, opts...),
+		SubtitleFile:       newSubtitleFile(db, opts...),
+		TaskState:          newTaskState(db, opts...),
+		Version:            newVersion(db, opts...),
 	}
 }
 
 type Query struct {
 	db *gorm.DB
 
-	Chapter       chapter
-	DeviceSession deviceSession
-	ExternalID    externalID
-	Folder        folder
-	Item          item
-	ItemField     itemField
-	Job           job
-	Library       library
-	LibrarySource librarySource
-	Part          part
-	PartFile      partFile
-	Profile       profile
-	Server        server
-	Stream        stream
-	SubtitleFile  subtitleFile
-	TaskState     taskState
-	Version       version
+	Chapter            chapter
+	DeviceSession      deviceSession
+	ExternalID         externalID
+	Folder             folder
+	Item               item
+	ItemField          itemField
+	Job                job
+	Library            library
+	LibraryRemoteExtra libraryRemoteExtra
+	LibrarySource      librarySource
+	Part               part
+	PartFile           partFile
+	Profile            profile
+	RemoteVideo        remoteVideo
+	Server             server
+	Stream             stream
+	SubtitleFile       subtitleFile
+	TaskState          taskState
+	Version            version
 }
 
 func (q *Query) Available() bool { return q.db != nil }
@@ -66,24 +70,26 @@ func (q *Query) UnderlyingDB() *gorm.DB { return q.db }
 
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
-		db:            db,
-		Chapter:       q.Chapter.clone(db),
-		DeviceSession: q.DeviceSession.clone(db),
-		ExternalID:    q.ExternalID.clone(db),
-		Folder:        q.Folder.clone(db),
-		Item:          q.Item.clone(db),
-		ItemField:     q.ItemField.clone(db),
-		Job:           q.Job.clone(db),
-		Library:       q.Library.clone(db),
-		LibrarySource: q.LibrarySource.clone(db),
-		Part:          q.Part.clone(db),
-		PartFile:      q.PartFile.clone(db),
-		Profile:       q.Profile.clone(db),
-		Server:        q.Server.clone(db),
-		Stream:        q.Stream.clone(db),
-		SubtitleFile:  q.SubtitleFile.clone(db),
-		TaskState:     q.TaskState.clone(db),
-		Version:       q.Version.clone(db),
+		db:                 db,
+		Chapter:            q.Chapter.clone(db),
+		DeviceSession:      q.DeviceSession.clone(db),
+		ExternalID:         q.ExternalID.clone(db),
+		Folder:             q.Folder.clone(db),
+		Item:               q.Item.clone(db),
+		ItemField:          q.ItemField.clone(db),
+		Job:                q.Job.clone(db),
+		Library:            q.Library.clone(db),
+		LibraryRemoteExtra: q.LibraryRemoteExtra.clone(db),
+		LibrarySource:      q.LibrarySource.clone(db),
+		Part:               q.Part.clone(db),
+		PartFile:           q.PartFile.clone(db),
+		Profile:            q.Profile.clone(db),
+		RemoteVideo:        q.RemoteVideo.clone(db),
+		Server:             q.Server.clone(db),
+		Stream:             q.Stream.clone(db),
+		SubtitleFile:       q.SubtitleFile.clone(db),
+		TaskState:          q.TaskState.clone(db),
+		Version:            q.Version.clone(db),
 	}
 }
 
@@ -97,66 +103,72 @@ func (q *Query) WriteDB() *Query {
 
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
-		db:            db,
-		Chapter:       q.Chapter.replaceDB(db),
-		DeviceSession: q.DeviceSession.replaceDB(db),
-		ExternalID:    q.ExternalID.replaceDB(db),
-		Folder:        q.Folder.replaceDB(db),
-		Item:          q.Item.replaceDB(db),
-		ItemField:     q.ItemField.replaceDB(db),
-		Job:           q.Job.replaceDB(db),
-		Library:       q.Library.replaceDB(db),
-		LibrarySource: q.LibrarySource.replaceDB(db),
-		Part:          q.Part.replaceDB(db),
-		PartFile:      q.PartFile.replaceDB(db),
-		Profile:       q.Profile.replaceDB(db),
-		Server:        q.Server.replaceDB(db),
-		Stream:        q.Stream.replaceDB(db),
-		SubtitleFile:  q.SubtitleFile.replaceDB(db),
-		TaskState:     q.TaskState.replaceDB(db),
-		Version:       q.Version.replaceDB(db),
+		db:                 db,
+		Chapter:            q.Chapter.replaceDB(db),
+		DeviceSession:      q.DeviceSession.replaceDB(db),
+		ExternalID:         q.ExternalID.replaceDB(db),
+		Folder:             q.Folder.replaceDB(db),
+		Item:               q.Item.replaceDB(db),
+		ItemField:          q.ItemField.replaceDB(db),
+		Job:                q.Job.replaceDB(db),
+		Library:            q.Library.replaceDB(db),
+		LibraryRemoteExtra: q.LibraryRemoteExtra.replaceDB(db),
+		LibrarySource:      q.LibrarySource.replaceDB(db),
+		Part:               q.Part.replaceDB(db),
+		PartFile:           q.PartFile.replaceDB(db),
+		Profile:            q.Profile.replaceDB(db),
+		RemoteVideo:        q.RemoteVideo.replaceDB(db),
+		Server:             q.Server.replaceDB(db),
+		Stream:             q.Stream.replaceDB(db),
+		SubtitleFile:       q.SubtitleFile.replaceDB(db),
+		TaskState:          q.TaskState.replaceDB(db),
+		Version:            q.Version.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
-	Chapter       IChapterDo
-	DeviceSession IDeviceSessionDo
-	ExternalID    IExternalIDDo
-	Folder        IFolderDo
-	Item          IItemDo
-	ItemField     IItemFieldDo
-	Job           IJobDo
-	Library       ILibraryDo
-	LibrarySource ILibrarySourceDo
-	Part          IPartDo
-	PartFile      IPartFileDo
-	Profile       IProfileDo
-	Server        IServerDo
-	Stream        IStreamDo
-	SubtitleFile  ISubtitleFileDo
-	TaskState     ITaskStateDo
-	Version       IVersionDo
+	Chapter            IChapterDo
+	DeviceSession      IDeviceSessionDo
+	ExternalID         IExternalIDDo
+	Folder             IFolderDo
+	Item               IItemDo
+	ItemField          IItemFieldDo
+	Job                IJobDo
+	Library            ILibraryDo
+	LibraryRemoteExtra ILibraryRemoteExtraDo
+	LibrarySource      ILibrarySourceDo
+	Part               IPartDo
+	PartFile           IPartFileDo
+	Profile            IProfileDo
+	RemoteVideo        IRemoteVideoDo
+	Server             IServerDo
+	Stream             IStreamDo
+	SubtitleFile       ISubtitleFileDo
+	TaskState          ITaskStateDo
+	Version            IVersionDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
-		Chapter:       q.Chapter.WithContext(ctx),
-		DeviceSession: q.DeviceSession.WithContext(ctx),
-		ExternalID:    q.ExternalID.WithContext(ctx),
-		Folder:        q.Folder.WithContext(ctx),
-		Item:          q.Item.WithContext(ctx),
-		ItemField:     q.ItemField.WithContext(ctx),
-		Job:           q.Job.WithContext(ctx),
-		Library:       q.Library.WithContext(ctx),
-		LibrarySource: q.LibrarySource.WithContext(ctx),
-		Part:          q.Part.WithContext(ctx),
-		PartFile:      q.PartFile.WithContext(ctx),
-		Profile:       q.Profile.WithContext(ctx),
-		Server:        q.Server.WithContext(ctx),
-		Stream:        q.Stream.WithContext(ctx),
-		SubtitleFile:  q.SubtitleFile.WithContext(ctx),
-		TaskState:     q.TaskState.WithContext(ctx),
-		Version:       q.Version.WithContext(ctx),
+		Chapter:            q.Chapter.WithContext(ctx),
+		DeviceSession:      q.DeviceSession.WithContext(ctx),
+		ExternalID:         q.ExternalID.WithContext(ctx),
+		Folder:             q.Folder.WithContext(ctx),
+		Item:               q.Item.WithContext(ctx),
+		ItemField:          q.ItemField.WithContext(ctx),
+		Job:                q.Job.WithContext(ctx),
+		Library:            q.Library.WithContext(ctx),
+		LibraryRemoteExtra: q.LibraryRemoteExtra.WithContext(ctx),
+		LibrarySource:      q.LibrarySource.WithContext(ctx),
+		Part:               q.Part.WithContext(ctx),
+		PartFile:           q.PartFile.WithContext(ctx),
+		Profile:            q.Profile.WithContext(ctx),
+		RemoteVideo:        q.RemoteVideo.WithContext(ctx),
+		Server:             q.Server.WithContext(ctx),
+		Stream:             q.Stream.WithContext(ctx),
+		SubtitleFile:       q.SubtitleFile.WithContext(ctx),
+		TaskState:          q.TaskState.WithContext(ctx),
+		Version:            q.Version.WithContext(ctx),
 	}
 }
 

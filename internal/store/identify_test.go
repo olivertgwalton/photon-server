@@ -108,3 +108,54 @@ func TestIdentityDescribesAShowsEpisodes(t *testing.T) {
 		t.Errorf("after a new season, seasons to ask for = %v, want [2]", got)
 	}
 }
+
+func TestALibraryKeepsTheVideoKindsItAsksFor(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	film := Film{Title: "alien", Folder: "Alien", Copies: []Copy{{ContentKey: []byte("alien"), Parts: []Part{{
+		RelPath: "Alien/Alien.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{},
+	}}}}}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Alien", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	item, err := s.q.Item.WithContext(ctx).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	match := domain.Metadata{Videos: []domain.RemoteVideo{
+		{Kind: domain.ExtraTrailer, Site: "YouTube", Key: "trailer", Name: "Trailer"},
+		{Kind: domain.ExtraBlooper, Site: "YouTube", Key: "gag", Name: "Gag reel"},
+		{Kind: domain.ExtraOther, Site: "YouTube", Key: "titles", Name: "Titles"},
+	}}
+	kept := func() []string {
+		t.Helper()
+		if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, match, nil); err != nil {
+			t.Fatal(err)
+		}
+		rv := s.q.RemoteVideo
+		var keys []string
+		if err := rv.WithContext(ctx).Order(rv.Position).Pluck(rv.Key, &keys); err != nil {
+			t.Fatal(err)
+		}
+		return keys
+	}
+	if got := kept(); !slices.Equal(got, []string{"trailer"}) {
+		t.Errorf("by default, kept %v; want the trailer alone", got)
+	}
+	if err := s.SetLibrary(ctx, "Films", LibraryChange{RemoteExtras: []domain.ExtraKind{domain.ExtraBlooper, domain.ExtraOther}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := kept(); !slices.Equal(got, []string{"gag", "titles"}) {
+		t.Errorf("keeping bloopers and other, kept %v; want those two in order and no trailer", got)
+	}
+	if err := s.SetLibrary(ctx, "Films", LibraryChange{RemoteExtras: []domain.ExtraKind{}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := kept(); len(got) != 0 {
+		t.Errorf("keeping none, kept %v", got)
+	}
+}
