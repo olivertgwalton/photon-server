@@ -99,6 +99,9 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	logger.InfoContext(ctx, "media tools",
 		slog.String("ffmpeg", tools.FFmpeg.Path), slog.String("ffmpeg_version", tools.FFmpeg.Version),
 		slog.String("ffprobe", tools.FFprobe.Path), slog.String("ffprobe_version", tools.FFprobe.Version))
+	if !tools.Chromaprint {
+		logger.WarnContext(ctx, "intros and credits are found from chapters only: ffmpeg has no chromaprint muxer")
+	}
 	st, err := store.Open(ctx, databaseURL, logger)
 	if err != nil {
 		return err
@@ -170,7 +173,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		PGDump: cmp.Or(os.Getenv("PHOTON_PG_DUMP"), "pg_dump"), URL: databaseURL,
 		Dir: cmp.Or(os.Getenv("PHOTON_BACKUP_DIR"), filepath.Join(configDir, "photon-server", "backups")),
 	}
-	scheduler := task.NewScheduler(st, logger, node, scanTask(st), sweepTask(st, logger), backupTask(dumper, logger), refreshTask(st, logger), sweepArtworkTask(st, pictureCache, logger))
+	scheduler := task.NewScheduler(st, logger, node, scanTask(st), sweepTask(st, logger), backupTask(dumper, logger), refreshTask(st, logger), sweepArtworkTask(st, pictureCache, logger), markersTask(st, tools, logger))
 	lang := cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US")
 	// TMDB runs before TheTVDB, as its match may give TheTVDB an id to find a show by.
 	providers := provider.NewRegistry(
@@ -194,6 +197,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		domain.JobKeyframes:   analysis.Keyframes(st, tools),
 		domain.JobIdentify:    identify.Handler(st, providers, logger),
 		domain.JobScanLibrary: scanLibrary(st, scan.New(st, tools, logger), logger),
+		domain.JobMarkers:     analysis.Markers(st, tools.Fingerprint),
 	})
 	watcher := watch.New(st, logger)
 	background, stopBackground := context.WithCancel(ctx)

@@ -12,6 +12,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/backup"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/task"
@@ -124,6 +125,25 @@ func sweepArtworkTask(st *store.Store, cache *artwork.Cache, logger *slog.Logger
 			n, err := cache.Sweep(ctx, st.LivePictures)
 			if n > 0 {
 				logger.InfoContext(ctx, "replaced pictures cleared", slog.Int("files", n))
+			}
+			return err
+		},
+	}
+}
+
+// markersTask queues the comparison of every season with an episode whose sound has not been
+// compared: those from before the server could, and those whose comparison was cut short.
+func markersTask(st *store.Store, tools media.Tools, logger *slog.Logger) task.Task {
+	return task.Task{
+		Key:      domain.TaskDetectMarkers,
+		Triggers: []task.Trigger{{Kind: task.TriggerDaily, At: refreshAt}},
+		Run: func(ctx context.Context) error {
+			if !tools.Chromaprint {
+				return nil
+			}
+			n, err := st.QueueMarkers(ctx)
+			if n > 0 {
+				logger.InfoContext(ctx, "seasons queued to have their intros and credits found", slog.Int64("seasons", n))
 			}
 			return err
 		},
