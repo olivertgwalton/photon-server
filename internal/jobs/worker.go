@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"maps"
 	"slices"
@@ -19,7 +20,13 @@ const (
 	// again, so every job writes its result idempotently. A running job's lease is renewed every
 	// third of it, so a long one, as a conversion is, keeps it.
 	lease = 10 * time.Minute
+	// notNow is how long a job with no room to run waits before it is claimed again.
+	notNow = 30 * time.Second
 )
+
+// ErrNotNow is a handler's answer for a job that cannot run on its node yet: it is queued again for
+// later, by any node, with its attempt given back.
+var ErrNotNow = errors.New("jobs: no room to run this job here now")
 
 type Handler func(ctx context.Context, subject uuid.UUID) error
 
@@ -28,6 +35,7 @@ type queue interface {
 	CompleteJob(ctx context.Context, id int64) error
 	FailJob(ctx context.Context, job store.Job, err error) (bool, error)
 	ExtendLease(ctx context.Context, id int64, lease time.Duration) error
+	PostponeJob(ctx context.Context, job store.Job, delay time.Duration) error
 }
 
 // Worker runs queued jobs of the kinds it has handlers for, at most slots at a time.
@@ -89,6 +97,8 @@ func (w *Worker) run(ctx context.Context, job store.Job) {
 	}
 	var err error
 	switch {
+	case errors.Is(runErr, ErrNotNow):
+		err = w.queue.PostponeJob(ctx, job, notNow)
 	case runErr != nil:
 		log.WarnContext(ctx, "job failed", slog.Int("attempt", job.Attempts), slog.Any("err", runErr))
 		var dead bool

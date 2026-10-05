@@ -2,6 +2,7 @@ package hls
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -198,7 +199,7 @@ func TestTranscodesAtOnceNeverPassTheLimit(t *testing.T) {
 		})
 	}
 	wg.Wait()
-	if active, limit := r.Transcodes(); len(opened) != 3 || refused != 17 || active != 3 || limit != 3 {
+	if active, _, limit := r.Transcodes(); len(opened) != 3 || refused != 17 || active != 3 || limit != 3 {
 		t.Fatalf("20 at once: %d opened, %d refused, %d/%d active; want 3 and 17", len(opened), refused, active, limit)
 	}
 
@@ -212,5 +213,85 @@ func TestTranscodesAtOnceNeverPassTheLimit(t *testing.T) {
 	}
 	if err := r.Open(uuid.NewV7(), transcode); !errors.Is(err, ErrTranscodeLimit) {
 		t.Errorf("one more: %v, want ErrTranscodeLimit", err)
+	}
+}
+
+func TestPlaybacksTakeTheirSlotsFromConversions(t *testing.T) {
+	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 3, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var (
+		wg      sync.WaitGroup
+		mu      sync.Mutex
+		plays   int
+		refused int
+		held    []context.Context
+	)
+	for n := range 30 {
+		wg.Go(func() {
+			if n%3 == 0 {
+				ctx, _, ok := r.HoldConversion(t.Context())
+				if ok {
+					mu.Lock()
+					held = append(held, ctx)
+					mu.Unlock()
+				}
+				return
+			}
+			err := r.Open(uuid.NewV7(), transcode)
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case err == nil:
+				plays++
+			case errors.Is(err, ErrTranscodeLimit):
+				refused++
+			default:
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	converting := 0
+	for _, ctx := range held {
+		if context.Cause(ctx) == nil {
+			converting++
+		} else if !errors.Is(context.Cause(ctx), ErrPreempted) {
+			t.Errorf("a conversion ended with %v, want ErrPreempted", context.Cause(ctx))
+		}
+	}
+	if active, conversions, _ := r.Transcodes(); plays != 3 || refused != 17 || converting != 0 || active != 3 || conversions != 0 {
+		t.Fatalf("20 plays and 10 conversions at once: %d played, %d refused, %d still converting, %d active (%d conversions); want 3 played, the rest refused, every conversion stopped",
+			plays, refused, converting, active, conversions)
+	}
+	if _, _, ok := r.HoldConversion(t.Context()); ok {
+		t.Error("a conversion with playbacks holding every slot was given one")
+	}
+}
+
+func TestAConversionWaitsForAFreeSlot(t *testing.T) {
+	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 1, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	play := uuid.NewV7()
+	if err := r.Open(play, transcode); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok := r.HoldConversion(t.Context()); ok {
+		t.Fatal("a conversion beside a playback holding the only slot was given it")
+	}
+	r.Close(play)
+	_, release, ok := r.HoldConversion(t.Context())
+	if !ok {
+		t.Fatal("a conversion on an idle node had no slot")
+	}
+	if _, _, ok := r.HoldConversion(t.Context()); ok {
+		t.Error("a second conversion was given the slot the first holds")
+	}
+	release()
+	if active, _, _ := r.Transcodes(); active != 0 {
+		t.Errorf("%d transcodes once the conversion ended, want none", active)
 	}
 }

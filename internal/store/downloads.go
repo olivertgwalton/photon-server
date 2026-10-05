@@ -260,6 +260,13 @@ func (s *Store) FailConversion(ctx context.Context, id, node uuid.UUID, reason s
 		c.FinishedAt.Value(time.Now()))
 }
 
+// RequeueConversion puts a conversion a node had to stop back in the queue, to be made from the
+// beginning.
+func (s *Store) RequeueConversion(ctx context.Context, id, node uuid.UUID) error {
+	c := s.q.Conversion
+	return s.converting(ctx, id, node, c.State.Value(string(domain.DownloadQueued)), c.Progress.Value(0), c.NodeID.Null())
+}
+
 // ConversionsOn answers the conversions whose files a node is making or holds.
 func (s *Store) ConversionsOn(ctx context.Context, node uuid.UUID) ([]uuid.UUID, error) {
 	c := s.q.Conversion

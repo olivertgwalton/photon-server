@@ -77,11 +77,15 @@ server encodes a test picture on it at start, and falls back to software if it w
 
 Each node encodes at most `PHOTON_MAX_TRANSCODES` videos at once (a number, or `unlimited`): by
 default a quarter of its CPUs in software, at least one, and eight on a hardware encoder, the cap
-NVIDIA puts on a GeForce card's sessions. A play that would encode video on a node at its limit is
-refused with 503 `transcode_limit` rather than played worse; one played as it is or with its video
-copied is never refused. A transcode's slot is freed as it stops, or a couple of minutes after its player
-goes quiet. `GET /api/v1/admin/playbacks` says which node runs each playback, and how many videos
-the node answering is transcoding against its limit (`transcodes.limit` is absent when unlimited).
+NVIDIA puts on a GeForce card's sessions. A download's conversion takes one of those slots too, but
+playback always wins: a play that needs a slot on a node at its limit stops a conversion there,
+which goes back in the queue to start again from the beginning once a slot is free. Only when
+plays hold every slot is a play that would encode video refused, with 503 `transcode_limit`, rather
+than played worse; one played as it is or with its video copied is never refused. A transcode's slot
+is freed as it stops, or a couple of minutes after its player goes quiet.
+`GET /api/v1/admin/playbacks` says which node runs each playback, and how many videos the node
+answering is transcoding against its limit (`transcodes.limit` is absent when unlimited), with
+`transcodes.conversions` saying how many of them are conversions.
 Each copy says where its intro, credits, recap and preview are, so a player can offer to skip them.
 A chapter named for one (Intro, Opening, End Credits, Previously…) marks it. Otherwise the server
 compares the sound of a season's episodes, as Plex and Jellyfin's Intro Skipper do: the stretch two
@@ -108,8 +112,9 @@ A client downloads a title for offline viewing at a most video bitrate, and widt
 Plex's Downloads do. A copy already within both is downloaded as it is; any other is converted in
 the background, on the same device as playback, into one MP4 of H.264 and AAC (HDR tone mapped to
 SDR) under `PHOTON_CACHE_DIR`'s `downloads` folder, where the client fetches it, resuming as it
-likes. Each node converts one title at a time, so playback is not starved, and a title asked for at
-the same quality by several profiles is converted once. A converted file is deleted when the last
+likes. Each node converts one title at a time, and only in a free transcode slot that a play may
+take back (see `PHOTON_MAX_TRANSCODES`), so playback is not starved; a title asked for at the same
+quality by several profiles is converted once. A converted file is deleted when the last
 download needing it is removed, and downloads are forgotten a week after they are ready if no one
 removes them; size the cache folder for the conversions waiting to be fetched.
 

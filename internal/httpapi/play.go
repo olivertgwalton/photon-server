@@ -50,7 +50,7 @@ type hlsFiles interface {
 	SubtitleSegment(ctx context.Context, playback uuid.UUID, track, n int) (string, error)
 	Init(ctx context.Context, playback uuid.UUID, part int) (*os.File, error)
 	Segment(ctx context.Context, playback uuid.UUID, n int) (*os.File, error)
-	Transcodes() (active, limit int)
+	Transcodes() (active, conversions, limit int)
 }
 
 type playing interface {
@@ -220,7 +220,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if errors.Is(err, hls.ErrTranscodeLimit) {
-				_, limit := a.svc.HLS.Transcodes()
+				_, _, limit := a.svc.HLS.Transcodes()
 				writeProblem(w, a.logger, codeTranscodeLimit, fmt.Sprintf("the server is already transcoding as many videos at once as it may: %d", limit))
 				return
 			}
