@@ -90,6 +90,9 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 		if err := saveGroupings(ctx, tx, item, source, m.Collections); err != nil {
 			return err
 		}
+		if err := saveCredits(ctx, tx, item, source, m.Credits); err != nil {
+			return err
+		}
 		i := tx.Item
 		for number, season := range seasons {
 			row, err := i.WithContext(ctx).Where(
@@ -120,6 +123,9 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 						return err
 					}
 					if err := saveProviderArtwork(ctx, tx, e.ID, source, said.Artwork); err != nil {
+						return err
+					}
+					if err := saveCredits(ctx, tx, e.ID, source, said.Credits); err != nil {
 						return err
 					}
 				}

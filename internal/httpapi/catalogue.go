@@ -177,7 +177,21 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": cardsJSON(cards)})
+	found, err := a.svc.People.SearchPeople(r.Context(), query.Text, query.Limit)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	type personJSON struct {
+		ID    uuid.UUID `json:"id"`
+		Name  string    `json:"name"`
+		Photo uuid.UUID `json:"photo,omitzero"`
+	}
+	people := make([]personJSON, len(found))
+	for i, p := range found {
+		people[i] = personJSON(p)
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": cardsJSON(cards), "people": people})
 }
 
 func (a *API) title(w http.ResponseWriter, r *http.Request) {
@@ -227,7 +241,7 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 
 // wallFilterParameters are what a wall, and its letters, are narrowed by: each list repeated or
 // comma-separated, any of its values.
-var wallFilterParameters = []string{"starts_with", "mark", "genre", "year", "certificate", "studio", "resolution", "range", "rating_site", "min_rating"}
+var wallFilterParameters = []string{"starts_with", "mark", "genre", "year", "certificate", "studio", "resolution", "range", "rating_site", "min_rating", "person"}
 
 func wallFilter(q url.Values) (store.WallFilter, error) {
 	var f store.WallFilter
@@ -257,6 +271,9 @@ func wallFilter(q url.Values) (store.WallFilter, error) {
 		return f, errors.New("year is a year")
 	}
 	f.Genres, f.Certificates, f.Studios = list("genre"), list("certificate"), list("studio")
+	if f.People, err = parseAll(list("person"), uuid.Parse); err != nil {
+		return f, errors.New("person is a person's id")
+	}
 	if s := q.Get("rating_site"); s != "" {
 		if f.RatingSite, err = domain.ParseRatingSite(s); err != nil {
 			return f, err

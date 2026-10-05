@@ -164,8 +164,11 @@ type details struct {
 		PosterPath   string `json:"poster_path"`
 		BackdropPath string `json:"backdrop_path"`
 	} `json:"belongs_to_collection"`
-	VoteAverage float64 `json:"vote_average"`
-	VoteCount   int     `json:"vote_count"`
+	Credits          credits  `json:"credits"`
+	AggregateCredits credits  `json:"aggregate_credits"`
+	CreatedBy        []person `json:"created_by"`
+	VoteAverage      float64  `json:"vote_average"`
+	VoteCount        int      `json:"vote_count"`
 	result
 	Overview            string  `json:"overview"`
 	Tagline             string  `json:"tagline"`
@@ -202,7 +205,7 @@ type details struct {
 
 // Details answers what TMDB says about a title, with its certificate in the client's country.
 func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadata, error) {
-	extra := map[Kind]string{Movie: "release_dates,external_ids,videos,images", Show: "content_ratings,external_ids,videos,images"}[kind]
+	extra := map[Kind]string{Movie: "release_dates,external_ids,videos,images,credits", Show: "content_ratings,external_ids,videos,images,aggregate_credits"}[kind]
 	q := url.Values{
 		"append_to_response": {extra},
 		// Videos and pictures in the metadata language, and those in none: most trailers' music,
@@ -227,6 +230,14 @@ func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadat
 			ID: strconv.Itoa(b.ID), Title: b.Name,
 			Artwork: slices.Concat(picture(domain.ArtworkPoster, b.PosterPath), picture(domain.ArtworkBackdrop, b.BackdropPath)),
 		}}
+	}
+	if kind == Show {
+		for _, p := range d.CreatedBy {
+			out.Credits = append(out.Credits, p.credit(domain.CreditCreator, ""))
+		}
+		out.Credits = append(out.Credits, d.AggregateCredits.list(domain.CreditActor)...)
+	} else {
+		out.Credits = d.Credits.list(domain.CreditActor)
 	}
 	if d.VoteCount > 0 {
 		out.Ratings = []domain.Rating{{Site: domain.SiteTMDB, Score: d.VoteAverage * 10, Votes: d.VoteCount}}
@@ -330,11 +341,13 @@ func (c *Client) Season(ctx context.Context, show, number int) (domain.SeasonMet
 		AirDate  string `json:"air_date"`
 		Poster   string `json:"poster_path"`
 		Episodes []struct {
-			Number   int    `json:"episode_number"`
-			Name     string `json:"name"`
-			Overview string `json:"overview"`
-			AirDate  string `json:"air_date"`
-			Still    string `json:"still_path"`
+			Number     int      `json:"episode_number"`
+			Name       string   `json:"name"`
+			Overview   string   `json:"overview"`
+			AirDate    string   `json:"air_date"`
+			Still      string   `json:"still_path"`
+			GuestStars []person `json:"guest_stars"`
+			Crew       []person `json:"crew"`
 		} `json:"episodes"`
 	}
 	if err := c.get(ctx, fmt.Sprintf("/tv/%d/season/%d", show, number), nil, &s); err != nil {
@@ -353,7 +366,95 @@ func (c *Client) Season(ctx context.Context, show, number int) (domain.SeasonMet
 		out.Episodes[e.Number] = domain.Metadata{
 			Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: year(aired),
 			Artwork: picture(domain.ArtworkThumb, e.Still),
+			Credits: credits{Cast: e.GuestStars, Crew: e.Crew}.list(domain.CreditGuestStar),
 		}
+	}
+	return out, nil
+}
+
+// person is someone TMDB credits: in a film's cast with the character, in a show's with each role
+// they played, or in its crew with the job.
+type person struct {
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	Profile   string `json:"profile_path"`
+	Character string `json:"character"`
+	Roles     []struct {
+		Character string `json:"character"`
+	} `json:"roles"`
+	Job        string `json:"job"`
+	Department string `json:"department"`
+	Jobs       []struct {
+		Job string `json:"job"`
+	} `json:"jobs"`
+}
+
+type credits struct {
+	Cast []person `json:"cast"`
+	Crew []person `json:"crew"`
+}
+
+// castShown is how much of a cast is kept, in billing order: the rest are walk-ons.
+const castShown = 50
+
+// list answers the cast, as actors of kind, and the crew whose jobs a reader looks for, as Jellyfin
+// keeps them: directors, writers, producers and composers.
+func (c credits) list(actor domain.CreditKind) []domain.Credit {
+	var out []domain.Credit
+	for _, p := range c.Cast[:min(len(c.Cast), castShown)] {
+		role := p.Character
+		if len(p.Roles) > 0 {
+			role = p.Roles[0].Character
+		}
+		out = append(out, p.credit(actor, role))
+	}
+	for _, p := range c.Crew {
+		job := p.Job
+		if len(p.Jobs) > 0 {
+			job = p.Jobs[0].Job
+		}
+		var kind domain.CreditKind
+		switch {
+		case job == "Director":
+			kind = domain.CreditDirector
+		case p.Department == "Writing":
+			kind = domain.CreditWriter
+		case job == "Producer":
+			kind = domain.CreditProducer
+		case job == "Original Music Composer" || job == "Music":
+			kind = domain.CreditComposer
+		default:
+			continue
+		}
+		out = append(out, p.credit(kind, job))
+	}
+	return out
+}
+
+func (p person) credit(kind domain.CreditKind, role string) domain.Credit {
+	c := domain.Credit{Name: p.Name, IDs: map[domain.Provider]string{domain.ProviderTMDB: strconv.Itoa(p.ID)}, Kind: kind, Role: role}
+	if p.Profile != "" {
+		c.Photo = imageURL + p.Profile
+	}
+	return c
+}
+
+// Person answers what TMDB knows of someone by their TMDB id.
+func (c *Client) Person(ctx context.Context, id string) (domain.Person, error) {
+	var p struct {
+		Name       string `json:"name"`
+		Biography  string `json:"biography"`
+		Birthday   string `json:"birthday"`
+		Deathday   string `json:"deathday"`
+		Birthplace string `json:"place_of_birth"`
+		Profile    string `json:"profile_path"`
+	}
+	if err := c.get(ctx, "/person/"+url.PathEscape(id), nil, &p); err != nil {
+		return domain.Person{}, err
+	}
+	out := domain.Person{Name: p.Name, Biography: p.Biography, Born: date(p.Birthday), Died: date(p.Deathday), Birthplace: p.Birthplace}
+	if p.Profile != "" {
+		out.Photo = imageURL + p.Profile
 	}
 	return out, nil
 }

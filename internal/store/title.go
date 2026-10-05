@@ -33,7 +33,9 @@ type TitlePage struct {
 	IDs           map[domain.Provider]string `json:"ids,omitzero"`
 	Ratings       []RatingRef                `json:"ratings,omitzero"`
 	// Collections are the box sets it is in.
-	Collections   []TitleRef    `json:"collections,omitzero"`
+	Collections []TitleRef `json:"collections,omitzero"`
+	// Credits are its cast and crew, as the highest-ranked source gives them.
+	Credits       []CreditRef   `json:"credits,omitzero"`
 	AddedAt       time.Time     `json:"added_at"`
 	SeasonNumber  *int          `json:"season_number,omitzero"`
 	EpisodeNumber *int          `json:"episode_number,omitzero"`
@@ -193,6 +195,9 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		p.Ratings = append(p.Ratings, RatingRef(r))
 	}
 	if p.Collections, err = s.collectionsOf(ctx, item.ID); err != nil {
+		return TitlePage{}, err
+	}
+	if p.Credits, err = s.credits(ctx, item.ID); err != nil {
 		return TitlePage{}, err
 	}
 	switch item.Kind {

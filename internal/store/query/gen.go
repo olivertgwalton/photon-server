@@ -22,6 +22,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Chapter:            newChapter(db, opts...),
 		Collection:         newCollection(db, opts...),
 		CollectionMember:   newCollectionMember(db, opts...),
+		Credit:             newCredit(db, opts...),
 		DeviceSession:      newDeviceSession(db, opts...),
 		ExternalID:         newExternalID(db, opts...),
 		Favourite:          newFavourite(db, opts...),
@@ -34,6 +35,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		LibrarySource:      newLibrarySource(db, opts...),
 		Part:               newPart(db, opts...),
 		PartFile:           newPartFile(db, opts...),
+		Person:             newPerson(db, opts...),
 		Playlist:           newPlaylist(db, opts...),
 		PlaylistEntry:      newPlaylistEntry(db, opts...),
 		Profile:            newProfile(db, opts...),
@@ -56,6 +58,7 @@ type Query struct {
 	Chapter            chapter
 	Collection         collection
 	CollectionMember   collectionMember
+	Credit             credit
 	DeviceSession      deviceSession
 	ExternalID         externalID
 	Favourite          favourite
@@ -68,6 +71,7 @@ type Query struct {
 	LibrarySource      librarySource
 	Part               part
 	PartFile           partFile
+	Person             person
 	Playlist           playlist
 	PlaylistEntry      playlistEntry
 	Profile            profile
@@ -93,6 +97,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Chapter:            q.Chapter.clone(db),
 		Collection:         q.Collection.clone(db),
 		CollectionMember:   q.CollectionMember.clone(db),
+		Credit:             q.Credit.clone(db),
 		DeviceSession:      q.DeviceSession.clone(db),
 		ExternalID:         q.ExternalID.clone(db),
 		Favourite:          q.Favourite.clone(db),
@@ -105,6 +110,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		LibrarySource:      q.LibrarySource.clone(db),
 		Part:               q.Part.clone(db),
 		PartFile:           q.PartFile.clone(db),
+		Person:             q.Person.clone(db),
 		Playlist:           q.Playlist.clone(db),
 		PlaylistEntry:      q.PlaylistEntry.clone(db),
 		Profile:            q.Profile.clone(db),
@@ -135,6 +141,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Chapter:            q.Chapter.replaceDB(db),
 		Collection:         q.Collection.replaceDB(db),
 		CollectionMember:   q.CollectionMember.replaceDB(db),
+		Credit:             q.Credit.replaceDB(db),
 		DeviceSession:      q.DeviceSession.replaceDB(db),
 		ExternalID:         q.ExternalID.replaceDB(db),
 		Favourite:          q.Favourite.replaceDB(db),
@@ -147,6 +154,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		LibrarySource:      q.LibrarySource.replaceDB(db),
 		Part:               q.Part.replaceDB(db),
 		PartFile:           q.PartFile.replaceDB(db),
+		Person:             q.Person.replaceDB(db),
 		Playlist:           q.Playlist.replaceDB(db),
 		PlaylistEntry:      q.PlaylistEntry.replaceDB(db),
 		Profile:            q.Profile.replaceDB(db),
@@ -167,6 +175,7 @@ type queryCtx struct {
 	Chapter            IChapterDo
 	Collection         ICollectionDo
 	CollectionMember   ICollectionMemberDo
+	Credit             ICreditDo
 	DeviceSession      IDeviceSessionDo
 	ExternalID         IExternalIDDo
 	Favourite          IFavouriteDo
@@ -179,6 +188,7 @@ type queryCtx struct {
 	LibrarySource      ILibrarySourceDo
 	Part               IPartDo
 	PartFile           IPartFileDo
+	Person             IPersonDo
 	Playlist           IPlaylistDo
 	PlaylistEntry      IPlaylistEntryDo
 	Profile            IProfileDo
@@ -199,6 +209,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Chapter:            q.Chapter.WithContext(ctx),
 		Collection:         q.Collection.WithContext(ctx),
 		CollectionMember:   q.CollectionMember.WithContext(ctx),
+		Credit:             q.Credit.WithContext(ctx),
 		DeviceSession:      q.DeviceSession.WithContext(ctx),
 		ExternalID:         q.ExternalID.WithContext(ctx),
 		Favourite:          q.Favourite.WithContext(ctx),
@@ -211,6 +222,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		LibrarySource:      q.LibrarySource.WithContext(ctx),
 		Part:               q.Part.WithContext(ctx),
 		PartFile:           q.PartFile.WithContext(ctx),
+		Person:             q.Person.WithContext(ctx),
 		Playlist:           q.Playlist.WithContext(ctx),
 		PlaylistEntry:      q.PlaylistEntry.WithContext(ctx),
 		Profile:            q.Profile.WithContext(ctx),
