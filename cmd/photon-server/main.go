@@ -129,14 +129,12 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	node := uuid.NewV7()
 	scheduler := task.NewScheduler(st, logger, node,
 		scanTask(st, scan.New(st, tools, logger), logger), sweepTask(st, logger))
-	handlers := map[domain.JobKind]jobs.Handler{domain.JobKeyframes: analysis.Keyframes(st, tools)}
-	if token := os.Getenv("PHOTON_TMDB_TOKEN"); token != "" {
-		c := tmdb.New(token, cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US"), cache)
-		handlers[domain.JobIdentify] = identify.Handler(st, c, logger)
-	} else {
-		logger.InfoContext(ctx, "PHOTON_TMDB_TOKEN is not set: titles are described by their files and NFOs alone")
-	}
-	worker := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), handlers)
+	movies := tmdb.New(cmp.Or(os.Getenv("PHOTON_TMDB_TOKEN"), tmdb.DefaultToken),
+		cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US"), cache)
+	worker := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), map[domain.JobKind]jobs.Handler{
+		domain.JobKeyframes: analysis.Keyframes(st, tools),
+		domain.JobIdentify:  identify.Handler(st, movies, logger),
+	})
 	background, stopBackground := context.WithCancel(ctx)
 	var wg sync.WaitGroup
 	wg.Go(func() { scheduler.Run(background) })

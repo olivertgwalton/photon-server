@@ -20,6 +20,10 @@ import (
 
 const baseURL = "https://api.themoviedb.org/3"
 
+// DefaultToken is the project's own API read access token, shipped in the source as Jellyfin
+// ships its key, so matching works without an account. An operator's own token replaces it.
+const DefaultToken = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJkYzYwYTNmZmYyZTRlOWQyZmU3ZTliYzgzYWI1ODNhYSIsIm5iZiI6MTc2MTg2OTQzNi41NDEsInN1YiI6IjY5MDNmZTdjMDIyZTUxOWZlMTJmZGI1YyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.H6Hra5soywDrjrzesbmH2wzHscr1Vx5ZwfhPTa5nN1Y" //nolint:gosec // public by design
+
 // limit keeps every node together well under TMDB's rate limit of about 50 requests a second.
 var limit = kv.Limit{Every: 50 * time.Millisecond, Burst: 20}
 
