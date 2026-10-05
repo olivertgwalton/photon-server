@@ -77,4 +77,23 @@ func TestANodeIsReachedWhileItSaysWhere(t *testing.T) {
 	if got, ok, err := k.NodeAddress(ctx, node); !ok || err != nil || got != "http://10.0.0.5:8640" {
 		t.Errorf("NodeAddress = %q, %v, %v", got, ok, err)
 	}
+	nodes, err := k.Nodes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(nodes, func(n Node) bool { return n.ID == node })
+	if i < 0 || nodes[i].Address != "http://10.0.0.5:8640" || time.Since(nodes[i].Seen) > time.Minute {
+		t.Errorf("Nodes = %+v, want %v among them, seen just now", nodes, node)
+	}
+}
+
+func TestValkeySaysItsVersion(t *testing.T) {
+	k, err := Open(os.Getenv("TEST_VALKEY_URL"))
+	if err != nil {
+		t.Fatalf("TEST_VALKEY_URL: %v", err)
+	}
+	defer k.Close()
+	if v, err := k.Version(t.Context()); v == "" || err != nil {
+		t.Errorf("Version = %q, %v", v, err)
+	}
 }

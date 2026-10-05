@@ -69,20 +69,61 @@ func (k *KV) EndPlayback(ctx context.Context, id uuid.UUID) error {
 	return k.client.Do(ctx, k.client.B().Del().Key(playbackKey(id)).Build()).Error()
 }
 
-func nodeKey(id uuid.UUID) string { return "photon:node:" + id.String() }
+const nodePrefix = "photon:node:"
+
+func nodeKey(id uuid.UUID) string { return nodePrefix + id.String() }
+
+// Node is a server node that says where its peers reach it, and when it last said so.
+type Node struct {
+	ID      uuid.UUID
+	Address string
+	Seen    time.Time
+}
 
 // SetNode says where a server node answers its peers, for ttl unless said again.
 func (k *KV) SetNode(ctx context.Context, id uuid.UUID, address string, ttl time.Duration) error {
-	return k.client.Do(ctx, k.client.B().Set().Key(nodeKey(id)).Value(address).Ex(ttl).Build()).Error()
+	key := nodeKey(id)
+	cmds := k.client.B()
+	for _, r := range k.client.DoMulti(ctx,
+		cmds.Hset().Key(key).FieldValue().FieldValue("address", address).
+			FieldValue("seen", strconv.FormatInt(time.Now().Unix(), 10)).Build(),
+		cmds.Expire().Key(key).Seconds(int64(ttl.Seconds())).Build(),
+	) {
+		if err := r.Error(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // NodeAddress answers where a node answers its peers, or false for one that has gone quiet.
 func (k *KV) NodeAddress(ctx context.Context, id uuid.UUID) (string, bool, error) {
-	address, err := k.client.Do(ctx, k.client.B().Get().Key(nodeKey(id)).Build()).ToString()
+	address, err := k.client.Do(ctx, k.client.B().Hget().Key(nodeKey(id)).Field("address").Build()).ToString()
 	if valkey.IsValkeyNil(err) {
 		return "", false, nil
 	}
 	return address, err == nil, err
+}
+
+// Nodes answers every node that has said where its peers reach it and not gone quiet.
+func (k *KV) Nodes(ctx context.Context) ([]Node, error) {
+	var out []Node
+	for id, err := range k.ids(ctx, nodePrefix) {
+		if err != nil {
+			return nil, err
+		}
+		m, err := k.client.Do(ctx, k.client.B().Hgetall().Key(nodeKey(id)).Build()).AsStrMap()
+		if err != nil {
+			return nil, err
+		}
+		// One may go quiet between the scan and the read.
+		if len(m) == 0 {
+			continue
+		}
+		seen, _ := strconv.ParseInt(m["seen"], 10, 64)
+		out = append(out, Node{ID: id, Address: m["address"], Seen: time.Unix(seen, 0)})
+	}
+	return out, nil
 }
 
 // Playbacks answers every playback going on, across the cluster, by scanning their keys: there are
