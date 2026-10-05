@@ -28,6 +28,7 @@ func newArtwork(db *gorm.DB, opts ...gen.DOOption) artwork {
 
 	tableName := _artwork.artworkDo.TableName()
 	_artwork.ALL = field.NewAsterisk(tableName)
+	_artwork.ID = field.NewField(tableName, "id")
 	_artwork.ItemID = field.NewField(tableName, "item_id")
 	_artwork.Source = field.NewString(tableName, "source")
 	_artwork.Kind = field.NewString(tableName, "kind")
@@ -47,6 +48,7 @@ type artwork struct {
 	artworkDo artworkDo
 
 	ALL      field.Asterisk
+	ID       field.Field
 	ItemID   field.Field
 	Source   field.String
 	Kind     field.String
@@ -72,6 +74,7 @@ func (a artwork) As(alias string) *artwork {
 
 func (a *artwork) updateTableName(table string) *artwork {
 	a.ALL = field.NewAsterisk(table)
+	a.ID = field.NewField(table, "id")
 	a.ItemID = field.NewField(table, "item_id")
 	a.Source = field.NewString(table, "source")
 	a.Kind = field.NewString(table, "kind")
@@ -105,7 +108,8 @@ func (a *artwork) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (a *artwork) fillFieldMap() {
-	a.fieldMap = make(map[string]field.Expr, 9)
+	a.fieldMap = make(map[string]field.Expr, 10)
+	a.fieldMap["id"] = a.ID
 	a.fieldMap["item_id"] = a.ItemID
 	a.fieldMap["source"] = a.Source
 	a.fieldMap["kind"] = a.Kind
