@@ -52,6 +52,13 @@ func (fakeCatalogue) Facets(_ context.Context, lib uuid.UUID) (store.Facets, err
 	return store.Facets{Genres: []string{"Crime"}}, nil
 }
 
+func (fakeCatalogue) Similar(_ context.Context, _, id uuid.UUID) ([]store.Card, error) {
+	if id != films {
+		return nil, store.ErrNotFound
+	}
+	return []store.Card{{ID: uuid.NewV7(), Kind: domain.ItemMovie, Title: "Thief"}}, nil
+}
+
 func (fakeCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage, error) {
 	if id != films {
 		return store.TitlePage{}, store.ErrNotFound
@@ -192,6 +199,9 @@ func TestWall(t *testing.T) {
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/letters?starts_with=m", goodToken, ""); !strings.Contains(rec.Body.String(), `"letter":"M"`) {
 		t.Errorf("letters narrowed: %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(t, http.MethodGet, "/api/v1/titles/"+films.String()+"/similar", goodToken, ""); !strings.Contains(rec.Body.String(), `"title":"Thief"`) {
+		t.Errorf("similar: %d %s", rec.Code, rec.Body)
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/facets", goodToken, ""); rec.Code != http.StatusOK ||
 		!strings.Contains(rec.Body.String(), `"genres":["Crime"]`) || !strings.Contains(rec.Body.String(), `"marks":["watched","unwatched","in_progress","favourite"]`) {
