@@ -45,3 +45,37 @@ type Playback struct {
 	Started  time.Time
 	Updated  time.Time
 }
+
+// VideoPlan is the video stream played, by its index in the file, and what becomes of its Dolby
+// Vision.
+type VideoPlan struct {
+	Stream      int
+	Codec       string
+	DolbyVision DolbyVisionHandling
+}
+
+// DolbyVisionHandling is what a copy does with a stream's Dolby Vision.
+type DolbyVisionHandling string
+
+const (
+	// DolbyVisionNone is a stream with none.
+	DolbyVisionNone DolbyVisionHandling = ""
+	// DolbyVisionKeep carries it to a client that shows it.
+	DolbyVisionKeep DolbyVisionHandling = "keep"
+	// DolbyVisionStrip drops it for the base layer, to a client that shows only that.
+	DolbyVisionStrip DolbyVisionHandling = "strip"
+)
+
+// AudioPlan is the audio stream played, by its index in the file, and what it is encoded to where
+// it is not copied.
+type AudioPlan struct {
+	Stream int
+	Encode *AudioEncode
+}
+
+// AudioEncode is audio encoded again: the codec, its channels and its bitrate.
+type AudioEncode struct {
+	Codec       string
+	Channels    int
+	BitrateKbps int
+}
