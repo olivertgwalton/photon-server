@@ -34,6 +34,14 @@ The server listens on `:8640` (`PHOTON_LISTEN`) and names itself after the host 
 Behind a reverse proxy, list the proxy's addresses in `PHOTON_TRUSTED_PROXIES` (for example
 `172.16.0.0/12,127.0.0.1`); `X-Forwarded-For` is ignored from anyone else.
 
+Clients on the local network find the server without being given its address: it listens on UDP at
+the same port number as HTTP (`8640`, so open both protocols on that port), and answers a datagram
+reading `who is PhotonServer?` (in any case) with its id, name, version and the address to reach it
+on, as Jellyfin does on 7359. Only askers on this machine or a private or link-local network are
+answered. In Docker a broadcast reaches the server only with host networking (`network_mode: host`),
+as with Jellyfin. `PHOTON_DISCOVERY=off` stops it answering; if the port is taken the server says
+so and serves HTTP regardless.
+
 Titles are described by their file names, then any Kodi NFO beside them, and films and shows are
 matched on TMDB in `PHOTON_METADATA_LANGUAGE` (default `en-US`, whose region picks certificates).
 The server ships its own TMDB token and TheTVDB key; set `PHOTON_TMDB_TOKEN`, or

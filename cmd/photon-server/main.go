@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +21,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/backup"
+	"github.com/olivertgwalton/photon-server/internal/discovery"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
@@ -128,6 +130,10 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	discoveryMode, err := domain.ParseDiscovery(cmp.Or(os.Getenv("PHOTON_DISCOVERY"), string(domain.DiscoveryBroadcast)))
+	if err != nil {
+		return fmt.Errorf("PHOTON_DISCOVERY: %w", err)
+	}
 	hw, err := hardware(ctx, tools.FFmpeg.Path, logger)
 	if err != nil {
 		return err
@@ -198,6 +204,11 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 			logger.WarnContext(ctx, "libraries are scanned on schedule only", slog.Any("err", err))
 		}
 	})
+	switch discoveryMode {
+	case domain.DiscoveryBroadcast:
+		wg.Go(func() { answerDiscovery(background, srv.Addr, info, logger) })
+	case domain.DiscoveryOff:
+	}
 	defer func() {
 		stopBackground()
 		wg.Wait()
@@ -233,6 +244,18 @@ func ready(st *store.Store, cache *kv.KV) func(context.Context) error {
 			errs = append(errs, fmt.Errorf("valkey: %w", err))
 		}
 		return errors.Join(errs...)
+	}
+}
+
+// answerDiscovery answers clients looking for the server on UDP at the HTTP listener's port.
+// Clients can still be given the address, so a port it cannot have is only a warning.
+func answerDiscovery(ctx context.Context, addr string, info httpapi.Info, logger *slog.Logger) {
+	conn, err := new(net.ListenConfig).ListenPacket(ctx, "udp", addr)
+	if err == nil {
+		err = discovery.Serve(ctx, conn, info, logger)
+	}
+	if err != nil {
+		logger.WarnContext(ctx, "clients must be given the server's address", slog.Any("err", err))
 	}
 }
 
