@@ -85,6 +85,8 @@ type StreamPage struct {
 	Width           int               `json:"width,omitzero"`
 	Height          int               `json:"height,omitzero"`
 	FrameRate       float64           `json:"frame_rate,omitzero"`
+	BitDepth        int16             `json:"bit_depth,omitzero"`
+	Level           int               `json:"level,omitzero"`
 	Range           domain.Range      `json:"range,omitzero"`
 	DVProfile       int16             `json:"dv_profile,omitzero"`
 	Channels        int               `json:"channels,omitzero"`
@@ -436,6 +438,7 @@ func streamPage(t *model.Stream) StreamPage {
 		Index: t.Idx, Kind: t.Kind, Codec: t.Codec, Profile: deref(t.Profile), Language: deref(t.Language),
 		Title: deref(t.Title), Default: t.IsDefault, Forced: t.Forced, HearingImpaired: t.HearingImpaired,
 		Commentary: t.Commentary, Width: deref(t.Width), Height: deref(t.Height), FrameRate: deref(t.FrameRate),
+		BitDepth: deref(t.BitDepth), Level: deref(t.Level),
 		Range: deref(t.VideoRange), DVProfile: deref(t.DVProfile), Channels: deref(t.Channels),
 		ChannelLayout: deref(t.ChannelLayout), SampleRate: deref(t.SampleRate), BitrateKbps: deref(t.BitrateKbps),
 	}

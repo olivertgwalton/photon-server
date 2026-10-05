@@ -36,7 +36,7 @@ func TestProbeHDR10Matroska(t *testing.T) {
 		Duration:    2023 * time.Millisecond,
 		BitrateKbps: 1050,
 		Streams: []Stream{
-			{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Profile: "Main 10", Width: 640, Height: 360, FrameRate: 24, Range: domain.RangeHDR10},
+			{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Profile: "Main 10", Width: 640, Height: 360, FrameRate: 24, BitDepth: 10, Level: 63, Range: domain.RangeHDR10},
 			{Index: 1, Kind: domain.StreamAudio, Codec: "eac3", Language: language.English, Title: "Surround", Default: true, Channels: 6, ChannelLayout: "5.1(side)", SampleRate: 44100, BitrateKbps: 448},
 			{Index: 2, Kind: domain.StreamAudio, Codec: "aac", Profile: "LC", Language: language.French, Title: "Commentary", Commentary: true, Channels: 1, ChannelLayout: "mono", SampleRate: 44100},
 			{Index: 3, Kind: domain.StreamSubtitle, Codec: "subrip", Language: language.English, Forced: true, HearingImpaired: true},

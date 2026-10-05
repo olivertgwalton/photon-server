@@ -312,7 +312,11 @@ func saveFacts(ctx context.Context, tx *query.Query, partID model.UUID, f *media
 		switch st.Kind {
 		case domain.StreamVideo:
 			row.Width, row.Height, row.FrameRate = optionalInt(st.Width), optionalInt(st.Height), &st.FrameRate
-			row.VideoRange = &st.Range
+			row.VideoRange, row.Level = &st.Range, optionalInt(st.Level)
+			if st.BitDepth > 0 {
+				depth := int16(st.BitDepth)
+				row.BitDepth = &depth
+			}
 			if dv := st.DolbyVision; dv != nil {
 				profile, level, compat := int16(dv.Profile), int16(dv.Level), int16(dv.Compatibility)
 				row.DVProfile, row.DVLevel, row.DVCompatibility = &profile, &level, &compat
