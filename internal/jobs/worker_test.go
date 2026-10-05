@@ -19,6 +19,7 @@ type memoryQueue struct {
 	pending   []store.Job
 	completed []int64
 	failed    []int64
+	postponed []int64
 	// leaseUntil is when the job last claimed or renewed loses its lease.
 	leaseUntil time.Time
 }
@@ -45,6 +46,13 @@ func (q *memoryQueue) FailJob(_ context.Context, job store.Job, _ error) (bool, 
 	defer q.mu.Unlock()
 	q.failed = append(q.failed, job.ID)
 	return false, nil
+}
+
+func (q *memoryQueue) PostponeJob(_ context.Context, job store.Job, _ time.Duration) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.postponed = append(q.postponed, job.ID)
+	return nil
 }
 
 func (q *memoryQueue) ExtendLease(_ context.Context, _ int64, lease time.Duration) error {
@@ -110,6 +118,26 @@ func TestWorkerReportsFailures(t *testing.T) {
 		<-done
 		if len(q.failed) != 1 || q.failed[0] != 7 || len(q.completed) != 0 {
 			t.Errorf("failed %v, completed %v; want job 7 failed once", q.failed, q.completed)
+		}
+	})
+}
+
+func TestAJobWithNoRoomIsPostponedNotFailed(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := &memoryQueue{pending: []store.Job{{ID: 7, Kind: domain.JobConvert}}}
+		busy := func(context.Context, uuid.UUID) error { return ErrNotNow }
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobConvert: busy}, ignore)
+		go func() {
+			w.Run(ctx)
+			close(done)
+		}()
+		synctest.Sleep(10 * time.Second)
+		cancel()
+		<-done
+		if len(q.postponed) != 1 || q.postponed[0] != 7 || len(q.failed) != 0 || len(q.completed) != 0 {
+			t.Errorf("postponed %v, failed %v, completed %v; want job 7 postponed", q.postponed, q.failed, q.completed)
 		}
 	})
 }

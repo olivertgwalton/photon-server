@@ -123,6 +123,16 @@ func (s *Store) FailJob(ctx context.Context, job Job, runErr error) (bool, error
 	return false, err
 }
 
+// PostponeJob queues a job again once a delay has passed, giving back its attempt: it could not
+// start for want of room on its node, which is no fault of its subject's.
+func (s *Store) PostponeJob(ctx context.Context, job Job, delay time.Duration) error {
+	j := s.q.Job
+	_, err := j.WithContext(ctx).Where(j.ID.Eq(job.ID)).UpdateSimple(
+		j.State.Value(string(domain.JobQueued)), j.Attempts.Sub(1), j.LeaseUntil.Null(), j.NodeID.Null(),
+		j.RunAfter.Value(time.Now().Add(delay)))
+	return err
+}
+
 // RunningJobs answers the jobs being run now, on every node, the oldest first.
 func (s *Store) RunningJobs(ctx context.Context) ([]Job, error) {
 	j := s.q.Job

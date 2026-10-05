@@ -127,6 +127,29 @@ func TestFailedJobsBackOffThenDie(t *testing.T) {
 	}
 }
 
+func TestAPostponedJobNeverDies(t *testing.T) {
+	s := migrated(t)
+	enqueueN(t, s, 1)
+	kinds := []domain.JobKind{domain.JobKeyframes}
+	node := uuid.NewV7()
+	for attempt := range maxAttempts + 2 {
+		jobs, err := s.ClaimJobs(t.Context(), kinds, node, time.Minute, 1)
+		if err != nil || len(jobs) != 1 || jobs[0].Attempts != 1 {
+			t.Fatalf("claim %d: %+v (err %v), want the job on its first attempt", attempt, jobs, err)
+		}
+		if err := s.PostponeJob(t.Context(), jobs[0], time.Hour); err != nil {
+			t.Fatal(err)
+		}
+		if again, _ := s.ClaimJobs(t.Context(), kinds, node, time.Minute, 1); len(again) != 0 {
+			t.Fatalf("claim %d: a postponed job was claimable before its delay", attempt)
+		}
+		j := s.q.Job
+		if _, err := j.WithContext(t.Context()).Where(j.ID.Eq(jobs[0].ID)).UpdateSimple(j.RunAfter.Value(time.Now().Add(-time.Second))); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestSweepRequeuesExpiredLeases(t *testing.T) {
 	s := migrated(t)
 	enqueueN(t, s, 2)
