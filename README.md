@@ -54,6 +54,10 @@ encoded, or its video encoded to H.264, HDR tone mapped to SDR. Encoding is in s
 default `/dev/dri/renderD128`) or `nvenc` (on CUDA device `PHOTON_HWACCEL_DEVICE`, default `0`). The
 server encodes a test picture on it at start, and falls back to software if it will not.
 
+Run several nodes against one Postgres and Valkey behind a load balancer and each says where its
+peers reach it in `PHOTON_NODE_ADDRESS` (`http://10.0.0.5:8640`): a request for a stream's segments
+that lands on another node is handed to the node making them.
+
 The first admin is made on the command line, before anyone can sign in:
 
 ```sh

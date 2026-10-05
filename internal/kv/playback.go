@@ -6,6 +6,8 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/valkey-io/valkey-go"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
@@ -21,7 +23,8 @@ func (k *KV) SavePlayback(ctx context.Context, p domain.Playback, ttl time.Durat
 			FieldValue("version", p.Version.String()).FieldValue("method", string(p.Method)).
 			FieldValue("state", string(p.State)).FieldValue("position_ms", strconv.FormatInt(p.Position.Milliseconds(), 10)).
 			FieldValue("started", strconv.FormatInt(p.Started.Unix(), 10)).
-			FieldValue("updated", strconv.FormatInt(p.Updated.Unix(), 10)).Build(),
+			FieldValue("updated", strconv.FormatInt(p.Updated.Unix(), 10)).
+			FieldValue("node", p.Node.String()).Build(),
 		cmds.Expire().Key(key).Seconds(int64(ttl.Seconds())).Build(),
 	) {
 		if err := r.Error(); err != nil {
@@ -41,6 +44,7 @@ func (k *KV) Playback(ctx context.Context, id uuid.UUID) (domain.Playback, bool,
 	p.Profile, _ = uuid.Parse(m["profile"])
 	p.Item, _ = uuid.Parse(m["item"])
 	p.Version, _ = uuid.Parse(m["version"])
+	p.Node, _ = uuid.Parse(m["node"])
 	ms, _ := strconv.ParseInt(m["position_ms"], 10, 64)
 	p.Position = time.Duration(ms) * time.Millisecond
 	started, _ := strconv.ParseInt(m["started"], 10, 64)
@@ -51,4 +55,20 @@ func (k *KV) Playback(ctx context.Context, id uuid.UUID) (domain.Playback, bool,
 
 func (k *KV) EndPlayback(ctx context.Context, id uuid.UUID) error {
 	return k.client.Do(ctx, k.client.B().Del().Key(playbackKey(id)).Build()).Error()
+}
+
+func nodeKey(id uuid.UUID) string { return "photon:node:" + id.String() }
+
+// SetNode says where a server node answers its peers, for ttl unless said again.
+func (k *KV) SetNode(ctx context.Context, id uuid.UUID, address string, ttl time.Duration) error {
+	return k.client.Do(ctx, k.client.B().Set().Key(nodeKey(id)).Value(address).Ex(ttl).Build()).Error()
+}
+
+// NodeAddress answers where a node answers its peers, or false for one that has gone quiet.
+func (k *KV) NodeAddress(ctx context.Context, id uuid.UUID) (string, bool, error) {
+	address, err := k.client.Do(ctx, k.client.B().Get().Key(nodeKey(id)).Build()).ToString()
+	if valkey.IsValkeyNil(err) {
+		return "", false, nil
+	}
+	return address, err == nil, err
 }

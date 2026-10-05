@@ -183,6 +183,8 @@ func (fakeHLS) Open(context.Context, uuid.UUID, store.PlayCopy, domain.VideoPlan
 	return nil
 }
 
+func (fakeHLS) Has(playback uuid.UUID) bool { return playback == playbackID }
+
 func (fakeHLS) Playlist(playback uuid.UUID, name string) (string, error) {
 	if playback != playbackID || name != "main.m3u8" {
 		return "", hls.ErrNoRemux
@@ -274,5 +276,39 @@ func TestAClientIsToldWhyNothingPlays(t *testing.T) {
 		if rec.Code != tc.wantStatus || !slices.Equal(got.Reasons, tc.wantReasons) {
 			t.Errorf("%s: %d %v, want %d %v", tc.body, rec.Code, got.Reasons, tc.wantStatus, tc.wantReasons)
 		}
+	}
+}
+
+// noHLS runs no remux: the playback is another node's.
+type noHLS struct{ fakeHLS }
+
+func (noHLS) Has(uuid.UUID) bool { return false }
+
+type owner string
+
+func (o owner) Owner(_ context.Context, playback uuid.UUID) (string, bool, error) {
+	return string(o), playback == playbackID, nil
+}
+
+func TestHLSIsServedByTheNodeRunningIt(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "segment"), []byte("m4s"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	signer := playback.NewSigner([]byte("key"))
+	running := httptest.NewServer(New(slog.New(slog.DiscardHandler), Info{}, Services{HLS: fakeHLS{dir: dir}, Signer: signer}))
+	defer running.Close()
+	front := New(slog.New(slog.DiscardHandler), Info{}, Services{HLS: noHLS{}, Owners: owner(running.URL), Signer: signer})
+	subject := hlsSubject(playbackID)
+	exp, sig := signer.Token(subject, time.Now().Add(time.Hour))
+	rec := httptest.NewRecorder()
+	front.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, subject+"/"+exp+"/"+sig+"/0.m4s", nil))
+	if rec.Code != http.StatusOK || rec.Body.String() != "m4s" {
+		t.Errorf("a segment another node makes: %d %q, want it from that node", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	front.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, subject+"/"+exp+"/forged/0.m4s", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("a forged signature: %d, want 401 before any node is asked", rec.Code)
 	}
 }

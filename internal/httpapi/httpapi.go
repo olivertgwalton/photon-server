@@ -79,6 +79,8 @@ type Services struct {
 	Playbacks playbacks
 	Remuxing  remuxing
 	HLS       hlsFiles
+	// Owners say which node serves a playback's HLS, nil on a server of one node.
+	Owners owners
 	// Signer signs the addresses titles play from.
 	Signer  playback.Signer
 	Artwork pictureCache
@@ -105,7 +107,7 @@ func New(logger *slog.Logger, info Info, svc Services) *API {
 		case signedAddress:
 			h = a.requireSignature(h)
 		case signedPath:
-			h = a.requireSignedPath(h)
+			h = a.requireSignedPath(a.routeToOwner(h))
 		case admin:
 			h = a.requireAdmin(h)
 		}

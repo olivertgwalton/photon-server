@@ -138,6 +138,12 @@ func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
 	return nil
 }
 
+// Has reports whether this remuxer runs a playback's remux.
+func (r *Remuxer) Has(playback uuid.UUID) bool {
+	_, err := r.session(playback)
+	return err == nil
+}
+
 // Playlist answers one of a playback's playlists by name: its master, MasterName, and those the
 // master names.
 func (r *Remuxer) Playlist(playback uuid.UUID, name string) (string, error) {

@@ -146,17 +146,18 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		Name:    cmp.Or(os.Getenv("PHOTON_NAME"), hostname),
 		Version: version,
 	}
+	// node is this process among the cluster's.
+	node := uuid.NewV7()
 	srv := &http.Server{
 		Addr: cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Limits: cache, TrustedProxies: trusted,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close, node), Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Limits: cache, TrustedProxies: trusted,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
 	}
 
-	node := uuid.NewV7()
 	scheduler := task.NewScheduler(st, logger, node, scanTask(st), sweepTask(st, logger))
 	lang := cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US")
 	movies := tmdb.New(cmp.Or(os.Getenv("PHOTON_TMDB_TOKEN"), tmdb.DefaultToken), lang, cache)
@@ -172,6 +173,9 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	wg.Go(func() { scheduler.Run(background) })
 	wg.Go(func() { worker.Run(background) })
 	wg.Go(func() { sweepRemuxes(background, remuxer) })
+	if address := os.Getenv("PHOTON_NODE_ADDRESS"); address != "" {
+		wg.Go(func() { advertise(background, cache, node, address, logger) })
+	}
 	wg.Go(func() {
 		if err := watcher.Run(background); err != nil {
 			logger.WarnContext(ctx, "libraries are scanned on schedule only", slog.Any("err", err))
@@ -243,6 +247,27 @@ func hardware(ctx context.Context, ffmpeg string, logger *slog.Logger) (hls.Hard
 	}
 	logger.InfoContext(ctx, "encoding video", slog.String("on", string(accel)), slog.String("device", device))
 	return hw, nil
+}
+
+// advertiseEvery is how often a node says where its peers reach it; it is forgotten after three
+// times that, quiet.
+const advertiseEvery = 15 * time.Second
+
+// advertise says where this node's peers reach it, PHOTON_NODE_ADDRESS, so a request for HLS one
+// of its playbacks makes is handed to it whichever node it lands on.
+func advertise(ctx context.Context, cache *kv.KV, node uuid.UUID, address string, logger *slog.Logger) {
+	t := time.NewTicker(advertiseEvery)
+	defer t.Stop()
+	for {
+		if err := cache.SetNode(ctx, node, address, 3*advertiseEvery); err != nil && ctx.Err() == nil {
+			logger.WarnContext(ctx, "node address not advertised", slog.Any("err", err))
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 func sweepRemuxes(ctx context.Context, r *hls.Remuxer) {

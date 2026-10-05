@@ -37,7 +37,7 @@ func (p positions) SaveProgress(_ context.Context, _, item uuid.UUID, at time.Du
 func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	live, saved := memory{}, positions{}
 	var ended []uuid.UUID
-	s := NewSessions(live, saved, func(id uuid.UUID) { ended = append(ended, id) })
+	s := NewSessions(live, saved, func(id uuid.UUID) { ended = append(ended, id) }, uuid.NewV7())
 	ctx := t.Context()
 	oliver, guest, film := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
 

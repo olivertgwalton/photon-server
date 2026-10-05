@@ -31,12 +31,13 @@ type Sessions struct {
 	live  sessionStore
 	saved progressStore
 	ended func(uuid.UUID)
+	node  uuid.UUID
 }
 
 // NewSessions keeps playbacks in live and places in saved, and calls ended as a playback stops,
-// to let go of what it held.
-func NewSessions(live sessionStore, saved progressStore, ended func(uuid.UUID)) *Sessions {
-	return &Sessions{live: live, saved: saved, ended: ended}
+// to let go of what it held. Each playback started is node's to serve.
+func NewSessions(live sessionStore, saved progressStore, ended func(uuid.UUID), node uuid.UUID) *Sessions {
+	return &Sessions{live: live, saved: saved, ended: ended, node: node}
 }
 
 // Start opens a playback of a copy of a title.
@@ -44,7 +45,7 @@ func (s *Sessions) Start(ctx context.Context, profile, item, version uuid.UUID, 
 	now := time.Now()
 	p := domain.Playback{
 		ID: uuid.NewV7(), Profile: profile, Item: item, Version: version, Method: method,
-		State: domain.StatePlaying, Started: now, Updated: now,
+		State: domain.StatePlaying, Started: now, Updated: now, Node: s.node,
 	}
 	return p, s.live.SavePlayback(ctx, p, sessionLife)
 }
