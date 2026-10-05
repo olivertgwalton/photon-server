@@ -125,7 +125,7 @@ func saveExtra(ctx context.Context, tx *query.Query, lib uuid.UUID, owner model.
 	if err != nil {
 		return err
 	}
-	if err := fromFiles(ctx, tx, row.ID, e.Title, 0); err != nil {
+	if err := describe(ctx, tx, row.ID, e.Title, 0, nil, nil); err != nil {
 		return err
 	}
 	return saveCopy(ctx, tx, lib, row.ID, e.Copy)

@@ -1,5 +1,22 @@
 package domain
 
+import "time"
+
+// Metadata is what one source says about a title. A zero field says nothing.
+type Metadata struct {
+	Title         string
+	SortTitle     string
+	OriginalTitle string
+	Overview      string
+	Tagline       string
+	Certificate   string
+	ReleaseDate   time.Time
+	Year          int
+	Genres        []string
+	Studios       []string
+	IDs           map[Provider]string
+}
+
 // Field is a piece of a title's metadata whose source is remembered.
 type Field string
 

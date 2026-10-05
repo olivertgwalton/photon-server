@@ -1,9 +1,11 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql/driver"
 	"encoding/json"
+	"slices"
 	"time"
 
 	"gorm.io/gen/field"
@@ -13,19 +15,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
-
-// Metadata is what one source says about a title. A zero field says nothing and changes nothing.
-type Metadata struct {
-	Title         string
-	OriginalTitle string
-	Overview      string
-	Tagline       string
-	Certificate   string
-	ReleaseDate   time.Time
-	Year          int
-	Genres        []string
-	Studios       []string
-}
 
 // jsonList writes a list column as the JSON its serializer reads back.
 type jsonList []string
@@ -38,7 +27,7 @@ func (l jsonList) Value() (driver.Value, error) {
 // applyMetadata writes what source says about a title, field by field, wherever no source that
 // ranks higher has spoken, and remembers the source of each field it writes. A list is replaced
 // whole, never merged, so two providers' genres never stand side by side.
-func applyMetadata(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, m Metadata) error {
+func applyMetadata(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, m domain.Metadata) error {
 	f := tx.ItemField
 	rows, err := f.WithContext(ctx).Where(f.ItemID.Eq(item)).Find()
 	if err != nil {
@@ -58,7 +47,8 @@ func applyMetadata(ctx context.Context, tx *query.Query, item model.UUID, source
 		}
 	}
 	set(domain.FieldTitle, m.Title != "", i.Title.Value(m.Title))
-	set(domain.FieldSortTitle, m.Title != "", i.SortTitle.Value(sortTitle(m.Title)))
+	sort := cmp.Or(m.SortTitle, m.Title)
+	set(domain.FieldSortTitle, sort != "", i.SortTitle.Value(sortTitle(sort)))
 	set(domain.FieldOriginalTitle, m.OriginalTitle != "", i.OriginalTitle.Value(m.OriginalTitle))
 	set(domain.FieldOverview, m.Overview != "", i.Overview.Value(m.Overview))
 	set(domain.FieldTagline, m.Tagline != "", i.Tagline.Value(m.Tagline))
@@ -79,7 +69,43 @@ func applyMetadata(ctx context.Context, tx *query.Query, item model.UUID, source
 	}).Create(written...)
 }
 
-// fromFiles is what the scanner read from a title's file and folder names.
-func fromFiles(ctx context.Context, tx *query.Query, item model.UUID, title string, year int) error {
-	return applyMetadata(ctx, tx, item, domain.SourceFile, Metadata{Title: title, Year: year})
+// describe writes what a title's file and folder names say about it, then its NFO, if it has one.
+func describe(ctx context.Context, tx *query.Query, item model.UUID, title string, year int, ids map[domain.Provider]string, nfo *domain.Metadata) error {
+	if err := applyMetadata(ctx, tx, item, domain.SourceFile, domain.Metadata{Title: title, Year: year}); err != nil {
+		return err
+	}
+	if err := saveIDs(ctx, tx, item, domain.IDFromPath, ids); err != nil {
+		return err
+	}
+	if nfo == nil {
+		return nil
+	}
+	if err := applyMetadata(ctx, tx, item, domain.SourceNFO, *nfo); err != nil {
+		return err
+	}
+	return saveIDs(ctx, tx, item, domain.IDFromNFO, nfo.IDs)
+}
+
+// saveIDs records a title's provider ids, each unless a higher-ranking source already gave one.
+func saveIDs(ctx context.Context, tx *query.Query, item model.UUID, source domain.IDSource, ids map[domain.Provider]string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	e := tx.ExternalID
+	known, err := e.WithContext(ctx).Where(e.ItemID.Eq(item)).Find()
+	if err != nil {
+		return err
+	}
+	for provider, value := range ids {
+		if slices.ContainsFunc(known, func(k *model.ExternalID) bool {
+			return k.Provider == provider && k.Source.Rank() > source.Rank()
+		}) {
+			continue
+		}
+		err := e.WithContext(ctx).Save(&model.ExternalID{ItemID: item, Provider: provider, Value: value, Source: source})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

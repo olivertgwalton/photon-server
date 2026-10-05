@@ -31,8 +31,23 @@ func Providers() []Provider {
 // IDSource is where a title's provider id came from, so a later source knows what it may replace.
 type IDSource string
 
-const IDFromPath IDSource = "path"
+const (
+	IDFromNFO  IDSource = "nfo"
+	IDFromPath IDSource = "path"
+)
 
 func IDSources() []IDSource {
-	return []IDSource{IDFromPath}
+	return []IDSource{IDFromNFO, IDFromPath}
+}
+
+// Rank puts an id the reader typed into a folder or file name above one an NFO carries, since
+// NFOs are mostly written by other tools.
+func (s IDSource) Rank() int {
+	switch s {
+	case IDFromNFO:
+		return 1
+	case IDFromPath:
+		return 2
+	}
+	return 0
 }
