@@ -44,19 +44,21 @@ tool() {
   chmod +x "$bin/$triple-$1"
 }
 # Zig compiles rather than only preprocesses when given -E and -c together, as fontconfig gives
-# them; GCC and Clang let -E win.
+# them; GCC and Clang let -E win. And it refuses the glibc version in the target when reading
+# standard input with no language named, as older Meson asks for the predefined macros.
 compiler() {
   cat >"$bin/$triple-$1" <<EOF
 #!/bin/sh
 case " \$* " in *" -E "*) for a; do shift; [ "\$a" = -c ] || set -- "\$@" "\$a"; done ;; esac
+case " \$* " in *" -x "*) ;; *" - "*) set -- -x $3 "\$@" ;; esac
 exec $zig $2 -target $triple.2.28 "\$@"
 EOF
   chmod +x "$bin/$triple-$1"
 }
-compiler cc cc
-compiler gcc cc
-compiler c++ c++
-compiler g++ c++
+compiler cc cc c
+compiler gcc cc c
+compiler c++ c++ c++
+compiler g++ c++ c++
 tool ar "$zig ar"
 tool ranlib "$zig ranlib"
 tool nm nm
