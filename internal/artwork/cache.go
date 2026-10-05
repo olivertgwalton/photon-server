@@ -24,9 +24,7 @@ const (
 )
 
 // Cache fetches each picture once, under its id. A picture replaced gets a new id, so a file
-// here never goes stale.
-// ponytail: a replaced picture's file stays until the cache folder is cleared; a sweep against
-// the artwork table when disk use matters.
+// here never goes stale; one replaced is swept away (see Sweep).
 type Cache struct {
 	root  *os.Root
 	http  *http.Client
@@ -94,4 +92,53 @@ func (c *Cache) fetch(ctx context.Context, name, url string) error {
 		}
 		return err
 	})
+}
+
+// partLife is how long a picture half written may be, before it is taken for one abandoned.
+const partLife = time.Hour
+
+// Sweep removes the files of every picture live says is gone, original and resized copies alike,
+// and pictures half written long ago. It answers how many files it removed.
+func (c *Cache) Sweep(ctx context.Context, live func(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]bool, error)) (int, error) {
+	entries, err := fs.ReadDir(c.root.FS(), ".")
+	if err != nil {
+		return 0, err
+	}
+	byID := map[uuid.UUID][]string{}
+	var stale []string
+	for _, e := range entries {
+		name := e.Name()
+		if strings.HasSuffix(name, ".part") {
+			if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > partLife {
+				stale = append(stale, name)
+			}
+			continue
+		}
+		id, err := uuid.Parse(name[:min(len(name), 36)])
+		if err != nil {
+			continue
+		}
+		byID[id] = append(byID[id], name)
+	}
+	ids := make([]uuid.UUID, 0, len(byID))
+	for id := range byID {
+		ids = append(ids, id)
+	}
+	alive, err := live(ctx, ids)
+	if err != nil {
+		return 0, err
+	}
+	for id, names := range byID {
+		if !alive[id] {
+			stale = append(stale, names...)
+		}
+	}
+	removed := 0
+	for _, name := range stale {
+		if err := c.root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return removed, err
+		}
+		removed++
+	}
+	return removed, nil
 }

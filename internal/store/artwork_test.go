@@ -58,3 +58,38 @@ func TestPicturesBesideATitleComeBeforeAProvidersAndItsCardShowsTheBest(t *testi
 		t.Errorf("card = %+v, %v; want the best poster and backdrop", cards, err)
 	}
 }
+
+func TestOnlyPicturesStillInUseAreLive(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{{Title: "Heat", Folder: "Heat"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	item, err := s.q.Item.WithContext(ctx).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, domain.Metadata{
+		Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, URL: "https://image.tmdb.org/t/p/original/p.jpg"}},
+		Credits: []domain.Credit{{Name: "Al Pacino", IDs: map[domain.Provider]string{domain.ProviderTMDB: "1158"}, Photo: "https://image.tmdb.org/t/p/original/a.jpg", Kind: domain.CreditActor}},
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	poster, err := s.q.Artwork.WithContext(ctx).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	person, err := s.q.Person.WithContext(ctx).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone := uuid.NewV7()
+	live, err := s.LivePictures(ctx, []uuid.UUID{uuid.UUID(poster.ID), uuid.UUID(*person.PhotoID), gone})
+	if err != nil || !live[uuid.UUID(poster.ID)] || !live[uuid.UUID(*person.PhotoID)] || live[gone] {
+		t.Errorf("live = %v, %v; want the poster and the photo, not the replaced one", live, err)
+	}
+}
