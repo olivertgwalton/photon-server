@@ -8,7 +8,9 @@ import (
 
 // All is every table's model, for the generator and the drift test.
 func All() []any {
-	return []any{Server{}, Library{}}
+	return []any{
+		Server{}, Library{}, Folder{}, Item{}, ExternalID{}, Version{}, Part{}, Stream{}, Chapter{},
+	}
 }
 
 // UUID is the standard library's uuid.UUID as a column; pgx hands a uuid to database/sql as text.
