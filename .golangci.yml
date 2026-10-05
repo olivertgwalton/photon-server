@@ -1,5 +1,8 @@
 version: "2"
 
+run:
+  build-tags: [integration]
+
 formatters:
   enable: [gofumpt, goimports]
   settings:
@@ -65,6 +68,11 @@ linters:
       context: scope
     depguard:
       rules:
+        orm-boundary:
+          files: ["!**/internal/store/**"]
+          deny:
+            - pkg: gorm.io
+              desc: only internal/store talks to GORM and gen
         main:
           deny:
             - pkg: github.com/pkg/errors
