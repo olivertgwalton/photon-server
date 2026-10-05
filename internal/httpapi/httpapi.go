@@ -73,6 +73,8 @@ type Services struct {
 	Profiles  profileLister
 	Catalogue catalogue
 	Libraries libraryAdmin
+	// History is the plays each profile has finished.
+	History history
 	// Editing is an admin's say over what a title is.
 	Editing editing
 	// People are those credited on titles, and PersonDescriber says who they are.
@@ -163,6 +165,8 @@ func (a *API) routes() []route {
 		{pattern: "GET /api/v1/titles/{id}/members", access: signedIn, handle: a.members},
 		{pattern: "GET /api/v1/titles/{id}/similar", access: signedIn, handle: a.similar},
 		{pattern: "GET /api/v1/people/{id}", access: signedIn, handle: a.person},
+		{pattern: "GET /api/v1/history", access: signedIn, query: []string{"offset", "limit"}, handle: a.ownHistory},
+		{pattern: "GET /api/v1/admin/history", access: admin, query: []string{"profile", "offset", "limit"}, handle: a.adminHistory},
 		{pattern: "GET /api/v1/playlists", access: signedIn, handle: a.playlistsOf},
 		{pattern: "POST /api/v1/playlists", access: signedIn, handle: a.addPlaylist},
 		{pattern: "PATCH /api/v1/playlists/{id}", access: signedIn, handle: a.setPlaylist},

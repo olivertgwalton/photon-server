@@ -34,6 +34,12 @@ func (p positions) SaveProgress(_ context.Context, _, item uuid.UUID, at time.Du
 	return domain.ReachResumable, nil
 }
 
+// RecordPlay keeps a play as how far it got, under its playback's id.
+func (p positions) RecordPlay(_ context.Context, pb domain.Playback, _ time.Time, at time.Duration) error {
+	p[pb.ID] = at
+	return nil
+}
+
 func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	live, saved := memory{}, positions{}
 	var ended []uuid.UUID
@@ -59,6 +65,9 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	}
 	if _, ok := live[p.ID]; ok || saved[film] != 25*time.Minute || len(ended) != 1 || ended[0] != p.ID {
 		t.Errorf("after stop: still live %v, saved %v, ended %v; want it gone, kept at 25 minutes, and let go", ok, saved[film], ended)
+	}
+	if saved[p.ID] != 25*time.Minute {
+		t.Errorf("history kept %v, want the play at 25 minutes", saved[p.ID])
 	}
 	if _, err := s.Progress(ctx, oliver, p.ID, time.Hour, domain.StatePlaying); !errors.Is(err, ErrNoPlayback) {
 		t.Errorf("reporting a stopped playback: %v, want ErrNoPlayback", err)

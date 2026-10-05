@@ -24,6 +24,7 @@ type sessionStore interface {
 
 type progressStore interface {
 	SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration) (domain.Reach, error)
+	RecordPlay(ctx context.Context, p domain.Playback, stopped time.Time, position time.Duration) error
 }
 
 // Sessions keeps who is playing what, and keeps each profile's place in it as they go.
@@ -64,7 +65,7 @@ func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position
 	return reach, s.live.SavePlayback(ctx, p, sessionLife)
 }
 
-// Stop ends a profile's playback where it stopped.
+// Stop ends a profile's playback where it stopped, and keeps it in the history.
 func (s *Sessions) Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error) {
 	p, err := s.own(ctx, profile, id)
 	if err != nil {
@@ -72,6 +73,9 @@ func (s *Sessions) Stop(ctx context.Context, profile, id uuid.UUID, position tim
 	}
 	reach, err := s.saved.SaveProgress(ctx, profile, p.Item, position)
 	if err != nil {
+		return "", err
+	}
+	if err := s.saved.RecordPlay(ctx, p, time.Now(), position); err != nil {
 		return "", err
 	}
 	s.ended(id)
