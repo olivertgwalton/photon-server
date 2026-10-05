@@ -8,6 +8,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/analysis"
 	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/backup"
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -144,6 +145,34 @@ func markersTask(st *store.Store, tools media.Tools, logger *slog.Logger) task.T
 			n, err := st.QueueMarkers(ctx)
 			if n > 0 {
 				logger.InfoContext(ctx, "seasons queued to have their intros and credits found", slog.Int64("seasons", n))
+			}
+			return err
+		},
+	}
+}
+
+// previewsAt is when previews are brought into line with their libraries: the small hours, before
+// the metadata refresh.
+const previewsAt = 2 * time.Hour
+
+// previewsTask queues the parts whose previews are not what their library asks for, among them
+// those of a library switched on since and those whose job died, and clears the folders of
+// previews no part has any more.
+func previewsTask(st *store.Store, previews *analysis.Previews, logger *slog.Logger) task.Task {
+	return task.Task{
+		Key:      domain.TaskBackfillPreviews,
+		Triggers: []task.Trigger{{Kind: task.TriggerDaily, At: previewsAt}},
+		Run: func(ctx context.Context) error {
+			n, err := st.QueuePreviews(ctx)
+			if n > 0 {
+				logger.InfoContext(ctx, "parts queued for previews", slog.Int64("parts", n))
+			}
+			if err != nil {
+				return err
+			}
+			removed, err := previews.Sweep(ctx, st.LivePreviews)
+			if removed > 0 {
+				logger.InfoContext(ctx, "previews no part has cleared", slog.Int("folders", removed))
 			}
 			return err
 		},
