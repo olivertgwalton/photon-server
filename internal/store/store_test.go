@@ -3,54 +3,20 @@
 package store
 
 import (
-	"context"
 	"errors"
 	"log/slog"
-	"net/url"
-	"os"
 	"testing"
 	"uuid"
 
-	"github.com/jackc/pgx/v5"
 	"gorm.io/gorm"
 
 	"github.com/olivertgwalton/photon-server/internal/store/model"
+	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
-
-// freshDatabase creates an empty database for one test on the server TEST_DATABASE_URL names.
-func freshDatabase(t *testing.T) string {
-	t.Helper()
-	base := os.Getenv("TEST_DATABASE_URL")
-	if base == "" {
-		t.Fatal("TEST_DATABASE_URL is not set")
-	}
-	admin, err := pgx.Connect(t.Context(), base)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { admin.Close(context.Background()) })
-
-	name := "photon_" + uuid.NewV4().String()[:8]
-	if _, err := admin.Exec(t.Context(), "CREATE DATABASE "+name); err != nil {
-		t.Fatal(err)
-	}
-	// t.Context is already cancelled when cleanups run.
-	t.Cleanup(func() {
-		if _, err := admin.Exec(context.Background(), "DROP DATABASE "+name+" WITH (FORCE)"); err != nil {
-			t.Error(err)
-		}
-	})
-	u, err := url.Parse(base)
-	if err != nil {
-		t.Fatal(err)
-	}
-	u.Path = "/" + name
-	return u.String()
-}
 
 func migrated(t *testing.T) *Store {
 	t.Helper()
-	db := freshDatabase(t)
+	db := storetest.FreshDatabase(t)
 	log := slog.New(slog.DiscardHandler)
 	if err := Migrate(t.Context(), db, log); err != nil {
 		t.Fatal(err)
@@ -64,14 +30,14 @@ func migrated(t *testing.T) *Store {
 }
 
 func TestOpenRefusesUnmigratedDatabase(t *testing.T) {
-	_, err := Open(t.Context(), freshDatabase(t), slog.New(slog.DiscardHandler))
+	_, err := Open(t.Context(), storetest.FreshDatabase(t), slog.New(slog.DiscardHandler))
 	if !errors.Is(err, errSchema) {
 		t.Fatalf("Open on an empty database: err = %v, want %v", err, errSchema)
 	}
 }
 
 func TestServerIDSurvivesReopening(t *testing.T) {
-	db := freshDatabase(t)
+	db := storetest.FreshDatabase(t)
 	log := slog.New(slog.DiscardHandler)
 	if err := Migrate(t.Context(), db, log); err != nil {
 		t.Fatal(err)
