@@ -41,6 +41,7 @@ func newItem(db *gorm.DB, opts ...gen.DOOption) item {
 	_item.EpisodeNumber = field.NewInt(tableName, "episode_number")
 	_item.EpisodeEnd = field.NewInt(tableName, "episode_end")
 	_item.AirDate = field.NewTime(tableName, "air_date")
+	_item.ExtraKind = field.NewString(tableName, "extra_kind")
 
 	_item.fillFieldMap()
 
@@ -64,6 +65,7 @@ type item struct {
 	EpisodeNumber field.Int
 	EpisodeEnd    field.Int
 	AirDate       field.Time
+	ExtraKind     field.String
 
 	fieldMap map[string]field.Expr
 }
@@ -93,6 +95,7 @@ func (i *item) updateTableName(table string) *item {
 	i.EpisodeNumber = field.NewInt(table, "episode_number")
 	i.EpisodeEnd = field.NewInt(table, "episode_end")
 	i.AirDate = field.NewTime(table, "air_date")
+	i.ExtraKind = field.NewString(table, "extra_kind")
 
 	i.fillFieldMap()
 
@@ -117,7 +120,7 @@ func (i *item) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (i *item) fillFieldMap() {
-	i.fieldMap = make(map[string]field.Expr, 13)
+	i.fieldMap = make(map[string]field.Expr, 14)
 	i.fieldMap["id"] = i.ID
 	i.fieldMap["library_id"] = i.LibraryID
 	i.fieldMap["kind"] = i.Kind
@@ -131,6 +134,7 @@ func (i *item) fillFieldMap() {
 	i.fieldMap["episode_number"] = i.EpisodeNumber
 	i.fieldMap["episode_end"] = i.EpisodeEnd
 	i.fieldMap["air_date"] = i.AirDate
+	i.fieldMap["extra_kind"] = i.ExtraKind
 }
 
 func (i item) clone(db *gorm.DB) item {

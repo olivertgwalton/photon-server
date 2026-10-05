@@ -38,7 +38,7 @@ func stem(name string) string {
 // film (Jellyfin's rule). Anything else, and every file at the library root, is a film of its own
 // named by its file.
 func planFilms(f library.Folder) []film {
-	if _, isExtras := naming.ExtraFolder(path.Base(f.Path)); isExtras {
+	if _, isExtras := naming.ExtraFolder(path.Base(f.Path)); isExtras || naming.SampleFolder(path.Base(f.Path)) {
 		return nil
 	}
 	copies := stacks(f.Files)
@@ -123,7 +123,7 @@ func stacks(files []library.File) [][]library.File {
 		if !naming.IsVideo(f.Name) {
 			continue
 		}
-		if _, extra := naming.Extra(stem(f.Name)); extra {
+		if _, _, extra := naming.Extra(stem(f.Name)); extra || naming.Sample(stem(f.Name)) {
 			continue
 		}
 		if p, ok := naming.StackPart(stem(f.Name)); ok {

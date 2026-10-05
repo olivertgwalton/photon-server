@@ -27,6 +27,7 @@ type Item struct {
 	EpisodeNumber *int
 	EpisodeEnd    *int
 	AirDate       *time.Time `gorm:"type:date"`
+	ExtraKind     *domain.ExtraKind
 }
 
 type ExternalID struct {
