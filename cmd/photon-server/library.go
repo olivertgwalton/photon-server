@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"text/tabwriter"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -101,7 +102,15 @@ func setLibrary(ctx context.Context, st *store.Store, out io.Writer, args []stri
 			return err
 		}
 	}
-	if err := st.SetLibrary(ctx, *name, change); err != nil {
+	libs, err := st.Libraries(ctx)
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(libs, func(l domain.Library) bool { return l.Name == *name })
+	if i < 0 {
+		return fmt.Errorf("no library is called %q", *name)
+	}
+	if err := st.SetLibrary(ctx, libs[i].ID, change); err != nil {
 		return err
 	}
 	_, err = fmt.Fprintf(out, "%s changed\n", *name)

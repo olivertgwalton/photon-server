@@ -146,13 +146,13 @@ func TestALibraryKeepsTheVideoKindsItAsksFor(t *testing.T) {
 	if got := kept(); !slices.Equal(got, []string{"trailer"}) {
 		t.Errorf("by default, kept %v; want the trailer alone", got)
 	}
-	if err := s.SetLibrary(ctx, "Films", LibraryChange{RemoteExtras: []domain.ExtraKind{domain.ExtraBlooper, domain.ExtraOther}}); err != nil {
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{RemoteExtras: []domain.ExtraKind{domain.ExtraBlooper, domain.ExtraOther}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := kept(); !slices.Equal(got, []string{"gag", "titles"}) {
 		t.Errorf("keeping bloopers and other, kept %v; want those two in order and no trailer", got)
 	}
-	if err := s.SetLibrary(ctx, "Films", LibraryChange{RemoteExtras: []domain.ExtraKind{}}); err != nil {
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{RemoteExtras: []domain.ExtraKind{}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := kept(); len(got) != 0 {
