@@ -148,3 +148,5 @@ func migrationsDir() fs.FS {
 	}
 	return dir
 }
+
+func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }

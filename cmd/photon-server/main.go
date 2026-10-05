@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
+	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -34,9 +35,9 @@ func run(logger *slog.Logger, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	databaseURL := os.Getenv("PHOTON_DATABASE_URL")
-	if databaseURL == "" {
-		return errors.New("PHOTON_DATABASE_URL is not set")
+	databaseURL, err := requiredEnv("PHOTON_DATABASE_URL")
+	if err != nil {
+		return err
 	}
 	switch {
 	case len(args) == 0:
@@ -47,12 +48,28 @@ func run(logger *slog.Logger, args []string) error {
 	return fmt.Errorf("usage: photon-server [migrate], got %q", args)
 }
 
+func requiredEnv(name string) (string, error) {
+	if v := os.Getenv(name); v != "" {
+		return v, nil
+	}
+	return "", fmt.Errorf("%s is not set", name)
+}
+
 func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
+	valkeyURL, err := requiredEnv("PHOTON_VALKEY_URL")
+	if err != nil {
+		return err
+	}
 	st, err := store.Open(ctx, databaseURL, logger)
 	if err != nil {
 		return err
 	}
 	defer st.Close()
+	cache, err := kv.Open(valkeyURL)
+	if err != nil {
+		return fmt.Errorf("valkey: %w", err)
+	}
+	defer cache.Close()
 	id, err := st.ServerID(ctx)
 	if err != nil {
 		return err
@@ -68,7 +85,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	srv := &http.Server{
 		Addr:              cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
-		Handler:           httpapi.New(logger, info),
+		Handler:           httpapi.New(logger, info, ready(st, cache)),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
@@ -92,6 +109,19 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	return nil
+}
+
+func ready(st *store.Store, cache *kv.KV) func(context.Context) error {
+	return func(ctx context.Context) error {
+		var errs []error
+		if err := st.Ping(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("postgres: %w", err))
+		}
+		if err := cache.Ping(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("valkey: %w", err))
+		}
+		return errors.Join(errs...)
+	}
 }
 
 func version() string {

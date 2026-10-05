@@ -12,6 +12,7 @@ const (
 	codeNotFound         problemCode = "not_found"
 	codeMethodNotAllowed problemCode = "method_not_allowed"
 	codeUnknownParameter problemCode = "unknown_parameter"
+	codeNotReady         problemCode = "not_ready"
 )
 
 func (c problemCode) status() int {
@@ -22,6 +23,8 @@ func (c problemCode) status() int {
 		return http.StatusMethodNotAllowed
 	case codeUnknownParameter:
 		return http.StatusBadRequest
+	case codeNotReady:
+		return http.StatusServiceUnavailable
 	}
 	panic("httpapi: problem code without a status: " + string(c))
 }

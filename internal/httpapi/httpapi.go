@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -22,11 +23,13 @@ type route struct {
 type API struct {
 	logger *slog.Logger
 	info   Info
+	ready  func(context.Context) error
 	mux    *http.ServeMux
 }
 
-func New(logger *slog.Logger, info Info) *API {
-	a := &API{logger: logger, info: info, mux: http.NewServeMux()}
+// ready reports whether everything a request may need is reachable.
+func New(logger *slog.Logger, info Info, ready func(context.Context) error) *API {
+	a := &API{logger: logger, info: info, ready: ready, mux: http.NewServeMux()}
 	for _, r := range a.publicRoutes() {
 		a.mux.Handle(r.pattern, a.checkQuery(r))
 	}
@@ -37,6 +40,7 @@ func New(logger *slog.Logger, info Info) *API {
 func (a *API) publicRoutes() []route {
 	return []route{
 		{pattern: "GET /api/v1/server", handle: a.server},
+		{pattern: "GET /readyz", handle: a.readyz},
 	}
 }
 
@@ -79,4 +83,13 @@ func (a *API) unmatched(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) server(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, a.info)
+}
+
+func (a *API) readyz(w http.ResponseWriter, r *http.Request) {
+	if err := a.ready(r.Context()); err != nil {
+		a.logger.WarnContext(r.Context(), "not ready", slog.Any("err", err))
+		writeProblem(w, a.logger, codeNotReady, "")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
