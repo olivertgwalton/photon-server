@@ -31,6 +31,8 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"stream_kind":        names(domain.StreamKinds()),
 		"video_range":        names(domain.Ranges()),
 		"stream_video_range": names(domain.Ranges()),
+		"task_key":           names(domain.TaskKeys()),
+		"task_result":        names(domain.TaskResults()),
 	} {
 		var def string
 		err := s.pool.QueryRow(t.Context(),

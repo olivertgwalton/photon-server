@@ -26,6 +26,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Part:       newPart(db, opts...),
 		Server:     newServer(db, opts...),
 		Stream:     newStream(db, opts...),
+		TaskState:  newTaskState(db, opts...),
 		Version:    newVersion(db, opts...),
 	}
 }
@@ -41,6 +42,7 @@ type Query struct {
 	Part       part
 	Server     server
 	Stream     stream
+	TaskState  taskState
 	Version    version
 }
 
@@ -59,6 +61,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Part:       q.Part.clone(db),
 		Server:     q.Server.clone(db),
 		Stream:     q.Stream.clone(db),
+		TaskState:  q.TaskState.clone(db),
 		Version:    q.Version.clone(db),
 	}
 }
@@ -82,6 +85,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Part:       q.Part.replaceDB(db),
 		Server:     q.Server.replaceDB(db),
 		Stream:     q.Stream.replaceDB(db),
+		TaskState:  q.TaskState.replaceDB(db),
 		Version:    q.Version.replaceDB(db),
 	}
 }
@@ -95,6 +99,7 @@ type queryCtx struct {
 	Part       IPartDo
 	Server     IServerDo
 	Stream     IStreamDo
+	TaskState  ITaskStateDo
 	Version    IVersionDo
 }
 
@@ -108,6 +113,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Part:       q.Part.WithContext(ctx),
 		Server:     q.Server.WithContext(ctx),
 		Stream:     q.Stream.WithContext(ctx),
+		TaskState:  q.TaskState.WithContext(ctx),
 		Version:    q.Version.WithContext(ctx),
 	}
 }
