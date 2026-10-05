@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -254,10 +255,13 @@ func (c *Client) Season(ctx context.Context, show, number int) (domain.SeasonMet
 	return out, nil
 }
 
+// names lists each name once: a network is often one of its show's production companies too.
 func names(ns []named) []string {
 	out := make([]string, 0, len(ns))
 	for _, n := range ns {
-		out = append(out, n.Name)
+		if !slices.Contains(out, n.Name) {
+			out = append(out, n.Name)
+		}
 	}
 	return out
 }
