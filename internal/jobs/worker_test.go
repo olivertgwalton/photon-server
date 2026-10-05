@@ -22,6 +22,8 @@ type memoryQueue struct {
 	postponed []int64
 	// leaseUntil is when the job last claimed or renewed loses its lease.
 	leaseUntil time.Time
+	// taken is whether the job's lease was swept and the job claimed by another node.
+	taken bool
 }
 
 func (q *memoryQueue) ClaimJobs(_ context.Context, _ []domain.JobKind, _ uuid.UUID, lease time.Duration, limit int) ([]store.Job, error) {
@@ -55,9 +57,12 @@ func (q *memoryQueue) PostponeJob(_ context.Context, job store.Job, _ time.Durat
 	return nil
 }
 
-func (q *memoryQueue) ExtendLease(_ context.Context, _ int64, lease time.Duration) error {
+func (q *memoryQueue) ExtendLease(_ context.Context, _ int64, _ uuid.UUID, lease time.Duration) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if q.taken {
+		return store.ErrLeaseLost
+	}
 	q.leaseUntil = time.Now().Add(lease)
 	return nil
 }
@@ -194,6 +199,42 @@ func TestAJobCutShortByShutdownIsQueuedAgainAtOnce(t *testing.T) {
 		<-done
 		if len(q.postponed) != 1 || q.postponed[0] != 7 || len(q.failed) != 0 {
 			t.Errorf("postponed %v, failed %v; want job 7 queued again", q.postponed, q.failed)
+		}
+	})
+}
+
+// A worker that lost touch for longer than a lease finds its job taken by another node: it stops
+// the job and leaves its outcome to the node that has it.
+func TestAJobWhoseLeaseWasLostStopsAndRecordsNothing(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := &memoryQueue{pending: []store.Job{{ID: 7, Kind: domain.JobScanLibrary}}}
+		var stopped bool
+		scanning := func(ctx context.Context, _ uuid.UUID) error {
+			select {
+			case <-ctx.Done():
+				stopped = true
+				return ctx.Err()
+			case <-time.After(time.Hour):
+				return nil
+			}
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobScanLibrary: scanning}, ignore)
+		go func() {
+			w.Run(ctx)
+			close(done)
+		}()
+		synctest.Sleep(time.Second)
+		q.mu.Lock()
+		q.taken = true
+		q.mu.Unlock()
+		synctest.Sleep(lease)
+		cancel()
+		<-done
+		if !stopped || len(q.completed)+len(q.failed)+len(q.postponed) != 0 {
+			t.Errorf("stopped %t, completed %v, failed %v, postponed %v; want the job stopped and nothing recorded",
+				stopped, q.completed, q.failed, q.postponed)
 		}
 	})
 }

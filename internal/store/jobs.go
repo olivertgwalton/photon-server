@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 	"uuid"
 
@@ -161,11 +162,19 @@ func (s *Store) RunningJobs(ctx context.Context) ([]Job, error) {
 	return out, nil
 }
 
-// ExtendLease keeps a running job's lease while its worker is at it.
-func (s *Store) ExtendLease(ctx context.Context, id int64, lease time.Duration) error {
+// ErrLeaseLost is a node's answer for a job it no longer holds: its lease ran out and the job was
+// queued again, and may be running elsewhere.
+var ErrLeaseLost = errors.New("the job's lease ran out and it was queued again")
+
+// ExtendLease keeps a running job's lease while node is at it.
+func (s *Store) ExtendLease(ctx context.Context, id int64, node uuid.UUID, lease time.Duration) error {
 	j := s.q.Job
-	_, err := j.WithContext(ctx).Where(j.ID.Eq(id), j.State.In(string(domain.JobRunning), string(domain.JobRerun))).
+	info, err := j.WithContext(ctx).
+		Where(j.ID.Eq(id), j.State.In(string(domain.JobRunning), string(domain.JobRerun)), j.NodeID.Eq(model.UUID(node))).
 		UpdateSimple(j.LeaseUntil.Value(time.Now().Add(lease)))
+	if err == nil && info.RowsAffected == 0 {
+		return ErrLeaseLost
+	}
 	return err
 }
 

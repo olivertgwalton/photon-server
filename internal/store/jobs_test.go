@@ -169,6 +169,29 @@ func TestSweepRequeuesExpiredLeases(t *testing.T) {
 	}
 }
 
+func TestALeaseIsRenewedOnlyByTheNodeHoldingIt(t *testing.T) {
+	s := migrated(t)
+	enqueueN(t, s, 1)
+	kinds := []domain.JobKind{domain.JobKeyframes}
+	first, second := uuid.NewV7(), uuid.NewV7()
+	jobs, err := s.ClaimJobs(t.Context(), kinds, first, -time.Second, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SweepJobs(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ClaimJobs(t.Context(), kinds, second, time.Hour, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ExtendLease(t.Context(), jobs[0].ID, first, time.Hour); !errors.Is(err, ErrLeaseLost) {
+		t.Errorf("the node that lost the job renewed it: %v", err)
+	}
+	if err := s.ExtendLease(t.Context(), jobs[0].ID, second, time.Hour); err != nil {
+		t.Errorf("the node holding the job did not renew it: %v", err)
+	}
+}
+
 func TestAJobAskedForWhileRunningRunsAgain(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
