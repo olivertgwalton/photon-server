@@ -71,8 +71,13 @@ type Remuxer struct {
 // takes the slot.
 type conversion struct{ stop context.CancelCauseFunc }
 
-// NewRemuxer runs remuxes on hw, at most limit of them encoding video at once, or Unlimited.
+// NewRemuxer runs remuxes on hw, at most limit of them encoding video at once, or Unlimited. What
+// is in dir is removed: no remux outlives its process, and one that stopped uncleanly left its
+// segments.
 func NewRemuxer(ffmpeg, dir, subtitles string, hw Hardware, limit int, log *slog.Logger) (*Remuxer, error) {
+	if err := os.RemoveAll(dir); err != nil {
+		return nil, err
+	}
 	for _, d := range []string{dir, subtitles} {
 		if err := os.MkdirAll(d, 0o750); err != nil {
 			return nil, err

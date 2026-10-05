@@ -118,6 +118,32 @@ func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
 	}
 }
 
+// A process stopped uncleanly leaves its playbacks' segments; the next one starts without them,
+// and keeps the subtitles it read before.
+func TestARemuxerStartsWithNothingLeftOver(t *testing.T) {
+	dir, subtitles := t.TempDir(), t.TempDir()
+	stale := filepath.Join(dir, uuid.NewV7().String())
+	if err := os.MkdirAll(stale, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stale, "0.m4s"), []byte("segment"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	read := filepath.Join(subtitles, uuid.NewV7().String())
+	if err := os.WriteFile(read, []byte("WEBVTT"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewRemuxer(fakeFFmpeg(t), dir, subtitles, Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(stale); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("a stopped process's segments are still there: %v", err)
+	}
+	if _, err := os.Stat(read); err != nil {
+		t.Errorf("the subtitles read before are gone: %v", err)
+	}
+}
+
 // args is the remuxer's whole say over what ffmpeg makes of a file.
 func TestArgsCarryWhatWasDecided(t *testing.T) {
 	for _, tc := range []struct {
