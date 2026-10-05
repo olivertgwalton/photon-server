@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // fakeFFmpeg writes what jellyfin-ffmpeg wrote for the fixture, from its start whatever it is asked:
@@ -71,7 +73,10 @@ func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
 	}
 	open := func() (*os.File, error) { return os.Open("testdata/fragments.mp4") }
 	playback := uuid.NewV7()
-	if err := r.Open(playback, []Source{{Open: open, Part: Part{Duration: 30 * time.Second, Keyframes: keyframes}}}); err != nil {
+	if err := r.Open(playback, []Source{{
+		Open: open, Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
+		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
+	}}); err != nil {
 		t.Fatal(err)
 	}
 	playlist, err := r.Playlist(playback)
@@ -108,5 +113,41 @@ func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
 	if f, err := r.Segment(t.Context(), playback, 1); !errors.Is(err, ErrNoRemux) {
 		_ = f.Close()
 		t.Errorf("after closing: %v, want ErrNoRemux", err)
+	}
+}
+
+// args is the remuxer's whole say over what ffmpeg makes of a file.
+func TestArgsCarryWhatWasDecided(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		video domain.VideoPlan
+		audio *domain.AudioPlan
+		want  []string
+	}{
+		{"HEVC is hvc1 for Apple's players", domain.VideoPlan{Codec: "hevc"}, nil, []string{"-tag:v hvc1"}},
+		{"Dolby Vision kept is dvh1", domain.VideoPlan{Codec: "hevc", DolbyVision: domain.DolbyVisionKeep}, nil, []string{"-tag:v dvh1"}},
+		{
+			"Dolby Vision stripped leaves its base layer",
+			domain.VideoPlan{Codec: "hevc", DolbyVision: domain.DolbyVisionStrip},
+			nil,
+			[]string{"-tag:v hvc1", "-bsf:v dovi_rpu=strip=1"},
+		},
+		{"audio asked for is copied", domain.VideoPlan{Stream: 0, Codec: "h264"}, &domain.AudioPlan{Stream: 2}, []string{"-map 0:0 -c:v copy -map 0:2 -c:a copy"}},
+		{
+			"audio encoded",
+			domain.VideoPlan{Codec: "h264"},
+			&domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "eac3", Channels: 6, BitrateKbps: 640}},
+			[]string{"-map 0:1 -c:a eac3 -ac 6 -b:a 640k"},
+		},
+	} {
+		got := strings.Join(args(12*time.Second, tc.video, tc.audio), " ")
+		for _, w := range tc.want {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: %q lacks %q", tc.name, got, w)
+			}
+		}
+		if tc.audio == nil && strings.Contains(got, "-c:a") {
+			t.Errorf("%s: %q has audio, and there is none", tc.name, got)
+		}
 	}
 }
