@@ -9,6 +9,7 @@ require (
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/valkey-io/valkey-go v1.0.78
 	golang.org/x/crypto v0.57.0
+	golang.org/x/image v0.46.0
 	golang.org/x/sync v0.23.0
 	golang.org/x/term v0.46.0
 	golang.org/x/text v0.42.0

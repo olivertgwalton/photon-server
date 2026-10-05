@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 	"uuid"
@@ -30,6 +31,8 @@ type Cache struct {
 	root  *os.Root
 	http  *http.Client
 	group singleflight.Group
+	// resizing holds a place for each picture being resized, one per processor.
+	resizing chan struct{}
 }
 
 func Open(dir string) (*Cache, error) {
@@ -40,7 +43,9 @@ func Open(dir string) (*Cache, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Cache{root: root, http: &http.Client{Timeout: fetchFor}}, nil
+	return &Cache{
+		root: root, http: &http.Client{Timeout: fetchFor}, resizing: make(chan struct{}, runtime.NumCPU()),
+	}, nil
 }
 
 func (c *Cache) Close() error { return c.root.Close() }
@@ -82,21 +87,11 @@ func (c *Cache) fetch(ctx context.Context, name, url string) error {
 	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "image/") {
 		return fmt.Errorf("picture %s: %s is not an image", url, resp.Header.Get("Content-Type"))
 	}
-	part := name + ".part"
-	f, err := c.root.Create(part)
-	if err != nil {
+	return c.write(name, func(w io.Writer) error {
+		n, err := io.Copy(w, io.LimitReader(resp.Body, maxPicture+1))
+		if err == nil && n > maxPicture {
+			err = fmt.Errorf("picture %s is over %d bytes", url, maxPicture)
+		}
 		return err
-	}
-	n, err := io.Copy(f, io.LimitReader(resp.Body, maxPicture+1))
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err == nil && n > maxPicture {
-		err = fmt.Errorf("picture %s is over %d bytes", url, maxPicture)
-	}
-	if err != nil {
-		_ = c.root.Remove(part)
-		return err
-	}
-	return c.root.Rename(part, name)
+	})
 }
