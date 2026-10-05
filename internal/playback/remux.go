@@ -52,7 +52,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 	sources := make([]hls.Source, len(c.Parts))
 	opens := make([]func() (*os.File, error), len(c.Parts))
 	for i, p := range c.Parts {
-		open := func() (*os.File, error) { return r.open(opening, r.parts.PartFile, p.ID) }
+		open := func() (*os.File, error) { return openFile(opening, r.parts.PartFile, p.ID) }
 		opens[i] = open
 		duration := time.Duration(p.DurationMS) * time.Millisecond
 		keyframes := hls.Forced(duration)
@@ -92,7 +92,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 			continue
 		}
 		sub := subtitle(f.Title, f.Language, f.Default, f.Forced, f.HearingImpaired)
-		sub.Sources = []hls.SubtitleSource{{Open: func() (*os.File, error) { return r.open(opening, r.parts.SubtitleFile, f.ID) }, Language: sub.Language}}
+		sub.Sources = []hls.SubtitleSource{{Open: func() (*os.File, error) { return openFile(opening, r.parts.SubtitleFile, f.ID) }, Language: sub.Language}}
 		h.Subtitles = append(h.Subtitles, sub)
 	}
 	return r.hls.Open(playback, h)
@@ -141,8 +141,8 @@ func (r *Remuxes) index(ctx context.Context, part uuid.UUID, open func() (*os.Fi
 	return pts, r.parts.SaveKeyframes(ctx, part, pts)
 }
 
-// open opens a file of a library through its root, so a path can never leave the library.
-func (r *Remuxes) open(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (*os.File, error) {
+// openFile opens a file of a library through its root, so a path can never leave the library.
+func openFile(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (*os.File, error) {
 	root, rel, err := where(ctx, id)
 	if err != nil {
 		return nil, err
