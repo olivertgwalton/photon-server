@@ -99,8 +99,10 @@ a JPEG sheet, HDR tone mapped). They are made from keyframes in the background, 
 per node beside the other jobs, and kept under `PHOTON_CACHE_DIR` in `previews`; a two-hour film's
 come to a few megabytes. `photon-server library set -name NAME -previews chapters` makes only the
 chapter pictures, and `-previews off` none. Each night at two the server queues whatever is not yet
-as its library asks, takes away what a library no longer wants, and clears previews of files that
-have gone.
+as its library asks and takes away what a library no longer wants. A file replaced by new bytes
+loses its old previews at the scan that finds it; a file that is simply gone keeps them for 30 days,
+so a share that is unmounted for a while does not come back to hours of remaking, and loses them
+after that.
 
 A client downloads a title for offline viewing at a most video bitrate, and width if it says, as
 Plex's Downloads do. A copy already within both is downloaded as it is; any other is converted in

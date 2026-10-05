@@ -300,6 +300,56 @@ func (f *fixture) age(part uuid.UUID) {
 	}
 }
 
+// missingFor scans the library with the film's file gone, then dates its going d ago.
+func (f *fixture) missingFor(d time.Duration) {
+	f.t.Helper()
+	if err := f.st.FinishScan(f.t.Context(), f.lib.ID, []string{""}, nil); err != nil {
+		f.t.Fatal(err)
+	}
+	if _, err := f.db.Exec(f.t.Context(), `UPDATE versions SET missing_since = now() - $1::interval`, d.String()); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+func TestPreviewsOfAMissingFileLastTheGrace(t *testing.T) {
+	const grace = 30 * 24 * time.Hour
+	for _, c := range []struct {
+		name    string
+		missing time.Duration
+		back    bool
+		kept    bool
+	}{
+		{"missing a day", 24 * time.Hour, false, true},
+		{"missing past the grace", grace + time.Hour, false, false},
+		{"back after the grace", grace + time.Hour, true, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t)
+			_, part := f.film("heat")
+			f.run(part)
+			f.missingFor(c.missing)
+			if c.back {
+				f.film("heat")
+			}
+			if _, err := f.st.ForgetMissingPreviews(t.Context(), time.Now().Add(-grace)); err != nil {
+				t.Fatal(err)
+			}
+			f.age(part)
+			if _, err := f.previews.Sweep(t.Context(), f.st.LivePreviews); err != nil {
+				t.Fatal(err)
+			}
+			_, err := f.previews.Sheet(part, 0)
+			if kept := err == nil; kept != c.kept {
+				t.Errorf("sheet kept = %v (%v), want %v", kept, err, c.kept)
+			}
+			_, err = f.st.Trickplay(t.Context(), f.admin.ID, part)
+			if kept := err == nil; kept != c.kept {
+				t.Errorf("trickplay kept = %v (%v), want %v", kept, err, c.kept)
+			}
+		})
+	}
+}
+
 func TestTheSweepClearsPreviewsNoPartHas(t *testing.T) {
 	f := newFixture(t)
 	_, part := f.film("heat")

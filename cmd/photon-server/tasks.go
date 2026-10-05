@@ -189,9 +189,15 @@ func markersTask(st *store.Store, tools media.Tools, logger *slog.Logger) task.T
 // the metadata refresh.
 const previewsAt = 2 * time.Hour
 
+// missingPreviewsKept is how long a part on no disk keeps its previews. Jellyfin and Plex drop a
+// missing file's at the next scan or emptied trash; a month covers a share down for repair or
+// over a holiday, which would otherwise come back to hours of remaking, for a few megabytes a
+// title.
+const missingPreviewsKept = 30 * 24 * time.Hour
+
 // previewsTask queues the parts whose previews are not what their library asks for, among them
-// those of a library switched on since and those whose job died, and clears the folders of
-// previews no part has any more.
+// those of a library switched on since and those whose job died, forgets the previews of parts
+// missing past missingPreviewsKept, and clears the folders of previews no part has any more.
 func previewsTask(st *store.Store, previews *analysis.Previews, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:      domain.TaskBackfillPreviews,
@@ -200,6 +206,13 @@ func previewsTask(st *store.Store, previews *analysis.Previews, logger *slog.Log
 			n, err := st.QueuePreviews(ctx)
 			if n > 0 {
 				logger.InfoContext(ctx, "parts queued for previews", slog.Int64("parts", n))
+			}
+			if err != nil {
+				return err
+			}
+			n, err = st.ForgetMissingPreviews(ctx, time.Now().Add(-missingPreviewsKept))
+			if n > 0 {
+				logger.InfoContext(ctx, "previews of missing parts forgotten", slog.Int64("parts", n))
 			}
 			if err != nil {
 				return err

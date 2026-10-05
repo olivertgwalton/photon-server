@@ -16,7 +16,7 @@ const (
 	// TaskDetectMarkers queues the seasons with episodes whose sound has not been compared.
 	TaskDetectMarkers TaskKey = "detect_markers"
 	// TaskBackfillPreviews queues the parts whose previews are not what their library asks for,
-	// and clears previews no part has any more.
+	// and clears previews no part has any more or whose file has long been missing.
 	TaskBackfillPreviews TaskKey = "backfill_previews"
 	// TaskSweepDownloads forgets downloads kept past their retention, and conversions no download
 	// needs.
