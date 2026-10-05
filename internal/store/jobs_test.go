@@ -108,6 +108,23 @@ func TestFailedJobsBackOffThenDie(t *testing.T) {
 	if job.State != domain.JobDead || job.LastError == nil || *job.LastError != "unreadable" {
 		t.Errorf("after %d failures: state %q, error %v; want dead with the reason", maxAttempts, job.State, job.LastError)
 	}
+	counts, dead, err := s.JobQueue(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(counts) != 1 || counts[0] != (JobCount{Kind: domain.JobKeyframes, State: domain.JobDead, Count: 1}) ||
+		len(dead) != 1 || dead[0].ID != job.ID || dead[0].Error != "unreadable" {
+		t.Errorf("queue = %+v, %+v; want the one dead job with its reason", counts, dead)
+	}
+	if err := s.RetryJob(t.Context(), job.ID); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := s.ClaimJobs(t.Context(), kinds, node, time.Minute, 1); len(again) != 1 || again[0].Attempts != 1 {
+		t.Errorf("after a retry: claimed %+v, want the job on a fresh first attempt", again)
+	}
+	if err := s.RetryJob(t.Context(), job.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("retrying a job that is not dead: %v, want ErrNotFound", err)
+	}
 }
 
 func TestSweepRequeuesExpiredLeases(t *testing.T) {
