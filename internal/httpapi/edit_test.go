@@ -23,6 +23,7 @@ type fakeEditing struct {
 	mode   domain.RefreshMode
 	marked []domain.Marker
 	absent []domain.MarkerAbsent
+	chosen map[domain.ArtworkKind]uuid.UUID
 }
 
 func (f *fakeEditing) EditMetadata(_ context.Context, id uuid.UUID, m domain.Metadata) error {
@@ -73,6 +74,38 @@ func (f *fakeEditing) SetMarkers(_ context.Context, id uuid.UUID, markers []doma
 	return nil
 }
 
+// poster is the one picture fakeEditing's film has to choose from.
+var poster = uuid.NewV7()
+
+func (f *fakeEditing) ArtworkCandidates(_ context.Context, id uuid.UUID, kind domain.ArtworkKind) ([]store.ArtworkCandidate, error) {
+	if id != films {
+		return nil, store.ErrNotFound
+	}
+	if kind != domain.ArtworkPoster {
+		return nil, nil
+	}
+	return []store.ArtworkCandidate{{ID: poster, Source: domain.SourceTMDB, Language: "en", Width: 2000, Height: 3000, Chosen: f.chosen[kind] == poster}}, nil
+}
+
+func (f *fakeEditing) ChooseArtwork(_ context.Context, id uuid.UUID, kind domain.ArtworkKind, picture uuid.UUID) error {
+	if id != films {
+		return store.ErrNotFound
+	}
+	if kind != domain.ArtworkPoster || picture != poster {
+		return store.ErrNotACandidate
+	}
+	f.chosen = map[domain.ArtworkKind]uuid.UUID{kind: picture}
+	return nil
+}
+
+func (f *fakeEditing) ForgetArtworkChoice(_ context.Context, id uuid.UUID, kind domain.ArtworkKind) error {
+	if id != films {
+		return store.ErrNotFound
+	}
+	delete(f.chosen, kind)
+	return nil
+}
+
 func (f *fakeEditing) IdentifySubject(_ context.Context, id uuid.UUID) (store.Subject, bool, error) {
 	return store.Subject{Kind: domain.ItemMovie, Title: "heat", Year: 1995}, id == films, nil
 }
@@ -115,6 +148,16 @@ func TestAnAdminFixesATitle(t *testing.T) {
 		{goodToken, http.MethodPost, base + "/refresh", `{"mode": "images"}`, http.StatusBadRequest, ""},
 		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + uuid.NewV7().String() + "/refresh", `{"mode": "all"}`, http.StatusNotFound, ""},
 		{goodToken, http.MethodPost, base + "/refresh", `{"mode": "all"}`, http.StatusAccepted, ""},
+		{memberToken, http.MethodGet, base + "/artwork/candidates?kind=poster", "", http.StatusForbidden, ""},
+		{goodToken, http.MethodGet, base + "/artwork/candidates?kind=disc", "", http.StatusBadRequest, ""},
+		{goodToken, http.MethodGet, base + "/artwork/candidates?kind=poster", "", http.StatusOK, `"source":"tmdb","language":"en","width":2000,"height":3000,"chosen":false`},
+		{goodToken, http.MethodPut, base + "/artwork/backdrop", `{"id": "` + poster.String() + `"}`, http.StatusBadRequest, "candidates"},
+		{goodToken, http.MethodPut, base + "/artwork/disc", `{"id": "` + poster.String() + `"}`, http.StatusNotFound, ""},
+		{goodToken, http.MethodPut, "/api/v1/admin/titles/" + uuid.NewV7().String() + "/artwork/poster", `{"id": "` + poster.String() + `"}`, http.StatusNotFound, ""},
+		{goodToken, http.MethodPut, base + "/artwork/poster", `{"id": "` + poster.String() + `"}`, http.StatusNoContent, ""},
+		{goodToken, http.MethodGet, base + "/artwork/candidates?kind=poster", "", http.StatusOK, `"chosen":true`},
+		{goodToken, http.MethodDelete, base + "/artwork/poster", "", http.StatusNoContent, ""},
+		{goodToken, http.MethodGet, base + "/artwork/candidates?kind=poster", "", http.StatusOK, `"chosen":false`},
 		{memberToken, http.MethodPut, copyBase, `{"markers": []}`, http.StatusForbidden, ""},
 		{goodToken, http.MethodPut, copyBase, `{"markers": [{"kind": "commercial", "start_ms": 0, "end_ms": 1000}]}`, http.StatusBadRequest, ""},
 		{goodToken, http.MethodPut, copyBase, `{"markers": [{"kind": "intro", "start_ms": 5000, "end_ms": 5000}]}`, http.StatusBadRequest, ""},
