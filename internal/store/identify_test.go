@@ -4,6 +4,7 @@ package store
 
 import (
 	"maps"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -76,5 +77,34 @@ func TestIdentityDescribesAShowsEpisodes(t *testing.T) {
 		if id.Provider == domain.ProviderTVDB && id.Value != "79126" {
 			t.Errorf("a matched TVDB id replaced the folder's: %s", id.Value)
 		}
+	}
+
+	seasons := func() []int {
+		t.Helper()
+		sub, _, err := s.IdentifySubject(ctx, uuid.UUID(row.ID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return sub.Seasons
+	}
+	if got := seasons(); !slices.Equal(got, []int{1}) {
+		t.Errorf("with an episode still undescribed, seasons to ask for = %v, want [1]", got)
+	}
+	err = s.SaveIdentity(ctx, uuid.UUID(row.ID), domain.Metadata{}, map[int]domain.SeasonMetadata{1: {
+		Metadata: domain.Metadata{Title: "Season 1"}, Episodes: map[int]domain.Metadata{2: {Title: "The Detail"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := seasons(); len(got) != 0 {
+		t.Errorf("with every episode described, seasons to ask for = %v, want none", got)
+	}
+	next := episode(3)
+	next.Season, next.Folder = 2, "The Wire/Season 2"
+	if _, err := s.SaveShowFolder(ctx, lib.ID, "The Wire/Season 2", []byte("v1"), show, []Episode{next}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := seasons(); !slices.Equal(got, []int{2}) {
+		t.Errorf("after a new season, seasons to ask for = %v, want [2]", got)
 	}
 }

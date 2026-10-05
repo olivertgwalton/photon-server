@@ -12,7 +12,8 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
-// Subject is what a film or show is matched to a provider by.
+// Subject is what a film or show is matched to a provider by, with the seasons of a show that
+// a provider has yet to describe.
 type Subject struct {
 	Kind    domain.ItemKind
 	Title   string
@@ -43,8 +44,14 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 		sub.IDs[x.Provider] = x.Value
 	}
 	if item.Kind == domain.ItemShow {
-		err := i.WithContext(ctx).Where(i.ParentID.Eq(item.ID), i.Kind.Eq(string(domain.ItemSeason))).
-			Order(i.SeasonNumber).Pluck(i.SeasonNumber, &sub.Seasons)
+		// Only a season holding something still titled by its file name, as Jellyfin asks a
+		// provider only about items it has never refreshed: a show's new episode costs one season.
+		err := i.WithContext(ctx).UnderlyingDB().Raw(`
+			SELECT DISTINCT s.season_number FROM items s
+			JOIN items e ON e.parent_id = s.id OR e.id = s.id
+			JOIN item_fields f ON f.item_id = e.id AND f.field = 'title' AND f.source = 'file'
+			WHERE s.parent_id = ? AND s.kind = 'season'
+			ORDER BY s.season_number`, item.ID).Scan(&sub.Seasons).Error
 		if err != nil {
 			return Subject{}, false, err
 		}
