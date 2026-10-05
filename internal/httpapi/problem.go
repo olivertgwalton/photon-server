@@ -12,6 +12,7 @@ const (
 	codeNotFound           problemCode = "not_found"
 	codeMethodNotAllowed   problemCode = "method_not_allowed"
 	codeUnknownParameter   problemCode = "unknown_parameter"
+	codeInvalidParameter   problemCode = "invalid_parameter"
 	codeNotReady           problemCode = "not_ready"
 	codeInvalidBody        problemCode = "invalid_body"
 	codeUnauthenticated    problemCode = "unauthenticated"
@@ -32,7 +33,7 @@ func (c problemCode) status() int {
 		return http.StatusNotFound
 	case codeMethodNotAllowed:
 		return http.StatusMethodNotAllowed
-	case codeUnknownParameter:
+	case codeUnknownParameter, codeInvalidParameter:
 		return http.StatusBadRequest
 	case codeNotReady:
 		return http.StatusServiceUnavailable
