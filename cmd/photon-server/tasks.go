@@ -40,3 +40,17 @@ func scanTask(st *store.Store, scanner *scan.Scanner, logger *slog.Logger) task.
 		},
 	}
 }
+
+func sweepTask(st *store.Store, logger *slog.Logger) task.Task {
+	return task.Task{
+		Key:      domain.TaskSweepJobs,
+		Triggers: []task.Trigger{{Kind: task.TriggerEvery, Every: time.Minute}},
+		Run: func(ctx context.Context) error {
+			n, err := st.SweepJobs(ctx)
+			if n > 0 {
+				logger.InfoContext(ctx, "jobs requeued after their worker's lease ran out", slog.Int64("jobs", n))
+			}
+			return err
+		},
+	}
+}

@@ -9,11 +9,17 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/debug"
+	"sync"
 	"syscall"
 	"time"
+	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/analysis"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
+	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/scan"
@@ -105,16 +111,19 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
 	}
 
-	scheduler := task.NewScheduler(st, logger, scanTask(st, scan.New(st, tools, logger), logger))
-	scheduling, stopScheduling := context.WithCancel(ctx)
-	scheduled := make(chan struct{})
-	go func() {
-		scheduler.Run(scheduling)
-		close(scheduled)
-	}()
+	node := uuid.NewV7()
+	scheduler := task.NewScheduler(st, logger, node,
+		scanTask(st, scan.New(st, tools, logger), logger), sweepTask(st, logger))
+	worker := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), map[domain.JobKind]jobs.Handler{
+		domain.JobKeyframes: analysis.Keyframes(st, tools),
+	})
+	background, stopBackground := context.WithCancel(ctx)
+	var wg sync.WaitGroup
+	wg.Go(func() { scheduler.Run(background) })
+	wg.Go(func() { worker.Run(background) })
 	defer func() {
-		stopScheduling()
-		<-scheduled
+		stopBackground()
+		wg.Wait()
 	}()
 
 	served := make(chan error, 1)

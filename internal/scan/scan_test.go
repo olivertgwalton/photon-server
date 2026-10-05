@@ -127,6 +127,10 @@ func TestScanFilms(t *testing.T) {
 		t.Errorf("%d video streams recorded, want 5", n)
 	}
 
+	if n := f.count(`SELECT count(*) FROM jobs WHERE kind = 'keyframes'`); n != 5 {
+		t.Errorf("%d keyframe jobs queued, want one per new part with video (5)", n)
+	}
+
 	if r := f.scan(); r.Probed != 0 || r.Unchanged != r.Folders {
 		t.Errorf("rescanning an unchanged library: %+v, want no probes and every folder unchanged", r)
 	}
@@ -149,6 +153,9 @@ func TestRenameKeepsIdentity(t *testing.T) {
 	}
 	if r := f.scan(); r.Probed != 0 {
 		t.Errorf("a renamed file was probed again (%d probes)", r.Probed)
+	}
+	if n := f.count(`SELECT count(*) FROM jobs`); n != 1 {
+		t.Errorf("%d jobs after a rename, want the original one only", n)
 	}
 	var gotItem, gotVersion, path string
 	err := f.db.QueryRow(t.Context(),

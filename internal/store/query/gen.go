@@ -22,6 +22,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		ExternalID: newExternalID(db, opts...),
 		Folder:     newFolder(db, opts...),
 		Item:       newItem(db, opts...),
+		Job:        newJob(db, opts...),
 		Library:    newLibrary(db, opts...),
 		Part:       newPart(db, opts...),
 		Server:     newServer(db, opts...),
@@ -38,6 +39,7 @@ type Query struct {
 	ExternalID externalID
 	Folder     folder
 	Item       item
+	Job        job
 	Library    library
 	Part       part
 	Server     server
@@ -57,6 +59,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		ExternalID: q.ExternalID.clone(db),
 		Folder:     q.Folder.clone(db),
 		Item:       q.Item.clone(db),
+		Job:        q.Job.clone(db),
 		Library:    q.Library.clone(db),
 		Part:       q.Part.clone(db),
 		Server:     q.Server.clone(db),
@@ -81,6 +84,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		ExternalID: q.ExternalID.replaceDB(db),
 		Folder:     q.Folder.replaceDB(db),
 		Item:       q.Item.replaceDB(db),
+		Job:        q.Job.replaceDB(db),
 		Library:    q.Library.replaceDB(db),
 		Part:       q.Part.replaceDB(db),
 		Server:     q.Server.replaceDB(db),
@@ -95,6 +99,7 @@ type queryCtx struct {
 	ExternalID IExternalIDDo
 	Folder     IFolderDo
 	Item       IItemDo
+	Job        IJobDo
 	Library    ILibraryDo
 	Part       IPartDo
 	Server     IServerDo
@@ -109,6 +114,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		ExternalID: q.ExternalID.WithContext(ctx),
 		Folder:     q.Folder.WithContext(ctx),
 		Item:       q.Item.WithContext(ctx),
+		Job:        q.Job.WithContext(ctx),
 		Library:    q.Library.WithContext(ctx),
 		Part:       q.Part.WithContext(ctx),
 		Server:     q.Server.WithContext(ctx),

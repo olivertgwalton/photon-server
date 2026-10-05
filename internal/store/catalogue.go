@@ -217,6 +217,11 @@ func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.
 		if err := saveFacts(ctx, tx, row.ID, part.Facts); err != nil {
 			return err
 		}
+		if firstVideo(part.Facts) != nil {
+			if err := enqueue(ctx, tx, domain.JobKeyframes, row.ID); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

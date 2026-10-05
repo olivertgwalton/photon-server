@@ -110,7 +110,7 @@ func TestSchedulerRunsDueTasksOneAtATime(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
 		go func() {
-			NewScheduler(st, discard(), task).Run(ctx)
+			NewScheduler(st, discard(), uuid.NewV7(), task).Run(ctx)
 			close(done)
 		}()
 
@@ -139,7 +139,7 @@ func TestSchedulerRunsNothingWithoutTheLease(t *testing.T) {
 			Run:      func(context.Context) error { ran = true; return nil },
 		}
 		ctx, cancel := context.WithCancel(t.Context())
-		go NewScheduler(st, discard(), task).Run(ctx)
+		go NewScheduler(st, discard(), uuid.NewV7(), task).Run(ctx)
 		synctest.Sleep(time.Hour)
 		cancel()
 		synctest.Wait()
@@ -162,7 +162,7 @@ func TestLosingTheLeaseCancelsTheRunningTask(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
-		go NewScheduler(st, discard(), task).Run(ctx)
+		go NewScheduler(st, discard(), uuid.NewV7(), task).Run(ctx)
 		synctest.Sleep(time.Minute)
 		st.setLeader(false)
 		synctest.Sleep(time.Minute)
