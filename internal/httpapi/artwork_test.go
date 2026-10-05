@@ -7,9 +7,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -35,9 +37,17 @@ func (f fakePictures) File(context.Context, uuid.UUID, string) (*os.File, error)
 	return os.Open(filepath.Join(f.root, "cached"))
 }
 
+// Resized answers a copy only of the provider's picture, and the local one as it is.
+func (f fakePictures) Resized(_ context.Context, key string, _ int, _ func() (*os.File, error)) (*os.File, error) {
+	if key == providerPoster.String() {
+		return os.Open(filepath.Join(f.root, "small"))
+	}
+	return nil, artwork.ErrNotResizable
+}
+
 func TestArtwork(t *testing.T) {
 	root := t.TempDir()
-	for name, body := range map[string]string{"Heat (1995)/poster.jpg": "local jpeg", "cached": "provider jpeg"} {
+	for name, body := range map[string]string{"Heat (1995)/poster.jpg": "local jpeg", "cached": "provider jpeg", "small": "\xff\xd8\xff\xe0small"} {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -47,9 +57,9 @@ func TestArtwork(t *testing.T) {
 	}
 	pics := fakePictures{root: root}
 	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Pictures: pics, Artwork: pics})
-	get := func(id uuid.UUID) *httptest.ResponseRecorder {
+	get := func(id uuid.UUID, query ...string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
-		api.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/artwork/"+id.String(), nil))
+		api.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/artwork/"+id.String()+strings.Join(query, ""), nil))
 		return rec
 	}
 	for id, want := range map[uuid.UUID]string{localPoster: "local jpeg", providerPoster: "provider jpeg"} {
@@ -60,6 +70,15 @@ func TestArtwork(t *testing.T) {
 		if rec.Header().Get("Content-Type") != "image/jpeg" || rec.Header().Get("X-Content-Type-Options") != "nosniff" {
 			t.Errorf("%v: headers %v, want image/jpeg, nosniff", id, rec.Header())
 		}
+	}
+	if rec := get(providerPoster, "?width=320"); rec.Body.String() != "\xff\xd8\xff\xe0small" || rec.Header().Get("Content-Type") != "image/jpeg" {
+		t.Errorf("a resized picture: %q as %q, want the copy, typed by its content", rec.Body.String(), rec.Header().Get("Content-Type"))
+	}
+	if rec := get(localPoster, "?width=320"); rec.Body.String() != "local jpeg" {
+		t.Errorf("a picture that cannot be resized: %q, want it as it is", rec.Body.String())
+	}
+	if rec := get(localPoster, "?width=wide"); rec.Code != http.StatusBadRequest {
+		t.Errorf("width=wide: %d, want 400", rec.Code)
 	}
 	if rec := get(uuid.NewV7()); rec.Code != http.StatusNotFound {
 		t.Errorf("an unknown picture: %d, want 404", rec.Code)
