@@ -221,6 +221,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 			return st.ProviderSettings(ctx, domain.SourceMDBList)
 		}, cache),
 	)
+	sessions := playback.NewSessions(cache, st, remuxer, hub.Raise, node)
 	listen := cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen)
 	setup := httpapi.Setup{
 		Started: started, Node: node, Listen: listen, Tools: tools, Encoder: hw, Discovery: discoveryMode,
@@ -229,7 +230,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	srv := &http.Server{
 		Addr: listen,
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close, hub.Raise, node), Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Setup: setup, Postgres: st, Valkey: cache,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: sessions, Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Setup: setup, Postgres: st, Valkey: cache,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -262,7 +263,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	wg.Go(func() { worker.Run(background) })
 	wg.Go(func() { previewer.Run(background) })
 	wg.Go(func() { converter.Run(background) })
-	wg.Go(func() { sweepRemuxes(background, remuxer) })
+	wg.Go(func() { sweepPlaybacks(background, sessions, remuxer, logger) })
 	wg.Go(func() { pruneConversions(background, conversions, logger) })
 	if address := os.Getenv("PHOTON_NODE_ADDRESS"); address != "" {
 		wg.Go(func() { advertise(background, cache, node, address, logger) })
@@ -327,7 +328,6 @@ func answerDiscovery(ctx context.Context, addr string, info httpapi.Info, logger
 	}
 }
 
-// sweepRemuxes ends the remuxes of players that went away without stopping.
 // hardware is the device PHOTON_HWACCEL names to encode on (software when unset), on
 // PHOTON_HWACCEL_DEVICE: a render node for VAAPI and QSV, a CUDA index for NVENC. A device that
 // will not encode is reported and passed over for software, as playing slowly beats not playing.
@@ -410,15 +410,22 @@ func advertise(ctx context.Context, cache *kv.KV, node uuid.UUID, address string
 	}
 }
 
-func sweepRemuxes(ctx context.Context, r *hls.Remuxer) {
-	t := time.NewTicker(30 * time.Second)
+// sweepEvery is how often a node ends the playbacks of players that went away without stopping,
+// closes its streams of playbacks that have ended, and forgets subtitles no one has read lately.
+const sweepEvery = 30 * time.Second
+
+func sweepPlaybacks(ctx context.Context, s *playback.Sessions, r *hls.Remuxer, logger *slog.Logger) {
+	t := time.NewTicker(sweepEvery)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			r.Sweep()
+		}
+		r.SweepSubtitles()
+		if err := s.Sweep(ctx); err != nil && ctx.Err() == nil {
+			logger.WarnContext(ctx, "playbacks not swept", slog.Any("err", err))
 		}
 	}
 }

@@ -3041,7 +3041,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Say where a playback has got to */
+        /** Say where a playback has got to, paused too: one unheard from for two minutes is stopped */
         post: {
             parameters: {
                 query?: never;

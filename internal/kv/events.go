@@ -50,7 +50,8 @@ func (k *KV) SaveScan(ctx context.Context, p domain.ScanProgress, ttl time.Durat
 }
 
 func (k *KV) EndScan(ctx context.Context, lib uuid.UUID) error {
-	return k.end(ctx, scanIndex, scanPrefix, lib)
+	_, err := k.end(ctx, scanIndex, scanPrefix, lib)
+	return err
 }
 
 // Scans answers every scan going on, across the cluster.

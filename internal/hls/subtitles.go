@@ -207,8 +207,8 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, streams []int
 	return os.Rename(made, dir)
 }
 
-// sweepSubtitles removes the text streams of parts no one has read for subtitlesKept.
-func (r *Remuxer) sweepSubtitles() {
+// SweepSubtitles removes the text streams of parts no one has read for subtitlesKept.
+func (r *Remuxer) SweepSubtitles() {
 	entries, err := os.ReadDir(r.subtitles)
 	if err != nil {
 		return

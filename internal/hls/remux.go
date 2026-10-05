@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -24,8 +26,6 @@ const (
 	// jump is how far beyond the remux's place a request may be before it restarts there rather
 	// than waits, as Jellyfin's does about 24 seconds out.
 	jump = 4
-	// idle is how long a remux nobody asks anything of lives on.
-	idle = 2 * time.Minute
 )
 
 // ErrNoRemux is a remux that has ended, or never was.
@@ -122,7 +122,6 @@ type session struct {
 	inits    map[int]bool
 	run      *run
 	furthest int
-	touched  time.Time
 }
 
 // run is one ffmpeg producing the segments of one part from first onwards.
@@ -168,7 +167,7 @@ func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
 	}
 	s := &session{
 		dir: filepath.Join(r.dir, playback.String()), sources: c.Parts, offsets: offsets, plan: Plan(parts),
-		ready: map[int]chan struct{}{}, failed: map[int]error{}, inits: map[int]bool{}, touched: time.Now(),
+		ready: map[int]chan struct{}{}, failed: map[int]error{}, inits: map[int]bool{},
 	}
 	s.playlists = map[string]string{
 		MasterName: Master(c.Subtitles, c.Variant, videoName, subtitleName),
@@ -240,8 +239,8 @@ func (r *Remuxer) Transcodes() (active, conversions, limit int) {
 func (r *Remuxer) full() bool { return r.limit != Unlimited && r.transcodes() >= r.limit }
 
 // transcodes counts the remuxes encoding video and the conversions; the caller holds r.mu. The
-// sessions are the one account of what playback is encoding, as a remux leaves them however it
-// ends: stopped, swept or never opened.
+// sessions are the one account of what playback is encoding, as a remux leaves them however its
+// playback ends, or where it is never opened.
 func (r *Remuxer) transcodes() int {
 	n := len(r.conversions)
 	for _, s := range r.sessions {
@@ -285,9 +284,6 @@ func (r *Remuxer) SubtitleSegment(ctx context.Context, playback uuid.UUID, track
 	if track < 0 || track >= len(s.subtitles) || n < 0 || n >= len(s.plan) {
 		return "", ErrNoRemux
 	}
-	s.mu.Lock()
-	s.touched = time.Now()
-	s.mu.Unlock()
 	sub := s.subtitles[track]
 	sub.mu.Lock()
 	cues, read := sub.cues, sub.read
@@ -334,23 +330,11 @@ func (r *Remuxer) Close(playback uuid.UUID) {
 	_ = os.RemoveAll(s.dir)
 }
 
-// Sweep closes every remux nobody has asked anything of for a while, a player that went away, and
-// forgets the subtitles of parts no one has played in a long while.
-func (r *Remuxer) Sweep() {
-	r.sweepSubtitles()
+// Playbacks answers the playbacks this remuxer runs a remux of.
+func (r *Remuxer) Playbacks() []uuid.UUID {
 	r.mu.Lock()
-	var stale []uuid.UUID
-	for id, s := range r.sessions {
-		s.mu.Lock()
-		if time.Since(s.touched) > idle {
-			stale = append(stale, id)
-		}
-		s.mu.Unlock()
-	}
-	r.mu.Unlock()
-	for _, id := range stale {
-		r.Close(id)
-	}
+	defer r.mu.Unlock()
+	return slices.Collect(maps.Keys(r.sessions))
 }
 
 func (r *Remuxer) session(playback uuid.UUID) (*session, error) {
@@ -416,7 +400,6 @@ func (r *Remuxer) Segment(ctx context.Context, playback uuid.UUID, n int) (*os.F
 		return nil, ErrNoRemux
 	}
 	s.mu.Lock()
-	s.touched = time.Now()
 	s.furthest = max(s.furthest, n)
 	wait := s.waiter(n)
 	select {

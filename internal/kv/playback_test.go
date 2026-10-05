@@ -52,8 +52,11 @@ func TestAPlaybackIsKeptForItsLife(t *testing.T) {
 	if err != nil || left <= 0 || left > time.Minute.Milliseconds() {
 		t.Errorf("life left = %d ms, %v; want up to a minute", left, err)
 	}
-	if err := k.EndPlayback(ctx, want.ID); err != nil {
-		t.Fatal(err)
+	if ended, err := k.EndPlayback(ctx, want.ID); !ended || err != nil {
+		t.Fatalf("EndPlayback = %v, %v; want it ended", ended, err)
+	}
+	if ended, err := k.EndPlayback(ctx, want.ID); ended || err != nil {
+		t.Errorf("ending it again = %v, %v; want it already gone", ended, err)
 	}
 	if all, err := k.Playbacks(ctx); err != nil || slices.ContainsFunc(all, same) {
 		t.Errorf("after ending: Playbacks = %d, %v; want it gone", len(all), err)
@@ -153,7 +156,7 @@ func TestListingReadsNoKeyItDoesNotList(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		for _, id := range ids {
-			_ = k.EndPlayback(context.WithoutCancel(ctx), id)
+			_, _ = k.EndPlayback(context.WithoutCancel(ctx), id)
 			_ = k.EndScan(context.WithoutCancel(ctx), id)
 		}
 	})
