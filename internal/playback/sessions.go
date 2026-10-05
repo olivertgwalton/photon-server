@@ -91,6 +91,20 @@ func (s *Sessions) Stop(ctx context.Context, profile, id uuid.UUID, position tim
 	return s.stop(ctx, p, position)
 }
 
+// End stops anyone's playback where its player last said it was, as an admin does from the
+// dashboard; its player is refused from then on.
+func (s *Sessions) End(ctx context.Context, id uuid.UUID) error {
+	p, ok, err := s.live.Playback(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNoPlayback
+	}
+	_, err = s.stop(ctx, p, p.Position)
+	return err
+}
+
 func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Duration) (domain.Reach, error) {
 	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position)
 	if err != nil {

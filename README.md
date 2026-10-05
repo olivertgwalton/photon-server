@@ -92,7 +92,11 @@ profile, the device and app that started it and the address it played from, the 
 pictures, the copy and its length, where it has got to, and how it plays: the reasons it could not
 play as it is, each stream as it is in the file and what it is encoded to, whether a subtitle is
 drawn into the picture, and the device encoding it. All of it is fixed as the playback starts, and
-the event stream's snapshot and playback events carry each playback the same way.
+the event stream's snapshot and playback events carry each playback the same way. `DELETE
+/api/v1/admin/playbacks/{id}` stops one: its remux ends on whichever node runs it, its player is
+refused from then on, and the play is kept in the history where its player last said it was. A
+title played as it is is read from a signed address that lasts a day, so its player can go on
+reading the file it has; only its reports are refused.
 Each copy says where its intro, credits, recap and preview are, so a player can offer to skip them.
 A chapter named for one (Intro, Opening, End Credits, Previously…) marks it. Otherwise the server
 compares the sound of a season's episodes, as Plex and Jellyfin's Intro Skipper do: the stretch two

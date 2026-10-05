@@ -102,6 +102,13 @@ func (f fakePlaybacks) Stop(ctx context.Context, profile, id uuid.UUID, at time.
 	return f.Progress(ctx, profile, id, at, domain.StatePlaying)
 }
 
+func (fakePlaybacks) End(_ context.Context, id uuid.UUID) error {
+	if id != playbackID {
+		return playback.ErrNoPlayback
+	}
+	return nil
+}
+
 func (fakePlaybacks) Abandon(context.Context, uuid.UUID) error { return nil }
 
 func TestAPlaybackReportsWhereItIs(t *testing.T) {
@@ -312,15 +319,29 @@ func TestHLSIsServedByTheNodeRunningIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	signer := playback.NewSigner([]byte("key"))
-	running := httptest.NewServer(New(slog.New(slog.DiscardHandler), Info{}, Services{HLS: fakeHLS{dir: dir}, Signer: signer}))
+	running := httptest.NewServer(New(slog.New(slog.DiscardHandler), Info{}, Services{
+		Auth: fakeAuth{}, HLS: fakeHLS{dir: dir}, Signer: signer, Playbacks: fakePlaybacks{},
+	}))
 	defer running.Close()
-	front := New(slog.New(slog.DiscardHandler), Info{}, Services{HLS: noHLS{}, Owners: owner(running.URL), Signer: signer})
+	// The front node keeps no playbacks, so one it ended itself would answer 404.
+	none := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
+	front := New(slog.New(slog.DiscardHandler), Info{}, Services{
+		Auth: fakeAuth{}, HLS: noHLS{}, Owners: owner(running.URL), Signer: signer,
+		Playbacks: playback.NewSessions(none, none, func(uuid.UUID) {}, func(context.Context, domain.Event) {}, uuid.NewV7()),
+	})
 	subject := hlsSubject(playbackID)
 	exp, sig := signer.Token(subject, time.Now().Add(time.Hour))
 	rec := httptest.NewRecorder()
 	front.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, subject+"/"+exp+"/"+sig+"/0.m4s", nil))
 	if rec.Code != http.StatusOK || rec.Body.String() != "m4s" {
 		t.Errorf("a segment another node makes: %d %q, want it from that node", rec.Code, rec.Body.String())
+	}
+	stop := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/playbacks/"+playbackID.String(), nil)
+	stop.Header.Set("Authorization", "Bearer "+goodToken)
+	rec = httptest.NewRecorder()
+	front.ServeHTTP(rec, stop)
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("an admin stopping a playback another node runs: %d %s, want it stopped there", rec.Code, rec.Body)
 	}
 	rec = httptest.NewRecorder()
 	front.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, subject+"/"+exp+"/forged/0.m4s", nil))
@@ -458,7 +479,7 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 	}
 }
 
-func TestTheDashboardShowsAPlayback(t *testing.T) {
+func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 	remuxer, err := hls.NewRemuxer("ffmpeg", t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, hls.Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
@@ -481,6 +502,7 @@ func TestTheDashboardShowsAPlayback(t *testing.T) {
 	// Two megabits is less than the film's eight, so its video is encoded.
 	var started struct {
 		PlaybackID uuid.UUID `json:"playback_id"`
+		Playlist   string    `json:"playlist"`
 	}
 	body := `{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000}}`
 	if err := json.NewDecoder(do(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", body).Body).Decode(&started); err != nil {
@@ -517,5 +539,25 @@ func TestTheDashboardShowsAPlayback(t *testing.T) {
 	}
 	if got, _ := json.Marshal(told[0].Details["playback"]); told[0].Kind != domain.EventPlaybackStarted || string(got) != string(items[0]) {
 		t.Errorf("told %v %s; want it started, shown as the list shows it", told[0].Kind, got)
+	}
+
+	target := "/api/v1/admin/playbacks/" + started.PlaybackID.String()
+	if rec := do(http.MethodDelete, target, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("stopping it: %d %s", rec.Code, rec.Body)
+	}
+	if remuxer.Has(started.PlaybackID) || len(list()) != 0 {
+		t.Errorf("after stopping: remux running %v, listed %d; want neither", remuxer.Has(started.PlaybackID), len(list()))
+	}
+	if last := told[len(told)-1]; last.Kind != domain.EventPlaybackStopped {
+		t.Errorf("told %v, want it stopped", last.Kind)
+	}
+	if rec := do(http.MethodPost, "/api/v1/playback/"+started.PlaybackID.String()+"/progress", `{"position_ms": 5000, "state": "playing"}`); rec.Code != http.StatusNotFound {
+		t.Errorf("its player reporting after: %d, want 404", rec.Code)
+	}
+	if rec := do(http.MethodGet, started.Playlist, ""); rec.Code != http.StatusNotFound {
+		t.Errorf("its player asking for its playlist after: %d, want 404", rec.Code)
+	}
+	if rec := do(http.MethodDelete, target, ""); rec.Code != http.StatusNotFound {
+		t.Errorf("stopping it again: %d, want 404", rec.Code)
 	}
 }

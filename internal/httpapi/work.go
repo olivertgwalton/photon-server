@@ -151,3 +151,22 @@ func playbacksJSON(all []domain.Playback) []playback.NowPlaying {
 	}
 	return out
 }
+
+// stopPlayback ends anyone's playback, as Jellyfin's dashboard stops a session: its remux on the
+// node running it, the place and the play kept where its player last said it was.
+func (a *API) stopPlayback(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeProblem(w, a.logger, codeNotFound, "")
+		return
+	}
+	err = a.svc.Playbacks.End(r.Context(), id)
+	switch {
+	case errors.Is(err, playback.ErrNoPlayback):
+		writeProblem(w, a.logger, codeNotFound, "the playback has stopped, or lapsed")
+	case err != nil:
+		a.internal(w, r, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}

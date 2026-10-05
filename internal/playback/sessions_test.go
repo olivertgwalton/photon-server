@@ -86,3 +86,36 @@ func card(profile, title uuid.UUID) domain.PlaybackCard {
 		Profile: domain.PlaybackProfile{ID: profile}, Title: domain.PlaybackTitle{ID: title}, Version: domain.PlaybackVersion{ID: uuid.NewV7()},
 	}
 }
+
+func TestAnAdminEndsAnyonesPlaybackWhereItGotTo(t *testing.T) {
+	live, saved := memory{}, positions{}
+	var ended []uuid.UUID
+	var told []domain.Event
+	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
+	s := NewSessions(live, saved, func(id uuid.UUID) { ended = append(ended, id) }, raise, uuid.NewV7())
+	ctx := t.Context()
+	guest, film := uuid.NewV7(), uuid.NewV7()
+	p, err := s.Start(ctx, domain.PlayRemux, card(guest, film))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Progress(ctx, guest, p.ID, 40*time.Minute, domain.StatePlaying); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.End(ctx, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := live[p.ID]; ok || saved[p.ID] != 40*time.Minute || saved[film] != 40*time.Minute || !slices.Equal(ended, []uuid.UUID{p.ID}) {
+		t.Errorf("after ending: still live %v, history %v, place %v, ended %v; want it gone and kept at 40 minutes", ok, saved[p.ID], saved[film], ended)
+	}
+	if _, err := s.Progress(ctx, guest, p.ID, 41*time.Minute, domain.StatePlaying); !errors.Is(err, ErrNoPlayback) {
+		t.Errorf("its player reporting after: %v, want ErrNoPlayback", err)
+	}
+	if err := s.End(ctx, p.ID); !errors.Is(err, ErrNoPlayback) {
+		t.Errorf("ending it again: %v, want ErrNoPlayback", err)
+	}
+	last := told[len(told)-1]
+	if shown, _ := last.Details["playback"].(NowPlaying); last.Kind != domain.EventPlaybackStopped || shown.PositionMS != (40*time.Minute).Milliseconds() || shown.Title.ID != film {
+		t.Errorf("told %v %+v, want it stopped at 40 minutes", last.Kind, last.Details)
+	}
+}

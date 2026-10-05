@@ -34,6 +34,7 @@ type playbacks interface {
 	Start(ctx context.Context, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error)
 	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState) (domain.Reach, error)
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
+	End(ctx context.Context, id uuid.UUID) error
 	Abandon(ctx context.Context, id uuid.UUID) error
 }
 
@@ -404,11 +405,12 @@ func (a *API) answeredRemux(w http.ResponseWriter, r *http.Request, err error) b
 	return true
 }
 
-// routeToOwner hands a request for a playback's HLS that another node of the cluster runs to that
-// node, which checks its signature again; every node signs with the server's one key.
-func (a *API) routeToOwner(next http.Handler) http.Handler {
+// routeToOwner hands a request about the playback the path names by param that another node of
+// the cluster runs to that node, which checks the request again: its HLS, whose signature every
+// node makes with the server's one key, or an admin's stop of it.
+func (a *API) routeToOwner(param string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		playback, err := uuid.Parse(r.PathValue("playback"))
+		playback, err := uuid.Parse(r.PathValue(param))
 		if err != nil || a.svc.Owners == nil || a.svc.HLS.Has(playback) {
 			next.ServeHTTP(w, r)
 			return
