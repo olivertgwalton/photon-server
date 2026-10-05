@@ -197,6 +197,9 @@ func saveSources(ctx context.Context, tx *query.Query, lib model.UUID, sources [
 	if len(sources) == 0 {
 		return nil
 	}
+	if err := registered(ctx, tx, sources); err != nil {
+		return err
+	}
 	rows := make([]*model.LibrarySource, len(sources))
 	for n, src := range sources {
 		rows[n] = &model.LibrarySource{LibraryID: lib, Source: src, Position: n}

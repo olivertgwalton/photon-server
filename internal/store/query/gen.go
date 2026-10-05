@@ -42,6 +42,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Play:               newPlay(db, opts...),
 		Playlist:           newPlaylist(db, opts...),
 		PlaylistEntry:      newPlaylistEntry(db, opts...),
+		Plugin:             newPlugin(db, opts...),
 		Profile:            newProfile(db, opts...),
 		ProfileLibrary:     newProfileLibrary(db, opts...),
 		Provider:           newProvider(db, opts...),
@@ -83,6 +84,7 @@ type Query struct {
 	Play               play
 	Playlist           playlist
 	PlaylistEntry      playlistEntry
+	Plugin             plugin
 	Profile            profile
 	ProfileLibrary     profileLibrary
 	Provider           provider
@@ -127,6 +129,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Play:               q.Play.clone(db),
 		Playlist:           q.Playlist.clone(db),
 		PlaylistEntry:      q.PlaylistEntry.clone(db),
+		Plugin:             q.Plugin.clone(db),
 		Profile:            q.Profile.clone(db),
 		ProfileLibrary:     q.ProfileLibrary.clone(db),
 		Provider:           q.Provider.clone(db),
@@ -176,6 +179,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Play:               q.Play.replaceDB(db),
 		Playlist:           q.Playlist.replaceDB(db),
 		PlaylistEntry:      q.PlaylistEntry.replaceDB(db),
+		Plugin:             q.Plugin.replaceDB(db),
 		Profile:            q.Profile.replaceDB(db),
 		ProfileLibrary:     q.ProfileLibrary.replaceDB(db),
 		Provider:           q.Provider.replaceDB(db),
@@ -215,6 +219,7 @@ type queryCtx struct {
 	Play               IPlayDo
 	Playlist           IPlaylistDo
 	PlaylistEntry      IPlaylistEntryDo
+	Plugin             IPluginDo
 	Profile            IProfileDo
 	ProfileLibrary     IProfileLibraryDo
 	Provider           IProviderDo
@@ -254,6 +259,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Play:               q.Play.WithContext(ctx),
 		Playlist:           q.Playlist.WithContext(ctx),
 		PlaylistEntry:      q.PlaylistEntry.WithContext(ctx),
+		Plugin:             q.Plugin.WithContext(ctx),
 		Profile:            q.Profile.WithContext(ctx),
 		ProfileLibrary:     q.ProfileLibrary.WithContext(ctx),
 		Provider:           q.Provider.WithContext(ctx),
