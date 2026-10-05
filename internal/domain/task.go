@@ -2,10 +2,13 @@ package domain
 
 type TaskKey string
 
-const TaskScanLibraries TaskKey = "scan_libraries"
+const (
+	TaskScanLibraries TaskKey = "scan_libraries"
+	TaskSweepJobs     TaskKey = "sweep_jobs"
+)
 
 func TaskKeys() []TaskKey {
-	return []TaskKey{TaskScanLibraries}
+	return []TaskKey{TaskScanLibraries, TaskSweepJobs}
 }
 
 type TaskResult string
