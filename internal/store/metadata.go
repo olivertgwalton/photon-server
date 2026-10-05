@@ -41,8 +41,10 @@ func applyMetadata(ctx context.Context, tx *query.Query, item model.UUID, source
 	var assigns []field.AssignExpr
 	var written []*model.ItemField
 	set := func(name domain.Field, said bool, a field.AssignExpr) {
-		if cur, ok := current[name]; said && (!ok || source.Rank() >= cur.Rank()) {
-			assigns = append(assigns, a)
+		if cur, ok := current[name]; (said || slices.Contains(m.Locked, name)) && (!ok || source.Rank() >= cur.Rank()) {
+			if said {
+				assigns = append(assigns, a)
+			}
 			written = append(written, &model.ItemField{ItemID: item, Field: name, Source: source})
 		}
 	}
@@ -57,11 +59,13 @@ func applyMetadata(ctx context.Context, tx *query.Query, item model.UUID, source
 	set(domain.FieldYear, m.Year != 0, i.Year.Value(m.Year))
 	set(domain.FieldGenres, len(m.Genres) > 0, i.Genres.Value(jsonList(m.Genres)))
 	set(domain.FieldStudios, len(m.Studios) > 0, i.Studios.Value(jsonList(m.Studios)))
-	if len(assigns) == 0 {
+	if len(written) == 0 {
 		return nil
 	}
-	if _, err := i.WithContext(ctx).Where(i.ID.Eq(item)).UpdateSimple(assigns...); err != nil {
-		return err
+	if len(assigns) > 0 {
+		if _, err := i.WithContext(ctx).Where(i.ID.Eq(item)).UpdateSimple(assigns...); err != nil {
+			return err
+		}
 	}
 	return f.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "item_id"}, {Name: "field"}},

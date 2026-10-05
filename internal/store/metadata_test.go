@@ -5,6 +5,7 @@ package store
 import (
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -101,5 +102,45 @@ func TestNFOSaysMoreThanFileNamesButNotOverTypedIDs(t *testing.T) {
 	}
 	if got[domain.ProviderTMDB] != "348" || got[domain.ProviderIMDb] != "tt0078748" {
 		t.Errorf("ids = %v; want the folder's TMDB id and the NFO's IMDb id", got)
+	}
+}
+
+func TestALockedFieldIsLeftForTheReader(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	film := Film{
+		Title: "heat", Folder: "Heat",
+		NFO: &domain.Metadata{Title: "Heat", Locked: []domain.Field{domain.FieldOverview}},
+		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{},
+		}}}},
+	}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	item, err := s.q.Item.WithContext(ctx).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid.UUID(item.ID)
+	if err := s.SaveIdentity(ctx, id, domain.Metadata{Overview: "A crime saga.", Tagline: "A Los Angeles crime saga."}, nil); err != nil {
+		t.Fatal(err)
+	}
+	item, _ = s.q.Item.WithContext(ctx).Take()
+	if item.Overview != nil || item.Tagline == nil {
+		t.Errorf("after a match, overview = %v and tagline = %v; want the locked overview empty and the tagline TMDB's", item.Overview, item.Tagline)
+	}
+	if err := s.q.Transaction(func(tx *query.Query) error {
+		return applyMetadata(ctx, tx, item.ID, domain.SourceUser, domain.Metadata{Overview: "Pacino and De Niro."})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	item, _ = s.q.Item.WithContext(ctx).Take()
+	if item.Overview == nil || *item.Overview != "Pacino and De Niro." {
+		t.Errorf("a reader's overview on a locked field = %v, want it written", item.Overview)
 	}
 }
