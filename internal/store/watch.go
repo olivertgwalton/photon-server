@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"time"
 	"uuid"
@@ -199,4 +200,75 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 		out[r.ItemID] = st
 	}
 	return out, nil
+}
+
+// RecordPlay keeps a playback in the history as it stops.
+func (s *Store) RecordPlay(ctx context.Context, p domain.Playback, stopped time.Time, position time.Duration) error {
+	row := model.Play{
+		ProfileID: model.UUID(p.Profile), ItemID: model.UUID(p.Item), Method: p.Method,
+		StartedAt: p.Started, StoppedAt: stopped, PositionMS: position.Milliseconds(),
+	}
+	if p.Version != (uuid.UUID{}) {
+		row.VersionID = new(model.UUID(p.Version))
+	}
+	err := s.q.Play.WithContext(ctx).Create(&row)
+	// A title removed while it played leaves nothing to keep.
+	if errors.Is(err, gorm.ErrForeignKeyViolated) {
+		return nil
+	}
+	return err
+}
+
+// Play is one playback in the history: who, of what, how, when and how far.
+type Play struct {
+	ID         uuid.UUID
+	Profile    uuid.UUID
+	Card       Card
+	Method     domain.PlayMethod
+	StartedAt  time.Time
+	StoppedAt  time.Time
+	PositionMS int64
+}
+
+// History answers a page of plays, the latest first, and how many there are: a profile's, or
+// everyone's for none.
+func (s *Store) History(ctx context.Context, profile uuid.UUID, offset, limit int) ([]Play, int64, error) {
+	p := s.q.Play
+	q := p.WithContext(ctx)
+	if profile != (uuid.UUID{}) {
+		q = q.Where(p.ProfileID.Eq(model.UUID(profile)))
+	}
+	total, err := q.Count()
+	if err != nil {
+		return nil, 0, err
+	}
+	rows, err := q.Order(p.StoppedAt.Desc(), p.ID.Desc()).Offset(offset).Limit(limit).Find()
+	if err != nil || len(rows) == 0 {
+		return []Play{}, total, err
+	}
+	in := make([]driver.Valuer, len(rows))
+	for n, r := range rows {
+		in[n] = r.ItemID
+	}
+	i := s.q.Item
+	items, err := i.WithContext(ctx).Where(i.ID.In(in...)).Find()
+	if err != nil {
+		return nil, 0, err
+	}
+	cards, err := s.cards(ctx, profile, items)
+	if err != nil {
+		return nil, 0, err
+	}
+	byID := map[uuid.UUID]Card{}
+	for _, c := range cards {
+		byID[c.ID] = c
+	}
+	out := make([]Play, len(rows))
+	for n, r := range rows {
+		out[n] = Play{
+			ID: uuid.UUID(r.ID), Profile: uuid.UUID(r.ProfileID), Card: byID[uuid.UUID(r.ItemID)], Method: r.Method,
+			StartedAt: r.StartedAt, StoppedAt: r.StoppedAt, PositionMS: r.PositionMS,
+		}
+	}
+	return out, total, nil
 }

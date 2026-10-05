@@ -17,6 +17,10 @@ const (
 	PlayTranscode PlayMethod = "transcode"
 )
 
+func PlayMethods() []PlayMethod {
+	return []PlayMethod{PlayDirect, PlayRemux, PlayTranscode}
+}
+
 // PlayState is what the player says it is doing.
 type PlayState string
 

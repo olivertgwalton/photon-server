@@ -36,6 +36,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Part:               newPart(db, opts...),
 		PartFile:           newPartFile(db, opts...),
 		Person:             newPerson(db, opts...),
+		Play:               newPlay(db, opts...),
 		Playlist:           newPlaylist(db, opts...),
 		PlaylistEntry:      newPlaylistEntry(db, opts...),
 		Profile:            newProfile(db, opts...),
@@ -73,6 +74,7 @@ type Query struct {
 	Part               part
 	PartFile           partFile
 	Person             person
+	Play               play
 	Playlist           playlist
 	PlaylistEntry      playlistEntry
 	Profile            profile
@@ -113,6 +115,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Part:               q.Part.clone(db),
 		PartFile:           q.PartFile.clone(db),
 		Person:             q.Person.clone(db),
+		Play:               q.Play.clone(db),
 		Playlist:           q.Playlist.clone(db),
 		PlaylistEntry:      q.PlaylistEntry.clone(db),
 		Profile:            q.Profile.clone(db),
@@ -158,6 +161,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Part:               q.Part.replaceDB(db),
 		PartFile:           q.PartFile.replaceDB(db),
 		Person:             q.Person.replaceDB(db),
+		Play:               q.Play.replaceDB(db),
 		Playlist:           q.Playlist.replaceDB(db),
 		PlaylistEntry:      q.PlaylistEntry.replaceDB(db),
 		Profile:            q.Profile.replaceDB(db),
@@ -193,6 +197,7 @@ type queryCtx struct {
 	Part               IPartDo
 	PartFile           IPartFileDo
 	Person             IPersonDo
+	Play               IPlayDo
 	Playlist           IPlaylistDo
 	PlaylistEntry      IPlaylistEntryDo
 	Profile            IProfileDo
@@ -228,6 +233,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Part:               q.Part.WithContext(ctx),
 		PartFile:           q.PartFile.WithContext(ctx),
 		Person:             q.Person.WithContext(ctx),
+		Play:               q.Play.WithContext(ctx),
 		Playlist:           q.Playlist.WithContext(ctx),
 		PlaylistEntry:      q.PlaylistEntry.WithContext(ctx),
 		Profile:            q.Profile.WithContext(ctx),

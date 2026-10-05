@@ -32,3 +32,14 @@ type DeviceSession struct {
 	LastSeenAt time.Time `gorm:"default:now()"`
 	ExpiresAt  time.Time
 }
+
+type Play struct {
+	ID         UUID  `gorm:"type:uuid;default:uuidv7()"`
+	ProfileID  UUID  `gorm:"type:uuid"`
+	ItemID     UUID  `gorm:"type:uuid"`
+	VersionID  *UUID `gorm:"type:uuid"`
+	Method     domain.PlayMethod
+	StartedAt  time.Time
+	StoppedAt  time.Time
+	PositionMS int64 `gorm:"column:position_ms"`
+}
