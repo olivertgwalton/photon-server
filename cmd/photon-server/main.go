@@ -17,6 +17,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/analysis"
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
@@ -57,8 +58,10 @@ func run(logger *slog.Logger, args []string) error {
 		return library(ctx, logger, databaseURL, os.Stdout, args[1:])
 	case args[0] == "scan":
 		return scanLibraries(ctx, logger, databaseURL, os.Stdout, args[1:])
+	case args[0] == "profile":
+		return profileCommand(ctx, logger, databaseURL, os.Stdout, args[1:])
 	}
-	return fmt.Errorf("usage: photon-server [migrate | library | scan], got %q", args)
+	return fmt.Errorf("usage: photon-server [migrate | library | scan | profile], got %q", args)
 }
 
 func requiredEnv(name string) (string, error) {
@@ -94,6 +97,10 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	authService, err := auth.New(ctx, st)
+	if err != nil {
+		return err
+	}
 	hostname, err := os.Hostname()
 	if err != nil {
 		return err
@@ -105,7 +112,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	srv := &http.Server{
 		Addr:              cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
-		Handler:           httpapi.New(logger, info, ready(st, cache)),
+		Handler:           httpapi.New(logger, info, httpapi.Services{Ready: ready(st, cache), Auth: authService}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
