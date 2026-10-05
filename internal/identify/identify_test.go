@@ -26,7 +26,7 @@ func (films) Match(_ context.Context, _ domain.ItemKind, h provider.Hints) (stri
 	return "578", nil
 }
 
-func (films) Describe(context.Context, domain.ItemKind, string, []int) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
+func (films) Describe(context.Context, domain.ItemKind, string, domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
 	return domain.Metadata{Title: "Jaws", Overview: "A shark.", IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0073195"}}, nil, nil
 }
 

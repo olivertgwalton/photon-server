@@ -18,6 +18,7 @@ type editing interface {
 	EditMetadata(ctx context.Context, id uuid.UUID, m domain.Metadata) error
 	ResetEdits(ctx context.Context, id uuid.UUID, fields []domain.Field) error
 	PinMatch(ctx context.Context, id uuid.UUID, p domain.Provider, value string) error
+	SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder) error
 	IdentifySubject(ctx context.Context, id uuid.UUID) (store.Subject, bool, error)
 }
 
@@ -160,6 +161,34 @@ func (a *API) pinMatch(w http.ResponseWriter, r *http.Request) {
 	err := a.svc.Editing.PinMatch(r.Context(), id, req.Provider, req.ID)
 	if errors.Is(err, store.ErrNotFound) {
 		writeProblem(w, a.logger, codeNotFound, "no film or show has that id")
+		return
+	}
+	if a.answered(w, r, err) {
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// setEpisodeOrder says the order a show's episode files are numbered in, as Plex's and Jellyfin's
+// per-show episode ordering does, and matches its episodes again in it.
+func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Order domain.EpisodeOrder `json:"order"`
+	}
+	if !a.decode(w, r, &req) {
+		return
+	}
+	if !slices.Contains(domain.EpisodeOrders(), req.Order) {
+		writeProblem(w, a.logger, codeInvalidBody, "order is aired, dvd or absolute")
+		return
+	}
+	err := a.svc.Editing.SetEpisodeOrder(r.Context(), id, req.Order)
+	if errors.Is(err, store.ErrNotFound) {
+		writeProblem(w, a.logger, codeNotFound, "no show has that id")
 		return
 	}
 	if a.answered(w, r, err) {

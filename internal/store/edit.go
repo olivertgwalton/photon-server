@@ -107,3 +107,37 @@ func rematch(ctx context.Context, tx *query.Query, item *model.Item) error {
 	}
 	return enqueueAfter(ctx, tx, domain.JobScanLibrary, item.LibraryID, 0)
 }
+
+// SetEpisodeOrder renumbers a show's episodes in the order its files are numbered in: what any
+// provider said of its seasons and episodes stops standing, and every season is matched again.
+// The episodes keep their old titles until then.
+func (s *Store) SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder) error {
+	return s.q.Transaction(func(tx *query.Query) error {
+		i := tx.Item
+		res, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id)), i.Kind.Eq(string(domain.ItemShow))).
+			UpdateSimple(i.EpisodeOrder.Value(string(order)))
+		if err == nil && res.RowsAffected == 0 {
+			err = ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		// What providers said under the old numbers: their claims, stills and credits. What files
+		// and NFOs say, and a reader's edits, stand.
+		below := `SELECT s.id FROM items s WHERE s.parent_id = @show
+			UNION SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id WHERE s.parent_id = @show`
+		for _, q := range []string{
+			`DELETE FROM item_fields WHERE item_id IN (` + below + `) AND source NOT IN ('file', 'nfo', 'user')`,
+			`DELETE FROM artwork WHERE item_id IN (` + below + `) AND source <> 'file'`,
+			`DELETE FROM credits WHERE item_id IN (` + below + `) AND source <> 'nfo'`,
+			// Each episode is titled as its file again, so its season is asked about again.
+			`INSERT INTO item_fields (item_id, field, source) SELECT id, 'title', 'file' FROM items
+				WHERE kind = 'episode' AND id IN (` + below + `) ON CONFLICT (item_id, field) DO NOTHING`,
+		} {
+			if err := i.WithContext(ctx).UnderlyingDB().Exec(q, map[string]any{"show": model.UUID(id)}).Error; err != nil {
+				return err
+			}
+		}
+		return enqueue(ctx, tx, domain.JobIdentify, model.UUID(id))
+	})
+}

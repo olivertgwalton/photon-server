@@ -282,13 +282,16 @@ func (c *Client) Details(ctx context.Context, id int) (domain.Metadata, error) {
 	return m, nil
 }
 
-// Seasons answers what TVDB says about the episodes of the given seasons, in its aired order.
-func (c *Client) Seasons(ctx context.Context, id int, seasons []int) (map[int]domain.SeasonMetadata, error) {
+// seasonTypes are TheTVDB's names for its episode orders.
+var seasonTypes = map[domain.EpisodeOrder]string{domain.OrderAired: "default", domain.OrderDVD: "dvd", domain.OrderAbsolute: "absolute"}
+
+// Seasons answers what TVDB says about the episodes of the given seasons, numbered in order.
+func (c *Client) Seasons(ctx context.Context, id int, seasons []int, order domain.EpisodeOrder) (map[int]domain.SeasonMetadata, error) {
 	out := map[int]domain.SeasonMetadata{}
 	for _, n := range seasons {
 		out[n] = domain.SeasonMetadata{Episodes: map[int]domain.Metadata{}}
 	}
-	path := fmt.Sprintf("/series/%d/episodes/default/%s?page=0", id, c.language)
+	path := fmt.Sprintf("/series/%d/episodes/%s/%s?page=0", id, cmp.Or(seasonTypes[order], "default"), c.language)
 	for path != "" {
 		var page struct {
 			Data struct {
