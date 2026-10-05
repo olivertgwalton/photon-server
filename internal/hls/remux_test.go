@@ -64,7 +64,7 @@ func shownIn(t *testing.T, init, segment *os.File) []time.Duration {
 }
 
 func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
-	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ var transcode = Copy{Parts: []Source{{
 }}}
 
 func TestTranscodesAtOnceNeverPassTheLimit(t *testing.T) {
-	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 3, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 3, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestTranscodesAtOnceNeverPassTheLimit(t *testing.T) {
 }
 
 func TestPlaybacksTakeTheirSlotsFromConversions(t *testing.T) {
-	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 3, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 3, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +271,7 @@ func TestPlaybacksTakeTheirSlotsFromConversions(t *testing.T) {
 }
 
 func TestAConversionWaitsForAFreeSlot(t *testing.T) {
-	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 1, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 1, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

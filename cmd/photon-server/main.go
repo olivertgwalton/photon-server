@@ -170,7 +170,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	remuxer, err := hls.NewRemuxer(tools.FFmpeg.Path, filepath.Join(cacheRoot, "hls"), hw, transcodes, logger)
+	remuxer, err := hls.NewRemuxer(tools.FFmpeg.Path, filepath.Join(cacheRoot, "hls"), filepath.Join(cacheRoot, "subtitles"), hw, transcodes, logger)
 	if err != nil {
 		return err
 	}

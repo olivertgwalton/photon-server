@@ -400,7 +400,7 @@ func (r remuxOpener) Open(_ context.Context, id uuid.UUID, c store.PlayCopy, vid
 }
 
 func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
-	remuxer, err := hls.NewRemuxer("ffmpeg", t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, 1, slog.New(slog.DiscardHandler))
+	remuxer, err := hls.NewRemuxer("ffmpeg", t.TempDir(), t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, 1, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,7 +480,7 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 }
 
 func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
-	remuxer, err := hls.NewRemuxer("ffmpeg", t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, hls.Unlimited, slog.New(slog.DiscardHandler))
+	remuxer, err := hls.NewRemuxer("ffmpeg", t.TempDir(), t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, hls.Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

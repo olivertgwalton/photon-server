@@ -1,9 +1,11 @@
 package hls
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -44,7 +46,7 @@ After the interval.
 `
 
 func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
-	r, err := NewRemuxer(fakeConverter(t, film), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(fakeConverter(t, film), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,5 +116,73 @@ func TestRepeatedNamesAreNumbered(t *testing.T) {
 		if !strings.Contains(m, want) {
 			t.Errorf("master =\n%s\nwant %s", m, want)
 		}
+	}
+}
+
+// A part's embedded text streams are read out together, in one read of the file, which a player
+// giving up does not stop and a later playback of the part does not repeat.
+func TestEmbeddedSubtitlesAreReadOnce(t *testing.T) {
+	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
+	dir := t.TempDir()
+	for name, text := range map[string]string{"en.srt": "Hello.", "fr.srt": "Bonjour."} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("1\n00:00:01,000 --> 00:00:03,000\n"+text+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	film := filepath.Join(dir, "film.mkv")
+	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-i", filepath.Join(dir, "en.srt"), "-i", filepath.Join(dir, "fr.srt"),
+		"-t", "10", "-map", "0", "-map", "1", "-map", "2", "-c:v", "libx264", "-c:s", "srt", film)
+	if out, err := made.CombinedOutput(); err != nil {
+		t.Fatalf("making the film: %v: %s", err, out)
+	}
+	runs := filepath.Join(dir, "runs")
+	counting := filepath.Join(dir, "ffmpeg")
+	if err := os.WriteFile(counting, []byte("#!/bin/sh\necho >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRemuxer(counting, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	open := func() (*os.File, error) { return os.Open(film) }
+	part := uuid.NewV7()
+	english, french := 1, 2
+	c := Copy{
+		Parts: []Source{{Open: open, Part: Part{Duration: 10 * time.Second, Keyframes: Forced(10 * time.Second)}}},
+		Subtitles: []Subtitle{
+			{Name: "English", Sources: []SubtitleSource{{Open: open, Stream: &english, Part: part}}},
+			{Name: "French", Sources: []SubtitleSource{{Open: open, Stream: &french, Part: part}}},
+		},
+	}
+	first, second := uuid.NewV7(), uuid.NewV7()
+	for _, p := range []uuid.UUID{first, second} {
+		if err := r.Open(p, c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gone, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, _ = r.SubtitleSegment(gone, first, 0, 0)
+
+	for _, tc := range []struct {
+		playback uuid.UUID
+		track    int
+		want     string
+	}{{first, 0, "Hello."}, {first, 1, "Bonjour."}, {second, 1, "Bonjour."}} {
+		got, err := r.SubtitleSegment(t.Context(), tc.playback, tc.track, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(got, "00:00:01.000 --> 00:00:03.000\n"+tc.want) {
+			t.Errorf("track %d =\n%s\nwant %q", tc.track, got, tc.want)
+		}
+	}
+	read, err := os.ReadFile(runs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(read), "\n"); n != 1 {
+		t.Errorf("the film was read %d times, want once", n)
 	}
 }
