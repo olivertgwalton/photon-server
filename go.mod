@@ -3,6 +3,7 @@ module github.com/olivertgwalton/photon-server
 go 1.27.0
 
 require (
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/go-cmp v0.7.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/pressly/goose/v3 v3.28.0
