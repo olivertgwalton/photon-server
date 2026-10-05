@@ -36,6 +36,8 @@ type Card struct {
 	EpisodeNumber *int
 	EpisodeEnd    *int
 	Thumb         uuid.UUID
+	// Origin is who made a collection: an admin's is changed by hand, a provider's only by it.
+	Origin domain.CollectionOrigin
 }
 
 // WallPage asks for one page of a library's titles: Limit of them from Offset, as Jellyfin's
@@ -167,6 +169,10 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 	if err != nil {
 		return nil, err
 	}
+	origins, err := s.origins(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
 	cards := make([]Card, len(rows))
 	for n, r := range rows {
 		cards[n] = Card{
@@ -175,6 +181,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 			Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]), State: states[r.ID],
 			DurationMS: lengths[r.ID], Show: shows[r.ID], SeasonNumber: r.SeasonNumber,
 			EpisodeNumber: r.EpisodeNumber, EpisodeEnd: r.EpisodeEnd, Thumb: first(pictures[r.ID][domain.ArtworkThumb]),
+			Origin: origins[r.ID],
 		}
 	}
 	return cards, nil
