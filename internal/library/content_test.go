@@ -15,14 +15,9 @@ func TestContentKey(t *testing.T) {
 		"Alien (1979)/Alien.mkv":      string(append(append([]byte(nil), body[:len(body)-1]...), 'X')),
 		"Short.mkv":                   "tiny",
 	})
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
 	key := func(parts ...string) string {
 		t.Helper()
-		k, err := ContentKey(root, parts)
+		k, err := ContentKey(dir, parts)
 		if err != nil {
 			t.Fatal(err)
 		}

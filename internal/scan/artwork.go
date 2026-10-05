@@ -1,9 +1,9 @@
 package scan
 
 import (
-	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -52,8 +52,8 @@ func (p pictures) of(stem string, main domain.ArtworkKind) []domain.Artwork {
 }
 
 // seasonPictures answers the pictures a series' folder keeps for one season.
-func seasonPictures(root *os.Root, series string, season int) []domain.Artwork {
-	entries, err := fs.ReadDir(root.FS(), series)
+func seasonPictures(root, series string, season int) []domain.Artwork {
+	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(series)))
 	if err != nil {
 		return nil
 	}

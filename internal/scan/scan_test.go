@@ -209,6 +209,43 @@ func TestRemovedFileIsMissingNotForgotten(t *testing.T) {
 	}
 }
 
+// A library of links into another mount, as Riven and other debrid setups make them, scans as
+// the files behind the links; a link the mount no longer answers is left out and counted, and a
+// root that cannot be read fails the scan rather than emptying the library.
+func TestALibraryOfLinksScansWhatTheyLeadTo(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	mount := t.TempDir()
+	if err := os.WriteFile(filepath.Join(mount, "heat.mkv"), bytes.Repeat([]byte("heat"), 50_000), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(f.root, "Heat (1995)"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for target, name := range map[string]string{
+		"heat.mkv": "Heat (1995)/Heat (1995).mkv",
+		"gone.mkv": "Heat (1995)/Heat (1995) - 1080p.mkv",
+	} {
+		if err := os.Symlink(filepath.Join(mount, target), filepath.Join(f.root, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := f.scan()
+	if r.Probed != 1 || r.Skipped != 1 {
+		t.Errorf("probed %d and left out %d, want 1 and 1", r.Probed, r.Skipped)
+	}
+	if n := f.count(`SELECT count(*) FROM items WHERE title = 'Heat'`); n != 1 {
+		t.Error("the linked film was not found")
+	}
+
+	f.lib.Root = filepath.Join(f.root, "unmounted")
+	if _, err := f.scanner.Scan(t.Context(), f.lib, func(domain.ScanProgress) {}, func(store.Changed) {}); err == nil {
+		t.Error("a root that cannot be read scanned")
+	}
+	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NULL`); n != 1 {
+		t.Error("an unreadable root took the library's titles with it")
+	}
+}
+
 // Plex's rule: a byte-identical copy is another place to read one version. Removing either copy
 // costs nothing; removing both makes the version missing.
 func TestIdenticalCopiesAreOneVersionInTwoPlaces(t *testing.T) {

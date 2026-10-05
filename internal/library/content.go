@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"io"
-	"os"
 )
 
 const contentSample = 64 << 10
@@ -12,8 +11,8 @@ const contentSample = 64 << 10
 // ContentKey identifies a copy by its bytes rather than its path: the part count, then the first
 // part's size and its first and last 64 KiB. A rename or a move keeps the key; replacing the file
 // changes it.
-func ContentKey(root *os.Root, parts []string) ([]byte, error) {
-	f, err := root.Open(parts[0])
+func ContentKey(root string, parts []string) ([]byte, error) {
+	f, err := Open(root, parts[0])
 	if err != nil {
 		return nil, err
 	}
