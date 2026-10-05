@@ -73,13 +73,13 @@ func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
 	}
 	open := func() (*os.File, error) { return os.Open("testdata/fragments.mp4") }
 	playback := uuid.NewV7()
-	if err := r.Open(playback, []Source{{
+	if err := r.Open(playback, Copy{Parts: []Source{{
 		Open: open, Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
 		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
-	}}); err != nil {
+	}}}); err != nil {
 		t.Fatal(err)
 	}
-	playlist, err := r.Playlist(playback)
+	playlist, err := r.Playlist(playback, "video.m3u8")
 	if err != nil {
 		t.Fatal(err)
 	}

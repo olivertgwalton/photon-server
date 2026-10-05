@@ -153,6 +153,7 @@ func (a *API) routes() []route {
 		{pattern: "PATCH /api/v1/admin/libraries/{id}", access: admin, handle: a.setLibrary},
 		{pattern: "DELETE /api/v1/admin/libraries/{id}", access: admin, handle: a.removeLibrary},
 		{pattern: "POST /api/v1/admin/libraries/{id}/scan", access: admin, handle: a.scanLibrary},
+		{pattern: "GET /api/v1/subtitles/{id}/file", access: signedAddress, query: []string{"exp", "sig"}, handle: a.subtitleFile},
 		{pattern: "GET /api/v1/home", access: signedIn, query: []string{"limit"}, handle: a.home},
 		{pattern: "GET /api/v1/search", access: signedIn, query: []string{"q", "library", "limit"}, handle: a.search},
 		{pattern: "GET /api/v1/artwork/{id}", access: public, query: []string{"width"}, handle: a.artwork},

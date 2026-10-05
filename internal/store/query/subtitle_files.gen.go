@@ -28,6 +28,7 @@ func newSubtitleFile(db *gorm.DB, opts ...gen.DOOption) subtitleFile {
 
 	tableName := _subtitleFile.subtitleFileDo.TableName()
 	_subtitleFile.ALL = field.NewAsterisk(tableName)
+	_subtitleFile.ID = field.NewField(tableName, "id")
 	_subtitleFile.VersionID = field.NewField(tableName, "version_id")
 	_subtitleFile.LibraryID = field.NewField(tableName, "library_id")
 	_subtitleFile.RelPath = field.NewString(tableName, "rel_path")
@@ -49,6 +50,7 @@ type subtitleFile struct {
 	subtitleFileDo subtitleFileDo
 
 	ALL             field.Asterisk
+	ID              field.Field
 	VersionID       field.Field
 	LibraryID       field.Field
 	RelPath         field.String
@@ -76,6 +78,7 @@ func (s subtitleFile) As(alias string) *subtitleFile {
 
 func (s *subtitleFile) updateTableName(table string) *subtitleFile {
 	s.ALL = field.NewAsterisk(table)
+	s.ID = field.NewField(table, "id")
 	s.VersionID = field.NewField(table, "version_id")
 	s.LibraryID = field.NewField(table, "library_id")
 	s.RelPath = field.NewString(table, "rel_path")
@@ -115,7 +118,8 @@ func (s *subtitleFile) GetFieldByName(fieldName string) (field.OrderExpr, bool) 
 }
 
 func (s *subtitleFile) fillFieldMap() {
-	s.fieldMap = make(map[string]field.Expr, 11)
+	s.fieldMap = make(map[string]field.Expr, 12)
+	s.fieldMap["id"] = s.ID
 	s.fieldMap["version_id"] = s.VersionID
 	s.fieldMap["library_id"] = s.LibraryID
 	s.fieldMap["rel_path"] = s.RelPath

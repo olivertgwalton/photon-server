@@ -14,6 +14,8 @@ import (
 	"time"
 	"uuid"
 
+	"golang.org/x/text/language"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -42,7 +44,17 @@ func (fakePlaying) Playable(_ context.Context, item, _ uuid.UUID) (store.PlayCop
 			{Index: 0, Kind: domain.StreamVideo, Codec: "h264"},
 			{Index: 1, Kind: domain.StreamAudio, Codec: "aac", Channels: 2},
 		},
+		Subtitles: []store.PlaySubtitle{{ID: subtitleID, Codec: "subrip", Language: language.English}},
 	}, nil
+}
+
+var subtitleID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000d1")
+
+func (f fakePlaying) SubtitleFile(_ context.Context, id uuid.UUID) (string, string, error) {
+	if id != subtitleID {
+		return "", "", store.ErrNotFound
+	}
+	return f.root, "Lawrence/Lawrence.en.srt", nil
 }
 
 // playRequest asks to play films on a client that opens these containers and plays H.264 and AAC.
@@ -109,6 +121,9 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "Lawrence", "Lawrence cd1.mkv"), []byte("0123456789"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(root, "Lawrence", "Lawrence.en.srt"), []byte("1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	api := New(slog.New(slog.DiscardHandler), Info{}, Services{
 		Auth: fakeAuth{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{}, Signer: playback.NewSigner([]byte("key")),
 	})
@@ -124,6 +139,10 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 			URL      string `json:"url"`
 			OffsetMS int64  `json:"offset_ms"`
 		} `json:"parts"`
+		Subtitles []struct {
+			Language string `json:"language"`
+			URL      string `json:"url"`
+		} `json:"subtitles"`
 		ExpiresAt time.Time `json:"expires_at"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
@@ -131,6 +150,14 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 	}
 	if got.PlaybackID != playbackID || len(got.Parts) != 2 || got.Parts[1].OffsetMS != 3_600_000 || time.Until(got.ExpiresAt) < 23*time.Hour {
 		t.Fatalf("play = %+v, want both parts, the second an hour in, good for a day", got)
+	}
+
+	if len(got.Subtitles) != 1 || got.Subtitles[0].Language != "en" {
+		t.Fatalf("subtitles = %+v, want the English file", got.Subtitles)
+	}
+	if rec := do(httptest.NewRequest(http.MethodGet, got.Subtitles[0].URL, nil)); rec.Code != http.StatusOK ||
+		rec.Body.String() != "1\n" || rec.Header().Get("Content-Type") != "application/x-subrip" {
+		t.Errorf("the subtitle file: %d %q %q, want it as SubRip", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
 	}
 
 	ranged := httptest.NewRequest(http.MethodGet, got.Parts[0].URL, nil)
@@ -152,15 +179,22 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 // fakeHLS remuxes into a playlist and one segment, of the playback it was opened for.
 type fakeHLS struct{ dir string }
 
-func (fakeHLS) Open(context.Context, uuid.UUID, []store.PlayPart, domain.VideoPlan, *domain.AudioPlan) error {
+func (fakeHLS) Open(context.Context, uuid.UUID, store.PlayCopy, domain.VideoPlan, *domain.AudioPlan) error {
 	return nil
 }
 
-func (fakeHLS) Playlist(playback uuid.UUID) (string, error) {
-	if playback != playbackID {
+func (fakeHLS) Playlist(playback uuid.UUID, name string) (string, error) {
+	if playback != playbackID || name != "main.m3u8" {
 		return "", hls.ErrNoRemux
 	}
 	return "#EXTM3U\n", nil
+}
+
+func (fakeHLS) SubtitleSegment(_ context.Context, playback uuid.UUID, track, n int) (string, error) {
+	if playback != playbackID || track != 0 || n != 2 {
+		return "", hls.ErrNoRemux
+	}
+	return "WEBVTT\n", nil
 }
 
 func (f fakeHLS) Init(context.Context, uuid.UUID, int) (*os.File, error) {
@@ -201,7 +235,7 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 		t.Fatalf("play = %+v, want a remux's playlist, for the container", got)
 	}
 	base := strings.TrimSuffix(got.Playlist, "main.m3u8")
-	for file, want := range map[string]string{"main.m3u8": "#EXTM3U\n", "0.m4s": "m4s"} {
+	for file, want := range map[string]string{"main.m3u8": "#EXTM3U\n", "0.m4s": "m4s", "sub0-2.vtt": "WEBVTT\n"} {
 		if rec := do(httptest.NewRequest(http.MethodGet, base+file, nil)); rec.Code != http.StatusOK || rec.Body.String() != want {
 			t.Errorf("%s: %d %q, want %q", file, rec.Code, rec.Body.String(), want)
 		}

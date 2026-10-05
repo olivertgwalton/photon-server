@@ -1,10 +1,14 @@
 package playback
 
 import (
+	"cmp"
 	"context"
 	"os"
 	"time"
 	"uuid"
+
+	"golang.org/x/text/language"
+	"golang.org/x/text/language/display"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
@@ -13,6 +17,7 @@ import (
 
 type partStore interface {
 	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
+	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
 	Keyframes(ctx context.Context, part uuid.UUID) ([]int64, bool, error)
 	SaveKeyframes(ctx context.Context, part uuid.UUID, ptsMS []int64) error
 }
@@ -22,7 +27,7 @@ type keyframer interface {
 }
 
 type remuxer interface {
-	Open(playback uuid.UUID, sources []hls.Source) error
+	Open(playback uuid.UUID, c hls.Copy) error
 	Close(playback uuid.UUID)
 }
 
@@ -39,13 +44,16 @@ func NewRemuxes(parts partStore, frames keyframer, h remuxer) *Remuxes {
 	return &Remuxes{parts: parts, frames: frames, hls: h}
 }
 
-// Open starts a playback's HLS of the parts of a copy, carrying its video and audio as decided.
-func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, parts []store.PlayPart, video domain.VideoPlan, audio *domain.AudioPlan) error {
+// Open starts a playback's HLS of a copy, carrying its video and audio as decided, and its text
+// subtitles, embedded and beside it, as WebVTT.
+func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan) error {
 	// The remux opens its files long after this request has been answered.
 	opening := context.WithoutCancel(ctx)
-	sources := make([]hls.Source, len(parts))
-	for i, p := range parts {
-		open := func() (*os.File, error) { return r.open(opening, p.ID) }
+	sources := make([]hls.Source, len(c.Parts))
+	opens := make([]func() (*os.File, error), len(c.Parts))
+	for i, p := range c.Parts {
+		open := func() (*os.File, error) { return r.open(opening, r.parts.PartFile, p.ID) }
+		opens[i] = open
 		duration := time.Duration(p.DurationMS) * time.Millisecond
 		keyframes := hls.Forced(duration)
 		if video.Encode == nil {
@@ -59,7 +67,45 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, parts []store.Pl
 			Part: hls.Part{Duration: duration, Keyframes: keyframes},
 		}
 	}
-	return r.hls.Open(playback, sources)
+	h := hls.Copy{Parts: sources, BandwidthKbps: c.BitrateKbps}
+	if e := video.Encode; e != nil {
+		h.BandwidthKbps = e.BitrateKbps
+		if audio != nil && audio.Encode != nil {
+			h.BandwidthKbps += audio.Encode.BitrateKbps
+		}
+	}
+	// The parts of a copy are cut from one master, so each holds the first's streams.
+	for _, st := range c.Streams {
+		if st.Kind != domain.StreamSubtitle || !hls.TextSubtitle(st.Codec) {
+			continue
+		}
+		sub := subtitle(st.Title, st.Language, st.Default, st.Forced, st.HearingImpaired)
+		for i, p := range c.Parts {
+			sub.Sources = append(sub.Sources, hls.SubtitleSource{
+				Open: opens[i], Stream: &st.Index, Offset: time.Duration(p.OffsetMS) * time.Millisecond,
+			})
+		}
+		h.Subtitles = append(h.Subtitles, sub)
+	}
+	for _, f := range c.Subtitles {
+		if !hls.TextSubtitle(f.Codec) {
+			continue
+		}
+		sub := subtitle(f.Title, f.Language, f.Default, f.Forced, f.HearingImpaired)
+		sub.Sources = []hls.SubtitleSource{{Open: func() (*os.File, error) { return r.open(opening, r.parts.SubtitleFile, f.ID) }, Language: sub.Language}}
+		h.Subtitles = append(h.Subtitles, sub)
+	}
+	return r.hls.Open(playback, h)
+}
+
+// subtitle names a subtitle by its title, else its language in English.
+func subtitle(title string, lang language.Tag, def, forced, sdh bool) hls.Subtitle {
+	s := hls.Subtitle{Name: title, Default: def, Forced: forced, HearingImpaired: sdh}
+	if lang != language.Und {
+		s.Language = lang.String()
+		s.Name = cmp.Or(title, display.English.Tags().Name(lang))
+	}
+	return s
 }
 
 func (r *Remuxes) Close(playback uuid.UUID) { r.hls.Close(playback) }
@@ -95,9 +141,9 @@ func (r *Remuxes) index(ctx context.Context, part uuid.UUID, open func() (*os.Fi
 	return pts, r.parts.SaveKeyframes(ctx, part, pts)
 }
 
-// open opens a part's file through its library's root, so a path can never leave the library.
-func (r *Remuxes) open(ctx context.Context, part uuid.UUID) (*os.File, error) {
-	root, rel, err := r.parts.PartFile(ctx, part)
+// open opens a file of a library through its root, so a path can never leave the library.
+func (r *Remuxes) open(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (*os.File, error) {
+	root, rel, err := where(ctx, id)
 	if err != nil {
 		return nil, err
 	}

@@ -191,6 +191,7 @@ type Chapter struct {
 
 // SubtitleFile is a subtitle beside a copy rather than inside it.
 type SubtitleFile struct {
+	ID              UUID   `gorm:"type:uuid;default:uuidv7()"`
 	VersionID       UUID   `gorm:"type:uuid"`
 	LibraryID       UUID   `gorm:"type:uuid;primaryKey"`
 	RelPath         string `gorm:"primaryKey"`
