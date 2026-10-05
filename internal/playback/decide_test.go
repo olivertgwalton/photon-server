@@ -43,6 +43,11 @@ func TestDecide(t *testing.T) {
 	hdr10Only.Video = []VideoSupport{{Codec: "hevc", Ranges: []domain.Range{domain.RangeHDR10}}}
 	sdrOnly := appleTV
 	sdrOnly.Video = []VideoSupport{{Codec: "hevc"}}
+	cappedRemux := appleTV
+	cappedRemux.Audio = append(cappedRemux.Audio, AudioSupport{Codec: "truehd"})
+	cappedRemux.MaxBitrateKbps = 80_000
+	sdrH264 := appleTV
+	sdrH264.Video = []VideoSupport{{Codec: "hevc"}, {Codec: "h264", MaxWidth: 1920, MaxHeight: 1080}}
 	capped := everything
 	capped.MaxBitrateKbps = 20_000
 	stereo := appleTV
@@ -100,8 +105,33 @@ func TestDecide(t *testing.T) {
 			want: Decision{Reasons: []Reason{ContainerNotSupported, VideoRangeNotSupported}}, err: ErrNoCompatibleStream,
 		},
 		{
-			name: "a bitrate over the client's limit cannot be copied", profile: capped,
-			want: Decision{Reasons: []Reason{BitrateExceedsLimit}}, err: ErrNoCompatibleStream,
+			name: "a bitrate over the client's limit is encoded to fit it, with the audio's share taken first", profile: capped,
+			want: Decision{
+				Method: domain.PlayTranscode,
+				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+					Codec: "h264", Width: 3840, Height: 2160, BitrateKbps: 20_000 - 640, ToneMap: true,
+				}},
+				Audio:   &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 8, BitrateKbps: 640}},
+				Reasons: []Reason{BitrateExceedsLimit},
+			},
+		},
+		{
+			name: "under a limit it fits, a remux copies audio of a bitrate nobody knows", profile: cappedRemux,
+			want: Decision{
+				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 1},
+				Reasons: []Reason{ContainerNotSupported},
+			},
+		},
+		{
+			name: "HDR to an SDR client is tone mapped into H.264 its size", profile: sdrH264, audio: new(2),
+			want: Decision{
+				Method: domain.PlayTranscode,
+				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+					Codec: "h264", Width: 1920, Height: 1080, BitrateKbps: 40_000 * 10 / 6, ToneMap: true,
+				}},
+				Audio:   &domain.AudioPlan{Stream: 2},
+				Reasons: []Reason{ContainerNotSupported, VideoRangeNotSupported},
+			},
 		},
 		{
 			name: "audio no encoder writes for the client", profile: silent,
@@ -149,6 +179,19 @@ func TestSurroundIsKeptInLayoutsPlayersKnow(t *testing.T) {
 		got, _ := p.audioEncode(media.Stream{Codec: "dts", Channels: tc.channels})
 		if got.Channels != tc.want {
 			t.Errorf("%d channels to a client of %d: %d, want %d", tc.channels, tc.most, got.Channels, tc.want)
+		}
+	}
+}
+
+func TestAPictureFitsWithinTheClientsLimit(t *testing.T) {
+	for _, tc := range []struct{ w, h, maxW, maxH, wantW, wantH int }{
+		{3840, 1600, 1920, 1080, 1920, 800},
+		{1440, 1080, 1920, 720, 960, 720},
+		{1280, 720, 1920, 1080, 1280, 720},
+		{1281, 721, 0, 0, 1280, 720},
+	} {
+		if w, h := fit(tc.w, tc.h, tc.maxW, tc.maxH); w != tc.wantW || h != tc.wantH {
+			t.Errorf("%dx%d within %dx%d: %dx%d, want %dx%d", tc.w, tc.h, tc.maxW, tc.maxH, w, h, tc.wantW, tc.wantH)
 		}
 	}
 }

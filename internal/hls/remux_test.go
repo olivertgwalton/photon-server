@@ -132,6 +132,12 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 			nil,
 			[]string{"-tag:v hvc1", "-bsf:v dovi_rpu=strip=1"},
 		},
+		{
+			"encoded video is H.264 with a keyframe every segment, tone mapped",
+			domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 8000, ToneMap: true}},
+			nil,
+			[]string{"-vf scale=1280:720,tonemapx=", "-c:v libx264", "-maxrate 8000k -bufsize 16000k", "-force_key_frames expr:gte(t,n_forced*6)"},
+		},
 		{"audio asked for is copied", domain.VideoPlan{Stream: 0, Codec: "h264"}, &domain.AudioPlan{Stream: 2}, []string{"-map 0:0 -c:v copy -map 0:2 -c:a copy"}},
 		{
 			"audio encoded",

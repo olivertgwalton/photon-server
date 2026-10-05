@@ -320,21 +320,26 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	return err
 }
 
-// args copies a file's video and its audio, or encodes the audio, into fragmented MP4 on stdout,
-// from the keyframe at start, on the file's own clock (see clockOffset).
+// args copies or encodes a file's video and its audio into fragmented MP4 on stdout, from start,
+// on the file's own clock (see clockOffset). Copied video starts at the keyframe at start; encoded
+// video makes one there and every SegmentLength after.
 func args(start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan) []string {
 	a := []string{
 		"-hide_banner", "-loglevel", "error", "-nostdin",
 		"-protocol_whitelist", "fd", "-fd", "3",
 		"-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts", "-i", "fd:",
-		"-map", "0:" + strconv.Itoa(video.Stream), "-c:v", "copy",
+		"-map", "0:" + strconv.Itoa(video.Stream),
 	}
+	switch e := video.Encode; {
+	case e != nil:
+		a = append(a, encodeArgs(*e)...)
 	// Apple's players take HEVC only as hvc1, and Dolby Vision as dvh1.
-	switch {
 	case video.Codec == "hevc" && video.DolbyVision == domain.DolbyVisionKeep:
-		a = append(a, "-tag:v", "dvh1")
+		a = append(a, "-c:v", "copy", "-tag:v", "dvh1")
 	case video.Codec == "hevc":
-		a = append(a, "-tag:v", "hvc1")
+		a = append(a, "-c:v", "copy", "-tag:v", "hvc1")
+	default:
+		a = append(a, "-c:v", "copy")
 	}
 	if video.DolbyVision == domain.DolbyVisionStrip {
 		a = append(a, "-bsf:v", "dovi_rpu=strip=1")
@@ -355,6 +360,28 @@ func args(start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan) 
 		"-output_ts_offset", strconv.FormatFloat(clockOffset.Seconds(), 'f', 0, 64),
 		"-fflags", "+bitexact", "-",
 	)
+}
+
+// encodeArgs encodes video to H.264 as Jellyfin's software transcode does: x264's veryfast preset
+// at constant quality capped at the bitrate, scaled, and tone mapped from HDR by jellyfin-ffmpeg's
+// tonemapx, with a keyframe where it starts and every SegmentLength after: ffmpeg counts t from
+// the seek.
+func encodeArgs(e domain.VideoEncode) []string {
+	filter := "scale=" + strconv.Itoa(e.Width) + ":" + strconv.Itoa(e.Height)
+	if e.ToneMap {
+		filter += ",tonemapx=tonemap=bt2390:desat=0:peak=100:t=bt709:m=bt709:p=bt709:format=yuv420p"
+	} else {
+		filter += ",format=yuv420p"
+	}
+	kbps := strconv.Itoa(e.BitrateKbps)
+	return []string{
+		"-vf", filter,
+		"-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-profile:v", "high",
+		"-maxrate", kbps + "k", "-bufsize", strconv.Itoa(2*e.BitrateKbps) + "k",
+		"-x264opts", "subme=0:me_range=16:rc_lookahead=10:me=hex:open_gop=0",
+		"-force_key_frames", "expr:gte(t,n_forced*" + strconv.Itoa(int(SegmentLength.Seconds())) + ")",
+		"-sc_threshold", "0",
+	}
 }
 
 // cut reads ffmpeg's output and keeps the plan's segments of the run's part from run.at onwards.

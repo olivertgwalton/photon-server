@@ -46,12 +46,23 @@ type Playback struct {
 	Updated  time.Time
 }
 
-// VideoPlan is the video stream played, by its index in the file, and what becomes of its Dolby
-// Vision.
+// VideoPlan is the video stream played, by its index in the file, what becomes of its Dolby
+// Vision, and what it is encoded to where it is not copied.
 type VideoPlan struct {
 	Stream      int
 	Codec       string
 	DolbyVision DolbyVisionHandling
+	// Encode is the video encoded again; nil copies it.
+	Encode *VideoEncode
+}
+
+// VideoEncode is video encoded again: the codec, the picture's size, the most bitrate it may
+// spend, and whether HDR is tone mapped to SDR on the way.
+type VideoEncode struct {
+	Codec         string
+	Width, Height int
+	BitrateKbps   int
+	ToneMap       bool
 }
 
 // DolbyVisionHandling is what a copy does with a stream's Dolby Vision.

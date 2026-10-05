@@ -26,8 +26,9 @@ type remuxer interface {
 	Close(playback uuid.UUID)
 }
 
-// Remuxes opens a playback's copy as HLS: each of its files with its keyframes, which are indexed
-// in the background as a library is scanned and here, before playing, for a file not reached yet.
+// Remuxes opens a playback's copy as HLS: each of its files cut at its keyframes where the video
+// is copied, which are indexed in the background as a library is scanned and here, before playing,
+// for a file not reached yet; or every SegmentLength where it is encoded.
 type Remuxes struct {
 	parts  partStore
 	frames keyframer
@@ -38,35 +39,48 @@ func NewRemuxes(parts partStore, frames keyframer, h remuxer) *Remuxes {
 	return &Remuxes{parts: parts, frames: frames, hls: h}
 }
 
-// Open starts a playback's remux of the parts of a copy, carrying its video and audio as decided.
+// Open starts a playback's HLS of the parts of a copy, carrying its video and audio as decided.
 func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, parts []store.PlayPart, video domain.VideoPlan, audio *domain.AudioPlan) error {
 	// The remux opens its files long after this request has been answered.
 	opening := context.WithoutCancel(ctx)
 	sources := make([]hls.Source, len(parts))
 	for i, p := range parts {
 		open := func() (*os.File, error) { return r.open(opening, p.ID) }
-		pts, ok, err := r.parts.Keyframes(ctx, p.ID)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			if pts, err = r.index(ctx, p.ID, open); err != nil {
+		duration := time.Duration(p.DurationMS) * time.Millisecond
+		keyframes := hls.Forced(duration)
+		if video.Encode == nil {
+			var err error
+			if keyframes, err = r.keyframes(ctx, p.ID, open); err != nil {
 				return err
 			}
 		}
-		keyframes := make([]time.Duration, len(pts))
-		for k, ms := range pts {
-			keyframes[k] = time.Duration(ms) * time.Millisecond
-		}
 		sources[i] = hls.Source{
 			Open: open, Video: video, Audio: audio,
-			Part: hls.Part{Duration: time.Duration(p.DurationMS) * time.Millisecond, Keyframes: keyframes},
+			Part: hls.Part{Duration: duration, Keyframes: keyframes},
 		}
 	}
 	return r.hls.Open(playback, sources)
 }
 
 func (r *Remuxes) Close(playback uuid.UUID) { r.hls.Close(playback) }
+
+// keyframes answers a part's keyframes, indexing them if the scan has not reached it yet.
+func (r *Remuxes) keyframes(ctx context.Context, part uuid.UUID, open func() (*os.File, error)) ([]time.Duration, error) {
+	pts, ok, err := r.parts.Keyframes(ctx, part)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		if pts, err = r.index(ctx, part, open); err != nil {
+			return nil, err
+		}
+	}
+	keyframes := make([]time.Duration, len(pts))
+	for k, ms := range pts {
+		keyframes[k] = time.Duration(ms) * time.Millisecond
+	}
+	return keyframes, nil
+}
 
 func (r *Remuxes) index(ctx context.Context, part uuid.UUID, open func() (*os.File, error)) ([]int64, error) {
 	f, err := open()
