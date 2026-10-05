@@ -113,6 +113,7 @@ func (a *API) routes() []route {
 			pattern: "GET /api/v1/libraries/{id}/titles", access: signedIn,
 			query: []string{"sort", "order", "after", "limit"}, handle: a.wall,
 		},
+		{pattern: "GET /api/v1/titles/{id}", access: signedIn, handle: a.title},
 	}
 }
 
