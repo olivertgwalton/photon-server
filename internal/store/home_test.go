@@ -4,6 +4,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 	"uuid"
@@ -149,5 +150,108 @@ func TestHome(t *testing.T) {
 				t.Errorf("%s: episode card %+v, want its show and its length", r.Kind, c)
 			}
 		}
+	}
+}
+
+func TestNextEpisode(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var eps []Episode
+	for _, se := range [][2]int{{0, 1}, {1, 1}, {1, 2}, {1, 3}, {2, 1}} {
+		rel := fmt.Sprintf("Wire/S%dE%d.mkv", se[0], se[1])
+		eps = append(eps, Episode{
+			Season: se[0], Episodes: []int{se[1]}, Title: fmt.Sprintf("S%dE%d", se[0], se[1]), Folder: "Wire", ByNumber: true,
+			Copies: []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{Duration: time.Hour}}}}},
+		})
+	}
+	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
+		t.Fatal(err)
+	}
+	i := s.q.Item
+	title := func(kind domain.ItemKind, season, n int) uuid.UUID {
+		t.Helper()
+		q := i.WithContext(ctx).Where(i.Kind.Eq(string(kind)))
+		if kind != domain.ItemShow {
+			q = q.Where(i.SeasonNumber.Eq(season))
+		}
+		if kind == domain.ItemEpisode {
+			q = q.Where(i.EpisodeNumber.Eq(n))
+		}
+		row, err := q.Take()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return uuid.UUID(row.ID)
+	}
+	show, season1 := title(domain.ItemShow, 0, 0), title(domain.ItemSeason, 1, 0)
+	next := func(id uuid.UUID) string {
+		t.Helper()
+		c, err := s.Next(ctx, profile.ID, id)
+		if errors.Is(err, ErrNoNext) {
+			return "none"
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.Title
+	}
+	for _, tc := range []struct {
+		id   uuid.UUID
+		want string
+	}{
+		{title(domain.ItemEpisode, 1, 1), "S1E2"},
+		{title(domain.ItemEpisode, 1, 3), "S2E1"},
+		{title(domain.ItemEpisode, 0, 1), "S1E1"},
+		{title(domain.ItemEpisode, 2, 1), "none"},
+		{show, "S1E1"},
+	} {
+		if got := next(tc.id); got != tc.want {
+			t.Errorf("after %v: %s, want %s", tc.id, got, tc.want)
+		}
+	}
+
+	if err := s.MarkWatched(ctx, profile.ID, title(domain.ItemEpisode, 1, 2)); err != nil {
+		t.Fatal(err)
+	}
+	if got := next(show); got != "S1E3" {
+		t.Errorf("a show with S1E2 watched starts at %s, want the one after it", got)
+	}
+	if _, err := s.SaveProgress(ctx, profile.ID, title(domain.ItemEpisode, 2, 1), 20*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if got := next(show); got != "S2E1" {
+		t.Errorf("a show with an episode under way starts at %s, want that one", got)
+	}
+	if got := next(season1); got != "S1E3" {
+		t.Errorf("season 1 starts at %s, want the one after its last watched", got)
+	}
+	if err := s.MarkWatched(ctx, profile.ID, show); err != nil {
+		t.Fatal(err)
+	}
+	if got := next(show); got != "S1E1" {
+		t.Errorf("a finished show starts at %s, want its first episode", got)
+	}
+
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{films.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Next(ctx, kid.ID, show); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a show the profile may not see: %v, want ErrNotFound", err)
 	}
 }
