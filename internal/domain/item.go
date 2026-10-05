@@ -2,10 +2,15 @@ package domain
 
 type ItemKind string
 
-const ItemMovie ItemKind = "movie"
+const (
+	ItemMovie   ItemKind = "movie"
+	ItemShow    ItemKind = "show"
+	ItemSeason  ItemKind = "season"
+	ItemEpisode ItemKind = "episode"
+)
 
 func ItemKinds() []ItemKind {
-	return []ItemKind{ItemMovie}
+	return []ItemKind{ItemMovie, ItemShow, ItemSeason, ItemEpisode}
 }
 
 // Provider is a metadata source whose ids a title can carry.

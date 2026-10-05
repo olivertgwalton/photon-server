@@ -36,6 +36,11 @@ func newItem(db *gorm.DB, opts ...gen.DOOption) item {
 	_item.Year = field.NewInt(tableName, "year")
 	_item.Folder = field.NewString(tableName, "folder")
 	_item.AddedAt = field.NewTime(tableName, "added_at")
+	_item.ParentID = field.NewField(tableName, "parent_id")
+	_item.SeasonNumber = field.NewInt(tableName, "season_number")
+	_item.EpisodeNumber = field.NewInt(tableName, "episode_number")
+	_item.EpisodeEnd = field.NewInt(tableName, "episode_end")
+	_item.AirDate = field.NewTime(tableName, "air_date")
 
 	_item.fillFieldMap()
 
@@ -45,15 +50,20 @@ func newItem(db *gorm.DB, opts ...gen.DOOption) item {
 type item struct {
 	itemDo itemDo
 
-	ALL       field.Asterisk
-	ID        field.Field
-	LibraryID field.Field
-	Kind      field.String
-	Title     field.String
-	SortTitle field.String
-	Year      field.Int
-	Folder    field.String
-	AddedAt   field.Time
+	ALL           field.Asterisk
+	ID            field.Field
+	LibraryID     field.Field
+	Kind          field.String
+	Title         field.String
+	SortTitle     field.String
+	Year          field.Int
+	Folder        field.String
+	AddedAt       field.Time
+	ParentID      field.Field
+	SeasonNumber  field.Int
+	EpisodeNumber field.Int
+	EpisodeEnd    field.Int
+	AirDate       field.Time
 
 	fieldMap map[string]field.Expr
 }
@@ -78,6 +88,11 @@ func (i *item) updateTableName(table string) *item {
 	i.Year = field.NewInt(table, "year")
 	i.Folder = field.NewString(table, "folder")
 	i.AddedAt = field.NewTime(table, "added_at")
+	i.ParentID = field.NewField(table, "parent_id")
+	i.SeasonNumber = field.NewInt(table, "season_number")
+	i.EpisodeNumber = field.NewInt(table, "episode_number")
+	i.EpisodeEnd = field.NewInt(table, "episode_end")
+	i.AirDate = field.NewTime(table, "air_date")
 
 	i.fillFieldMap()
 
@@ -102,7 +117,7 @@ func (i *item) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (i *item) fillFieldMap() {
-	i.fieldMap = make(map[string]field.Expr, 8)
+	i.fieldMap = make(map[string]field.Expr, 13)
 	i.fieldMap["id"] = i.ID
 	i.fieldMap["library_id"] = i.LibraryID
 	i.fieldMap["kind"] = i.Kind
@@ -111,6 +126,11 @@ func (i *item) fillFieldMap() {
 	i.fieldMap["year"] = i.Year
 	i.fieldMap["folder"] = i.Folder
 	i.fieldMap["added_at"] = i.AddedAt
+	i.fieldMap["parent_id"] = i.ParentID
+	i.fieldMap["season_number"] = i.SeasonNumber
+	i.fieldMap["episode_number"] = i.EpisodeNumber
+	i.fieldMap["episode_end"] = i.EpisodeEnd
+	i.fieldMap["air_date"] = i.AirDate
 }
 
 func (i item) clone(db *gorm.DB) item {
