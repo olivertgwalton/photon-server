@@ -4,6 +4,7 @@ package kv
 
 import (
 	"os"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -31,6 +32,9 @@ func TestAPlaybackIsKeptForItsLife(t *testing.T) {
 	if err != nil || !ok || got != want {
 		t.Fatalf("Playback = %+v, %v, %v; want %+v", got, ok, err, want)
 	}
+	if all, err := k.Playbacks(ctx); err != nil || !slices.Contains(all, want) {
+		t.Errorf("Playbacks = %d, %v; want it among them", len(all), err)
+	}
 	// Valkey lapses it on its own clock; what is asked of it is the life it was given.
 	left, err := k.client.Do(ctx, k.client.B().Pttl().Key(playbackKey(want.ID)).Build()).AsInt64()
 	if err != nil || left <= 0 || left > time.Minute.Milliseconds() {
@@ -38,6 +42,9 @@ func TestAPlaybackIsKeptForItsLife(t *testing.T) {
 	}
 	if err := k.EndPlayback(ctx, want.ID); err != nil {
 		t.Fatal(err)
+	}
+	if all, err := k.Playbacks(ctx); err != nil || slices.Contains(all, want) {
+		t.Errorf("after ending: Playbacks = %d, %v; want it gone", len(all), err)
 	}
 	if _, ok, err := k.Playback(ctx, want.ID); ok || err != nil {
 		t.Errorf("after ending: still there %v, %v", ok, err)
