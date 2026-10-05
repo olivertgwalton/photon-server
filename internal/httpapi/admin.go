@@ -46,13 +46,14 @@ type adminLibraryJSON struct {
 	RefreshDays  int                    `json:"refresh_days"`
 	Previews     domain.PreviewLevel    `json:"previews"`
 	Markers      domain.MarkerDetection `json:"markers"`
+	Keyframes    domain.KeyframeMode    `json:"keyframes"`
 }
 
 func adminLibrary(l domain.Library) adminLibraryJSON {
 	return adminLibraryJSON{
 		ID: l.ID, Name: l.Name, Kind: l.Kind, Root: l.Root, Sources: nonNil(l.Sources),
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
-		Previews: l.Previews, Markers: l.Markers,
+		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes,
 	}
 }
 
@@ -129,11 +130,14 @@ type libraryChangeJSON struct {
 	RefreshDays *int                   `json:"refresh_days,omitzero"`
 	Previews    domain.PreviewLevel    `json:"previews,omitzero"`
 	Markers     domain.MarkerDetection `json:"markers,omitzero"`
+	// Keyframes is how its files' keyframes are found: index reads the container's own index,
+	// full walks a file that has none, off finds none.
+	Keyframes domain.KeyframeMode `json:"keyframes,omitzero"`
 }
 
 // setLibrary changes what is sent of a library: its name, whether it is watched, where its
 // metadata comes from, the kinds of video it keeps providers' links to, what previews it makes and
-// how it finds markers.
+// how it finds markers and keyframes.
 func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r)
 	if !ok {
@@ -143,7 +147,10 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	change := store.LibraryChange{Name: req.Name, Sources: req.Sources, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays, Previews: req.Previews, Markers: req.Markers}
+	change := store.LibraryChange{
+		Name: req.Name, Sources: req.Sources, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays,
+		Previews: req.Previews, Markers: req.Markers, Keyframes: req.Keyframes,
+	}
 	if d := req.RefreshDays; d != nil && (*d < 0 || *d > 365) {
 		writeProblem(w, a.logger, codeInvalidBody, "refresh_days is from 0, never, to 365")
 		return
@@ -199,6 +206,11 @@ func validChange(c store.LibraryChange) error {
 	}
 	if c.Markers != "" {
 		if _, err := domain.ParseMarkerDetection(string(c.Markers)); err != nil {
+			return err
+		}
+	}
+	if c.Keyframes != "" {
+		if _, err := domain.ParseKeyframeMode(string(c.Keyframes)); err != nil {
 			return err
 		}
 	}

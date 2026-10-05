@@ -4068,6 +4068,7 @@ export interface components {
         AdminLibrary: {
             /** Format: uuid */
             id: string;
+            keyframes: components["schemas"]["KeyframeMode"];
             kind: components["schemas"]["LibraryKind"];
             markers: components["schemas"]["MarkerDetection"];
             monitor: components["schemas"]["Monitor"];
@@ -4481,6 +4482,8 @@ export interface components {
         };
         /** @enum {string} */
         JobState: "queued" | "running" | "rerun" | "dead";
+        /** @enum {string} */
+        KeyframeMode: "index" | "full" | "off";
         Letter: {
             count: number;
             letter: string;
@@ -4495,6 +4498,7 @@ export interface components {
             name: string;
         };
         LibraryChange: {
+            keyframes?: components["schemas"]["KeyframeMode"];
             markers?: components["schemas"]["MarkerDetection"];
             monitor?: components["schemas"]["Monitor"];
             name?: string;

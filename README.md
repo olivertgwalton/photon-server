@@ -207,7 +207,7 @@ ffprobe instead, reading every byte of it once, for exact segments from a librar
 `off` finds none and cuts every file every six seconds. Files are read for keyframes in the
 background, after scans and matching; a title played before its file has been read is cut every six
 seconds that time, and its file is read next. `photon-server library set -name NAME -keyframes full`
-changes the setting, and the library's files with no keyframes known are read again.
+(or `"keyframes": "full"` in `PATCH /api/v1/admin/libraries/{id}`) changes the setting, and the library's files with no keyframes known are read again.
 
 A client downloads a title for offline viewing at a most video bitrate, and width if it says, as
 Plex's Downloads do. A copy already within both is downloaded as it is; any other is converted in
