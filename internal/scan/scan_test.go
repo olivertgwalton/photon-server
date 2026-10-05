@@ -304,3 +304,31 @@ func TestScanShows(t *testing.T) {
 		t.Errorf("rescanning probed %d files", r.Probed)
 	}
 }
+
+func TestExternalSubtitles(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	f.put("Heat (1995)/Heat (1995).mkv", "heat")
+	f.put("Heat (1995)/Heat (1995).en.sdh.srt", "1")
+	f.put("Heat (1995)/Subs/Heat (1995).fr.forced.srt", "2")
+	f.scan()
+	if n := f.count(`SELECT count(*) FROM subtitle_files WHERE language = 'en' AND hearing_impaired AND codec = 'subrip'`); n != 1 {
+		t.Error("the English SDH subtitle beside the film was not recorded")
+	}
+	if n := f.count(`SELECT count(*) FROM subtitle_files WHERE rel_path = 'Heat (1995)/Subs/Heat (1995).fr.forced.srt' AND forced`); n != 1 {
+		t.Error("the forced French subtitle in Subs was not recorded")
+	}
+
+	if err := os.Remove(filepath.Join(f.root, "Heat (1995)", "Subs", "Heat (1995).fr.forced.srt")); err != nil {
+		t.Fatal(err)
+	}
+	f.put("Heat (1995)/Heat (1995).de.srt", "3")
+	if r := f.scan(); r.Probed != 0 {
+		t.Errorf("a subtitle change probed the film again (%d)", r.Probed)
+	}
+	if n := f.count(`SELECT count(*) FROM subtitle_files`); n != 2 {
+		t.Errorf("%d subtitles after removing one and adding one, want 2", n)
+	}
+	if n := f.count(`SELECT count(*) FROM subtitle_files WHERE language = 'de'`); n != 1 {
+		t.Error("the added German subtitle was not recorded")
+	}
+}
