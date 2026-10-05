@@ -35,6 +35,7 @@ func newLibrary(db *gorm.DB, opts ...gen.DOOption) library {
 	_library.Monitor = field.NewString(tableName, "monitor")
 	_library.RefreshDays = field.NewInt16(tableName, "refresh_days")
 	_library.Previews = field.NewString(tableName, "previews")
+	_library.Markers = field.NewString(tableName, "markers")
 	_library.CreatedAt = field.NewTime(tableName, "created_at")
 
 	_library.fillFieldMap()
@@ -53,6 +54,7 @@ type library struct {
 	Monitor     field.String
 	RefreshDays field.Int16
 	Previews    field.String
+	Markers     field.String
 	CreatedAt   field.Time
 
 	fieldMap map[string]field.Expr
@@ -77,6 +79,7 @@ func (l *library) updateTableName(table string) *library {
 	l.Monitor = field.NewString(table, "monitor")
 	l.RefreshDays = field.NewInt16(table, "refresh_days")
 	l.Previews = field.NewString(table, "previews")
+	l.Markers = field.NewString(table, "markers")
 	l.CreatedAt = field.NewTime(table, "created_at")
 
 	l.fillFieldMap()
@@ -102,7 +105,7 @@ func (l *library) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (l *library) fillFieldMap() {
-	l.fieldMap = make(map[string]field.Expr, 8)
+	l.fieldMap = make(map[string]field.Expr, 9)
 	l.fieldMap["id"] = l.ID
 	l.fieldMap["name"] = l.Name
 	l.fieldMap["kind"] = l.Kind
@@ -110,6 +113,7 @@ func (l *library) fillFieldMap() {
 	l.fieldMap["monitor"] = l.Monitor
 	l.fieldMap["refresh_days"] = l.RefreshDays
 	l.fieldMap["previews"] = l.Previews
+	l.fieldMap["markers"] = l.Markers
 	l.fieldMap["created_at"] = l.CreatedAt
 }
 

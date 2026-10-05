@@ -136,6 +136,16 @@ and so does an admin's word that a part has none of a kind (`"absent": [{"kind":
 0}]`, parts counted from 0), which hides a wrong chapter or fingerprint match through rescans and
 later comparisons. Each PUT replaces what was said of the copy; an empty one clears it.
 
+Comparing sound reads the first ten minutes and the last stretch of every episode, which on a
+library on a network share or a debrid mount of 4K remuxes is gigabytes an episode. Each library
+chooses, as Plex's intro and credits detection and Jellyfin's per-library segment providers let it:
+`photon-server library set -name NAME -markers chapters` (or `"markers": "chapters"` in
+`PATCH /api/v1/admin/libraries/{id}`) offers only the markers chapters name, which costs no reads,
+`-markers off` none, and `all`, the default, compares sound too. A library not comparing queues no
+comparisons, and one already queued for it does nothing; fingerprints it found before are kept and
+offered again if it goes back to `all`, whose next 3 a.m. run queues the seasons not yet compared.
+An admin's own markers stand whatever the setting.
+
 Each library makes previews of its videos ahead of time, as Plex and Jellyfin do: a picture of each
 chapter, and trickplay sheets for scrubbing (a 320-pixel thumbnail every ten seconds, a hundred to
 a JPEG sheet, HDR tone mapped). They are made from keyframes in the background, one part at a time
