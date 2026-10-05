@@ -15,10 +15,13 @@ const (
 	TaskSweepArtwork TaskKey = "sweep_artwork"
 	// TaskDetectMarkers queues the seasons with episodes whose sound has not been compared.
 	TaskDetectMarkers TaskKey = "detect_markers"
+	// TaskBackfillPreviews queues the parts whose previews are not what their library asks for,
+	// and clears previews no part has any more.
+	TaskBackfillPreviews TaskKey = "backfill_previews"
 )
 
 func TaskKeys() []TaskKey {
-	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers}
+	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews}
 }
 
 type TaskResult string
