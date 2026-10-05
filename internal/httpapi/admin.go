@@ -36,22 +36,23 @@ type libraryAdmin interface {
 
 // adminLibraryJSON is a library as an admin sees it: where it is and how it is kept.
 type adminLibraryJSON struct {
-	ID           uuid.UUID            `json:"id"`
-	Name         string               `json:"name"`
-	Kind         domain.LibraryKind   `json:"kind"`
-	Root         string               `json:"root"`
-	Sources      []domain.FieldSource `json:"sources"`
-	RemoteExtras []domain.ExtraKind   `json:"remote_extras"`
-	Monitor      domain.Monitor       `json:"monitor"`
-	RefreshDays  int                  `json:"refresh_days"`
-	Previews     domain.PreviewLevel  `json:"previews"`
+	ID           uuid.UUID              `json:"id"`
+	Name         string                 `json:"name"`
+	Kind         domain.LibraryKind     `json:"kind"`
+	Root         string                 `json:"root"`
+	Sources      []domain.FieldSource   `json:"sources"`
+	RemoteExtras []domain.ExtraKind     `json:"remote_extras"`
+	Monitor      domain.Monitor         `json:"monitor"`
+	RefreshDays  int                    `json:"refresh_days"`
+	Previews     domain.PreviewLevel    `json:"previews"`
+	Markers      domain.MarkerDetection `json:"markers"`
 }
 
 func adminLibrary(l domain.Library) adminLibraryJSON {
 	return adminLibraryJSON{
 		ID: l.ID, Name: l.Name, Kind: l.Kind, Root: l.Root, Sources: nonNil(l.Sources),
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
-		Previews: l.Previews,
+		Previews: l.Previews, Markers: l.Markers,
 	}
 }
 
@@ -125,12 +126,14 @@ type libraryChangeJSON struct {
 	RemoteExtras []domain.ExtraKind   `json:"remote_extras,omitzero"`
 	Monitor      domain.Monitor       `json:"monitor,omitzero"`
 	// RefreshDays is how often its metadata is refreshed, 0 for never.
-	RefreshDays *int                `json:"refresh_days,omitzero"`
-	Previews    domain.PreviewLevel `json:"previews,omitzero"`
+	RefreshDays *int                   `json:"refresh_days,omitzero"`
+	Previews    domain.PreviewLevel    `json:"previews,omitzero"`
+	Markers     domain.MarkerDetection `json:"markers,omitzero"`
 }
 
 // setLibrary changes what is sent of a library: its name, whether it is watched, where its
-// metadata comes from, the kinds of video it keeps providers' links to, and what previews it makes.
+// metadata comes from, the kinds of video it keeps providers' links to, what previews it makes and
+// how it finds markers.
 func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r)
 	if !ok {
@@ -140,7 +143,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	change := store.LibraryChange{Name: req.Name, Sources: req.Sources, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays, Previews: req.Previews}
+	change := store.LibraryChange{Name: req.Name, Sources: req.Sources, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays, Previews: req.Previews, Markers: req.Markers}
 	if d := req.RefreshDays; d != nil && (*d < 0 || *d > 365) {
 		writeProblem(w, a.logger, codeInvalidBody, "refresh_days is from 0, never, to 365")
 		return
@@ -191,6 +194,11 @@ func validChange(c store.LibraryChange) error {
 	}
 	if c.Previews != "" {
 		if _, err := domain.ParsePreviewLevel(string(c.Previews)); err != nil {
+			return err
+		}
+	}
+	if c.Markers != "" {
+		if _, err := domain.ParseMarkerDetection(string(c.Markers)); err != nil {
 			return err
 		}
 	}

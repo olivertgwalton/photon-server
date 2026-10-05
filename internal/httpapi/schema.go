@@ -38,6 +38,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.JobKind]():             values(domain.JobKinds()),
 	reflect.TypeFor[domain.JobState]():            values(domain.JobStates()),
 	reflect.TypeFor[domain.LibraryKind]():         values(domain.LibraryKinds()),
+	reflect.TypeFor[domain.MarkerDetection]():     values(domain.MarkerDetections()),
 	reflect.TypeFor[domain.MarkerKind]():          values(domain.MarkerKinds()),
 	reflect.TypeFor[domain.MarkerSource]():        values(domain.MarkerSources()),
 	reflect.TypeFor[domain.Mark]():                values(domain.Marks()),

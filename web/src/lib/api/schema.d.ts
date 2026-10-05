@@ -4032,6 +4032,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["LibraryKind"];
+            markers: components["schemas"]["MarkerDetection"];
             monitor: components["schemas"]["Monitor"];
             name: string;
             previews: components["schemas"]["PreviewLevel"];
@@ -4454,6 +4455,7 @@ export interface components {
             name: string;
         };
         LibraryChange: {
+            markers?: components["schemas"]["MarkerDetection"];
             monitor?: components["schemas"]["Monitor"];
             name?: string;
             previews?: components["schemas"]["PreviewLevel"];
@@ -4489,6 +4491,8 @@ export interface components {
             kind: components["schemas"]["MarkerKind"];
             part: number;
         };
+        /** @enum {string} */
+        MarkerDetection: "off" | "chapters" | "all";
         /** @enum {string} */
         MarkerKind: "intro" | "credits" | "recap" | "preview";
         MarkerRef: {
