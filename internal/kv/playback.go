@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"encoding/json"
 	"iter"
 	"strconv"
 	"strings"
@@ -20,6 +21,10 @@ func playbackKey(id uuid.UUID) string { return playbackPrefix + id.String() }
 // SavePlayback writes a playback session, which lapses after ttl unless written again.
 func (k *KV) SavePlayback(ctx context.Context, p domain.Playback, ttl time.Duration) error {
 	key := playbackKey(p.ID)
+	card, err := json.Marshal(p.Card)
+	if err != nil {
+		return err
+	}
 	cmds := k.client.B()
 	for _, r := range k.client.DoMulti(ctx,
 		cmds.Hset().Key(key).FieldValue().
@@ -28,7 +33,7 @@ func (k *KV) SavePlayback(ctx context.Context, p domain.Playback, ttl time.Durat
 			FieldValue("state", string(p.State)).FieldValue("position_ms", strconv.FormatInt(p.Position.Milliseconds(), 10)).
 			FieldValue("started", strconv.FormatInt(p.Started.Unix(), 10)).
 			FieldValue("updated", strconv.FormatInt(p.Updated.Unix(), 10)).
-			FieldValue("node", p.Node.String()).Build(),
+			FieldValue("node", p.Node.String()).FieldValue("card", string(card)).Build(),
 		cmds.Expire().Key(key).Seconds(int64(ttl.Seconds())).Build(),
 	) {
 		if err := r.Error(); err != nil {
@@ -54,6 +59,9 @@ func (k *KV) Playback(ctx context.Context, id uuid.UUID) (domain.Playback, bool,
 	started, _ := strconv.ParseInt(m["started"], 10, 64)
 	updated, _ := strconv.ParseInt(m["updated"], 10, 64)
 	p.Started, p.Updated = time.Unix(started, 0), time.Unix(updated, 0)
+	if err := json.Unmarshal([]byte(m["card"]), &p.Card); err != nil {
+		return domain.Playback{}, false, err
+	}
 	return p, true, nil
 }
 
