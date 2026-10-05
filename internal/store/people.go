@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"slices"
 	"time"
 	"uuid"
 
+	"gorm.io/gen/field"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -16,50 +18,109 @@ import (
 )
 
 // saveCredits replaces what a source credits on a title, keeping one row per person whatever
-// titles credit them. A person is known by their TMDB id; one with none is passed over.
+// titles credit them. A person is known by any of their ids; one with none is passed over.
 func saveCredits(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, credits []domain.Credit) error {
 	c := tx.Credit
 	if _, err := c.WithContext(ctx).Where(c.ItemID.Eq(item), c.Source.Eq(string(source))).Delete(); err != nil {
 		return err
 	}
-	var rows []*model.Credit
 	for n, cr := range credits {
-		tmdb := cr.IDs[domain.ProviderTMDB]
-		if tmdb == "" {
-			continue
-		}
-		person, err := personByTMDB(ctx, tx, tmdb, cr.Name, cr.Photo)
+		person, ok, err := personByIDs(ctx, tx, cr)
 		if err != nil {
 			return err
 		}
-		rows = append(rows, &model.Credit{ItemID: item, PersonID: person, Source: source, Kind: cr.Kind, Role: cr.Role, Position: n})
+		if !ok {
+			continue
+		}
+		// Each row goes in as its person is found, since finding a later one may merge an earlier.
+		// A source may credit one person twice for one part: an actor billed as two names of one role.
+		row := &model.Credit{ItemID: item, PersonID: person, Source: source, Kind: cr.Kind, Role: cr.Role, Position: n}
+		if err := c.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(row); err != nil {
+			return err
+		}
 	}
-	if len(rows) == 0 {
-		return nil
-	}
-	// A source may credit one person twice for one part: an actor billed as two names of one role.
-	return c.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(rows...)
+	return nil
 }
 
-// personByTMDB answers the person with a TMDB id, adding them the first time; their name and
-// picture follow the latest credit, and a new picture gets a new id.
-func personByTMDB(ctx context.Context, tx *query.Query, tmdb, name, photo string) (model.UUID, error) {
-	p := tx.Person
-	row, err := p.WithContext(ctx).Where(p.TMDBID.Eq(tmdb)).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		row = &model.Person{Name: name, TMDBID: &tmdb}
-		setPhoto(row, photo)
-		return row.ID, p.WithContext(ctx).Create(row)
+// personByIDs answers the person a credit names by any of their ids, adding them the first time,
+// and false for a credit with none. People found by different ids of one credit are the same
+// person and are merged into the first added. The ids a credit brings that its person lacks are
+// added, and their name and picture follow the latest credit; a new picture gets a new id.
+func personByIDs(ctx context.Context, tx *query.Query, cr domain.Credit) (model.UUID, bool, error) {
+	pi := tx.PersonExternalID
+	var ids []*model.PersonExternalID
+	var match []field.Expr
+	for provider, value := range cr.IDs {
+		if value != "" {
+			ids = append(ids, &model.PersonExternalID{Provider: provider, Value: value})
+			match = append(match, field.And(pi.Provider.Eq(string(provider)), pi.Value.Eq(value)))
+		}
 	}
+	if len(ids) == 0 {
+		return model.UUID{}, false, nil
+	}
+	found, err := pi.WithContext(ctx).Where(field.Or(match...)).Order(pi.PersonID).Find()
 	if err != nil {
-		return model.UUID{}, err
+		return model.UUID{}, false, err
 	}
-	if row.Name == name && deref(row.PhotoURL) == photo {
-		return row.ID, nil
+	people := make([]model.UUID, 0, len(found))
+	for _, f := range found {
+		people = append(people, f.PersonID)
 	}
-	row.Name = name
-	setPhoto(row, photo)
-	return row.ID, p.WithContext(ctx).Save(row)
+	people = slices.Compact(people)
+	p := tx.Person
+	var row *model.Person
+	if len(people) == 0 {
+		row = &model.Person{Name: cr.Name}
+		setPhoto(row, cr.Photo)
+		if err := p.WithContext(ctx).Create(row); err != nil {
+			return model.UUID{}, false, err
+		}
+	} else {
+		for _, other := range people[1:] {
+			if err := mergePerson(ctx, tx, people[0], other); err != nil {
+				return model.UUID{}, false, err
+			}
+		}
+		if row, err = p.WithContext(ctx).Where(p.ID.Eq(people[0])).Take(); err != nil {
+			return model.UUID{}, false, err
+		}
+		if row.Name != cr.Name || deref(row.PhotoURL) != cr.Photo {
+			row.Name = cr.Name
+			setPhoto(row, cr.Photo)
+			if err := p.WithContext(ctx).Save(row); err != nil {
+				return model.UUID{}, false, err
+			}
+		}
+	}
+	for _, id := range ids {
+		id.PersonID = row.ID
+	}
+	create := pi.WithContext(ctx)
+	if len(people) > 0 {
+		// A second id for a provider they already have one for is not taken. For someone new, a
+		// conflict is another job adding them at once: this one fails rather than keep them twice.
+		create = create.Clauses(clause.OnConflict{DoNothing: true})
+	}
+	return row.ID, true, create.Create(ids...)
+}
+
+// mergePerson folds other into into: their credits and the ids into has no id of the provider for.
+func mergePerson(ctx context.Context, tx *query.Query, into, other model.UUID) error {
+	db := tx.Person.WithContext(ctx).UnderlyingDB()
+	args := map[string]any{"into": into, "other": other}
+	for _, stmt := range []string{
+		`UPDATE person_ids SET person_id = @into WHERE person_id = @other
+			AND provider NOT IN (SELECT provider FROM person_ids WHERE person_id = @into)`,
+		`UPDATE credits c SET person_id = @into WHERE person_id = @other AND NOT EXISTS (
+			SELECT 1 FROM credits k WHERE k.person_id = @into AND (k.item_id, k.source, k.kind, k.role) = (c.item_id, c.source, c.kind, c.role))`,
+		`DELETE FROM people WHERE id = @other`,
+	} {
+		if err := db.Exec(stmt, args).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func setPhoto(p *model.Person, url string) {
@@ -158,8 +219,16 @@ func (s *Store) Person(ctx context.Context, id uuid.UUID) (PersonPage, error) {
 	if row.PhotoID != nil {
 		out.Photo = uuid.UUID(*row.PhotoID)
 	}
-	if row.TMDBID != nil {
-		out.IDs = map[domain.Provider]string{domain.ProviderTMDB: *row.TMDBID}
+	pi := s.q.PersonExternalID
+	ids, err := pi.WithContext(ctx).Where(pi.PersonID.Eq(row.ID)).Find()
+	if err != nil {
+		return PersonPage{}, err
+	}
+	for _, i := range ids {
+		if out.IDs == nil {
+			out.IDs = map[domain.Provider]string{}
+		}
+		out.IDs[i.Provider] = i.Value
 	}
 	return out, nil
 }
