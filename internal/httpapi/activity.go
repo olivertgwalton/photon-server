@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -17,6 +18,10 @@ import (
 // heartbeatEvery is how often a quiet event stream sends a comment, so proxies that close idle
 // connections, after a minute in nginx's default, leave it open.
 const heartbeatEvery = 15 * time.Second
+
+// sendWithin is how long one event may take to reach a client before its stream is given up, so a
+// client that stops reading but keeps its connection does not hold the stream for good.
+const sendWithin = 10 * time.Second
 
 type activityLog interface {
 	Activity(ctx context.Context, kind domain.EventKind, offset, limit int) ([]domain.Event, int64, error)
@@ -128,7 +133,7 @@ func (a *API) streamEvents(w http.ResponseWriter, r *http.Request, events <-chan
 				return
 			}
 		case <-heartbeat.C:
-			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil || rc.Flush() != nil {
+			if sendText(w, rc, ": heartbeat\n\n") != nil {
 				return
 			}
 		}
@@ -140,7 +145,14 @@ func (a *API) sendEvent(w http.ResponseWriter, rc *http.ResponseController, name
 	if err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, data); err != nil {
+	return sendText(w, rc, fmt.Sprintf("event: %s\ndata: %s\n\n", name, data))
+}
+
+func sendText(w http.ResponseWriter, rc *http.ResponseController, text string) error {
+	if err := rc.SetWriteDeadline(time.Now().Add(sendWithin)); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, text); err != nil {
 		return err
 	}
 	return rc.Flush()

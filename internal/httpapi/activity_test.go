@@ -2,13 +2,16 @@ package httpapi
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -111,6 +114,45 @@ func TestSignInsAreTold(t *testing.T) {
 			if v == "guess" || v == "correct horse" {
 				t.Errorf("%s carries the password", e.Kind)
 			}
+		}
+	}
+}
+
+// streamingEvents streams events, and says when the stream lets go of its subscription.
+type streamingEvents struct {
+	*fakeEvents
+	events chan domain.Event
+	gone   chan struct{}
+}
+
+func (f streamingEvents) Subscribe() (<-chan domain.Event, func()) {
+	return f.events, func() { close(f.gone) }
+}
+
+// A client that stops reading but keeps its connection does not hold its stream for good.
+func TestAStreamNobodyReadsIsGivenUp(t *testing.T) {
+	t.Parallel()
+	work := &fakeWork{}
+	told := streamingEvents{fakeEvents: &fakeEvents{}, events: make(chan domain.Event), gone: make(chan struct{})}
+	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: told}))
+	defer srv.Close()
+	conn, err := net.Dial("tcp", srv.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := fmt.Fprintf(conn, "GET /api/v1/admin/events HTTP/1.1\r\nHost: photon\r\nAuthorization: Bearer %s\r\n\r\n", goodToken); err != nil {
+		t.Fatal(err)
+	}
+	big := domain.Event{Kind: domain.EventScanProgress, Details: map[string]any{"padding": strings.Repeat("x", 64<<10)}}
+	deadline := time.After(3 * sendWithin)
+	for {
+		select {
+		case told.events <- big:
+		case <-told.gone:
+			return
+		case <-deadline:
+			t.Fatal("the stream is still held by a client that stopped reading")
 		}
 	}
 }
