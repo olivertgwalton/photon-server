@@ -137,8 +137,11 @@ type Services struct {
 	Watching   watching
 	Playing    playing
 	Playbacks  playbacks
-	Remuxing   remuxing
-	HLS        hlsFiles
+	// Downloads are each profile's, and Conversions make the ones not downloaded as they are.
+	Downloads   downloads
+	Conversions conversions
+	Remuxing    remuxing
+	HLS         hlsFiles
 	// Owners say which node serves a playback's HLS, nil on a server of one node.
 	Owners owners
 	// Signer signs the addresses titles play from.
@@ -431,6 +434,29 @@ func (a *API) routes() []route {
 			},
 			status: http.StatusOK, reply: asFile{"application/vnd.apple.mpegurl", "text/vtt", "video/mp4", "video/iso.segment"},
 			handle: a.hlsFile,
+		},
+		{
+			pattern: "POST /api/v1/downloads", access: signedIn,
+			summary: "Download a film or episode no larger than a bitrate: its file as it is, else converted",
+			body:    downloadRequestJSON{}, status: http.StatusOK, reply: downloadJSON{}, handle: a.addDownload,
+		},
+		{
+			pattern: "GET /api/v1/downloads", access: signedIn, summary: "List the profile's downloads, the newest first",
+			status: http.StatusOK, reply: listJSON[downloadJSON]{}, handle: a.ownDownloads,
+		},
+		{
+			pattern: "GET /api/v1/downloads/{id}", access: signedIn, summary: "A download, as far as its conversion has got",
+			status: http.StatusOK, reply: downloadJSON{}, handle: a.download,
+		},
+		{
+			pattern: "DELETE /api/v1/downloads/{id}", access: signedIn,
+			summary: "Remove a download, and its conversion where no other download needs it",
+			status:  http.StatusNoContent, handle: a.removeDownload,
+		},
+		{
+			pattern: "GET /api/v1/downloads/{id}/file", access: signedAddress,
+			summary: "A download's conversion, in byte ranges, at the address the download answered",
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/mp4"}, handle: a.downloadFile,
 		},
 		{
 			pattern: "GET /api/v1/parts/{id}/stream", access: signedAddress,
