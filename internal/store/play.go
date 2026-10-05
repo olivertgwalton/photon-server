@@ -21,10 +21,13 @@ type PlayPart struct {
 	DurationMS int64
 }
 
-// PlayCopy is a copy to play: its container and bitrate, its parts, its first part's streams, and
-// the subtitle files beside it.
+// PlayCopy is a copy to play: what it is, its container, bitrate and length, its parts, its first
+// part's streams, and the subtitle files beside it.
 type PlayCopy struct {
 	Version     uuid.UUID
+	Edition     string
+	Label       string
+	DurationMS  int64
 	Container   string
 	BitrateKbps int
 	Parts       []PlayPart
@@ -73,7 +76,10 @@ func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) 
 	if err != nil {
 		return PlayCopy{}, err
 	}
-	c := PlayCopy{Version: uuid.UUID(row.ID), Container: row.Container, BitrateKbps: row.BitrateKbps}
+	c := PlayCopy{
+		Version: uuid.UUID(row.ID), Edition: deref(row.Edition), Label: deref(row.Label), DurationMS: row.DurationMS,
+		Container: row.Container, BitrateKbps: row.BitrateKbps,
+	}
 	for _, f := range subs {
 		lang, _ := language.Parse(deref(f.Language))
 		c.Subtitles = append(c.Subtitles, PlaySubtitle{

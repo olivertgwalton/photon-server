@@ -48,31 +48,6 @@ type AudioSupport struct {
 	MaxChannels int    `json:"max_channels,omitzero"`
 }
 
-// Reason is why a copy cannot reach a client as it is, in Jellyfin's TranscodeReason terms.
-type Reason string
-
-const (
-	ContainerNotSupported       Reason = "container_not_supported"
-	VideoCodecNotSupported      Reason = "video_codec_not_supported"
-	VideoProfileNotSupported    Reason = "video_profile_not_supported"
-	VideoLevelNotSupported      Reason = "video_level_not_supported"
-	VideoResolutionNotSupported Reason = "video_resolution_not_supported"
-	VideoBitDepthNotSupported   Reason = "video_bit_depth_not_supported"
-	VideoRangeNotSupported      Reason = "video_range_not_supported"
-	AudioCodecNotSupported      Reason = "audio_codec_not_supported"
-	AudioChannelsNotSupported   Reason = "audio_channels_not_supported"
-	BitrateExceedsLimit         Reason = "bitrate_exceeds_limit"
-	SubtitleCodecNotSupported   Reason = "subtitle_codec_not_supported"
-)
-
-func Reasons() []Reason {
-	return []Reason{
-		ContainerNotSupported, VideoCodecNotSupported, VideoProfileNotSupported, VideoLevelNotSupported,
-		VideoResolutionNotSupported, VideoBitDepthNotSupported, VideoRangeNotSupported, AudioCodecNotSupported,
-		AudioChannelsNotSupported, BitrateExceedsLimit, SubtitleCodecNotSupported,
-	}
-}
-
 var (
 	// ErrNoCompatibleStream is a copy that cannot be made into anything the client plays.
 	ErrNoCompatibleStream = errors.New("playback: nothing the client plays can be made of this copy")
@@ -96,7 +71,7 @@ type Decision struct {
 	Method  domain.PlayMethod
 	Video   *domain.VideoPlan
 	Audio   *domain.AudioPlan
-	Reasons []Reason
+	Reasons []domain.TranscodeReason
 }
 
 // pictureSubtitles are subtitle codecs that are pictures, which only a client drawing them from the
@@ -134,7 +109,7 @@ func Decide(p Profile, c Copy, audio, subtitle *int) (Decision, error) {
 		}
 	}
 	var d Decision
-	var videoReasons, audioReasons []Reason
+	var videoReasons, audioReasons []domain.TranscodeReason
 	if video != nil {
 		d.Video = &domain.VideoPlan{Stream: video.Index, Codec: video.Codec}
 		videoReasons = p.videoReasons(*video)
@@ -150,16 +125,16 @@ func Decide(p Profile, c Copy, audio, subtitle *int) (Decision, error) {
 		audioReasons = p.audioReasons(*sound)
 	}
 	if !p.opens(c.Container) {
-		d.Reasons = append(d.Reasons, ContainerNotSupported)
+		d.Reasons = append(d.Reasons, domain.ContainerNotSupported)
 	}
 	d.Reasons = append(d.Reasons, videoReasons...)
 	d.Reasons = append(d.Reasons, audioReasons...)
 	tooMuch := p.MaxBitrateKbps > 0 && c.BitrateKbps > p.MaxBitrateKbps
 	if tooMuch {
-		d.Reasons = append(d.Reasons, BitrateExceedsLimit)
+		d.Reasons = append(d.Reasons, domain.BitrateExceedsLimit)
 	}
 	if burn != nil && !slices.Contains(p.Subtitles, burnCodec) {
-		d.Reasons = append(d.Reasons, SubtitleCodecNotSupported)
+		d.Reasons = append(d.Reasons, domain.SubtitleCodecNotSupported)
 	}
 	if len(d.Reasons) == 0 {
 		d.Method = domain.PlayDirect
@@ -251,28 +226,28 @@ func (p Profile) opens(container string) bool {
 	return false
 }
 
-func (p Profile) videoReasons(s media.Stream) []Reason {
+func (p Profile) videoReasons(s media.Stream) []domain.TranscodeReason {
 	i := slices.IndexFunc(p.Video, func(v VideoSupport) bool { return v.Codec == s.Codec })
 	if i < 0 {
-		return []Reason{VideoCodecNotSupported}
+		return []domain.TranscodeReason{domain.VideoCodecNotSupported}
 	}
 	v := p.Video[i]
-	var r []Reason
+	var r []domain.TranscodeReason
 	if len(v.Profiles) > 0 && s.Profile != "" &&
 		!slices.ContainsFunc(v.Profiles, func(name string) bool { return strings.EqualFold(name, s.Profile) }) {
-		r = append(r, VideoProfileNotSupported)
+		r = append(r, domain.VideoProfileNotSupported)
 	}
 	if v.MaxLevel > 0 && s.Level > v.MaxLevel {
-		r = append(r, VideoLevelNotSupported)
+		r = append(r, domain.VideoLevelNotSupported)
 	}
 	if (v.MaxWidth > 0 && s.Width > v.MaxWidth) || (v.MaxHeight > 0 && s.Height > v.MaxHeight) {
-		r = append(r, VideoResolutionNotSupported)
+		r = append(r, domain.VideoResolutionNotSupported)
 	}
 	if v.MaxBitDepth > 0 && s.BitDepth > v.MaxBitDepth {
-		r = append(r, VideoBitDepthNotSupported)
+		r = append(r, domain.VideoBitDepthNotSupported)
 	}
 	if !v.shows(s) {
-		r = append(r, VideoRangeNotSupported)
+		r = append(r, domain.VideoRangeNotSupported)
 	}
 	return r
 }
@@ -327,13 +302,13 @@ func (v VideoSupport) showsBase(dv *media.DolbyVision) bool {
 	return false
 }
 
-func (p Profile) audioReasons(s media.Stream) []Reason {
+func (p Profile) audioReasons(s media.Stream) []domain.TranscodeReason {
 	a, ok := p.audio(s.Codec)
 	switch {
 	case !ok:
-		return []Reason{AudioCodecNotSupported}
+		return []domain.TranscodeReason{domain.AudioCodecNotSupported}
 	case a.MaxChannels > 0 && s.Channels > a.MaxChannels:
-		return []Reason{AudioChannelsNotSupported}
+		return []domain.TranscodeReason{domain.AudioChannelsNotSupported}
 	}
 	return nil
 }

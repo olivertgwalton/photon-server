@@ -9,6 +9,8 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
@@ -24,15 +26,22 @@ func TestAPlaybackIsKeptForItsLife(t *testing.T) {
 		ID: uuid.NewV7(), Profile: uuid.NewV7(), Item: uuid.NewV7(), Version: uuid.NewV7(),
 		Method: domain.PlayRemux, State: domain.StatePaused, Position: 90 * time.Second,
 		Started: started, Updated: started.Add(time.Minute), Node: uuid.NewV7(),
+		Card: domain.PlaybackCard{
+			Profile: domain.PlaybackProfile{ID: uuid.NewV7(), Name: "Oliver"},
+			Title:   domain.PlaybackTitle{ID: uuid.NewV7(), Kind: domain.ItemMovie, Title: "Heat"},
+			Reasons: []domain.TranscodeReason{domain.ContainerNotSupported},
+			Video:   &domain.PlaybackVideo{Codec: "hevc", Encode: &domain.PlaybackEncode{Codec: "h264", ToneMapped: true}},
+		},
 	}
 	if err := k.SavePlayback(ctx, want, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	got, ok, err := k.Playback(ctx, want.ID)
-	if err != nil || !ok || got != want {
+	if err != nil || !ok || !cmp.Equal(got, want) {
 		t.Fatalf("Playback = %+v, %v, %v; want %+v", got, ok, err, want)
 	}
-	if all, err := k.Playbacks(ctx); err != nil || !slices.Contains(all, want) {
+	same := func(p domain.Playback) bool { return p.ID == want.ID }
+	if all, err := k.Playbacks(ctx); err != nil || !slices.ContainsFunc(all, same) {
 		t.Errorf("Playbacks = %d, %v; want it among them", len(all), err)
 	}
 	// Valkey lapses it on its own clock; what is asked of it is the life it was given.
@@ -43,7 +52,7 @@ func TestAPlaybackIsKeptForItsLife(t *testing.T) {
 	if err := k.EndPlayback(ctx, want.ID); err != nil {
 		t.Fatal(err)
 	}
-	if all, err := k.Playbacks(ctx); err != nil || slices.Contains(all, want) {
+	if all, err := k.Playbacks(ctx); err != nil || slices.ContainsFunc(all, same) {
 		t.Errorf("after ending: Playbacks = %d, %v; want it gone", len(all), err)
 	}
 	if _, ok, err := k.Playback(ctx, want.ID); ok || err != nil {

@@ -52,6 +52,108 @@ type Playback struct {
 	Updated  time.Time
 	// Node is the server node running it, whose HLS it serves.
 	Node uuid.UUID
+	Card PlaybackCard
+}
+
+// PlaybackCard is what an admin's dashboard shows of a playback beside where it has got to, as
+// Jellyfin's session card does: who, on what, which title and copy, and how it plays. It is fixed
+// as the playback starts, so listing playbacks decides nothing again, and kept and sent as JSON.
+type PlaybackCard struct {
+	Profile  PlaybackProfile   `json:"profile"`
+	Device   PlaybackDevice    `json:"device"`
+	Title    PlaybackTitle     `json:"title"`
+	Version  PlaybackVersion   `json:"version"`
+	Reasons  []TranscodeReason `json:"reasons,omitzero"`
+	Video    *PlaybackVideo    `json:"video,omitzero"`
+	Audio    *PlaybackAudio    `json:"audio,omitzero"`
+	Subtitle *PlaybackSubtitle `json:"subtitle,omitzero"`
+	// Acceleration is the device its video is encoded on, absent where it is not encoded.
+	Acceleration Acceleration `json:"acceleration,omitzero"`
+}
+
+type PlaybackProfile struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+// PlaybackDevice is the signed-in device that started a playback, as it named itself when it
+// signed in, and the address it asked from.
+type PlaybackDevice struct {
+	ID      uuid.UUID `json:"id"`
+	Name    string    `json:"name"`
+	Client  string    `json:"client"`
+	Address string    `json:"address"`
+}
+
+// PlaybackTitle is the title played, with its pictures by id; an episode's names its show and
+// where in it it is.
+type PlaybackTitle struct {
+	ID            uuid.UUID `json:"id"`
+	Kind          ItemKind  `json:"kind"`
+	Title         string    `json:"title"`
+	Year          int       `json:"year,omitzero"`
+	ShowID        uuid.UUID `json:"show_id,omitzero"`
+	Show          string    `json:"show,omitzero"`
+	SeasonNumber  *int      `json:"season_number,omitzero"`
+	EpisodeNumber *int      `json:"episode_number,omitzero"`
+	EpisodeEnd    *int      `json:"episode_end,omitzero"`
+	Poster        uuid.UUID `json:"poster,omitzero"`
+	Thumb         uuid.UUID `json:"thumb,omitzero"`
+	Backdrop      uuid.UUID `json:"backdrop,omitzero"`
+}
+
+type PlaybackVersion struct {
+	ID          uuid.UUID `json:"id"`
+	Edition     string    `json:"edition,omitzero"`
+	Label       string    `json:"label,omitzero"`
+	Container   string    `json:"container"`
+	BitrateKbps int       `json:"bitrate_kbps,omitzero"`
+	DurationMS  int64     `json:"duration_ms"`
+}
+
+// PlaybackVideo is the video stream played as it is in the file, and what it is encoded to;
+// Encode is absent where it is copied.
+type PlaybackVideo struct {
+	Stream      int                 `json:"stream"`
+	Codec       string              `json:"codec"`
+	Profile     string              `json:"profile,omitzero"`
+	Width       int                 `json:"width,omitzero"`
+	Height      int                 `json:"height,omitzero"`
+	Range       Range               `json:"range,omitzero"`
+	BitrateKbps int                 `json:"bitrate_kbps,omitzero"`
+	DolbyVision DolbyVisionHandling `json:"dolby_vision,omitzero"`
+	Encode      *PlaybackEncode     `json:"encode,omitzero"`
+}
+
+// PlaybackAudio is the audio stream played as it is in the file, and what it is encoded to;
+// Encode is absent where it is copied.
+type PlaybackAudio struct {
+	Stream      int             `json:"stream"`
+	Codec       string          `json:"codec"`
+	Language    string          `json:"language,omitzero"`
+	Channels    int             `json:"channels,omitzero"`
+	BitrateKbps int             `json:"bitrate_kbps,omitzero"`
+	Encode      *PlaybackEncode `json:"encode,omitzero"`
+}
+
+// PlaybackEncode is what a stream is encoded to: a picture's size and tone mapping, or a sound's
+// channels.
+type PlaybackEncode struct {
+	Codec       string `json:"codec"`
+	Width       int    `json:"width,omitzero"`
+	Height      int    `json:"height,omitzero"`
+	Channels    int    `json:"channels,omitzero"`
+	BitrateKbps int    `json:"bitrate_kbps,omitzero"`
+	ToneMapped  bool   `json:"tone_mapped,omitzero"`
+}
+
+// PlaybackSubtitle is the subtitle stream of the file shown, and whether it is drawn into the
+// video rather than by the player.
+type PlaybackSubtitle struct {
+	Stream   int    `json:"stream"`
+	Codec    string `json:"codec"`
+	Language string `json:"language,omitzero"`
+	Burned   bool   `json:"burned,omitzero"`
 }
 
 // VideoPlan is the video stream played, by its index in the file, what becomes of its Dolby
@@ -117,10 +219,36 @@ const (
 	AccelNVENC        Acceleration = "nvenc"
 )
 
+func Accelerations() []Acceleration {
+	return []Acceleration{AccelSoftware, AccelVideoToolbox, AccelVAAPI, AccelQSV, AccelNVENC}
+}
+
 func ParseAcceleration(s string) (Acceleration, bool) {
-	switch v := Acceleration(s); v {
-	case AccelSoftware, AccelVideoToolbox, AccelVAAPI, AccelQSV, AccelNVENC:
-		return v, true
+	v := Acceleration(s)
+	return v, slices.Contains(Accelerations(), v)
+}
+
+// TranscodeReason is why a copy cannot reach a client as it is, in Jellyfin's TranscodeReason terms.
+type TranscodeReason string
+
+const (
+	ContainerNotSupported       TranscodeReason = "container_not_supported"
+	VideoCodecNotSupported      TranscodeReason = "video_codec_not_supported"
+	VideoProfileNotSupported    TranscodeReason = "video_profile_not_supported"
+	VideoLevelNotSupported      TranscodeReason = "video_level_not_supported"
+	VideoResolutionNotSupported TranscodeReason = "video_resolution_not_supported"
+	VideoBitDepthNotSupported   TranscodeReason = "video_bit_depth_not_supported"
+	VideoRangeNotSupported      TranscodeReason = "video_range_not_supported"
+	AudioCodecNotSupported      TranscodeReason = "audio_codec_not_supported"
+	AudioChannelsNotSupported   TranscodeReason = "audio_channels_not_supported"
+	BitrateExceedsLimit         TranscodeReason = "bitrate_exceeds_limit"
+	SubtitleCodecNotSupported   TranscodeReason = "subtitle_codec_not_supported"
+)
+
+func TranscodeReasons() []TranscodeReason {
+	return []TranscodeReason{
+		ContainerNotSupported, VideoCodecNotSupported, VideoProfileNotSupported, VideoLevelNotSupported,
+		VideoResolutionNotSupported, VideoBitDepthNotSupported, VideoRangeNotSupported, AudioCodecNotSupported,
+		AudioChannelsNotSupported, BitrateExceedsLimit, SubtitleCodecNotSupported,
 	}
-	return "", false
 }

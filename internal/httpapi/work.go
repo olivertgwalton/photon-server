@@ -9,6 +9,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/task"
 )
@@ -118,19 +119,6 @@ func (a *API) retryJob(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-type nowPlayingJSON struct {
-	ID         uuid.UUID         `json:"id"`
-	ProfileID  uuid.UUID         `json:"profile_id"`
-	TitleID    uuid.UUID         `json:"title_id"`
-	VersionID  uuid.UUID         `json:"version_id"`
-	Method     domain.PlayMethod `json:"method"`
-	State      domain.PlayState  `json:"state"`
-	PositionMS int64             `json:"position_ms"`
-	StartedAt  time.Time         `json:"started_at"`
-	UpdatedAt  time.Time         `json:"updated_at"`
-	NodeID     uuid.UUID         `json:"node_id"`
-}
-
 // transcodesJSON is how many videos a node is transcoding, against its limit if it has one, and
 // how many of those are download conversions.
 type transcodesJSON struct {
@@ -140,8 +128,8 @@ type transcodesJSON struct {
 }
 
 type nowPlayingListJSON struct {
-	Items      []nowPlayingJSON `json:"items"`
-	Transcodes transcodesJSON   `json:"transcodes"`
+	Items      []playback.NowPlaying `json:"items"`
+	Transcodes transcodesJSON        `json:"transcodes"`
 }
 
 // adminPlaybacks answers who is playing what, how, on which node, and where they have got to, and
@@ -156,13 +144,29 @@ func (a *API) adminPlaybacks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, nowPlayingListJSON{playbacksJSON(all), transcodesJSON{active, conversions, limit}})
 }
 
-func playbacksJSON(all []domain.Playback) []nowPlayingJSON {
-	out := make([]nowPlayingJSON, len(all))
+func playbacksJSON(all []domain.Playback) []playback.NowPlaying {
+	out := make([]playback.NowPlaying, len(all))
 	for i, p := range all {
-		out[i] = nowPlayingJSON{
-			ID: p.ID, ProfileID: p.Profile, TitleID: p.Item, VersionID: p.Version, Method: p.Method, State: p.State,
-			PositionMS: p.Position.Milliseconds(), StartedAt: p.Started.UTC(), UpdatedAt: p.Updated.UTC(), NodeID: p.Node,
-		}
+		out[i] = playback.Showing(p)
 	}
 	return out
+}
+
+// stopPlayback ends anyone's playback, as Jellyfin's dashboard stops a session: its remux on the
+// node running it, the place and the play kept where its player last said it was.
+func (a *API) stopPlayback(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeProblem(w, a.logger, codeNotFound, "")
+		return
+	}
+	err = a.svc.Playbacks.End(r.Context(), id)
+	switch {
+	case errors.Is(err, playback.ErrNoPlayback):
+		writeProblem(w, a.logger, codeNotFound, "the playback has stopped, or lapsed")
+	case err != nil:
+		a.internal(w, r, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
 }

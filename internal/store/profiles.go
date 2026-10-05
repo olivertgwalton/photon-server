@@ -93,12 +93,13 @@ func (s *Store) CreateSession(ctx context.Context, n NewSession) (uuid.UUID, err
 func (s *Store) SessionByToken(ctx context.Context, tokenHash []byte, now time.Time) (domain.Session, time.Time, error) {
 	d, p := s.q.DeviceSession, s.q.Profile
 	var row struct {
-		ID, ProfileID model.UUID
-		Name          string
-		Role          domain.Role
-		LastSeenAt    time.Time
+		ID, ProfileID      model.UUID
+		Name               string
+		Role               domain.Role
+		DeviceName, Client string
+		LastSeenAt         time.Time
 	}
-	err := d.WithContext(ctx).Select(d.ID, d.ProfileID, p.Name, p.Role, d.LastSeenAt).
+	err := d.WithContext(ctx).Select(d.ID, d.ProfileID, p.Name, p.Role, d.DeviceName, d.Client, d.LastSeenAt).
 		Join(p, p.ID.EqCol(d.ProfileID)).
 		Where(d.TokenHash.Eq(tokenHash), d.ExpiresAt.Gt(now)).Scan(&row)
 	if err != nil {
@@ -110,6 +111,7 @@ func (s *Store) SessionByToken(ctx context.Context, tokenHash []byte, now time.T
 	return domain.Session{
 		ID:      uuid.UUID(row.ID),
 		Profile: domain.Profile{ID: uuid.UUID(row.ProfileID), Name: row.Name, Role: row.Role},
+		Device:  row.DeviceName, Client: row.Client,
 	}, row.LastSeenAt, nil
 }
 

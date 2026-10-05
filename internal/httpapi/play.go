@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -29,9 +31,10 @@ import (
 const streamFor = 24 * time.Hour
 
 type playbacks interface {
-	Start(ctx context.Context, profile, item, version uuid.UUID, method domain.PlayMethod) (domain.Playback, error)
+	Start(ctx context.Context, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error)
 	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState) (domain.Reach, error)
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
+	End(ctx context.Context, id uuid.UUID) error
 	Abandon(ctx context.Context, id uuid.UUID) error
 }
 
@@ -51,10 +54,12 @@ type hlsFiles interface {
 	Init(ctx context.Context, playback uuid.UUID, part int) (*os.File, error)
 	Segment(ctx context.Context, playback uuid.UUID, n int) (*os.File, error)
 	Transcodes() (active, conversions, limit int)
+	Encoder(video domain.VideoPlan) domain.Acceleration
 }
 
 type playing interface {
 	Playable(ctx context.Context, profile, item, version uuid.UUID) (store.PlayCopy, error)
+	Card(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
 }
@@ -123,22 +128,22 @@ type playJSON struct {
 // playbackJSON is a playback opened: its parts and subtitles played as they are, or its playlist,
 // at addresses relative to the server.
 type playbackJSON struct {
-	PlaybackID uuid.UUID         `json:"playback_id"`
-	Method     domain.PlayMethod `json:"method"`
-	VersionID  uuid.UUID         `json:"version_id"`
-	Video      *videoJSON        `json:"video,omitzero"`
-	Audio      *audioJSON        `json:"audio,omitzero"`
-	Reasons    []playback.Reason `json:"reasons,omitzero"`
-	Parts      []partJSON        `json:"parts,omitzero"`
-	Subtitles  []subtitleJSON    `json:"subtitles,omitzero"`
-	Playlist   string            `json:"playlist,omitzero"`
-	ExpiresAt  time.Time         `json:"expires_at"`
+	PlaybackID uuid.UUID                `json:"playback_id"`
+	Method     domain.PlayMethod        `json:"method"`
+	VersionID  uuid.UUID                `json:"version_id"`
+	Video      *videoJSON               `json:"video,omitzero"`
+	Audio      *audioJSON               `json:"audio,omitzero"`
+	Reasons    []domain.TranscodeReason `json:"reasons,omitzero"`
+	Parts      []partJSON               `json:"parts,omitzero"`
+	Subtitles  []subtitleJSON           `json:"subtitles,omitzero"`
+	Playlist   string                   `json:"playlist,omitzero"`
+	ExpiresAt  time.Time                `json:"expires_at"`
 }
 
 // refusalJSON is a copy nothing the client plays can be made of, and why.
 type refusalJSON struct {
 	problem
-	Reasons []playback.Reason `json:"reasons"`
+	Reasons []domain.TranscodeReason `json:"reasons"`
 }
 
 // play opens a playback of a film or episode as the client's profile decides: its copy's files in
@@ -187,7 +192,11 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	session, err := a.svc.Playbacks.Start(r.Context(), sessionOf(r).Profile.ID, id, c.Version, d.Method)
+	title, err := a.svc.Playing.Card(r.Context(), sessionOf(r).Profile.ID, id)
+	if a.answered(w, r, err) {
+		return
+	}
+	session, err := a.svc.Playbacks.Start(r.Context(), d.Method, a.cardOf(r, title, c, d, req.SubtitleStream))
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -238,17 +247,81 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 		for _, f := range c.Subtitles {
-			sub := subtitleJSON{
-				ID: f.ID, Codec: f.Codec, Title: f.Title, Default: f.Default, Forced: f.Forced,
+			answer.Subtitles = append(answer.Subtitles, subtitleJSON{
+				ID: f.ID, Codec: f.Codec, Language: tagOf(f.Language), Title: f.Title, Default: f.Default, Forced: f.Forced,
 				HearingImpaired: f.HearingImpaired, URL: a.svc.Signer.Sign("/api/v1/subtitles/"+f.ID.String()+"/file", until),
-			}
-			if f.Language != language.Und {
-				sub.Language = f.Language.String()
-			}
-			answer.Subtitles = append(answer.Subtitles, sub)
+			})
 		}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, answer)
+}
+
+// cardOf is what the dashboard shows of a playback the request starts of a copy, as decided.
+func (a *API) cardOf(r *http.Request, t store.Card, c store.PlayCopy, d playback.Decision, subtitle *int) domain.PlaybackCard {
+	s := sessionOf(r)
+	card := domain.PlaybackCard{
+		Profile: domain.PlaybackProfile{ID: s.Profile.ID, Name: s.Profile.Name},
+		Device: domain.PlaybackDevice{
+			ID: s.ID, Name: s.Device, Client: s.Client, Address: clientAddr(r, a.svc.TrustedProxies).String(),
+		},
+		Title: domain.PlaybackTitle{
+			ID: t.ID, Kind: t.Kind, Title: t.Title, Year: t.Year, SeasonNumber: t.SeasonNumber,
+			EpisodeNumber: t.EpisodeNumber, EpisodeEnd: t.EpisodeEnd, Poster: t.Poster, Thumb: t.Thumb, Backdrop: t.Backdrop,
+		},
+		Version: domain.PlaybackVersion{
+			ID: c.Version, Edition: c.Edition, Label: c.Label, Container: c.Container, BitrateKbps: c.BitrateKbps,
+			DurationMS: c.DurationMS,
+		},
+		Reasons: d.Reasons,
+	}
+	if t.Show != nil {
+		card.Title.ShowID, card.Title.Show = t.Show.ID, t.Show.Title
+	}
+	stream := func(index int) media.Stream {
+		if i := slices.IndexFunc(c.Streams, func(s media.Stream) bool { return s.Index == index }); i >= 0 {
+			return c.Streams[i]
+		}
+		return media.Stream{Index: index}
+	}
+	if v := d.Video; v != nil {
+		src := stream(v.Stream)
+		card.Video = &domain.PlaybackVideo{
+			Stream: v.Stream, Codec: src.Codec, Profile: src.Profile, Width: src.Width, Height: src.Height,
+			Range: src.Range, BitrateKbps: src.BitrateKbps, DolbyVision: v.DolbyVision,
+		}
+		if e := v.Encode; e != nil {
+			card.Video.Encode = &domain.PlaybackEncode{
+				Codec: e.Codec, Width: e.Width, Height: e.Height, BitrateKbps: e.BitrateKbps, ToneMapped: e.ToneMap,
+			}
+			card.Acceleration = a.svc.HLS.Encoder(*v)
+		}
+	}
+	if au := d.Audio; au != nil {
+		src := stream(au.Stream)
+		card.Audio = &domain.PlaybackAudio{
+			Stream: au.Stream, Codec: src.Codec, Language: tagOf(src.Language), Channels: src.Channels,
+			BitrateKbps: src.BitrateKbps,
+		}
+		if e := au.Encode; e != nil {
+			card.Audio.Encode = &domain.PlaybackEncode{Codec: e.Codec, Channels: e.Channels, BitrateKbps: e.BitrateKbps}
+		}
+	}
+	if subtitle != nil {
+		src := stream(*subtitle)
+		card.Subtitle = &domain.PlaybackSubtitle{
+			Stream: *subtitle, Codec: src.Codec, Language: tagOf(src.Language),
+			Burned: d.Video != nil && d.Video.Encode != nil && d.Video.Encode.Burn != nil,
+		}
+	}
+	return card
+}
+
+// tagOf is a language's BCP 47 tag, or nothing for none.
+func tagOf(l language.Tag) string {
+	if l == language.Und {
+		return ""
+	}
+	return l.String()
 }
 
 func hlsSubject(playback uuid.UUID) string { return "/api/v1/hls/" + playback.String() }
@@ -332,11 +405,12 @@ func (a *API) answeredRemux(w http.ResponseWriter, r *http.Request, err error) b
 	return true
 }
 
-// routeToOwner hands a request for a playback's HLS that another node of the cluster runs to that
-// node, which checks its signature again; every node signs with the server's one key.
-func (a *API) routeToOwner(next http.Handler) http.Handler {
+// routeToOwner hands a request about the playback the path names by param that another node of
+// the cluster runs to that node, which checks the request again: its HLS, whose signature every
+// node makes with the server's one key, or an admin's stop of it.
+func (a *API) routeToOwner(param string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		playback, err := uuid.Parse(r.PathValue("playback"))
+		playback, err := uuid.Parse(r.PathValue(param))
 		if err != nil || a.svc.Owners == nil || a.svc.HLS.Has(playback) {
 			next.ServeHTTP(w, r)
 			return

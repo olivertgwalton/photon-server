@@ -48,7 +48,10 @@ func (f *fakeWork) RunningJobs(context.Context) ([]store.Job, error) {
 }
 
 func (f *fakeWork) Playbacks(context.Context) ([]domain.Playback, error) {
-	return []domain.Playback{{ID: playbackID, Profile: oliver.ID, Item: films, Method: domain.PlayTranscode, Position: time.Minute}}, nil
+	return []domain.Playback{{
+		ID: playbackID, Profile: oliver.ID, Item: films, Method: domain.PlayTranscode, Position: time.Minute,
+		Card: domain.PlaybackCard{Title: domain.PlaybackTitle{ID: films}},
+	}}, nil
 }
 
 func TestAnAdminSeesTheServersWork(t *testing.T) {
@@ -86,11 +89,13 @@ func TestAnAdminSeesTheServersWork(t *testing.T) {
 	}
 	var playing struct {
 		Items []struct {
-			TitleID uuid.UUID `json:"title_id"`
+			Title struct {
+				ID uuid.UUID `json:"id"`
+			} `json:"title"`
 		} `json:"items"`
 	}
 	if err := json.NewDecoder(do(goodToken, http.MethodGet, "/api/v1/admin/playbacks").Body).Decode(&playing); err != nil ||
-		len(playing.Items) != 1 || playing.Items[0].TitleID != films {
+		len(playing.Items) != 1 || playing.Items[0].Title.ID != films {
 		t.Errorf("playbacks = %+v, %v; want the film", playing, err)
 	}
 }

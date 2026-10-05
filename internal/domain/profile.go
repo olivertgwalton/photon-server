@@ -36,6 +36,9 @@ type Profile struct {
 type Session struct {
 	ID      uuid.UUID
 	Profile Profile
+	// Device and Client are what the device called itself and its app when it signed in.
+	Device string
+	Client string
 }
 
 // ProfileLock is what switching to a profile asks for.

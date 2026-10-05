@@ -10,6 +10,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/playback"
 )
 
 // heartbeatEvery is how often a quiet event stream sends a comment, so proxies that close idle
@@ -137,10 +138,10 @@ func eventStream() asStream {
 }
 
 type snapshotJSON struct {
-	Tasks     []runningTaskJSON `json:"tasks"`
-	Jobs      []runningJobJSON  `json:"jobs"`
-	Scans     []scanJSON        `json:"scans"`
-	Playbacks []nowPlayingJSON  `json:"playbacks"`
+	Tasks     []runningTaskJSON     `json:"tasks"`
+	Jobs      []runningJobJSON      `json:"jobs"`
+	Scans     []scanJSON            `json:"scans"`
+	Playbacks []playback.NowPlaying `json:"playbacks"`
 }
 
 type runningTaskJSON struct {

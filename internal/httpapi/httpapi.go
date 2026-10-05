@@ -188,7 +188,7 @@ func New(logger *slog.Logger, info Info, svc Services) *API {
 		case signedAddress:
 			h = a.requireSignature(h)
 		case signedPath:
-			h = a.requireSignedPath(a.routeToOwner(h))
+			h = a.requireSignedPath(a.routeToOwner("playback", h))
 		case admin:
 			h = a.requireAdmin(h)
 		}
@@ -594,6 +594,11 @@ func (a *API) routes() []route {
 			pattern: "GET /api/v1/admin/playbacks", access: admin,
 			summary: "List who is playing what, and how many videos this node is transcoding",
 			status:  http.StatusOK, reply: nowPlayingListJSON{}, handle: a.adminPlaybacks,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/playbacks/{id}", access: admin,
+			summary: "Stop anyone's playback, keeping where it had got to", status: http.StatusNoContent,
+			handle: a.routeToOwner("id", http.HandlerFunc(a.stopPlayback)).ServeHTTP,
 		},
 		{
 			pattern: "GET /api/v1/admin/activity", access: admin, summary: "Page the activity log, the newest first",
