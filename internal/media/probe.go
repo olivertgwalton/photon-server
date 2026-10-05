@@ -11,25 +11,8 @@ import (
 	"time"
 
 	"golang.org/x/text/language"
-)
 
-type StreamKind string
-
-const (
-	StreamVideo    StreamKind = "video"
-	StreamAudio    StreamKind = "audio"
-	StreamSubtitle StreamKind = "subtitle"
-)
-
-// Range is how a picture's brightness is coded.
-type Range string
-
-const (
-	RangeSDR       Range = "sdr"
-	RangeHLG       Range = "hlg"
-	RangeHDR10     Range = "hdr10"
-	RangeHDR10Plus Range = "hdr10plus"
-	RangeDV        Range = "dv"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 type Facts struct {
@@ -42,7 +25,7 @@ type Facts struct {
 
 type Stream struct {
 	Index    int
-	Kind     StreamKind
+	Kind     domain.StreamKind
 	Codec    string
 	Profile  string
 	Language language.Tag
@@ -55,7 +38,7 @@ type Stream struct {
 
 	Width, Height int
 	FrameRate     float64
-	Range         Range
+	Range         domain.Range
 	DolbyVision   *DolbyVision
 
 	Channels      int
@@ -149,13 +132,13 @@ func parseProbe(out []byte) (Facts, error) {
 		BitrateKbps: kbps(p.Format.BitRate),
 	}
 	for _, s := range p.Streams {
-		kind := StreamKind(s.CodecType)
+		kind := domain.StreamKind(s.CodecType)
 		switch kind {
-		case StreamVideo, StreamAudio, StreamSubtitle:
+		case domain.StreamVideo, domain.StreamAudio, domain.StreamSubtitle:
 		default:
 			continue
 		}
-		if kind == StreamVideo && s.Disposition["attached_pic"] == 1 {
+		if kind == domain.StreamVideo && s.Disposition["attached_pic"] == 1 {
 			continue
 		}
 		lang, _ := language.Parse(s.Tags["language"])
@@ -175,7 +158,7 @@ func parseProbe(out []byte) (Facts, error) {
 			SampleRate:      atoi(s.SampleRate),
 			BitrateKbps:     kbps(s.BitRate),
 		}
-		if kind == StreamVideo {
+		if kind == domain.StreamVideo {
 			st.Width, st.Height = s.Width, s.Height
 			st.FrameRate = rate(s.AvgFrameRate)
 			transfer, frameSide := s.ColorTransfer, []probeSideData(nil)
@@ -210,22 +193,22 @@ func dolbyVision(side []probeSideData) *DolbyVision {
 	return nil
 }
 
-func videoRange(transfer string, dv *DolbyVision, frameSide []probeSideData) Range {
+func videoRange(transfer string, dv *DolbyVision, frameSide []probeSideData) domain.Range {
 	if dv != nil {
-		return RangeDV
+		return domain.RangeDV
 	}
 	switch transfer {
 	case "smpte2084":
 		for _, d := range frameSide {
 			if strings.Contains(d.Type, "SMPTE2094-40") {
-				return RangeHDR10Plus
+				return domain.RangeHDR10Plus
 			}
 		}
-		return RangeHDR10
+		return domain.RangeHDR10
 	case "arib-std-b67":
-		return RangeHLG
+		return domain.RangeHLG
 	}
-	return RangeSDR
+	return domain.RangeSDR
 }
 
 func atoi(s string) int {

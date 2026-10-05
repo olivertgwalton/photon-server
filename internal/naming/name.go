@@ -29,6 +29,11 @@ var (
 	trailEpNum = regexp.MustCompile(`\s+-\s+\d+\s*$`)
 )
 
+// StripTags removes provider-id and edition tags from a name.
+func StripTags(s string) string {
+	return editionTag.ReplaceAllString(idTag.ReplaceAllString(s, ""), "")
+}
+
 // CleanName reads a stem: a file name without its extension, or a folder name.
 func CleanName(stem string) Name {
 	var n Name

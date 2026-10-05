@@ -24,7 +24,13 @@ var quoted = regexp.MustCompile(`'([^']*)'`)
 func TestEnumConstraintsMatchGo(t *testing.T) {
 	s := migrated(t)
 	for constraint, want := range map[string][]string{
-		"library_kind": names(domain.LibraryKinds()),
+		"library_kind":       names(domain.LibraryKinds()),
+		"item_kind":          names(domain.ItemKinds()),
+		"id_provider":        names(domain.Providers()),
+		"id_source":          names(domain.IDSources()),
+		"stream_kind":        names(domain.StreamKinds()),
+		"video_range":        names(domain.Ranges()),
+		"stream_video_range": names(domain.Ranges()),
 	} {
 		var def string
 		err := s.pool.QueryRow(t.Context(),
