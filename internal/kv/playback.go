@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"iter"
 	"strconv"
 	"strings"
 	"time"
@@ -80,26 +81,38 @@ func (k *KV) NodeAddress(ctx context.Context, id uuid.UUID) (string, bool, error
 // as many as there are people watching.
 func (k *KV) Playbacks(ctx context.Context) ([]domain.Playback, error) {
 	var out []domain.Playback
-	var cursor uint64
-	for {
-		e, err := k.client.Do(ctx, k.client.B().Scan().Cursor(cursor).Match(playbackPrefix+"*").Count(100).Build()).AsScanEntry()
+	for id, err := range k.ids(ctx, playbackPrefix) {
 		if err != nil {
 			return nil, err
 		}
-		for _, key := range e.Elements {
-			id, err := uuid.Parse(strings.TrimPrefix(key, playbackPrefix))
-			if err != nil {
-				continue
-			}
-			// One may lapse between the scan and the read.
-			if p, ok, err := k.Playback(ctx, id); err != nil {
-				return nil, err
-			} else if ok {
-				out = append(out, p)
-			}
+		// One may lapse between the scan and the read.
+		if p, ok, err := k.Playback(ctx, id); err != nil {
+			return nil, err
+		} else if ok {
+			out = append(out, p)
 		}
-		if cursor = e.Cursor; cursor == 0 {
-			return out, nil
+	}
+	return out, nil
+}
+
+// ids yields the id each key under prefix ends in.
+func (k *KV) ids(ctx context.Context, prefix string) iter.Seq2[uuid.UUID, error] {
+	return func(yield func(uuid.UUID, error) bool) {
+		var cursor uint64
+		for {
+			e, err := k.client.Do(ctx, k.client.B().Scan().Cursor(cursor).Match(prefix+"*").Count(100).Build()).AsScanEntry()
+			if err != nil {
+				yield(uuid.UUID{}, err)
+				return
+			}
+			for _, key := range e.Elements {
+				if id, err := uuid.Parse(strings.TrimPrefix(key, prefix)); err == nil && !yield(id, nil) {
+					return
+				}
+			}
+			if cursor = e.Cursor; cursor == 0 {
+				return
+			}
 		}
 	}
 }

@@ -37,12 +37,14 @@ type Scheduler struct {
 	store stateStore
 	log   *slog.Logger
 	node  uuid.UUID
+	raise func(context.Context, domain.Event)
 	tasks []Task
 }
 
-// node identifies this process to the other nodes of the cluster.
-func NewScheduler(st stateStore, log *slog.Logger, node uuid.UUID, tasks ...Task) *Scheduler {
-	return &Scheduler{store: st, log: log, node: node, tasks: tasks}
+// node identifies this process to the other nodes of the cluster; raise says as each task starts
+// and ends.
+func NewScheduler(st stateStore, log *slog.Logger, node uuid.UUID, raise func(context.Context, domain.Event), tasks ...Task) *Scheduler {
+	return &Scheduler{store: st, log: log, node: node, raise: raise, tasks: tasks}
 }
 
 func (s *Scheduler) Run(ctx context.Context) {
@@ -177,17 +179,24 @@ func (s *Scheduler) Request(ctx context.Context, key domain.TaskKey) error {
 func (s *Scheduler) run(ctx context.Context, task Task) {
 	log := s.log.With(slog.String("task", string(task.Key)))
 	log.InfoContext(ctx, "task started")
+	s.raise(ctx, domain.Event{Kind: domain.EventTaskStarted, Details: map[string]any{"task": task.Key}})
 	err := task.Run(ctx)
-	result := domain.TaskSucceeded
+	result, kind := domain.TaskSucceeded, domain.EventTaskFinished
 	switch {
 	case errors.Is(err, context.Canceled):
 		result = domain.TaskCancelled
 	case err != nil:
-		result = domain.TaskFailed
+		result, kind = domain.TaskFailed, domain.EventTaskFailed
 	}
 	log.InfoContext(ctx, "task finished", slog.String("result", string(result)), slog.Any("err", err))
 	// The run's own context may be cancelled; its outcome is still recorded.
-	if err := s.store.TaskFinished(context.WithoutCancel(ctx), task.Key, time.Now(), result, err); err != nil {
+	ctx = context.WithoutCancel(ctx)
+	if err := s.store.TaskFinished(ctx, task.Key, time.Now(), result, err); err != nil {
 		log.WarnContext(ctx, "task outcome not recorded", slog.Any("err", err))
 	}
+	finished := domain.Event{Kind: kind, Details: map[string]any{"task": task.Key, "result": result}}
+	if err != nil {
+		finished.Details["error"] = err.Error()
+	}
+	s.raise(ctx, finished)
 }

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"uuid"
@@ -37,11 +38,11 @@ func (f *fakeProfiles) SetProfile(_ context.Context, id uuid.UUID, c store.Profi
 	return oliver, nil
 }
 
-func (f *fakeProfiles) RemoveProfile(_ context.Context, id uuid.UUID) error {
+func (f *fakeProfiles) RemoveProfile(_ context.Context, id uuid.UUID) (string, error) {
 	if id == oliver.ID {
-		return store.ErrLastAdmin
+		return "", store.ErrLastAdmin
 	}
-	return store.ErrNotFound
+	return "", store.ErrNotFound
 }
 
 func (f *fakeProfiles) Access(_ context.Context, id uuid.UUID) (store.ProfileAccess, error) {
@@ -61,7 +62,8 @@ func (f *fakeProfiles) SetAccess(_ context.Context, id uuid.UUID, a store.Profil
 
 func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 	profiles := &fakeProfiles{hashes: map[string]string{}}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, ProfileAdmin: profiles})
+	told := &fakeEvents{}
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, ProfileAdmin: profiles, Events: told})
 	for _, tc := range []struct {
 		token, method, target, body string
 		want                        int
@@ -95,5 +97,8 @@ func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 	}
 	if profiles.hashes["Kid"] != "" || !strings.HasPrefix(profiles.hashes["Partner"], "$argon2id$") {
 		t.Errorf("hashes kept: %v, want none for Kid and an argon2id hash for Partner", profiles.hashes)
+	}
+	if got, want := told.kinds(), []domain.EventKind{domain.EventProfileAdded, domain.EventProfileAdded}; !slices.Equal(got, want) {
+		t.Errorf("told %v, want the two added", got)
 	}
 }

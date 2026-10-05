@@ -86,7 +86,7 @@ func (f *fixture) put(rel, seed string) {
 
 func (f *fixture) scan() Report {
 	f.t.Helper()
-	r, err := f.scanner.Scan(f.t.Context(), f.lib)
+	r, err := f.scanner.Scan(f.t.Context(), f.lib, func(domain.ScanProgress) {})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestOneFileInTwoLibrariesIsACopyInEach(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.scanner.Scan(t.Context(), lib); err != nil {
+	if _, err := f.scanner.Scan(t.Context(), lib, func(domain.ScanProgress) {}); err != nil {
 		t.Fatal(err)
 	}
 	if n := f.count(`SELECT count(DISTINCT i.library_id) FROM versions v JOIN items i ON i.id = v.item_id`); n != 2 {
@@ -611,4 +611,24 @@ func TestPicturesOfAShowItsSeasonsAndEpisodes(t *testing.T) {
 	f.scan()
 	check("season", "Season 1 poster The Wire/Season 1/folder.jpg")
 	check("show", "The Wire poster The Wire/poster.jpg")
+}
+
+func TestAScanTellsHowFarItHasGot(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	f.put("Heat (1995)/Heat (1995).mkv", "heat")
+	f.put("Alien (1979)/Alien (1979).mkv", "alien")
+	f.put("Ignored/.ignore", "x")
+	var told []domain.ScanProgress
+	if _, err := f.scanner.Scan(t.Context(), f.lib, func(p domain.ScanProgress) { told = append(told, p) }); err != nil {
+		t.Fatal(err)
+	}
+	want := []domain.ScanProgress{
+		{Library: f.lib.ID, Phase: domain.ScanReading, Done: 1, Known: 4},
+		{Library: f.lib.ID, Phase: domain.ScanReading, Done: 2, Known: 4},
+		{Library: f.lib.ID, Phase: domain.ScanReading, Done: 3, Known: 4},
+		{Library: f.lib.ID, Phase: domain.ScanRemoving, Done: 3, Known: 3},
+	}
+	if !slices.Equal(told, want) {
+		t.Errorf("told %+v, want %+v", told, want)
+	}
 }

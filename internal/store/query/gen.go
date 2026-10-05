@@ -18,6 +18,7 @@ import (
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
 		db:                 db,
+		Activity:           newActivity(db, opts...),
 		Artwork:            newArtwork(db, opts...),
 		Chapter:            newChapter(db, opts...),
 		Collection:         newCollection(db, opts...),
@@ -60,6 +61,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 type Query struct {
 	db *gorm.DB
 
+	Activity           activity
 	Artwork            artwork
 	Chapter            chapter
 	Collection         collection
@@ -105,6 +107,7 @@ func (q *Query) UnderlyingDB() *gorm.DB { return q.db }
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
 		db:                 db,
+		Activity:           q.Activity.clone(db),
 		Artwork:            q.Artwork.clone(db),
 		Chapter:            q.Chapter.clone(db),
 		Collection:         q.Collection.clone(db),
@@ -155,6 +158,7 @@ func (q *Query) WriteDB() *Query {
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
 		db:                 db,
+		Activity:           q.Activity.replaceDB(db),
 		Artwork:            q.Artwork.replaceDB(db),
 		Chapter:            q.Chapter.replaceDB(db),
 		Collection:         q.Collection.replaceDB(db),
@@ -195,6 +199,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 }
 
 type queryCtx struct {
+	Activity           IActivityDo
 	Artwork            IArtworkDo
 	Chapter            IChapterDo
 	Collection         ICollectionDo
@@ -235,6 +240,7 @@ type queryCtx struct {
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
+		Activity:           q.Activity.WithContext(ctx),
 		Artwork:            q.Artwork.WithContext(ctx),
 		Chapter:            q.Chapter.WithContext(ctx),
 		Collection:         q.Collection.WithContext(ctx),

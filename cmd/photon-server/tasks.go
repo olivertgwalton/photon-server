@@ -12,6 +12,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/backup"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/events"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/scan"
@@ -43,7 +44,7 @@ func scanTask(st *store.Store) task.Task {
 
 // scanLibrary is the job that scans one library; jobs are one per library, so two scans of a
 // library never run at once.
-func scanLibrary(st *store.Store, scanner *scan.Scanner, logger *slog.Logger) jobs.Handler {
+func scanLibrary(st *store.Store, scanner *scan.Scanner, hub *events.Hub, logger *slog.Logger) jobs.Handler {
 	return func(ctx context.Context, id uuid.UUID) error {
 		lib, err := st.Library(ctx, id)
 		if errors.Is(err, store.ErrNotFound) {
@@ -52,13 +53,25 @@ func scanLibrary(st *store.Store, scanner *scan.Scanner, logger *slog.Logger) jo
 		if err != nil {
 			return err
 		}
-		r, err := scanner.Scan(ctx, lib)
+		started := time.Now()
+		r, err := scanner.Scan(ctx, lib, hub.Scanning(ctx))
+		hub.Scanned(ctx, lib.ID)
 		if err != nil {
 			return fmt.Errorf("%s: %w", lib.Name, err)
 		}
 		logger.InfoContext(ctx, "library scanned", slog.String("library", lib.Name),
 			slog.Int("folders", r.Folders), slog.Int("unchanged", r.Unchanged),
 			slog.Int("probed", r.Probed), slog.Int("left_out", r.Skipped))
+		hub.Raise(ctx, domain.Event{Kind: domain.EventLibraryScanned, Library: lib.ID, Details: map[string]any{
+			"folders": r.Folders, "unchanged": r.Unchanged, "probed": r.Probed, "left_out": r.Skipped,
+		}})
+		added, err := st.TitlesAddedSince(ctx, lib.ID, started)
+		if err != nil {
+			logger.WarnContext(ctx, "titles added not counted", slog.Any("err", err))
+		}
+		if added > 0 {
+			hub.Raise(ctx, domain.Event{Kind: domain.EventTitlesAdded, Library: lib.ID, Details: map[string]any{"titles": added}})
+		}
 		return nil
 	}
 }
@@ -81,7 +94,7 @@ func sweepTask(st *store.Store, logger *slog.Logger) task.Task {
 const backupEvery = 3 * 24 * time.Hour
 
 // backupTask dumps the database, keeping the newest few.
-func backupTask(d backup.Dumper, logger *slog.Logger) task.Task {
+func backupTask(d backup.Dumper, hub *events.Hub, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:      domain.TaskBackupDatabase,
 		Triggers: []task.Trigger{{Kind: task.TriggerEvery, Every: backupEvery}},
@@ -89,6 +102,27 @@ func backupTask(d backup.Dumper, logger *slog.Logger) task.Task {
 			name, err := d.Dump(ctx, time.Now())
 			if err == nil {
 				logger.InfoContext(ctx, "database backed up", slog.String("file", name))
+				hub.Raise(ctx, domain.Event{Kind: domain.EventBackupMade, Details: map[string]any{"file": name}})
+			}
+			return err
+		},
+	}
+}
+
+// activityKept is how long the activity log keeps an entry: Jellyfin's default.
+const activityKept = 30 * 24 * time.Hour
+
+// pruneActivityEvery is how often entries older than that are forgotten.
+const pruneActivityEvery = 24 * time.Hour
+
+func pruneActivityTask(st *store.Store, logger *slog.Logger) task.Task {
+	return task.Task{
+		Key:      domain.TaskPruneActivity,
+		Triggers: []task.Trigger{{Kind: task.TriggerEvery, Every: pruneActivityEvery}},
+		Run: func(ctx context.Context) error {
+			n, err := st.PruneActivity(ctx, time.Now().Add(-activityKept))
+			if n > 0 {
+				logger.InfoContext(ctx, "old activity forgotten", slog.Int64("entries", n))
 			}
 			return err
 		},

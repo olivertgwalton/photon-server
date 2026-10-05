@@ -25,6 +25,9 @@ type param struct {
 // asFile is a reply that is a file, by the types it may be.
 type asFile []string
 
+// asStream is a reply of Server-Sent Events, by each event's name and the JSON its data carries.
+type asStream map[string]any
+
 var (
 	limitParam = param{"limit", 0, "How many to answer, from 1 to " + strconv.Itoa(maxWallLimit) + "."}
 	pageParams = []param{{"offset", 0, "Where the page starts, from 0."}, limitParam}
@@ -137,6 +140,14 @@ func operation(s *schemas, r route, path string) (map[string]any, error) {
 			content[t] = map[string]any{}
 		}
 		success["content"] = content
+	case asStream:
+		events := map[string]any{}
+		for name, data := range reply {
+			events[name] = s.of(reflect.TypeOf(data))
+		}
+		success["content"] = map[string]any{"text/event-stream": map[string]any{
+			"schema": map[string]any{"type": "string"}, "x-events": events,
+		}}
 	default:
 		success["content"] = map[string]any{"application/json": map[string]any{"schema": s.of(reflect.TypeOf(reply))}}
 	}

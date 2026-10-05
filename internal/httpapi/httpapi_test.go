@@ -23,6 +23,7 @@ func newAPI(readiness error) *API {
 		Catalogue: fakeCatalogue{},
 		People:    &fakePeople{},
 		Watching:  fakeWatching{},
+		Events:    &fakeEvents{},
 	})
 }
 

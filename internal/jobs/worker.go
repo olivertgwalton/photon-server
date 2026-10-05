@@ -26,7 +26,7 @@ type Handler func(ctx context.Context, subject uuid.UUID) error
 type queue interface {
 	ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]store.Job, error)
 	CompleteJob(ctx context.Context, id int64) error
-	FailJob(ctx context.Context, job store.Job, err error) error
+	FailJob(ctx context.Context, job store.Job, err error) (bool, error)
 	ExtendLease(ctx context.Context, id int64, lease time.Duration) error
 }
 
@@ -37,10 +37,12 @@ type Worker struct {
 	node     uuid.UUID
 	slots    int
 	handlers map[domain.JobKind]Handler
+	raise    func(context.Context, domain.Event)
 }
 
-func NewWorker(q queue, log *slog.Logger, node uuid.UUID, slots int, handlers map[domain.JobKind]Handler) *Worker {
-	return &Worker{queue: q, log: log, node: node, slots: slots, handlers: handlers}
+// NewWorker runs jobs with handlers, and says as each starts and ends through raise.
+func NewWorker(q queue, log *slog.Logger, node uuid.UUID, slots int, handlers map[domain.JobKind]Handler, raise func(context.Context, domain.Event)) *Worker {
+	return &Worker{queue: q, log: log, node: node, slots: slots, handlers: handlers, raise: raise}
 }
 
 func (w *Worker) Run(ctx context.Context) {
@@ -78,17 +80,27 @@ func (w *Worker) run(ctx context.Context, job store.Job) {
 	log := w.log.With(slog.String("job", string(job.Kind)), slog.String("subject", job.Subject.String()))
 	done := make(chan struct{})
 	go w.renew(ctx, log, job.ID, done)
-	err := w.handlers[job.Kind](ctx, job.Subject)
+	w.raise(ctx, event(domain.EventJobStarted, job, nil))
+	runErr := w.handlers[job.Kind](ctx, job.Subject)
 	close(done)
 	// A job cut short by shutdown is left to the lease sweep rather than counted as a failure.
 	if ctx.Err() != nil {
 		return
 	}
-	if err != nil {
-		log.WarnContext(ctx, "job failed", slog.Int("attempt", job.Attempts), slog.Any("err", err))
-		err = w.queue.FailJob(ctx, job, err)
-	} else {
+	var err error
+	switch {
+	case runErr != nil:
+		log.WarnContext(ctx, "job failed", slog.Int("attempt", job.Attempts), slog.Any("err", runErr))
+		var dead bool
+		dead, err = w.queue.FailJob(ctx, job, runErr)
+		kind := domain.EventJobFailed
+		if dead {
+			kind = domain.EventJobDead
+		}
+		w.raise(ctx, event(kind, job, runErr))
+	default:
 		err = w.queue.CompleteJob(ctx, job.ID)
+		w.raise(ctx, event(domain.EventJobFinished, job, nil))
 	}
 	if err != nil {
 		log.WarnContext(ctx, "job outcome not recorded", slog.Any("err", err))
@@ -111,4 +123,15 @@ func (w *Worker) renew(ctx context.Context, log *slog.Logger, id int64, done <-c
 			}
 		}
 	}
+}
+
+func event(kind domain.EventKind, job store.Job, runErr error) domain.Event {
+	e := domain.Event{Kind: kind, Details: map[string]any{
+		"job_id": job.ID, "job_kind": job.Kind, "subject": job.Subject, "attempt": job.Attempts,
+	}}
+	e.Item, e.Library = job.About()
+	if runErr != nil {
+		e.Details["error"] = runErr.Error()
+	}
+	return e
 }

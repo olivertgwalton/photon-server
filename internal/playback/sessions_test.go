@@ -3,6 +3,7 @@ package playback
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -43,7 +44,9 @@ func (p positions) RecordPlay(_ context.Context, pb domain.Playback, _ time.Time
 func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	live, saved := memory{}, positions{}
 	var ended []uuid.UUID
-	s := NewSessions(live, saved, func(id uuid.UUID) { ended = append(ended, id) }, uuid.NewV7())
+	var told []domain.EventKind
+	raise := func(_ context.Context, e domain.Event) { told = append(told, e.Kind) }
+	s := NewSessions(live, saved, func(id uuid.UUID) { ended = append(ended, id) }, raise, uuid.NewV7())
 	ctx := t.Context()
 	oliver, guest, film := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
 
@@ -71,5 +74,9 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	}
 	if _, err := s.Progress(ctx, oliver, p.ID, time.Hour, domain.StatePlaying); !errors.Is(err, ErrNoPlayback) {
 		t.Errorf("reporting a stopped playback: %v, want ErrNoPlayback", err)
+	}
+	want := []domain.EventKind{domain.EventPlaybackStarted, domain.EventPlaybackPaused, domain.EventPlaybackStopped}
+	if !slices.Equal(told, want) {
+		t.Errorf("told %v, want %v", told, want)
 	}
 }

@@ -21,10 +21,12 @@ const (
 	// TaskSweepDownloads forgets downloads kept past their retention, and conversions no download
 	// needs.
 	TaskSweepDownloads TaskKey = "sweep_downloads"
+	// TaskPruneActivity forgets activity older than the log keeps.
+	TaskPruneActivity TaskKey = "prune_activity"
 )
 
 func TaskKeys() []TaskKey {
-	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads}
+	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads, TaskPruneActivity}
 }
 
 type TaskResult string

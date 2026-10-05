@@ -72,7 +72,8 @@ func (f *fakeLibraries) ScanLibrary(_ context.Context, lib uuid.UUID, _ time.Dur
 
 func TestAnAdminKeepsTheLibraries(t *testing.T) {
 	libs := &fakeLibraries{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Libraries: libs})
+	told := &fakeEvents{}
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Libraries: libs, Events: told})
 	do := func(token, method, target, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -112,5 +113,8 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 		if rec := do(goodToken, tc.method, tc.target, tc.body); rec.Code != tc.want {
 			t.Errorf("%s %s %s: %d, want %d: %s", tc.method, tc.target, tc.body, rec.Code, tc.want, rec.Body)
 		}
+	}
+	if got, want := told.kinds(), []domain.EventKind{domain.EventLibraryAdded, domain.EventLibraryRemoved}; !slices.Equal(got, want) {
+		t.Errorf("told %v, want %v", got, want)
 	}
 }
