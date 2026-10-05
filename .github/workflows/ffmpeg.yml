@@ -1,0 +1,67 @@
+name: ffmpeg
+on:
+  pull_request:
+    paths: [build/ffmpeg/**, mise.toml, .github/workflows/ffmpeg.yml]
+  push:
+    branches: [main]
+    paths: [build/ffmpeg/**, mise.toml, .github/workflows/ffmpeg.yml]
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [linux64, linuxarm64]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - name: Install the build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends nasm meson ninja-build cmake autoconf \
+            automake libtool gperf pkg-config qemu-user-static libc6-arm64-cross fonts-dejavu-core
+      - uses: actions/cache@v6
+        with:
+          path: build/ffmpeg/.work/downloads
+          key: ffmpeg-sources-${{ hashFiles('build/ffmpeg/sources.sha256') }}
+      - uses: actions/cache@v6
+        with:
+          path: build/ffmpeg/.work/${{ matrix.target }}
+          key: ffmpeg-${{ matrix.target }}-${{ hashFiles('build/ffmpeg/build.sh', 'build/ffmpeg/sources.sha256', 'mise.toml') }}
+      - run: build/ffmpeg/build.sh ${{ matrix.target }} out
+      - name: Run it
+        env:
+          # The arm64 build runs under QEMU against Ubuntu's arm64 glibc.
+          QEMU_LD_PREFIX: /usr/aarch64-linux-gnu
+        run: |
+          mkdir run && tar -xJf out/ffmpeg-*-${{ matrix.target }}.tar.xz -C run --strip-components 1
+          build/ffmpeg/verify.sh run
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ffmpeg-${{ matrix.target }}
+          path: out/
+          retention-days: 7
+  release:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: out
+          merge-multiple: true
+      - name: Publish the executables beside their source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(grep '^ffmpeg ' build/ffmpeg/sources.txt | cut -d' ' -f2)"
+          release="ffmpeg-$version-${GITHUB_SHA::7}"
+          gh release create "$release" --target "$GITHUB_SHA" --title "$release" \
+            --notes "FFmpeg $version and the libraries in build/ffmpeg/sources.txt, built by build/ffmpeg/build.sh. GPL-3.0-or-later; the source archive is the Corresponding Source." \
+            out/*
