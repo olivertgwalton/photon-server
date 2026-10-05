@@ -2,10 +2,25 @@
 
 A media server for films and television, written in Go.
 
+## Run
+
+The image (`ghcr.io/olivertgwalton/photon-server`, amd64 and arm64) carries jellyfin-ffmpeg's
+portable build, for its hardware transcoding and tone mapping, with Intel's and AMD's VAAPI drivers,
+Quick Sync's runtime and Intel's OpenCL on amd64, and Mesa's Vulkan. `deploy/` runs it with
+PostgreSQL and Valkey:
+
+```sh
+cd deploy && cp .env.example .env    # set the passwords and MEDIA_DIR
+docker compose up -d                 # add -f compose.intel.yml or -f compose.nvidia.yml for a GPU
+docker compose exec server photon-server profile add -name Admin -role admin
+docker compose exec server photon-server library add -name Films -kind movies /media/Films
+```
+
 ## Develop
 
-Needs PostgreSQL 18, Valkey, and FFmpeg 9 or newer (`ffmpeg` and `ffprobe` on the `PATH`, or
-`PHOTON_FFMPEG` and `PHOTON_FFPROBE`).
+Needs PostgreSQL 18, Valkey, and FFmpeg 8 or newer (`ffmpeg` and `ffprobe` on the `PATH`, or
+`PHOTON_FFMPEG` and `PHOTON_FFPROBE`); jellyfin-ffmpeg publishes portable macOS builds that match
+the image's.
 
 ```sh
 export PHOTON_DATABASE_URL=postgres://localhost/photon_dev

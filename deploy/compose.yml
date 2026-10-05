@@ -1,0 +1,78 @@
+name: photon
+
+x-server: &server
+  image: ${PHOTON_IMAGE:-ghcr.io/olivertgwalton/photon-server:main}
+  environment:
+    PHOTON_DATABASE_URL: postgres://photon:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db/photon
+    PHOTON_VALKEY_URL: valkey://photon:${VALKEY_PASSWORD:?set VALKEY_PASSWORD}@valkey:6379
+
+services:
+  server:
+    <<: *server
+    ports: ["8640:8640"]
+    volumes:
+      # Libraries are added at their path inside the container: /media/Films and the like.
+      - ${MEDIA_DIR:?set MEDIA_DIR to the folder holding your libraries}:/media:ro
+      - cache:/var/cache/photon-server
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      valkey: { condition: service_healthy }
+    restart: unless-stopped
+
+  migrate:
+    <<: *server
+    command: [migrate]
+    depends_on:
+      db: { condition: service_healthy }
+
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: photon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: photon
+    volumes:
+      - db:/var/lib/postgresql
+    shm_size: 256mb
+    healthcheck:
+      test: [CMD, pg_isready, -U, photon, -d, photon]
+      interval: 5s
+      retries: 12
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:9-alpine
+    # Nothing durable lives here: snapshots only keep live sessions across a routine restart.
+    command:
+      - valkey-server
+      - --appendonly
+      - "no"
+      - --save
+      - "300 1"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - volatile-lru
+      - --user
+      - default
+      - "off"
+      - --user
+      - photon
+      - "on"
+      - ">${VALKEY_PASSWORD}"
+      - "~photon:*"
+      - "&*"
+      - +@all
+      - -@dangerous
+    volumes:
+      - valkey:/data
+    healthcheck:
+      test: [CMD, valkey-cli, --user, photon, --pass, "${VALKEY_PASSWORD}", --no-auth-warning, ping]
+      interval: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  db:
+  valkey:
+  cache:
