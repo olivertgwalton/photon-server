@@ -24,6 +24,10 @@ import (
 // picture is kept at a handful of sizes whatever clients ask for.
 var Widths = []int{160, 320, 480, 640, 960, 1280, 1920, 2560, 3840}
 
+// maxPixels bounds the pictures decoded here: a few MiB of PNG can claim a picture that takes GiBs
+// to decode. A 4K backdrop is 8 megapixels.
+const maxPixels = 50_000_000
+
 // ErrNotResizable is a picture answered as it is: one no wider than asked for, or not decoded
 // here, such as SVG.
 var ErrNotResizable = errors.New("picture cannot be resized")
@@ -65,10 +69,10 @@ func (c *Cache) resize(ctx context.Context, name string, width int, open func() 
 	if err != nil {
 		return err
 	}
-	src, _, err := image.Decode(f)
+	src, err := decode(f)
 	_ = f.Close()
-	// A picture that cannot be made smaller (a format not decoded here, a damaged file, or one
-	// already no wider) is marked, so the next ask does not decode it again.
+	// A picture that cannot be made smaller (a format not decoded here, a damaged or vast file, or
+	// one already no wider) is marked, so the next ask does not decode it again.
 	if err != nil || src.Bounds().Dx() <= width {
 		if err := c.write(name+".as-is", func(io.Writer) error { return nil }); err != nil {
 			return err
@@ -84,6 +88,22 @@ func (c *Cache) resize(ctx context.Context, name string, width int, open func() 
 		}
 		return png.Encode(w, dst)
 	})
+}
+
+// decode reads a picture of at most maxPixels.
+func decode(f *os.File) (image.Image, error) {
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Width*cfg.Height > maxPixels {
+		return nil, fmt.Errorf("picture is %d×%d, over %d pixels", cfg.Width, cfg.Height, maxPixels)
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	src, _, err := image.Decode(f)
+	return src, err
 }
 
 // write makes file name whole before it can be read.
