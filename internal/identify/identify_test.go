@@ -12,6 +12,7 @@ func TestPick(t *testing.T) {
 		{ID: 2, Title: "The Thing", Year: 1982},
 		{ID: 3, Title: "Le Fabuleux Destin d'Amélie Poulain", OriginalTitle: "Amélie", Year: 2001},
 		{ID: 4, Title: "Fast & Furious", Year: 2009},
+		{ID: 5, Title: "Doctor Who (2005)", Year: 2005},
 	}
 	for _, tc := range []struct {
 		title string
@@ -24,6 +25,7 @@ func TestPick(t *testing.T) {
 		{"the thing", 2011, 1},
 		{"Amelie", 2001, 3},
 		{"Fast and Furious", 2009, 4},
+		{"Doctor Who", 2005, 5},
 		{"The Thing", 1990, 0},
 		{"Thing", 1982, 0},
 	} {

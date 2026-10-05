@@ -128,7 +128,7 @@ func TestALockedFieldIsLeftForTheReader(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := uuid.UUID(item.ID)
-	if err := s.SaveIdentity(ctx, id, domain.Metadata{Overview: "A crime saga.", Tagline: "A Los Angeles crime saga."}, nil); err != nil {
+	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Overview: "A crime saga.", Tagline: "A Los Angeles crime saga."}, nil); err != nil {
 		t.Fatal(err)
 	}
 	item, _ = s.q.Item.WithContext(ctx).Take()
@@ -176,7 +176,7 @@ func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
 	}
 	match := domain.Metadata{Title: "Heat (TMDB)"}
 
-	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), match, nil); err != nil {
+	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, match, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := title(); got != "Heat (NFO)" {
@@ -192,7 +192,7 @@ func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
 	if n, _ := s.q.Job.WithContext(ctx).Where(s.q.Job.Kind.Eq(string(domain.JobIdentify))).Count(); n != 1 {
 		t.Errorf("%d identify jobs after the sources changed, want the film's", n)
 	}
-	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), match, nil); err != nil {
+	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, match, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := title(); got != "Heat (TMDB)" {
@@ -202,7 +202,7 @@ func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
 	if _, err := s.SetLibrarySources(ctx, "Films", []domain.FieldSource{domain.SourceNFO}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.Metadata{Overview: "From TMDB."}, nil); err != nil {
+	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, domain.Metadata{Overview: "From TMDB."}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if it, _ := s.q.Item.WithContext(ctx).Where(s.q.Item.ID.Eq(item.ID)).Take(); it.Overview != nil {

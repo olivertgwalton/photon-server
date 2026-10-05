@@ -50,7 +50,7 @@ func TestIdentityDescribesAShowsEpisodes(t *testing.T) {
 		t.Errorf("subject = %+v, want the TVDB id and season 1", sub)
 	}
 
-	err = s.SaveIdentity(ctx, uuid.UUID(row.ID), domain.Metadata{Title: "The Wire", IDs: map[domain.Provider]string{
+	err = s.SaveIdentity(ctx, uuid.UUID(row.ID), domain.SourceTMDB, domain.Metadata{Title: "The Wire", IDs: map[domain.Provider]string{
 		domain.ProviderTMDB: "1438", domain.ProviderTVDB: "1",
 	}}, map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Title: "The Target"}}}})
 	if err != nil {
@@ -90,7 +90,7 @@ func TestIdentityDescribesAShowsEpisodes(t *testing.T) {
 	if got := seasons(); !slices.Equal(got, []int{1}) {
 		t.Errorf("with an episode still undescribed, seasons to ask for = %v, want [1]", got)
 	}
-	err = s.SaveIdentity(ctx, uuid.UUID(row.ID), domain.Metadata{}, map[int]domain.SeasonMetadata{1: {
+	err = s.SaveIdentity(ctx, uuid.UUID(row.ID), domain.SourceTMDB, domain.Metadata{}, map[int]domain.SeasonMetadata{1: {
 		Metadata: domain.Metadata{Title: "Season 1"}, Episodes: map[int]domain.Metadata{2: {Title: "The Detail"}},
 	}})
 	if err != nil {

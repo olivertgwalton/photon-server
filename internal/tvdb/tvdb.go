@@ -74,7 +74,7 @@ func (c *Client) login(ctx context.Context) (string, error) {
 	if c.token != "" && time.Now().Before(c.expires) {
 		return c.token, nil
 	}
-	body, err := json.Marshal(struct {
+	body, err := json.Marshal(struct { //nolint:gosec // the login request is where the key is meant to go
 		Key string `json:"apikey"`
 		PIN string `json:"pin,omitzero"`
 	}{c.key, c.pin})
