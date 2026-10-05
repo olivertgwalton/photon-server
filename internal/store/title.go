@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 	"uuid"
@@ -76,6 +77,17 @@ type VersionPage struct {
 	Subtitles    []SubtitleRef `json:"subtitles,omitzero"`
 	Chapters     []ChapterRef  `json:"chapters,omitzero"`
 	Markers      []MarkerRef   `json:"markers,omitzero"`
+	// Trickplay is the thumbnail sheets of each part that has them; a part's sheets are at
+	// /api/v1/parts/{part_id}/trickplay/{n}.
+	Trickplay []PartTrickplay `json:"trickplay,omitzero"`
+}
+
+// PartTrickplay is a part's thumbnail sheets, its thumbnails timed from OffsetMS on the copy's
+// timeline.
+type PartTrickplay struct {
+	PartID   uuid.UUID `json:"part_id"`
+	OffsetMS int64     `json:"offset_ms"`
+	Trickplay
 }
 
 // StreamPage is a track of a copy's first part; the parts of one copy are cut from one master.
@@ -119,11 +131,13 @@ type RatingRef struct {
 	Votes int               `json:"votes,omitzero"`
 }
 
-// ChapterRef is a chapter on the copy's whole timeline, across its parts.
+// ChapterRef is a chapter on the copy's whole timeline, across its parts. Image is the address of
+// its picture, for those that have one.
 type ChapterRef struct {
 	StartMS int64  `json:"start_ms"`
 	EndMS   int64  `json:"end_ms"`
 	Title   string `json:"title,omitzero"`
+	Image   string `json:"image,omitzero"`
 }
 
 type SeasonCard struct {
@@ -441,6 +455,10 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 	if err != nil {
 		return nil, err
 	}
+	pictured, sheets, err := s.partPreviews(ctx, parts)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]VersionPage, len(rows))
 	for n, r := range rows {
 		vp := VersionPage{
@@ -453,9 +471,11 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 			for _, c := range chapters {
 				if c.PartID == p.ID {
 					own = append(own, c)
-					vp.Chapters = append(vp.Chapters, ChapterRef{
-						StartMS: p.OffsetMS + c.StartMS, EndMS: p.OffsetMS + c.EndMS, Title: deref(c.Title),
-					})
+					ref := ChapterRef{StartMS: p.OffsetMS + c.StartMS, EndMS: p.OffsetMS + c.EndMS, Title: deref(c.Title)}
+					if slices.Contains(pictured[p.ID], c.Idx) {
+						ref.Image = fmt.Sprintf("/api/v1/parts/%s/chapters/%d/image", uuid.UUID(p.ID), c.Idx)
+					}
+					vp.Chapters = append(vp.Chapters, ref)
 				}
 			}
 			var stored []*model.Marker
@@ -468,6 +488,9 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 				m.StartMS += p.OffsetMS
 				m.EndMS += p.OffsetMS
 				vp.Markers = append(vp.Markers, m)
+			}
+			if t, ok := sheets[p.ID]; ok {
+				vp.Trickplay = append(vp.Trickplay, PartTrickplay{PartID: uuid.UUID(p.ID), OffsetMS: p.OffsetMS, Trickplay: t})
 			}
 			if k > 0 {
 				continue
@@ -489,6 +512,40 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 		out[n] = vp
 	}
 	return out, nil
+}
+
+// partPreviews answers the idx of each part's chapters that have an image, and each part's
+// trickplay sheets.
+func (s *Store) partPreviews(ctx context.Context, parts []*model.Part) (map[model.UUID][]int, map[model.UUID]Trickplay, error) {
+	ids := make([]string, len(parts))
+	for n, p := range parts {
+		ids[n] = uuid.UUID(p.ID).String()
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT pv.part_id::text, pv.chapter_images, t.width, t.height, t.interval_ms, t.columns, t.rows, t.thumbnails
+		FROM previews pv LEFT JOIN trickplay t ON t.part_id = pv.part_id WHERE pv.part_id::text = ANY($1)`, ids)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	pictured, sheets := map[model.UUID][]int{}, map[model.UUID]Trickplay{}
+	for rows.Next() {
+		var id string
+		var idx []int
+		var w, h, interval, cols, rws, n *int
+		if err := rows.Scan(&id, &idx, &w, &h, &interval, &cols, &rws, &n); err != nil {
+			return nil, nil, err
+		}
+		part, err := uuid.Parse(id)
+		if err != nil {
+			return nil, nil, err
+		}
+		pictured[model.UUID(part)] = idx
+		if n != nil {
+			sheets[model.UUID(part)] = sheetsOf(*w, *h, *interval, *cols, *rws, *n)
+		}
+	}
+	return pictured, sheets, rows.Err()
 }
 
 func streamPage(t *model.Stream) StreamPage {
