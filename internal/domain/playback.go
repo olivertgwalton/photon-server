@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"slices"
 	"time"
 	"uuid"
 )
@@ -29,12 +30,13 @@ const (
 	StatePaused  PlayState = "paused"
 )
 
+func PlayStates() []PlayState {
+	return []PlayState{StatePlaying, StatePaused}
+}
+
 func ParsePlayState(s string) (PlayState, bool) {
-	switch v := PlayState(s); v {
-	case StatePlaying, StatePaused:
-		return v, true
-	}
-	return "", false
+	v := PlayState(s)
+	return v, slices.Contains(PlayStates(), v)
 }
 
 // Playback is one profile playing one copy of a title, from play to stop.
@@ -84,6 +86,11 @@ const (
 	// DolbyVisionStrip drops it for the base layer, to a client that shows only that.
 	DolbyVisionStrip DolbyVisionHandling = "strip"
 )
+
+// DolbyVisionHandlings are what a stream with Dolby Vision may have done with it.
+func DolbyVisionHandlings() []DolbyVisionHandling {
+	return []DolbyVisionHandling{DolbyVisionKeep, DolbyVisionStrip}
+}
 
 // AudioPlan is the audio stream played, by its index in the file, and what it is encoded to where
 // it is not copied.

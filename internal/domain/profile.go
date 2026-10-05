@@ -47,6 +47,10 @@ const (
 	LockPassword ProfileLock = "password"
 )
 
+func ProfileLocks() []ProfileLock {
+	return []ProfileLock{LockNone, LockPIN, LockPassword}
+}
+
 // Lock is what a profile asks for: an admin its password always, so a household profile cannot
 // become an admin by switching; anyone else their PIN, if they set one.
 func Lock(role Role, hasPIN bool) ProfileLock {

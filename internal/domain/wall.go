@@ -115,8 +115,12 @@ func ParseWallSort(s string) (WallSort, error) {
 	return "", fmt.Errorf("sort %q is not one of %v", s, WallSorts())
 }
 
+func Orders() []Order {
+	return []Order{Ascending, Descending}
+}
+
 func ParseOrder(s string) (Order, error) {
-	if v := Order(s); v == Ascending || v == Descending {
+	if v := Order(s); slices.Contains(Orders(), v) {
 		return v, nil
 	}
 	return "", fmt.Errorf("order %q is not %s or %s", s, Ascending, Descending)
