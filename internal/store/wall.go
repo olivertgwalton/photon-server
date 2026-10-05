@@ -26,6 +26,9 @@ type Card struct {
 	Year        int
 	ReleaseDate time.Time
 	AddedAt     time.Time
+	// Poster and Backdrop are the title's best pictures of each kind, by id.
+	Poster   uuid.UUID
+	Backdrop uuid.UUID
 }
 
 // WallPage asks for one page of a library's titles. After is the cursor the previous page
@@ -129,9 +132,16 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, st
 		}
 		next = base64.RawURLEncoding.EncodeToString(raw)
 	}
+	pictures, err := s.pictureOrder(ctx, rows)
+	if err != nil {
+		return nil, "", err
+	}
 	cards := make([]Card, len(rows))
 	for n, r := range rows {
-		cards[n] = Card{ID: uuid.UUID(r.ID), Kind: r.Kind, Title: r.Title, AddedAt: r.AddedAt}
+		cards[n] = Card{
+			ID: uuid.UUID(r.ID), Kind: r.Kind, Title: r.Title, AddedAt: r.AddedAt,
+			Poster: first(pictures[r.ID][domain.ArtworkPoster]), Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]),
+		}
 		if r.Year != nil {
 			cards[n].Year = *r.Year
 		}

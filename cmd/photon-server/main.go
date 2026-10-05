@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"sync"
@@ -17,6 +18,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/analysis"
+	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
@@ -105,6 +107,15 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return err
+	}
+	pictureCache, err := artwork.Open(filepath.Join(cmp.Or(os.Getenv("PHOTON_CACHE_DIR"), filepath.Join(cacheDir, "photon-server")), "artwork"))
+	if err != nil {
+		return err
+	}
+	defer pictureCache.Close()
 	authService, err := auth.New(ctx, st, cache)
 	if err != nil {
 		return err
@@ -121,7 +132,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	srv := &http.Server{
 		Addr: cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Limits: cache, TrustedProxies: trusted,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Pictures: st, Artwork: pictureCache, Limits: cache, TrustedProxies: trusted,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
