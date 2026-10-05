@@ -39,6 +39,10 @@ func (f fakeWatching) MarkUnwatched(ctx context.Context, p, i uuid.UUID) error {
 	return f.mark(ctx, p, i)
 }
 
+func (f fakeWatching) ClearProgress(ctx context.Context, p, i uuid.UUID) error {
+	return f.mark(ctx, p, i)
+}
+
 func (f fakeWatching) Favourite(ctx context.Context, p, i uuid.UUID) error { return f.mark(ctx, p, i) }
 
 func (f fakeWatching) Unfavourite(ctx context.Context, p, i uuid.UUID) error {
@@ -56,6 +60,8 @@ func TestWatching(t *testing.T) {
 		{http.MethodPut, title + "/progress", `{"position_ms": 7000000}`, http.StatusOK, `{"reach":"end"}`},
 		{http.MethodPut, title + "/progress", `{"position_ms": -1}`, http.StatusBadRequest, ""},
 		{http.MethodPut, "/api/v1/titles/" + uuid.NewV7().String() + "/progress", `{"position_ms": 1}`, http.StatusNotFound, ""},
+		{http.MethodDelete, title + "/progress", "", http.StatusNoContent, ""},
+		{http.MethodDelete, "/api/v1/titles/" + uuid.NewV7().String() + "/progress", "", http.StatusNotFound, ""},
 		{http.MethodPut, title + "/watched", "", http.StatusNoContent, ""},
 		{http.MethodDelete, title + "/favourite", "", http.StatusNoContent, ""},
 		{http.MethodPut, "/api/v1/titles/" + uuid.NewV7().String() + "/favourite", "", http.StatusNotFound, ""},

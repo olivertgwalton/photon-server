@@ -15,6 +15,7 @@ type watching interface {
 	SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration) (domain.Reach, error)
 	MarkWatched(ctx context.Context, profile, item uuid.UUID) error
 	MarkUnwatched(ctx context.Context, profile, item uuid.UUID) error
+	ClearProgress(ctx context.Context, profile, item uuid.UUID) error
 	Favourite(ctx context.Context, profile, item uuid.UUID) error
 	Unfavourite(ctx context.Context, profile, item uuid.UUID) error
 }
