@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 const (
@@ -29,13 +31,13 @@ const (
 // ErrNoRemux is a remux that has ended, or never was.
 var ErrNoRemux = errors.New("hls: no such remux")
 
-// Source is one file of a copy to remux: how to open it, its plan input, and the audio to keep.
+// Source is one file of a copy to remux: how to open it, its plan input, its video, and its audio
+// if it has any.
 type Source struct {
-	Open func() (*os.File, error)
-	Part Part
-	// Audio is the file's stream to copy as the audio, by its index in the file; nil is its first
-	// audio stream.
-	Audio *int
+	Open  func() (*os.File, error)
+	Part  Part
+	Video domain.VideoPlan
+	Audio *domain.AudioPlan
 }
 
 // Remuxer runs the remuxes of copies played as HLS, one per playback, each writing its segments
@@ -297,7 +299,7 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	}
 	defer f.Close()
 	start := s.plan[run.at].Start
-	cmd := exec.CommandContext(ctx, r.ffmpeg, args(start, src.Audio)...) //nolint:gosec // the configured ffmpeg; every argument is built here
+	cmd := exec.CommandContext(ctx, r.ffmpeg, args(start, src.Video, src.Audio)...) //nolint:gosec // the configured ffmpeg; every argument is built here
 	cmd.ExtraFiles = []*os.File{f}
 	out, err := cmd.StdoutPipe()
 	if err != nil {
@@ -318,26 +320,41 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	return err
 }
 
-// args copies a file's first video and one audio stream into fragmented MP4 on stdout,
+// args copies a file's video and its audio, or encodes the audio, into fragmented MP4 on stdout,
 // from the keyframe at start, on the file's own clock (see clockOffset).
-func args(start time.Duration, audio *int) []string {
-	return []string{
+func args(start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan) []string {
+	a := []string{
 		"-hide_banner", "-loglevel", "error", "-nostdin",
 		"-protocol_whitelist", "fd", "-fd", "3",
 		"-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts", "-i", "fd:",
-		"-map", "0:v:0", "-map", audioMap(audio), "-c", "copy",
+		"-map", "0:" + strconv.Itoa(video.Stream), "-c:v", "copy",
+	}
+	// Apple's players take HEVC only as hvc1, and Dolby Vision as dvh1.
+	switch {
+	case video.Codec == "hevc" && video.DolbyVision == domain.DolbyVisionKeep:
+		a = append(a, "-tag:v", "dvh1")
+	case video.Codec == "hevc":
+		a = append(a, "-tag:v", "hvc1")
+	}
+	if video.DolbyVision == domain.DolbyVisionStrip {
+		a = append(a, "-bsf:v", "dovi_rpu=strip=1")
+	}
+	if audio != nil {
+		a = append(a, "-map", "0:"+strconv.Itoa(audio.Stream))
+		if e := audio.Encode; e != nil {
+			a = append(a, "-c:a", e.Codec, "-ac", strconv.Itoa(e.Channels), "-b:a", strconv.Itoa(e.BitrateKbps)+"k")
+		} else {
+			a = append(a, "-c:a", "copy")
+		}
+	}
+	// Dolby Vision's configuration, TrueHD and DTS are experimental in FFmpeg's MP4 muxer.
+	return append(a,
+		"-strict", "experimental",
 		"-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+default_base_moof+delay_moov+frag_discont+skip_trailer",
 		"-use_editlist", "0", "-avoid_negative_ts", "disabled",
 		"-output_ts_offset", strconv.FormatFloat(clockOffset.Seconds(), 'f', 0, 64),
 		"-fflags", "+bitexact", "-",
-	}
-}
-
-func audioMap(stream *int) string {
-	if stream == nil {
-		return "0:a:0?"
-	}
-	return "0:" + strconv.Itoa(*stream)
+	)
 }
 
 // cut reads ffmpeg's output and keeps the plan's segments of the run's part from run.at onwards.

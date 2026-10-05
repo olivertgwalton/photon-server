@@ -1,2 +1,3 @@
 /photon-server
 *.out
+.DS_Store

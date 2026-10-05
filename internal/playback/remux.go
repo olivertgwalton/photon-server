@@ -6,6 +6,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -37,9 +38,8 @@ func NewRemuxes(parts partStore, frames keyframer, h remuxer) *Remuxes {
 	return &Remuxes{parts: parts, frames: frames, hls: h}
 }
 
-// Open starts a playback's remux of the parts of a copy, copying audio as asked (nil for each
-// file's first audio stream).
-func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, parts []store.PlayPart, audio *int) error {
+// Open starts a playback's remux of the parts of a copy, carrying its video and audio as decided.
+func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, parts []store.PlayPart, video domain.VideoPlan, audio *domain.AudioPlan) error {
 	// The remux opens its files long after this request has been answered.
 	opening := context.WithoutCancel(ctx)
 	sources := make([]hls.Source, len(parts))
@@ -59,7 +59,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, parts []store.Pl
 			keyframes[k] = time.Duration(ms) * time.Millisecond
 		}
 		sources[i] = hls.Source{
-			Open: open, Audio: audio,
+			Open: open, Video: video, Audio: audio,
 			Part: hls.Part{Duration: time.Duration(p.DurationMS) * time.Millisecond, Keyframes: keyframes},
 		}
 	}

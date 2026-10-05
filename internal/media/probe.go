@@ -1,6 +1,7 @@
 package media
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,8 +39,11 @@ type Stream struct {
 
 	Width, Height int
 	FrameRate     float64
-	Range         domain.Range
-	DolbyVision   *DolbyVision
+	BitDepth      int
+	// Level is ffprobe's: ten times the level for H.264 (41 is 4.1), thirty times for HEVC.
+	Level       int
+	Range       domain.Range
+	DolbyVision *DolbyVision
 
 	Channels      int
 	ChannelLayout string
@@ -98,6 +102,9 @@ type probeStream struct {
 	CodecType     string            `json:"codec_type"`
 	CodecName     string            `json:"codec_name"`
 	Profile       string            `json:"profile"`
+	Level         int               `json:"level"`
+	PixFmt        string            `json:"pix_fmt"`
+	RawBits       string            `json:"bits_per_raw_sample"`
 	Width         int               `json:"width"`
 	Height        int               `json:"height"`
 	AvgFrameRate  string            `json:"avg_frame_rate"`
@@ -161,6 +168,8 @@ func parseProbe(out []byte) (Facts, error) {
 		if kind == domain.StreamVideo {
 			st.Width, st.Height = s.Width, s.Height
 			st.FrameRate = rate(s.AvgFrameRate)
+			st.BitDepth = cmp.Or(atoi(s.RawBits), bitDepth(s.PixFmt))
+			st.Level = max(s.Level, 0)
 			transfer, frameSide := s.ColorTransfer, []probeSideData(nil)
 			for _, f := range p.Frames {
 				if f.StreamIndex == s.Index {
@@ -209,6 +218,16 @@ func videoRange(transfer string, dv *DolbyVision, frameSide []probeSideData) dom
 		return domain.RangeHLG
 	}
 	return domain.RangeSDR
+}
+
+// bitDepth reads a pixel format's depth from its name: yuv420p10le and p010le are 10, yuv420p 8.
+func bitDepth(pixFmt string) int {
+	if pixFmt == "" {
+		return 0
+	}
+	at := strings.LastIndexByte(pixFmt, 'p')
+	digits := strings.TrimRightFunc(pixFmt[at+1:], func(r rune) bool { return r < '0' || r > '9' })
+	return cmp.Or(atoi(digits), 8)
 }
 
 func atoi(s string) int {

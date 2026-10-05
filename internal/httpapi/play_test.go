@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -24,16 +26,31 @@ var (
 	partTwo = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b2")
 )
 
-// fakePlaying holds films in two parts under root.
+// fakePlaying holds films in two parts under root: H.264 in Matroska, with stereo AAC.
 type fakePlaying struct{ root string }
 
-func (fakePlaying) Playable(_ context.Context, item, _ uuid.UUID) (uuid.UUID, []store.PlayPart, error) {
+func (fakePlaying) Playable(_ context.Context, item, _ uuid.UUID) (store.PlayCopy, error) {
 	if item != films {
-		return uuid.UUID{}, nil, store.ErrNotFound
+		return store.PlayCopy{}, store.ErrNotFound
 	}
-	return films, []store.PlayPart{
-		{ID: partOne, DurationMS: 3_600_000}, {ID: partTwo, OffsetMS: 3_600_000, DurationMS: 3_000_000},
+	return store.PlayCopy{
+		Version: films, Container: "matroska,webm", BitrateKbps: 8000,
+		Parts: []store.PlayPart{
+			{ID: partOne, DurationMS: 3_600_000}, {ID: partTwo, OffsetMS: 3_600_000, DurationMS: 3_000_000},
+		},
+		Streams: []media.Stream{
+			{Index: 0, Kind: domain.StreamVideo, Codec: "h264"},
+			{Index: 1, Kind: domain.StreamAudio, Codec: "aac", Channels: 2},
+		},
 	}, nil
+}
+
+// playRequest asks to play films on a client that opens these containers and plays H.264 and AAC.
+func playRequest(containers string) *http.Request {
+	body := `{"profile": {"containers": [` + containers + `], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}]}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	return req
 }
 
 func (f fakePlaying) PartFile(_ context.Context, part uuid.UUID) (string, string, error) {
@@ -100,9 +117,7 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 		api.ServeHTTP(rec, req)
 		return rec
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", nil)
-	req.Header.Set("Authorization", "Bearer "+goodToken)
-	rec := do(req)
+	rec := do(playRequest(`"matroska"`))
 	var got struct {
 		PlaybackID uuid.UUID `json:"playback_id"`
 		Parts      []struct {
@@ -137,7 +152,9 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 // fakeHLS remuxes into a playlist and one segment, of the playback it was opened for.
 type fakeHLS struct{ dir string }
 
-func (fakeHLS) Open(context.Context, uuid.UUID, []store.PlayPart, *int) error { return nil }
+func (fakeHLS) Open(context.Context, uuid.UUID, []store.PlayPart, domain.VideoPlan, *domain.AudioPlan) error {
+	return nil
+}
 
 func (fakeHLS) Playlist(playback uuid.UUID) (string, error) {
 	if playback != playbackID {
@@ -172,17 +189,16 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 		api.ServeHTTP(rec, req)
 		return rec
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(`{"method":"remux"}`))
-	req.Header.Set("Authorization", "Bearer "+goodToken)
 	var got struct {
-		Method   string `json:"method"`
-		Playlist string `json:"playlist"`
+		Method   string   `json:"method"`
+		Reasons  []string `json:"reasons"`
+		Playlist string   `json:"playlist"`
 	}
-	if err := json.NewDecoder(do(req).Body).Decode(&got); err != nil {
+	if err := json.NewDecoder(do(playRequest(`"mp4"`)).Body).Decode(&got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Method != "remux" || !strings.HasSuffix(got.Playlist, "/main.m3u8") {
-		t.Fatalf("play = %+v, want a remux's playlist", got)
+	if got.Method != "remux" || !strings.HasSuffix(got.Playlist, "/main.m3u8") || len(got.Reasons) != 1 || got.Reasons[0] != "container_not_supported" {
+		t.Fatalf("play = %+v, want a remux's playlist, for the container", got)
 	}
 	base := strings.TrimSuffix(got.Playlist, "main.m3u8")
 	for file, want := range map[string]string{"main.m3u8": "#EXTM3U\n", "0.m4s": "m4s"} {
@@ -197,9 +213,32 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 	if rec := do(httptest.NewRequest(http.MethodGet, base+"7.m4s", nil)); rec.Code != http.StatusNotFound {
 		t.Errorf("a segment there is not: %d, want 404", rec.Code)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(`{"method":"transcode"}`))
-	req.Header.Set("Authorization", "Bearer "+goodToken)
-	if rec := do(req); rec.Code != http.StatusBadRequest {
-		t.Errorf("method transcode: %d, want 400 until it is offered", rec.Code)
+}
+
+func TestAClientIsToldWhyNothingPlays(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Playing: fakePlaying{}, Playbacks: fakePlaybacks{}})
+	for _, tc := range []struct {
+		body        string
+		wantStatus  int
+		wantReasons []string
+	}{
+		{`{}`, http.StatusBadRequest, nil},
+		{
+			`{"profile": {"containers": ["mp4"], "video": [{"codec": "hevc"}], "audio": [{"codec": "aac"}]}}`, http.StatusUnprocessableEntity,
+			[]string{"container_not_supported", "video_codec_not_supported"},
+		},
+		{`{"audio_stream": 0, "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}]}}`, http.StatusBadRequest, nil},
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(tc.body))
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		var got struct {
+			Reasons []string `json:"reasons"`
+		}
+		_ = json.NewDecoder(rec.Body).Decode(&got)
+		if rec.Code != tc.wantStatus || !slices.Equal(got.Reasons, tc.wantReasons) {
+			t.Errorf("%s: %d %v, want %d %v", tc.body, rec.Code, got.Reasons, tc.wantStatus, tc.wantReasons)
+		}
 	}
 }

@@ -4,6 +4,7 @@ package store
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 	"uuid"
@@ -22,8 +23,15 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	part := func(rel string, d time.Duration) Part {
 		return Part{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{Duration: d}}
 	}
+	theatricalPart := part("L/theatrical.mkv", 3*time.Hour)
+	theatricalPart.Facts.Container = "matroska,webm"
+	video := media.Stream{
+		Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Profile: "Main 10", Width: 3840, Height: 2160, BitDepth: 10,
+		Level: 153, Range: domain.RangeDV, DolbyVision: &media.DolbyVision{Profile: 8, Level: 6, Compatibility: 1},
+	}
+	theatricalPart.Facts.Streams = []media.Stream{video, {Index: 1, Kind: domain.StreamAudio, Codec: "truehd", Channels: 8}}
 	film := Film{Title: "Lawrence", Folder: "L", Copies: []Copy{
-		{ContentKey: []byte("cut"), Label: "theatrical", Parts: []Part{part("L/theatrical.mkv", 3*time.Hour)}},
+		{ContentKey: []byte("cut"), Label: "theatrical", Parts: []Part{theatricalPart}},
 		{ContentKey: []byte("long"), Label: "restored", Parts: []Part{part("L/r1.mkv", 2*time.Hour), part("L/r2.mkv", 2*time.Hour)}},
 	}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "L", []byte("v1"), []Film{film}, nil); err != nil {
@@ -33,22 +41,26 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	longest, parts, err := s.Playable(ctx, uuid.UUID(item.ID), uuid.UUID{})
-	if err != nil || len(parts) != 2 || parts[1].OffsetMS != (2*time.Hour).Milliseconds() {
-		t.Fatalf("Playable = %v, %+v, %v; want the four-hour copy's two parts on one timeline", longest, parts, err)
+	longest, err := s.Playable(ctx, uuid.UUID(item.ID), uuid.UUID{})
+	if err != nil || len(longest.Parts) != 2 || longest.Parts[1].OffsetMS != (2*time.Hour).Milliseconds() {
+		t.Fatalf("Playable = %+v, %v; want the four-hour copy's two parts on one timeline", longest, err)
 	}
 	v := s.q.Version
 	theatrical, err := v.WithContext(ctx).Where(v.Label.Eq("theatrical")).Take()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, parts, err := s.Playable(ctx, uuid.UUID(item.ID), uuid.UUID(theatrical.ID)); err != nil || got != uuid.UUID(theatrical.ID) || len(parts) != 1 {
-		t.Errorf("asking for the theatrical cut: %v, %d parts, %v", got, len(parts), err)
+	got, err := s.Playable(ctx, uuid.UUID(item.ID), uuid.UUID(theatrical.ID))
+	if err != nil || got.Version != uuid.UUID(theatrical.ID) || len(got.Parts) != 1 || got.Container != "matroska,webm" {
+		t.Errorf("asking for the theatrical cut: %+v, %v", got, err)
+	}
+	if len(got.Streams) != 2 || !reflect.DeepEqual(got.Streams[0], video) || got.Streams[1].Channels != 8 {
+		t.Errorf("its streams: %+v, want the Dolby Vision video as probed and TrueHD 7.1", got.Streams)
 	}
 	if err := s.FinishScan(ctx, lib.ID, []string{"L"}, []string{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Playable(ctx, uuid.UUID(item.ID), uuid.UUID{}); !errors.Is(err, ErrNotFound) {
+	if _, err := s.Playable(ctx, uuid.UUID(item.ID), uuid.UUID{}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("with every copy's files gone: %v, want ErrNotFound", err)
 	}
 }

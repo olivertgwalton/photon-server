@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"io"
@@ -30,7 +29,7 @@ type playbacks interface {
 }
 
 type remuxing interface {
-	Open(ctx context.Context, playback uuid.UUID, parts []store.PlayPart, audio *int) error
+	Open(ctx context.Context, playback uuid.UUID, parts []store.PlayPart, video domain.VideoPlan, audio *domain.AudioPlan) error
 }
 
 type hlsFiles interface {
@@ -40,7 +39,7 @@ type hlsFiles interface {
 }
 
 type playing interface {
-	Playable(ctx context.Context, item, version uuid.UUID) (uuid.UUID, []store.PlayPart, error)
+	Playable(ctx context.Context, item, version uuid.UUID) (store.PlayCopy, error)
 	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
 }
 
@@ -51,17 +50,43 @@ type partJSON struct {
 	DurationMS int64     `json:"duration_ms"`
 }
 
-// play opens a playback of a film or episode and answers where it plays from: its copy's files in
-// order, each with where it starts on the copy's timeline, or with method "remux" an HLS playlist
-// of them, at signed addresses a player fetches directly.
+type videoJSON struct {
+	Stream      int                        `json:"stream"`
+	Decision    decision                   `json:"decision"`
+	DolbyVision domain.DolbyVisionHandling `json:"dolby_vision,omitzero"`
+}
+
+type audioJSON struct {
+	Stream      int      `json:"stream"`
+	Decision    decision `json:"decision"`
+	Codec       string   `json:"codec,omitzero"`
+	Channels    int      `json:"channels,omitzero"`
+	BitrateKbps int      `json:"bitrate_kbps,omitzero"`
+}
+
+// decision is what becomes of a stream, in Plex's words.
+type decision string
+
+const (
+	decisionCopy      decision = "copy"
+	decisionTranscode decision = "transcode"
+)
+
+// play opens a playback of a film or episode as the client's profile decides: its copy's files in
+// order, each with where it starts on the copy's timeline, or an HLS playlist of them, at signed
+// addresses a player fetches directly. It says what becomes of each stream, and why the copy could
+// not be played as it is.
 func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		VersionID   string            `json:"version_id"`
-		Method      domain.PlayMethod `json:"method"`
 		AudioStream *int              `json:"audio_stream"`
+		Profile     *playback.Profile `json:"profile"`
 	}
-	// A body is only for asking for one copy rather than the longest.
-	if r.ContentLength != 0 && !a.decode(w, r, &req) {
+	if !a.decode(w, r, &req) {
+		return
+	}
+	if req.Profile == nil {
+		writeProblem(w, a.logger, codeInvalidBody, "profile says what the client plays")
 		return
 	}
 	var version uuid.UUID
@@ -72,20 +97,31 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	method := cmp.Or(req.Method, domain.PlayDirect)
-	if method != domain.PlayDirect && method != domain.PlayRemux {
-		writeProblem(w, a.logger, codeInvalidBody, "method is direct or remux")
-		return
-	}
 	id, ok := a.titleID(w, r)
 	if !ok {
 		return
 	}
-	version, parts, err := a.svc.Playing.Playable(r.Context(), id, version)
+	c, err := a.svc.Playing.Playable(r.Context(), id, version)
 	if a.answered(w, r, err) {
 		return
 	}
-	session, err := a.svc.Playbacks.Start(r.Context(), sessionOf(r).Profile.ID, id, version, method)
+	d, err := playback.Decide(*req.Profile, playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Streams: c.Streams}, req.AudioStream)
+	switch {
+	case errors.Is(err, playback.ErrNoSuchAudio):
+		writeProblem(w, a.logger, codeInvalidBody, "audio_stream is not one of the copy's audio streams")
+		return
+	case errors.Is(err, playback.ErrNoCompatibleStream):
+		status := codeNoCompatibleStream.status()
+		writeJSON(w, a.logger, "application/problem+json", status, struct {
+			problem
+			Reasons []playback.Reason `json:"reasons"`
+		}{problem{Title: http.StatusText(status), Status: status, Code: codeNoCompatibleStream}, d.Reasons})
+		return
+	case err != nil:
+		a.internal(w, r, err)
+		return
+	}
+	session, err := a.svc.Playbacks.Start(r.Context(), sessionOf(r).Profile.ID, id, c.Version, d.Method)
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -95,12 +131,28 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		PlaybackID uuid.UUID         `json:"playback_id"`
 		Method     domain.PlayMethod `json:"method"`
 		VersionID  uuid.UUID         `json:"version_id"`
+		Video      *videoJSON        `json:"video,omitzero"`
+		Audio      *audioJSON        `json:"audio,omitzero"`
+		Reasons    []playback.Reason `json:"reasons,omitzero"`
 		Parts      []partJSON        `json:"parts,omitzero"`
 		Playlist   string            `json:"playlist,omitzero"`
 		ExpiresAt  time.Time         `json:"expires_at"`
-	}{PlaybackID: session.ID, Method: method, VersionID: version, ExpiresAt: until.UTC().Truncate(time.Second)}
-	if method == domain.PlayRemux {
-		if err := a.svc.Remuxing.Open(r.Context(), session.ID, parts, req.AudioStream); err != nil {
+	}{
+		PlaybackID: session.ID, Method: d.Method, VersionID: c.Version, Reasons: d.Reasons,
+		ExpiresAt: until.UTC().Truncate(time.Second),
+	}
+	if v := d.Video; v != nil {
+		answer.Video = &videoJSON{Stream: v.Stream, Decision: decisionCopy, DolbyVision: v.DolbyVision}
+	}
+	if au := d.Audio; au != nil {
+		answer.Audio = &audioJSON{Stream: au.Stream, Decision: decisionCopy}
+		if e := au.Encode; e != nil {
+			answer.Audio.Decision, answer.Audio.Codec = decisionTranscode, e.Codec
+			answer.Audio.Channels, answer.Audio.BitrateKbps = e.Channels, e.BitrateKbps
+		}
+	}
+	if d.Method == domain.PlayRemux {
+		if err := a.svc.Remuxing.Open(r.Context(), session.ID, c.Parts, *d.Video, d.Audio); err != nil {
 			a.internal(w, r, err)
 			return
 		}
@@ -108,7 +160,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		exp, sig := a.svc.Signer.Token(subject, until)
 		answer.Playlist = subject + "/" + exp + "/" + sig + "/main.m3u8"
 	} else {
-		for _, p := range parts {
+		for _, p := range c.Parts {
 			answer.Parts = append(answer.Parts, partJSON{
 				ID: p.ID, URL: a.svc.Signer.Sign("/api/v1/parts/"+p.ID.String()+"/stream", until),
 				OffsetMS: p.OffsetMS, DurationMS: p.DurationMS,

@@ -169,6 +169,8 @@ type Stream struct {
 	Width           *int
 	Height          *int
 	FrameRate       *float64
+	BitDepth        *int16
+	Level           *int
 	VideoRange      *domain.Range
 	DVProfile       *int16 `gorm:"column:dv_profile"`
 	DVLevel         *int16 `gorm:"column:dv_level"`
