@@ -33,13 +33,17 @@ type MarkerRef struct {
 	Source  domain.MarkerSource `json:"source"`
 }
 
-// partMarkers is one marker of each kind a part has, the most trusted source's: what an admin
-// said, then the part's chapters, then its season's fingerprints. An admin's word that there is
-// none outranks the others' stretches the same way.
-func partMarkers(stored []*model.Marker, chapters []*model.Chapter) []MarkerRef {
+// partMarkers is one marker of each kind a part has, the most trusted source's its library
+// offers: what an admin said, then the part's chapters, then its season's fingerprints. An admin's
+// word that there is none outranks the others' stretches the same way. Fingerprints found before a
+// library stopped comparing are kept, and offered again should it start.
+func partMarkers(stored []*model.Marker, chapters []*model.Chapter, detection domain.MarkerDetection) []MarkerRef {
 	rank := func(s domain.MarkerSource) int { return slices.Index(domain.MarkerSources(), s) }
 	byKind := map[domain.MarkerKind]*model.Marker{}
 	for _, m := range slices.Concat(stored, chapterMarkers(chapters)) {
+		if !detection.Keeps(m.Source) {
+			continue
+		}
 		if have, ok := byKind[m.Kind]; !ok || rank(m.Source) < rank(have.Source) {
 			byKind[m.Kind] = m
 		}
@@ -141,8 +145,8 @@ type SeasonPart struct {
 	Fingerprinted bool
 }
 
-// SeasonParts answers the parts of a season's episodes that are on disk and have sound, by
-// episode, copy and order.
+// SeasonParts answers the parts of a season's episodes that are on disk, in a library that compares
+// sound, and have sound, by episode, copy and order.
 func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart, error) {
 	var rows []struct {
 		ID, Episode, Version model.UUID
@@ -158,7 +162,7 @@ func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart
 		JOIN versions v ON v.item_id = e.id AND v.missing_since IS NULL
 		JOIN parts p ON p.version_id = v.id
 		JOIN part_files f ON f.part_id = p.id
-		JOIN libraries l ON l.id = f.library_id
+		JOIN libraries l ON l.id = f.library_id AND l.markers = 'all'
 		WHERE e.parent_id = ? AND e.kind = 'episode'
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'audio')
 		ORDER BY p.id, f.rel_path`, model.UUID(season)).Scan(&rows).Error
@@ -211,12 +215,14 @@ func (s *Store) SaveFingerprintMarkers(ctx context.Context, compared []uuid.UUID
 }
 
 // QueueMarkers queues a comparison of every season with an episode whose sound has not been
-// compared. A season whose comparison failed every attempt waits for its episodes to change.
+// compared, in a library that compares sound. A season whose comparison failed every attempt waits
+// for its episodes to change.
 func (s *Store) QueueMarkers(ctx context.Context) (int64, error) {
 	res := s.q.Item.WithContext(ctx).UnderlyingDB().Exec(`
 		INSERT INTO jobs (kind, subject)
 		SELECT DISTINCT 'markers', e.parent_id FROM items e
 		JOIN versions v ON v.item_id = e.id AND v.missing_since IS NULL
+		JOIN libraries l ON l.id = v.library_id AND l.markers = 'all'
 		JOIN parts p ON p.version_id = v.id
 		WHERE e.kind = 'episode' AND p.fingerprinted_at IS NULL
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'audio')

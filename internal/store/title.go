@@ -464,6 +464,10 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 	if err != nil {
 		return nil, err
 	}
+	detection, err := s.markerDetection(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]VersionPage, len(rows))
 	for n, r := range rows {
 		vp := VersionPage{
@@ -489,7 +493,7 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 					stored = append(stored, m)
 				}
 			}
-			for _, m := range partMarkers(stored, own) {
+			for _, m := range partMarkers(stored, own, detection[r.LibraryID]) {
 				m.StartMS += p.OffsetMS
 				m.EndMS += p.OffsetMS
 				vp.Markers = append(vp.Markers, m)
@@ -517,6 +521,21 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 		out[n] = vp
 	}
 	return out, nil
+}
+
+// markerDetection answers how each copy's library finds markers.
+func (s *Store) markerDetection(ctx context.Context, versions []*model.Version) (map[model.UUID]domain.MarkerDetection, error) {
+	ids := make([]driver.Valuer, len(versions))
+	for n, v := range versions {
+		ids[n] = v.LibraryID
+	}
+	l := s.q.Library
+	libs, err := l.WithContext(ctx).Select(l.ID, l.Markers).Where(l.ID.In(ids...)).Find()
+	out := map[model.UUID]domain.MarkerDetection{}
+	for _, lib := range libs {
+		out[lib.ID] = lib.Markers
+	}
+	return out, err
 }
 
 // partPreviews answers the idx of each part's chapters that have an image, and each part's

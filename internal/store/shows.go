@@ -207,6 +207,11 @@ func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID, se
 			return err
 		}
 	}
+	l := tx.Library
+	settings, err := l.WithContext(ctx).Select(l.Markers).Where(l.ID.Eq(model.UUID(lib))).Take()
+	if err != nil || settings.Markers != domain.MarkersAll {
+		return err
+	}
 	// The season's sound is compared again; the comparison passes over a season with nothing new.
 	return enqueueAfter(ctx, tx, domain.JobMarkers, seasonID, markersQuiet)
 }
