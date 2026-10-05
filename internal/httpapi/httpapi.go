@@ -299,6 +299,11 @@ func (a *API) routes() []route {
 			status: http.StatusOK, reply: listJSON[cardJSON]{}, handle: a.members,
 		},
 		{
+			pattern: "GET /api/v1/titles/{id}/next", access: signedIn,
+			summary: "The episode to play next: after an episode, or where the profile is in a show or season",
+			status:  http.StatusOK, reply: cardJSON{}, handle: a.next,
+		},
+		{
 			pattern: "GET /api/v1/titles/{id}/similar", access: signedIn, summary: "The titles most like one",
 			status: http.StatusOK, reply: listJSON[cardJSON]{}, handle: a.similar,
 		},

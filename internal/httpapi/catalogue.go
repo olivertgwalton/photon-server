@@ -29,6 +29,7 @@ type catalogue interface {
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, error)
 	Home(ctx context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error)
+	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 }
 
 type libraryJSON struct {
@@ -360,6 +361,24 @@ func (a *API) similar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
+}
+
+// next answers the episode to play after a title: after an episode the one that follows it, and
+// of a show or season the one the profile is at, as Jellyfin's NextUp and Plex's onDeck.
+func (a *API) next(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r)
+	if !ok {
+		return
+	}
+	card, err := a.svc.Catalogue.Next(r.Context(), sessionOf(r).Profile.ID, id)
+	if errors.Is(err, store.ErrNoNext) {
+		writeProblem(w, a.logger, codeNotFound, err.Error())
+		return
+	}
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, cardsJSON([]store.Card{card})[0])
 }
 
 // paging reads a page's offset and limit, as walls page.

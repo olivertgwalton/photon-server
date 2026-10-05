@@ -59,6 +59,14 @@ func (fakeCatalogue) Similar(_ context.Context, _, id uuid.UUID) ([]store.Card, 
 	return []store.Card{{ID: uuid.NewV7(), Kind: domain.ItemMovie, Title: "Thief"}}, nil
 }
 
+// Next has an episode after films and nothing after anything else.
+func (fakeCatalogue) Next(_ context.Context, _, id uuid.UUID) (store.Card, error) {
+	if id != films {
+		return store.Card{}, store.ErrNoNext
+	}
+	return store.Card{ID: uuid.NewV7(), Kind: domain.ItemEpisode, Title: "The Target"}, nil
+}
+
 func (fakeCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage, error) {
 	if id != films {
 		return store.TitlePage{}, store.ErrNotFound
@@ -202,6 +210,14 @@ func TestWall(t *testing.T) {
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/titles/"+films.String()+"/similar", goodToken, ""); !strings.Contains(rec.Body.String(), `"title":"Thief"`) {
 		t.Errorf("similar: %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(t, http.MethodGet, "/api/v1/titles/"+films.String()+"/next", goodToken, ""); rec.Code != http.StatusOK ||
+		!strings.Contains(rec.Body.String(), `"title":"The Target"`) {
+		t.Errorf("next: %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(t, http.MethodGet, "/api/v1/titles/"+uuid.NewV7().String()+"/next", goodToken, ""); rec.Code != http.StatusNotFound ||
+		!strings.Contains(rec.Body.String(), `"detail":"no episode follows"`) {
+		t.Errorf("nothing next: %d %s, want a 404 saying so", rec.Code, rec.Body)
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/facets", goodToken, ""); rec.Code != http.StatusOK ||
 		!strings.Contains(rec.Body.String(), `"genres":["Crime"]`) || !strings.Contains(rec.Body.String(), `"marks":["watched","unwatched","in_progress","favourite"]`) {
