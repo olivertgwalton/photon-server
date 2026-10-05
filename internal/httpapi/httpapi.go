@@ -73,12 +73,16 @@ type Services struct {
 	Profiles  profileLister
 	Catalogue catalogue
 	Libraries libraryAdmin
-	Pictures  pictures
-	Watching  watching
-	Playing   playing
-	Playbacks playbacks
-	Remuxing  remuxing
-	HLS       hlsFiles
+	Tasks     tasks
+	Jobs      jobQueue
+	// NowPlaying is every playback going on, across the cluster.
+	NowPlaying nowPlaying
+	Pictures   pictures
+	Watching   watching
+	Playing    playing
+	Playbacks  playbacks
+	Remuxing   remuxing
+	HLS        hlsFiles
 	// Owners say which node serves a playback's HLS, nil on a server of one node.
 	Owners owners
 	// Signer signs the addresses titles play from.
@@ -156,6 +160,11 @@ func (a *API) routes() []route {
 		{pattern: "DELETE /api/v1/admin/libraries/{id}", access: admin, handle: a.removeLibrary},
 		{pattern: "POST /api/v1/admin/libraries/{id}/scan", access: admin, handle: a.scanLibrary},
 		{pattern: "GET /api/v1/subtitles/{id}/file", access: signedAddress, query: []string{"exp", "sig"}, handle: a.subtitleFile},
+		{pattern: "GET /api/v1/admin/tasks", access: admin, handle: a.adminTasks},
+		{pattern: "POST /api/v1/admin/tasks/{key}/run", access: admin, handle: a.runTask},
+		{pattern: "GET /api/v1/admin/jobs", access: admin, handle: a.adminJobs},
+		{pattern: "POST /api/v1/admin/jobs/{id}/retry", access: admin, handle: a.retryJob},
+		{pattern: "GET /api/v1/admin/playbacks", access: admin, handle: a.adminPlaybacks},
 		{pattern: "GET /api/v1/home", access: signedIn, query: []string{"limit"}, handle: a.home},
 		{pattern: "GET /api/v1/search", access: signedIn, query: []string{"q", "library", "limit"}, handle: a.search},
 		{pattern: "GET /api/v1/artwork/{id}", access: public, query: []string{"width"}, handle: a.artwork},
