@@ -118,7 +118,8 @@ type Video struct {
 
 type Credit struct {
 	Name string `json:"name"`
-	// IDs are the person's: one with no "tmdb" id is not kept.
+	// IDs are the person's, by provider; one with none is not kept. Two credits sharing an id, from
+	// any source, are one person.
 	IDs   map[string]string `json:"ids"`
 	Photo string            `json:"photo,omitempty"`
 	// Kind is "actor", "guest_star", "director", "writer", "producer", "composer" or "creator".

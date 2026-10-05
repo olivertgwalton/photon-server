@@ -30,7 +30,6 @@ func newPerson(db *gorm.DB, opts ...gen.DOOption) person {
 	_person.ALL = field.NewAsterisk(tableName)
 	_person.ID = field.NewField(tableName, "id")
 	_person.Name = field.NewString(tableName, "name")
-	_person.TMDBID = field.NewString(tableName, "tmdb_id")
 	_person.PhotoURL = field.NewString(tableName, "photo_url")
 	_person.PhotoID = field.NewField(tableName, "photo_id")
 	_person.Biography = field.NewString(tableName, "biography")
@@ -50,7 +49,6 @@ type person struct {
 	ALL         field.Asterisk
 	ID          field.Field
 	Name        field.String
-	TMDBID      field.String
 	PhotoURL    field.String
 	PhotoID     field.Field
 	Biography   field.String
@@ -76,7 +74,6 @@ func (p *person) updateTableName(table string) *person {
 	p.ALL = field.NewAsterisk(table)
 	p.ID = field.NewField(table, "id")
 	p.Name = field.NewString(table, "name")
-	p.TMDBID = field.NewString(table, "tmdb_id")
 	p.PhotoURL = field.NewString(table, "photo_url")
 	p.PhotoID = field.NewField(table, "photo_id")
 	p.Biography = field.NewString(table, "biography")
@@ -108,10 +105,9 @@ func (p *person) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (p *person) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 10)
+	p.fieldMap = make(map[string]field.Expr, 9)
 	p.fieldMap["id"] = p.ID
 	p.fieldMap["name"] = p.Name
-	p.fieldMap["tmdb_id"] = p.TMDBID
 	p.fieldMap["photo_url"] = p.PhotoURL
 	p.fieldMap["photo_id"] = p.PhotoID
 	p.fieldMap["biography"] = p.Biography

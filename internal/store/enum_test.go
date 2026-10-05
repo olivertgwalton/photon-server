@@ -33,6 +33,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"artwork_kind":        names(domain.ArtworkKinds()),
 		"item_kind":           names(domain.ItemKinds()),
 		"id_provider":         plugins(names(domain.Providers())),
+		"person_id_provider":  plugins(names(domain.Providers())),
 		"id_source":           names(domain.IDSources()),
 		"stream_kind":         names(domain.StreamKinds()),
 		"video_range":         names(domain.Ranges()),

@@ -4,6 +4,7 @@ package store
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"testing"
 	"time"
@@ -92,6 +93,75 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 	cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{People: []uuid.UUID{her}}})
 	if err != nil || len(cards) != 2 {
 		t.Errorf("titles she is in: %+v, %v; want the film and the show", cards, err)
+	}
+}
+
+func TestAPersonIsKnownByAnyProvidersID(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	film := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{{ContentKey: []byte("Heat"), Parts: []Part{{RelPath: "Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}}}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	cards, _, _ := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 1})
+	heat := cards[0].ID
+	plugin := domain.Provider(domain.PluginSource("films"))
+	credit := func(name string, ids map[domain.Provider]string) domain.Credit {
+		return domain.Credit{Name: name, IDs: ids, Kind: domain.CreditActor, Role: name}
+	}
+	// A plugin credits someone TMDB does not know, and someone it knows by their IMDb id.
+	if err := s.SaveIdentity(ctx, heat, domain.PluginSource("films"), domain.Metadata{Title: "Heat", Credits: []domain.Credit{
+		credit("Extra", map[domain.Provider]string{plugin: "extra"}),
+		credit("Al Pacino", map[domain.Provider]string{domain.ProviderIMDb: "nm0000199", plugin: "pacino"}),
+		credit("Val Kilmer", map[domain.Provider]string{plugin: "kilmer"}),
+	}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	page, err := s.Title(ctx, uuid.UUID{}, heat)
+	if err != nil || len(page.Credits) != 3 || page.Credits[0].Name != "Extra" {
+		t.Fatalf("credits = %+v, %v; want the plugin's three", page.Credits, err)
+	}
+	extra := page.Credits[0].PersonID
+	if p, err := s.Person(ctx, extra); err != nil || p.Name != "Extra" || p.IDs[plugin] != "extra" || len(p.IDs) != 1 {
+		t.Errorf("his page = %+v, %v; want him by the plugin's id", p, err)
+	}
+	if work, err := s.PersonCredits(ctx, uuid.UUID{}, extra); err != nil || len(work) != 1 || work[0].Card.Title != "Heat" {
+		t.Errorf("his work = %+v, %v; want Heat", work, err)
+	}
+	// TMDB credits Pacino by the IMDb id the plugin gave, and Kilmer by its own id alone; then the
+	// plugin learns Kilmer's TMDB id, and the two Kilmers are one.
+	if err := s.SaveIdentity(ctx, heat, domain.SourceTMDB, domain.Metadata{Title: "Heat", Credits: []domain.Credit{
+		credit("Al Pacino", map[domain.Provider]string{domain.ProviderTMDB: "1158", domain.ProviderIMDb: "nm0000199"}),
+		credit("Val Kilmer", map[domain.Provider]string{domain.ProviderTMDB: "5576"}),
+	}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveIdentity(ctx, heat, domain.PluginSource("films"), domain.Metadata{Title: "Heat", Credits: []domain.Credit{
+		credit("Al Pacino", map[domain.Provider]string{domain.ProviderIMDb: "nm0000199", plugin: "pacino"}),
+		credit("Val Kilmer", map[domain.Provider]string{domain.ProviderTMDB: "5576", plugin: "kilmer"}),
+	}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	page, err = s.Title(ctx, uuid.UUID{}, heat)
+	if err != nil || len(page.Credits) != 2 {
+		t.Fatalf("credits = %+v, %v", page.Credits, err)
+	}
+	want := map[string]map[domain.Provider]string{
+		"Al Pacino":  {domain.ProviderTMDB: "1158", domain.ProviderIMDb: "nm0000199", plugin: "pacino"},
+		"Val Kilmer": {domain.ProviderTMDB: "5576", plugin: "kilmer"},
+	}
+	for _, c := range page.Credits {
+		p, err := s.Person(ctx, c.PersonID)
+		if err != nil || !maps.Equal(p.IDs, want[c.Name]) {
+			t.Errorf("%s = %+v, %v; want one person with ids %v", c.Name, p, err, want[c.Name])
+		}
+		if found, _ := s.SearchPeople(ctx, c.Name, 10); len(found) != 1 {
+			t.Errorf("search %q: %+v, want one person", c.Name, found)
+		}
 	}
 }
 

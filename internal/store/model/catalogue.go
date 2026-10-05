@@ -266,7 +266,6 @@ type PlaylistEntry struct {
 type Person struct {
 	ID          UUID `gorm:"type:uuid;default:uuidv7()"`
 	Name        string
-	TMDBID      *string `gorm:"column:tmdb_id"`
 	PhotoURL    *string
 	PhotoID     *UUID `gorm:"type:uuid"`
 	Biography   *string
@@ -277,6 +276,14 @@ type Person struct {
 }
 
 func (Person) TableName() string { return "people" }
+
+type PersonExternalID struct {
+	PersonID UUID            `gorm:"type:uuid"`
+	Provider domain.Provider `gorm:"primaryKey"`
+	Value    string          `gorm:"primaryKey"`
+}
+
+func (PersonExternalID) TableName() string { return "person_ids" }
 
 type Credit struct {
 	ItemID   UUID               `gorm:"type:uuid;primaryKey"`
