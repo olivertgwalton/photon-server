@@ -32,7 +32,7 @@ func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.Library
 	if err != nil {
 		return domain.Library{}, fmt.Errorf("adding library: %w", err)
 	}
-	row.Monitor = domain.MonitorRealtime
+	row.Monitor, row.RefreshDays = domain.MonitorRealtime, 30
 	return library(row, domain.DefaultSources(), domain.DefaultRemoteExtras()), nil
 }
 
@@ -87,6 +87,8 @@ type LibraryChange struct {
 	Sources      []domain.FieldSource
 	RemoteExtras []domain.ExtraKind
 	Monitor      domain.Monitor
+	// RefreshDays, where set, is how often its titles are matched again; zero never.
+	RefreshDays *int
 }
 
 // SetLibrary renames a library, changes whether it is watched, where its metadata comes from and
@@ -117,6 +119,11 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 				return err
 			}
 			if _, err := tx.Folder.WithContext(ctx).Where(tx.Folder.LibraryID.Eq(row.ID)).Delete(); err != nil {
+				return err
+			}
+		}
+		if change.RefreshDays != nil {
+			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.RefreshDays, *change.RefreshDays); err != nil {
 				return err
 			}
 		}
@@ -192,6 +199,6 @@ func saveSources(ctx context.Context, tx *query.Query, lib model.UUID, sources [
 func library(r model.Library, sources []domain.FieldSource, extras []domain.ExtraKind) domain.Library {
 	return domain.Library{
 		ID: uuid.UUID(r.ID), Name: r.Name, Kind: r.Kind, Root: r.Root, Sources: sources, RemoteExtras: extras,
-		Monitor: r.Monitor,
+		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays),
 	}
 }

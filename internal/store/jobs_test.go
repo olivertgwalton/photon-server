@@ -234,3 +234,43 @@ func TestAScanWaitsForItsLibraryToGoQuiet(t *testing.T) {
 		t.Errorf("%d scans due once the delay has passed, want 1", n)
 	}
 }
+
+func TestTitlesDueAFreshMatchAreQueued(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"Heat", "Ronin"} {
+		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{{Title: title, Folder: title}}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Scanning queued both; they ran.
+	j := s.q.Job
+	if _, err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobIdentify))).Delete(); err != nil {
+		t.Fatal(err)
+	}
+	i := s.q.Item
+	heat, _ := i.WithContext(ctx).Where(i.Title.Eq("Heat")).Take()
+	if err := s.Identified(ctx, uuid.UUID(heat.ID)); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.RefreshStale(ctx); err != nil || n != 1 {
+		t.Errorf("queued %d, %v; want Ronin, never matched, alone", n, err)
+	}
+	never := 0
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{RefreshDays: &never}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobIdentify))).Delete(); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.RefreshStale(ctx); err != nil || n != 0 {
+		t.Errorf("a library never refreshed: queued %d, %v", n, err)
+	}
+	if got, _ := s.Library(ctx, lib.ID); got.RefreshDays != 0 {
+		t.Errorf("refresh days = %d, want 0", got.RefreshDays)
+	}
+}

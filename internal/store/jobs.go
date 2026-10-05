@@ -187,3 +187,25 @@ func (s *Store) RetryJob(ctx context.Context, id int64) error {
 	}
 	return err
 }
+
+// Identified records that a title has just been matched on every provider its library takes.
+func (s *Store) Identified(ctx context.Context, id uuid.UUID) error {
+	i := s.q.Item
+	_, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Update(i.IdentifiedAt, time.Now())
+	return err
+}
+
+// RefreshStale queues a match of every film and show its library refreshes and that was last
+// matched longer ago than the library says, as Jellyfin's scheduled metadata refresh does. It
+// answers how many.
+func (s *Store) RefreshStale(ctx context.Context) (int64, error) {
+	res := s.q.Item.WithContext(ctx).UnderlyingDB().Exec(`
+		INSERT INTO jobs (kind, subject)
+		SELECT 'identify', i.id FROM items i JOIN libraries l ON l.id = i.library_id
+		WHERE i.kind IN ('movie', 'show') AND l.refresh_days > 0
+			AND coalesce(i.identified_at, '-infinity') < now() - make_interval(days => l.refresh_days)
+		ON CONFLICT (kind, subject) DO UPDATE SET
+			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
+			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END`)
+	return res.RowsAffected, res.Error
+}
