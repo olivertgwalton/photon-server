@@ -3,6 +3,7 @@
 package store
 
 import (
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -142,5 +143,73 @@ func TestALockedFieldIsLeftForTheReader(t *testing.T) {
 	item, _ = s.q.Item.WithContext(ctx).Take()
 	if item.Overview == nil || *item.Overview != "Pacino and De Niro." {
 		t.Errorf("a reader's overview on a locked field = %v, want it written", item.Overview)
+	}
+}
+
+func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	film := Film{
+		Title: "heat", Folder: "Heat", NFO: &domain.Metadata{Title: "Heat (NFO)"},
+		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{},
+		}}}},
+	}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	item, err := s.q.Item.WithContext(ctx).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	title := func() string {
+		t.Helper()
+		it, err := s.q.Item.WithContext(ctx).Where(s.q.Item.ID.Eq(item.ID)).Take()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return it.Title
+	}
+	match := domain.Metadata{Title: "Heat (TMDB)"}
+
+	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), match, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := title(); got != "Heat (NFO)" {
+		t.Errorf("by default, title = %q, want the NFO's over TMDB's", got)
+	}
+
+	if _, err := s.SetLibrarySources(ctx, "Films", []domain.FieldSource{domain.SourceTMDB, domain.SourceNFO}); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.q.Folder.WithContext(ctx).Count(); n != 0 {
+		t.Errorf("%d folders still fingerprinted after the sources changed, want none", n)
+	}
+	if n, _ := s.q.Job.WithContext(ctx).Where(s.q.Job.Kind.Eq(string(domain.JobIdentify))).Count(); n != 1 {
+		t.Errorf("%d identify jobs after the sources changed, want the film's", n)
+	}
+	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), match, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := title(); got != "Heat (TMDB)" {
+		t.Errorf("trusting TMDB first, title = %q, want TMDB's", got)
+	}
+
+	if _, err := s.SetLibrarySources(ctx, "Films", []domain.FieldSource{domain.SourceNFO}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.Metadata{Overview: "From TMDB."}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if it, _ := s.q.Item.WithContext(ctx).Where(s.q.Item.ID.Eq(item.ID)).Take(); it.Overview != nil {
+		t.Errorf("a library that takes no TMDB took its overview %q", *it.Overview)
+	}
+	libs, err := s.Libraries(ctx)
+	if err != nil || len(libs) != 1 || !slices.Equal(libs[0].Sources, []domain.FieldSource{domain.SourceNFO}) {
+		t.Errorf("libraries = %+v, %v; want Films taking only NFOs", libs, err)
 	}
 }

@@ -1,6 +1,11 @@
 package domain
 
-import "time"
+import (
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+)
 
 // Metadata is what one source says about a title. A zero field says nothing.
 type Metadata struct {
@@ -50,7 +55,7 @@ func Fields() []Field {
 }
 
 // FieldSource is where a field's value came from. A value is replaced only by one from a source
-// that ranks as high or higher, so a user's edit stands until the user changes it.
+// its library ranks as high or higher, so a user's edit stands until the user changes it.
 type FieldSource string
 
 const (
@@ -64,18 +69,28 @@ func FieldSources() []FieldSource {
 	return []FieldSource{SourceFile, SourceTMDB, SourceNFO, SourceUser}
 }
 
-// Rank orders sources: the reader's own edit, then the NFO they keep beside the file, then a
-// provider, then what the file's name says.
-func (s FieldSource) Rank() int {
-	switch s {
-	case SourceFile:
-		return 1
-	case SourceTMDB:
-		return 2
-	case SourceNFO:
-		return 3
-	case SourceUser:
-		return 4
+// MetadataSources are the sources a library may take metadata from, in an order it chooses:
+// what files say always ranks lowest, and a reader's own edit highest.
+func MetadataSources() []FieldSource {
+	return []FieldSource{SourceNFO, SourceTMDB}
+}
+
+// DefaultSources trust an NFO beside the file over a provider, as Jellyfin's default order does.
+func DefaultSources() []FieldSource {
+	return []FieldSource{SourceNFO, SourceTMDB}
+}
+
+func ParseMetadataSources(list string) ([]FieldSource, error) {
+	var out []FieldSource
+	for name := range strings.SplitSeq(list, ",") {
+		src := FieldSource(strings.TrimSpace(name))
+		if !slices.Contains(MetadataSources(), src) {
+			return nil, fmt.Errorf("source %q is not one of %v", src, MetadataSources())
+		}
+		if slices.Contains(out, src) {
+			return nil, fmt.Errorf("source %q is listed twice", src)
+		}
+		out = append(out, src)
 	}
-	return 0
+	return out, nil
 }

@@ -24,24 +24,33 @@ func (l jsonList) Value() (driver.Value, error) {
 	return string(b), err
 }
 
-// applyMetadata writes what source says about a title, field by field, wherever no source that
-// ranks higher has spoken, and remembers the source of each field it writes. A list is replaced
-// whole, never merged, so two providers' genres never stand side by side.
+// applyMetadata writes what source says about a title, field by field, wherever no source its
+// library ranks higher has spoken, and remembers the source of each field it writes. A source the
+// library does not take writes nothing. A list is replaced whole, never merged, so two providers'
+// genres never stand side by side.
 func applyMetadata(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, m domain.Metadata) error {
 	f := tx.ItemField
 	rows, err := f.WithContext(ctx).Where(f.ItemID.Eq(item)).Find()
 	if err != nil {
 		return err
 	}
-	current := make(map[domain.Field]domain.FieldSource, len(rows))
+	ranked, err := ranks(ctx, tx, item)
+	if err != nil {
+		return err
+	}
+	rank, taken := ranked[source]
+	if !taken {
+		return nil
+	}
+	current := make(map[domain.Field]int, len(rows))
 	for _, r := range rows {
-		current[r.Field] = r.Source
+		current[r.Field] = ranked[r.Source]
 	}
 	i := tx.Item
 	var assigns []field.AssignExpr
 	var written []*model.ItemField
 	set := func(name domain.Field, said bool, a field.AssignExpr) {
-		if cur, ok := current[name]; (said || slices.Contains(m.Locked, name)) && (!ok || source.Rank() >= cur.Rank()) {
+		if cur, ok := current[name]; (said || slices.Contains(m.Locked, name)) && (!ok || rank >= cur) {
 			if said {
 				assigns = append(assigns, a)
 			}
@@ -71,6 +80,22 @@ func applyMetadata(ctx context.Context, tx *query.Query, item model.UUID, source
 		Columns:   []clause.Column{{Name: "item_id"}, {Name: "field"}},
 		DoUpdates: clause.Assignments(map[string]any{"source": source, "updated_at": time.Now()}),
 	}).Create(written...)
+}
+
+// ranks orders the sources that may write an item's fields: what files say lowest, a reader's own
+// edit highest, and its library's sources between, in the library's order. A source the library
+// does not take is absent, and a value it once wrote ranks below everything.
+func ranks(ctx context.Context, tx *query.Query, item model.UUID) (map[domain.FieldSource]int, error) {
+	ls, i := tx.LibrarySource, tx.Item
+	taken, err := ls.WithContext(ctx).Join(i, i.LibraryID.EqCol(ls.LibraryID)).Where(i.ID.Eq(item)).Find()
+	if err != nil {
+		return nil, err
+	}
+	out := map[domain.FieldSource]int{domain.SourceFile: 1, domain.SourceUser: len(taken) + 2}
+	for _, t := range taken {
+		out[t.Source] = len(taken) + 1 - t.Position
+	}
+	return out, nil
 }
 
 // describe writes what a title's file and folder names say about it, then its NFO, if it has one.

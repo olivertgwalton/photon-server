@@ -36,8 +36,8 @@ func TestLibraries(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []domain.Library{
-		{Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films"},
-		{Name: "Television", Kind: domain.LibraryShows, Root: "/srv/tv"},
+		{Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films", Sources: domain.DefaultSources()},
+		{Name: "Television", Kind: domain.LibraryShows, Root: "/srv/tv", Sources: domain.DefaultSources()},
 	}
 	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(domain.Library{}, "ID")); diff != "" {
 		t.Errorf("libraries (-want +got):\n%s", diff)
