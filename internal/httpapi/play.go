@@ -51,7 +51,7 @@ type hlsFiles interface {
 }
 
 type playing interface {
-	Playable(ctx context.Context, item, version uuid.UUID) (store.PlayCopy, error)
+	Playable(ctx context.Context, profile, item, version uuid.UUID) (store.PlayCopy, error)
 	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
 }
@@ -137,7 +137,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	c, err := a.svc.Playing.Playable(r.Context(), id, version)
+	c, err := a.svc.Playing.Playable(r.Context(), sessionOf(r).Profile.ID, id, version)
 	if a.answered(w, r, err) {
 		return
 	}

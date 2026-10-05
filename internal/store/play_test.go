@@ -45,7 +45,7 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	longest, err := s.Playable(ctx, uuid.UUID(item.ID), uuid.UUID{})
+	longest, err := s.Playable(ctx, uuid.UUID{}, uuid.UUID(item.ID), uuid.UUID{})
 	if err != nil || len(longest.Parts) != 2 || longest.Parts[1].OffsetMS != (2*time.Hour).Milliseconds() {
 		t.Fatalf("Playable = %+v, %v; want the four-hour copy's two parts on one timeline", longest, err)
 	}
@@ -54,7 +54,7 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.Playable(ctx, uuid.UUID(item.ID), uuid.UUID(theatrical.ID))
+	got, err := s.Playable(ctx, uuid.UUID{}, uuid.UUID(item.ID), uuid.UUID(theatrical.ID))
 	if err != nil || got.Version != uuid.UUID(theatrical.ID) || len(got.Parts) != 1 || got.Container != "matroska,webm" {
 		t.Errorf("asking for the theatrical cut: %+v, %v", got, err)
 	}
@@ -69,7 +69,7 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	if err := s.FinishScan(ctx, lib.ID, []string{"L"}, []string{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Playable(ctx, uuid.UUID(item.ID), uuid.UUID{}); !errors.Is(err, ErrNotFound) {
+	if _, err := s.Playable(ctx, uuid.UUID{}, uuid.UUID(item.ID), uuid.UUID{}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("with every copy's files gone: %v, want ErrNotFound", err)
 	}
 }

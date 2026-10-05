@@ -94,7 +94,7 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, in
 	return cards, total, err
 }
 
-// wallQuery is a library's films and shows as a filter narrows them for a profile; ErrNotFound
+// wallQuery is a library's films and shows a profile may see, as a filter narrows them; ErrNotFound
 // for no such library.
 func (s *Store) wallQuery(ctx context.Context, lib, profile uuid.UUID, f WallFilter) (*gorm.DB, error) {
 	l := s.q.Library
@@ -104,7 +104,8 @@ func (s *Store) wallQuery(ctx context.Context, lib, profile uuid.UUID, f WallFil
 		return nil, err
 	}
 	i := s.q.Item
-	q := i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib)), i.Kind.In(string(domain.ItemMovie), string(domain.ItemShow))).UnderlyingDB()
+	q := i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib)), i.Kind.In(string(domain.ItemMovie), string(domain.ItemShow))).UnderlyingDB().
+		Where("visible(items.id, ?)", profile.String())
 	return f.apply(q, profile), nil
 }
 

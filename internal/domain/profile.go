@@ -58,3 +58,15 @@ func Lock(role Role, hasPIN bool) ProfileLock {
 	}
 	return LockNone
 }
+
+// Unrated is whether a profile with an age limit sees titles no certificate rates.
+type Unrated string
+
+const (
+	UnratedAllow Unrated = "allow"
+	UnratedBlock Unrated = "block"
+)
+
+func UnratedPolicies() []Unrated {
+	return []Unrated{UnratedAllow, UnratedBlock}
+}

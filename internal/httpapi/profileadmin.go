@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
@@ -15,6 +17,57 @@ type profileAdmin interface {
 	AddProfile(ctx context.Context, name string, role domain.Role, passwordHash string) (domain.Profile, error)
 	SetProfile(ctx context.Context, id uuid.UUID, c store.ProfileChange) (domain.Profile, error)
 	RemoveProfile(ctx context.Context, id uuid.UUID) error
+	Access(ctx context.Context, id uuid.UUID) (store.ProfileAccess, error)
+	SetAccess(ctx context.Context, id uuid.UUID, a store.ProfileAccess) error
+}
+
+type accessJSON struct {
+	// MaxAge is the oldest certificate it sees, by the age it is for; null for any.
+	MaxAge    *int           `json:"max_age"`
+	Unrated   domain.Unrated `json:"unrated"`
+	Libraries []uuid.UUID    `json:"libraries"`
+}
+
+// profileAccess answers what a profile may see, as Jellyfin's parental control and library access
+// say it.
+func (a *API) profileAccess(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r)
+	if !ok {
+		return
+	}
+	access, err := a.svc.ProfileAdmin.Access(r.Context(), id)
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, accessJSON(access))
+}
+
+// setProfileAccess replaces what a profile may see: titles rated for max_age and younger, unrated
+// ones allowed or blocked, and only the libraries listed, every one where none are.
+func (a *API) setProfileAccess(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r)
+	if !ok {
+		return
+	}
+	var req accessJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	req.Unrated = cmp.Or(req.Unrated, domain.UnratedAllow)
+	if !slices.Contains(domain.UnratedPolicies(), req.Unrated) || (req.MaxAge != nil && (*req.MaxAge < 0 || *req.MaxAge > 21)) {
+		writeProblem(w, a.logger, codeInvalidBody, "max_age is an age to 21 or null, and unrated is allow or block")
+		return
+	}
+	err := a.svc.ProfileAdmin.SetAccess(r.Context(), id, store.ProfileAccess(req))
+	if errors.Is(err, store.ErrNotFound) {
+		writeProblem(w, a.logger, codeNotFound, "no such profile, or one of its libraries")
+		return
+	}
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // addProfile adds a profile of the household, as Jellyfin's dashboard adds a user. One with no

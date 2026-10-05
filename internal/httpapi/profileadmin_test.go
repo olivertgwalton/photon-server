@@ -14,7 +14,10 @@ import (
 )
 
 // fakeProfiles has Oliver, the only admin, and keeps the hashes it is given.
-type fakeProfiles struct{ hashes map[string]string }
+type fakeProfiles struct {
+	hashes map[string]string
+	access store.ProfileAccess
+}
 
 func (f *fakeProfiles) AddProfile(_ context.Context, name string, role domain.Role, hash string) (domain.Profile, error) {
 	if name == oliver.Name {
@@ -41,6 +44,21 @@ func (f *fakeProfiles) RemoveProfile(_ context.Context, id uuid.UUID) error {
 	return store.ErrNotFound
 }
 
+func (f *fakeProfiles) Access(_ context.Context, id uuid.UUID) (store.ProfileAccess, error) {
+	if id != oliver.ID {
+		return store.ProfileAccess{}, store.ErrNotFound
+	}
+	return f.access, nil
+}
+
+func (f *fakeProfiles) SetAccess(_ context.Context, id uuid.UUID, a store.ProfileAccess) error {
+	if id != oliver.ID {
+		return store.ErrNotFound
+	}
+	f.access = a
+	return nil
+}
+
 func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 	profiles := &fakeProfiles{hashes: map[string]string{}}
 	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, ProfileAdmin: profiles})
@@ -58,6 +76,11 @@ func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 		{goodToken, http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"name": "Ollie"}`, http.StatusOK},
 		{goodToken, http.MethodPatch, "/api/v1/admin/profiles/" + uuid.NewV7().String(), `{"name": "Nobody"}`, http.StatusNotFound},
 		{goodToken, http.MethodDelete, "/api/v1/admin/profiles/" + oliver.ID.String(), "", http.StatusConflict},
+		{goodToken, http.MethodPut, "/api/v1/admin/profiles/" + oliver.ID.String() + "/access", `{"max_age": 12, "unrated": "block", "libraries": []}`, http.StatusNoContent},
+		{goodToken, http.MethodPut, "/api/v1/admin/profiles/" + oliver.ID.String() + "/access", `{"max_age": -1}`, http.StatusBadRequest},
+		{goodToken, http.MethodPut, "/api/v1/admin/profiles/" + oliver.ID.String() + "/access", `{"unrated": "maybe"}`, http.StatusBadRequest},
+		{goodToken, http.MethodPut, "/api/v1/admin/profiles/" + uuid.NewV7().String() + "/access", `{}`, http.StatusNotFound},
+		{goodToken, http.MethodGet, "/api/v1/admin/profiles/" + oliver.ID.String() + "/access", "", http.StatusOK},
 	} {
 		req := httptest.NewRequest(tc.method, tc.target, strings.NewReader(tc.body))
 		req.Header.Set("Authorization", "Bearer "+tc.token)
@@ -66,6 +89,9 @@ func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 		if rec.Code != tc.want {
 			t.Errorf("%s %s %s: %d, want %d: %s", tc.method, tc.target, tc.body, rec.Code, tc.want, rec.Body)
 		}
+	}
+	if profiles.access.MaxAge == nil || *profiles.access.MaxAge != 12 || profiles.access.Unrated != domain.UnratedBlock {
+		t.Errorf("access kept: %+v", profiles.access)
 	}
 	if profiles.hashes["Kid"] != "" || !strings.HasPrefix(profiles.hashes["Partner"], "$argon2id$") {
 		t.Errorf("hashes kept: %v, want none for Kid and an argon2id hash for Partner", profiles.hashes)

@@ -39,6 +39,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Playlist:           newPlaylist(db, opts...),
 		PlaylistEntry:      newPlaylistEntry(db, opts...),
 		Profile:            newProfile(db, opts...),
+		ProfileLibrary:     newProfileLibrary(db, opts...),
 		Provider:           newProvider(db, opts...),
 		Rating:             newRating(db, opts...),
 		RemoteVideo:        newRemoteVideo(db, opts...),
@@ -75,6 +76,7 @@ type Query struct {
 	Playlist           playlist
 	PlaylistEntry      playlistEntry
 	Profile            profile
+	ProfileLibrary     profileLibrary
 	Provider           provider
 	Rating             rating
 	RemoteVideo        remoteVideo
@@ -114,6 +116,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Playlist:           q.Playlist.clone(db),
 		PlaylistEntry:      q.PlaylistEntry.clone(db),
 		Profile:            q.Profile.clone(db),
+		ProfileLibrary:     q.ProfileLibrary.clone(db),
 		Provider:           q.Provider.clone(db),
 		Rating:             q.Rating.clone(db),
 		RemoteVideo:        q.RemoteVideo.clone(db),
@@ -158,6 +161,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Playlist:           q.Playlist.replaceDB(db),
 		PlaylistEntry:      q.PlaylistEntry.replaceDB(db),
 		Profile:            q.Profile.replaceDB(db),
+		ProfileLibrary:     q.ProfileLibrary.replaceDB(db),
 		Provider:           q.Provider.replaceDB(db),
 		Rating:             q.Rating.replaceDB(db),
 		RemoteVideo:        q.RemoteVideo.replaceDB(db),
@@ -192,6 +196,7 @@ type queryCtx struct {
 	Playlist           IPlaylistDo
 	PlaylistEntry      IPlaylistEntryDo
 	Profile            IProfileDo
+	ProfileLibrary     IProfileLibraryDo
 	Provider           IProviderDo
 	Rating             IRatingDo
 	RemoteVideo        IRemoteVideoDo
@@ -226,6 +231,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Playlist:           q.Playlist.WithContext(ctx),
 		PlaylistEntry:      q.PlaylistEntry.WithContext(ctx),
 		Profile:            q.Profile.WithContext(ctx),
+		ProfileLibrary:     q.ProfileLibrary.WithContext(ctx),
 		Provider:           q.Provider.WithContext(ctx),
 		Rating:             q.Rating.WithContext(ctx),
 		RemoteVideo:        q.RemoteVideo.WithContext(ctx),

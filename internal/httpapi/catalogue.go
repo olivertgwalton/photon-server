@@ -24,7 +24,7 @@ type catalogue interface {
 	Libraries(ctx context.Context) ([]domain.Library, error)
 	Wall(ctx context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
 	Letters(ctx context.Context, lib, profile uuid.UUID, f store.WallFilter) ([]store.Letter, error)
-	Facets(ctx context.Context, lib uuid.UUID) (store.Facets, error)
+	Facets(ctx context.Context, lib, profile uuid.UUID) (store.Facets, error)
 	Similar(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, error)
@@ -308,7 +308,7 @@ func (a *API) facets(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	f, err := a.svc.Catalogue.Facets(r.Context(), lib)
+	f, err := a.svc.Catalogue.Facets(r.Context(), lib, sessionOf(r).Profile.ID)
 	if a.answered(w, r, err) {
 		return
 	}

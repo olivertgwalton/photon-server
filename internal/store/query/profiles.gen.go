@@ -34,6 +34,8 @@ func newProfile(db *gorm.DB, opts ...gen.DOOption) profile {
 	_profile.PasswordHash = field.NewString(tableName, "password_hash")
 	_profile.PinHash = field.NewString(tableName, "pin_hash")
 	_profile.CreatedAt = field.NewTime(tableName, "created_at")
+	_profile.MaxAge = field.NewInt16(tableName, "max_age")
+	_profile.Unrated = field.NewString(tableName, "unrated")
 
 	_profile.fillFieldMap()
 
@@ -50,6 +52,8 @@ type profile struct {
 	PasswordHash field.String
 	PinHash      field.String
 	CreatedAt    field.Time
+	MaxAge       field.Int16
+	Unrated      field.String
 
 	fieldMap map[string]field.Expr
 }
@@ -72,6 +76,8 @@ func (p *profile) updateTableName(table string) *profile {
 	p.PasswordHash = field.NewString(table, "password_hash")
 	p.PinHash = field.NewString(table, "pin_hash")
 	p.CreatedAt = field.NewTime(table, "created_at")
+	p.MaxAge = field.NewInt16(table, "max_age")
+	p.Unrated = field.NewString(table, "unrated")
 
 	p.fillFieldMap()
 
@@ -96,13 +102,15 @@ func (p *profile) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (p *profile) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 6)
+	p.fieldMap = make(map[string]field.Expr, 8)
 	p.fieldMap["id"] = p.ID
 	p.fieldMap["name"] = p.Name
 	p.fieldMap["role"] = p.Role
 	p.fieldMap["password_hash"] = p.PasswordHash
 	p.fieldMap["pin_hash"] = p.PinHash
 	p.fieldMap["created_at"] = p.CreatedAt
+	p.fieldMap["max_age"] = p.MaxAge
+	p.fieldMap["unrated"] = p.Unrated
 }
 
 func (p profile) clone(db *gorm.DB) profile {
