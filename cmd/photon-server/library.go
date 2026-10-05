@@ -17,7 +17,7 @@ import (
 
 const libraryUsage = `usage:
   photon-server library add -name NAME -kind movies|shows ROOT
-  photon-server library set -name NAME -sources nfo,tmdb
+  photon-server library set -name NAME [-sources nfo,tmdb,tvdb] [-extras trailer,featurette|none]
   photon-server library list`
 
 func library(ctx context.Context, logger *slog.Logger, databaseURL string, out io.Writer, args []string) error {
@@ -75,21 +75,29 @@ func setLibrary(ctx context.Context, st *store.Store, out io.Writer, args []stri
 	fs := flag.NewFlagSet("library set", flag.ContinueOnError)
 	name := fs.String("name", "", "the library's name")
 	sources := fs.String("sources", "", "where its metadata comes from, most trusted first")
+	extras := fs.String("extras", "", "the kinds of video it keeps providers' links to, or none")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *name == "" || *sources == "" || fs.NArg() != 0 {
+	if *name == "" || (*sources == "" && *extras == "") || fs.NArg() != 0 {
 		return errors.New(libraryUsage)
 	}
-	list, err := domain.ParseMetadataSources(*sources)
-	if err != nil {
+	var change store.LibraryChange
+	var err error
+	if *sources != "" {
+		if change.Sources, err = domain.ParseMetadataSources(*sources); err != nil {
+			return err
+		}
+	}
+	if *extras != "" {
+		if change.RemoteExtras, err = domain.ParseExtraKinds(*extras); err != nil {
+			return err
+		}
+	}
+	if err := st.SetLibrary(ctx, *name, change); err != nil {
 		return err
 	}
-	lib, err := st.SetLibrarySources(ctx, *name, list)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(out, "%s takes metadata from %v; its folders are read again at the next scan\n", lib.Name, lib.Sources)
+	_, err = fmt.Fprintf(out, "%s changed; its titles are matched again\n", *name)
 	return err
 }
 
@@ -99,9 +107,9 @@ func listLibraries(ctx context.Context, st *store.Store, out io.Writer) error {
 		return err
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "NAME\tKIND\tSOURCES\tROOT\tID")
+	_, _ = fmt.Fprintln(w, "NAME\tKIND\tSOURCES\tEXTRAS\tROOT\tID")
 	for _, l := range libs {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%v\t%s\t%s\n", l.Name, l.Kind, l.Sources, l.Root, l.ID)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%v\t%v\t%s\t%s\n", l.Name, l.Kind, l.Sources, l.RemoteExtras, l.Root, l.ID)
 	}
 	return w.Flush()
 }

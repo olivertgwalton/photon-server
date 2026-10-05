@@ -57,6 +57,24 @@ type LibrarySource struct {
 	Position  int
 }
 
+// LibraryRemoteExtra is a kind of video a library keeps providers' links to.
+type LibraryRemoteExtra struct {
+	LibraryID UUID             `gorm:"type:uuid;primaryKey"`
+	Kind      domain.ExtraKind `gorm:"primaryKey"`
+}
+
+type RemoteVideo struct {
+	ItemID      UUID               `gorm:"type:uuid;primaryKey"`
+	Source      domain.FieldSource `gorm:"primaryKey"`
+	Position    int                `gorm:"primaryKey"`
+	Kind        domain.ExtraKind
+	Site        string
+	Key         string
+	Name        string
+	Language    *string
+	PublishedAt *time.Time
+}
+
 type ExternalID struct {
 	ItemID   UUID            `gorm:"type:uuid;primaryKey"`
 	Provider domain.Provider `gorm:"primaryKey"`

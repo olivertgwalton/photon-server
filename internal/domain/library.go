@@ -31,4 +31,6 @@ type Library struct {
 	Root string
 	// Sources are where its metadata may come from, most trusted first.
 	Sources []FieldSource
+	// RemoteExtras are the kinds of video it keeps links to from its providers.
+	RemoteExtras []ExtraKind
 }

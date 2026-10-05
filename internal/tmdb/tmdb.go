@@ -41,20 +41,21 @@ type limiter interface {
 }
 
 type Client struct {
-	base     string
-	token    string
-	language string
-	country  string
-	http     *http.Client
-	limits   limiter
+	base          string
+	token         string
+	language      string
+	videoLanguage string
+	country       string
+	http          *http.Client
+	limits        limiter
 }
 
 // New makes a client that authenticates with an API read access token and asks for metadata in
 // language, an IETF tag such as en-US whose region picks the certificates.
 func New(token, language string, limits limiter) *Client {
-	_, country, _ := strings.Cut(language, "-")
+	videoLanguage, country, _ := strings.Cut(language, "-")
 	return &Client{
-		base: baseURL, token: token, language: language, country: strings.ToUpper(country),
+		base: baseURL, token: token, language: language, videoLanguage: videoLanguage, country: strings.ToUpper(country),
 		http: &http.Client{Timeout: 30 * time.Second}, limits: limits,
 	}
 }
@@ -169,6 +170,9 @@ type details struct {
 			} `json:"release_dates"`
 		} `json:"results"`
 	} `json:"release_dates"`
+	Videos struct {
+		Results []video `json:"results"`
+	} `json:"videos"`
 	ContentRatings struct {
 		Results []struct {
 			Country string `json:"iso_3166_1"`
@@ -179,9 +183,14 @@ type details struct {
 
 // Details answers what TMDB says about a title, with its certificate in the client's country.
 func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadata, error) {
-	extra := map[Kind]string{Movie: "release_dates,external_ids", Show: "content_ratings,external_ids"}[kind]
+	extra := map[Kind]string{Movie: "release_dates,external_ids,videos", Show: "content_ratings,external_ids,videos"}[kind]
+	q := url.Values{
+		"append_to_response": {extra},
+		// Videos in the metadata language, and those in none, such as most trailers' music.
+		"include_video_language": {c.videoLanguage + ",null"},
+	}
 	var d details
-	if err := c.get(ctx, fmt.Sprintf("/%s/%d", kind, id), url.Values{"append_to_response": {extra}}, &d); err != nil {
+	if err := c.get(ctx, fmt.Sprintf("/%s/%d", kind, id), q, &d); err != nil {
 		return domain.Metadata{}, err
 	}
 	m := d.match()
@@ -210,7 +219,39 @@ func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadat
 			out.Certificate = cmp.Or(out.Certificate, r.Rating)
 		}
 	}
+	videos := d.Videos.Results
+	// The studio's own first, then the newest.
+	slices.SortStableFunc(videos, func(a, b video) int {
+		if a.Official != b.Official {
+			return map[bool]int{true: -1, false: 1}[a.Official]
+		}
+		return b.Published.Compare(a.Published)
+	})
+	for _, v := range videos {
+		out.Videos = append(out.Videos, domain.RemoteVideo{
+			Kind: cmp.Or(videoKinds[v.Type], domain.ExtraOther), Site: v.Site, Key: v.Key, Name: v.Name,
+			Language: v.Language, Published: v.Published,
+		})
+	}
 	return out, nil
+}
+
+type video struct {
+	Type      string    `json:"type"`
+	Site      string    `json:"site"`
+	Key       string    `json:"key"`
+	Name      string    `json:"name"`
+	Language  string    `json:"iso_639_1"`
+	Official  bool      `json:"official"`
+	Published time.Time `json:"published_at"`
+}
+
+// videoKinds maps TMDB's video types to extra kinds; Opening Credits and any type TMDB adds are
+// other.
+var videoKinds = map[string]domain.ExtraKind{
+	"Trailer": domain.ExtraTrailer, "Teaser": domain.ExtraTeaser, "Clip": domain.ExtraClip,
+	"Featurette": domain.ExtraFeaturette, "Behind the Scenes": domain.ExtraBehindTheScenes,
+	"Bloopers": domain.ExtraBlooper,
 }
 
 func (c *Client) Season(ctx context.Context, show, number int) (domain.SeasonMetadata, error) {

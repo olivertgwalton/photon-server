@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"slices"
 	"uuid"
 
 	"gorm.io/gorm"
@@ -77,6 +78,9 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 		if err := saveIDs(ctx, tx, item, domain.IDFromMatch, m.IDs); err != nil {
 			return err
 		}
+		if err := saveRemoteVideos(ctx, tx, item, source, m.Videos); err != nil {
+			return err
+		}
 		i := tx.Item
 		for number, season := range seasons {
 			row, err := i.WithContext(ctx).Where(
@@ -108,4 +112,36 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 		}
 		return nil
 	})
+}
+
+// saveRemoteVideos replaces what a provider links to for a title with the videos it links to now,
+// of the kinds the title's library keeps.
+func saveRemoteVideos(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, videos []domain.RemoteVideo) error {
+	rv, ex, i := tx.RemoteVideo, tx.LibraryRemoteExtra, tx.Item
+	if _, err := rv.WithContext(ctx).Where(rv.ItemID.Eq(item), rv.Source.Eq(string(source))).Delete(); err != nil {
+		return err
+	}
+	var kept []domain.ExtraKind
+	err := ex.WithContext(ctx).Select(ex.Kind).Join(i, i.LibraryID.EqCol(ex.LibraryID)).Where(i.ID.Eq(item)).Scan(&kept)
+	if err != nil {
+		return err
+	}
+	var rows []*model.RemoteVideo
+	for _, v := range videos {
+		if !slices.Contains(kept, v.Kind) {
+			continue
+		}
+		row := &model.RemoteVideo{
+			ItemID: item, Source: source, Position: len(rows), Kind: v.Kind, Site: v.Site, Key: v.Key, Name: v.Name,
+			Language: optional(v.Language),
+		}
+		if !v.Published.IsZero() {
+			row.PublishedAt = &v.Published
+		}
+		rows = append(rows, row)
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	return rv.WithContext(ctx).Create(rows...)
 }
