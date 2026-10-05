@@ -44,6 +44,8 @@ type authenticator interface {
 	PollPairing(ctx context.Context, deviceCode string) (kv.PairingState, string, domain.Profile, error)
 	SwitchProfile(ctx context.Context, session domain.Session, target uuid.UUID, secret string) (domain.Profile, error)
 	SetPIN(ctx context.Context, profile uuid.UUID, pin string) error
+	Devices(ctx context.Context, session domain.Session) ([]store.DeviceListing, error)
+	SignOutDevice(ctx context.Context, session domain.Session, device uuid.UUID) error
 }
 
 type profileLister interface {
@@ -94,6 +96,8 @@ func (a *API) routes() []route {
 		{pattern: "PUT /api/v1/session/profile", access: signedIn, handle: a.switchProfile},
 		{pattern: "PUT /api/v1/me/pin", access: signedIn, handle: a.setPIN},
 		{pattern: "DELETE /api/v1/me/pin", access: signedIn, handle: a.clearPIN},
+		{pattern: "GET /api/v1/auth/devices", access: signedIn, handle: a.devices},
+		{pattern: "DELETE /api/v1/auth/devices/{id}", access: signedIn, handle: a.signOutDevice},
 	}
 }
 
