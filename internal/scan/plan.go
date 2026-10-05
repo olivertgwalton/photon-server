@@ -156,9 +156,10 @@ func stacks(files []library.File) [][]library.File {
 }
 
 // versionsOf groups copies as versions of the folder's film. One copy is the folder's film
-// whatever its file is called. Several are its versions only when each name begins with the
-// folder's (without its id and edition tags) and what follows is nothing, a separator or a
-// bracket, which becomes the version's label (Jellyfin's rule).
+// whatever its file is called. Several are its versions only when every name gives the same year
+// and begins with the folder's (without its id and edition tags), and what follows is nothing, a
+// separator or a bracket, which becomes the version's label. That is Jellyfin's rule, except that
+// a brace or parenthesis also opens a label, for Plex's edition tags.
 func versionsOf(folder string, copies [][]library.File) ([]copyPlan, bool) {
 	folder = strings.TrimSpace(naming.StripTags(folder))
 	plans := make([]copyPlan, 0, len(copies))
@@ -166,6 +167,9 @@ func versionsOf(folder string, copies [][]library.File) ([]copyPlan, bool) {
 		s := stem(c[0].Name)
 		if p, ok := naming.StackPart(s); ok {
 			s = p.Base
+		}
+		if naming.CleanName(s).Year != naming.CleanName(stem(copies[0][0].Name)).Year {
+			return nil, false
 		}
 		rest, prefixed := cutPrefixFold(s, folder)
 		if prefixed {
