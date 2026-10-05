@@ -50,6 +50,13 @@ metadata from `nfo` and `tmdb` by default, most trusted first; change that with
 `photon-server library set -name NAME -sources nfo,tvdb,tmdb`. TheTVDB describes shows only. What a reader edits
 or an NFO says is never replaced by a match.
 
+A film or show is matched again every 30 days (a library's `refresh_days`, 0 never). An admin can ask now, as
+with Jellyfin's and Plex's Refresh Metadata: `POST /api/v1/admin/titles/{id}/refresh` with
+`{"mode": "missing"}` asks about the title and any season with an episode not yet described, ahead
+of everything queued; `"all"` asks about every season and episode under it too. Either way each
+provider's pictures are replaced with what it has now, and edits, locks and NFOs stand. Reading
+its files again is the library scan's job.
+
 Metadata providers are plugins: `GET /api/v1/admin/providers` lists each with what it can do (describe
 titles, rate them) and what it needs set. TMDB gives its own score; MDBList gives IMDb's, Rotten
 Tomatoes' critics and audience, Metacritic's, Letterboxd's and Trakt's once an admin sets its free

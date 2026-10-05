@@ -389,6 +389,11 @@ func (a *API) routes() []route {
 			body:    setEpisodeOrderJSON{}, status: http.StatusAccepted, handle: a.setEpisodeOrder,
 		},
 		{
+			pattern: "POST /api/v1/admin/titles/{id}/refresh", access: admin,
+			summary: "Ask a title's providers about it again now: a season or episode as its show",
+			body:    refreshJSON{}, status: http.StatusAccepted, handle: a.refresh,
+		},
+		{
 			pattern: "PUT /api/v1/admin/versions/{id}/markers", access: admin,
 			summary: "Say where a copy's intro, credits, recap and preview are, or that a part has none, over what was found",
 			body:    markersJSON{}, status: http.StatusNoContent, handle: a.setMarkers,

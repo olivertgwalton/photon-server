@@ -97,6 +97,23 @@ func EpisodeOrders() []EpisodeOrder {
 	return []EpisodeOrder{OrderAired, OrderDVD, OrderAbsolute}
 }
 
+// RefreshMode is how much of a title an admin's refresh asks its providers about again. Either
+// way what a reader edited or locked, and what an NFO says, stands, and each provider's pictures
+// are replaced with what it has now.
+type RefreshMode string
+
+const (
+	// RefreshMissing asks about the title and the seasons with something not yet described, as
+	// the scheduled refresh does.
+	RefreshMissing RefreshMode = "missing"
+	// RefreshAll asks about every season and episode under it as well.
+	RefreshAll RefreshMode = "all"
+)
+
+func RefreshModes() []RefreshMode {
+	return []RefreshMode{RefreshMissing, RefreshAll}
+}
+
 // SeasonRequest is which of a show's seasons a provider is asked about, in the order its files are
 // numbered in.
 type SeasonRequest struct {
