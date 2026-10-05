@@ -454,3 +454,26 @@ func TestFilmNFO(t *testing.T) {
 		t.Errorf("Heat's tagline = %q, want its own NFO's", got)
 	}
 }
+
+func TestNFOsNameSeasonsAndNumberEpisodes(t *testing.T) {
+	f := newFixture(t, domain.LibraryShows)
+	f.put("the wire/Season 1/the.wire.s01e01.mkv", "e1")
+	f.put("the wire/Season 2/the.wire.s02e01.mkv", "e2")
+	f.write("the wire/tvshow.nfo", `<tvshow><title>The Wire</title><namedseason number="1">The Street</namedseason></tvshow>`)
+	f.write("the wire/Season 2/season.nfo", `<season><title>The Port</title></season>`)
+	f.write("the wire/Season 2/the.wire.s02e01.nfo", `<episodedetails><title>Ebb Tide</title><season>2</season><episode>1</episode></episodedetails>
+<episodedetails><title>Collateral Damage</title><season>2</season><episode>2</episode></episodedetails>`)
+	f.scan()
+	if got := f.title(`SELECT string_agg(title, ', ' ORDER BY season_number) FROM items WHERE kind = 'season'`); got != "The Street, The Port" {
+		t.Errorf("seasons = %q, want tvshow.nfo's name for 1 and season.nfo's for 2", got)
+	}
+	if got := f.title(`SELECT title || ' ' || episode_number || '-' || episode_end FROM items WHERE kind = 'episode' AND season_number = 2`); got != "Ebb Tide / Collateral Damage 1-2" {
+		t.Errorf("season 2's episode = %q, want both NFO episodes as 1-2", got)
+	}
+
+	f.write("the wire/tvshow.nfo", `<tvshow><title>The Wire</title><namedseason number="1">Baltimore</namedseason></tvshow>`)
+	f.scan()
+	if got := f.title(`SELECT title FROM items WHERE kind = 'season' AND season_number = 1`); got != "Baltimore" {
+		t.Errorf("after renaming season 1 in tvshow.nfo, it is %q", got)
+	}
+}

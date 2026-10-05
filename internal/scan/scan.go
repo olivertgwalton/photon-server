@@ -2,6 +2,7 @@ package scan
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -156,9 +157,21 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 	var show store.Show
 	if series != "" {
 		name := naming.SeriesName(series)
+		said := s.readNFO(ctx, root, series, "tvshow.nfo")
 		show = store.Show{
-			Title: name.Title, Year: name.Year, Folder: series, IDs: ids(name.IDs),
-			NFO: metadata(s.readNFO(ctx, root, series, "tvshow.nfo")),
+			Title: name.Title, Year: name.Year, Folder: series, IDs: ids(name.IDs), NFO: metadata(said),
+			Seasons: map[int]domain.Metadata{},
+		}
+		if said != nil {
+			for n, title := range said.SeasonNames {
+				show.Seasons[n] = domain.Metadata{Title: title}
+			}
+		}
+		// Jellyfin reads season.nfo only in the season's own folder.
+		if said := s.readNFO(ctx, root, folder.Path, "season.nfo"); said != nil && season != nil {
+			n := cmp.Or(said.Season, season)
+			said.Title = cmp.Or(said.Title, show.Seasons[*n].Title)
+			show.Seasons[*n] = said.Metadata
 		}
 	}
 	var episodes []store.Episode
@@ -172,13 +185,24 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 			if err != nil {
 				return err
 			}
-			if len(copies) > 0 {
-				episodes = append(episodes, store.Episode{
-					Season: e.season, Episodes: e.episodes, AirDate: e.airDate, Title: e.title,
-					Folder: folder.Path, IDs: ids(e.name.IDs), ByNumber: e.byNumber, Copies: copies,
-					NFO: metadata(s.readNFO(ctx, root, folder.Path, nfoOf(e.versions[0].parts))),
-				})
+			if len(copies) == 0 {
+				continue
 			}
+			ep := store.Episode{
+				Season: e.season, Episodes: e.episodes, AirDate: e.airDate, Title: e.title,
+				Folder: folder.Path, IDs: ids(e.name.IDs), ByNumber: e.byNumber, Copies: copies,
+			}
+			// An NFO's numbers are stated, not guessed, so they win over the file name's.
+			if said := s.readNFO(ctx, root, folder.Path, nfoOf(e.versions[0].parts)); said != nil {
+				ep.NFO = &said.Metadata
+				if len(said.Episodes) > 0 {
+					ep.Episodes, ep.ByNumber = said.Episodes, true
+				}
+				if said.Season != nil {
+					ep.Season = *said.Season
+				}
+			}
+			episodes = append(episodes, ep)
 		}
 	}
 	plans, inExtrasFolder := extrasIn(folder)

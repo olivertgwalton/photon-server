@@ -67,6 +67,25 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 					return fmt.Errorf("%s season %d %v: %w", show.Title, e.Season, e.Episodes, err)
 				}
 			}
+			// A season named by tvshow.nfo keeps its episodes in a folder of its own.
+			i := tx.Item
+			for number, said := range show.Seasons {
+				if _, done := seasons[number]; done {
+					continue
+				}
+				row, err := i.WithContext(ctx).Where(
+					i.ParentID.Eq(showID), i.Kind.Eq(string(domain.ItemSeason)), i.SeasonNumber.Eq(number),
+				).Take()
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					continue
+				}
+				if err != nil {
+					return err
+				}
+				if err := applyMetadata(ctx, tx, row.ID, domain.SourceNFO, said); err != nil {
+					return err
+				}
+			}
 		}
 		var err error
 		if unowned, err = saveExtras(ctx, tx, lib, extras); err != nil {
