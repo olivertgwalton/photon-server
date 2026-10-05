@@ -27,8 +27,8 @@ type personDescriber interface {
 const describedFor = 30 * 24 * time.Hour
 
 type creditJSON struct {
-	Kind domain.CreditKind `json:"kind"`
-	Role string            `json:"role,omitzero"`
+	Credit domain.CreditKind `json:"credit"`
+	Role   string            `json:"role,omitzero"`
 	cardJSON
 }
 
@@ -68,7 +68,7 @@ func (a *API) person(w http.ResponseWriter, r *http.Request) {
 	}
 	out := personJSON{PersonPage: p, Credits: []creditJSON{}}
 	for _, c := range credits {
-		out.Credits = append(out.Credits, creditJSON{Kind: c.Kind, Role: c.Role, cardJSON: cardsJSON([]store.Card{c.Card})[0]})
+		out.Credits = append(out.Credits, creditJSON{Credit: c.Kind, Role: c.Role, cardJSON: cardsJSON([]store.Card{c.Card})[0]})
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
