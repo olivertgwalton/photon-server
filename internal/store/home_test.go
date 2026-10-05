@@ -3,6 +3,7 @@
 package store
 
 import (
+	"errors"
 	"testing"
 	"time"
 	"uuid"
@@ -99,6 +100,44 @@ func TestHome(t *testing.T) {
 	}
 	if len(got[domain.RowNextUp]) != 0 {
 		t.Errorf("next up = %v, want nothing: the next episode is under way", got[domain.RowNextUp])
+	}
+
+	if err := s.ClearProgress(ctx, profile.ID, uuid.UUID(heat.ID)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ClearProgress(ctx, profile.ID, uuid.NewV7()); !errors.Is(err, ErrNotFound) {
+		t.Errorf("clearing a title there is not: err = %v, want %v", err, ErrNotFound)
+	}
+	if c := home()[domain.RowContinueWatching]; len(c) != 1 || c[0] != "Wire/S1E2.mkv" {
+		t.Errorf("continue watching = %v, want Heat gone and the episode left", c)
+	}
+	show, err := s.q.Item.WithContext(ctx).Where(s.q.Item.Kind.Eq(string(domain.ItemShow))).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ClearProgress(ctx, profile.ID, uuid.UUID(show.ID)); err != nil {
+		t.Fatal(err)
+	}
+	got = home()
+	if c := got[domain.RowContinueWatching]; len(c) != 0 {
+		t.Errorf("continue watching = %v, want nothing once the show's progress is cleared", c)
+	}
+	if c := got[domain.RowNextUp]; len(c) != 1 || c[0] != "Wire/S1E2.mkv" {
+		t.Errorf("next up = %v, want the episode after the one still watched", c)
+	}
+	page, err := s.Title(ctx, profile.ID, uuid.UUID(heat.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.State.LastPlayedAt == nil || page.State.PositionMS != 0 {
+		t.Errorf("Heat's state = %+v, want played but nowhere to resume", page.State)
+	}
+	page, err = s.Title(ctx, profile.ID, episode(1, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.State.WatchedAt == nil || page.State.Plays != 1 {
+		t.Errorf("a watched episode's state = %+v, want it still watched once", page.State)
 	}
 	rows, err := s.Home(ctx, profile.ID, 10)
 	if err != nil {
