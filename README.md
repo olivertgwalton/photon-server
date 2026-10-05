@@ -21,7 +21,10 @@ Behind a reverse proxy, list the proxy's addresses in `PHOTON_TRUSTED_PROXIES` (
 
 Titles are described by their file names, then any Kodi NFO beside them, and films and shows are
 matched on TMDB in `PHOTON_METADATA_LANGUAGE` (default `en-US`, whose region picks certificates).
-The server ships its own TMDB token; set `PHOTON_TMDB_TOKEN` to use yours. What a reader edits
+The server ships its own TMDB token and TheTVDB key; set `PHOTON_TMDB_TOKEN`, or
+`PHOTON_TVDB_KEY` (with `PHOTON_TVDB_PIN` for a subscriber key), to use yours. Each library takes
+metadata from `nfo` and `tmdb` by default, most trusted first; change that with
+`photon-server library set -name NAME -sources nfo,tvdb,tmdb`. TheTVDB describes shows only. What a reader edits
 or an NFO says is never replaced by a match.
 
 The first admin is made on the command line, before anyone can sign in:
@@ -40,6 +43,9 @@ squash-merged into `main` once CI passes.
 ## Metadata
 
 This product uses the TMDB API but is not endorsed or certified by TMDB.
+
+Metadata provided by [TheTVDB](https://thetvdb.com). Please consider adding missing information or
+subscribing.
 
 ## Licence
 

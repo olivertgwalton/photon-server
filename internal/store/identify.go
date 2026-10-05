@@ -68,10 +68,10 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 
 // SaveIdentity writes what a provider says about a title, and about the seasons and episodes of a
 // show, under every source that ranks above it.
-func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, m domain.Metadata, seasons map[int]domain.SeasonMetadata) error {
+func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.FieldSource, m domain.Metadata, seasons map[int]domain.SeasonMetadata) error {
 	return s.q.Transaction(func(tx *query.Query) error {
 		item := model.UUID(id)
-		if err := applyMetadata(ctx, tx, item, domain.SourceTMDB, m); err != nil {
+		if err := applyMetadata(ctx, tx, item, source, m); err != nil {
 			return err
 		}
 		if err := saveIDs(ctx, tx, item, domain.IDFromMatch, m.IDs); err != nil {
@@ -88,7 +88,7 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, m domain.Metadat
 			if err != nil {
 				return err
 			}
-			if err := applyMetadata(ctx, tx, row.ID, domain.SourceTMDB, season.Metadata); err != nil {
+			if err := applyMetadata(ctx, tx, row.ID, source, season.Metadata); err != nil {
 				return err
 			}
 			episodes, err := i.WithContext(ctx).Where(i.ParentID.Eq(row.ID), i.Kind.Eq(string(domain.ItemEpisode))).Find()
@@ -100,7 +100,7 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, m domain.Metadat
 					continue
 				}
 				if said, ok := season.Episodes[*e.EpisodeNumber]; ok {
-					if err := applyMetadata(ctx, tx, e.ID, domain.SourceTMDB, said); err != nil {
+					if err := applyMetadata(ctx, tx, e.ID, source, said); err != nil {
 						return err
 					}
 				}

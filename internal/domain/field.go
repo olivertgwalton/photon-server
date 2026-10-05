@@ -25,6 +25,14 @@ type Metadata struct {
 	Locked []Field
 }
 
+// Candidate is a title a provider offers as a match.
+type Candidate struct {
+	ID            int
+	Title         string
+	OriginalTitle string
+	Year          int
+}
+
 // SeasonMetadata is what a source says about a season and its episodes, by episode number.
 type SeasonMetadata struct {
 	Metadata Metadata
@@ -61,18 +69,19 @@ type FieldSource string
 const (
 	SourceFile FieldSource = "file"
 	SourceTMDB FieldSource = "tmdb"
+	SourceTVDB FieldSource = "tvdb"
 	SourceNFO  FieldSource = "nfo"
 	SourceUser FieldSource = "user"
 )
 
 func FieldSources() []FieldSource {
-	return []FieldSource{SourceFile, SourceTMDB, SourceNFO, SourceUser}
+	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser}
 }
 
 // MetadataSources are the sources a library may take metadata from, in an order it chooses:
 // what files say always ranks lowest, and a reader's own edit highest.
 func MetadataSources() []FieldSource {
-	return []FieldSource{SourceNFO, SourceTMDB}
+	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB}
 }
 
 // DefaultSources trust an NFO beside the file over a provider, as Jellyfin's default order does.

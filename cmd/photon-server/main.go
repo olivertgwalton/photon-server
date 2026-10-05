@@ -28,6 +28,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/task"
 	"github.com/olivertgwalton/photon-server/internal/tmdb"
+	"github.com/olivertgwalton/photon-server/internal/tvdb"
 )
 
 const (
@@ -129,11 +130,12 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	node := uuid.NewV7()
 	scheduler := task.NewScheduler(st, logger, node,
 		scanTask(st, scan.New(st, tools, logger), logger), sweepTask(st, logger))
-	movies := tmdb.New(cmp.Or(os.Getenv("PHOTON_TMDB_TOKEN"), tmdb.DefaultToken),
-		cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US"), cache)
+	lang := cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US")
+	movies := tmdb.New(cmp.Or(os.Getenv("PHOTON_TMDB_TOKEN"), tmdb.DefaultToken), lang, cache)
+	shows := tvdb.New(cmp.Or(os.Getenv("PHOTON_TVDB_KEY"), tvdb.DefaultKey), os.Getenv("PHOTON_TVDB_PIN"), lang, cache)
 	worker := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), map[domain.JobKind]jobs.Handler{
 		domain.JobKeyframes: analysis.Keyframes(st, tools),
-		domain.JobIdentify:  identify.Handler(st, movies, logger),
+		domain.JobIdentify:  identify.Handler(st, movies, shows, logger),
 	})
 	background, stopBackground := context.WithCancel(ctx)
 	var wg sync.WaitGroup

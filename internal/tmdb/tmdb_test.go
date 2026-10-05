@@ -47,7 +47,7 @@ func TestSearchAsksForTheYearByKind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff([]Match{{ID: 1438, Title: "The Wire", OriginalTitle: "The Wire", Year: 2002}}, got); diff != "" {
+	if diff := cmp.Diff([]domain.Candidate{{ID: 1438, Title: "The Wire", OriginalTitle: "The Wire", Year: 2002}}, got); diff != "" {
 		t.Errorf("Search (-want +got):\n%s", diff)
 	}
 }
