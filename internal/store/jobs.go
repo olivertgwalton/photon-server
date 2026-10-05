@@ -109,6 +109,14 @@ func (s *Store) FailJob(ctx context.Context, job Job, runErr error) error {
 	return err
 }
 
+// ExtendLease keeps a running job's lease while its worker is at it.
+func (s *Store) ExtendLease(ctx context.Context, id int64, lease time.Duration) error {
+	j := s.q.Job
+	_, err := j.WithContext(ctx).Where(j.ID.Eq(id), j.State.In(string(domain.JobRunning), string(domain.JobRerun))).
+		UpdateSimple(j.LeaseUntil.Value(time.Now().Add(lease)))
+	return err
+}
+
 // SweepJobs queues again every job whose worker's lease ran out: the worker died or lost touch.
 func (s *Store) SweepJobs(ctx context.Context) (int64, error) {
 	j := s.q.Job
