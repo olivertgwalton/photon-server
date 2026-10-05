@@ -59,6 +59,19 @@ func (s *Store) SetPasswordHash(ctx context.Context, profileID uuid.UUID, hash s
 	return err
 }
 
+// ChangePassword replaces a profile's password and signs out every device on the profile but keep,
+// since a password changed for fear of who knows it must not leave them signed in.
+func (s *Store) ChangePassword(ctx context.Context, profileID uuid.UUID, hash string, keep uuid.UUID) error {
+	return s.q.Transaction(func(tx *query.Query) error {
+		p, d := tx.Profile, tx.DeviceSession
+		if _, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(profileID))).UpdateSimple(p.PasswordHash.Value(hash)); err != nil {
+			return err
+		}
+		_, err := d.WithContext(ctx).Where(d.ProfileID.Eq(model.UUID(profileID)), d.ID.Neq(model.UUID(keep))).Delete()
+		return err
+	})
+}
+
 type NewSession struct {
 	ProfileID  uuid.UUID
 	TokenHash  []byte
