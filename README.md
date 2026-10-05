@@ -27,6 +27,12 @@ metadata from `nfo` and `tmdb` by default, most trusted first; change that with
 `photon-server library set -name NAME -sources nfo,tvdb,tmdb`. TheTVDB describes shows only. What a reader edits
 or an NFO says is never replaced by a match.
 
+Libraries are scanned every 12 hours, and as their files change: each folder is watched (inotify on
+Linux) and a library is scanned a minute after its last change. Network shares send no change
+events, so a library on one is scanned on the schedule; `photon-server library set -name NAME
+-monitor off` stops watching a library. A large library may need a higher
+`fs.inotify.max_user_watches`; the server says so when it runs out.
+
 The first admin is made on the command line, before anyone can sign in:
 
 ```sh
