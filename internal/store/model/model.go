@@ -9,7 +9,7 @@ import (
 // All is every table's model, for the generator and the drift test.
 func All() []any {
 	return []any{
-		Server{}, Library{}, Folder{}, Item{}, ExternalID{}, Version{}, Part{}, Stream{}, Chapter{},
+		Server{}, Library{}, Folder{}, Item{}, ExternalID{}, Version{}, Part{}, Stream{}, Chapter{}, TaskState{},
 	}
 }
 
