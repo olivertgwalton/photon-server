@@ -128,3 +128,58 @@ func TestSweepRequeuesExpiredLeases(t *testing.T) {
 		t.Errorf("swept %d jobs, want only the one whose lease ran out", n)
 	}
 }
+
+func TestAJobAskedForWhileRunningRunsAgain(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	subject := model.UUID(uuid.NewV7())
+	ask := func() {
+		t.Helper()
+		if err := s.q.Transaction(func(tx *query.Query) error {
+			return enqueue(ctx, tx, domain.JobIdentify, subject)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	claim := func() []Job {
+		t.Helper()
+		jobs, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobIdentify}, uuid.NewV7(), time.Minute, 5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return jobs
+	}
+
+	ask()
+	running := claim()
+	ask()
+	ask()
+	if len(claim()) != 0 {
+		t.Fatal("a job asked for while running was claimed twice at once")
+	}
+	if err := s.CompleteJob(ctx, running[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	again := claim()
+	if len(again) != 1 || again[0].Attempts != 1 {
+		t.Fatalf("after finishing, claimed %+v; want the job once more, on a fresh first attempt", again)
+	}
+	if err := s.CompleteJob(ctx, again[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.q.Job.WithContext(ctx).Count(); n != 0 {
+		t.Errorf("%d jobs left after the rerun finished, want none", n)
+	}
+
+	ask()
+	for job := claim(); len(job) > 0; job = claim() {
+		job[0].Attempts = maxAttempts
+		if err := s.FailJob(ctx, job[0], errors.New("tmdb is down")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ask()
+	if revived := claim(); len(revived) != 1 || revived[0].Attempts != 1 {
+		t.Errorf("a dead job asked for again: claimed %+v, want it on a first attempt", revived)
+	}
+}
