@@ -33,12 +33,13 @@ type Metadata struct {
 	Locked []Field
 }
 
-// Candidate is a title a provider offers as a match.
+// Candidate is a title a provider offers as a match, and its poster to tell it by.
 type Candidate struct {
 	ID            int
 	Title         string
 	OriginalTitle string
 	Year          int
+	Poster        string
 }
 
 // SeasonMetadata is what a source says about a season and its episodes, by episode number.

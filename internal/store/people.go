@@ -227,3 +227,56 @@ func (s *Store) PersonCredits(ctx context.Context, profile, person uuid.UUID) ([
 	}
 	return out, nil
 }
+
+// similarShown is how many similar titles a title's page offers.
+const similarShown = 20
+
+// Similar answers the films or shows most like a title, as Plex ranks them: by how many of its
+// first three genres, its first director, its first writer and its five top-billed actors they
+// share, all counting alike, the newer first on a tie. A title sharing none is left out.
+func (s *Store) Similar(ctx context.Context, profile, id uuid.UUID) ([]Card, error) {
+	i := s.q.Item
+	item, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if item.Kind != domain.ItemMovie && item.Kind != domain.ItemShow {
+		return []Card{}, nil
+	}
+	var rows []*model.Item
+	err = i.WithContext(ctx).UnderlyingDB().Raw(`
+		WITH src AS (
+			SELECT id, kind, ARRAY(SELECT jsonb_array_elements_text(coalesce(genres, '[]'))) AS genres FROM items WHERE id = @id
+		), src_genres AS (
+			SELECT src.genres[1:3] AS genres FROM src
+		), picked AS (
+			(SELECT person_id, kind FROM credits WHERE item_id = @id AND kind = 'director' ORDER BY position LIMIT 1)
+			UNION ALL
+			(SELECT person_id, kind FROM credits WHERE item_id = @id AND kind = 'writer' ORDER BY position LIMIT 1)
+			UNION ALL
+			(SELECT DISTINCT ON (position, person_id) person_id, kind FROM credits
+				WHERE item_id = @id AND kind = 'actor' ORDER BY position, person_id LIMIT 5)
+		), shared_people AS (
+			SELECT other.item_id, count(DISTINCT (other.person_id, other.kind)) AS shared
+			FROM picked JOIN credits other ON other.person_id = picked.person_id AND other.kind = picked.kind
+			WHERE other.item_id <> @id
+			GROUP BY other.item_id
+		), candidates AS (
+			SELECT i.*, ARRAY(SELECT jsonb_array_elements_text(coalesce(i.genres, '[]'))) AS genre_list FROM items i, src
+			WHERE i.kind = src.kind AND i.id <> src.id
+		)
+		SELECT c.* FROM candidates c CROSS JOIN src_genres g
+		LEFT JOIN shared_people p ON p.item_id = c.id
+		WHERE c.genre_list && g.genres OR p.item_id IS NOT NULL
+		ORDER BY cardinality(ARRAY(SELECT unnest(c.genre_list) INTERSECT SELECT unnest(g.genres))) + coalesce(p.shared, 0) DESC,
+			c.released_desc DESC NULLS LAST, c.added_at, c.id
+		LIMIT @limit`,
+		map[string]any{"id": item.ID, "limit": similarShown}).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return s.cards(ctx, profile, rows)
+}

@@ -25,6 +25,7 @@ type catalogue interface {
 	Wall(ctx context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
 	Letters(ctx context.Context, lib, profile uuid.UUID, f store.WallFilter) ([]store.Letter, error)
 	Facets(ctx context.Context, lib uuid.UUID) (store.Facets, error)
+	Similar(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, error)
 	Home(ctx context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error)
@@ -324,4 +325,17 @@ func (a *API) facets(w http.ResponseWriter, r *http.Request) {
 		nonNil(f.Genres), nonNil(f.Years), nonNil(f.Certificates), nonNil(f.Studios), nonNil(f.Resolutions),
 		nonNil(f.Ranges), nonNil(f.RatingSites), domain.Marks(),
 	})
+}
+
+// similar answers the titles most like one, for "More like this".
+func (a *API) similar(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r)
+	if !ok {
+		return
+	}
+	cards, err := a.svc.Catalogue.Similar(r.Context(), sessionOf(r).Profile.ID, id)
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": cardsJSON(cards)})
 }

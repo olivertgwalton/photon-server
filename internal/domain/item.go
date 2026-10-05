@@ -58,14 +58,16 @@ const (
 	IDFromMatch IDSource = "match"
 	IDFromNFO   IDSource = "nfo"
 	IDFromPath  IDSource = "path"
+	// IDFromUser is an id an admin pinned the title to, fixing a match.
+	IDFromUser IDSource = "user"
 )
 
 func IDSources() []IDSource {
-	return []IDSource{IDFromMatch, IDFromNFO, IDFromPath}
+	return []IDSource{IDFromMatch, IDFromNFO, IDFromPath, IDFromUser}
 }
 
-// Rank puts an id the reader typed into a folder or file name above one an NFO carries, since
-// NFOs are mostly written by other tools, and both above a match.
+// Rank puts an id an admin pinned above all, then one the reader typed into a folder or file name
+// above one an NFO carries, since NFOs are mostly written by other tools, and all above a match.
 func (s IDSource) Rank() int {
 	switch s {
 	case IDFromMatch:
@@ -74,6 +76,8 @@ func (s IDSource) Rank() int {
 		return 2
 	case IDFromPath:
 		return 3
+	case IDFromUser:
+		return 4
 	}
 	return 0
 }

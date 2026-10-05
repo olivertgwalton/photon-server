@@ -61,3 +61,8 @@ func (c *Client) DescribePerson(ctx context.Context, ids map[domain.Provider]str
 	}
 	return c.Person(ctx, id)
 }
+
+// Candidates answers TMDB's titles by a name, for an admin fixing a match.
+func (c *Client) Candidates(ctx context.Context, kind domain.ItemKind, title string, year int) ([]domain.Candidate, error) {
+	return c.Search(ctx, kinds[kind], title, year)
+}

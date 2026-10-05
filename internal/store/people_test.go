@@ -4,6 +4,7 @@ package store
 
 import (
 	"errors"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -91,5 +92,57 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 	cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{People: []uuid.UUID{her}}})
 	if err != nil || len(cards) != 2 {
 		t.Errorf("titles she is in: %+v, %v; want the film and the show", cards, err)
+	}
+}
+
+func TestSimilarTitlesShareSomething(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mann := domain.Credit{Name: "Michael Mann", IDs: map[domain.Provider]string{domain.ProviderTMDB: "638"}, Kind: domain.CreditDirector, Role: "Director"}
+	ids := map[string]uuid.UUID{}
+	for _, f := range []struct {
+		title   string
+		genres  []string
+		credits []domain.Credit
+	}{
+		{"Heat", []string{"Crime", "Thriller"}, []domain.Credit{mann}},
+		{"Thief", []string{"Crime"}, []domain.Credit{mann}},
+		{"Ronin", []string{"Thriller"}, nil},
+		{"Amélie", []string{"Comedy"}, nil},
+	} {
+		film := Film{Title: f.title, Folder: f.title, Copies: []Copy{{ContentKey: []byte(f.title), Parts: []Part{{RelPath: f.title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}}}
+		if _, err := s.SaveFolder(ctx, lib.ID, f.title, []byte("v1"), []Film{film}, nil); err != nil {
+			t.Fatal(err)
+		}
+		cards, _, _ := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		ids[f.title] = cards[0].ID
+		if err := s.SaveIdentity(ctx, cards[0].ID, domain.SourceTMDB, domain.Metadata{Title: f.title, Genres: f.genres, Credits: f.credits}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.Similar(ctx, uuid.UUID{}, ids["Heat"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var titles []string
+	for _, c := range got {
+		titles = append(titles, c.Title)
+	}
+	if want := []string{"Thief", "Ronin"}; !slices.Equal(titles, want) {
+		t.Errorf("like Heat: %q, want %q: its director and a genre, then a genre, and nothing that shares none", titles, want)
+	}
+	// Only the first three genres count: a fourth shared is no likeness.
+	if err := s.SaveIdentity(ctx, ids["Amélie"], domain.SourceTMDB, domain.Metadata{Title: "Amélie", Genres: []string{"Comedy"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveIdentity(ctx, ids["Heat"], domain.SourceTMDB, domain.Metadata{Title: "Heat", Genres: []string{"Crime", "Thriller", "Drama", "Comedy"}, Credits: []domain.Credit{mann}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = s.Similar(ctx, uuid.UUID{}, ids["Heat"]); slices.ContainsFunc(got, func(c Card) bool { return c.Title == "Amélie" }) {
+		t.Errorf("a fourth genre counted: %+v", got)
 	}
 }
