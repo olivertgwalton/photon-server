@@ -32,6 +32,13 @@ func (fakeCatalogue) Wall(_ context.Context, lib uuid.UUID, p store.WallPage) ([
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: title, ReleaseDate: time.Date(1995, 12, 15, 0, 0, 0, 0, time.UTC)}}, "next", nil
 }
 
+func (fakeCatalogue) Title(_ context.Context, id uuid.UUID) (store.TitlePage, error) {
+	if id != films {
+		return store.TitlePage{}, store.ErrNotFound
+	}
+	return store.TitlePage{ID: id, Kind: domain.ItemMovie, Title: "Heat"}, nil
+}
+
 func TestWall(t *testing.T) {
 	for _, tc := range []struct {
 		query      string

@@ -21,6 +21,7 @@ const (
 type catalogue interface {
 	Libraries(ctx context.Context) ([]domain.Library, error)
 	Wall(ctx context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, string, error)
+	Title(ctx context.Context, id uuid.UUID) (store.TitlePage, error)
 }
 
 type libraryJSON struct {
@@ -34,7 +35,7 @@ type cardJSON struct {
 	Kind        domain.ItemKind `json:"kind"`
 	Title       string          `json:"title"`
 	Year        int             `json:"year,omitzero"`
-	ReleaseDate string          `json:"release_date,omitzero"`
+	ReleaseDate domain.Date     `json:"release_date,omitzero"`
 	AddedAt     time.Time       `json:"added_at"`
 }
 
@@ -87,13 +88,29 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]cardJSON, len(cards))
 	for i, c := range cards {
-		out[i] = cardJSON{ID: c.ID, Kind: c.Kind, Title: c.Title, Year: c.Year, AddedAt: c.AddedAt}
-		if !c.ReleaseDate.IsZero() {
-			out[i].ReleaseDate = c.ReleaseDate.Format(time.DateOnly)
+		out[i] = cardJSON{
+			ID: c.ID, Kind: c.Kind, Title: c.Title, Year: c.Year, ReleaseDate: domain.Date(c.ReleaseDate), AddedAt: c.AddedAt,
 		}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, struct {
 		Items []cardJSON `json:"items"`
 		Next  string     `json:"next,omitzero"`
 	}{out, next})
+}
+
+func (a *API) title(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeProblem(w, a.logger, codeNotFound, "")
+		return
+	}
+	page, err := a.svc.Catalogue.Title(r.Context(), id)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeProblem(w, a.logger, codeNotFound, "")
+	case err != nil:
+		a.internal(w, r, err)
+	default:
+		writeJSON(w, a.logger, "application/json", http.StatusOK, page)
+	}
 }
