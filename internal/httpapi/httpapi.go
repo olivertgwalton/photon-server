@@ -61,10 +61,11 @@ type profileLister interface {
 // Services are what the API's routes call.
 type Services struct {
 	// Ready reports whether everything a request may need is reachable.
-	Ready    func(context.Context) error
-	Auth     authenticator
-	Profiles profileLister
-	Limits   limiter
+	Ready     func(context.Context) error
+	Auth      authenticator
+	Profiles  profileLister
+	Catalogue catalogue
+	Limits    limiter
 	// TrustedProxies are the peers whose X-Forwarded-For names the client. None by default.
 	TrustedProxies []netip.Prefix
 }
@@ -107,6 +108,11 @@ func (a *API) routes() []route {
 		{pattern: "DELETE /api/v1/me/pin", access: signedIn, handle: a.clearPIN},
 		{pattern: "GET /api/v1/auth/devices", access: signedIn, handle: a.devices},
 		{pattern: "DELETE /api/v1/auth/devices/{id}", access: signedIn, handle: a.signOutDevice},
+		{pattern: "GET /api/v1/libraries", access: signedIn, handle: a.libraries},
+		{
+			pattern: "GET /api/v1/libraries/{id}/titles", access: signedIn,
+			query: []string{"sort", "order", "after", "limit"}, handle: a.wall,
+		},
 	}
 }
 
