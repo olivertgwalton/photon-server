@@ -9,10 +9,14 @@ import (
 type problemCode string
 
 const (
-	codeNotFound         problemCode = "not_found"
-	codeMethodNotAllowed problemCode = "method_not_allowed"
-	codeUnknownParameter problemCode = "unknown_parameter"
-	codeNotReady         problemCode = "not_ready"
+	codeNotFound           problemCode = "not_found"
+	codeMethodNotAllowed   problemCode = "method_not_allowed"
+	codeUnknownParameter   problemCode = "unknown_parameter"
+	codeNotReady           problemCode = "not_ready"
+	codeInvalidBody        problemCode = "invalid_body"
+	codeUnauthenticated    problemCode = "unauthenticated"
+	codeInvalidCredentials problemCode = "invalid_credentials" //nolint:gosec // a problem code, not a credential
+	codeInternal           problemCode = "internal"
 )
 
 func (c problemCode) status() int {
@@ -25,6 +29,12 @@ func (c problemCode) status() int {
 		return http.StatusBadRequest
 	case codeNotReady:
 		return http.StatusServiceUnavailable
+	case codeInvalidBody:
+		return http.StatusBadRequest
+	case codeUnauthenticated, codeInvalidCredentials:
+		return http.StatusUnauthorized
+	case codeInternal:
+		return http.StatusInternalServerError
 	}
 	panic("httpapi: problem code without a status: " + string(c))
 }
