@@ -29,15 +29,18 @@ type Card struct {
 	// Poster and Backdrop are the title's best pictures of each kind, by id.
 	Poster   uuid.UUID
 	Backdrop uuid.UUID
+	// State is what the profile asking has made of it.
+	State TitleState
 }
 
 // WallPage asks for one page of a library's titles. After is the cursor the previous page
 // answered, empty for the first.
 type WallPage struct {
-	Sort  domain.WallSort
-	Order domain.Order
-	After string
-	Limit int
+	Profile uuid.UUID
+	Sort    domain.WallSort
+	Order   domain.Order
+	After   string
+	Limit   int
 }
 
 // cursor is the last title a page held, by the key it was sorted on.
@@ -132,13 +135,17 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, st
 		}
 		next = base64.RawURLEncoding.EncodeToString(raw)
 	}
-	cards, err := s.cards(ctx, rows)
+	cards, err := s.cards(ctx, p.Profile, rows)
 	return cards, next, err
 }
 
-// cards answers titles as cards, with their best pictures.
-func (s *Store) cards(ctx context.Context, rows []*model.Item) ([]Card, error) {
+// cards answers titles as cards for a profile, with their best pictures.
+func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item) ([]Card, error) {
 	pictures, err := s.pictureOrder(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
+	states, err := s.states(ctx, profile, rows)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +154,7 @@ func (s *Store) cards(ctx context.Context, rows []*model.Item) ([]Card, error) {
 		cards[n] = Card{
 			ID: uuid.UUID(r.ID), Kind: r.Kind, Title: r.Title, AddedAt: r.AddedAt, Year: deref(r.Year),
 			ReleaseDate: deref(r.ReleaseDate), Poster: first(pictures[r.ID][domain.ArtworkPoster]),
-			Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]),
+			Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]), State: states[r.ID],
 		}
 	}
 	return cards, nil

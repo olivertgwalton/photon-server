@@ -21,7 +21,7 @@ const (
 type catalogue interface {
 	Libraries(ctx context.Context) ([]domain.Library, error)
 	Wall(ctx context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, string, error)
-	Title(ctx context.Context, id uuid.UUID) (store.TitlePage, error)
+	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, error)
 }
 
@@ -32,14 +32,15 @@ type libraryJSON struct {
 }
 
 type cardJSON struct {
-	ID          uuid.UUID       `json:"id"`
-	Kind        domain.ItemKind `json:"kind"`
-	Title       string          `json:"title"`
-	Year        int             `json:"year,omitzero"`
-	ReleaseDate domain.Date     `json:"release_date,omitzero"`
-	AddedAt     time.Time       `json:"added_at"`
-	Poster      uuid.UUID       `json:"poster,omitzero"`
-	Backdrop    uuid.UUID       `json:"backdrop,omitzero"`
+	ID          uuid.UUID        `json:"id"`
+	Kind        domain.ItemKind  `json:"kind"`
+	Title       string           `json:"title"`
+	Year        int              `json:"year,omitzero"`
+	ReleaseDate domain.Date      `json:"release_date,omitzero"`
+	AddedAt     time.Time        `json:"added_at"`
+	Poster      uuid.UUID        `json:"poster,omitzero"`
+	Backdrop    uuid.UUID        `json:"backdrop,omitzero"`
+	State       store.TitleState `json:"state,omitzero"`
 }
 
 func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +63,7 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	page := store.WallPage{After: q.Get("after"), Limit: defaultWallLimit}
+	page := store.WallPage{Profile: sessionOf(r).Profile.ID, After: q.Get("after"), Limit: defaultWallLimit}
 	if page.Sort, err = domain.ParseWallSort(cmp.Or(q.Get("sort"), string(domain.SortTitle))); err != nil {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
@@ -100,7 +101,7 @@ func cardsJSON(cards []store.Card) []cardJSON {
 	for i, c := range cards {
 		out[i] = cardJSON{
 			ID: c.ID, Kind: c.Kind, Title: c.Title, Year: c.Year, ReleaseDate: domain.Date(c.ReleaseDate), AddedAt: c.AddedAt,
-			Poster: c.Poster, Backdrop: c.Backdrop,
+			Poster: c.Poster, Backdrop: c.Backdrop, State: c.State,
 		}
 	}
 	return out
@@ -108,7 +109,7 @@ func cardsJSON(cards []store.Card) []cardJSON {
 
 func (a *API) search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	query := store.SearchQuery{Text: q.Get("q"), Limit: defaultWallLimit}
+	query := store.SearchQuery{Profile: sessionOf(r).Profile.ID, Text: q.Get("q"), Limit: defaultWallLimit}
 	if query.Text == "" {
 		writeProblem(w, a.logger, codeInvalidParameter, "q is what to search for")
 		return
@@ -140,7 +141,7 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	page, err := a.svc.Catalogue.Title(r.Context(), id)
+	page, err := a.svc.Catalogue.Title(r.Context(), sessionOf(r).Profile.ID, id)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeProblem(w, a.logger, codeNotFound, "")

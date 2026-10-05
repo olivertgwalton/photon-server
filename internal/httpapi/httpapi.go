@@ -66,6 +66,7 @@ type Services struct {
 	Profiles  profileLister
 	Catalogue catalogue
 	Pictures  pictures
+	Watching  watching
 	Artwork   pictureCache
 	Limits    limiter
 	// TrustedProxies are the peers whose X-Forwarded-For names the client. None by default.
@@ -116,6 +117,11 @@ func (a *API) routes() []route {
 			query: []string{"sort", "order", "after", "limit"}, handle: a.wall,
 		},
 		{pattern: "GET /api/v1/titles/{id}", access: signedIn, handle: a.title},
+		{pattern: "PUT /api/v1/titles/{id}/progress", access: signedIn, handle: a.progress},
+		{pattern: "PUT /api/v1/titles/{id}/watched", access: signedIn, handle: a.mark(watching.MarkWatched)},
+		{pattern: "DELETE /api/v1/titles/{id}/watched", access: signedIn, handle: a.mark(watching.MarkUnwatched)},
+		{pattern: "PUT /api/v1/titles/{id}/favourite", access: signedIn, handle: a.mark(watching.Favourite)},
+		{pattern: "DELETE /api/v1/titles/{id}/favourite", access: signedIn, handle: a.mark(watching.Unfavourite)},
 		{pattern: "GET /api/v1/search", access: signedIn, query: []string{"q", "library", "limit"}, handle: a.search},
 		{pattern: "GET /api/v1/artwork/{id}", access: public, query: []string{"width"}, handle: a.artwork},
 	}
