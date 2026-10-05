@@ -20,6 +20,15 @@ type Hardware struct {
 	Device string
 }
 
+// encoding is the hardware video planned so is encoded on: a subtitle is drawn in in software, as
+// each device overlays in its own way.
+func (h Hardware) encoding(video domain.VideoPlan) Hardware {
+	if e := video.Encode; e != nil && e.Burn != nil {
+		return Hardware{Accel: domain.AccelSoftware}
+	}
+	return h
+}
+
 // longGOP stops an encoder adding keyframes of its own between those it is told to make.
 const longGOP = "1000"
 

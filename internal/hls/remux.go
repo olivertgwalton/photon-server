@@ -271,6 +271,14 @@ func (r *Remuxer) SubtitleSegment(ctx context.Context, playback uuid.UUID, track
 	return writeVTT(sub.cues, s.offsets[seg.Part], seg.Start, seg.End), nil
 }
 
+// Encoder answers the device video planned so is encoded on, or nothing where it is copied.
+func (r *Remuxer) Encoder(video domain.VideoPlan) domain.Acceleration {
+	if video.Encode == nil {
+		return ""
+	}
+	return r.hw.encoding(video).Accel
+}
+
 // Close ends a playback's remux and removes its segments.
 func (r *Remuxer) Close(playback uuid.UUID) {
 	r.mu.Lock()
@@ -487,10 +495,7 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 // video makes one there and every SegmentLength after, on hw.
 func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan) []string {
 	a := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3"}
-	// A subtitle is drawn in in software: each device overlays in its own way.
-	if e := video.Encode; e != nil && e.Burn != nil {
-		hw = Hardware{Accel: domain.AccelSoftware}
-	}
+	hw = hw.encoding(video)
 	if video.Encode != nil {
 		a = append(a, hw.inputArgs(video.Codec)...)
 	}
