@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path"
@@ -14,6 +15,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/naming"
+	"github.com/olivertgwalton/photon-server/internal/nfo"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -90,7 +92,8 @@ func (s *Scanner) saveFilms(ctx context.Context, root *os.Root, lib domain.Libra
 		}
 		if len(copies) > 0 {
 			films = append(films, store.Film{
-				Title: f.name.Title, Year: f.name.Year, Folder: folder.Path, IDs: ids(f.name.IDs), Copies: copies,
+				Title: f.name.Title, Year: f.name.Year, Folder: folder.Path, IDs: ids(f.name.IDs),
+				NFO: s.readNFO(ctx, root, folder.Path, f.nfos...), Copies: copies,
 			})
 		}
 	}
@@ -153,7 +156,10 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 	var show store.Show
 	if series != "" {
 		name := naming.SeriesName(series)
-		show = store.Show{Title: name.Title, Year: name.Year, Folder: series, IDs: ids(name.IDs)}
+		show = store.Show{
+			Title: name.Title, Year: name.Year, Folder: series, IDs: ids(name.IDs),
+			NFO: s.readNFO(ctx, root, series, "tvshow.nfo"),
+		}
 	}
 	var episodes []store.Episode
 	if holdsEpisodes(folder.Path) {
@@ -170,6 +176,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 				episodes = append(episodes, store.Episode{
 					Season: e.season, Episodes: e.episodes, AirDate: e.airDate, Title: e.title,
 					Folder: folder.Path, IDs: ids(e.name.IDs), ByNumber: e.byNumber, Copies: copies,
+					NFO: s.readNFO(ctx, root, folder.Path, nfoOf(e.versions[0].parts)),
 				})
 			}
 		}
@@ -266,6 +273,29 @@ func (s *Scanner) probe(ctx context.Context, root *os.Root, rel string) (media.F
 	}
 	defer f.Close()
 	return s.prober.Probe(ctx, f)
+}
+
+// readNFO reads the first of the named NFOs in dir that exists. One that cannot be read is
+// logged and the title goes on without it.
+func (s *Scanner) readNFO(ctx context.Context, root *os.Root, dir string, names ...string) *domain.Metadata {
+	for _, name := range names {
+		rel := path.Join(dir, name)
+		f, err := root.Open(rel)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err == nil {
+			var m domain.Metadata
+			m, err = nfo.Read(f)
+			f.Close()
+			if err == nil {
+				return &m
+			}
+		}
+		s.log.WarnContext(ctx, "NFO not read", slog.String("file", rel), slog.Any("err", err))
+		return nil
+	}
+	return nil
 }
 
 func (s *Scanner) skip(ctx context.Context, report *Report, rel string, err error) {

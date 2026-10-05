@@ -171,7 +171,6 @@ func knownItem(ctx context.Context, tx *query.Query, lib uuid.UUID, kind domain.
 	return model.UUID{}, false, nil
 }
 
-
 func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.UUID, c Copy) error {
 	v, p := tx.Version, tx.Part
 	edition, label := optional(c.Edition), optional(c.Label)
