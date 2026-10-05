@@ -42,6 +42,8 @@ type TitlePage struct {
 	Episodes      []EpisodeCard              `json:"episodes,omitzero"`
 	Extras        []ExtraCard                `json:"extras,omitzero"`
 	Videos        []VideoLink                `json:"videos,omitzero"`
+	// Artwork is the title's pictures by kind, best first, by id: /api/v1/artwork/{id}.
+	Artwork map[domain.ArtworkKind][]uuid.UUID `json:"artwork,omitzero"`
 }
 
 type TitleRef struct {
@@ -113,6 +115,7 @@ type SeasonCard struct {
 	Year     int         `json:"year,omitzero"`
 	Aired    domain.Date `json:"release_date,omitzero"`
 	Episodes int         `json:"episodes"`
+	Poster   uuid.UUID   `json:"poster,omitzero"`
 }
 
 type EpisodeCard struct {
@@ -123,6 +126,7 @@ type EpisodeCard struct {
 	Overview   string      `json:"overview,omitzero"`
 	Aired      domain.Date `json:"release_date,omitzero"`
 	DurationMS int64       `json:"duration_ms,omitzero"`
+	Thumb      uuid.UUID   `json:"thumb,omitzero"`
 }
 
 type ExtraCard struct {
@@ -179,7 +183,11 @@ func (s *Store) Title(ctx context.Context, id uuid.UUID) (TitlePage, error) {
 	if p.Extras, err = s.extras(ctx, item.ID); err != nil {
 		return TitlePage{}, err
 	}
-	p.Videos, err = s.videos(ctx, item.ID)
+	if p.Videos, err = s.videos(ctx, item.ID); err != nil {
+		return TitlePage{}, err
+	}
+	pictures, err := s.pictureOrder(ctx, []*model.Item{item})
+	p.Artwork = pictures[item.ID]
 	return p, err
 }
 
@@ -238,11 +246,16 @@ func (s *Store) seasons(ctx context.Context, show model.UUID) ([]SeasonCard, err
 	for _, c := range counts {
 		episodes[c.ParentID] = c.N
 	}
+	pictures, err := s.pictureOrder(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]SeasonCard, len(rows))
 	for n, r := range rows {
 		out[n] = SeasonCard{
 			ID: uuid.UUID(r.ID), Number: deref(r.SeasonNumber), Title: r.Title, Overview: deref(r.Overview),
 			Year: deref(r.Year), Aired: date(r.ReleaseDate), Episodes: episodes[r.ID],
+			Poster: first(pictures[r.ID][domain.ArtworkPoster]),
 		}
 	}
 	return out, nil
@@ -259,6 +272,10 @@ func (s *Store) episodes(ctx context.Context, season model.UUID) ([]EpisodeCard,
 	if err != nil {
 		return nil, err
 	}
+	pictures, err := s.pictureOrder(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]EpisodeCard, len(rows))
 	for n, r := range rows {
 		aired := r.ReleaseDate
@@ -268,6 +285,7 @@ func (s *Store) episodes(ctx context.Context, season model.UUID) ([]EpisodeCard,
 		out[n] = EpisodeCard{
 			ID: uuid.UUID(r.ID), Number: r.EpisodeNumber, End: r.EpisodeEnd, Title: r.Title,
 			Overview: deref(r.Overview), Aired: date(aired), DurationMS: lengths[r.ID],
+			Thumb: first(pictures[r.ID][domain.ArtworkThumb]),
 		}
 	}
 	return out, nil
@@ -428,4 +446,11 @@ func date(t *time.Time) domain.Date {
 		return domain.Date{}
 	}
 	return domain.Date(*t)
+}
+
+func first(ids []uuid.UUID) uuid.UUID {
+	if len(ids) == 0 {
+		return uuid.UUID{}
+	}
+	return ids[0]
 }
