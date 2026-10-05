@@ -37,6 +37,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.Monitor]():             values(domain.Monitors()),
 	reflect.TypeFor[domain.Order]():               values(domain.Orders()),
 	reflect.TypeFor[domain.PlayMethod]():          values(domain.PlayMethods()),
+	reflect.TypeFor[domain.PreviewLevel]():        values(domain.PreviewLevels()),
 	reflect.TypeFor[domain.PlayState]():           values(domain.PlayStates()),
 	reflect.TypeFor[domain.ProfileLock]():         values(domain.ProfileLocks()),
 	reflect.TypeFor[domain.Provider]():            values(domain.Providers()),

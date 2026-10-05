@@ -144,7 +144,10 @@ type Services struct {
 	// Signer signs the addresses titles play from.
 	Signer  playback.Signer
 	Artwork pictureCache
-	Limits  limiter
+	// Previews are parts' chapter images and trickplay sheets, as recorded and as files.
+	Previews     previews
+	PreviewFiles previewFiles
+	Limits       limiter
 	// TrustedProxies are the peers whose X-Forwarded-For names the client. None by default.
 	TrustedProxies []netip.Prefix
 }
@@ -433,6 +436,22 @@ func (a *API) routes() []route {
 			pattern: "GET /api/v1/parts/{id}/stream", access: signedAddress,
 			summary: "A copy's file as it is, in byte ranges, at the address play answered",
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, handle: a.partStream,
+		},
+		{
+			pattern: "GET /api/v1/parts/{id}/trickplay", access: signedIn,
+			summary: "How a part's trickplay sheets are laid out, to find the thumbnail for a time",
+			status:  http.StatusOK, reply: store.Trickplay{}, handle: a.trickplay,
+		},
+		{
+			pattern: "GET /api/v1/parts/{id}/trickplay/{n}", access: signedIn, summary: "A part's trickplay sheet",
+			path:   []param{{"n", 0, "The sheet, counted from 0."}},
+			status: http.StatusOK, reply: asFile{"image/jpeg"}, handle: a.trickplaySheet,
+		},
+		{
+			pattern: "GET /api/v1/parts/{id}/chapters/{idx}/image", access: signedIn,
+			summary: "A picture of a chapter, at the address the title's page gives",
+			path:    []param{{"idx", 0, "The chapter, counted from 0 in its part."}},
+			status:  http.StatusOK, reply: asFile{"image/jpeg"}, handle: a.chapterImage,
 		},
 		{
 			pattern: "GET /api/v1/admin/libraries", access: admin, summary: "List the libraries as an admin keeps them",

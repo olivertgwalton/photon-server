@@ -219,6 +219,12 @@ func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.
 	if err := v.WithContext(ctx).Create(&version); err != nil {
 		return err
 	}
+	l := tx.Library
+	settings, err := l.WithContext(ctx).Select(l.Previews).Where(l.ID.Eq(model.UUID(lib))).Take()
+	if err != nil {
+		return err
+	}
+	previews := settings.Previews != domain.PreviewsOff
 	for idx, part := range c.Parts {
 		row := model.Part{
 			VersionID: version.ID, Idx: int16(idx), SizeBytes: part.Size,
@@ -237,6 +243,11 @@ func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.
 		if firstVideo(part.Facts) != nil {
 			if err := enqueue(ctx, tx, domain.JobKeyframes, row.ID); err != nil {
 				return err
+			}
+			if previews {
+				if err := enqueue(ctx, tx, domain.JobPreviews, row.ID); err != nil {
+					return err
+				}
 			}
 		}
 	}

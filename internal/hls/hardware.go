@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // Hardware is the device video is encoded on, chosen for the whole server as Jellyfin's is:
@@ -73,7 +74,7 @@ func (h Hardware) videoArgs(e domain.VideoEncode, codec string) (string, []strin
 	case domain.AccelSoftware:
 		filter = "scale=" + w + ":" + ht + ",format=yuv420p"
 		if e.ToneMap {
-			filter = "scale=" + w + ":" + ht + ",tonemapx=tonemap=bt2390:desat=0:peak=100:t=bt709:m=bt709:p=bt709:format=yuv420p"
+			filter = "scale=" + w + ":" + ht + "," + media.ToneMap
 		}
 		// Jellyfin's software transcode: x264's veryfast preset at constant quality, capped.
 		encoder = []string{

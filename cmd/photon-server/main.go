@@ -130,6 +130,11 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	defer pictureCache.Close()
+	previews, err := analysis.OpenPreviews(filepath.Join(cacheRoot, "previews"))
+	if err != nil {
+		return err
+	}
+	defer previews.Close()
 	signingKey, err := st.SigningKey(ctx)
 	if err != nil {
 		return err
@@ -173,7 +178,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		PGDump: cmp.Or(os.Getenv("PHOTON_PG_DUMP"), "pg_dump"), URL: databaseURL,
 		Dir: cmp.Or(os.Getenv("PHOTON_BACKUP_DIR"), filepath.Join(configDir, "photon-server", "backups")),
 	}
-	scheduler := task.NewScheduler(st, logger, node, scanTask(st), sweepTask(st, logger), backupTask(dumper, logger), refreshTask(st, logger), sweepArtworkTask(st, pictureCache, logger), markersTask(st, tools, logger))
+	scheduler := task.NewScheduler(st, logger, node, scanTask(st), sweepTask(st, logger), backupTask(dumper, logger), refreshTask(st, logger), sweepArtworkTask(st, pictureCache, logger), markersTask(st, tools, logger), previewsTask(st, previews, logger))
 	lang := cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US")
 	// TMDB runs before TheTVDB, as its match may give TheTVDB an id to find a show by.
 	providers := provider.NewRegistry(
@@ -186,7 +191,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	srv := &http.Server{
 		Addr: cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close, node), Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Limits: cache, TrustedProxies: trusted,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close, node), Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Limits: cache, TrustedProxies: trusted,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -199,11 +204,17 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		domain.JobScanLibrary: scanLibrary(st, scan.New(st, tools, logger), logger),
 		domain.JobMarkers:     analysis.Markers(st, tools.Fingerprint),
 	})
+	// Previews have a worker and a slot of their own, so however many are queued, the other jobs
+	// keep every slot of theirs.
+	previewer := jobs.NewWorker(st, logger, node, 1, map[domain.JobKind]jobs.Handler{
+		domain.JobPreviews: analysis.MakePreviews(st, tools, previews, logger),
+	})
 	watcher := watch.New(st, logger)
 	background, stopBackground := context.WithCancel(ctx)
 	var wg sync.WaitGroup
 	wg.Go(func() { scheduler.Run(background) })
 	wg.Go(func() { worker.Run(background) })
+	wg.Go(func() { previewer.Run(background) })
 	wg.Go(func() { sweepRemuxes(background, remuxer) })
 	if address := os.Getenv("PHOTON_NODE_ADDRESS"); address != "" {
 		wg.Go(func() { advertise(background, cache, node, address, logger) })

@@ -10,10 +10,12 @@ const (
 	JobScanLibrary JobKind = "scan_library"
 	// JobMarkers finds the intro and credits a season's episodes share by their sound.
 	JobMarkers JobKind = "markers"
+	// JobPreviews makes a part's chapter images and trickplay sheets, as its library asks.
+	JobPreviews JobKind = "previews"
 )
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes, JobIdentify, JobScanLibrary, JobMarkers}
+	return []JobKind{JobKeyframes, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews}
 }
 
 type JobState string

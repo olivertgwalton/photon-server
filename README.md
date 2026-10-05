@@ -83,6 +83,15 @@ minutes after its episodes stop arriving, and any not yet compared at 3 a.m. Tha
 built with chromaprint, which the image's is; without it the server says so at start and reads
 chapters only. An admin's own markers (`PUT /api/v1/admin/versions/{id}/markers`) outrank both.
 
+Each library makes previews of its videos ahead of time, as Plex and Jellyfin do: a picture of each
+chapter, and trickplay sheets for scrubbing (a 320-pixel thumbnail every ten seconds, a hundred to
+a JPEG sheet, HDR tone mapped). They are made from keyframes in the background, one part at a time
+per node beside the other jobs, and kept under `PHOTON_CACHE_DIR` in `previews`; a two-hour film's
+come to a few megabytes. `photon-server library set -name NAME -previews chapters` makes only the
+chapter pictures, and `-previews off` none. Each night at two the server queues whatever is not yet
+as its library asks, takes away what a library no longer wants, and clears previews of files that
+have gone.
+
 Run several nodes against one Postgres and Valkey behind a load balancer and each says where its
 peers reach it in `PHOTON_NODE_ADDRESS` (`http://10.0.0.5:8640`): a request for a stream's segments
 that lands on another node is handed to the node making them.

@@ -32,7 +32,7 @@ func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.Library
 	if err != nil {
 		return domain.Library{}, fmt.Errorf("adding library: %w", err)
 	}
-	row.Monitor, row.RefreshDays = domain.MonitorRealtime, 30
+	row.Monitor, row.RefreshDays, row.Previews = domain.MonitorRealtime, 30, domain.PreviewsAll
 	return library(row, domain.DefaultSources(), domain.DefaultRemoteExtras()), nil
 }
 
@@ -80,8 +80,8 @@ func (s *Store) Library(ctx context.Context, id uuid.UUID) (domain.Library, erro
 	return domain.Library{}, ErrNotFound
 }
 
-// LibraryChange is what to change about a library; an empty name or monitor, or a nil list, is
-// left as it is.
+// LibraryChange is what to change about a library; an empty name, monitor or previews, or a nil
+// list, is left as it is.
 type LibraryChange struct {
 	Name         string
 	Sources      []domain.FieldSource
@@ -89,6 +89,9 @@ type LibraryChange struct {
 	Monitor      domain.Monitor
 	// RefreshDays, where set, is how often its titles are matched again; zero never.
 	RefreshDays *int
+	// Previews is what pictures it makes of its videos; parts are brought into line by the
+	// previews backfill.
+	Previews domain.PreviewLevel
 }
 
 // SetLibrary renames a library, changes whether it is watched, where its metadata comes from and
@@ -129,6 +132,11 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 		}
 		if change.Monitor != "" {
 			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Monitor, change.Monitor); err != nil {
+				return err
+			}
+		}
+		if change.Previews != "" {
+			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Previews, change.Previews); err != nil {
 				return err
 			}
 		}
@@ -199,6 +207,6 @@ func saveSources(ctx context.Context, tx *query.Query, lib model.UUID, sources [
 func library(r model.Library, sources []domain.FieldSource, extras []domain.ExtraKind) domain.Library {
 	return domain.Library{
 		ID: uuid.UUID(r.ID), Name: r.Name, Kind: r.Kind, Root: r.Root, Sources: sources, RemoteExtras: extras,
-		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays),
+		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews,
 	}
 }

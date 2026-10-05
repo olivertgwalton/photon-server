@@ -43,6 +43,27 @@ func ParseMonitor(s string) (Monitor, error) {
 	return "", fmt.Errorf("monitor %q is not one of %v", s, Monitors())
 }
 
+// PreviewLevel is what pictures a library makes of its videos ahead of time: none, an image per
+// chapter, or those and trickplay sheets for scrubbing.
+type PreviewLevel string
+
+const (
+	PreviewsOff      PreviewLevel = "off"
+	PreviewsChapters PreviewLevel = "chapters"
+	PreviewsAll      PreviewLevel = "all"
+)
+
+func PreviewLevels() []PreviewLevel {
+	return []PreviewLevel{PreviewsOff, PreviewsChapters, PreviewsAll}
+}
+
+func ParsePreviewLevel(s string) (PreviewLevel, error) {
+	if l := PreviewLevel(s); slices.Contains(PreviewLevels(), l) {
+		return l, nil
+	}
+	return "", fmt.Errorf("previews %q is not one of %v", s, PreviewLevels())
+}
+
 type Library struct {
 	ID   uuid.UUID
 	Name string
@@ -55,4 +76,5 @@ type Library struct {
 	Monitor      Monitor
 	// RefreshDays is how often its titles are matched again, in days; zero is never.
 	RefreshDays int
+	Previews    PreviewLevel
 }

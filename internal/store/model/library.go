@@ -11,7 +11,8 @@ type Library struct {
 	Name        string
 	Kind        domain.LibraryKind
 	Root        string
-	Monitor     domain.Monitor `gorm:"default:realtime"`
-	RefreshDays int16          `gorm:"default:30"`
+	Monitor     domain.Monitor      `gorm:"default:realtime"`
+	RefreshDays int16               `gorm:"default:30"`
+	Previews    domain.PreviewLevel `gorm:"default:all"`
 	CreatedAt   time.Time
 }

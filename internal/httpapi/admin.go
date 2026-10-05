@@ -44,12 +44,14 @@ type adminLibraryJSON struct {
 	RemoteExtras []domain.ExtraKind   `json:"remote_extras"`
 	Monitor      domain.Monitor       `json:"monitor"`
 	RefreshDays  int                  `json:"refresh_days"`
+	Previews     domain.PreviewLevel  `json:"previews"`
 }
 
 func adminLibrary(l domain.Library) adminLibraryJSON {
 	return adminLibraryJSON{
 		ID: l.ID, Name: l.Name, Kind: l.Kind, Root: l.Root, Sources: nonNil(l.Sources),
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
+		Previews: l.Previews,
 	}
 }
 
@@ -122,11 +124,12 @@ type libraryChangeJSON struct {
 	RemoteExtras []domain.ExtraKind   `json:"remote_extras,omitzero"`
 	Monitor      domain.Monitor       `json:"monitor,omitzero"`
 	// RefreshDays is how often its metadata is refreshed, 0 for never.
-	RefreshDays *int `json:"refresh_days,omitzero"`
+	RefreshDays *int                `json:"refresh_days,omitzero"`
+	Previews    domain.PreviewLevel `json:"previews,omitzero"`
 }
 
 // setLibrary changes what is sent of a library: its name, whether it is watched, where its
-// metadata comes from, and the kinds of video it keeps providers' links to.
+// metadata comes from, the kinds of video it keeps providers' links to, and what previews it makes.
 func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r)
 	if !ok {
@@ -136,7 +139,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	change := store.LibraryChange{Name: req.Name, Sources: req.Sources, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays}
+	change := store.LibraryChange{Name: req.Name, Sources: req.Sources, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays, Previews: req.Previews}
 	if d := req.RefreshDays; d != nil && (*d < 0 || *d > 365) {
 		writeProblem(w, a.logger, codeInvalidBody, "refresh_days is from 0, never, to 365")
 		return
@@ -179,6 +182,11 @@ func validChange(c store.LibraryChange) error {
 	}
 	if c.Monitor != "" {
 		if _, err := domain.ParseMonitor(string(c.Monitor)); err != nil {
+			return err
+		}
+	}
+	if c.Previews != "" {
+		if _, err := domain.ParsePreviewLevel(string(c.Previews)); err != nil {
 			return err
 		}
 	}
