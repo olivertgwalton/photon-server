@@ -19,6 +19,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/analysis"
 	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/backup"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
@@ -148,7 +149,15 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	// node is this process among the cluster's.
 	node := uuid.NewV7()
-	scheduler := task.NewScheduler(st, logger, node, scanTask(st), sweepTask(st, logger))
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return err
+	}
+	dumper := backup.Dumper{
+		PGDump: cmp.Or(os.Getenv("PHOTON_PG_DUMP"), "pg_dump"), URL: databaseURL,
+		Dir: cmp.Or(os.Getenv("PHOTON_BACKUP_DIR"), filepath.Join(configDir, "photon-server", "backups")),
+	}
+	scheduler := task.NewScheduler(st, logger, node, scanTask(st), sweepTask(st, logger), backupTask(dumper, logger))
 	srv := &http.Server{
 		Addr: cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
 		Handler: httpapi.New(logger, info, httpapi.Services{

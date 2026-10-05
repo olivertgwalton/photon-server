@@ -58,6 +58,11 @@ Run several nodes against one Postgres and Valkey behind a load balancer and eac
 peers reach it in `PHOTON_NODE_ADDRESS` (`http://10.0.0.5:8640`): a request for a stream's segments
 that lands on another node is handed to the node making them.
 
+The database is dumped every three days with `pg_dump` (`PHOTON_PG_DUMP`, no older than the
+Postgres it dumps) into `PHOTON_BACKUP_DIR` (by default the user config folder's `photon-server/backups`), keeping
+the newest three. Put one back into an empty database with
+`pg_restore --no-owner -d postgres://… photon-….dump`.
+
 The first admin is made on the command line, before anyone can sign in:
 
 ```sh
