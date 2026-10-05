@@ -1,0 +1,84 @@
+package store
+
+import (
+	"context"
+	"encoding/json"
+	"time"
+	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store/model"
+)
+
+// AddActivity keeps an event in the activity log and answers its entry's id. A profile, title or
+// library removed while the event was on its way is left out, as removing it later would.
+func (s *Store) AddActivity(ctx context.Context, e domain.Event) (uuid.UUID, error) {
+	details := []byte("{}")
+	if len(e.Details) > 0 {
+		var err error
+		if details, err = json.Marshal(e.Details); err != nil {
+			return uuid.UUID{}, err
+		}
+	}
+	var id string
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO activity (at, kind, profile_id, item_id, library_id, details) VALUES ($1, $2,
+			(SELECT id FROM profiles WHERE id = $3), (SELECT id FROM items WHERE id = $4),
+			(SELECT id FROM libraries WHERE id = $5), $6::jsonb)
+		RETURNING id::text`,
+		e.At, string(e.Kind), e.Profile.String(), e.Item.String(), e.Library.String(), string(details)).Scan(&id)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	return uuid.Parse(id)
+}
+
+// Activity answers a page of the activity log, the newest first, and how many entries there are:
+// every kind's, or one's.
+func (s *Store) Activity(ctx context.Context, kind domain.EventKind, offset, limit int) ([]domain.Event, int64, error) {
+	a := s.q.Activity
+	q := a.WithContext(ctx)
+	if kind != "" {
+		q = q.Where(a.Kind.Eq(string(kind)))
+	}
+	total, err := q.Count()
+	if err != nil {
+		return nil, 0, err
+	}
+	rows, err := q.Order(a.At.Desc(), a.ID.Desc()).Offset(offset).Limit(limit).Find()
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]domain.Event, len(rows))
+	for i, r := range rows {
+		out[i] = domain.Event{
+			ID: uuid.UUID(r.ID), Kind: r.Kind, At: r.At,
+			Profile: ref(r.ProfileID), Item: ref(r.ItemID), Library: ref(r.LibraryID),
+		}
+		if err := json.Unmarshal(r.Details, &out[i].Details); err != nil {
+			return nil, 0, err
+		}
+	}
+	return out, total, nil
+}
+
+func ref(id *model.UUID) uuid.UUID {
+	if id == nil {
+		return uuid.UUID{}
+	}
+	return uuid.UUID(*id)
+}
+
+// PruneActivity forgets the entries from before a time, answering how many.
+func (s *Store) PruneActivity(ctx context.Context, before time.Time) (int64, error) {
+	a := s.q.Activity
+	res, err := a.WithContext(ctx).Where(a.At.Lt(before)).Delete()
+	return res.RowsAffected, err
+}
+
+// TitlesAddedSince counts the films and episodes a library has had added since a time.
+func (s *Store) TitlesAddedSince(ctx context.Context, lib uuid.UUID, since time.Time) (int64, error) {
+	i := s.q.Item
+	return i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib)),
+		i.Kind.In(string(domain.ItemMovie), string(domain.ItemEpisode)), i.AddedAt.Gte(since)).Count()
+}
