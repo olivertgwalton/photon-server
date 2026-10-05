@@ -43,3 +43,33 @@ func TestLibraries(t *testing.T) {
 		t.Errorf("libraries (-want +got):\n%s", diff)
 	}
 }
+
+func TestALibraryIsRenamedAndRemoved(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddLibrary(ctx, "Television", domain.LibraryShows, "/srv/tv"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLibrary(ctx, films.ID, LibraryChange{Name: "Television"}); !errors.Is(err, ErrLibraryExists) {
+		t.Errorf("renaming onto another's name: %v, want %v", err, ErrLibraryExists)
+	}
+	if err := s.SetLibrary(ctx, films.ID, LibraryChange{Name: "Movies", Monitor: domain.MonitorOff}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Library(ctx, films.ID); err != nil || got.Name != "Movies" || got.Monitor != domain.MonitorOff {
+		t.Errorf("after renaming: %+v, %v", got, err)
+	}
+	if err := s.RemoveLibrary(ctx, films.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Library(ctx, films.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("after removing: %v, want %v", err, ErrNotFound)
+	}
+	if err := s.RemoveLibrary(ctx, films.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("removing it again: %v, want %v", err, ErrNotFound)
+	}
+}

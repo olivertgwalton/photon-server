@@ -80,26 +80,33 @@ func (s *Store) Library(ctx context.Context, id uuid.UUID) (domain.Library, erro
 	return domain.Library{}, ErrNotFound
 }
 
-// LibraryChange is what to change about a library; a nil list or an empty monitor is left as it
-// is.
+// LibraryChange is what to change about a library; an empty name or monitor, or a nil list, is
+// left as it is.
 type LibraryChange struct {
+	Name         string
 	Sources      []domain.FieldSource
 	RemoteExtras []domain.ExtraKind
 	Monitor      domain.Monitor
 }
 
-// SetLibrary changes where a library's metadata comes from, in what order, and which kinds of
-// video it keeps providers' links to. Its titles are matched again; with new sources its folders
-// are read again at the next scan too, so the new order reaches everything already there.
-func (s *Store) SetLibrary(ctx context.Context, name string, change LibraryChange) error {
-	return s.q.Transaction(func(tx *query.Query) error {
+// SetLibrary renames a library, changes whether it is watched, where its metadata comes from and
+// in what order, and which kinds of video it keeps providers' links to. With new sources or kinds
+// its titles are matched again, and with new sources its folders are read again at the next scan
+// too, so the new order reaches everything already there.
+func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChange) error {
+	err := s.q.Transaction(func(tx *query.Query) error {
 		l := tx.Library
-		row, err := l.WithContext(ctx).Where(l.Name.Eq(name)).Take()
+		row, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(id))).Take()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrNotFound
 		}
 		if err != nil {
 			return err
+		}
+		if change.Name != "" {
+			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Name, change.Name); err != nil {
+				return err
+			}
 		}
 		if change.Sources != nil {
 			ls := tx.LibrarySource
@@ -117,9 +124,9 @@ func (s *Store) SetLibrary(ctx context.Context, name string, change LibraryChang
 			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Monitor, change.Monitor); err != nil {
 				return err
 			}
-			if change.Sources == nil && change.RemoteExtras == nil {
-				return nil
-			}
+		}
+		if change.Sources == nil && change.RemoteExtras == nil {
+			return nil
 		}
 		if change.RemoteExtras != nil {
 			ex := tx.LibraryRemoteExtra
@@ -144,6 +151,20 @@ func (s *Store) SetLibrary(ctx context.Context, name string, change LibraryChang
 		}
 		return nil
 	})
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return ErrLibraryExists
+	}
+	return err
+}
+
+// RemoveLibrary forgets a library and everything in it; its files are left alone.
+func (s *Store) RemoveLibrary(ctx context.Context, id uuid.UUID) error {
+	l := s.q.Library
+	res, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(id))).Delete()
+	if err == nil && res.RowsAffected == 0 {
+		err = ErrNotFound
+	}
+	return err
 }
 
 func saveRemoteExtras(ctx context.Context, tx *query.Query, lib model.UUID, kinds []domain.ExtraKind) error {

@@ -183,7 +183,7 @@ func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
 		t.Errorf("by default, title = %q, want the NFO's over TMDB's", got)
 	}
 
-	if err := s.SetLibrary(ctx, "Films", LibraryChange{Sources: []domain.FieldSource{domain.SourceTMDB, domain.SourceNFO}}); err != nil {
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: []domain.FieldSource{domain.SourceTMDB, domain.SourceNFO}}); err != nil {
 		t.Fatal(err)
 	}
 	if n, _ := s.q.Folder.WithContext(ctx).Count(); n != 0 {
@@ -199,7 +199,7 @@ func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
 		t.Errorf("trusting TMDB first, title = %q, want TMDB's", got)
 	}
 
-	if err := s.SetLibrary(ctx, "Films", LibraryChange{Sources: []domain.FieldSource{domain.SourceNFO}}); err != nil {
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: []domain.FieldSource{domain.SourceNFO}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, domain.Metadata{Overview: "From TMDB."}, nil); err != nil {
