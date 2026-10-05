@@ -53,11 +53,7 @@ func profileCommand(ctx context.Context, logger *slog.Logger, databaseURL string
 		if err != nil {
 			return err
 		}
-		svc, err := auth.New(ctx, st)
-		if err != nil {
-			return err
-		}
-		if hash, err = svc.HashPassword(ctx, password); err != nil {
+		if hash, err = auth.HashPassword(ctx, password); err != nil {
 			return err
 		}
 	}

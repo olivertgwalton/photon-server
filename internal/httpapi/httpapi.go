@@ -10,6 +10,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/kv"
 )
 
 type Info struct {
@@ -37,6 +38,9 @@ type authenticator interface {
 	SignIn(ctx context.Context, name, password string, device auth.Device) (string, domain.Profile, error)
 	Authenticate(ctx context.Context, token string) (domain.Session, error)
 	SignOut(ctx context.Context, session uuid.UUID) error
+	StartPairing(ctx context.Context, d auth.Device) (auth.PairingStart, error)
+	ApprovePairing(ctx context.Context, approver domain.Session, userCode string) (auth.Device, error)
+	PollPairing(ctx context.Context, deviceCode string) (kv.PairingState, string, domain.Profile, error)
 }
 
 // Services are what the API's routes call.
@@ -75,6 +79,9 @@ func (a *API) routes() []route {
 		{pattern: "POST /api/v1/auth/login", access: public, handle: a.login},
 		{pattern: "POST /api/v1/auth/logout", access: signedIn, handle: a.logout},
 		{pattern: "GET /api/v1/me", access: signedIn, handle: a.me},
+		{pattern: "POST /api/v1/auth/device/start", access: public, handle: a.startPairing},
+		{pattern: "POST /api/v1/auth/device/approve", access: signedIn, handle: a.approvePairing},
+		{pattern: "POST /api/v1/auth/device/poll", access: public, handle: a.pollPairing},
 	}
 }
 

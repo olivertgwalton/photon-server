@@ -113,3 +113,15 @@ func (s *Store) DeleteSession(ctx context.Context, id uuid.UUID) error {
 func profile(r model.Profile) domain.Profile {
 	return domain.Profile{ID: uuid.UUID(r.ID), Name: r.Name, Role: r.Role}
 }
+
+func (s *Store) ProfileByID(ctx context.Context, id uuid.UUID) (domain.Profile, error) {
+	p := s.q.Profile
+	row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return domain.Profile{}, ErrNotFound
+	}
+	if err != nil {
+		return domain.Profile{}, err
+	}
+	return profile(*row), nil
+}

@@ -8,6 +8,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -29,26 +30,28 @@ var (
 
 type Service struct {
 	store  *store.Store
+	kv     *kv.KV
 	hasher *hasher
 	// dummy is verified against when no profile has the name, so a sign-in for an unknown name
 	// takes as long as one for a known name.
 	dummy string
 }
 
-func New(ctx context.Context, st *store.Store) (*Service, error) {
+func New(ctx context.Context, st *store.Store, k *kv.KV) (*Service, error) {
 	h := newHasher(concurrentHashes)
 	dummy, err := h.Hash(ctx, uuid.NewV4().String())
 	if err != nil {
 		return nil, err
 	}
-	return &Service{store: st, hasher: h, dummy: dummy}, nil
+	return &Service{store: st, kv: k, hasher: h, dummy: dummy}, nil
 }
 
-func (s *Service) HashPassword(ctx context.Context, password string) (string, error) {
+// HashPassword hashes a new password for storing, refusing one too short to be one.
+func HashPassword(ctx context.Context, password string) (string, error) {
 	if len([]rune(password)) < minPasswordLen {
 		return "", ErrPasswordTooShort
 	}
-	return s.hasher.Hash(ctx, password)
+	return newHasher(1).Hash(ctx, password)
 }
 
 type Device struct {
@@ -79,15 +82,20 @@ func (s *Service) SignIn(ctx context.Context, name, password string, device Devi
 			_ = s.store.SetPasswordHash(ctx, profile.ID, fresh)
 		}
 	}
+	token, err := s.startSession(ctx, profile, device)
+	return token, profile, err
+}
+
+func (s *Service) startSession(ctx context.Context, profile domain.Profile, device Device) (string, error) {
 	token, tokenHash := newToken()
-	_, err = s.store.CreateSession(ctx, store.NewSession{
+	_, err := s.store.CreateSession(ctx, store.NewSession{
 		ProfileID: profile.ID, TokenHash: tokenHash,
 		DeviceName: device.Name, Client: device.Client, ExpiresAt: time.Now().Add(idleExpiry),
 	})
 	if err != nil {
-		return "", domain.Profile{}, err
+		return "", err
 	}
-	return token, profile, nil
+	return token, nil
 }
 
 // Authenticate finds the session a device token belongs to.
