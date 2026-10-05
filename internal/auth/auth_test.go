@@ -41,13 +41,13 @@ func newService(t *testing.T) (*Service, *store.Store) {
 	return svc, st
 }
 
-func addProfile(t *testing.T, st *store.Store, name, password string) domain.Profile {
+func addOliver(t *testing.T, st *store.Store) domain.Profile {
 	t.Helper()
-	hash, err := HashPassword(t.Context(), password)
+	hash, err := HashPassword(t.Context(), "correct horse")
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := st.AddProfile(t.Context(), name, domain.RoleAdmin, hash)
+	p, err := st.AddProfile(t.Context(), "Oliver", domain.RoleAdmin, hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ var tv = Device{Name: "Living room", Client: "Photon tvOS"}
 
 func TestSignInAndOut(t *testing.T) {
 	svc, st := newService(t)
-	oliver := addProfile(t, st, "Oliver", "correct horse")
+	oliver := addOliver(t, st)
 	if _, err := st.AddProfile(t.Context(), "Guest", domain.RoleMember, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestSignInAndOut(t *testing.T) {
 
 func TestExpiredSessionsAreRefused(t *testing.T) {
 	svc, st := newService(t)
-	addProfile(t, st, "Oliver", "correct horse")
+	addOliver(t, st)
 	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv)
 	if err != nil {
 		t.Fatal(err)
@@ -145,7 +145,7 @@ func b64(b []byte) string { return base64.RawStdEncoding.EncodeToString(b) }
 
 func TestPairingATelevision(t *testing.T) {
 	svc, st := newService(t)
-	addProfile(t, st, "Oliver", "correct horse")
+	addOliver(t, st)
 	_, phone, err := svc.SignIn(t.Context(), "Oliver", "correct horse", Device{Name: "iPhone", Client: "Photon iOS"})
 	if err != nil {
 		t.Fatal(err)
@@ -200,5 +200,94 @@ func TestPairingPollsAreRateLimited(t *testing.T) {
 	}
 	if state, _, _, _ := svc.PollPairing(t.Context(), start.DeviceCode); state != kv.PairingSlowDown {
 		t.Errorf("an immediate second poll: %q, want slow_down", state)
+	}
+}
+
+func TestSwitchingProfiles(t *testing.T) {
+	svc, st := newService(t)
+	admin := addOliver(t, st)
+	sam, err := st.AddProfile(t.Context(), "Sam", domain.RoleMember, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kid, err := st.AddProfile(t.Context(), "Kid", domain.RoleRestricted, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetPIN(t.Context(), sam.ID, "4821"); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"12", "1234567", "12a4"} {
+		if err := svc.SetPIN(t.Context(), sam.ID, bad); !errors.Is(err, ErrPINNotDigits) {
+			t.Errorf("SetPIN(%q): err = %v", bad, err)
+		}
+	}
+	list, err := st.Profiles(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var locks []string
+	for _, p := range list {
+		locks = append(locks, p.Profile.Name+":"+string(p.Lock))
+	}
+	if got := strings.Join(locks, " "); got != "Kid:none Oliver:password Sam:pin" {
+		t.Errorf("the switcher would show %s", got)
+	}
+
+	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := func() domain.Session {
+		t.Helper()
+		s, err := svc.Authenticate(t.Context(), token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+
+	steps := []struct {
+		name    string
+		target  domain.Profile
+		secret  string
+		wantErr error
+		landsOn domain.Profile
+	}{
+		{"to a profile with no lock", kid, "", nil, kid},
+		{"to a PIN profile with the wrong PIN", sam, "0000", ErrWrongSecret, kid},
+		{"to a PIN profile with its PIN", sam, "4821", nil, sam},
+		{"to the admin with a PIN-like guess", admin, "4821", ErrWrongSecret, sam},
+		{"to the admin with no secret", admin, "", ErrWrongSecret, sam},
+		{"to the admin with its password", admin, "correct horse", nil, admin},
+	}
+	for _, s := range steps {
+		_, err := svc.SwitchProfile(t.Context(), session(), s.target.ID, s.secret)
+		if !errors.Is(err, s.wantErr) {
+			t.Errorf("%s: err = %v, want %v", s.name, err, s.wantErr)
+		}
+		if got := session().Profile; got != s.landsOn {
+			t.Errorf("%s: the device is %s, want %s", s.name, got.Name, s.landsOn.Name)
+		}
+	}
+}
+
+func TestAnAdminWithoutAPasswordCannotBeSwitchedTo(t *testing.T) {
+	svc, st := newService(t)
+	addOliver(t, st)
+	locked, err := st.AddProfile(t.Context(), "Locked", domain.RoleAdmin, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := svc.Authenticate(t.Context(), token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SwitchProfile(t.Context(), s, locked.ID, ""); !errors.Is(err, ErrWrongSecret) {
+		t.Errorf("switched to a password-less admin (err %v)", err)
 	}
 }
