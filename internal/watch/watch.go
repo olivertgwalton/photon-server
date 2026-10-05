@@ -25,6 +25,9 @@ const (
 	Settle = time.Minute
 	// resync is how often the list of libraries to watch is read again.
 	resync = time.Minute
+	// askEvery is how often the libraries changed since are asked to be scanned: copying a file in
+	// changes it on every write, which is too often to ask the database each time.
+	askEvery = time.Second
 )
 
 type libraries interface {
@@ -53,15 +56,23 @@ func (w *Watcher) Run(ctx context.Context) error {
 	w.sync(ctx, n)
 	tick := time.NewTicker(resync)
 	defer tick.Stop()
+	ask := time.NewTicker(askEvery)
+	defer ask.Stop()
+	changed := map[uuid.UUID]bool{}
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-tick.C:
 			w.sync(ctx, n)
+		case <-ask.C:
+			for lib := range changed {
+				w.scan(ctx, lib)
+			}
+			clear(changed)
 		case ev := <-n.Events:
 			lib, ok := w.owner(ev.Name)
-			if !ok {
+			if !ok || ev.Op == fsnotify.Chmod {
 				continue
 			}
 			if ev.Has(fsnotify.Create) {
@@ -69,7 +80,7 @@ func (w *Watcher) Run(ctx context.Context) error {
 					w.add(ctx, n, lib, ev.Name)
 				}
 			}
-			w.scan(ctx, lib)
+			changed[lib] = true
 		case err := <-n.Errors:
 			if !errors.Is(err, fsnotify.ErrEventOverflow) {
 				w.log.WarnContext(ctx, "watching libraries", slog.Any("err", err))
@@ -77,12 +88,14 @@ func (w *Watcher) Run(ctx context.Context) error {
 			}
 			// Events were lost: every watched library may have changed.
 			for lib := range w.roots {
-				w.scan(ctx, lib)
+				changed[lib] = true
 			}
 		}
 	}
 }
 
+// scan asks for a library to be scanned once it has been quiet for Settle: each ask moves the
+// scan later, so it runs after the last change.
 func (w *Watcher) scan(ctx context.Context, lib uuid.UUID) {
 	if err := w.libs.ScanLibrary(ctx, lib, Settle); err != nil && ctx.Err() == nil {
 		w.log.WarnContext(ctx, "library scan not queued", slog.Any("err", err))
