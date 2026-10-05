@@ -17,9 +17,16 @@ type film struct {
 
 // copyPlan is one copy: its files in play order, and what tells it apart from its siblings.
 type copyPlan struct {
-	parts   []library.File
-	edition string
-	label   string
+	parts     []library.File
+	edition   string
+	label     string
+	subtitles []subtitlePlan
+}
+
+type subtitlePlan struct {
+	file  library.File
+	codec string
+	tags  naming.Subtitle
 }
 
 func stem(name string) string {
@@ -41,15 +48,69 @@ func planFilms(f library.Folder) []film {
 	if f.Path != "." {
 		folder := path.Base(f.Path)
 		if v, ok := versionsOf(folder, copies); ok {
+			for i := range v {
+				v[i].subtitles = subtitlesFor(f.Files, copyStem(v[i].parts), strings.TrimSpace(naming.StripTags(folder)), len(v) == 1)
+			}
 			return []film{{name: naming.CleanName(folder), versions: v}}
 		}
 	}
 	films := make([]film, 0, len(copies))
 	for _, c := range copies {
 		n := naming.CleanName(stem(c[0].Name))
-		films = append(films, film{name: n, versions: []copyPlan{{parts: c, edition: n.Edition}}})
+		subs := subtitlesFor(f.Files, copyStem(c), "", len(copies) == 1)
+		films = append(films, film{name: n, versions: []copyPlan{{parts: c, edition: n.Edition, subtitles: subs}}})
 	}
 	return films
+}
+
+// copyStem is the name a copy's subtitles are named after: its file's stem, or for a copy split
+// across files what its parts share.
+func copyStem(parts []library.File) string {
+	s := stem(parts[0].Name)
+	if p, ok := naming.StackPart(s); ok {
+		return strings.TrimRight(p.Base, " ._-")
+	}
+	return s
+}
+
+// subtitlesFor picks a copy's subtitle files from its folder's, Subs folders included. A subtitle
+// named after the copy ("Heat (1995) - 2160p.en.srt") is the copy's; one named after the title
+// ("Heat (1995).en.srt") is every version's, which Jellyfin leaves unattached. In a Subs folder
+// beside a single copy, a subtitle named otherwise ("Subs/English.srt", as releases ship them) is
+// that copy's too.
+func subtitlesFor(files []library.File, copyName, titleName string, onlyCopy bool) []subtitlePlan {
+	var subs []subtitlePlan
+	for _, f := range files {
+		codec, ok := naming.SubtitleCodec(f.Name)
+		if !ok {
+			continue
+		}
+		s := stem(path.Base(f.Name))
+		tags, matched := "", false
+		for _, name := range []string{copyName, titleName} {
+			if name == "" {
+				continue
+			}
+			if rest, ok := cutPrefixFold(s, name); ok && (rest == "" || rest[0] == '.') {
+				tags, matched = rest, true
+				break
+			}
+		}
+		if !matched && onlyCopy && strings.Contains(f.Name, "/") {
+			tags, matched = "."+s, true
+		}
+		if matched {
+			subs = append(subs, subtitlePlan{file: f, codec: codec, tags: naming.SubtitleTags(tags)})
+		}
+	}
+	return subs
+}
+
+func cutPrefixFold(s, prefix string) (string, bool) {
+	if len(s) < len(prefix) || !strings.EqualFold(s[:len(prefix)], prefix) {
+		return "", false
+	}
+	return s[len(prefix):], true
 }
 
 // stacks groups a folder's videos into copies: a file on its own, or the parts of one copy split
@@ -97,9 +158,9 @@ func versionsOf(folder string, copies [][]library.File) ([]copyPlan, bool) {
 		if p, ok := naming.StackPart(s); ok {
 			s = p.Base
 		}
-		rest := ""
-		if len(s) >= len(folder) && strings.EqualFold(s[:len(folder)], folder) {
-			rest = strings.TrimSpace(s[len(folder):])
+		rest, prefixed := cutPrefixFold(s, folder)
+		if prefixed {
+			rest = strings.TrimSpace(rest)
 			if rest != "" && !strings.ContainsRune("-_.[{(", rune(rest[0])) {
 				rest = ""
 				if len(copies) > 1 {

@@ -120,3 +120,55 @@ func TestPlanFilms(t *testing.T) {
 		})
 	}
 }
+
+func TestSubtitlesFor(t *testing.T) {
+	tests := []struct {
+		name   string
+		folder library.Folder
+		want   map[string][]string // version label → subtitle file: language/forced
+	}{
+		{
+			name: "named after the copy, after the title, and in a Subs folder",
+			folder: folder("Heat (1995)", "Heat (1995).mkv", "Heat (1995).en.srt", "Heat (1995).fr.forced.ass",
+				"Subs/English.srt", "Heat 1995.de.srt", "Heat (1995).sub", "Heat (1995).idx"),
+			want: map[string][]string{"": {
+				"Heat (1995).en.srt:en", "Heat (1995).fr.forced.ass:fr forced",
+				"Subs/English.srt:en", "Heat (1995).idx:und",
+			}},
+		},
+		{
+			name: "a title's subtitle is every version's; a copy's only its own",
+			folder: folder("Heat (1995)", "Heat (1995) - 2160p.mkv", "Heat (1995) - 1080p.mkv",
+				"Heat (1995).en.srt", "Heat (1995) - 2160p.de.srt", "Subs/English.srt"),
+			want: map[string][]string{
+				"2160p": {"Heat (1995).en.srt:en", "Heat (1995) - 2160p.de.srt:de"},
+				"1080p": {"Heat (1995).en.srt:en"},
+			},
+		},
+		{
+			name:   "stacked parts share the subtitle named after what they share",
+			folder: folder("Lawrence (1962)", "Lawrence (1962) cd1.mkv", "Lawrence (1962) cd2.mkv", "Lawrence (1962).en.srt"),
+			want:   map[string][]string{"": {"Lawrence (1962).en.srt:en"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := map[string][]string{}
+			for _, f := range planFilms(tt.folder) {
+				for _, v := range f.versions {
+					got[v.label] = []string{}
+					for _, s := range v.subtitles {
+						desc := s.file.Name + ":" + s.tags.Language.String()
+						if s.tags.Forced {
+							desc += " forced"
+						}
+						got[v.label] = append(got[v.label], desc)
+					}
+				}
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("subtitles (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

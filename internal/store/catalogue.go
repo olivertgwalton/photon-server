@@ -36,6 +36,21 @@ type Copy struct {
 	Edition    string
 	Label      string
 	Parts      []Part
+	Subtitles  []Subtitle
+}
+
+// Subtitle is a subtitle file beside a copy.
+type Subtitle struct {
+	RelPath  string
+	Size     int64
+	ModTime  time.Time
+	Codec    string
+	Language language.Tag
+	Title    string
+	Forced   bool
+	Default  bool
+	// HearingImpaired is an SDH track: one that also describes sounds.
+	HearingImpaired bool
 }
 
 type Part struct {
@@ -177,7 +192,7 @@ func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.
 				return err
 			}
 		}
-		return nil
+		return saveSubtitles(ctx, tx, lib, known.ID, c.Subtitles)
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
@@ -228,7 +243,33 @@ func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.
 			}
 		}
 	}
-	return nil
+	return saveSubtitles(ctx, tx, lib, version.ID, c.Subtitles)
+}
+
+// saveSubtitles records a copy's subtitle files. A path already known moves to this copy, so a
+// subtitle renamed onto another version follows it.
+func saveSubtitles(ctx context.Context, tx *query.Query, lib uuid.UUID, versionID model.UUID, subs []Subtitle) error {
+	if len(subs) == 0 {
+		return nil
+	}
+	rows := make([]*model.SubtitleFile, len(subs))
+	for i, s := range subs {
+		rows[i] = &model.SubtitleFile{
+			VersionID: versionID, LibraryID: model.UUID(lib), RelPath: s.RelPath, Codec: s.Codec,
+			Title: optional(s.Title), Forced: s.Forced, IsDefault: s.Default, HearingImpaired: s.HearingImpaired,
+			SizeBytes: s.Size, MtimeNS: s.ModTime.UnixNano(),
+		}
+		if s.Language != language.Und {
+			rows[i].Language = optional(s.Language.String())
+		}
+	}
+	return tx.SubtitleFile.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "library_id"}, {Name: "rel_path"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"version_id", "codec", "language", "title", "forced",
+			"is_default", "hearing_impaired", "size_bytes", "mtime_ns",
+		}),
+	}).Create(rows...)
 }
 
 // locate records that a part's bytes are at the part's path. A path that held other bytes before
@@ -288,9 +329,9 @@ func saveFacts(ctx context.Context, tx *query.Query, partID model.UUID, f *media
 	return nil
 }
 
-// FinishScan settles a library after every folder has been seen. present holds every video path
-// the walk found, skipped folders included. A path no longer present stops being a place to read
-// its part; a version with a part left nowhere is marked missing (kept, so an unmounted disk does
+// FinishScan settles a library after every folder has been seen. present holds every video and
+// subtitle path the walk found, skipped folders included. A path no longer present stops being a
+// place to read its part, or is a subtitle no longer there; a version with a part left nowhere is marked missing (kept, so an unmounted disk does
 // not cost its titles), and one whose every part is somewhere is not. A title left with no
 // version is removed, then a season and a show left with nothing in them. A folder the walk did
 // not visit is forgotten.
@@ -305,12 +346,14 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present 
 		present = []string{}
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `DELETE FROM part_files WHERE library_id = $1 AND NOT rel_path = ANY($2)`,
-			lib.String(), present)
-		if err != nil {
-			return err
+		for _, table := range []string{"part_files", "subtitle_files"} {
+			_, err := tx.Exec(ctx, `DELETE FROM `+table+` WHERE library_id = $1 AND NOT rel_path = ANY($2)`,
+				lib.String(), present)
+			if err != nil {
+				return err
+			}
 		}
-		_, err = tx.Exec(ctx, `
+		_, err := tx.Exec(ctx, `
 			UPDATE versions v SET missing_since = CASE
 				WHEN EXISTS (SELECT 1 FROM parts p WHERE p.version_id = v.id
 					AND NOT EXISTS (SELECT 1 FROM part_files f WHERE f.part_id = p.id)) THEN coalesce(v.missing_since, now())

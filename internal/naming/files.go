@@ -36,3 +36,9 @@ var ignoredNames = []string{
 func Ignored(name string) bool {
 	return strings.HasPrefix(name, ".") || slices.Contains(ignoredNames, strings.ToLower(name))
 }
+
+// SubtitleFolder reports whether a folder beside a video holds its subtitles, as Plex reads them.
+func SubtitleFolder(name string) bool {
+	n := strings.ToLower(name)
+	return n == "subs" || n == "subtitles"
+}

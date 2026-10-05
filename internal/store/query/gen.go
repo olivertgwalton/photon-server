@@ -30,6 +30,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Profile:       newProfile(db, opts...),
 		Server:        newServer(db, opts...),
 		Stream:        newStream(db, opts...),
+		SubtitleFile:  newSubtitleFile(db, opts...),
 		TaskState:     newTaskState(db, opts...),
 		Version:       newVersion(db, opts...),
 	}
@@ -50,6 +51,7 @@ type Query struct {
 	Profile       profile
 	Server        server
 	Stream        stream
+	SubtitleFile  subtitleFile
 	TaskState     taskState
 	Version       version
 }
@@ -73,6 +75,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Profile:       q.Profile.clone(db),
 		Server:        q.Server.clone(db),
 		Stream:        q.Stream.clone(db),
+		SubtitleFile:  q.SubtitleFile.clone(db),
 		TaskState:     q.TaskState.clone(db),
 		Version:       q.Version.clone(db),
 	}
@@ -101,6 +104,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Profile:       q.Profile.replaceDB(db),
 		Server:        q.Server.replaceDB(db),
 		Stream:        q.Stream.replaceDB(db),
+		SubtitleFile:  q.SubtitleFile.replaceDB(db),
 		TaskState:     q.TaskState.replaceDB(db),
 		Version:       q.Version.replaceDB(db),
 	}
@@ -119,6 +123,7 @@ type queryCtx struct {
 	Profile       IProfileDo
 	Server        IServerDo
 	Stream        IStreamDo
+	SubtitleFile  ISubtitleFileDo
 	TaskState     ITaskStateDo
 	Version       IVersionDo
 }
@@ -137,6 +142,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Profile:       q.Profile.WithContext(ctx),
 		Server:        q.Server.WithContext(ctx),
 		Stream:        q.Stream.WithContext(ctx),
+		SubtitleFile:  q.SubtitleFile.WithContext(ctx),
 		TaskState:     q.TaskState.WithContext(ctx),
 		Version:       q.Version.WithContext(ctx),
 	}

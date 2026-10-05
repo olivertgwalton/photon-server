@@ -55,7 +55,7 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library) (Report, error) 
 		report.Folders++
 		folders = append(folders, folder.Path)
 		for _, f := range folder.Files {
-			if naming.IsVideo(f.Name) {
+			if naming.IsVideo(f.Name) || naming.IsSubtitle(f.Name) {
 				present = append(present, path.Join(folder.Path, f.Name))
 			}
 		}
@@ -144,6 +144,13 @@ func (s *Scanner) copies(ctx context.Context, root *os.Root, lib domain.Library,
 
 func (s *Scanner) copy(ctx context.Context, root *os.Root, lib domain.Library, dir string, v copyPlan, report *Report) (store.Copy, bool, error) {
 	c := store.Copy{Edition: v.edition, Label: v.label}
+	for _, sub := range v.subtitles {
+		c.Subtitles = append(c.Subtitles, store.Subtitle{
+			RelPath: path.Join(dir, sub.file.Name), Size: sub.file.Size, ModTime: sub.file.ModTime,
+			Codec: sub.codec, Language: sub.tags.Language, Title: sub.tags.Title,
+			Forced: sub.tags.Forced, Default: sub.tags.Default, HearingImpaired: sub.tags.HearingImpaired,
+		})
+	}
 	paths := make([]string, len(v.parts))
 	for i, p := range v.parts {
 		paths[i] = path.Join(dir, p.Name)

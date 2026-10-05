@@ -111,3 +111,26 @@ func TestFingerprintMovesOnlyWithItsFolder(t *testing.T) {
 		t.Error("adding a file did not change its folder's fingerprint")
 	}
 }
+
+func TestSubsFoldersBelongToTheirParent(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, map[string]string{
+		"Heat (1995)/Heat (1995).mkv":              "v",
+		"Heat (1995)/Subs/English.srt":             "s",
+		"Heat (1995)/Subtitles/Heat (1995).fr.srt": "s",
+		"Heat (1995)/Subs/notes.txt":               "x",
+	})
+	got := walkAll(t, dir)
+	if _, separate := got["Heat (1995)/Subs"]; separate {
+		t.Error("the Subs folder was walked as a folder of its own")
+	}
+	want := []string{"Heat (1995).mkv", "Subs/English.srt", "Subtitles/Heat (1995).fr.srt"}
+	if diff := cmp.Diff(want, fileNames(got["Heat (1995)"])); diff != "" {
+		t.Errorf("Heat's files (-want +got):\n%s", diff)
+	}
+	before := got["Heat (1995)"].Fingerprint
+	write(t, dir, map[string]string{"Heat (1995)/Subs/German.srt": "s"})
+	if walkAll(t, dir)["Heat (1995)"].Fingerprint == before {
+		t.Error("adding a subtitle under Subs did not change the film folder's fingerprint")
+	}
+}

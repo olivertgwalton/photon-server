@@ -105,3 +105,18 @@ type Chapter struct {
 	EndMS   int64 `gorm:"column:end_ms"`
 	Title   *string
 }
+
+// SubtitleFile is a subtitle beside a copy rather than inside it.
+type SubtitleFile struct {
+	VersionID       UUID   `gorm:"type:uuid"`
+	LibraryID       UUID   `gorm:"type:uuid;primaryKey"`
+	RelPath         string `gorm:"primaryKey"`
+	Codec           string
+	Language        *string
+	Title           *string
+	Forced          bool
+	IsDefault       bool
+	HearingImpaired bool
+	SizeBytes       int64
+	MtimeNS         int64 `gorm:"column:mtime_ns"`
+}
