@@ -200,6 +200,8 @@ still set a PIN with `PUT /api/v1/me/pin`.
 The API describes itself: `GET /api/v1/openapi.json` answers its OpenAPI 3.1 description, built
 from the server's own routes as it starts, so it says what the running server takes and answers.
 Point a client generator or a viewer such as Swagger UI at it; no token is needed.
+`photon-server openapi` writes the same description to standard output with no database or
+server running, which is what the web client generates its types from.
 
 `GET /readyz` answers 204 while Postgres and Valkey are reachable and 503 otherwise.
 `GET /api/v1/admin/server` shows an admin how the node answering was set up, for a dashboard: its
