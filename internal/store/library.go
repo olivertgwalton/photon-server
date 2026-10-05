@@ -32,6 +32,7 @@ func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.Library
 	if err != nil {
 		return domain.Library{}, fmt.Errorf("adding library: %w", err)
 	}
+	row.Monitor = domain.MonitorRealtime
 	return library(row, domain.DefaultSources(), domain.DefaultRemoteExtras()), nil
 }
 
@@ -65,10 +66,26 @@ func (s *Store) Libraries(ctx context.Context) ([]domain.Library, error) {
 	return libs, nil
 }
 
-// LibraryChange is what to change about a library; a nil list is left as it is.
+// Library answers one library, or ErrNotFound.
+func (s *Store) Library(ctx context.Context, id uuid.UUID) (domain.Library, error) {
+	libs, err := s.Libraries(ctx)
+	if err != nil {
+		return domain.Library{}, err
+	}
+	for _, l := range libs {
+		if l.ID == id {
+			return l, nil
+		}
+	}
+	return domain.Library{}, ErrNotFound
+}
+
+// LibraryChange is what to change about a library; a nil list or an empty monitor is left as it
+// is.
 type LibraryChange struct {
 	Sources      []domain.FieldSource
 	RemoteExtras []domain.ExtraKind
+	Monitor      domain.Monitor
 }
 
 // SetLibrary changes where a library's metadata comes from, in what order, and which kinds of
@@ -94,6 +111,14 @@ func (s *Store) SetLibrary(ctx context.Context, name string, change LibraryChang
 			}
 			if _, err := tx.Folder.WithContext(ctx).Where(tx.Folder.LibraryID.Eq(row.ID)).Delete(); err != nil {
 				return err
+			}
+		}
+		if change.Monitor != "" {
+			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Monitor, change.Monitor); err != nil {
+				return err
+			}
+			if change.Sources == nil && change.RemoteExtras == nil {
+				return nil
 			}
 		}
 		if change.RemoteExtras != nil {
@@ -146,5 +171,6 @@ func saveSources(ctx context.Context, tx *query.Query, lib model.UUID, sources [
 func library(r model.Library, sources []domain.FieldSource, extras []domain.ExtraKind) domain.Library {
 	return domain.Library{
 		ID: uuid.UUID(r.ID), Name: r.Name, Kind: r.Kind, Root: r.Root, Sources: sources, RemoteExtras: extras,
+		Monitor: r.Monitor,
 	}
 }

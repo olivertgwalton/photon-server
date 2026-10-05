@@ -11,5 +11,6 @@ type Library struct {
 	Name      string
 	Kind      domain.LibraryKind
 	Root      string
+	Monitor   domain.Monitor `gorm:"default:realtime"`
 	CreatedAt time.Time
 }
