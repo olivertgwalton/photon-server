@@ -293,9 +293,11 @@ func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange) (
 	return out, err
 }
 
-// RemoveProfile forgets a profile, its devices and what it has watched. The server keeps an admin.
-func (s *Store) RemoveProfile(ctx context.Context, id uuid.UUID) error {
-	return s.q.Transaction(func(tx *query.Query) error {
+// RemoveProfile forgets a profile, its devices and what it has watched, answering its name. The
+// server keeps an admin.
+func (s *Store) RemoveProfile(ctx context.Context, id uuid.UUID) (string, error) {
+	var name string
+	err := s.q.Transaction(func(tx *query.Query) error {
 		p := tx.Profile
 		row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -309,9 +311,11 @@ func (s *Store) RemoveProfile(ctx context.Context, id uuid.UUID) error {
 				return err
 			}
 		}
+		name = row.Name
 		_, err = p.WithContext(ctx).Where(p.ID.Eq(row.ID)).Delete()
 		return err
 	})
+	return name, err
 }
 
 // otherAdmin answers ErrLastAdmin unless an admin besides id remains, holding every admin's row

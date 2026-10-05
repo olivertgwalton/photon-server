@@ -361,3 +361,23 @@ func (a *API) similar(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
 }
+
+// paging reads a page's offset and limit, as walls page.
+func (a *API) paging(w http.ResponseWriter, r *http.Request) (offset, limit int, ok bool) {
+	q := r.URL.Query()
+	offset, limit = 0, defaultWallLimit
+	var err error
+	if s := q.Get("offset"); s != "" {
+		if offset, err = strconv.Atoi(s); err != nil || offset < 0 {
+			writeProblem(w, a.logger, codeInvalidParameter, "offset is a number from 0")
+			return 0, 0, false
+		}
+	}
+	if s := q.Get("limit"); s != "" {
+		if limit, err = strconv.Atoi(s); err != nil || limit < 1 || limit > maxWallLimit {
+			writeProblem(w, a.logger, codeInvalidParameter, "limit is a number from 1 to "+strconv.Itoa(maxWallLimit))
+			return 0, 0, false
+		}
+	}
+	return offset, limit, true
+}

@@ -48,7 +48,7 @@ func TestTheActivityLogIsReadNewestFirstAndForgetsTheOld(t *testing.T) {
 	if _, err := s.AddProfile(ctx, "Spare", domain.RoleAdmin, "h"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.RemoveProfile(ctx, oliver.ID); err != nil {
+	if _, err := s.RemoveProfile(ctx, oliver.ID); err != nil {
 		t.Fatal(err)
 	}
 	ins, total, err = s.Activity(ctx, domain.EventSignedIn, 0, 10)

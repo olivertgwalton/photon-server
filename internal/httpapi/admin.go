@@ -110,6 +110,7 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventLibraryAdded, Library: lib.ID, Details: map[string]any{"name": lib.Name}})
 	if err := a.svc.Libraries.ScanLibrary(r.Context(), lib.ID, 0); err != nil {
 		a.internal(w, r, err)
 		return
@@ -209,9 +210,11 @@ func (a *API) removeLibrary(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if a.answered(w, r, a.svc.Libraries.RemoveLibrary(r.Context(), id)) {
+	lib, err := a.svc.Libraries.Library(r.Context(), id)
+	if a.answered(w, r, err) || a.answered(w, r, a.svc.Libraries.RemoveLibrary(r.Context(), id)) {
 		return
 	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventLibraryRemoved, Details: map[string]any{"name": lib.Name}})
 	w.WriteHeader(http.StatusNoContent)
 }
 

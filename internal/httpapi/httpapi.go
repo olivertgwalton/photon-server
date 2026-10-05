@@ -133,6 +133,9 @@ type Services struct {
 	ProfileAdmin profileAdmin
 	Tasks        tasks
 	Jobs         jobQueue
+	// Activity is the log of what has happened, and Events tells it, and more, as it happens.
+	Activity activityLog
+	Events   eventHub
 	// NowPlaying is every playback going on, across the cluster.
 	NowPlaying nowPlaying
 	Pictures   pictures
@@ -578,6 +581,16 @@ func (a *API) routes() []route {
 			pattern: "GET /api/v1/admin/playbacks", access: admin,
 			summary: "List who is playing what, and how many videos this node is transcoding",
 			status:  http.StatusOK, reply: nowPlayingListJSON{}, handle: a.adminPlaybacks,
+		},
+		{
+			pattern: "GET /api/v1/admin/activity", access: admin, summary: "Page the activity log, the newest first",
+			query:  append([]param{{"kind", domain.EventKind(""), "Only entries of this kind, one the log keeps."}}, pageParams...),
+			status: http.StatusOK, reply: pageJSON[eventJSON]{}, handle: a.adminActivity,
+		},
+		{
+			pattern: "GET /api/v1/admin/events", access: admin,
+			summary: "Stream a snapshot of what is going on, then each event as it happens, as Server-Sent Events",
+			status:  http.StatusOK, reply: eventStream(), handle: a.adminEvents,
 		},
 		{
 			pattern: "GET /api/v1/home", access: signedIn, summary: "The profile's home rows, in order",

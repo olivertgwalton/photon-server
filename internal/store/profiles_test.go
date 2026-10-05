@@ -30,7 +30,7 @@ func TestTheServerKeepsAnAdminWithAPassword(t *testing.T) {
 			_, err := s.SetProfile(ctx, oliver.ID, ProfileChange{Role: domain.RoleMember})
 			return err
 		}, ErrLastAdmin},
-		{"removing the last admin", func() error { return s.RemoveProfile(ctx, oliver.ID) }, ErrLastAdmin},
+		{"removing the last admin", func() error { _, err := s.RemoveProfile(ctx, oliver.ID); return err }, ErrLastAdmin},
 		{"clearing an admin's password", func() error {
 			_, err := s.SetProfile(ctx, oliver.ID, ProfileChange{PasswordHash: &empty})
 			return err
@@ -57,7 +57,7 @@ func TestTheServerKeepsAnAdminWithAPassword(t *testing.T) {
 	if _, err := s.SetProfile(ctx, oliver.ID, ProfileChange{Role: domain.RoleMember}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.RemoveProfile(ctx, oliver.ID); err != nil {
+	if _, err := s.RemoveProfile(ctx, oliver.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.ProfileByID(ctx, oliver.ID); !errors.Is(err, ErrNotFound) {

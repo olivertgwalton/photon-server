@@ -21,6 +21,7 @@ type tasks interface {
 type jobQueue interface {
 	JobQueue(ctx context.Context) ([]store.JobCount, []store.DeadJob, error)
 	RetryJob(ctx context.Context, id int64) error
+	RunningJobs(ctx context.Context) ([]store.Job, error)
 }
 
 type nowPlaying interface {
@@ -149,6 +150,11 @@ func (a *API) adminPlaybacks(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
+	active, limit := a.svc.HLS.Transcodes()
+	writeJSON(w, a.logger, "application/json", http.StatusOK, nowPlayingListJSON{playbacksJSON(all), transcodesJSON{active, limit}})
+}
+
+func playbacksJSON(all []domain.Playback) []nowPlayingJSON {
 	out := make([]nowPlayingJSON, len(all))
 	for i, p := range all {
 		out[i] = nowPlayingJSON{
@@ -156,6 +162,5 @@ func (a *API) adminPlaybacks(w http.ResponseWriter, r *http.Request) {
 			PositionMS: p.Position.Milliseconds(), StartedAt: p.Started.UTC(), UpdatedAt: p.Updated.UTC(), NodeID: p.Node,
 		}
 	}
-	active, limit := a.svc.HLS.Transcodes()
-	writeJSON(w, a.logger, "application/json", http.StatusOK, nowPlayingListJSON{out, transcodesJSON{active, limit}})
+	return out
 }

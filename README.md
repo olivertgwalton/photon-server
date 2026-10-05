@@ -112,6 +112,16 @@ Run several nodes against one Postgres and Valkey behind a load balancer and eac
 peers reach it in `PHOTON_NODE_ADDRESS` (`http://10.0.0.5:8640`): a request for a stream's segments
 that lands on another node is handed to the node making them.
 
+The server keeps an activity log of what an admin reads later: sign-ins and refused ones (with the
+device and address), plays started and stopped, libraries and profiles added and removed, scans
+and the titles they found, failed tasks, backups, and jobs that failed for good. `GET
+/api/v1/admin/activity` pages it, newest first (`kind` narrows it), and entries older than 30 days
+are forgotten daily. `GET /api/v1/admin/events` is a Server-Sent Events stream for a dashboard:
+first a `snapshot` of the tasks and jobs running, the scans going on and who is playing what on
+every node, then each event as it happens, named by its kind (`task.finished`, `scan.progress`,
+`playback.paused`…), with a comment every 15 seconds so proxies leave it open. It asks nginx not
+to buffer it; another proxy may need buffering turned off for its path.
+
 The database is dumped every three days with `pg_dump` (`PHOTON_PG_DUMP`, no older than the
 Postgres it dumps) into `PHOTON_BACKUP_DIR` (by default the user config folder's `photon-server/backups`), keeping
 the newest three. Put one back into an empty database with

@@ -16,7 +16,7 @@ import (
 type profileAdmin interface {
 	AddProfile(ctx context.Context, name string, role domain.Role, passwordHash string) (domain.Profile, error)
 	SetProfile(ctx context.Context, id uuid.UUID, c store.ProfileChange) (domain.Profile, error)
-	RemoveProfile(ctx context.Context, id uuid.UUID) error
+	RemoveProfile(ctx context.Context, id uuid.UUID) (string, error)
 	Access(ctx context.Context, id uuid.UUID) (store.ProfileAccess, error)
 	SetAccess(ctx context.Context, id uuid.UUID, a store.ProfileAccess) error
 }
@@ -99,6 +99,7 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	if a.answeredProfile(w, r, err) {
 		return
 	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileAdded, Profile: p.ID, Details: map[string]any{"name": p.Name}})
 	writeJSON(w, a.logger, "application/json", http.StatusCreated, profileOf(p))
 }
 
@@ -145,9 +146,11 @@ func (a *API) removeProfile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if a.answeredProfile(w, r, a.svc.ProfileAdmin.RemoveProfile(r.Context(), id)) {
+	name, err := a.svc.ProfileAdmin.RemoveProfile(r.Context(), id)
+	if a.answeredProfile(w, r, err) {
 		return
 	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileRemoved, Details: map[string]any{"name": name}})
 	w.WriteHeader(http.StatusNoContent)
 }
 

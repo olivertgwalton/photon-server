@@ -90,6 +90,10 @@ const (
 	ScanRemoving ScanPhase = "removing"
 )
 
+func ScanPhases() []ScanPhase {
+	return []ScanPhase{ScanReading, ScanRemoving}
+}
+
 // ScanProgress is how far a scan has got: folders done of those found so far, which grows as it
 // reads.
 type ScanProgress struct {

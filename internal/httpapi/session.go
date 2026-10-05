@@ -100,14 +100,21 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token, profile, err := a.svc.Auth.SignIn(r.Context(), req.Name, req.Password, auth.Device{Name: req.Device, Client: req.Client})
+	// Who tried, from where and on what, as Jellyfin logs a sign-in; never the password.
+	details := map[string]any{
+		"name": req.Name, "device": req.Device, "client": req.Client,
+		"address": clientAddr(r, a.svc.TrustedProxies).String(),
+	}
 	switch {
 	case errors.Is(err, auth.ErrInvalidCredentials):
+		a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSignInRefused, Details: details})
 		writeProblem(w, a.logger, codeInvalidCredentials, "")
 		return
 	case err != nil:
 		a.internal(w, r, err)
 		return
 	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSignedIn, Profile: profile.ID, Details: details})
 	writeJSON(w, a.logger, "application/json", http.StatusOK, loginResponse{Token: token, Profile: profileOf(profile)})
 }
 
