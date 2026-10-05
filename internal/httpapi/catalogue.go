@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 	"uuid"
 
@@ -21,7 +23,8 @@ const (
 type catalogue interface {
 	Libraries(ctx context.Context) ([]domain.Library, error)
 	Wall(ctx context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
-	Letters(ctx context.Context, lib uuid.UUID) ([]store.Letter, error)
+	Letters(ctx context.Context, lib, profile uuid.UUID, f store.WallFilter) ([]store.Letter, error)
+	Facets(ctx context.Context, lib uuid.UUID) (store.Facets, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, error)
 	Home(ctx context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error)
@@ -87,6 +90,11 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if page.Filter, err = wallFilter(q); err != nil {
+		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
+		return
+	}
+	page.RatingSite = cmp.Or(page.Filter.RatingSite, domain.SiteIMDb)
 	if s := q.Get("offset"); s != "" {
 		if page.Offset, err = strconv.Atoi(s); err != nil || page.Offset < 0 {
 			writeProblem(w, a.logger, codeInvalidParameter, "offset is a number from 0")
@@ -112,7 +120,12 @@ func (a *API) letters(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	letters, err := a.svc.Catalogue.Letters(r.Context(), lib)
+	f, err := wallFilter(r.URL.Query())
+	if err != nil {
+		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
+		return
+	}
+	letters, err := a.svc.Catalogue.Letters(r.Context(), lib, sessionOf(r).Profile.ID, f)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -210,4 +223,88 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 		out[i] = rowJSON{Kind: row.Kind, Items: cardsJSON(row.Cards)}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"rows": out})
+}
+
+// wallFilterParameters are what a wall, and its letters, are narrowed by: each list repeated or
+// comma-separated, any of its values.
+var wallFilterParameters = []string{"starts_with", "mark", "genre", "year", "certificate", "studio", "resolution", "range", "rating_site", "min_rating"}
+
+func wallFilter(q url.Values) (store.WallFilter, error) {
+	var f store.WallFilter
+	list := func(name string) []string {
+		var out []string
+		for _, v := range q[name] {
+			out = append(out, strings.Split(v, ",")...)
+		}
+		return out
+	}
+	if s := q.Get("starts_with"); s != "" {
+		if f.StartsWith = strings.ToUpper(s); f.StartsWith != "#" && (len(f.StartsWith) != 1 || f.StartsWith < "A" || f.StartsWith > "Z") {
+			return f, errors.New("starts_with is a letter or #")
+		}
+	}
+	var err error
+	if f.Marks, err = parseAll(list("mark"), domain.ParseMark); err != nil {
+		return f, err
+	}
+	if f.Resolutions, err = parseAll(list("resolution"), domain.ParseResolution); err != nil {
+		return f, err
+	}
+	if f.Ranges, err = parseAll(list("range"), domain.ParseRange); err != nil {
+		return f, err
+	}
+	if f.Years, err = parseAll(list("year"), strconv.Atoi); err != nil {
+		return f, errors.New("year is a year")
+	}
+	f.Genres, f.Certificates, f.Studios = list("genre"), list("certificate"), list("studio")
+	if s := q.Get("rating_site"); s != "" {
+		if f.RatingSite, err = domain.ParseRatingSite(s); err != nil {
+			return f, err
+		}
+	}
+	if s := q.Get("min_rating"); s != "" {
+		if f.MinRating, err = strconv.ParseFloat(s, 64); err != nil || f.MinRating < 0 || f.MinRating > 100 {
+			return f, errors.New("min_rating is a score from 0 to 100")
+		}
+		f.RatingSite = cmp.Or(f.RatingSite, domain.SiteIMDb)
+	}
+	return f, nil
+}
+
+func parseAll[T any](values []string, parse func(string) (T, error)) ([]T, error) {
+	out := make([]T, 0, len(values))
+	for _, v := range values {
+		p, err := parse(v)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+// facets answers the values a library's titles have, which its wall can be narrowed to.
+func (a *API) facets(w http.ResponseWriter, r *http.Request) {
+	lib, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeProblem(w, a.logger, codeNotFound, "")
+		return
+	}
+	f, err := a.svc.Catalogue.Facets(r.Context(), lib)
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, struct {
+		Genres       []string            `json:"genres"`
+		Years        []int               `json:"years"`
+		Certificates []string            `json:"certificates"`
+		Studios      []string            `json:"studios"`
+		Resolutions  []domain.Resolution `json:"resolutions"`
+		Ranges       []domain.Range      `json:"ranges"`
+		RatingSites  []domain.RatingSite `json:"rating_sites"`
+		Marks        []domain.Mark       `json:"marks"`
+	}{
+		nonNil(f.Genres), nonNil(f.Years), nonNil(f.Certificates), nonNil(f.Studios), nonNil(f.Resolutions),
+		nonNil(f.Ranges), nonNil(f.RatingSites), domain.Marks(),
+	})
 }

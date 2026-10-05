@@ -8,12 +8,11 @@ import (
 	"time"
 	"uuid"
 
-	"gorm.io/gen/field"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 // Card is a title as a wall shows it.
@@ -40,54 +39,64 @@ type Card struct {
 }
 
 // WallPage asks for one page of a library's titles: Limit of them from Offset, as Jellyfin's
-// StartIndex and Plex's X-Plex-Container-Start page.
+// StartIndex and Plex's X-Plex-Container-Start page, narrowed by Filter.
 type WallPage struct {
 	Profile uuid.UUID
 	Sort    domain.WallSort
 	Order   domain.Order
-	Offset  int
-	Limit   int
+	// RatingSite is whose rating SortRating sorts by.
+	RatingSite domain.RatingSite
+	Filter     WallFilter
+	Offset     int
+	Limit      int
 }
 
 // Wall answers a page of a library's films or shows and how many there are in all. Ties in the
 // sort are broken by id, so a page is the same whenever it is asked for while the library is.
 func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, int64, error) {
-	i, err := s.wallQuery(ctx, lib)
+	q, err := s.wallQuery(ctx, lib, p.Profile, p.Filter)
 	if err != nil {
 		return nil, 0, err
 	}
-	total, err := i.Count()
-	if err != nil {
+	var total int64
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	it := s.q.Item
-	desc := p.Order == domain.Descending
-	var key field.Expr
-	switch {
-	case p.Sort == domain.SortAdded:
-		key = it.AddedAt
-	case p.Sort == domain.SortReleased && desc:
-		key = it.ReleasedDesc
-	case p.Sort == domain.SortReleased:
-		key = it.ReleasedAsc
-	default:
-		key = it.SortTitle
+	dir := "ASC"
+	if p.Order == domain.Descending {
+		dir = "DESC"
 	}
-	if desc {
-		i = i.Order(key.Desc(), it.ID.Desc())
-	} else {
-		i = i.Order(key, it.ID)
+	var key clause.Expr
+	switch p.Sort {
+	case domain.SortAdded:
+		key = clause.Expr{SQL: "items.added_at"}
+	case domain.SortReleased:
+		key = clause.Expr{SQL: "items.released_asc"}
+		if dir == "DESC" {
+			key = clause.Expr{SQL: "items.released_desc"}
+		}
+	case domain.SortRating:
+		key = clause.Expr{SQL: "(SELECT max(r.score) FROM ratings r WHERE r.item_id = items.id AND r.site = ?)", Vars: []any{p.RatingSite}}
+	case domain.SortRuntime:
+		key = clause.Expr{SQL: "(SELECT max(v.duration_ms) FROM versions v WHERE v.item_id = items.id AND v.missing_since IS NULL)"}
+	case domain.SortPlayed:
+		key = clause.Expr{SQL: "(SELECT max(w.last_played_at) FROM watch_state w WHERE w.profile_id = ? AND w.item_id IN (" + episodesOf + "))", Vars: []any{p.Profile.String()}}
+	case domain.SortTitle:
+		key = clause.Expr{SQL: "items.sort_title"}
 	}
-	rows, err := i.Offset(p.Offset).Limit(p.Limit).Find()
-	if err != nil {
+	// What has no value to sort by comes last whichever way the rest run.
+	key.SQL += " " + dir + " NULLS LAST, items.id " + dir
+	var rows []*model.Item
+	if err := q.Order(clause.OrderBy{Expression: key}).Offset(p.Offset).Limit(p.Limit).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	cards, err := s.cards(ctx, p.Profile, rows)
 	return cards, total, err
 }
 
-// wallQuery is a library's films and shows; ErrNotFound for no such library.
-func (s *Store) wallQuery(ctx context.Context, lib uuid.UUID) (query.IItemDo, error) {
+// wallQuery is a library's films and shows as a filter narrows them for a profile; ErrNotFound
+// for no such library.
+func (s *Store) wallQuery(ctx context.Context, lib, profile uuid.UUID, f WallFilter) (*gorm.DB, error) {
 	l := s.q.Library
 	if _, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(lib))).Take(); errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrNotFound
@@ -95,7 +104,8 @@ func (s *Store) wallQuery(ctx context.Context, lib uuid.UUID) (query.IItemDo, er
 		return nil, err
 	}
 	i := s.q.Item
-	return i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib)), i.Kind.In(string(domain.ItemMovie), string(domain.ItemShow))), nil
+	q := i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib)), i.Kind.In(string(domain.ItemMovie), string(domain.ItemShow))).UnderlyingDB()
+	return f.apply(q, profile), nil
 }
 
 // Letter is how many of a library's titles sort under a letter: "#" for those before A.
@@ -104,19 +114,16 @@ type Letter struct {
 	Count  int
 }
 
-// Letters counts a library's titles by the first letter they sort by, in title order, as Plex's
-// firstCharacter does, so a client can jump to a letter by its offset.
-func (s *Store) Letters(ctx context.Context, lib uuid.UUID) ([]Letter, error) {
-	i, err := s.wallQuery(ctx, lib)
+// Letters counts a library's titles, as a filter narrows them, by the first letter they sort by,
+// in title order, as Plex's firstCharacter does, so a client can jump to a letter by its offset.
+// Letters are read unaccented, so "Émile" counts under E where the wall sorts it.
+func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, f WallFilter) ([]Letter, error) {
+	q, err := s.wallQuery(ctx, lib, profile, f)
 	if err != nil {
 		return nil, err
 	}
 	var out []Letter
-	// Each sort title is folded to its first letter unaccented, so "Émile" counts under E where
-	// the wall sorts it; gen has no CASE, so this is SQL.
-	err = i.UnderlyingDB().Select(`CASE WHEN upper(left(unaccent(sort_title), 1)) BETWEEN 'A' AND 'Z'
-		THEN upper(left(unaccent(sort_title), 1)) ELSE '#' END AS letter, count(*) AS count`).
-		Group("letter").Order("letter").Scan(&out).Error
+	err = q.Select(firstLetter + " AS letter, count(*) AS count").Group("letter").Order("letter").Scan(&out).Error
 	// Titles before A sort first in the wall, whatever the collation makes of "#".
 	if n := slices.IndexFunc(out, func(l Letter) bool { return l.Letter == "#" }); n > 0 {
 		out = append([]Letter{out[n]}, slices.Delete(out, n, n+1)...)
