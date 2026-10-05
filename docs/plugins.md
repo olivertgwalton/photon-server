@@ -140,8 +140,8 @@ numbered in `order` (`aired`, `dvd` or `absolute`); describe those you have.
      "published": "2008-01-01T00:00:00Z"}
   ],
   "credits": [
-    {"name": "Dominic West", "ids": {"tmdb": "17178"}, "photo": "https://img.example/west.jpg",
-     "kind": "actor", "role": "Jimmy McNulty"},
+    {"name": "Dominic West", "ids": {"tmdb": "17178", "plugin:films": "west"},
+     "photo": "https://img.example/west.jpg", "kind": "actor", "role": "Jimmy McNulty"},
     {"name": "David Simon", "ids": {"tmdb": "5714"}, "kind": "creator"}
   ],
   "seasons": [
@@ -167,7 +167,8 @@ besides `number`; of them the server keeps the fields and pictures, and an episo
   `behind_the_scenes`, `deleted_scene`, `interview`, `scene`, `short`, `clip`, `blooper`,
   `theme_video`, `other`. A library keeps only the kinds it is set to.
 - `credits` kinds: `actor`, `guest_star`, `director`, `writer`, `producer`, `composer`, `creator`.
-  The server knows people by their TMDB id: a credit without a `tmdb` id is not kept.
+  The server knows a person by any of their `ids`, your own included: two credits sharing an id,
+  from any source, are one person, who gains the ids each brings. A credit with no ids is not kept.
 - `ids` are kept on the title, so the next match is handed them; give your own as `plugin:{id}`.
 
 ### `POST /search` (search)
@@ -208,7 +209,7 @@ Say what is known of someone a title credits, found by their ids. Answer `404` f
 plugin does not know.
 
 ```json
-{"settings": {"api_key": "…"}, "ids": {"tmdb": "17178"}}
+{"settings": {"api_key": "…"}, "ids": {"tmdb": "17178", "plugin:films": "west"}}
 ```
 
 ```json
