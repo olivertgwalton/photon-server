@@ -21,19 +21,32 @@ type PlayPart struct {
 	DurationMS int64
 }
 
-// PlayCopy is a copy to play: its container and bitrate, its parts, and its first part's streams.
+// PlayCopy is a copy to play: its container and bitrate, its parts, its first part's streams, and
+// the subtitle files beside it.
 type PlayCopy struct {
 	Version     uuid.UUID
 	Container   string
 	BitrateKbps int
 	Parts       []PlayPart
 	Streams     []media.Stream
+	Subtitles   []PlaySubtitle
+}
+
+// PlaySubtitle is a subtitle file beside a copy, timed on the copy's whole timeline.
+type PlaySubtitle struct {
+	ID              uuid.UUID
+	Codec           string
+	Language        language.Tag
+	Title           string
+	Default         bool
+	Forced          bool
+	HearingImpaired bool
 }
 
 // Playable answers the copy of a film or episode to play: the one asked for, else its longest on
 // disk. ErrNotFound for no such title, or none of its copies on disk.
 func (s *Store) Playable(ctx context.Context, item, version uuid.UUID) (PlayCopy, error) {
-	v, p, st := s.q.Version, s.q.Part, s.q.Stream
+	v, p, st, sf := s.q.Version, s.q.Part, s.q.Stream, s.q.SubtitleFile
 	q := v.WithContext(ctx).Where(v.ItemID.Eq(model.UUID(item)), v.MissingSince.IsNull())
 	if version != (uuid.UUID{}) {
 		q = q.Where(v.ID.Eq(model.UUID(version)))
@@ -53,7 +66,18 @@ func (s *Store) Playable(ctx context.Context, item, version uuid.UUID) (PlayCopy
 	if err != nil {
 		return PlayCopy{}, err
 	}
+	subs, err := sf.WithContext(ctx).Where(sf.VersionID.Eq(row.ID)).Order(sf.RelPath).Find()
+	if err != nil {
+		return PlayCopy{}, err
+	}
 	c := PlayCopy{Version: uuid.UUID(row.ID), Container: row.Container, BitrateKbps: row.BitrateKbps}
+	for _, f := range subs {
+		lang, _ := language.Parse(deref(f.Language))
+		c.Subtitles = append(c.Subtitles, PlaySubtitle{
+			ID: uuid.UUID(f.ID), Codec: f.Codec, Language: lang, Title: deref(f.Title), Default: f.IsDefault,
+			Forced: f.Forced, HearingImpaired: f.HearingImpaired,
+		})
+	}
 	for _, pt := range parts {
 		c.Parts = append(c.Parts, PlayPart{ID: uuid.UUID(pt.ID), OffsetMS: pt.OffsetMS, DurationMS: pt.DurationMS})
 	}
@@ -80,6 +104,21 @@ func mediaStream(t *model.Stream) media.Stream {
 		}
 	}
 	return m
+}
+
+// SubtitleFile answers where a subtitle file is: its library's root, and its path within it.
+func (s *Store) SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error) {
+	f, l := s.q.SubtitleFile, s.q.Library
+	var row struct {
+		Root    string
+		RelPath string
+	}
+	err = f.WithContext(ctx).Select(l.Root, f.RelPath).Join(l, l.ID.EqCol(f.LibraryID)).
+		Where(f.ID.Eq(model.UUID(id))).Limit(1).Scan(&row)
+	if err == nil && row.RelPath == "" {
+		err = ErrNotFound
+	}
+	return row.Root, row.RelPath, err
 }
 
 // Keyframes answers a part's video keyframe times, or false where they have not been indexed yet.

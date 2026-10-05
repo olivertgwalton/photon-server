@@ -9,6 +9,8 @@ import (
 	"time"
 	"uuid"
 
+	"golang.org/x/text/language"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
 )
@@ -31,7 +33,9 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	}
 	theatricalPart.Facts.Streams = []media.Stream{video, {Index: 1, Kind: domain.StreamAudio, Codec: "truehd", Channels: 8}}
 	film := Film{Title: "Lawrence", Folder: "L", Copies: []Copy{
-		{ContentKey: []byte("cut"), Label: "theatrical", Parts: []Part{theatricalPart}},
+		{ContentKey: []byte("cut"), Label: "theatrical", Parts: []Part{theatricalPart}, Subtitles: []Subtitle{
+			{RelPath: "L/theatrical.en.sdh.srt", Size: 1, ModTime: time.Unix(0, 0), Codec: "subrip", Language: language.English, HearingImpaired: true},
+		}},
 		{ContentKey: []byte("long"), Label: "restored", Parts: []Part{part("L/r1.mkv", 2*time.Hour), part("L/r2.mkv", 2*time.Hour)}},
 	}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "L", []byte("v1"), []Film{film}, nil); err != nil {
@@ -53,6 +57,11 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	got, err := s.Playable(ctx, uuid.UUID(item.ID), uuid.UUID(theatrical.ID))
 	if err != nil || got.Version != uuid.UUID(theatrical.ID) || len(got.Parts) != 1 || got.Container != "matroska,webm" {
 		t.Errorf("asking for the theatrical cut: %+v, %v", got, err)
+	}
+	if len(got.Subtitles) != 1 || got.Subtitles[0].Language != language.English || !got.Subtitles[0].HearingImpaired {
+		t.Errorf("its subtitles: %+v, want the English SDH file", got.Subtitles)
+	} else if root, rel, err := s.SubtitleFile(ctx, got.Subtitles[0].ID); err != nil || root != "/srv/films" || rel != "L/theatrical.en.sdh.srt" {
+		t.Errorf("SubtitleFile = %q %q %v, want the file in the library", root, rel, err)
 	}
 	if len(got.Streams) != 2 || !reflect.DeepEqual(got.Streams[0], video) || got.Streams[1].Channels != 8 {
 		t.Errorf("its streams: %+v, want the Dolby Vision video as probed and TrueHD 7.1", got.Streams)
