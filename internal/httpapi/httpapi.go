@@ -65,6 +65,8 @@ type Services struct {
 	Auth      authenticator
 	Profiles  profileLister
 	Catalogue catalogue
+	Pictures  pictures
+	Artwork   pictureCache
 	Limits    limiter
 	// TrustedProxies are the peers whose X-Forwarded-For names the client. None by default.
 	TrustedProxies []netip.Prefix
@@ -114,6 +116,7 @@ func (a *API) routes() []route {
 			query: []string{"sort", "order", "after", "limit"}, handle: a.wall,
 		},
 		{pattern: "GET /api/v1/titles/{id}", access: signedIn, handle: a.title},
+		{pattern: "GET /api/v1/artwork/{id}", access: public, handle: a.artwork},
 	}
 }
 

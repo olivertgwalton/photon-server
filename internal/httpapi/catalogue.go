@@ -37,6 +37,8 @@ type cardJSON struct {
 	Year        int             `json:"year,omitzero"`
 	ReleaseDate domain.Date     `json:"release_date,omitzero"`
 	AddedAt     time.Time       `json:"added_at"`
+	Poster      uuid.UUID       `json:"poster,omitzero"`
+	Backdrop    uuid.UUID       `json:"backdrop,omitzero"`
 }
 
 func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +92,7 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 	for i, c := range cards {
 		out[i] = cardJSON{
 			ID: c.ID, Kind: c.Kind, Title: c.Title, Year: c.Year, ReleaseDate: domain.Date(c.ReleaseDate), AddedAt: c.AddedAt,
+			Poster: c.Poster, Backdrop: c.Backdrop,
 		}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, struct {
