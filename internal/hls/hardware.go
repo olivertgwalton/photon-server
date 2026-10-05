@@ -55,8 +55,9 @@ func (h Hardware) inputArgs(codec string) []string {
 }
 
 // videoArgs encodes video to H.264 on the device, scaled and tone mapped there, with a keyframe
-// where it starts and every SegmentLength after: ffmpeg counts t from the seek.
-func (h Hardware) videoArgs(e domain.VideoEncode, codec string) []string {
+// where it starts and every SegmentLength after: ffmpeg counts t from the seek. It answers the
+// filter the picture goes through and the encoder's options.
+func (h Hardware) videoArgs(e domain.VideoEncode, codec string) (string, []string) {
 	w, ht := strconv.Itoa(e.Width), strconv.Itoa(e.Height)
 	kbps := strconv.Itoa(e.BitrateKbps) + "k"
 	rate := []string{"-b:v", kbps, "-maxrate", kbps, "-bufsize", strconv.Itoa(2*e.BitrateKbps) + "k"}
@@ -80,7 +81,7 @@ func (h Hardware) videoArgs(e domain.VideoEncode, codec string) []string {
 			"-maxrate", kbps, "-bufsize", strconv.Itoa(2*e.BitrateKbps) + "k",
 			"-x264opts", "subme=0:me_range=16:rc_lookahead=10:me=hex:open_gop=0", "-sc_threshold", "0",
 		}
-		return append(append([]string{"-vf", filter}, encoder...), keyframes...)
+		return filter, append(encoder, keyframes...)
 	case domain.AccelVideoToolbox:
 		filter = upload + "scale_vt=w=" + w + ":h=" + ht + ":format=nv12"
 		if e.ToneMap {
@@ -111,10 +112,9 @@ func (h Hardware) videoArgs(e domain.VideoEncode, codec string) []string {
 		}
 		encoder = []string{"-c:v", "h264_nvenc", "-preset", "p1", "-forced-idr", "1"}
 	}
-	a := append([]string{"-vf", filter}, encoder...)
-	a = append(a, "-profile:v", "high", "-g", longGOP)
-	a = append(a, rate...)
-	return append(a, keyframes...)
+	encoder = append(encoder, "-profile:v", "high", "-g", longGOP)
+	encoder = append(encoder, rate...)
+	return filter, append(encoder, keyframes...)
 }
 
 // errHardware is a device that would not encode.
@@ -135,7 +135,8 @@ func (h Hardware) Check(ctx context.Context, ffmpeg string) error {
 		a := []string{"-hide_banner", "-loglevel", "error", "-nostdin"}
 		a = append(a, h.inputArgs("rawvideo")...)
 		a = append(a, "-f", "lavfi", "-i", tc.source, "-t", "1")
-		a = append(a, h.videoArgs(domain.VideoEncode{Codec: "h264", Width: 640, Height: 360, BitrateKbps: 2000, ToneMap: tc.hdr}, "rawvideo")...)
+		filter, encoder := h.videoArgs(domain.VideoEncode{Codec: "h264", Width: 640, Height: 360, BitrateKbps: 2000, ToneMap: tc.hdr}, "rawvideo")
+		a = append(append(a, "-vf", filter), encoder...)
 		a = append(a, "-f", "null", "-")
 		cmd := exec.CommandContext(ctx, ffmpeg, a...)
 		var stderr bytes.Buffer

@@ -75,6 +75,8 @@ type videoJSON struct {
 	Height      int                        `json:"height,omitzero"`
 	BitrateKbps int                        `json:"bitrate_kbps,omitzero"`
 	ToneMapped  bool                       `json:"tone_mapped,omitzero"`
+	// BurnedSubtitle is the subtitle stream drawn into the picture.
+	BurnedSubtitle *int `json:"burned_subtitle,omitzero"`
 }
 
 type audioJSON struct {
@@ -100,9 +102,12 @@ const (
 // not be played as it is.
 func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		VersionID   string            `json:"version_id"`
-		AudioStream *int              `json:"audio_stream"`
-		Profile     *playback.Profile `json:"profile"`
+		VersionID   string `json:"version_id"`
+		AudioStream *int   `json:"audio_stream"`
+		// SubtitleStream is a subtitle the client will show; one that is a picture is drawn into the
+		// video where the client cannot draw it.
+		SubtitleStream *int              `json:"subtitle_stream"`
+		Profile        *playback.Profile `json:"profile"`
 	}
 	if !a.decode(w, r, &req) {
 		return
@@ -127,10 +132,13 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	d, err := playback.Decide(*req.Profile, playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Streams: c.Streams}, req.AudioStream)
+	d, err := playback.Decide(*req.Profile, playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Streams: c.Streams}, req.AudioStream, req.SubtitleStream)
 	switch {
 	case errors.Is(err, playback.ErrNoSuchAudio):
 		writeProblem(w, a.logger, codeInvalidBody, "audio_stream is not one of the copy's audio streams")
+		return
+	case errors.Is(err, playback.ErrNoSuchSubtitle):
+		writeProblem(w, a.logger, codeInvalidBody, "subtitle_stream is not one of the copy's subtitle streams")
 		return
 	case errors.Is(err, playback.ErrNoCompatibleStream):
 		status := codeNoCompatibleStream.status()
@@ -169,7 +177,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		if e := v.Encode; e != nil {
 			answer.Video = &videoJSON{
 				Stream: v.Stream, Decision: decisionTranscode, Codec: e.Codec, Width: e.Width, Height: e.Height,
-				BitrateKbps: e.BitrateKbps, ToneMapped: e.ToneMap,
+				BitrateKbps: e.BitrateKbps, ToneMapped: e.ToneMap, BurnedSubtitle: e.Burn,
 			}
 		}
 	}

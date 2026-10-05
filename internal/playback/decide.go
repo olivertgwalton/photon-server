@@ -20,6 +20,9 @@ type Profile struct {
 	Audio      []AudioSupport `json:"audio"`
 	// MaxBitrateKbps is the most it will be sent, zero for no limit.
 	MaxBitrateKbps int `json:"max_bitrate_kbps"`
+	// Subtitles are the subtitle formats it draws itself from a file it plays as it is, by
+	// FFmpeg's names ("subrip", "hdmv_pgs_subtitle").
+	Subtitles []string `json:"subtitles,omitzero"`
 }
 
 // VideoSupport is a video codec a client decodes, by FFmpeg's name, and how far. A zero limit is
@@ -59,6 +62,7 @@ const (
 	AudioCodecNotSupported      Reason = "audio_codec_not_supported"
 	AudioChannelsNotSupported   Reason = "audio_channels_not_supported"
 	BitrateExceedsLimit         Reason = "bitrate_exceeds_limit"
+	SubtitleCodecNotSupported   Reason = "subtitle_codec_not_supported"
 )
 
 var (
@@ -66,6 +70,8 @@ var (
 	ErrNoCompatibleStream = errors.New("playback: nothing the client plays can be made of this copy")
 	// ErrNoSuchAudio is an audio stream asked for that the copy does not have.
 	ErrNoSuchAudio = errors.New("playback: the copy has no such audio stream")
+	// ErrNoSuchSubtitle is a subtitle stream asked for that the copy does not have.
+	ErrNoSuchSubtitle = errors.New("playback: the copy has no such subtitle stream")
 )
 
 // Copy is what deciding needs of a copy: its container, its bitrate and its first part's streams,
@@ -85,6 +91,10 @@ type Decision struct {
 	Reasons []Reason
 }
 
+// pictureSubtitles are subtitle codecs that are pictures, which only a client drawing them from the
+// file shows, or which are drawn into the video.
+var pictureSubtitles = []string{"hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle", "xsub"}
+
 // fragmentable are the codecs fragmented MP4 carries, which HLS segments are.
 var (
 	fragmentableVideo = []string{"h264", "hevc", "av1", "vp9"}
@@ -96,10 +106,24 @@ var (
 // stream; else in HLS with its video copied where the client plays that, encoding the audio where
 // it does not; else in HLS with its video encoded to H.264. ErrNoCompatibleStream, with the reasons
 // it could not play as it is, where the client takes none of these.
-func Decide(p Profile, c Copy, audio *int) (Decision, error) {
+//
+// A picture subtitle asked for (PGS, DVD) is drawn into the video where the client cannot draw it
+// from the file itself, as HLS carries no pictures: as Jellyfin's subtitle Encode method does.
+func Decide(p Profile, c Copy, audio, subtitle *int) (Decision, error) {
 	video, sound := pick(c.Streams, audio)
 	if audio != nil && sound == nil {
 		return Decision{}, ErrNoSuchAudio
+	}
+	var burn *int
+	var burnCodec string
+	if subtitle != nil {
+		i := slices.IndexFunc(c.Streams, func(s media.Stream) bool { return s.Kind == domain.StreamSubtitle && s.Index == *subtitle })
+		if i < 0 {
+			return Decision{}, ErrNoSuchSubtitle
+		}
+		if slices.Contains(pictureSubtitles, c.Streams[i].Codec) {
+			burn, burnCodec = subtitle, c.Streams[i].Codec
+		}
 	}
 	var d Decision
 	var videoReasons, audioReasons []Reason
@@ -126,6 +150,9 @@ func Decide(p Profile, c Copy, audio *int) (Decision, error) {
 	if tooMuch {
 		d.Reasons = append(d.Reasons, BitrateExceedsLimit)
 	}
+	if burn != nil && !slices.Contains(p.Subtitles, burnCodec) {
+		d.Reasons = append(d.Reasons, SubtitleCodecNotSupported)
+	}
 	if len(d.Reasons) == 0 {
 		d.Method = domain.PlayDirect
 		return d, nil
@@ -134,11 +161,13 @@ func Decide(p Profile, c Copy, audio *int) (Decision, error) {
 		return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
 	}
 	d.Method = domain.PlayRemux
-	if len(videoReasons) > 0 || tooMuch || !slices.Contains(fragmentableVideo, video.Codec) {
+	// Out of a file played as it is, a picture subtitle reaches the client only drawn in.
+	if len(videoReasons) > 0 || tooMuch || burn != nil || !slices.Contains(fragmentableVideo, video.Codec) {
 		enc, ok := p.videoEncode(*video, c.BitrateKbps)
 		if !ok {
 			return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
 		}
+		enc.Burn = burn
 		d.Method, d.Video.Encode, d.Video.DolbyVision = domain.PlayTranscode, &enc, domain.DolbyVisionNone
 	}
 	if sound != nil {

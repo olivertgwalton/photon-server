@@ -399,23 +399,34 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 // video makes one there and every SegmentLength after, on hw.
 func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan) []string {
 	a := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3"}
+	// A subtitle is drawn in in software: each device overlays in its own way.
+	if e := video.Encode; e != nil && e.Burn != nil {
+		hw = Hardware{Accel: domain.AccelSoftware}
+	}
 	if video.Encode != nil {
 		a = append(a, hw.inputArgs(video.Codec)...)
 	}
-	a = append(a,
-		"-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts", "-i", "fd:",
-		"-map", "0:"+strconv.Itoa(video.Stream),
-	)
+	a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts", "-i", "fd:")
+	in := "0:" + strconv.Itoa(video.Stream)
 	switch e := video.Encode; {
+	case e != nil && e.Burn != nil:
+		// As Jellyfin's: picture and subtitle each scaled to the size encoded, the picture tone
+		// mapped first, so the subtitle is drawn as it was authored.
+		filter, encoder := hw.videoArgs(*e, video.Codec)
+		size := strconv.Itoa(e.Width) + ":" + strconv.Itoa(e.Height)
+		graph := "[" + in + "]" + filter + "[main];[0:" + strconv.Itoa(*e.Burn) + "]scale=" + size + "[sub];" +
+			"[main][sub]overlay=eof_action=pass:repeatlast=0,format=yuv420p[v]"
+		a = append(append(a, "-filter_complex", graph, "-map", "[v]"), encoder...)
 	case e != nil:
-		a = append(a, hw.videoArgs(*e, video.Codec)...)
+		filter, encoder := hw.videoArgs(*e, video.Codec)
+		a = append(append(a, "-map", in, "-vf", filter), encoder...)
 	// Apple's players take HEVC only as hvc1, and Dolby Vision as dvh1.
 	case video.Codec == "hevc" && video.DolbyVision == domain.DolbyVisionKeep:
-		a = append(a, "-c:v", "copy", "-tag:v", "dvh1")
+		a = append(a, "-map", in, "-c:v", "copy", "-tag:v", "dvh1")
 	case video.Codec == "hevc":
-		a = append(a, "-c:v", "copy", "-tag:v", "hvc1")
+		a = append(a, "-map", in, "-c:v", "copy", "-tag:v", "hvc1")
 	default:
-		a = append(a, "-c:v", "copy")
+		a = append(a, "-map", in, "-c:v", "copy")
 	}
 	if video.DolbyVision == domain.DolbyVisionStrip {
 		a = append(a, "-bsf:v", "dovi_rpu=strip=1")

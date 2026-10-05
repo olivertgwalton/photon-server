@@ -35,8 +35,11 @@ func TestEachDeviceEncodesTheWholeChain(t *testing.T) {
 		domain.AccelVAAPI: "h264_vaapi", domain.AccelQSV: "h264_qsv", domain.AccelNVENC: "h264_nvenc",
 	} {
 		hw := Hardware{Accel: accel, Device: "d"}
-		hevc := strings.Join(append(hw.inputArgs("hevc"), hw.videoArgs(e, "hevc")...), " ")
-		av1 := strings.Join(append(hw.inputArgs("av1"), hw.videoArgs(e, "av1")...), " ")
+		line := func(codec string) string {
+			filter, encoder := hw.videoArgs(e, codec)
+			return strings.Join(append(append(hw.inputArgs(codec), "-vf", filter), encoder...), " ")
+		}
+		hevc, av1 := line("hevc"), line("av1")
 		for _, want := range []string{"-c:v " + encoder, "expr:gte(t,n_forced*6)", "1280", "tonemap"} {
 			if !strings.Contains(hevc, want) {
 				t.Errorf("%s: %q lacks %q", accel, hevc, want)
