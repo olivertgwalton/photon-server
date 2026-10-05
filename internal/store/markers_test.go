@@ -62,22 +62,55 @@ func TestATitleSaysWhereItsIntroAndCreditsAre(t *testing.T) {
 
 	// An admin's word outranks both, and clearing it brings them back.
 	version := page(t, s, id).Versions[0].ID
-	if err := s.SetMarkers(ctx, version, []domain.Marker{{Kind: domain.MarkerIntro, StartMS: 62_000, EndMS: 148_500}}); err != nil {
+	if err := s.SetMarkers(ctx, version, []domain.Marker{{Kind: domain.MarkerIntro, StartMS: 62_000, EndMS: 148_500}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := markers(); len(got) != 3 || got[1] != (MarkerRef{Kind: domain.MarkerIntro, StartMS: 62_000, EndMS: 148_500, Source: domain.MarkerByUser}) {
 		t.Errorf("set by hand: %+v, want the admin's intro", got)
 	}
-	if err := s.SetMarkers(ctx, version, []domain.Marker{{Kind: domain.MarkerCredits, StartMS: 2_500_000, EndMS: 2_600_000}}); !errors.Is(err, ErrMarkerOutsidePart) {
+	if err := s.SetMarkers(ctx, version, []domain.Marker{{Kind: domain.MarkerCredits, StartMS: 2_500_000, EndMS: 2_600_000}}, nil); !errors.Is(err, ErrMarkerOutsidePart) {
 		t.Errorf("credits past the end: %v, want ErrMarkerOutsidePart", err)
 	}
-	if err := s.SetMarkers(ctx, version, nil); err != nil {
+	if err := s.SetMarkers(ctx, version, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := markers(); len(got) != 3 || got[1] != chapters[0] {
 		t.Errorf("cleared: %+v, want the chapters' intro again", got)
 	}
-	if err := s.SetMarkers(ctx, uuid.NewV7(), nil); !errors.Is(err, ErrNotFound) {
+
+	// An admin's word that there is no intro or recap hides the chapters' and fingerprints', through
+	// a rescan and the season compared again, until it is cleared.
+	none := []domain.MarkerAbsent{{Kind: domain.MarkerIntro}, {Kind: domain.MarkerRecap}}
+	if err := s.SetMarkers(ctx, version, nil, none); err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(chapters[1:], markers()); diff != "" {
+		t.Errorf("none said (-want +got):\n%s", diff)
+	}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v2"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveFingerprintMarkers(ctx, []uuid.UUID{uuid.UUID(part.ID)}, map[uuid.UUID][]domain.Marker{
+		uuid.UUID(part.ID): {{Kind: domain.MarkerIntro, StartMS: 61_000, EndMS: 149_000}, {Kind: domain.MarkerRecap, StartMS: 1000, EndMS: 30_000}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(chapters[1:], markers()); diff != "" {
+		t.Errorf("none said, then rescanned and compared again (-want +got):\n%s", diff)
+	}
+	if err := s.SetMarkers(ctx, version, nil, []domain.MarkerAbsent{{Kind: domain.MarkerIntro, Part: 1}}); !errors.Is(err, ErrMarkerNoPart) {
+		t.Errorf("none in a second part of a one-part copy: %v, want ErrMarkerNoPart", err)
+	}
+	if err := s.SetMarkers(ctx, version, []domain.Marker{{Kind: domain.MarkerIntro, StartMS: 62_000, EndMS: 148_500}}, none); !errors.Is(err, ErrMarkerRepeated) {
+		t.Errorf("an intro and none: %v, want ErrMarkerRepeated", err)
+	}
+	if err := s.SetMarkers(ctx, version, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := markers(); len(got) != 3 || got[0].Source != domain.MarkerByFingerprint || got[1] != chapters[0] {
+		t.Errorf("none cleared: %+v, want the fingerprints' recap and the chapters' intro again", got)
+	}
+	if err := s.SetMarkers(ctx, uuid.NewV7(), nil, nil); !errors.Is(err, ErrNotFound) {
 		t.Errorf("no such copy: %v, want ErrNotFound", err)
 	}
 }

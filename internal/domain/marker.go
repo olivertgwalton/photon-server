@@ -42,6 +42,12 @@ type Marker struct {
 	EndMS   int64
 }
 
+// MarkerAbsent is an admin's word that a copy's part, counted from 0, has no stretch of a kind.
+type MarkerAbsent struct {
+	Kind MarkerKind
+	Part int
+}
+
 // MarkerShortest is the shortest stretch found by chapter or fingerprint, as Intro Skipper's.
 const MarkerShortest = 15 * time.Second
 

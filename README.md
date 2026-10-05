@@ -88,7 +88,10 @@ compares the sound of a season's episodes, as Plex and Jellyfin's Intro Skipper 
 episodes share near the start is the intro, near the end the credits. A season is compared ten
 minutes after its episodes stop arriving, and any not yet compared at 3 a.m. That needs an FFmpeg
 built with chromaprint, which the image's is; without it the server says so at start and reads
-chapters only. An admin's own markers (`PUT /api/v1/admin/versions/{id}/markers`) outrank both.
+chapters only. An admin's own markers (`PUT /api/v1/admin/versions/{id}/markers`) outrank both,
+and so does an admin's word that a part has none of a kind (`"absent": [{"kind": "intro", "part":
+0}]`, parts counted from 0), which hides a wrong chapter or fingerprint match through rescans and
+later comparisons. Each PUT replaces what was said of the copy; an empty one clears it.
 
 Each library makes previews of its videos ahead of time, as Plex and Jellyfin do: a picture of each
 chapter, and trickplay sheets for scrubbing (a 320-pixel thumbnail every ten seconds, a hundred to

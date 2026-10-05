@@ -21,6 +21,7 @@ type fakeEditing struct {
 	pinned string
 	order  domain.EpisodeOrder
 	marked []domain.Marker
+	absent []domain.MarkerAbsent
 }
 
 func (f *fakeEditing) EditMetadata(_ context.Context, id uuid.UUID, m domain.Metadata) error {
@@ -52,14 +53,14 @@ func (f *fakeEditing) SetEpisodeOrder(_ context.Context, id uuid.UUID, order dom
 	return nil
 }
 
-func (f *fakeEditing) SetMarkers(_ context.Context, id uuid.UUID, markers []domain.Marker) error {
+func (f *fakeEditing) SetMarkers(_ context.Context, id uuid.UUID, markers []domain.Marker, absent []domain.MarkerAbsent) error {
 	if id != films {
 		return store.ErrNotFound
 	}
 	if len(markers) > 1 && markers[0].Kind == markers[1].Kind {
 		return store.ErrMarkerRepeated
 	}
-	f.marked = markers
+	f.marked, f.absent = markers, absent
 	return nil
 }
 
@@ -106,7 +107,9 @@ func TestAnAdminFixesATitle(t *testing.T) {
 		{goodToken, http.MethodPut, copyBase, `{"markers": [{"kind": "intro", "start_ms": 5000, "end_ms": 5000}]}`, http.StatusBadRequest, ""},
 		{goodToken, http.MethodPut, copyBase, `{"markers": [{"kind": "intro", "start_ms": 0, "end_ms": 1}, {"kind": "intro", "start_ms": 2, "end_ms": 3}]}`, http.StatusBadRequest, "one marker of each kind"},
 		{goodToken, http.MethodPut, "/api/v1/admin/versions/" + uuid.NewV7().String() + "/markers", `{"markers": []}`, http.StatusNotFound, ""},
-		{goodToken, http.MethodPut, copyBase, `{"markers": [{"kind": "intro", "start_ms": 62000, "end_ms": 121500}]}`, http.StatusNoContent, ""},
+		{goodToken, http.MethodPut, copyBase, `{"markers": [], "absent": [{"kind": "commercial", "part": 0}]}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPut, copyBase, `{"markers": [], "absent": [{"kind": "intro", "part": -1}]}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPut, copyBase, `{"markers": [{"kind": "intro", "start_ms": 62000, "end_ms": 121500}], "absent": [{"kind": "recap", "part": 0}]}`, http.StatusNoContent, ""},
 	} {
 		req := httptest.NewRequest(tc.method, tc.target, strings.NewReader(tc.body))
 		req.Header.Set("Authorization", "Bearer "+tc.token)
@@ -116,7 +119,8 @@ func TestAnAdminFixesATitle(t *testing.T) {
 			t.Errorf("%s %s %s: %d %s, want %d with %s", tc.method, tc.target, tc.body, rec.Code, rec.Body, tc.want, tc.has)
 		}
 	}
-	if e.edited.Title != "Heat" || e.edited.ReleaseDate.Year() != 1995 || len(e.edited.Locked) != 1 || len(e.reset) != 2 || e.pinned != "tmdb/949" || e.order != domain.OrderDVD || len(e.marked) != 1 || e.marked[0].EndMS != 121500 {
+	if e.edited.Title != "Heat" || e.edited.ReleaseDate.Year() != 1995 || len(e.edited.Locked) != 1 || len(e.reset) != 2 || e.pinned != "tmdb/949" || e.order != domain.OrderDVD || len(e.marked) != 1 || e.marked[0].EndMS != 121500 ||
+		len(e.absent) != 1 || e.absent[0] != (domain.MarkerAbsent{Kind: domain.MarkerRecap}) {
 		t.Errorf("done: %+v %v %q", e.edited, e.reset, e.pinned)
 	}
 }

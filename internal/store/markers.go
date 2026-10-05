@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"maps"
 	"slices"
 	"time"
 	"uuid"
@@ -17,6 +18,7 @@ import (
 var (
 	ErrMarkerOutsidePart = errors.New("a marker must lie within one part of the copy")
 	ErrMarkerRepeated    = errors.New("a part has one marker of each kind")
+	ErrMarkerNoPart      = errors.New("the copy has no part of that number")
 )
 
 // markersQuiet is how long a season's sound waits after its last episode arrives before it is
@@ -32,24 +34,21 @@ type MarkerRef struct {
 }
 
 // partMarkers is one marker of each kind a part has, the most trusted source's: what an admin
-// said, then the part's chapters, then its season's fingerprints.
+// said, then the part's chapters, then its season's fingerprints. An admin's word that there is
+// none outranks the others' stretches the same way.
 func partMarkers(stored []*model.Marker, chapters []*model.Chapter) []MarkerRef {
-	byKind := map[domain.MarkerKind]MarkerRef{}
-	offer := func(m MarkerRef) {
-		have, ok := byKind[m.Kind]
-		if !ok || slices.Index(domain.MarkerSources(), m.Source) < slices.Index(domain.MarkerSources(), have.Source) {
+	rank := func(s domain.MarkerSource) int { return slices.Index(domain.MarkerSources(), s) }
+	byKind := map[domain.MarkerKind]*model.Marker{}
+	for _, m := range slices.Concat(stored, chapterMarkers(chapters)) {
+		if have, ok := byKind[m.Kind]; !ok || rank(m.Source) < rank(have.Source) {
 			byKind[m.Kind] = m
 		}
 	}
-	for _, m := range stored {
-		offer(MarkerRef{Kind: m.Kind, StartMS: m.StartMS, EndMS: m.EndMS, Source: m.Source})
-	}
-	for _, m := range chapterMarkers(chapters) {
-		offer(m)
-	}
 	out := make([]MarkerRef, 0, len(byKind))
 	for _, m := range byKind {
-		out = append(out, m)
+		if m.StartMS != nil {
+			out = append(out, MarkerRef{Kind: m.Kind, StartMS: *m.StartMS, EndMS: *m.EndMS, Source: m.Source})
+		}
 	}
 	slices.SortFunc(out, func(a, b MarkerRef) int { return cmp.Compare(a.StartMS, b.StartMS) })
 	return out
@@ -57,8 +56,8 @@ func partMarkers(stored []*model.Marker, chapters []*model.Chapter) []MarkerRef 
 
 // chapterMarkers are the stretches a part's chapters name, as Intro Skipper reads them: the first
 // intro and recap, the last credits and preview, each of a plausible length.
-func chapterMarkers(chapters []*model.Chapter) []MarkerRef {
-	found := map[domain.MarkerKind]MarkerRef{}
+func chapterMarkers(chapters []*model.Chapter) []*model.Marker {
+	found := map[domain.MarkerKind]*model.Marker{}
 	for _, c := range chapters {
 		kind, ok := domain.ChapterMarker(deref(c.Title))
 		length := time.Duration(c.EndMS-c.StartMS) * time.Millisecond
@@ -68,18 +67,15 @@ func chapterMarkers(chapters []*model.Chapter) []MarkerRef {
 		if _, seen := found[kind]; seen && (kind == domain.MarkerIntro || kind == domain.MarkerRecap) {
 			continue
 		}
-		found[kind] = MarkerRef{Kind: kind, StartMS: c.StartMS, EndMS: c.EndMS, Source: domain.MarkerByChapter}
+		found[kind] = &model.Marker{Kind: kind, Source: domain.MarkerByChapter, StartMS: &c.StartMS, EndMS: &c.EndMS}
 	}
-	out := make([]MarkerRef, 0, len(found))
-	for _, m := range found {
-		out = append(out, m)
-	}
-	return out
+	return slices.Collect(maps.Values(found))
 }
 
-// SetMarkers replaces what an admin says of a copy's markers, given on its whole timeline; none
-// clears them, and the chapters' and fingerprints' stand again.
-func (s *Store) SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker) error {
+// SetMarkers replaces what an admin says of a copy's markers: stretches given on its whole
+// timeline, and parts that have none of a kind. Saying nothing clears them, and the chapters' and
+// fingerprints' stand again.
+func (s *Store) SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker, absent []domain.MarkerAbsent) error {
 	return s.q.Transaction(func(tx *query.Query) error {
 		pt := tx.Part
 		parts, err := pt.WithContext(ctx).Where(pt.VersionID.Eq(model.UUID(version))).Order(pt.Idx).Find()
@@ -89,7 +85,14 @@ func (s *Store) SetMarkers(ctx context.Context, version uuid.UUID, markers []dom
 		if len(parts) == 0 {
 			return ErrNotFound
 		}
-		rows := make([]*model.Marker, 0, len(markers))
+		rows := make([]*model.Marker, 0, len(markers)+len(absent))
+		add := func(m *model.Marker) error {
+			if slices.ContainsFunc(rows, func(r *model.Marker) bool { return r.PartID == m.PartID && r.Kind == m.Kind }) {
+				return ErrMarkerRepeated
+			}
+			rows = append(rows, m)
+			return nil
+		}
 		for _, m := range markers {
 			i := slices.IndexFunc(parts, func(p *model.Part) bool {
 				return p.OffsetMS <= m.StartMS && m.EndMS <= p.OffsetMS+p.DurationMS
@@ -98,13 +101,18 @@ func (s *Store) SetMarkers(ctx context.Context, version uuid.UUID, markers []dom
 				return ErrMarkerOutsidePart
 			}
 			p := parts[i]
-			if slices.ContainsFunc(rows, func(r *model.Marker) bool { return r.PartID == p.ID && r.Kind == m.Kind }) {
-				return ErrMarkerRepeated
+			start, end := m.StartMS-p.OffsetMS, m.EndMS-p.OffsetMS
+			if err := add(&model.Marker{PartID: p.ID, Kind: m.Kind, Source: domain.MarkerByUser, StartMS: &start, EndMS: &end}); err != nil {
+				return err
 			}
-			rows = append(rows, &model.Marker{
-				PartID: p.ID, Kind: m.Kind, Source: domain.MarkerByUser,
-				StartMS: m.StartMS - p.OffsetMS, EndMS: m.EndMS - p.OffsetMS,
-			})
+		}
+		for _, a := range absent {
+			if a.Part >= len(parts) {
+				return ErrMarkerNoPart
+			}
+			if err := add(&model.Marker{PartID: parts[a.Part].ID, Kind: a.Kind, Source: domain.MarkerByUser}); err != nil {
+				return err
+			}
 		}
 		mk := tx.Marker
 		pids := make([]driver.Valuer, len(parts))
@@ -188,7 +196,7 @@ func (s *Store) SaveFingerprintMarkers(ctx context.Context, compared []uuid.UUID
 		for part, markers := range found {
 			for _, m := range markers {
 				rows = append(rows, &model.Marker{
-					PartID: model.UUID(part), Kind: m.Kind, Source: domain.MarkerByFingerprint, StartMS: m.StartMS, EndMS: m.EndMS,
+					PartID: model.UUID(part), Kind: m.Kind, Source: domain.MarkerByFingerprint, StartMS: &m.StartMS, EndMS: &m.EndMS,
 				})
 			}
 		}

@@ -375,7 +375,7 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "PUT /api/v1/admin/versions/{id}/markers", access: admin,
-			summary: "Say where a copy's intro, credits, recap and preview are, over what was found",
+			summary: "Say where a copy's intro, credits, recap and preview are, or that a part has none, over what was found",
 			body:    markersJSON{}, status: http.StatusNoContent, handle: a.setMarkers,
 		},
 		{

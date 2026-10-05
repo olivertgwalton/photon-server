@@ -19,7 +19,7 @@ type editing interface {
 	ResetEdits(ctx context.Context, id uuid.UUID, fields []domain.Field) error
 	PinMatch(ctx context.Context, id uuid.UUID, p domain.Provider, value string) error
 	SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder) error
-	SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker) error
+	SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker, absent []domain.MarkerAbsent) error
 	IdentifySubject(ctx context.Context, id uuid.UUID) (store.Subject, bool, error)
 }
 
@@ -228,12 +228,20 @@ type markerJSON struct {
 	EndMS   int64             `json:"end_ms"`
 }
 
+// markerAbsentJSON says a part of a copy, counted from 0, has no stretch of a kind.
+type markerAbsentJSON struct {
+	Kind domain.MarkerKind `json:"kind"`
+	Part int               `json:"part"`
+}
+
 type markersJSON struct {
-	Markers []markerJSON `json:"markers"`
+	Markers []markerJSON       `json:"markers"`
+	Absent  []markerAbsentJSON `json:"absent,omitzero"`
 }
 
 // setMarkers says where a copy's intro, credits, recap and preview are, on its whole timeline as
-// its chapters are, over whatever its chapters or fingerprints say; none clears what was said.
+// its chapters are, and which of its parts have none of a kind, over whatever its chapters or
+// fingerprints say; saying nothing clears what was said.
 func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r)
 	if !ok {
@@ -255,12 +263,24 @@ func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
 		}
 		markers[i] = domain.Marker{Kind: m.Kind, StartMS: m.StartMS, EndMS: m.EndMS}
 	}
-	err := a.svc.Editing.SetMarkers(r.Context(), id, markers)
+	absent := make([]domain.MarkerAbsent, len(req.Absent))
+	for i, m := range req.Absent {
+		if !slices.Contains(domain.MarkerKinds(), m.Kind) {
+			writeProblem(w, a.logger, codeInvalidBody, "a marker's kind is intro, credits, recap or preview")
+			return
+		}
+		if m.Part < 0 {
+			writeProblem(w, a.logger, codeInvalidBody, "a part is counted from 0")
+			return
+		}
+		absent[i] = domain.MarkerAbsent{Kind: m.Kind, Part: m.Part}
+	}
+	err := a.svc.Editing.SetMarkers(r.Context(), id, markers, absent)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeProblem(w, a.logger, codeNotFound, "no copy has that id")
 		return
-	case errors.Is(err, store.ErrMarkerOutsidePart), errors.Is(err, store.ErrMarkerRepeated):
+	case errors.Is(err, store.ErrMarkerOutsidePart), errors.Is(err, store.ErrMarkerRepeated), errors.Is(err, store.ErrMarkerNoPart):
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())
 		return
 	}
