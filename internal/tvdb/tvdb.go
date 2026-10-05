@@ -242,9 +242,9 @@ func (c *Client) Details(ctx context.Context, id int) (domain.Metadata, error) {
 	aired := date(d.FirstAired)
 	m := domain.Metadata{
 		ReleaseDate: aired, Year: year(aired),
-		IDs: map[domain.Provider]string{domain.ProviderTVDB: strconv.Itoa(id)},
+		IDs:     map[domain.Provider]string{domain.ProviderTVDB: strconv.Itoa(id)},
+		Artwork: picture(domain.ArtworkPoster, d.Image),
 	}
-	m.Artwork = picture(domain.ArtworkPoster, d.Image)
 	if d.OriginalLanguage == c.language {
 		m.OriginalTitle = d.Name
 	}
