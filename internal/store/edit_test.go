@@ -135,3 +135,69 @@ func TestAShowRenumberedIsMatchedAgainWhole(t *testing.T) {
 		t.Errorf("renumbering an episode: %v, want ErrNotFound", err)
 	}
 }
+
+func TestARefreshIsAskedAheadOfTheQueue(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ep := func(n int) Episode {
+		return Episode{
+			Season: 1, Episodes: []int{n}, Title: "Firefly", Folder: "Firefly/Season 1", ByNumber: true,
+			Copies: []Copy{{ContentKey: []byte{byte(n)}, Parts: []Part{{RelPath: "Firefly/Season 1/" + string(rune('0'+n)) + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}},
+		}
+	}
+	if _, err := s.SaveShowFolder(ctx, lib.ID, "Firefly/Season 1", []byte("v1"), Show{Title: "Firefly", Folder: "Firefly"}, []Episode{ep(1), ep(2)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	i, j := s.q.Item, s.q.Job
+	show, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
+	id := uuid.UUID(show.ID)
+	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Title: "Firefly"},
+		map[int]domain.SeasonMetadata{1: {Metadata: domain.Metadata{Title: "Season 1"}, Episodes: map[int]domain.Metadata{
+			1: {Title: "Serenity"}, 2: {Title: "The Train Job"},
+		}}}); err != nil {
+		t.Fatal(err)
+	}
+	second, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode)), i.EpisodeNumber.Eq(2)).Take()
+	if err := s.EditMetadata(ctx, uuid.UUID(second.ID), domain.Metadata{Title: "Mine"}); err != nil {
+		t.Fatal(err)
+	}
+	// The match is done; a scan of the library is waiting.
+	if _, err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobIdentify))).Delete(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ScanLibrary(ctx, lib.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	season, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemSeason))).Take()
+	if err := s.Refresh(ctx, uuid.UUID(season.ID), domain.RefreshMissing); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobScanLibrary, domain.JobIdentify}, uuid.NewV7(), time.Minute, 1)
+	if err != nil || len(claimed) != 1 || claimed[0].Kind != domain.JobIdentify || claimed[0].Subject != id {
+		t.Fatalf("claimed %+v, %v; want the show's match, asked after the scan was queued", claimed, err)
+	}
+	if sub, _, _ := s.IdentifySubject(ctx, id); len(sub.Seasons) != 0 {
+		t.Errorf("refreshing what is missing asks about seasons %v; want none, all are described", sub.Seasons)
+	}
+
+	if err := s.Refresh(ctx, id, domain.RefreshAll); err != nil {
+		t.Fatal(err)
+	}
+	if sub, _, _ := s.IdentifySubject(ctx, id); len(sub.Seasons) != 1 {
+		t.Errorf("refreshing all asks about seasons %v; want season 1 again", sub.Seasons)
+	}
+	for n, want := range map[int]string{1: "Serenity", 2: "Mine"} {
+		page, err := s.Title(ctx, uuid.UUID{}, uuid.UUID(must(i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode)), i.EpisodeNumber.Eq(n)).Take()).ID))
+		if err != nil || page.Title != want {
+			t.Errorf("episode %d before the match: %q, %v; want %q to stand", n, page.Title, err, want)
+		}
+	}
+	if err := s.Refresh(ctx, uuid.NewV7(), domain.RefreshAll); !errors.Is(err, ErrNotFound) {
+		t.Errorf("refreshing nothing: %v, want ErrNotFound", err)
+	}
+}

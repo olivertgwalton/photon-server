@@ -46,14 +46,28 @@ func enqueue(ctx context.Context, tx *query.Query, kind domain.JobKind, subject 
 // enqueueAfter is enqueue for a job due after a quiet delay: asking again before it is due moves it
 // later, so a burst of causes is answered once, when the burst ends.
 func enqueueAfter(ctx context.Context, tx *query.Query, kind domain.JobKind, subject model.UUID, delay time.Duration) error {
+	return insertJob(ctx, tx, kind, subject, delay, 0)
+}
+
+// askedPriority is a job an admin asked for by hand: it is claimed before everything a schedule
+// or a scan queued.
+const askedPriority = 1
+
+// enqueueAsked is enqueue for a job an admin is waiting on.
+func enqueueAsked(ctx context.Context, tx *query.Query, kind domain.JobKind, subject model.UUID) error {
+	return insertJob(ctx, tx, kind, subject, 0, askedPriority)
+}
+
+func insertJob(ctx context.Context, tx *query.Query, kind domain.JobKind, subject model.UUID, delay time.Duration, priority int16) error {
 	// GORM refuses expressions in an upsert's assignments.
 	return tx.Job.WithContext(ctx).UnderlyingDB().Exec(`
-		INSERT INTO jobs (kind, subject, run_after) VALUES (?, ?, now() + ?::interval)
+		INSERT INTO jobs (kind, subject, run_after, priority) VALUES (?, ?, now() + ?::interval, ?)
 		ON CONFLICT (kind, subject) DO UPDATE SET
 			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
 			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END,
-			run_after = CASE WHEN jobs.state IN ('queued', 'dead') THEN excluded.run_after ELSE jobs.run_after END`,
-		kind, subject, delay.String()).Error
+			run_after = CASE WHEN jobs.state IN ('queued', 'dead') THEN excluded.run_after ELSE jobs.run_after END,
+			priority = greatest(jobs.priority, excluded.priority)`,
+		kind, subject, delay.String(), priority).Error
 }
 
 // ScanLibrary asks for a library to be scanned once delay has passed with no further asking.

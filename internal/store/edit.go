@@ -88,24 +88,72 @@ func rematch(ctx context.Context, tx *query.Query, item *model.Item) error {
 	if _, err := fo.WithContext(ctx).Where(fo.LibraryID.Eq(item.LibraryID), fo.Path.Eq(item.Folder)).Delete(); err != nil {
 		return err
 	}
-	title := item
-	for title.Kind == domain.ItemSeason || title.Kind == domain.ItemEpisode {
-		if title.ParentID == nil {
-			return nil
-		}
-		i := tx.Item
-		parent, err := i.WithContext(ctx).Where(i.ID.Eq(*title.ParentID)).Take()
-		if err != nil {
-			return err
-		}
-		title = parent
+	title, err := matchedAs(ctx, tx, item)
+	if err != nil {
+		return err
 	}
-	if title.Kind == domain.ItemMovie || title.Kind == domain.ItemShow {
+	if title != nil {
 		if err := enqueue(ctx, tx, domain.JobIdentify, title.ID); err != nil {
 			return err
 		}
 	}
 	return enqueueAfter(ctx, tx, domain.JobScanLibrary, item.LibraryID, 0)
+}
+
+// matchedAs answers the film or show an item is matched to providers as: itself, or the show a
+// season or episode is in. Nil for one that is neither, as a collection is.
+func matchedAs(ctx context.Context, tx *query.Query, item *model.Item) (*model.Item, error) {
+	title := item
+	for title.Kind == domain.ItemSeason || title.Kind == domain.ItemEpisode {
+		if title.ParentID == nil {
+			return nil, nil
+		}
+		i := tx.Item
+		parent, err := i.WithContext(ctx).Where(i.ID.Eq(*title.ParentID)).Take()
+		if err != nil {
+			return nil, err
+		}
+		title = parent
+	}
+	if title.Kind != domain.ItemMovie && title.Kind != domain.ItemShow {
+		return nil, nil
+	}
+	return title, nil
+}
+
+// Refresh matches a title again ahead of anything the schedule or a scan queued, as Jellyfin's
+// and Plex's Refresh Metadata do: a season or episode as its show. RefreshAll first says every
+// season and episode under the item was titled by its file, so its show's next match asks about
+// each again; their values stand until then. ErrNotFound for no film or show, or one under it.
+func (s *Store) Refresh(ctx context.Context, id uuid.UUID, mode domain.RefreshMode) error {
+	return s.q.Transaction(func(tx *query.Query) error {
+		item, err := editable(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		title, err := matchedAs(ctx, tx, item)
+		if err != nil {
+			return err
+		}
+		if title == nil {
+			return ErrNotFound
+		}
+		switch mode {
+		case domain.RefreshMissing:
+		case domain.RefreshAll:
+			err := tx.Item.WithContext(ctx).UnderlyingDB().Exec(`
+				UPDATE item_fields SET source = 'file', updated_at = now()
+				WHERE field = 'title' AND source NOT IN ('file', 'nfo', 'user') AND item_id IN (
+					SELECT id FROM items WHERE id = @item AND kind IN ('season', 'episode')
+					UNION SELECT s.id FROM items s WHERE s.parent_id = @item AND s.kind IN ('season', 'episode')
+					UNION SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id WHERE s.parent_id = @item AND e.kind = 'episode')`,
+				map[string]any{"item": item.ID}).Error
+			if err != nil {
+				return err
+			}
+		}
+		return enqueueAsked(ctx, tx, domain.JobIdentify, title.ID)
+	})
 }
 
 // SetEpisodeOrder renumbers a show's episodes in the order its files are numbered in: what any
