@@ -35,6 +35,7 @@ func TestShowFolder(t *testing.T) {
 }
 
 type plannedEpisode struct {
+	Title    string
 	Season   int
 	Episodes []int
 	ByNumber bool
@@ -55,36 +56,36 @@ func TestPlanEpisodes(t *testing.T) {
 			folder: []string{"The Wire S02E01 720p.mkv", "The Wire S02E01 1080p.mkv", "The Wire S02E02.mkv", "notes.txt"},
 			season: &two,
 			want: []plannedEpisode{
-				{Season: 2, Episodes: []int{1}, ByNumber: true, Copies: [][]string{{"The Wire S02E01 720p.mkv"}, {"The Wire S02E01 1080p.mkv"}}},
-				{Season: 2, Episodes: []int{2}, ByNumber: true, Copies: [][]string{{"The Wire S02E02.mkv"}}},
+				{Title: "Episode 1", Season: 2, Episodes: []int{1}, ByNumber: true, Copies: [][]string{{"The Wire S02E01 720p.mkv"}, {"The Wire S02E01 1080p.mkv"}}},
+				{Title: "Episode 2", Season: 2, Episodes: []int{2}, ByNumber: true, Copies: [][]string{{"The Wire S02E02.mkv"}}},
 			},
 		},
 		{
 			name:   "a file's season beats its folder's",
 			folder: []string{"The Wire S01E05.mkv"},
 			season: &two,
-			want:   []plannedEpisode{{Season: 1, Episodes: []int{5}, ByNumber: true, Copies: [][]string{{"The Wire S01E05.mkv"}}}},
+			want:   []plannedEpisode{{Title: "Episode 5", Season: 1, Episodes: []int{5}, ByNumber: true, Copies: [][]string{{"The Wire S01E05.mkv"}}}},
 		},
 		{
 			name:   "a two-episode file is not a copy of the first",
 			folder: []string{"Buck Rogers S01E01.mkv", "Buck Rogers S01E01E02.mkv"},
 			want: []plannedEpisode{
-				{Season: 1, Episodes: []int{1}, ByNumber: true, Copies: [][]string{{"Buck Rogers S01E01.mkv"}}},
-				{Season: 1, Episodes: []int{1, 2}, ByNumber: true, Copies: [][]string{{"Buck Rogers S01E01E02.mkv"}}},
+				{Title: "Episode 1", Season: 1, Episodes: []int{1}, ByNumber: true, Copies: [][]string{{"Buck Rogers S01E01.mkv"}}},
+				{Title: "Episode 1", Season: 1, Episodes: []int{1, 2}, ByNumber: true, Copies: [][]string{{"Buck Rogers S01E01E02.mkv"}}},
 			},
 		},
 		{
 			name:   "bare numbers are never grouped",
 			folder: []string{"Show - 01 [720p].mkv", "Show - 01 [1080p].mkv"},
 			want: []plannedEpisode{
-				{Season: 1, Episodes: []int{1}, Copies: [][]string{{"Show - 01 [720p].mkv"}}},
-				{Season: 1, Episodes: []int{1}, Copies: [][]string{{"Show - 01 [1080p].mkv"}}},
+				{Title: "Episode 1", Season: 1, Episodes: []int{1}, Copies: [][]string{{"Show - 01 [720p].mkv"}}},
+				{Title: "Episode 1", Season: 1, Episodes: []int{1}, Copies: [][]string{{"Show - 01 [1080p].mkv"}}},
 			},
 		},
 		{
 			name:   "a dated episode with no season takes its year",
 			folder: []string{"The Daily Show 2018-03-24.mkv"},
-			want:   []plannedEpisode{{Season: 2018, ByNumber: true, Copies: [][]string{{"The Daily Show 2018-03-24.mkv"}}}},
+			want:   []plannedEpisode{{Title: "2018-03-24", Season: 2018, ByNumber: true, Copies: [][]string{{"The Daily Show 2018-03-24.mkv"}}}},
 		},
 		{
 			name:   "a video with no episode in its name is left out",
@@ -97,7 +98,7 @@ func TestPlanEpisodes(t *testing.T) {
 			eps, unread := planEpisodes(folder("Show", tt.folder...), tt.season, "Show")
 			var got []plannedEpisode
 			for _, e := range eps {
-				pe := plannedEpisode{Season: e.season, Episodes: e.episodes, ByNumber: e.byNumber}
+				pe := plannedEpisode{Title: e.title, Season: e.season, Episodes: e.episodes, ByNumber: e.byNumber}
 				for _, v := range e.versions {
 					var names []string
 					for _, p := range v.parts {

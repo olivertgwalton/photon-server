@@ -115,7 +115,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 			}
 			if len(copies) > 0 {
 				episodes = append(episodes, store.Episode{
-					Season: e.season, Episodes: e.episodes, AirDate: e.airDate, Title: e.name.Title,
+					Season: e.season, Episodes: e.episodes, AirDate: e.airDate, Title: e.title,
 					Folder: folder.Path, IDs: ids(e.name.IDs), ByNumber: e.byNumber, Copies: copies,
 				})
 			}

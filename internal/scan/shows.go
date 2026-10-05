@@ -16,6 +16,7 @@ type episodePlan struct {
 	season   int
 	episodes []int
 	airDate  time.Time
+	title    string
 	name     naming.Name
 	// byNumber is true when the episode was read from a canonical form, so its numbers may join it
 	// to an episode already known; a bare number never does.
@@ -63,7 +64,7 @@ func planEpisodes(f library.Folder, folderSeason *int, series string) (episodes 
 		}
 		n := naming.CleanName(s)
 		plan := episodePlan{
-			episodes: ep.Episodes, airDate: ep.AirDate, name: n,
+			episodes: ep.Episodes, airDate: ep.AirDate, title: episodeTitle(ep), name: n,
 			byNumber: ep.Confidence == naming.ConfidenceHigh,
 			versions: []copyPlan{{parts: c, edition: n.Edition}},
 		}
@@ -98,4 +99,16 @@ func episodeKey(p episodePlan) string {
 		b.WriteString(strconv.Itoa(e))
 	}
 	return b.String()
+}
+
+// episodeTitle is what an episode is called until metadata names it: its name's own title, else
+// its number or air date, as Plex calls one it has not matched. Never the file's whole name.
+func episodeTitle(ep naming.Episode) string {
+	switch {
+	case ep.Title != "":
+		return ep.Title
+	case len(ep.Episodes) > 0:
+		return "Episode " + strconv.Itoa(ep.Episodes[0])
+	}
+	return ep.AirDate.Format(time.DateOnly)
 }
