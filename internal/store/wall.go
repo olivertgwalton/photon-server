@@ -41,8 +41,8 @@ type WallPage struct {
 type cursor struct {
 	Sort  domain.WallSort `json:"s"`
 	Order domain.Order    `json:"o"`
-	Title string          `json:"t"`
-	Added time.Time       `json:"a"`
+	Title string          `json:"t,omitzero"`
+	Date  time.Time       `json:"d,omitzero"`
 	ID    uuid.UUID       `json:"i"`
 }
 
@@ -64,14 +64,23 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, st
 		if err != nil || json.Unmarshal(raw, &c) != nil || c.Sort != p.Sort || c.Order != p.Order {
 			return nil, "", ErrBadCursor
 		}
-		var past, tie gen.Condition = i.SortTitle.Gt(c.Title), i.SortTitle.Eq(c.Title)
-		switch {
-		case p.Sort == domain.SortTitle && desc:
-			past = i.SortTitle.Lt(c.Title)
-		case p.Sort == domain.SortAdded && desc:
-			past, tie = i.AddedAt.Lt(c.Added), i.AddedAt.Eq(c.Added)
-		case p.Sort == domain.SortAdded:
-			past, tie = i.AddedAt.Gt(c.Added), i.AddedAt.Eq(c.Added)
+		var past, tie gen.Condition
+		switch p.Sort {
+		case domain.SortTitle:
+			past, tie = i.SortTitle.Gt(c.Title), i.SortTitle.Eq(c.Title)
+			if desc {
+				past = i.SortTitle.Lt(c.Title)
+			}
+		case domain.SortAdded:
+			past, tie = i.AddedAt.Gt(c.Date), i.AddedAt.Eq(c.Date)
+			if desc {
+				past = i.AddedAt.Lt(c.Date)
+			}
+		case domain.SortReleased:
+			past, tie = i.ReleasedAsc.Gt(c.Date), i.ReleasedAsc.Eq(c.Date)
+			if desc {
+				past, tie = i.ReleasedDesc.Lt(c.Date), i.ReleasedDesc.Eq(c.Date)
+			}
 		}
 		later := i.ID.Gt(model.UUID(c.ID))
 		if desc {
@@ -79,9 +88,16 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, st
 		}
 		q = q.Where(i.WithContext(ctx).Where(past).Or(tie, later))
 	}
-	var key field.Expr = i.SortTitle
-	if p.Sort == domain.SortAdded {
+	var key field.Expr
+	switch {
+	case p.Sort == domain.SortAdded:
 		key = i.AddedAt
+	case p.Sort == domain.SortReleased && desc:
+		key = i.ReleasedDesc
+	case p.Sort == domain.SortReleased:
+		key = i.ReleasedAsc
+	default:
+		key = i.SortTitle
 	}
 	if desc {
 		q = q.Order(key.Desc(), i.ID.Desc())
@@ -96,9 +112,18 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, st
 	if len(rows) > p.Limit {
 		rows = rows[:p.Limit]
 		last := rows[len(rows)-1]
-		raw, err := json.Marshal(cursor{
-			Sort: p.Sort, Order: p.Order, Title: last.SortTitle, Added: last.AddedAt, ID: uuid.UUID(last.ID),
-		})
+		c := cursor{Sort: p.Sort, Order: p.Order, ID: uuid.UUID(last.ID)}
+		switch {
+		case p.Sort == domain.SortTitle:
+			c.Title = last.SortTitle
+		case p.Sort == domain.SortAdded:
+			c.Date = last.AddedAt
+		case desc:
+			c.Date = last.ReleasedDesc
+		default:
+			c.Date = last.ReleasedAsc
+		}
+		raw, err := json.Marshal(c)
 		if err != nil {
 			return nil, "", err
 		}

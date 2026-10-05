@@ -11,10 +11,12 @@ type WallSort string
 const (
 	SortTitle WallSort = "title"
 	SortAdded WallSort = "added"
+	// SortReleased is by release date, else the year; a title with neither comes last.
+	SortReleased WallSort = "released"
 )
 
 func WallSorts() []WallSort {
-	return []WallSort{SortTitle, SortAdded}
+	return []WallSort{SortTitle, SortAdded, SortReleased}
 }
 
 // Order is the direction of a sort.
@@ -25,13 +27,13 @@ const (
 	Descending Order = "desc"
 )
 
-// DefaultOrder is the direction a sort reads in unless asked otherwise: titles from A, the most
-// recently added first.
+// DefaultOrder is the direction a sort reads in unless asked otherwise: titles from A, the newest
+// first by date.
 func (s WallSort) DefaultOrder() Order {
-	if s == SortAdded {
-		return Descending
+	if s == SortTitle {
+		return Ascending
 	}
-	return Ascending
+	return Descending
 }
 
 func ParseWallSort(s string) (WallSort, error) {

@@ -40,6 +40,7 @@ func TestWall(t *testing.T) {
 	}{
 		{"", http.StatusOK, "title asc 50ns"},
 		{"?sort=added", http.StatusOK, "added desc 50ns"},
+		{"?sort=released", http.StatusOK, "released desc 50ns"},
 		{"?sort=added&order=asc&limit=200&after=next", http.StatusOK, "added asc 200ns"},
 		{"?sort=rating", http.StatusBadRequest, ""},
 		{"?order=up", http.StatusBadRequest, ""},
