@@ -6,7 +6,6 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
-	"gorm.io/gorm/clause"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -24,10 +23,17 @@ type Job struct {
 }
 
 // enqueue adds a job inside the transaction whose write made it necessary, so the job and its
-// cause commit together. A job already queued for the subject stands.
+// cause commit together. A job already queued for the subject stands; one running will run again
+// once it ends, since it may have read the subject before this write; a dead one gets a fresh
+// set of attempts, as its subject has changed.
 func enqueue(ctx context.Context, tx *query.Query, kind domain.JobKind, subject model.UUID) error {
-	return tx.Job.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).
-		Create(&model.Job{Kind: kind, Subject: subject})
+	// GORM refuses expressions in an upsert's assignments.
+	return tx.Job.WithContext(ctx).UnderlyingDB().Exec(`
+		INSERT INTO jobs (kind, subject) VALUES (?, ?)
+		ON CONFLICT (kind, subject) DO UPDATE SET
+			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
+			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END`,
+		kind, subject).Error
 }
 
 // ClaimJobs leases up to limit queued jobs of the given kinds to node. Workers that ask together
@@ -58,20 +64,30 @@ func (s *Store) ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid
 	})
 }
 
-// CompleteJob removes a finished job: what it produced is the record that it ran.
+// CompleteJob removes a finished job, as what it produced is the record that it ran, or queues
+// it again if its subject changed while it ran.
 func (s *Store) CompleteJob(ctx context.Context, id int64) error {
-	_, err := s.q.Job.WithContext(ctx).Where(s.q.Job.ID.Eq(id)).Delete()
+	j := s.q.Job
+	done, err := j.WithContext(ctx).Where(j.ID.Eq(id), j.State.Eq(string(domain.JobRunning))).Delete()
+	if err != nil || done.RowsAffected > 0 {
+		return err
+	}
+	_, err = j.WithContext(ctx).Where(j.ID.Eq(id)).UpdateSimple(
+		j.State.Value(string(domain.JobQueued)), j.Attempts.Value(0), j.LeaseUntil.Null(), j.NodeID.Null())
 	return err
 }
 
 // FailJob queues a job again after a backoff that doubles with each attempt, up to an hour, or
-// marks it dead once it has had maxAttempts.
+// marks it dead once it has had maxAttempts and its subject has not changed since it was claimed.
 func (s *Store) FailJob(ctx context.Context, job Job, runErr error) error {
 	j := s.q.Job
 	q := j.WithContext(ctx).Where(j.ID.Eq(job.ID))
 	if job.Attempts >= maxAttempts {
-		_, err := q.UpdateSimple(j.State.Value(string(domain.JobDead)), j.LeaseUntil.Null(), j.LastError.Value(runErr.Error()))
-		return err
+		dead, err := j.WithContext(ctx).Where(j.ID.Eq(job.ID), j.State.Eq(string(domain.JobRunning))).
+			UpdateSimple(j.State.Value(string(domain.JobDead)), j.LeaseUntil.Null(), j.LastError.Value(runErr.Error()))
+		if err != nil || dead.RowsAffected > 0 {
+			return err
+		}
 	}
 	backoff := min(time.Minute<<job.Attempts, time.Hour)
 	_, err := q.UpdateSimple(
@@ -85,7 +101,7 @@ func (s *Store) FailJob(ctx context.Context, job Job, runErr error) error {
 func (s *Store) SweepJobs(ctx context.Context) (int64, error) {
 	j := s.q.Job
 	info, err := j.WithContext(ctx).
-		Where(j.State.Eq(string(domain.JobRunning)), j.LeaseUntil.Lt(time.Now())).
+		Where(j.State.In(string(domain.JobRunning), string(domain.JobRerun)), j.LeaseUntil.Lt(time.Now())).
 		UpdateSimple(j.State.Value(string(domain.JobQueued)), j.LeaseUntil.Null(), j.NodeID.Null())
 	return info.RowsAffected, err
 }
