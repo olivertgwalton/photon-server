@@ -11,10 +11,12 @@ const (
 	TaskBackupDatabase TaskKey = "backup_database"
 	// TaskRefreshMetadata matches again the titles whose libraries say it is time.
 	TaskRefreshMetadata TaskKey = "refresh_metadata"
+	// TaskSweepArtwork clears replaced pictures from the cache.
+	TaskSweepArtwork TaskKey = "sweep_artwork"
 )
 
 func TaskKeys() []TaskKey {
-	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata}
+	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork}
 }
 
 type TaskResult string

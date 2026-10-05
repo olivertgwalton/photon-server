@@ -8,6 +8,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/backup"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
@@ -105,6 +106,24 @@ func refreshTask(st *store.Store, logger *slog.Logger) task.Task {
 			n, err := st.RefreshStale(ctx)
 			if n > 0 {
 				logger.InfoContext(ctx, "titles queued to be matched again", slog.Int64("titles", n))
+			}
+			return err
+		},
+	}
+}
+
+// sweepArtworkEvery is how often replaced pictures are cleared from the cache.
+const sweepArtworkEvery = 7 * 24 * time.Hour
+
+// sweepArtworkTask clears the cache of pictures no title or person has any more.
+func sweepArtworkTask(st *store.Store, cache *artwork.Cache, logger *slog.Logger) task.Task {
+	return task.Task{
+		Key:      domain.TaskSweepArtwork,
+		Triggers: []task.Trigger{{Kind: task.TriggerEvery, Every: sweepArtworkEvery}},
+		Run: func(ctx context.Context) error {
+			n, err := cache.Sweep(ctx, st.LivePictures)
+			if n > 0 {
+				logger.InfoContext(ctx, "replaced pictures cleared", slog.Int("files", n))
 			}
 			return err
 		},
