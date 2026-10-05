@@ -11,6 +11,9 @@ export default defineConfig({
 		sveltekit({
 			adapter: adapter(),
 			csp: { mode: "auto", directives: cspDirectives },
+			// Kit's own check compares the scheme too, which adapter-bun can only
+			// guess; hooks.server.ts makes the same check by host instead.
+			csrf: { trustedOrigins: ["*"] },
 			compilerOptions: { runes: true },
 		}),
 	],
