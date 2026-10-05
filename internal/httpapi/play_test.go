@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"uuid"
@@ -91,6 +93,8 @@ func (fakePlaybacks) Progress(_ context.Context, profile, id uuid.UUID, _ time.D
 func (f fakePlaybacks) Stop(ctx context.Context, profile, id uuid.UUID, at time.Duration) (domain.Reach, error) {
 	return f.Progress(ctx, profile, id, at, domain.StatePlaying)
 }
+
+func (fakePlaybacks) Abandon(context.Context, uuid.UUID) error { return nil }
 
 func TestAPlaybackReportsWhereItIs(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Playbacks: fakePlaybacks{}})
@@ -182,6 +186,8 @@ type fakeHLS struct{ dir string }
 func (fakeHLS) Open(context.Context, uuid.UUID, store.PlayCopy, domain.VideoPlan, *domain.AudioPlan) error {
 	return nil
 }
+
+func (fakeHLS) Transcodes() (active, limit int) { return 1, 4 }
 
 func (fakeHLS) Has(playback uuid.UUID) bool { return playback == playbackID }
 
@@ -310,5 +316,112 @@ func TestHLSIsServedByTheNodeRunningIt(t *testing.T) {
 	front.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, subject+"/"+exp+"/forged/0.m4s", nil))
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("a forged signature: %d, want 401 before any node is asked", rec.Code)
+	}
+}
+
+// livePlaybacks keeps playbacks as Valkey does, and the places in them nowhere.
+type livePlaybacks struct {
+	mu sync.Mutex
+	m  map[uuid.UUID]domain.Playback
+}
+
+func (l *livePlaybacks) SavePlayback(_ context.Context, p domain.Playback, _ time.Duration) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.m[p.ID] = p
+	return nil
+}
+
+func (l *livePlaybacks) Playback(_ context.Context, id uuid.UUID) (domain.Playback, bool, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	p, ok := l.m[id]
+	return p, ok, nil
+}
+
+func (l *livePlaybacks) EndPlayback(_ context.Context, id uuid.UUID) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.m, id)
+	return nil
+}
+
+func (l *livePlaybacks) Playbacks(context.Context) ([]domain.Playback, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Collect(maps.Values(l.m)), nil
+}
+
+func (*livePlaybacks) SaveProgress(context.Context, uuid.UUID, uuid.UUID, time.Duration) (domain.Reach, error) {
+	return domain.ReachResumable, nil
+}
+
+func (*livePlaybacks) RecordPlay(context.Context, domain.Playback, time.Time, time.Duration) error {
+	return nil
+}
+
+// remuxOpener opens a copy's first part, as decided, on a real remuxer.
+type remuxOpener struct{ *hls.Remuxer }
+
+func (r remuxOpener) Open(_ context.Context, id uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan) error {
+	d := time.Duration(c.Parts[0].DurationMS) * time.Millisecond
+	return r.Remuxer.Open(id, hls.Copy{Parts: []hls.Source{{Part: hls.Part{Duration: d, Keyframes: hls.Forced(d)}, Video: video, Audio: audio}}})
+}
+
+func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
+	remuxer, err := hls.NewRemuxer("ffmpeg", t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, 1, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{
+		Auth: fakeAuth{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer.Close, uuid.NewV7()),
+		Remuxing: remuxOpener{remuxer}, HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
+	})
+	do := func(req *http.Request) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec
+	}
+	// Two megabits is less than the film's eight, so its video is encoded.
+	transcode := func() *httptest.ResponseRecorder {
+		body := `{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000}}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		return do(req)
+	}
+	var first struct {
+		PlaybackID uuid.UUID `json:"playback_id"`
+		Method     string    `json:"method"`
+	}
+	if err := json.NewDecoder(transcode().Body).Decode(&first); err != nil || first.Method != "transcode" {
+		t.Fatalf("the first play = %+v, %v; want a transcode", first, err)
+	}
+	var refused problem
+	if rec := transcode(); rec.Code != http.StatusServiceUnavailable || json.NewDecoder(rec.Body).Decode(&refused) != nil ||
+		refused.Code != codeTranscodeLimit || !strings.HasSuffix(refused.Detail, ": 1") {
+		t.Errorf("a second transcode: %d %+v, want 503 transcode_limit naming the limit", rec.Code, refused)
+	}
+	if rec := do(playRequest(`"mp4"`)); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"method":"remux"`) {
+		t.Errorf("a remux at the limit: %d %s, want it played", rec.Code, rec.Body)
+	}
+	admin := httptest.NewRequest(http.MethodGet, "/api/v1/admin/playbacks", nil)
+	admin.Header.Set("Authorization", "Bearer "+goodToken)
+	var playing struct {
+		Items      []json.RawMessage `json:"items"`
+		Transcodes struct{ Active, Limit int }
+	}
+	if err := json.NewDecoder(do(admin).Body).Decode(&playing); err != nil || len(playing.Items) != 2 ||
+		playing.Transcodes.Active != 1 || playing.Transcodes.Limit != 1 {
+		t.Errorf("admin playbacks = %+v, %v; want the transcode and the remux, one of one transcoding", playing, err)
+	}
+
+	stop := httptest.NewRequest(http.MethodPost, "/api/v1/playback/"+first.PlaybackID.String()+"/stop", strings.NewReader(`{"position_ms": 1000}`))
+	stop.Header.Set("Authorization", "Bearer "+goodToken)
+	if rec := do(stop); rec.Code != http.StatusOK {
+		t.Fatalf("stop: %d %s", rec.Code, rec.Body)
+	}
+	if rec := transcode(); rec.Code != http.StatusOK {
+		t.Errorf("a transcode once the first stopped: %d %s, want it played", rec.Code, rec.Body)
 	}
 }

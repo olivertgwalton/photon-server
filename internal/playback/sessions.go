@@ -82,6 +82,11 @@ func (s *Sessions) Stop(ctx context.Context, profile, id uuid.UUID, position tim
 	return reach, s.live.EndPlayback(ctx, id)
 }
 
+// Abandon ends a playback whose stream could not be opened, before any of it was watched.
+func (s *Sessions) Abandon(ctx context.Context, id uuid.UUID) error {
+	return s.live.EndPlayback(ctx, id)
+}
+
 func (s *Sessions) own(ctx context.Context, profile, id uuid.UUID) (domain.Playback, error) {
 	p, ok, err := s.live.Playback(ctx, id)
 	if err != nil {

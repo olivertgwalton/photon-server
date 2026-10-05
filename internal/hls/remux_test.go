@@ -63,7 +63,7 @@ func shownIn(t *testing.T, init, segment *os.File) []time.Duration {
 }
 
 func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
-	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,5 +161,56 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 		if tc.audio == nil && strings.Contains(got, "-c:a") {
 			t.Errorf("%s: %q has audio, and there is none", tc.name, got)
 		}
+	}
+}
+
+// transcode is a minute of video encoded to H.264.
+var transcode = Copy{Parts: []Source{{
+	Part:  Part{Duration: time.Minute, Keyframes: Forced(time.Minute)},
+	Video: domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 4000}},
+}}}
+
+func TestTranscodesAtOnceNeverPassTheLimit(t *testing.T) {
+	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 3, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var (
+		wg      sync.WaitGroup
+		mu      sync.Mutex
+		opened  []uuid.UUID
+		refused int
+	)
+	for range 20 {
+		wg.Go(func() {
+			id := uuid.NewV7()
+			err := r.Open(id, transcode)
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case err == nil:
+				opened = append(opened, id)
+			case errors.Is(err, ErrTranscodeLimit):
+				refused++
+			default:
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	if active, limit := r.Transcodes(); len(opened) != 3 || refused != 17 || active != 3 || limit != 3 {
+		t.Fatalf("20 at once: %d opened, %d refused, %d/%d active; want 3 and 17", len(opened), refused, active, limit)
+	}
+
+	remux := Copy{Parts: []Source{{Part: transcode.Parts[0].Part, Video: domain.VideoPlan{Codec: "h264"}}}}
+	if err := r.Open(uuid.NewV7(), remux); err != nil {
+		t.Errorf("a remux at the limit: %v, want it opened, as its video is copied", err)
+	}
+	r.Close(opened[0])
+	if err := r.Open(uuid.NewV7(), transcode); err != nil {
+		t.Errorf("a transcode after one closed: %v, want its slot", err)
+	}
+	if err := r.Open(uuid.NewV7(), transcode); !errors.Is(err, ErrTranscodeLimit) {
+		t.Errorf("one more: %v, want ErrTranscodeLimit", err)
 	}
 }

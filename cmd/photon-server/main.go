@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -138,7 +139,11 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	remuxer, err := hls.NewRemuxer(tools.FFmpeg.Path, filepath.Join(cacheRoot, "hls"), hw, logger)
+	transcodes, err := maxTranscodes(hw.Accel)
+	if err != nil {
+		return err
+	}
+	remuxer, err := hls.NewRemuxer(tools.FFmpeg.Path, filepath.Join(cacheRoot, "hls"), hw, transcodes, logger)
 	if err != nil {
 		return err
 	}
@@ -287,6 +292,38 @@ func hardware(ctx context.Context, ffmpeg string, logger *slog.Logger) (hls.Hard
 	}
 	logger.InfoContext(ctx, "encoding video", slog.String("on", string(accel)), slog.String("device", device))
 	return hw, nil
+}
+
+const (
+	// cpusPerTranscode is the logical CPUs one software transcode is given: x264 at veryfast takes
+	// about two cores, four hyperthreads, to encode 1080p in real time, and more from a 4K or tone
+	// mapped source.
+	cpusPerTranscode = 4
+	// hardwareTranscodes is NVIDIA's cap on NVENC sessions at once on a GeForce card, which the
+	// other encoders, bound by their throughput rather than a count, reach at about 1080p too.
+	hardwareTranscodes = 8
+)
+
+// maxTranscodes is how many videos the node encodes at once: PHOTON_MAX_TRANSCODES, a number or
+// unlimited, else what the device it encodes on keeps up with.
+func maxTranscodes(accel domain.Acceleration) (int, error) {
+	switch v := os.Getenv("PHOTON_MAX_TRANSCODES"); v {
+	case "":
+	case "unlimited":
+		return hls.Unlimited, nil
+	default:
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return 0, fmt.Errorf("PHOTON_MAX_TRANSCODES is a positive number or unlimited, not %q", v)
+		}
+		return n, nil
+	}
+	switch accel {
+	case domain.AccelSoftware:
+		return max(runtime.NumCPU()/cpusPerTranscode, 1), nil
+	case domain.AccelVideoToolbox, domain.AccelVAAPI, domain.AccelQSV, domain.AccelNVENC:
+	}
+	return hardwareTranscodes, nil
 }
 
 // advertiseEvery is how often a node says where its peers reach it; it is forgotten after three

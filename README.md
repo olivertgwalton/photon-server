@@ -68,6 +68,14 @@ encoded, or its video encoded to H.264, HDR tone mapped to SDR. Encoding is in s
 default `/dev/dri/renderD128`) or `nvenc` (on CUDA device `PHOTON_HWACCEL_DEVICE`, default `0`). The
 server encodes a test picture on it at start, and falls back to software if it will not.
 
+Each node encodes at most `PHOTON_MAX_TRANSCODES` videos at once (a number, or `unlimited`): by
+default a quarter of its CPUs in software, at least one, and eight on a hardware encoder, the cap
+NVIDIA puts on a GeForce card's sessions. A play that would encode video on a node at its limit is
+refused with 503 `transcode_limit` rather than played worse; one played as it is or with its video
+copied is never refused. A transcode's slot is freed as it stops, or a couple of minutes after its player
+goes quiet. `GET /api/v1/admin/playbacks` says which node runs each playback, and how many videos
+the node answering is transcoding against its limit (`transcodes.limit` is absent when unlimited).
+
 Run several nodes against one Postgres and Valkey behind a load balancer and each says where its
 peers reach it in `PHOTON_NODE_ADDRESS` (`http://10.0.0.5:8640`): a request for a stream's segments
 that lands on another node is handed to the node making them.

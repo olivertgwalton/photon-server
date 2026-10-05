@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -31,6 +32,7 @@ type playbacks interface {
 	Start(ctx context.Context, profile, item, version uuid.UUID, method domain.PlayMethod) (domain.Playback, error)
 	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState) (domain.Reach, error)
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
+	Abandon(ctx context.Context, id uuid.UUID) error
 }
 
 type remuxing interface {
@@ -48,6 +50,7 @@ type hlsFiles interface {
 	SubtitleSegment(ctx context.Context, playback uuid.UUID, track, n int) (string, error)
 	Init(ctx context.Context, playback uuid.UUID, part int) (*os.File, error)
 	Segment(ctx context.Context, playback uuid.UUID, n int) (*os.File, error)
+	Transcodes() (active, limit int)
 }
 
 type playing interface {
@@ -199,6 +202,15 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	}
 	if d.Method != domain.PlayDirect {
 		if err := a.svc.Remuxing.Open(r.Context(), session.ID, c, *d.Video, d.Audio); err != nil {
+			if aerr := a.svc.Playbacks.Abandon(context.WithoutCancel(r.Context()), session.ID); aerr != nil {
+				a.internal(w, r, aerr)
+				return
+			}
+			if errors.Is(err, hls.ErrTranscodeLimit) {
+				_, limit := a.svc.HLS.Transcodes()
+				writeProblem(w, a.logger, codeTranscodeLimit, fmt.Sprintf("the server is already transcoding as many videos at once as it may: %d", limit))
+				return
+			}
 			a.internal(w, r, err)
 			return
 		}

@@ -112,7 +112,8 @@ func (a *API) retryJob(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// adminPlaybacks answers who is playing what, how, and where they have got to.
+// adminPlaybacks answers who is playing what, how, on which node, and where they have got to, and
+// how many videos the node answering is transcoding against its limit, absent where it has none.
 func (a *API) adminPlaybacks(w http.ResponseWriter, r *http.Request) {
 	all, err := a.svc.NowPlaying.Playbacks(r.Context())
 	if err != nil {
@@ -129,13 +130,18 @@ func (a *API) adminPlaybacks(w http.ResponseWriter, r *http.Request) {
 		PositionMS int64             `json:"position_ms"`
 		StartedAt  time.Time         `json:"started_at"`
 		UpdatedAt  time.Time         `json:"updated_at"`
+		NodeID     uuid.UUID         `json:"node_id"`
 	}
 	out := make([]playbackJSON, len(all))
 	for i, p := range all {
 		out[i] = playbackJSON{
 			ID: p.ID, ProfileID: p.Profile, TitleID: p.Item, VersionID: p.Version, Method: p.Method, State: p.State,
-			PositionMS: p.Position.Milliseconds(), StartedAt: p.Started.UTC(), UpdatedAt: p.Updated.UTC(),
+			PositionMS: p.Position.Milliseconds(), StartedAt: p.Started.UTC(), UpdatedAt: p.Updated.UTC(), NodeID: p.Node,
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": out})
+	active, limit := a.svc.HLS.Transcodes()
+	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": out, "transcodes": struct {
+		Active int `json:"active"`
+		Limit  int `json:"limit,omitzero"`
+	}{active, limit}})
 }

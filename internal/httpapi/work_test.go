@@ -49,7 +49,7 @@ func (f *fakeWork) Playbacks(context.Context) ([]domain.Playback, error) {
 
 func TestAnAdminSeesTheServersWork(t *testing.T) {
 	work := &fakeWork{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work})
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, HLS: fakeHLS{}})
 	do := func(token, method, target string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, nil)
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -70,6 +70,7 @@ func TestAnAdminSeesTheServersWork(t *testing.T) {
 		{goodToken, http.MethodPost, "/api/v1/admin/jobs/7/retry", http.StatusAccepted, ""},
 		{goodToken, http.MethodPost, "/api/v1/admin/jobs/8/retry", http.StatusNotFound, ""},
 		{goodToken, http.MethodGet, "/api/v1/admin/playbacks", http.StatusOK, `"method":"transcode","state":"","position_ms":60000`},
+		{goodToken, http.MethodGet, "/api/v1/admin/playbacks", http.StatusOK, `"transcodes":{"active":1,"limit":4}`},
 	} {
 		rec := do(tc.token, tc.method, tc.target)
 		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.body) {

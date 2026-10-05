@@ -44,7 +44,7 @@ After the interval.
 `
 
 func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
-	r, err := NewRemuxer(fakeConverter(t, film), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(fakeConverter(t, film), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
