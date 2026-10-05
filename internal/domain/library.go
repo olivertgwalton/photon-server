@@ -64,6 +64,41 @@ func ParsePreviewLevel(s string) (PreviewLevel, error) {
 	return "", fmt.Errorf("previews %q is not one of %v", s, PreviewLevels())
 }
 
+// MarkerDetection is how a library finds the intros and credits a player may offer to skip:
+// not at all, only from chapters that name them, or from chapters and by comparing each season's
+// sound too, which reads the start and end of every episode.
+type MarkerDetection string
+
+const (
+	MarkersOff      MarkerDetection = "off"
+	MarkersChapters MarkerDetection = "chapters"
+	MarkersAll      MarkerDetection = "all"
+)
+
+func MarkerDetections() []MarkerDetection {
+	return []MarkerDetection{MarkersOff, MarkersChapters, MarkersAll}
+}
+
+func ParseMarkerDetection(s string) (MarkerDetection, error) {
+	if d := MarkerDetection(s); slices.Contains(MarkerDetections(), d) {
+		return d, nil
+	}
+	return "", fmt.Errorf("markers %q is not one of %v", s, MarkerDetections())
+}
+
+// Keeps is whether a marker from source is offered under d. What an admin said always is.
+func (d MarkerDetection) Keeps(source MarkerSource) bool {
+	switch d {
+	case MarkersOff:
+		return source == MarkerByUser
+	case MarkersChapters:
+		return source != MarkerByFingerprint
+	case MarkersAll:
+		return true
+	}
+	panic("domain: unknown marker detection: " + string(d))
+}
+
 type Library struct {
 	ID   uuid.UUID
 	Name string
@@ -77,4 +112,5 @@ type Library struct {
 	// RefreshDays is how often its titles are matched again, in days; zero is never.
 	RefreshDays int
 	Previews    PreviewLevel
+	Markers     MarkerDetection
 }
