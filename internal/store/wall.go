@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql/driver"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -31,6 +32,14 @@ type Card struct {
 	Backdrop uuid.UUID
 	// State is what the profile asking has made of it.
 	State TitleState
+	// DurationMS is how long it runs, for a progress bar: its longest copy on disk.
+	DurationMS int64
+	// An episode's card says which show it is of, where in it, and carries its still.
+	Show          *TitleRef
+	SeasonNumber  *int
+	EpisodeNumber *int
+	EpisodeEnd    *int
+	Thumb         uuid.UUID
 }
 
 // WallPage asks for one page of a library's titles. After is the cursor the previous page
@@ -149,13 +158,60 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 	if err != nil {
 		return nil, err
 	}
+	lengths, err := s.durations(ctx, ids(rows))
+	if err != nil {
+		return nil, err
+	}
+	shows, err := s.showsOf(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
 	cards := make([]Card, len(rows))
 	for n, r := range rows {
 		cards[n] = Card{
 			ID: uuid.UUID(r.ID), Kind: r.Kind, Title: r.Title, AddedAt: r.AddedAt, Year: deref(r.Year),
 			ReleaseDate: deref(r.ReleaseDate), Poster: first(pictures[r.ID][domain.ArtworkPoster]),
 			Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]), State: states[r.ID],
+			DurationMS: lengths[r.ID], Show: shows[r.ID], SeasonNumber: r.SeasonNumber,
+			EpisodeNumber: r.EpisodeNumber, EpisodeEnd: r.EpisodeEnd, Thumb: first(pictures[r.ID][domain.ArtworkThumb]),
 		}
 	}
 	return cards, nil
+}
+
+// showsOf answers the show each episode among rows is of.
+func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[model.UUID]*TitleRef, error) {
+	out := map[model.UUID]*TitleRef{}
+	var seasons []driver.Valuer
+	for _, r := range rows {
+		if r.Kind == domain.ItemEpisode && r.ParentID != nil {
+			seasons = append(seasons, *r.ParentID)
+		}
+	}
+	if len(seasons) == 0 {
+		return out, nil
+	}
+	i := s.q.Item
+	var pairs []struct {
+		Season model.UUID
+		ID     model.UUID
+		Title  string
+	}
+	// gen cannot alias a table joined to itself, so this one query is SQL.
+	err := i.WithContext(ctx).UnderlyingDB().Raw(`
+		SELECT season.id AS season, show.id, show.title FROM items season
+		JOIN items show ON show.id = season.parent_id WHERE season.id IN ?`, seasons).Scan(&pairs).Error
+	if err != nil {
+		return nil, err
+	}
+	bySeason := map[model.UUID]*TitleRef{}
+	for _, p := range pairs {
+		bySeason[p.Season] = &TitleRef{ID: uuid.UUID(p.ID), Title: p.Title}
+	}
+	for _, r := range rows {
+		if r.Kind == domain.ItemEpisode && r.ParentID != nil {
+			out[r.ID] = bySeason[*r.ParentID]
+		}
+	}
+	return out, nil
 }
