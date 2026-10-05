@@ -1,0 +1,128 @@
+version: "2"
+
+formatters:
+  enable: [gofumpt, goimports]
+  settings:
+    goimports:
+      local-prefixes: [github.com/olivertgwalton/photon-server]
+
+linters:
+  default: none
+  enable:
+    # correctness
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    # errors
+    - errorlint
+    - nilerr
+    - nilnesserr
+    # resources and context
+    - bodyclose
+    - noctx
+    - contextcheck
+    - fatcontext
+    # the project's rules
+    - exhaustive
+    - forcetypeassert
+    - depguard
+    - forbidigo
+    - nolintlint
+    - sloglint
+    # modern standard library
+    - modernize
+    - usestdlibvars
+    - perfsprint
+    - revive
+    # duplication, speculative generality, security
+    - dupl
+    - unparam
+    - gosec
+
+  settings:
+    govet:
+      enable-all: true
+      disable: [fieldalignment, shadow]
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+    exhaustive:
+      default-signifies-exhaustive: false
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+    dupl:
+      threshold: 150
+    sloglint:
+      attr-only: true
+      static-msg: true
+      key-naming-case: snake
+      no-global: all
+      context: scope
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: github.com/pkg/errors
+              desc: use the standard errors package
+            - pkg: github.com/sirupsen/logrus
+              desc: use log/slog
+            - pkg: go.uber.org/zap
+              desc: use log/slog
+            - pkg: github.com/go-chi/chi
+              desc: use net/http ServeMux patterns
+            - pkg: github.com/gorilla/mux
+              desc: use net/http ServeMux patterns
+            - pkg: github.com/stretchr/testify
+              desc: plain testing and go-cmp
+            - pkg: io/ioutil
+              desc: deprecated; use io and os
+            - pkg: golang.org/x/exp/slices
+              desc: use slices
+            - pkg: golang.org/x/exp/maps
+              desc: use maps
+    forbidigo:
+      forbid:
+        - pattern: ^fmt\.Print(f|ln)?$
+          msg: log with slog, or write to an explicit io.Writer
+        - pattern: ^log\.(Print|Fatal|Panic)(f|ln)?$
+          msg: use log/slog
+        - pattern: ^time\.Sleep$
+          msg: in tests use testing/synctest; in code a timer with ctx
+    gosec:
+      excludes: [G104, G115]
+    revive:
+      enable-default-rules: false
+      rules:
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: package-naming
+        - name: receiver-naming
+        - name: var-naming
+        - name: unexported-return
+        - name: time-equal
+        - name: redefines-builtin-id
+        - name: indent-error-flow
+        - name: superfluous-else
+        - name: use-any
+        - name: datarace
+
+  exclusions:
+    generated: lax
+    warn-unused: true
+    presets: [std-error-handling, common-false-positives]
+    rules:
+      - path: _test\.go
+        linters: [dupl, forcetypeassert, gosec, noctx]
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
