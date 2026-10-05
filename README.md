@@ -68,6 +68,14 @@ protocol ([docs/plugins.md](docs/plugins.md)). Register one by its address
 (`-sources nfo,plugin:films,tmdb`). A plugin that is down is passed over for the library's next
 source. Removing one keeps what it said about titles until another source says otherwise.
 
+An admin adding a library can browse the server's folders for it: `GET /api/v1/admin/folders`
+answers the folders to start from (`/` and whichever of `/media`, `/mnt`, `/srv`, `/Volumes` and
+the server's home are there, or each drive on Windows), and `?path=` an absolute folder's
+subfolders, links to folders among them, up to a thousand and saying when there are more. Folders
+whose names start with a dot are left out unless asked for (`&hidden=show`). It shows anything the
+server's user can read, so only an admin may ask; in Docker that is the container's view, with your
+media under `/media`.
+
 Libraries are scanned every 12 hours, and as their files change: each folder is watched (inotify on
 Linux) and a library is scanned a minute after its last change. Network shares send no change
 events, so a library on one is scanned on the schedule; `photon-server library set -name NAME
