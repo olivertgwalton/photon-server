@@ -8,6 +8,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/text/language"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // The fixtures are ffprobe 9.0.1's output for files made with ffmpeg (sdr.json, hdr10.json); dv8
@@ -34,10 +36,10 @@ func TestProbeHDR10Matroska(t *testing.T) {
 		Duration:    2023 * time.Millisecond,
 		BitrateKbps: 1050,
 		Streams: []Stream{
-			{Index: 0, Kind: StreamVideo, Codec: "hevc", Profile: "Main 10", Width: 640, Height: 360, FrameRate: 24, Range: RangeHDR10},
-			{Index: 1, Kind: StreamAudio, Codec: "eac3", Language: language.English, Title: "Surround", Default: true, Channels: 6, ChannelLayout: "5.1(side)", SampleRate: 44100, BitrateKbps: 448},
-			{Index: 2, Kind: StreamAudio, Codec: "aac", Profile: "LC", Language: language.French, Title: "Commentary", Commentary: true, Channels: 1, ChannelLayout: "mono", SampleRate: 44100},
-			{Index: 3, Kind: StreamSubtitle, Codec: "subrip", Language: language.English, Forced: true, HearingImpaired: true},
+			{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Profile: "Main 10", Width: 640, Height: 360, FrameRate: 24, Range: domain.RangeHDR10},
+			{Index: 1, Kind: domain.StreamAudio, Codec: "eac3", Language: language.English, Title: "Surround", Default: true, Channels: 6, ChannelLayout: "5.1(side)", SampleRate: 44100, BitrateKbps: 448},
+			{Index: 2, Kind: domain.StreamAudio, Codec: "aac", Profile: "LC", Language: language.French, Title: "Commentary", Commentary: true, Channels: 1, ChannelLayout: "mono", SampleRate: 44100},
+			{Index: 3, Kind: domain.StreamSubtitle, Codec: "subrip", Language: language.English, Forced: true, HearingImpaired: true},
 		},
 		Chapters: []Chapter{
 			{Start: 0, End: time.Second, Title: "Opening"},
@@ -52,13 +54,13 @@ func TestProbeHDR10Matroska(t *testing.T) {
 func TestProbeRange(t *testing.T) {
 	tests := []struct {
 		fixture string
-		want    Range
+		want    domain.Range
 		dv      *DolbyVision
 	}{
-		{fixture: "sdr.json", want: RangeSDR},
-		{fixture: "hdr10.json", want: RangeHDR10},
-		{fixture: "hdr10plus.json", want: RangeHDR10Plus},
-		{fixture: "dv8.json", want: RangeDV, dv: &DolbyVision{Profile: 8, Level: 6, Compatibility: 1, BaseLayer: true, RPU: true}},
+		{fixture: "sdr.json", want: domain.RangeSDR},
+		{fixture: "hdr10.json", want: domain.RangeHDR10},
+		{fixture: "hdr10plus.json", want: domain.RangeHDR10Plus},
+		{fixture: "dv8.json", want: domain.RangeDV, dv: &DolbyVision{Profile: 8, Level: 6, Compatibility: 1, BaseLayer: true, RPU: true}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.fixture, func(t *testing.T) {
