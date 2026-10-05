@@ -1,23 +1,27 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 )
 
-func newTestAPI() *API {
-	return New(slog.New(slog.DiscardHandler), Info{ID: "0199b3c0-0000-7000-8000-000000000000", Name: "den", Version: "v0.1.0"})
+func newAPI(readiness error) *API {
+	info := Info{ID: "0199b3c0-0000-7000-8000-000000000000", Name: "den", Version: "v0.1.0"}
+	return New(slog.New(slog.DiscardHandler), info, func(context.Context) error { return readiness })
 }
 
 func TestServer(t *testing.T) {
 	rec := httptest.NewRecorder()
-	newTestAPI().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/server", nil))
+	newAPI(nil).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/server", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -74,7 +78,7 @@ func TestRefusals(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			newTestAPI().ServeHTTP(rec, httptest.NewRequest(tt.method, tt.target, nil))
+			newAPI(nil).ServeHTTP(rec, httptest.NewRequest(tt.method, tt.target, nil))
 
 			res := rec.Result()
 			if res.StatusCode != tt.want.Status {
@@ -96,6 +100,29 @@ func TestRefusals(t *testing.T) {
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("problem (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestReadyz(t *testing.T) {
+	tests := []struct {
+		name      string
+		readiness error
+		want      int
+	}{
+		{name: "dependencies reachable", want: http.StatusNoContent},
+		{name: "a dependency down", readiness: errors.New("valkey: connection refused"), want: http.StatusServiceUnavailable},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			newAPI(tt.readiness).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+			if rec.Code != tt.want {
+				t.Errorf("status = %d, want %d", rec.Code, tt.want)
+			}
+			if body := rec.Body.String(); tt.readiness != nil && strings.Contains(body, "connection refused") {
+				t.Errorf("body %q leaks the dependency's error to an unauthenticated caller", body)
 			}
 		})
 	}
