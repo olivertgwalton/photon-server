@@ -19,6 +19,7 @@ type editing interface {
 	ResetEdits(ctx context.Context, id uuid.UUID, fields []domain.Field) error
 	PinMatch(ctx context.Context, id uuid.UUID, p domain.Provider, value string) error
 	SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder) error
+	Refresh(ctx context.Context, id uuid.UUID, mode domain.RefreshMode) error
 	SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker, absent []domain.MarkerAbsent) error
 	IdentifySubject(ctx context.Context, id uuid.UUID) (store.Subject, bool, error)
 }
@@ -213,6 +214,35 @@ func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
 	err := a.svc.Editing.SetEpisodeOrder(r.Context(), id, req.Order)
 	if errors.Is(err, store.ErrNotFound) {
 		writeProblem(w, a.logger, codeNotFound, "no show has that id")
+		return
+	}
+	if a.answered(w, r, err) {
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+type refreshJSON struct {
+	Mode domain.RefreshMode `json:"mode"`
+}
+
+// refresh asks a title's providers about it again now, ahead of the schedule.
+func (a *API) refresh(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r)
+	if !ok {
+		return
+	}
+	var req refreshJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	if !slices.Contains(domain.RefreshModes(), req.Mode) {
+		writeProblem(w, a.logger, codeInvalidBody, "mode is missing or all")
+		return
+	}
+	err := a.svc.Editing.Refresh(r.Context(), id, req.Mode)
+	if errors.Is(err, store.ErrNotFound) {
+		writeProblem(w, a.logger, codeNotFound, "no film or show, or season or episode of one, has that id")
 		return
 	}
 	if a.answered(w, r, err) {
