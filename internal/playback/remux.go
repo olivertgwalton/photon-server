@@ -92,7 +92,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 			continue
 		}
 		sub := subtitle(f.Title, f.Language, f.Default, f.Forced, f.HearingImpaired)
-		sub.Sources = []hls.SubtitleSource{{Open: func() (*os.File, error) { return r.open(opening, r.parts.SubtitleFile, f.ID) }}}
+		sub.Sources = []hls.SubtitleSource{{Open: func() (*os.File, error) { return r.open(opening, r.parts.SubtitleFile, f.ID) }, Language: sub.Language}}
 		h.Subtitles = append(h.Subtitles, sub)
 	}
 	return r.hls.Open(playback, h)

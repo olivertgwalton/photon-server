@@ -31,6 +31,8 @@ type SubtitleSource struct {
 	// Stream is the file's stream to read, by its index; nil for a subtitle file.
 	Stream *int
 	Offset time.Duration
+	// Language is a subtitle file's, which says what it was written in where it is not UTF-8.
+	Language string
 }
 
 // Cue is one WebVTT cue on the copy's timeline: its timing line's settings and its text.
@@ -56,13 +58,25 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource) ([]Cue, error
 		return nil, err
 	}
 	defer f.Close()
+	a := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3"}
 	stream := "0:s:0"
 	if src.Stream != nil {
+		// A container's text is UTF-8 by its specification.
 		stream = "0:" + strconv.Itoa(*src.Stream)
+	} else {
+		charset, err := subtitleCharset(f, src.Language)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return nil, err
+		}
+		if charset != "" {
+			a = append(a, "-sub_charenc", charset)
+		}
 	}
-	cmd := exec.CommandContext(ctx, r.ffmpeg, //nolint:gosec // the configured ffmpeg; every argument is built here
-		"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3",
-		"-i", "fd:", "-map", stream, "-c:s", "webvtt", "-f", "webvtt", "-")
+	a = append(a, "-i", "fd:", "-map", stream, "-c:s", "webvtt", "-f", "webvtt", "-")
+	cmd := exec.CommandContext(ctx, r.ffmpeg, a...) //nolint:gosec // the configured ffmpeg; every argument is built here
 	cmd.ExtraFiles = []*os.File{f}
 	stderr := &tail{}
 	cmd.Stderr = stderr
