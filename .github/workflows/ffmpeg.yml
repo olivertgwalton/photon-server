@@ -21,8 +21,8 @@ jobs:
       - name: Install the build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends nasm meson ninja-build cmake autoconf \
-            automake libtool gperf pkg-config qemu-user-static libc6-arm64-cross fonts-dejavu-core
+          sudo apt-get install -y --no-install-recommends nasm autoconf automake libtool gperf \
+            pkg-config qemu-user-static libc6-arm64-cross fonts-dejavu-core
       - uses: actions/cache@v6
         with:
           path: build/ffmpeg/.work/downloads

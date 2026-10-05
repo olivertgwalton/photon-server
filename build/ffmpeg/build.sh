@@ -28,6 +28,11 @@ mkdir -p "$downloads" "$prefix" "$bin" "$work/src" "$work/done"
 
 export PKG_CONFIG_LIBDIR="$prefix/lib/pkgconfig:$prefix/share/pkgconfig"
 unset PKG_CONFIG_PATH
+# The tools pinned in mise.toml go on PATH by their own folders: a shim resolves only inside the
+# repository, and build systems run tools from temporary folders outside it.
+if command -v mise >/dev/null; then
+  eval "$(mise -C "$here" env -s bash)"
+fi
 # macOS's own gperf is too old for fontconfig; Homebrew's is keg-only.
 export PATH="$bin:/opt/homebrew/opt/gperf/bin:$PATH"
 # Zig refuses __DATE__ and __TIME__, which some libraries print in a banner; they are kept, and

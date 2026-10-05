@@ -1,2 +1,6 @@
 [tools]
 zig = "0.17.0"
+cmake = "4.4.4"
+ninja = "1.13.2"
+uv = "0.12.23"
+"pipx:meson" = "1.12.0"
