@@ -9,7 +9,7 @@ import (
 // All is every table's model, for the generator and the drift test.
 func All() []any {
 	return []any{
-		Server{}, Library{}, Folder{}, Item{}, ExternalID{}, Version{}, Part{}, PartFile{}, SubtitleFile{}, ItemField{}, LibrarySource{}, LibraryRemoteExtra{}, RemoteVideo{}, Artwork{}, WatchState{}, Favourite{}, Stream{}, Chapter{}, Marker{}, TaskState{}, Job{}, Profile{}, DeviceSession{}, Rating{}, Provider{}, Plugin{}, Collection{}, CollectionMember{}, Playlist{}, PlaylistEntry{}, Person{}, Credit{}, ProfileLibrary{}, Play{}, Conversion{}, Download{}, Activity{},
+		Server{}, Library{}, Folder{}, Item{}, ExternalID{}, Version{}, Part{}, PartFile{}, SubtitleFile{}, ItemField{}, LibrarySource{}, LibraryRemoteExtra{}, RemoteVideo{}, Artwork{}, WatchState{}, Favourite{}, Stream{}, Chapter{}, Marker{}, TaskState{}, Job{}, Profile{}, DeviceSession{}, Rating{}, Provider{}, Plugin{}, Collection{}, CollectionMember{}, Playlist{}, PlaylistEntry{}, Person{}, Credit{}, ProfileLibrary{}, Play{}, Conversion{}, Download{}, Activity{}, Webhook{}, WebhookEvent{}, WebhookDelivery{},
 	}
 }
 
