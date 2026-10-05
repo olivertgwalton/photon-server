@@ -3,6 +3,7 @@
 package store
 
 import (
+	"errors"
 	"testing"
 	"time"
 	"uuid"
@@ -91,5 +92,87 @@ func TestOnlyPicturesStillInUseAreLive(t *testing.T) {
 	live, err := s.LivePictures(ctx, []uuid.UUID{uuid.UUID(poster.ID), uuid.UUID(*person.PhotoID), gone})
 	if err != nil || !live[uuid.UUID(poster.ID)] || !live[uuid.UUID(*person.PhotoID)] || live[gone] {
 		t.Errorf("live = %v, %v; want the poster and the photo, not the replaced one", live, err)
+	}
+}
+
+func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	film := Film{
+		Title: "heat", Folder: "Heat", Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, Path: "Heat/poster.jpg"}},
+		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}},
+	}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	item, err := s.q.Item.WithContext(ctx).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid.UUID(item.ID)
+	match := func(posters ...string) {
+		t.Helper()
+		var m domain.Metadata
+		for _, p := range posters {
+			m.Artwork = append(m.Artwork, domain.Artwork{Kind: domain.ArtworkPoster, URL: p, Language: "en", Width: 2000, Height: 3000})
+		}
+		if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, m, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	best := func() (string, int) {
+		t.Helper()
+		page, err := s.Title(ctx, uuid.UUID{}, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		posters := page.Artwork[domain.ArtworkPoster]
+		pic, err := s.Picture(ctx, posters[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		return pic.URL + pic.Path, len(posters)
+	}
+	match("a.jpg", "b.jpg")
+	offered, err := s.ArtworkCandidates(ctx, id, domain.ArtworkPoster)
+	if err != nil || len(offered) != 2 || offered[0].Source != domain.SourceTMDB || offered[0].Width != 2000 || offered[0].Chosen {
+		t.Fatalf("candidates = %+v, %v; want TMDB's two, the file beside the film left out", offered, err)
+	}
+	if err := s.ChooseArtwork(ctx, id, domain.ArtworkPoster, offered[1].ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, n := best(); got != "b.jpg" || n != 3 {
+		t.Errorf("chosen: best poster %q of %d; want b.jpg over the file, listed once", got, n)
+	}
+	if offered, _ := s.ArtworkCandidates(ctx, id, domain.ArtworkPoster); !offered[1].Chosen || offered[0].Chosen {
+		t.Errorf("candidates = %+v; want b.jpg marked chosen", offered)
+	}
+
+	match("c.jpg")
+	if got, _ := best(); got != "b.jpg" {
+		t.Errorf("after a match that no longer offers it, best poster %q; want the choice to stand", got)
+	}
+	file, _ := s.q.Artwork.WithContext(ctx).Where(s.q.Artwork.Source.Eq(string(domain.SourceFile))).Take()
+	offered, _ = s.ArtworkCandidates(ctx, id, domain.ArtworkPoster)
+	for _, pick := range []uuid.UUID{uuid.UUID(file.ID), uuid.NewV7()} {
+		if err := s.ChooseArtwork(ctx, id, domain.ArtworkPoster, pick); !errors.Is(err, ErrNotACandidate) {
+			t.Errorf("choosing %v: %v; want ErrNotACandidate", pick, err)
+		}
+	}
+	if err := s.ChooseArtwork(ctx, id, domain.ArtworkBackdrop, offered[0].ID); !errors.Is(err, ErrNotACandidate) {
+		t.Errorf("choosing a poster as the backdrop: %v; want ErrNotACandidate", err)
+	}
+	if err := s.ForgetArtworkChoice(ctx, id, domain.ArtworkPoster); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := best(); got != "Heat/poster.jpg" {
+		t.Errorf("choice forgotten: best poster %q; want the file beside the film again", got)
+	}
+	if _, err := s.ArtworkCandidates(ctx, uuid.NewV7(), domain.ArtworkPoster); !errors.Is(err, ErrNotFound) {
+		t.Errorf("candidates of no title: %v, want ErrNotFound", err)
 	}
 }
