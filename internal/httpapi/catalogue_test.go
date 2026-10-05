@@ -45,7 +45,7 @@ func (fakeCatalogue) Letters(_ context.Context, lib, _ uuid.UUID, f store.WallFi
 	return []store.Letter{{Letter: "#", Count: 2}, {Letter: "A", Count: 7}}, nil
 }
 
-func (fakeCatalogue) Facets(_ context.Context, lib uuid.UUID) (store.Facets, error) {
+func (fakeCatalogue) Facets(_ context.Context, lib, _ uuid.UUID) (store.Facets, error) {
 	if lib != films {
 		return store.Facets{}, store.ErrNotFound
 	}

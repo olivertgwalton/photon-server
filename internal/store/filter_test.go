@@ -138,7 +138,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		}
 	}
 
-	facets, err := s.Facets(ctx, lib.ID)
+	facets, err := s.Facets(ctx, lib.ID, uuid.UUID{})
 	if err != nil {
 		t.Fatal(err)
 	}

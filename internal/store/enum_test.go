@@ -50,6 +50,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"collection_origin":  names(domain.CollectionOrigins()),
 		"credit_source":      names(domain.CreditSources()),
 		"credit_kind":        names(domain.CreditKinds()),
+		"profile_unrated":    names(domain.UnratedPolicies()),
 	} {
 		var def string
 		err := s.pool.QueryRow(t.Context(),

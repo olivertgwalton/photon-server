@@ -31,7 +31,7 @@ var (
 // fakePlaying holds films in two parts under root: H.264 in Matroska, with stereo AAC.
 type fakePlaying struct{ root string }
 
-func (fakePlaying) Playable(_ context.Context, item, _ uuid.UUID) (store.PlayCopy, error) {
+func (fakePlaying) Playable(_ context.Context, _, item, _ uuid.UUID) (store.PlayCopy, error) {
 	if item != films {
 		return store.PlayCopy{}, store.ErrNotFound
 	}

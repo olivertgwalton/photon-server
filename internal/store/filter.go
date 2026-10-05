@@ -126,18 +126,19 @@ type Facets struct {
 	RatingSites  []domain.RatingSite
 }
 
-// Facets answers the values a library's films and shows have; ErrNotFound for no such library.
-func (s *Store) Facets(ctx context.Context, lib uuid.UUID) (Facets, error) {
+// Facets answers the values a library's films and shows a profile may see have; ErrNotFound for no
+// such library.
+func (s *Store) Facets(ctx context.Context, lib, profile uuid.UUID) (Facets, error) {
 	var f Facets
-	if _, err := s.wallQuery(ctx, lib, uuid.UUID{}, WallFilter{}); err != nil {
+	if _, err := s.wallQuery(ctx, lib, profile, WallFilter{}); err != nil {
 		return f, err
 	}
 	db := s.q.Item.WithContext(ctx).UnderlyingDB()
-	titles := `SELECT * FROM items WHERE library_id = @lib AND kind IN ('movie', 'show')`
+	titles := `SELECT * FROM items WHERE library_id = @lib AND kind IN ('movie', 'show') AND visible(id, @profile)`
 	// Copies on disk of the library's films and episodes.
 	copies := `SELECT v.* FROM versions v JOIN items e ON e.id = v.item_id
-		WHERE e.library_id = @lib AND v.missing_since IS NULL`
-	at := sql.Named("lib", lib.String())
+		WHERE e.library_id = @lib AND v.missing_since IS NULL AND visible(e.id, @profile)`
+	at := map[string]any{"lib": lib.String(), "profile": profile.String()}
 	for _, q := range []struct {
 		sql  string
 		into any
@@ -147,7 +148,7 @@ func (s *Store) Facets(ctx context.Context, lib uuid.UUID) (Facets, error) {
 		{`SELECT DISTINCT certificate FROM (` + titles + `) t WHERE certificate IS NOT NULL ORDER BY certificate`, &f.Certificates},
 		{`SELECT DISTINCT st FROM (` + titles + `) t, jsonb_array_elements_text(t.studios) st ORDER BY st`, &f.Studios},
 		{`SELECT DISTINCT video_range FROM (` + copies + `) c WHERE video_range IS NOT NULL`, &f.Ranges},
-		{`SELECT DISTINCT r.site FROM ratings r JOIN items t ON t.id = r.item_id WHERE t.library_id = @lib`, &f.RatingSites},
+		{`SELECT DISTINCT r.site FROM ratings r JOIN items t ON t.id = r.item_id WHERE t.library_id = @lib AND visible(t.id, @profile)`, &f.RatingSites},
 	} {
 		if err := db.Raw(q.sql, at).Scan(q.into).Error; err != nil {
 			return Facets{}, err

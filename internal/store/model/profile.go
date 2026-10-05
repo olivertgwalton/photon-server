@@ -13,6 +13,13 @@ type Profile struct {
 	PasswordHash *string
 	PinHash      *string
 	CreatedAt    time.Time `gorm:"default:now()"`
+	MaxAge       *int16
+	Unrated      domain.Unrated `gorm:"default:allow"`
+}
+
+type ProfileLibrary struct {
+	ProfileID UUID `gorm:"type:uuid;primaryKey"`
+	LibraryID UUID `gorm:"type:uuid;primaryKey"`
 }
 
 type DeviceSession struct {

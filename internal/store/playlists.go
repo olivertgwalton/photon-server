@@ -8,6 +8,7 @@ import (
 	"time"
 	"uuid"
 
+	"gorm.io/gen/field"
 	"gorm.io/gorm"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -62,7 +63,9 @@ func (s *Store) PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID
 		return nil, 0, err
 	}
 	e := s.q.PlaylistEntry
-	q := e.WithContext(ctx).Where(e.PlaylistID.Eq(model.UUID(playlist)))
+	// An entry the profile may no longer see, as a library taken from it, is passed over.
+	q := e.WithContext(ctx).Where(e.PlaylistID.Eq(model.UUID(playlist))).
+		Where(field.NewUnsafeFieldRaw("visible(item_id, ?)", profile.String()))
 	total, err := q.Count()
 	if err != nil {
 		return nil, 0, err

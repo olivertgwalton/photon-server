@@ -198,6 +198,8 @@ func (a *API) routes() []route {
 		{pattern: "POST /api/v1/admin/profiles", access: admin, handle: a.addProfile},
 		{pattern: "PATCH /api/v1/admin/profiles/{id}", access: admin, handle: a.setProfile},
 		{pattern: "DELETE /api/v1/admin/profiles/{id}", access: admin, handle: a.removeProfile},
+		{pattern: "GET /api/v1/admin/profiles/{id}/access", access: admin, handle: a.profileAccess},
+		{pattern: "PUT /api/v1/admin/profiles/{id}/access", access: admin, handle: a.setProfileAccess},
 		{pattern: "GET /api/v1/admin/providers", access: admin, handle: a.adminProviders},
 		{pattern: "PATCH /api/v1/admin/providers/{id}", access: admin, handle: a.setProvider},
 		{pattern: "GET /api/v1/admin/tasks", access: admin, handle: a.adminTasks},

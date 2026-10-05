@@ -8,6 +8,7 @@ import (
 	"time"
 	"uuid"
 
+	"gorm.io/gen/field"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -328,4 +329,65 @@ func otherAdmin(ctx context.Context, tx *query.Query, id model.UUID) error {
 		}
 	}
 	return ErrLastAdmin
+}
+
+// ProfileAccess is what a profile may see: titles rated for MaxAge and younger (nil for any), unrated
+// ones as Unrated says where there is an age, and only Libraries (none for every library).
+type ProfileAccess struct {
+	MaxAge    *int
+	Unrated   domain.Unrated
+	Libraries []uuid.UUID
+}
+
+// Access answers what a profile may see.
+func (s *Store) Access(ctx context.Context, id uuid.UUID) (ProfileAccess, error) {
+	p, pl := s.q.Profile, s.q.ProfileLibrary
+	row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ProfileAccess{}, ErrNotFound
+	}
+	if err != nil {
+		return ProfileAccess{}, err
+	}
+	out := ProfileAccess{Unrated: row.Unrated, Libraries: []uuid.UUID{}}
+	if row.MaxAge != nil {
+		age := int(*row.MaxAge)
+		out.MaxAge = &age
+	}
+	libs, err := pl.WithContext(ctx).Where(pl.ProfileID.Eq(row.ID)).Find()
+	for _, l := range libs {
+		out.Libraries = append(out.Libraries, uuid.UUID(l.LibraryID))
+	}
+	return out, err
+}
+
+// SetAccess replaces what a profile may see. ErrNotFound for no profile, or a library there is not.
+func (s *Store) SetAccess(ctx context.Context, id uuid.UUID, a ProfileAccess) error {
+	return s.q.Transaction(func(tx *query.Query) error {
+		p, pl := tx.Profile, tx.ProfileLibrary
+		set := []field.AssignExpr{p.Unrated.Value(string(cmp.Or(a.Unrated, domain.UnratedAllow))), p.MaxAge.Null()}
+		if a.MaxAge != nil {
+			set[1] = p.MaxAge.Value(int16(*a.MaxAge))
+		}
+		res, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).UpdateSimple(set...)
+		if err == nil && res.RowsAffected == 0 {
+			err = ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := pl.WithContext(ctx).Where(pl.ProfileID.Eq(model.UUID(id))).Delete(); err != nil {
+			return err
+		}
+		for _, lib := range a.Libraries {
+			err := pl.WithContext(ctx).Create(&model.ProfileLibrary{ProfileID: model.UUID(id), LibraryID: model.UUID(lib)})
+			if errors.Is(err, gorm.ErrForeignKeyViolated) {
+				return ErrNotFound
+			}
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

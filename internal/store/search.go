@@ -36,6 +36,7 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, error) {
 		SELECT * FROM items
 		WHERE kind IN (@movie, @show, @collection) AND search @@ to_tsquery('simple', search_text(@query))
 			AND (CAST(@library AS uuid) IS NULL OR library_id = CAST(@library AS uuid))
+			AND visible(id, CAST(@profile AS uuid))
 		ORDER BY search_text(title) = search_text(@text) DESC,
 			starts_with(search_text(title), search_text(@text)) DESC,
 			ts_rank_cd(search, to_tsquery('simple', search_text(@query))) DESC, sort_title, id
@@ -47,7 +48,7 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, error) {
 	var rows []*model.Item
 	err := s.q.Item.WithContext(ctx).UnderlyingDB().Raw(sql, map[string]any{
 		"movie": domain.ItemMovie, "show": domain.ItemShow, "collection": domain.ItemCollection, "query": strings.Join(words, " & "),
-		"text": q.Text, "library": library, "limit": q.Limit,
+		"text": q.Text, "library": library, "limit": q.Limit, "profile": q.Profile.String(),
 	}).Find(&rows).Error
 	if err != nil {
 		return nil, err

@@ -174,6 +174,9 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	if err != nil {
 		return TitlePage{}, err
 	}
+	if ok, err := s.visible(ctx, profile, id); err != nil || !ok {
+		return TitlePage{}, cmp.Or(err, ErrNotFound)
+	}
 	p := TitlePage{
 		ID: id, Kind: item.Kind, Title: item.Title, OriginalTitle: deref(item.OriginalTitle),
 		Overview: deref(item.Overview), Tagline: deref(item.Tagline), Certificate: deref(item.Certificate),
@@ -226,6 +229,14 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	states, err := s.states(ctx, profile, []*model.Item{item})
 	p.State = states[item.ID]
 	return p, err
+}
+
+// visible reports whether a profile may see a title: a library it has, and a certificate within its
+// age; a title it may not is not there to it.
+func (s *Store) visible(ctx context.Context, profile, id uuid.UUID) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `SELECT coalesce(visible($1, $2), false)`, id.String(), profile.String()).Scan(&ok)
+	return ok, err
 }
 
 func (s *Store) externalIDs(ctx context.Context, item model.UUID) (map[domain.Provider]string, error) {
