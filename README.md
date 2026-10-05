@@ -16,6 +16,14 @@ TEST_DATABASE_URL=postgres://localhost/postgres TEST_VALKEY_URL=valkey://localho
 ```
 
 The server listens on `:8640` (`PHOTON_LISTEN`) and names itself after the host (`PHOTON_NAME`).
+Behind a reverse proxy, list the proxy's addresses in `PHOTON_TRUSTED_PROXIES` (for example
+`172.16.0.0/12,127.0.0.1`); `X-Forwarded-For` is ignored from anyone else.
+
+The first admin is made on the command line, before anyone can sign in:
+
+```sh
+go run ./cmd/photon-server profile add -name Oliver -role admin
+```
 `GET /readyz` answers 204 while Postgres and Valkey are reachable and 503 otherwise.
 Integration tests create and drop a database per test on the server `TEST_DATABASE_URL` names.
 
