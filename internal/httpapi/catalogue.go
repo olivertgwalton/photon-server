@@ -55,6 +55,8 @@ type cardJSON struct {
 	EpisodeNumber *int            `json:"episode_number,omitzero"`
 	EpisodeEnd    *int            `json:"episode_end,omitzero"`
 	Thumb         uuid.UUID       `json:"thumb,omitzero"`
+	// Origin is who made a collection: only an admin's is changed through the admin routes.
+	Origin domain.CollectionOrigin `json:"origin,omitzero"`
 }
 
 func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
@@ -146,6 +148,7 @@ func cardsJSON(cards []store.Card) []cardJSON {
 			ID: c.ID, Kind: c.Kind, Title: c.Title, Year: c.Year, ReleaseDate: domain.Date(c.ReleaseDate), AddedAt: c.AddedAt,
 			Poster: c.Poster, Backdrop: c.Backdrop, State: c.State, DurationMS: c.DurationMS, Show: c.Show,
 			SeasonNumber: c.SeasonNumber, EpisodeNumber: c.EpisodeNumber, EpisodeEnd: c.EpisodeEnd, Thumb: c.Thumb,
+			Origin: c.Origin,
 		}
 	}
 	return out

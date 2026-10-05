@@ -137,6 +137,26 @@ func (s *Store) Members(ctx context.Context, profile, collection uuid.UUID) ([]C
 	return s.cards(ctx, profile, rows)
 }
 
+// origins answers who made each collection among rows.
+func (s *Store) origins(ctx context.Context, rows []*model.Item) (map[model.UUID]domain.CollectionOrigin, error) {
+	out := map[model.UUID]domain.CollectionOrigin{}
+	var in []driver.Valuer
+	for _, r := range rows {
+		if r.Kind == domain.ItemCollection {
+			in = append(in, r.ID)
+		}
+	}
+	if len(in) == 0 {
+		return out, nil
+	}
+	c := s.q.Collection
+	found, err := c.WithContext(ctx).Where(c.ItemID.In(in...)).Find()
+	for _, f := range found {
+		out[f.ItemID] = f.Origin
+	}
+	return out, err
+}
+
 // collectionsOf answers the shown collections a title is in, by title.
 func (s *Store) collectionsOf(ctx context.Context, item model.UUID) ([]TitleRef, error) {
 	var out []TitleRef

@@ -56,6 +56,11 @@ Tomatoes' critics and audience, Metacritic's, Letterboxd's and Trakt's once an a
 key (`PATCH /api/v1/admin/providers/mdblist` with `{"settings": {"api_key": "…"}}`) and a library
 takes it (`-sources nfo,tmdb,mdblist`). Ratings are scored out of 100.
 
+Collections are TMDB's box sets, shown once a library holds two of a set's titles, and an admin's
+own (`POST /api/v1/admin/collections`). Each says which in its `origin` (`tmdb` or `user`). Only an
+admin's has its titles set or is removed by hand; a TMDB set's titles follow TMDB, and it goes when
+none are left. Either one's name and overview can be edited as any title's, and the edit stands.
+
 Anyone can add a metadata provider, in any language, as a web service speaking the server's plugin
 protocol ([docs/plugins.md](docs/plugins.md)). Register one by its address
 (`POST /api/v1/admin/plugins` with `{"url": "http://films-plugin:9000"}`) and it is the provider

@@ -57,8 +57,27 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if err != nil || !slices.Equal(page.Collections, []TitleRef{{ID: set, Title: "Alien Collection"}}) {
 		t.Errorf("Alien is in %v, %v", page.Collections, err)
 	}
+	if shown[0].Origin != domain.CollectionTMDB {
+		t.Errorf("the set's card says it was made by %q, want tmdb", shown[0].Origin)
+	}
+	if page, err := s.Title(ctx, uuid.UUID{}, set); err != nil || page.Origin != domain.CollectionTMDB {
+		t.Errorf("the set's page says it was made by %q, %v; want tmdb", page.Origin, err)
+	}
 	if err := s.SetMembers(ctx, set, nil); !errors.Is(err, ErrNotUserCollection) {
 		t.Errorf("changing TMDB's set by hand: %v, want ErrNotUserCollection", err)
+	}
+	if err := s.RemoveCollection(ctx, set); !errors.Is(err, ErrNotUserCollection) {
+		t.Errorf("removing TMDB's set by hand: %v, want ErrNotUserCollection", err)
+	}
+	// Its name and words are an admin's to edit, as any title's, and outlast TMDB saying them again.
+	if err := s.EditMetadata(ctx, set, domain.Metadata{Title: "Alien Anthology"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveIdentity(ctx, ids["Alien"], domain.SourceTMDB, domain.Metadata{Title: "Alien", Collections: []domain.Grouping{{ID: "8091", Title: "Alien Collection"}}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if page, err := s.Title(ctx, uuid.UUID{}, set); err != nil || page.Title != "Alien Anthology" {
+		t.Errorf("the renamed set is called %q, %v; want the admin's name", page.Title, err)
 	}
 
 	// Aliens is no longer said to be in it: one is no set, and none is gone at the next scan.
@@ -91,6 +110,9 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	}
 	if err := s.SetMembers(ctx, mine, []uuid.UUID{uuid.NewV7()}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("a title of no library: %v, want ErrNotFound", err)
+	}
+	if shown, _, err := s.Collections(ctx, lib.ID, uuid.UUID{}, 0, 10); err != nil || len(shown) != 1 || shown[0].Origin != domain.CollectionUser {
+		t.Errorf("collections = %+v, %v; want the admin's own, saying so", shown, err)
 	}
 	members, err = s.Members(ctx, uuid.UUID{}, mine)
 	if err != nil || len(members) != 2 || members[0].Title != "Heat" {
