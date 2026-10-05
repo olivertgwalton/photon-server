@@ -408,6 +408,11 @@ func (a *API) routes() []route {
 			body:    positionJSON{}, status: http.StatusOK, reply: reachedJSON{}, handle: a.progress,
 		},
 		{
+			pattern: "DELETE /api/v1/titles/{id}/progress", access: signedIn,
+			summary: "Remove a title, or a show's or season's episodes, from Continue Watching, keeping what was watched",
+			status:  http.StatusNoContent, handle: a.mark(watching.ClearProgress),
+		},
+		{
 			pattern: "PUT /api/v1/titles/{id}/watched", access: signedIn, summary: "Mark a title watched",
 			status: http.StatusNoContent, handle: a.mark(watching.MarkWatched),
 		},

@@ -7,6 +7,7 @@ import (
 	"time"
 	"uuid"
 
+	"gorm.io/gen/field"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -82,13 +83,23 @@ func (s *Store) watched(ctx context.Context, profile uuid.UUID, items []*model.I
 // MarkUnwatched forgets that a film or episode, or every episode of a season or show, was
 // watched, and where it stopped.
 func (s *Store) MarkUnwatched(ctx context.Context, profile, item uuid.UUID) error {
+	w := s.q.WatchState
+	return s.setLeaves(ctx, profile, item, w.WatchedAt.Null(), w.PositionMS.Value(0))
+}
+
+// ClearProgress forgets where a film or episode, or each episode of a season or show, stopped,
+// taking it out of Continue Watching; whether it was watched, and its plays, stay.
+func (s *Store) ClearProgress(ctx context.Context, profile, item uuid.UUID) error {
+	return s.setLeaves(ctx, profile, item, s.q.WatchState.PositionMS.Value(0))
+}
+
+func (s *Store) setLeaves(ctx context.Context, profile, item uuid.UUID, set ...field.AssignExpr) error {
 	leaves, err := s.leaves(ctx, item)
 	if err != nil || len(leaves) == 0 {
 		return err
 	}
 	w := s.q.WatchState
-	_, err = w.WithContext(ctx).Where(w.ProfileID.Eq(model.UUID(profile)), w.ItemID.In(ids(leaves)...)).
-		UpdateSimple(w.WatchedAt.Null(), w.PositionMS.Value(0))
+	_, err = w.WithContext(ctx).Where(w.ProfileID.Eq(model.UUID(profile)), w.ItemID.In(ids(leaves)...)).UpdateSimple(set...)
 	return err
 }
 
