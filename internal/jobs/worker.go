@@ -15,8 +15,9 @@ import (
 
 const (
 	poll = 2 * time.Second
-	// lease is longer than any job runs; a job outliving it may be claimed again, so every job
-	// writes its result idempotently.
+	// lease is how long a worker may be silent before its job is taken to be lost and is claimed
+	// again, so every job writes its result idempotently. A running job's lease is renewed every
+	// third of it, so a long one, as a conversion is, keeps it.
 	lease = 10 * time.Minute
 )
 
@@ -26,6 +27,7 @@ type queue interface {
 	ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]store.Job, error)
 	CompleteJob(ctx context.Context, id int64) error
 	FailJob(ctx context.Context, job store.Job, err error) error
+	ExtendLease(ctx context.Context, id int64, lease time.Duration) error
 }
 
 // Worker runs queued jobs of the kinds it has handlers for, at most slots at a time.
@@ -74,7 +76,10 @@ func (w *Worker) Run(ctx context.Context) {
 
 func (w *Worker) run(ctx context.Context, job store.Job) {
 	log := w.log.With(slog.String("job", string(job.Kind)), slog.String("subject", job.Subject.String()))
+	done := make(chan struct{})
+	go w.renew(ctx, log, job.ID, done)
 	err := w.handlers[job.Kind](ctx, job.Subject)
+	close(done)
 	// A job cut short by shutdown is left to the lease sweep rather than counted as a failure.
 	if ctx.Err() != nil {
 		return
@@ -87,5 +92,23 @@ func (w *Worker) run(ctx context.Context, job store.Job) {
 	}
 	if err != nil {
 		log.WarnContext(ctx, "job outcome not recorded", slog.Any("err", err))
+	}
+}
+
+// renew keeps a job's lease until done is closed.
+func (w *Worker) renew(ctx context.Context, log *slog.Logger, id int64, done <-chan struct{}) {
+	t := time.NewTicker(lease / 3)
+	defer t.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if err := w.queue.ExtendLease(ctx, id, lease); err != nil && ctx.Err() == nil {
+				log.WarnContext(ctx, "job lease not renewed", slog.Any("err", err))
+			}
+		}
 	}
 }

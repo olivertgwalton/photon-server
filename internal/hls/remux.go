@@ -450,6 +450,20 @@ func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domai
 		a = append(a, hw.inputArgs(video.Codec)...)
 	}
 	a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts", "-i", "fd:")
+	a = append(a, streamArgs(hw, video, audio)...)
+	// Dolby Vision's configuration, TrueHD and DTS are experimental in FFmpeg's MP4 muxer.
+	return append(a,
+		"-strict", "experimental",
+		"-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+default_base_moof+delay_moov+frag_discont+skip_trailer",
+		"-use_editlist", "0", "-avoid_negative_ts", "disabled",
+		"-output_ts_offset", strconv.FormatFloat(clockOffset.Seconds(), 'f', 0, 64),
+		"-fflags", "+bitexact", "-",
+	)
+}
+
+// streamArgs maps the input's video and audio, each copied or encoded as planned, video on hw.
+func streamArgs(hw Hardware, video domain.VideoPlan, audio *domain.AudioPlan) []string {
+	var a []string
 	in := "0:" + strconv.Itoa(video.Stream)
 	switch e := video.Encode; {
 	case e != nil && e.Burn != nil:
@@ -482,14 +496,7 @@ func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domai
 			a = append(a, "-c:a", "copy")
 		}
 	}
-	// Dolby Vision's configuration, TrueHD and DTS are experimental in FFmpeg's MP4 muxer.
-	return append(a,
-		"-strict", "experimental",
-		"-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+default_base_moof+delay_moov+frag_discont+skip_trailer",
-		"-use_editlist", "0", "-avoid_negative_ts", "disabled",
-		"-output_ts_offset", strconv.FormatFloat(clockOffset.Seconds(), 'f', 0, 64),
-		"-fflags", "+bitexact", "-",
-	)
+	return a
 }
 
 // cut reads ffmpeg's output and keeps the plan's segments of the run's part from run.at onwards.

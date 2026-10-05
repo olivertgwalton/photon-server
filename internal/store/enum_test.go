@@ -56,6 +56,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"episode_order":      names(domain.EpisodeOrders()),
 		"marker_kind":        names(domain.MarkerKinds()),
 		"marker_source":      names(domain.MarkerSources()),
+		"download_state":     names(domain.DownloadStates()),
 	} {
 		var def string
 		err := s.pool.QueryRow(t.Context(),

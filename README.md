@@ -92,6 +92,15 @@ chapter pictures, and `-previews off` none. Each night at two the server queues 
 as its library asks, takes away what a library no longer wants, and clears previews of files that
 have gone.
 
+A client downloads a title for offline viewing at a most video bitrate, and width if it says, as
+Plex's Downloads do. A copy already within both is downloaded as it is; any other is converted in
+the background, on the same device as playback, into one MP4 of H.264 and AAC (HDR tone mapped to
+SDR) under `PHOTON_CACHE_DIR`'s `downloads` folder, where the client fetches it, resuming as it
+likes. Each node converts one title at a time, so playback is not starved, and a title asked for at
+the same quality by several profiles is converted once. A converted file is deleted when the last
+download needing it is removed, and downloads are forgotten a week after they are ready if no one
+removes them; size the cache folder for the conversions waiting to be fetched.
+
 Run several nodes against one Postgres and Valkey behind a load balancer and each says where its
 peers reach it in `PHOTON_NODE_ADDRESS` (`http://10.0.0.5:8640`): a request for a stream's segments
 that lands on another node is handed to the node making them.

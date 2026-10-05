@@ -351,15 +351,20 @@ func (a *API) routeToOwner(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		proxy := &httputil.ReverseProxy{
-			Rewrite: func(pr *httputil.ProxyRequest) {
-				pr.SetURL(target)
-				pr.SetXForwarded()
-			},
-			ErrorLog: slog.NewLogLogger(a.logger.Handler(), slog.LevelWarn),
-		}
-		proxy.ServeHTTP(w, r)
+		a.proxy(w, r, target)
 	})
+}
+
+// proxy hands a request to another node of the cluster.
+func (a *API) proxy(w http.ResponseWriter, r *http.Request, target *url.URL) {
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(target)
+			pr.SetXForwarded()
+		},
+		ErrorLog: slog.NewLogLogger(a.logger.Handler(), slog.LevelWarn),
+	}
+	proxy.ServeHTTP(w, r)
 }
 
 // requireSignedPath admits a request whose path carries a signature of its HLS playback, as
