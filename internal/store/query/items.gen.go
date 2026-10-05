@@ -42,6 +42,14 @@ func newItem(db *gorm.DB, opts ...gen.DOOption) item {
 	_item.EpisodeEnd = field.NewInt(tableName, "episode_end")
 	_item.AirDate = field.NewTime(tableName, "air_date")
 	_item.ExtraKind = field.NewString(tableName, "extra_kind")
+	_item.ScanTitle = field.NewString(tableName, "scan_title")
+	_item.OriginalTitle = field.NewString(tableName, "original_title")
+	_item.Overview = field.NewString(tableName, "overview")
+	_item.Tagline = field.NewString(tableName, "tagline")
+	_item.Certificate = field.NewString(tableName, "certificate")
+	_item.ReleaseDate = field.NewTime(tableName, "release_date")
+	_item.Genres = field.NewField(tableName, "genres")
+	_item.Studios = field.NewField(tableName, "studios")
 
 	_item.fillFieldMap()
 
@@ -66,6 +74,14 @@ type item struct {
 	EpisodeEnd    field.Int
 	AirDate       field.Time
 	ExtraKind     field.String
+	ScanTitle     field.String
+	OriginalTitle field.String
+	Overview      field.String
+	Tagline       field.String
+	Certificate   field.String
+	ReleaseDate   field.Time
+	Genres        field.Field
+	Studios       field.Field
 
 	fieldMap map[string]field.Expr
 }
@@ -96,6 +112,14 @@ func (i *item) updateTableName(table string) *item {
 	i.EpisodeEnd = field.NewInt(table, "episode_end")
 	i.AirDate = field.NewTime(table, "air_date")
 	i.ExtraKind = field.NewString(table, "extra_kind")
+	i.ScanTitle = field.NewString(table, "scan_title")
+	i.OriginalTitle = field.NewString(table, "original_title")
+	i.Overview = field.NewString(table, "overview")
+	i.Tagline = field.NewString(table, "tagline")
+	i.Certificate = field.NewString(table, "certificate")
+	i.ReleaseDate = field.NewTime(table, "release_date")
+	i.Genres = field.NewField(table, "genres")
+	i.Studios = field.NewField(table, "studios")
 
 	i.fillFieldMap()
 
@@ -120,7 +144,7 @@ func (i *item) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (i *item) fillFieldMap() {
-	i.fieldMap = make(map[string]field.Expr, 14)
+	i.fieldMap = make(map[string]field.Expr, 22)
 	i.fieldMap["id"] = i.ID
 	i.fieldMap["library_id"] = i.LibraryID
 	i.fieldMap["kind"] = i.Kind
@@ -135,6 +159,14 @@ func (i *item) fillFieldMap() {
 	i.fieldMap["episode_end"] = i.EpisodeEnd
 	i.fieldMap["air_date"] = i.AirDate
 	i.fieldMap["extra_kind"] = i.ExtraKind
+	i.fieldMap["scan_title"] = i.ScanTitle
+	i.fieldMap["original_title"] = i.OriginalTitle
+	i.fieldMap["overview"] = i.Overview
+	i.fieldMap["tagline"] = i.Tagline
+	i.fieldMap["certificate"] = i.Certificate
+	i.fieldMap["release_date"] = i.ReleaseDate
+	i.fieldMap["genres"] = i.Genres
+	i.fieldMap["studios"] = i.Studios
 }
 
 func (i item) clone(db *gorm.DB) item {

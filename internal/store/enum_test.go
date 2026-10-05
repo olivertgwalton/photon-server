@@ -35,6 +35,8 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"job_state":          names(domain.JobStates()),
 		"profile_role":       names(domain.Roles()),
 		"extra_kind":         names(domain.ExtraKinds()),
+		"field":              names(domain.Fields()),
+		"field_source":       names(domain.FieldSources()),
 		"task_key":           names(domain.TaskKeys()),
 		"task_result":        names(domain.TaskResults()),
 	} {
