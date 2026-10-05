@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"math"
 	"slices"
 	"uuid"
 
@@ -58,7 +59,8 @@ func (s *Store) ratings(ctx context.Context, item model.UUID) ([]domain.Rating, 
 	}
 	out := make([]domain.Rating, 0, len(best))
 	for _, row := range best {
-		out = append(out, domain.Rating{Site: row.Site, Score: float64(row.Score), Votes: deref(row.Votes)})
+		// Kept as a real; a tenth of a point is as fine as any site scores.
+		out = append(out, domain.Rating{Site: row.Site, Score: math.Round(float64(row.Score)*10) / 10, Votes: deref(row.Votes)})
 	}
 	order := domain.RatingSites()
 	slices.SortFunc(out, func(a, b domain.Rating) int {

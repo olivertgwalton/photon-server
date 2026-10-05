@@ -59,6 +59,12 @@ type Rater interface {
 	Ratings(ctx context.Context, kind domain.ItemKind, ids map[domain.Provider]string) ([]domain.Rating, error)
 }
 
+// PersonDescriber says what a provider knows of someone it credits, found by their ids.
+type PersonDescriber interface {
+	Provider
+	DescribePerson(ctx context.Context, ids map[domain.Provider]string) (domain.Person, error)
+}
+
 // Settings answers a provider's settings as an admin set them.
 type Settings func(ctx context.Context) (map[string]string, error)
 
@@ -83,4 +89,22 @@ func (r *Registry) Get(id domain.FieldSource) (Provider, bool) {
 		}
 	}
 	return nil, false
+}
+
+// DescribePerson asks each provider that describes people, in order, what it knows of someone;
+// false where none knows them.
+func (r *Registry) DescribePerson(ctx context.Context, ids map[domain.Provider]string) (domain.Person, bool, error) {
+	var errs []error
+	for _, p := range r.all {
+		d, ok := p.(PersonDescriber)
+		if !ok {
+			continue
+		}
+		person, err := d.DescribePerson(ctx, ids)
+		if err == nil {
+			return person, true, nil
+		}
+		errs = append(errs, err)
+	}
+	return domain.Person{}, false, errors.Join(errs...)
 }

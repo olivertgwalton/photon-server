@@ -227,7 +227,7 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 
 // wallFilterParameters are what a wall, and its letters, are narrowed by: each list repeated or
 // comma-separated, any of its values.
-var wallFilterParameters = []string{"starts_with", "mark", "genre", "year", "certificate", "studio", "resolution", "range", "rating_site", "min_rating"}
+var wallFilterParameters = []string{"starts_with", "mark", "genre", "year", "certificate", "studio", "resolution", "range", "rating_site", "min_rating", "person"}
 
 func wallFilter(q url.Values) (store.WallFilter, error) {
 	var f store.WallFilter
@@ -257,6 +257,9 @@ func wallFilter(q url.Values) (store.WallFilter, error) {
 		return f, errors.New("year is a year")
 	}
 	f.Genres, f.Certificates, f.Studios = list("genre"), list("certificate"), list("studio")
+	if f.People, err = parseAll(list("person"), uuid.Parse); err != nil {
+		return f, errors.New("person is a person's id")
+	}
 	if s := q.Get("rating_site"); s != "" {
 		if f.RatingSite, err = domain.ParseRatingSite(s); err != nil {
 			return f, err

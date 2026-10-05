@@ -242,3 +242,27 @@ type PlaylistEntry struct {
 	ItemID     UUID `gorm:"type:uuid"`
 	Position   int
 }
+
+type Person struct {
+	ID          UUID `gorm:"type:uuid;default:uuidv7()"`
+	Name        string
+	TMDBID      *string `gorm:"column:tmdb_id"`
+	PhotoURL    *string
+	PhotoID     *UUID `gorm:"type:uuid"`
+	Biography   *string
+	Born        *time.Time `gorm:"type:date"`
+	Died        *time.Time `gorm:"type:date"`
+	Birthplace  *string
+	DescribedAt *time.Time
+}
+
+func (Person) TableName() string { return "people" }
+
+type Credit struct {
+	ItemID   UUID               `gorm:"type:uuid;primaryKey"`
+	PersonID UUID               `gorm:"type:uuid;primaryKey"`
+	Source   domain.FieldSource `gorm:"primaryKey"`
+	Kind     domain.CreditKind  `gorm:"primaryKey"`
+	Role     string             `gorm:"primaryKey"`
+	Position int
+}

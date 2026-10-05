@@ -1,0 +1,229 @@
+package store
+
+import (
+	"context"
+	"database/sql/driver"
+	"errors"
+	"time"
+	"uuid"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store/model"
+	"github.com/olivertgwalton/photon-server/internal/store/query"
+)
+
+// saveCredits replaces what a source credits on a title, keeping one row per person whatever
+// titles credit them. A person is known by their TMDB id; one with none is passed over.
+func saveCredits(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, credits []domain.Credit) error {
+	c := tx.Credit
+	if _, err := c.WithContext(ctx).Where(c.ItemID.Eq(item), c.Source.Eq(string(source))).Delete(); err != nil {
+		return err
+	}
+	var rows []*model.Credit
+	for n, cr := range credits {
+		tmdb := cr.IDs[domain.ProviderTMDB]
+		if tmdb == "" {
+			continue
+		}
+		person, err := personByTMDB(ctx, tx, tmdb, cr.Name, cr.Photo)
+		if err != nil {
+			return err
+		}
+		rows = append(rows, &model.Credit{ItemID: item, PersonID: person, Source: source, Kind: cr.Kind, Role: cr.Role, Position: n})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	// A source may credit one person twice for one part: an actor billed as two names of one role.
+	return c.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(rows...)
+}
+
+// personByTMDB answers the person with a TMDB id, adding them the first time; their name and
+// picture follow the latest credit, and a new picture gets a new id.
+func personByTMDB(ctx context.Context, tx *query.Query, tmdb, name, photo string) (model.UUID, error) {
+	p := tx.Person
+	row, err := p.WithContext(ctx).Where(p.TMDBID.Eq(tmdb)).Take()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		row = &model.Person{Name: name, TMDBID: &tmdb}
+		setPhoto(row, photo)
+		return row.ID, p.WithContext(ctx).Create(row)
+	}
+	if err != nil {
+		return model.UUID{}, err
+	}
+	if row.Name == name && deref(row.PhotoURL) == photo {
+		return row.ID, nil
+	}
+	row.Name = name
+	setPhoto(row, photo)
+	return row.ID, p.WithContext(ctx).Save(row)
+}
+
+func setPhoto(p *model.Person, url string) {
+	if url == "" || deref(p.PhotoURL) == url {
+		return
+	}
+	id := model.UUID(uuid.NewV7())
+	p.PhotoURL, p.PhotoID = &url, &id
+}
+
+// CreditRef is someone's part in a title, with their picture's id.
+type CreditRef struct {
+	PersonID uuid.UUID         `json:"person_id"`
+	Name     string            `json:"name"`
+	Kind     domain.CreditKind `json:"kind"`
+	Role     string            `json:"role,omitzero"`
+	Photo    uuid.UUID         `json:"photo,omitzero"`
+}
+
+// credits answers a title's cast and crew as the highest-ranked source with any gives them.
+func (s *Store) credits(ctx context.Context, item model.UUID) ([]CreditRef, error) {
+	ranked, err := ranks(ctx, s.q, item)
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		Source   domain.FieldSource
+		PersonID model.UUID
+		Name     string
+		Kind     domain.CreditKind
+		Role     string
+		PhotoID  *model.UUID
+	}
+	err = s.q.Credit.WithContext(ctx).UnderlyingDB().Raw(`
+		SELECT c.source, c.person_id, p.name, c.kind, c.role, p.photo_id FROM credits c
+		JOIN people p ON p.id = c.person_id WHERE c.item_id = ? ORDER BY c.position`, item).Scan(&rows).Error
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	best := rows[0].Source
+	for _, r := range rows {
+		if ranked[r.Source] > ranked[best] {
+			best = r.Source
+		}
+	}
+	var out []CreditRef
+	for _, r := range rows {
+		if r.Source != best {
+			continue
+		}
+		ref := CreditRef{PersonID: uuid.UUID(r.PersonID), Name: r.Name, Kind: r.Kind, Role: r.Role}
+		if r.PhotoID != nil {
+			ref.Photo = uuid.UUID(*r.PhotoID)
+		}
+		out = append(out, ref)
+	}
+	return out, nil
+}
+
+// PersonPage is someone as their page shows them: what is known of them and their work here.
+type PersonPage struct {
+	ID         uuid.UUID                  `json:"id"`
+	Name       string                     `json:"name"`
+	Photo      uuid.UUID                  `json:"photo,omitzero"`
+	Biography  string                     `json:"biography,omitzero"`
+	Born       domain.Date                `json:"born,omitzero"`
+	Died       domain.Date                `json:"died,omitzero"`
+	Birthplace string                     `json:"birthplace,omitzero"`
+	IDs        map[domain.Provider]string `json:"ids,omitzero"`
+	// DescribedAt is when a provider last said who they are, zero for never.
+	DescribedAt time.Time `json:"-"`
+}
+
+// PersonCredit is a title someone is credited on, as a card, and what they did on it; credits on
+// episodes are the show's.
+type PersonCredit struct {
+	Card Card
+	Kind domain.CreditKind
+	Role string
+}
+
+// Person answers someone's page, or ErrNotFound.
+func (s *Store) Person(ctx context.Context, id uuid.UUID) (PersonPage, error) {
+	p := s.q.Person
+	row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return PersonPage{}, ErrNotFound
+	}
+	if err != nil {
+		return PersonPage{}, err
+	}
+	out := PersonPage{
+		ID: id, Name: row.Name, Biography: deref(row.Biography), Born: date(row.Born), Died: date(row.Died),
+		Birthplace: deref(row.Birthplace), DescribedAt: deref(row.DescribedAt),
+	}
+	if row.PhotoID != nil {
+		out.Photo = uuid.UUID(*row.PhotoID)
+	}
+	if row.TMDBID != nil {
+		out.IDs = map[domain.Provider]string{domain.ProviderTMDB: *row.TMDBID}
+	}
+	return out, nil
+}
+
+// DescribePerson records what a provider says of someone.
+func (s *Store) DescribePerson(ctx context.Context, id uuid.UUID, d domain.Person) error {
+	return s.q.Transaction(func(tx *query.Query) error {
+		p := tx.Person
+		row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
+		if err != nil {
+			return err
+		}
+		now := time.Now()
+		row.Biography, row.Birthplace, row.DescribedAt = optional(d.Biography), optional(d.Birthplace), &now
+		row.Born, row.Died = optionalTime(d.Born), optionalTime(d.Died)
+		setPhoto(row, d.Photo)
+		return p.WithContext(ctx).Save(row)
+	})
+}
+
+func optionalTime(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
+
+// PersonCredits answers the films and shows someone is credited on, the newest first.
+func (s *Store) PersonCredits(ctx context.Context, profile, person uuid.UUID) ([]PersonCredit, error) {
+	var links []struct {
+		ItemID model.UUID
+		Kind   domain.CreditKind
+		Role   string
+	}
+	// An episode's credit is its show's; a person in many episodes is listed once per part.
+	err := s.q.Credit.WithContext(ctx).UnderlyingDB().Raw(`
+		SELECT DISTINCT ON (t.id, c.kind) t.id AS item_id, c.kind, c.role FROM credits c
+		JOIN items i ON i.id = c.item_id
+		JOIN items t ON t.id = CASE i.kind WHEN 'episode' THEN (SELECT s.parent_id FROM items s WHERE s.id = i.parent_id) ELSE i.id END
+		WHERE c.person_id = ? AND t.kind IN ('movie', 'show')
+		ORDER BY t.id, c.kind, c.position`, person.String()).Scan(&links).Error
+	if err != nil || len(links) == 0 {
+		return nil, err
+	}
+	ids := make([]driver.Valuer, len(links))
+	for n, l := range links {
+		ids[n] = l.ItemID
+	}
+	i := s.q.Item
+	rows, err := i.WithContext(ctx).Where(i.ID.In(ids...)).Order(i.ReleasedDesc.Desc(), i.ID).Find()
+	if err != nil {
+		return nil, err
+	}
+	cards, err := s.cards(ctx, profile, rows)
+	if err != nil {
+		return nil, err
+	}
+	var out []PersonCredit
+	for _, c := range cards {
+		for _, l := range links {
+			if uuid.UUID(l.ItemID) == c.ID {
+				out = append(out, PersonCredit{Card: c, Kind: l.Kind, Role: l.Role})
+			}
+		}
+	}
+	return out, nil
+}

@@ -73,6 +73,9 @@ type Services struct {
 	Profiles  profileLister
 	Catalogue catalogue
 	Libraries libraryAdmin
+	// People are those credited on titles, and PersonDescriber says who they are.
+	People          people
+	PersonDescriber personDescriber
 	// Playlists are each profile's own.
 	Playlists playlists
 	// Collections are box sets, a provider's and an admin's.
@@ -156,6 +159,7 @@ func (a *API) routes() []route {
 		{pattern: "GET /api/v1/libraries/{id}/facets", access: signedIn, handle: a.facets},
 		{pattern: "GET /api/v1/libraries/{id}/collections", access: signedIn, query: []string{"offset", "limit"}, handle: a.libraryCollections},
 		{pattern: "GET /api/v1/titles/{id}/members", access: signedIn, handle: a.members},
+		{pattern: "GET /api/v1/people/{id}", access: signedIn, handle: a.person},
 		{pattern: "GET /api/v1/playlists", access: signedIn, handle: a.playlistsOf},
 		{pattern: "POST /api/v1/playlists", access: signedIn, handle: a.addPlaylist},
 		{pattern: "PATCH /api/v1/playlists/{id}", access: signedIn, handle: a.setPlaylist},

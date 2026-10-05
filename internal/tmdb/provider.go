@@ -52,3 +52,12 @@ func (c *Client) Describe(ctx context.Context, kind domain.ItemKind, id string, 
 	}
 	return m, said, nil
 }
+
+// DescribePerson answers what TMDB knows of someone with a TMDB id; ErrNotFound for anyone else.
+func (c *Client) DescribePerson(ctx context.Context, ids map[domain.Provider]string) (domain.Person, error) {
+	id := ids[domain.ProviderTMDB]
+	if id == "" {
+		return domain.Person{}, ErrNotFound
+	}
+	return c.Person(ctx, id)
+}

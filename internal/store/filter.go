@@ -24,6 +24,8 @@ type WallFilter struct {
 	Studios      []string
 	Resolutions  []domain.Resolution
 	Ranges       []domain.Range
+	// People are credited on it, or on one of its episodes.
+	People []uuid.UUID
 	// MinRating is the least RatingSite's score out of 100 may be, zero for any.
 	RatingSite domain.RatingSite
 	MinRating  float64
@@ -76,6 +78,14 @@ func (f WallFilter) apply(q *gorm.DB, profile uuid.UUID) *gorm.DB {
 	}
 	if len(f.Ranges) > 0 {
 		q = q.Where("EXISTS ("+versionOf+" AND v.video_range IN ?)", f.Ranges)
+	}
+	if len(f.People) > 0 {
+		people := make([]string, len(f.People))
+		for n, p := range f.People {
+			people[n] = p.String()
+		}
+		q = q.Where(`EXISTS (SELECT 1 FROM credits c WHERE c.person_id IN ? AND (c.item_id = items.id
+			OR c.item_id IN (SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id WHERE s.parent_id = items.id)))`, people)
 	}
 	if f.MinRating > 0 {
 		q = q.Where("EXISTS (SELECT 1 FROM ratings r WHERE r.item_id = items.id AND r.site = ? AND r.score >= ?)", f.RatingSite, f.MinRating)

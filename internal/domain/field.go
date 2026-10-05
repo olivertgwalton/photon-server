@@ -26,6 +26,8 @@ type Metadata struct {
 	Ratings []Rating
 	// Collections are the box sets the source names the title part of.
 	Collections []Grouping
+	// Credits are its cast and crew, in the source's order.
+	Credits []Credit
 	// Locked fields are claimed at this source's rank even where it gives no value, so no lower
 	// source fills them.
 	Locked []Field
