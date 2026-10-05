@@ -21,6 +21,12 @@ type Item struct {
 	Year      *int
 	Folder    string
 	AddedAt   time.Time `gorm:"default:now()"`
+
+	ParentID      *UUID `gorm:"type:uuid"`
+	SeasonNumber  *int
+	EpisodeNumber *int
+	EpisodeEnd    *int
+	AirDate       *time.Time `gorm:"type:date"`
 }
 
 type ExternalID struct {

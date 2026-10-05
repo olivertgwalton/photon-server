@@ -43,7 +43,7 @@ type fixture struct {
 	prober  *countingProber
 }
 
-func newFixture(t *testing.T) *fixture {
+func newFixture(t *testing.T, kind domain.LibraryKind) *fixture {
 	t.Helper()
 	url := storetest.FreshDatabase(t)
 	log := slog.New(slog.DiscardHandler)
@@ -61,7 +61,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	t.Cleanup(func() { db.Close(context.Background()) })
 	root := t.TempDir()
-	lib, err := st.AddLibrary(t.Context(), "Films", domain.LibraryMovies, root)
+	lib, err := st.AddLibrary(t.Context(), "Library", kind, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func (f *fixture) count(sql string) int {
 }
 
 func TestScanFilms(t *testing.T) {
-	f := newFixture(t)
+	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995) [tmdbid-949]/Heat (1995) - 2160p.mkv", "heat-uhd")
 	f.put("Heat (1995) [tmdbid-949]/Heat (1995) - 1080p.mkv", "heat-hd")
 	f.put("Lawrence of Arabia (1962)/Lawrence of Arabia (1962) cd1.mkv", "lawrence-1")
@@ -133,7 +133,7 @@ func TestScanFilms(t *testing.T) {
 }
 
 func TestRenameKeepsIdentity(t *testing.T) {
-	f := newFixture(t)
+	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
 	f.scan()
 	var item, version string
@@ -167,7 +167,7 @@ func TestRenameKeepsIdentity(t *testing.T) {
 }
 
 func TestRemovedFileIsMissingNotForgotten(t *testing.T) {
-	f := newFixture(t)
+	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
 	f.put("Alien (1979)/Alien (1979).mkv", "alien")
 	f.scan()
@@ -199,7 +199,7 @@ func TestRemovedFileIsMissingNotForgotten(t *testing.T) {
 }
 
 func TestIdenticalCopiesAreOneVersion(t *testing.T) {
-	f := newFixture(t)
+	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
 	f.put("Backup/Heat (1995)/Heat (1995).mkv", "heat")
 	if r := f.scan(); r.Skipped != 1 {
@@ -211,7 +211,7 @@ func TestIdenticalCopiesAreOneVersion(t *testing.T) {
 }
 
 func TestOneFileInTwoLibrariesIsACopyInEach(t *testing.T) {
-	f := newFixture(t)
+	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
 	f.scan()
 
@@ -238,5 +238,41 @@ func TestOneFileInTwoLibrariesIsACopyInEach(t *testing.T) {
 	}
 	if n := f.count(`SELECT count(*) FROM versions v JOIN items i ON i.id = v.item_id WHERE v.library_id <> i.library_id`); n != 0 {
 		t.Error("a version belongs to a title in another library")
+	}
+}
+
+func TestScanShows(t *testing.T) {
+	f := newFixture(t, domain.LibraryShows)
+	f.put("The Wire (2002) [tvdbid-79126]/Season 1/The Wire S01E01.mkv", "s1e1")
+	f.put("The Wire (2002) [tvdbid-79126]/Season 1/The Wire S01E02.mkv", "s1e2")
+	f.put("The Wire (2002) [tvdbid-79126]/Season 2/The Wire S02E01 - 720p.mkv", "s2e1-hd")
+	f.put("The Wire (2002) [tvdbid-79126]/Season 2/The Wire S02E01 - 1080p.mkv", "s2e1-fhd")
+	f.put("The Wire (2002) [tvdbid-79126]/Specials/The Wire S00E01.mkv", "special")
+	f.put("The Wire (2002) [tvdbid-79126]/Extras/Making Of.mkv", "extra")
+	f.put("Stray.mkv", "stray")
+
+	if r := f.scan(); r.Probed != 5 {
+		t.Errorf("first scan probed %d files, want 5", r.Probed)
+	}
+	for _, c := range []struct {
+		what string
+		sql  string
+		want int
+	}{
+		{"shows", `SELECT count(*) FROM items WHERE kind = 'show' AND title = 'The Wire' AND year = 2002`, 1},
+		{"seasons 0, 1 and 2", `SELECT count(*) FROM items s JOIN items sh ON sh.id = s.parent_id
+			WHERE s.kind = 'season' AND sh.kind = 'show' AND s.season_number IN (0, 1, 2)`, 3},
+		{"episodes", `SELECT count(*) FROM items e JOIN items s ON s.id = e.parent_id WHERE e.kind = 'episode' AND s.kind = 'season'`, 4},
+		{"copies of S02E01", `SELECT count(*) FROM versions v JOIN items e ON e.id = v.item_id
+			WHERE e.season_number = 2 AND e.episode_number = 1`, 2},
+		{"the show's TVDB id", `SELECT count(*) FROM external_ids x JOIN items i ON i.id = x.item_id
+			WHERE i.kind = 'show' AND x.provider = 'tvdb' AND x.value = '79126'`, 1},
+	} {
+		if n := f.count(c.sql); n != c.want {
+			t.Errorf("%s: %d, want %d", c.what, n, c.want)
+		}
+	}
+	if r := f.scan(); r.Probed != 0 {
+		t.Errorf("rescanning probed %d files", r.Probed)
 	}
 }

@@ -84,13 +84,8 @@ func saveFilm(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) error
 	if err != nil {
 		return err
 	}
-	for provider, value := range f.IDs {
-		err := tx.ExternalID.WithContext(ctx).Save(&model.ExternalID{
-			ItemID: itemID, Provider: provider, Value: value, Source: domain.IDFromPath,
-		})
-		if err != nil {
-			return err
-		}
+	if err := saveIDs(ctx, tx, itemID, f.IDs); err != nil {
+		return err
 	}
 	for _, c := range f.Copies {
 		if err := saveCopy(ctx, tx, lib, itemID, c); err != nil {
@@ -110,18 +105,13 @@ func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) (mode
 	if f.Year != 0 {
 		item.Year = &f.Year
 	}
-	v, i := tx.Version, tx.Item
-	for _, c := range f.Copies {
-		known, err := v.WithContext(ctx).Where(v.LibraryID.Eq(model.UUID(lib)), v.Fingerprint.Eq(c.ContentKey)).Take()
-		if err == nil {
-			item.ID = known.ItemID
-			break
-		}
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return model.UUID{}, err
-		}
+	i := tx.Item
+	id, known, err := knownItem(ctx, tx, lib, f.Copies)
+	if err != nil {
+		return model.UUID{}, err
 	}
-	if item.ID == (model.UUID{}) {
+	item.ID = id
+	if !known {
 		same, err := i.WithContext(ctx).Where(
 			i.LibraryID.Eq(model.UUID(lib)), i.Folder.Eq(f.Folder), i.Title.Eq(f.Title),
 		).Take()
@@ -135,9 +125,36 @@ func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) (mode
 			return item.ID, err
 		}
 	}
-	_, err := i.WithContext(ctx).Where(i.ID.Eq(item.ID)).
+	_, err = i.WithContext(ctx).Where(i.ID.Eq(item.ID)).
 		Select(i.Title, i.SortTitle, i.Year, i.Folder).Updates(&item)
 	return item.ID, err
+}
+
+// knownItem is the title of the first copy the catalogue already holds.
+func knownItem(ctx context.Context, tx *query.Query, lib uuid.UUID, copies []Copy) (model.UUID, bool, error) {
+	v := tx.Version
+	for _, c := range copies {
+		known, err := v.WithContext(ctx).Where(v.LibraryID.Eq(model.UUID(lib)), v.Fingerprint.Eq(c.ContentKey)).Take()
+		if err == nil {
+			return known.ItemID, true, nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return model.UUID{}, false, err
+		}
+	}
+	return model.UUID{}, false, nil
+}
+
+func saveIDs(ctx context.Context, tx *query.Query, itemID model.UUID, ids map[domain.Provider]string) error {
+	for provider, value := range ids {
+		err := tx.ExternalID.WithContext(ctx).Save(&model.ExternalID{
+			ItemID: itemID, Provider: provider, Value: value, Source: domain.IDFromPath,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.UUID, c Copy) error {
@@ -251,7 +268,8 @@ func saveFacts(ctx context.Context, tx *query.Query, partID model.UUID, f *media
 // FinishScan settles a library after every folder has been seen. present holds every video path
 // the walk found, skipped folders included: a version with no part among them is marked missing
 // (kept, so an unmounted disk does not cost its titles), one with a part among them is not, and a
-// title left with no version is removed. A folder the walk did not visit is forgotten.
+// title left with no version is removed, then a season and a show left with nothing in them. A
+// folder the walk did not visit is forgotten.
 func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present []string) error {
 	// pgx sends present as one text[] parameter; GORM would expand it into a parameter per path.
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -263,10 +281,17 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present 
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM items i WHERE i.library_id = $1
-			AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.item_id = i.id)`, lib.String())
-		if err != nil {
-			return err
+		for _, sql := range []string{
+			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode')
+				AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.item_id = i.id)`,
+			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'season'
+				AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
+			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'show'
+				AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
+		} {
+			if _, err := tx.Exec(ctx, sql, lib.String()); err != nil {
+				return err
+			}
 		}
 		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND NOT path = ANY($2)`, lib.String(), folders)
 		return err
