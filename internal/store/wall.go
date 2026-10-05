@@ -133,6 +133,23 @@ func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, f WallFilte
 }
 
 // cards answers titles as cards for a profile, with their best pictures.
+// Card answers a title as a wall shows it to a profile. ErrNotFound for no such title.
+func (s *Store) Card(ctx context.Context, profile, id uuid.UUID) (Card, error) {
+	i := s.q.Item
+	row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return Card{}, ErrNotFound
+	}
+	if err != nil {
+		return Card{}, err
+	}
+	cards, err := s.cards(ctx, profile, []*model.Item{row})
+	if err != nil {
+		return Card{}, err
+	}
+	return cards[0], nil
+}
+
 func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item) ([]Card, error) {
 	pictures, err := s.pictureOrder(ctx, rows)
 	if err != nil {
