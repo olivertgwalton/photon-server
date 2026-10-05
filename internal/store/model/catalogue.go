@@ -195,11 +195,12 @@ type Chapter struct {
 
 // Marker is a stretch of a part a player may offer to skip, from the part's start.
 type Marker struct {
-	PartID  UUID                `gorm:"type:uuid;primaryKey"`
-	Kind    domain.MarkerKind   `gorm:"primaryKey"`
-	Source  domain.MarkerSource `gorm:"primaryKey"`
-	StartMS int64               `gorm:"column:start_ms"`
-	EndMS   int64               `gorm:"column:end_ms"`
+	PartID UUID                `gorm:"type:uuid;primaryKey"`
+	Kind   domain.MarkerKind   `gorm:"primaryKey"`
+	Source domain.MarkerSource `gorm:"primaryKey"`
+	// StartMS and EndMS are absent where an admin said the part has none of the kind.
+	StartMS *int64 `gorm:"column:start_ms"`
+	EndMS   *int64 `gorm:"column:end_ms"`
 }
 
 // SubtitleFile is a subtitle beside a copy rather than inside it.
