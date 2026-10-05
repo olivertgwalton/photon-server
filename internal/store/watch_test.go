@@ -62,11 +62,13 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 	}
 	first, second := season(oliver.ID).Episodes[0].ID, season(oliver.ID).Episodes[1].ID
 
-	for position, want := range map[time.Duration]domain.Reach{
-		2 * time.Minute: domain.ReachStart, 20 * time.Minute: domain.ReachResumable,
-	} {
-		if reach, err := s.SaveProgress(ctx, oliver.ID, second, position); err != nil || reach != want {
-			t.Errorf("progress at %v: %s, %v; want %s", position, reach, err, want)
+	// In order: a stop near the start puts the position back to nothing.
+	for _, p := range []struct {
+		at   time.Duration
+		want domain.Reach
+	}{{2 * time.Minute, domain.ReachStart}, {20 * time.Minute, domain.ReachResumable}} {
+		if reach, err := s.SaveProgress(ctx, oliver.ID, second, p.at); err != nil || reach != p.want {
+			t.Errorf("progress at %v: %s, %v; want %s", p.at, reach, err, p.want)
 		}
 	}
 	if reach, err := s.SaveProgress(ctx, oliver.ID, first, 58*time.Minute); err != nil || reach != domain.ReachEnd {
