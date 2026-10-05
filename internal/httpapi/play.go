@@ -13,6 +13,8 @@ import (
 	"time"
 	"uuid"
 
+	"golang.org/x/text/language"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/playback"
@@ -29,11 +31,12 @@ type playbacks interface {
 }
 
 type remuxing interface {
-	Open(ctx context.Context, playback uuid.UUID, parts []store.PlayPart, video domain.VideoPlan, audio *domain.AudioPlan) error
+	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan) error
 }
 
 type hlsFiles interface {
-	Playlist(playback uuid.UUID) (string, error)
+	Playlist(playback uuid.UUID, name string) (string, error)
+	SubtitleSegment(ctx context.Context, playback uuid.UUID, track, n int) (string, error)
 	Init(ctx context.Context, playback uuid.UUID, part int) (*os.File, error)
 	Segment(ctx context.Context, playback uuid.UUID, n int) (*os.File, error)
 }
@@ -41,6 +44,7 @@ type hlsFiles interface {
 type playing interface {
 	Playable(ctx context.Context, item, version uuid.UUID) (store.PlayCopy, error)
 	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
+	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
 }
 
 type partJSON struct {
@@ -48,6 +52,18 @@ type partJSON struct {
 	URL        string    `json:"url"`
 	OffsetMS   int64     `json:"offset_ms"`
 	DurationMS int64     `json:"duration_ms"`
+}
+
+// subtitleJSON is a subtitle file beside a copy played as it is, timed on the copy's timeline.
+type subtitleJSON struct {
+	ID              uuid.UUID `json:"id"`
+	Codec           string    `json:"codec"`
+	Language        string    `json:"language,omitzero"`
+	Title           string    `json:"title,omitzero"`
+	Default         bool      `json:"default,omitzero"`
+	Forced          bool      `json:"forced,omitzero"`
+	HearingImpaired bool      `json:"hearing_impaired,omitzero"`
+	URL             string    `json:"url"`
 }
 
 type videoJSON struct {
@@ -141,6 +157,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		Audio      *audioJSON        `json:"audio,omitzero"`
 		Reasons    []playback.Reason `json:"reasons,omitzero"`
 		Parts      []partJSON        `json:"parts,omitzero"`
+		Subtitles  []subtitleJSON    `json:"subtitles,omitzero"`
 		Playlist   string            `json:"playlist,omitzero"`
 		ExpiresAt  time.Time         `json:"expires_at"`
 	}{
@@ -164,7 +181,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if d.Method != domain.PlayDirect {
-		if err := a.svc.Remuxing.Open(r.Context(), session.ID, c.Parts, *d.Video, d.Audio); err != nil {
+		if err := a.svc.Remuxing.Open(r.Context(), session.ID, c, *d.Video, d.Audio); err != nil {
 			a.internal(w, r, err)
 			return
 		}
@@ -177,6 +194,16 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 				ID: p.ID, URL: a.svc.Signer.Sign("/api/v1/parts/"+p.ID.String()+"/stream", until),
 				OffsetMS: p.OffsetMS, DurationMS: p.DurationMS,
 			})
+		}
+		for _, f := range c.Subtitles {
+			sub := subtitleJSON{
+				ID: f.ID, Codec: f.Codec, Title: f.Title, Default: f.Default, Forced: f.Forced,
+				HearingImpaired: f.HearingImpaired, URL: a.svc.Signer.Sign("/api/v1/subtitles/"+f.ID.String()+"/file", until),
+			}
+			if f.Language != language.Und {
+				sub.Language = f.Language.String()
+			}
+			answer.Subtitles = append(answer.Subtitles, sub)
 		}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, answer)
@@ -195,13 +222,28 @@ func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("file")
 	var f *os.File
 	switch {
-	case name == "main.m3u8":
-		playlist, err := a.svc.HLS.Playlist(playback)
+	case strings.HasSuffix(name, ".m3u8"):
+		playlist, err := a.svc.HLS.Playlist(playback, name)
 		if a.answeredRemux(w, r, err) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		_, _ = io.WriteString(w, playlist)
+		return
+	case strings.HasPrefix(name, "sub") && strings.HasSuffix(name, ".vtt"):
+		track, n, ok := strings.Cut(strings.TrimSuffix(strings.TrimPrefix(name, "sub"), ".vtt"), "-")
+		t, terr := strconv.Atoi(track)
+		k, kerr := strconv.Atoi(n)
+		if !ok || terr != nil || kerr != nil {
+			writeProblem(w, a.logger, codeNotFound, "")
+			return
+		}
+		vtt, err := a.svc.HLS.SubtitleSegment(r.Context(), playback, t, k)
+		if a.answeredRemux(w, r, err) {
+			return
+		}
+		w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+		_, _ = io.WriteString(w, vtt)
 		return
 	case strings.HasPrefix(name, "init") && strings.HasSuffix(name, ".mp4"):
 		part, perr := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(name, "init"), ".mp4"))
@@ -314,22 +356,34 @@ func (a *API) reportPlayback(w http.ResponseWriter, r *http.Request, report func
 	}
 }
 
-// videoTypes are the types of the containers a library holds, which Go's own table lacks.
-var videoTypes = map[string]string{
+// fileTypes are the types of the files a library holds, which Go's own table lacks.
+var fileTypes = map[string]string{
 	".mkv": "video/x-matroska", ".mk3d": "video/x-matroska", ".webm": "video/webm", ".mp4": "video/mp4",
 	".m4v": "video/x-m4v", ".mov": "video/quicktime", ".ts": "video/mp2t", ".m2ts": "video/mp2t",
 	".mts": "video/mp2t", ".avi": "video/x-msvideo", ".wmv": "video/x-ms-wmv", ".mpg": "video/mpeg",
 	".mpeg": "video/mpeg", ".ogv": "video/ogg", ".flv": "video/x-flv",
+	".srt": "application/x-subrip", ".vtt": "text/vtt", ".ass": "text/x-ssa", ".ssa": "text/x-ssa",
 }
 
 // partStream serves one file of a copy as it is, in byte ranges.
 func (a *API) partStream(w http.ResponseWriter, r *http.Request) {
+	a.serveLibraryFile(w, r, a.svc.Playing.PartFile)
+}
+
+// subtitleFile serves a subtitle file beside a copy as it is.
+func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
+	a.serveLibraryFile(w, r, a.svc.Playing.SubtitleFile)
+}
+
+// serveLibraryFile serves the file of a library that where finds for the id in the path, through
+// the library's root, so a path can never leave it.
+func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where func(context.Context, uuid.UUID) (string, string, error)) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	root, rel, err := a.svc.Playing.PartFile(r.Context(), id)
+	root, rel, err := where(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
@@ -359,7 +413,7 @@ func (a *API) partStream(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	if t, ok := videoTypes[strings.ToLower(path.Ext(rel))]; ok {
+	if t, ok := fileTypes[strings.ToLower(path.Ext(rel))]; ok {
 		w.Header().Set("Content-Type", t)
 	}
 	http.ServeContent(w, r, rel, info.ModTime(), f)

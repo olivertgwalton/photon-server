@@ -58,13 +58,23 @@ func NewRemuxer(ffmpeg, dir string, log *slog.Logger) (*Remuxer, error) {
 	return &Remuxer{ffmpeg: ffmpeg, dir: dir, log: log, sessions: map[uuid.UUID]*session{}}, nil
 }
 
+// Copy is what a playback's HLS is made of: its parts in order, its text subtitles, and the
+// bitrate it is sent at.
+type Copy struct {
+	Parts         []Source
+	Subtitles     []Subtitle
+	BandwidthKbps int
+}
+
 // session is one playback's remux: its plan, the segments made so far, and the ffmpeg making more.
 type session struct {
-	dir      string
-	root     *os.Root
-	sources  []Source
-	plan     []Segment
-	playlist string
+	dir       string
+	root      *os.Root
+	sources   []Source
+	offsets   []time.Duration
+	plan      []Segment
+	playlists map[string]string
+	subtitles []*subtitle
 
 	mu       sync.Mutex
 	ready    map[int]chan struct{}
@@ -83,18 +93,36 @@ type run struct {
 	more   chan struct{}
 }
 
+// subtitle is a subtitle of a session, its cues read once, when first asked for.
+type subtitle struct {
+	Subtitle
+	mu   sync.Mutex
+	cues []Cue
+	read bool
+}
+
 // Open starts the remux of a playback's copy; nothing is run until a segment is asked for.
-// Addresses in its playlist are relative to the playlist's own.
-func (r *Remuxer) Open(playback uuid.UUID, sources []Source) error {
-	parts := make([]Part, len(sources))
-	for i, s := range sources {
-		parts[i] = s.Part
+// Addresses in its playlists are relative to the playlists' own.
+func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
+	parts := make([]Part, len(c.Parts))
+	offsets := make([]time.Duration, len(c.Parts))
+	var at time.Duration
+	for i, s := range c.Parts {
+		parts[i], offsets[i] = s.Part, at
+		at += s.Part.Duration
 	}
 	s := &session{
-		dir: filepath.Join(r.dir, playback.String()), sources: sources, plan: Plan(parts),
+		dir: filepath.Join(r.dir, playback.String()), sources: c.Parts, offsets: offsets, plan: Plan(parts),
 		ready: map[int]chan struct{}{}, failed: map[int]error{}, inits: map[int]bool{}, touched: time.Now(),
 	}
-	s.playlist = Playlist(s.plan, initName, segmentName)
+	s.playlists = map[string]string{
+		MasterName: Master(c.Subtitles, c.BandwidthKbps, videoName, subtitleName),
+		videoName:  Playlist(s.plan, initName, segmentName),
+	}
+	for n, sub := range c.Subtitles {
+		s.subtitles = append(s.subtitles, &subtitle{Subtitle: sub})
+		s.playlists[subtitleName(n)] = Playlist(s.plan, nil, func(k int) string { return subtitleSegmentName(n, k) })
+	}
 	if err := os.MkdirAll(s.dir, 0o750); err != nil {
 		return err
 	}
@@ -109,13 +137,49 @@ func (r *Remuxer) Open(playback uuid.UUID, sources []Source) error {
 	return nil
 }
 
-// Playlist answers a playback's media playlist.
-func (r *Remuxer) Playlist(playback uuid.UUID) (string, error) {
+// Playlist answers one of a playback's playlists by name: its master, MasterName, and those the
+// master names.
+func (r *Remuxer) Playlist(playback uuid.UUID, name string) (string, error) {
 	s, err := r.session(playback)
 	if err != nil {
 		return "", err
 	}
-	return s.playlist, nil
+	p, ok := s.playlists[name]
+	if !ok {
+		return "", ErrNoRemux
+	}
+	return p, nil
+}
+
+// SubtitleSegment answers segment n of subtitle track as WebVTT, reading the track's cues the
+// first time it is asked for.
+func (r *Remuxer) SubtitleSegment(ctx context.Context, playback uuid.UUID, track, n int) (string, error) {
+	s, err := r.session(playback)
+	if err != nil {
+		return "", err
+	}
+	if track < 0 || track >= len(s.subtitles) || n < 0 || n >= len(s.plan) {
+		return "", ErrNoRemux
+	}
+	s.mu.Lock()
+	s.touched = time.Now()
+	s.mu.Unlock()
+	sub := s.subtitles[track]
+	sub.mu.Lock()
+	defer sub.mu.Unlock()
+	if !sub.read {
+		var cues []Cue
+		for _, src := range sub.Sources {
+			c, err := r.extract(ctx, src)
+			if err != nil {
+				return "", err
+			}
+			cues = append(cues, c...)
+		}
+		sub.cues, sub.read = cues, true
+	}
+	seg := s.plan[n]
+	return writeVTT(sub.cues, s.offsets[seg.Part], seg.Start, seg.End), nil
 }
 
 // Close ends a playback's remux and removes its segments.
@@ -193,8 +257,17 @@ func (r *Remuxer) Init(ctx context.Context, playback uuid.UUID, part int) (*os.F
 	return s.root.Open(initName(part))
 }
 
-func initName(part int) string { return "init" + strconv.Itoa(part) + ".mp4" }
-func segmentName(n int) string { return strconv.Itoa(n) + ".m4s" }
+// MasterName is the playlist a player is given.
+const MasterName = "main.m3u8"
+
+const videoName = "video.m3u8"
+
+func initName(part int) string      { return "init" + strconv.Itoa(part) + ".mp4" }
+func segmentName(n int) string      { return strconv.Itoa(n) + ".m4s" }
+func subtitleName(track int) string { return "sub" + strconv.Itoa(track) + ".m3u8" }
+func subtitleSegmentName(track, n int) string {
+	return "sub" + strconv.Itoa(track) + "-" + strconv.Itoa(n) + ".vtt"
+}
 
 // Segment opens segment n, starting or moving the remux to make it if need be, and waiting until
 // it is whole.

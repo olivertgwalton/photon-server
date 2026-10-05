@@ -3,8 +3,10 @@
 package hls
 
 import (
+	"cmp"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -59,7 +61,8 @@ func Plan(parts []Part) []Segment {
 }
 
 // Playlist writes the media playlist of a plan: every segment's address from segment(n), each
-// part's initialisation from init(part), and a discontinuity where one part gives way to the next.
+// part's initialisation from init(part) where there is one, and a discontinuity where one part
+// gives way to the next.
 func Playlist(segs []Segment, init func(part int) string, segment func(n int) string) string {
 	var b strings.Builder
 	longest := time.Duration(0)
@@ -74,11 +77,53 @@ func Playlist(segs []Segment, init func(part int) string, segment func(n int) st
 			if part >= 0 {
 				b.WriteString("#EXT-X-DISCONTINUITY\n")
 			}
-			fmt.Fprintf(&b, "#EXT-X-MAP:URI=%q\n", init(s.Part))
+			if init != nil {
+				fmt.Fprintf(&b, "#EXT-X-MAP:URI=%q\n", init(s.Part))
+			}
 			part = s.Part
 		}
 		fmt.Fprintf(&b, "#EXTINF:%.6f,\n%s\n", (s.End - s.Start).Seconds(), segment(n))
 	}
 	b.WriteString("#EXT-X-ENDLIST\n")
 	return b.String()
+}
+
+// Master writes the master playlist: the video's variant at its bandwidth and its subtitles as
+// renditions in one group, the first marked default chosen by default. Names within a group must
+// differ, so a repeated one is numbered.
+func Master(subs []Subtitle, kbps int, video string, subtitle func(track int) string) string {
+	var b strings.Builder
+	b.WriteString("#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-INDEPENDENT-SEGMENTS\n")
+	seen := map[string]int{}
+	chosen := false
+	for n, s := range subs {
+		name := cmp.Or(s.Name, s.Language, "Subtitles")
+		if seen[name]++; seen[name] > 1 {
+			name += " " + strconv.Itoa(seen[name])
+		}
+		fmt.Fprintf(&b, "#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=%q", name)
+		if s.Language != "" {
+			fmt.Fprintf(&b, ",LANGUAGE=%q", s.Language)
+		}
+		def := s.Default && !chosen
+		chosen = chosen || def
+		fmt.Fprintf(&b, ",DEFAULT=%s,AUTOSELECT=YES,FORCED=%s", yes(def), yes(s.Forced))
+		if s.HearingImpaired {
+			b.WriteString(",CHARACTERISTICS=\"public.accessibility.transcribes-spoken-dialog,public.accessibility.describes-music-and-sound\"")
+		}
+		fmt.Fprintf(&b, ",URI=%q\n", subtitle(n))
+	}
+	fmt.Fprintf(&b, "#EXT-X-STREAM-INF:BANDWIDTH=%d", max(kbps, 1)*1000)
+	if len(subs) > 0 {
+		b.WriteString(",SUBTITLES=\"subs\"")
+	}
+	b.WriteString("\n" + video + "\n")
+	return b.String()
+}
+
+func yes(b bool) string {
+	if b {
+		return "YES"
+	}
+	return "NO"
 }
