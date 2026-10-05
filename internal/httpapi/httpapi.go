@@ -73,8 +73,10 @@ type Services struct {
 	Profiles  profileLister
 	Catalogue catalogue
 	Libraries libraryAdmin
-	Tasks     tasks
-	Jobs      jobQueue
+	// ProfileAdmin adds, changes and removes the household's profiles.
+	ProfileAdmin profileAdmin
+	Tasks        tasks
+	Jobs         jobQueue
 	// NowPlaying is every playback going on, across the cluster.
 	NowPlaying nowPlaying
 	Pictures   pictures
@@ -160,6 +162,9 @@ func (a *API) routes() []route {
 		{pattern: "DELETE /api/v1/admin/libraries/{id}", access: admin, handle: a.removeLibrary},
 		{pattern: "POST /api/v1/admin/libraries/{id}/scan", access: admin, handle: a.scanLibrary},
 		{pattern: "GET /api/v1/subtitles/{id}/file", access: signedAddress, query: []string{"exp", "sig"}, handle: a.subtitleFile},
+		{pattern: "POST /api/v1/admin/profiles", access: admin, handle: a.addProfile},
+		{pattern: "PATCH /api/v1/admin/profiles/{id}", access: admin, handle: a.setProfile},
+		{pattern: "DELETE /api/v1/admin/profiles/{id}", access: admin, handle: a.removeProfile},
 		{pattern: "GET /api/v1/admin/tasks", access: admin, handle: a.adminTasks},
 		{pattern: "POST /api/v1/admin/tasks/{key}/run", access: admin, handle: a.runTask},
 		{pattern: "GET /api/v1/admin/jobs", access: admin, handle: a.adminJobs},
