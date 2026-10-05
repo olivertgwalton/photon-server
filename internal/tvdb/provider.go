@@ -37,3 +37,8 @@ func (c *Client) Describe(ctx context.Context, _ domain.ItemKind, id string, sea
 	said, err := c.Seasons(ctx, n, seasons)
 	return m, said, err
 }
+
+// Candidates answers TheTVDB's shows by a name, for an admin fixing a match.
+func (c *Client) Candidates(ctx context.Context, _ domain.ItemKind, title string, year int) ([]domain.Candidate, error) {
+	return c.Search(ctx, title, year)
+}

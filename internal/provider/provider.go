@@ -53,6 +53,12 @@ type Describer interface {
 	Describe(ctx context.Context, kind domain.ItemKind, id string, seasons []int) (domain.Metadata, map[int]domain.SeasonMetadata, error)
 }
 
+// Searcher lists what a provider has by a name, for an admin choosing the match by hand.
+type Searcher interface {
+	Provider
+	Candidates(ctx context.Context, kind domain.ItemKind, title string, year int) ([]domain.Candidate, error)
+}
+
 // Rater says what sites' readers and critics make of a title, found by the ids it carries.
 type Rater interface {
 	Provider

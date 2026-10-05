@@ -102,13 +102,18 @@ type result struct {
 	OriginalName  string `json:"original_name"`
 	ReleaseDate   string `json:"release_date"`
 	FirstAirDate  string `json:"first_air_date"`
+	Poster        string `json:"poster_path"`
 }
 
 func (r result) match() domain.Candidate {
-	return domain.Candidate{
+	c := domain.Candidate{
 		ID: r.ID, Title: cmp.Or(r.Title, r.Name), OriginalTitle: cmp.Or(r.OriginalTitle, r.OriginalName),
 		Year: year(date(cmp.Or(r.ReleaseDate, r.FirstAirDate))),
 	}
+	if r.Poster != "" {
+		c.Poster = imageURL + r.Poster
+	}
+	return c
 }
 
 func matches(rs []result) []domain.Candidate {

@@ -151,6 +151,7 @@ func (c *Client) Search(ctx context.Context, title string, year int) ([]domain.C
 			ID           string            `json:"tvdb_id"`
 			Name         string            `json:"name"`
 			Year         string            `json:"year"`
+			Image        string            `json:"image_url"`
 			Translations map[string]string `json:"translations"`
 		} `json:"data"`
 	}
@@ -165,7 +166,7 @@ func (c *Client) Search(ctx context.Context, title string, year int) ([]domain.C
 		}
 		y, _ := strconv.Atoi(r.Year)
 		found = append(found, domain.Candidate{
-			ID: id, Title: cmp.Or(r.Translations[c.language], r.Name), OriginalTitle: r.Name, Year: y,
+			ID: id, Title: cmp.Or(r.Translations[c.language], r.Name), OriginalTitle: r.Name, Year: y, Poster: r.Image,
 		})
 	}
 	return found, nil
