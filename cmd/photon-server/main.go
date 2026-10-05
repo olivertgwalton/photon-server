@@ -97,7 +97,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	authService, err := auth.New(ctx, st)
+	authService, err := auth.New(ctx, st, cache)
 	if err != nil {
 		return err
 	}

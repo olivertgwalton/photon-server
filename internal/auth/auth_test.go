@@ -6,10 +6,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
@@ -26,16 +29,21 @@ func newService(t *testing.T) (*Service, *store.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	svc, err := New(t.Context(), st)
+	k, err := kv.Open(os.Getenv("TEST_VALKEY_URL"))
+	if err != nil {
+		t.Fatalf("TEST_VALKEY_URL: %v", err)
+	}
+	t.Cleanup(k.Close)
+	svc, err := New(t.Context(), st, k)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return svc, st
 }
 
-func addProfile(t *testing.T, svc *Service, st *store.Store, name, password string) domain.Profile {
+func addProfile(t *testing.T, st *store.Store, name, password string) domain.Profile {
 	t.Helper()
-	hash, err := svc.HashPassword(t.Context(), password)
+	hash, err := HashPassword(t.Context(), password)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +58,7 @@ var tv = Device{Name: "Living room", Client: "Photon tvOS"}
 
 func TestSignInAndOut(t *testing.T) {
 	svc, st := newService(t)
-	oliver := addProfile(t, svc, st, "Oliver", "correct horse")
+	oliver := addProfile(t, st, "Oliver", "correct horse")
 	if _, err := st.AddProfile(t.Context(), "Guest", domain.RoleMember, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +99,7 @@ func TestSignInAndOut(t *testing.T) {
 
 func TestExpiredSessionsAreRefused(t *testing.T) {
 	svc, st := newService(t)
-	addProfile(t, svc, st, "Oliver", "correct horse")
+	addProfile(t, st, "Oliver", "correct horse")
 	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv)
 	if err != nil {
 		t.Fatal(err)
@@ -134,3 +142,63 @@ func TestWeakHashIsUpgradedAtSignIn(t *testing.T) {
 }
 
 func b64(b []byte) string { return base64.RawStdEncoding.EncodeToString(b) }
+
+func TestPairingATelevision(t *testing.T) {
+	svc, st := newService(t)
+	addProfile(t, st, "Oliver", "correct horse")
+	_, phone, err := svc.SignIn(t.Context(), "Oliver", "correct horse", Device{Name: "iPhone", Client: "Photon iOS"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	approver := domain.Session{Profile: phone}
+
+	start, err := svc.StartPairing(t.Context(), tv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(start.UserCode) != 9 || strings.Trim(strings.ReplaceAll(start.UserCode, "-", ""), userCodeAlphabet) != "" {
+		t.Errorf("user code %q is not XXXX-XXXX from %s", start.UserCode, userCodeAlphabet)
+	}
+	if _, err := svc.ApprovePairing(t.Context(), approver, "ZZZZ-ZZZZ"); start.UserCode != "ZZZZ-ZZZZ" && !errors.Is(err, ErrPairingNotFound) {
+		t.Errorf("a code nobody was shown was approved (err %v)", err)
+	}
+	d, err := svc.ApprovePairing(t.Context(), approver, strings.ToLower(start.UserCode))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d != tv {
+		t.Errorf("approved %+v, want the television that asked", d)
+	}
+	if _, err := svc.ApprovePairing(t.Context(), approver, start.UserCode); !errors.Is(err, ErrPairingNotFound) {
+		t.Errorf("a code was approved twice (err %v)", err)
+	}
+
+	code, _, _ := strings.Cut(start.DeviceCode, ".")
+	if state, _, _, _ := svc.PollPairing(t.Context(), code+".wrong-secret"); state != kv.PairingExpired {
+		t.Errorf("a poll with the wrong secret answered %q", state)
+	}
+	state, token, profile, err := svc.PollPairing(t.Context(), start.DeviceCode)
+	if err != nil || state != kv.PairingApproved || profile.Name != "Oliver" {
+		t.Fatalf("poll after approval: %q, %+v, %v", state, profile, err)
+	}
+	if session, err := svc.Authenticate(t.Context(), token); err != nil || session.Profile.Name != "Oliver" {
+		t.Errorf("the television's token: %+v, %v", session, err)
+	}
+	if state, _, _, _ := svc.PollPairing(t.Context(), start.DeviceCode); state != kv.PairingExpired {
+		t.Errorf("an approved pairing was handed out twice (%q)", state)
+	}
+}
+
+func TestPairingPollsAreRateLimited(t *testing.T) {
+	svc, _ := newService(t)
+	start, err := svc.StartPairing(t.Context(), tv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state, _, _, _ := svc.PollPairing(t.Context(), start.DeviceCode); state != kv.PairingPending {
+		t.Errorf("first poll: %q, want pending", state)
+	}
+	if state, _, _, _ := svc.PollPairing(t.Context(), start.DeviceCode); state != kv.PairingSlowDown {
+		t.Errorf("an immediate second poll: %q, want slow_down", state)
+	}
+}
