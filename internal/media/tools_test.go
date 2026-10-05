@@ -27,7 +27,8 @@ func TestFindTools(t *testing.T) {
 		{name: "release", ffmpeg: "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers", wantVersion: "9.0.2"},
 		{name: "git tag build", ffmpeg: "ffmpeg version n9.0.2-12-gabc1234 Copyright", wantVersion: "9.0.2"},
 		{name: "two-part release", ffmpeg: "ffmpeg version 10.1 Copyright", wantVersion: "10.1"},
-		{name: "older major", ffmpeg: "ffmpeg version 8.1.3-Jellyfin Copyright", wantErr: "older than 9"},
+		{name: "jellyfin-ffmpeg", ffmpeg: "ffmpeg version 8.1.3-Jellyfin Copyright (c) 2000-2026 the FFmpeg developers", wantVersion: "8.1.3"},
+		{name: "older major", ffmpeg: "ffmpeg version 7.1.1 Copyright", wantErr: "older than 8"},
 		{name: "master snapshot", ffmpeg: "ffmpeg version N-121000-g1a2b3c4 Copyright", wantErr: "not a release build"},
 	}
 	for _, tt := range tests {

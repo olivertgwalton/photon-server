@@ -14,7 +14,9 @@ import (
 	"time"
 )
 
-const minimumMajor = 9
+// minimumMajor is the oldest FFmpeg the server is run against: jellyfin-ffmpeg's 8.1, which the
+// image installs.
+const minimumMajor = 8
 
 type Tools struct {
 	FFmpeg  Tool

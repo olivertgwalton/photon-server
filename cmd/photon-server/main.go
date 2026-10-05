@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"runtime/debug"
 	"sync"
 	"syscall"
 	"time"
@@ -33,6 +32,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/tvdb"
 	"github.com/olivertgwalton/photon-server/internal/watch"
 )
+
+// version is stamped by the image's build: -ldflags "-X main.version=…".
+var version = "(devel)"
 
 const (
 	defaultListen = ":8640"
@@ -127,7 +129,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	info := httpapi.Info{
 		ID:      id.String(),
 		Name:    cmp.Or(os.Getenv("PHOTON_NAME"), hostname),
-		Version: version(),
+		Version: version,
 	}
 	srv := &http.Server{
 		Addr: cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
@@ -195,11 +197,4 @@ func ready(st *store.Store, cache *kv.KV) func(context.Context) error {
 		}
 		return errors.Join(errs...)
 	}
-}
-
-func version() string {
-	if bi, ok := debug.ReadBuildInfo(); ok {
-		return bi.Main.Version
-	}
-	return "(devel)"
 }
