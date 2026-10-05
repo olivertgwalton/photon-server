@@ -75,6 +75,22 @@ type RemoteVideo struct {
 	PublishedAt *time.Time
 }
 
+// Artwork is a picture of a title: a file in its library, at place relative to the library's
+// root, or a provider's, at place as a URL.
+type Artwork struct {
+	ItemID   UUID               `gorm:"type:uuid;primaryKey"`
+	Source   domain.FieldSource `gorm:"primaryKey"`
+	Kind     domain.ArtworkKind `gorm:"primaryKey"`
+	Place    string             `gorm:"primaryKey"`
+	Position int
+	Folder   *string
+	Language *string
+	Width    *int
+	Height   *int
+}
+
+func (Artwork) TableName() string { return "artwork" }
+
 type ExternalID struct {
 	ItemID   UUID            `gorm:"type:uuid;primaryKey"`
 	Provider domain.Provider `gorm:"primaryKey"`

@@ -87,20 +87,31 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library) (Report, error) 
 
 func (s *Scanner) saveFilms(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, report *Report) error {
 	var films []store.Film
-	for _, f := range planFilms(folder) {
+	plans := planFilms(folder)
+	pics := picturesIn(folder.Path, fileNames(folder))
+	for _, f := range plans {
 		copies, err := s.copies(ctx, root, lib, folder.Path, f.versions, report)
 		if err != nil {
 			return err
 		}
-		if len(copies) > 0 {
-			films = append(films, store.Film{
-				Title: f.name.Title, Year: f.name.Year, Folder: folder.Path, IDs: ids(f.name.IDs),
-				NFO: metadata(s.readNFO(ctx, root, lib, folder.Path, f.nfos...)), Copies: copies,
-			})
+		if len(copies) == 0 {
+			continue
 		}
+		var art []domain.Artwork
+		for _, v := range f.versions {
+			art = append(art, pics.of(stem(v.parts[0].Name), domain.ArtworkPoster)...)
+		}
+		// A folder's own pictures are its film's when it holds one, as Jellyfin reads them.
+		if len(plans) == 1 && folder.Path != "." {
+			art = append(art, pics.own...)
+		}
+		films = append(films, store.Film{
+			Title: f.name.Title, Year: f.name.Year, Folder: folder.Path, IDs: ids(f.name.IDs),
+			NFO: metadata(s.readNFO(ctx, root, lib, folder.Path, f.nfos...)), Artwork: art, Copies: copies,
+		})
 	}
-	plans, inExtrasFolder := extrasIn(folder)
-	extras, err := s.extras(ctx, root, lib, folder, plans, report, func(e extraPlan) store.Owner {
+	extraPlans, inExtrasFolder := extrasIn(folder)
+	extras, err := s.extras(ctx, root, lib, folder, extraPlans, report, func(e extraPlan) store.Owner {
 		if inExtrasFolder {
 			return store.Owner{Kind: domain.ItemMovie, Folder: path.Dir(folder.Path)}
 		}
@@ -175,6 +186,16 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 			show.Seasons[*n] = said.Metadata
 		}
 	}
+	pics := picturesIn(folder.Path, fileNames(folder))
+	switch {
+	case series != "" && folder.Path == series:
+		show.Artwork = append([]domain.Artwork{}, pics.own...)
+		show.SeasonArtwork = pics.seasons
+	case series != "" && season != nil:
+		show.SeasonArtwork = map[int][]domain.Artwork{
+			*season: append(pics.own, seasonPictures(root, series, *season)...),
+		}
+	}
 	var episodes []store.Episode
 	if holdsEpisodes(folder.Path) {
 		plans, unread := planEpisodes(folder, season, show.Title)
@@ -192,6 +213,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 			ep := store.Episode{
 				Season: e.season, Episodes: e.episodes, AirDate: e.airDate, Title: e.title,
 				Folder: folder.Path, IDs: ids(e.name.IDs), ByNumber: e.byNumber, Copies: copies,
+				Artwork: pics.of(stem(e.versions[0].parts[0].Name), domain.ArtworkThumb),
 			}
 			// An NFO's numbers are stated, not guessed, so they win over the file name's.
 			if said := s.readNFO(ctx, root, lib, folder.Path, nfoOf(e.versions[0].parts)); said != nil {
@@ -324,6 +346,14 @@ func (s *Scanner) readNFO(ctx context.Context, root *os.Root, lib domain.Library
 		return nil
 	}
 	return nil
+}
+
+func fileNames(f library.Folder) []string {
+	names := make([]string, len(f.Files))
+	for i, file := range f.Files {
+		names[i] = file.Name
+	}
+	return names
 }
 
 func metadata(f *nfo.File) *domain.Metadata {

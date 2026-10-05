@@ -27,7 +27,9 @@ type Film struct {
 	Folder string
 	IDs    map[domain.Provider]string
 	NFO    *domain.Metadata
-	Copies []Copy
+	// Artwork is the pictures of it in its folder.
+	Artwork []domain.Artwork
+	Copies  []Copy
 }
 
 // Copy is one version. Facts is nil for a copy whose content key is already known: nothing about
@@ -106,6 +108,9 @@ func (s *Store) SaveFolder(ctx context.Context, lib uuid.UUID, path string, fing
 func saveFilm(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) error {
 	itemID, err := filmItem(ctx, tx, lib, f)
 	if err != nil {
+		return err
+	}
+	if err := saveFolderArtwork(ctx, tx, itemID, f.Folder, f.Artwork); err != nil {
 		return err
 	}
 	for _, c := range f.Copies {
