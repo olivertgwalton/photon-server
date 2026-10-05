@@ -92,6 +92,24 @@ type Artwork struct {
 
 func (Artwork) TableName() string { return "artwork" }
 
+// WatchState is what a profile has made of a film or episode.
+type WatchState struct {
+	ProfileID    UUID  `gorm:"type:uuid;primaryKey"`
+	ItemID       UUID  `gorm:"type:uuid;primaryKey"`
+	PositionMS   int64 `gorm:"column:position_ms"`
+	Plays        int
+	WatchedAt    *time.Time
+	LastPlayedAt *time.Time
+}
+
+func (WatchState) TableName() string { return "watch_state" }
+
+type Favourite struct {
+	ProfileID UUID      `gorm:"type:uuid;primaryKey"`
+	ItemID    UUID      `gorm:"type:uuid;primaryKey"`
+	AddedAt   time.Time `gorm:"default:now()"`
+}
+
 type ExternalID struct {
 	ItemID   UUID            `gorm:"type:uuid;primaryKey"`
 	Provider domain.Provider `gorm:"primaryKey"`

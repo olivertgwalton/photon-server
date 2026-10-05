@@ -38,7 +38,7 @@ func TestPicturesBesideATitleComeBeforeAProvidersAndItsCardShowsTheBest(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := s.Title(ctx, uuid.UUID(item.ID))
+	page, err := s.Title(ctx, uuid.UUID{}, uuid.UUID(item.ID))
 	if err != nil {
 		t.Fatal(err)
 	}

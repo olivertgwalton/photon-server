@@ -42,6 +42,8 @@ type TitlePage struct {
 	Episodes      []EpisodeCard              `json:"episodes,omitzero"`
 	Extras        []ExtraCard                `json:"extras,omitzero"`
 	Videos        []VideoLink                `json:"videos,omitzero"`
+	// State is what the profile asking has made of it.
+	State TitleState `json:"state,omitzero"`
 	// Artwork is the title's pictures by kind, best first, by id: /api/v1/artwork/{id}.
 	Artwork map[domain.ArtworkKind][]uuid.UUID `json:"artwork,omitzero"`
 }
@@ -116,6 +118,7 @@ type SeasonCard struct {
 	Aired    domain.Date `json:"release_date,omitzero"`
 	Episodes int         `json:"episodes"`
 	Poster   uuid.UUID   `json:"poster,omitzero"`
+	State    TitleState  `json:"state,omitzero"`
 }
 
 type EpisodeCard struct {
@@ -127,6 +130,7 @@ type EpisodeCard struct {
 	Aired      domain.Date `json:"release_date,omitzero"`
 	DurationMS int64       `json:"duration_ms,omitzero"`
 	Thumb      uuid.UUID   `json:"thumb,omitzero"`
+	State      TitleState  `json:"state,omitzero"`
 }
 
 type ExtraCard struct {
@@ -146,8 +150,8 @@ type VideoLink struct {
 	Published *time.Time       `json:"published_at,omitzero"`
 }
 
-// Title answers a title's page, or ErrNotFound.
-func (s *Store) Title(ctx context.Context, id uuid.UUID) (TitlePage, error) {
+// Title answers a title's page for a profile, or ErrNotFound.
+func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, error) {
 	i := s.q.Item
 	item, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -171,9 +175,9 @@ func (s *Store) Title(ctx context.Context, id uuid.UUID) (TitlePage, error) {
 	}
 	switch item.Kind {
 	case domain.ItemShow:
-		p.Seasons, err = s.seasons(ctx, item.ID)
+		p.Seasons, err = s.seasons(ctx, profile, item.ID)
 	case domain.ItemSeason:
-		p.Episodes, err = s.episodes(ctx, item.ID)
+		p.Episodes, err = s.episodes(ctx, profile, item.ID)
 	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
 		p.Versions, err = s.versions(ctx, item.ID)
 	}
@@ -187,7 +191,12 @@ func (s *Store) Title(ctx context.Context, id uuid.UUID) (TitlePage, error) {
 		return TitlePage{}, err
 	}
 	pictures, err := s.pictureOrder(ctx, []*model.Item{item})
+	if err != nil {
+		return TitlePage{}, err
+	}
 	p.Artwork = pictures[item.ID]
+	states, err := s.states(ctx, profile, []*model.Item{item})
+	p.State = states[item.ID]
 	return p, err
 }
 
@@ -226,7 +235,7 @@ func (s *Store) parents(ctx context.Context, item *model.Item, p *TitlePage) err
 	return nil
 }
 
-func (s *Store) seasons(ctx context.Context, show model.UUID) ([]SeasonCard, error) {
+func (s *Store) seasons(ctx context.Context, profile uuid.UUID, show model.UUID) ([]SeasonCard, error) {
 	i := s.q.Item
 	rows, err := i.WithContext(ctx).Where(i.ParentID.Eq(show), i.Kind.Eq(string(domain.ItemSeason))).
 		Order(i.SeasonNumber).Find()
@@ -250,18 +259,22 @@ func (s *Store) seasons(ctx context.Context, show model.UUID) ([]SeasonCard, err
 	if err != nil {
 		return nil, err
 	}
+	states, err := s.states(ctx, profile, rows)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]SeasonCard, len(rows))
 	for n, r := range rows {
 		out[n] = SeasonCard{
 			ID: uuid.UUID(r.ID), Number: deref(r.SeasonNumber), Title: r.Title, Overview: deref(r.Overview),
 			Year: deref(r.Year), Aired: date(r.ReleaseDate), Episodes: episodes[r.ID],
-			Poster: first(pictures[r.ID][domain.ArtworkPoster]),
+			Poster: first(pictures[r.ID][domain.ArtworkPoster]), State: states[r.ID],
 		}
 	}
 	return out, nil
 }
 
-func (s *Store) episodes(ctx context.Context, season model.UUID) ([]EpisodeCard, error) {
+func (s *Store) episodes(ctx context.Context, profile uuid.UUID, season model.UUID) ([]EpisodeCard, error) {
 	i := s.q.Item
 	rows, err := i.WithContext(ctx).Where(i.ParentID.Eq(season), i.Kind.Eq(string(domain.ItemEpisode))).
 		Order(i.EpisodeNumber, i.AirDate, i.SortTitle).Find()
@@ -276,6 +289,10 @@ func (s *Store) episodes(ctx context.Context, season model.UUID) ([]EpisodeCard,
 	if err != nil {
 		return nil, err
 	}
+	states, err := s.states(ctx, profile, rows)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]EpisodeCard, len(rows))
 	for n, r := range rows {
 		aired := r.ReleaseDate
@@ -285,7 +302,7 @@ func (s *Store) episodes(ctx context.Context, season model.UUID) ([]EpisodeCard,
 		out[n] = EpisodeCard{
 			ID: uuid.UUID(r.ID), Number: r.EpisodeNumber, End: r.EpisodeEnd, Title: r.Title,
 			Overview: deref(r.Overview), Aired: date(aired), DurationMS: lengths[r.ID],
-			Thumb: first(pictures[r.ID][domain.ArtworkThumb]),
+			Thumb: first(pictures[r.ID][domain.ArtworkThumb]), State: states[r.ID],
 		}
 	}
 	return out, nil

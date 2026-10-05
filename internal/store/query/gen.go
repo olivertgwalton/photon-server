@@ -22,6 +22,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Chapter:            newChapter(db, opts...),
 		DeviceSession:      newDeviceSession(db, opts...),
 		ExternalID:         newExternalID(db, opts...),
+		Favourite:          newFavourite(db, opts...),
 		Folder:             newFolder(db, opts...),
 		Item:               newItem(db, opts...),
 		ItemField:          newItemField(db, opts...),
@@ -38,6 +39,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		SubtitleFile:       newSubtitleFile(db, opts...),
 		TaskState:          newTaskState(db, opts...),
 		Version:            newVersion(db, opts...),
+		WatchState:         newWatchState(db, opts...),
 	}
 }
 
@@ -48,6 +50,7 @@ type Query struct {
 	Chapter            chapter
 	DeviceSession      deviceSession
 	ExternalID         externalID
+	Favourite          favourite
 	Folder             folder
 	Item               item
 	ItemField          itemField
@@ -64,6 +67,7 @@ type Query struct {
 	SubtitleFile       subtitleFile
 	TaskState          taskState
 	Version            version
+	WatchState         watchState
 }
 
 func (q *Query) Available() bool { return q.db != nil }
@@ -77,6 +81,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Chapter:            q.Chapter.clone(db),
 		DeviceSession:      q.DeviceSession.clone(db),
 		ExternalID:         q.ExternalID.clone(db),
+		Favourite:          q.Favourite.clone(db),
 		Folder:             q.Folder.clone(db),
 		Item:               q.Item.clone(db),
 		ItemField:          q.ItemField.clone(db),
@@ -93,6 +98,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		SubtitleFile:       q.SubtitleFile.clone(db),
 		TaskState:          q.TaskState.clone(db),
 		Version:            q.Version.clone(db),
+		WatchState:         q.WatchState.clone(db),
 	}
 }
 
@@ -111,6 +117,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Chapter:            q.Chapter.replaceDB(db),
 		DeviceSession:      q.DeviceSession.replaceDB(db),
 		ExternalID:         q.ExternalID.replaceDB(db),
+		Favourite:          q.Favourite.replaceDB(db),
 		Folder:             q.Folder.replaceDB(db),
 		Item:               q.Item.replaceDB(db),
 		ItemField:          q.ItemField.replaceDB(db),
@@ -127,6 +134,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		SubtitleFile:       q.SubtitleFile.replaceDB(db),
 		TaskState:          q.TaskState.replaceDB(db),
 		Version:            q.Version.replaceDB(db),
+		WatchState:         q.WatchState.replaceDB(db),
 	}
 }
 
@@ -135,6 +143,7 @@ type queryCtx struct {
 	Chapter            IChapterDo
 	DeviceSession      IDeviceSessionDo
 	ExternalID         IExternalIDDo
+	Favourite          IFavouriteDo
 	Folder             IFolderDo
 	Item               IItemDo
 	ItemField          IItemFieldDo
@@ -151,6 +160,7 @@ type queryCtx struct {
 	SubtitleFile       ISubtitleFileDo
 	TaskState          ITaskStateDo
 	Version            IVersionDo
+	WatchState         IWatchStateDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
@@ -159,6 +169,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Chapter:            q.Chapter.WithContext(ctx),
 		DeviceSession:      q.DeviceSession.WithContext(ctx),
 		ExternalID:         q.ExternalID.WithContext(ctx),
+		Favourite:          q.Favourite.WithContext(ctx),
 		Folder:             q.Folder.WithContext(ctx),
 		Item:               q.Item.WithContext(ctx),
 		ItemField:          q.ItemField.WithContext(ctx),
@@ -175,6 +186,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		SubtitleFile:       q.SubtitleFile.WithContext(ctx),
 		TaskState:          q.TaskState.WithContext(ctx),
 		Version:            q.Version.WithContext(ctx),
+		WatchState:         q.WatchState.WithContext(ctx),
 	}
 }
 

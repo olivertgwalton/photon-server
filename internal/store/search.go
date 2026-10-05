@@ -13,6 +13,7 @@ import (
 // SearchQuery asks for the films and shows whose title has words starting with each word typed,
 // ignoring case and accents: "amel" finds Amélie. Library narrows it to one library.
 type SearchQuery struct {
+	Profile uuid.UUID
 	Text    string
 	Library uuid.UUID
 	Limit   int
@@ -49,5 +50,5 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s.cards(ctx, rows)
+	return s.cards(ctx, q.Profile, rows)
 }

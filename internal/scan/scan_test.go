@@ -498,7 +498,7 @@ func TestTitlePagesShowWhatTheScanFound(t *testing.T) {
 	f.put("Lawrence of Arabia (1962)/Lawrence of Arabia (1962) - 1080p.en.srt", "sub")
 	f.put("Lawrence of Arabia (1962)/trailers/Teaser.mkv", "teaser")
 	f.scan()
-	page, err := f.st.Title(t.Context(), f.id(`SELECT id::text FROM items WHERE kind = 'movie'`))
+	page, err := f.st.Title(t.Context(), uuid.UUID{}, f.id(`SELECT id::text FROM items WHERE kind = 'movie'`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -529,21 +529,21 @@ func TestAShowsPageListsItsSeasonsAndASeasonsItsEpisodes(t *testing.T) {
 	f.put("The Wire/Season 1/The Wire S01E01.mkv", "e1")
 	f.put("The Wire/Season 2/The Wire S02E01.mkv", "e3")
 	f.scan()
-	show, err := f.st.Title(t.Context(), f.id(`SELECT id::text FROM items WHERE kind = 'show'`))
+	show, err := f.st.Title(t.Context(), uuid.UUID{}, f.id(`SELECT id::text FROM items WHERE kind = 'show'`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(show.Seasons) != 2 || show.Seasons[0].Episodes != 2 || show.Seasons[1].Number != 2 {
 		t.Fatalf("seasons = %+v, want season 1 with two episodes, then season 2", show.Seasons)
 	}
-	season, err := f.st.Title(t.Context(), show.Seasons[0].ID)
+	season, err := f.st.Title(t.Context(), uuid.UUID{}, show.Seasons[0].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if season.Show == nil || season.Show.ID != show.ID || len(season.Episodes) != 2 || *season.Episodes[0].Number != 1 {
 		t.Errorf("season page = %+v, want its show and episodes 1 and 2 in order", season)
 	}
-	episode, err := f.st.Title(t.Context(), season.Episodes[1].ID)
+	episode, err := f.st.Title(t.Context(), uuid.UUID{}, season.Episodes[1].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
