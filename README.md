@@ -12,7 +12,7 @@ export PHOTON_DATABASE_URL=postgres://localhost/photon_dev
 export PHOTON_VALKEY_URL=valkey://localhost:6379
 go run ./cmd/photon-server migrate
 go run ./cmd/photon-server
-TEST_DATABASE_URL=postgres://localhost/postgres go test -tags integration ./...
+TEST_DATABASE_URL=postgres://localhost/postgres TEST_VALKEY_URL=valkey://localhost:6379 go test -tags integration ./...
 ```
 
 The server listens on `:8640` (`PHOTON_LISTEN`) and names itself after the host (`PHOTON_NAME`).

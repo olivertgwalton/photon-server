@@ -17,6 +17,11 @@ const (
 	codeUnauthenticated    problemCode = "unauthenticated"
 	codeInvalidCredentials problemCode = "invalid_credentials" //nolint:gosec // a problem code, not a credential
 	codeInternal           problemCode = "internal"
+	codePairingNotFound    problemCode = "pairing_not_found"
+	// RFC 8628's own error names, so a client that knows the RFC needs no mapping.
+	codeAuthorizationPending problemCode = "authorization_pending"
+	codeSlowDown             problemCode = "slow_down"
+	codeExpiredToken         problemCode = "expired_token"
 )
 
 func (c problemCode) status() int {
@@ -35,6 +40,10 @@ func (c problemCode) status() int {
 		return http.StatusUnauthorized
 	case codeInternal:
 		return http.StatusInternalServerError
+	case codePairingNotFound:
+		return http.StatusNotFound
+	case codeAuthorizationPending, codeSlowDown, codeExpiredToken:
+		return http.StatusBadRequest
 	}
 	panic("httpapi: problem code without a status: " + string(c))
 }

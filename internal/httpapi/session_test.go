@@ -7,12 +7,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/kv"
 )
 
 const goodToken = "pst_good"
@@ -36,6 +38,21 @@ func (fakeAuth) Authenticate(_ context.Context, token string) (domain.Session, e
 }
 
 func (fakeAuth) SignOut(context.Context, uuid.UUID) error { return nil }
+
+func (fakeAuth) StartPairing(context.Context, auth.Device) (auth.PairingStart, error) {
+	return auth.PairingStart{DeviceCode: "BCDFGHJK.secret", UserCode: "BCDF-GHJK", ExpiresIn: 10 * time.Minute}, nil
+}
+
+func (fakeAuth) ApprovePairing(context.Context, domain.Session, string) (auth.Device, error) {
+	return auth.Device{}, auth.ErrPairingNotFound
+}
+
+func (fakeAuth) PollPairing(_ context.Context, deviceCode string) (kv.PairingState, string, domain.Profile, error) {
+	if deviceCode == "BCDFGHJK.secret" {
+		return kv.PairingPending, "", domain.Profile{}, nil
+	}
+	return kv.PairingExpired, "", domain.Profile{}, nil
+}
 
 func serve(t *testing.T, method, target, token, body string) *httptest.ResponseRecorder {
 	t.Helper()
@@ -113,5 +130,15 @@ func TestMeIsTheSessionsProfile(t *testing.T) {
 	}
 	if got.Name != "Oliver" || got.Role != domain.RoleAdmin {
 		t.Errorf("me = %+v", got)
+	}
+}
+
+func TestPollingAnswersInRFC8628Terms(t *testing.T) {
+	for code, want := range map[string]problemCode{"BCDFGHJK.secret": codeAuthorizationPending, "guessed": codeExpiredToken} {
+		rec := serve(t, http.MethodPost, "/api/v1/auth/device/poll", "", `{"device_code":"`+code+`"}`)
+		var p problem
+		if err := json.NewDecoder(rec.Body).Decode(&p); err != nil || rec.Code != http.StatusBadRequest || p.Code != want {
+			t.Errorf("poll %q: %d %q (err %v), want 400 %q", code, rec.Code, p.Code, err, want)
+		}
 	}
 }
