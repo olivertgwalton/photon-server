@@ -34,6 +34,8 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		LibrarySource:      newLibrarySource(db, opts...),
 		Part:               newPart(db, opts...),
 		PartFile:           newPartFile(db, opts...),
+		Playlist:           newPlaylist(db, opts...),
+		PlaylistEntry:      newPlaylistEntry(db, opts...),
 		Profile:            newProfile(db, opts...),
 		Provider:           newProvider(db, opts...),
 		Rating:             newRating(db, opts...),
@@ -66,6 +68,8 @@ type Query struct {
 	LibrarySource      librarySource
 	Part               part
 	PartFile           partFile
+	Playlist           playlist
+	PlaylistEntry      playlistEntry
 	Profile            profile
 	Provider           provider
 	Rating             rating
@@ -101,6 +105,8 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		LibrarySource:      q.LibrarySource.clone(db),
 		Part:               q.Part.clone(db),
 		PartFile:           q.PartFile.clone(db),
+		Playlist:           q.Playlist.clone(db),
+		PlaylistEntry:      q.PlaylistEntry.clone(db),
 		Profile:            q.Profile.clone(db),
 		Provider:           q.Provider.clone(db),
 		Rating:             q.Rating.clone(db),
@@ -141,6 +147,8 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		LibrarySource:      q.LibrarySource.replaceDB(db),
 		Part:               q.Part.replaceDB(db),
 		PartFile:           q.PartFile.replaceDB(db),
+		Playlist:           q.Playlist.replaceDB(db),
+		PlaylistEntry:      q.PlaylistEntry.replaceDB(db),
 		Profile:            q.Profile.replaceDB(db),
 		Provider:           q.Provider.replaceDB(db),
 		Rating:             q.Rating.replaceDB(db),
@@ -171,6 +179,8 @@ type queryCtx struct {
 	LibrarySource      ILibrarySourceDo
 	Part               IPartDo
 	PartFile           IPartFileDo
+	Playlist           IPlaylistDo
+	PlaylistEntry      IPlaylistEntryDo
 	Profile            IProfileDo
 	Provider           IProviderDo
 	Rating             IRatingDo
@@ -201,6 +211,8 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		LibrarySource:      q.LibrarySource.WithContext(ctx),
 		Part:               q.Part.WithContext(ctx),
 		PartFile:           q.PartFile.WithContext(ctx),
+		Playlist:           q.Playlist.WithContext(ctx),
+		PlaylistEntry:      q.PlaylistEntry.WithContext(ctx),
 		Profile:            q.Profile.WithContext(ctx),
 		Provider:           q.Provider.WithContext(ctx),
 		Rating:             q.Rating.WithContext(ctx),

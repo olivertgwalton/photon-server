@@ -73,6 +73,8 @@ type Services struct {
 	Profiles  profileLister
 	Catalogue catalogue
 	Libraries libraryAdmin
+	// Playlists are each profile's own.
+	Playlists playlists
 	// Collections are box sets, a provider's and an admin's.
 	Collections collections
 	// Providers are the metadata providers the server has, and ProviderSettings what an admin set
@@ -154,6 +156,14 @@ func (a *API) routes() []route {
 		{pattern: "GET /api/v1/libraries/{id}/facets", access: signedIn, handle: a.facets},
 		{pattern: "GET /api/v1/libraries/{id}/collections", access: signedIn, query: []string{"offset", "limit"}, handle: a.libraryCollections},
 		{pattern: "GET /api/v1/titles/{id}/members", access: signedIn, handle: a.members},
+		{pattern: "GET /api/v1/playlists", access: signedIn, handle: a.playlistsOf},
+		{pattern: "POST /api/v1/playlists", access: signedIn, handle: a.addPlaylist},
+		{pattern: "PATCH /api/v1/playlists/{id}", access: signedIn, handle: a.setPlaylist},
+		{pattern: "DELETE /api/v1/playlists/{id}", access: signedIn, handle: a.removePlaylist},
+		{pattern: "GET /api/v1/playlists/{id}/entries", access: signedIn, query: []string{"offset", "limit"}, handle: a.playlistEntries},
+		{pattern: "POST /api/v1/playlists/{id}/entries", access: signedIn, handle: a.addToPlaylist},
+		{pattern: "PUT /api/v1/playlists/{id}/entries/{entry}/position", access: signedIn, handle: a.moveEntry},
+		{pattern: "DELETE /api/v1/playlists/{id}/entries/{entry}", access: signedIn, handle: a.removeEntry},
 		{pattern: "POST /api/v1/admin/collections", access: admin, handle: a.addCollection},
 		{pattern: "PUT /api/v1/admin/collections/{id}/members", access: admin, handle: a.setMembers},
 		{pattern: "DELETE /api/v1/admin/collections/{id}", access: admin, handle: a.removeCollection},

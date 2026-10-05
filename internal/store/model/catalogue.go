@@ -228,3 +228,17 @@ type CollectionMember struct {
 	ItemID       UUID `gorm:"type:uuid;primaryKey"`
 	Position     int
 }
+
+type Playlist struct {
+	ID        UUID `gorm:"type:uuid;default:uuidv7()"`
+	ProfileID UUID `gorm:"type:uuid"`
+	Name      string
+	UpdatedAt time.Time `gorm:"default:now()"`
+}
+
+type PlaylistEntry struct {
+	ID         UUID `gorm:"type:uuid;default:uuidv7()"`
+	PlaylistID UUID `gorm:"type:uuid"`
+	ItemID     UUID `gorm:"type:uuid"`
+	Position   int
+}
