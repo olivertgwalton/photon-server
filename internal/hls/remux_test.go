@@ -192,6 +192,39 @@ func TestARemuxerStartsWithNothingLeftOver(t *testing.T) {
 	}
 }
 
+// A file whose header says a minute and which holds thirty seconds: a player asking past its end
+// is told at once, not left waiting.
+func TestASegmentPastAShortFilesEndFails(t *testing.T) {
+	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keyframes []time.Duration
+	for k := range 30 {
+		keyframes = append(keyframes, time.Duration(2*k)*time.Second)
+	}
+	playback := uuid.NewV7()
+	if err := r.Open(playback, Copy{Parts: []Source{{
+		Open:  func() (*os.File, error) { return os.Open("testdata/fragments.mp4") },
+		Part:  Part{Duration: time.Minute, Keyframes: keyframes},
+		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { r.Close(playback) })
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	for _, n := range []int{5, 7} {
+		f, err := r.Segment(ctx, playback, n)
+		if err == nil {
+			_ = f.Close()
+		}
+		if !errors.Is(err, errEnded) {
+			t.Errorf("segment %d, past the file's end: %v, want it refused at once", n, err)
+		}
+	}
+}
+
 // args is the remuxer's whole say over what ffmpeg makes of a file.
 func TestArgsCarryWhatWasDecided(t *testing.T) {
 	for _, tc := range []struct {
