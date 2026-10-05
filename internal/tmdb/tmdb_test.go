@@ -56,7 +56,7 @@ func TestDetailsTakeTheCountrysCertificate(t *testing.T) {
 	c := serve(t, map[string]string{
 		"/movie/348?append_to_response=release_dates%2Cexternal_ids&language=en-GB": `{
 			"id":348,"title":"Alien","original_title":"Alien","overview":"In space.","tagline":"Scream.",
-			"release_date":"1979-05-25","genres":[{"name":"Horror"}],"production_companies":[{"name":"Brandywine"}],
+			"release_date":"1979-05-25","genres":[{"name":"Horror"}],"production_companies":[{"name":"Brandywine"}],"networks":[{"name":"Brandywine"}],
 			"external_ids":{"imdb_id":"tt0078748"},
 			"release_dates":{"results":[
 				{"iso_3166_1":"US","release_dates":[{"certification":"R"}]},
