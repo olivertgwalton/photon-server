@@ -38,7 +38,7 @@ func (f fakePictures) File(context.Context, uuid.UUID, string) (*os.File, error)
 }
 
 // Resized answers a copy only of the provider's picture, and the local one as it is.
-func (f fakePictures) Resized(_ context.Context, key string, _ int, _ func() (*os.File, error)) (*os.File, error) {
+func (f fakePictures) Resized(_ context.Context, key string, _ int, _ func(context.Context) (*os.File, error)) (*os.File, error) {
 	if key == providerPoster.String() {
 		return os.Open(filepath.Join(f.root, "small"))
 	}

@@ -33,8 +33,9 @@ const maxPixels = 50_000_000
 var ErrNotResizable = errors.New("picture cannot be resized")
 
 // Resized answers the picture with key at width or, where it is no wider than that, as it is
-// (ErrNotResizable). open reads the picture's own file. Each size is made once and kept.
-func (c *Cache) Resized(ctx context.Context, key string, width int, open func() (*os.File, error)) (*os.File, error) {
+// (ErrNotResizable). open reads the picture's own file, on a context that outlives the callers,
+// as everyone asking for the size at once shares it. Each size is made once and kept.
+func (c *Cache) Resized(ctx context.Context, key string, width int, open func(context.Context) (*os.File, error)) (*os.File, error) {
 	i, _ := slices.BinarySearch(Widths, width)
 	width = Widths[min(i, len(Widths)-1)]
 	name := fmt.Sprintf("%s-w%d", key, width)
@@ -58,14 +59,14 @@ func (c *Cache) Resized(ctx context.Context, key string, width int, open func() 
 	return c.root.Open(name)
 }
 
-func (c *Cache) resize(ctx context.Context, name string, width int, open func() (*os.File, error)) error {
+func (c *Cache) resize(ctx context.Context, name string, width int, open func(context.Context) (*os.File, error)) error {
 	select {
 	case c.resizing <- struct{}{}:
 		defer func() { <-c.resizing }()
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	f, err := open()
+	f, err := open(ctx)
 	if err != nil {
 		return err
 	}
