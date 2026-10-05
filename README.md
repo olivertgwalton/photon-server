@@ -5,7 +5,8 @@ A media server for films and television, written in Go.
 ## Develop
 
 Needs PostgreSQL 18, Valkey, and FFmpeg 9 or newer (`ffmpeg` and `ffprobe` on the `PATH`, or
-`PHOTON_FFMPEG` and `PHOTON_FFPROBE`).
+`PHOTON_FFMPEG` and `PHOTON_FFPROBE`). The server's own FFmpeg, for Linux on x86-64 and arm64, is
+`build/ffmpeg/build.sh`: it cross-compiles with Zig from macOS or Linux (see `build/ffmpeg/SOURCE.md`).
 
 ```sh
 export PHOTON_DATABASE_URL=postgres://localhost/photon_dev
