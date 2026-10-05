@@ -39,8 +39,9 @@ type Scheduler struct {
 	tasks []Task
 }
 
-func NewScheduler(st stateStore, log *slog.Logger, tasks ...Task) *Scheduler {
-	return &Scheduler{store: st, log: log, node: uuid.NewV7(), tasks: tasks}
+// node identifies this process to the other nodes of the cluster.
+func NewScheduler(st stateStore, log *slog.Logger, node uuid.UUID, tasks ...Task) *Scheduler {
+	return &Scheduler{store: st, log: log, node: node, tasks: tasks}
 }
 
 func (s *Scheduler) Run(ctx context.Context) {
