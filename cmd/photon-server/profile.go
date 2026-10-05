@@ -42,6 +42,9 @@ func profileCommand(ctx context.Context, logger *slog.Logger, databaseURL string
 	if err != nil {
 		return err
 	}
+	if r == domain.RoleAdmin && *noPassword {
+		return auth.ErrAdminPassword
+	}
 	st, err := store.Open(ctx, databaseURL, logger)
 	if err != nil {
 		return err

@@ -11,6 +11,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 type Info struct {
@@ -41,13 +42,20 @@ type authenticator interface {
 	StartPairing(ctx context.Context, d auth.Device) (auth.PairingStart, error)
 	ApprovePairing(ctx context.Context, approver domain.Session, userCode string) (auth.Device, error)
 	PollPairing(ctx context.Context, deviceCode string) (kv.PairingState, string, domain.Profile, error)
+	SwitchProfile(ctx context.Context, session domain.Session, target uuid.UUID, secret string) (domain.Profile, error)
+	SetPIN(ctx context.Context, profile uuid.UUID, pin string) error
+}
+
+type profileLister interface {
+	Profiles(ctx context.Context) ([]store.ProfileListing, error)
 }
 
 // Services are what the API's routes call.
 type Services struct {
 	// Ready reports whether everything a request may need is reachable.
-	Ready func(context.Context) error
-	Auth  authenticator
+	Ready    func(context.Context) error
+	Auth     authenticator
+	Profiles profileLister
 }
 
 type API struct {
@@ -82,6 +90,10 @@ func (a *API) routes() []route {
 		{pattern: "POST /api/v1/auth/device/start", access: public, handle: a.startPairing},
 		{pattern: "POST /api/v1/auth/device/approve", access: signedIn, handle: a.approvePairing},
 		{pattern: "POST /api/v1/auth/device/poll", access: public, handle: a.pollPairing},
+		{pattern: "GET /api/v1/profiles", access: signedIn, handle: a.profiles},
+		{pattern: "PUT /api/v1/session/profile", access: signedIn, handle: a.switchProfile},
+		{pattern: "PUT /api/v1/me/pin", access: signedIn, handle: a.setPIN},
+		{pattern: "DELETE /api/v1/me/pin", access: signedIn, handle: a.clearPIN},
 	}
 }
 
