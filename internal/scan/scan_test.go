@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/jackc/pgx/v5"
 
@@ -39,6 +40,7 @@ type fixture struct {
 	root    string
 	lib     domain.Library
 	db      *pgx.Conn
+	st      *store.Store
 	scanner *Scanner
 	prober  *countingProber
 }
@@ -66,7 +68,7 @@ func newFixture(t *testing.T, kind domain.LibraryKind) *fixture {
 		t.Fatal(err)
 	}
 	p := &countingProber{}
-	return &fixture{t: t, root: root, lib: lib, db: db, scanner: New(st, p, log), prober: p}
+	return &fixture{t: t, root: root, lib: lib, db: db, st: st, scanner: New(st, p, log), prober: p}
 }
 
 // put writes a file whose bytes are its seed repeated, so different seeds are different copies.
@@ -475,5 +477,76 @@ func TestNFOsNameSeasonsAndNumberEpisodes(t *testing.T) {
 	f.scan()
 	if got := f.title(`SELECT title FROM items WHERE kind = 'season' AND season_number = 1`); got != "Baltimore" {
 		t.Errorf("after renaming season 1 in tvshow.nfo, it is %q", got)
+	}
+}
+
+func (f *fixture) id(sql string) uuid.UUID {
+	f.t.Helper()
+	var s string
+	if err := f.db.QueryRow(f.t.Context(), sql).Scan(&s); err != nil {
+		f.t.Fatal(err)
+	}
+	return uuid.MustParse(s)
+}
+
+func TestTitlePagesShowWhatTheScanFound(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	f.put("Lawrence of Arabia (1962)/Lawrence of Arabia (1962) - 2160p cd1.mkv", "l1")
+	f.put("Lawrence of Arabia (1962)/Lawrence of Arabia (1962) - 2160p cd2.mkv", "l2")
+	f.put("Lawrence of Arabia (1962)/Lawrence of Arabia (1962) - 1080p.mkv", "l3")
+	f.put("Lawrence of Arabia (1962)/Lawrence of Arabia (1962) - 1080p.en.srt", "sub")
+	f.put("Lawrence of Arabia (1962)/trailers/Teaser.mkv", "teaser")
+	f.scan()
+	page, err := f.st.Title(t.Context(), f.id(`SELECT id::text FROM items WHERE kind = 'movie'`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Title != "Lawrence of Arabia" || page.Year != 1962 || len(page.Versions) != 2 {
+		t.Fatalf("page = %q %d with %d versions, want Lawrence of Arabia 1962 in two", page.Title, page.Year, len(page.Versions))
+	}
+	long, short := page.Versions[0], page.Versions[1]
+	if long.Label != "2160p" || long.Parts != 2 || long.DurationMS != 4*3600*1000 {
+		t.Errorf("first version = %q in %d parts, %d ms; want the two-part 2160p copy, longest first", long.Label, long.Parts, long.DurationMS)
+	}
+	if len(long.Chapters) != 2 || long.Chapters[1].StartMS != 2*3600*1000 {
+		t.Errorf("chapters = %+v, want one per part on one timeline", long.Chapters)
+	}
+	if len(long.Streams) != 2 || long.Streams[0].Range != domain.RangeHDR10 {
+		t.Errorf("streams = %+v, want the first part's HDR10 video and its audio", long.Streams)
+	}
+	if len(short.Subtitles) != 1 || short.Subtitles[0].Language != "en" || len(long.Subtitles) != 0 {
+		t.Errorf("subtitles = %+v and %+v, want the English file on the 1080p copy alone", long.Subtitles, short.Subtitles)
+	}
+	if len(page.Extras) != 1 || page.Extras[0].Kind != domain.ExtraTrailer {
+		t.Errorf("extras = %+v, want the trailer", page.Extras)
+	}
+}
+
+func TestAShowsPageListsItsSeasonsAndASeasonsItsEpisodes(t *testing.T) {
+	f := newFixture(t, domain.LibraryShows)
+	f.put("The Wire/Season 1/The Wire S01E02.mkv", "e2")
+	f.put("The Wire/Season 1/The Wire S01E01.mkv", "e1")
+	f.put("The Wire/Season 2/The Wire S02E01.mkv", "e3")
+	f.scan()
+	show, err := f.st.Title(t.Context(), f.id(`SELECT id::text FROM items WHERE kind = 'show'`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(show.Seasons) != 2 || show.Seasons[0].Episodes != 2 || show.Seasons[1].Number != 2 {
+		t.Fatalf("seasons = %+v, want season 1 with two episodes, then season 2", show.Seasons)
+	}
+	season, err := f.st.Title(t.Context(), show.Seasons[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if season.Show == nil || season.Show.ID != show.ID || len(season.Episodes) != 2 || *season.Episodes[0].Number != 1 {
+		t.Errorf("season page = %+v, want its show and episodes 1 and 2 in order", season)
+	}
+	episode, err := f.st.Title(t.Context(), season.Episodes[1].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if episode.Season == nil || episode.Show == nil || episode.Show.Title != "The Wire" || len(episode.Versions) != 1 {
+		t.Errorf("episode page = %+v, want its season, its show and its copy", episode)
 	}
 }
