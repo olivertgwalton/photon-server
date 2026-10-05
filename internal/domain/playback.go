@@ -44,6 +44,8 @@ type Playback struct {
 	Position time.Duration
 	Started  time.Time
 	Updated  time.Time
+	// Node is the server node running it, whose HLS it serves.
+	Node uuid.UUID
 }
 
 // VideoPlan is the video stream played, by its index in the file, what becomes of its Dolby

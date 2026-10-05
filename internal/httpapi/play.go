@@ -5,7 +5,10 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -34,7 +37,13 @@ type remuxing interface {
 	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan) error
 }
 
+// owners say which node of the cluster serves a playback's HLS.
+type owners interface {
+	Owner(ctx context.Context, playback uuid.UUID) (string, bool, error)
+}
+
 type hlsFiles interface {
+	Has(playback uuid.UUID) bool
 	Playlist(playback uuid.UUID, name string) (string, error)
 	SubtitleSegment(ctx context.Context, playback uuid.UUID, track, n int) (string, error)
 	Init(ctx context.Context, playback uuid.UUID, part int) (*os.File, error)
@@ -296,6 +305,36 @@ func (a *API) answeredRemux(w http.ResponseWriter, r *http.Request, err error) b
 		return false
 	}
 	return true
+}
+
+// routeToOwner hands a request for a playback's HLS that another node of the cluster runs to that
+// node, which checks its signature again; every node signs with the server's one key.
+func (a *API) routeToOwner(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		playback, err := uuid.Parse(r.PathValue("playback"))
+		if err != nil || a.svc.Owners == nil || a.svc.HLS.Has(playback) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		address, elsewhere, err := a.svc.Owners.Owner(r.Context(), playback)
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		target, perr := url.Parse(address)
+		if !elsewhere || perr != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		proxy := &httputil.ReverseProxy{
+			Rewrite: func(pr *httputil.ProxyRequest) {
+				pr.SetURL(target)
+				pr.SetXForwarded()
+			},
+			ErrorLog: slog.NewLogLogger(a.logger.Handler(), slog.LevelWarn),
+		}
+		proxy.ServeHTTP(w, r)
+	})
 }
 
 // requireSignedPath admits a request whose path carries a signature of its HLS playback, as
