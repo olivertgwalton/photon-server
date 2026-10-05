@@ -75,12 +75,12 @@ func (filmSearch) Info() provider.Info {
 }
 
 func (filmSearch) Candidates(_ context.Context, _ domain.ItemKind, title string, year int) ([]domain.Candidate, error) {
-	return []domain.Candidate{{ID: 949, Title: title + " asked", Year: year, Poster: "https://image.tmdb.org/t/p/original/heat.jpg"}}, nil
+	return []domain.Candidate{{ID: "949", Title: title + " asked", Year: year, Poster: "https://image.tmdb.org/t/p/original/heat.jpg"}}, nil
 }
 
 func TestAnAdminFixesATitle(t *testing.T) {
 	e := &fakeEditing{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Editing: e, Providers: provider.NewRegistry(filmSearch{})})
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Editing: e, Providers: provider.NewRegistry(nil, filmSearch{})})
 	base := "/api/v1/admin/titles/" + films.String()
 	copyBase := "/api/v1/admin/versions/" + films.String() + "/markers"
 	for _, tc := range []struct {

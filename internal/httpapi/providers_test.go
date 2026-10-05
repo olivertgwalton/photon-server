@@ -44,7 +44,7 @@ func (m memorySettings) SetProviderSettings(_ context.Context, id domain.FieldSo
 func TestAnAdminSetsAProvidersKeyAndNeverSeesItAgain(t *testing.T) {
 	settings := memorySettings{}
 	api := New(slog.New(slog.DiscardHandler), Info{}, Services{
-		Auth: fakeAuth{}, Providers: provider.NewRegistry(keyed{}), ProviderSettings: settings,
+		Auth: fakeAuth{}, Providers: provider.NewRegistry(nil, keyed{}), ProviderSettings: settings,
 	})
 	do := func(token, method, target, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, strings.NewReader(body))

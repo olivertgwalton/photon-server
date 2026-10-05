@@ -56,6 +56,13 @@ Tomatoes' critics and audience, Metacritic's, Letterboxd's and Trakt's once an a
 key (`PATCH /api/v1/admin/providers/mdblist` with `{"settings": {"api_key": "…"}}`) and a library
 takes it (`-sources nfo,tmdb,mdblist`). Ratings are scored out of 100.
 
+Anyone can add a metadata provider, in any language, as a web service speaking the server's plugin
+protocol ([docs/plugins.md](docs/plugins.md)). Register one by its address
+(`POST /api/v1/admin/plugins` with `{"url": "http://films-plugin:9000"}`) and it is the provider
+`plugin:ID`: listed with the others, set the same way, and taken by a library like any source
+(`-sources nfo,plugin:films,tmdb`). A plugin that is down is passed over for the library's next
+source. Removing one keeps what it said about titles until another source says otherwise.
+
 Libraries are scanned every 12 hours, and as their files change: each folder is watched (inotify on
 Linux) and a library is scanned a minute after its last change. Network shares send no change
 events, so a library on one is scanned on the schedule; `photon-server library set -name NAME

@@ -10,8 +10,9 @@ import (
 )
 
 type providerList interface {
-	All() []provider.Provider
-	Get(id domain.FieldSource) (provider.Provider, bool)
+	All(ctx context.Context) ([]provider.Provider, error)
+	Get(ctx context.Context, id domain.FieldSource) (provider.Provider, bool, error)
+	Forget()
 }
 
 type providerSettings interface {
@@ -30,11 +31,11 @@ type settingJSON struct {
 }
 
 type metadataProviderJSON struct {
-	ID           domain.FieldSource `json:"id"`
-	Name         string             `json:"name"`
-	Kinds        []domain.ItemKind  `json:"kinds"`
-	Capabilities []string           `json:"capabilities"`
-	Settings     []settingJSON      `json:"settings"`
+	ID           domain.FieldSource  `json:"id"`
+	Name         string              `json:"name"`
+	Kinds        []domain.ItemKind   `json:"kinds"`
+	Capabilities []domain.Capability `json:"capabilities"`
+	Settings     []settingJSON       `json:"settings"`
 	// Ready is whether every setting it needs is set.
 	Ready bool `json:"ready"`
 }
@@ -42,7 +43,11 @@ type metadataProviderJSON struct {
 // adminProviders lists the metadata providers the server has, what each can do, and what is set of
 // what each needs, as Jellyfin's plugin settings show them.
 func (a *API) adminProviders(w http.ResponseWriter, r *http.Request) {
-	all := a.svc.Providers.All()
+	all, err := a.svc.Providers.All(r.Context())
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
 	out := make([]metadataProviderJSON, 0, len(all))
 	for _, p := range all {
 		j, err := a.provider(r.Context(), p)
@@ -62,7 +67,11 @@ type providerChangeJSON struct {
 // setProvider changes a provider's settings: each value given replaces what was set, and "" clears
 // it. Only the settings it declares are taken.
 func (a *API) setProvider(w http.ResponseWriter, r *http.Request) {
-	p, ok := a.svc.Providers.Get(domain.FieldSource(r.PathValue("id")))
+	p, ok, err := a.svc.Providers.Get(r.Context(), domain.FieldSource(r.PathValue("id")))
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
 	if !ok {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
@@ -91,13 +100,7 @@ func (a *API) setProvider(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) provider(ctx context.Context, p provider.Provider) (metadataProviderJSON, error) {
 	info := p.Info()
-	j := metadataProviderJSON{ID: info.ID, Name: info.Name, Kinds: info.Kinds, Capabilities: []string{}, Settings: []settingJSON{}, Ready: true}
-	if _, ok := p.(provider.Describer); ok {
-		j.Capabilities = append(j.Capabilities, "describe")
-	}
-	if _, ok := p.(provider.Rater); ok {
-		j.Capabilities = append(j.Capabilities, "rate")
-	}
+	j := metadataProviderJSON{ID: info.ID, Name: info.Name, Kinds: info.Kinds, Capabilities: provider.Capabilities(p), Settings: []settingJSON{}, Ready: true}
 	if len(info.Settings) == 0 {
 		return j, nil
 	}

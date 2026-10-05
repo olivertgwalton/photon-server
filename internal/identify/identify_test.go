@@ -77,10 +77,10 @@ func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {
 	id := cards[0].ID
 
 	// A failing rater does not fail the job: the match stands.
-	if err := Handler(st, provider.NewRegistry(films{}, critics{fail: true}), log)(ctx, id); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, films{}, critics{fail: true}), log)(ctx, id); err != nil {
 		t.Fatalf("with the rater failing: %v", err)
 	}
-	if err := Handler(st, provider.NewRegistry(films{}, critics{}), log)(ctx, id); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, films{}, critics{}), log)(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	page, err := st.Title(ctx, uuid.UUID{}, id)

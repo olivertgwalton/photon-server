@@ -108,8 +108,12 @@ func (a *API) candidates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	p, found := a.svc.Providers.Get(domain.FieldSource(q.Get("provider")))
-	searcher, searches := p.(provider.Searcher)
+	p, found, err := a.svc.Providers.Get(r.Context(), domain.FieldSource(q.Get("provider")))
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	searcher, searches := provider.As[provider.Searcher](p, domain.CapabilitySearch)
 	if !found || !searches {
 		writeProblem(w, a.logger, codeInvalidParameter, "provider is one that searches")
 		return
@@ -134,13 +138,17 @@ func (a *API) candidates(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	offered, err := searcher.Candidates(r.Context(), sub.Kind, title, year)
+	if errors.Is(err, provider.ErrUnavailable) {
+		writeProblem(w, a.logger, codeProviderUnavailable, err.Error())
+		return
+	}
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
 	out := make([]candidateJSON, len(offered))
 	for i, c := range offered {
-		out[i] = candidateJSON{ID: strconv.Itoa(c.ID), Title: c.Title, OriginalTitle: c.OriginalTitle, Year: c.Year, Poster: c.Poster}
+		out[i] = candidateJSON{ID: c.ID, Title: c.Title, OriginalTitle: c.OriginalTitle, Year: c.Year, Poster: c.Poster}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[candidateJSON]{Items: out})
 }
@@ -160,7 +168,15 @@ func (a *API) pinMatch(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if !slices.Contains(domain.Providers(), req.Provider) || req.ID == "" {
+	known := slices.Contains(domain.Providers(), req.Provider)
+	if _, plugin := domain.FieldSource(req.Provider).Plugin(); plugin {
+		var err error
+		if _, known, err = a.svc.Providers.Get(r.Context(), domain.FieldSource(req.Provider)); err != nil {
+			a.internal(w, r, err)
+			return
+		}
+	}
+	if !known || req.ID == "" {
 		writeProblem(w, a.logger, codeInvalidBody, "provider is one a title carries ids of, and id is set")
 		return
 	}

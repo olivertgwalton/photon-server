@@ -18,10 +18,7 @@ func (c *Client) Match(ctx context.Context, _ domain.ItemKind, h provider.Hints)
 	id, err := provider.Resolve(h, domain.ProviderTVDB, []domain.Provider{domain.ProviderIMDb, domain.ProviderTMDB},
 		func(_ domain.Provider, v string) ([]domain.Candidate, error) { return c.Find(ctx, v) },
 		func(title string, year int) ([]domain.Candidate, error) { return c.Search(ctx, title, year) })
-	if err != nil || id == 0 {
-		return "", err
-	}
-	return strconv.Itoa(id), nil
+	return id, err
 }
 
 // Describe answers TheTVDB's details of a show and of the seasons asked for, in the order its

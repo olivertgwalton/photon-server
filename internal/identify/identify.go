@@ -17,25 +17,30 @@ import (
 // Handler asks each provider a film's or show's library takes, in the registry's order, what it
 // knows: a describer matches the title and records what it says about it and, for a show, its
 // seasons and episodes, and a rater records its ratings; the library's order decides whose values
-// stand. A title with no confident match is left as its files and NFO describe it.
+// stand. A title with no confident match is left as its files and NFO describe it, and a provider
+// not configured or not reachable is passed over.
 func Handler(st *store.Store, providers *provider.Registry, log *slog.Logger) jobs.Handler {
 	return func(ctx context.Context, id uuid.UUID) error {
 		sub, ok, err := st.IdentifySubject(ctx, id)
 		if err != nil || !ok {
 			return err
 		}
-		for _, p := range providers.All() {
+		all, err := providers.All(ctx)
+		if err != nil {
+			return err
+		}
+		for _, p := range all {
 			info := p.Info()
 			if !slices.Contains(sub.Sources, info.ID) || !slices.Contains(info.Kinds, sub.Kind) {
 				continue
 			}
 			log := log.With(slog.String("provider", string(info.ID)), slog.String("title", sub.Title))
-			if d, ok := p.(provider.Describer); ok {
+			if d, ok := provider.As[provider.Describer](p, domain.CapabilityDescribe); ok {
 				if err := describe(ctx, st, d, id, &sub, log); err != nil {
 					return err
 				}
 			}
-			if r, ok := p.(provider.Rater); ok {
+			if r, ok := provider.As[provider.Rater](p, domain.CapabilityRate); ok {
 				rate(ctx, st, r, id, sub, log)
 			}
 		}
@@ -45,7 +50,7 @@ func Handler(st *store.Store, providers *provider.Registry, log *slog.Logger) jo
 
 func describe(ctx context.Context, st *store.Store, d provider.Describer, id uuid.UUID, sub *store.Subject, log *slog.Logger) error {
 	match, err := d.Match(ctx, sub.Kind, provider.Hints{Title: sub.Title, Year: sub.Year, IDs: sub.IDs})
-	if errors.Is(err, provider.ErrNotConfigured) {
+	if passedOver(ctx, err, log) {
 		return nil
 	}
 	if err != nil {
@@ -56,6 +61,9 @@ func describe(ctx context.Context, st *store.Store, d provider.Describer, id uui
 		return nil
 	}
 	m, seasons, err := d.Describe(ctx, sub.Kind, match, domain.SeasonRequest{Numbers: sub.Seasons, Order: sub.Order})
+	if passedOver(ctx, err, log) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -66,6 +74,16 @@ func describe(ctx context.Context, st *store.Store, d provider.Describer, id uui
 		}
 	}
 	return st.SaveIdentity(ctx, id, d.Info().ID, m, seasons)
+}
+
+// passedOver is a provider that is not configured, or cannot be reached, as a plugin that is down:
+// the next source is asked rather than the job failing.
+func passedOver(ctx context.Context, err error, log *slog.Logger) bool {
+	if errors.Is(err, provider.ErrUnavailable) {
+		log.WarnContext(ctx, "provider passed over", slog.Any("err", err))
+		return true
+	}
+	return errors.Is(err, provider.ErrNotConfigured)
 }
 
 // rate records a title's ratings. Ratings are worth less than the match before them, so a rater

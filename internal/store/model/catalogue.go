@@ -231,6 +231,12 @@ type Provider struct {
 	Settings []byte `gorm:"type:jsonb"`
 }
 
+type Plugin struct {
+	Slug     string `gorm:"primaryKey"`
+	URL      string
+	Manifest []byte `gorm:"type:jsonb"`
+}
+
 type Collection struct {
 	ItemID UUID `gorm:"type:uuid;primaryKey"`
 	Origin domain.CollectionOrigin

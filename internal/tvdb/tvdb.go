@@ -160,13 +160,12 @@ func (c *Client) Search(ctx context.Context, title string, year int) ([]domain.C
 	}
 	found := make([]domain.Candidate, 0, len(out.Data))
 	for _, r := range out.Data {
-		id, err := strconv.Atoi(r.ID)
-		if err != nil {
+		if _, err := strconv.Atoi(r.ID); err != nil {
 			continue
 		}
 		y, _ := strconv.Atoi(r.Year)
 		found = append(found, domain.Candidate{
-			ID: id, Title: cmp.Or(r.Translations[c.language], r.Name), OriginalTitle: r.Name, Year: y, Poster: r.Image,
+			ID: r.ID, Title: cmp.Or(r.Translations[c.language], r.Name), OriginalTitle: r.Name, Year: y, Poster: r.Image,
 		})
 	}
 	return found, nil
@@ -190,7 +189,7 @@ func (c *Client) Find(ctx context.Context, id string) ([]domain.Candidate, error
 	for _, r := range out.Data {
 		if r.Series != nil {
 			y, _ := strconv.Atoi(r.Series.Year)
-			found = append(found, domain.Candidate{ID: r.Series.ID, Title: r.Series.Name, OriginalTitle: r.Series.Name, Year: y})
+			found = append(found, domain.Candidate{ID: strconv.Itoa(r.Series.ID), Title: r.Series.Name, OriginalTitle: r.Series.Name, Year: y})
 		}
 	}
 	return found, nil

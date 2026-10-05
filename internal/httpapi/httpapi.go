@@ -127,6 +127,8 @@ type Services struct {
 	// of them.
 	Providers        providerList
 	ProviderSettings providerSettings
+	// Plugins are the metadata plugins an admin registered.
+	Plugins pluginAdmin
 	// ProfileAdmin adds, changes and removes the household's profiles.
 	ProfileAdmin profileAdmin
 	Tasks        tasks
@@ -535,6 +537,24 @@ func (a *API) routes() []route {
 			pattern: "PATCH /api/v1/admin/providers/{id}", access: admin, summary: "Change a provider's settings",
 			path: []param{{"id", domain.FieldSource(""), "The provider."}},
 			body: providerChangeJSON{}, status: http.StatusOK, reply: metadataProviderJSON{}, handle: a.setProvider,
+		},
+		{
+			pattern: "GET /api/v1/admin/plugins", access: admin, summary: "List the registered metadata plugins",
+			status: http.StatusOK, reply: listJSON[pluginJSON]{}, handle: a.adminPlugins,
+		},
+		{
+			pattern: "POST /api/v1/admin/plugins", access: admin,
+			summary: "Register the metadata plugin at an address, once its manifest is read",
+			body:    addPluginJSON{}, status: http.StatusCreated, reply: pluginJSON{}, handle: a.addPlugin,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/plugins/{slug}", access: admin,
+			summary: "Forget a plugin; what it said about titles stays",
+			path:    []param{slugParam}, status: http.StatusNoContent, handle: a.removePlugin,
+		},
+		{
+			pattern: "POST /api/v1/admin/plugins/{slug}/refresh", access: admin, summary: "Read a plugin's manifest again",
+			path: []param{slugParam}, status: http.StatusOK, reply: pluginJSON{}, handle: a.refreshPlugin,
 		},
 		{
 			pattern: "GET /api/v1/admin/tasks", access: admin, summary: "List the scheduled tasks and how each last ran",

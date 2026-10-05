@@ -20,6 +20,7 @@ import (
 // enums are the values of each typed string the API sends or takes.
 var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.ArtworkKind]():         values(domain.ArtworkKinds()),
+	reflect.TypeFor[domain.Capability]():          values(domain.Capabilities()),
 	reflect.TypeFor[domain.CreditKind]():          values(domain.CreditKinds()),
 	reflect.TypeFor[domain.DolbyVisionHandling](): values(domain.DolbyVisionHandlings()),
 	reflect.TypeFor[domain.DownloadState]():       values(domain.DownloadStates()),
@@ -55,6 +56,13 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[playback.Reason]():            values(playback.Reasons()),
 	reflect.TypeFor[decision]():                   values(decisions()),
 	reflect.TypeFor[problemCode]():                values(problemCodes()),
+}
+
+// open are the enums that take, beside their own values, any matching a pattern: a registered
+// plugin's source and the kind of id it files titles under.
+var open = map[reflect.Type]string{
+	reflect.TypeFor[domain.FieldSource](): domain.PluginPattern,
+	reflect.TypeFor[domain.Provider]():    domain.PluginPattern,
 }
 
 func values[T ~string](list []T) []string {
@@ -119,7 +127,12 @@ func (s *schemas) of(t reflect.Type) map[string]any {
 			s.fail(fmt.Errorf("%v has no values in enums", t))
 			return map[string]any{}
 		}
-		return s.ref(t, func() map[string]any { return map[string]any{"type": "string", "enum": enum} })
+		return s.ref(t, func() map[string]any {
+			if pattern, ok := open[t]; ok {
+				return map[string]any{"type": "string", "anyOf": []any{map[string]any{"enum": enum}, map[string]any{"pattern": pattern}}}
+			}
+			return map[string]any{"type": "string", "enum": enum}
+		})
 	case reflect.Slice, reflect.Array:
 		return map[string]any{"type": "array", "items": s.of(t.Elem())}
 	case reflect.Map:

@@ -32,6 +32,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/mdblist"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
+	"github.com/olivertgwalton/photon-server/internal/plugin"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -184,8 +185,9 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	scheduler := task.NewScheduler(st, logger, node, scanTask(st), sweepTask(st, logger), backupTask(dumper, logger), refreshTask(st, logger), sweepArtworkTask(st, pictureCache, logger), markersTask(st, tools, logger), previewsTask(st, previews, logger), sweepDownloadsTask(st, logger))
 	lang := cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US")
+	plugins := plugin.New(st)
 	// TMDB runs before TheTVDB, as its match may give TheTVDB an id to find a show by.
-	providers := provider.NewRegistry(
+	providers := provider.NewRegistry(plugins.Load,
 		tmdb.New(cmp.Or(os.Getenv("PHOTON_TMDB_TOKEN"), tmdb.DefaultToken), lang, cache),
 		tvdb.New(cmp.Or(os.Getenv("PHOTON_TVDB_KEY"), tvdb.DefaultKey), os.Getenv("PHOTON_TVDB_PIN"), lang, cache),
 		mdblist.New(func(ctx context.Context) (map[string]string, error) {
@@ -195,7 +197,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	srv := &http.Server{
 		Addr: cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close, node), Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, TrustedProxies: trusted,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close, node), Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, TrustedProxies: trusted,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,

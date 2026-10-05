@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -35,7 +36,7 @@ type Metadata struct {
 
 // Candidate is a title a provider offers as a match, and its poster to tell it by.
 type Candidate struct {
-	ID            int
+	ID            string
 	Title         string
 	OriginalTitle string
 	Year          int
@@ -89,10 +90,49 @@ func FieldSources() []FieldSource {
 	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceMDBList}
 }
 
-// MetadataSources are the sources a library may take metadata from, in an order it chooses:
-// what files say always ranks lowest, and a reader's own edit highest.
+// MetadataSources are the built-in sources a library may take metadata from, in an order it
+// chooses: what files say always ranks lowest, and a reader's own edit highest. A registered
+// plugin is one too.
 func MetadataSources() []FieldSource {
 	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList}
+}
+
+// PluginPattern is a metadata plugin's source id: its slug after "plugin:", so none collides with
+// a built-in source. It is also the kind of id a plugin files titles under, and Postgres checks
+// both by the same pattern.
+const PluginPattern = `^plugin:[a-z0-9][a-z0-9-]{0,62}$`
+
+const pluginPrefix = "plugin:"
+
+var pluginSource = regexp.MustCompile(PluginPattern)
+
+func PluginSource(slug string) FieldSource {
+	return FieldSource(pluginPrefix + slug)
+}
+
+// Plugin answers the slug of a plugin's source id, or false for a built-in source.
+func (s FieldSource) Plugin() (string, bool) {
+	if !pluginSource.MatchString(string(s)) {
+		return "", false
+	}
+	return string(s[len(pluginPrefix):]), true
+}
+
+// Capability is something a metadata provider can do.
+type Capability string
+
+const (
+	// CapabilityDescribe is matching a title and saying what is known of it.
+	CapabilityDescribe Capability = "describe"
+	// CapabilitySearch is listing titles by a name, for an admin choosing a match by hand.
+	CapabilitySearch Capability = "search"
+	CapabilityRate   Capability = "rate"
+	// CapabilityPerson is saying what is known of someone a title credits.
+	CapabilityPerson Capability = "person"
+)
+
+func Capabilities() []Capability {
+	return []Capability{CapabilityDescribe, CapabilitySearch, CapabilityRate, CapabilityPerson}
 }
 
 // DefaultSources trust an NFO beside the file over a provider, as Jellyfin's default order does.
@@ -104,8 +144,8 @@ func ParseMetadataSources(list string) ([]FieldSource, error) {
 	var out []FieldSource
 	for name := range strings.SplitSeq(list, ",") {
 		src := FieldSource(strings.TrimSpace(name))
-		if !slices.Contains(MetadataSources(), src) {
-			return nil, fmt.Errorf("source %q is not one of %v", src, MetadataSources())
+		if _, plugin := src.Plugin(); !plugin && !slices.Contains(MetadataSources(), src) {
+			return nil, fmt.Errorf("source %q is not one of %v or a plugin's", src, MetadataSources())
 		}
 		if slices.Contains(out, src) {
 			return nil, fmt.Errorf("source %q is listed twice", src)
