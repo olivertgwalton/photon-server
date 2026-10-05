@@ -97,6 +97,11 @@ The first admin is made on the command line, before anyone can sign in:
 ```sh
 go run ./cmd/photon-server profile add -name Oliver -role admin
 ```
+
+The API describes itself: `GET /api/v1/openapi.json` answers its OpenAPI 3.1 description, built
+from the server's own routes as it starts, so it says what the running server takes and answers.
+Point a client generator or a viewer such as Swagger UI at it; no token is needed.
+
 `GET /readyz` answers 204 while Postgres and Valkey are reachable and 503 otherwise.
 Integration tests create and drop a database per test on the server `TEST_DATABASE_URL` names.
 
