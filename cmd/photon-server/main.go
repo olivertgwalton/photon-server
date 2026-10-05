@@ -173,7 +173,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	// node is this process among the cluster's.
 	node := uuid.NewV7()
-	conversions, err := playback.NewConversions(st, cache, tools.FFmpeg.Path, hw, filepath.Join(cacheRoot, "downloads"), node)
+	conversions, err := playback.NewConversions(st, cache, remuxer, tools.FFmpeg.Path, hw, filepath.Join(cacheRoot, "downloads"), node)
 	if err != nil {
 		return err
 	}
@@ -219,8 +219,8 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	previewer := jobs.NewWorker(st, logger, node, 1, map[domain.JobKind]jobs.Handler{
 		domain.JobPreviews: analysis.MakePreviews(st, tools, previews, logger),
 	}, hub.Raise)
-	// Conversions have slots of their own, so a long one never holds up a scan, and a node's are
-	// few, so they never starve its playbacks.
+	// Conversions have slots of their own, so a long one never holds up a scan, and each holds a
+	// transcode slot its node's playbacks may take, so they never starve them.
 	converter := jobs.NewWorker(st, logger, node, playback.MaxConversions, map[domain.JobKind]jobs.Handler{
 		domain.JobConvert: conversions.Convert,
 	}, hub.Raise)

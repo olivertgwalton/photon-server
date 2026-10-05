@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -187,7 +188,7 @@ func (fakeHLS) Open(context.Context, uuid.UUID, store.PlayCopy, domain.VideoPlan
 	return nil
 }
 
-func (fakeHLS) Transcodes() (active, limit int) { return 1, 4 }
+func (fakeHLS) Transcodes() (active, conversions, limit int) { return 1, 0, 4 }
 
 func (fakeHLS) Has(playback uuid.UUID) bool { return playback == playbackID }
 
@@ -390,12 +391,34 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer "+goodToken)
 		return do(req)
 	}
+	admin := func() (transcodes struct{ Active, Conversions, Limit int }) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/playbacks", nil)
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		var playing struct {
+			Transcodes struct{ Active, Conversions, Limit int }
+		}
+		if err := json.NewDecoder(do(req).Body).Decode(&playing); err != nil {
+			t.Fatal(err)
+		}
+		return playing.Transcodes
+	}
+	converting, release, ok := remuxer.HoldConversion(t.Context())
+	if !ok {
+		t.Fatal("a conversion on an idle node had no slot")
+	}
+	defer release()
+	if got := admin(); got.Active != 1 || got.Conversions != 1 {
+		t.Errorf("transcodes while converting = %+v, want the conversion counted", got)
+	}
 	var first struct {
 		PlaybackID uuid.UUID `json:"playback_id"`
 		Method     string    `json:"method"`
 	}
 	if err := json.NewDecoder(transcode().Body).Decode(&first); err != nil || first.Method != "transcode" {
-		t.Fatalf("the first play = %+v, %v; want a transcode", first, err)
+		t.Fatalf("the first play = %+v, %v; want a transcode, the conversion stopped for it", first, err)
+	}
+	if !errors.Is(context.Cause(converting), hls.ErrPreempted) {
+		t.Errorf("the conversion after a play took its slot: %v, want it stopped", context.Cause(converting))
 	}
 	var refused problem
 	if rec := transcode(); rec.Code != http.StatusServiceUnavailable || json.NewDecoder(rec.Body).Decode(&refused) != nil ||
@@ -405,14 +428,14 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 	if rec := do(playRequest(`"mp4"`)); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"method":"remux"`) {
 		t.Errorf("a remux at the limit: %d %s, want it played", rec.Code, rec.Body)
 	}
-	admin := httptest.NewRequest(http.MethodGet, "/api/v1/admin/playbacks", nil)
-	admin.Header.Set("Authorization", "Bearer "+goodToken)
+	list := httptest.NewRequest(http.MethodGet, "/api/v1/admin/playbacks", nil)
+	list.Header.Set("Authorization", "Bearer "+goodToken)
 	var playing struct {
 		Items      []json.RawMessage `json:"items"`
-		Transcodes struct{ Active, Limit int }
+		Transcodes struct{ Active, Conversions, Limit int }
 	}
-	if err := json.NewDecoder(do(admin).Body).Decode(&playing); err != nil || len(playing.Items) != 2 ||
-		playing.Transcodes.Active != 1 || playing.Transcodes.Limit != 1 {
+	if err := json.NewDecoder(do(list).Body).Decode(&playing); err != nil || len(playing.Items) != 2 ||
+		playing.Transcodes.Active != 1 || playing.Transcodes.Conversions != 0 || playing.Transcodes.Limit != 1 {
 		t.Errorf("admin playbacks = %+v, %v; want the transcode and the remux, one of one transcoding", playing, err)
 	}
 

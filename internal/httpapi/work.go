@@ -131,10 +131,12 @@ type nowPlayingJSON struct {
 	NodeID     uuid.UUID         `json:"node_id"`
 }
 
-// transcodesJSON is how many videos a node is transcoding, against its limit if it has one.
+// transcodesJSON is how many videos a node is transcoding, against its limit if it has one, and
+// how many of those are download conversions.
 type transcodesJSON struct {
-	Active int `json:"active"`
-	Limit  int `json:"limit,omitzero"`
+	Active      int `json:"active"`
+	Conversions int `json:"conversions"`
+	Limit       int `json:"limit,omitzero"`
 }
 
 type nowPlayingListJSON struct {
@@ -150,8 +152,8 @@ func (a *API) adminPlaybacks(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	active, limit := a.svc.HLS.Transcodes()
-	writeJSON(w, a.logger, "application/json", http.StatusOK, nowPlayingListJSON{playbacksJSON(all), transcodesJSON{active, limit}})
+	active, conversions, limit := a.svc.HLS.Transcodes()
+	writeJSON(w, a.logger, "application/json", http.StatusOK, nowPlayingListJSON{playbacksJSON(all), transcodesJSON{active, conversions, limit}})
 }
 
 func playbacksJSON(all []domain.Playback) []nowPlayingJSON {

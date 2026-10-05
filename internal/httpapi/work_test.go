@@ -74,7 +74,7 @@ func TestAnAdminSeesTheServersWork(t *testing.T) {
 		{goodToken, http.MethodPost, "/api/v1/admin/jobs/7/retry", http.StatusAccepted, ""},
 		{goodToken, http.MethodPost, "/api/v1/admin/jobs/8/retry", http.StatusNotFound, ""},
 		{goodToken, http.MethodGet, "/api/v1/admin/playbacks", http.StatusOK, `"method":"transcode","state":"","position_ms":60000`},
-		{goodToken, http.MethodGet, "/api/v1/admin/playbacks", http.StatusOK, `"transcodes":{"active":1,"limit":4}`},
+		{goodToken, http.MethodGet, "/api/v1/admin/playbacks", http.StatusOK, `"transcodes":{"active":1,"conversions":0,"limit":4}`},
 	} {
 		rec := do(tc.token, tc.method, tc.target)
 		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.body) {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -40,7 +41,8 @@ func Conversion(c Copy, q domain.Quality) (Decision, error) {
 }
 
 // MaxConversions is how many conversions a node makes at once: Plex's downloads transcode one at
-// a time, so a playback is not starved of the processor.
+// a time, so a playback is not starved of the processor. Each also holds one of the node's
+// transcode slots, which a playback takes from it.
 const MaxConversions = 1
 
 // progressEvery is how often a conversion's progress is recorded.
@@ -52,9 +54,15 @@ type conversionStore interface {
 	ConversionProgress(ctx context.Context, id, node uuid.UUID, progress float64) error
 	FinishConversion(ctx context.Context, id, node uuid.UUID, size int64) error
 	FailConversion(ctx context.Context, id, node uuid.UUID, reason string) error
+	RequeueConversion(ctx context.Context, id, node uuid.UUID) error
 	ConversionsOn(ctx context.Context, node uuid.UUID) ([]uuid.UUID, error)
 	RemoveDownload(ctx context.Context, profile, id uuid.UUID) error
 	ConvertedFile(ctx context.Context, download uuid.UUID) (conversion, node uuid.UUID, err error)
+}
+
+// transcodeSlots are the node's slots for encoding video, shared with its playbacks.
+type transcodeSlots interface {
+	HoldConversion(ctx context.Context) (held context.Context, release func(), ok bool)
 }
 
 type nodeAddresses interface {
@@ -66,17 +74,18 @@ type nodeAddresses interface {
 type Conversions struct {
 	store  conversionStore
 	nodes  nodeAddresses
+	slots  transcodeSlots
 	ffmpeg string
 	hw     hls.Hardware
 	dir    string
 	node   uuid.UUID
 }
 
-func NewConversions(st conversionStore, nodes nodeAddresses, ffmpeg string, hw hls.Hardware, dir string, node uuid.UUID) (*Conversions, error) {
+func NewConversions(st conversionStore, nodes nodeAddresses, slots transcodeSlots, ffmpeg string, hw hls.Hardware, dir string, node uuid.UUID) (*Conversions, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, err
 	}
-	return &Conversions{store: st, nodes: nodes, ffmpeg: ffmpeg, hw: hw, dir: dir, node: node}, nil
+	return &Conversions{store: st, nodes: nodes, slots: slots, ffmpeg: ffmpeg, hw: hw, dir: dir, node: node}, nil
 }
 
 func (c *Conversions) path(conversion uuid.UUID) string {
@@ -85,8 +94,14 @@ func (c *Conversions) path(conversion uuid.UUID) string {
 
 // Convert is the job that makes a conversion. It is written to a temporary name and renamed once
 // whole; one no longer wanted is stopped and its file removed. One ffmpeg cannot make is recorded
-// as failed with its reason, not tried again: a client asking again tries again.
+// as failed with its reason, not tried again: a client asking again tries again. It waits, queued,
+// for a free transcode slot, and one stopped for a playback starts again from the beginning.
 func (c *Conversions) Convert(ctx context.Context, id uuid.UUID) error {
+	held, release, ok := c.slots.HoldConversion(ctx)
+	if !ok {
+		return jobs.ErrNotNow
+	}
+	defer release()
 	job, err := c.store.StartConversion(ctx, id, c.node)
 	if errors.Is(err, store.ErrNotFound) {
 		return nil
@@ -106,7 +121,7 @@ func (c *Conversions) Convert(ctx context.Context, id uuid.UUID) error {
 	dst := c.path(id)
 	temp := dst + ".part"
 	var reported time.Time
-	err = c.hw.Convert(ctx, c.ffmpeg, src, *d.Video, d.Audio, job.Duration, temp, func(p float64) error {
+	err = c.hw.Convert(held, c.ffmpeg, src, *d.Video, d.Audio, job.Duration, temp, func(p float64) error {
 		if time.Since(reported) < progressEvery {
 			return nil
 		}
@@ -123,6 +138,12 @@ func (c *Conversions) Convert(ctx context.Context, id uuid.UUID) error {
 			return ctx.Err()
 		case errors.Is(err, store.ErrNotFound):
 			return nil
+		case errors.Is(err, hls.ErrPreempted):
+			err := c.store.RequeueConversion(ctx, id, c.node)
+			if errors.Is(err, store.ErrNotFound) {
+				return nil
+			}
+			return cmp.Or(err, jobs.ErrNotNow)
 		}
 		return c.fail(ctx, id, err)
 	}

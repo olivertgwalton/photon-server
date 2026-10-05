@@ -34,6 +34,9 @@ var ErrNoRemux = errors.New("hls: no such remux")
 // ErrTranscodeLimit is a remux that would encode video on a remuxer already encoding its limit.
 var ErrTranscodeLimit = errors.New("hls: at the limit of transcodes at once")
 
+// ErrPreempted is a conversion stopped so a playback could have its transcode slot.
+var ErrPreempted = errors.New("hls: conversion stopped for a playback")
+
 // Unlimited is a remuxer that encodes as many videos at once as it is asked to.
 const Unlimited = 0
 
@@ -47,7 +50,8 @@ type Source struct {
 }
 
 // Remuxer runs the remuxes of copies played as HLS, one per playback, each writing its segments
-// into a folder of its own under dir.
+// into a folder of its own under dir. It keeps the node's one account of transcode slots, its
+// download conversions' as well as its own.
 type Remuxer struct {
 	ffmpeg string
 	dir    string
@@ -55,16 +59,21 @@ type Remuxer struct {
 	limit  int
 	log    *slog.Logger
 
-	mu       sync.Mutex
-	sessions map[uuid.UUID]*session
+	mu          sync.Mutex
+	sessions    map[uuid.UUID]*session
+	conversions map[*conversion]struct{}
 }
+
+// conversion is a download's conversion holding a transcode slot until it ends or a playback
+// takes the slot.
+type conversion struct{ stop context.CancelCauseFunc }
 
 // NewRemuxer runs remuxes on hw, at most limit of them encoding video at once, or Unlimited.
 func NewRemuxer(ffmpeg, dir string, hw Hardware, limit int, log *slog.Logger) (*Remuxer, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, err
 	}
-	return &Remuxer{ffmpeg: ffmpeg, dir: dir, hw: hw, limit: limit, log: log, sessions: map[uuid.UUID]*session{}}, nil
+	return &Remuxer{ffmpeg: ffmpeg, dir: dir, hw: hw, limit: limit, log: log, sessions: map[uuid.UUID]*session{}, conversions: map[*conversion]struct{}{}}, nil
 }
 
 // Copy is what a playback's HLS is made of: its parts in order, its text subtitles, and the
@@ -112,7 +121,8 @@ type subtitle struct {
 
 // Open starts the remux of a playback's copy; nothing is run until a segment is asked for.
 // Addresses in its playlists are relative to the playlists' own. A copy whose video is encoded is
-// refused with ErrTranscodeLimit while the remuxer is encoding its limit.
+// refused with ErrTranscodeLimit while playbacks hold every transcode slot; where a conversion
+// holds one, the conversion is stopped and the playback has its slot.
 func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
 	parts := make([]Part, len(c.Parts))
 	offsets := make([]time.Duration, len(c.Parts))
@@ -143,7 +153,7 @@ func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
 	s.root = root
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if s.encodes() && r.limit != Unlimited && r.transcodes() >= r.limit {
+	if s.encodes() && r.full() && !r.preempt() {
 		_ = root.Close()
 		_ = os.RemoveAll(s.dir)
 		return ErrTranscodeLimit
@@ -152,18 +162,53 @@ func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
 	return nil
 }
 
-// Transcodes answers how many remuxes are encoding video, and the most that may at once.
-func (r *Remuxer) Transcodes() (active, limit int) {
+// HoldConversion gives a download's conversion a transcode slot for as long as no playback needs
+// it: ok is false where every slot is held, and held is cancelled with ErrPreempted when a playback
+// takes the slot. release gives the slot back once the conversion ends.
+func (r *Remuxer) HoldConversion(ctx context.Context) (held context.Context, release func(), ok bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.transcodes(), r.limit
+	if r.full() {
+		return nil, nil, false
+	}
+	held, stop := context.WithCancelCause(ctx)
+	c := &conversion{stop: stop}
+	r.conversions[c] = struct{}{}
+	return held, func() {
+		r.mu.Lock()
+		delete(r.conversions, c)
+		r.mu.Unlock()
+		stop(nil)
+	}, true
 }
 
-// transcodes counts the remuxes encoding video; the caller holds r.mu. The sessions are the one
-// account of what this node is encoding, as a remux leaves them however it ends: stopped, swept
-// or never opened.
+// preempt stops a conversion holding a slot, answering whether there was one; the caller holds
+// r.mu. Its slot is free as this returns, not once its ffmpeg has gone.
+func (r *Remuxer) preempt() bool {
+	for c := range r.conversions {
+		delete(r.conversions, c)
+		c.stop(ErrPreempted)
+		return true
+	}
+	return false
+}
+
+// Transcodes answers how many videos this node is encoding, how many of those are conversions,
+// and the most that may be at once.
+func (r *Remuxer) Transcodes() (active, conversions, limit int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.transcodes(), len(r.conversions), r.limit
+}
+
+// full is whether every transcode slot is held; the caller holds r.mu.
+func (r *Remuxer) full() bool { return r.limit != Unlimited && r.transcodes() >= r.limit }
+
+// transcodes counts the remuxes encoding video and the conversions; the caller holds r.mu. The
+// sessions are the one account of what playback is encoding, as a remux leaves them however it
+// ends: stopped, swept or never opened.
 func (r *Remuxer) transcodes() int {
-	n := 0
+	n := len(r.conversions)
 	for _, s := range r.sessions {
 		if s.encodes() {
 			n++
