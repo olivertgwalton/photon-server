@@ -1,0 +1,108 @@
+package media
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"golang.org/x/text/language"
+)
+
+// The fixtures are ffprobe 9.0.1's output for files made with ffmpeg (sdr.json, hdr10.json); dv8
+// and hdr10plus add the side data FFmpeg reports for those to hdr10.json.
+func probeFixture(t *testing.T, name string) Facts {
+	t.Helper()
+	out, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := parseProbe(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return facts
+}
+
+var tagString = cmp.Transformer("tag", func(t language.Tag) string { return t.String() })
+
+func TestProbeHDR10Matroska(t *testing.T) {
+	got := probeFixture(t, "hdr10.json")
+	want := Facts{
+		Container:   "matroska,webm",
+		Duration:    2023 * time.Millisecond,
+		BitrateKbps: 1050,
+		Streams: []Stream{
+			{Index: 0, Kind: StreamVideo, Codec: "hevc", Profile: "Main 10", Width: 640, Height: 360, FrameRate: 24, Range: RangeHDR10},
+			{Index: 1, Kind: StreamAudio, Codec: "eac3", Language: language.English, Title: "Surround", Default: true, Channels: 6, ChannelLayout: "5.1(side)", SampleRate: 44100, BitrateKbps: 448},
+			{Index: 2, Kind: StreamAudio, Codec: "aac", Profile: "LC", Language: language.French, Title: "Commentary", Commentary: true, Channels: 1, ChannelLayout: "mono", SampleRate: 44100},
+			{Index: 3, Kind: StreamSubtitle, Codec: "subrip", Language: language.English, Forced: true, HearingImpaired: true},
+		},
+		Chapters: []Chapter{
+			{Start: 0, End: time.Second, Title: "Opening"},
+			{Start: time.Second, End: 2 * time.Second, Title: "Credits"},
+		},
+	}
+	if diff := cmp.Diff(want, got, tagString); diff != "" {
+		t.Errorf("facts (-want +got):\n%s", diff)
+	}
+}
+
+func TestProbeRange(t *testing.T) {
+	tests := []struct {
+		fixture string
+		want    Range
+		dv      *DolbyVision
+	}{
+		{fixture: "sdr.json", want: RangeSDR},
+		{fixture: "hdr10.json", want: RangeHDR10},
+		{fixture: "hdr10plus.json", want: RangeHDR10Plus},
+		{fixture: "dv8.json", want: RangeDV, dv: &DolbyVision{Profile: 8, Level: 6, Compatibility: 1, BaseLayer: true, RPU: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.fixture, func(t *testing.T) {
+			v := probeFixture(t, tt.fixture).Streams[0]
+			if v.Range != tt.want {
+				t.Errorf("range = %q, want %q", v.Range, tt.want)
+			}
+			if diff := cmp.Diff(tt.dv, v.DolbyVision); diff != "" {
+				t.Errorf("dolby vision (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// The file reaches ffprobe as descriptor 3, never as a path.
+func TestProbeReadsTheOpenFile(t *testing.T) {
+	dir := t.TempDir()
+	fixture, err := filepath.Abs(filepath.Join("testdata", "sdr.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\n" +
+		`case "$*" in *"-fd 3"*"-i fd:"*) ;; *) echo "unexpected arguments: $*" >&2; exit 2 ;; esac` + "\n" +
+		`[ "$(cat <&3)" = "media bytes" ] || { echo "descriptor 3 is not the file" >&2; exit 3; }` + "\n" +
+		"cat '" + fixture + "'\n"
+	ffprobe := filepath.Join(dir, "ffprobe")
+	if err := os.WriteFile(ffprobe, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	media := filepath.Join(dir, "Movie (2010).mkv")
+	if err := os.WriteFile(media, []byte("media bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(media)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	facts, err := Tools{FFprobe: Tool{Path: ffprobe}}.Probe(t.Context(), f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if facts.Container != "mov,mp4,m4a,3gp,3g2,mj2" {
+		t.Errorf("container = %q", facts.Container)
+	}
+}

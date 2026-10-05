@@ -43,7 +43,7 @@ func findTool(ctx context.Context, name string) (Tool, error) {
 	if err != nil {
 		return Tool{}, err
 	}
-	out, err := output(ctx, path, "-hide_banner", "-version")
+	out, err := output(ctx, nil, path, "-hide_banner", "-version")
 	if err != nil {
 		return Tool{}, fmt.Errorf("%s -version: %w", path, err)
 	}
@@ -72,10 +72,12 @@ func releaseVersion(out []byte) (string, error) {
 
 const stopGrace = 5 * time.Second
 
-// output runs a tool to completion and returns its stdout. A cancelled context asks the process
-// to stop with SIGTERM, so ffmpeg can finish what it is writing, and kills it after stopGrace.
-func output(ctx context.Context, path string, args ...string) ([]byte, error) {
+// output runs a tool to completion and returns its stdout. files are the tool's descriptors from 3
+// up. A cancelled context asks the process to stop with SIGTERM, so ffmpeg can finish what it is
+// writing, and kills it after stopGrace.
+func output(ctx context.Context, files []*os.File, path string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, path, args...) //nolint:gosec // path is the operator's configured tool; this package builds every argument
+	cmd.ExtraFiles = files
 	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 	cmd.WaitDelay = stopGrace
 	out, err := cmd.Output()
