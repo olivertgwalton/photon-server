@@ -213,6 +213,31 @@ and Valkey answer and their versions, and the nodes that say where their peers r
 is changed here; no password or connection string is in it.
 Integration tests create and drop a database per test on the server `TEST_DATABASE_URL` names.
 
+## Web
+
+`web/` is the server's web app, a SvelteKit app run by Bun: people log in, browse and play there,
+and admins run the server from it. It is a thin server of its own in front of the API: it keeps
+the session's token in an HTTP-only cookie and passes the browser's API calls on to
+`PHOTON_API_URL` with the token added, so the browser talks to one origin and never sees a token.
+Compose runs it as `web` on port 3000 (`ghcr.io/olivertgwalton/photon-server-web`), and the
+server trusts its `X-Forwarded-For`, so sign-in limits and the activity log see each reader's own
+address. It is reached over plain HTTP at its address (`http://192.168.1.10:3000`) or behind a reverse
+proxy at HTTPS, where the session cookie is Secure; behind a proxy, give it
+`ADDRESS_HEADER=x-forwarded-for` so it sees readers' addresses, and pass the `Host` header through (or set `HOST_HEADER=x-forwarded-host`).
+
+To work on it, run the server as above and, from `web/`:
+
+```sh
+bun install
+PHOTON_API_URL=http://localhost:8640 bun run dev   # http://localhost:5173
+bun run check && bun run lint && bun test src && bun run test:e2e
+bun run api   # after changing a route: regenerates src/lib/api/schema.d.ts
+```
+
+The API's types are generated from `photon-server openapi`; CI fails when
+`web/src/lib/api/schema.d.ts` is older than the routes. The end-to-end tests run the built app
+against a mock of the API (`web/e2e/mock-api.ts`), typed by the same schema.
+
 ## Contributing
 
 See [CLAUDE.md](CLAUDE.md): one concern per branch, each PR a short series of small commits,
