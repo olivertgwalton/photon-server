@@ -83,6 +83,8 @@ func connect(ctx context.Context, url string, log *slog.Logger) (*Store, error) 
 			SlowThreshold:             200 * time.Millisecond,
 			LogLevel:                  logger.Warn,
 			IgnoreRecordNotFoundError: true,
+			// A slow or failed query is logged without its values, which may be a provider's key.
+			ParameterizedQueries: true,
 		}),
 	})
 	if err != nil {
