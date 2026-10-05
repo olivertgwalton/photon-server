@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -31,7 +32,7 @@ func Handler(st *store.Store, c *tmdb.Client, log *slog.Logger) jobs.Handler {
 			return err
 		}
 		kind, ok := kinds[sub.Kind]
-		if !ok {
+		if !ok || !slices.Contains(sub.Sources, domain.SourceTMDB) {
 			return nil
 		}
 		match, err := resolve(ctx, c, kind, sub)

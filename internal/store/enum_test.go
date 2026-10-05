@@ -37,6 +37,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"extra_kind":         names(domain.ExtraKinds()),
 		"field":              names(domain.Fields()),
 		"field_source":       names(domain.FieldSources()),
+		"library_source":     names(domain.MetadataSources()),
 		"task_key":           names(domain.TaskKeys()),
 		"task_result":        names(domain.TaskResults()),
 	} {

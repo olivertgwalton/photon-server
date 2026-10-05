@@ -26,6 +26,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		ItemField:     newItemField(db, opts...),
 		Job:           newJob(db, opts...),
 		Library:       newLibrary(db, opts...),
+		LibrarySource: newLibrarySource(db, opts...),
 		Part:          newPart(db, opts...),
 		PartFile:      newPartFile(db, opts...),
 		Profile:       newProfile(db, opts...),
@@ -48,6 +49,7 @@ type Query struct {
 	ItemField     itemField
 	Job           job
 	Library       library
+	LibrarySource librarySource
 	Part          part
 	PartFile      partFile
 	Profile       profile
@@ -73,6 +75,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		ItemField:     q.ItemField.clone(db),
 		Job:           q.Job.clone(db),
 		Library:       q.Library.clone(db),
+		LibrarySource: q.LibrarySource.clone(db),
 		Part:          q.Part.clone(db),
 		PartFile:      q.PartFile.clone(db),
 		Profile:       q.Profile.clone(db),
@@ -103,6 +106,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		ItemField:     q.ItemField.replaceDB(db),
 		Job:           q.Job.replaceDB(db),
 		Library:       q.Library.replaceDB(db),
+		LibrarySource: q.LibrarySource.replaceDB(db),
 		Part:          q.Part.replaceDB(db),
 		PartFile:      q.PartFile.replaceDB(db),
 		Profile:       q.Profile.replaceDB(db),
@@ -123,6 +127,7 @@ type queryCtx struct {
 	ItemField     IItemFieldDo
 	Job           IJobDo
 	Library       ILibraryDo
+	LibrarySource ILibrarySourceDo
 	Part          IPartDo
 	PartFile      IPartFileDo
 	Profile       IProfileDo
@@ -143,6 +148,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		ItemField:     q.ItemField.WithContext(ctx),
 		Job:           q.Job.WithContext(ctx),
 		Library:       q.Library.WithContext(ctx),
+		LibrarySource: q.LibrarySource.WithContext(ctx),
 		Part:          q.Part.WithContext(ctx),
 		PartFile:      q.PartFile.WithContext(ctx),
 		Profile:       q.Profile.WithContext(ctx),

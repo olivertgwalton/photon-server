@@ -20,6 +20,8 @@ type Subject struct {
 	Year    int
 	IDs     map[domain.Provider]string
 	Seasons []int
+	// Sources are what its library takes metadata from.
+	Sources []domain.FieldSource
 }
 
 // IdentifySubject answers what is known of a title to match it by, or false for one that has gone.
@@ -35,6 +37,11 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	sub := Subject{Kind: item.Kind, Title: item.Title, IDs: map[domain.Provider]string{}}
 	if item.Year != nil {
 		sub.Year = *item.Year
+	}
+	ls := s.q.LibrarySource
+	if err := ls.WithContext(ctx).Where(ls.LibraryID.Eq(item.LibraryID)).Order(ls.Position).
+		Pluck(ls.Source, &sub.Sources); err != nil {
+		return Subject{}, false, err
 	}
 	ids, err := e.WithContext(ctx).Where(e.ItemID.Eq(item.ID)).Find()
 	if err != nil {

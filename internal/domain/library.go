@@ -29,4 +29,6 @@ type Library struct {
 	Name string
 	Kind LibraryKind
 	Root string
+	// Sources are where its metadata may come from, most trusted first.
+	Sources []FieldSource
 }

@@ -50,6 +50,13 @@ type ItemField struct {
 	UpdatedAt time.Time `gorm:"default:now()"`
 }
 
+// LibrarySource is a source a library takes metadata from; position 0 is the most trusted.
+type LibrarySource struct {
+	LibraryID UUID               `gorm:"type:uuid;primaryKey"`
+	Source    domain.FieldSource `gorm:"primaryKey"`
+	Position  int
+}
+
 type ExternalID struct {
 	ItemID   UUID            `gorm:"type:uuid;primaryKey"`
 	Provider domain.Provider `gorm:"primaryKey"`
