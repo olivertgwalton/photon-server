@@ -99,6 +99,28 @@ func (d MarkerDetection) Keeps(source MarkerSource) bool {
 	panic("domain: unknown marker detection: " + string(d))
 }
 
+// KeyframeMode is how a library finds the keyframes a copied video's segments are cut at: from the
+// container's own index alone, from the index or else by reading the whole file, or not at all. A
+// file with none known is cut every segment length, at the keyframe after each.
+type KeyframeMode string
+
+const (
+	KeyframesIndex KeyframeMode = "index"
+	KeyframesFull  KeyframeMode = "full"
+	KeyframesOff   KeyframeMode = "off"
+)
+
+func KeyframeModes() []KeyframeMode {
+	return []KeyframeMode{KeyframesIndex, KeyframesFull, KeyframesOff}
+}
+
+func ParseKeyframeMode(s string) (KeyframeMode, error) {
+	if m := KeyframeMode(s); slices.Contains(KeyframeModes(), m) {
+		return m, nil
+	}
+	return "", fmt.Errorf("keyframes %q is not one of %v", s, KeyframeModes())
+}
+
 type Library struct {
 	ID   uuid.UUID
 	Name string

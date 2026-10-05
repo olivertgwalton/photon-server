@@ -24,7 +24,7 @@ type partStore interface {
 }
 
 type keyframer interface {
-	Keyframes(ctx context.Context, f *os.File) ([]int64, error)
+	Keyframes(ctx context.Context, f *os.File, mode domain.KeyframeMode) ([]int64, error)
 }
 
 type remuxer interface {
@@ -141,7 +141,7 @@ func (r *Remuxes) index(ctx context.Context, part uuid.UUID, open func() (*os.Fi
 		return nil, err
 	}
 	defer f.Close()
-	pts, err := r.frames.Keyframes(ctx, f)
+	pts, err := r.frames.Keyframes(ctx, f, domain.KeyframesFull)
 	if err != nil {
 		return nil, err
 	}

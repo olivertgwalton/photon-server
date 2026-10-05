@@ -4,6 +4,7 @@ import (
 	"context"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -17,7 +18,7 @@ func Keyframes(st *store.Store, tools media.Tools) jobs.Handler {
 			return err
 		}
 		defer f.Close()
-		pts, err := tools.Keyframes(ctx, f)
+		pts, err := tools.Keyframes(ctx, f, domain.KeyframesFull)
 		if err != nil {
 			return err
 		}
