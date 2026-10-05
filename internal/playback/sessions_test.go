@@ -75,7 +75,10 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	if _, err := s.Progress(ctx, oliver, p.ID, time.Hour, domain.StatePlaying); !errors.Is(err, ErrNoPlayback) {
 		t.Errorf("reporting a stopped playback: %v, want ErrNoPlayback", err)
 	}
-	want := []domain.EventKind{domain.EventPlaybackStarted, domain.EventPlaybackPaused, domain.EventPlaybackStopped}
+	want := []domain.EventKind{
+		domain.EventPlaybackStarted, domain.EventUserDataChanged, domain.EventPlaybackPaused,
+		domain.EventUserDataChanged, domain.EventPlaybackStopped,
+	}
 	if !slices.Equal(told, want) {
 		t.Errorf("told %v, want %v", told, want)
 	}

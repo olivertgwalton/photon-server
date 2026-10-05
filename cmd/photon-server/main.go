@@ -230,7 +230,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 
 	worker := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), map[domain.JobKind]jobs.Handler{
 		domain.JobKeyframes:      analysis.Keyframes(st, tools),
-		domain.JobIdentify:       identify.Handler(st, providers, logger),
+		domain.JobIdentify:       identify.Handler(st, providers, hub.Raise, logger),
 		domain.JobScanLibrary:    scanLibrary(st, scan.New(st, tools, logger), hub, logger),
 		domain.JobMarkers:        analysis.Markers(st, tools.Fingerprint),
 		domain.JobDeliverWebhook: webhook.Deliver(st),

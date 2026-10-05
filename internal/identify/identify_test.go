@@ -76,12 +76,17 @@ func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {
 	}
 	id := cards[0].ID
 
+	var told []domain.Event
+	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
 	// A failing rater does not fail the job: the match stands.
-	if err := Handler(st, provider.NewRegistry(nil, films{}, critics{fail: true}), log)(ctx, id); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, films{}, critics{fail: true}), raise, log)(ctx, id); err != nil {
 		t.Fatalf("with the rater failing: %v", err)
 	}
-	if err := Handler(st, provider.NewRegistry(nil, films{}, critics{}), log)(ctx, id); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, films{}, critics{}), raise, log)(ctx, id); err != nil {
 		t.Fatal(err)
+	}
+	if len(told) != 2 || told[1].Kind != domain.EventTitleUpdated || told[1].Item != id {
+		t.Errorf("told %+v; want title.updated for Jaws after each match", told)
 	}
 	page, err := st.Title(ctx, uuid.UUID{}, id)
 	if err != nil {

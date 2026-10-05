@@ -36,8 +36,28 @@ func (a *API) progress(w http.ResponseWriter, r *http.Request) {
 	}
 	reach, err := a.svc.Watching.SaveProgress(r.Context(), sessionOf(r).Profile.ID, id, time.Duration(req.PositionMS)*time.Millisecond)
 	if !a.answered(w, r, err) {
+		a.titleStateChanged(r, id)
 		writeJSON(w, a.logger, "application/json", http.StatusOK, reachedJSON{Reach: reach})
 	}
+}
+
+// titleStateChanged tells the profile's other devices its own state of a title changed.
+func (a *API) titleStateChanged(r *http.Request, id uuid.UUID) {
+	profile := sessionOf(r).Profile.ID
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventUserDataChanged, Profile: profile, Item: id})
+}
+
+// playlistChanged tells the profile's other devices one of its playlists changed.
+func (a *API) playlistChanged(r *http.Request, id uuid.UUID) {
+	profile := sessionOf(r).Profile.ID
+	a.svc.Events.Raise(r.Context(), domain.Event{
+		Kind: domain.EventUserDataChanged, Profile: profile, Details: map[string]any{"playlist_id": id},
+	})
+}
+
+// titleUpdated tells the profiles that see a title it was described again.
+func (a *API) titleUpdated(r *http.Request, id uuid.UUID) {
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventTitleUpdated, Item: id})
 }
 
 // mark answers a route that sets or clears a profile's mark on a title, by one of watching's
@@ -49,6 +69,7 @@ func (a *API) mark(set func(w watching, ctx context.Context, profile, item uuid.
 			return
 		}
 		if !a.answered(w, r, set(a.svc.Watching, r.Context(), sessionOf(r).Profile.ID, id)) {
+			a.titleStateChanged(r, id)
 			w.WriteHeader(http.StatusNoContent)
 		}
 	}

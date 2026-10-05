@@ -122,8 +122,8 @@ func (filmSearch) Candidates(_ context.Context, _ domain.ItemKind, title string,
 }
 
 func TestAnAdminFixesATitle(t *testing.T) {
-	e := &fakeEditing{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Editing: e, Providers: provider.NewRegistry(nil, filmSearch{})})
+	e, told := &fakeEditing{}, &fakeEvents{}
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Editing: e, Providers: provider.NewRegistry(nil, filmSearch{}), Events: told})
 	base := "/api/v1/admin/titles/" + films.String()
 	copyBase := "/api/v1/admin/versions/" + films.String() + "/markers"
 	for _, tc := range []struct {
@@ -178,5 +178,9 @@ func TestAnAdminFixesATitle(t *testing.T) {
 	if e.edited.Title != "Heat" || e.edited.ReleaseDate.Year() != 1995 || len(e.edited.Locked) != 1 || len(e.reset) != 2 || e.pinned != "tmdb/949" || e.order != domain.OrderDVD || e.mode != domain.RefreshAll || len(e.marked) != 1 || e.marked[0].EndMS != 121500 ||
 		len(e.absent) != 1 || e.absent[0] != (domain.MarkerAbsent{Kind: domain.MarkerRecap}) {
 		t.Errorf("done: %+v %v %q", e.edited, e.reset, e.pinned)
+	}
+	// The edit and the two pictures; a match is told by the job that makes it.
+	if got := told.kinds(); len(got) != 3 || got[0] != domain.EventTitleUpdated {
+		t.Errorf("told %v, want title.updated thrice", got)
 	}
 }
