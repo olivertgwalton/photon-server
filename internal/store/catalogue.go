@@ -1,0 +1,315 @@
+package store
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+	"uuid"
+
+	"github.com/jackc/pgx/v5"
+	"golang.org/x/text/language"
+	"gorm.io/gen/field"
+	"gorm.io/gorm"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/store/model"
+	"github.com/olivertgwalton/photon-server/internal/store/query"
+)
+
+// Film is a title as the scanner found it in one folder.
+type Film struct {
+	Title  string
+	Year   int
+	Folder string
+	IDs    map[domain.Provider]string
+	Copies []Copy
+}
+
+// Copy is one version. Facts is nil for a copy whose content key is already known: nothing about
+// its bytes has changed, only perhaps its paths.
+type Copy struct {
+	ContentKey []byte
+	Edition    string
+	Label      string
+	Parts      []Part
+}
+
+type Part struct {
+	RelPath string
+	Size    int64
+	ModTime time.Time
+	Facts   *media.Facts
+}
+
+// KnownCopy reports whether a copy with this content key is already in the library. The same file
+// in two libraries is a copy in each.
+func (s *Store) KnownCopy(ctx context.Context, lib uuid.UUID, key []byte) (bool, error) {
+	v := s.q.Version
+	n, err := v.WithContext(ctx).Where(v.LibraryID.Eq(model.UUID(lib)), v.Fingerprint.Eq(key)).Count()
+	return n > 0, err
+}
+
+// FolderFingerprint is the fingerprint the folder had when it was last scanned.
+func (s *Store) FolderFingerprint(ctx context.Context, lib uuid.UUID, path string) ([]byte, error) {
+	f := s.q.Folder
+	row, err := f.WithContext(ctx).Where(f.LibraryID.Eq(model.UUID(lib)), f.Path.Eq(path)).Take()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return row.Fingerprint, nil
+}
+
+// SaveFolder writes a scanned folder's films and remembers its fingerprint, in one transaction.
+func (s *Store) SaveFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, films []Film) error {
+	return s.q.Transaction(func(tx *query.Query) error {
+		for _, f := range films {
+			if err := saveFilm(ctx, tx, lib, f); err != nil {
+				return fmt.Errorf("%s: %w", f.Title, err)
+			}
+		}
+		return tx.Folder.WithContext(ctx).Save(&model.Folder{
+			LibraryID: model.UUID(lib), Path: path, Fingerprint: fingerprint,
+		})
+	})
+}
+
+func saveFilm(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) error {
+	itemID, err := filmItem(ctx, tx, lib, f)
+	if err != nil {
+		return err
+	}
+	for provider, value := range f.IDs {
+		err := tx.ExternalID.WithContext(ctx).Save(&model.ExternalID{
+			ItemID: itemID, Provider: provider, Value: value, Source: domain.IDFromPath,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	for _, c := range f.Copies {
+		if err := saveCopy(ctx, tx, lib, itemID, c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// filmItem is the title a film's copies belong to: the title of a copy already known, else a title
+// of the same name in the same folder, else a new one.
+func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) (model.UUID, error) {
+	item := model.Item{
+		LibraryID: model.UUID(lib), Kind: domain.ItemMovie,
+		Title: f.Title, SortTitle: sortTitle(f.Title), Folder: f.Folder,
+	}
+	if f.Year != 0 {
+		item.Year = &f.Year
+	}
+	v, i := tx.Version, tx.Item
+	for _, c := range f.Copies {
+		known, err := v.WithContext(ctx).Where(v.LibraryID.Eq(model.UUID(lib)), v.Fingerprint.Eq(c.ContentKey)).Take()
+		if err == nil {
+			item.ID = known.ItemID
+			break
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return model.UUID{}, err
+		}
+	}
+	if item.ID == (model.UUID{}) {
+		same, err := i.WithContext(ctx).Where(
+			i.LibraryID.Eq(model.UUID(lib)), i.Folder.Eq(f.Folder), i.Title.Eq(f.Title),
+		).Take()
+		switch {
+		case err == nil:
+			item.ID = same.ID
+		case !errors.Is(err, gorm.ErrRecordNotFound):
+			return model.UUID{}, err
+		default:
+			err := i.WithContext(ctx).Create(&item)
+			return item.ID, err
+		}
+	}
+	_, err := i.WithContext(ctx).Where(i.ID.Eq(item.ID)).
+		Select(i.Title, i.SortTitle, i.Year, i.Folder).Updates(&item)
+	return item.ID, err
+}
+
+func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.UUID, c Copy) error {
+	v, p := tx.Version, tx.Part
+	edition, label := optional(c.Edition), optional(c.Label)
+	known, err := v.WithContext(ctx).Where(v.LibraryID.Eq(model.UUID(lib)), v.Fingerprint.Eq(c.ContentKey)).Take()
+	if err == nil {
+		_, err := v.WithContext(ctx).Where(v.ID.Eq(known.ID)).UpdateSimple(
+			v.ItemID.Value(itemID), nullable(v.Edition, c.Edition), nullable(v.Label, c.Label), v.MissingSince.Null())
+		if err != nil {
+			return err
+		}
+		for idx, part := range c.Parts {
+			_, err := p.WithContext(ctx).Where(p.VersionID.Eq(known.ID), p.Idx.Eq(int16(idx))).
+				UpdateSimple(p.RelPath.Value(part.RelPath), p.SizeBytes.Value(part.Size), p.MtimeNS.Value(part.ModTime.UnixNano()))
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	version := model.Version{
+		ItemID: itemID, LibraryID: model.UUID(lib), Fingerprint: c.ContentKey, Edition: edition, Label: label,
+	}
+	var offset int64
+	for _, part := range c.Parts {
+		version.SizeBytes += part.Size
+		version.DurationMS += part.Facts.Duration.Milliseconds()
+	}
+	first := c.Parts[0].Facts
+	version.Container = first.Container
+	if video := firstVideo(first); video != nil {
+		version.Width, version.Height = &video.Width, &video.Height
+		version.VideoCodec, version.VideoRange = &video.Codec, &video.Range
+		if video.DolbyVision != nil {
+			profile := int16(video.DolbyVision.Profile)
+			version.DVProfile = &profile
+		}
+	}
+	if version.DurationMS > 0 {
+		version.BitrateKbps = int(version.SizeBytes * 8 / version.DurationMS)
+	}
+	if err := v.WithContext(ctx).Create(&version); err != nil {
+		return err
+	}
+	for idx, part := range c.Parts {
+		row := model.Part{
+			VersionID: version.ID, Idx: int16(idx), LibraryID: model.UUID(lib), RelPath: part.RelPath,
+			SizeBytes: part.Size, MtimeNS: part.ModTime.UnixNano(),
+			DurationMS: part.Facts.Duration.Milliseconds(), OffsetMS: offset,
+		}
+		offset += row.DurationMS
+		if err := p.WithContext(ctx).Create(&row); err != nil {
+			return err
+		}
+		if err := saveFacts(ctx, tx, row.ID, part.Facts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func saveFacts(ctx context.Context, tx *query.Query, partID model.UUID, f *media.Facts) error {
+	streams := make([]*model.Stream, 0, len(f.Streams))
+	for _, st := range f.Streams {
+		row := &model.Stream{
+			PartID: partID, Idx: st.Index, Kind: st.Kind, Codec: st.Codec,
+			Profile: optional(st.Profile), Title: optional(st.Title),
+			IsDefault: st.Default, Forced: st.Forced, HearingImpaired: st.HearingImpaired, Commentary: st.Commentary,
+			BitrateKbps: optionalInt(st.BitrateKbps),
+		}
+		if st.Language != language.Und {
+			row.Language = optional(st.Language.String())
+		}
+		switch st.Kind {
+		case domain.StreamVideo:
+			row.Width, row.Height, row.FrameRate = optionalInt(st.Width), optionalInt(st.Height), &st.FrameRate
+			row.VideoRange = &st.Range
+			if dv := st.DolbyVision; dv != nil {
+				profile, level, compat := int16(dv.Profile), int16(dv.Level), int16(dv.Compatibility)
+				row.DVProfile, row.DVLevel, row.DVCompatibility = &profile, &level, &compat
+			}
+		case domain.StreamAudio:
+			row.Channels, row.ChannelLayout = optionalInt(st.Channels), optional(st.ChannelLayout)
+			row.SampleRate = optionalInt(st.SampleRate)
+		case domain.StreamSubtitle:
+		}
+		streams = append(streams, row)
+	}
+	if len(streams) > 0 {
+		if err := tx.Stream.WithContext(ctx).Create(streams...); err != nil {
+			return err
+		}
+	}
+	chapters := make([]*model.Chapter, 0, len(f.Chapters))
+	for i, c := range f.Chapters {
+		chapters = append(chapters, &model.Chapter{
+			PartID: partID, Idx: i, StartMS: c.Start.Milliseconds(), EndMS: c.End.Milliseconds(), Title: optional(c.Title),
+		})
+	}
+	if len(chapters) > 0 {
+		return tx.Chapter.WithContext(ctx).Create(chapters...)
+	}
+	return nil
+}
+
+// FinishScan settles a library after every folder has been seen. present holds every video path
+// the walk found, skipped folders included: a version with no part among them is marked missing
+// (kept, so an unmounted disk does not cost its titles), one with a part among them is not, and a
+// title left with no version is removed. A folder the walk did not visit is forgotten.
+func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present []string) error {
+	// pgx sends present as one text[] parameter; GORM would expand it into a parameter per path.
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `
+			UPDATE versions v SET missing_since = CASE
+				WHEN EXISTS (SELECT 1 FROM parts p WHERE p.version_id = v.id AND p.rel_path = ANY($2)) THEN NULL
+				ELSE coalesce(v.missing_since, now()) END
+			FROM items i WHERE i.id = v.item_id AND i.library_id = $1`, lib.String(), present)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM items i WHERE i.library_id = $1
+			AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.item_id = i.id)`, lib.String())
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND NOT path = ANY($2)`, lib.String(), folders)
+		return err
+	})
+}
+
+func firstVideo(f *media.Facts) *media.Stream {
+	for i := range f.Streams {
+		if f.Streams[i].Kind == domain.StreamVideo {
+			return &f.Streams[i]
+		}
+	}
+	return nil
+}
+
+func nullable(f field.String, s string) field.AssignExpr {
+	if s == "" {
+		return f.Null()
+	}
+	return f.Value(s)
+}
+
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func optionalInt(n int) *int {
+	if n == 0 {
+		return nil
+	}
+	return &n
+}
+
+// sortTitle orders "The Thing" under T and ignores case.
+func sortTitle(title string) string {
+	t := strings.ToLower(title)
+	for _, article := range []string{"the ", "a ", "an "} {
+		if rest, ok := strings.CutPrefix(t, article); ok && rest != "" {
+			return rest
+		}
+	}
+	return t
+}
