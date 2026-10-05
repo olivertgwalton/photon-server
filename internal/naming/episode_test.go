@@ -15,23 +15,23 @@ func TestParseEpisode(t *testing.T) {
 		want         Episode // Rule is not compared; Confidence is.
 		notEpisode   bool
 	}{
-		{stem: "Running Man S2017E368", want: Episode{Season: 2017, Episodes: []int{368}, Confidence: ConfidenceHigh}},
-		{stem: "S003 E009", want: Episode{Season: 3, Episodes: []int{9}, Confidence: ConfidenceHigh}},
-		{stem: "The Series Season 3 Episode 9 - The title", want: Episode{Season: 3, Episodes: []int{9}, Confidence: ConfidenceHigh}},
+		{stem: "Running Man S2017E368", want: Episode{Season: new(2017), Episodes: []int{368}, Confidence: ConfidenceHigh}},
+		{stem: "S003 E009", want: Episode{Season: new(3), Episodes: []int{9}, Confidence: ConfidenceHigh}},
+		{stem: "The Series Season 3 Episode 9 - The title", want: Episode{Season: new(3), Episodes: []int{9}, Confidence: ConfidenceHigh}},
 		{stem: "Episode 21 - 94 Meetings", want: Episode{Episodes: []int{21}, Confidence: ConfidenceHigh}},
 		{stem: "The.Legend.of.Condor.Heroes.2017.E07.V2.web-dl.1080p.h264.aac-hdctv", want: Episode{Episodes: []int{7}, Confidence: ConfidenceHigh}},
-		{stem: "The Daily Show 25x22 - [WEBDL-720p][AAC 2.0][x264] Noah Baumbach-TBS", want: Episode{Season: 25, Episodes: []int{22}, Confidence: ConfidenceHigh}},
+		{stem: "The Daily Show 25x22 - [WEBDL-720p][AAC 2.0][x264] Noah Baumbach-TBS", want: Episode{Season: new(25), Episodes: []int{22}, Confidence: ConfidenceHigh}},
 		{stem: "Series Special (1920x1080)", notEpisode: true},
 
 		// Several episodes in one file.
-		{stem: "Show S01E23-E24-E26", want: Episode{Season: 1, Episodes: []int{23, 24, 25, 26}, Confidence: ConfidenceHigh}},
-		{stem: "Show 02x03-04-15", want: Episode{Season: 2, Episodes: []int{3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}, Confidence: ConfidenceHigh}},
-		{stem: "MOONLIGHTING_s01e01-e04", want: Episode{Season: 1, Episodes: []int{1, 2, 3, 4}, Confidence: ConfidenceHigh}},
-		{stem: "buck.rogers.s01e01e02.alternate.cut", want: Episode{Season: 1, Episodes: []int{1, 2}, Confidence: ConfidenceHigh}},
-		{stem: "series-s09e14-1080p", want: Episode{Season: 9, Episodes: []int{14}, Confidence: ConfidenceHigh}},
-		{stem: "S01E01 The 6-10 to Lubbock", want: Episode{Season: 1, Episodes: []int{1}, Confidence: ConfidenceHigh}},
-		{stem: "S05E23 11-59 [HDTV-1080p]", want: Episode{Season: 5, Episodes: []int{23}, Confidence: ConfidenceHigh}},
-		{stem: "Star Trek Enterprise (2001) - S03E21 - E2 (1080p BluRay x265)", want: Episode{Season: 3, Episodes: []int{21}, Confidence: ConfidenceHigh}},
+		{stem: "Show S01E23-E24-E26", want: Episode{Season: new(1), Episodes: []int{23, 24, 25, 26}, Confidence: ConfidenceHigh}},
+		{stem: "Show 02x03-04-15", want: Episode{Season: new(2), Episodes: []int{3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}, Confidence: ConfidenceHigh}},
+		{stem: "MOONLIGHTING_s01e01-e04", want: Episode{Season: new(1), Episodes: []int{1, 2, 3, 4}, Confidence: ConfidenceHigh}},
+		{stem: "buck.rogers.s01e01e02.alternate.cut", want: Episode{Season: new(1), Episodes: []int{1, 2}, Confidence: ConfidenceHigh}},
+		{stem: "series-s09e14-1080p", want: Episode{Season: new(9), Episodes: []int{14}, Confidence: ConfidenceHigh}},
+		{stem: "S01E01 The 6-10 to Lubbock", want: Episode{Season: new(1), Episodes: []int{1}, Confidence: ConfidenceHigh}},
+		{stem: "S05E23 11-59 [HDTV-1080p]", want: Episode{Season: new(5), Episodes: []int{23}, Confidence: ConfidenceHigh}},
+		{stem: "Star Trek Enterprise (2001) - S03E21 - E2 (1080p BluRay x265)", want: Episode{Season: new(3), Episodes: []int{21}, Confidence: ConfidenceHigh}},
 		{stem: "02-04 - blah 14 blah", want: Episode{Episodes: []int{2, 3, 4}, Confidence: ConfidenceMedium}},
 
 		// Air dates.
@@ -52,7 +52,7 @@ func TestParseEpisode(t *testing.T) {
 		{stem: "[VCB-Studio] Re Zero kara Hajimeru Isekai Seikatsu [21][Ma10p_1080p][x265_flac]", want: Episode{Episodes: []int{21}, Confidence: ConfidenceMedium}},
 		{stem: "[CASO&Sumisora][Oda_Nobuna_no_Yabou][04][BDRIP][1920x1080][H264_AAC]", want: Episode{Episodes: []int{4}, Confidence: ConfidenceMedium}},
 		{stem: "One Piece 1001", series: "One Piece", want: Episode{Episodes: []int{1001}, Confidence: ConfidenceMedium}},
-		{stem: "Seinfeld 0807 The Checks", series: "Seinfeld", want: Episode{Season: 8, Episodes: []int{7}, Confidence: ConfidenceMedium}},
+		{stem: "Seinfeld 0807 The Checks", series: "Seinfeld", want: Episode{Season: new(8), Episodes: []int{7}, Confidence: ConfidenceMedium}},
 		{stem: "01 - Pilot", want: Episode{Episodes: []int{1}, Confidence: ConfidenceMedium}},
 		{stem: "Show - 01 - Pilot", want: Episode{Episodes: []int{1}, Confidence: ConfidenceMedium}},
 	}
@@ -91,4 +91,15 @@ func FuzzParseEpisode(f *testing.F) {
 			}
 		}
 	})
+}
+
+func TestSpecialsAreSeasonZero(t *testing.T) {
+	ep, ok := ParseEpisode("Doctor Who S00E01 The Christmas Invasion", "")
+	if !ok || ep.Season == nil || *ep.Season != 0 {
+		t.Errorf("ParseEpisode(S00E01) season = %v, want 0", ep.Season)
+	}
+	ep, _ = ParseEpisode("01 - Pilot", "")
+	if ep.Season != nil {
+		t.Errorf("ParseEpisode(01 - Pilot) season = %d, want none", *ep.Season)
+	}
 }

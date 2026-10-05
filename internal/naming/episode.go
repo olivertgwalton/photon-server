@@ -17,8 +17,9 @@ const (
 )
 
 type Episode struct {
-	// Season is 0 when the name does not say; the season folder or season 1 decides.
-	Season     int
+	// Season is nil when the name does not say; the season folder or season 1 decides. Season 0 is
+	// specials.
+	Season     *int
 	Episodes   []int
 	AirDate    time.Time
 	Confidence Confidence
@@ -113,7 +114,7 @@ func parseSxxEyy(stem, _ string) (Episode, bool) {
 		return Episode{}, false
 	}
 	first := atoi(stem[m[4]:m[5]])
-	return Episode{Season: atoi(stem[m[2]:m[3]]), Episodes: moreEpisodes(first, stem[m[5]:])}, true
+	return Episode{Season: new(atoi(stem[m[2]:m[3]])), Episodes: moreEpisodes(first, stem[m[5]:])}, true
 }
 
 func parseNxNN(stem, _ string) (Episode, bool) {
@@ -122,7 +123,7 @@ func parseNxNN(stem, _ string) (Episode, bool) {
 		return Episode{}, false
 	}
 	first := atoi(stem[m[4]:m[5]])
-	return Episode{Season: atoi(stem[m[2]:m[3]]), Episodes: moreEpisodes(first, stem[m[5]:])}, true
+	return Episode{Season: new(atoi(stem[m[2]:m[3]])), Episodes: moreEpisodes(first, stem[m[5]:])}, true
 }
 
 var seasonEpisodeWords = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])s(?:eason)?\s*(\d{1,4})\s+e(?:pisode)?\s*(\d{1,4})`)
@@ -132,7 +133,7 @@ func parseSeasonEpisodeWords(stem, _ string) (Episode, bool) {
 	if m == nil || !validSeason(atoi(m[1])) {
 		return Episode{}, false
 	}
-	return Episode{Season: atoi(m[1]), Episodes: []int{atoi(m[2])}}, true
+	return Episode{Season: new(atoi(m[1])), Episodes: []int{atoi(m[2])}}, true
 }
 
 var (
@@ -227,7 +228,7 @@ func parseSeriesDigits(stem, series string) (Episode, bool) {
 	if len(d) != 4 || d[0] != '0' || strings.Trim(d, "0123456789") != "" {
 		return Episode{}, false
 	}
-	return Episode{Season: atoi(d[:len(d)-2]), Episodes: []int{atoi(d[len(d)-2:])}}, true
+	return Episode{Season: new(atoi(d[:len(d)-2])), Episodes: []int{atoi(d[len(d)-2:])}}, true
 }
 
 var leadingNumber = regexp.MustCompile(`^(\d{1,3})(?:-(\d{2,3}))?(?:\s*-\s*|[.\s]|$)`)
