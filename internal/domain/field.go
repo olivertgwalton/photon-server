@@ -20,9 +20,10 @@ type Metadata struct {
 	Genres        []string
 	Studios       []string
 	IDs           map[Provider]string
-	// Videos and Artwork are what the source links to; they are kept per source, not per field.
+	// Videos, Artwork and Ratings are kept per source, not per field.
 	Videos  []RemoteVideo
 	Artwork []Artwork
+	Ratings []Rating
 	// Locked fields are claimed at this source's rank even where it gives no value, so no lower
 	// source fills them.
 	Locked []Field
@@ -75,16 +76,18 @@ const (
 	SourceTVDB FieldSource = "tvdb"
 	SourceNFO  FieldSource = "nfo"
 	SourceUser FieldSource = "user"
+	// SourceMDBList gives ratings alone.
+	SourceMDBList FieldSource = "mdblist"
 )
 
 func FieldSources() []FieldSource {
-	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser}
+	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceMDBList}
 }
 
 // MetadataSources are the sources a library may take metadata from, in an order it chooses:
 // what files say always ranks lowest, and a reader's own edit highest.
 func MetadataSources() []FieldSource {
-	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB}
+	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList}
 }
 
 // DefaultSources trust an NFO beside the file over a provider, as Jellyfin's default order does.

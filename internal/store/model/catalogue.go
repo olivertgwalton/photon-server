@@ -204,3 +204,16 @@ type SubtitleFile struct {
 	SizeBytes       int64
 	MtimeNS         int64 `gorm:"column:mtime_ns"`
 }
+
+type Rating struct {
+	ItemID UUID               `gorm:"type:uuid;primaryKey"`
+	Source domain.FieldSource `gorm:"primaryKey"`
+	Site   domain.RatingSite  `gorm:"primaryKey"`
+	Score  float32
+	Votes  *int
+}
+
+type Provider struct {
+	ID       string `gorm:"primaryKey"`
+	Settings []byte `gorm:"type:jsonb"`
+}

@@ -45,6 +45,8 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"remote_video_kind":  names(domain.ExtraKinds()),
 		"task_key":           names(domain.TaskKeys()),
 		"task_result":        names(domain.TaskResults()),
+		"rating_source":      names(domain.RatingSources()),
+		"rating_site":        names(domain.RatingSites()),
 	} {
 		var def string
 		err := s.pool.QueryRow(t.Context(),
