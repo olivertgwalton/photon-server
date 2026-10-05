@@ -12,6 +12,7 @@ import (
 	"golang.org/x/text/language"
 	"gorm.io/gen/field"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -168,9 +169,11 @@ func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.
 			return err
 		}
 		for idx, part := range c.Parts {
-			_, err := p.WithContext(ctx).Where(p.VersionID.Eq(known.ID), p.Idx.Eq(int16(idx))).
-				UpdateSimple(p.RelPath.Value(part.RelPath), p.SizeBytes.Value(part.Size), p.MtimeNS.Value(part.ModTime.UnixNano()))
+			row, err := p.WithContext(ctx).Where(p.VersionID.Eq(known.ID), p.Idx.Eq(int16(idx))).Take()
 			if err != nil {
+				return err
+			}
+			if err := locate(ctx, tx, lib, row.ID, part); err != nil {
 				return err
 			}
 		}
@@ -206,12 +209,14 @@ func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.
 	}
 	for idx, part := range c.Parts {
 		row := model.Part{
-			VersionID: version.ID, Idx: int16(idx), LibraryID: model.UUID(lib), RelPath: part.RelPath,
-			SizeBytes: part.Size, MtimeNS: part.ModTime.UnixNano(),
+			VersionID: version.ID, Idx: int16(idx), SizeBytes: part.Size,
 			DurationMS: part.Facts.Duration.Milliseconds(), OffsetMS: offset,
 		}
 		offset += row.DurationMS
 		if err := p.WithContext(ctx).Create(&row); err != nil {
+			return err
+		}
+		if err := locate(ctx, tx, lib, row.ID, part); err != nil {
 			return err
 		}
 		if err := saveFacts(ctx, tx, row.ID, part.Facts); err != nil {
@@ -224,6 +229,19 @@ func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.
 		}
 	}
 	return nil
+}
+
+// locate records that a part's bytes are at the part's path. A path that held other bytes before
+// now holds these, so its row moves to this part.
+func locate(ctx context.Context, tx *query.Query, lib uuid.UUID, partID model.UUID, part Part) error {
+	f := tx.PartFile
+	return f.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "library_id"}, {Name: "rel_path"}},
+		DoUpdates: clause.AssignmentColumns([]string{"part_id", "size_bytes", "mtime_ns"}),
+	}).Create(&model.PartFile{
+		PartID: partID, LibraryID: model.UUID(lib), RelPath: part.RelPath,
+		SizeBytes: part.Size, MtimeNS: part.ModTime.UnixNano(),
+	})
 }
 
 func saveFacts(ctx context.Context, tx *query.Query, partID model.UUID, f *media.Facts) error {
@@ -271,18 +289,33 @@ func saveFacts(ctx context.Context, tx *query.Query, partID model.UUID, f *media
 }
 
 // FinishScan settles a library after every folder has been seen. present holds every video path
-// the walk found, skipped folders included: a version with no part among them is marked missing
-// (kept, so an unmounted disk does not cost its titles), one with a part among them is not, and a
-// title left with no version is removed, then a season and a show left with nothing in them. A
-// folder the walk did not visit is forgotten.
+// the walk found, skipped folders included. A path no longer present stops being a place to read
+// its part; a version with a part left nowhere is marked missing (kept, so an unmounted disk does
+// not cost its titles), and one whose every part is somewhere is not. A title left with no
+// version is removed, then a season and a show left with nothing in them. A folder the walk did
+// not visit is forgotten.
 func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present []string) error {
-	// pgx sends present as one text[] parameter; GORM would expand it into a parameter per path.
+	// pgx sends each list as one text[] parameter; GORM would expand it into a parameter per path.
+	// A nil slice would go as NULL, and NOT x = ANY(NULL) matches nothing, so an emptied library
+	// would keep every path it ever had.
+	if folders == nil {
+		folders = []string{}
+	}
+	if present == nil {
+		present = []string{}
+	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `
+		_, err := tx.Exec(ctx, `DELETE FROM part_files WHERE library_id = $1 AND NOT rel_path = ANY($2)`,
+			lib.String(), present)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
 			UPDATE versions v SET missing_since = CASE
-				WHEN EXISTS (SELECT 1 FROM parts p WHERE p.version_id = v.id AND p.rel_path = ANY($2)) THEN NULL
-				ELSE coalesce(v.missing_since, now()) END
-			FROM items i WHERE i.id = v.item_id AND i.library_id = $1`, lib.String(), present)
+				WHEN EXISTS (SELECT 1 FROM parts p WHERE p.version_id = v.id
+					AND NOT EXISTS (SELECT 1 FROM part_files f WHERE f.part_id = p.id)) THEN coalesce(v.missing_since, now())
+				ELSE NULL END
+			WHERE v.library_id = $1`, lib.String())
 		if err != nil {
 			return err
 		}

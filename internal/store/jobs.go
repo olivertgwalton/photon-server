@@ -90,15 +90,19 @@ func (s *Store) SweepJobs(ctx context.Context) (int64, error) {
 	return info.RowsAffected, err
 }
 
-// PartFile is where a part's file is: its library's root and its path inside it.
+// PartFile is a place a part's bytes are: its library's root and the path inside it. Of several
+// identical copies, any will do.
 func (s *Store) PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error) {
-	p, l := s.q.Part, s.q.Library
+	f, l := s.q.PartFile, s.q.Library
 	var row struct {
 		Root    string
 		RelPath string
 	}
-	err = p.WithContext(ctx).Select(l.Root, p.RelPath).Join(l, l.ID.EqCol(p.LibraryID)).
-		Where(p.ID.Eq(model.UUID(part))).Scan(&row)
+	err = f.WithContext(ctx).Select(l.Root, f.RelPath).Join(l, l.ID.EqCol(f.LibraryID)).
+		Where(f.PartID.Eq(model.UUID(part))).Order(f.RelPath).Limit(1).Scan(&row)
+	if err == nil && row.RelPath == "" {
+		err = ErrNotFound
+	}
 	return row.Root, row.RelPath, err
 }
 
