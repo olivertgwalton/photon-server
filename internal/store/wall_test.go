@@ -22,12 +22,30 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 	}
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	// Two titles share a sort title and two share a time added, so the id breaks both ties.
-	for n, title := range []string{"Heat", "Alien", "heat", "Brazil", "Zodiac", "Memento", "Ran"} {
-		added := base.Add(time.Duration(n%5) * time.Hour)
-		err := s.q.Item.WithContext(ctx).Create(&model.Item{
-			LibraryID: model.UUID(lib.ID), Kind: domain.ItemMovie, Title: title, ScanTitle: title,
-			SortTitle: sortTitle(title), Folder: title, AddedAt: added,
-		})
+	// Released: a date, a year alone (its first of January), or neither, which goes last.
+	date := func(y, m, d int) *time.Time { return new(time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)) }
+	for n, f := range []struct {
+		title    string
+		year     int
+		released *time.Time
+	}{
+		{"Heat", 1995, date(1995, 12, 15)},
+		{"Alien", 1979, nil},
+		{"heat", 0, nil},
+		{"Brazil", 1985, date(1985, 2, 20)},
+		{"Zodiac", 0, date(2007, 3, 2)},
+		{"Memento", 2000, date(2000, 9, 5)},
+		{"Ran", 1985, nil},
+	} {
+		item := &model.Item{
+			LibraryID: model.UUID(lib.ID), Kind: domain.ItemMovie, Title: f.title, ScanTitle: f.title,
+			SortTitle: sortTitle(f.title), Folder: f.title, AddedAt: base.Add(time.Duration(n%5) * time.Hour),
+			ReleaseDate: f.released,
+		}
+		if f.year != 0 {
+			item.Year = &f.year
+		}
+		err := s.q.Item.WithContext(ctx).Create(item)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -72,6 +90,19 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 			}
 			if !slices.Equal(ids(paged), ids(full)) {
 				t.Errorf("%s %s: paging by 3 gave %v, want %v", sort, order, ids(paged), ids(full))
+			}
+			if sort == domain.SortReleased {
+				var titles []string
+				for _, c := range full {
+					titles = append(titles, c.Title)
+				}
+				want := []string{"Alien", "Ran", "Brazil", "Heat", "Memento", "Zodiac", "heat"}
+				if order == domain.Descending {
+					want = []string{"Zodiac", "Memento", "Heat", "Brazil", "Ran", "Alien", "heat"}
+				}
+				if !slices.Equal(titles, want) {
+					t.Errorf("released %s = %q, want %q", order, titles, want)
+				}
 			}
 		}
 	}

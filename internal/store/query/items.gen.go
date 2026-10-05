@@ -50,6 +50,8 @@ func newItem(db *gorm.DB, opts ...gen.DOOption) item {
 	_item.ReleaseDate = field.NewTime(tableName, "release_date")
 	_item.Genres = field.NewField(tableName, "genres")
 	_item.Studios = field.NewField(tableName, "studios")
+	_item.ReleasedAsc = field.NewTime(tableName, "released_asc")
+	_item.ReleasedDesc = field.NewTime(tableName, "released_desc")
 
 	_item.fillFieldMap()
 
@@ -82,6 +84,8 @@ type item struct {
 	ReleaseDate   field.Time
 	Genres        field.Field
 	Studios       field.Field
+	ReleasedAsc   field.Time
+	ReleasedDesc  field.Time
 
 	fieldMap map[string]field.Expr
 }
@@ -120,6 +124,8 @@ func (i *item) updateTableName(table string) *item {
 	i.ReleaseDate = field.NewTime(table, "release_date")
 	i.Genres = field.NewField(table, "genres")
 	i.Studios = field.NewField(table, "studios")
+	i.ReleasedAsc = field.NewTime(table, "released_asc")
+	i.ReleasedDesc = field.NewTime(table, "released_desc")
 
 	i.fillFieldMap()
 
@@ -144,7 +150,7 @@ func (i *item) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (i *item) fillFieldMap() {
-	i.fieldMap = make(map[string]field.Expr, 22)
+	i.fieldMap = make(map[string]field.Expr, 24)
 	i.fieldMap["id"] = i.ID
 	i.fieldMap["library_id"] = i.LibraryID
 	i.fieldMap["kind"] = i.Kind
@@ -167,6 +173,8 @@ func (i *item) fillFieldMap() {
 	i.fieldMap["release_date"] = i.ReleaseDate
 	i.fieldMap["genres"] = i.Genres
 	i.fieldMap["studios"] = i.Studios
+	i.fieldMap["released_asc"] = i.ReleasedAsc
+	i.fieldMap["released_desc"] = i.ReleasedDesc
 }
 
 func (i item) clone(db *gorm.DB) item {
