@@ -515,6 +515,15 @@ func (a *API) routes() []route {
 			body: addLibraryJSON{}, status: http.StatusCreated, reply: adminLibraryJSON{}, handle: a.addLibrary,
 		},
 		{
+			pattern: "GET /api/v1/admin/folders", access: admin,
+			summary: "List a folder's subfolders on the server, or the folders to start from, for choosing a library's",
+			query: []param{
+				{"path", "", "An absolute path; without one, the folders to start from."},
+				{"hidden", hideHidden, "show lists folders whose names start with a dot, hidden by default."},
+			},
+			status: http.StatusOK, reply: folderListJSON{}, handle: a.adminFolders,
+		},
+		{
 			pattern: "PATCH /api/v1/admin/libraries/{id}", access: admin, summary: "Change how a library is kept",
 			body: libraryChangeJSON{}, status: http.StatusOK, reply: adminLibraryJSON{}, handle: a.setLibrary,
 		},

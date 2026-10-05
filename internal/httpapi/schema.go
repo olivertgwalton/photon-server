@@ -60,6 +60,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.WallSort]():            values(domain.WallSorts()),
 	reflect.TypeFor[domain.TranscodeReason]():     values(domain.TranscodeReasons()),
 	reflect.TypeFor[decision]():                   values(decisions()),
+	reflect.TypeFor[hiddenFolders]():              values(hiddenFolderModes()),
 	reflect.TypeFor[problemCode]():                values(problemCodes()),
 }
 
