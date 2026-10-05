@@ -83,3 +83,55 @@ func TestAnEditStandsUntilItIsReset(t *testing.T) {
 		t.Errorf("editing no title: %v, want ErrNotFound", err)
 	}
 }
+
+func TestAShowRenumberedIsMatchedAgainWhole(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: []domain.FieldSource{domain.SourceNFO, domain.SourceTVDB, domain.SourceTMDB}}); err != nil {
+		t.Fatal(err)
+	}
+	ep := Episode{
+		Season: 1, Episodes: []int{1}, Title: "Firefly", Folder: "Firefly/Season 1", ByNumber: true,
+		Copies: []Copy{{ContentKey: []byte("f1"), Parts: []Part{{RelPath: "Firefly/Season 1/S01E01.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}},
+	}
+	if _, err := s.SaveShowFolder(ctx, lib.ID, "Firefly/Season 1", []byte("v1"), Show{Title: "Firefly", Folder: "Firefly"}, []Episode{ep}, nil); err != nil {
+		t.Fatal(err)
+	}
+	i := s.q.Item
+	show, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
+	id := uuid.UUID(show.ID)
+	// Matched as aired: the first file is titled as broadcast's first.
+	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Title: "Firefly"},
+		map[int]domain.SeasonMetadata{1: {Metadata: domain.Metadata{Title: "Season 1"}, Episodes: map[int]domain.Metadata{1: {Title: "The Train Job", Artwork: []domain.Artwork{{Kind: domain.ArtworkThumb, URL: "https://image.tmdb.org/t/p/original/train.jpg"}}}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Identified(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if sub, _, _ := s.IdentifySubject(ctx, id); len(sub.Seasons) != 0 || sub.Order != domain.OrderAired {
+		t.Fatalf("matched: %+v; want nothing left to ask, in aired order", sub)
+	}
+	if err := s.SetEpisodeOrder(ctx, id, domain.OrderDVD); err != nil {
+		t.Fatal(err)
+	}
+	sub, _, err := s.IdentifySubject(ctx, id)
+	if err != nil || sub.Order != domain.OrderDVD || len(sub.Seasons) != 1 {
+		t.Fatalf("renumbered: %+v, %v; want season 1 asked again, on DVD", sub, err)
+	}
+	if err := s.SaveIdentity(ctx, id, domain.SourceTVDB, domain.Metadata{Title: "Firefly"},
+		map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Title: "Serenity"}}}}); err != nil {
+		t.Fatal(err)
+	}
+	e, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode))).Take()
+	page, err := s.Title(ctx, uuid.UUID{}, uuid.UUID(e.ID))
+	if err != nil || page.Title != "Serenity" || len(page.Artwork[domain.ArtworkThumb]) != 0 {
+		t.Errorf("the first file on DVD: %q, stills %v, %v; want Serenity and the aired still gone", page.Title, page.Artwork, err)
+	}
+	if err := s.SetEpisodeOrder(ctx, uuid.UUID(e.ID), domain.OrderDVD); !errors.Is(err, ErrNotFound) {
+		t.Errorf("renumbering an episode: %v, want ErrNotFound", err)
+	}
+}

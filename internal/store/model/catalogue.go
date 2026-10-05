@@ -41,6 +41,7 @@ type Item struct {
 	ReleasedAsc  time.Time `gorm:"->;type:date"`
 	ReleasedDesc time.Time `gorm:"->;type:date"`
 	IdentifiedAt *time.Time
+	EpisodeOrder domain.EpisodeOrder `gorm:"default:aired"`
 }
 
 // ItemField is where one of a title's fields came from.

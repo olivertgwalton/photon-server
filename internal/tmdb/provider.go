@@ -29,8 +29,9 @@ func (c *Client) Match(ctx context.Context, kind domain.ItemKind, h provider.Hin
 }
 
 // Describe answers TMDB's details of a title, its score among them, and of the seasons of a show
-// asked for that TMDB has.
-func (c *Client) Describe(ctx context.Context, kind domain.ItemKind, id string, seasons []int) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
+// asked for that TMDB has. TMDB numbers episodes as aired, so a show numbered otherwise is
+// described without its seasons.
+func (c *Client) Describe(ctx context.Context, kind domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
 	n, err := strconv.Atoi(id)
 	if err != nil {
 		return domain.Metadata{}, nil, err
@@ -40,7 +41,10 @@ func (c *Client) Describe(ctx context.Context, kind domain.ItemKind, id string, 
 		return domain.Metadata{}, nil, err
 	}
 	said := map[int]domain.SeasonMetadata{}
-	for _, number := range seasons {
+	if seasons.Order != domain.OrderAired {
+		return m, said, nil
+	}
+	for _, number := range seasons.Numbers {
 		s, err := c.Season(ctx, n, number)
 		if errors.Is(err, ErrNotFound) {
 			continue

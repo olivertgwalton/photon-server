@@ -81,3 +81,25 @@ func (s IDSource) Rank() int {
 	}
 	return 0
 }
+
+// EpisodeOrder is the order a show's episode files are numbered in.
+type EpisodeOrder string
+
+const (
+	OrderAired EpisodeOrder = "aired"
+	// OrderDVD is as the discs number them.
+	OrderDVD EpisodeOrder = "dvd"
+	// OrderAbsolute counts every episode from the first, as anime often is.
+	OrderAbsolute EpisodeOrder = "absolute"
+)
+
+func EpisodeOrders() []EpisodeOrder {
+	return []EpisodeOrder{OrderAired, OrderDVD, OrderAbsolute}
+}
+
+// SeasonRequest is which of a show's seasons a provider is asked about, in the order its files are
+// numbered in.
+type SeasonRequest struct {
+	Numbers []int
+	Order   EpisodeOrder
+}

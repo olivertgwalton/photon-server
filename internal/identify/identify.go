@@ -8,6 +8,7 @@ import (
 	"slices"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -54,7 +55,7 @@ func describe(ctx context.Context, st *store.Store, d provider.Describer, id uui
 		log.InfoContext(ctx, "no confident match", slog.Int("year", sub.Year))
 		return nil
 	}
-	m, seasons, err := d.Describe(ctx, sub.Kind, match, sub.Seasons)
+	m, seasons, err := d.Describe(ctx, sub.Kind, match, domain.SeasonRequest{Numbers: sub.Seasons, Order: sub.Order})
 	if err != nil {
 		return err
 	}

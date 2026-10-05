@@ -21,6 +21,8 @@ type Subject struct {
 	Year    int
 	IDs     map[domain.Provider]string
 	Seasons []int
+	// Order is the order a show's episode files are numbered in.
+	Order domain.EpisodeOrder
 	// Sources are what its library takes metadata from.
 	Sources []domain.FieldSource
 }
@@ -35,7 +37,7 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	if err != nil {
 		return Subject{}, false, err
 	}
-	sub := Subject{Kind: item.Kind, Title: item.Title, IDs: map[domain.Provider]string{}}
+	sub := Subject{Kind: item.Kind, Title: item.Title, IDs: map[domain.Provider]string{}, Order: item.EpisodeOrder}
 	if item.Year != nil {
 		sub.Year = *item.Year
 	}

@@ -19,6 +19,7 @@ type fakeEditing struct {
 	edited domain.Metadata
 	reset  []domain.Field
 	pinned string
+	order  domain.EpisodeOrder
 }
 
 func (f *fakeEditing) EditMetadata(_ context.Context, id uuid.UUID, m domain.Metadata) error {
@@ -39,6 +40,14 @@ func (f *fakeEditing) PinMatch(_ context.Context, id uuid.UUID, p domain.Provide
 		return store.ErrNotFound
 	}
 	f.pinned = string(p) + "/" + v
+	return nil
+}
+
+func (f *fakeEditing) SetEpisodeOrder(_ context.Context, id uuid.UUID, order domain.EpisodeOrder) error {
+	if id != films {
+		return store.ErrNotFound
+	}
+	f.order = order
 	return nil
 }
 
@@ -77,6 +86,8 @@ func TestAnAdminFixesATitle(t *testing.T) {
 		{goodToken, http.MethodGet, "/api/v1/admin/titles/" + uuid.NewV7().String() + "/candidates?provider=tmdb", "", http.StatusNotFound, ""},
 		{goodToken, http.MethodPut, base + "/match", `{"provider": "tmdb", "id": "949"}`, http.StatusAccepted, ""},
 		{goodToken, http.MethodPut, base + "/match", `{"provider": "netflix", "id": "1"}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "dvd"}`, http.StatusAccepted, ""},
+		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "production"}`, http.StatusBadRequest, ""},
 	} {
 		req := httptest.NewRequest(tc.method, tc.target, strings.NewReader(tc.body))
 		req.Header.Set("Authorization", "Bearer "+tc.token)
@@ -86,7 +97,7 @@ func TestAnAdminFixesATitle(t *testing.T) {
 			t.Errorf("%s %s %s: %d %s, want %d with %s", tc.method, tc.target, tc.body, rec.Code, rec.Body, tc.want, tc.has)
 		}
 	}
-	if e.edited.Title != "Heat" || e.edited.ReleaseDate.Year() != 1995 || len(e.edited.Locked) != 1 || len(e.reset) != 2 || e.pinned != "tmdb/949" {
+	if e.edited.Title != "Heat" || e.edited.ReleaseDate.Year() != 1995 || len(e.edited.Locked) != 1 || len(e.reset) != 2 || e.pinned != "tmdb/949" || e.order != domain.OrderDVD {
 		t.Errorf("done: %+v %v %q", e.edited, e.reset, e.pinned)
 	}
 }

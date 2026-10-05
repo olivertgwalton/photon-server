@@ -50,7 +50,7 @@ type Describer interface {
 	Provider
 	// Match answers the title's id on the provider, empty for no confident match.
 	Match(ctx context.Context, kind domain.ItemKind, h Hints) (string, error)
-	Describe(ctx context.Context, kind domain.ItemKind, id string, seasons []int) (domain.Metadata, map[int]domain.SeasonMetadata, error)
+	Describe(ctx context.Context, kind domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error)
 }
 
 // Searcher lists what a provider has by a name, for an admin choosing the match by hand.

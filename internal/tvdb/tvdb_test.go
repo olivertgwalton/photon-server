@@ -53,6 +53,8 @@ func fake(t *testing.T) (*Client, *int) {
 		case "/series/79126/episodes/default/eng?page=0":
 			_, _ = w.Write([]byte(`{"data":{"episodes":[{"seasonNumber":1,"number":1,"name":"The Target","aired":"2002-06-02","image":"https://artworks.thetvdb.com/banners/"},
 				{"seasonNumber":2,"number":1,"name":"Ebb Tide"}]},"links":{"next":"` + srv.URL + `/series/79126/episodes/default/eng?page=1"}}`))
+		case "/series/79126/episodes/dvd/eng?page=0":
+			_, _ = w.Write([]byte(`{"data":{"episodes":[{"seasonNumber":1,"number":1,"name":"The Detail"}]},"links":{"next":null}}`))
 		case "/series/79126/episodes/default/eng?page=1":
 			_, _ = w.Write([]byte(`{"data":{"episodes":[{"seasonNumber":1,"number":2,"name":"The Detail"}]},"links":{"next":null}}`))
 		default:
@@ -88,7 +90,7 @@ func TestDetailsInTheClientsLanguageAndCountry(t *testing.T) {
 
 func TestSeasonsReadEveryPage(t *testing.T) {
 	c, _ := fake(t)
-	got, err := c.Seasons(t.Context(), 79126, []int{1})
+	got, err := c.Seasons(t.Context(), 79126, []int{1}, domain.OrderAired)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,5 +103,13 @@ func TestSeasonsReadEveryPage(t *testing.T) {
 	}
 	if strings.Join(titles, ", ") != "The Target, The Detail" || len(got) != 1 {
 		t.Errorf("seasons = %+v, want season 1 alone with both pages' episodes", got)
+	}
+}
+
+func TestSeasonsAreNumberedInTheOrderAsked(t *testing.T) {
+	c, _ := fake(t)
+	got, err := c.Seasons(t.Context(), 79126, []int{1}, domain.OrderDVD)
+	if err != nil || got[1].Episodes[1].Title != "The Detail" {
+		t.Errorf("on DVD, season 1 = %+v, %v; want The Detail first", got[1], err)
 	}
 }

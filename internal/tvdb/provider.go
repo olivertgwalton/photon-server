@@ -24,8 +24,9 @@ func (c *Client) Match(ctx context.Context, _ domain.ItemKind, h provider.Hints)
 	return strconv.Itoa(id), nil
 }
 
-// Describe answers TheTVDB's details of a show and of the seasons asked for.
-func (c *Client) Describe(ctx context.Context, _ domain.ItemKind, id string, seasons []int) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
+// Describe answers TheTVDB's details of a show and of the seasons asked for, in the order its
+// files are numbered in.
+func (c *Client) Describe(ctx context.Context, _ domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
 	n, err := strconv.Atoi(id)
 	if err != nil {
 		return domain.Metadata{}, nil, err
@@ -34,7 +35,7 @@ func (c *Client) Describe(ctx context.Context, _ domain.ItemKind, id string, sea
 	if err != nil {
 		return domain.Metadata{}, nil, err
 	}
-	said, err := c.Seasons(ctx, n, seasons)
+	said, err := c.Seasons(ctx, n, seasons.Numbers, seasons.Order)
 	return m, said, err
 }
 
