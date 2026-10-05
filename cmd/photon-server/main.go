@@ -185,7 +185,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	scheduler := task.NewScheduler(st, logger, node, scanTask(st), sweepTask(st, logger), backupTask(dumper, logger), refreshTask(st, logger), sweepArtworkTask(st, pictureCache, logger), markersTask(st, tools, logger), previewsTask(st, previews, logger), sweepDownloadsTask(st, logger))
 	lang := cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US")
 	// TMDB runs before TheTVDB, as its match may give TheTVDB an id to find a show by.
-	providers := provider.NewRegistry(
+	providers := provider.NewRegistry(nil,
 		tmdb.New(cmp.Or(os.Getenv("PHOTON_TMDB_TOKEN"), tmdb.DefaultToken), lang, cache),
 		tvdb.New(cmp.Or(os.Getenv("PHOTON_TVDB_KEY"), tvdb.DefaultKey), os.Getenv("PHOTON_TVDB_PIN"), lang, cache),
 		mdblist.New(func(ctx context.Context) (map[string]string, error) {

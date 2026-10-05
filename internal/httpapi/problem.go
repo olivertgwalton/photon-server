@@ -25,6 +25,8 @@ const (
 	codeForbidden          problemCode = "forbidden"
 	codeConflict           problemCode = "conflict"
 	codeTranscodeLimit     problemCode = "transcode_limit"
+	// codeProviderUnavailable is a metadata provider, a plugin, that could not be reached.
+	codeProviderUnavailable problemCode = "provider_unavailable"
 	// RFC 8628's own error names, so a client that knows the RFC needs no mapping.
 	codeAuthorizationPending problemCode = "authorization_pending"
 	codeSlowDown             problemCode = "slow_down"
@@ -37,7 +39,7 @@ func problemCodes() []problemCode {
 		codeNotFound, codeMethodNotAllowed, codeUnknownParameter, codeInvalidParameter, codeNotReady,
 		codeInvalidBody, codeUnauthenticated, codeInvalidCredentials, codeInternal, codePairingNotFound,
 		codeWrongSecret, codeRateLimited, codeNoCompatibleStream, codeForbidden, codeConflict,
-		codeTranscodeLimit, codeAuthorizationPending, codeSlowDown, codeExpiredToken,
+		codeTranscodeLimit, codeProviderUnavailable, codeAuthorizationPending, codeSlowDown, codeExpiredToken,
 	}
 }
 
@@ -65,6 +67,8 @@ func (c problemCode) status() int {
 		return http.StatusForbidden
 	case codeConflict:
 		return http.StatusConflict
+	case codeProviderUnavailable:
+		return http.StatusBadGateway
 	case codeInternal:
 		return http.StatusInternalServerError
 	case codePairingNotFound:

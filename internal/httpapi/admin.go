@@ -156,6 +156,9 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, store.ErrLibraryExists):
 		writeProblem(w, a.logger, codeConflict, "a library has that name")
 		return
+	case errors.Is(err, store.ErrUnknownPlugin):
+		writeProblem(w, a.logger, codeInvalidBody, err.Error())
+		return
 	case err != nil:
 		a.internal(w, r, err)
 		return
