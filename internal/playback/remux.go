@@ -19,12 +19,8 @@ import (
 type partStore interface {
 	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
-	Keyframes(ctx context.Context, part uuid.UUID) ([]int64, bool, error)
-	SaveKeyframes(ctx context.Context, part uuid.UUID, ptsMS []int64) error
-}
-
-type keyframer interface {
-	Keyframes(ctx context.Context, f *os.File, mode domain.KeyframeMode) ([]int64, error)
+	Keyframes(ctx context.Context, part uuid.UUID) (store.PartKeyframes, error)
+	AskKeyframes(ctx context.Context, part uuid.UUID) error
 }
 
 type remuxer interface {
@@ -33,16 +29,16 @@ type remuxer interface {
 }
 
 // Remuxes opens a playback's copy as HLS: each of its files cut at its keyframes where the video
-// is copied, which are indexed in the background as a library is scanned and here, before playing,
-// for a file not reached yet; or every SegmentLength where it is encoded.
+// is copied and they are known, which are indexed in the background as a library is scanned; or
+// every SegmentLength where it is encoded or none are known, as Jellyfin cuts a file it has no
+// keyframes for. A play never waits on a file being read for them.
 type Remuxes struct {
-	parts  partStore
-	frames keyframer
-	hls    remuxer
+	parts partStore
+	hls   remuxer
 }
 
-func NewRemuxes(parts partStore, frames keyframer, h remuxer) *Remuxes {
-	return &Remuxes{parts: parts, frames: frames, hls: h}
+func NewRemuxes(parts partStore, h remuxer) *Remuxes {
+	return &Remuxes{parts: parts, hls: h}
 }
 
 // Open starts a playback's HLS of a copy, carrying its video and audio as decided, and, unless a
@@ -58,9 +54,12 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 		duration := time.Duration(p.DurationMS) * time.Millisecond
 		keyframes := hls.Forced(duration)
 		if video.Encode == nil {
-			var err error
-			if keyframes, err = r.keyframes(ctx, p.ID, open); err != nil {
+			known, err := r.keyframes(ctx, p.ID)
+			if err != nil {
 				return err
+			}
+			if len(known) > 0 {
+				keyframes = known
 			}
 		}
 		sources[i] = hls.Source{
@@ -117,35 +116,23 @@ func subtitle(title string, lang language.Tag, def, forced, sdh bool) hls.Subtit
 
 func (r *Remuxes) Close(playback uuid.UUID) { r.hls.Close(playback) }
 
-// keyframes answers a part's keyframes, indexing them if the scan has not reached it yet.
-func (r *Remuxes) keyframes(ctx context.Context, part uuid.UUID, open func() (*os.File, error)) ([]time.Duration, error) {
-	pts, ok, err := r.parts.Keyframes(ctx, part)
+// keyframes answers a part's keyframes where they are known. One its library finds but has not
+// reached yet has its job moved to the front, so the next play is cut at them.
+func (r *Remuxes) keyframes(ctx context.Context, part uuid.UUID) ([]time.Duration, error) {
+	known, err := r.parts.Keyframes(ctx, part)
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
-		if pts, err = r.index(ctx, part, open); err != nil {
+	if known.PtsMS == nil && known.Mode != domain.KeyframesOff {
+		if err := r.parts.AskKeyframes(ctx, part); err != nil {
 			return nil, err
 		}
 	}
-	keyframes := make([]time.Duration, len(pts))
-	for k, ms := range pts {
+	keyframes := make([]time.Duration, len(known.PtsMS))
+	for k, ms := range known.PtsMS {
 		keyframes[k] = time.Duration(ms) * time.Millisecond
 	}
 	return keyframes, nil
-}
-
-func (r *Remuxes) index(ctx context.Context, part uuid.UUID, open func() (*os.File, error)) ([]int64, error) {
-	f, err := open()
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	pts, err := r.frames.Keyframes(ctx, f, domain.KeyframesFull)
-	if err != nil {
-		return nil, err
-	}
-	return pts, r.parts.SaveKeyframes(ctx, part, pts)
 }
 
 // openFile opens a file of a library the scanner recorded.

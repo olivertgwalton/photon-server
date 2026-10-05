@@ -135,4 +135,5 @@ type Library struct {
 	RefreshDays int
 	Previews    PreviewLevel
 	Markers     MarkerDetection
+	Keyframes   KeyframeMode
 }

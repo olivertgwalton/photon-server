@@ -241,7 +241,7 @@ func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.
 		return err
 	}
 	l := tx.Library
-	settings, err := l.WithContext(ctx).Select(l.Previews).Where(l.ID.Eq(model.UUID(lib))).Take()
+	settings, err := l.WithContext(ctx).Select(l.Previews, l.Keyframes).Where(l.ID.Eq(model.UUID(lib))).Take()
 	if err != nil {
 		return err
 	}
@@ -262,8 +262,10 @@ func saveCopy(ctx context.Context, tx *query.Query, lib uuid.UUID, itemID model.
 			return err
 		}
 		if firstVideo(part.Facts) != nil {
-			if err := enqueue(ctx, tx, domain.JobKeyframes, row.ID); err != nil {
-				return err
+			if settings.Keyframes != domain.KeyframesOff {
+				if err := insertJob(ctx, tx, domain.JobKeyframes, row.ID, 0, indexPriority); err != nil {
+					return err
+				}
 			}
 			if previews {
 				if err := enqueue(ctx, tx, domain.JobPreviews, row.ID); err != nil {

@@ -54,6 +54,10 @@ func enqueueAfter(ctx context.Context, tx *query.Query, kind domain.JobKind, sub
 // or a scan queued.
 const askedPriority = 1
 
+// indexPriority is a part's keyframes job: claimed after every scan and identify, so an import's
+// thousands of them do not hold back what a reader sees first.
+const indexPriority = -1
+
 // enqueueAsked is enqueue for a job an admin is waiting on.
 func enqueueAsked(ctx context.Context, tx *query.Query, kind domain.JobKind, subject model.UUID) error {
 	return insertJob(ctx, tx, kind, subject, 0, askedPriority)
@@ -203,12 +207,46 @@ func (s *Store) PartFile(ctx context.Context, part uuid.UUID) (root, rel string,
 	return row.Root, row.RelPath, err
 }
 
-// SaveKeyframes records a part's keyframe times. pgx writes them as one bigint[].
+// SaveKeyframes records a part's keyframe times, none where it has none known. pgx writes them as
+// one bigint[].
 func (s *Store) SaveKeyframes(ctx context.Context, part uuid.UUID, ptsMS []int64) error {
+	if ptsMS == nil {
+		ptsMS = []int64{}
+	}
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO keyframes (part_id, pts_ms) VALUES ($1, $2)
 		ON CONFLICT (part_id) DO UPDATE SET pts_ms = excluded.pts_ms`, part.String(), ptsMS)
 	return err
+}
+
+// rekeyframe queues a library's parts with no keyframes known to be read again under its new mode;
+// those already known stay, since every mode finds the same ones.
+func rekeyframe(ctx context.Context, tx *query.Query, lib model.UUID, mode domain.KeyframeMode) error {
+	if mode == domain.KeyframesOff {
+		return nil
+	}
+	db := tx.Job.WithContext(ctx).UnderlyingDB()
+	err := db.Exec(`
+		DELETE FROM keyframes k USING parts p, versions v
+		WHERE k.part_id = p.id AND v.id = p.version_id AND v.library_id = ? AND cardinality(k.pts_ms) = 0`, lib).Error
+	if err != nil {
+		return err
+	}
+	return db.Exec(`
+		INSERT INTO jobs (kind, subject, priority)
+		SELECT 'keyframes', p.id, ? FROM parts p JOIN versions v ON v.id = p.version_id
+		WHERE v.library_id = ?
+			AND EXISTS (SELECT 1 FROM part_files f WHERE f.part_id = p.id)
+			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'video')
+			AND NOT EXISTS (SELECT 1 FROM keyframes k WHERE k.part_id = p.id)
+		ON CONFLICT (kind, subject) DO UPDATE SET
+			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
+			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END`, indexPriority, lib).Error
+}
+
+// AskKeyframes queues a part's keyframes job ahead of the rest, for a part played before its turn.
+func (s *Store) AskKeyframes(ctx context.Context, part uuid.UUID) error {
+	return enqueueAsked(ctx, s.q, domain.JobKeyframes, model.UUID(part))
 }
 
 // JobCount is how many jobs of a kind are in a state.

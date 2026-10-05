@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/google/go-cmp/cmp"
@@ -26,10 +27,11 @@ func (indexed) SubtitleFile(context.Context, uuid.UUID) (string, string, error) 
 	return "", "", os.ErrNotExist
 }
 
-func (indexed) Keyframes(context.Context, uuid.UUID) ([]int64, bool, error) {
-	return []int64{0}, true, nil
+func (indexed) Keyframes(context.Context, uuid.UUID) (store.PartKeyframes, error) {
+	return store.PartKeyframes{Mode: domain.KeyframesIndex, PtsMS: []int64{0}}, nil
 }
-func (indexed) SaveKeyframes(context.Context, uuid.UUID, []int64) error { return nil }
+
+func (indexed) AskKeyframes(context.Context, uuid.UUID) error { return nil }
 
 // opened keeps the HLS each playback was opened as.
 type opened map[uuid.UUID]hls.Copy
@@ -91,7 +93,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			hlsOf := opened{}
 			playback := uuid.NewV7()
-			if err := NewRemuxes(indexed{}, nil, hlsOf).Open(t.Context(), playback, copyOf(tc.copy), tc.video, tc.audio); err != nil {
+			if err := NewRemuxes(indexed{}, hlsOf).Open(t.Context(), playback, copyOf(tc.copy), tc.video, tc.audio); err != nil {
 				t.Fatal(err)
 			}
 			got := hlsOf[playback]
@@ -104,6 +106,61 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.subtitles, names, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("subtitles (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+type knownKeyframes struct {
+	known store.PartKeyframes
+	asked bool
+}
+
+func (k *knownKeyframes) PartFile(context.Context, uuid.UUID) (string, string, error) {
+	return "", "", store.ErrNotFound
+}
+
+func (k *knownKeyframes) SubtitleFile(context.Context, uuid.UUID) (string, string, error) {
+	return "", "", store.ErrNotFound
+}
+
+func (k *knownKeyframes) Keyframes(context.Context, uuid.UUID) (store.PartKeyframes, error) {
+	return k.known, nil
+}
+
+func (k *knownKeyframes) AskKeyframes(context.Context, uuid.UUID) error {
+	k.asked = true
+	return nil
+}
+
+// A copied video is cut at its keyframes where they are known, and every segment length where
+// none are; a play never reads the file for them, and moves a part not reached yet to the front.
+func TestACopyIsCutAtTheKeyframesItsLibraryFound(t *testing.T) {
+	const duration = 20 * time.Second
+	cases := []struct {
+		name  string
+		known store.PartKeyframes
+		want  []time.Duration
+		asked bool
+	}{
+		{"known", store.PartKeyframes{Mode: domain.KeyframesIndex, PtsMS: []int64{0, 7000}}, []time.Duration{0, 7 * time.Second}, false},
+		{"none known", store.PartKeyframes{Mode: domain.KeyframesFull, PtsMS: []int64{}}, hls.Forced(duration), false},
+		{"not read yet", store.PartKeyframes{Mode: domain.KeyframesIndex}, hls.Forced(duration), true},
+		{"off", store.PartKeyframes{Mode: domain.KeyframesOff}, hls.Forced(duration), false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			parts := &knownKeyframes{known: c.known}
+			hlsOf, playback := opened{}, uuid.NewV7()
+			copied := store.PlayCopy{Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: duration.Milliseconds()}}}
+			if err := NewRemuxes(parts, hlsOf).Open(t.Context(), playback, copied, domain.VideoPlan{Codec: "h264"}, nil); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(c.want, hlsOf[playback].Parts[0].Part.Keyframes); diff != "" {
+				t.Errorf("keyframes (-want +got):\n%s", diff)
+			}
+			if parts.asked != c.asked {
+				t.Errorf("asked for the part's keyframes: %t, want %t", parts.asked, c.asked)
 			}
 		})
 	}

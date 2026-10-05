@@ -10,6 +10,7 @@ import (
 	"golang.org/x/text/language"
 	"gorm.io/gorm"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
@@ -130,12 +131,25 @@ func (s *Store) SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel strin
 	return row.Root, row.RelPath, err
 }
 
-// Keyframes answers a part's video keyframe times, or false where they have not been indexed yet.
-func (s *Store) Keyframes(ctx context.Context, part uuid.UUID) ([]int64, bool, error) {
-	var pts []int64
-	err := s.pool.QueryRow(ctx, `SELECT pts_ms FROM keyframes WHERE part_id = $1`, part.String()).Scan(&pts)
+// PartKeyframes is how a part's library finds keyframes, and those found: none where the part has
+// none known, nil where it has not been read for them yet.
+type PartKeyframes struct {
+	Mode  domain.KeyframeMode
+	PtsMS []int64
+}
+
+// Keyframes answers a part's keyframes, or ErrNotFound for a part gone.
+func (s *Store) Keyframes(ctx context.Context, part uuid.UUID) (PartKeyframes, error) {
+	var k PartKeyframes
+	var mode string
+	err := s.pool.QueryRow(ctx, `
+		SELECT l.keyframes, k.pts_ms
+		FROM parts p JOIN versions v ON v.id = p.version_id JOIN libraries l ON l.id = v.library_id
+		LEFT JOIN keyframes k ON k.part_id = p.id
+		WHERE p.id = $1`, part.String()).Scan(&mode, &k.PtsMS)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, false, nil
+		return k, ErrNotFound
 	}
-	return pts, err == nil, err
+	k.Mode = domain.KeyframeMode(mode)
+	return k, err
 }
