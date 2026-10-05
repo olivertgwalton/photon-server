@@ -25,7 +25,8 @@ type Task struct {
 
 type stateStore interface {
 	HoldLease(ctx context.Context, name string, node uuid.UUID, ttl time.Duration) (bool, error)
-	TaskStarts(ctx context.Context) (map[domain.TaskKey]time.Time, error)
+	TaskStates(ctx context.Context) (map[domain.TaskKey]domain.TaskState, error)
+	RequestTask(ctx context.Context, key domain.TaskKey) error
 	TaskStarted(ctx context.Context, key domain.TaskKey, at time.Time) error
 	TaskFinished(ctx context.Context, key domain.TaskKey, at time.Time, result domain.TaskResult, err error) error
 }
@@ -69,7 +70,7 @@ func (s *Scheduler) lead(ctx context.Context, t *time.Ticker) {
 	var mu sync.Mutex
 	running := map[domain.TaskKey]bool{}
 	for {
-		starts, err := s.store.TaskStarts(ctx)
+		states, err := s.store.TaskStates(ctx)
 		if err != nil {
 			s.log.WarnContext(ctx, "task state not read", slog.Any("err", err))
 		}
@@ -78,7 +79,7 @@ func (s *Scheduler) lead(ctx context.Context, t *time.Ticker) {
 			mu.Lock()
 			busy := running[task.Key]
 			mu.Unlock()
-			if err != nil || busy || !isDue(task, starts[task.Key], now) {
+			if err != nil || busy || !isDue(task, states[task.Key], now) {
 				continue
 			}
 			if err := s.store.TaskStarted(ctx, task.Key, now); err != nil {
@@ -114,13 +115,63 @@ func (s *Scheduler) holdLease(ctx context.Context) bool {
 	return held && err == nil
 }
 
-func isDue(task Task, last, now time.Time) bool {
+// isDue reports whether a task was asked for since it last started, or a trigger has fired.
+func isDue(task Task, state domain.TaskState, now time.Time) bool {
+	if state.Requested.After(state.Started) {
+		return true
+	}
 	for _, t := range task.Triggers {
-		if t.due(last, now) {
+		if t.due(state.Started, now) {
 			return true
 		}
 	}
 	return false
+}
+
+// ErrNoTask is a task the scheduler does not run.
+var ErrNoTask = errors.New("task: no such task")
+
+// Status is a task as an admin sees it: its last run, whether it is running, and when it next
+// will.
+type Status struct {
+	Key     domain.TaskKey
+	State   domain.TaskState
+	Running bool
+	Next    time.Time
+}
+
+// Statuses answers every task's status, in the order the scheduler was given them.
+func (s *Scheduler) Statuses(ctx context.Context) ([]Status, error) {
+	states, err := s.store.TaskStates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	out := make([]Status, len(s.tasks))
+	for i, task := range s.tasks {
+		st := states[task.Key]
+		out[i] = Status{Key: task.Key, State: st, Running: !st.Started.IsZero() && st.Started.After(st.Finished)}
+		if isDue(task, st, now) {
+			out[i].Next = now
+			continue
+		}
+		for _, t := range task.Triggers {
+			if next := t.next(st.Started, now); out[i].Next.IsZero() || next.Before(out[i].Next) {
+				out[i].Next = next
+			}
+		}
+	}
+	return out, nil
+}
+
+// Request asks for a task to run as soon as it is not running, on whichever node leads.
+func (s *Scheduler) Request(ctx context.Context, key domain.TaskKey) error {
+	for _, task := range s.tasks {
+		if task.Key == key {
+			return s.store.RequestTask(ctx, key)
+		}
+	}
+	return ErrNoTask
 }
 
 func (s *Scheduler) run(ctx context.Context, task Task) {

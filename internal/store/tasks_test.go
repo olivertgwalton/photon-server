@@ -3,9 +3,12 @@
 package store
 
 import (
+	"errors"
 	"testing"
 	"time"
 	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 func TestLeaseHasOneHolder(t *testing.T) {
@@ -34,5 +37,28 @@ func TestLeaseHasOneHolder(t *testing.T) {
 	}
 	if hold(a, time.Hour) {
 		t.Fatal("the old holder took the lease back")
+	}
+}
+
+func TestATaskAskedForIsRecordedUntilItStarts(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	start := time.Now().Add(-time.Hour).Truncate(time.Second)
+	if err := s.TaskStarted(ctx, domain.TaskScanLibraries, start); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.TaskFinished(ctx, domain.TaskScanLibraries, start.Add(time.Minute), domain.TaskFailed, errors.New("disk gone")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RequestTask(ctx, domain.TaskScanLibraries); err != nil {
+		t.Fatal(err)
+	}
+	states, err := s.TaskStates(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := states[domain.TaskScanLibraries]
+	if !got.Started.Equal(start) || got.Result != domain.TaskFailed || got.Error != "disk gone" || !got.Requested.After(got.Started) {
+		t.Errorf("state = %+v, want the failed run and a request after it", got)
 	}
 }

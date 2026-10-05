@@ -29,17 +29,27 @@ func (s *Store) HoldLease(ctx context.Context, name string, node uuid.UUID, ttl 
 	return err == nil, err
 }
 
-// TaskStarts is when each task last started.
-func (s *Store) TaskStarts(ctx context.Context) (map[domain.TaskKey]time.Time, error) {
+// TaskStates is what is known of each task that has ever started.
+func (s *Store) TaskStates(ctx context.Context) (map[domain.TaskKey]domain.TaskState, error) {
 	rows, err := s.q.TaskState.WithContext(ctx).Find()
 	if err != nil {
 		return nil, err
 	}
-	starts := make(map[domain.TaskKey]time.Time, len(rows))
+	states := make(map[domain.TaskKey]domain.TaskState, len(rows))
 	for _, r := range rows {
-		starts[r.Key] = r.StartedAt
+		states[r.Key] = domain.TaskState{
+			Started: r.StartedAt, Finished: deref(r.FinishedAt), Result: deref(r.Result), Error: deref(r.Error),
+			Requested: deref(r.RequestedAt),
+		}
 	}
-	return starts, nil
+	return states, nil
+}
+
+// RequestTask asks for a task to run now. One that has never started is due already.
+func (s *Store) RequestTask(ctx context.Context, key domain.TaskKey) error {
+	t := s.q.TaskState
+	_, err := t.WithContext(ctx).Where(t.Key.Eq(string(key))).Update(t.RequestedAt, time.Now())
+	return err
 }
 
 func (s *Store) TaskStarted(ctx context.Context, key domain.TaskKey, at time.Time) error {

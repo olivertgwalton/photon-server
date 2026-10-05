@@ -2,8 +2,8 @@ package task
 
 import (
 	"context"
+	"errors"
 	"log/slog"
-	"maps"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -42,10 +42,11 @@ func TestTriggerDue(t *testing.T) {
 }
 
 type memoryStore struct {
-	mu       sync.Mutex
-	leader   bool
-	starts   map[domain.TaskKey]time.Time
-	outcomes []domain.TaskResult
+	mu        sync.Mutex
+	leader    bool
+	starts    map[domain.TaskKey]time.Time
+	requested map[domain.TaskKey]time.Time
+	outcomes  []domain.TaskResult
 }
 
 func (m *memoryStore) HoldLease(context.Context, string, uuid.UUID, time.Duration) (bool, error) {
@@ -60,10 +61,21 @@ func (m *memoryStore) setLeader(held bool) {
 	m.leader = held
 }
 
-func (m *memoryStore) TaskStarts(context.Context) (map[domain.TaskKey]time.Time, error) {
+func (m *memoryStore) TaskStates(context.Context) (map[domain.TaskKey]domain.TaskState, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return maps.Clone(m.starts), nil
+	states := map[domain.TaskKey]domain.TaskState{}
+	for k, at := range m.starts {
+		states[k] = domain.TaskState{Started: at, Requested: m.requested[k]}
+	}
+	return states, nil
+}
+
+func (m *memoryStore) RequestTask(_ context.Context, key domain.TaskKey) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.requested[key] = time.Now()
+	return nil
 }
 
 func (m *memoryStore) TaskStarted(_ context.Context, key domain.TaskKey, at time.Time) error {
@@ -88,7 +100,7 @@ func (m *memoryStore) results() []domain.TaskResult {
 
 func TestSchedulerRunsDueTasksOneAtATime(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		st := &memoryStore{leader: true, starts: map[domain.TaskKey]time.Time{}}
+		st := &memoryStore{leader: true, starts: map[domain.TaskKey]time.Time{}, requested: map[domain.TaskKey]time.Time{}}
 		var mu sync.Mutex
 		runs, concurrent, most := 0, 0, 0
 		task := Task{
@@ -131,7 +143,7 @@ func TestSchedulerRunsDueTasksOneAtATime(t *testing.T) {
 
 func TestSchedulerRunsNothingWithoutTheLease(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		st := &memoryStore{starts: map[domain.TaskKey]time.Time{}}
+		st := &memoryStore{starts: map[domain.TaskKey]time.Time{}, requested: map[domain.TaskKey]time.Time{}}
 		ran := false
 		task := Task{
 			Key:      domain.TaskScanLibraries,
@@ -151,7 +163,7 @@ func TestSchedulerRunsNothingWithoutTheLease(t *testing.T) {
 
 func TestLosingTheLeaseCancelsTheRunningTask(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		st := &memoryStore{leader: true, starts: map[domain.TaskKey]time.Time{}}
+		st := &memoryStore{leader: true, starts: map[domain.TaskKey]time.Time{}, requested: map[domain.TaskKey]time.Time{}}
 		task := Task{
 			Key:      domain.TaskScanLibraries,
 			Triggers: []Trigger{{Kind: TriggerEvery, Every: 24 * time.Hour}},
@@ -169,6 +181,38 @@ func TestLosingTheLeaseCancelsTheRunningTask(t *testing.T) {
 		synctest.Wait()
 		if got := st.results(); len(got) != 1 || got[0] != domain.TaskCancelled {
 			t.Errorf("outcomes = %v, want one cancelled run", got)
+		}
+	})
+}
+
+func TestATaskAskedForRunsBeforeItIsDue(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		st := &memoryStore{leader: true, starts: map[domain.TaskKey]time.Time{}, requested: map[domain.TaskKey]time.Time{}}
+		runs := 0
+		task := Task{
+			Key:      domain.TaskScanLibraries,
+			Triggers: []Trigger{{Kind: TriggerEvery, Every: 12 * time.Hour}},
+			Run:      func(context.Context) error { runs++; return nil },
+		}
+		s := NewScheduler(st, discard(), uuid.NewV7(), task)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		go s.Run(ctx)
+		synctest.Sleep(time.Hour)
+		statuses, err := s.Statuses(ctx)
+		if err != nil || len(statuses) != 1 || !statuses[0].Next.Equal(statuses[0].State.Started.Add(12*time.Hour)) {
+			t.Fatalf("statuses = %+v, %v; want the next run twelve hours after the first", statuses, err)
+		}
+		if err := s.Request(ctx, domain.TaskSweepJobs); !errors.Is(err, ErrNoTask) {
+			t.Errorf("asking for a task it does not run: %v, want ErrNoTask", err)
+		}
+		if err := s.Request(ctx, domain.TaskScanLibraries); err != nil {
+			t.Fatal(err)
+		}
+		synctest.Sleep(time.Minute)
+		synctest.Wait()
+		if runs != 2 {
+			t.Errorf("%d runs, want the first and the one asked for", runs)
 		}
 	})
 }

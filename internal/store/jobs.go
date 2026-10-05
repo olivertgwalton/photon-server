@@ -141,3 +141,49 @@ func (s *Store) SaveKeyframes(ctx context.Context, part uuid.UUID, ptsMS []int64
 		ON CONFLICT (part_id) DO UPDATE SET pts_ms = excluded.pts_ms`, part.String(), ptsMS)
 	return err
 }
+
+// JobCount is how many jobs of a kind are in a state.
+type JobCount struct {
+	Kind  domain.JobKind
+	State domain.JobState
+	Count int
+}
+
+// DeadJob is a job that failed every attempt, and why it last did.
+type DeadJob struct {
+	Job
+	Error string
+}
+
+// deadShown is how many dead jobs an admin is shown, the most recent first.
+const deadShown = 50
+
+// JobQueue answers how many jobs of each kind are in each state, and the jobs that are dead.
+func (s *Store) JobQueue(ctx context.Context) ([]JobCount, []DeadJob, error) {
+	j := s.q.Job
+	var counts []JobCount
+	if err := j.WithContext(ctx).Select(j.Kind, j.State, j.ID.Count().As("count")).
+		Group(j.Kind, j.State).Order(j.Kind, j.State).Scan(&counts); err != nil {
+		return nil, nil, err
+	}
+	rows, err := j.WithContext(ctx).Where(j.State.Eq(string(domain.JobDead))).Order(j.ID.Desc()).Limit(deadShown).Find()
+	if err != nil {
+		return nil, nil, err
+	}
+	dead := make([]DeadJob, len(rows))
+	for i, r := range rows {
+		dead[i] = DeadJob{ID: r.ID, Kind: r.Kind, Subject: uuid.UUID(r.Subject), Attempts: int(r.Attempts), Error: deref(r.LastError)}
+	}
+	return counts, dead, nil
+}
+
+// RetryJob gives a dead job a fresh set of attempts now. ErrNotFound for no dead job of that id.
+func (s *Store) RetryJob(ctx context.Context, id int64) error {
+	j := s.q.Job
+	res, err := j.WithContext(ctx).Where(j.ID.Eq(id), j.State.Eq(string(domain.JobDead))).
+		UpdateSimple(j.State.Value(string(domain.JobQueued)), j.Attempts.Value(0), j.RunAfter.Value(time.Now()))
+	if err == nil && res.RowsAffected == 0 {
+		err = ErrNotFound
+	}
+	return err
+}

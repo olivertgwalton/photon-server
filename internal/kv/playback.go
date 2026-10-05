@@ -3,6 +3,7 @@ package kv
 import (
 	"context"
 	"strconv"
+	"strings"
 	"time"
 	"uuid"
 
@@ -11,7 +12,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-func playbackKey(id uuid.UUID) string { return "photon:play:" + id.String() }
+const playbackPrefix = "photon:play:"
+
+func playbackKey(id uuid.UUID) string { return playbackPrefix + id.String() }
 
 // SavePlayback writes a playback session, which lapses after ttl unless written again.
 func (k *KV) SavePlayback(ctx context.Context, p domain.Playback, ttl time.Duration) error {
@@ -71,4 +74,32 @@ func (k *KV) NodeAddress(ctx context.Context, id uuid.UUID) (string, bool, error
 		return "", false, nil
 	}
 	return address, err == nil, err
+}
+
+// Playbacks answers every playback going on, across the cluster, by scanning their keys: there are
+// as many as there are people watching.
+func (k *KV) Playbacks(ctx context.Context) ([]domain.Playback, error) {
+	var out []domain.Playback
+	var cursor uint64
+	for {
+		e, err := k.client.Do(ctx, k.client.B().Scan().Cursor(cursor).Match(playbackPrefix+"*").Count(100).Build()).AsScanEntry()
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range e.Elements {
+			id, err := uuid.Parse(strings.TrimPrefix(key, playbackPrefix))
+			if err != nil {
+				continue
+			}
+			// One may lapse between the scan and the read.
+			if p, ok, err := k.Playback(ctx, id); err != nil {
+				return nil, err
+			} else if ok {
+				out = append(out, p)
+			}
+		}
+		if cursor = e.Cursor; cursor == 0 {
+			return out, nil
+		}
+	}
 }
