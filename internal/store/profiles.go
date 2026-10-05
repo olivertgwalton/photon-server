@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -8,9 +9,11 @@ import (
 	"uuid"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
+	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 var (
@@ -230,4 +233,99 @@ func (s *Store) DeleteDevice(ctx context.Context, id uuid.UUID, profile *uuid.UU
 	}
 	info, err := q.Delete()
 	return info.RowsAffected == 1, err
+}
+
+var (
+	// ErrLastAdmin is a change that would leave the server with no admin.
+	ErrLastAdmin = errors.New("the server's last admin cannot stop being one")
+	// ErrAdminNeedsPassword is an admin left with no password to sign in with.
+	ErrAdminNeedsPassword = errors.New("an admin profile needs a password")
+)
+
+// ProfileChange is what to change about a profile; an empty name or role, or a nil hash, is left
+// as it is, and an empty hash clears the password.
+type ProfileChange struct {
+	Name         string
+	Role         domain.Role
+	PasswordHash *string
+}
+
+// SetProfile renames a profile, changes its role, and sets or clears its password. The server
+// keeps an admin, and every admin a password.
+func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange) (domain.Profile, error) {
+	var out domain.Profile
+	err := s.q.Transaction(func(tx *query.Query) error {
+		p := tx.Profile
+		row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if c.Role != "" && c.Role != domain.RoleAdmin && row.Role == domain.RoleAdmin {
+			if err := otherAdmin(ctx, tx, row.ID); err != nil {
+				return err
+			}
+		}
+		row.Name, row.Role = cmp.Or(c.Name, row.Name), cmp.Or(c.Role, row.Role)
+		if c.PasswordHash != nil {
+			row.PasswordHash = optional(*c.PasswordHash)
+		}
+		if row.Role == domain.RoleAdmin && row.PasswordHash == nil {
+			return ErrAdminNeedsPassword
+		}
+		password := p.PasswordHash.Null()
+		if row.PasswordHash != nil {
+			password = p.PasswordHash.Value(*row.PasswordHash)
+		}
+		if _, err := p.WithContext(ctx).Where(p.ID.Eq(row.ID)).
+			UpdateSimple(p.Name.Value(row.Name), p.Role.Value(string(row.Role)), password); err != nil {
+			return err
+		}
+		out = profile(*row)
+		return nil
+	})
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return domain.Profile{}, ErrProfileExists
+	}
+	return out, err
+}
+
+// RemoveProfile forgets a profile, its devices and what it has watched. The server keeps an admin.
+func (s *Store) RemoveProfile(ctx context.Context, id uuid.UUID) error {
+	return s.q.Transaction(func(tx *query.Query) error {
+		p := tx.Profile
+		row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if row.Role == domain.RoleAdmin {
+			if err := otherAdmin(ctx, tx, row.ID); err != nil {
+				return err
+			}
+		}
+		_, err = p.WithContext(ctx).Where(p.ID.Eq(row.ID)).Delete()
+		return err
+	})
+}
+
+// otherAdmin answers ErrLastAdmin unless an admin besides id remains, holding every admin's row
+// until the transaction ends so two admins cannot each demote the other at once.
+func otherAdmin(ctx context.Context, tx *query.Query, id model.UUID) error {
+	p := tx.Profile
+	admins, err := p.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where(p.Role.Eq(string(domain.RoleAdmin))).Find()
+	if err != nil {
+		return err
+	}
+	for _, a := range admins {
+		if a.ID != id {
+			return nil
+		}
+	}
+	return ErrLastAdmin
 }
