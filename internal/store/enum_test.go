@@ -53,6 +53,8 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"profile_unrated":    names(domain.UnratedPolicies()),
 		"play_method":        names(domain.PlayMethods()),
 		"episode_order":      names(domain.EpisodeOrders()),
+		"marker_kind":        names(domain.MarkerKinds()),
+		"marker_source":      names(domain.MarkerSources()),
 	} {
 		var def string
 		err := s.pool.QueryRow(t.Context(),

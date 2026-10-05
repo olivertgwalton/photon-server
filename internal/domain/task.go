@@ -13,10 +13,12 @@ const (
 	TaskRefreshMetadata TaskKey = "refresh_metadata"
 	// TaskSweepArtwork clears replaced pictures from the cache.
 	TaskSweepArtwork TaskKey = "sweep_artwork"
+	// TaskDetectMarkers queues the seasons with episodes whose sound has not been compared.
+	TaskDetectMarkers TaskKey = "detect_markers"
 )
 
 func TaskKeys() []TaskKey {
-	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork}
+	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers}
 }
 
 type TaskResult string
