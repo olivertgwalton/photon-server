@@ -106,6 +106,7 @@ func TestSearch(t *testing.T) {
 		wantTitle  string
 	}{
 		{"?q=heat", http.StatusOK, "heat 00000000-0000-0000-0000-000000000000"},
+		{"?q=sigourney", http.StatusOK, "sigourney 00000000-0000-0000-0000-000000000000"},
 		{"?q=heat&library=" + films.String(), http.StatusOK, "heat " + films.String()},
 		{"", http.StatusBadRequest, ""},
 		{"?q=heat&library=films", http.StatusBadRequest, ""},
@@ -122,12 +123,18 @@ func TestSearch(t *testing.T) {
 			Items []struct {
 				Title string `json:"title"`
 			} `json:"items"`
+			People []struct {
+				Name string `json:"name"`
+			} `json:"people"`
 		}
 		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 			t.Fatal(err)
 		}
 		if len(got.Items) != 1 || got.Items[0].Title != tc.wantTitle {
 			t.Errorf("%q: items = %+v, want %q", tc.query, got.Items, tc.wantTitle)
+		}
+		if wantPeople := strings.Contains(tc.query, "sigourney"); wantPeople != (len(got.People) == 1) {
+			t.Errorf("%q: people = %+v", tc.query, got.People)
 		}
 	}
 }

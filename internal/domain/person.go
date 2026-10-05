@@ -1,10 +1,6 @@
 package domain
 
-import (
-	"fmt"
-	"slices"
-	"time"
-)
+import "time"
 
 // CreditKind is what a person did on a title.
 type CreditKind string
@@ -23,13 +19,6 @@ const (
 
 func CreditKinds() []CreditKind {
 	return []CreditKind{CreditActor, CreditGuestStar, CreditDirector, CreditWriter, CreditProducer, CreditComposer, CreditCreator}
-}
-
-func ParseCreditKind(s string) (CreditKind, error) {
-	if v := CreditKind(s); slices.Contains(CreditKinds(), v) {
-		return v, nil
-	}
-	return "", fmt.Errorf("credit %q is not one of %v", s, CreditKinds())
 }
 
 // Credit is a person's part in a title, as a source gives it: their name, ids and picture, what

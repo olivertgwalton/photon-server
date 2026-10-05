@@ -40,6 +40,13 @@ func (f *fakePeople) DescribePerson(_ context.Context, _ uuid.UUID, d domain.Per
 	return nil
 }
 
+func (f *fakePeople) SearchPeople(_ context.Context, text string, _ int) ([]store.PersonRef, error) {
+	if strings.HasPrefix("sigourney weaver", strings.ToLower(text)) {
+		return []store.PersonRef{{ID: weaver, Name: "Sigourney Weaver"}}, nil
+	}
+	return []store.PersonRef{}, nil
+}
+
 type describer struct {
 	asked int
 	fail  bool

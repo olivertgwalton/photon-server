@@ -21,6 +21,7 @@ func newAPI(readiness error) *API {
 		Auth:      fakeAuth{},
 		Limits:    &fakeLimiter{},
 		Catalogue: fakeCatalogue{},
+		People:    &fakePeople{},
 		Watching:  fakeWatching{},
 	})
 }

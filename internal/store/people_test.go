@@ -80,6 +80,14 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 	if _, err := s.Person(ctx, uuid.NewV7()); !errors.Is(err, ErrNotFound) {
 		t.Errorf("no one: %v, want ErrNotFound", err)
 	}
+	for _, q := range []string{"weav", "SIGOURNEY w", "Sigourney Weaver"} {
+		if found, err := s.SearchPeople(ctx, q, 10); err != nil || len(found) != 1 || found[0].ID != her || found[0].Photo == (uuid.UUID{}) {
+			t.Errorf("search %q: %+v, %v; want her", q, found, err)
+		}
+	}
+	if found, _ := s.SearchPeople(ctx, "gourney", 10); len(found) != 0 {
+		t.Errorf("search inside a word: %+v, want no one", found)
+	}
 	cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{People: []uuid.UUID{her}}})
 	if err != nil || len(cards) != 2 {
 		t.Errorf("titles she is in: %+v, %v; want the film and the show", cards, err)

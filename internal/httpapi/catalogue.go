@@ -177,7 +177,21 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": cardsJSON(cards)})
+	found, err := a.svc.People.SearchPeople(r.Context(), query.Text, query.Limit)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	type personJSON struct {
+		ID    uuid.UUID `json:"id"`
+		Name  string    `json:"name"`
+		Photo uuid.UUID `json:"photo,omitzero"`
+	}
+	people := make([]personJSON, len(found))
+	for i, p := range found {
+		people[i] = personJSON(p)
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": cardsJSON(cards), "people": people})
 }
 
 func (a *API) title(w http.ResponseWriter, r *http.Request) {
