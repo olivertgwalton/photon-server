@@ -97,6 +97,10 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	trusted, err := httpapi.ParseTrustedProxies(os.Getenv("PHOTON_TRUSTED_PROXIES"))
+	if err != nil {
+		return err
+	}
 	authService, err := auth.New(ctx, st, cache)
 	if err != nil {
 		return err
@@ -111,8 +115,10 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		Version: version(),
 	}
 	srv := &http.Server{
-		Addr:              cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
-		Handler:           httpapi.New(logger, info, httpapi.Services{Ready: ready(st, cache), Auth: authService, Profiles: st}),
+		Addr: cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
+		Handler: httpapi.New(logger, info, httpapi.Services{
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Limits: cache, TrustedProxies: trusted,
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),

@@ -95,6 +95,10 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "name, device and client are required")
 		return
 	}
+	if !a.allowed(w, r, signInsPerAddress, a.addrKey(r, "signin")) ||
+		!a.allowed(w, r, signInsPerName, nameKey("signin", req.Name)) {
+		return
+	}
 	token, profile, err := a.svc.Auth.SignIn(r.Context(), req.Name, req.Password, auth.Device{Name: req.Device, Client: req.Client})
 	switch {
 	case errors.Is(err, auth.ErrInvalidCredentials):
