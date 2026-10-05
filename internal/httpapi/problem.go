@@ -24,6 +24,7 @@ const (
 	codeNoCompatibleStream problemCode = "no_compatible_stream"
 	codeForbidden          problemCode = "forbidden"
 	codeConflict           problemCode = "conflict"
+	codeTranscodeLimit     problemCode = "transcode_limit"
 	// RFC 8628's own error names, so a client that knows the RFC needs no mapping.
 	codeAuthorizationPending problemCode = "authorization_pending"
 	codeSlowDown             problemCode = "slow_down"
@@ -38,7 +39,7 @@ func (c problemCode) status() int {
 		return http.StatusMethodNotAllowed
 	case codeUnknownParameter, codeInvalidParameter:
 		return http.StatusBadRequest
-	case codeNotReady:
+	case codeNotReady, codeTranscodeLimit:
 		return http.StatusServiceUnavailable
 	case codeInvalidBody:
 		return http.StatusBadRequest
