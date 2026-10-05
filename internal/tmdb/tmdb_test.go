@@ -54,10 +54,14 @@ func TestSearchAsksForTheYearByKind(t *testing.T) {
 
 func TestDetailsTakeTheCountrysCertificate(t *testing.T) {
 	c := serve(t, map[string]string{
-		"/movie/348?append_to_response=release_dates%2Cexternal_ids&language=en-GB": `{
+		"/movie/348?append_to_response=release_dates%2Cexternal_ids%2Cvideos&include_video_language=en%2Cnull&language=en-GB": `{
 			"id":348,"title":"Alien","original_title":"Alien","overview":"In space.","tagline":"Scream.",
 			"release_date":"1979-05-25","genres":[{"name":"Horror"}],"production_companies":[{"name":"Brandywine"}],"networks":[{"name":"Brandywine"}],
 			"external_ids":{"imdb_id":"tt0078748"},
+			"videos":{"results":[
+				{"type":"Trailer","site":"YouTube","key":"fan","name":"Fan cut","official":false,"published_at":"2020-01-01T00:00:00.000Z"},
+				{"type":"Opening Credits","site":"YouTube","key":"titles","name":"Titles","official":true,"published_at":"2019-01-01T00:00:00.000Z"},
+				{"type":"Trailer","site":"YouTube","key":"studio","name":"Trailer","iso_639_1":"en","official":true,"published_at":"2021-01-01T00:00:00.000Z"}]},
 			"release_dates":{"results":[
 				{"iso_3166_1":"US","release_dates":[{"certification":"R"}]},
 				{"iso_3166_1":"GB","release_dates":[{"certification":""},{"certification":"18"}]}]}}`,
@@ -71,6 +75,11 @@ func TestDetailsTakeTheCountrysCertificate(t *testing.T) {
 		ReleaseDate: time.Date(1979, 5, 25, 0, 0, 0, 0, time.UTC), Year: 1979,
 		Genres: []string{"Horror"}, Studios: []string{"Brandywine"},
 		IDs: map[domain.Provider]string{domain.ProviderTMDB: "348", domain.ProviderIMDb: "tt0078748"},
+		Videos: []domain.RemoteVideo{
+			{Kind: domain.ExtraTrailer, Site: "YouTube", Key: "studio", Name: "Trailer", Language: "en", Published: time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)},
+			{Kind: domain.ExtraOther, Site: "YouTube", Key: "titles", Name: "Titles", Published: time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC)},
+			{Kind: domain.ExtraTrailer, Site: "YouTube", Key: "fan", Name: "Fan cut", Published: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
+		},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Details (-want +got):\n%s", diff)
