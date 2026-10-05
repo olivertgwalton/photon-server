@@ -179,6 +179,13 @@ from the server's own routes as it starts, so it says what the running server ta
 Point a client generator or a viewer such as Swagger UI at it; no token is needed.
 
 `GET /readyz` answers 204 while Postgres and Valkey are reachable and 503 otherwise.
+`GET /api/v1/admin/server` shows an admin how the node answering was set up, for a dashboard: its
+version and when it started, the OS, FFmpeg and FFprobe and whether they fingerprint sound, the
+encoder and transcode limit, discovery, the listen address and trusted proxies, the cache and backup
+folders with the space left on them (on Linux and macOS), the metadata language, whether Postgres
+and Valkey answer and their versions, and the nodes that say where their peers reach them
+(`PHOTON_NODE_ADDRESS`), each with when it last did. It is all set by the environment, so none of it
+is changed here; no password or connection string is in it.
 Integration tests create and drop a database per test on the server `TEST_DATABASE_URL` names.
 
 ## Contributing

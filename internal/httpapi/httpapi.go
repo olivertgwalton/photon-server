@@ -161,6 +161,10 @@ type Services struct {
 	Limits       limiter
 	// TrustedProxies are the peers whose X-Forwarded-For names the client. None by default.
 	TrustedProxies []netip.Prefix
+	// Setup is how this node was started, and Postgres and Valkey what it reaches.
+	Setup    Setup
+	Postgres versioned
+	Valkey   cluster
 }
 
 type API struct {
@@ -604,6 +608,11 @@ func (a *API) routes() []route {
 			pattern: "DELETE /api/v1/admin/playbacks/{id}", access: admin,
 			summary: "Stop anyone's playback, keeping where it had got to", status: http.StatusNoContent,
 			handle: a.routeToOwner("id", http.HandlerFunc(a.stopPlayback)).ServeHTTP,
+		},
+		{
+			pattern: "GET /api/v1/admin/server", access: admin,
+			summary: "Say how this node was set up, what it reaches, and the cluster's nodes",
+			status:  http.StatusOK, reply: serverJSON{}, handle: a.adminServer,
 		},
 		{
 			pattern: "GET /api/v1/admin/activity", access: admin, summary: "Page the activity log, the newest first",
