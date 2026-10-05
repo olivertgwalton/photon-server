@@ -107,20 +107,43 @@ const (
 	decisionTranscode decision = "transcode"
 )
 
+type playJSON struct {
+	VersionID   string `json:"version_id"`
+	AudioStream *int   `json:"audio_stream"`
+	// SubtitleStream is a subtitle the client will show; one that is a picture is drawn into the
+	// video where the client cannot draw it.
+	SubtitleStream *int              `json:"subtitle_stream"`
+	Profile        *playback.Profile `json:"profile"`
+}
+
+// playbackJSON is a playback opened: its parts and subtitles played as they are, or its playlist,
+// at addresses relative to the server.
+type playbackJSON struct {
+	PlaybackID uuid.UUID         `json:"playback_id"`
+	Method     domain.PlayMethod `json:"method"`
+	VersionID  uuid.UUID         `json:"version_id"`
+	Video      *videoJSON        `json:"video,omitzero"`
+	Audio      *audioJSON        `json:"audio,omitzero"`
+	Reasons    []playback.Reason `json:"reasons,omitzero"`
+	Parts      []partJSON        `json:"parts,omitzero"`
+	Subtitles  []subtitleJSON    `json:"subtitles,omitzero"`
+	Playlist   string            `json:"playlist,omitzero"`
+	ExpiresAt  time.Time         `json:"expires_at"`
+}
+
+// refusalJSON is a copy nothing the client plays can be made of, and why.
+type refusalJSON struct {
+	problem
+	Reasons []playback.Reason `json:"reasons"`
+}
+
 // play opens a playback of a film or episode as the client's profile decides: its copy's files in
 // order, each with where it starts on the copy's timeline, or an HLS playlist of them, its video
 // copied or encoded, at signed
 // addresses a player fetches directly. It says what becomes of each stream, and why the copy could
 // not be played as it is.
 func (a *API) play(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		VersionID   string `json:"version_id"`
-		AudioStream *int   `json:"audio_stream"`
-		// SubtitleStream is a subtitle the client will show; one that is a picture is drawn into the
-		// video where the client cannot draw it.
-		SubtitleStream *int              `json:"subtitle_stream"`
-		Profile        *playback.Profile `json:"profile"`
-	}
+	var req playJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -154,10 +177,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		return
 	case errors.Is(err, playback.ErrNoCompatibleStream):
 		status := codeNoCompatibleStream.status()
-		writeJSON(w, a.logger, "application/problem+json", status, struct {
-			problem
-			Reasons []playback.Reason `json:"reasons"`
-		}{problem{Title: http.StatusText(status), Status: status, Code: codeNoCompatibleStream}, d.Reasons})
+		writeJSON(w, a.logger, "application/problem+json", status, refusalJSON{problem{Title: http.StatusText(status), Status: status, Code: codeNoCompatibleStream}, d.Reasons})
 		return
 	case err != nil:
 		a.internal(w, r, err)
@@ -169,18 +189,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	until := time.Now().Add(streamFor)
-	answer := struct {
-		PlaybackID uuid.UUID         `json:"playback_id"`
-		Method     domain.PlayMethod `json:"method"`
-		VersionID  uuid.UUID         `json:"version_id"`
-		Video      *videoJSON        `json:"video,omitzero"`
-		Audio      *audioJSON        `json:"audio,omitzero"`
-		Reasons    []playback.Reason `json:"reasons,omitzero"`
-		Parts      []partJSON        `json:"parts,omitzero"`
-		Subtitles  []subtitleJSON    `json:"subtitles,omitzero"`
-		Playlist   string            `json:"playlist,omitzero"`
-		ExpiresAt  time.Time         `json:"expires_at"`
-	}{
+	answer := playbackJSON{
 		PlaybackID: session.ID, Method: d.Method, VersionID: c.Version, Reasons: d.Reasons,
 		ExpiresAt: until.UTC().Truncate(time.Second),
 	}
@@ -362,16 +371,18 @@ func (a *API) requireSignedPath(next http.Handler) http.Handler {
 	})
 }
 
+type playStateJSON struct {
+	PositionMS int64            `json:"position_ms"`
+	State      domain.PlayState `json:"state"`
+}
+
 // playbackProgress is the player saying where it has got to, every ten seconds or so.
 func (a *API) playbackProgress(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		PositionMS int64  `json:"position_ms"`
-		State      string `json:"state"`
-	}
+	var req playStateJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
-	state, ok := domain.ParsePlayState(req.State)
+	state, ok := domain.ParsePlayState(string(req.State))
 	if !ok || req.PositionMS < 0 {
 		writeProblem(w, a.logger, codeInvalidBody, "position_ms is not negative and state is playing or paused")
 		return
@@ -383,9 +394,7 @@ func (a *API) playbackProgress(w http.ResponseWriter, r *http.Request) {
 
 // playbackStop is the player saying it has stopped, and where.
 func (a *API) playbackStop(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		PositionMS int64 `json:"position_ms"`
-	}
+	var req positionJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -411,7 +420,7 @@ func (a *API) reportPlayback(w http.ResponseWriter, r *http.Request, report func
 	case err != nil:
 		a.internal(w, r, err)
 	default:
-		writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]domain.Reach{"reach": reach})
+		writeJSON(w, a.logger, "application/json", http.StatusOK, reachJSON{Reach: reach})
 	}
 }
 

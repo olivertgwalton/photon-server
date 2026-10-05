@@ -52,7 +52,11 @@ func (a *API) adminProviders(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, j)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": out})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[providerJSON]{Items: out})
+}
+
+type providerChangeJSON struct {
+	Settings map[string]string `json:"settings"`
 }
 
 // setProvider changes a provider's settings: each value given replaces what was set, and "" clears
@@ -63,9 +67,7 @@ func (a *API) setProvider(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	var req struct {
-		Settings map[string]string `json:"settings"`
-	}
+	var req providerChangeJSON
 	if !a.decode(w, r, &req) {
 		return
 	}

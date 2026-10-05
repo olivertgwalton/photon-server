@@ -23,6 +23,34 @@ type Info struct {
 	Version string `json:"version"`
 }
 
+// listJSON is every item there is; pageJSON is total's items from offset.
+type listJSON[T any] struct {
+	Items []T `json:"items"`
+}
+
+type pageJSON[T any] struct {
+	Items  []T   `json:"items"`
+	Offset int   `json:"offset"`
+	Total  int64 `json:"total"`
+}
+
+type createdJSON struct {
+	ID uuid.UUID `json:"id"`
+}
+
+type reachJSON struct {
+	Reach domain.Reach `json:"reach"`
+}
+
+// itemIDsJSON is titles, in order.
+type itemIDsJSON struct {
+	ItemIDs []uuid.UUID `json:"item_ids"`
+}
+
+type positionJSON struct {
+	PositionMS int64 `json:"position_ms"`
+}
+
 // access is who may call a route. Every route says; none is public by omission.
 type access string
 

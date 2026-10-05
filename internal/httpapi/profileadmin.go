@@ -70,14 +70,16 @@ func (a *API) setProfileAccess(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type addProfileJSON struct {
+	Name     string      `json:"name"`
+	Role     domain.Role `json:"role"`
+	Password string      `json:"password"`
+}
+
 // addProfile adds a profile of the household, as Jellyfin's dashboard adds a user. One with no
 // password is chosen on a signed-in device and never signs in itself; an admin has one.
 func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name     string      `json:"name"`
-		Role     domain.Role `json:"role"`
-		Password string      `json:"password"`
-	}
+	var req addProfileJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -100,17 +102,19 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusCreated, profileOf(p))
 }
 
+type profileChangeJSON struct {
+	Name     string      `json:"name"`
+	Role     domain.Role `json:"role"`
+	Password *string     `json:"password"`
+}
+
 // setProfile renames a profile, changes its role, and sets its password, or clears it with "".
 func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r)
 	if !ok {
 		return
 	}
-	var req struct {
-		Name     string      `json:"name"`
-		Role     domain.Role `json:"role"`
-		Password *string     `json:"password"`
-	}
+	var req profileChangeJSON
 	if !a.decode(w, r, &req) {
 		return
 	}

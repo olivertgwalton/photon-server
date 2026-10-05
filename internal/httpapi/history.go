@@ -15,6 +15,16 @@ type history interface {
 	History(ctx context.Context, profile uuid.UUID, offset, limit int) ([]store.Play, int64, error)
 }
 
+type historyEntryJSON struct {
+	ID         uuid.UUID         `json:"id"`
+	ProfileID  uuid.UUID         `json:"profile_id"`
+	Title      cardJSON          `json:"title"`
+	Method     domain.PlayMethod `json:"method"`
+	StartedAt  time.Time         `json:"started_at"`
+	StoppedAt  time.Time         `json:"stopped_at"`
+	PositionMS int64             `json:"position_ms"`
+}
+
 // ownHistory answers the profile's plays, the latest first.
 func (a *API) ownHistory(w http.ResponseWriter, r *http.Request) {
 	a.history(w, r, sessionOf(r).Profile.ID)
@@ -55,25 +65,12 @@ func (a *API) history(w http.ResponseWriter, r *http.Request, profile uuid.UUID)
 		a.internal(w, r, err)
 		return
 	}
-	type playJSON struct {
-		ID         uuid.UUID         `json:"id"`
-		ProfileID  uuid.UUID         `json:"profile_id"`
-		Title      cardJSON          `json:"title"`
-		Method     domain.PlayMethod `json:"method"`
-		StartedAt  time.Time         `json:"started_at"`
-		StoppedAt  time.Time         `json:"stopped_at"`
-		PositionMS int64             `json:"position_ms"`
-	}
-	out := make([]playJSON, len(plays))
+	out := make([]historyEntryJSON, len(plays))
 	for i, p := range plays {
-		out[i] = playJSON{
+		out[i] = historyEntryJSON{
 			ID: p.ID, ProfileID: p.Profile, Title: cardsJSON([]store.Card{p.Card})[0], Method: p.Method,
 			StartedAt: p.StartedAt.UTC(), StoppedAt: p.StoppedAt.UTC(), PositionMS: p.PositionMS,
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, struct {
-		Items  []playJSON `json:"items"`
-		Offset int        `json:"offset"`
-		Total  int64      `json:"total"`
-	}{out, offset, total})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[historyEntryJSON]{out, offset, total})
 }

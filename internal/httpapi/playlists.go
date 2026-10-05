@@ -21,6 +21,33 @@ type playlists interface {
 	RemovePlaylist(ctx context.Context, profile, playlist uuid.UUID) error
 }
 
+type playlistJSON struct {
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	Entries    int       `json:"entries"`
+	DurationMS int64     `json:"duration_ms"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+type addPlaylistJSON struct {
+	Name    string      `json:"name"`
+	ItemIDs []uuid.UUID `json:"item_ids"`
+}
+
+type nameJSON struct {
+	Name string `json:"name"`
+}
+
+type entryJSON struct {
+	EntryID uuid.UUID `json:"entry_id"`
+	cardJSON
+}
+
+// moveJSON is a position counted from zero.
+type moveJSON struct {
+	Position int `json:"position"`
+}
+
 // playlistsOf answers the profile's playlists, by name.
 func (a *API) playlistsOf(w http.ResponseWriter, r *http.Request) {
 	all, err := a.svc.Playlists.Playlists(r.Context(), sessionOf(r).Profile.ID)
@@ -28,26 +55,16 @@ func (a *API) playlistsOf(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	type playlistJSON struct {
-		ID         uuid.UUID `json:"id"`
-		Name       string    `json:"name"`
-		Entries    int       `json:"entries"`
-		DurationMS int64     `json:"duration_ms"`
-		UpdatedAt  time.Time `json:"updated_at"`
-	}
 	out := make([]playlistJSON, len(all))
 	for i, p := range all {
 		out[i] = playlistJSON(p)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": out})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[playlistJSON]{Items: out})
 }
 
 // addPlaylist makes one of the profile's playlists, of the titles given if any.
 func (a *API) addPlaylist(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name    string      `json:"name"`
-		ItemIDs []uuid.UUID `json:"item_ids"`
-	}
+	var req addPlaylistJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -59,7 +76,7 @@ func (a *API) addPlaylist(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, map[string]uuid.UUID{"id": id})
+	writeJSON(w, a.logger, "application/json", http.StatusCreated, createdJSON{ID: id})
 }
 
 // playlistEntries answers a page of a playlist, in its order: each entry's own id and the title it
@@ -88,19 +105,11 @@ func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	type entryJSON struct {
-		EntryID uuid.UUID `json:"entry_id"`
-		cardJSON
-	}
 	out := make([]entryJSON, len(entries))
 	for i, e := range entries {
 		out[i] = entryJSON{EntryID: e.ID, cardJSON: cardsJSON([]store.Card{e.Card})[0]}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, struct {
-		Items  []entryJSON `json:"items"`
-		Offset int         `json:"offset"`
-		Total  int64       `json:"total"`
-	}{out, offset, total})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[entryJSON]{out, offset, total})
 }
 
 // addToPlaylist puts titles at the end of a playlist: a show or season as its episodes, a
@@ -110,9 +119,7 @@ func (a *API) addToPlaylist(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req struct {
-		ItemIDs []uuid.UUID `json:"item_ids"`
-	}
+	var req itemIDsJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -128,9 +135,7 @@ func (a *API) setPlaylist(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req struct {
-		Name string `json:"name"`
-	}
+	var req nameJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -166,9 +171,7 @@ func (a *API) moveEntry(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	var req struct {
-		Position int `json:"position"`
-	}
+	var req moveJSON
 	if !a.decode(w, r, &req) {
 		return
 	}

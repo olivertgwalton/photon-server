@@ -26,6 +26,17 @@ type personDescriber interface {
 // describedFor is how long what a provider said of someone stands before it is asked again.
 const describedFor = 30 * 24 * time.Hour
 
+type creditJSON struct {
+	Kind domain.CreditKind `json:"kind"`
+	Role string            `json:"role,omitzero"`
+	cardJSON
+}
+
+type personJSON struct {
+	store.PersonPage
+	Credits []creditJSON `json:"credits"`
+}
+
 // person answers someone's page: who they are, as a provider says the first time it is opened and
 // monthly after, and their films and shows here, the newest first.
 func (a *API) person(w http.ResponseWriter, r *http.Request) {
@@ -55,15 +66,7 @@ func (a *API) person(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	type creditJSON struct {
-		Kind domain.CreditKind `json:"kind"`
-		Role string            `json:"role,omitzero"`
-		cardJSON
-	}
-	out := struct {
-		store.PersonPage
-		Credits []creditJSON `json:"credits"`
-	}{PersonPage: p, Credits: []creditJSON{}}
+	out := personJSON{PersonPage: p, Credits: []creditJSON{}}
 	for _, c := range credits {
 		out.Credits = append(out.Credits, creditJSON{Kind: c.Kind, Role: c.Role, cardJSON: cardsJSON([]store.Card{c.Card})[0]})
 	}

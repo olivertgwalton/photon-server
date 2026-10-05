@@ -21,9 +21,7 @@ type watching interface {
 
 // progress records where the profile stopped a film or episode, and answers how far that got.
 func (a *API) progress(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		PositionMS int64 `json:"position_ms"`
-	}
+	var req positionJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -37,7 +35,7 @@ func (a *API) progress(w http.ResponseWriter, r *http.Request) {
 	}
 	reach, err := a.svc.Watching.SaveProgress(r.Context(), sessionOf(r).Profile.ID, id, time.Duration(req.PositionMS)*time.Millisecond)
 	if !a.answered(w, r, err) {
-		writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]domain.Reach{"reach": reach})
+		writeJSON(w, a.logger, "application/json", http.StatusOK, reachJSON{Reach: reach})
 	}
 }
 

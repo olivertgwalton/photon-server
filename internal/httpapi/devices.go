@@ -33,7 +33,7 @@ func (a *API) devices(w http.ResponseWriter, r *http.Request) {
 			SignedInAt: d.CreatedAt, LastSeenAt: d.LastSeenAt, ThisDevice: d.ID == session.ID,
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": out})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[deviceListingJSON]{Items: out})
 }
 
 func (a *API) signOutDevice(w http.ResponseWriter, r *http.Request) {
