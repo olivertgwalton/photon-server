@@ -8,6 +8,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/backup"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/scan"
@@ -67,6 +68,24 @@ func sweepTask(st *store.Store, logger *slog.Logger) task.Task {
 			n, err := st.SweepJobs(ctx)
 			if n > 0 {
 				logger.InfoContext(ctx, "jobs requeued after their worker's lease ran out", slog.Int64("jobs", n))
+			}
+			return err
+		},
+	}
+}
+
+// backupEvery is how often Plex backs its database up.
+const backupEvery = 3 * 24 * time.Hour
+
+// backupTask dumps the database, keeping the newest few.
+func backupTask(d backup.Dumper, logger *slog.Logger) task.Task {
+	return task.Task{
+		Key:      domain.TaskBackupDatabase,
+		Triggers: []task.Trigger{{Kind: task.TriggerEvery, Every: backupEvery}},
+		Run: func(ctx context.Context) error {
+			name, err := d.Dump(ctx, time.Now())
+			if err == nil {
+				logger.InfoContext(ctx, "database backed up", slog.String("file", name))
 			}
 			return err
 		},

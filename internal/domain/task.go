@@ -7,10 +7,12 @@ type TaskKey string
 const (
 	TaskScanLibraries TaskKey = "scan_libraries"
 	TaskSweepJobs     TaskKey = "sweep_jobs"
+	// TaskBackupDatabase dumps the database for pg_restore.
+	TaskBackupDatabase TaskKey = "backup_database"
 )
 
 func TaskKeys() []TaskKey {
-	return []TaskKey{TaskScanLibraries, TaskSweepJobs}
+	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase}
 }
 
 type TaskResult string
