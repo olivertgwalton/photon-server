@@ -22,8 +22,10 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Chapter:            newChapter(db, opts...),
 		Collection:         newCollection(db, opts...),
 		CollectionMember:   newCollectionMember(db, opts...),
+		Conversion:         newConversion(db, opts...),
 		Credit:             newCredit(db, opts...),
 		DeviceSession:      newDeviceSession(db, opts...),
+		Download:           newDownload(db, opts...),
 		ExternalID:         newExternalID(db, opts...),
 		Favourite:          newFavourite(db, opts...),
 		Folder:             newFolder(db, opts...),
@@ -61,8 +63,10 @@ type Query struct {
 	Chapter            chapter
 	Collection         collection
 	CollectionMember   collectionMember
+	Conversion         conversion
 	Credit             credit
 	DeviceSession      deviceSession
+	Download           download
 	ExternalID         externalID
 	Favourite          favourite
 	Folder             folder
@@ -103,8 +107,10 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Chapter:            q.Chapter.clone(db),
 		Collection:         q.Collection.clone(db),
 		CollectionMember:   q.CollectionMember.clone(db),
+		Conversion:         q.Conversion.clone(db),
 		Credit:             q.Credit.clone(db),
 		DeviceSession:      q.DeviceSession.clone(db),
+		Download:           q.Download.clone(db),
 		ExternalID:         q.ExternalID.clone(db),
 		Favourite:          q.Favourite.clone(db),
 		Folder:             q.Folder.clone(db),
@@ -150,8 +156,10 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Chapter:            q.Chapter.replaceDB(db),
 		Collection:         q.Collection.replaceDB(db),
 		CollectionMember:   q.CollectionMember.replaceDB(db),
+		Conversion:         q.Conversion.replaceDB(db),
 		Credit:             q.Credit.replaceDB(db),
 		DeviceSession:      q.DeviceSession.replaceDB(db),
+		Download:           q.Download.replaceDB(db),
 		ExternalID:         q.ExternalID.replaceDB(db),
 		Favourite:          q.Favourite.replaceDB(db),
 		Folder:             q.Folder.replaceDB(db),
@@ -187,8 +195,10 @@ type queryCtx struct {
 	Chapter            IChapterDo
 	Collection         ICollectionDo
 	CollectionMember   ICollectionMemberDo
+	Conversion         IConversionDo
 	Credit             ICreditDo
 	DeviceSession      IDeviceSessionDo
+	Download           IDownloadDo
 	ExternalID         IExternalIDDo
 	Favourite          IFavouriteDo
 	Folder             IFolderDo
@@ -224,8 +234,10 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Chapter:            q.Chapter.WithContext(ctx),
 		Collection:         q.Collection.WithContext(ctx),
 		CollectionMember:   q.CollectionMember.WithContext(ctx),
+		Conversion:         q.Conversion.WithContext(ctx),
 		Credit:             q.Credit.WithContext(ctx),
 		DeviceSession:      q.DeviceSession.WithContext(ctx),
+		Download:           q.Download.WithContext(ctx),
 		ExternalID:         q.ExternalID.WithContext(ctx),
 		Favourite:          q.Favourite.WithContext(ctx),
 		Folder:             q.Folder.WithContext(ctx),

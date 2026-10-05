@@ -18,10 +18,13 @@ const (
 	// TaskBackfillPreviews queues the parts whose previews are not what their library asks for,
 	// and clears previews no part has any more.
 	TaskBackfillPreviews TaskKey = "backfill_previews"
+	// TaskSweepDownloads forgets downloads kept past their retention, and conversions no download
+	// needs.
+	TaskSweepDownloads TaskKey = "sweep_downloads"
 )
 
 func TaskKeys() []TaskKey {
-	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews}
+	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads}
 }
 
 type TaskResult string

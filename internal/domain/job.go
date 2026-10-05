@@ -12,10 +12,12 @@ const (
 	JobMarkers JobKind = "markers"
 	// JobPreviews makes a part's chapter images and trickplay sheets, as its library asks.
 	JobPreviews JobKind = "previews"
+	// JobConvert makes a part smaller for downloading; one job per conversion.
+	JobConvert JobKind = "convert"
 )
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews}
+	return []JobKind{JobKeyframes, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert}
 }
 
 type JobState string
