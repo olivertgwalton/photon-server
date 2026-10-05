@@ -72,6 +72,7 @@ func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "restricted"}`, http.StatusCreated},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Partner", "role": "member", "password": "correct horse"}`, http.StatusCreated},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Boss", "role": "admin"}`, http.StatusBadRequest},
+		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Short", "role": "member", "password": "hunter2"}`, http.StatusBadRequest},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Oliver", "role": "member"}`, http.StatusConflict},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Cat", "role": "pet"}`, http.StatusBadRequest},
 		{goodToken, http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"role": "member"}`, http.StatusConflict},

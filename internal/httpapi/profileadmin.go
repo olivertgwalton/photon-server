@@ -160,6 +160,10 @@ func (a *API) hash(w http.ResponseWriter, r *http.Request, password string) (str
 		return "", true
 	}
 	hash, err := auth.HashPassword(r.Context(), password)
+	if errors.Is(err, auth.ErrPasswordTooShort) {
+		writeProblem(w, a.logger, codeInvalidBody, err.Error())
+		return "", false
+	}
 	if err != nil {
 		a.internal(w, r, err)
 		return "", false

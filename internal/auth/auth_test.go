@@ -345,3 +345,66 @@ func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
 		t.Errorf("%d devices left, want the admin's own", n)
 	}
 }
+
+func TestChangingAPasswordSignsOutTheProfilesOtherDevices(t *testing.T) {
+	svc, st := newService(t)
+	addOliver(t, st)
+	guest, err := st.AddProfile(t.Context(), "Guest", domain.RoleMember, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	signIn := func(device string) (string, domain.Session) {
+		t.Helper()
+		token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", Device{Name: device, Client: "Photon"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := svc.Authenticate(t.Context(), token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return token, s
+	}
+	phoneToken, phone := signIn("Phone")
+	tvToken, _ := signIn("TV")
+	guestToken, guestTV := signIn("Guest's TV")
+	if _, err := svc.SwitchProfile(t.Context(), guestTV, guest.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	guestTV, err = svc.Authenticate(t.Context(), guestToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.ChangePassword(t.Context(), phone, "guess", "battery staple"); !errors.Is(err, ErrWrongSecret) {
+		t.Errorf("with the wrong current password: err = %v, want %v", err, ErrWrongSecret)
+	}
+	if err := svc.ChangePassword(t.Context(), phone, "correct horse", "short"); !errors.Is(err, ErrPasswordTooShort) {
+		t.Errorf("to a short password: err = %v, want %v", err, ErrPasswordTooShort)
+	}
+	if err := svc.ChangePassword(t.Context(), guestTV, "", "battery staple"); !errors.Is(err, ErrNoPassword) {
+		t.Errorf("a household profile gave itself a password: err = %v, want %v", err, ErrNoPassword)
+	}
+	if _, err := svc.Authenticate(t.Context(), tvToken); err != nil {
+		t.Fatalf("a refused change signed the TV out: %v", err)
+	}
+
+	if err := svc.ChangePassword(t.Context(), phone, "correct horse", "battery staple"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Authenticate(t.Context(), phoneToken); err != nil {
+		t.Errorf("the device that changed it was signed out: %v", err)
+	}
+	if _, err := svc.Authenticate(t.Context(), tvToken); !errors.Is(err, ErrUnauthenticated) {
+		t.Errorf("the profile's other device is still signed in (err %v)", err)
+	}
+	if _, err := svc.Authenticate(t.Context(), guestToken); err != nil {
+		t.Errorf("a device watching as another profile was signed out: %v", err)
+	}
+	if _, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv); !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("the old password still signs in (err %v)", err)
+	}
+	if _, _, err := svc.SignIn(t.Context(), "Oliver", "battery staple", tv); err != nil {
+		t.Errorf("the new password does not sign in: %v", err)
+	}
+}

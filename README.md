@@ -152,6 +152,12 @@ The first admin is made on the command line, before anyone can sign in:
 go run ./cmd/photon-server profile add -name Oliver -role admin
 ```
 
+A profile with a password changes it itself with `PUT /api/v1/me/password` (`current` and `new`, at
+least 8 characters), which signs out every other device watching as that profile; wrong guesses are
+limited as sign-ins are. A household profile, one with no password, is only ever chosen on a
+signed-in device and cannot give itself one: an admin does, which lets it sign in by itself. It can
+still set a PIN with `PUT /api/v1/me/pin`.
+
 The API describes itself: `GET /api/v1/openapi.json` answers its OpenAPI 3.1 description, built
 from the server's own routes as it starts, so it says what the running server takes and answers.
 Point a client generator or a viewer such as Swagger UI at it; no token is needed.

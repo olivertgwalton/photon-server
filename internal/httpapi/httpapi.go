@@ -92,6 +92,7 @@ type authenticator interface {
 	PollPairing(ctx context.Context, deviceCode string) (kv.PairingState, string, domain.Profile, error)
 	SwitchProfile(ctx context.Context, session domain.Session, target uuid.UUID, secret string) (domain.Profile, error)
 	SetPIN(ctx context.Context, profile uuid.UUID, pin string) error
+	ChangePassword(ctx context.Context, session domain.Session, current, password string) error
 	Devices(ctx context.Context, session domain.Session) ([]store.DeviceListing, error)
 	SignOutDevice(ctx context.Context, session domain.Session, device uuid.UUID) error
 }
@@ -253,6 +254,11 @@ func (a *API) routes() []route {
 		{
 			pattern: "DELETE /api/v1/me/pin", access: signedIn, summary: "Clear the profile's PIN",
 			status: http.StatusNoContent, handle: a.clearPIN,
+		},
+		{
+			pattern: "PUT /api/v1/me/password", access: signedIn,
+			summary: "Change the profile's password, signing out its other devices",
+			body:    passwordChangeJSON{}, status: http.StatusNoContent, handle: a.changePassword,
 		},
 		{
 			pattern: "GET /api/v1/auth/devices", access: signedIn, summary: "List the devices signed in",

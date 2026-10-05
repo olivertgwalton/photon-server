@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -64,6 +65,19 @@ func (fakeAuth) SwitchProfile(_ context.Context, _ domain.Session, target uuid.U
 func (fakeAuth) SetPIN(_ context.Context, _ uuid.UUID, pin string) error {
 	if pin != "" && len(pin) < 4 {
 		return auth.ErrPINNotDigits
+	}
+	return nil
+}
+
+// ChangePassword knows Oliver's password; the member is a household profile with none.
+func (fakeAuth) ChangePassword(_ context.Context, s domain.Session, current, password string) error {
+	switch {
+	case s.Profile.ID != oliver.ID:
+		return auth.ErrNoPassword
+	case current != "correct horse":
+		return auth.ErrWrongSecret
+	case len(password) < 8:
+		return auth.ErrPasswordTooShort
 	}
 	return nil
 }
@@ -183,5 +197,40 @@ func TestSwitchingNeedsTheLocksSecret(t *testing.T) {
 	}
 	if rec := serve(t, http.MethodPut, "/api/v1/me/pin", goodToken, `{"pin":"12"}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("a two-digit PIN: status %d, want 400", rec.Code)
+	}
+}
+
+func TestChangingYourOwnPassword(t *testing.T) {
+	limits := &fakeLimiter{}
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Limits: limits, Events: &fakeEvents{}})
+	change := func(token, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/me/password", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec
+	}
+	for _, tc := range []struct {
+		name, token, body string
+		want              int
+		code              problemCode
+	}{
+		{"the wrong current password", goodToken, `{"current":"guess","new":"battery staple"}`, http.StatusForbidden, codeWrongSecret},
+		{"a new one too short", goodToken, `{"current":"correct horse","new":"short"}`, http.StatusBadRequest, codeInvalidBody},
+		{"a household profile", memberToken, `{"current":"","new":"battery staple"}`, http.StatusConflict, codeConflict},
+		{"the right one", goodToken, `{"current":"correct horse","new":"battery staple"}`, http.StatusNoContent, ""},
+	} {
+		rec := change(tc.token, tc.body)
+		var p problem
+		_ = json.Unmarshal(rec.Body.Bytes(), &p)
+		if rec.Code != tc.want || p.Code != tc.code {
+			t.Errorf("%s: %d %q, want %d %q", tc.name, rec.Code, p.Code, tc.want, tc.code)
+		}
+	}
+	for range signInsPerName.Burst {
+		change(goodToken, `{"current":"guess","new":"battery staple"}`)
+	}
+	if rec := change(goodToken, `{"current":"correct horse","new":"battery staple"}`); rec.Code != http.StatusTooManyRequests {
+		t.Errorf("guessing past the limit: %d, want 429", rec.Code)
 	}
 }

@@ -13,6 +13,9 @@ var (
 	ErrWrongSecret   = errors.New("the PIN or password is wrong")
 	ErrPINNotDigits  = errors.New("a PIN is 4 to 6 digits")
 	ErrAdminPassword = errors.New("an admin profile needs a password")
+	// ErrNoPassword is a household profile, chosen on a signed-in device: only an admin gives it
+	// a password, which would let it sign in by itself.
+	ErrNoPassword = errors.New("this profile has no password to change; an admin gives it one")
 )
 
 // SwitchProfile moves a signed-in device to another profile of the household, if secret is what
@@ -60,4 +63,28 @@ func (s *Service) SetPIN(ctx context.Context, profile uuid.UUID, pin string) err
 		return err
 	}
 	return s.store.SetPINHash(ctx, profile, hash)
+}
+
+// ChangePassword sets the session's profile a new password, if current is its password now, and
+// signs out the profile's other devices.
+func (s *Service) ChangePassword(ctx context.Context, session domain.Session, current, password string) error {
+	_, secrets, err := s.store.ProfileSecrets(ctx, session.Profile.ID)
+	if err != nil {
+		return err
+	}
+	if secrets.Password == "" {
+		return ErrNoPassword
+	}
+	match, _, err := s.hasher.Verify(ctx, secrets.Password, current)
+	if err != nil {
+		return err
+	}
+	if !match {
+		return ErrWrongSecret
+	}
+	hash, err := HashPassword(ctx, password)
+	if err != nil {
+		return err
+	}
+	return s.store.ChangePassword(ctx, session.Profile.ID, hash, session.ID)
 }
