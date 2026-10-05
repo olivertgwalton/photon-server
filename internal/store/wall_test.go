@@ -64,22 +64,17 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 
 	for _, sort := range domain.WallSorts() {
 		for _, order := range []domain.Order{domain.Ascending, domain.Descending} {
-			full, next, err := s.Wall(ctx, lib.ID, WallPage{Sort: sort, Order: order, Limit: 100})
-			if err != nil || next != "" || len(full) != 7 {
-				t.Fatalf("%s %s in one page: %d titles, next %q, err %v; want the 7 films", sort, order, len(full), next, err)
+			full, total, err := s.Wall(ctx, lib.ID, WallPage{Sort: sort, Order: order, Limit: 100})
+			if err != nil || total != 7 || len(full) != 7 {
+				t.Fatalf("%s %s in one page: %d titles of %d, err %v; want the 7 films", sort, order, len(full), total, err)
 			}
 			var paged []Card
-			after := ""
-			for {
-				page, next, err := s.Wall(ctx, lib.ID, WallPage{Sort: sort, Order: order, After: after, Limit: 3})
-				if err != nil {
-					t.Fatal(err)
+			for offset := 0; offset < int(total); offset += 3 {
+				page, n, err := s.Wall(ctx, lib.ID, WallPage{Sort: sort, Order: order, Offset: offset, Limit: 3})
+				if err != nil || n != total {
+					t.Fatalf("from %d: %d of %d, %v", offset, len(page), n, err)
 				}
 				paged = append(paged, page...)
-				if next == "" {
-					break
-				}
-				after = next
 			}
 			ids := func(cs []Card) []uuid.UUID {
 				out := make([]uuid.UUID, len(cs))
@@ -107,12 +102,17 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 		}
 	}
 
-	_, next, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 3})
-	if err != nil {
-		t.Fatal(err)
+	if past, total, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Offset: 7, Limit: 3}); err != nil || len(past) != 0 || total != 7 {
+		t.Errorf("past the end: %d of %d, %v; want none of 7", len(past), total, err)
 	}
-	if _, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortAdded, Order: domain.Descending, After: next, Limit: 3}); !errors.Is(err, ErrBadCursor) {
-		t.Errorf("a title cursor on the added order: err = %v, want ErrBadCursor", err)
+	// Alien, Brazil, Heat and heat, Memento, Ran, Zodiac.
+	letters, err := s.Letters(ctx, lib.ID)
+	want := []Letter{{"A", 1}, {"B", 1}, {"H", 2}, {"M", 1}, {"R", 1}, {"Z", 1}}
+	if err != nil || !slices.Equal(letters, want) {
+		t.Errorf("letters = %v, %v; want %v", letters, err, want)
+	}
+	if _, err := s.Letters(ctx, uuid.NewV7()); !errors.Is(err, ErrNotFound) {
+		t.Errorf("letters of an unknown library: %v, want ErrNotFound", err)
 	}
 	if _, _, err := s.Wall(ctx, uuid.NewV7(), WallPage{Sort: domain.SortTitle, Limit: 3}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("an unknown library: err = %v, want ErrNotFound", err)
