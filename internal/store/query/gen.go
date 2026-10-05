@@ -26,6 +26,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Job:           newJob(db, opts...),
 		Library:       newLibrary(db, opts...),
 		Part:          newPart(db, opts...),
+		PartFile:      newPartFile(db, opts...),
 		Profile:       newProfile(db, opts...),
 		Server:        newServer(db, opts...),
 		Stream:        newStream(db, opts...),
@@ -45,6 +46,7 @@ type Query struct {
 	Job           job
 	Library       library
 	Part          part
+	PartFile      partFile
 	Profile       profile
 	Server        server
 	Stream        stream
@@ -67,6 +69,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Job:           q.Job.clone(db),
 		Library:       q.Library.clone(db),
 		Part:          q.Part.clone(db),
+		PartFile:      q.PartFile.clone(db),
 		Profile:       q.Profile.clone(db),
 		Server:        q.Server.clone(db),
 		Stream:        q.Stream.clone(db),
@@ -94,6 +97,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Job:           q.Job.replaceDB(db),
 		Library:       q.Library.replaceDB(db),
 		Part:          q.Part.replaceDB(db),
+		PartFile:      q.PartFile.replaceDB(db),
 		Profile:       q.Profile.replaceDB(db),
 		Server:        q.Server.replaceDB(db),
 		Stream:        q.Stream.replaceDB(db),
@@ -111,6 +115,7 @@ type queryCtx struct {
 	Job           IJobDo
 	Library       ILibraryDo
 	Part          IPartDo
+	PartFile      IPartFileDo
 	Profile       IProfileDo
 	Server        IServerDo
 	Stream        IStreamDo
@@ -128,6 +133,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Job:           q.Job.WithContext(ctx),
 		Library:       q.Library.WithContext(ctx),
 		Part:          q.Part.WithContext(ctx),
+		PartFile:      q.PartFile.WithContext(ctx),
 		Profile:       q.Profile.WithContext(ctx),
 		Server:        q.Server.WithContext(ctx),
 		Stream:        q.Stream.WithContext(ctx),

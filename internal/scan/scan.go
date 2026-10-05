@@ -47,7 +47,6 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library) (Report, error) 
 
 	var report Report
 	var folders, present []string
-	claimed := map[string]string{}
 	for folder, err := range library.Walk(root) {
 		if err != nil {
 			s.log.WarnContext(ctx, "folder not read", slog.String("folder", folder.Path), slog.Any("err", err))
@@ -70,9 +69,9 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library) (Report, error) 
 		}
 		switch lib.Kind {
 		case domain.LibraryMovies:
-			err = s.saveFilms(ctx, root, lib, folder, claimed, &report)
+			err = s.saveFilms(ctx, root, lib, folder, &report)
 		case domain.LibraryShows:
-			err = s.saveEpisodes(ctx, root, lib, folder, claimed, &report)
+			err = s.saveEpisodes(ctx, root, lib, folder, &report)
 		}
 		if err != nil {
 			return report, fmt.Errorf("%s: %w", folder.Path, err)
@@ -81,10 +80,10 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library) (Report, error) 
 	return report, s.store.FinishScan(ctx, lib.ID, folders, present)
 }
 
-func (s *Scanner) saveFilms(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, claimed map[string]string, report *Report) error {
+func (s *Scanner) saveFilms(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, report *Report) error {
 	var films []store.Film
 	for _, f := range planFilms(folder) {
-		copies, err := s.copies(ctx, root, lib, folder.Path, f.versions, claimed, report)
+		copies, err := s.copies(ctx, root, lib, folder.Path, f.versions, report)
 		if err != nil {
 			return err
 		}
@@ -97,7 +96,7 @@ func (s *Scanner) saveFilms(ctx context.Context, root *os.Root, lib domain.Libra
 	return s.store.SaveFolder(ctx, lib.ID, folder.Path, folder.Fingerprint[:], films)
 }
 
-func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, claimed map[string]string, report *Report) error {
+func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, report *Report) error {
 	seriesFolder, season, ok := showFolder(folder.Path)
 	var episodes []store.Episode
 	show := store.Show{}
@@ -109,7 +108,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 			s.skip(ctx, report, rel, errNoEpisode)
 		}
 		for _, e := range plans {
-			copies, err := s.copies(ctx, root, lib, folder.Path, e.versions, claimed, report)
+			copies, err := s.copies(ctx, root, lib, folder.Path, e.versions, report)
 			if err != nil {
 				return err
 			}
@@ -127,12 +126,12 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 var errNoEpisode = errors.New("its name says no season or episode")
 
 // copies reads each copy's content key and probes only copies the catalogue does not hold. A copy
-// that cannot be read is left out and logged; claimed keeps a byte-identical copy in a second
-// place from becoming a second version.
-func (s *Scanner) copies(ctx context.Context, root *os.Root, lib domain.Library, dir string, plans []copyPlan, claimed map[string]string, report *Report) ([]store.Copy, error) {
+// that cannot be read is left out and logged. A byte-identical copy in a second place is a known
+// copy: it becomes another place to read the same version.
+func (s *Scanner) copies(ctx context.Context, root *os.Root, lib domain.Library, dir string, plans []copyPlan, report *Report) ([]store.Copy, error) {
 	var copies []store.Copy
 	for _, v := range plans {
-		c, ok, err := s.copy(ctx, root, lib, dir, v, claimed, report)
+		c, ok, err := s.copy(ctx, root, lib, dir, v, report)
 		if err != nil {
 			return nil, err
 		}
@@ -143,7 +142,7 @@ func (s *Scanner) copies(ctx context.Context, root *os.Root, lib domain.Library,
 	return copies, nil
 }
 
-func (s *Scanner) copy(ctx context.Context, root *os.Root, lib domain.Library, dir string, v copyPlan, claimed map[string]string, report *Report) (store.Copy, bool, error) {
+func (s *Scanner) copy(ctx context.Context, root *os.Root, lib domain.Library, dir string, v copyPlan, report *Report) (store.Copy, bool, error) {
 	c := store.Copy{Edition: v.edition, Label: v.label}
 	paths := make([]string, len(v.parts))
 	for i, p := range v.parts {
@@ -155,11 +154,6 @@ func (s *Scanner) copy(ctx context.Context, root *os.Root, lib domain.Library, d
 		s.skip(ctx, report, paths[0], err)
 		return c, false, nil
 	}
-	if first, dup := claimed[string(key)]; dup {
-		s.skip(ctx, report, paths[0], fmt.Errorf("the same file as %s", first))
-		return c, false, nil
-	}
-	claimed[string(key)] = paths[0]
 	c.ContentKey = key
 	known, err := s.store.KnownCopy(ctx, lib.ID, key)
 	if err != nil {

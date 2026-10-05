@@ -159,7 +159,8 @@ func TestRenameKeepsIdentity(t *testing.T) {
 	}
 	var gotItem, gotVersion, path string
 	err := f.db.QueryRow(t.Context(),
-		"SELECT v.item_id::text, v.id::text, p.rel_path FROM versions v JOIN parts p ON p.version_id = v.id").
+		`SELECT v.item_id::text, v.id::text, f.rel_path FROM versions v
+		JOIN parts p ON p.version_id = v.id JOIN part_files f ON f.part_id = p.id`).
 		Scan(&gotItem, &gotVersion, &path)
 	if err != nil {
 		t.Fatal(err)
@@ -205,15 +206,35 @@ func TestRemovedFileIsMissingNotForgotten(t *testing.T) {
 	}
 }
 
-func TestIdenticalCopiesAreOneVersion(t *testing.T) {
+// Plex's rule: a byte-identical copy is another place to read one version. Removing either copy
+// costs nothing; removing both makes the version missing.
+func TestIdenticalCopiesAreOneVersionInTwoPlaces(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
 	f.put("Backup/Heat (1995)/Heat (1995).mkv", "heat")
-	if r := f.scan(); r.Skipped != 1 {
-		t.Errorf("skipped %d copies, want the duplicate", r.Skipped)
-	}
+	f.scan()
 	if n := f.count("SELECT count(*) FROM versions"); n != 1 {
 		t.Errorf("%d versions, want 1", n)
+	}
+	if n := f.count("SELECT count(*) FROM part_files"); n != 2 {
+		t.Errorf("%d places to read it, want 2", n)
+	}
+	if err := os.RemoveAll(filepath.Join(f.root, "Backup")); err != nil {
+		t.Fatal(err)
+	}
+	f.scan()
+	if n := f.count("SELECT count(*) FROM versions WHERE missing_since IS NULL"); n != 1 {
+		t.Error("removing one of two copies made the version missing")
+	}
+	if n := f.count("SELECT count(*) FROM part_files"); n != 1 {
+		t.Errorf("%d places after removing the backup, want 1", n)
+	}
+	if err := os.RemoveAll(filepath.Join(f.root, "Heat (1995)")); err != nil {
+		t.Fatal(err)
+	}
+	f.scan()
+	if n := f.count("SELECT count(*) FROM versions WHERE missing_since IS NOT NULL"); n != 1 {
+		t.Error("removing every copy did not make the version missing")
 	}
 }
 

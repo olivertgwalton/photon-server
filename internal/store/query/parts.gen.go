@@ -31,10 +31,7 @@ func newPart(db *gorm.DB, opts ...gen.DOOption) part {
 	_part.ID = field.NewField(tableName, "id")
 	_part.VersionID = field.NewField(tableName, "version_id")
 	_part.Idx = field.NewInt16(tableName, "idx")
-	_part.LibraryID = field.NewField(tableName, "library_id")
-	_part.RelPath = field.NewString(tableName, "rel_path")
 	_part.SizeBytes = field.NewInt64(tableName, "size_bytes")
-	_part.MtimeNS = field.NewInt64(tableName, "mtime_ns")
 	_part.DurationMS = field.NewInt64(tableName, "duration_ms")
 	_part.OffsetMS = field.NewInt64(tableName, "offset_ms")
 
@@ -50,10 +47,7 @@ type part struct {
 	ID         field.Field
 	VersionID  field.Field
 	Idx        field.Int16
-	LibraryID  field.Field
-	RelPath    field.String
 	SizeBytes  field.Int64
-	MtimeNS    field.Int64
 	DurationMS field.Int64
 	OffsetMS   field.Int64
 
@@ -75,10 +69,7 @@ func (p *part) updateTableName(table string) *part {
 	p.ID = field.NewField(table, "id")
 	p.VersionID = field.NewField(table, "version_id")
 	p.Idx = field.NewInt16(table, "idx")
-	p.LibraryID = field.NewField(table, "library_id")
-	p.RelPath = field.NewString(table, "rel_path")
 	p.SizeBytes = field.NewInt64(table, "size_bytes")
-	p.MtimeNS = field.NewInt64(table, "mtime_ns")
 	p.DurationMS = field.NewInt64(table, "duration_ms")
 	p.OffsetMS = field.NewInt64(table, "offset_ms")
 
@@ -105,14 +96,11 @@ func (p *part) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (p *part) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 9)
+	p.fieldMap = make(map[string]field.Expr, 6)
 	p.fieldMap["id"] = p.ID
 	p.fieldMap["version_id"] = p.VersionID
 	p.fieldMap["idx"] = p.Idx
-	p.fieldMap["library_id"] = p.LibraryID
-	p.fieldMap["rel_path"] = p.RelPath
 	p.fieldMap["size_bytes"] = p.SizeBytes
-	p.fieldMap["mtime_ns"] = p.MtimeNS
 	p.fieldMap["duration_ms"] = p.DurationMS
 	p.fieldMap["offset_ms"] = p.OffsetMS
 }

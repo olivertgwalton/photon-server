@@ -59,12 +59,18 @@ type Part struct {
 	ID         UUID `gorm:"type:uuid;default:uuidv7()"`
 	VersionID  UUID `gorm:"type:uuid"`
 	Idx        int16
-	LibraryID  UUID `gorm:"type:uuid"`
-	RelPath    string
 	SizeBytes  int64
-	MtimeNS    int64 `gorm:"column:mtime_ns"`
 	DurationMS int64 `gorm:"column:duration_ms"`
 	OffsetMS   int64 `gorm:"column:offset_ms"`
+}
+
+// PartFile is one place a part's bytes are on disk.
+type PartFile struct {
+	PartID    UUID   `gorm:"type:uuid"`
+	LibraryID UUID   `gorm:"type:uuid;primaryKey"`
+	RelPath   string `gorm:"primaryKey"`
+	SizeBytes int64
+	MtimeNS   int64 `gorm:"column:mtime_ns"`
 }
 
 type Stream struct {
