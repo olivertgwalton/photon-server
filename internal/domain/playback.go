@@ -63,6 +63,8 @@ type VideoEncode struct {
 	Width, Height int
 	BitrateKbps   int
 	ToneMap       bool
+	// Burn is a picture subtitle stream of the file drawn into the picture, by its index.
+	Burn *int
 }
 
 // DolbyVisionHandling is what a copy does with a stream's Dolby Vision.

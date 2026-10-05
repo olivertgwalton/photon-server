@@ -21,6 +21,7 @@ var film = Copy{
 		{Index: 1, Kind: domain.StreamAudio, Codec: "truehd", Channels: 8, Default: true},
 		{Index: 2, Kind: domain.StreamAudio, Codec: "ac3", Channels: 6},
 		{Index: 3, Kind: domain.StreamSubtitle, Codec: "subrip"},
+		{Index: 4, Kind: domain.StreamSubtitle, Codec: "hdmv_pgs_subtitle"},
 	},
 }
 
@@ -41,6 +42,8 @@ func TestDecide(t *testing.T) {
 	everything.Audio = append(everything.Audio, AudioSupport{Codec: "truehd"})
 	hdr10Only := appleTV
 	hdr10Only.Video = []VideoSupport{{Codec: "hevc", Ranges: []domain.Range{domain.RangeHDR10}}}
+	drawsPGS := everything
+	drawsPGS.Subtitles = []string{"hdmv_pgs_subtitle"}
 	sdrOnly := appleTV
 	sdrOnly.Video = []VideoSupport{{Codec: "hevc"}}
 	cappedRemux := appleTV
@@ -59,11 +62,12 @@ func TestDecide(t *testing.T) {
 		return &domain.VideoPlan{Stream: 0, Codec: "hevc", DolbyVision: dv}
 	}
 	for _, tc := range []struct {
-		name    string
-		profile Profile
-		audio   *int
-		want    Decision
-		err     error
+		name     string
+		profile  Profile
+		audio    *int
+		subtitle *int
+		want     Decision
+		err      error
 	}{
 		{
 			name: "a client that plays it all plays the file", profile: everything,
@@ -138,9 +142,28 @@ func TestDecide(t *testing.T) {
 			want: Decision{Reasons: []Reason{ContainerNotSupported, AudioCodecNotSupported}}, err: ErrNoCompatibleStream,
 		},
 		{name: "an audio stream the copy lacks", profile: everything, audio: new(3), err: ErrNoSuchAudio},
+		{name: "a subtitle stream the copy lacks", profile: everything, subtitle: new(1), err: ErrNoSuchSubtitle},
+		{
+			name: "a picture subtitle the client draws plays in the file", profile: drawsPGS, subtitle: new(4),
+			want: Decision{Method: domain.PlayDirect, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 1}},
+		},
+		{
+			name: "a picture subtitle the client cannot draw is drawn in", profile: everything, subtitle: new(4),
+			want: Decision{
+				Method: domain.PlayTranscode,
+				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+					Codec: "h264", Width: 3840, Height: 2160, BitrateKbps: 40_000 * 10 / 6, ToneMap: true, Burn: new(4),
+				}},
+				Audio: &domain.AudioPlan{Stream: 1}, Reasons: []Reason{SubtitleCodecNotSupported},
+			},
+		},
+		{
+			name: "a text subtitle is no reason to encode", profile: everything, subtitle: new(3),
+			want: Decision{Method: domain.PlayDirect, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 1}},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := Decide(tc.profile, film, tc.audio)
+			got, err := Decide(tc.profile, film, tc.audio, tc.subtitle)
 			if !errors.Is(err, tc.err) {
 				t.Fatalf("err = %v, want %v", err, tc.err)
 			}
