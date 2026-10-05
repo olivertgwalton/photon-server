@@ -279,6 +279,25 @@ func TestAChangedFileDropsOldPreviews(t *testing.T) {
 	if !f.queued(replaced) {
 		t.Error("the new file was not queued for previews")
 	}
+	if _, err := f.st.Trickplay(t.Context(), f.admin.ID, old); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("the replaced file's trickplay: %v, want it forgotten", err)
+	}
+	f.age(old)
+	if _, err := f.previews.Sweep(t.Context(), f.st.LivePreviews); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.previews.Sheet(old, 0); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the replaced file's sheet: %v, want it gone", err)
+	}
+}
+
+// age dates a part's previews folder past the sweep's wait for one being made.
+func (f *fixture) age(part uuid.UUID) {
+	f.t.Helper()
+	long := time.Now().Add(-2 * madeLife)
+	if err := os.Chtimes(filepath.Join(f.previews.dir, part.String()), long, long); err != nil {
+		f.t.Fatal(err)
+	}
 }
 
 func TestTheSweepClearsPreviewsNoPartHas(t *testing.T) {
