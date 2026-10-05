@@ -42,6 +42,12 @@ metadata from `nfo` and `tmdb` by default, most trusted first; change that with
 `photon-server library set -name NAME -sources nfo,tvdb,tmdb`. TheTVDB describes shows only. What a reader edits
 or an NFO says is never replaced by a match.
 
+Metadata providers are plugins: `GET /api/v1/admin/providers` lists each with what it can do (describe
+titles, rate them) and what it needs set. TMDB gives its own score; MDBList gives IMDb's, Rotten
+Tomatoes' critics and audience, Metacritic's, Letterboxd's and Trakt's once an admin sets its free
+key (`PATCH /api/v1/admin/providers/mdblist` with `{"settings": {"api_key": "…"}}`) and a library
+takes it (`-sources nfo,tmdb,mdblist`). Ratings are scored out of 100.
+
 Libraries are scanned every 12 hours, and as their files change: each folder is watched (inotify on
 Linux) and a library is scanned a minute after its last change. Network shares send no change
 events, so a library on one is scanned on the schedule; `photon-server library set -name NAME

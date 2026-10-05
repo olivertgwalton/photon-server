@@ -1,0 +1,54 @@
+package tmdb
+
+import (
+	"context"
+	"errors"
+	"strconv"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/provider"
+)
+
+var kinds = map[domain.ItemKind]Kind{domain.ItemMovie: Movie, domain.ItemShow: Show}
+
+func (c *Client) Info() provider.Info {
+	return provider.Info{ID: domain.SourceTMDB, Name: "TMDB", Kinds: []domain.ItemKind{domain.ItemMovie, domain.ItemShow}}
+}
+
+// Match finds a title on TMDB by its TMDB id, else the title an IMDb or TVDB id names, else a
+// confident search.
+func (c *Client) Match(ctx context.Context, kind domain.ItemKind, h provider.Hints) (string, error) {
+	k := kinds[kind]
+	id, err := provider.Resolve(h, domain.ProviderTMDB, []domain.Provider{domain.ProviderIMDb, domain.ProviderTVDB},
+		func(p domain.Provider, v string) ([]domain.Candidate, error) { return c.Find(ctx, k, p, v) },
+		func(title string, year int) ([]domain.Candidate, error) { return c.Search(ctx, k, title, year) })
+	if err != nil || id == 0 {
+		return "", err
+	}
+	return strconv.Itoa(id), nil
+}
+
+// Describe answers TMDB's details of a title, its score among them, and of the seasons of a show
+// asked for that TMDB has.
+func (c *Client) Describe(ctx context.Context, kind domain.ItemKind, id string, seasons []int) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
+	n, err := strconv.Atoi(id)
+	if err != nil {
+		return domain.Metadata{}, nil, err
+	}
+	m, err := c.Details(ctx, kinds[kind], n)
+	if err != nil {
+		return domain.Metadata{}, nil, err
+	}
+	said := map[int]domain.SeasonMetadata{}
+	for _, number := range seasons {
+		s, err := c.Season(ctx, n, number)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return domain.Metadata{}, nil, err
+		}
+		said[number] = s
+	}
+	return m, said, nil
+}

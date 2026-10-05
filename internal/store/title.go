@@ -31,6 +31,7 @@ type TitlePage struct {
 	Genres        []string                   `json:"genres,omitzero"`
 	Studios       []string                   `json:"studios,omitzero"`
 	IDs           map[domain.Provider]string `json:"ids,omitzero"`
+	Ratings       []RatingRef                `json:"ratings,omitzero"`
 	AddedAt       time.Time                  `json:"added_at"`
 	SeasonNumber  *int                       `json:"season_number,omitzero"`
 	EpisodeNumber *int                       `json:"episode_number,omitzero"`
@@ -104,6 +105,13 @@ type SubtitleRef struct {
 	HearingImpaired bool   `json:"hearing_impaired,omitzero"`
 }
 
+// RatingRef is what a site's readers or critics make of a title, out of 100.
+type RatingRef struct {
+	Site  domain.RatingSite `json:"site"`
+	Score float64           `json:"score"`
+	Votes int               `json:"votes,omitzero"`
+}
+
 // ChapterRef is a chapter on the copy's whole timeline, across its parts.
 type ChapterRef struct {
 	StartMS int64  `json:"start_ms"`
@@ -174,6 +182,13 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	}
 	if err := s.parents(ctx, item, &p); err != nil {
 		return TitlePage{}, err
+	}
+	ratings, err := s.ratings(ctx, item.ID)
+	if err != nil {
+		return TitlePage{}, err
+	}
+	for _, r := range ratings {
+		p.Ratings = append(p.Ratings, RatingRef(r))
 	}
 	switch item.Kind {
 	case domain.ItemShow:

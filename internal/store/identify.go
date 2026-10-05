@@ -84,6 +84,9 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 		if err := saveProviderArtwork(ctx, tx, item, source, m.Artwork); err != nil {
 			return err
 		}
+		if err := saveRatings(ctx, tx, item, source, m.Ratings); err != nil {
+			return err
+		}
 		i := tx.Item
 		for number, season := range seasons {
 			row, err := i.WithContext(ctx).Where(

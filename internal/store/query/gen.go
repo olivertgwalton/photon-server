@@ -33,6 +33,8 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Part:               newPart(db, opts...),
 		PartFile:           newPartFile(db, opts...),
 		Profile:            newProfile(db, opts...),
+		Provider:           newProvider(db, opts...),
+		Rating:             newRating(db, opts...),
 		RemoteVideo:        newRemoteVideo(db, opts...),
 		Server:             newServer(db, opts...),
 		Stream:             newStream(db, opts...),
@@ -61,6 +63,8 @@ type Query struct {
 	Part               part
 	PartFile           partFile
 	Profile            profile
+	Provider           provider
+	Rating             rating
 	RemoteVideo        remoteVideo
 	Server             server
 	Stream             stream
@@ -92,6 +96,8 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Part:               q.Part.clone(db),
 		PartFile:           q.PartFile.clone(db),
 		Profile:            q.Profile.clone(db),
+		Provider:           q.Provider.clone(db),
+		Rating:             q.Rating.clone(db),
 		RemoteVideo:        q.RemoteVideo.clone(db),
 		Server:             q.Server.clone(db),
 		Stream:             q.Stream.clone(db),
@@ -128,6 +134,8 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Part:               q.Part.replaceDB(db),
 		PartFile:           q.PartFile.replaceDB(db),
 		Profile:            q.Profile.replaceDB(db),
+		Provider:           q.Provider.replaceDB(db),
+		Rating:             q.Rating.replaceDB(db),
 		RemoteVideo:        q.RemoteVideo.replaceDB(db),
 		Server:             q.Server.replaceDB(db),
 		Stream:             q.Stream.replaceDB(db),
@@ -154,6 +162,8 @@ type queryCtx struct {
 	Part               IPartDo
 	PartFile           IPartFileDo
 	Profile            IProfileDo
+	Provider           IProviderDo
+	Rating             IRatingDo
 	RemoteVideo        IRemoteVideoDo
 	Server             IServerDo
 	Stream             IStreamDo
@@ -180,6 +190,8 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Part:               q.Part.WithContext(ctx),
 		PartFile:           q.PartFile.WithContext(ctx),
 		Profile:            q.Profile.WithContext(ctx),
+		Provider:           q.Provider.WithContext(ctx),
+		Rating:             q.Rating.WithContext(ctx),
 		RemoteVideo:        q.RemoteVideo.WithContext(ctx),
 		Server:             q.Server.WithContext(ctx),
 		Stream:             q.Stream.WithContext(ctx),
