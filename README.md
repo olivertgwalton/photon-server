@@ -86,6 +86,13 @@ is freed as it stops, or a couple of minutes after its player goes quiet.
 `GET /api/v1/admin/playbacks` says which node runs each playback, and how many videos the node
 answering is transcoding against its limit (`transcodes.limit` is absent when unlimited), with
 `transcodes.conversions` saying how many of them are conversions.
+
+An admin's dashboard sees each playback as Jellyfin's does: `GET /api/v1/admin/playbacks` names the
+profile, the device and app that started it and the address it played from, the title with its
+pictures, the copy and its length, where it has got to, and how it plays: the reasons it could not
+play as it is, each stream as it is in the file and what it is encoded to, whether a subtitle is
+drawn into the picture, and the device encoding it. All of it is fixed as the playback starts, and
+the event stream's snapshot and playback events carry each playback the same way.
 Each copy says where its intro, credits, recap and preview are, so a player can offer to skip them.
 A chapter named for one (Intro, Opening, End Credits, Previously…) marks it. Otherwise the server
 compares the sound of a season's episodes, as Plex and Jellyfin's Intro Skipper do: the stretch two

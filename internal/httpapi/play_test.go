@@ -17,6 +17,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/google/go-cmp/cmp"
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -39,7 +40,7 @@ func (fakePlaying) Playable(_ context.Context, _, item, _ uuid.UUID) (store.Play
 		return store.PlayCopy{}, store.ErrNotFound
 	}
 	return store.PlayCopy{
-		Version: films, Container: "matroska,webm", BitrateKbps: 8000,
+		Version: films, Container: "matroska,webm", BitrateKbps: 8000, DurationMS: 6_600_000,
 		Parts: []store.PlayPart{
 			{ID: partOne, DurationMS: 3_600_000}, {ID: partTwo, OffsetMS: 3_600_000, DurationMS: 3_000_000},
 		},
@@ -50,6 +51,12 @@ func (fakePlaying) Playable(_ context.Context, _, item, _ uuid.UUID) (store.Play
 		Subtitles: []store.PlaySubtitle{{ID: subtitleID, Codec: "subrip", Language: language.English}},
 	}, nil
 }
+
+func (fakePlaying) Card(_ context.Context, _, id uuid.UUID) (store.Card, error) {
+	return store.Card{ID: id, Kind: domain.ItemMovie, Title: "Lawrence of Arabia", Year: 1962, Poster: posterID}, nil
+}
+
+var posterID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1")
 
 var subtitleID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000d1")
 
@@ -80,8 +87,8 @@ var playbackID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000c1")
 // fakePlaybacks knows one playback, Oliver's.
 type fakePlaybacks struct{}
 
-func (fakePlaybacks) Start(_ context.Context, profile, item, version uuid.UUID, method domain.PlayMethod) (domain.Playback, error) {
-	return domain.Playback{ID: playbackID, Profile: profile, Item: item, Version: version, Method: method}, nil
+func (fakePlaybacks) Start(_ context.Context, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
+	return domain.Playback{ID: playbackID, Profile: card.Profile.ID, Item: card.Title.ID, Version: card.Version.ID, Method: method, Card: card}, nil
 }
 
 func (fakePlaybacks) Progress(_ context.Context, profile, id uuid.UUID, _ time.Duration, _ domain.PlayState) (domain.Reach, error) {
@@ -189,6 +196,8 @@ func (fakeHLS) Open(context.Context, uuid.UUID, store.PlayCopy, domain.VideoPlan
 }
 
 func (fakeHLS) Transcodes() (active, conversions, limit int) { return 1, 0, 4 }
+
+func (fakeHLS) Encoder(domain.VideoPlan) domain.Acceleration { return domain.AccelSoftware }
 
 func (fakeHLS) Has(playback uuid.UUID) bool { return playback == playbackID }
 
@@ -446,5 +455,67 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 	}
 	if rec := transcode(); rec.Code != http.StatusOK {
 		t.Errorf("a transcode once the first stopped: %d %s, want it played", rec.Code, rec.Body)
+	}
+}
+
+func TestTheDashboardShowsAPlayback(t *testing.T) {
+	remuxer, err := hls.NewRemuxer("ffmpeg", t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, hls.Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
+	var told []domain.Event
+	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{
+		Auth: fakeAuth{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer.Close, raise, uuid.NewV7()),
+		Remuxing: remuxOpener{remuxer}, HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
+	})
+	do := func(method, target, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, target, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		req.RemoteAddr = "192.0.2.7:51000"
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec
+	}
+	// Two megabits is less than the film's eight, so its video is encoded.
+	var started struct {
+		PlaybackID uuid.UUID `json:"playback_id"`
+	}
+	body := `{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000}}`
+	if err := json.NewDecoder(do(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", body).Body).Decode(&started); err != nil {
+		t.Fatal(err)
+	}
+	list := func() (items []json.RawMessage) {
+		var playing struct{ Items []json.RawMessage }
+		if err := json.NewDecoder(do(http.MethodGet, "/api/v1/admin/playbacks", "").Body).Decode(&playing); err != nil {
+			t.Fatal(err)
+		}
+		return playing.Items
+	}
+	items := list()
+	var shown playback.NowPlaying
+	if len(items) != 1 || json.Unmarshal(items[0], &shown) != nil {
+		t.Fatalf("admin playbacks = %s, want the one playing", items)
+	}
+	want := domain.PlaybackCard{
+		Profile: domain.PlaybackProfile{ID: oliver.ID, Name: "Oliver"},
+		Device:  domain.PlaybackDevice{ID: shown.Device.ID, Name: "Living room", Client: "Photon Web 1.0", Address: "192.0.2.7"},
+		Title:   domain.PlaybackTitle{ID: films, Kind: domain.ItemMovie, Title: "Lawrence of Arabia", Year: 1962, Poster: posterID},
+		Version: domain.PlaybackVersion{ID: films, Container: "matroska,webm", BitrateKbps: 8000, DurationMS: 6_600_000},
+		Reasons: []domain.TranscodeReason{domain.BitrateExceedsLimit},
+		Video: &domain.PlaybackVideo{
+			Codec: "h264", Encode: &domain.PlaybackEncode{Codec: "h264", BitrateKbps: shown.Video.Encode.BitrateKbps},
+		},
+		Audio: &domain.PlaybackAudio{
+			Stream: 1, Codec: "aac", Channels: 2, Encode: &domain.PlaybackEncode{Codec: "aac", Channels: 2, BitrateKbps: 256},
+		},
+		Acceleration: domain.AccelSoftware,
+	}
+	if shown.ID != started.PlaybackID || shown.Method != domain.PlayTranscode || !cmp.Equal(shown.PlaybackCard, want) {
+		t.Errorf("the playback shown: %s; want %+v", items[0], want)
+	}
+	if got, _ := json.Marshal(told[0].Details["playback"]); told[0].Kind != domain.EventPlaybackStarted || string(got) != string(items[0]) {
+		t.Errorf("told %v %s; want it started, shown as the list shows it", told[0].Kind, got)
 	}
 }

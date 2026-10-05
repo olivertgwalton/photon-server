@@ -50,7 +50,7 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	ctx := t.Context()
 	oliver, guest, film := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
 
-	p, err := s.Start(ctx, oliver, film, uuid.NewV7(), domain.PlayDirect)
+	p, err := s.Start(ctx, domain.PlayDirect, card(oliver, film))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,5 +78,11 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	want := []domain.EventKind{domain.EventPlaybackStarted, domain.EventPlaybackPaused, domain.EventPlaybackStopped}
 	if !slices.Equal(told, want) {
 		t.Errorf("told %v, want %v", told, want)
+	}
+}
+
+func card(profile, title uuid.UUID) domain.PlaybackCard {
+	return domain.PlaybackCard{
+		Profile: domain.PlaybackProfile{ID: profile}, Title: domain.PlaybackTitle{ID: title}, Version: domain.PlaybackVersion{ID: uuid.NewV7()},
 	}
 }

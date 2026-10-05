@@ -19,6 +19,7 @@ import (
 
 // enums are the values of each typed string the API sends or takes.
 var enums = map[reflect.Type][]string{
+	reflect.TypeFor[domain.Acceleration]():        values(domain.Accelerations()),
 	reflect.TypeFor[domain.ArtworkKind]():         values(domain.ArtworkKinds()),
 	reflect.TypeFor[domain.Capability]():          values(domain.Capabilities()),
 	reflect.TypeFor[domain.CreditKind]():          values(domain.CreditKinds()),

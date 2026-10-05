@@ -43,12 +43,12 @@ func NewSessions(live sessionStore, saved progressStore, ended func(uuid.UUID), 
 	return &Sessions{live: live, saved: saved, ended: ended, raise: raise, node: node}
 }
 
-// Start opens a playback of a copy of a title.
-func (s *Sessions) Start(ctx context.Context, profile, item, version uuid.UUID, method domain.PlayMethod) (domain.Playback, error) {
+// Start opens a playback of the copy of a title its card names, by its card's profile.
+func (s *Sessions) Start(ctx context.Context, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
 	now := time.Now()
 	p := domain.Playback{
-		ID: uuid.NewV7(), Profile: profile, Item: item, Version: version, Method: method,
-		State: domain.StatePlaying, Started: now, Updated: now, Node: s.node,
+		ID: uuid.NewV7(), Profile: card.Profile.ID, Item: card.Title.ID, Version: card.Version.ID, Method: method,
+		State: domain.StatePlaying, Started: now, Updated: now, Node: s.node, Card: card,
 	}
 	if err := s.live.SavePlayback(ctx, p, sessionLife); err != nil {
 		return p, err
@@ -88,15 +88,19 @@ func (s *Sessions) Stop(ctx context.Context, profile, id uuid.UUID, position tim
 	if err != nil {
 		return "", err
 	}
-	reach, err := s.saved.SaveProgress(ctx, profile, p.Item, position)
+	return s.stop(ctx, p, position)
+}
+
+func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Duration) (domain.Reach, error) {
+	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position)
 	if err != nil {
 		return "", err
 	}
 	if err := s.saved.RecordPlay(ctx, p, time.Now(), position); err != nil {
 		return "", err
 	}
-	s.ended(id)
-	if err := s.live.EndPlayback(ctx, id); err != nil {
+	s.ended(p.ID)
+	if err := s.live.EndPlayback(ctx, p.ID); err != nil {
 		return "", err
 	}
 	p.Position = position
@@ -107,10 +111,29 @@ func (s *Sessions) Stop(ctx context.Context, profile, id uuid.UUID, position tim
 	return reach, nil
 }
 
+// event tells of a playback as the dashboard lists it.
 func event(kind domain.EventKind, p domain.Playback) domain.Event {
-	return domain.Event{Kind: kind, Profile: p.Profile, Item: p.Item, Details: map[string]any{
-		"playback_id": p.ID, "method": p.Method, "position_ms": p.Position.Milliseconds(),
-	}}
+	return domain.Event{Kind: kind, Profile: p.Profile, Item: p.Item, Details: map[string]any{"playback": Showing(p)}}
+}
+
+// NowPlaying is a playback as an admin's dashboard shows it, in the list of playbacks, the event
+// stream's snapshot and each playback event alike.
+type NowPlaying struct {
+	ID uuid.UUID `json:"id"`
+	domain.PlaybackCard
+	Method     domain.PlayMethod `json:"method"`
+	State      domain.PlayState  `json:"state"`
+	PositionMS int64             `json:"position_ms"`
+	StartedAt  time.Time         `json:"started_at"`
+	UpdatedAt  time.Time         `json:"updated_at"`
+	NodeID     uuid.UUID         `json:"node_id"`
+}
+
+func Showing(p domain.Playback) NowPlaying {
+	return NowPlaying{
+		ID: p.ID, PlaybackCard: p.Card, Method: p.Method, State: p.State, PositionMS: p.Position.Milliseconds(),
+		StartedAt: p.Started.UTC(), UpdatedAt: p.Updated.UTC(), NodeID: p.Node,
+	}
 }
 
 // Abandon ends a playback whose stream could not be opened, before any of it was watched.
