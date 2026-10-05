@@ -1,6 +1,7 @@
 package playback
 
 import (
+	"cmp"
 	"errors"
 	"slices"
 	"strings"
@@ -93,7 +94,8 @@ var (
 // Decide chooses how a copy plays on a client, with its audio stream as asked, else its default
 // one, else its first. It plays as it is where the client opens the container and plays every
 // stream; else in HLS with its video copied where the client plays that, encoding the audio where
-// it does not; else ErrNoCompatibleStream until video is encoded, with the reasons it could not.
+// it does not; else in HLS with its video encoded to H.264. ErrNoCompatibleStream, with the reasons
+// it could not play as it is, where the client takes none of these.
 func Decide(p Profile, c Copy, audio *int) (Decision, error) {
 	video, sound := pick(c.Streams, audio)
 	if audio != nil && sound == nil {
@@ -120,26 +122,61 @@ func Decide(p Profile, c Copy, audio *int) (Decision, error) {
 	}
 	d.Reasons = append(d.Reasons, videoReasons...)
 	d.Reasons = append(d.Reasons, audioReasons...)
-	if p.MaxBitrateKbps > 0 && c.BitrateKbps > p.MaxBitrateKbps {
+	tooMuch := p.MaxBitrateKbps > 0 && c.BitrateKbps > p.MaxBitrateKbps
+	if tooMuch {
 		d.Reasons = append(d.Reasons, BitrateExceedsLimit)
 	}
-	switch {
-	case len(d.Reasons) == 0:
+	if len(d.Reasons) == 0 {
 		d.Method = domain.PlayDirect
 		return d, nil
-	case video != nil && len(videoReasons) == 0 && !slices.Contains(d.Reasons, BitrateExceedsLimit) &&
-		slices.Contains(fragmentableVideo, video.Codec):
-		d.Method = domain.PlayRemux
-		if sound != nil && (len(audioReasons) > 0 || !slices.Contains(fragmentableAudio, sound.Codec)) {
+	}
+	if video == nil {
+		return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
+	}
+	d.Method = domain.PlayRemux
+	if len(videoReasons) > 0 || tooMuch || !slices.Contains(fragmentableVideo, video.Codec) {
+		enc, ok := p.videoEncode(*video, c.BitrateKbps)
+		if !ok {
+			return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
+		}
+		d.Method, d.Video.Encode, d.Video.DolbyVision = domain.PlayTranscode, &enc, domain.DolbyVisionNone
+	}
+	if sound != nil {
+		// Encoded video shares the client's limit with the audio, and audio has a share of it; a
+		// copy whose video is copied fits it whole already.
+		budget := 0
+		if d.Video.Encode != nil {
+			budget = p.audioBudget()
+		}
+		// Under a limit, audio of a bitrate nobody knows may be lossless, and is not risked.
+		copied := len(audioReasons) == 0 && slices.Contains(fragmentableAudio, sound.Codec) &&
+			(budget == 0 || (sound.BitrateKbps > 0 && sound.BitrateKbps <= budget))
+		if !copied {
 			enc, ok := p.audioEncode(*sound)
 			if !ok {
 				return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
 			}
+			if budget > 0 {
+				enc.BitrateKbps = min(enc.BitrateKbps, budget)
+			}
 			d.Audio.Encode = &enc
 		}
-		return d, nil
 	}
-	return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
+	if e := d.Video.Encode; e != nil && p.MaxBitrateKbps > 0 {
+		e.BitrateKbps = max(min(e.BitrateKbps, p.MaxBitrateKbps-d.audioKbps(sound)), 64)
+	}
+	return d, nil
+}
+
+// audioKbps is what the decided audio spends of the client's bitrate.
+func (d Decision) audioKbps(sound *media.Stream) int {
+	switch {
+	case sound == nil:
+		return 0
+	case d.Audio.Encode != nil:
+		return d.Audio.Encode.BitrateKbps
+	}
+	return sound.BitrateKbps
 }
 
 // pick finds the first video stream and the audio stream to play.
@@ -306,4 +343,62 @@ func (p Profile) audioEncode(s media.Stream) (domain.AudioEncode, bool) {
 		return domain.AudioEncode{Codec: a.Codec, Channels: channels, BitrateKbps: kbps}, true
 	}
 	return domain.AudioEncode{}, false
+}
+
+// sourceKbps stands in for a copy whose bitrate is unknown, as Jellyfin's does.
+const sourceKbps = 40_000
+
+// videoEncode chooses what video the client cannot take as it is is encoded to: H.264, 8-bit and
+// SDR, no larger than the client takes it, and spending no more than the client's limit or what
+// H.264 needs to match the source.
+func (p Profile) videoEncode(s media.Stream, copyKbps int) (domain.VideoEncode, bool) {
+	i := slices.IndexFunc(p.Video, func(v VideoSupport) bool { return v.Codec == "h264" })
+	if i < 0 {
+		return domain.VideoEncode{}, false
+	}
+	h264 := p.Video[i]
+	width, height := fit(s.Width, s.Height, h264.MaxWidth, h264.MaxHeight)
+	// H.264 needs more than the newer codecs for the same picture: Jellyfin's ScaleBitrate.
+	kbps := cmp.Or(copyKbps, sourceKbps)
+	switch s.Codec {
+	case "hevc", "vp9":
+		kbps = kbps * 10 / 6
+	case "av1":
+		kbps *= 2
+	}
+	if p.MaxBitrateKbps > 0 {
+		kbps = min(kbps, p.MaxBitrateKbps)
+	}
+	return domain.VideoEncode{
+		Codec: "h264", Width: width, Height: height, BitrateKbps: kbps,
+		ToneMap: s.Range != "" && s.Range != domain.RangeSDR,
+	}, true
+}
+
+// fit answers a picture's size scaled down to fit within a limit, keeping its shape, each side
+// even as H.264's 4:2:0 needs. A zero limit is none.
+func fit(width, height, maxWidth, maxHeight int) (int, int) {
+	scale := 1.0
+	if maxWidth > 0 && width > maxWidth {
+		scale = float64(maxWidth) / float64(width)
+	}
+	if maxHeight > 0 && height > maxHeight {
+		scale = min(scale, float64(maxHeight)/float64(height))
+	}
+	even := func(n float64) int { return int(n/2) * 2 }
+	return even(float64(width) * scale), even(float64(height) * scale)
+}
+
+// audioBudget is the most audio may spend of the client's bitrate, Jellyfin's
+// GetMaxAudioBitrateForTotalBitrate; zero is no limit.
+func (p Profile) audioBudget() int {
+	for _, step := range [][2]int{{640, 128}, {2000, 384}, {3000, 448}, {4000, 640}, {5000, 768}, {10_000, 1536}, {15_000, 2304}, {20_000, 3584}} {
+		if p.MaxBitrateKbps > 0 && p.MaxBitrateKbps <= step[0] {
+			return step[1]
+		}
+	}
+	if p.MaxBitrateKbps > 0 {
+		return 7168
+	}
+	return 0
 }

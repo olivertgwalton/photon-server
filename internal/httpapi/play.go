@@ -54,6 +54,11 @@ type videoJSON struct {
 	Stream      int                        `json:"stream"`
 	Decision    decision                   `json:"decision"`
 	DolbyVision domain.DolbyVisionHandling `json:"dolby_vision,omitzero"`
+	Codec       string                     `json:"codec,omitzero"`
+	Width       int                        `json:"width,omitzero"`
+	Height      int                        `json:"height,omitzero"`
+	BitrateKbps int                        `json:"bitrate_kbps,omitzero"`
+	ToneMapped  bool                       `json:"tone_mapped,omitzero"`
 }
 
 type audioJSON struct {
@@ -73,7 +78,8 @@ const (
 )
 
 // play opens a playback of a film or episode as the client's profile decides: its copy's files in
-// order, each with where it starts on the copy's timeline, or an HLS playlist of them, at signed
+// order, each with where it starts on the copy's timeline, or an HLS playlist of them, its video
+// copied or encoded, at signed
 // addresses a player fetches directly. It says what becomes of each stream, and why the copy could
 // not be played as it is.
 func (a *API) play(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +149,12 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	}
 	if v := d.Video; v != nil {
 		answer.Video = &videoJSON{Stream: v.Stream, Decision: decisionCopy, DolbyVision: v.DolbyVision}
+		if e := v.Encode; e != nil {
+			answer.Video = &videoJSON{
+				Stream: v.Stream, Decision: decisionTranscode, Codec: e.Codec, Width: e.Width, Height: e.Height,
+				BitrateKbps: e.BitrateKbps, ToneMapped: e.ToneMap,
+			}
+		}
 	}
 	if au := d.Audio; au != nil {
 		answer.Audio = &audioJSON{Stream: au.Stream, Decision: decisionCopy}
@@ -151,7 +163,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 			answer.Audio.Channels, answer.Audio.BitrateKbps = e.Channels, e.BitrateKbps
 		}
 	}
-	if d.Method == domain.PlayRemux {
+	if d.Method != domain.PlayDirect {
 		if err := a.svc.Remuxing.Open(r.Context(), session.ID, c.Parts, *d.Video, d.Audio); err != nil {
 			a.internal(w, r, err)
 			return
