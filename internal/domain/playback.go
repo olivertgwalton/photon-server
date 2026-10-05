@@ -90,3 +90,22 @@ type AudioEncode struct {
 	Channels    int
 	BitrateKbps int
 }
+
+// Acceleration is the device the server encodes video on.
+type Acceleration string
+
+const (
+	AccelSoftware     Acceleration = "software"
+	AccelVideoToolbox Acceleration = "videotoolbox"
+	AccelVAAPI        Acceleration = "vaapi"
+	AccelQSV          Acceleration = "qsv"
+	AccelNVENC        Acceleration = "nvenc"
+)
+
+func ParseAcceleration(s string) (Acceleration, bool) {
+	switch v := Acceleration(s); v {
+	case AccelSoftware, AccelVideoToolbox, AccelVAAPI, AccelQSV, AccelNVENC:
+		return v, true
+	}
+	return "", false
+}
