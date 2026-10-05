@@ -17,15 +17,17 @@ import (
 
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
-		db:     db,
-		Server: newServer(db, opts...),
+		db:      db,
+		Library: newLibrary(db, opts...),
+		Server:  newServer(db, opts...),
 	}
 }
 
 type Query struct {
 	db *gorm.DB
 
-	Server server
+	Library library
+	Server  server
 }
 
 func (q *Query) Available() bool { return q.db != nil }
@@ -34,8 +36,9 @@ func (q *Query) UnderlyingDB() *gorm.DB { return q.db }
 
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
-		db:     db,
-		Server: q.Server.clone(db),
+		db:      db,
+		Library: q.Library.clone(db),
+		Server:  q.Server.clone(db),
 	}
 }
 
@@ -49,18 +52,21 @@ func (q *Query) WriteDB() *Query {
 
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
-		db:     db,
-		Server: q.Server.replaceDB(db),
+		db:      db,
+		Library: q.Library.replaceDB(db),
+		Server:  q.Server.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
-	Server IServerDo
+	Library ILibraryDo
+	Server  IServerDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
-		Server: q.Server.WithContext(ctx),
+		Library: q.Library.WithContext(ctx),
+		Server:  q.Server.WithContext(ctx),
 	}
 }
 
