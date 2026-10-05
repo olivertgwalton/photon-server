@@ -19,6 +19,7 @@ type editing interface {
 	ResetEdits(ctx context.Context, id uuid.UUID, fields []domain.Field) error
 	PinMatch(ctx context.Context, id uuid.UUID, p domain.Provider, value string) error
 	SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder) error
+	SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker) error
 	IdentifySubject(ctx context.Context, id uuid.UUID) (store.Subject, bool, error)
 }
 
@@ -195,4 +196,48 @@ func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// setMarkers says where a copy's intro, credits, recap and preview are, on its whole timeline as
+// its chapters are, over whatever its chapters or fingerprints say; none clears what was said.
+func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Markers []struct {
+			Kind    domain.MarkerKind `json:"kind"`
+			StartMS int64             `json:"start_ms"`
+			EndMS   int64             `json:"end_ms"`
+		} `json:"markers"`
+	}
+	if !a.decode(w, r, &req) {
+		return
+	}
+	markers := make([]domain.Marker, len(req.Markers))
+	for i, m := range req.Markers {
+		if !slices.Contains(domain.MarkerKinds(), m.Kind) {
+			writeProblem(w, a.logger, codeInvalidBody, "a marker's kind is intro, credits, recap or preview")
+			return
+		}
+		if m.StartMS < 0 || m.EndMS <= m.StartMS {
+			writeProblem(w, a.logger, codeInvalidBody, "a marker ends after it starts, at 0 or later")
+			return
+		}
+		markers[i] = domain.Marker{Kind: m.Kind, StartMS: m.StartMS, EndMS: m.EndMS}
+	}
+	err := a.svc.Editing.SetMarkers(r.Context(), id, markers)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeProblem(w, a.logger, codeNotFound, "no copy has that id")
+		return
+	case errors.Is(err, store.ErrMarkerOutsidePart), errors.Is(err, store.ErrMarkerRepeated):
+		writeProblem(w, a.logger, codeInvalidBody, err.Error())
+		return
+	}
+	if a.answered(w, r, err) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

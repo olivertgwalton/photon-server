@@ -1,0 +1,217 @@
+package store
+
+import (
+	"cmp"
+	"context"
+	"database/sql/driver"
+	"errors"
+	"slices"
+	"time"
+	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store/model"
+	"github.com/olivertgwalton/photon-server/internal/store/query"
+)
+
+var (
+	ErrMarkerOutsidePart = errors.New("a marker must lie within one part of the copy")
+	ErrMarkerRepeated    = errors.New("a part has one marker of each kind")
+)
+
+// markersQuiet is how long a season's sound waits after its last episode arrives before it is
+// compared, so a season scanned folder by folder is compared once.
+const markersQuiet = 10 * time.Minute
+
+// MarkerRef is a stretch a player may offer to skip, on the copy's whole timeline like a chapter.
+type MarkerRef struct {
+	Kind    domain.MarkerKind   `json:"kind"`
+	StartMS int64               `json:"start_ms"`
+	EndMS   int64               `json:"end_ms"`
+	Source  domain.MarkerSource `json:"source"`
+}
+
+// partMarkers is one marker of each kind a part has, the most trusted source's: what an admin
+// said, then the part's chapters, then its season's fingerprints.
+func partMarkers(stored []*model.Marker, chapters []*model.Chapter) []MarkerRef {
+	byKind := map[domain.MarkerKind]MarkerRef{}
+	offer := func(m MarkerRef) {
+		have, ok := byKind[m.Kind]
+		if !ok || slices.Index(domain.MarkerSources(), m.Source) < slices.Index(domain.MarkerSources(), have.Source) {
+			byKind[m.Kind] = m
+		}
+	}
+	for _, m := range stored {
+		offer(MarkerRef{Kind: m.Kind, StartMS: m.StartMS, EndMS: m.EndMS, Source: m.Source})
+	}
+	for _, m := range chapterMarkers(chapters) {
+		offer(m)
+	}
+	out := make([]MarkerRef, 0, len(byKind))
+	for _, m := range byKind {
+		out = append(out, m)
+	}
+	slices.SortFunc(out, func(a, b MarkerRef) int { return cmp.Compare(a.StartMS, b.StartMS) })
+	return out
+}
+
+// chapterMarkers are the stretches a part's chapters name, as Intro Skipper reads them: the first
+// intro and recap, the last credits and preview, each of a plausible length.
+func chapterMarkers(chapters []*model.Chapter) []MarkerRef {
+	found := map[domain.MarkerKind]MarkerRef{}
+	for _, c := range chapters {
+		kind, ok := domain.ChapterMarker(deref(c.Title))
+		length := time.Duration(c.EndMS-c.StartMS) * time.Millisecond
+		if !ok || length < domain.MarkerShortest || length > kind.Longest() {
+			continue
+		}
+		if _, seen := found[kind]; seen && (kind == domain.MarkerIntro || kind == domain.MarkerRecap) {
+			continue
+		}
+		found[kind] = MarkerRef{Kind: kind, StartMS: c.StartMS, EndMS: c.EndMS, Source: domain.MarkerByChapter}
+	}
+	out := make([]MarkerRef, 0, len(found))
+	for _, m := range found {
+		out = append(out, m)
+	}
+	return out
+}
+
+// SetMarkers replaces what an admin says of a copy's markers, given on its whole timeline; none
+// clears them, and the chapters' and fingerprints' stand again.
+func (s *Store) SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker) error {
+	return s.q.Transaction(func(tx *query.Query) error {
+		pt := tx.Part
+		parts, err := pt.WithContext(ctx).Where(pt.VersionID.Eq(model.UUID(version))).Order(pt.Idx).Find()
+		if err != nil {
+			return err
+		}
+		if len(parts) == 0 {
+			return ErrNotFound
+		}
+		rows := make([]*model.Marker, 0, len(markers))
+		for _, m := range markers {
+			i := slices.IndexFunc(parts, func(p *model.Part) bool {
+				return p.OffsetMS <= m.StartMS && m.EndMS <= p.OffsetMS+p.DurationMS
+			})
+			if i < 0 {
+				return ErrMarkerOutsidePart
+			}
+			p := parts[i]
+			if slices.ContainsFunc(rows, func(r *model.Marker) bool { return r.PartID == p.ID && r.Kind == m.Kind }) {
+				return ErrMarkerRepeated
+			}
+			rows = append(rows, &model.Marker{
+				PartID: p.ID, Kind: m.Kind, Source: domain.MarkerByUser,
+				StartMS: m.StartMS - p.OffsetMS, EndMS: m.EndMS - p.OffsetMS,
+			})
+		}
+		mk := tx.Marker
+		pids := make([]driver.Valuer, len(parts))
+		for n, p := range parts {
+			pids[n] = p.ID
+		}
+		_, err = mk.WithContext(ctx).Where(mk.PartID.In(pids...), mk.Source.Eq(string(domain.MarkerByUser))).Delete()
+		if err != nil || len(rows) == 0 {
+			return err
+		}
+		return mk.WithContext(ctx).Create(rows...)
+	})
+}
+
+// SeasonPart is a part of an episode in a season, with somewhere to read it and sound to compare.
+type SeasonPart struct {
+	ID      uuid.UUID
+	Episode uuid.UUID
+	Version uuid.UUID
+	Idx     int
+	// Duration is the part's own length.
+	Duration time.Duration
+	Root     string
+	RelPath  string
+	// Fingerprinted is whether its sound has been compared with its season's.
+	Fingerprinted bool
+}
+
+// SeasonParts answers the parts of a season's episodes that are on disk and have sound, by
+// episode, copy and order.
+func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart, error) {
+	var rows []struct {
+		ID, Episode, Version model.UUID
+		Idx                  int
+		DurationMS           int64
+		Root, RelPath        string
+		FingerprintedAt      *time.Time
+	}
+	err := s.q.Part.WithContext(ctx).UnderlyingDB().Raw(`
+		SELECT DISTINCT ON (p.id) p.id, e.id AS episode, v.id AS version, p.idx, p.duration_ms,
+			l.root, f.rel_path, p.fingerprinted_at
+		FROM items e
+		JOIN versions v ON v.item_id = e.id AND v.missing_since IS NULL
+		JOIN parts p ON p.version_id = v.id
+		JOIN part_files f ON f.part_id = p.id
+		JOIN libraries l ON l.id = f.library_id
+		WHERE e.parent_id = ? AND e.kind = 'episode'
+			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'audio')
+		ORDER BY p.id, f.rel_path`, model.UUID(season)).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SeasonPart, len(rows))
+	for n, r := range rows {
+		out[n] = SeasonPart{
+			ID: uuid.UUID(r.ID), Episode: uuid.UUID(r.Episode), Version: uuid.UUID(r.Version), Idx: r.Idx,
+			Duration: time.Duration(r.DurationMS) * time.Millisecond, Root: r.Root, RelPath: r.RelPath,
+			Fingerprinted: r.FingerprintedAt != nil,
+		}
+	}
+	slices.SortFunc(out, func(a, b SeasonPart) int {
+		return cmp.Or(cmp.Compare(a.Episode.String(), b.Episode.String()),
+			cmp.Compare(a.Version.String(), b.Version.String()), cmp.Compare(a.Idx, b.Idx))
+	})
+	return out, nil
+}
+
+// SaveFingerprintMarkers replaces the markers fingerprints found on the parts compared, and
+// records that they were.
+func (s *Store) SaveFingerprintMarkers(ctx context.Context, compared []uuid.UUID, found map[uuid.UUID][]domain.Marker) error {
+	return s.q.Transaction(func(tx *query.Query) error {
+		ids := make([]driver.Valuer, len(compared))
+		for n, id := range compared {
+			ids[n] = model.UUID(id)
+		}
+		mk, pt := tx.Marker, tx.Part
+		if _, err := mk.WithContext(ctx).Where(mk.PartID.In(ids...), mk.Source.Eq(string(domain.MarkerByFingerprint))).Delete(); err != nil {
+			return err
+		}
+		var rows []*model.Marker
+		for part, markers := range found {
+			for _, m := range markers {
+				rows = append(rows, &model.Marker{
+					PartID: model.UUID(part), Kind: m.Kind, Source: domain.MarkerByFingerprint, StartMS: m.StartMS, EndMS: m.EndMS,
+				})
+			}
+		}
+		if len(rows) > 0 {
+			if err := mk.WithContext(ctx).Create(rows...); err != nil {
+				return err
+			}
+		}
+		_, err := pt.WithContext(ctx).Where(pt.ID.In(ids...)).UpdateSimple(pt.FingerprintedAt.Value(time.Now()))
+		return err
+	})
+}
+
+// QueueMarkers queues a comparison of every season with an episode whose sound has not been
+// compared. A season whose comparison failed every attempt waits for its episodes to change.
+func (s *Store) QueueMarkers(ctx context.Context) (int64, error) {
+	res := s.q.Item.WithContext(ctx).UnderlyingDB().Exec(`
+		INSERT INTO jobs (kind, subject)
+		SELECT DISTINCT 'markers', e.parent_id FROM items e
+		JOIN versions v ON v.item_id = e.id AND v.missing_since IS NULL
+		JOIN parts p ON p.version_id = v.id
+		WHERE e.kind = 'episode' AND p.fingerprinted_at IS NULL
+			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'audio')
+		ON CONFLICT (kind, subject) DO NOTHING`)
+	return res.RowsAffected, res.Error
+}

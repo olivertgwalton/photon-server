@@ -145,6 +145,8 @@ type Part struct {
 	SizeBytes  int64
 	DurationMS int64 `gorm:"column:duration_ms"`
 	OffsetMS   int64 `gorm:"column:offset_ms"`
+	// FingerprintedAt is when the part's sound was last compared with its season's.
+	FingerprintedAt *time.Time
 }
 
 // PartFile is one place a part's bytes are on disk.
@@ -189,6 +191,15 @@ type Chapter struct {
 	StartMS int64 `gorm:"column:start_ms"`
 	EndMS   int64 `gorm:"column:end_ms"`
 	Title   *string
+}
+
+// Marker is a stretch of a part a player may offer to skip, from the part's start.
+type Marker struct {
+	PartID  UUID                `gorm:"type:uuid;primaryKey"`
+	Kind    domain.MarkerKind   `gorm:"primaryKey"`
+	Source  domain.MarkerSource `gorm:"primaryKey"`
+	StartMS int64               `gorm:"column:start_ms"`
+	EndMS   int64               `gorm:"column:end_ms"`
 }
 
 // SubtitleFile is a subtitle beside a copy rather than inside it.

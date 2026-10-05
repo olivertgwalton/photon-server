@@ -34,6 +34,7 @@ func newPart(db *gorm.DB, opts ...gen.DOOption) part {
 	_part.SizeBytes = field.NewInt64(tableName, "size_bytes")
 	_part.DurationMS = field.NewInt64(tableName, "duration_ms")
 	_part.OffsetMS = field.NewInt64(tableName, "offset_ms")
+	_part.FingerprintedAt = field.NewTime(tableName, "fingerprinted_at")
 
 	_part.fillFieldMap()
 
@@ -43,13 +44,14 @@ func newPart(db *gorm.DB, opts ...gen.DOOption) part {
 type part struct {
 	partDo partDo
 
-	ALL        field.Asterisk
-	ID         field.Field
-	VersionID  field.Field
-	Idx        field.Int16
-	SizeBytes  field.Int64
-	DurationMS field.Int64
-	OffsetMS   field.Int64
+	ALL             field.Asterisk
+	ID              field.Field
+	VersionID       field.Field
+	Idx             field.Int16
+	SizeBytes       field.Int64
+	DurationMS      field.Int64
+	OffsetMS        field.Int64
+	FingerprintedAt field.Time
 
 	fieldMap map[string]field.Expr
 }
@@ -72,6 +74,7 @@ func (p *part) updateTableName(table string) *part {
 	p.SizeBytes = field.NewInt64(table, "size_bytes")
 	p.DurationMS = field.NewInt64(table, "duration_ms")
 	p.OffsetMS = field.NewInt64(table, "offset_ms")
+	p.FingerprintedAt = field.NewTime(table, "fingerprinted_at")
 
 	p.fillFieldMap()
 
@@ -96,13 +99,14 @@ func (p *part) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (p *part) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 6)
+	p.fieldMap = make(map[string]field.Expr, 7)
 	p.fieldMap["id"] = p.ID
 	p.fieldMap["version_id"] = p.VersionID
 	p.fieldMap["idx"] = p.Idx
 	p.fieldMap["size_bytes"] = p.SizeBytes
 	p.fieldMap["duration_ms"] = p.DurationMS
 	p.fieldMap["offset_ms"] = p.OffsetMS
+	p.fieldMap["fingerprinted_at"] = p.FingerprintedAt
 }
 
 func (p part) clone(db *gorm.DB) part {

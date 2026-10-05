@@ -180,6 +180,7 @@ func (a *API) routes() []route {
 		{pattern: "GET /api/v1/admin/titles/{id}/candidates", access: admin, query: []string{"provider", "title", "year"}, handle: a.candidates},
 		{pattern: "PUT /api/v1/admin/titles/{id}/match", access: admin, handle: a.pinMatch},
 		{pattern: "PUT /api/v1/admin/titles/{id}/episode-order", access: admin, handle: a.setEpisodeOrder},
+		{pattern: "PUT /api/v1/admin/versions/{id}/markers", access: admin, handle: a.setMarkers},
 		{pattern: "POST /api/v1/admin/collections", access: admin, handle: a.addCollection},
 		{pattern: "PUT /api/v1/admin/collections/{id}/members", access: admin, handle: a.setMembers},
 		{pattern: "DELETE /api/v1/admin/collections/{id}", access: admin, handle: a.removeCollection},

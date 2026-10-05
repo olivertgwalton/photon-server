@@ -33,6 +33,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Library:            newLibrary(db, opts...),
 		LibraryRemoteExtra: newLibraryRemoteExtra(db, opts...),
 		LibrarySource:      newLibrarySource(db, opts...),
+		Marker:             newMarker(db, opts...),
 		Part:               newPart(db, opts...),
 		PartFile:           newPartFile(db, opts...),
 		Person:             newPerson(db, opts...),
@@ -71,6 +72,7 @@ type Query struct {
 	Library            library
 	LibraryRemoteExtra libraryRemoteExtra
 	LibrarySource      librarySource
+	Marker             marker
 	Part               part
 	PartFile           partFile
 	Person             person
@@ -112,6 +114,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Library:            q.Library.clone(db),
 		LibraryRemoteExtra: q.LibraryRemoteExtra.clone(db),
 		LibrarySource:      q.LibrarySource.clone(db),
+		Marker:             q.Marker.clone(db),
 		Part:               q.Part.clone(db),
 		PartFile:           q.PartFile.clone(db),
 		Person:             q.Person.clone(db),
@@ -158,6 +161,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Library:            q.Library.replaceDB(db),
 		LibraryRemoteExtra: q.LibraryRemoteExtra.replaceDB(db),
 		LibrarySource:      q.LibrarySource.replaceDB(db),
+		Marker:             q.Marker.replaceDB(db),
 		Part:               q.Part.replaceDB(db),
 		PartFile:           q.PartFile.replaceDB(db),
 		Person:             q.Person.replaceDB(db),
@@ -194,6 +198,7 @@ type queryCtx struct {
 	Library            ILibraryDo
 	LibraryRemoteExtra ILibraryRemoteExtraDo
 	LibrarySource      ILibrarySourceDo
+	Marker             IMarkerDo
 	Part               IPartDo
 	PartFile           IPartFileDo
 	Person             IPersonDo
@@ -230,6 +235,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Library:            q.Library.WithContext(ctx),
 		LibraryRemoteExtra: q.LibraryRemoteExtra.WithContext(ctx),
 		LibrarySource:      q.LibrarySource.WithContext(ctx),
+		Marker:             q.Marker.WithContext(ctx),
 		Part:               q.Part.WithContext(ctx),
 		PartFile:           q.PartFile.WithContext(ctx),
 		Person:             q.Person.WithContext(ctx),

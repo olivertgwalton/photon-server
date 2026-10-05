@@ -21,6 +21,8 @@ const minimumMajor = 8
 type Tools struct {
 	FFmpeg  Tool
 	FFprobe Tool
+	// Chromaprint is whether FFmpeg can fingerprint sound, which finding a season's intros needs.
+	Chromaprint bool
 }
 
 type Tool struct {
@@ -37,7 +39,7 @@ func FindTools(ctx context.Context) (Tools, error) {
 	if err != nil {
 		return Tools{}, err
 	}
-	return Tools{FFmpeg: ffmpeg, FFprobe: ffprobe}, nil
+	return Tools{FFmpeg: ffmpeg, FFprobe: ffprobe, Chromaprint: hasChromaprint(ctx, ffmpeg.Path)}, nil
 }
 
 func findTool(ctx context.Context, name string) (Tool, error) {

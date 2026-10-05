@@ -75,6 +75,7 @@ type VersionPage struct {
 	Streams      []StreamPage  `json:"streams"`
 	Subtitles    []SubtitleRef `json:"subtitles,omitzero"`
 	Chapters     []ChapterRef  `json:"chapters,omitzero"`
+	Markers      []MarkerRef   `json:"markers,omitzero"`
 }
 
 // StreamPage is a track of a copy's first part; the parts of one copy are cut from one master.
@@ -399,7 +400,7 @@ func (s *Store) videos(ctx context.Context, item model.UUID) ([]VideoLink, error
 
 // versions answers a film's or episode's copies, those on disk first, the longest first.
 func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, error) {
-	v, pt, st, ch, sf := s.q.Version, s.q.Part, s.q.Stream, s.q.Chapter, s.q.SubtitleFile
+	v, pt, st, ch, sf, mk := s.q.Version, s.q.Part, s.q.Stream, s.q.Chapter, s.q.SubtitleFile, s.q.Marker
 	rows, err := v.WithContext(ctx).Where(v.ItemID.Eq(item)).Find()
 	if err != nil || len(rows) == 0 {
 		return nil, err
@@ -432,6 +433,10 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 	if err != nil {
 		return nil, err
 	}
+	markers, err := mk.WithContext(ctx).Where(mk.PartID.In(pids...)).Find()
+	if err != nil {
+		return nil, err
+	}
 	subs, err := sf.WithContext(ctx).Where(sf.VersionID.In(vids...)).Order(sf.RelPath).Find()
 	if err != nil {
 		return nil, err
@@ -444,12 +449,25 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 			Parts: len(byVersion[r.ID]), MissingSince: r.MissingSince, Streams: []StreamPage{},
 		}
 		for k, p := range byVersion[r.ID] {
+			var own []*model.Chapter
 			for _, c := range chapters {
 				if c.PartID == p.ID {
+					own = append(own, c)
 					vp.Chapters = append(vp.Chapters, ChapterRef{
 						StartMS: p.OffsetMS + c.StartMS, EndMS: p.OffsetMS + c.EndMS, Title: deref(c.Title),
 					})
 				}
+			}
+			var stored []*model.Marker
+			for _, m := range markers {
+				if m.PartID == p.ID {
+					stored = append(stored, m)
+				}
+			}
+			for _, m := range partMarkers(stored, own) {
+				m.StartMS += p.OffsetMS
+				m.EndMS += p.OffsetMS
+				vp.Markers = append(vp.Markers, m)
 			}
 			if k > 0 {
 				continue

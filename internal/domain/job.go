@@ -8,10 +8,12 @@ const (
 	JobIdentify JobKind = "identify"
 	// JobScanLibrary reads a library's folders again; one job per library at a time.
 	JobScanLibrary JobKind = "scan_library"
+	// JobMarkers finds the intro and credits a season's episodes share by their sound.
+	JobMarkers JobKind = "markers"
 )
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes, JobIdentify, JobScanLibrary}
+	return []JobKind{JobKeyframes, JobIdentify, JobScanLibrary, JobMarkers}
 }
 
 type JobState string
