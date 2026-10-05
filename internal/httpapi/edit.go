@@ -24,17 +24,17 @@ type editing interface {
 }
 
 type editJSON struct {
-	Title         string         `json:"title"`
-	SortTitle     string         `json:"sort_title"`
-	OriginalTitle string         `json:"original_title"`
-	Overview      string         `json:"overview"`
-	Tagline       string         `json:"tagline"`
-	Certificate   string         `json:"certificate"`
-	ReleaseDate   string         `json:"release_date"`
-	Year          int            `json:"year"`
-	Genres        []string       `json:"genres"`
-	Studios       []string       `json:"studios"`
-	Locked        []domain.Field `json:"locked"`
+	Title         string         `json:"title,omitzero"`
+	SortTitle     string         `json:"sort_title,omitzero"`
+	OriginalTitle string         `json:"original_title,omitzero"`
+	Overview      string         `json:"overview,omitzero"`
+	Tagline       string         `json:"tagline,omitzero"`
+	Certificate   string         `json:"certificate,omitzero"`
+	ReleaseDate   string         `json:"release_date,omitzero"`
+	Year          int            `json:"year,omitzero"`
+	Genres        []string       `json:"genres,omitzero"`
+	Studios       []string       `json:"studios,omitzero"`
+	Locked        []domain.Field `json:"locked,omitzero"`
 }
 
 // editTitle writes what an admin says of a title, field by field; what it locks no source changes.
@@ -175,7 +175,7 @@ func (a *API) pinMatch(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-type episodeOrderJSON struct {
+type setEpisodeOrderJSON struct {
 	Order domain.EpisodeOrder `json:"order"`
 }
 
@@ -186,7 +186,7 @@ func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req episodeOrderJSON
+	var req setEpisodeOrderJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -205,6 +205,17 @@ func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// markerJSON is a stretch of a copy, on its whole timeline.
+type markerJSON struct {
+	Kind    domain.MarkerKind `json:"kind"`
+	StartMS int64             `json:"start_ms"`
+	EndMS   int64             `json:"end_ms"`
+}
+
+type markersJSON struct {
+	Markers []markerJSON `json:"markers"`
+}
+
 // setMarkers says where a copy's intro, credits, recap and preview are, on its whole timeline as
 // its chapters are, over whatever its chapters or fingerprints say; none clears what was said.
 func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
@@ -212,13 +223,7 @@ func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req struct {
-		Markers []struct {
-			Kind    domain.MarkerKind `json:"kind"`
-			StartMS int64             `json:"start_ms"`
-			EndMS   int64             `json:"end_ms"`
-		} `json:"markers"`
-	}
+	var req markersJSON
 	if !a.decode(w, r, &req) {
 		return
 	}

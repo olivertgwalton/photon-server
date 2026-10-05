@@ -31,6 +31,16 @@ const (
 	codeExpiredToken         problemCode = "expired_token"
 )
 
+// problemCodes are every code; TestEveryProblemCodeIsListed holds the list to the constants.
+func problemCodes() []problemCode {
+	return []problemCode{
+		codeNotFound, codeMethodNotAllowed, codeUnknownParameter, codeInvalidParameter, codeNotReady,
+		codeInvalidBody, codeUnauthenticated, codeInvalidCredentials, codeInternal, codePairingNotFound,
+		codeWrongSecret, codeRateLimited, codeNoCompatibleStream, codeForbidden, codeConflict,
+		codeTranscodeLimit, codeAuthorizationPending, codeSlowDown, codeExpiredToken,
+	}
+}
+
 func (c problemCode) status() int {
 	switch c {
 	case codeNotFound:

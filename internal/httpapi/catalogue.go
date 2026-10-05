@@ -250,7 +250,19 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 
 // wallFilterParameters are what a wall, and its letters, are narrowed by: each list repeated or
 // comma-separated, any of its values.
-var wallFilterParameters = []string{"starts_with", "mark", "genre", "year", "certificate", "studio", "resolution", "range", "rating_site", "min_rating", "person"}
+var wallFilterParameters = []param{
+	{"starts_with", "", "A letter, or # for anything before A."},
+	{"mark", []domain.Mark{}, ""},
+	{"genre", []string{}, ""},
+	{"year", []int{}, ""},
+	{"certificate", []string{}, ""},
+	{"studio", []string{}, ""},
+	{"resolution", []domain.Resolution{}, ""},
+	{"range", []domain.Range{}, ""},
+	{"rating_site", domain.RatingSite(""), "The site min_rating and the rating sort go by, IMDb by default."},
+	{"min_rating", 0.0, "A score from 0 to 100."},
+	{"person", []uuid.UUID{}, "People credited."},
+}
 
 func wallFilter(q url.Values) (store.WallFilter, error) {
 	var f store.WallFilter

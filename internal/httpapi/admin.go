@@ -117,12 +117,12 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 
 // libraryChangeJSON changes what it sets and leaves the rest.
 type libraryChangeJSON struct {
-	Name         string               `json:"name"`
-	Sources      []domain.FieldSource `json:"sources"`
-	RemoteExtras []domain.ExtraKind   `json:"remote_extras"`
-	Monitor      domain.Monitor       `json:"monitor"`
+	Name         string               `json:"name,omitzero"`
+	Sources      []domain.FieldSource `json:"sources,omitzero"`
+	RemoteExtras []domain.ExtraKind   `json:"remote_extras,omitzero"`
+	Monitor      domain.Monitor       `json:"monitor,omitzero"`
 	// RefreshDays is how often its metadata is refreshed, 0 for never.
-	RefreshDays *int `json:"refresh_days"`
+	RefreshDays *int `json:"refresh_days,omitzero"`
 }
 
 // setLibrary changes what is sent of a library: its name, whether it is watched, where its

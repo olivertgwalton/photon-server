@@ -31,7 +31,7 @@ type playlistJSON struct {
 
 type addPlaylistJSON struct {
 	Name    string      `json:"name"`
-	ItemIDs []uuid.UUID `json:"item_ids"`
+	ItemIDs []uuid.UUID `json:"item_ids,omitzero"`
 }
 
 type nameJSON struct {

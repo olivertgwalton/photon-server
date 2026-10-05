@@ -73,7 +73,7 @@ func (a *API) setProfileAccess(w http.ResponseWriter, r *http.Request) {
 type addProfileJSON struct {
 	Name     string      `json:"name"`
 	Role     domain.Role `json:"role"`
-	Password string      `json:"password"`
+	Password string      `json:"password,omitzero"`
 }
 
 // addProfile adds a profile of the household, as Jellyfin's dashboard adds a user. One with no
@@ -103,9 +103,9 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 type profileChangeJSON struct {
-	Name     string      `json:"name"`
-	Role     domain.Role `json:"role"`
-	Password *string     `json:"password"`
+	Name     string      `json:"name,omitzero"`
+	Role     domain.Role `json:"role,omitzero"`
+	Password *string     `json:"password,omitzero"`
 }
 
 // setProfile renames a profile, changes its role, and sets its password, or clears it with "".

@@ -18,7 +18,7 @@ type profileListingJSON struct {
 type switchJSON struct {
 	ProfileID string `json:"profile_id"`
 	// Secret is the PIN or password the profile's lock asks for.
-	Secret string `json:"secret"`
+	Secret string `json:"secret,omitzero"`
 }
 
 type pinJSON struct {

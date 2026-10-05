@@ -35,7 +35,7 @@ func (a *API) progress(w http.ResponseWriter, r *http.Request) {
 	}
 	reach, err := a.svc.Watching.SaveProgress(r.Context(), sessionOf(r).Profile.ID, id, time.Duration(req.PositionMS)*time.Millisecond)
 	if !a.answered(w, r, err) {
-		writeJSON(w, a.logger, "application/json", http.StatusOK, reachJSON{Reach: reach})
+		writeJSON(w, a.logger, "application/json", http.StatusOK, reachedJSON{Reach: reach})
 	}
 }
 

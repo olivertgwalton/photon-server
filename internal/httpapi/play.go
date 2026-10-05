@@ -107,12 +107,16 @@ const (
 	decisionTranscode decision = "transcode"
 )
 
+func decisions() []decision {
+	return []decision{decisionCopy, decisionTranscode}
+}
+
 type playJSON struct {
-	VersionID   string `json:"version_id"`
-	AudioStream *int   `json:"audio_stream"`
+	VersionID   string `json:"version_id,omitzero"`
+	AudioStream *int   `json:"audio_stream,omitzero"`
 	// SubtitleStream is a subtitle the client will show; one that is a picture is drawn into the
 	// video where the client cannot draw it.
-	SubtitleStream *int              `json:"subtitle_stream"`
+	SubtitleStream *int              `json:"subtitle_stream,omitzero"`
 	Profile        *playback.Profile `json:"profile"`
 }
 
@@ -371,14 +375,14 @@ func (a *API) requireSignedPath(next http.Handler) http.Handler {
 	})
 }
 
-type playStateJSON struct {
+type playbackProgressJSON struct {
 	PositionMS int64            `json:"position_ms"`
 	State      domain.PlayState `json:"state"`
 }
 
 // playbackProgress is the player saying where it has got to, every ten seconds or so.
 func (a *API) playbackProgress(w http.ResponseWriter, r *http.Request) {
-	var req playStateJSON
+	var req playbackProgressJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
@@ -420,7 +424,7 @@ func (a *API) reportPlayback(w http.ResponseWriter, r *http.Request, report func
 	case err != nil:
 		a.internal(w, r, err)
 	default:
-		writeJSON(w, a.logger, "application/json", http.StatusOK, reachJSON{Reach: reach})
+		writeJSON(w, a.logger, "application/json", http.StatusOK, reachedJSON{Reach: reach})
 	}
 }
 
