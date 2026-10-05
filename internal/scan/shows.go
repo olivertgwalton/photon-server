@@ -52,7 +52,8 @@ func showFolder(rel string) (series string, season *int, ok bool) {
 // two episodes rather than silently merging (Jellyfin #18081).
 func planEpisodes(f library.Folder, folderSeason *int, series string) (episodes []episodePlan, unread []string) {
 	byKey := map[string]int{}
-	for _, c := range stacks(f.Files) {
+	copies := stacks(f.Files)
+	for _, c := range copies {
 		s := stem(c[0].Name)
 		if p, ok := naming.StackPart(s); ok {
 			s = p.Base
@@ -66,7 +67,7 @@ func planEpisodes(f library.Folder, folderSeason *int, series string) (episodes 
 		plan := episodePlan{
 			episodes: ep.Episodes, airDate: ep.AirDate, title: episodeTitle(ep), name: n,
 			byNumber: ep.Confidence == naming.ConfidenceHigh,
-			versions: []copyPlan{{parts: c, edition: n.Edition}},
+			versions: []copyPlan{{parts: c, edition: n.Edition, subtitles: subtitlesFor(f.Files, copyStem(c), "", len(copies) == 1)}},
 		}
 		switch {
 		case ep.Season != nil:
