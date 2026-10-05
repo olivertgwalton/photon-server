@@ -20,12 +20,14 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
+	"github.com/olivertgwalton/photon-server/internal/identify"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/task"
+	"github.com/olivertgwalton/photon-server/internal/tmdb"
 )
 
 const (
@@ -127,9 +129,14 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	node := uuid.NewV7()
 	scheduler := task.NewScheduler(st, logger, node,
 		scanTask(st, scan.New(st, tools, logger), logger), sweepTask(st, logger))
-	worker := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), map[domain.JobKind]jobs.Handler{
-		domain.JobKeyframes: analysis.Keyframes(st, tools),
-	})
+	handlers := map[domain.JobKind]jobs.Handler{domain.JobKeyframes: analysis.Keyframes(st, tools)}
+	if token := os.Getenv("PHOTON_TMDB_TOKEN"); token != "" {
+		c := tmdb.New(token, cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US"), cache)
+		handlers[domain.JobIdentify] = identify.Handler(st, c, logger)
+	} else {
+		logger.InfoContext(ctx, "PHOTON_TMDB_TOKEN is not set: titles are described by their files and NFOs alone")
+	}
+	worker := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), handlers)
 	background, stopBackground := context.WithCancel(ctx)
 	var wg sync.WaitGroup
 	wg.Go(func() { scheduler.Run(background) })
