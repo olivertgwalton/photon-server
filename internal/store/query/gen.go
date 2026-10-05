@@ -18,6 +18,7 @@ import (
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
 		db:                 db,
+		Artwork:            newArtwork(db, opts...),
 		Chapter:            newChapter(db, opts...),
 		DeviceSession:      newDeviceSession(db, opts...),
 		ExternalID:         newExternalID(db, opts...),
@@ -43,6 +44,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 type Query struct {
 	db *gorm.DB
 
+	Artwork            artwork
 	Chapter            chapter
 	DeviceSession      deviceSession
 	ExternalID         externalID
@@ -71,6 +73,7 @@ func (q *Query) UnderlyingDB() *gorm.DB { return q.db }
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
 		db:                 db,
+		Artwork:            q.Artwork.clone(db),
 		Chapter:            q.Chapter.clone(db),
 		DeviceSession:      q.DeviceSession.clone(db),
 		ExternalID:         q.ExternalID.clone(db),
@@ -104,6 +107,7 @@ func (q *Query) WriteDB() *Query {
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
 		db:                 db,
+		Artwork:            q.Artwork.replaceDB(db),
 		Chapter:            q.Chapter.replaceDB(db),
 		DeviceSession:      q.DeviceSession.replaceDB(db),
 		ExternalID:         q.ExternalID.replaceDB(db),
@@ -127,6 +131,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 }
 
 type queryCtx struct {
+	Artwork            IArtworkDo
 	Chapter            IChapterDo
 	DeviceSession      IDeviceSessionDo
 	ExternalID         IExternalIDDo
@@ -150,6 +155,7 @@ type queryCtx struct {
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
+		Artwork:            q.Artwork.WithContext(ctx),
 		Chapter:            q.Chapter.WithContext(ctx),
 		DeviceSession:      q.DeviceSession.WithContext(ctx),
 		ExternalID:         q.ExternalID.WithContext(ctx),

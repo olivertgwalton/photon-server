@@ -20,8 +20,9 @@ type Metadata struct {
 	Genres        []string
 	Studios       []string
 	IDs           map[Provider]string
-	// Videos are what the source links to; they are kept per source, not per field.
-	Videos []RemoteVideo
+	// Videos and Artwork are what the source links to; they are kept per source, not per field.
+	Videos  []RemoteVideo
+	Artwork []Artwork
 	// Locked fields are claimed at this source's rank even where it gives no value, so no lower
 	// source fills them.
 	Locked []Field

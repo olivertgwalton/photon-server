@@ -18,7 +18,13 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/kv"
 )
 
-const baseURL = "https://api.themoviedb.org/3"
+const (
+	baseURL = "https://api.themoviedb.org/3"
+	// imageURL serves a picture at the size it was uploaded; the server sizes it for clients.
+	imageURL = "https://image.tmdb.org/t/p/original"
+	// keepPictures is how many of each kind are kept, best first.
+	keepPictures = 10
+)
 
 // DefaultToken is the project's own API read access token, shipped in the source as Jellyfin
 // ships its key, so matching works without an account. An operator's own token replaces it.
@@ -173,6 +179,11 @@ type details struct {
 	Videos struct {
 		Results []video `json:"results"`
 	} `json:"videos"`
+	Images struct {
+		Posters   []image `json:"posters"`
+		Backdrops []image `json:"backdrops"`
+		Logos     []image `json:"logos"`
+	} `json:"images"`
 	ContentRatings struct {
 		Results []struct {
 			Country string `json:"iso_3166_1"`
@@ -183,11 +194,13 @@ type details struct {
 
 // Details answers what TMDB says about a title, with its certificate in the client's country.
 func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadata, error) {
-	extra := map[Kind]string{Movie: "release_dates,external_ids,videos", Show: "content_ratings,external_ids,videos"}[kind]
+	extra := map[Kind]string{Movie: "release_dates,external_ids,videos,images", Show: "content_ratings,external_ids,videos,images"}[kind]
 	q := url.Values{
 		"append_to_response": {extra},
-		// Videos in the metadata language, and those in none, such as most trailers' music.
+		// Videos and pictures in the metadata language, and those in none: most trailers' music,
+		// and backdrops and posters without lettering.
 		"include_video_language": {c.videoLanguage + ",null"},
+		"include_image_language": {c.videoLanguage + ",null"},
 	}
 	var d details
 	if err := c.get(ctx, fmt.Sprintf("/%s/%d", kind, id), q, &d); err != nil {
@@ -219,6 +232,11 @@ func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadat
 			out.Certificate = cmp.Or(out.Certificate, r.Rating)
 		}
 	}
+	out.Artwork = slices.Concat(
+		pictures(domain.ArtworkPoster, d.Images.Posters, c.videoLanguage),
+		pictures(domain.ArtworkBackdrop, d.Images.Backdrops, ""),
+		pictures(domain.ArtworkLogo, d.Images.Logos, c.videoLanguage),
+	)
 	videos := d.Videos.Results
 	// The studio's own first, then the newest.
 	slices.SortStableFunc(videos, func(a, b video) int {
@@ -234,6 +252,40 @@ func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadat
 		})
 	}
 	return out, nil
+}
+
+type image struct {
+	Path     string  `json:"file_path"`
+	Width    int     `json:"width"`
+	Height   int     `json:"height"`
+	Language string  `json:"iso_639_1"`
+	Votes    float64 `json:"vote_average"`
+}
+
+// pictures orders a kind's pictures, the preferred language first (a poster's lettering in the
+// reader's language, a backdrop with none), then by TMDB's votes, and keeps the best.
+func pictures(kind domain.ArtworkKind, images []image, preferred string) []domain.Artwork {
+	images = slices.Clone(images)
+	slices.SortStableFunc(images, func(a, b image) int {
+		if (a.Language == preferred) != (b.Language == preferred) {
+			return map[bool]int{true: -1, false: 1}[a.Language == preferred]
+		}
+		return cmp.Compare(b.Votes, a.Votes)
+	})
+	out := make([]domain.Artwork, 0, min(len(images), keepPictures))
+	for _, im := range images[:min(len(images), keepPictures)] {
+		out = append(out, domain.Artwork{
+			Kind: kind, URL: imageURL + im.Path, Language: im.Language, Width: im.Width, Height: im.Height,
+		})
+	}
+	return out
+}
+
+func picture(kind domain.ArtworkKind, path string) []domain.Artwork {
+	if path == "" {
+		return nil
+	}
+	return []domain.Artwork{{Kind: kind, URL: imageURL + path}}
 }
 
 type video struct {
@@ -259,11 +311,13 @@ func (c *Client) Season(ctx context.Context, show, number int) (domain.SeasonMet
 		Name     string `json:"name"`
 		Overview string `json:"overview"`
 		AirDate  string `json:"air_date"`
+		Poster   string `json:"poster_path"`
 		Episodes []struct {
 			Number   int    `json:"episode_number"`
 			Name     string `json:"name"`
 			Overview string `json:"overview"`
 			AirDate  string `json:"air_date"`
+			Still    string `json:"still_path"`
 		} `json:"episodes"`
 	}
 	if err := c.get(ctx, fmt.Sprintf("/tv/%d/season/%d", show, number), nil, &s); err != nil {
@@ -271,12 +325,18 @@ func (c *Client) Season(ctx context.Context, show, number int) (domain.SeasonMet
 	}
 	aired := date(s.AirDate)
 	out := domain.SeasonMetadata{
-		Metadata: domain.Metadata{Title: s.Name, Overview: s.Overview, ReleaseDate: aired, Year: year(aired)},
+		Metadata: domain.Metadata{
+			Title: s.Name, Overview: s.Overview, ReleaseDate: aired, Year: year(aired),
+			Artwork: picture(domain.ArtworkPoster, s.Poster),
+		},
 		Episodes: make(map[int]domain.Metadata, len(s.Episodes)),
 	}
 	for _, e := range s.Episodes {
 		aired := date(e.AirDate)
-		out.Episodes[e.Number] = domain.Metadata{Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: year(aired)}
+		out.Episodes[e.Number] = domain.Metadata{
+			Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: year(aired),
+			Artwork: picture(domain.ArtworkThumb, e.Still),
+		}
 	}
 	return out, nil
 }

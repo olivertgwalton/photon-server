@@ -159,3 +159,55 @@ func TestALibraryKeepsTheVideoKindsItAsksFor(t *testing.T) {
 		t.Errorf("keeping none, kept %v", got)
 	}
 }
+
+func TestAMatchKeepsItsProvidersPictures(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	episode := Episode{
+		Season: 1, Episodes: []int{1}, Title: "pilot", Folder: "The Wire/Season 1", ByNumber: true,
+		Copies: []Copy{{ContentKey: []byte("e1"), Parts: []Part{{
+			RelPath: "The Wire/Season 1/1.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{},
+		}}}},
+	}
+	if _, err := s.SaveShowFolder(ctx, lib.ID, "The Wire/Season 1", []byte("v1"), Show{Title: "the wire", Folder: "The Wire"}, []Episode{episode}, nil); err != nil {
+		t.Fatal(err)
+	}
+	show, err := s.q.Item.WithContext(ctx).Where(s.q.Item.Kind.Eq(string(domain.ItemShow))).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	match := func(posters ...string) {
+		t.Helper()
+		m := domain.Metadata{}
+		for _, p := range posters {
+			m.Artwork = append(m.Artwork, domain.Artwork{Kind: domain.ArtworkPoster, URL: p})
+		}
+		seasons := map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{
+			1: {Artwork: []domain.Artwork{{Kind: domain.ArtworkThumb, URL: "still"}}},
+		}}}
+		if err := s.SaveIdentity(ctx, uuid.UUID(show.ID), domain.SourceTMDB, m, seasons); err != nil {
+			t.Fatal(err)
+		}
+	}
+	places := func() []string {
+		t.Helper()
+		a := s.q.Artwork
+		var got []string
+		if err := a.WithContext(ctx).Order(a.Kind, a.Position).Pluck(a.Place, &got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	match("one", "two")
+	if got := places(); !slices.Equal(got, []string{"one", "two", "still"}) {
+		t.Errorf("pictures = %v, want the show's two posters and the episode's still", got)
+	}
+	match("three")
+	if got := places(); !slices.Equal(got, []string{"three", "still"}) {
+		t.Errorf("after a second match, pictures = %v, want its poster alone and the still", got)
+	}
+}

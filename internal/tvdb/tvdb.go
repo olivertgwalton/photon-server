@@ -208,6 +208,7 @@ func (c *Client) Details(ctx context.Context, id int) (domain.Metadata, error) {
 	var out struct {
 		Data struct {
 			Name             string  `json:"name"`
+			Image            string  `json:"image"`
 			FirstAired       string  `json:"firstAired"`
 			Genres           []named `json:"genres"`
 			OriginalNetwork  *named  `json:"originalNetwork"`
@@ -241,7 +242,8 @@ func (c *Client) Details(ctx context.Context, id int) (domain.Metadata, error) {
 	aired := date(d.FirstAired)
 	m := domain.Metadata{
 		ReleaseDate: aired, Year: year(aired),
-		IDs: map[domain.Provider]string{domain.ProviderTVDB: strconv.Itoa(id)},
+		IDs:     map[domain.Provider]string{domain.ProviderTVDB: strconv.Itoa(id)},
+		Artwork: picture(domain.ArtworkPoster, d.Image),
 	}
 	if d.OriginalLanguage == c.language {
 		m.OriginalTitle = d.Name
@@ -295,6 +297,7 @@ func (c *Client) Seasons(ctx context.Context, id int, seasons []int) (map[int]do
 					Name     string `json:"name"`
 					Overview string `json:"overview"`
 					Aired    string `json:"aired"`
+					Image    string `json:"image"`
 				} `json:"episodes"`
 			} `json:"data"`
 			Links struct {
@@ -307,12 +310,27 @@ func (c *Client) Seasons(ctx context.Context, id int, seasons []int) (map[int]do
 		for _, e := range page.Data.Episodes {
 			if s, ok := out[e.Season]; ok {
 				aired := date(e.Aired)
-				s.Episodes[e.Number] = domain.Metadata{Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: year(aired)}
+				s.Episodes[e.Number] = domain.Metadata{
+					Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: year(aired),
+					Artwork: picture(domain.ArtworkThumb, e.Image),
+				}
 			}
 		}
 		path = strings.TrimPrefix(page.Links.Next, c.base)
 	}
 	return out, nil
+}
+
+// picture is TVDB's picture at address, which it answers as its bare /banners/ folder for a
+// record with none, and as a path for older records.
+func picture(kind domain.ArtworkKind, address string) []domain.Artwork {
+	if address == "" || strings.HasSuffix(address, "/banners/") {
+		return nil
+	}
+	if strings.HasPrefix(address, "/") {
+		address = "https://artworks.thetvdb.com" + address
+	}
+	return []domain.Artwork{{Kind: kind, URL: address}}
 }
 
 func date(s string) time.Time {

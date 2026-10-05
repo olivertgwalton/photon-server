@@ -23,6 +23,12 @@ type Show struct {
 	NFO    *domain.Metadata
 	// Seasons is what NFOs say about the show's seasons, by number.
 	Seasons map[int]domain.Metadata
+	// Artwork is the pictures of the show in its folder, read when that folder is.
+	Artwork []domain.Artwork
+	// SeasonArtwork is the pictures of each season found by the scan of a folder: its own
+	// season's from a season folder (and those kept for it in the series' folder), every season's
+	// from the series' folder.
+	SeasonArtwork map[int][]domain.Artwork
 }
 
 type Episode struct {
@@ -33,6 +39,7 @@ type Episode struct {
 	Folder   string
 	IDs      map[domain.Provider]string
 	NFO      *domain.Metadata
+	Artwork  []domain.Artwork
 	// ByNumber lets the episode join one already known by its season and numbers. It is false for
 	// an episode read from a bare number, which joins nothing but its own copies.
 	ByNumber bool
@@ -45,7 +52,7 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 	var unowned []string
 	err := s.q.Transaction(func(tx *query.Query) error {
 		// A series' own folder, holding its NFO and extras, comes before any of its episodes.
-		if len(episodes) > 0 || ((len(extras) > 0 || show.NFO != nil) && show.Folder != "") {
+		if len(episodes) > 0 || ((len(extras) > 0 || show.NFO != nil || len(show.Artwork) > 0) && show.Folder != "") {
 			showID, err := ensureShow(ctx, tx, lib, show)
 			if err != nil {
 				return err
@@ -66,6 +73,14 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 				if err := saveEpisode(ctx, tx, lib, showID, seasonID, e); err != nil {
 					return fmt.Errorf("%s season %d %v: %w", show.Title, e.Season, e.Episodes, err)
 				}
+			}
+			if path == show.Folder {
+				if err := saveFolderArtwork(ctx, tx, showID, path, show.Artwork); err != nil {
+					return err
+				}
+			}
+			if err := saveSeasonArtwork(ctx, tx, showID, path, show); err != nil {
+				return err
 			}
 			// A season named by tvshow.nfo keeps its episodes in a folder of its own.
 			i := tx.Item
@@ -184,6 +199,9 @@ func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID, se
 	if err := describe(ctx, tx, row.ID, e.Title, 0, e.IDs, e.NFO); err != nil {
 		return err
 	}
+	if err := saveFolderArtwork(ctx, tx, row.ID, e.Folder, e.Artwork); err != nil {
+		return err
+	}
 	for _, c := range e.Copies {
 		if err := saveCopy(ctx, tx, lib, row.ID, c); err != nil {
 			return err
@@ -221,4 +239,31 @@ func episodeItem(ctx context.Context, tx *query.Query, lib uuid.UUID, e Episode,
 		return model.UUID{}, err
 	}
 	return known.ID, nil
+}
+
+// saveSeasonArtwork keeps the pictures a folder's scan found for each season. The series' folder
+// speaks for every season's pictures kept there; a season's folder for its own, in it and in the
+// series' folder.
+func saveSeasonArtwork(ctx context.Context, tx *query.Query, showID model.UUID, folder string, show Show) error {
+	i := tx.Item
+	seasons, err := i.WithContext(ctx).Where(i.ParentID.Eq(showID), i.Kind.Eq(string(domain.ItemSeason))).Find()
+	if err != nil {
+		return err
+	}
+	folders := []string{folder}
+	if folder != show.Folder {
+		folders = append(folders, show.Folder)
+	}
+	for _, season := range seasons {
+		pictures, found := show.SeasonArtwork[*season.SeasonNumber]
+		if folder != show.Folder && !found {
+			continue
+		}
+		for _, f := range folders {
+			if err := saveFolderArtwork(ctx, tx, season.ID, f, pictures); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

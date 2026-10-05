@@ -81,6 +81,9 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 		if err := saveRemoteVideos(ctx, tx, item, source, m.Videos); err != nil {
 			return err
 		}
+		if err := saveProviderArtwork(ctx, tx, item, source, m.Artwork); err != nil {
+			return err
+		}
 		i := tx.Item
 		for number, season := range seasons {
 			row, err := i.WithContext(ctx).Where(
@@ -95,6 +98,9 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 			if err := applyMetadata(ctx, tx, row.ID, source, season.Metadata); err != nil {
 				return err
 			}
+			if err := saveProviderArtwork(ctx, tx, row.ID, source, season.Metadata.Artwork); err != nil {
+				return err
+			}
 			episodes, err := i.WithContext(ctx).Where(i.ParentID.Eq(row.ID), i.Kind.Eq(string(domain.ItemEpisode))).Find()
 			if err != nil {
 				return err
@@ -105,6 +111,9 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 				}
 				if said, ok := season.Episodes[*e.EpisodeNumber]; ok {
 					if err := applyMetadata(ctx, tx, e.ID, source, said); err != nil {
+						return err
+					}
+					if err := saveProviderArtwork(ctx, tx, e.ID, source, said.Artwork); err != nil {
 						return err
 					}
 				}

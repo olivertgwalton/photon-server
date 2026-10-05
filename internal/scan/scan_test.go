@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -549,4 +550,65 @@ func TestAShowsPageListsItsSeasonsAndASeasonsItsEpisodes(t *testing.T) {
 	if episode.Season == nil || episode.Show == nil || episode.Show.Title != "The Wire" || len(episode.Versions) != 1 {
 		t.Errorf("episode page = %+v, want its season, its show and its copy", episode)
 	}
+}
+
+func (f *fixture) pictures(kind string) []string {
+	f.t.Helper()
+	rows, err := f.db.Query(f.t.Context(), `SELECT i.title || ' ' || a.kind || ' ' || a.place FROM artwork a
+		JOIN items i ON i.id = a.item_id WHERE i.kind = $1 ORDER BY 1`, kind)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	out, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return out
+}
+
+func TestPicturesBesideFilmsAreTheirs(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	f.put("Heat (1995)/Heat (1995).mkv", "heat")
+	f.put("Heat (1995)/poster.jpg", "p")
+	f.put("Heat (1995)/fanart.jpg", "b")
+	f.put("Heat (1995)/Heat (1995)-clearlogo.png", "l")
+	f.put("Alien (1979).mkv", "alien")
+	f.put("Alien (1979).jpg", "a")
+	f.put("folder.jpg", "root")
+	f.scan()
+	want := []string{
+		"Alien poster Alien (1979).jpg",
+		"Heat backdrop Heat (1995)/fanart.jpg",
+		"Heat logo Heat (1995)/Heat (1995)-clearlogo.png",
+		"Heat poster Heat (1995)/poster.jpg",
+	}
+	if got := f.pictures("movie"); !slices.Equal(got, want) {
+		t.Errorf("pictures = %q, want %q", got, want)
+	}
+}
+
+func TestPicturesOfAShowItsSeasonsAndEpisodes(t *testing.T) {
+	f := newFixture(t, domain.LibraryShows)
+	f.put("The Wire/Season 1/The Wire S01E01.mkv", "e1")
+	f.put("The Wire/Season 1/The Wire S01E01.jpg", "still")
+	f.put("The Wire/Season 1/folder.jpg", "s1")
+	f.put("The Wire/poster.jpg", "show")
+	f.put("The Wire/season01-poster.jpg", "s1root")
+	f.scan()
+	check := func(kind string, want ...string) {
+		t.Helper()
+		if got := f.pictures(kind); !slices.Equal(got, want) {
+			t.Errorf("%s pictures = %q, want %q", kind, got, want)
+		}
+	}
+	check("show", "The Wire poster The Wire/poster.jpg")
+	check("season", "Season 1 poster The Wire/Season 1/folder.jpg", "Season 1 poster The Wire/season01-poster.jpg")
+	check("episode", "Episode 1 thumb The Wire/Season 1/The Wire S01E01.jpg")
+
+	if err := os.Remove(filepath.Join(f.root, "The Wire", "season01-poster.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	f.scan()
+	check("season", "Season 1 poster The Wire/Season 1/folder.jpg")
+	check("show", "The Wire poster The Wire/poster.jpg")
 }
