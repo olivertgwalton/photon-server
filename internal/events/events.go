@@ -29,22 +29,30 @@ const (
 	scanLife = 2 * time.Minute
 )
 
+// Server is the server a webhook is told an event happened on.
+type Server struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
 type Hub struct {
-	store *store.Store
-	kv    *kv.KV
-	log   *slog.Logger
+	store  *store.Store
+	kv     *kv.KV
+	server Server
+	log    *slog.Logger
 
 	mu      sync.Mutex
 	streams map[chan domain.Event]struct{}
 	closed  bool
 }
 
-func New(st *store.Store, k *kv.KV, log *slog.Logger) *Hub {
-	return &Hub{store: st, kv: k, log: log, streams: map[chan domain.Event]struct{}{}}
+func New(st *store.Store, k *kv.KV, server Server, log *slog.Logger) *Hub {
+	return &Hub{store: st, kv: k, server: server, log: log, streams: map[chan domain.Event]struct{}{}}
 }
 
-// Raise keeps an event in the activity log if it is a kind the log keeps, and tells every node's
-// streams. It never fails what raised it: what goes wrong is logged.
+// Raise keeps an event in the activity log if it is a kind the log keeps, queues it for the
+// webhooks that asked for it, and tells every node's streams. It never fails what raised it: what
+// goes wrong is logged, and a webhook is called by a job, never here.
 func (h *Hub) Raise(ctx context.Context, e domain.Event) {
 	// What raised it may be ending, as a player that stops and goes.
 	ctx = context.WithoutCancel(ctx)
@@ -56,6 +64,15 @@ func (h *Hub) Raise(ctx context.Context, e domain.Event) {
 		}
 		e.ID = id
 	}
+	if e.Kind.Hookable() {
+		body, err := h.payload(ctx, e)
+		if err == nil {
+			err = h.store.QueueWebhooks(ctx, e.Kind, body)
+		}
+		if err != nil {
+			h.log.WarnContext(ctx, "webhooks not queued", slog.String("kind", string(e.Kind)), slog.Any("err", err))
+		}
+	}
 	message, err := json.Marshal(e)
 	if err == nil {
 		err = h.kv.PublishEvent(ctx, string(message))
@@ -63,6 +80,60 @@ func (h *Hub) Raise(ctx context.Context, e domain.Event) {
 	if err != nil {
 		h.log.WarnContext(ctx, "event not told", slog.String("kind", string(e.Kind)), slog.Any("err", err))
 	}
+}
+
+// TestWebhook queues a test event to one webhook. store.ErrNotFound for no such webhook.
+func (h *Hub) TestWebhook(ctx context.Context, id uuid.UUID) error {
+	e := domain.Event{Kind: domain.EventWebhookTest, At: time.Now()}
+	body, err := h.payload(ctx, e)
+	if err != nil {
+		return err
+	}
+	return h.store.QueueDelivery(ctx, id, e.Kind, body)
+}
+
+type named struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+type title struct {
+	ID    uuid.UUID       `json:"id"`
+	Kind  domain.ItemKind `json:"kind"`
+	Title string          `json:"title"`
+	Year  *int            `json:"year,omitzero"`
+}
+
+// payload is the body a webhook is sent, as Plex's carries its server, account and metadata: the
+// event, the server, the profile, title and library it is about where it is about one still
+// there, and its details.
+func (h *Hub) payload(ctx context.Context, e domain.Event) ([]byte, error) {
+	d, err := h.store.Describe(ctx, e)
+	if err != nil {
+		return nil, err
+	}
+	body := struct {
+		Event   domain.EventKind `json:"event"`
+		At      time.Time        `json:"at"`
+		Server  Server           `json:"server"`
+		Profile *named           `json:"profile,omitzero"`
+		Title   *title           `json:"title,omitzero"`
+		Library *named           `json:"library,omitzero"`
+		Details map[string]any   `json:"details"`
+	}{Event: e.Kind, At: e.At.UTC(), Server: h.server, Details: e.Details}
+	if body.Details == nil {
+		body.Details = map[string]any{}
+	}
+	if d.ProfileName != nil {
+		body.Profile = &named{ID: e.Profile, Name: *d.ProfileName}
+	}
+	if d.Title != nil {
+		body.Title = &title{ID: e.Item, Kind: *d.TitleKind, Title: *d.Title, Year: d.Year}
+	}
+	if d.LibraryName != nil {
+		body.Library = &named{ID: e.Library, Name: *d.LibraryName}
+	}
+	return json.Marshal(body)
 }
 
 // Run hands this node's streams every node's events until ctx ends, then ends them.
