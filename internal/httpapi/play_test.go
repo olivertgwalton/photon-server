@@ -347,6 +347,14 @@ func TestHLSIsServedByTheNodeRunningIt(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("an admin stopping a playback another node runs: %d %s, want it stopped there", rec.Code, rec.Body)
 	}
+	// Stopped where it runs, so its remux ends and its transcode slot is free at once.
+	stop = httptest.NewRequest(http.MethodPost, "/api/v1/playback/"+playbackID.String()+"/stop", strings.NewReader(`{"position_ms": 1000}`))
+	stop.Header.Set("Authorization", "Bearer "+goodToken)
+	rec = httptest.NewRecorder()
+	front.ServeHTTP(rec, stop)
+	if rec.Code != http.StatusOK {
+		t.Errorf("its player stopping a playback another node runs: %d %s, want it stopped there", rec.Code, rec.Body)
+	}
 	rec = httptest.NewRecorder()
 	front.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, subject+"/"+exp+"/forged/0.m4s", nil))
 	if rec.Code != http.StatusUnauthorized {
