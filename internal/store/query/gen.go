@@ -17,35 +17,39 @@ import (
 
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
-		db:         db,
-		Chapter:    newChapter(db, opts...),
-		ExternalID: newExternalID(db, opts...),
-		Folder:     newFolder(db, opts...),
-		Item:       newItem(db, opts...),
-		Job:        newJob(db, opts...),
-		Library:    newLibrary(db, opts...),
-		Part:       newPart(db, opts...),
-		Server:     newServer(db, opts...),
-		Stream:     newStream(db, opts...),
-		TaskState:  newTaskState(db, opts...),
-		Version:    newVersion(db, opts...),
+		db:            db,
+		Chapter:       newChapter(db, opts...),
+		DeviceSession: newDeviceSession(db, opts...),
+		ExternalID:    newExternalID(db, opts...),
+		Folder:        newFolder(db, opts...),
+		Item:          newItem(db, opts...),
+		Job:           newJob(db, opts...),
+		Library:       newLibrary(db, opts...),
+		Part:          newPart(db, opts...),
+		Profile:       newProfile(db, opts...),
+		Server:        newServer(db, opts...),
+		Stream:        newStream(db, opts...),
+		TaskState:     newTaskState(db, opts...),
+		Version:       newVersion(db, opts...),
 	}
 }
 
 type Query struct {
 	db *gorm.DB
 
-	Chapter    chapter
-	ExternalID externalID
-	Folder     folder
-	Item       item
-	Job        job
-	Library    library
-	Part       part
-	Server     server
-	Stream     stream
-	TaskState  taskState
-	Version    version
+	Chapter       chapter
+	DeviceSession deviceSession
+	ExternalID    externalID
+	Folder        folder
+	Item          item
+	Job           job
+	Library       library
+	Part          part
+	Profile       profile
+	Server        server
+	Stream        stream
+	TaskState     taskState
+	Version       version
 }
 
 func (q *Query) Available() bool { return q.db != nil }
@@ -54,18 +58,20 @@ func (q *Query) UnderlyingDB() *gorm.DB { return q.db }
 
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
-		db:         db,
-		Chapter:    q.Chapter.clone(db),
-		ExternalID: q.ExternalID.clone(db),
-		Folder:     q.Folder.clone(db),
-		Item:       q.Item.clone(db),
-		Job:        q.Job.clone(db),
-		Library:    q.Library.clone(db),
-		Part:       q.Part.clone(db),
-		Server:     q.Server.clone(db),
-		Stream:     q.Stream.clone(db),
-		TaskState:  q.TaskState.clone(db),
-		Version:    q.Version.clone(db),
+		db:            db,
+		Chapter:       q.Chapter.clone(db),
+		DeviceSession: q.DeviceSession.clone(db),
+		ExternalID:    q.ExternalID.clone(db),
+		Folder:        q.Folder.clone(db),
+		Item:          q.Item.clone(db),
+		Job:           q.Job.clone(db),
+		Library:       q.Library.clone(db),
+		Part:          q.Part.clone(db),
+		Profile:       q.Profile.clone(db),
+		Server:        q.Server.clone(db),
+		Stream:        q.Stream.clone(db),
+		TaskState:     q.TaskState.clone(db),
+		Version:       q.Version.clone(db),
 	}
 }
 
@@ -79,48 +85,54 @@ func (q *Query) WriteDB() *Query {
 
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
-		db:         db,
-		Chapter:    q.Chapter.replaceDB(db),
-		ExternalID: q.ExternalID.replaceDB(db),
-		Folder:     q.Folder.replaceDB(db),
-		Item:       q.Item.replaceDB(db),
-		Job:        q.Job.replaceDB(db),
-		Library:    q.Library.replaceDB(db),
-		Part:       q.Part.replaceDB(db),
-		Server:     q.Server.replaceDB(db),
-		Stream:     q.Stream.replaceDB(db),
-		TaskState:  q.TaskState.replaceDB(db),
-		Version:    q.Version.replaceDB(db),
+		db:            db,
+		Chapter:       q.Chapter.replaceDB(db),
+		DeviceSession: q.DeviceSession.replaceDB(db),
+		ExternalID:    q.ExternalID.replaceDB(db),
+		Folder:        q.Folder.replaceDB(db),
+		Item:          q.Item.replaceDB(db),
+		Job:           q.Job.replaceDB(db),
+		Library:       q.Library.replaceDB(db),
+		Part:          q.Part.replaceDB(db),
+		Profile:       q.Profile.replaceDB(db),
+		Server:        q.Server.replaceDB(db),
+		Stream:        q.Stream.replaceDB(db),
+		TaskState:     q.TaskState.replaceDB(db),
+		Version:       q.Version.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
-	Chapter    IChapterDo
-	ExternalID IExternalIDDo
-	Folder     IFolderDo
-	Item       IItemDo
-	Job        IJobDo
-	Library    ILibraryDo
-	Part       IPartDo
-	Server     IServerDo
-	Stream     IStreamDo
-	TaskState  ITaskStateDo
-	Version    IVersionDo
+	Chapter       IChapterDo
+	DeviceSession IDeviceSessionDo
+	ExternalID    IExternalIDDo
+	Folder        IFolderDo
+	Item          IItemDo
+	Job           IJobDo
+	Library       ILibraryDo
+	Part          IPartDo
+	Profile       IProfileDo
+	Server        IServerDo
+	Stream        IStreamDo
+	TaskState     ITaskStateDo
+	Version       IVersionDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
-		Chapter:    q.Chapter.WithContext(ctx),
-		ExternalID: q.ExternalID.WithContext(ctx),
-		Folder:     q.Folder.WithContext(ctx),
-		Item:       q.Item.WithContext(ctx),
-		Job:        q.Job.WithContext(ctx),
-		Library:    q.Library.WithContext(ctx),
-		Part:       q.Part.WithContext(ctx),
-		Server:     q.Server.WithContext(ctx),
-		Stream:     q.Stream.WithContext(ctx),
-		TaskState:  q.TaskState.WithContext(ctx),
-		Version:    q.Version.WithContext(ctx),
+		Chapter:       q.Chapter.WithContext(ctx),
+		DeviceSession: q.DeviceSession.WithContext(ctx),
+		ExternalID:    q.ExternalID.WithContext(ctx),
+		Folder:        q.Folder.WithContext(ctx),
+		Item:          q.Item.WithContext(ctx),
+		Job:           q.Job.WithContext(ctx),
+		Library:       q.Library.WithContext(ctx),
+		Part:          q.Part.WithContext(ctx),
+		Profile:       q.Profile.WithContext(ctx),
+		Server:        q.Server.WithContext(ctx),
+		Stream:        q.Stream.WithContext(ctx),
+		TaskState:     q.TaskState.WithContext(ctx),
+		Version:       q.Version.WithContext(ctx),
 	}
 }
 
