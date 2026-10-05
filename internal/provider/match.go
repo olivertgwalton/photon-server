@@ -14,19 +14,21 @@ import (
 )
 
 // Resolve finds a title's id on a provider: one it already carries, else one another provider's
-// id leads to, else a confident search result. Zero is no match.
+// id leads to, else a confident search result. Empty is no match.
 func Resolve(h Hints, own domain.Provider, others []domain.Provider,
 	find func(domain.Provider, string) ([]domain.Candidate, error),
 	search func(string, int) ([]domain.Candidate, error),
-) (int, error) {
-	if id, err := strconv.Atoi(h.IDs[own]); err == nil {
-		return id, nil
+) (string, error) {
+	if id := h.IDs[own]; id != "" {
+		if _, err := strconv.Atoi(id); err == nil {
+			return id, nil
+		}
 	}
 	for _, p := range others {
 		if v := h.IDs[p]; v != "" {
 			found, err := find(p, v)
 			if err != nil {
-				return 0, err
+				return "", err
 			}
 			if len(found) > 0 {
 				return found[0].ID, nil
@@ -35,13 +37,13 @@ func Resolve(h Hints, own domain.Provider, others []domain.Provider,
 	}
 	found, err := search(h.Title, h.Year)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 	// A year read from a folder is often the wrong one of several release dates; Jellyfin asks
 	// again without it.
 	if len(found) == 0 && h.Year != 0 {
 		if found, err = search(h.Title, 0); err != nil {
-			return 0, err
+			return "", err
 		}
 	}
 	return pick(found, h.Title, h.Year), nil
@@ -50,7 +52,7 @@ func Resolve(h Hints, own domain.Provider, others []domain.Provider,
 // pick takes the first result, in the provider's order, whose title or original title is the one asked
 // for and whose year is within one of the one asked for. Anything looser is left unmatched rather
 // than risk a wrong match.
-func pick(found []domain.Candidate, title string, year int) int {
+func pick(found []domain.Candidate, title string, year int) string {
 	want := normalise(title)
 	for _, m := range found {
 		named := normalise(m.Title) == want || normalise(m.OriginalTitle) == want
@@ -59,7 +61,7 @@ func pick(found []domain.Candidate, title string, year int) int {
 			return m.ID
 		}
 	}
-	return 0
+	return ""
 }
 
 var unmark = transform.Chain(norm.NFKD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)

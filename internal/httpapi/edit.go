@@ -140,7 +140,7 @@ func (a *API) candidates(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]candidateJSON, len(offered))
 	for i, c := range offered {
-		out[i] = candidateJSON{ID: strconv.Itoa(c.ID), Title: c.Title, OriginalTitle: c.OriginalTitle, Year: c.Year, Poster: c.Poster}
+		out[i] = candidateJSON{ID: c.ID, Title: c.Title, OriginalTitle: c.OriginalTitle, Year: c.Year, Poster: c.Poster}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[candidateJSON]{Items: out})
 }

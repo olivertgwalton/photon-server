@@ -107,7 +107,7 @@ type result struct {
 
 func (r result) match() domain.Candidate {
 	c := domain.Candidate{
-		ID: r.ID, Title: cmp.Or(r.Title, r.Name), OriginalTitle: cmp.Or(r.OriginalTitle, r.OriginalName),
+		ID: strconv.Itoa(r.ID), Title: cmp.Or(r.Title, r.Name), OriginalTitle: cmp.Or(r.OriginalTitle, r.OriginalName),
 		Year: year(date(cmp.Or(r.ReleaseDate, r.FirstAirDate))),
 	}
 	if r.Poster != "" {

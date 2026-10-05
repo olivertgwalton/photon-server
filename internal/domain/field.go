@@ -35,7 +35,7 @@ type Metadata struct {
 
 // Candidate is a title a provider offers as a match, and its poster to tell it by.
 type Candidate struct {
-	ID            int
+	ID            string
 	Title         string
 	OriginalTitle string
 	Year          int

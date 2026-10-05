@@ -22,10 +22,7 @@ func (c *Client) Match(ctx context.Context, kind domain.ItemKind, h provider.Hin
 	id, err := provider.Resolve(h, domain.ProviderTMDB, []domain.Provider{domain.ProviderIMDb, domain.ProviderTVDB},
 		func(p domain.Provider, v string) ([]domain.Candidate, error) { return c.Find(ctx, k, p, v) },
 		func(title string, year int) ([]domain.Candidate, error) { return c.Search(ctx, k, title, year) })
-	if err != nil || id == 0 {
-		return "", err
-	}
-	return strconv.Itoa(id), nil
+	return id, err
 }
 
 // Describe answers TMDB's details of a title, its score among them, and of the seasons of a show
