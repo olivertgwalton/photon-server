@@ -12,7 +12,7 @@ func day(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0,
 func TestParseEpisode(t *testing.T) {
 	tests := []struct {
 		stem, series string
-		want         Episode // Rule is not compared; Confidence is.
+		want         Episode // Rule and Title are not compared here; Confidence is.
 		notEpisode   bool
 	}{
 		{stem: "Running Man S2017E368", want: Episode{Season: new(2017), Episodes: []int{368}, Confidence: ConfidenceHigh}},
@@ -68,7 +68,7 @@ func TestParseEpisode(t *testing.T) {
 			if !ok {
 				t.Fatalf("ParseEpisode(%q): no episode", tt.stem)
 			}
-			got.Rule = ""
+			got.Rule, got.Title = "", ""
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("ParseEpisode(%q) (-want +got):\n%s", tt.stem, diff)
 			}
@@ -101,5 +101,31 @@ func TestSpecialsAreSeasonZero(t *testing.T) {
 	ep, _ = ParseEpisode("01 - Pilot", "")
 	if ep.Season != nil {
 		t.Errorf("ParseEpisode(01 - Pilot) season = %d, want none", *ep.Season)
+	}
+}
+
+func TestEpisodeTitles(t *testing.T) {
+	for stem, want := range map[string]string{
+		"Severance.S01E01.Good.News.About.Hell.2160p.WEB-DL": "Good News About Hell",
+		"The Wire S02E01 - Ebb Tide":                         "Ebb Tide",
+		"The Wire S02E01 - 720p":                             "",
+		"The Wire S02E01":                                    "",
+		"Show S01E23-E24-E26 - Finale":                       "Finale",
+		"The Daily Show 25x22 - Noah Baumbach":               "Noah Baumbach",
+		"james.corden.2017.04.20.anne.hathaway.720p.hdtv":    "anne hathaway",
+		"01 - Pilot":                "Pilot",
+		"01.Pilot.1080p":            "Pilot",
+		"Show - 01 - Pilot [1080p]": "Pilot",
+		"Marvel's Agents of S.H.I.E.L.D. S01E01 - Pilot": "Pilot",
+		"Show - 101 [720p]": "",
+	} {
+		ep, ok := ParseEpisode(stem, "")
+		if !ok {
+			t.Errorf("%q: no episode", stem)
+			continue
+		}
+		if ep.Title != want {
+			t.Errorf("%q: title %q, want %q", stem, ep.Title, want)
+		}
 	}
 }

@@ -19,9 +19,11 @@ const (
 type Episode struct {
 	// Season is nil when the name does not say; the season folder or season 1 decides. Season 0 is
 	// specials.
-	Season     *int
-	Episodes   []int
-	AirDate    time.Time
+	Season   *int
+	Episodes []int
+	AirDate  time.Time
+	// Title is what the name says after its marker ("S01E01 - Pilot"), empty where it says nothing.
+	Title      string
 	Confidence Confidence
 	Rule       string
 }
@@ -81,7 +83,7 @@ var (
 // moreEpisodes reads the episodes that continue a canonical match: E01E02, E23-E24-E26, 02x03-04.
 // A number followed by p, i or another digit is a resolution, not an episode, and a number lower
 // than the first belongs to the title ("S03E21 - E2").
-func moreEpisodes(first int, rest string) []int {
+func moreEpisodes(first int, rest string) ([]int, string) {
 	last := first
 	for {
 		m := continuation.FindStringSubmatchIndex(rest)
@@ -105,7 +107,21 @@ func moreEpisodes(first int, rest string) []int {
 	for n := first; n <= last; n++ {
 		eps = append(eps, n)
 	}
-	return eps
+	return eps, rest
+}
+
+// episodeTitle reads what follows an episode's marker: " - Pilot", ".Good.News.About.Hell.2160p".
+// Release tags end it even when they come first, so "S02E01 - 720p" has no title.
+func episodeTitle(rest string) string {
+	if i := releaseToken(tokenize(rest)); i >= 0 {
+		rest = rest[:tokenize(rest)[i].start]
+	}
+	return spaced(strings.Trim(rest, " ._-([{,"))
+}
+
+func numbered(first int, rest string) ([]int, string) {
+	eps, rest := moreEpisodes(first, rest)
+	return eps, episodeTitle(rest)
 }
 
 func parseSxxEyy(stem, _ string) (Episode, bool) {
@@ -113,8 +129,8 @@ func parseSxxEyy(stem, _ string) (Episode, bool) {
 	if m == nil || !validSeason(atoi(stem[m[2]:m[3]])) {
 		return Episode{}, false
 	}
-	first := atoi(stem[m[4]:m[5]])
-	return Episode{Season: new(atoi(stem[m[2]:m[3]])), Episodes: moreEpisodes(first, stem[m[5]:])}, true
+	eps, title := numbered(atoi(stem[m[4]:m[5]]), stem[m[5]:])
+	return Episode{Season: new(atoi(stem[m[2]:m[3]])), Episodes: eps, Title: title}, true
 }
 
 func parseNxNN(stem, _ string) (Episode, bool) {
@@ -122,18 +138,20 @@ func parseNxNN(stem, _ string) (Episode, bool) {
 	if m == nil || !validSeason(atoi(stem[m[2]:m[3]])) {
 		return Episode{}, false
 	}
-	first := atoi(stem[m[4]:m[5]])
-	return Episode{Season: new(atoi(stem[m[2]:m[3]])), Episodes: moreEpisodes(first, stem[m[5]:])}, true
+	eps, title := numbered(atoi(stem[m[4]:m[5]]), stem[m[5]:])
+	return Episode{Season: new(atoi(stem[m[2]:m[3]])), Episodes: eps, Title: title}, true
 }
 
 var seasonEpisodeWords = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])s(?:eason)?\s*(\d{1,4})\s+e(?:pisode)?\s*(\d{1,4})`)
 
 func parseSeasonEpisodeWords(stem, _ string) (Episode, bool) {
-	m := seasonEpisodeWords.FindStringSubmatch(stem)
-	if m == nil || !validSeason(atoi(m[1])) {
+	m := seasonEpisodeWords.FindStringSubmatchIndex(stem)
+	if m == nil || !validSeason(atoi(stem[m[2]:m[3]])) {
 		return Episode{}, false
 	}
-	return Episode{Season: new(atoi(m[1])), Episodes: []int{atoi(m[2])}}, true
+	return Episode{
+		Season: new(atoi(stem[m[2]:m[3]])), Episodes: []int{atoi(stem[m[4]:m[5]])}, Title: episodeTitle(stem[m[1]:]),
+	}, true
 }
 
 var (
@@ -148,17 +166,17 @@ func date(y, m, d int) (time.Time, bool) {
 
 // A day-first date that is not a valid day-first date is read month-first, never guessed.
 func parseAirDate(stem, _ string) (Episode, bool) {
-	if m := yearFirstDate.FindStringSubmatch(stem); m != nil {
-		if t, ok := date(atoi(m[1]), atoi(m[2]), atoi(m[3])); ok {
-			return Episode{AirDate: t}, true
+	if m := yearFirstDate.FindStringSubmatchIndex(stem); m != nil {
+		if t, ok := date(atoi(stem[m[2]:m[3]]), atoi(stem[m[4]:m[5]]), atoi(stem[m[6]:m[7]])); ok {
+			return Episode{AirDate: t, Title: episodeTitle(stem[m[7]:])}, true
 		}
 	}
-	if m := dayFirstDate.FindStringSubmatch(stem); m != nil {
-		if t, ok := date(atoi(m[3]), atoi(m[2]), atoi(m[1])); ok {
-			return Episode{AirDate: t}, true
-		}
-		if t, ok := date(atoi(m[3]), atoi(m[1]), atoi(m[2])); ok {
-			return Episode{AirDate: t}, true
+	if m := dayFirstDate.FindStringSubmatchIndex(stem); m != nil {
+		d, mo, y := atoi(stem[m[2]:m[3]]), atoi(stem[m[4]:m[5]]), atoi(stem[m[6]:m[7]])
+		for _, dm := range [][2]int{{d, mo}, {mo, d}} {
+			if t, ok := date(y, dm[1], dm[0]); ok {
+				return Episode{AirDate: t, Title: episodeTitle(stem[m[7]:])}, true
+			}
 		}
 	}
 	return Episode{}, false
@@ -173,7 +191,8 @@ func parseEpisodeWord(stem, _ string) (Episode, bool) {
 	}
 	first := atoi(m[1])
 	if m[2] != "" && atoi(m[2]) > first {
-		return Episode{Episodes: moreEpisodes(first, "-"+m[2])}, true
+		eps, _ := moreEpisodes(first, "-"+m[2])
+		return Episode{Episodes: eps}, true
 	}
 	return Episode{Episodes: []int{first}}, true
 }
@@ -239,22 +258,23 @@ func parseLeadingNumber(stem, _ string) (Episode, bool) {
 	if m == nil {
 		return Episode{}, false
 	}
-	first := atoi(m[1])
+	first, title := atoi(m[1]), episodeTitle(stem[len(m[0]):])
 	if m[2] != "" && atoi(m[2]) > first {
-		return Episode{Episodes: moreEpisodes(first, "-"+m[2])}, true
+		eps, _ := moreEpisodes(first, "-"+m[2])
+		return Episode{Episodes: eps, Title: title}, true
 	}
-	return Episode{Episodes: []int{first}}, true
+	return Episode{Episodes: []int{first}, Title: title}, true
 }
 
 var innerDashNumber = regexp.MustCompile(`\s-\s(\d{1,3})\s-\s`)
 
 // "Show - 01 - Title".
 func parseInnerDashNumber(stem, _ string) (Episode, bool) {
-	m := innerDashNumber.FindStringSubmatch(stem)
+	m := innerDashNumber.FindStringSubmatchIndex(stem)
 	if m == nil {
 		return Episode{}, false
 	}
-	return Episode{Episodes: []int{atoi(m[1])}}, true
+	return Episode{Episodes: []int{atoi(stem[m[2]:m[3]])}, Title: episodeTitle(stem[m[1]:])}, true
 }
 
 // "One Piece 1001": a last token of digits after the series' own words.
