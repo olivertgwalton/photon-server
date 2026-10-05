@@ -141,6 +141,15 @@ func (s *Store) ServerID(ctx context.Context) (uuid.UUID, error) {
 	return uuid.UUID(row.ID), nil
 }
 
+// SigningKey is the key the server signs stream addresses with, made once by its migration.
+func (s *Store) SigningKey(ctx context.Context) ([]byte, error) {
+	row, err := s.q.Server.WithContext(ctx).Take()
+	if err != nil {
+		return nil, err
+	}
+	return row.SigningKey, nil
+}
+
 func migrationsDir() fs.FS {
 	dir, err := fs.Sub(migrations, "migrations")
 	if err != nil {

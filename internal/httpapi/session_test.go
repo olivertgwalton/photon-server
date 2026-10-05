@@ -88,10 +88,10 @@ func serve(t *testing.T, method, target, token, body string) *httptest.ResponseR
 	return rec
 }
 
-// Every route not marked public refuses a request without a valid token.
+// Every route for the signed-in refuses a request without a valid token.
 func TestSignedInRoutesRefuseStrangers(t *testing.T) {
 	for _, r := range newAPI(nil).routes() {
-		if r.access == public {
+		if r.access != signedIn {
 			continue
 		}
 		method, path, _ := strings.Cut(r.pattern, " ")

@@ -13,6 +13,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -28,6 +29,9 @@ type access string
 const (
 	public   access = "public"
 	signedIn access = "signed_in"
+	// signedAddress is a route reached by an address the server signed, for players that send
+	// no headers of their own.
+	signedAddress access = "signed_address"
 )
 
 type route struct {
@@ -67,8 +71,11 @@ type Services struct {
 	Catalogue catalogue
 	Pictures  pictures
 	Watching  watching
-	Artwork   pictureCache
-	Limits    limiter
+	Playing   playing
+	// Signer signs the addresses titles play from.
+	Signer  playback.Signer
+	Artwork pictureCache
+	Limits  limiter
 	// TrustedProxies are the peers whose X-Forwarded-For names the client. None by default.
 	TrustedProxies []netip.Prefix
 }
@@ -88,6 +95,8 @@ func New(logger *slog.Logger, info Info, svc Services) *API {
 		case public:
 		case signedIn:
 			h = a.requireSession(h)
+		case signedAddress:
+			h = a.requireSignature(h)
 		}
 		a.mux.Handle(r.pattern, h)
 	}
@@ -122,6 +131,8 @@ func (a *API) routes() []route {
 		{pattern: "DELETE /api/v1/titles/{id}/watched", access: signedIn, handle: a.mark(watching.MarkUnwatched)},
 		{pattern: "PUT /api/v1/titles/{id}/favourite", access: signedIn, handle: a.mark(watching.Favourite)},
 		{pattern: "DELETE /api/v1/titles/{id}/favourite", access: signedIn, handle: a.mark(watching.Unfavourite)},
+		{pattern: "POST /api/v1/titles/{id}/play", access: signedIn, handle: a.play},
+		{pattern: "GET /api/v1/parts/{id}/stream", access: signedAddress, query: []string{"exp", "sig"}, handle: a.partStream},
 		{pattern: "GET /api/v1/home", access: signedIn, query: []string{"limit"}, handle: a.home},
 		{pattern: "GET /api/v1/search", access: signedIn, query: []string{"q", "library", "limit"}, handle: a.search},
 		{pattern: "GET /api/v1/artwork/{id}", access: public, query: []string{"width"}, handle: a.artwork},
