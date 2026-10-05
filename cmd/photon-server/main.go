@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -182,8 +184,10 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	// node is this process among the cluster's.
-	node := uuid.NewV7()
+	node, err := nodeID(cacheRoot)
+	if err != nil {
+		return err
+	}
 	info := httpapi.Info{
 		ID:      id.String(),
 		Name:    cmp.Or(os.Getenv("PHOTON_NAME"), hostname),
@@ -413,6 +417,30 @@ func sweepRemuxes(ctx context.Context, r *hls.Remuxer) {
 			r.Sweep()
 		}
 	}
+}
+
+// nodeID is this node's id among the cluster's, kept in its cache folder beside what is filed
+// under it: the conversions it holds and the playbacks it serves. It lasts as long as that folder
+// does, so a restart keeps them, and a node given an empty folder is a new node.
+func nodeID(dir string) (uuid.UUID, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	defer root.Close()
+	b, err := root.ReadFile("node")
+	if err == nil {
+		return uuid.Parse(strings.TrimSpace(string(b)))
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return uuid.UUID{}, err
+	}
+	id := uuid.NewV7()
+	// Written whole before it is read: a node stopped halfway must not lose its id to half a file.
+	if err := root.WriteFile("node.part", []byte(id.String()+"\n"), 0o600); err != nil {
+		return uuid.UUID{}, err
+	}
+	return id, root.Rename("node.part", "node")
 }
 
 // pruneEvery is how often a node removes the converted files no download needs any more.
