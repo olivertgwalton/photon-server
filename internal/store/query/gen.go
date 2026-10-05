@@ -55,6 +55,9 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		TaskState:          newTaskState(db, opts...),
 		Version:            newVersion(db, opts...),
 		WatchState:         newWatchState(db, opts...),
+		Webhook:            newWebhook(db, opts...),
+		WebhookDelivery:    newWebhookDelivery(db, opts...),
+		WebhookEvent:       newWebhookEvent(db, opts...),
 	}
 }
 
@@ -98,6 +101,9 @@ type Query struct {
 	TaskState          taskState
 	Version            version
 	WatchState         watchState
+	Webhook            webhook
+	WebhookDelivery    webhookDelivery
+	WebhookEvent       webhookEvent
 }
 
 func (q *Query) Available() bool { return q.db != nil }
@@ -144,6 +150,9 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		TaskState:          q.TaskState.clone(db),
 		Version:            q.Version.clone(db),
 		WatchState:         q.WatchState.clone(db),
+		Webhook:            q.Webhook.clone(db),
+		WebhookDelivery:    q.WebhookDelivery.clone(db),
+		WebhookEvent:       q.WebhookEvent.clone(db),
 	}
 }
 
@@ -195,6 +204,9 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		TaskState:          q.TaskState.replaceDB(db),
 		Version:            q.Version.replaceDB(db),
 		WatchState:         q.WatchState.replaceDB(db),
+		Webhook:            q.Webhook.replaceDB(db),
+		WebhookDelivery:    q.WebhookDelivery.replaceDB(db),
+		WebhookEvent:       q.WebhookEvent.replaceDB(db),
 	}
 }
 
@@ -236,6 +248,9 @@ type queryCtx struct {
 	TaskState          ITaskStateDo
 	Version            IVersionDo
 	WatchState         IWatchStateDo
+	Webhook            IWebhookDo
+	WebhookDelivery    IWebhookDeliveryDo
+	WebhookEvent       IWebhookEventDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
@@ -277,6 +292,9 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		TaskState:          q.TaskState.WithContext(ctx),
 		Version:            q.Version.WithContext(ctx),
 		WatchState:         q.WatchState.WithContext(ctx),
+		Webhook:            q.Webhook.WithContext(ctx),
+		WebhookDelivery:    q.WebhookDelivery.WithContext(ctx),
+		WebhookEvent:       q.WebhookEvent.WithContext(ctx),
 	}
 }
 

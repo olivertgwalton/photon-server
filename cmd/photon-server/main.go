@@ -41,6 +41,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/tmdb"
 	"github.com/olivertgwalton/photon-server/internal/tvdb"
 	"github.com/olivertgwalton/photon-server/internal/watch"
+	"github.com/olivertgwalton/photon-server/internal/webhook"
 )
 
 // version is stamped by the image's build: -ldflags "-X main.version=…".
@@ -184,7 +185,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		PGDump: cmp.Or(os.Getenv("PHOTON_PG_DUMP"), "pg_dump"), URL: databaseURL,
 		Dir: cmp.Or(os.Getenv("PHOTON_BACKUP_DIR"), filepath.Join(configDir, "photon-server", "backups")),
 	}
-	hub := events.New(st, cache, logger)
+	hub := events.New(st, cache, events.Server{ID: id, Name: info.Name}, logger)
 	scheduler := task.NewScheduler(st, logger, node, hub.Raise, scanTask(st), sweepTask(st, logger), backupTask(dumper, hub, logger), refreshTask(st, logger), sweepArtworkTask(st, pictureCache, logger), markersTask(st, tools, logger), previewsTask(st, previews, logger), sweepDownloadsTask(st, logger), pruneActivityTask(st, logger))
 	lang := cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US")
 	plugins := plugin.New(st)
@@ -199,7 +200,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	srv := &http.Server{
 		Addr: cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close, hub.Raise, node), Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, TrustedProxies: trusted,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: playback.NewSessions(cache, st, remuxer.Close, hub.Raise, node), Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, tools, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Webhooks: st, TrustedProxies: trusted,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -207,10 +208,11 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 
 	worker := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), map[domain.JobKind]jobs.Handler{
-		domain.JobKeyframes:   analysis.Keyframes(st, tools),
-		domain.JobIdentify:    identify.Handler(st, providers, logger),
-		domain.JobScanLibrary: scanLibrary(st, scan.New(st, tools, logger), hub, logger),
-		domain.JobMarkers:     analysis.Markers(st, tools.Fingerprint),
+		domain.JobKeyframes:      analysis.Keyframes(st, tools),
+		domain.JobIdentify:       identify.Handler(st, providers, logger),
+		domain.JobScanLibrary:    scanLibrary(st, scan.New(st, tools, logger), hub, logger),
+		domain.JobMarkers:        analysis.Markers(st, tools.Fingerprint),
+		domain.JobDeliverWebhook: webhook.Deliver(st),
 	}, hub.Raise)
 	// Previews have a worker and a slot of their own, so however many are queued, the other jobs
 	// keep every slot of theirs.

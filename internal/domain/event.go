@@ -36,6 +36,8 @@ const (
 	// EventJobFailed is an attempt that failed and will be tried again; EventJobDead is the last.
 	EventJobFailed EventKind = "job.failed"
 	EventJobDead   EventKind = "job.dead"
+	// EventWebhookTest is sent to one webhook when an admin asks, and to no one else.
+	EventWebhookTest EventKind = "webhook.test"
 )
 
 func EventKinds() []EventKind {
@@ -44,7 +46,7 @@ func EventKinds() []EventKind {
 		EventSignedIn, EventSignInRefused, EventProfileAdded, EventProfileRemoved,
 		EventLibraryAdded, EventLibraryRemoved, EventLibraryScanned, EventTitlesAdded, EventScanProgress,
 		EventTaskStarted, EventTaskFinished, EventTaskFailed, EventBackupMade,
-		EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead,
+		EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead, EventWebhookTest,
 	}
 }
 
@@ -57,10 +59,32 @@ func (k EventKind) Logged() bool {
 		EventLibraryScanned, EventTitlesAdded, EventTaskFailed, EventBackupMade, EventJobDead:
 		return true
 	case EventPlaybackPaused, EventPlaybackResumed, EventScanProgress, EventTaskStarted,
-		EventTaskFinished, EventJobStarted, EventJobFinished, EventJobFailed:
+		EventTaskFinished, EventJobStarted, EventJobFinished, EventJobFailed, EventWebhookTest:
 		return false
 	}
 	return false
+}
+
+// Hookable reports whether a webhook may ask for events of this kind: what happens to people and
+// libraries, as Plex's webhooks tell plays and new titles, and not the server's own work. A job is
+// how a webhook is called, so one that told jobs would call itself without end.
+func (k EventKind) Hookable() bool {
+	switch k {
+	case EventPlaybackStarted, EventPlaybackPaused, EventPlaybackResumed, EventPlaybackStopped,
+		EventSignedIn, EventSignInRefused, EventProfileAdded, EventProfileRemoved,
+		EventLibraryAdded, EventLibraryRemoved, EventLibraryScanned, EventTitlesAdded,
+		EventTaskFailed, EventBackupMade:
+		return true
+	case EventScanProgress, EventTaskStarted, EventTaskFinished, EventJobStarted, EventJobFinished,
+		EventJobFailed, EventJobDead, EventWebhookTest:
+		return false
+	}
+	return false
+}
+
+// HookableEventKinds are the kinds a webhook may ask for.
+func HookableEventKinds() []EventKind {
+	return slices.DeleteFunc(EventKinds(), func(k EventKind) bool { return !k.Hookable() })
 }
 
 // LoggedEventKinds are the kinds the activity log keeps.

@@ -100,7 +100,10 @@ func (s *Sessions) Stop(ctx context.Context, profile, id uuid.UUID, position tim
 		return "", err
 	}
 	p.Position = position
-	s.raise(ctx, event(domain.EventPlaybackStopped, p))
+	stopped := event(domain.EventPlaybackStopped, p)
+	// How far it got says whether it was watched to the end, as Plex's media.scrobble does.
+	stopped.Details["reach"] = reach
+	s.raise(ctx, stopped)
 	return reach, nil
 }
 

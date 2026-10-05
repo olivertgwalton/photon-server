@@ -14,10 +14,12 @@ const (
 	JobPreviews JobKind = "previews"
 	// JobConvert makes a part smaller for downloading; one job per conversion.
 	JobConvert JobKind = "convert"
+	// JobDeliverWebhook sends one event to one webhook.
+	JobDeliverWebhook JobKind = "deliver_webhook"
 )
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert}
+	return []JobKind{JobKeyframes, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook}
 }
 
 type JobState string

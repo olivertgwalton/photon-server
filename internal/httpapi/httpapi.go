@@ -136,6 +136,8 @@ type Services struct {
 	// Activity is the log of what has happened, and Events tells it, and more, as it happens.
 	Activity activityLog
 	Events   eventHub
+	// Webhooks are the addresses told of events.
+	Webhooks webhooks
 	// NowPlaying is every playback going on, across the cluster.
 	NowPlaying nowPlaying
 	Pictures   pictures
@@ -591,6 +593,23 @@ func (a *API) routes() []route {
 			pattern: "GET /api/v1/admin/events", access: admin,
 			summary: "Stream a snapshot of what is going on, then each event as it happens, as Server-Sent Events",
 			status:  http.StatusOK, reply: eventStream(), handle: a.adminEvents,
+		},
+		{
+			pattern: "GET /api/v1/admin/webhooks", access: admin, summary: "List the webhooks, without their secrets",
+			status: http.StatusOK, reply: listJSON[webhookJSON]{}, handle: a.adminWebhooks,
+		},
+		{
+			pattern: "POST /api/v1/admin/webhooks", access: admin,
+			summary: "Add a webhook, answering the secret its bodies are signed with, this once",
+			body:    addWebhookJSON{}, status: http.StatusCreated, reply: addedWebhookJSON{}, handle: a.addWebhook,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/webhooks/{id}", access: admin, summary: "Remove a webhook and what waits to be sent to it",
+			status: http.StatusNoContent, handle: a.removeWebhook,
+		},
+		{
+			pattern: "POST /api/v1/admin/webhooks/{id}/test", access: admin, summary: "Send a webhook.test event to one webhook",
+			status: http.StatusAccepted, handle: a.testWebhook,
 		},
 		{
 			pattern: "GET /api/v1/home", access: signedIn, summary: "The profile's home rows, in order",

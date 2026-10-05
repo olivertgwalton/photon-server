@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
@@ -31,7 +32,7 @@ func newHub(t *testing.T) (*Hub, *store.Store) {
 		t.Fatalf("TEST_VALKEY_URL: %v", err)
 	}
 	t.Cleanup(k.Close)
-	return New(st, k, log), st
+	return New(st, k, Server{ID: uuid.NewV7(), Name: "den"}, log), st
 }
 
 func TestTheLogKeepsWhatAnAdminReadsLater(t *testing.T) {

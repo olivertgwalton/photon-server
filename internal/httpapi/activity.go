@@ -24,6 +24,7 @@ type eventHub interface {
 	Raise(ctx context.Context, e domain.Event)
 	Subscribe() (<-chan domain.Event, func())
 	Scans(ctx context.Context) ([]domain.ScanProgress, error)
+	TestWebhook(ctx context.Context, id uuid.UUID) error
 }
 
 // eventJSON is an event as the log lists it and the stream tells it; id is its activity entry's.

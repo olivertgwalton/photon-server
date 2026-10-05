@@ -5,18 +5,21 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// fakeEvents keeps what is raised, and streams nothing.
+// fakeEvents keeps what is raised, streams nothing, and tests the webhooks it is told of.
 type fakeEvents struct {
-	mu     sync.Mutex
-	raised []domain.Event
+	mu       sync.Mutex
+	raised   []domain.Event
+	webhooks []uuid.UUID
 }
 
 func (f *fakeEvents) Raise(_ context.Context, e domain.Event) {
@@ -30,6 +33,13 @@ func (f *fakeEvents) Subscribe() (<-chan domain.Event, func()) {
 }
 
 func (f *fakeEvents) Scans(context.Context) ([]domain.ScanProgress, error) { return nil, nil }
+
+func (f *fakeEvents) TestWebhook(_ context.Context, id uuid.UUID) error {
+	if !slices.Contains(f.webhooks, id) {
+		return store.ErrNotFound
+	}
+	return nil
+}
 
 func (f *fakeEvents) kinds() []domain.EventKind {
 	f.mu.Lock()

@@ -23,14 +23,14 @@ type Job struct {
 }
 
 // About is the title, season or library a job is about, where its subject is one; a part's
-// keyframes or previews and a download's conversion are neither.
+// keyframes or previews, a download's conversion and a webhook's delivery are neither.
 func (j Job) About() (item, library uuid.UUID) {
 	switch j.Kind {
 	case domain.JobIdentify, domain.JobMarkers:
 		return j.Subject, uuid.UUID{}
 	case domain.JobScanLibrary:
 		return uuid.UUID{}, j.Subject
-	case domain.JobKeyframes, domain.JobPreviews, domain.JobConvert:
+	case domain.JobKeyframes, domain.JobPreviews, domain.JobConvert, domain.JobDeliverWebhook:
 	}
 	return uuid.UUID{}, uuid.UUID{}
 }

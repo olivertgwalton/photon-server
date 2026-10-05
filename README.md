@@ -122,6 +122,15 @@ every node, then each event as it happens, named by its kind (`task.finished`, `
 `playback.paused`…), with a comment every 15 seconds so proxies leave it open. It asks nginx not
 to buffer it; another proxy may need buffering turned off for its path.
 
+Webhooks are told of events as Plex's are: `POST /api/v1/admin/webhooks` with a `url` and the
+`events` it wants (plays started, paused, resumed and stopped, sign-ins, profiles and libraries
+added and removed, scans, titles added, failed tasks and backups) answers a `secret`, once. Each
+event is POSTed as JSON (`event`, `at`, `server`, and the `profile`, `title` and `library` it is
+about) with `X-Photon-Event` naming it and `X-Photon-Signature: sha256=` the hex HMAC-SHA256 of the
+body under the secret. A receiver has 10 seconds to answer 2xx; anything else, a redirect too, is
+tried again with the job queue's backoff, five times, and then shows among the dead jobs. `POST
+/api/v1/admin/webhooks/{id}/test` sends it a `webhook.test`.
+
 The database is dumped every three days with `pg_dump` (`PHOTON_PG_DUMP`, no older than the
 Postgres it dumps) into `PHOTON_BACKUP_DIR` (by default the user config folder's `photon-server/backups`), keeping
 the newest three. Put one back into an empty database with
