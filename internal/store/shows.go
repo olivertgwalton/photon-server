@@ -207,7 +207,8 @@ func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID, se
 			return err
 		}
 	}
-	return nil
+	// The season's sound is compared again; the comparison passes over a season with nothing new.
+	return enqueueAfter(ctx, tx, domain.JobMarkers, seasonID, markersQuiet)
 }
 
 // episodeItem is the episode a copy belongs to: the episode of a copy already known, else, for an
