@@ -14,6 +14,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -130,5 +131,75 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 	forged.URL.Path = "/api/v1/parts/" + partOne.String() + "/stream"
 	if rec := do(forged); rec.Code != http.StatusUnauthorized {
 		t.Errorf("one part's signature on another's address: %d, want 401", rec.Code)
+	}
+}
+
+// fakeHLS remuxes into a playlist and one segment, of the playback it was opened for.
+type fakeHLS struct{ dir string }
+
+func (fakeHLS) Open(context.Context, uuid.UUID, []store.PlayPart, *int) error { return nil }
+
+func (fakeHLS) Playlist(playback uuid.UUID) (string, error) {
+	if playback != playbackID {
+		return "", hls.ErrNoRemux
+	}
+	return "#EXTM3U\n", nil
+}
+
+func (f fakeHLS) Init(context.Context, uuid.UUID, int) (*os.File, error) {
+	return os.Open(filepath.Join(f.dir, "segment"))
+}
+
+func (f fakeHLS) Segment(_ context.Context, playback uuid.UUID, n int) (*os.File, error) {
+	if playback != playbackID || n != 0 {
+		return nil, hls.ErrNoRemux
+	}
+	return os.Open(filepath.Join(f.dir, "segment"))
+}
+
+func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "segment"), []byte("m4s"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h := fakeHLS{dir: dir}
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{
+		Auth: fakeAuth{}, Playing: fakePlaying{root: dir}, Playbacks: fakePlaybacks{}, Remuxing: h, HLS: h,
+		Signer: playback.NewSigner([]byte("key")),
+	})
+	do := func(req *http.Request) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(`{"method":"remux"}`))
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	var got struct {
+		Method   string `json:"method"`
+		Playlist string `json:"playlist"`
+	}
+	if err := json.NewDecoder(do(req).Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Method != "remux" || !strings.HasSuffix(got.Playlist, "/main.m3u8") {
+		t.Fatalf("play = %+v, want a remux's playlist", got)
+	}
+	base := strings.TrimSuffix(got.Playlist, "main.m3u8")
+	for file, want := range map[string]string{"main.m3u8": "#EXTM3U\n", "0.m4s": "m4s"} {
+		if rec := do(httptest.NewRequest(http.MethodGet, base+file, nil)); rec.Code != http.StatusOK || rec.Body.String() != want {
+			t.Errorf("%s: %d %q, want %q", file, rec.Code, rec.Body.String(), want)
+		}
+	}
+	other := strings.Replace(base, playbackID.String(), uuid.NewV7().String(), 1)
+	if rec := do(httptest.NewRequest(http.MethodGet, other+"0.m4s", nil)); rec.Code != http.StatusUnauthorized {
+		t.Errorf("one playback's signature on another's path: %d, want 401", rec.Code)
+	}
+	if rec := do(httptest.NewRequest(http.MethodGet, base+"7.m4s", nil)); rec.Code != http.StatusNotFound {
+		t.Errorf("a segment there is not: %d, want 404", rec.Code)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(`{"method":"transcode"}`))
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	if rec := do(req); rec.Code != http.StatusBadRequest {
+		t.Errorf("method transcode: %d, want 400 until it is offered", rec.Code)
 	}
 }

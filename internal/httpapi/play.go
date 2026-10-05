@@ -1,17 +1,21 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -23,6 +27,16 @@ type playbacks interface {
 	Start(ctx context.Context, profile, item, version uuid.UUID, method domain.PlayMethod) (domain.Playback, error)
 	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState) (domain.Reach, error)
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
+}
+
+type remuxing interface {
+	Open(ctx context.Context, playback uuid.UUID, parts []store.PlayPart, audio *int) error
+}
+
+type hlsFiles interface {
+	Playlist(playback uuid.UUID) (string, error)
+	Init(ctx context.Context, playback uuid.UUID, part int) (*os.File, error)
+	Segment(ctx context.Context, playback uuid.UUID, n int) (*os.File, error)
 }
 
 type playing interface {
@@ -37,11 +51,14 @@ type partJSON struct {
 	DurationMS int64     `json:"duration_ms"`
 }
 
-// play answers where a film or episode plays from: its copy's files in order, each with where it
-// starts on the copy's timeline, at signed addresses a player fetches directly.
+// play opens a playback of a film or episode and answers where it plays from: its copy's files in
+// order, each with where it starts on the copy's timeline, or with method "remux" an HLS playlist
+// of them, at signed addresses a player fetches directly.
 func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		VersionID string `json:"version_id"`
+		VersionID   string            `json:"version_id"`
+		Method      domain.PlayMethod `json:"method"`
+		AudioStream *int              `json:"audio_stream"`
 	}
 	// A body is only for asking for one copy rather than the longest.
 	if r.ContentLength != 0 && !a.decode(w, r, &req) {
@@ -55,6 +72,11 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	method := cmp.Or(req.Method, domain.PlayDirect)
+	if method != domain.PlayDirect && method != domain.PlayRemux {
+		writeProblem(w, a.logger, codeInvalidBody, "method is direct or remux")
+		return
+	}
 	id, ok := a.titleID(w, r)
 	if !ok {
 		return
@@ -63,26 +85,116 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	session, err := a.svc.Playbacks.Start(r.Context(), sessionOf(r).Profile.ID, id, version, domain.PlayDirect)
+	session, err := a.svc.Playbacks.Start(r.Context(), sessionOf(r).Profile.ID, id, version, method)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
 	until := time.Now().Add(streamFor)
-	out := make([]partJSON, len(parts))
-	for i, p := range parts {
-		out[i] = partJSON{
-			ID: p.ID, URL: a.svc.Signer.Sign("/api/v1/parts/"+p.ID.String()+"/stream", until),
-			OffsetMS: p.OffsetMS, DurationMS: p.DurationMS,
-		}
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, struct {
+	answer := struct {
 		PlaybackID uuid.UUID         `json:"playback_id"`
 		Method     domain.PlayMethod `json:"method"`
 		VersionID  uuid.UUID         `json:"version_id"`
-		Parts      []partJSON        `json:"parts"`
+		Parts      []partJSON        `json:"parts,omitzero"`
+		Playlist   string            `json:"playlist,omitzero"`
 		ExpiresAt  time.Time         `json:"expires_at"`
-	}{session.ID, session.Method, version, out, until.UTC().Truncate(time.Second)})
+	}{PlaybackID: session.ID, Method: method, VersionID: version, ExpiresAt: until.UTC().Truncate(time.Second)}
+	if method == domain.PlayRemux {
+		if err := a.svc.Remuxing.Open(r.Context(), session.ID, parts, req.AudioStream); err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		subject := hlsSubject(session.ID)
+		exp, sig := a.svc.Signer.Token(subject, until)
+		answer.Playlist = subject + "/" + exp + "/" + sig + "/main.m3u8"
+	} else {
+		for _, p := range parts {
+			answer.Parts = append(answer.Parts, partJSON{
+				ID: p.ID, URL: a.svc.Signer.Sign("/api/v1/parts/"+p.ID.String()+"/stream", until),
+				OffsetMS: p.OffsetMS, DurationMS: p.DurationMS,
+			})
+		}
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, answer)
+}
+
+func hlsSubject(playback uuid.UUID) string { return "/api/v1/hls/" + playback.String() }
+
+// hlsFile serves a remux's playlist, a part's initialisation or a segment, made as they are asked
+// for. The playlist addresses everything else relative to itself, so one signature covers it all.
+func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
+	playback, err := uuid.Parse(r.PathValue("playback"))
+	if err != nil {
+		writeProblem(w, a.logger, codeNotFound, "")
+		return
+	}
+	name := r.PathValue("file")
+	var f *os.File
+	switch {
+	case name == "main.m3u8":
+		playlist, err := a.svc.HLS.Playlist(playback)
+		if a.answeredRemux(w, r, err) {
+			return
+		}
+		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+		_, _ = io.WriteString(w, playlist)
+		return
+	case strings.HasPrefix(name, "init") && strings.HasSuffix(name, ".mp4"):
+		part, perr := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(name, "init"), ".mp4"))
+		if perr != nil {
+			writeProblem(w, a.logger, codeNotFound, "")
+			return
+		}
+		f, err = a.svc.HLS.Init(r.Context(), playback, part)
+		w.Header().Set("Content-Type", "video/mp4")
+	case strings.HasSuffix(name, ".m4s"):
+		n, perr := strconv.Atoi(strings.TrimSuffix(name, ".m4s"))
+		if perr != nil {
+			writeProblem(w, a.logger, codeNotFound, "")
+			return
+		}
+		f, err = a.svc.HLS.Segment(r.Context(), playback, n)
+		w.Header().Set("Content-Type", "video/iso.segment")
+	default:
+		writeProblem(w, a.logger, codeNotFound, "")
+		return
+	}
+	if a.answeredRemux(w, r, err) {
+		return
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	http.ServeContent(w, r, name, info.ModTime(), f)
+}
+
+func (a *API) answeredRemux(w http.ResponseWriter, r *http.Request, err error) bool {
+	switch {
+	case errors.Is(err, hls.ErrNoRemux):
+		writeProblem(w, a.logger, codeNotFound, "the playback has stopped, or lapsed")
+	case errors.Is(err, context.Canceled):
+	case err != nil:
+		a.internal(w, r, err)
+	default:
+		return false
+	}
+	return true
+}
+
+// requireSignedPath admits a request whose path carries a signature of its HLS playback, as
+// /api/v1/hls/{playback}/{exp}/{sig}/…, that has not lapsed.
+func (a *API) requireSignedPath(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		subject := "/api/v1/hls/" + r.PathValue("playback")
+		if !a.svc.Signer.Valid(subject, r.PathValue("exp"), r.PathValue("sig"), time.Now()) {
+			writeProblem(w, a.logger, codeUnauthenticated, "the address is not signed, or has lapsed")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // playbackProgress is the player saying where it has got to, every ten seconds or so.

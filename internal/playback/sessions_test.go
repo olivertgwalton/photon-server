@@ -36,7 +36,8 @@ func (p positions) SaveProgress(_ context.Context, _, item uuid.UUID, at time.Du
 
 func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	live, saved := memory{}, positions{}
-	s := NewSessions(live, saved)
+	var ended []uuid.UUID
+	s := NewSessions(live, saved, func(id uuid.UUID) { ended = append(ended, id) })
 	ctx := t.Context()
 	oliver, guest, film := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
 
@@ -56,8 +57,8 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	if _, err := s.Stop(ctx, oliver, p.ID, 25*time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := live[p.ID]; ok || saved[film] != 25*time.Minute {
-		t.Errorf("after stop: still live %v, saved %v; want it gone, kept at 25 minutes", ok, saved[film])
+	if _, ok := live[p.ID]; ok || saved[film] != 25*time.Minute || len(ended) != 1 || ended[0] != p.ID {
+		t.Errorf("after stop: still live %v, saved %v, ended %v; want it gone, kept at 25 minutes, and let go", ok, saved[film], ended)
 	}
 	if _, err := s.Progress(ctx, oliver, p.ID, time.Hour, domain.StatePlaying); !errors.Is(err, ErrNoPlayback) {
 		t.Errorf("reporting a stopped playback: %v, want ErrNoPlayback", err)

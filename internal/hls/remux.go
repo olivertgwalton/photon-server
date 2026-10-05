@@ -31,8 +31,8 @@ var ErrNoRemux = errors.New("hls: no such remux")
 
 // Source is one file of a copy to remux: how to open it, its plan input, and the audio to keep.
 type Source struct {
-	Open  func() (*os.File, error)
-	Part  Part
+	Open func() (*os.File, error)
+	Part Part
 	// Audio is the file's stream to copy as the audio, by its index in the file; nil is its first
 	// audio stream.
 	Audio *int
