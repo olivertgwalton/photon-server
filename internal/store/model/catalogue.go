@@ -28,6 +28,23 @@ type Item struct {
 	EpisodeEnd    *int
 	AirDate       *time.Time `gorm:"type:date"`
 	ExtraKind     *domain.ExtraKind
+
+	ScanTitle     string
+	OriginalTitle *string
+	Overview      *string
+	Tagline       *string
+	Certificate   *string
+	ReleaseDate   *time.Time `gorm:"type:date"`
+	Genres        []string   `gorm:"serializer:json"`
+	Studios       []string   `gorm:"serializer:json"`
+}
+
+// ItemField is where one of a title's fields came from.
+type ItemField struct {
+	ItemID    UUID         `gorm:"type:uuid;primaryKey"`
+	Field     domain.Field `gorm:"primaryKey"`
+	Source    domain.FieldSource
+	UpdatedAt time.Time `gorm:"default:now()"`
 }
 
 type ExternalID struct {

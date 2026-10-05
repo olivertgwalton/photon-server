@@ -123,10 +123,7 @@ func saveFilm(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) error
 func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) (model.UUID, error) {
 	item := model.Item{
 		LibraryID: model.UUID(lib), Kind: domain.ItemMovie,
-		Title: f.Title, SortTitle: sortTitle(f.Title), Folder: f.Folder,
-	}
-	if f.Year != 0 {
-		item.Year = &f.Year
+		ScanTitle: f.Title, Title: f.Title, SortTitle: sortTitle(f.Title), Folder: f.Folder,
 	}
 	i := tx.Item
 	id, known, err := knownItem(ctx, tx, lib, domain.ItemMovie, f.Copies)
@@ -136,7 +133,7 @@ func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) (mode
 	item.ID = id
 	if !known {
 		same, err := i.WithContext(ctx).Where(
-			i.LibraryID.Eq(model.UUID(lib)), i.Folder.Eq(f.Folder), i.Title.Eq(f.Title),
+			i.LibraryID.Eq(model.UUID(lib)), i.Folder.Eq(f.Folder), i.ScanTitle.Eq(f.Title),
 		).Take()
 		switch {
 		case err == nil:
@@ -144,13 +141,17 @@ func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) (mode
 		case !errors.Is(err, gorm.ErrRecordNotFound):
 			return model.UUID{}, err
 		default:
-			err := i.WithContext(ctx).Create(&item)
-			return item.ID, err
+			if err := i.WithContext(ctx).Create(&item); err != nil {
+				return model.UUID{}, err
+			}
+			return item.ID, fromFiles(ctx, tx, item.ID, f.Title, f.Year)
 		}
 	}
-	_, err = i.WithContext(ctx).Where(i.ID.Eq(item.ID)).
-		Select(i.Title, i.SortTitle, i.Year, i.Folder).Updates(&item)
-	return item.ID, err
+	_, err = i.WithContext(ctx).Where(i.ID.Eq(item.ID)).Select(i.ScanTitle, i.Folder).Updates(&item)
+	if err != nil {
+		return model.UUID{}, err
+	}
+	return item.ID, fromFiles(ctx, tx, item.ID, f.Title, f.Year)
 }
 
 // knownItem is the title of kind holding the first of copies the catalogue already has. A copy
