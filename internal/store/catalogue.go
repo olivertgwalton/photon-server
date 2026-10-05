@@ -296,8 +296,18 @@ func saveSubtitles(ctx context.Context, tx *query.Query, lib uuid.UUID, versionI
 }
 
 // locate records that a part's bytes are at the part's path. A path that held other bytes before
-// now holds these, so its row moves to this part.
+// now holds these, so its row moves to this part, and a part it leaves nowhere was replaced: its
+// previews go now, where a part left nowhere by an unmounted disk keeps them a while.
 func locate(ctx context.Context, tx *query.Query, lib uuid.UUID, partID model.UUID, part Part) error {
+	err := tx.PartFile.WithContext(ctx).UnderlyingDB().Exec(`
+		DELETE FROM previews pv USING part_files f
+		WHERE f.library_id = ? AND f.rel_path = ? AND f.part_id <> ? AND pv.part_id = f.part_id
+			AND NOT EXISTS (SELECT 1 FROM part_files o WHERE o.part_id = f.part_id
+				AND (o.library_id, o.rel_path) <> (f.library_id, f.rel_path))`,
+		lib.String(), part.RelPath, partID).Error
+	if err != nil {
+		return err
+	}
 	f := tx.PartFile
 	return f.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "library_id"}, {Name: "rel_path"}},

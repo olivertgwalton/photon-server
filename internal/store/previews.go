@@ -98,6 +98,16 @@ func (s *Store) ForgetPreviews(ctx context.Context, part uuid.UUID) error {
 	return err
 }
 
+// ForgetMissingPreviews forgets the previews of parts on no disk since before, answering how many.
+// Their folders go with the next Sweep.
+func (s *Store) ForgetMissingPreviews(ctx context.Context, before time.Time) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `
+		DELETE FROM previews pv USING parts p JOIN versions v ON v.id = p.version_id
+		WHERE pv.part_id = p.id AND v.missing_since < $1
+			AND NOT EXISTS (SELECT 1 FROM part_files f WHERE f.part_id = p.id)`, before)
+	return tag.RowsAffected(), err
+}
+
 // Trickplay answers a part's thumbnail sheets, or ErrNotFound where it has none or the profile may
 // not see its title.
 func (s *Store) Trickplay(ctx context.Context, profile, part uuid.UUID) (Trickplay, error) {
