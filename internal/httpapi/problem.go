@@ -25,7 +25,8 @@ const (
 	codeForbidden          problemCode = "forbidden"
 	codeConflict           problemCode = "conflict"
 	codeTranscodeLimit     problemCode = "transcode_limit"
-	// codeProviderUnavailable is a metadata provider, a plugin, that could not be reached.
+	// codeProviderUnavailable is a metadata provider, a plugin, that could not be reached or
+	// failed on its side.
 	codeProviderUnavailable problemCode = "provider_unavailable"
 	// RFC 8628's own error names, so a client that knows the RFC needs no mapping.
 	codeAuthorizationPending problemCode = "authorization_pending"

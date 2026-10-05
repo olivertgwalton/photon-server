@@ -12,6 +12,7 @@ import (
 type providerList interface {
 	All(ctx context.Context) ([]provider.Provider, error)
 	Get(ctx context.Context, id domain.FieldSource) (provider.Provider, bool, error)
+	Forget()
 }
 
 type providerSettings interface {
