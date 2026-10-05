@@ -125,7 +125,11 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	remuxer, err := hls.NewRemuxer(tools.FFmpeg.Path, filepath.Join(cacheRoot, "hls"), logger)
+	hw, err := hardware(ctx, tools.FFmpeg.Path, logger)
+	if err != nil {
+		return err
+	}
+	remuxer, err := hls.NewRemuxer(tools.FFmpeg.Path, filepath.Join(cacheRoot, "hls"), hw, logger)
 	if err != nil {
 		return err
 	}
@@ -212,6 +216,35 @@ func ready(st *store.Store, cache *kv.KV) func(context.Context) error {
 }
 
 // sweepRemuxes ends the remuxes of players that went away without stopping.
+// hardware is the device PHOTON_HWACCEL names to encode on (software when unset), on
+// PHOTON_HWACCEL_DEVICE: a render node for VAAPI and QSV, a CUDA index for NVENC. A device that
+// will not encode is reported and passed over for software, as playing slowly beats not playing.
+func hardware(ctx context.Context, ffmpeg string, logger *slog.Logger) (hls.Hardware, error) {
+	accel, ok := domain.ParseAcceleration(cmp.Or(os.Getenv("PHOTON_HWACCEL"), string(domain.AccelSoftware)))
+	if !ok {
+		return hls.Hardware{}, fmt.Errorf("PHOTON_HWACCEL is software, videotoolbox, vaapi, qsv or nvenc, not %q", os.Getenv("PHOTON_HWACCEL"))
+	}
+	device := os.Getenv("PHOTON_HWACCEL_DEVICE")
+	switch accel {
+	case domain.AccelVAAPI, domain.AccelQSV:
+		device = cmp.Or(device, "/dev/dri/renderD128")
+	case domain.AccelNVENC:
+		device = cmp.Or(device, "0")
+	case domain.AccelSoftware, domain.AccelVideoToolbox:
+	}
+	hw := hls.Hardware{Accel: accel, Device: device}
+	if err := hw.Check(ctx, ffmpeg); err != nil {
+		if accel == domain.AccelSoftware {
+			logger.ErrorContext(ctx, "transcoding will fail: ffmpeg would not encode a test picture", slog.Any("err", err))
+			return hw, nil
+		}
+		logger.WarnContext(ctx, "encoding in software", slog.Any("err", err))
+		return hls.Hardware{Accel: domain.AccelSoftware}, nil
+	}
+	logger.InfoContext(ctx, "encoding video", slog.String("on", string(accel)), slog.String("device", device))
+	return hw, nil
+}
+
 func sweepRemuxes(ctx context.Context, r *hls.Remuxer) {
 	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()

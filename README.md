@@ -48,6 +48,12 @@ events, so a library on one is scanned on the schedule; `photon-server library s
 -monitor off` stops watching a library. A large library may need a higher
 `fs.inotify.max_user_watches`; the server says so when it runs out.
 
+A title a client cannot play as it is has its video copied into HLS where it can, with its audio
+encoded, or its video encoded to H.264, HDR tone mapped to SDR. Encoding is in software unless
+`PHOTON_HWACCEL` names a device: `videotoolbox`, `vaapi` or `qsv` (on `PHOTON_HWACCEL_DEVICE`,
+default `/dev/dri/renderD128`) or `nvenc` (on CUDA device `PHOTON_HWACCEL_DEVICE`, default `0`). The
+server encodes a test picture on it at start, and falls back to software if it will not.
+
 The first admin is made on the command line, before anyone can sign in:
 
 ```sh

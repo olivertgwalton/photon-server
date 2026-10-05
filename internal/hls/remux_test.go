@@ -63,7 +63,7 @@ func shownIn(t *testing.T, init, segment *os.File) []time.Duration {
 }
 
 func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
-	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 			[]string{"-map 0:1 -c:a eac3 -ac 6 -b:a 640k"},
 		},
 	} {
-		got := strings.Join(args(12*time.Second, tc.video, tc.audio), " ")
+		got := strings.Join(args(Hardware{Accel: domain.AccelSoftware}, 12*time.Second, tc.video, tc.audio), " ")
 		for _, w := range tc.want {
 			if !strings.Contains(got, w) {
 				t.Errorf("%s: %q lacks %q", tc.name, got, w)

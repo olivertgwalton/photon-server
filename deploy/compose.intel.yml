@@ -2,4 +2,7 @@
 services:
   server:
     devices: [/dev/dri:/dev/dri]
+    environment:
+      # qsv on Intel, which is faster there; vaapi on AMD.
+      PHOTON_HWACCEL: ${PHOTON_HWACCEL:-vaapi}
     group_add: ["${RENDER_GID:?set RENDER_GID to the host's render group id}"]
