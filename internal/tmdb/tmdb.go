@@ -158,6 +158,12 @@ type named struct {
 }
 
 type details struct {
+	BelongsToCollection *struct {
+		ID           int    `json:"id"`
+		Name         string `json:"name"`
+		PosterPath   string `json:"poster_path"`
+		BackdropPath string `json:"backdrop_path"`
+	} `json:"belongs_to_collection"`
 	VoteAverage float64 `json:"vote_average"`
 	VoteCount   int     `json:"vote_count"`
 	result
@@ -215,6 +221,12 @@ func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadat
 		ReleaseDate: released, Year: year(released),
 		Genres: names(d.Genres), Studios: names(append(d.ProductionCompanies, d.Networks...)),
 		IDs: map[domain.Provider]string{domain.ProviderTMDB: strconv.Itoa(id)},
+	}
+	if b := d.BelongsToCollection; b != nil {
+		out.Collections = []domain.Grouping{{
+			ID: strconv.Itoa(b.ID), Title: b.Name,
+			Artwork: slices.Concat(picture(domain.ArtworkPoster, b.PosterPath), picture(domain.ArtworkBackdrop, b.BackdropPath)),
+		}}
 	}
 	if d.VoteCount > 0 {
 		out.Ratings = []domain.Rating{{Site: domain.SiteTMDB, Score: d.VoteAverage * 10, Votes: d.VoteCount}}

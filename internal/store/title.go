@@ -32,17 +32,19 @@ type TitlePage struct {
 	Studios       []string                   `json:"studios,omitzero"`
 	IDs           map[domain.Provider]string `json:"ids,omitzero"`
 	Ratings       []RatingRef                `json:"ratings,omitzero"`
-	AddedAt       time.Time                  `json:"added_at"`
-	SeasonNumber  *int                       `json:"season_number,omitzero"`
-	EpisodeNumber *int                       `json:"episode_number,omitzero"`
-	EpisodeEnd    *int                       `json:"episode_end,omitzero"`
-	Show          *TitleRef                  `json:"show,omitzero"`
-	Season        *TitleRef                  `json:"season,omitzero"`
-	Versions      []VersionPage              `json:"versions,omitzero"`
-	Seasons       []SeasonCard               `json:"seasons,omitzero"`
-	Episodes      []EpisodeCard              `json:"episodes,omitzero"`
-	Extras        []ExtraCard                `json:"extras,omitzero"`
-	Videos        []VideoLink                `json:"videos,omitzero"`
+	// Collections are the box sets it is in.
+	Collections   []TitleRef    `json:"collections,omitzero"`
+	AddedAt       time.Time     `json:"added_at"`
+	SeasonNumber  *int          `json:"season_number,omitzero"`
+	EpisodeNumber *int          `json:"episode_number,omitzero"`
+	EpisodeEnd    *int          `json:"episode_end,omitzero"`
+	Show          *TitleRef     `json:"show,omitzero"`
+	Season        *TitleRef     `json:"season,omitzero"`
+	Versions      []VersionPage `json:"versions,omitzero"`
+	Seasons       []SeasonCard  `json:"seasons,omitzero"`
+	Episodes      []EpisodeCard `json:"episodes,omitzero"`
+	Extras        []ExtraCard   `json:"extras,omitzero"`
+	Videos        []VideoLink   `json:"videos,omitzero"`
 	// State is what the profile asking has made of it.
 	State TitleState `json:"state,omitzero"`
 	// Artwork is the title's pictures by kind, best first, by id: /api/v1/artwork/{id}.
@@ -190,6 +192,9 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	for _, r := range ratings {
 		p.Ratings = append(p.Ratings, RatingRef(r))
 	}
+	if p.Collections, err = s.collectionsOf(ctx, item.ID); err != nil {
+		return TitlePage{}, err
+	}
 	switch item.Kind {
 	case domain.ItemShow:
 		p.Seasons, err = s.seasons(ctx, profile, item.ID)
@@ -197,6 +202,7 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		p.Episodes, err = s.episodes(ctx, profile, item.ID)
 	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
 		p.Versions, err = s.versions(ctx, item.ID)
+	case domain.ItemCollection:
 	}
 	if err != nil {
 		return TitlePage{}, err
@@ -245,7 +251,7 @@ func (s *Store) parents(ctx context.Context, item *model.Item, p *TitlePage) err
 			p.Season = ref
 		case domain.ItemShow:
 			p.Show = ref
-		case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
+		case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection:
 		}
 		parent = row.ParentID
 	}

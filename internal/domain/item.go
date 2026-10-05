@@ -9,10 +9,32 @@ const (
 	ItemEpisode ItemKind = "episode"
 	// ItemExtra is a trailer, featurette or the like, belonging to its parent title.
 	ItemExtra ItemKind = "extra"
+	// ItemCollection is a box set: titles grouped by a provider, or by an admin.
+	ItemCollection ItemKind = "collection"
 )
 
 func ItemKinds() []ItemKind {
-	return []ItemKind{ItemMovie, ItemShow, ItemSeason, ItemEpisode, ItemExtra}
+	return []ItemKind{ItemMovie, ItemShow, ItemSeason, ItemEpisode, ItemExtra, ItemCollection}
+}
+
+// CollectionOrigin is who made a collection: a provider that names its titles part of it, or an
+// admin.
+type CollectionOrigin string
+
+const (
+	CollectionTMDB CollectionOrigin = "tmdb"
+	CollectionUser CollectionOrigin = "user"
+)
+
+func CollectionOrigins() []CollectionOrigin {
+	return []CollectionOrigin{CollectionTMDB, CollectionUser}
+}
+
+// Grouping is a collection a provider names a title part of: its id there, its name and pictures.
+type Grouping struct {
+	ID      string
+	Title   string
+	Artwork []Artwork
 }
 
 // Provider is a metadata source whose ids a title can carry.

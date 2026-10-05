@@ -24,6 +24,8 @@ type Metadata struct {
 	Videos  []RemoteVideo
 	Artwork []Artwork
 	Ratings []Rating
+	// Collections are the box sets the source names the title part of.
+	Collections []Grouping
 	// Locked fields are claimed at this source's rank even where it gives no value, so no lower
 	// source fills them.
 	Locked []Field

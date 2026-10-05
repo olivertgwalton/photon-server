@@ -20,6 +20,8 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		db:                 db,
 		Artwork:            newArtwork(db, opts...),
 		Chapter:            newChapter(db, opts...),
+		Collection:         newCollection(db, opts...),
+		CollectionMember:   newCollectionMember(db, opts...),
 		DeviceSession:      newDeviceSession(db, opts...),
 		ExternalID:         newExternalID(db, opts...),
 		Favourite:          newFavourite(db, opts...),
@@ -50,6 +52,8 @@ type Query struct {
 
 	Artwork            artwork
 	Chapter            chapter
+	Collection         collection
+	CollectionMember   collectionMember
 	DeviceSession      deviceSession
 	ExternalID         externalID
 	Favourite          favourite
@@ -83,6 +87,8 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		db:                 db,
 		Artwork:            q.Artwork.clone(db),
 		Chapter:            q.Chapter.clone(db),
+		Collection:         q.Collection.clone(db),
+		CollectionMember:   q.CollectionMember.clone(db),
 		DeviceSession:      q.DeviceSession.clone(db),
 		ExternalID:         q.ExternalID.clone(db),
 		Favourite:          q.Favourite.clone(db),
@@ -121,6 +127,8 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		db:                 db,
 		Artwork:            q.Artwork.replaceDB(db),
 		Chapter:            q.Chapter.replaceDB(db),
+		Collection:         q.Collection.replaceDB(db),
+		CollectionMember:   q.CollectionMember.replaceDB(db),
 		DeviceSession:      q.DeviceSession.replaceDB(db),
 		ExternalID:         q.ExternalID.replaceDB(db),
 		Favourite:          q.Favourite.replaceDB(db),
@@ -149,6 +157,8 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 type queryCtx struct {
 	Artwork            IArtworkDo
 	Chapter            IChapterDo
+	Collection         ICollectionDo
+	CollectionMember   ICollectionMemberDo
 	DeviceSession      IDeviceSessionDo
 	ExternalID         IExternalIDDo
 	Favourite          IFavouriteDo
@@ -177,6 +187,8 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
 		Artwork:            q.Artwork.WithContext(ctx),
 		Chapter:            q.Chapter.WithContext(ctx),
+		Collection:         q.Collection.WithContext(ctx),
+		CollectionMember:   q.CollectionMember.WithContext(ctx),
 		DeviceSession:      q.DeviceSession.WithContext(ctx),
 		ExternalID:         q.ExternalID.WithContext(ctx),
 		Favourite:          q.Favourite.WithContext(ctx),

@@ -73,6 +73,8 @@ type Services struct {
 	Profiles  profileLister
 	Catalogue catalogue
 	Libraries libraryAdmin
+	// Collections are box sets, a provider's and an admin's.
+	Collections collections
 	// Providers are the metadata providers the server has, and ProviderSettings what an admin set
 	// of them.
 	Providers        providerList
@@ -150,6 +152,11 @@ func (a *API) routes() []route {
 		},
 		{pattern: "GET /api/v1/libraries/{id}/letters", access: signedIn, query: wallFilterParameters, handle: a.letters},
 		{pattern: "GET /api/v1/libraries/{id}/facets", access: signedIn, handle: a.facets},
+		{pattern: "GET /api/v1/libraries/{id}/collections", access: signedIn, query: []string{"offset", "limit"}, handle: a.libraryCollections},
+		{pattern: "GET /api/v1/titles/{id}/members", access: signedIn, handle: a.members},
+		{pattern: "POST /api/v1/admin/collections", access: admin, handle: a.addCollection},
+		{pattern: "PUT /api/v1/admin/collections/{id}/members", access: admin, handle: a.setMembers},
+		{pattern: "DELETE /api/v1/admin/collections/{id}", access: admin, handle: a.removeCollection},
 		{pattern: "GET /api/v1/titles/{id}", access: signedIn, handle: a.title},
 		{pattern: "PUT /api/v1/titles/{id}/progress", access: signedIn, handle: a.progress},
 		{pattern: "PUT /api/v1/titles/{id}/watched", access: signedIn, handle: a.mark(watching.MarkWatched)},

@@ -217,3 +217,14 @@ type Provider struct {
 	ID       string `gorm:"primaryKey"`
 	Settings []byte `gorm:"type:jsonb"`
 }
+
+type Collection struct {
+	ItemID UUID `gorm:"type:uuid;primaryKey"`
+	Origin domain.CollectionOrigin
+}
+
+type CollectionMember struct {
+	CollectionID UUID `gorm:"type:uuid;primaryKey"`
+	ItemID       UUID `gorm:"type:uuid;primaryKey"`
+	Position     int
+}
