@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 	"uuid"
@@ -20,16 +22,20 @@ func (fakeCatalogue) Libraries(context.Context) ([]domain.Library, error) {
 	return []domain.Library{{ID: films, Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films"}}, nil
 }
 
-// Wall answers one card titled after the page it was asked for, and refuses a cursor it did not give.
-func (fakeCatalogue) Wall(_ context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, string, error) {
+// Wall answers one card titled after the page it was asked for, of 120 in all.
+func (fakeCatalogue) Wall(_ context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, int64, error) {
 	if lib != films {
-		return nil, "", store.ErrNotFound
+		return nil, 0, store.ErrNotFound
 	}
-	if p.After != "" && p.After != "next" {
-		return nil, "", store.ErrBadCursor
+	title := string(p.Sort) + " " + string(p.Order) + " " + strconv.Itoa(p.Offset) + "+" + strconv.Itoa(p.Limit)
+	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: title, ReleaseDate: time.Date(1995, 12, 15, 0, 0, 0, 0, time.UTC)}}, 120, nil
+}
+
+func (fakeCatalogue) Letters(_ context.Context, lib uuid.UUID) ([]store.Letter, error) {
+	if lib != films {
+		return nil, store.ErrNotFound
 	}
-	title := string(p.Sort) + " " + string(p.Order) + " " + time.Duration(p.Limit).String()
-	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: title, ReleaseDate: time.Date(1995, 12, 15, 0, 0, 0, 0, time.UTC)}}, "next", nil
+	return []store.Letter{{Letter: "#", Count: 2}, {Letter: "A", Count: 7}}, nil
 }
 
 func (fakeCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage, error) {
@@ -118,14 +124,15 @@ func TestWall(t *testing.T) {
 		wantStatus int
 		wantTitle  string
 	}{
-		{"", http.StatusOK, "title asc 50ns"},
-		{"?sort=added", http.StatusOK, "added desc 50ns"},
-		{"?sort=released", http.StatusOK, "released desc 50ns"},
-		{"?sort=added&order=asc&limit=200&after=next", http.StatusOK, "added asc 200ns"},
+		{"", http.StatusOK, "title asc 0+50"},
+		{"?sort=added", http.StatusOK, "added desc 0+50"},
+		{"?sort=released", http.StatusOK, "released desc 0+50"},
+		{"?sort=added&order=asc&limit=200&offset=60", http.StatusOK, "added asc 60+200"},
 		{"?sort=rating", http.StatusBadRequest, ""},
 		{"?order=up", http.StatusBadRequest, ""},
 		{"?limit=201", http.StatusBadRequest, ""},
-		{"?after=forged", http.StatusBadRequest, ""},
+		{"?offset=-1", http.StatusBadRequest, ""},
+		{"?after=cursor", http.StatusBadRequest, ""},
 	} {
 		rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/titles"+tc.query, goodToken, "")
 		if rec.Code != tc.wantStatus {
@@ -140,16 +147,20 @@ func TestWall(t *testing.T) {
 				Title       string `json:"title"`
 				ReleaseDate string `json:"release_date"`
 			} `json:"items"`
-			Next string `json:"next"`
+			Total int `json:"total"`
 		}
 		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 			t.Fatal(err)
 		}
-		if len(got.Items) != 1 || got.Items[0].Title != tc.wantTitle || got.Items[0].ReleaseDate != "1995-12-15" || got.Next != "next" {
-			t.Errorf("%q: body = %+v, want one card %q released 1995-12-15 and next", tc.query, got, tc.wantTitle)
+		if len(got.Items) != 1 || got.Items[0].Title != tc.wantTitle || got.Items[0].ReleaseDate != "1995-12-15" || got.Total != 120 {
+			t.Errorf("%q: body = %+v, want one card %q released 1995-12-15 of 120", tc.query, got, tc.wantTitle)
 		}
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+uuid.NewV7().String()+"/titles", goodToken, ""); rec.Code != http.StatusNotFound {
 		t.Errorf("an unknown library: status = %d, want 404", rec.Code)
+	}
+	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/letters", goodToken, ""); rec.Code != http.StatusOK ||
+		!strings.Contains(rec.Body.String(), `[{"letter":"#","count":2},{"letter":"A","count":7}]`) {
+		t.Errorf("letters: %d %s", rec.Code, rec.Body)
 	}
 }

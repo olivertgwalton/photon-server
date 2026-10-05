@@ -20,7 +20,8 @@ const (
 
 type catalogue interface {
 	Libraries(ctx context.Context) ([]domain.Library, error)
-	Wall(ctx context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, string, error)
+	Wall(ctx context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
+	Letters(ctx context.Context, lib uuid.UUID) ([]store.Letter, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, error)
 	Home(ctx context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error)
@@ -71,7 +72,7 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	page := store.WallPage{Profile: sessionOf(r).Profile.ID, After: q.Get("after"), Limit: defaultWallLimit}
+	page := store.WallPage{Profile: sessionOf(r).Profile.ID, Limit: defaultWallLimit}
 	if page.Sort, err = domain.ParseWallSort(cmp.Or(q.Get("sort"), string(domain.SortTitle))); err != nil {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
@@ -86,22 +87,44 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	cards, next, err := a.svc.Catalogue.Wall(r.Context(), lib, page)
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
-	case errors.Is(err, store.ErrBadCursor):
-		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
-		return
-	case err != nil:
-		a.internal(w, r, err)
+	if s := q.Get("offset"); s != "" {
+		if page.Offset, err = strconv.Atoi(s); err != nil || page.Offset < 0 {
+			writeProblem(w, a.logger, codeInvalidParameter, "offset is a number from 0")
+			return
+		}
+	}
+	cards, total, err := a.svc.Catalogue.Wall(r.Context(), lib, page)
+	if a.answered(w, r, err) {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, struct {
-		Items []cardJSON `json:"items"`
-		Next  string     `json:"next,omitzero"`
-	}{cardsJSON(cards), next})
+		Items  []cardJSON `json:"items"`
+		Offset int        `json:"offset"`
+		Total  int64      `json:"total"`
+	}{cardsJSON(cards), page.Offset, total})
+}
+
+// letters answers how many of a library's titles sort under each letter, in title order, so a
+// client jumps to a letter at the sum of those before it.
+func (a *API) letters(w http.ResponseWriter, r *http.Request) {
+	lib, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeProblem(w, a.logger, codeNotFound, "")
+		return
+	}
+	letters, err := a.svc.Catalogue.Letters(r.Context(), lib)
+	if a.answered(w, r, err) {
+		return
+	}
+	type letterJSON struct {
+		Letter string `json:"letter"`
+		Count  int    `json:"count"`
+	}
+	out := make([]letterJSON, len(letters))
+	for i, l := range letters {
+		out[i] = letterJSON(l)
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": out})
 }
 
 func cardsJSON(cards []store.Card) []cardJSON {

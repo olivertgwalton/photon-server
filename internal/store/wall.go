@@ -3,21 +3,18 @@ package store
 import (
 	"context"
 	"database/sql/driver"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 	"uuid"
 
-	"gorm.io/gen"
 	"gorm.io/gen/field"
 	"gorm.io/gorm"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
+	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
-
-var ErrBadCursor = errors.New("the cursor is not one this listing gave")
 
 // Card is a title as a wall shows it.
 type Card struct {
@@ -42,110 +39,89 @@ type Card struct {
 	Thumb         uuid.UUID
 }
 
-// WallPage asks for one page of a library's titles. After is the cursor the previous page
-// answered, empty for the first.
+// WallPage asks for one page of a library's titles: Limit of them from Offset, as Jellyfin's
+// StartIndex and Plex's X-Plex-Container-Start page.
 type WallPage struct {
 	Profile uuid.UUID
 	Sort    domain.WallSort
 	Order   domain.Order
-	After   string
+	Offset  int
 	Limit   int
 }
 
-// cursor is the last title a page held, by the key it was sorted on.
-type cursor struct {
-	Sort  domain.WallSort `json:"s"`
-	Order domain.Order    `json:"o"`
-	Title string          `json:"t,omitzero"`
-	Date  time.Time       `json:"d,omitzero"`
-	ID    uuid.UUID       `json:"i"`
-}
-
-// Wall answers a page of a library's films or shows and the cursor for the next, empty after the
-// last. Paging by key, not offset, keeps a page stable while titles are added before it.
-func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, string, error) {
-	l := s.q.Library
-	if _, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(lib))).Take(); errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, "", ErrNotFound
-	} else if err != nil {
-		return nil, "", err
+// Wall answers a page of a library's films or shows and how many there are in all. Ties in the
+// sort are broken by id, so a page is the same whenever it is asked for while the library is.
+func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, int64, error) {
+	i, err := s.wallQuery(ctx, lib)
+	if err != nil {
+		return nil, 0, err
 	}
-	i := s.q.Item
-	q := i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib)), i.Kind.In(string(domain.ItemMovie), string(domain.ItemShow)))
+	total, err := i.Count()
+	if err != nil {
+		return nil, 0, err
+	}
+	it := s.q.Item
 	desc := p.Order == domain.Descending
-	if p.After != "" {
-		var c cursor
-		raw, err := base64.RawURLEncoding.DecodeString(p.After)
-		if err != nil || json.Unmarshal(raw, &c) != nil || c.Sort != p.Sort || c.Order != p.Order {
-			return nil, "", ErrBadCursor
-		}
-		var past, tie gen.Condition
-		switch p.Sort {
-		case domain.SortTitle:
-			past, tie = i.SortTitle.Gt(c.Title), i.SortTitle.Eq(c.Title)
-			if desc {
-				past = i.SortTitle.Lt(c.Title)
-			}
-		case domain.SortAdded:
-			past, tie = i.AddedAt.Gt(c.Date), i.AddedAt.Eq(c.Date)
-			if desc {
-				past = i.AddedAt.Lt(c.Date)
-			}
-		case domain.SortReleased:
-			past, tie = i.ReleasedAsc.Gt(c.Date), i.ReleasedAsc.Eq(c.Date)
-			if desc {
-				past, tie = i.ReleasedDesc.Lt(c.Date), i.ReleasedDesc.Eq(c.Date)
-			}
-		}
-		later := i.ID.Gt(model.UUID(c.ID))
-		if desc {
-			later = i.ID.Lt(model.UUID(c.ID))
-		}
-		q = q.Where(i.WithContext(ctx).Where(past).Or(tie, later))
-	}
 	var key field.Expr
 	switch {
 	case p.Sort == domain.SortAdded:
-		key = i.AddedAt
+		key = it.AddedAt
 	case p.Sort == domain.SortReleased && desc:
-		key = i.ReleasedDesc
+		key = it.ReleasedDesc
 	case p.Sort == domain.SortReleased:
-		key = i.ReleasedAsc
+		key = it.ReleasedAsc
 	default:
-		key = i.SortTitle
+		key = it.SortTitle
 	}
 	if desc {
-		q = q.Order(key.Desc(), i.ID.Desc())
+		i = i.Order(key.Desc(), it.ID.Desc())
 	} else {
-		q = q.Order(key, i.ID)
+		i = i.Order(key, it.ID)
 	}
-	rows, err := q.Limit(p.Limit + 1).Find()
+	rows, err := i.Offset(p.Offset).Limit(p.Limit).Find()
 	if err != nil {
-		return nil, "", err
-	}
-	var next string
-	if len(rows) > p.Limit {
-		rows = rows[:p.Limit]
-		last := rows[len(rows)-1]
-		c := cursor{Sort: p.Sort, Order: p.Order, ID: uuid.UUID(last.ID)}
-		switch {
-		case p.Sort == domain.SortTitle:
-			c.Title = last.SortTitle
-		case p.Sort == domain.SortAdded:
-			c.Date = last.AddedAt
-		case desc:
-			c.Date = last.ReleasedDesc
-		default:
-			c.Date = last.ReleasedAsc
-		}
-		raw, err := json.Marshal(c)
-		if err != nil {
-			return nil, "", err
-		}
-		next = base64.RawURLEncoding.EncodeToString(raw)
+		return nil, 0, err
 	}
 	cards, err := s.cards(ctx, p.Profile, rows)
-	return cards, next, err
+	return cards, total, err
+}
+
+// wallQuery is a library's films and shows; ErrNotFound for no such library.
+func (s *Store) wallQuery(ctx context.Context, lib uuid.UUID) (query.IItemDo, error) {
+	l := s.q.Library
+	if _, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(lib))).Take(); errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	i := s.q.Item
+	return i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib)), i.Kind.In(string(domain.ItemMovie), string(domain.ItemShow))), nil
+}
+
+// Letter is how many of a library's titles sort under a letter: "#" for those before A.
+type Letter struct {
+	Letter string
+	Count  int
+}
+
+// Letters counts a library's titles by the first letter they sort by, in title order, as Plex's
+// firstCharacter does, so a client can jump to a letter by its offset.
+func (s *Store) Letters(ctx context.Context, lib uuid.UUID) ([]Letter, error) {
+	i, err := s.wallQuery(ctx, lib)
+	if err != nil {
+		return nil, err
+	}
+	var out []Letter
+	// Each sort title is folded to its first letter unaccented, so "Émile" counts under E where
+	// the wall sorts it; gen has no CASE, so this is SQL.
+	err = i.UnderlyingDB().Select(`CASE WHEN upper(left(unaccent(sort_title), 1)) BETWEEN 'A' AND 'Z'
+		THEN upper(left(unaccent(sort_title), 1)) ELSE '#' END AS letter, count(*) AS count`).
+		Group("letter").Order("letter").Scan(&out).Error
+	// Titles before A sort first in the wall, whatever the collation makes of "#".
+	if n := slices.IndexFunc(out, func(l Letter) bool { return l.Letter == "#" }); n > 0 {
+		out = append([]Letter{out[n]}, slices.Delete(out, n, n+1)...)
+	}
+	return out, err
 }
 
 // cards answers titles as cards for a profile, with their best pictures.
