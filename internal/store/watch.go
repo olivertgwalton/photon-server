@@ -125,6 +125,15 @@ func (s *Store) leaves(ctx context.Context, id uuid.UUID) ([]*model.Item, error)
 			return nil, err
 		}
 	case domain.ItemSeason:
+	case domain.ItemCollection:
+		// A box set marked is each of its titles marked, as Jellyfin's is.
+		var leaves []*model.Item
+		err := i.WithContext(ctx).UnderlyingDB().Raw(`
+			SELECT e.* FROM items e JOIN collection_members m ON m.collection_id = ?
+			WHERE (e.id = m.item_id AND e.kind = 'movie')
+				OR (e.kind = 'episode' AND e.parent_id IN (SELECT s.id FROM items s WHERE s.parent_id = m.item_id))`,
+			row.ID).Scan(&leaves).Error
+		return leaves, err
 	}
 	return i.WithContext(ctx).Where(i.ParentID.In(ids(parents)...), i.Kind.Eq(string(domain.ItemEpisode))).Find()
 }

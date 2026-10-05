@@ -64,6 +64,8 @@ func ownerOf(ctx context.Context, tx *query.Query, lib uuid.UUID, o Owner) (mode
 		if o.Title != "" {
 			conds = append(conds, i.Title.Eq(o.Title))
 		}
+	case domain.ItemCollection:
+		return model.UUID{}, ErrNotFound
 	case domain.ItemShow, domain.ItemSeason, domain.ItemEpisode:
 		show, err := one(i.WithContext(ctx).Where(inLibrary, i.Kind.Eq(string(domain.ItemShow)), i.Folder.Eq(o.Folder)))
 		if err != nil || o.Kind == domain.ItemShow {
