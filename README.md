@@ -127,6 +127,9 @@ read field order is taken as progressive until it changes. Encoding is in softwa
 `PHOTON_HWACCEL` names a device: `videotoolbox`, `vaapi` or `qsv` (on `PHOTON_HWACCEL_DEVICE`,
 default `/dev/dri/renderD128`) or `nvenc` (on CUDA device `PHOTON_HWACCEL_DEVICE`, default `0`). The
 server encodes a test picture on it at start, and falls back to software if it will not.
+Segments are written under `PHOTON_CACHE_DIR`'s `hls` folder and kept from a minute behind where
+each player last asked, so a film played through holds about a minute and a half of itself there;
+seeking back further makes them again. The folder is emptied at start.
 
 Each node encodes at most `PHOTON_MAX_TRANSCODES` videos at once (a number, or `unlimited`): by
 default a quarter of its CPUs in software, at least one, and eight on a hardware encoder, the cap
