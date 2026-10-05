@@ -132,22 +132,23 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, st
 		}
 		next = base64.RawURLEncoding.EncodeToString(raw)
 	}
+	cards, err := s.cards(ctx, rows)
+	return cards, next, err
+}
+
+// cards answers titles as cards, with their best pictures.
+func (s *Store) cards(ctx context.Context, rows []*model.Item) ([]Card, error) {
 	pictures, err := s.pictureOrder(ctx, rows)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	cards := make([]Card, len(rows))
 	for n, r := range rows {
 		cards[n] = Card{
-			ID: uuid.UUID(r.ID), Kind: r.Kind, Title: r.Title, AddedAt: r.AddedAt,
-			Poster: first(pictures[r.ID][domain.ArtworkPoster]), Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]),
-		}
-		if r.Year != nil {
-			cards[n].Year = *r.Year
-		}
-		if r.ReleaseDate != nil {
-			cards[n].ReleaseDate = *r.ReleaseDate
+			ID: uuid.UUID(r.ID), Kind: r.Kind, Title: r.Title, AddedAt: r.AddedAt, Year: deref(r.Year),
+			ReleaseDate: deref(r.ReleaseDate), Poster: first(pictures[r.ID][domain.ArtworkPoster]),
+			Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]),
 		}
 	}
-	return cards, next, nil
+	return cards, nil
 }

@@ -22,6 +22,7 @@ type catalogue interface {
 	Libraries(ctx context.Context) ([]domain.Library, error)
 	Wall(ctx context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, string, error)
 	Title(ctx context.Context, id uuid.UUID) (store.TitlePage, error)
+	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, error)
 }
 
 type libraryJSON struct {
@@ -88,6 +89,13 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, struct {
+		Items []cardJSON `json:"items"`
+		Next  string     `json:"next,omitzero"`
+	}{cardsJSON(cards), next})
+}
+
+func cardsJSON(cards []store.Card) []cardJSON {
 	out := make([]cardJSON, len(cards))
 	for i, c := range cards {
 		out[i] = cardJSON{
@@ -95,10 +103,35 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 			Poster: c.Poster, Backdrop: c.Backdrop,
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, struct {
-		Items []cardJSON `json:"items"`
-		Next  string     `json:"next,omitzero"`
-	}{out, next})
+	return out
+}
+
+func (a *API) search(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	query := store.SearchQuery{Text: q.Get("q"), Limit: defaultWallLimit}
+	if query.Text == "" {
+		writeProblem(w, a.logger, codeInvalidParameter, "q is what to search for")
+		return
+	}
+	var err error
+	if s := q.Get("library"); s != "" {
+		if query.Library, err = uuid.Parse(s); err != nil {
+			writeProblem(w, a.logger, codeInvalidParameter, "library is not an id")
+			return
+		}
+	}
+	if s := q.Get("limit"); s != "" {
+		if query.Limit, err = strconv.Atoi(s); err != nil || query.Limit < 1 || query.Limit > maxWallLimit {
+			writeProblem(w, a.logger, codeInvalidParameter, "limit is a number from 1 to "+strconv.Itoa(maxWallLimit))
+			return
+		}
+	}
+	cards, err := a.svc.Catalogue.Search(r.Context(), query)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]any{"items": cardsJSON(cards)})
 }
 
 func (a *API) title(w http.ResponseWriter, r *http.Request) {

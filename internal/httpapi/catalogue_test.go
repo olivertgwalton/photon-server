@@ -39,6 +39,44 @@ func (fakeCatalogue) Title(_ context.Context, id uuid.UUID) (store.TitlePage, er
 	return store.TitlePage{ID: id, Kind: domain.ItemMovie, Title: "Heat"}, nil
 }
 
+// Search answers one card titled after what it was asked.
+func (fakeCatalogue) Search(_ context.Context, q store.SearchQuery) ([]store.Card, error) {
+	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: q.Text + " " + q.Library.String()}}, nil
+}
+
+func TestSearch(t *testing.T) {
+	for _, tc := range []struct {
+		query      string
+		wantStatus int
+		wantTitle  string
+	}{
+		{"?q=heat", http.StatusOK, "heat 00000000-0000-0000-0000-000000000000"},
+		{"?q=heat&library=" + films.String(), http.StatusOK, "heat " + films.String()},
+		{"", http.StatusBadRequest, ""},
+		{"?q=heat&library=films", http.StatusBadRequest, ""},
+	} {
+		rec := serve(t, http.MethodGet, "/api/v1/search"+tc.query, goodToken, "")
+		if rec.Code != tc.wantStatus {
+			t.Errorf("%q: status = %d, want %d", tc.query, rec.Code, tc.wantStatus)
+			continue
+		}
+		if tc.wantStatus != http.StatusOK {
+			continue
+		}
+		var got struct {
+			Items []struct {
+				Title string `json:"title"`
+			} `json:"items"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Items) != 1 || got.Items[0].Title != tc.wantTitle {
+			t.Errorf("%q: items = %+v, want %q", tc.query, got.Items, tc.wantTitle)
+		}
+	}
+}
+
 func TestWall(t *testing.T) {
 	for _, tc := range []struct {
 		query      string
