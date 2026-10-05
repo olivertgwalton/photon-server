@@ -34,6 +34,7 @@ const (
 	signedAddress access = "signed_address"
 	// signedPath is an HLS route whose path carries its playback's signature.
 	signedPath access = "signed_path"
+	admin      access = "admin"
 )
 
 type route struct {
@@ -71,6 +72,7 @@ type Services struct {
 	Auth      authenticator
 	Profiles  profileLister
 	Catalogue catalogue
+	Libraries libraryAdmin
 	Pictures  pictures
 	Watching  watching
 	Playing   playing
@@ -104,6 +106,8 @@ func New(logger *slog.Logger, info Info, svc Services) *API {
 			h = a.requireSignature(h)
 		case signedPath:
 			h = a.requireSignedPath(h)
+		case admin:
+			h = a.requireAdmin(h)
 		}
 		a.mux.Handle(r.pattern, h)
 	}
@@ -143,6 +147,11 @@ func (a *API) routes() []route {
 		{pattern: "POST /api/v1/playback/{id}/stop", access: signedIn, handle: a.playbackStop},
 		{pattern: "GET /api/v1/hls/{playback}/{exp}/{sig}/{file}", access: signedPath, handle: a.hlsFile},
 		{pattern: "GET /api/v1/parts/{id}/stream", access: signedAddress, query: []string{"exp", "sig"}, handle: a.partStream},
+		{pattern: "GET /api/v1/admin/libraries", access: admin, handle: a.adminLibraries},
+		{pattern: "POST /api/v1/admin/libraries", access: admin, handle: a.addLibrary},
+		{pattern: "PATCH /api/v1/admin/libraries/{id}", access: admin, handle: a.setLibrary},
+		{pattern: "DELETE /api/v1/admin/libraries/{id}", access: admin, handle: a.removeLibrary},
+		{pattern: "POST /api/v1/admin/libraries/{id}/scan", access: admin, handle: a.scanLibrary},
 		{pattern: "GET /api/v1/home", access: signedIn, query: []string{"limit"}, handle: a.home},
 		{pattern: "GET /api/v1/search", access: signedIn, query: []string{"q", "library", "limit"}, handle: a.search},
 		{pattern: "GET /api/v1/artwork/{id}", access: public, query: []string{"width"}, handle: a.artwork},

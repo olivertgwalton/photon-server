@@ -18,7 +18,10 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-const goodToken = "pst_good"
+const (
+	goodToken   = "pst_good"
+	memberToken = "pst_member"
+)
 
 var oliver = domain.Profile{ID: uuid.MustParse("0199b3c0-0000-7000-8000-000000000001"), Name: "Oliver", Role: domain.RoleAdmin}
 
@@ -32,8 +35,11 @@ func (fakeAuth) SignIn(_ context.Context, name, password string, _ auth.Device) 
 }
 
 func (fakeAuth) Authenticate(_ context.Context, token string) (domain.Session, error) {
-	if token == goodToken {
+	switch token {
+	case goodToken:
 		return domain.Session{ID: uuid.NewV7(), Profile: oliver}, nil
+	case memberToken:
+		return domain.Session{ID: uuid.NewV7(), Profile: domain.Profile{ID: uuid.NewV7(), Name: "Kid", Role: domain.RoleMember}}, nil
 	}
 	return domain.Session{}, auth.ErrUnauthenticated
 }
