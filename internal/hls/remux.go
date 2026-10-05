@@ -31,6 +31,12 @@ const (
 // ErrNoRemux is a remux that has ended, or never was.
 var ErrNoRemux = errors.New("hls: no such remux")
 
+// ErrTranscodeLimit is a remux that would encode video on a remuxer already encoding its limit.
+var ErrTranscodeLimit = errors.New("hls: at the limit of transcodes at once")
+
+// Unlimited is a remuxer that encodes as many videos at once as it is asked to.
+const Unlimited = 0
+
 // Source is one file of a copy to remux: how to open it, its plan input, its video, and its audio
 // if it has any.
 type Source struct {
@@ -46,17 +52,19 @@ type Remuxer struct {
 	ffmpeg string
 	dir    string
 	hw     Hardware
+	limit  int
 	log    *slog.Logger
 
 	mu       sync.Mutex
 	sessions map[uuid.UUID]*session
 }
 
-func NewRemuxer(ffmpeg, dir string, hw Hardware, log *slog.Logger) (*Remuxer, error) {
+// NewRemuxer runs remuxes on hw, at most limit of them encoding video at once, or Unlimited.
+func NewRemuxer(ffmpeg, dir string, hw Hardware, limit int, log *slog.Logger) (*Remuxer, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, err
 	}
-	return &Remuxer{ffmpeg: ffmpeg, dir: dir, hw: hw, log: log, sessions: map[uuid.UUID]*session{}}, nil
+	return &Remuxer{ffmpeg: ffmpeg, dir: dir, hw: hw, limit: limit, log: log, sessions: map[uuid.UUID]*session{}}, nil
 }
 
 // Copy is what a playback's HLS is made of: its parts in order, its text subtitles, and the
@@ -103,7 +111,8 @@ type subtitle struct {
 }
 
 // Open starts the remux of a playback's copy; nothing is run until a segment is asked for.
-// Addresses in its playlists are relative to the playlists' own.
+// Addresses in its playlists are relative to the playlists' own. A copy whose video is encoded is
+// refused with ErrTranscodeLimit while the remuxer is encoding its limit.
 func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
 	parts := make([]Part, len(c.Parts))
 	offsets := make([]time.Duration, len(c.Parts))
@@ -133,10 +142,38 @@ func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
 	}
 	s.root = root
 	r.mu.Lock()
+	defer r.mu.Unlock()
+	if s.encodes() && r.limit != Unlimited && r.transcodes() >= r.limit {
+		_ = root.Close()
+		_ = os.RemoveAll(s.dir)
+		return ErrTranscodeLimit
+	}
 	r.sessions[playback] = s
-	r.mu.Unlock()
 	return nil
 }
+
+// Transcodes answers how many remuxes are encoding video, and the most that may at once.
+func (r *Remuxer) Transcodes() (active, limit int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.transcodes(), r.limit
+}
+
+// transcodes counts the remuxes encoding video; the caller holds r.mu. The sessions are the one
+// account of what this node is encoding, as a remux leaves them however it ends: stopped, swept
+// or never opened.
+func (r *Remuxer) transcodes() int {
+	n := 0
+	for _, s := range r.sessions {
+		if s.encodes() {
+			n++
+		}
+	}
+	return n
+}
+
+// encodes is whether a remux encodes video; every part of a copy is played to the same plan.
+func (s *session) encodes() bool { return len(s.sources) > 0 && s.sources[0].Video.Encode != nil }
 
 // Has reports whether this remuxer runs a playback's remux.
 func (r *Remuxer) Has(playback uuid.UUID) bool {
