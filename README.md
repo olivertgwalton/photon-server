@@ -75,6 +75,13 @@ refused with 503 `transcode_limit` rather than played worse; one played as it is
 copied is never refused. A transcode's slot is freed as it stops, or a couple of minutes after its player
 goes quiet. `GET /api/v1/admin/playbacks` says which node runs each playback, and how many videos
 the node answering is transcoding against its limit (`transcodes.limit` is absent when unlimited).
+Each copy says where its intro, credits, recap and preview are, so a player can offer to skip them.
+A chapter named for one (Intro, Opening, End Credits, Previously…) marks it. Otherwise the server
+compares the sound of a season's episodes, as Plex and Jellyfin's Intro Skipper do: the stretch two
+episodes share near the start is the intro, near the end the credits. A season is compared ten
+minutes after its episodes stop arriving, and any not yet compared at 3 a.m. That needs an FFmpeg
+built with chromaprint, which the image's is; without it the server says so at start and reads
+chapters only. An admin's own markers (`PUT /api/v1/admin/versions/{id}/markers`) outrank both.
 
 Run several nodes against one Postgres and Valkey behind a load balancer and each says where its
 peers reach it in `PHOTON_NODE_ADDRESS` (`http://10.0.0.5:8640`): a request for a stream's segments
