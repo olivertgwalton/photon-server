@@ -182,3 +182,52 @@ func (s *Store) SetSessionProfile(ctx context.Context, session, profile uuid.UUI
 	_, err := d.WithContext(ctx).Where(d.ID.Eq(model.UUID(session))).UpdateSimple(d.ProfileID.Value(model.UUID(profile)))
 	return err
 }
+
+type DeviceListing struct {
+	ID         uuid.UUID
+	DeviceName string
+	Client     string
+	Profile    string
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+}
+
+// Devices lists signed-in devices, newest first: every device, or with profile set only those on
+// that profile.
+func (s *Store) Devices(ctx context.Context, profile *uuid.UUID) ([]DeviceListing, error) {
+	d, p := s.q.DeviceSession, s.q.Profile
+	q := d.WithContext(ctx).Select(d.ID, d.DeviceName, d.Client, p.Name.As("profile"), d.CreatedAt, d.LastSeenAt).
+		Join(p, p.ID.EqCol(d.ProfileID)).Where(d.ExpiresAt.Gt(time.Now())).Order(d.LastSeenAt.Desc())
+	if profile != nil {
+		q = q.Where(d.ProfileID.Eq(model.UUID(*profile)))
+	}
+	var rows []struct {
+		ID                    model.UUID
+		DeviceName, Client    string
+		Profile               string
+		CreatedAt, LastSeenAt time.Time
+	}
+	if err := q.Scan(&rows); err != nil {
+		return nil, err
+	}
+	out := make([]DeviceListing, len(rows))
+	for i, r := range rows {
+		out[i] = DeviceListing{
+			ID: uuid.UUID(r.ID), DeviceName: r.DeviceName, Client: r.Client, Profile: r.Profile,
+			CreatedAt: r.CreatedAt, LastSeenAt: r.LastSeenAt,
+		}
+	}
+	return out, nil
+}
+
+// DeleteDevice signs a device out: any device, or with profile set only one on that profile. It
+// reports whether there was such a device.
+func (s *Store) DeleteDevice(ctx context.Context, id uuid.UUID, profile *uuid.UUID) (bool, error) {
+	d := s.q.DeviceSession
+	q := d.WithContext(ctx).Where(d.ID.Eq(model.UUID(id)))
+	if profile != nil {
+		q = q.Where(d.ProfileID.Eq(model.UUID(*profile)))
+	}
+	info, err := q.Delete()
+	return info.RowsAffected == 1, err
+}
