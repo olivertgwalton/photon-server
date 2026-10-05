@@ -79,7 +79,9 @@ func ensureShow(ctx context.Context, tx *query.Query, lib uuid.UUID, show Show) 
 		row.ID = known.ID
 		_, err = i.WithContext(ctx).Where(i.ID.Eq(row.ID)).Select(i.ScanTitle).Updates(&row)
 	case errors.Is(err, gorm.ErrRecordNotFound):
-		err = i.WithContext(ctx).Create(&row)
+		if err = i.WithContext(ctx).Create(&row); err == nil {
+			err = enqueue(ctx, tx, domain.JobIdentify, row.ID)
+		}
 	}
 	if err != nil {
 		return model.UUID{}, err
@@ -138,6 +140,10 @@ func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID mod
 	i := tx.Item
 	if row.ID == (model.UUID{}) {
 		if err := i.WithContext(ctx).Create(&row); err != nil {
+			return err
+		}
+		// The show's match describes its episodes, so a new one asks for it again.
+		if err := enqueue(ctx, tx, domain.JobIdentify, showID); err != nil {
 			return err
 		}
 	} else {

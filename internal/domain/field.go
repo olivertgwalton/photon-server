@@ -17,6 +17,12 @@ type Metadata struct {
 	IDs           map[Provider]string
 }
 
+// SeasonMetadata is what a source says about a season and its episodes, by episode number.
+type SeasonMetadata struct {
+	Metadata Metadata
+	Episodes map[int]Metadata
+}
+
 // Field is a piece of a title's metadata whose source is remembered.
 type Field string
 

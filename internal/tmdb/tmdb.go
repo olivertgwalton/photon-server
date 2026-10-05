@@ -227,13 +227,7 @@ func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadat
 	return out, nil
 }
 
-// Season is what TMDB says about a season and its episodes, by episode number.
-type Season struct {
-	Metadata domain.Metadata
-	Episodes map[int]domain.Metadata
-}
-
-func (c *Client) Season(ctx context.Context, show, number int) (Season, error) {
+func (c *Client) Season(ctx context.Context, show, number int) (domain.SeasonMetadata, error) {
 	var s struct {
 		Name     string `json:"name"`
 		Overview string `json:"overview"`
@@ -246,10 +240,10 @@ func (c *Client) Season(ctx context.Context, show, number int) (Season, error) {
 		} `json:"episodes"`
 	}
 	if err := c.get(ctx, fmt.Sprintf("/tv/%d/season/%d", show, number), nil, &s); err != nil {
-		return Season{}, err
+		return domain.SeasonMetadata{}, err
 	}
 	aired := date(s.AirDate)
-	out := Season{
+	out := domain.SeasonMetadata{
 		Metadata: domain.Metadata{Title: s.Name, Overview: s.Overview, ReleaseDate: aired, Year: year(aired)},
 		Episodes: make(map[int]domain.Metadata, len(s.Episodes)),
 	}

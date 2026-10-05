@@ -142,6 +142,9 @@ func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) (mode
 			if err := i.WithContext(ctx).Create(&item); err != nil {
 				return model.UUID{}, err
 			}
+			if err := enqueue(ctx, tx, domain.JobIdentify, item.ID); err != nil {
+				return model.UUID{}, err
+			}
 			return item.ID, describe(ctx, tx, item.ID, f.Title, f.Year, f.IDs, f.NFO)
 		}
 	}
