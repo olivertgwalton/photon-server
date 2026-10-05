@@ -11,11 +11,19 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // streamFor is how long a stream's address stays good: longer than anyone watches in a sitting.
 const streamFor = 24 * time.Hour
+
+type playbacks interface {
+	Start(ctx context.Context, profile, item, version uuid.UUID, method domain.PlayMethod) (domain.Playback, error)
+	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState) (domain.Reach, error)
+	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
+}
 
 type playing interface {
 	Playable(ctx context.Context, item, version uuid.UUID) (uuid.UUID, []store.PlayPart, error)
@@ -55,6 +63,11 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
+	session, err := a.svc.Playbacks.Start(r.Context(), sessionOf(r).Profile.ID, id, version, domain.PlayDirect)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
 	until := time.Now().Add(streamFor)
 	out := make([]partJSON, len(parts))
 	for i, p := range parts {
@@ -64,10 +77,65 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, struct {
-		VersionID uuid.UUID  `json:"version_id"`
-		Parts     []partJSON `json:"parts"`
-		ExpiresAt time.Time  `json:"expires_at"`
-	}{version, out, until.UTC().Truncate(time.Second)})
+		PlaybackID uuid.UUID         `json:"playback_id"`
+		Method     domain.PlayMethod `json:"method"`
+		VersionID  uuid.UUID         `json:"version_id"`
+		Parts      []partJSON        `json:"parts"`
+		ExpiresAt  time.Time         `json:"expires_at"`
+	}{session.ID, session.Method, version, out, until.UTC().Truncate(time.Second)})
+}
+
+// playbackProgress is the player saying where it has got to, every ten seconds or so.
+func (a *API) playbackProgress(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PositionMS int64  `json:"position_ms"`
+		State      string `json:"state"`
+	}
+	if !a.decode(w, r, &req) {
+		return
+	}
+	state, ok := domain.ParsePlayState(req.State)
+	if !ok || req.PositionMS < 0 {
+		writeProblem(w, a.logger, codeInvalidBody, "position_ms is not negative and state is playing or paused")
+		return
+	}
+	a.reportPlayback(w, r, func(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error) {
+		return a.svc.Playbacks.Progress(ctx, profile, id, time.Duration(req.PositionMS)*time.Millisecond, state)
+	})
+}
+
+// playbackStop is the player saying it has stopped, and where.
+func (a *API) playbackStop(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PositionMS int64 `json:"position_ms"`
+	}
+	if !a.decode(w, r, &req) {
+		return
+	}
+	if req.PositionMS < 0 {
+		writeProblem(w, a.logger, codeInvalidBody, "position_ms is not negative")
+		return
+	}
+	a.reportPlayback(w, r, func(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error) {
+		return a.svc.Playbacks.Stop(ctx, profile, id, time.Duration(req.PositionMS)*time.Millisecond)
+	})
+}
+
+func (a *API) reportPlayback(w http.ResponseWriter, r *http.Request, report func(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error)) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeProblem(w, a.logger, codeNotFound, "")
+		return
+	}
+	reach, err := report(r.Context(), sessionOf(r).Profile.ID, id)
+	switch {
+	case errors.Is(err, playback.ErrNoPlayback):
+		writeProblem(w, a.logger, codeNotFound, "the playback has stopped, or lapsed")
+	case err != nil:
+		a.internal(w, r, err)
+	default:
+		writeJSON(w, a.logger, "application/json", http.StatusOK, map[string]domain.Reach{"reach": reach})
+	}
 }
 
 // videoTypes are the types of the containers a library holds, which Go's own table lacks.

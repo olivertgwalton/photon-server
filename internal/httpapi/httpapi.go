@@ -72,6 +72,7 @@ type Services struct {
 	Pictures  pictures
 	Watching  watching
 	Playing   playing
+	Playbacks playbacks
 	// Signer signs the addresses titles play from.
 	Signer  playback.Signer
 	Artwork pictureCache
@@ -132,6 +133,8 @@ func (a *API) routes() []route {
 		{pattern: "PUT /api/v1/titles/{id}/favourite", access: signedIn, handle: a.mark(watching.Favourite)},
 		{pattern: "DELETE /api/v1/titles/{id}/favourite", access: signedIn, handle: a.mark(watching.Unfavourite)},
 		{pattern: "POST /api/v1/titles/{id}/play", access: signedIn, handle: a.play},
+		{pattern: "POST /api/v1/playback/{id}/progress", access: signedIn, handle: a.playbackProgress},
+		{pattern: "POST /api/v1/playback/{id}/stop", access: signedIn, handle: a.playbackStop},
 		{pattern: "GET /api/v1/parts/{id}/stream", access: signedAddress, query: []string{"exp", "sig"}, handle: a.partStream},
 		{pattern: "GET /api/v1/home", access: signedIn, query: []string{"limit"}, handle: a.home},
 		{pattern: "GET /api/v1/search", access: signedIn, query: []string{"q", "library", "limit"}, handle: a.search},
