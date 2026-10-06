@@ -3,6 +3,7 @@
 // schema the app is, so a change to the API that the app would feel fails
 // `bun run check` here too.
 import type { components } from "../src/lib/api/schema.d.ts";
+import { admin, adminTitles } from "./mock-admin.ts";
 
 type Schemas = components["schemas"];
 
@@ -238,7 +239,7 @@ const server_ = Bun.serve({
 	port: Number(process.env.PORT ?? 4173),
 	async fetch(request) {
 		const url = new URL(request.url);
-		if (!url.pathname.startsWith("/api/")) return app(url);
+		if (!/^\/(api|mock)\//.test(url.pathname)) return app(url);
 		const route = `${request.method} ${url.pathname}`;
 		const token =
 			request.headers.get("authorization")?.replace("Bearer ", "") ??
@@ -400,6 +401,8 @@ const server_ = Bun.serve({
 				} satisfies Schemas["Device"]);
 			}
 		}
+		const answered = (await admin(request, url, me)) ?? adminTitles(route);
+		if (answered) return answered;
 		return problem(404, "not_found", "Not Found");
 	},
 });
