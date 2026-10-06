@@ -4631,6 +4631,8 @@ export interface components {
         };
         /** @enum {string} */
         CollectionOrigin: "tmdb" | "user";
+        /** @enum {string} */
+        CollectionPlacement: "library" | "home";
         Counts: {
             collections: number;
             episodes: number;
@@ -5658,6 +5660,7 @@ export interface components {
             origin?: components["schemas"]["CollectionOrigin"];
             original_title?: string;
             overview?: string;
+            placement?: components["schemas"]["CollectionPlacement"];
             ratings?: components["schemas"]["RatingRef"][];
             /** Format: date */
             release_date?: string;

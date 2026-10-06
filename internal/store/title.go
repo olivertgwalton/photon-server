@@ -37,7 +37,8 @@ type TitlePage struct {
 	// Credits are its cast and crew, as the highest-ranked source gives them.
 	Credits []CreditRef `json:"credits,omitzero"`
 	// Origin is who made a collection: an admin's is changed by hand, a provider's only by it.
-	Origin domain.CollectionOrigin `json:"origin,omitzero"`
+	Origin    domain.CollectionOrigin    `json:"origin,omitzero"`
+	Placement domain.CollectionPlacement `json:"placement,omitzero"`
 	// EpisodeOrder is the order a show's episode files are numbered in.
 	EpisodeOrder  domain.EpisodeOrder `json:"episode_order,omitzero"`
 	AddedAt       time.Time           `json:"added_at"`
@@ -287,9 +288,7 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
 		p.Versions, err = s.versions(ctx, item.ID)
 	case domain.ItemCollection:
-		var origins map[uuid.UUID]domain.CollectionOrigin
-		origins, err = s.origins(ctx, []*model.Item{item})
-		p.Origin = origins[item.ID]
+		err = s.pool.QueryRow(ctx, `SELECT origin, placement FROM collections WHERE item_id = $1`, item.ID).Scan(&p.Origin, &p.Placement)
 	}
 	if err != nil {
 		return TitlePage{}, err

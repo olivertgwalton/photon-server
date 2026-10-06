@@ -62,6 +62,19 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if page, err := s.Title(ctx, uuid.UUID{}, set); err != nil || page.Origin != domain.CollectionTMDB {
 		t.Errorf("the set's page says it was made by %q, %v; want tmdb", page.Origin, err)
 	}
+	if page, _ := s.Title(ctx, uuid.UUID{}, set); page.Placement != domain.PlacementLibrary {
+		t.Errorf("a new set is placed %q, want library", page.Placement)
+	}
+	// A provider's set is put on the home page as an admin's is.
+	if err := s.SetPlacement(ctx, set, domain.PlacementHome); err != nil {
+		t.Fatal(err)
+	}
+	if page, _ := s.Title(ctx, uuid.UUID{}, set); page.Placement != domain.PlacementHome {
+		t.Errorf("the promoted set is placed %q, want home", page.Placement)
+	}
+	if err := s.SetPlacement(ctx, uuid.NewV7(), domain.PlacementHome); !errors.Is(err, ErrNotFound) {
+		t.Errorf("placing no collection: %v, want ErrNotFound", err)
+	}
 	if err := s.SetMembers(ctx, set, nil); !errors.Is(err, ErrNotUserCollection) {
 		t.Errorf("changing TMDB's set by hand: %v, want ErrNotUserCollection", err)
 	}

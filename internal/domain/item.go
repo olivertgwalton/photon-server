@@ -30,6 +30,19 @@ func CollectionOrigins() []CollectionOrigin {
 	return []CollectionOrigin{CollectionTMDB, CollectionUser}
 }
 
+// CollectionPlacement is where a collection is shown: in its library only, or on the home page of
+// each profile that sees it too, as Plex's promoted collections.
+type CollectionPlacement string
+
+const (
+	PlacementLibrary CollectionPlacement = "library"
+	PlacementHome    CollectionPlacement = "home"
+)
+
+func CollectionPlacements() []CollectionPlacement {
+	return []CollectionPlacement{PlacementLibrary, PlacementHome}
+}
+
 // Grouping is a collection a provider names a title part of: its id there, its name and pictures.
 type Grouping struct {
 	ID      string
