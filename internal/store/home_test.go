@@ -80,11 +80,11 @@ func TestHome(t *testing.T) {
 		t.Errorf("next up = %v, want the episode after the last one watched, specials aside", got)
 	}
 
-	if _, err := s.SaveProgress(ctx, profile.ID, episode(1, 2), 20*time.Minute, domain.ReachStart, nil); err != nil {
+	if _, err := saveProgress(ctx, s, profile.ID, episode(1, 2), 20*time.Minute, domain.ReachStart, nil); err != nil {
 		t.Fatal(err)
 	}
 	heat := oneItem(t, s, `kind = 'movie'`).ID
-	if _, err := s.SaveProgress(ctx, profile.ID, heat, 30*time.Minute, domain.ReachStart, nil); err != nil {
+	if _, err := saveProgress(ctx, s, profile.ID, heat, 30*time.Minute, domain.ReachStart, nil); err != nil {
 		t.Fatal(err)
 	}
 	got := home()
@@ -230,7 +230,7 @@ func TestNextEpisode(t *testing.T) {
 	if got := next(show); got != "S1E3" {
 		t.Errorf("a show with S1E2 watched starts at %s, want the one after it", got)
 	}
-	if _, err := s.SaveProgress(ctx, profile.ID, title(domain.ItemEpisode, 2, 1), 20*time.Minute, domain.ReachStart, nil); err != nil {
+	if _, err := saveProgress(ctx, s, profile.ID, title(domain.ItemEpisode, 2, 1), 20*time.Minute, domain.ReachStart, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := next(show); got != "S2E1" {
@@ -319,7 +319,7 @@ func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveProgress(ctx, profile.ID, episode(1, 3), time.Minute, domain.ReachStart, nil); err != nil {
+	if _, err := saveProgress(ctx, s, profile.ID, episode(1, 3), time.Minute, domain.ReachStart, nil); err != nil {
 		t.Fatal(err)
 	}
 	after, err := s.Title(ctx, profile.ID, episode(1, 3))
@@ -435,7 +435,7 @@ func TestTopRatedUnwatched(t *testing.T) {
 	if err := s.MarkWatched(ctx, admin, titled("Watched"), nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveProgress(ctx, admin, titled("Started"), 20*time.Minute, domain.ReachStart, nil); err != nil {
+	if _, err := saveProgress(ctx, s, admin, titled("Started"), 20*time.Minute, domain.ReachStart, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.MarkWatched(ctx, admin, titled("Begun S1E1"), nil); err != nil {
@@ -494,7 +494,7 @@ func TestWatchlist(t *testing.T) {
 	if err := s.MarkWatched(ctx, admin, heat, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveProgress(ctx, admin, first, time.Hour, domain.ReachResumable, nil); err != nil {
+	if _, err := saveProgress(ctx, s, admin, first, time.Hour, domain.ReachResumable, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := homeRow(t, s, admin, domain.RowWatchlist), []string{"Alien", "The Wire"}; !slices.Equal(got, want) {

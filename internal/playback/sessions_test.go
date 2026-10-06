@@ -50,7 +50,9 @@ type positions map[uuid.UUID]time.Duration
 
 var gone = uuid.MustParse("0199b3c0-0000-7000-8000-00000000d0e5")
 
-func (p positions) SaveProgress(_ context.Context, _, item uuid.UUID, at time.Duration, _ domain.Reach, _ *time.Time) (domain.Reach, error) {
+func (positions) Length(context.Context, uuid.UUID) (time.Duration, error) { return 2 * time.Hour, nil }
+
+func (p positions) SaveProgress(_ context.Context, _, item uuid.UUID, at, _ time.Duration, _ domain.Reach, _ *time.Time) (domain.Reach, error) {
 	if item == gone {
 		return "", store.ErrNotFound
 	}
@@ -174,7 +176,9 @@ func TestAPlaybackOfARemovedTitleIsSweptOnce(t *testing.T) {
 // ends answers the end for every report, and keeps how far each report said the viewing had got.
 type ends struct{ before []domain.Reach }
 
-func (e *ends) SaveProgress(_ context.Context, _, _ uuid.UUID, _ time.Duration, before domain.Reach, _ *time.Time) (domain.Reach, error) {
+func (*ends) Length(context.Context, uuid.UUID) (time.Duration, error) { return time.Hour, nil }
+
+func (e *ends) SaveProgress(_ context.Context, _, _ uuid.UUID, _, _ time.Duration, before domain.Reach, _ *time.Time) (domain.Reach, error) {
 	e.before = append(e.before, before)
 	return domain.ReachEnd, nil
 }

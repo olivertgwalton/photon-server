@@ -37,28 +37,27 @@ var ErrSuperseded = errors.New("the title's state has changed since then")
 // nothing written after it.
 const newest = ` WHERE watch_state.changed_at IS NULL OR watch_state.changed_at <= excluded.changed_at`
 
-// SaveProgress records that a profile stopped a film or episode at position, at a time or now for
-// none, and answers how far that got: too near the start to keep, somewhere to resume, or far
-// enough to count as watched. ErrSuperseded if the state has changed since.
+// Length is how long a film or episode runs, as its progress is measured: its longest copy's.
+func (s *Store) Length(ctx context.Context, item uuid.UUID) (time.Duration, error) {
+	lengths, err := s.durations(ctx, []uuid.UUID{item})
+	return time.Duration(lengths[item]) * time.Millisecond, err
+}
+
+// SaveProgress records that a profile stopped a film or episode, running length, at position, at a
+// time or now for none, and answers how far that got: too near the start to keep, somewhere to
+// resume, or far enough to count as watched. ErrSuperseded if the state has changed since.
 // before is how far the viewing had already got: the play is counted as it first reaches the end,
 // once however often a player reports from there, as Jellyfin counts a play and Plex scrobbles.
-func (s *Store) SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration, before domain.Reach, at *time.Time) (domain.Reach, error) {
-	row, err := readItem(ctx, s.pool, item)
-	if err != nil {
-		return "", err
-	}
-	lengths, err := s.durations(ctx, ids([]*model.Item{row}))
-	if err != nil {
-		return "", err
-	}
-	reach := domain.ReachOf(position, time.Duration(lengths[row.ID])*time.Millisecond)
+func (s *Store) SaveProgress(ctx context.Context, profile, item uuid.UUID, position, length time.Duration, before domain.Reach, at *time.Time) (domain.Reach, error) {
+	reach := domain.ReachOf(position, length)
 	var tag pgconn.CommandTag
+	var err error
 	switch reach {
 	case domain.ReachEnd:
 		if before == domain.ReachEnd {
-			tag, err = s.watched(ctx, profile, []*model.Item{row}, at)
+			tag, err = s.watched(ctx, profile, []uuid.UUID{item}, at)
 		} else {
-			tag, err = s.played(ctx, profile, row, at)
+			tag, err = s.played(ctx, profile, item, at)
 		}
 	case domain.ReachStart, domain.ReachResumable:
 		// A peek at the start is not a play, as Jellyfin's is not: it moves nothing up Next Up.
@@ -72,10 +71,14 @@ func (s *Store) SaveProgress(ctx context.Context, profile, item uuid.UUID, posit
 			ON CONFLICT (profile_id, item_id) DO UPDATE SET position_ms = excluded.position_ms,
 				last_played_at = coalesce(excluded.last_played_at, watch_state.last_played_at),
 				changed_at = excluded.changed_at`+newest,
-			profile, row.ID, position.Milliseconds(), at)
+			profile, item, position.Milliseconds(), at)
 	}
-	if err == nil && tag.RowsAffected() == 0 {
-		err = ErrSuperseded
+	switch {
+	case violates(err, foreignKeyViolation):
+		// A title removed is written all the same, as same_title answers it, and refused.
+		return reach, ErrNotFound
+	case err == nil && tag.RowsAffected() == 0:
+		return reach, ErrSuperseded
 	}
 	return reach, err
 }
@@ -87,18 +90,18 @@ func (s *Store) MarkWatched(ctx context.Context, profile, item uuid.UUID, at *ti
 	if err != nil {
 		return err
 	}
-	_, err = s.watched(ctx, profile, leaves, at)
+	_, err = s.watched(ctx, profile, ids(leaves), at)
 	return err
 }
 
 // watched marks titles watched without counting a play: one marked by hand has been played at
 // least once, and keeps when it was first watched, as Jellyfin's MarkPlayed does. A profile's state
 // of a title is its state wherever the title is listed, so each of these writes them all.
-func (s *Store) watched(ctx context.Context, profile uuid.UUID, items []*model.Item, at *time.Time) (pgconn.CommandTag, error) {
+func (s *Store) watched(ctx context.Context, profile uuid.UUID, items []uuid.UUID, at *time.Time) (pgconn.CommandTag, error) {
 	if len(items) == 0 {
 		return pgconn.CommandTag{}, nil
 	}
-	return s.finish(ctx, profile, ids(items), `
+	return s.finish(ctx, profile, items, `
 		INSERT INTO watch_state (profile_id, item_id, plays, watched_at, last_played_at, changed_at)
 		SELECT DISTINCT $1::uuid, t, 1, w, w, w
 		FROM unnest($2::uuid[]) i, same_title(i) t, least($3::timestamptz, now()) w ORDER BY t
@@ -106,19 +109,19 @@ func (s *Store) watched(ctx context.Context, profile uuid.UUID, items []*model.I
 			position_ms = 0, plays = greatest(watch_state.plays, 1),
 			watched_at = coalesce(watch_state.watched_at, excluded.watched_at),
 			last_played_at = excluded.last_played_at, changed_at = excluded.changed_at`+newest,
-		profile, ids(items), at)
+		profile, items, at)
 }
 
 // played counts a viewing that reached the end.
-func (s *Store) played(ctx context.Context, profile uuid.UUID, item *model.Item, at *time.Time) (pgconn.CommandTag, error) {
-	return s.finish(ctx, profile, []uuid.UUID{item.ID}, `
+func (s *Store) played(ctx context.Context, profile, item uuid.UUID, at *time.Time) (pgconn.CommandTag, error) {
+	return s.finish(ctx, profile, []uuid.UUID{item}, `
 		INSERT INTO watch_state (profile_id, item_id, plays, watched_at, last_played_at, changed_at)
 		SELECT $1, t, 1, w, w, w FROM same_title($2) t, least($3::timestamptz, now()) w ORDER BY t
 		ON CONFLICT (profile_id, item_id) DO UPDATE SET
 			position_ms = 0, plays = watch_state.plays + 1,
 			watched_at = coalesce(watch_state.watched_at, excluded.watched_at),
 			last_played_at = excluded.last_played_at, changed_at = excluded.changed_at`+newest,
-		profile, item.ID, at)
+		profile, item, at)
 }
 
 // finish runs write, which marks films or episodes watched, and takes from the watchlist each film

@@ -44,6 +44,8 @@ type Playback struct {
 	Position time.Duration
 	Started  time.Time
 	Updated  time.Time
+	// Length is how long the title runs, as it was when the playback started.
+	Length time.Duration
 	// Reached is the furthest it has got, so a play is counted once, as it first reaches the end.
 	Reached Reach
 	// Node is the server node running it, whose HLS it serves.

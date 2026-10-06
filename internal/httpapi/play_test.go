@@ -457,7 +457,11 @@ func (l *livePlaybacks) Playbacks(context.Context) ([]domain.Playback, error) {
 	return slices.Collect(maps.Values(l.m)), nil
 }
 
-func (*livePlaybacks) SaveProgress(context.Context, uuid.UUID, uuid.UUID, time.Duration, domain.Reach, *time.Time) (domain.Reach, error) {
+func (*livePlaybacks) Length(context.Context, uuid.UUID) (time.Duration, error) {
+	return 2 * time.Hour, nil
+}
+
+func (*livePlaybacks) SaveProgress(context.Context, uuid.UUID, uuid.UUID, time.Duration, time.Duration, domain.Reach, *time.Time) (domain.Reach, error) {
 	return domain.ReachResumable, nil
 }
 
