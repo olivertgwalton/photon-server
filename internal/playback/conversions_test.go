@@ -254,3 +254,43 @@ func TestAConversionWaitsForASlotAndGivesItUpToAPlay(t *testing.T) {
 		t.Errorf("the download once converted again: %+v, want it ready", got)
 	}
 }
+
+func TestARestartedNodeKeepsItsReadyDownloads(t *testing.T) {
+	st, item, part := filmToDownload(t)
+	ctx := t.Context()
+	profile, err := st.AddProfile(ctx, "Oliver", domain.RoleMember, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := st.AddDownload(ctx, profile.ID, item, part, &domain.Quality{MaxBitrateKbps: 2000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, node := t.TempDir(), uuid.NewV7()
+	ffmpeg := countingFFmpeg(t, filepath.Join(t.TempDir(), "runs"))
+	before, err := NewConversions(st, noNodes{}, slots(t), ffmpeg, hls.Hardware{Accel: domain.AccelSoftware}, dir, node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := before.Convert(ctx, d.Conversion); err != nil {
+		t.Fatal(err)
+	}
+
+	// The node as it starts again, with its id and its cache, prunes first.
+	after, err := NewConversions(st, noNodes{}, slots(t), ffmpeg, hls.Hardware{Accel: domain.AccelSoftware}, dir, node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := after.Prune(ctx); err != nil {
+		t.Fatal(err)
+	}
+	f, _, err := after.File(ctx, d.ID)
+	if err != nil {
+		t.Fatalf("the ready download after a restart: %v", err)
+	}
+	b, _ := io.ReadAll(f)
+	_ = f.Close()
+	if string(b) != "converted" {
+		t.Errorf("its file is %q", b)
+	}
+}

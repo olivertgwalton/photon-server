@@ -32,3 +32,19 @@ func TestAnOperatorSetsHowManyVideosAreEncodedAtOnce(t *testing.T) {
 		t.Errorf("software by default: %d, want at least one", got)
 	}
 }
+
+func TestANodeKeepsItsIDAcrossRestartsWhileItKeepsItsCache(t *testing.T) {
+	cache := t.TempDir()
+	first, err := nodeID(cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := nodeID(cache)
+	if err != nil || again != first {
+		t.Errorf("restarted on the same cache: %v, %v; want %v", again, err, first)
+	}
+	other, err := nodeID(t.TempDir())
+	if err != nil || other == first {
+		t.Errorf("on a cache of its own: %v, %v; want a new node", other, err)
+	}
+}
