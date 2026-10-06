@@ -1,13 +1,21 @@
 <script lang="ts">
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
+import { blurStyle } from "#lib/blurhash.js";
 
 // A person, by their photograph, or their initial where there is none.
 let {
 	id,
 	name,
 	photo,
+	blurhashes,
 	caption,
-}: { id: string; name: string; photo?: string; caption?: string } = $props();
+}: {
+	id: string;
+	name: string;
+	photo?: string;
+	blurhashes?: Record<string, string>;
+	caption?: string;
+} = $props();
 </script>
 
 <a href="/people/{id}" class="group block outline-none">
@@ -23,6 +31,7 @@ let {
 				loading="lazy"
 				decoding="async"
 				class="size-full object-cover"
+				style={blurStyle(blurhashes?.[photo])}
 			>
 		{:else}
 			<span

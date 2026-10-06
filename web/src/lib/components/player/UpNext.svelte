@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onDestroy } from "svelte";
 import { artworkSrc } from "#lib/artwork.js";
+import { blurStyle } from "#lib/blurhash.js";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 
@@ -52,6 +53,7 @@ const where = $derived(
 				src={artworkSrc(picture, "still")}
 				alt=""
 				class="size-full object-cover"
+				style={blurStyle(card.blurhashes?.[picture])}
 			>
 		{/if}
 	</div>

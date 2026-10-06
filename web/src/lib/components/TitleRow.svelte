@@ -3,6 +3,7 @@ import CheckIcon from "@lucide/svelte/icons/check";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import type { Snippet } from "svelte";
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
+import { blurStyle } from "#lib/blurhash.js";
 import type { components } from "#lib/api/schema.js";
 import { episodeLabel, runtime } from "#lib/format.js";
 import TitleMenu from "./TitleMenu.svelte";
@@ -55,6 +56,7 @@ const line = $derived(
 					loading="lazy"
 					decoding="async"
 					class="size-full object-cover"
+					style={blurStyle(card.blurhashes?.[picture])}
 				>
 			{/if}
 		</span>

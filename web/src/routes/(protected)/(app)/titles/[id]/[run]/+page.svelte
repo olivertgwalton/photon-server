@@ -40,6 +40,7 @@ const collections = $derived(
 					id={credit.person_id}
 					name={credit.name}
 					photo={credit.photo}
+					blurhashes={credit.blurhashes}
 					caption={credit.said}
 				/>
 			{/snippet}

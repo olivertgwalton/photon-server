@@ -25,7 +25,7 @@ export const tasks: Record<Schemas["TaskKey"], { name: string; does: string }> =
 		},
 		sweep_artwork: {
 			name: "Clear old artwork",
-			does: "Removes replaced pictures from the cache.",
+			does: "Removes replaced pictures from the cache, and takes the blur drawn while each loads where it has none.",
 		},
 		detect_markers: {
 			name: "Detect intros and credits",
