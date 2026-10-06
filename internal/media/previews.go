@@ -46,8 +46,9 @@ func fitted(width int, toneMap bool) string {
 	return f + ",format=yuvj420p"
 }
 
-// trickplayThreads is how many threads the trickplay ffmpeg encodes its sheets with: one, Jellyfin's
-// default for its trickplay's, so a library's sheets never take more than a core from a playback.
+// trickplayThreads is how many threads the trickplay ffmpeg decodes, filters and encodes its sheets
+// with: one, Jellyfin's default for its trickplay's, so a library's sheets never take more than a
+// core from a playback.
 const trickplayThreads = 1
 
 // Trickplay writes a video's thumbnail sheets into dir as 0.jpg, 1.jpg… in one run, decoding
@@ -60,8 +61,9 @@ func (t Tools) Trickplay(ctx context.Context, f *os.File, dir string, g Grid, to
 	graph := fmt.Sprintf("[0:v:0]fps=1000/%d,%s,split[s][n];[s]tile=%dx%d[t]",
 		g.Interval.Milliseconds(), fitted(g.Width, toneMap), g.Columns, g.Rows)
 	out, err := output(ctx, Background, WholeRun(f), []*os.File{f}, t.FFmpeg.Path,
-		"-hide_banner", "-loglevel", "error", "-nostdin", "-skip_frame", "nokey",
-		"-protocol_whitelist", "fd", "-fd", "3", "-i", "fd:", "-an", "-sn", "-dn", "-filter_complex", graph,
+		"-hide_banner", "-loglevel", "error", "-nostdin", "-skip_frame", "nokey", "-threads", strconv.Itoa(trickplayThreads),
+		"-protocol_whitelist", "fd", "-fd", "3", "-i", "fd:", "-an", "-sn", "-dn",
+		"-filter_complex_threads", strconv.Itoa(trickplayThreads), "-filter_complex", graph,
 		"-map", "[t]", "-threads", strconv.Itoa(trickplayThreads), "-c:v", "mjpeg", "-q:v", jpegQuality, "-f", "image2", "-start_number", "0",
 		filepath.Join(dir, "%d.jpg"),
 		"-map", "[n]", "-f", "framecrc", "pipe:1")
