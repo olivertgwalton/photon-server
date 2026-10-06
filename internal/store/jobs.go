@@ -347,13 +347,13 @@ func (s *Store) Identified(ctx context.Context, id uuid.UUID) error {
 // matched longer ago than the library says, as Jellyfin's scheduled metadata refresh does. It
 // answers how many.
 func (s *Store) RefreshStale(ctx context.Context) (int64, error) {
-	res := s.q.Item.WithContext(ctx).UnderlyingDB().Exec(`
+	tag, err := s.pool.Exec(ctx, `
 		INSERT INTO jobs (kind, subject, priority)
-		SELECT 'identify', i.id, ? FROM items i JOIN libraries l ON l.id = i.library_id
+		SELECT 'identify', i.id, $1 FROM items i JOIN libraries l ON l.id = i.library_id
 		WHERE i.kind IN ('movie', 'show') AND l.refresh_days > 0
 			AND coalesce(i.identified_at, '-infinity') < now() - make_interval(days => l.refresh_days)
 		ON CONFLICT (kind, subject) DO UPDATE SET
 			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
 			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END`, refreshPriority)
-	return res.RowsAffected, res.Error
+	return tag.RowsAffected(), err
 }

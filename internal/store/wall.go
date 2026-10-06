@@ -2,13 +2,14 @@ package store
 
 import (
 	"context"
-	"database/sql/driver"
 	"slices"
 	"time"
 	"uuid"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -207,28 +208,32 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 	return cards, nil
 }
 
+type seasonShow struct {
+	Season model.UUID
+	ID     model.UUID
+	Title  string
+}
+
 // showsOf answers the show each episode among rows is of.
 func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[model.UUID]*TitleRef, error) {
 	out := map[model.UUID]*TitleRef{}
-	var seasons []driver.Valuer
+	var seasons []string
 	for _, r := range rows {
 		if r.Kind == domain.ItemEpisode && r.ParentID != nil {
-			seasons = append(seasons, *r.ParentID)
+			seasons = append(seasons, uuid.UUID(*r.ParentID).String())
 		}
 	}
 	if len(seasons) == 0 {
 		return out, nil
 	}
-	i := s.q.Item
-	var pairs []struct {
-		Season model.UUID
-		ID     model.UUID
-		Title  string
-	}
 	// gen cannot alias a table joined to itself, so this one query is SQL.
-	err := i.WithContext(ctx).UnderlyingDB().Raw(`
+	found, err := s.pool.Query(ctx, `
 		SELECT season.id AS season, show.id, show.title FROM items season
-		JOIN items show ON show.id = season.parent_id WHERE season.id IN ?`, seasons).Scan(&pairs).Error
+		JOIN items show ON show.id = season.parent_id WHERE season.id = ANY($1::uuid[])`, seasons)
+	if err != nil {
+		return nil, err
+	}
+	pairs, err := pgx.CollectRows(found, pgx.RowToStructByName[seasonShow])
 	if err != nil {
 		return nil, err
 	}

@@ -38,6 +38,9 @@ func array[T any](values []T) pgtype.Array[T] {
 	return pgtype.Array[T]{Elements: values, Dims: []pgtype.ArrayDimension{{Length: int32(len(values)), LowerBound: 1}}, Valid: true}
 }
 
+// Store reaches Postgres two ways: gen for its models, SQL into a model's rows included, and pgx on
+// pool for SQL of its own. A transaction is gen's alone, and SQL inside one goes through it, so it
+// stays in the transaction.
 type Store struct {
 	pool *pgxpool.Pool
 	sql  *sql.DB

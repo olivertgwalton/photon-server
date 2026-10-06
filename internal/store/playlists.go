@@ -9,6 +9,8 @@ import (
 
 	"gorm.io/gen/field"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 	"github.com/olivertgwalton/photon-server/internal/store/query"
@@ -31,13 +33,15 @@ type PlaylistEntry struct {
 
 // Playlists answers a profile's playlists, by name.
 func (s *Store) Playlists(ctx context.Context, profile uuid.UUID) ([]PlaylistSummary, error) {
-	var out []PlaylistSummary
-	err := s.q.Playlist.WithContext(ctx).UnderlyingDB().Raw(`
+	rows, err := s.pool.Query(ctx, `
 		SELECT p.id, p.name, p.updated_at, count(e.id) AS entries,
 			coalesce(sum((SELECT max(v.duration_ms) FROM versions v WHERE v.item_id = e.item_id AND v.missing_since IS NULL)), 0) AS duration_ms
 		FROM playlists p LEFT JOIN playlist_entries e ON e.playlist_id = p.id
-		WHERE p.profile_id = ? GROUP BY p.id ORDER BY lower(p.name), p.id`, profile.String()).Scan(&out).Error
-	return out, err
+		WHERE p.profile_id = $1 GROUP BY p.id ORDER BY lower(p.name), p.id`, profile.String())
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[PlaylistSummary])
 }
 
 // AddPlaylist makes a profile's playlist of titles (see AddToPlaylist).

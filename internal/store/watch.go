@@ -11,6 +11,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
@@ -76,25 +78,27 @@ func (s *Store) watched(ctx context.Context, profile uuid.UUID, items []*model.I
 	if len(items) == 0 {
 		return nil
 	}
-	return s.q.WatchState.WithContext(ctx).UnderlyingDB().Exec(`
+	_, err := s.pool.Exec(ctx, `
 		INSERT INTO watch_state (profile_id, item_id, plays, watched_at, last_played_at)
-		SELECT ?, id, 1, now(), now() FROM items WHERE id IN ?
+		SELECT $1, id, 1, now(), now() FROM items WHERE id = ANY($2::uuid[])
 		ON CONFLICT (profile_id, item_id) DO UPDATE SET
 			position_ms = 0, plays = greatest(watch_state.plays, 1),
 			watched_at = coalesce(watch_state.watched_at, now()), last_played_at = now()`,
-		model.UUID(profile), ids(items)).Error
+		profile.String(), texts(items))
+	return err
 }
 
 // played counts a viewing that reached the end.
 func (s *Store) played(ctx context.Context, profile uuid.UUID, item *model.Item) error {
 	// A play counted adds to the plays before it, which GORM's upsert cannot say.
-	return s.q.WatchState.WithContext(ctx).UnderlyingDB().Exec(`
+	_, err := s.pool.Exec(ctx, `
 		INSERT INTO watch_state (profile_id, item_id, plays, watched_at, last_played_at)
-		VALUES (?, ?, 1, now(), now())
+		VALUES ($1, $2, 1, now(), now())
 		ON CONFLICT (profile_id, item_id) DO UPDATE SET
 			position_ms = 0, plays = watch_state.plays + 1,
 			watched_at = coalesce(watch_state.watched_at, now()), last_played_at = now()`,
-		model.UUID(profile), item.ID).Error
+		profile.String(), uuid.UUID(item.ID).String())
+	return err
 }
 
 // MarkUnwatched forgets that a film or episode, or every episode of a season or show, was
@@ -164,6 +168,14 @@ func (s *Store) leaves(ctx context.Context, id uuid.UUID) ([]*model.Item, error)
 	return i.WithContext(ctx).Where(i.ParentID.In(ids(parents)...), i.Kind.Eq(string(domain.ItemEpisode))).Find()
 }
 
+type episodeCount struct {
+	ID         model.UUID
+	Episodes   int
+	Watched    int
+	LastPlayed *time.Time
+	WatchedAt  *time.Time
+}
+
 // states answers what a profile has made of each title.
 func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.Item) (map[model.UUID]TitleState, error) {
 	out := map[model.UUID]TitleState{}
@@ -188,14 +200,7 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 	}
 	if len(groups) > 0 {
 		// gen cannot count down two levels of episodes, so this one query is SQL.
-		var counts []struct {
-			ID         model.UUID
-			Episodes   int
-			Watched    int
-			LastPlayed *time.Time
-			WatchedAt  *time.Time
-		}
-		err := w.WithContext(ctx).UnderlyingDB().Raw(`
+		found, err := s.pool.Query(ctx, `
 			SELECT g.id, count(e.id) AS episodes, count(ws.watched_at) AS watched,
 				max(ws.last_played_at) AS last_played, max(ws.watched_at) AS watched_at
 			FROM items g
@@ -204,9 +209,13 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 				UNION ALL
 				SELECT e.id FROM items s JOIN items e ON e.parent_id = s.id WHERE s.parent_id = g.id AND e.kind = 'episode'
 			) e
-			LEFT JOIN watch_state ws ON ws.item_id = e.id AND ws.profile_id = ?
-			WHERE g.id IN ?
-			GROUP BY g.id`, p, ids(groups)).Scan(&counts).Error
+			LEFT JOIN watch_state ws ON ws.item_id = e.id AND ws.profile_id = $1
+			WHERE g.id = ANY($2::uuid[])
+			GROUP BY g.id`, profile.String(), texts(groups))
+		if err != nil {
+			return nil, err
+		}
+		counts, err := pgx.CollectRows(found, pgx.RowToStructByName[episodeCount])
 		if err != nil {
 			return nil, err
 		}

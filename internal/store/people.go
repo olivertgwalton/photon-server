@@ -12,6 +12,8 @@ import (
 
 	"gorm.io/gorm/clause"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 	"github.com/olivertgwalton/photon-server/internal/store/query"
@@ -276,23 +278,28 @@ type CreditRef struct {
 	Photo    uuid.UUID         `json:"photo,omitzero"`
 }
 
+type creditRow struct {
+	Source   domain.FieldSource
+	PersonID model.UUID
+	Name     string
+	Kind     domain.CreditKind
+	Role     string
+	PhotoID  *model.UUID
+}
+
 // credits answers a title's cast and crew as the highest-ranked source with any gives them.
 func (s *Store) credits(ctx context.Context, item model.UUID) ([]CreditRef, error) {
 	ranked, err := ranks(ctx, s.q, item)
 	if err != nil {
 		return nil, err
 	}
-	var rows []struct {
-		Source   domain.FieldSource
-		PersonID model.UUID
-		Name     string
-		Kind     domain.CreditKind
-		Role     string
-		PhotoID  *model.UUID
-	}
-	err = s.q.Credit.WithContext(ctx).UnderlyingDB().Raw(`
+	found, err := s.pool.Query(ctx, `
 		SELECT c.source, c.person_id, p.name, c.kind, c.role, p.photo_id FROM credits c
-		JOIN people p ON p.id = c.person_id WHERE c.item_id = ? ORDER BY c.position`, item).Scan(&rows).Error
+		JOIN people p ON p.id = c.person_id WHERE c.item_id = $1 ORDER BY c.position`, uuid.UUID(item).String())
+	if err != nil {
+		return nil, err
+	}
+	rows, err := pgx.CollectRows(found, pgx.RowToStructByName[creditRow])
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}
@@ -389,21 +396,26 @@ func optionalTime(t time.Time) *time.Time {
 	return &t
 }
 
+type creditLink struct {
+	ItemID model.UUID
+	Kind   domain.CreditKind
+	Role   string
+}
+
 // PersonCredits answers the films and shows someone is credited on, the newest first.
 func (s *Store) PersonCredits(ctx context.Context, profile, person uuid.UUID) ([]PersonCredit, error) {
-	var links []struct {
-		ItemID model.UUID
-		Kind   domain.CreditKind
-		Role   string
-	}
 	// An episode's credit is its show's; a person in many episodes is listed once per part.
-	err := s.q.Credit.WithContext(ctx).UnderlyingDB().Raw(`
+	found, err := s.pool.Query(ctx, `
 		SELECT DISTINCT ON (t.id, c.kind) t.id AS item_id, c.kind, c.role FROM credits c
 		JOIN items i ON i.id = c.item_id
 		JOIN items t ON t.id = CASE i.kind WHEN 'episode' THEN (SELECT s.parent_id FROM items s WHERE s.id = i.parent_id) ELSE i.id END
-		WHERE c.person_id = ? AND t.kind IN ('movie', 'show')
-			AND EXISTS (SELECT 1 FROM viewer(?) v WHERE sees(v, t))
-		ORDER BY t.id, c.kind, c.position`, person.String(), profile.String()).Scan(&links).Error
+		WHERE c.person_id = $1 AND t.kind IN ('movie', 'show')
+			AND EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, t))
+		ORDER BY t.id, c.kind, c.position`, person.String(), profile.String())
+	if err != nil {
+		return nil, err
+	}
+	links, err := pgx.CollectRows(found, pgx.RowToStructByName[creditLink])
 	if err != nil || len(links) == 0 {
 		return nil, err
 	}

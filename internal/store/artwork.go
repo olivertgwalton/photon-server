@@ -252,25 +252,16 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (Picture, error) {
 
 // LivePictures answers which of these picture ids are still a title's or a person's.
 func (s *Store) LivePictures(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]bool, error) {
-	out := make(map[uuid.UUID]bool, len(ids))
-	for start := 0; start < len(ids); start += 1000 {
-		batch := ids[start:min(start+1000, len(ids))]
-		in := make([]string, len(batch))
-		for n, id := range batch {
-			in[n] = id.String()
-		}
-		var found []string
-		err := s.q.Artwork.WithContext(ctx).UnderlyingDB().Raw(`
-			SELECT id::text FROM artwork WHERE id::text IN ?
-			UNION SELECT photo_id::text FROM people WHERE photo_id::text IN ?`, in, in).Scan(&found).Error
-		if err != nil {
-			return nil, err
-		}
-		for _, f := range found {
-			if id, err := uuid.Parse(f); err == nil {
-				out[id] = true
-			}
-		}
+	in := make([]string, len(ids))
+	for n, id := range ids {
+		in[n] = id.String()
 	}
-	return out, nil
+	live, err := queryIDs(ctx, s.pool, `
+		SELECT id::text FROM artwork WHERE id = ANY($1::uuid[])
+		UNION SELECT photo_id::text FROM people WHERE photo_id = ANY($1::uuid[])`, in)
+	out := make(map[uuid.UUID]bool, len(live))
+	for _, id := range live {
+		out[id] = true
+	}
+	return out, err
 }

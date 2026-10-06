@@ -10,6 +10,8 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 	"github.com/olivertgwalton/photon-server/internal/store/query"
@@ -145,17 +147,18 @@ type SeasonPart struct {
 	Fingerprinted bool
 }
 
+type seasonPartRow struct {
+	ID, Episode, Version model.UUID
+	Idx                  int
+	DurationMS           int64
+	Root, RelPath        string
+	FingerprintedAt      *time.Time
+}
+
 // SeasonParts answers the parts of a season's episodes that are on disk, in a library that compares
 // sound, and have sound, by episode, copy and order.
 func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart, error) {
-	var rows []struct {
-		ID, Episode, Version model.UUID
-		Idx                  int
-		DurationMS           int64
-		Root, RelPath        string
-		FingerprintedAt      *time.Time
-	}
-	err := s.q.Part.WithContext(ctx).UnderlyingDB().Raw(`
+	found, err := s.pool.Query(ctx, `
 		SELECT DISTINCT ON (p.id) p.id, e.id AS episode, v.id AS version, p.idx, p.duration_ms,
 			l.root, f.rel_path, p.fingerprinted_at
 		FROM items e
@@ -163,9 +166,13 @@ func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart
 		JOIN parts p ON p.version_id = v.id
 		JOIN part_files f ON f.part_id = p.id
 		JOIN libraries l ON l.id = f.library_id AND l.markers = 'all'
-		WHERE e.parent_id = ? AND e.kind = 'episode'
+		WHERE e.parent_id = $1 AND e.kind = 'episode'
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'audio')
-		ORDER BY p.id, f.rel_path`, model.UUID(season)).Scan(&rows).Error
+		ORDER BY p.id, f.rel_path`, season.String())
+	if err != nil {
+		return nil, err
+	}
+	rows, err := pgx.CollectRows(found, pgx.RowToStructByName[seasonPartRow])
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +225,7 @@ func (s *Store) SaveFingerprintMarkers(ctx context.Context, compared []uuid.UUID
 // compared, in a library that compares sound. A season whose comparison failed every attempt waits
 // for its episodes to change.
 func (s *Store) QueueMarkers(ctx context.Context) (int64, error) {
-	res := s.q.Item.WithContext(ctx).UnderlyingDB().Exec(`
+	tag, err := s.pool.Exec(ctx, `
 		INSERT INTO jobs (kind, subject)
 		SELECT DISTINCT 'markers', e.parent_id FROM items e
 		JOIN versions v ON v.item_id = e.id AND v.missing_since IS NULL
@@ -227,5 +234,5 @@ func (s *Store) QueueMarkers(ctx context.Context) (int64, error) {
 		WHERE e.kind = 'episode' AND p.fingerprinted_at IS NULL
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'audio')
 		ON CONFLICT (kind, subject) DO NOTHING`)
-	return res.RowsAffected, res.Error
+	return tag.RowsAffected(), err
 }
