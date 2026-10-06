@@ -75,6 +75,15 @@ func TestProbeRange(t *testing.T) {
 	}
 }
 
+// interlaced.json is ffprobe's output for MPEG-2 encoded by fields, top first, in MPEG-TS.
+func TestProbeFindsAnInterlacedPicture(t *testing.T) {
+	for fixture, want := range map[string]bool{"interlaced.json": true, "sdr.json": false} {
+		if got := probeFixture(t, fixture).Streams[0].Interlaced; got != want {
+			t.Errorf("%s: interlaced %t, want %t", fixture, got, want)
+		}
+	}
+}
+
 // The file reaches ffprobe as descriptor 3, never as a path.
 func TestProbeReadsTheOpenFile(t *testing.T) {
 	dir := t.TempDir()

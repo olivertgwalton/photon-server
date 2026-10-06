@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -44,6 +45,9 @@ type Stream struct {
 	Level       int
 	Range       domain.Range
 	DolbyVision *DolbyVision
+	// Interlaced is a picture ffprobe gives a field order for; one it calls unknown is taken as
+	// progressive.
+	Interlaced bool
 
 	Channels      int
 	ChannelLayout string
@@ -108,6 +112,7 @@ type probeStream struct {
 	Width         int               `json:"width"`
 	Height        int               `json:"height"`
 	AvgFrameRate  string            `json:"avg_frame_rate"`
+	FieldOrder    string            `json:"field_order"`
 	ColorTransfer string            `json:"color_transfer"`
 	Channels      int               `json:"channels"`
 	ChannelLayout string            `json:"channel_layout"`
@@ -170,6 +175,7 @@ func parseProbe(out []byte) (Facts, error) {
 			st.FrameRate = rate(s.AvgFrameRate)
 			st.BitDepth = cmp.Or(atoi(s.RawBits), bitDepth(s.PixFmt))
 			st.Level = max(s.Level, 0)
+			st.Interlaced = slices.Contains([]string{"tt", "bb", "tb", "bt"}, s.FieldOrder)
 			transfer, frameSide := s.ColorTransfer, []probeSideData(nil)
 			for _, f := range p.Frames {
 				if f.StreamIndex == s.Index {

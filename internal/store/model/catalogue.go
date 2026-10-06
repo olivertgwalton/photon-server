@@ -176,6 +176,7 @@ type Stream struct {
 	BitDepth        *int16
 	Level           *int
 	VideoRange      *domain.Range
+	Interlaced      bool
 	DVProfile       *int16 `gorm:"column:dv_profile"`
 	DVLevel         *int16 `gorm:"column:dv_level"`
 	DVCompatibility *int16 `gorm:"column:dv_compatibility"`
