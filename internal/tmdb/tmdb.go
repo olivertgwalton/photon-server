@@ -213,10 +213,11 @@ func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadat
 	extra := map[Kind]string{Movie: "release_dates,external_ids,videos,images,credits", Show: "content_ratings,external_ids,videos,images,aggregate_credits"}[kind]
 	q := url.Values{
 		"append_to_response": {extra},
-		// Videos and pictures in the metadata language, and those in none: most trailers' music,
-		// and backdrops and posters without lettering.
+		// Videos in the metadata language, and those in none: most trailers' music. Pictures in
+		// that language, those in none (backdrops and posters without lettering), and English, as
+		// Jellyfin asks, since a title may have no poster lettered in any other.
 		"include_video_language": {c.videoLanguage + ",null"},
-		"include_image_language": {c.videoLanguage + ",null"},
+		"include_image_language": {c.imageLanguages()},
 	}
 	var d details
 	if err := c.get(ctx, fmt.Sprintf("/%s/%d", kind, id), q, &d); err != nil {
@@ -266,9 +267,9 @@ func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadat
 		}
 	}
 	out.Artwork = slices.Concat(
-		pictures(domain.ArtworkPoster, d.Images.Posters, c.videoLanguage),
-		pictures(domain.ArtworkBackdrop, d.Images.Backdrops, ""),
-		pictures(domain.ArtworkLogo, d.Images.Logos, c.videoLanguage),
+		pictures(domain.ArtworkPoster, d.Images.Posters, c.videoLanguage, "en", ""),
+		pictures(domain.ArtworkBackdrop, d.Images.Backdrops, "", c.videoLanguage, "en"),
+		pictures(domain.ArtworkLogo, d.Images.Logos, c.videoLanguage, "en", ""),
 	)
 	videos := d.Videos.Results
 	// The studio's own first, then the newest.
@@ -293,17 +294,30 @@ type image struct {
 	Height   int     `json:"height"`
 	Language string  `json:"iso_639_1"`
 	Votes    float64 `json:"vote_average"`
+	Count    int     `json:"vote_count"`
 }
 
-// pictures orders a kind's pictures, the preferred language first (a poster's lettering in the
-// reader's language, a backdrop with none), then by TMDB's votes, and keeps the best.
-func pictures(kind domain.ArtworkKind, images []image, preferred string) []domain.Artwork {
+// imageLanguages is the pictures to ask for: in the metadata language, in none, and in English.
+func (c *Client) imageLanguages() string {
+	if c.videoLanguage == "en" {
+		return "en,null"
+	}
+	return c.videoLanguage + ",null,en"
+}
+
+// pictures orders a kind's pictures by language, most preferred first (a poster's lettering in the
+// reader's language, then English, then none; a backdrop with none), then by TMDB's rating and
+// how many voted, as Jellyfin does, and keeps the best.
+func pictures(kind domain.ArtworkKind, images []image, preferred ...string) []domain.Artwork {
+	rank := func(im image) int {
+		if i := slices.Index(preferred, im.Language); i >= 0 {
+			return i
+		}
+		return len(preferred)
+	}
 	images = slices.Clone(images)
 	slices.SortStableFunc(images, func(a, b image) int {
-		if (a.Language == preferred) != (b.Language == preferred) {
-			return map[bool]int{true: -1, false: 1}[a.Language == preferred]
-		}
-		return cmp.Compare(b.Votes, a.Votes)
+		return cmp.Or(cmp.Compare(rank(a), rank(b)), cmp.Compare(b.Votes, a.Votes), cmp.Compare(b.Count, a.Count))
 	})
 	out := make([]domain.Artwork, 0, min(len(images), keepPictures))
 	for _, im := range images[:min(len(images), keepPictures)] {
