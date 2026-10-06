@@ -1,7 +1,6 @@
 <script lang="ts">
 import FilmIcon from "@lucide/svelte/icons/film";
 import DownloadIcon from "@lucide/svelte/icons/download";
-import GaugeIcon from "@lucide/svelte/icons/gauge";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import HistoryIcon from "@lucide/svelte/icons/history";
 import HouseIcon from "@lucide/svelte/icons/house";
@@ -15,7 +14,7 @@ import * as Sidebar from "#lib/components/ui/sidebar/index.js";
 
 type Library = components["schemas"]["Library"];
 
-let { libraries, admin }: { libraries: Library[]; admin: boolean } = $props();
+let { libraries }: { libraries: Library[] } = $props();
 
 const kindIcons: Record<Library["kind"], Component> = {
 	movies: FilmIcon,
@@ -28,7 +27,6 @@ function current(href: string) {
 	const path = page.url.pathname;
 	if (href === "/") return path === "/";
 	// The server's settings are the dashboard's, not the reader's.
-	if (href === "/settings" && path.startsWith("/settings/server")) return false;
 	return path === href || path.startsWith(`${href}/`);
 }
 </script>
@@ -96,9 +94,6 @@ function current(href: string) {
 			<Sidebar.Group>
 				<Sidebar.Menu>
 					{@render item("/settings", "Settings", SettingsIcon)}
-					{#if admin}
-						{@render item("/settings/server", "Dashboard", GaugeIcon)}
-					{/if}
 				</Sidebar.Menu>
 			</Sidebar.Group>
 		</nav>

@@ -30,7 +30,9 @@ test("home draws the rows and the shell lists every library", async ({
 		"/libraries/l-films",
 	);
 	await expect(nav.getByRole("link", { name: "Shows" })).toBeVisible();
-	await expect(nav.getByRole("link", { name: "Dashboard" })).toBeVisible();
+	// The server's pages are under Settings, as Plex keeps them: one way in.
+	await expect(nav.getByRole("link", { name: "Settings" })).toBeVisible();
+	await expect(nav.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
 });
 
 test("rows scroll sideways inside the page, which never does", async ({
