@@ -18,6 +18,7 @@ const number = (name: string) => {
 {#key data.title.id}
 	<Player
 		title={data.title}
+		prefs={data.prefs}
 		start={number("t") ?? (data.title.state?.position_ms ?? 0) / 1000}
 		version={page.url.searchParams.get("version") ?? undefined}
 		audio={number("audio")}

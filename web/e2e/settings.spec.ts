@@ -68,12 +68,14 @@ test("a member sets a PIN and takes it off again, and sees no server", async ({
 	await expect(page.getByRole("button", { name: "Set PIN" })).toBeVisible();
 });
 
-test("playback settings are kept in the browser", async ({ page }) => {
+test("playback settings are the profile's, kept by the server", async ({
+	page,
+}) => {
 	await logIn(page, "/settings/playback");
 	await expectAccessible(page);
 	await page.getByLabel("Subtitles", { exact: true }).click();
 	await page.getByRole("option", { name: "Always" }).click();
-	await expect(page.getByText("Saved for this browser.")).toBeVisible();
+	await expect(page.getByText("Saved for every device.")).toBeVisible();
 	await page.getByRole("switch", { name: "Play the next episode" }).click();
 	await page.reload();
 	await expect(page.getByLabel("Subtitles", { exact: true })).toHaveText(

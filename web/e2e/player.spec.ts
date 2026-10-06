@@ -28,7 +28,12 @@ test("a film plays as it is from where it was left, and stops where it was", asy
 	);
 	expect(body.profile.containers).toContain("mp4");
 
-	await page.waitForRequest("**/api/v1/playback/*/progress");
+	// It says which tracks are playing, so the title plays with them again.
+	const report = await page.waitForRequest("**/api/v1/playback/*/progress");
+	expect(report.postDataJSON()).toMatchObject({
+		audio_stream: 1,
+		subtitle_stream: -1,
+	});
 	await expect.poll(() => time(page)).toBeGreaterThan(2);
 	await expect(
 		page.getByRole("heading", { name: "Quiet Hours" }),
@@ -148,10 +153,13 @@ test("scrubbing shows the chapter and the thumbnail under the pointer", async ({
 	expect((await sheet).ok()).toBe(true);
 });
 
-test("the player follows this browser's playback settings", async ({
+test("what this browser kept moves up to the profile once, and the player follows it", async ({
 	page,
 }) => {
+	// Kept before the server kept them, and only once: what goes up is gone.
 	await page.addInitScript(() => {
+		if (sessionStorage.getItem("seeded")) return;
+		sessionStorage.setItem("seeded", "1");
 		localStorage.setItem(
 			"photon.playback",
 			JSON.stringify({ audioLanguage: "fr", skipIntro: "auto" }),
@@ -166,4 +174,13 @@ test("the player follows this browser's playback settings", async ({
 		.poll(() => time(page), { timeout: 2_000 })
 		.toBeGreaterThanOrEqual(3);
 	await expect(page.getByRole("button", { name: "Skip Intro" })).toHaveCount(0);
+	expect(
+		await page.evaluate(() => localStorage.getItem("photon.playback")),
+	).toBeNull();
+	const kept = await page.request.get("/api/v1/me/preferences");
+	expect(await kept.json()).toMatchObject({
+		audio_language: "fr",
+		audio_track: "language",
+		intro_action: "skip",
+	});
 });
