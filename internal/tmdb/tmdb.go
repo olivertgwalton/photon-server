@@ -344,6 +344,8 @@ func (c *Client) Season(ctx context.Context, show, number int) (domain.SeasonMet
 			Still      string   `json:"still_path"`
 			GuestStars []person `json:"guest_stars"`
 			Crew       []person `json:"crew"`
+			Score      float64  `json:"vote_average"`
+			Votes      int      `json:"vote_count"`
 		} `json:"episodes"`
 	}
 	if err := c.get(ctx, fmt.Sprintf("/tv/%d/season/%d", show, number), nil, &s); err != nil {
@@ -363,6 +365,11 @@ func (c *Client) Season(ctx context.Context, show, number int) (domain.SeasonMet
 			Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: year(aired),
 			Artwork: picture(domain.ArtworkThumb, e.Still),
 			Credits: credits{Cast: e.GuestStars, Crew: e.Crew}.list(domain.CreditGuestStar),
+		}
+		if e.Votes > 0 {
+			m := out.Episodes[e.Number]
+			m.Ratings = []domain.Rating{{Site: domain.SiteTMDB, Score: e.Score * 10, Votes: e.Votes}}
+			out.Episodes[e.Number] = m
 		}
 	}
 	return out, nil

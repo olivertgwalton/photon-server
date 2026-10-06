@@ -143,6 +143,9 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 					if err := saveProviderArtwork(ctx, tx, e.ID, source, said.Artwork); err != nil {
 						return err
 					}
+					if err := saveRatings(ctx, tx, e.ID, source, said.Ratings); err != nil {
+						return err
+					}
 					credits = append(credits, credited{e.ID, said.Credits})
 				}
 			}
