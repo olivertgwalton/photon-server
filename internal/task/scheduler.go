@@ -18,9 +18,9 @@ const (
 )
 
 type Task struct {
-	Key      domain.TaskKey
-	Triggers []Trigger
-	Run      func(ctx context.Context) error
+	Key     domain.TaskKey
+	Trigger Trigger
+	Run     func(ctx context.Context) error
 }
 
 type stateStore interface {
@@ -117,17 +117,9 @@ func (s *Scheduler) holdLease(ctx context.Context) bool {
 	return held && err == nil
 }
 
-// isDue reports whether a task was asked for since it last started, or a trigger has fired.
+// isDue reports whether a task was asked for since it last started, or its trigger has fired.
 func isDue(task Task, state domain.TaskState, now time.Time) bool {
-	if state.Requested.After(state.Started) {
-		return true
-	}
-	for _, t := range task.Triggers {
-		if t.due(state.Started, now) {
-			return true
-		}
-	}
-	return false
+	return state.Requested.After(state.Started) || task.Trigger.due(state.Started, now)
 }
 
 // ErrNoTask is a task the scheduler does not run.
@@ -152,16 +144,11 @@ func (s *Scheduler) Statuses(ctx context.Context) ([]Status, error) {
 	out := make([]Status, len(s.tasks))
 	for i, task := range s.tasks {
 		st := states[task.Key]
-		out[i] = Status{Key: task.Key, State: st, Running: !st.Started.IsZero() && st.Started.After(st.Finished)}
-		if isDue(task, st, now) {
-			out[i].Next = now
-			continue
+		next := now
+		if !isDue(task, st, now) {
+			next = task.Trigger.next(st.Started, now)
 		}
-		for _, t := range task.Triggers {
-			if next := t.next(st.Started, now); out[i].Next.IsZero() || next.Before(out[i].Next) {
-				out[i].Next = next
-			}
-		}
+		out[i] = Status{Key: task.Key, State: st, Running: !st.Started.IsZero() && st.Started.After(st.Finished), Next: next}
 	}
 	return out, nil
 }
