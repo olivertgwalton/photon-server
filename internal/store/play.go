@@ -131,6 +131,21 @@ func (s *Store) SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel strin
 	return row.Root, row.RelPath, err
 }
 
+// VisiblePartFile is where a part's bytes are, as PartFile answers, or ErrNotFound unless the
+// profile may see its title.
+func (s *Store) VisiblePartFile(ctx context.Context, profile, part uuid.UUID) (root, rel string, err error) {
+	err = s.pool.QueryRow(ctx, `
+		SELECT l.root, f.rel_path FROM part_files f JOIN libraries l ON l.id = f.library_id
+			JOIN parts p ON p.id = f.part_id JOIN versions v ON v.id = p.version_id
+			JOIN items i ON i.id = v.item_id, viewer($2) asking
+		WHERE f.part_id = $1 AND sees(asking, i) ORDER BY f.rel_path LIMIT 1`,
+		part.String(), profile.String()).Scan(&root, &rel)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return root, rel, err
+}
+
 // PartKeyframes is how a part's library finds keyframes, and those found: none where the part has
 // none known, nil where it has not been read for them yet.
 type PartKeyframes struct {

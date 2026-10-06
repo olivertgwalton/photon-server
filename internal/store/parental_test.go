@@ -11,6 +11,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
 func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
@@ -78,6 +79,15 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 		}
 		return out
 	}
+	partOf := func(item uuid.UUID) uuid.UUID {
+		t.Helper()
+		v, p := s.q.Version, s.q.Part
+		var part struct{ ID model.UUID }
+		if err := p.WithContext(ctx).Select(p.ID).Join(v, v.ID.EqCol(p.VersionID)).Where(v.ItemID.Eq(model.UUID(item))).Scan(&part); err != nil {
+			t.Fatal(err)
+		}
+		return uuid.UUID(part.ID)
+	}
 	if got := walls(); len(got) != 5 {
 		t.Errorf("with no limits: %q, want everything", got)
 	}
@@ -95,6 +105,9 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 		if _, err := s.Playable(ctx, kid.ID, id, uuid.UUID{}); !errors.Is(err, ErrNotFound) {
 			t.Errorf("playing %s: %v, want ErrNotFound", name, err)
 		}
+		if _, _, err := s.VisiblePartFile(ctx, kid.ID, partOf(id)); !errors.Is(err, ErrNotFound) {
+			t.Errorf("timing the connection on %s: %v, want ErrNotFound", name, err)
+		}
 	}
 	if found, total, _ := s.Search(ctx, SearchQuery{Profile: kid.ID, Text: "heat", Limit: 10}); len(found) != 0 || total != 0 {
 		t.Errorf("searching for Heat: %+v, want nothing", found)
@@ -109,6 +122,9 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 				t.Errorf("home row %s holds %q", r.Kind, c.Title)
 			}
 		}
+	}
+	if root, rel, err := s.VisiblePartFile(ctx, kid.ID, partOf(ids["Paddington"])); err != nil || root != "/srv/films" || rel != "Paddington.mkv" {
+		t.Errorf("timing the connection on Paddington: %q %q %v", root, rel, err)
 	}
 	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedAllow}); err != nil {
 		t.Fatal(err)
