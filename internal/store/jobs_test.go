@@ -320,3 +320,33 @@ func TestTitlesDueAFreshMatchAreQueued(t *testing.T) {
 		t.Errorf("refresh days = %d, want 0", got.RefreshDays)
 	}
 }
+
+func TestATitleAScanFindsIsMatchedBeforeTheRefresh(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{{Title: "Heat", Folder: "Heat"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	j := s.q.Job
+	if _, err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobIdentify))).Delete(); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.RefreshStale(ctx); err != nil || n != 1 {
+		t.Fatalf("queued %d, %v; want Heat", n, err)
+	}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Ronin", []byte("v1"), []Film{{Title: "Ronin", Folder: "Ronin"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobIdentify}, uuid.NewV4(), time.Minute, 1)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claimed %v, %v", claimed, err)
+	}
+	i := s.q.Item
+	if ronin, _ := i.WithContext(ctx).Where(i.Title.Eq("Ronin")).Take(); claimed[0].Subject != uuid.UUID(ronin.ID) {
+		t.Error("the scheduled refresh was matched before the title the scan found")
+	}
+}
