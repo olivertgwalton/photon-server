@@ -366,6 +366,8 @@ func (s *Store) parents(ctx context.Context, item *model.Item, p *TitlePage) err
 			return err
 		}
 		ref := &TitleRef{ID: uuid.UUID(row.ID), Title: row.Title}
+		// A season or episode with no certificate of its own wears the nearest it is under.
+		p.Certificate = cmp.Or(p.Certificate, deref(row.Certificate))
 		switch row.Kind {
 		case domain.ItemSeason:
 			p.Season = ref
