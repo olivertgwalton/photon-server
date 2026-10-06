@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"net/http"
-	"strconv"
 	"time"
 	"uuid"
 
@@ -87,20 +86,9 @@ func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	q := r.URL.Query()
-	offset, limit := 0, maxWallLimit
-	var err error
-	if s := q.Get("offset"); s != "" {
-		if offset, err = strconv.Atoi(s); err != nil || offset < 0 {
-			writeProblem(w, a.logger, codeInvalidParameter, "offset is a number from 0")
-			return
-		}
-	}
-	if s := q.Get("limit"); s != "" {
-		if limit, err = strconv.Atoi(s); err != nil || limit < 1 || limit > maxWallLimit {
-			writeProblem(w, a.logger, codeInvalidParameter, "limit is a number from 1 to "+strconv.Itoa(maxWallLimit))
-			return
-		}
+	offset, limit, ok := a.paging(w, r, maxWallLimit)
+	if !ok {
+		return
 	}
 	entries, total, err := a.svc.Playlists.PlaylistEntries(r.Context(), sessionOf(r).Profile.ID, id, offset, limit)
 	if a.answered(w, r, err) {

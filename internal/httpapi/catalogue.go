@@ -216,7 +216,7 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var ok bool
-	if query.Offset, query.Limit, ok = a.paging(w, r); !ok {
+	if query.Offset, query.Limit, ok = a.paging(w, r, defaultWallLimit); !ok {
 		return
 	}
 	cards, total, err := a.svc.Catalogue.Search(r.Context(), query)
@@ -272,13 +272,10 @@ type homeJSON struct {
 
 // home answers the profile's home page: its rows with anything in them, in the order to show.
 func (a *API) home(w http.ResponseWriter, r *http.Request) {
-	limit := defaultHomeLimit
-	if s := r.URL.Query().Get("limit"); s != "" {
-		var err error
-		if limit, err = strconv.Atoi(s); err != nil || limit < 1 || limit > maxWallLimit {
-			writeProblem(w, a.logger, codeInvalidParameter, "limit is a number from 1 to "+strconv.Itoa(maxWallLimit))
-			return
-		}
+	// The route takes no offset.
+	_, limit, ok := a.paging(w, r, defaultHomeLimit)
+	if !ok {
+		return
 	}
 	rows, err := a.svc.Catalogue.Home(r.Context(), sessionOf(r).Profile.ID, limit)
 	if err != nil {
@@ -426,9 +423,9 @@ func (a *API) next(w http.ResponseWriter, r *http.Request) {
 }
 
 // paging reads a page's offset and limit, as walls page.
-func (a *API) paging(w http.ResponseWriter, r *http.Request) (offset, limit int, ok bool) {
+func (a *API) paging(w http.ResponseWriter, r *http.Request, defaultLimit int) (offset, limit int, ok bool) {
 	q := r.URL.Query()
-	offset, limit = 0, defaultWallLimit
+	offset, limit = 0, defaultLimit
 	var err error
 	if s := q.Get("offset"); s != "" {
 		if offset, err = strconv.Atoi(s); err != nil || offset < 0 {

@@ -44,7 +44,7 @@ func (a *API) adminHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) history(w http.ResponseWriter, r *http.Request, profile uuid.UUID) {
-	offset, limit, ok := a.paging(w, r)
+	offset, limit, ok := a.paging(w, r, defaultWallLimit)
 	if !ok {
 		return
 	}

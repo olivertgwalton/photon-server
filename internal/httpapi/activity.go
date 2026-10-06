@@ -68,7 +68,7 @@ func (a *API) adminActivity(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidParameter, fmt.Sprintf("kind is one of %v", domain.LoggedEventKinds()))
 		return
 	}
-	offset, limit, ok := a.paging(w, r)
+	offset, limit, ok := a.paging(w, r, defaultWallLimit)
 	if !ok {
 		return
 	}

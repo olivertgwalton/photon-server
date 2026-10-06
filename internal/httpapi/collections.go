@@ -23,7 +23,7 @@ func (a *API) libraryCollections(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	offset, limit, ok := a.paging(w, r)
+	offset, limit, ok := a.paging(w, r, defaultWallLimit)
 	if !ok {
 		return
 	}
