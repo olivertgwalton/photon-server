@@ -104,8 +104,8 @@ func TestSchedulerRunsDueTasksOneAtATime(t *testing.T) {
 		var mu sync.Mutex
 		runs, concurrent, most := 0, 0, 0
 		task := Task{
-			Key:      domain.TaskScanLibraries,
-			Triggers: []Trigger{{Kind: TriggerEvery, Every: time.Hour}},
+			Key:     domain.TaskScanLibraries,
+			Trigger: Trigger{Kind: TriggerEvery, Every: time.Hour},
 			Run: func(context.Context) error {
 				mu.Lock()
 				runs++
@@ -146,9 +146,9 @@ func TestSchedulerRunsNothingWithoutTheLease(t *testing.T) {
 		st := &memoryStore{starts: map[domain.TaskKey]time.Time{}, requested: map[domain.TaskKey]time.Time{}}
 		ran := false
 		task := Task{
-			Key:      domain.TaskScanLibraries,
-			Triggers: []Trigger{{Kind: TriggerEvery, Every: time.Hour}},
-			Run:      func(context.Context) error { ran = true; return nil },
+			Key:     domain.TaskScanLibraries,
+			Trigger: Trigger{Kind: TriggerEvery, Every: time.Hour},
+			Run:     func(context.Context) error { ran = true; return nil },
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		go NewScheduler(st, discard(), uuid.NewV7(), ignore, task).Run(ctx)
@@ -165,8 +165,8 @@ func TestLosingTheLeaseCancelsTheRunningTask(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		st := &memoryStore{leader: true, starts: map[domain.TaskKey]time.Time{}, requested: map[domain.TaskKey]time.Time{}}
 		task := Task{
-			Key:      domain.TaskScanLibraries,
-			Triggers: []Trigger{{Kind: TriggerEvery, Every: 24 * time.Hour}},
+			Key:     domain.TaskScanLibraries,
+			Trigger: Trigger{Kind: TriggerEvery, Every: 24 * time.Hour},
 			Run: func(ctx context.Context) error {
 				<-ctx.Done()
 				return ctx.Err()
@@ -190,9 +190,9 @@ func TestATaskAskedForRunsBeforeItIsDue(t *testing.T) {
 		st := &memoryStore{leader: true, starts: map[domain.TaskKey]time.Time{}, requested: map[domain.TaskKey]time.Time{}}
 		runs := 0
 		task := Task{
-			Key:      domain.TaskScanLibraries,
-			Triggers: []Trigger{{Kind: TriggerEvery, Every: 12 * time.Hour}},
-			Run:      func(context.Context) error { runs++; return nil },
+			Key:     domain.TaskScanLibraries,
+			Trigger: Trigger{Kind: TriggerEvery, Every: 12 * time.Hour},
+			Run:     func(context.Context) error { runs++; return nil },
 		}
 		s := NewScheduler(st, discard(), uuid.NewV7(), ignore, task)
 		ctx, cancel := context.WithCancel(t.Context())

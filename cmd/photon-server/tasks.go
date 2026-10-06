@@ -26,8 +26,8 @@ const scanEvery = 12 * time.Hour
 // scanTask queues every library's scan; a library being watched is usually scanned already.
 func scanTask(st *store.Store) task.Task {
 	return task.Task{
-		Key:      domain.TaskScanLibraries,
-		Triggers: []task.Trigger{{Kind: task.TriggerEvery, Every: scanEvery}},
+		Key:     domain.TaskScanLibraries,
+		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: scanEvery},
 		Run: func(ctx context.Context) error {
 			libs, err := st.Libraries(ctx)
 			if err != nil {
@@ -85,8 +85,8 @@ func scanLibrary(st *store.Store, scanner *scan.Scanner, hub *events.Hub, logger
 
 func sweepTask(st *store.Store, logger *slog.Logger) task.Task {
 	return task.Task{
-		Key:      domain.TaskSweepJobs,
-		Triggers: []task.Trigger{{Kind: task.TriggerEvery, Every: time.Minute}},
+		Key:     domain.TaskSweepJobs,
+		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: time.Minute},
 		Run: func(ctx context.Context) error {
 			n, err := st.SweepJobs(ctx)
 			if n > 0 {
@@ -103,8 +103,8 @@ const backupEvery = 3 * 24 * time.Hour
 // backupTask dumps the database, keeping the newest few.
 func backupTask(d backup.Dumper, hub *events.Hub, logger *slog.Logger) task.Task {
 	return task.Task{
-		Key:      domain.TaskBackupDatabase,
-		Triggers: []task.Trigger{{Kind: task.TriggerEvery, Every: backupEvery}},
+		Key:     domain.TaskBackupDatabase,
+		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: backupEvery},
 		Run: func(ctx context.Context) error {
 			name, err := d.Dump(ctx, time.Now())
 			if err == nil {
@@ -124,8 +124,8 @@ const pruneActivityEvery = 24 * time.Hour
 
 func pruneActivityTask(st *store.Store, logger *slog.Logger) task.Task {
 	return task.Task{
-		Key:      domain.TaskPruneActivity,
-		Triggers: []task.Trigger{{Kind: task.TriggerEvery, Every: pruneActivityEvery}},
+		Key:     domain.TaskPruneActivity,
+		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: pruneActivityEvery},
 		Run: func(ctx context.Context) error {
 			n, err := st.PruneActivity(ctx, time.Now().Add(-activityKept))
 			if n > 0 {
@@ -143,8 +143,8 @@ const refreshAt = 3 * time.Hour
 // refreshTask queues a match of every title its library says is due one.
 func refreshTask(st *store.Store, logger *slog.Logger) task.Task {
 	return task.Task{
-		Key:      domain.TaskRefreshMetadata,
-		Triggers: []task.Trigger{{Kind: task.TriggerDaily, At: refreshAt}},
+		Key:     domain.TaskRefreshMetadata,
+		Trigger: task.Trigger{Kind: task.TriggerDaily, At: refreshAt},
 		Run: func(ctx context.Context) error {
 			n, err := st.RefreshStale(ctx)
 			if n > 0 {
@@ -162,8 +162,8 @@ const sweepArtworkEvery = 7 * 24 * time.Hour
 // BlurHash of every picture kept without one.
 func sweepArtworkTask(st *store.Store, cache *artwork.Cache, logger *slog.Logger) task.Task {
 	return task.Task{
-		Key:      domain.TaskSweepArtwork,
-		Triggers: []task.Trigger{{Kind: task.TriggerEvery, Every: sweepArtworkEvery}},
+		Key:     domain.TaskSweepArtwork,
+		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: sweepArtworkEvery},
 		Run: func(ctx context.Context) error {
 			n, err := cache.Sweep(ctx, st.LivePictures)
 			if n > 0 {
@@ -218,8 +218,8 @@ func backfillBlurhashes(ctx context.Context, st *store.Store, cache *artwork.Cac
 // compared: those from before the server could, and those whose comparison was cut short.
 func markersTask(st *store.Store, tools media.Tools, logger *slog.Logger) task.Task {
 	return task.Task{
-		Key:      domain.TaskDetectMarkers,
-		Triggers: []task.Trigger{{Kind: task.TriggerDaily, At: refreshAt}},
+		Key:     domain.TaskDetectMarkers,
+		Trigger: task.Trigger{Kind: task.TriggerDaily, At: refreshAt},
 		Run: func(ctx context.Context) error {
 			if !tools.Chromaprint {
 				return nil
@@ -248,8 +248,8 @@ const missingPreviewsKept = 30 * 24 * time.Hour
 // missing past missingPreviewsKept, and clears the folders of previews no part has any more.
 func previewsTask(st *store.Store, previews *analysis.Previews, logger *slog.Logger) task.Task {
 	return task.Task{
-		Key:      domain.TaskBackfillPreviews,
-		Triggers: []task.Trigger{{Kind: task.TriggerDaily, At: previewsAt}},
+		Key:     domain.TaskBackfillPreviews,
+		Trigger: task.Trigger{Kind: task.TriggerDaily, At: previewsAt},
 		Run: func(ctx context.Context) error {
 			n, err := st.QueuePreviews(ctx)
 			if n > 0 {
@@ -283,8 +283,8 @@ const downloadsKept = 7 * 24 * time.Hour
 // download needs; each node then prunes their files.
 func sweepDownloadsTask(st *store.Store, logger *slog.Logger) task.Task {
 	return task.Task{
-		Key:      domain.TaskSweepDownloads,
-		Triggers: []task.Trigger{{Kind: task.TriggerEvery, Every: time.Hour}},
+		Key:     domain.TaskSweepDownloads,
+		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: time.Hour},
 		Run: func(ctx context.Context) error {
 			n, err := st.ExpireDownloads(ctx, time.Now().Add(-downloadsKept))
 			if n > 0 {
