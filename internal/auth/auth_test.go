@@ -272,26 +272,6 @@ func TestSwitchingProfiles(t *testing.T) {
 	}
 }
 
-func TestAnAdminWithoutAPasswordCannotBeSwitchedTo(t *testing.T) {
-	svc, st := newService(t)
-	addOliver(t, st)
-	locked, err := st.AddProfile(t.Context(), "Locked", domain.RoleAdmin, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := svc.Authenticate(t.Context(), token)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := svc.SwitchProfile(t.Context(), s, locked.ID, ""); !errors.Is(err, ErrWrongSecret) {
-		t.Errorf("switched to a password-less admin (err %v)", err)
-	}
-}
-
 func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
 	svc, st := newService(t)
 	addOliver(t, st)

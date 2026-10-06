@@ -10,9 +10,8 @@ import (
 )
 
 var (
-	ErrWrongSecret   = errors.New("the PIN or password is wrong")
-	ErrPINNotDigits  = errors.New("a PIN is 4 to 6 digits")
-	ErrAdminPassword = errors.New("an admin profile needs a password")
+	ErrWrongSecret  = errors.New("the PIN or password is wrong")
+	ErrPINNotDigits = errors.New("a PIN is 4 to 6 digits")
 	// ErrNoPassword is a household profile, chosen on a signed-in device: only an admin gives it
 	// a password, which would let it sign in by itself.
 	ErrNoPassword = errors.New("this profile has no password to change; an admin gives it one")

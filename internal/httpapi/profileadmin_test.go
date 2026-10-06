@@ -24,6 +24,9 @@ func (f *fakeProfiles) AddProfile(_ context.Context, name string, role domain.Ro
 	if name == oliver.Name {
 		return domain.Profile{}, store.ErrProfileExists
 	}
+	if role == domain.RoleAdmin && hash == "" {
+		return domain.Profile{}, store.ErrAdminNeedsPassword
+	}
 	f.hashes[name] = hash
 	return domain.Profile{ID: uuid.NewV7(), Name: name, Role: role}, nil
 }
@@ -71,7 +74,7 @@ func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 		{memberToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "restricted"}`, http.StatusForbidden},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "restricted"}`, http.StatusCreated},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Partner", "role": "member", "password": "correct horse"}`, http.StatusCreated},
-		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Boss", "role": "admin"}`, http.StatusBadRequest},
+		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Boss", "role": "admin"}`, http.StatusConflict},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Short", "role": "member", "password": "hunter2"}`, http.StatusBadRequest},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Oliver", "role": "member"}`, http.StatusConflict},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Cat", "role": "pet"}`, http.StatusBadRequest},
