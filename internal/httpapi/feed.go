@@ -109,7 +109,7 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (ev
 		domain.EventLibraryRemoved, domain.EventTitlesAdded,
 		domain.EventTaskStarted, domain.EventTaskFinished, domain.EventTaskFailed, domain.EventBackupMade,
 		domain.EventJobStarted, domain.EventJobFinished, domain.EventJobFailed, domain.EventJobDead,
-		domain.EventWebhookTest:
+		domain.EventJobsProgress, domain.EventWebhookTest:
 	}
 	return eventJSON{}, false, nil
 }

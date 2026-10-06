@@ -44,6 +44,9 @@ const (
 	// EventJobFailed is an attempt that failed and will be tried again; EventJobDead is the last.
 	EventJobFailed EventKind = "job.failed"
 	EventJobDead   EventKind = "job.dead"
+	// EventJobsProgress is how far a kind's backlog has got (a Backlog); it says so at most every
+	// backlogProgressEvery, and once more when none is left.
+	EventJobsProgress EventKind = "jobs.progress"
 	// EventWebhookTest is sent to one webhook when an admin asks, and to no one else.
 	EventWebhookTest EventKind = "webhook.test"
 )
@@ -54,7 +57,7 @@ func EventKinds() []EventKind {
 		EventSignedIn, EventSignInRefused, EventProfileAdded, EventProfileRemoved,
 		EventLibraryAdded, EventLibraryRemoved, EventLibraryScanned, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventTitlesAdded, EventScanProgress, EventTaskStarted, EventTaskFinished, EventTaskFailed, EventBackupMade,
-		EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead, EventWebhookTest,
+		EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead, EventJobsProgress, EventWebhookTest,
 	}
 }
 
@@ -68,7 +71,7 @@ func (k EventKind) Logged() bool {
 		return true
 	case EventPlaybackPaused, EventPlaybackResumed, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventScanProgress, EventTaskStarted, EventTaskFinished, EventJobStarted,
-		EventJobFinished, EventJobFailed, EventWebhookTest:
+		EventJobFinished, EventJobFailed, EventJobsProgress, EventWebhookTest:
 		return false
 	}
 	return false
@@ -86,7 +89,7 @@ func (k EventKind) Hookable() bool {
 		return true
 	case EventLibraryChanged, EventTitleUpdated, EventUserDataChanged, EventScanProgress,
 		EventTaskStarted, EventTaskFinished, EventJobStarted, EventJobFinished, EventJobFailed,
-		EventJobDead, EventWebhookTest:
+		EventJobDead, EventJobsProgress, EventWebhookTest:
 		return false
 	}
 	return false

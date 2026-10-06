@@ -30,6 +30,12 @@ const (
 	// scanLife is how long a scan's progress is kept unless it is told again, so a node that dies
 	// mid-scan leaves none behind.
 	scanLife = 2 * time.Minute
+	// backlogProgressEvery is the most often a kind's backlog tells how far it has got, besides
+	// once when none is left.
+	backlogProgressEvery = time.Second
+	// backlogLife is how long a kind's count of jobs done outlives its last, so a backlog emptied
+	// without its jobs ending, as cancelled conversions are, is not counted into the next.
+	backlogLife = 24 * time.Hour
 )
 
 // Server is the server a webhook is told an event happened on.
@@ -49,12 +55,15 @@ type Hub struct {
 	closed  bool
 	// changed is each library's titles changed and not yet told.
 	changed map[uuid.UUID]store.Changed
+	// toldBacklog is when each kind's backlog was last told from this node.
+	toldBacklog map[domain.JobKind]time.Time
 }
 
 func New(st *store.Store, k *kv.KV, server Server, log *slog.Logger) *Hub {
 	return &Hub{
 		store: st, kv: k, server: server, log: log,
 		streams: map[chan domain.Event]struct{}{}, changed: map[uuid.UUID]store.Changed{},
+		toldBacklog: map[domain.JobKind]time.Time{},
 	}
 }
 
@@ -225,6 +234,63 @@ func (h *Hub) Scanning(ctx context.Context) func(domain.ScanProgress) {
 			"phase": p.Phase, "done": p.Done, "known": p.Known, "folder": p.Folder,
 		}})
 	}
+}
+
+// Backlogs answers the backlog of each kind of job with any left, across the cluster.
+func (h *Hub) Backlogs(ctx context.Context) ([]domain.Backlog, error) {
+	left, err := h.store.JobsLeft(ctx)
+	if err != nil {
+		return nil, err
+	}
+	done, err := h.kv.JobsDone(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []domain.Backlog
+	for _, kind := range domain.JobKinds() {
+		if left[kind] > 0 {
+			out = append(out, domain.Backlog{Kind: kind, Left: left[kind], Done: done[kind]})
+		}
+	}
+	return out, nil
+}
+
+// JobEnded counts a job of kind that finished or gave up as done in its backlog, and tells how far
+// the backlog has got: at most every backlogProgressEvery, and always once none is left, when its
+// count starts again.
+func (h *Hub) JobEnded(ctx context.Context, kind domain.JobKind) {
+	ctx = context.WithoutCancel(ctx)
+	done, err := h.kv.JobDone(ctx, kind, backlogLife)
+	if err != nil {
+		h.log.WarnContext(ctx, "job not counted", slog.String("kind", string(kind)), slog.Any("err", err))
+		return
+	}
+	left, err := h.store.JobsLeft(ctx)
+	if err != nil {
+		h.log.WarnContext(ctx, "jobs left not counted", slog.Any("err", err))
+		return
+	}
+	if left[kind] == 0 {
+		if err := h.kv.EndBacklog(ctx, kind); err != nil {
+			h.log.WarnContext(ctx, "backlog not ended", slog.String("kind", string(kind)), slog.Any("err", err))
+		}
+	} else if !h.backlogDue(kind) {
+		return
+	}
+	h.Raise(ctx, domain.Event{Kind: domain.EventJobsProgress, Details: map[string]any{
+		"job_kind": kind, "left": left[kind], "done": done,
+	}})
+}
+
+func (h *Hub) backlogDue(kind domain.JobKind) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	now := time.Now()
+	if now.Sub(h.toldBacklog[kind]) < backlogProgressEvery {
+		return false
+	}
+	h.toldBacklog[kind] = now
+	return true
 }
 
 // Changed gathers a library's changed titles, telling them as one library.changed once

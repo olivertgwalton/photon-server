@@ -268,27 +268,27 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	// matching and a scan never waits behind either.
 	scanner := jobs.NewWorker(st, logger, node, scanSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobScanLibrary: scanLibrary(st, scan.New(st, tools, logger), hub, logger),
-	}, hub.Raise)
+	}, hub)
 	matcher := jobs.NewWorker(st, logger, node, identifySlots, map[domain.JobKind]jobs.Handler{
 		domain.JobIdentify: identify.Handler(st, providers, hub.Raise, logger),
-	}, hub.Raise)
+	}, hub)
 	analyser := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), map[domain.JobKind]jobs.Handler{
 		domain.JobKeyframes: analysis.Keyframes(st, tools),
 		domain.JobMarkers:   analysis.Markers(st, tools.Fingerprint),
-	}, hub.Raise)
+	}, hub)
 	notifier := jobs.NewWorker(st, logger, node, webhookSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobDeliverWebhook: webhook.Deliver(st),
-	}, hub.Raise)
+	}, hub)
 	// Previews have a slot of their own, so however many are queued, the other analysis keeps
 	// every slot of its.
 	previewer := jobs.NewWorker(st, logger, node, 1, map[domain.JobKind]jobs.Handler{
 		domain.JobPreviews: analysis.MakePreviews(st, tools, previews, logger),
-	}, hub.Raise)
+	}, hub)
 	// Conversions have slots of their own, so a long one never holds up a scan, and each holds a
 	// transcode slot its node's playbacks may take, so they never starve them.
 	converter := jobs.NewWorker(st, logger, node, playback.MaxConversions, map[domain.JobKind]jobs.Handler{
 		domain.JobConvert: conversions.Convert,
-	}, hub.Raise)
+	}, hub)
 	watcher := watch.New(st, logger)
 	background, stopBackground := context.WithCancel(ctx)
 	var wg sync.WaitGroup

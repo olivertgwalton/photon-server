@@ -39,6 +39,13 @@ type queue interface {
 	PostponeJob(ctx context.Context, job domain.Job, delay time.Duration) error
 }
 
+// teller is told as each job starts and ends.
+type teller interface {
+	Raise(ctx context.Context, e domain.Event)
+	// JobEnded is told of a job that finished or gave up, once its outcome is recorded.
+	JobEnded(ctx context.Context, kind domain.JobKind)
+}
+
 // Worker runs queued jobs of the kinds it has handlers for, at most slots at a time.
 type Worker struct {
 	queue    queue
@@ -46,12 +53,12 @@ type Worker struct {
 	node     uuid.UUID
 	slots    int
 	handlers map[domain.JobKind]Handler
-	raise    func(context.Context, domain.Event)
+	tell     teller
 }
 
-// NewWorker runs jobs with handlers, and says as each starts and ends through raise.
-func NewWorker(q queue, log *slog.Logger, node uuid.UUID, slots int, handlers map[domain.JobKind]Handler, raise func(context.Context, domain.Event)) *Worker {
-	return &Worker{queue: q, log: log, node: node, slots: slots, handlers: handlers, raise: raise}
+// NewWorker runs jobs with handlers, telling tell as each starts and ends.
+func NewWorker(q queue, log *slog.Logger, node uuid.UUID, slots int, handlers map[domain.JobKind]Handler, tell teller) *Worker {
+	return &Worker{queue: q, log: log, node: node, slots: slots, handlers: handlers, tell: tell}
 }
 
 func (w *Worker) Run(ctx context.Context) {
@@ -91,7 +98,7 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	jobCtx, lose := context.WithCancelCause(ctx)
 	defer lose(nil)
 	go w.renew(ctx, log, job.ID, lose, done)
-	w.raise(ctx, event(domain.EventJobStarted, job, nil))
+	w.tell.Raise(ctx, event(domain.EventJobStarted, job, nil))
 	runErr := w.handlers[job.Kind](jobCtx, job.Subject)
 	close(done)
 	// Another node may hold it now, so what this run made of it is not the job's outcome.
@@ -103,6 +110,7 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	record, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordTimeout)
 	defer cancel()
 	var err error
+	ended := false
 	switch {
 	case runErr != nil && ctx.Err() != nil:
 		// Cut short by shutdown, which is no fault of its subject's: any node takes it now.
@@ -111,19 +119,23 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 		err = w.queue.PostponeJob(record, job, notNow)
 	case runErr != nil:
 		log.WarnContext(ctx, "job failed", slog.Int("attempt", job.Attempts), slog.Any("err", runErr))
-		var dead bool
-		dead, err = w.queue.FailJob(record, job, runErr)
+		ended, err = w.queue.FailJob(record, job, runErr)
 		kind := domain.EventJobFailed
-		if dead {
+		if ended {
 			kind = domain.EventJobDead
 		}
-		w.raise(ctx, event(kind, job, runErr))
+		w.tell.Raise(ctx, event(kind, job, runErr))
 	default:
 		err = w.queue.CompleteJob(record, job.ID)
-		w.raise(ctx, event(domain.EventJobFinished, job, nil))
+		ended = true
+		w.tell.Raise(ctx, event(domain.EventJobFinished, job, nil))
 	}
 	if err != nil {
 		log.WarnContext(ctx, "job outcome not recorded", slog.Any("err", err))
+		return
+	}
+	if ended {
+		w.tell.JobEnded(record, job.Kind)
 	}
 }
 
