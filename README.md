@@ -98,8 +98,8 @@ makes one the title's own, above the files and through every refresh, until `DEL
 address gives it back.
 
 Metadata providers are plugins: `GET /api/v1/admin/providers` lists each with what it can do (describe
-titles, rate them) and what it needs set. TMDB gives its own score; MDBList gives IMDb's, Rotten
-Tomatoes' critics and audience, Metacritic's, Letterboxd's and Trakt's once an admin sets its free
+titles, rate them) and what it needs set. TMDB gives its own score; MDBList gives IMDb's and Rotten
+Tomatoes' critics and audience once an admin sets its free
 key (`PATCH /api/v1/admin/providers/mdblist` with `{"settings": {"api_key": "…"}}`) and a library
 takes it (`-sources nfo,tmdb,mdblist`). Ratings are scored out of 100.
 

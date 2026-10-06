@@ -10,15 +10,10 @@ const (
 	SiteRottenTomatoes RatingSite = "rotten_tomatoes"
 	// SiteRottenTomatoesAudience is the Popcornmeter: the share of the audience who did.
 	SiteRottenTomatoesAudience RatingSite = "rotten_tomatoes_audience"
-	SiteMetacritic             RatingSite = "metacritic"
-	SiteLetterboxd             RatingSite = "letterboxd"
-	SiteTrakt                  RatingSite = "trakt"
 )
 
 func RatingSites() []RatingSite {
-	return []RatingSite{
-		SiteIMDb, SiteTMDB, SiteRottenTomatoes, SiteRottenTomatoesAudience, SiteMetacritic, SiteLetterboxd, SiteTrakt,
-	}
+	return []RatingSite{SiteIMDb, SiteTMDB, SiteRottenTomatoes, SiteRottenTomatoesAudience}
 }
 
 // Rating is what a site's readers or critics make of a title, scored out of 100 whatever scale the

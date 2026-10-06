@@ -187,7 +187,7 @@ func TestWall(t *testing.T) {
 		{"?resolution=8k", http.StatusBadRequest, ""},
 		{"?min_rating=101", http.StatusBadRequest, ""},
 		{"?starts_with=ab", http.StatusBadRequest, ""},
-		{"?sort=rating&rating_site=letterboxd", http.StatusOK, "rating desc 0+50"},
+		{"?sort=rating&rating_site=tmdb", http.StatusOK, "rating desc 0+50"},
 	} {
 		rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/titles"+tc.query, goodToken, "")
 		if rec.Code != tc.wantStatus {
