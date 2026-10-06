@@ -345,7 +345,13 @@ export async function admin(
 				items: [
 					{
 						...films,
-						counts: { movies: 250, shows: 0, seasons: 0, episodes: 0 },
+						counts: {
+							movies: 250,
+							shows: 0,
+							seasons: 0,
+							episodes: 0,
+							collections: 1,
+						},
 					},
 				],
 			} satisfies Schemas["AdminLibraryListingList"]);

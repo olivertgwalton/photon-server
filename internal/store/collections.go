@@ -92,6 +92,10 @@ func saveGroupings(ctx context.Context, tx *query.Query, item model.UUID, source
 var shownCollections = `SELECT c.item_id FROM collections c
 	WHERE c.origin = 'user' OR (SELECT count(*) FROM collection_members m WHERE m.collection_id = c.item_id) >= ` + strconv.Itoa(minShown)
 
+// listedCollection is whether items is a collection the viewer v finds listed in its library, so
+// the listing and the library's count of them cannot disagree.
+var listedCollection = `items.kind = 'collection' AND items.id IN (` + shownCollections + `) AND sees(v, items)`
+
 // Collections answers a page of a library's collections, by title, and how many there are.
 func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]Card, int64, error) {
 	l := s.q.Library
@@ -99,8 +103,7 @@ func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset,
 		return nil, 0, found(err)
 	}
 	q := s.q.Item.WithContext(ctx).UnderlyingDB().
-		Where("items.library_id = ? AND items.kind = 'collection' AND items.id IN ("+shownCollections+")", lib.String()).
-		Where("EXISTS (SELECT 1 FROM viewer(?) v WHERE sees(v, items))", profile.String())
+		Where("items.library_id = ? AND EXISTS (SELECT 1 FROM viewer(?) v WHERE "+listedCollection+")", lib.String(), profile.String())
 	var total int64
 	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err

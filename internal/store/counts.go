@@ -7,8 +7,8 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// LibraryCounts counts each library's films, shows, seasons and episodes a profile may see; the
-// zero id is the server's own count of everything.
+// LibraryCounts counts each library's films, shows, seasons, episodes and listed collections a
+// profile may see; the zero id is the server's own count of everything.
 //
 // It is sees() over every title at once: each certificate's age is read once rather than once for
 // every title under it, and a title's certificates are its own, its season's and its show's, as
@@ -35,6 +35,10 @@ func (s *Store) LibraryCounts(ctx context.Context, profile uuid.UUID) (map[uuid.
 		LEFT JOIN ok og ON og.c = g.certificate
 		WHERE v.max_age IS NULL OR (coalesce(oi.ok, true) AND coalesce(os.ok, true) AND coalesce(og.ok, true)
 			AND (coalesce(i.certificate, s.certificate, g.certificate) IS NOT NULL OR v.unrated = 'allow'))
+		GROUP BY 1, 2
+		UNION ALL
+		SELECT items.library_id::text, items.kind, count(*) FROM items, viewer($1) v
+		WHERE `+listedCollection+`
 		GROUP BY 1, 2`, profile.String())
 	if err != nil {
 		return nil, err
@@ -62,7 +66,9 @@ func (s *Store) LibraryCounts(ctx context.Context, profile uuid.UUID) (map[uuid.
 			c.Seasons = n
 		case domain.ItemEpisode:
 			c.Episodes = n
-		case domain.ItemExtra, domain.ItemCollection:
+		case domain.ItemCollection:
+			c.Collections = n
+		case domain.ItemExtra:
 		}
 		out[id] = c
 	}

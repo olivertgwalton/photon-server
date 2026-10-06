@@ -8,7 +8,10 @@ const base = $derived(`/libraries/${data.library.id}`);
 const tabs = $derived(
 	[
 		{ href: base, label: "Titles" },
-		{ href: `${base}/collections`, label: "Collections" },
+		data.library.counts.collections && {
+			href: `${base}/collections`,
+			label: "Collections",
+		},
 		data.facets.genres.length && { href: `${base}/genres`, label: "Genres" },
 		data.facets.studios.length && {
 			href: `${base}/studios`,

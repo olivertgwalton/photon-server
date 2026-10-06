@@ -69,6 +69,21 @@ test("a library's wall pages as it scrolls and jumps to a letter", async ({
 	await expect(wall.getByRole("link", { name: /Hilm 244/ })).toBeVisible();
 });
 
+test("a library offers its collections only where it keeps some", async ({
+	page,
+}) => {
+	await logIn(page, "/libraries/l-films");
+	const views = page.getByRole("navigation", { name: "Films views" });
+	await views.getByRole("link", { name: "Collections" }).click();
+	await expect(page.getByRole("list", { name: "Collections" })).toBeVisible();
+	await page.goto("/libraries/l-shows");
+	await expect(
+		page
+			.getByRole("navigation", { name: "Shows views" })
+			.getByRole("link", { name: "Collections" }),
+	).toHaveCount(0);
+});
+
 test("a wall is sorted, filtered and drawn as the reader asks", async ({
 	page,
 }) => {

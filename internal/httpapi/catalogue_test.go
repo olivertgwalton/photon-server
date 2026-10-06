@@ -215,7 +215,7 @@ func TestWall(t *testing.T) {
 			t.Errorf("%q: body = %+v, want one card %q released 1995-12-15 of 120", tc.query, got, tc.wantTitle)
 		}
 	}
-	if rec := serve(t, http.MethodGet, "/api/v1/libraries", goodToken, ""); !strings.Contains(rec.Body.String(), `"counts":{"movies":120,"shows":0,"seasons":0,"episodes":0}`) {
+	if rec := serve(t, http.MethodGet, "/api/v1/libraries", goodToken, ""); !strings.Contains(rec.Body.String(), `"counts":{"movies":120,"shows":0,"seasons":0,"episodes":0,"collections":0}`) {
 		t.Errorf("libraries = %s, want each with its counts", rec.Body)
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+uuid.NewV7().String()+"/titles", goodToken, ""); rec.Code != http.StatusNotFound {

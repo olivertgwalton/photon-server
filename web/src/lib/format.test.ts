@@ -46,7 +46,13 @@ test("the player is told only what the reader chose", () => {
 });
 
 test("a library says what it holds as its kind counts it", () => {
-	const c = { movies: 1204, shows: 1, seasons: 4, episodes: 40 };
+	const c = {
+		movies: 1204,
+		shows: 1,
+		seasons: 4,
+		episodes: 40,
+		collections: 0,
+	};
 	expect(holding("movies", c)).toBe("1,204 films");
 	expect(holding("shows", c)).toBe("1 show · 4 seasons · 40 episodes");
 });
