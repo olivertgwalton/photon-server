@@ -101,7 +101,7 @@ func Master(subs []Subtitle, kbps int, video string, subtitle func(track int) st
 		if seen[name]++; seen[name] > 1 {
 			name += " " + strconv.Itoa(seen[name])
 		}
-		fmt.Fprintf(&b, "#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=%q", name)
+		fmt.Fprintf(&b, "#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"%s\"", quotable.Replace(name))
 		if s.Language != "" {
 			fmt.Fprintf(&b, ",LANGUAGE=%q", s.Language)
 		}
@@ -120,6 +120,9 @@ func Master(subs []Subtitle, kbps int, video string, subtitle func(track int) st
 	b.WriteString("\n" + video + "\n")
 	return b.String()
 }
+
+// quotable makes a name an RFC 8216 quoted-string, which holds no double quote or line break.
+var quotable = strings.NewReplacer(`"`, "'", "\r", " ", "\n", " ")
 
 func yes(b bool) string {
 	if b {

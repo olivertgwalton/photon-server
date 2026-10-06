@@ -111,8 +111,8 @@ func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
 }
 
 func TestRepeatedNamesAreNumbered(t *testing.T) {
-	m := Master([]Subtitle{{Name: "English"}, {Name: "English", Forced: true}, {Language: "fr"}}, 1, "v", subtitleName)
-	for _, want := range []string{`NAME="English",`, `NAME="English 2",DEFAULT=NO,AUTOSELECT=YES,FORCED=YES`, `NAME="fr",LANGUAGE="fr"`} {
+	m := Master([]Subtitle{{Name: "English"}, {Name: "English", Forced: true}, {Language: "fr"}, {Name: "The \"Director\"\nCommentary"}}, 1, "v", subtitleName)
+	for _, want := range []string{`NAME="English",`, `NAME="English 2",DEFAULT=NO,AUTOSELECT=YES,FORCED=YES`, `NAME="fr",LANGUAGE="fr"`, `NAME="The 'Director' Commentary"`} {
 		if !strings.Contains(m, want) {
 			t.Errorf("master =\n%s\nwant %s", m, want)
 		}
