@@ -339,10 +339,14 @@ test("a playlist is made, filled, reordered and deleted", async ({ page }) => {
 	await expect(page.getByText("No playlists yet.")).toBeVisible();
 });
 
-test("a title put on the watchlist is on the home's watchlist row", async ({
+test("a title put on the watchlist is on its home row and its page", async ({
 	page,
 }) => {
-	await logIn(page, "/titles/t-film");
+	await logIn(page, "/watchlist");
+	await expect(page.getByText(/Nothing here yet/)).toBeVisible();
+	await expectAccessible(page);
+
+	await page.goto("/titles/t-film");
 	const watchlist = page.getByRole("button", { name: "Watchlist" });
 	await expect(watchlist).toHaveAttribute("aria-pressed", "false");
 	await watchlist.click();
@@ -350,6 +354,14 @@ test("a title put on the watchlist is on the home's watchlist row", async ({
 	await page.goto("/");
 	const row = page.getByRole("region", { name: "Watchlist" });
 	await expect(row.getByRole("link", { name: /Quiet Hours/ })).toBeVisible();
+
+	await page
+		.getByRole("navigation")
+		.getByRole("link", { name: "Watchlist" })
+		.click();
+	await expect(page).toHaveURL("/watchlist");
+	await expect(page.getByRole("link", { name: /Quiet Hours/ })).toBeVisible();
+	await expectAccessible(page);
 });
 
 test("favourites, history and downloads list the reader's own", async ({

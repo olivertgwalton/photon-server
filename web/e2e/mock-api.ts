@@ -849,6 +849,18 @@ const server_ = Bun.serve({
 				downloads.unshift(d);
 				return Response.json(d);
 			}
+			case "GET /api/v1/watchlist": {
+				const items = everything().filter(
+					(c) => states.get(c.id)?.watchlisted_at,
+				);
+				const offset = Number(url.searchParams.get("offset") ?? 0);
+				const limit = Number(url.searchParams.get("limit") ?? 50);
+				return Response.json({
+					items: items.slice(offset, offset + limit).map(card),
+					offset,
+					total: items.length,
+				} satisfies Schemas["CardPage"]);
+			}
 			case "GET /api/v1/history":
 				return Response.json({
 					items: [
