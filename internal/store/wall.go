@@ -3,6 +3,7 @@ package store
 import (
 	"cmp"
 	"context"
+	"database/sql/driver"
 	"slices"
 	"time"
 	"uuid"
@@ -16,7 +17,8 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
-// Card is a title as a wall shows it.
+// Card is a title as a wall shows it. An episode carries its show's poster,
+// backdrop and lettering, alongside its own still in Thumb.
 type Card struct {
 	ID          uuid.UUID
 	Kind        domain.ItemKind
@@ -187,6 +189,10 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 	if err != nil {
 		return nil, err
 	}
+	showArtwork, err := s.artworkOfShows(ctx, shows)
+	if err != nil {
+		return nil, err
+	}
 	origins, err := s.origins(ctx, rows)
 	if err != nil {
 		return nil, err
@@ -208,8 +214,75 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 		}
 		c := &cards[n]
 		c.Blurhashes = blurhashesOf(hashes, c.Poster, c.Backdrop, c.Thumb, c.Logo)
+		if show := shows[r.ID].ref; r.Kind == domain.ItemEpisode && show != nil {
+			c.Poster, c.Backdrop, c.Logo = showArtwork[show.ID].pictures()
+			c.Blurhashes = c.Blurhashes.merged(showArtwork[show.ID].Blurhashes)
+		}
 	}
 	return cards, nil
+}
+
+type showArtwork struct {
+	Poster     uuid.UUID
+	Backdrop   uuid.UUID
+	Logo       uuid.UUID
+	Blurhashes Blurhashes
+}
+
+func (a showArtwork) pictures() (uuid.UUID, uuid.UUID, uuid.UUID) {
+	return a.Poster, a.Backdrop, a.Logo
+}
+
+// artworkOfShows answers the show artwork episodes borrow for cards. A list of
+// episodes costs one additional artwork query regardless of its length.
+func (s *Store) artworkOfShows(ctx context.Context, shows map[model.UUID]episodeShow) (map[uuid.UUID]showArtwork, error) {
+	ids := map[model.UUID]bool{}
+	for _, show := range shows {
+		if show.ref != nil {
+			ids[model.UUID(show.ref.ID)] = true
+		}
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	showIDs := make([]driver.Valuer, 0, len(ids))
+	for id := range ids {
+		showIDs = append(showIDs, id)
+	}
+	i := s.q.Item
+	rows, err := i.WithContext(ctx).Where(i.ID.In(showIDs...)).Find()
+	if err != nil {
+		return nil, err
+	}
+	pictures, hashes, err := s.pictureOrder(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uuid.UUID]showArtwork, len(rows))
+	for _, row := range rows {
+		artwork := pictures[row.ID]
+		poster := first(artwork[domain.ArtworkPoster])
+		backdrop := first(artwork[domain.ArtworkBackdrop])
+		logo := first(artwork[domain.ArtworkLogo])
+		out[uuid.UUID(row.ID)] = showArtwork{
+			Poster: poster, Backdrop: backdrop, Logo: logo,
+			Blurhashes: blurhashesOf(hashes, poster, backdrop, logo),
+		}
+	}
+	return out, nil
+}
+
+func (h Blurhashes) merged(other Blurhashes) Blurhashes {
+	if len(other) == 0 {
+		return h
+	}
+	if h == nil {
+		h = Blurhashes{}
+	}
+	for id, hash := range other {
+		h[id] = hash
+	}
+	return h
 }
 
 type seasonShow struct {
