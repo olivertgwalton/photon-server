@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"math"
+	"net/url"
 	"path"
 	"slices"
+	"strings"
 	"uuid"
 
 	"gorm.io/gorm"
@@ -234,10 +236,19 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (Picture, error) {
 		// Or a person's.
 		p := s.q.Person
 		person, err := p.WithContext(ctx).Where(p.PhotoID.Eq(model.UUID(id))).Take()
+		if err == nil {
+			return Picture{URL: deref(person.PhotoURL)}, nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return Picture{}, err
+		}
+		// Or a video's still.
+		rv := s.q.RemoteVideo
+		video, err := rv.WithContext(ctx).Where(rv.ThumbID.Eq(model.UUID(id))).Take()
 		if err != nil {
 			return Picture{}, found(err)
 		}
-		return Picture{URL: deref(person.PhotoURL)}, nil
+		return Picture{URL: videoStill(video.Site, video.Key)}, nil
 	}
 	if err != nil {
 		return Picture{}, err
@@ -250,7 +261,16 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (Picture, error) {
 	return Picture{Root: lib.Root, Path: row.Place}, err
 }
 
-// LivePictures answers which of these picture ids are still a title's or a person's.
+// videoStill is where a video's site publishes a still of it, or "" for a site that publishes none
+// without its own API. YouTube's is public and the same for every video.
+func videoStill(site, key string) string {
+	if strings.EqualFold(site, "youtube") {
+		return "https://i.ytimg.com/vi/" + url.PathEscape(key) + "/hqdefault.jpg"
+	}
+	return ""
+}
+
+// LivePictures answers which of these picture ids are still a title's, a person's or a video's.
 func (s *Store) LivePictures(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]bool, error) {
 	in := make([]string, len(ids))
 	for n, id := range ids {
@@ -258,7 +278,8 @@ func (s *Store) LivePictures(ctx context.Context, ids []uuid.UUID) (map[uuid.UUI
 	}
 	live, err := queryIDs(ctx, s.pool, `
 		SELECT id::text FROM artwork WHERE id = ANY($1::uuid[])
-		UNION SELECT photo_id::text FROM people WHERE photo_id = ANY($1::uuid[])`, in)
+		UNION SELECT photo_id::text FROM people WHERE photo_id = ANY($1::uuid[])
+		UNION SELECT thumb_id::text FROM remote_videos WHERE thumb_id = ANY($1::uuid[])`, in)
 	out := make(map[uuid.UUID]bool, len(live))
 	for _, id := range live {
 		out[id] = true

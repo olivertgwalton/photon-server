@@ -37,6 +37,7 @@ func newRemoteVideo(db *gorm.DB, opts ...gen.DOOption) remoteVideo {
 	_remoteVideo.Name = field.NewString(tableName, "name")
 	_remoteVideo.Language = field.NewString(tableName, "language")
 	_remoteVideo.PublishedAt = field.NewTime(tableName, "published_at")
+	_remoteVideo.ThumbID = field.NewField(tableName, "thumb_id")
 
 	_remoteVideo.fillFieldMap()
 
@@ -56,6 +57,7 @@ type remoteVideo struct {
 	Name        field.String
 	Language    field.String
 	PublishedAt field.Time
+	ThumbID     field.Field
 
 	fieldMap map[string]field.Expr
 }
@@ -81,6 +83,7 @@ func (r *remoteVideo) updateTableName(table string) *remoteVideo {
 	r.Name = field.NewString(table, "name")
 	r.Language = field.NewString(table, "language")
 	r.PublishedAt = field.NewTime(table, "published_at")
+	r.ThumbID = field.NewField(table, "thumb_id")
 
 	r.fillFieldMap()
 
@@ -107,7 +110,7 @@ func (r *remoteVideo) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (r *remoteVideo) fillFieldMap() {
-	r.fieldMap = make(map[string]field.Expr, 9)
+	r.fieldMap = make(map[string]field.Expr, 10)
 	r.fieldMap["item_id"] = r.ItemID
 	r.fieldMap["source"] = r.Source
 	r.fieldMap["position"] = r.Position
@@ -117,6 +120,7 @@ func (r *remoteVideo) fillFieldMap() {
 	r.fieldMap["name"] = r.Name
 	r.fieldMap["language"] = r.Language
 	r.fieldMap["published_at"] = r.PublishedAt
+	r.fieldMap["thumb_id"] = r.ThumbID
 }
 
 func (r remoteVideo) clone(db *gorm.DB) remoteVideo {

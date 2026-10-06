@@ -5355,6 +5355,8 @@ export interface components {
             /** Format: date-time */
             published_at?: string | null;
             site: string;
+            /** Format: uuid */
+            thumb?: string;
         };
         VideoSupport: {
             codec: string;

@@ -75,6 +75,8 @@ type RemoteVideo struct {
 	Name        string
 	Language    *string
 	PublishedAt *time.Time
+	// ThumbID serves the still the video's site publishes for it, where it publishes one.
+	ThumbID *UUID `gorm:"type:uuid"`
 }
 
 // Artwork is a picture of a title: a file in its library, at place relative to the library's
