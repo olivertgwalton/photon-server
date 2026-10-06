@@ -406,3 +406,46 @@ func TestRecentlyReleased(t *testing.T) {
 		t.Errorf("recently released for a profile without the shows = %v, want %v", got, want)
 	}
 }
+
+func TestTopRatedUnwatched(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	admin, kid := homeLibraries(t, s, []string{"Best", "Few Votes", "Watched", "Started", "Other Site", "Good"}, []string{"Begun", "Fresh"})
+	for _, r := range []struct {
+		title, source, site string
+		score               float32
+		votes               *int
+	}{
+		{"Best", "tmdb", "imdb", 40, nil},
+		{"Best", "omdb", "imdb", 90, new(250000)},
+		{"Few Votes", "omdb", "imdb", 95, new(12)},
+		{"Watched", "omdb", "imdb", 88, nil},
+		{"Started", "omdb", "imdb", 87, nil},
+		{"Other Site", "tmdb", "tmdb", 99, nil},
+		{"Begun", "tmdb", "imdb", 86, nil},
+		{"Fresh", "tmdb", "imdb", 75, nil},
+		{"Good", "tmdb", "imdb", 65, nil},
+	} {
+		if _, err := s.pool.Exec(ctx, `INSERT INTO ratings (item_id, source, site, score, votes)
+			SELECT id, $2, $3, $4, $5 FROM items WHERE title = $1`, r.title, r.source, r.site, r.score, r.votes); err != nil {
+			t.Fatal(err)
+		}
+	}
+	titled := func(title string) uuid.UUID { return oneItem(t, s, `title = $1`, title).ID }
+	if err := s.MarkWatched(ctx, admin, titled("Watched"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveProgress(ctx, admin, titled("Started"), 20*time.Minute, domain.ReachStart, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkWatched(ctx, admin, titled("Begun S1E1"), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, want := homeRow(t, s, admin, domain.RowTopRatedUnwatched), []string{"Best", "Fresh", "Good"}; !slices.Equal(got, want) {
+		t.Errorf("top rated = %v, want %v: by IMDb, nothing begun or rated by too few", got, want)
+	}
+	if got, want := homeRow(t, s, kid, domain.RowTopRatedUnwatched), []string{"Best", "Watched", "Started", "Good"}; !slices.Equal(got, want) {
+		t.Errorf("top rated for another profile, without the shows = %v, want %v", got, want)
+	}
+}

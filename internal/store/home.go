@@ -90,6 +90,18 @@ var rowQueries = map[domain.HomeRow]string{
 		SELECT ` + itemColumnsOf("i") + ` FROM released JOIN items i ON i.id = released.id
 		WHERE EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))
 		ORDER BY released.released DESC, i.id DESC LIMIT @limit`,
+	// The titles the profile has not begun by their IMDb rating, as the wall sorts by it, leaving
+	// out a rating too few voted for where its site counts votes. The ratings are put in order
+	// first so that only as many titles as the row takes are tried.
+	domain.RowTopRatedUnwatched: `
+		SELECT ` + itemColumns + ` FROM (
+			SELECT item_id, max(score) AS score FROM ratings
+			WHERE site = '` + string(domain.SiteIMDb) + `' AND (votes IS NULL OR votes >= ` + strconv.Itoa(leastVotes) + `)
+			GROUP BY item_id ORDER BY score DESC, item_id DESC
+		) rated JOIN items ON items.id = rated.item_id
+		WHERE items.kind IN ('movie', 'show') AND NOT ` + begun + `
+			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND first_of_title(v, items))
+		ORDER BY rated.score DESC, rated.item_id DESC LIMIT @limit`,
 }
 
 // collectionRowsQuery is, for each collection placed on the home page that the profile sees, by
@@ -112,6 +124,10 @@ type collectionMember struct {
 	CollectionTitle string
 	model.Item
 }
+
+// leastVotes is how many votes a rating needs to put a title on the top rated row, so a title a
+// handful rated highly does not lead it.
+const leastVotes = 1000
 
 // releasedWithinDays is how lately a title is released to be on the recently released row: a
 // year, as a film's files come months after it opens in cinemas.

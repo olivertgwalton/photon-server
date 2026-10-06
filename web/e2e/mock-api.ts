@@ -557,6 +557,7 @@ const defaults: Schemas["Preferences"] = {
 		"recently_added_films",
 		"recently_added_shows",
 		"recently_released",
+		"top_rated_unwatched",
 	].map((row) => ({
 		row: row as Schemas["HomeRowKind"],
 		visibility: "shown" as const,

@@ -4969,7 +4969,7 @@ export interface components {
             kind: components["schemas"]["HomeRowKind"];
         };
         /** @enum {string} */
-        HomeRowKind: "continue_watching" | "next_up" | "favourites" | "recently_added_films" | "recently_added_shows" | "recently_released" | "collection";
+        HomeRowKind: "continue_watching" | "next_up" | "favourites" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched" | "collection";
         HomeSection: {
             row: components["schemas"]["HomeRowKind"];
             visibility: components["schemas"]["RowVisibility"];
