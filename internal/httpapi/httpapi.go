@@ -746,6 +746,7 @@ func (a *API) routes() []route {
 			query: append([]param{
 				{"q", "", "What to search for; required."},
 				{"library", uuid.UUID{}, "Only this library's titles."},
+				{"kind", []domain.SearchKind{}, "Only these kinds of title, or people; repeated or comma-separated, everything by default."},
 			}, pageParams...),
 			status: http.StatusOK, reply: searchJSON{}, handle: a.search,
 		},

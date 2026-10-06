@@ -67,6 +67,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.Reach]():               values(domain.Reaches()),
 	reflect.TypeFor[domain.Resolution]():          values(domain.Resolutions()),
 	reflect.TypeFor[domain.Role]():                values(domain.Roles()),
+	reflect.TypeFor[domain.SearchKind]():          values(domain.SearchKinds()),
 	reflect.TypeFor[domain.ScanPhase]():           values(domain.ScanPhases()),
 	reflect.TypeFor[domain.StreamKind]():          values(domain.StreamKinds()),
 	reflect.TypeFor[domain.TaskKey]():             values(domain.TaskKeys()),
