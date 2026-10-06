@@ -265,20 +265,32 @@ func (h *Hub) JobEnded(ctx context.Context, kind domain.JobKind) {
 		h.log.WarnContext(ctx, "job not counted", slog.String("kind", string(kind)), slog.Any("err", err))
 		return
 	}
-	left, err := h.store.JobsLeft(ctx)
+	// Counting the backlog reads every job left, so it waits until a report is due; whether any is
+	// left at all is answered from the first one found.
+	anyLeft, err := h.store.AnyJobsLeft(ctx, kind)
 	if err != nil {
 		h.log.WarnContext(ctx, "jobs left not counted", slog.Any("err", err))
 		return
 	}
-	if left[kind] == 0 {
+	var left int
+	if anyLeft {
+		if !h.backlogDue(kind) {
+			return
+		}
+		all, err := h.store.JobsLeft(ctx)
+		if err != nil {
+			h.log.WarnContext(ctx, "jobs left not counted", slog.Any("err", err))
+			return
+		}
+		left = all[kind]
+	}
+	if left == 0 {
 		if err := h.kv.EndBacklog(ctx, kind); err != nil {
 			h.log.WarnContext(ctx, "backlog not ended", slog.String("kind", string(kind)), slog.Any("err", err))
 		}
-	} else if !h.backlogDue(kind) {
-		return
 	}
 	h.Raise(ctx, domain.Event{Kind: domain.EventJobsProgress, Details: map[string]any{
-		"job_kind": kind, "left": left[kind], "done": done,
+		"job_kind": kind, "left": left, "done": done,
 	}})
 }
 
