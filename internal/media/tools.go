@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -48,7 +47,7 @@ func findTool(ctx context.Context, name string) (Tool, error) {
 	if err != nil {
 		return Tool{}, err
 	}
-	out, err := output(ctx, partRun, nil, path, "-hide_banner", "-version")
+	out, err := output(ctx, PartRun, nil, path, "-hide_banner", "-version")
 	if err != nil {
 		return Tool{}, fmt.Errorf("%s -version: %w", path, err)
 	}
@@ -77,12 +76,12 @@ func releaseVersion(out []byte) (string, error) {
 
 const (
 	stopGrace = 5 * time.Second
-	// partRun is how long a tool reading part of a file (a probe, a picture, a stretch of sound) may
+	// PartRun is how long a tool reading part of a file (a probe, a picture, a stretch of sound) may
 	// run. A network mount that stops answering blocks a read forever, and the job waiting on it
 	// keeps renewing its lease; past this the mount is taken to have stopped.
-	partRun = 5 * time.Minute
+	PartRun = 5 * time.Minute
 	// slowestRead is the rate, in bytes a second, a tool reading a whole file is held to: it may run
-	// partRun and the file's size at this rate.
+	// PartRun and the file's size at this rate.
 	slowestRead = 8 << 20
 )
 
@@ -90,27 +89,66 @@ const (
 func WholeRun(f *os.File) time.Duration {
 	info, err := f.Stat()
 	if err != nil {
-		return partRun
+		return PartRun
 	}
-	return partRun + time.Duration(info.Size()/slowestRead)*time.Second
+	return PartRun + time.Duration(info.Size()/slowestRead)*time.Second
 }
 
-// output runs a tool to completion and returns its stdout. files are the tool's descriptors from 3
-// up. A cancelled context, or one still running after limit, is asked to stop with SIGTERM, so
-// ffmpeg can finish what it is writing, and killed after stopGrace.
-func output(ctx context.Context, limit time.Duration, files []*os.File, path string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeoutCause(ctx, limit, fmt.Errorf("%s still running after %s", filepath.Base(path), limit))
-	defer cancel()
-	cmd := exec.CommandContext(ctx, path, args...) //nolint:gosec // path is the operator's configured tool; this package builds every argument
+// Within is ctx ending once the tool at path has run for limit, saying so.
+func Within(ctx context.Context, path string, limit time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeoutCause(ctx, limit, fmt.Errorf("%s still running after %s", filepath.Base(path), limit))
+}
+
+// Command is a tool run as every one is run: files are its descriptors from 3 up; once ctx ends it
+// is asked to stop with SIGTERM, so ffmpeg can finish what it is writing, and killed after
+// stopGrace; and the end of what it writes to stderr is kept for Err.
+type Command struct {
+	*exec.Cmd
+	ctx    context.Context
+	stderr tail
+}
+
+func NewCommand(ctx context.Context, files []*os.File, path string, args ...string) *Command {
+	cmd := exec.CommandContext(ctx, path, args...) //nolint:gosec // path is the operator's configured tool; its callers build every argument
 	cmd.ExtraFiles = files
 	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 	cmd.WaitDelay = stopGrace
-	out, err := cmd.Output()
-	if err != nil && ctx.Err() != nil {
-		return out, context.Cause(ctx)
+	c := &Command{Cmd: cmd, ctx: ctx}
+	cmd.Stderr = &c.stderr
+	return c
+}
+
+// Err is what running c came to, err being what running it answered: why ctx ended where it did,
+// else err with the last the tool said.
+func (c *Command) Err(err error) error {
+	if err == nil {
+		return nil
 	}
-	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && len(exitErr.Stderr) > 0 {
-		return out, fmt.Errorf("%w: %s", err, bytes.TrimSpace(exitErr.Stderr))
+	if cause := context.Cause(c.ctx); cause != nil {
+		return cause
 	}
-	return out, err
+	if said := bytes.TrimSpace(c.stderr.b); len(said) > 0 {
+		return fmt.Errorf("%s: %w: %s", filepath.Base(c.Path), err, said)
+	}
+	return fmt.Errorf("%s: %w", filepath.Base(c.Path), err)
+}
+
+// tail keeps the last of what a tool writes, where the reason it failed is.
+type tail struct{ b []byte }
+
+func (t *tail) Write(p []byte) (int, error) {
+	t.b = append(t.b, p...)
+	if len(t.b) > 2048 {
+		t.b = t.b[len(t.b)-2048:]
+	}
+	return len(p), nil
+}
+
+// output runs a tool to completion within limit and returns its stdout.
+func output(ctx context.Context, limit time.Duration, files []*os.File, path string, args ...string) ([]byte, error) {
+	ctx, cancel := Within(ctx, path, limit)
+	defer cancel()
+	c := NewCommand(ctx, files, path, args...)
+	out, err := c.Output()
+	return out, c.Err(err)
 }
