@@ -47,6 +47,7 @@ const rows = $derived<[string, string][]>([
 		s.discovery === "broadcast" ? "Answers apps looking on the network" : "Off",
 	],
 	["Listening on", s.listen],
+	["Web app at", s.public_url ?? "Where each device reaches the server"],
 	["Trusted proxies", s.trusted_proxies.join(", ") || "None"],
 	["Metadata language", s.metadata_language],
 	["Postgres", backend(s.postgres)],

@@ -49,3 +49,12 @@ test("a TV is linked by the code it shows", async ({ page }) => {
 		"Living Room (Photon for tvOS) is signed in.",
 	);
 });
+
+test("a TV's link fills in the code it shows", async ({ page }) => {
+	await logIn(page, "/link?code=BCDF-GHJK");
+	await expect(page.getByLabel("Code")).toHaveValue("BCDF-GHJK");
+	await page.getByRole("button", { name: "Link" }).click();
+	await expect(page.getByRole("status")).toHaveText(
+		"Living Room (Photon for tvOS) is signed in.",
+	);
+});

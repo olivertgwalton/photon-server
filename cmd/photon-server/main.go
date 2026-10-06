@@ -145,6 +145,10 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	public, err := httpapi.ParsePublicURL(os.Getenv("PHOTON_PUBLIC_URL"))
+	if err != nil {
+		return err
+	}
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return err
@@ -229,7 +233,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	listen := cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen)
 	setup := httpapi.Setup{
 		Started: started, Node: node, Listen: listen, Tools: tools, Encoder: hw, Discovery: discoveryMode,
-		MetadataLanguage: lang, CacheDir: cacheRoot, BackupDir: dumper.Dir,
+		MetadataLanguage: lang, CacheDir: cacheRoot, BackupDir: dumper.Dir, PublicURL: public,
 	}
 	srv := &http.Server{
 		Addr: listen,
