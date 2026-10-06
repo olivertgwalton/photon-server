@@ -21,7 +21,7 @@ type pictures interface {
 
 type pictureCache interface {
 	File(ctx context.Context, id uuid.UUID, url string) (*os.File, error)
-	Resized(ctx context.Context, key string, width int, open func(context.Context) (*os.File, error)) (*os.File, error)
+	Resized(ctx context.Context, key string, width, height int, open func(context.Context) (*os.File, error)) (*os.File, error)
 	Keep(id uuid.UUID, r io.Reader) error
 	Kept(id uuid.UUID) (*os.File, error)
 }
@@ -69,7 +69,7 @@ func (a *API) openPicture(ctx context.Context, id uuid.UUID, pic store.Picture, 
 		return library.Open(pic.Root, pic.Path)
 	}
 	if width > 0 {
-		f, err := a.svc.Artwork.Resized(ctx, id.String(), width, original)
+		f, err := a.svc.Artwork.Resized(ctx, id.String(), width, 0, original)
 		// A resized copy is named for no format; its content says which.
 		if !errors.Is(err, artwork.ErrNotResizable) {
 			return f, "", err

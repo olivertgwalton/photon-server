@@ -20,25 +20,32 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
-// Widths are the sizes a picture is made at: a width asked for is rounded up to the next, so each
-// picture is kept at a handful of sizes whatever clients ask for.
-var Widths = []int{160, 320, 480, 640, 960, 1280, 1920, 2560, 3840}
+// sizes are the bounds a picture is made within: a width or height asked for is rounded up to the
+// next, so each picture is kept at a handful of sizes whatever clients ask for.
+var sizes = []int{160, 320, 480, 640, 960, 1280, 1920, 2560, 3840}
 
 // maxPixels bounds the pictures decoded here: a few MiB of PNG can claim a picture that takes GiBs
 // to decode. A 4K backdrop is 8 megapixels.
 const maxPixels = 50_000_000
 
-// ErrNotResizable is a picture answered as it is: one no wider than asked for, or not decoded
-// here, such as SVG.
+// ErrNotResizable is a picture answered as it is: one that fits what was asked for already, or not
+// decoded here, such as SVG.
 var ErrNotResizable = errors.New("picture cannot be resized")
 
-// Resized answers the picture with key at width or, where it is no wider than that, as it is
-// (ErrNotResizable). open reads the picture's own file, on a context that outlives the callers,
-// as everyone asking for the size at once shares it. Each size is made once and kept.
-func (c *Cache) Resized(ctx context.Context, key string, width int, open func(context.Context) (*os.File, error)) (*os.File, error) {
-	i, _ := slices.BinarySearch(Widths, width)
-	width = Widths[min(i, len(Widths)-1)]
-	name := fmt.Sprintf("%s-w%d", key, width)
+// Resized answers the picture with key shrunk to fit inside width×height, keeping its shape, where
+// a bound of 0 is none; or, where it fits already, as it is (ErrNotResizable). open reads the
+// picture's own file, on a context that outlives the callers, as everyone asking for the size at
+// once shares it. Each size is made once and kept.
+func (c *Cache) Resized(ctx context.Context, key string, width, height int, open func(context.Context) (*os.File, error)) (*os.File, error) {
+	name := key
+	if width > 0 {
+		width = roundUp(width)
+		name += fmt.Sprintf("-w%d", width)
+	}
+	if height > 0 {
+		height = roundUp(height)
+		name += fmt.Sprintf("-h%d", height)
+	}
 	if f, err := c.root.Open(name); !errors.Is(err, fs.ErrNotExist) {
 		return f, err
 	}
@@ -46,7 +53,7 @@ func (c *Cache) Resized(ctx context.Context, key string, width int, open func(co
 		return nil, ErrNotResizable
 	}
 	made := c.group.DoChan(name, func() (any, error) {
-		return nil, c.resize(context.WithoutCancel(ctx), name, width, open)
+		return nil, c.resize(context.WithoutCancel(ctx), name, width, height, open)
 	})
 	select {
 	case <-ctx.Done():
@@ -59,7 +66,12 @@ func (c *Cache) Resized(ctx context.Context, key string, width int, open func(co
 	return c.root.Open(name)
 }
 
-func (c *Cache) resize(ctx context.Context, name string, width int, open func(context.Context) (*os.File, error)) error {
+func roundUp(n int) int {
+	i, _ := slices.BinarySearch(sizes, n)
+	return sizes[min(i, len(sizes)-1)]
+}
+
+func (c *Cache) resize(ctx context.Context, name string, width, height int, open func(context.Context) (*os.File, error)) error {
 	select {
 	case c.resizing <- struct{}{}:
 		defer func() { <-c.resizing }()
@@ -72,16 +84,21 @@ func (c *Cache) resize(ctx context.Context, name string, width int, open func(co
 	}
 	src, err := decode(f)
 	_ = f.Close()
+	var b image.Rectangle
+	var w, h int
+	if err == nil {
+		b = src.Bounds()
+		w, h = fit(b.Dx(), b.Dy(), width, height)
+	}
 	// A picture that cannot be made smaller (a format not decoded here, a damaged or vast file, or
-	// one already no wider) is marked, so the next ask does not decode it again.
-	if err != nil || src.Bounds().Dx() <= width {
+	// one that fits already) is marked, so the next ask does not decode it again.
+	if err != nil || w == b.Dx() && h == b.Dy() {
 		if err := c.write(name+".as-is", func(io.Writer) error { return nil }); err != nil {
 			return err
 		}
 		return ErrNotResizable
 	}
-	b := src.Bounds()
-	dst := image.NewRGBA(image.Rect(0, 0, width, b.Dy()*width/b.Dx()))
+	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 	draw.CatmullRom.Scale(dst, dst.Bounds(), src, b, draw.Src, nil)
 	return c.write(name, func(w io.Writer) error {
 		if dst.Opaque() {
@@ -89,6 +106,18 @@ func (c *Cache) resize(ctx context.Context, name string, width int, open func(co
 		}
 		return png.Encode(w, dst)
 	})
+}
+
+// fit answers the size a dx×dy picture shrinks to inside width×height, where a bound of 0 is none.
+func fit(dx, dy, width, height int) (w, h int) {
+	w, h = dx, dy
+	if width > 0 && w > width {
+		w, h = width, dy*width/dx
+	}
+	if height > 0 && h > height {
+		w, h = dx*height/dy, height
+	}
+	return max(w, 1), max(h, 1)
 }
 
 // decode reads a picture of at most maxPixels.

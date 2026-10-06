@@ -50,7 +50,7 @@ func TestResized(t *testing.T) {
 	t.Cleanup(func() { _ = c.Close() })
 
 	poster, opens := picture(t, 1000, 1500, true)
-	f, err := c.Resized(t.Context(), "poster", 300, poster)
+	f, err := c.Resized(t.Context(), "poster", 300, 0, poster)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,18 +59,18 @@ func TestResized(t *testing.T) {
 	if err != nil || cfg.Width != 320 || cfg.Height != 480 {
 		t.Errorf("300 wide gave %+v, %v; want a 320×480 JPEG, the next width up", cfg, err)
 	}
-	if _, err := c.Resized(t.Context(), "poster", 320, poster); err != nil || *opens != 1 {
+	if _, err := c.Resized(t.Context(), "poster", 320, 0, poster); err != nil || *opens != 1 {
 		t.Errorf("asking again read the original %d times, %v; want it made once", *opens, err)
 	}
-	if _, err := c.Resized(t.Context(), "poster", 1920, poster); !errors.Is(err, ErrNotResizable) {
+	if _, err := c.Resized(t.Context(), "poster", 1920, 0, poster); !errors.Is(err, ErrNotResizable) {
 		t.Errorf("wider than the picture: %v, want it answered as it is", err)
 	}
-	if _, err := c.Resized(t.Context(), "poster", 1920, poster); !errors.Is(err, ErrNotResizable) || *opens != 2 {
+	if _, err := c.Resized(t.Context(), "poster", 1920, 0, poster); !errors.Is(err, ErrNotResizable) || *opens != 2 {
 		t.Errorf("asking again for a size it cannot make read the original %d times, want it remembered", *opens)
 	}
 
 	logo, _ := picture(t, 800, 300, false)
-	f, err = c.Resized(t.Context(), "logo", 400, logo)
+	f, err = c.Resized(t.Context(), "logo", 400, 0, logo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +78,46 @@ func TestResized(t *testing.T) {
 	_ = f.Close()
 	if err != nil || format != "png" {
 		t.Errorf("a transparent logo came back as %q, %v; want PNG, keeping its transparency", format, err)
+	}
+}
+
+// A width and height bound a box the picture shrinks to fit inside, keeping its shape, each
+// rounded up to the next size as a width alone is.
+func TestResizedWithinABox(t *testing.T) {
+	c, err := Open(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	poster, _ := picture(t, 1000, 1500, true)
+	backdrop, _ := picture(t, 1500, 500, true)
+	for _, tc := range []struct {
+		name          string
+		open          func(context.Context) (*os.File, error)
+		width, height int
+		wantW, wantH  int
+	}{
+		{"poster", poster, 0, 400, 320, 480},
+		{"poster", poster, 960, 300, 213, 320},
+		{"backdrop", backdrop, 640, 640, 640, 213},
+		{"poster", poster, 0, 2000, 0, 0},
+		{"backdrop", backdrop, 1600, 900, 0, 0},
+	} {
+		f, err := c.Resized(t.Context(), tc.name, tc.width, tc.height, tc.open)
+		if tc.wantW == 0 {
+			if !errors.Is(err, ErrNotResizable) {
+				t.Errorf("%s within %d×%d: %v, want it as it is, never made larger", tc.name, tc.width, tc.height, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg, _, err := image.DecodeConfig(f)
+		_ = f.Close()
+		if err != nil || cfg.Width != tc.wantW || cfg.Height != tc.wantH {
+			t.Errorf("%s within %d×%d gave %d×%d, %v; want %d×%d", tc.name, tc.width, tc.height, cfg.Width, cfg.Height, err, tc.wantW, tc.wantH)
+		}
 	}
 }
 
@@ -104,7 +144,7 @@ func TestAVastPictureIsAnsweredAsItIs(t *testing.T) {
 
 	var before, after runtime.MemStats
 	runtime.ReadMemStats(&before)
-	_, err = c.Resized(t.Context(), "vast", 320, func(context.Context) (*os.File, error) { return os.Open(path) })
+	_, err = c.Resized(t.Context(), "vast", 320, 0, func(context.Context) (*os.File, error) { return os.Open(path) })
 	runtime.ReadMemStats(&after)
 	if !errors.Is(err, ErrNotResizable) {
 		t.Errorf("resizing a vast picture: %v, want it answered as it is", err)
@@ -132,10 +172,10 @@ func TestAResizeOutlivesTheFirstToAsk(t *testing.T) {
 			}
 			return poster(ctx)
 		}
-		go func() { _, _ = c.Resized(first, "poster", 320, slow) }()
+		go func() { _, _ = c.Resized(first, "poster", 320, 0, slow) }()
 		stayed := make(chan error)
 		go func() {
-			f, err := c.Resized(t.Context(), "poster", 320, slow)
+			f, err := c.Resized(t.Context(), "poster", 320, 0, slow)
 			if err == nil {
 				_ = f.Close()
 			}
