@@ -33,11 +33,8 @@ type TitleState struct {
 func (s *Store) SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration, before domain.Reach) (domain.Reach, error) {
 	i := s.q.Item
 	row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(item))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return "", ErrNotFound
-	}
 	if err != nil {
-		return "", err
+		return "", found(err)
 	}
 	lengths, err := s.durations(ctx, ids([]*model.Item{row}))
 	if err != nil {
@@ -142,11 +139,8 @@ func (s *Store) Unfavourite(ctx context.Context, profile, item uuid.UUID) error 
 func (s *Store) leaves(ctx context.Context, id uuid.UUID) ([]*model.Item, error) {
 	i := s.q.Item
 	row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrNotFound
-	}
 	if err != nil {
-		return nil, err
+		return nil, found(err)
 	}
 	parents := []*model.Item{row}
 	switch row.Kind {

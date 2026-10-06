@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql/driver"
-	"errors"
 	"slices"
 	"time"
 	"uuid"
@@ -107,10 +106,8 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, in
 // for no such library.
 func (s *Store) wallQuery(ctx context.Context, lib, profile uuid.UUID, f WallFilter) (*gorm.DB, error) {
 	l := s.q.Library
-	if _, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(lib))).Take(); errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrNotFound
-	} else if err != nil {
-		return nil, err
+	if _, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(lib))).Take(); err != nil {
+		return nil, found(err)
 	}
 	i := s.q.Item
 	q := i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib)), i.Kind.In(string(domain.ItemMovie), string(domain.ItemShow))).UnderlyingDB().
@@ -146,11 +143,8 @@ func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, f WallFilte
 func (s *Store) PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.PlaybackTitle, error) {
 	i := s.q.Item
 	row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return domain.PlaybackTitle{}, ErrNotFound
-	}
 	if err != nil {
-		return domain.PlaybackTitle{}, err
+		return domain.PlaybackTitle{}, found(err)
 	}
 	rows := []*model.Item{row}
 	pictures, err := s.pictureOrder(ctx, rows)

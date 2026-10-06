@@ -6,8 +6,6 @@ import (
 	"errors"
 	"uuid"
 
-	"gorm.io/gorm"
-
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
@@ -150,11 +148,8 @@ const resumeQuery = `
 func (s *Store) Next(ctx context.Context, profile, id uuid.UUID) (Card, error) {
 	i := s.q.Item
 	item, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return Card{}, ErrNotFound
-	}
 	if err != nil {
-		return Card{}, err
+		return Card{}, found(err)
 	}
 	if ok, err := s.visible(ctx, profile, id); err != nil || !ok {
 		return Card{}, cmp.Or(err, ErrNotFound)

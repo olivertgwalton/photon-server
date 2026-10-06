@@ -108,11 +108,8 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 	err := s.q.Transaction(func(tx *query.Query) error {
 		l := tx.Library
 		row, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(id))).Take()
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrNotFound
-		}
 		if err != nil {
-			return err
+			return found(err)
 		}
 		if change.Name != "" {
 			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Name, change.Name); err != nil {

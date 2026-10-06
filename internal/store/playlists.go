@@ -3,13 +3,11 @@ package store
 import (
 	"context"
 	"database/sql/driver"
-	"errors"
 	"slices"
 	"time"
 	"uuid"
 
 	"gorm.io/gen/field"
-	"gorm.io/gorm"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -182,10 +180,7 @@ func (s *Store) RemovePlaylist(ctx context.Context, profile, playlist uuid.UUID)
 func ownPlaylist(ctx context.Context, q *query.Query, profile, playlist uuid.UUID) error {
 	p := q.Playlist
 	_, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(playlist)), p.ProfileID.Eq(model.UUID(profile))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return ErrNotFound
-	}
-	return err
+	return found(err)
 }
 
 func touch(ctx context.Context, tx *query.Query, playlist model.UUID) error {
@@ -231,11 +226,8 @@ func appendEntries(ctx context.Context, tx *query.Query, playlist model.UUID, it
 func playableOf(ctx context.Context, tx *query.Query, id model.UUID) ([]model.UUID, error) {
 	i := tx.Item
 	row, err := i.WithContext(ctx).Where(i.ID.Eq(id)).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrNotFound
-	}
 	if err != nil {
-		return nil, err
+		return nil, found(err)
 	}
 	var out []model.UUID
 	db := i.WithContext(ctx).UnderlyingDB()
