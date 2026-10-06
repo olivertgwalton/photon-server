@@ -2,11 +2,17 @@
 
 A media server for films and television, written in Go.
 
+## Tech stack
+
+- **Server**: Go, PostgreSQL (GORM, pgx, goose migrations), Valkey
+- **Media**: FFmpeg (jellyfin-ffmpeg in the image, with VAAPI, Quick Sync, NVIDIA and Vulkan)
+- **Metadata**: TMDB, TheTVDB, Kodi NFO
+- **Web**: SvelteKit (static build served by the Go server), Tailwind, bits-ui, Bun, Biome,
+  Playwright
+
 ## Run
 
-The image (`ghcr.io/olivertgwalton/photon-server`, amd64 and arm64) carries jellyfin-ffmpeg's
-portable build, for its hardware transcoding and tone mapping, with Intel's and AMD's VAAPI drivers,
-Quick Sync's runtime and Intel's OpenCL on amd64, and Mesa's Vulkan. `deploy/` runs it with
+The image is `ghcr.io/olivertgwalton/photon-server` (amd64 and arm64). `deploy/` runs it with
 PostgreSQL and Valkey:
 
 ```sh
@@ -16,17 +22,12 @@ docker compose exec server photon-server profile add -name Admin -role admin
 docker compose exec server photon-server library add -name Films -kind movies /media/Films
 ```
 
-A library added is scanned straight away. `library add` takes the same settings as `library set`
-(`-previews`, `-markers`, `-keyframes`, `-metadata`…), so a library on a network or debrid mount can
-be added as `-previews off -markers chapters -keyframes index` and never read whole.
-
-The web app is in the same image and on the same port: open `http://<server>:8640` and log in.
+Then open `http://<server>:8640` and log in.
 
 ## Develop
 
-Needs PostgreSQL 18, Valkey 9, and FFmpeg 8 or newer (`ffmpeg` and `ffprobe` on the `PATH`, or
-`PHOTON_FFMPEG` and `PHOTON_FFPROBE`); jellyfin-ffmpeg publishes portable macOS builds that match
-the image's.
+Needs PostgreSQL 18, Valkey 9 and FFmpeg 8 or newer (`ffmpeg` and `ffprobe` on the `PATH`, or
+`PHOTON_FFMPEG` and `PHOTON_FFPROBE`).
 
 ```sh
 export PHOTON_DATABASE_URL=postgres://localhost/photon_dev
@@ -36,452 +37,14 @@ go run ./cmd/photon-server
 TEST_DATABASE_URL=postgres://localhost/postgres TEST_VALKEY_URL=valkey://localhost:6379 go test -tags integration ./...
 ```
 
-The server listens on `:8640` (`PHOTON_LISTEN`) and names itself after the host (`PHOTON_NAME`).
-Behind a reverse proxy, list the proxy's addresses in `PHOTON_TRUSTED_PROXIES` (for example
-`172.16.0.0/12,127.0.0.1`); `X-Forwarded-For` is ignored from anyone else.
-
-Each node keeps up to as many PostgreSQL connections as it has CPUs, plus 48, shared by its jobs and
-the requests it answers. Set another number with `pool_max_conns` in `PHOTON_DATABASE_URL`
-(`postgres://db/photon?pool_max_conns=40`); with several nodes, keep their sum under PostgreSQL's
-`max_connections`, 100 unless it is changed.
-
-A device that signs in by a code it shows (a television) is told where to enter it, as RFC 8628's
-`verification_uri`: the web app's `/link` page, and `verification_uri_complete` with the code filled
-in, for a QR code. That is at `PHOTON_PUBLIC_URL` (`https://photon.example.com`) where it is set,
-else at the address the device reached the server on, over HTTPS where it came over TLS or a trusted
-proxy says `X-Forwarded-Proto: https`. The web app is on the server's own port, so that address is
-already right; set it only where readers reach the web app at another address than devices reach
-the API (`PHOTON_WEB=off` with the app served elsewhere).
-
-Clients on the local network find the server without being given its address: it listens on UDP at
-the same port number as HTTP (`8640`, so open both protocols on that port), and answers a datagram
-reading `who is PhotonServer?` (in any case) with its id, name, version and the address to reach it
-on, as Jellyfin does on 7359. Only askers on this machine or a private or link-local network are
-answered. In Docker a broadcast reaches the server only with host networking (`network_mode: host`),
-as with Jellyfin. `PHOTON_DISCOVERY=off` stops it answering; if the port is taken the server says
-so and serves HTTP regardless.
-
-Titles are described by their file names, then any Kodi NFO beside them, and films and shows are
-matched on TMDB in `PHOTON_METADATA_LANGUAGE` (default `en-US`, whose region picks certificates).
-A profile's age limit reads each certificate as Jellyfin's rating tables do: in that region's
-system (India's `A` is for adults), else the US's, else any country's; `US:R` in the US's; and a
-list such as `SE:15 / SE:15+` by its first entry that reads. An episode's own certificate counts as
-well as its show's.
-Posters and logos are lettered in that language where TMDB has one, else in English, else not at
-all, as Jellyfin chooses them; backdrops are unlettered where one is.
-The server ships its own TMDB token and TheTVDB key; set `PHOTON_TMDB_TOKEN`, or
-`PHOTON_TVDB_KEY` (with `PHOTON_TVDB_PIN` for a subscriber key), to use yours. What a reader edits
-or an NFO says is never replaced by a match.
-
-A library ranks its sources for each kind of item it holds (a film; or a show, its seasons and its
-episodes), for metadata and for pictures apart, as Jellyfin's metadata downloaders and image
-fetchers are. A lower source only fills what those above it left empty, and one unticked keeps its
-place but is not asked. A new library takes `nfo` then `tmdb` for metadata and `tmdb`'s pictures
-for every kind. The settings page draws the lists; from the shell, `photon-server library set -name
-TV -metadata 'show=nfo,tmdb;episode=nfo,tvdb,tmdb' -images 'show=tvdb,tmdb'` sets those kinds and
-leaves the rest, and `library list` shows what each asks. TheTVDB knows shows only, an NFO has no
-pictures, MDBList rates films and shows, and OMDb describes no season and pictures only films and
-shows; `GET /api/v1/admin/providers` says which kinds each provider may be ranked for. The files beside a title come before every source's
-pictures. Changing a list matches the library's titles again.
-
-A film or show is matched again every 30 days (a library's `refresh_days`, 0 never). An admin can ask now, as
-with Jellyfin's and Plex's Refresh Metadata: `POST /api/v1/admin/titles/{id}/refresh` with
-`{"mode": "missing"}` asks about the title and any season with an episode not yet described, ahead
-of everything queued; `"all"` asks about every season and episode under it too. Either way each
-provider's pictures are replaced with what it has now, and edits, locks and NFOs stand. Reading
-its files again is the library scan's job.
-
-A whole library is refreshed the same way with `POST /api/v1/admin/libraries/{id}/refresh`:
-`"missing"` takes the films and shows never matched, with no overview or poster, with a season not
-yet described, or whose last match failed every attempt; `"all"` takes every one, with all their
-seasons and episodes. Those matches queue behind the titles a scan has just found, so a large
-library's refresh, which can take hours, never holds up a new film; the dashboard shows them run.
-
-A title's pictures are the files beside it first (`poster.jpg`, `fanart.jpg`…), then each
-provider's best ten of a kind, in the order the library ranks image fetchers for its kind. An admin chooses another, as with Jellyfin's
-Edit Images and Plex's poster chooser: `GET /api/v1/admin/titles/{id}/artwork/candidates?kind=poster`
-lists what the providers had at the last match, each served like any picture at
-`/api/v1/artwork/{id}`, and `PUT /api/v1/admin/titles/{id}/artwork/poster` with `{"id": "…"}`
-makes one the title's own, above the files and through every refresh, until `DELETE` on the same
-address gives it back.
-
-A film or show plays its theme tune under its page, as Jellyfin's theme songs and Plex's TV theme
-music do: `theme.mp3` (or `.flac`, `.m4a`, `.ogg`, `.opus`, `.wav`, `.aac`, `.wma`) in its folder,
-then the sound files in a `theme-music` folder there, read by the scan and never written to. A
-season's and an episode's page plays its show's. A title's page lists them in `themes`, each served
-at `/api/v1/themes/{id}` without a token, like a picture. Whether a page plays them is each
-profile's `theme_music` preference, `off` until it says `play`, as in Jellyfin's web client.
-
-A library can also fetch themes as Jellyfin's Themerr plugin does, and like that plugin it is off
-until asked for: `photon-server library set -name NAME -themes themerr` (or `"themes": "themerr"`
-in `PATCH /api/v1/admin/libraries/{id}`). A film or show with no theme file of its own then takes
-the YouTube link [ThemerrDB](https://github.com/LizardByte/ThemerrDB) lists for its TMDB id (or a
-film's IMDb id) once it is matched, and checks the link again at every refresh; its sound is
-downloaded from YouTube with [yt-dlp](https://github.com/yt-dlp/yt-dlp) and kept as AAC in
-`PHOTON_CACHE_DIR`'s `artwork` folder, never in the media folders, and a file of the title's own
-always wins. YouTube's terms do not permit downloading this way; whether to turn it on is the
-operator's call. The image carries yt-dlp; elsewhere it is `yt-dlp` on the `PATH` or
-`PHOTON_YTDLP`, and without it `themerr` is refused. A title ThemerrDB does not list is asked about
-again a day later, and a video YouTube will not give (removed, blocked, age-gated) is logged once
-and tried again a week later. `-themes local`, the default, keeps to the files; `off` plays none.
-
-Metadata providers are plugins: `GET /api/v1/admin/providers` lists each with what it can do (describe
-titles, rate them) and what it needs set. TMDB gives its own score; MDBList gives IMDb's and Rotten
-Tomatoes' critics and audience once an admin sets its free
-key (`PATCH /api/v1/admin/providers/mdblist` with `{"settings": {"api_key": "…"}}`) and a library
-takes it (`-metadata 'movie=nfo,tmdb,mdblist'`). Ratings are scored out of 100.
-
-The Open Movie Database fills in what the sources above it leave out, as Jellyfin's OMDb provider
-does: a title's name, plot, certificate, release date, genres and a 300-pixel poster, each episode's
-name, plot and air date, and IMDb's score and the Tomatometer. It knows titles only by their IMDb
-ids, which an NFO, TMDB or TheTVDB finds first, so a library takes it beside them, ranked last
-(`-metadata 'movie=nfo,tmdb,omdb'`), once an admin sets its key (`PATCH /api/v1/admin/providers/omdb` with
-`{"settings": {"api_key": "…"}}`). It is asked once for a film, and once for each season and each
-episode of a show, so a free key's thousand requests a day go quickly on a large library; a refused
-or spent key passes OMDb over until it works again.
-
-Collections are TMDB's box sets, shown once a library holds two of a set's titles, and an admin's
-own (`POST /api/v1/admin/collections`). Each says which in its `origin` (`tmdb` or `user`). Only an
-admin's has its titles set or is removed by hand; a TMDB set's titles follow TMDB, and it goes when
-none are left. Either one's name and overview can be edited as any title's, and the edit stands.
-
-Anyone can add a metadata provider, in any language, as a web service speaking the server's plugin
-protocol ([docs/plugins.md](docs/plugins.md)). Register one by its address
-(`POST /api/v1/admin/plugins` with `{"url": "http://films-plugin:9000"}`) and it is the provider
-`plugin:ID`: listed with the others, set the same way, and taken by a library like any source
-(`-metadata 'movie=nfo,plugin:films,tmdb'`). A plugin that is down is passed over for the library's next
-source. Removing one keeps what it said about titles until another source says otherwise.
-
-An admin adding a library can browse the server's folders for it: `GET /api/v1/admin/folders`
-answers the folders to start from (`/` and whichever of `/media`, `/mnt`, `/srv`, `/Volumes` and
-the server's home are there, or each drive on Windows), and `?path=` an absolute folder's
-subfolders, links to folders among them, up to a thousand and saying when there are more. Folders
-whose names start with a dot are left out unless asked for (`&hidden=show`). It shows anything the
-server's user can read, so only an admin may ask; in Docker that is the container's view, with your
-media under `/media`.
-
-Links in a library are followed wherever they lead, to files and to folders, as Jellyfin and Plex
-follow them, so a library of links into a remote mount (Riven, zurg, rdt-client) reads like any
-other. A link that leads nowhere, one back to a folder above it, and anything that is neither a file
-nor a folder are left out, each logged and counted in the scan's `left_out`. A library whose own
-folder cannot be read fails its scan and keeps its titles. The server only ever opens a file a scan
-recorded: no request names a path.
-
-Libraries are scanned every 12 hours, and as their files change: each folder is watched (inotify on
-Linux) and, a minute after a library's last change, the folders that changed are scanned, each the
-nearest folder to a change that is still there, as Jellyfin's monitor reads them; a film's or a
-show's folder, not the library. Network shares and FUSE mounts send no change events, so a library
-on one is scanned on the schedule, or by a tool that says what it added, as autoscan says it to
-Plex: `POST /api/v1/admin/libraries/{id}/scan?path=/media/films/Heat (1995)` (an admin's token, the
-path as the server sees it, which must be inside the library) scans that folder of it, or the
-nearest one above a path that is not a folder. `photon-server library set -name NAME -monitor off`
-stops watching a library. A large library may need a higher
-`fs.inotify.max_user_watches`; the server says so when it runs out.
-
-Each node runs its jobs in pools of their own: two library scans at once, sixteen matches (as many
-as reach TMDB's rate limit, which every node shares), half its CPUs reading files for keyframes and
-intros, one preview, one conversion and two webhook deliveries. A large import's reading so never
-holds up its matching, nor matching a scan, and a title a scan has just found is matched before the
-nightly refresh of those matched already.
-
-A scan reads only what changed, as Plex does: a folder whose files are all as they were is passed
-over, and in one that changed, a file the same size with the same modification time as at the last
-scan is not opened. A file that changed only its modification time, as every file does when some
-mounts are remounted, is read for its first and last 64 KiB, recognised and not probed again.
-
-A scan walks four of a library's top-level folders at once (a film's folder, a show's) and reads
-four files at once among them, the folders under each one after another, so a show's seasons are
-read after the show. On a network or debrid mount, where every look at a file waits on the network,
-that makes a first scan several times faster; one library is still scanned by one scan at a time.
-
-A network mount that stops answering blocks a read forever, so every FFmpeg run over a library
-file has a limit: five minutes for one that reads part of a file (a probe, a chapter picture, an
-intro's sound), five minutes plus the file at 8 MiB a second for one that reads all of it
-(keyframes, trickplay), and five minutes without progress for a download's conversion. A run past
-its limit is stopped and its job fails saying so, rather than holding its place for ever.
-
-A `.ignore` file keeps files out of a library, as Jellyfin's does: an empty one hides its whole
-folder, and one with gitignore patterns (`*.nfo`, `Extras/`, `!keep.mkv`, `**/sample.*`) hides
-what they match in its folder and below, until a deeper `.ignore` takes over.
-
-A title in more than one library, as a show Riven links into both `kids/shows` and `shows`, is one
-title wherever libraries are gathered: search, home's rows, a person's work and similar titles show
-it once, as it is in the library added first of those the profile may see, so a profile limited to
-one library is shown that library's. What a profile has watched, how far it got and what it
-favoured follow the title, as Plex keeps one watch state for a guid on a server: watching Victorious
-from Kids marks it watched under Shows, and `userdata.changed` names it in each. Titles are the same
-when they share any TMDB, TVDB or IMDb id (a season or episode its show's, with its numbers) or a
-file, or are each the same as a third: a show TMDB matched in Kids is the show TheTVDB matched in
-Shows, since TMDB gives a show's TVDB and IMDb ids and TheTVDB its IMDb and TMDB ids, and every
-match keeps them. Each library still lists its own.
-
-A title a client cannot play as it is has its video copied into HLS where it can, with its audio
-encoded, or its video encoded again, an interlaced picture (a DVD, a 1080i recording) deinterlaced
-with yadif, as Jellyfin's default; a file probed before the server read field order is taken as
-progressive until it changes. Encoding is in software unless
-`PHOTON_HWACCEL` names a device: `videotoolbox`, `vaapi` or `qsv` (on `PHOTON_HWACCEL_DEVICE`,
-default `/dev/dri/renderD128`) or `nvenc` (on CUDA device `PHOTON_HWACCEL_DEVICE`, default `0`). The
-server encodes a test picture on it at start, and falls back to software if it will not.
-Segments are written under `PHOTON_CACHE_DIR`'s `hls` folder and kept from a minute behind where
-each player last asked, so a film played through holds about a minute and a half of itself there;
-seeking back further makes them again. The folder is emptied at start.
-
-Video is encoded to HEVC for a client whose play profile lists `hevc`, in preference to H.264 as
-Jellyfin's is when HEVC encoding is allowed, and to H.264 otherwise. HEVC keeps a source's HDR10 or
-HLG where the client lists that range and takes 10 bits: Main 10, BT.2020, its transfer and its
-mastering display and light levels carried over, tagged `hvc1` in the HLS segments, whose master
-playlist says `VIDEO-RANGE=PQ` or `HLG`. HDR10+ is kept as its HDR10, and Dolby Vision 8.1 (or a
-profile 7 Blu-ray) as the HDR10 of its base layer, as Jellyfin transcodes it; no Dolby Vision is
-encoded. Anything a client cannot show, and anything encoded to H.264, is tone mapped to SDR. The
-play answer and the dashboard's playback say the codec and range sent, and whether it was tone
-mapped. `PHOTON_HEVC_ENCODING=deny` (default `allow`) encodes H.264 alone; HEVC is also left off,
-saying so at start, where the device, or software (which draws picture subtitles in), will not
-encode it, as `encoder.hevc` in `GET /api/v1/admin/server` shows. In software HEVC is libx265 at
-the superfast preset with Jellyfin's tuning, constant quality 28: on four threads it encodes 10-bit
-1080p at twice real time, where Jellyfin's veryfast falls short of it, at about a fifth more
-processor than H.264.
-
-A copy in several files (`cd1`, `cd2`, `part1`…) plays whole. A client says how it plays one in
-its play profile: by default as one stream, so its files are joined into one HLS stream with their
-video copied (`parts_not_supported` among the reasons); with `"parts": "each"`, as Plex's players
-take a stacked item, it is given each file's own address and where it starts on the copy's
-timeline.
-
-A title played as it is lists the subtitle files beside it, each at a signed address serving the
-file as it is; add `&format=webvtt` and a text one (SubRip, ASS, SSA, WebVTT and the rest FFmpeg
-reads as text) is converted to WebVTT, as Jellyfin's subtitle route converts, read in the charset
-its byte order mark or language says where it is not UTF-8. Pictures (VobSub, PGS) are refused.
-
-Each node encodes at most `PHOTON_MAX_TRANSCODES` videos at once (a number, or `unlimited`): by
-default a quarter of its CPUs in software, at least one, and eight on a hardware encoder, the cap
-NVIDIA puts on a GeForce card's sessions. A download's conversion takes one of those slots too, but
-playback always wins: a play that needs a slot on a node at its limit stops a conversion there,
-which goes back in the queue to start again from the beginning once a slot is free. Only when
-plays hold every slot is a play that would encode video refused, with 503 `transcode_limit`, rather
-than played worse; one played as it is or with its video copied is never refused. A transcode's slot
-is freed as it stops, or a couple of minutes after its player goes quiet.
-`GET /api/v1/admin/playbacks` says which node runs each playback, and how many videos the node
-answering is transcoding against its limit (`transcodes.limit` is absent when unlimited), with
-`transcodes.conversions` saying how many of them are conversions.
-
-A text subtitle inside a file is sent beside an HLS playback as WebVTT. Reading one out means
-reading the whole file, so the first time any of a file's text subtitles is asked for, all of them
-are read out in that one pass, as Jellyfin does, and kept under `PHOTON_CACHE_DIR` in `subtitles`
-until no one has played the file for a month. A player that gives up waiting does not stop the
-pass, and finds the subtitles there when it asks again.
-
-An admin's dashboard sees each playback as Jellyfin's does: `GET /api/v1/admin/playbacks` names the
-profile, the device and app that started it and the address it played from, the title with its
-pictures, the copy and its length, where it has got to, and how it plays: the reasons it could not
-play as it is, each stream as it is in the file and what it is encoded to, whether a subtitle is
-drawn into the picture, and the device encoding it. All of it is fixed as the playback starts, and
-the event stream's snapshot and playback events carry each playback the same way. `DELETE
-/api/v1/admin/playbacks/{id}` stops one: its remux ends on whichever node runs it, its player is
-refused from then on, and the play is kept in the history where its player last said it was. A
-title played as it is is read from a signed address that lasts a day, so its player can go on
-reading the file it has; only its reports are refused. A playback lasts as long as its player
-reports, paused or playing, every ten seconds or so: its remux runs however long it is paused, and
-its player's stop ends the remux and frees its transcode slot at once, on whichever node runs it.
-A player that goes quiet for two minutes is stopped where it last said it was, as Jellyfin's
-session timeout does: the play is kept in the history and `playback.stopped` is raised.
-
-A client times its connection to the server on a title's own bytes, as Jellyfin's bitrate test
-does on made-up ones: `GET /api/v1/parts/{id}/sample` answers the first 16 MiB of a file the
-profile may see, in byte ranges, and nothing past them. It is not a playback, so it is in no
-history, activity log or dashboard.
-
-Each copy says where its intro, credits, recap and preview are, so a player can offer to skip them.
-A chapter named for one (Intro, Opening, End Credits, Previously…) marks it. Otherwise the server
-compares the sound of a season's episodes, as Plex and Jellyfin's Intro Skipper do: the stretch two
-episodes share near the start is the intro, near the end the credits. A season is compared ten
-minutes after its episodes stop arriving, and any not yet compared at 3 a.m. That needs an FFmpeg
-built with chromaprint, which the image's is; without it the server says so at start and reads
-chapters only. An admin's own markers (`PUT /api/v1/admin/versions/{id}/markers`) outrank both,
-and so does an admin's word that a part has none of a kind (`"absent": [{"kind": "intro", "part":
-0}]`, parts counted from 0), which hides a wrong chapter or fingerprint match through rescans and
-later comparisons. Each PUT replaces what was said of the copy; an empty one clears it.
-
-Comparing sound reads the first ten minutes and the last stretch of every episode, which on a
-library on a network share or a debrid mount of 4K remuxes is gigabytes an episode. Each library
-chooses, as Plex's intro and credits detection and Jellyfin's per-library segment providers let it:
-`photon-server library set -name NAME -markers chapters` (or `"markers": "chapters"` in
-`PATCH /api/v1/admin/libraries/{id}`) offers only the markers chapters name, which costs no reads,
-`-markers off` none, and `all`, the default, compares sound too. A library not comparing queues no
-comparisons, and one already queued for it does nothing; fingerprints it found before are kept and
-offered again if it goes back to `all`, whose next 3 a.m. run queues the seasons not yet compared.
-An admin's own markers stand whatever the setting.
-
-Each library makes previews of its videos ahead of time, as Plex and Jellyfin do: a picture of each
-chapter (a video with none is pictured once, fifteen seconds in, which is what a trailer's or other
-extra's card shows), and trickplay sheets for scrubbing (a 320-pixel thumbnail every ten seconds, a hundred to
-a JPEG sheet, HDR tone mapped). They are made from keyframes in the background, one part at a time
-per node beside the other jobs, and kept under `PHOTON_CACHE_DIR` in `previews`; a two-hour film's
-come to a few megabytes. `photon-server library set -name NAME -previews chapters` makes only the
-chapter pictures, and `-previews off` none. Each night at two the server queues whatever is not yet
-as its library asks and takes away what a library no longer wants. A file replaced by new bytes
-loses its old previews at the scan that finds it; a file that is simply gone keeps them for 30 days,
-so a share that is unmounted for a while does not come back to hours of remaking, and loses them
-after that. A title's page gives each chapter's picture at a signed-in address (`image`) and at one
-signed for a day or two (`signed_image`), the same all day, for a player that sends no token.
-
-A title whose video is copied is cut into HLS segments at its keyframes, which each library finds as
-its `keyframes` setting says. `index`, the default, reads them from the file's own index, as
-Jellyfin reads a Matroska file's Cues: Matroska and WebM Cues, MP4 and MOV sample tables, and a
-fragmented MP4's `mfra`. That is a few reads of a few kilobytes however large the file, so it is the
-one to choose for a library on a network share or a debrid mount, where reading a file means
-downloading it. A file with no index (MPEG-TS, AVI, a Matroska file written without Cues) is then
-cut every six seconds at the keyframe after each, as Jellyfin cuts a file it has no keyframes for,
-so a segment runs a little longer or shorter than its playlist says. `full` walks such a file with
-ffprobe instead, reading every byte of it once, for exact segments from a library on a local disk;
-`off` finds none and cuts every file every six seconds. Files are read for keyframes in the
-background, after scans and matching; a title played before its file has been read is cut every six
-seconds that time, and its file is read next. `photon-server library set -name NAME -keyframes full`
-(or `"keyframes": "full"` in `PATCH /api/v1/admin/libraries/{id}`) changes the setting, and the library's files with no keyframes known are read again.
-
-A client downloads a title for offline viewing at a most video bitrate, and width if it says, as
-Plex's Downloads do. A copy already within both is downloaded as it is; any other is converted in
-the background, on the same device as playback, into one MP4 of AAC and H.264 tone mapped to SDR,
-or HEVC with HDR kept as a play would be for a device that lists them in `video_codecs` and
-`video_ranges` (FFmpeg's codec names; `sdr`, `hdr10`, `hlg`), under `PHOTON_CACHE_DIR`'s `downloads` folder, where the client fetches it, resuming as it
-likes. Each node converts one title at a time, and only in a free transcode slot that a play may
-take back (see `PHOTON_MAX_TRANSCODES`), so playback is not starved; a title asked for at the same
-quality and video by several profiles is converted once. A converted file is deleted when the last
-download needing it is removed, and downloads are forgotten a week after they are ready if no one
-removes them; size the cache folder for the conversions waiting to be fetched. A download is the
-device's that asked for it, as Plex's are its client's: `GET /api/v1/downloads` lists this device's,
-`?scope=profile` the profile's on every device, and signing a device out forgets its downloads.
-
-Run several nodes against one Postgres and Valkey behind a load balancer and each says where its
-peers reach it in `PHOTON_NODE_ADDRESS` (`http://10.0.0.5:8640`): a request for a stream's segments
-that lands on another node is handed to the node making them. A node is known by the id it keeps in
-a `node` file in its cache folder, made the first time it starts: its converted downloads and the
-streams it serves are filed under that id, so it keeps them across restarts as long as it keeps the
-folder. Give each node a cache folder of its own; two nodes sharing one would be taken for one.
-
-Every key and channel the server keeps in Valkey is named under its id, so several servers can
-share one Valkey (each with its own Postgres) without seeing each other's playbacks, scans or
-events; the nodes of one server share its id through its Postgres. What is going on (playbacks,
-scans, nodes) lapses with Valkey 9's hash field expiry, so a playback whose player and node both
-went away drops off the dashboard on its own.
-
-The server keeps an activity log of what an admin reads later: sign-ins and refused ones (with the
-device and address), plays started and stopped, libraries and profiles added and removed, scans
-and the titles they found, failed tasks, backups, and jobs that failed for good. `GET
-/api/v1/admin/activity` pages it, newest first (`kind` narrows it), and entries older than 30 days
-are forgotten daily. `GET /api/v1/admin/events` is a Server-Sent Events stream for a dashboard:
-first a `snapshot` of the tasks and jobs running, the scans going on and who is playing what on
-every node, then each event as it happens, named by its kind (`task.finished`, `scan.progress`,
-`playback.paused`…), with a comment every 15 seconds so proxies leave it open. It asks nginx not
-to buffer it; another proxy may need buffering turned off for its path.
-
-The dashboard says how far each kind of job's backlog has got, as Plex's activity panel does with
-its preview thumbnails: the snapshot's `backlogs` and the `jobs.progress` event (at most once a
-second for each kind, and once more when none is left) give how many are `left`, queued or
-running, and how many are `done` since the kind last had none left, so a dashboard draws "585 of
-8,607" with a bar whose end moves out as more is queued. The count of done is kept in Valkey for a
-day after its last job, so any node tells it right.
-
-Clients keep their pages right without polling through `GET /api/v1/events`, the same kind of
-stream for any signed-in profile, as Jellyfin's WebSocket and Plex's notifications do: a `hello`
-with the scans going on, then `library.changed` (a library's titles `added`, `updated` and
-`removed`, gathered for three seconds, so a scan of hundreds of files is a handful of events),
-`title.updated` (matched, edited or given another picture), `scan.progress`, `library.scanned`
-as a scan ends, and `userdata.changed` for the profile's own progress, marks, favourites and
-playlists from any device. A profile is told only of libraries and titles it may see. Nothing is
-kept to resend, so a client that reconnects asks again for what it shows, and one whose device
-switches profile opens the stream again.
-
-Webhooks are told of events as Plex's are: `POST /api/v1/admin/webhooks` with a `url` and the
-`events` it wants (plays started, paused, resumed and stopped, sign-ins, profiles and libraries
-added and removed, scans, titles added, failed tasks and backups) answers a `secret`, once. Each
-event is POSTed as JSON (`event`, `at`, `server`, and the `profile`, `title` and `library` it is
-about) with `X-Photon-Event` naming it and `X-Photon-Signature: sha256=` the hex HMAC-SHA256 of the
-body under the secret. A receiver has 10 seconds to answer 2xx; anything else, a redirect too, is
-tried again with the job queue's backoff, five times, and then shows among the dead jobs. `POST
-/api/v1/admin/webhooks/{id}/test` sends it a `webhook.test`.
-
-The database is dumped every three days with `pg_dump` (`PHOTON_PG_DUMP`, no older than the
-Postgres it dumps) into `PHOTON_BACKUP_DIR` (by default the user config folder's `photon-server/backups`; the image's
-`/var/lib/photon-server/backups`, a volume of its own in `deploy/compose.yml`), keeping
-the newest three. Put one back into an empty database with
-`pg_restore --no-owner -d postgres://… photon-….dump`.
-
-The first admin is made on the command line, before anyone can sign in:
-
-```sh
-go run ./cmd/photon-server profile add -name Oliver -role admin
-```
-
-A profile with a password changes it itself with `PUT /api/v1/me/password` (`current` and `new`, at
-least 8 characters), which signs out every other device watching as that profile; wrong guesses are
-limited as sign-ins are. A household profile, one with no password, is only ever chosen on a
-signed-in device and cannot give itself one: an admin does, which lets it sign in by itself. It can
-still set a PIN with `PUT /api/v1/me/pin`. Any profile renames itself with `PATCH /api/v1/me`
-(`{"name": "…"}`), as a Jellyfin user may, and an admin renames any; a name is unique, up to 64
-characters with no control characters, and trimmed. Every device shows the new name on its next
-request.
-
-A profile has a picture, as Jellyfin's users and Plex's Home users do: `POST /api/v1/me/avatar` with
-the image as the body sets the profile's own, and an admin sets anyone's at
-`/api/v1/admin/profiles/{id}/avatar`; `DELETE` on either takes it away. The server keeps a JPEG, PNG,
-GIF or WebP, by what its bytes say it is (never SVG), of at most 32 MiB and 50 megapixels, as it
-bounds providers' pictures, in its picture cache, and serves it at `/api/v1/artwork/{id}` like any
-other; the id changes with the picture, so a client keeps it for good. A picture taken away is swept
-with the rest.
-
-How a profile plays is kept on the server, so every device it plays on follows it, as Jellyfin's
-user settings are: `GET /api/v1/me/preferences` and `PATCH` with what to change. The sound and
-subtitle languages and when subtitles come on are the server's to apply: a title's page names, for
-each copy, the tracks it plays with for that profile, and a play that asks for no sound gets that
-track. Where the profile keeps them (the default), the tracks a player reports playing are
-remembered for that title and chosen again next time. The highest quality, playing the next episode
-and skipping intros and credits are each player's to follow. The preferences hold the profile's
-home too, as Jellyfin's home sections and Plex's pinned rows: `home` lists every row in the order
-`GET /api/v1/home` answers them, each `shown` or `hidden`; a row the server gains later is shown at
-the foot of a home arranged before it.
-
-The API describes itself: `GET /api/v1/openapi.json` answers its OpenAPI 3.1 description, built
-from the server's own routes as it starts, so it says what the running server takes and answers.
-Point a client generator or a viewer such as Swagger UI at it; no token is needed.
-`photon-server openapi` writes the same description to standard output with no database or
-server running, which is what the web client generates its types from.
-
-`GET /readyz` answers 204 while Postgres and Valkey are reachable and 503 otherwise.
-`GET /api/v1/admin/server` shows an admin how the node answering was set up, for a dashboard: its
-version and when it started, the OS, FFmpeg and FFprobe and whether they fingerprint sound, the
-encoder and transcode limit, discovery, the listen address and trusted proxies, the cache and backup
-folders with the space left on them (on Linux and macOS), the metadata language, whether Postgres
-and Valkey answer and their versions, and the nodes that say where their peers reach them
-(`PHOTON_NODE_ADDRESS`), each with when it last did. It is all set by the environment, so none of it
-is changed here; no password or connection string is in it.
-Integration tests create and drop a database per test on the server `TEST_DATABASE_URL` names.
-
-## Web
-
-`web/` is the server's web app, a SvelteKit app built to static files: people log in, browse and
-play there, and admins run the server from it. The server serves the build on its own port for every
-path the API does not own, as Jellyfin and Plex serve their web clients: `PHOTON_WEB=serve` from
-`PHOTON_WEB_DIR` (in the image, `/usr/local/share/photon-server/web`), which is the default wherever
-a build is there, or `PHOTON_WEB=off` for the API alone; `serve` with no build stops the server at
-start. The browser calls the API itself on the same origin. Logging in with `"keep": "cookie"` has
-the server keep the session in an HTTP-only, SameSite=Lax cookie, Secure when the browser came over
-HTTPS (here, or at a trusted proxy that says so in `X-Forwarded-Proto`), and answer the profile with
-no token; the cookie is taken wherever a bearer token is, and a write carrying it is refused unless
-it comes from the server's own pages (its `Origin` is this server's `Host`), so behind a reverse
-proxy pass the `Host` header through. Apps keep the token, as before.
-
-To work on it, run the server as above and, from `web/`:
+The web app, from `web/`, with the server running:
 
 ```sh
 bun install
-bun run dev   # http://localhost:5173, with /api passed on to PHOTON_API_URL (default http://localhost:8640)
+bun run dev   # http://localhost:5173, /api passed on to PHOTON_API_URL (default http://localhost:8640)
 bun run check && bun run lint && bun test src && bun run test:e2e
 bun run api   # after changing a route: regenerates src/lib/api/schema.d.ts
 ```
-
-The API's types are generated from `photon-server openapi`; CI fails when
-`web/src/lib/api/schema.d.ts` is older than the routes. The end-to-end tests run the built app
-beside a mock of the API on one origin (`web/e2e/mock-api.ts`), typed by the same schema.
 
 ## Contributing
 
@@ -497,4 +60,4 @@ subscribing.
 
 ## Licence
 
-Apache-2.0. See [LICENSE](LICENSE).
+GPL-3.0. See [LICENSE](LICENSE).

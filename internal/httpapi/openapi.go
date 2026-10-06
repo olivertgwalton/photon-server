@@ -72,7 +72,7 @@ func describe(info domain.Info, routes []route) ([]byte, error) {
 		"info": map[string]any{
 			"title":   "photon-server",
 			"version": info.Version,
-			"license": map[string]any{"name": "Apache-2.0", "identifier": "Apache-2.0"},
+			"license": map[string]any{"name": "GPL-3.0-only", "identifier": "GPL-3.0-only"},
 			"description": "A media server's API. Every refusal is a problem (RFC 9457) whose code says which. " +
 				"A route marked admin answers only an admin's session. A signed address, as play answers, " +
 				"is fetched as given, with no token: the signature is in its exp and sig, or in its path.",
