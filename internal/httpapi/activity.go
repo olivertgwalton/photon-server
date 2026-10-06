@@ -47,17 +47,14 @@ type eventJSON struct {
 }
 
 func eventOf(e domain.Event) eventJSON {
-	return eventJSON{
+	out := eventJSON{
 		ID: e.ID, Kind: e.Kind, At: e.At.UTC(), ProfileID: e.Profile, TitleID: e.Item, LibraryID: e.Library,
-		Details: nonNilMap(e.Details),
+		Details: e.Details,
 	}
-}
-
-func nonNilMap(m map[string]any) map[string]any {
-	if m == nil {
-		return map[string]any{}
+	if out.Details == nil {
+		out.Details = map[string]any{}
 	}
-	return m
+	return out
 }
 
 // adminActivity answers a page of the activity log, the newest first, as Jellyfin's dashboard
