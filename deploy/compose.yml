@@ -14,6 +14,7 @@ services:
       # Libraries are added at their path inside the container: /media/Films and the like.
       - ${MEDIA_DIR:?set MEDIA_DIR to the folder holding your libraries}:/media:ro
       - cache:/var/cache/photon-server
+      - backups:/var/lib/photon-server/backups
     depends_on:
       migrate: { condition: service_completed_successfully }
       valkey: { condition: service_healthy }
@@ -78,3 +79,4 @@ volumes:
   db:
   valkey:
   cache:
+  backups:
