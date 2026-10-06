@@ -338,17 +338,17 @@ func (s *Store) credits(ctx context.Context, item uuid.UUID) ([]CreditRef, error
 
 // PersonPage is someone as their page shows them: what is known of them and their work here.
 type PersonPage struct {
-	ID         uuid.UUID                  `json:"id"`
-	Name       string                     `json:"name"`
-	Photo      uuid.UUID                  `json:"photo,omitzero"`
-	Blurhashes Blurhashes                 `json:"blurhashes,omitzero"`
-	Biography  string                     `json:"biography,omitzero"`
-	Born       domain.Date                `json:"born,omitzero"`
-	Died       domain.Date                `json:"died,omitzero"`
-	Birthplace string                     `json:"birthplace,omitzero"`
-	IDs        map[domain.Provider]string `json:"ids,omitzero"`
+	ID         uuid.UUID
+	Name       string
+	Photo      uuid.UUID
+	Blurhashes Blurhashes
+	Biography  string
+	Born       domain.Date
+	Died       domain.Date
+	Birthplace string
+	IDs        map[domain.Provider]string
 	// DescribedAt is when a provider last said who they are, zero for never.
-	DescribedAt time.Time `json:"-"`
+	DescribedAt time.Time
 }
 
 // PersonCredit is a title someone is credited on, as a card, and what they did on it; credits on
