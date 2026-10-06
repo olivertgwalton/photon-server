@@ -477,8 +477,8 @@ func (a *API) playbackProgress(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	state, ok := domain.ParsePlayState(string(req.State))
-	if !ok || req.PositionMS < 0 {
+	state, err := domain.Parse("state", string(req.State), domain.PlayStates())
+	if err != nil || req.PositionMS < 0 {
 		writeProblem(w, a.logger, codeInvalidBody, "position_ms is not negative and state is playing or paused")
 		return
 	}

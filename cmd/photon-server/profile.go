@@ -38,7 +38,7 @@ func profileCommand(ctx context.Context, logger *slog.Logger, databaseURL string
 	if *name == "" || fs.NArg() != 0 {
 		return errors.New(profileUsage)
 	}
-	r, err := domain.ParseRole(*role)
+	r, err := domain.Parse("role", *role, domain.Roles())
 	if err != nil {
 		return err
 	}

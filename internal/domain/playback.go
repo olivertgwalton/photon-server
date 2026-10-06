@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"slices"
 	"time"
 	"uuid"
 )
@@ -32,11 +31,6 @@ const (
 
 func PlayStates() []PlayState {
 	return []PlayState{StatePlaying, StatePaused}
-}
-
-func ParsePlayState(s string) (PlayState, bool) {
-	v := PlayState(s)
-	return v, slices.Contains(PlayStates(), v)
 }
 
 // Playback is one profile playing one copy of a title, from play to stop.
@@ -205,11 +199,6 @@ const (
 
 func HEVCEncodings() []HEVCEncoding { return []HEVCEncoding{HEVCAllow, HEVCDeny} }
 
-func ParseHEVCEncoding(s string) (HEVCEncoding, bool) {
-	v := HEVCEncoding(s)
-	return v, slices.Contains(HEVCEncodings(), v)
-}
-
 // DolbyVisionHandling is what a copy does with a stream's Dolby Vision.
 type DolbyVisionHandling string
 
@@ -256,11 +245,6 @@ const (
 
 func Accelerations() []Acceleration {
 	return []Acceleration{AccelSoftware, AccelVideoToolbox, AccelVAAPI, AccelQSV, AccelNVENC}
-}
-
-func ParseAcceleration(s string) (Acceleration, bool) {
-	v := Acceleration(s)
-	return v, slices.Contains(Accelerations(), v)
 }
 
 // TranscodeReason is why a copy cannot reach a client as it is, in Jellyfin's TranscodeReason terms.

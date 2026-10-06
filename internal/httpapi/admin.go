@@ -91,7 +91,7 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if _, err := domain.ParseLibraryKind(string(req.Kind)); err != nil || req.Name == "" {
+	if _, err := domain.Parse("library kind", string(req.Kind), domain.LibraryKinds()); err != nil || req.Name == "" {
 		writeProblem(w, a.logger, codeInvalidBody, "name is set and kind is movies or shows")
 		return
 	}
@@ -196,22 +196,22 @@ func validChange(c store.LibraryChange) error {
 		}
 	}
 	if c.Monitor != "" {
-		if _, err := domain.ParseMonitor(string(c.Monitor)); err != nil {
+		if _, err := domain.Parse("monitor", string(c.Monitor), domain.Monitors()); err != nil {
 			return err
 		}
 	}
 	if c.Previews != "" {
-		if _, err := domain.ParsePreviewLevel(string(c.Previews)); err != nil {
+		if _, err := domain.Parse("previews", string(c.Previews), domain.PreviewLevels()); err != nil {
 			return err
 		}
 	}
 	if c.Markers != "" {
-		if _, err := domain.ParseMarkerDetection(string(c.Markers)); err != nil {
+		if _, err := domain.Parse("markers", string(c.Markers), domain.MarkerDetections()); err != nil {
 			return err
 		}
 	}
 	if c.Keyframes != "" {
-		if _, err := domain.ParseKeyframeMode(string(c.Keyframes)); err != nil {
+		if _, err := domain.Parse("keyframes", string(c.Keyframes), domain.KeyframeModes()); err != nil {
 			return err
 		}
 	}

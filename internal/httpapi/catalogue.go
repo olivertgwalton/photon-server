@@ -86,11 +86,11 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	page := store.WallPage{Profile: sessionOf(r).Profile.ID, Limit: defaultWallLimit}
-	if page.Sort, err = domain.ParseWallSort(cmp.Or(q.Get("sort"), string(domain.SortTitle))); err != nil {
+	if page.Sort, err = domain.Parse("sort", cmp.Or(q.Get("sort"), string(domain.SortTitle)), domain.WallSorts()); err != nil {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
 	}
-	if page.Order, err = domain.ParseOrder(cmp.Or(q.Get("order"), string(page.Sort.DefaultOrder()))); err != nil {
+	if page.Order, err = domain.Parse("order", cmp.Or(q.Get("order"), string(page.Sort.DefaultOrder())), domain.Orders()); err != nil {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
 	}
@@ -301,13 +301,13 @@ func wallFilter(q url.Values) (store.WallFilter, error) {
 		}
 	}
 	var err error
-	if f.Marks, err = parseAll(list("mark"), domain.ParseMark); err != nil {
+	if f.Marks, err = parseAll(list("mark"), enum("mark", domain.Marks())); err != nil {
 		return f, err
 	}
-	if f.Resolutions, err = parseAll(list("resolution"), domain.ParseResolution); err != nil {
+	if f.Resolutions, err = parseAll(list("resolution"), enum("resolution", domain.Resolutions())); err != nil {
 		return f, err
 	}
-	if f.Ranges, err = parseAll(list("range"), domain.ParseRange); err != nil {
+	if f.Ranges, err = parseAll(list("range"), enum("range", domain.Ranges())); err != nil {
 		return f, err
 	}
 	if f.Years, err = parseAll(list("year"), strconv.Atoi); err != nil {
@@ -318,7 +318,7 @@ func wallFilter(q url.Values) (store.WallFilter, error) {
 		return f, errors.New("person is a person's id")
 	}
 	if s := q.Get("rating_site"); s != "" {
-		if f.RatingSite, err = domain.ParseRatingSite(s); err != nil {
+		if f.RatingSite, err = domain.Parse("rating site", s, domain.RatingSites()); err != nil {
 			return f, err
 		}
 	}
@@ -329,6 +329,11 @@ func wallFilter(q url.Values) (store.WallFilter, error) {
 		f.RatingSite = cmp.Or(f.RatingSite, domain.SiteIMDb)
 	}
 	return f, nil
+}
+
+// enum parses one of all for parseAll.
+func enum[T ~string](what string, all []T) func(string) (T, error) {
+	return func(s string) (T, error) { return domain.Parse(what, s, all) }
 }
 
 func parseAll[T any](values []string, parse func(string) (T, error)) ([]T, error) {

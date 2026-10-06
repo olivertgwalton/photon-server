@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -44,9 +43,9 @@ func ParseExtraKinds(list string) ([]ExtraKind, error) {
 	}
 	var out []ExtraKind
 	for name := range strings.SplitSeq(list, ",") {
-		k := ExtraKind(strings.TrimSpace(name))
-		if !slices.Contains(ExtraKinds(), k) {
-			return nil, fmt.Errorf("extra kind %q is not one of %v", k, ExtraKinds())
+		k, err := Parse("extra kind", strings.TrimSpace(name), ExtraKinds())
+		if err != nil {
+			return nil, err
 		}
 		if !slices.Contains(out, k) {
 			out = append(out, k)

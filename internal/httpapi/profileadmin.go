@@ -83,7 +83,7 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if _, err := domain.ParseRole(string(req.Role)); err != nil || req.Name == "" {
+	if _, err := domain.Parse("role", string(req.Role), domain.Roles()); err != nil || req.Name == "" {
 		writeProblem(w, a.logger, codeInvalidBody, "name is set and role is admin, member or restricted")
 		return
 	}
@@ -120,7 +120,7 @@ func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Role != "" {
-		if _, err := domain.ParseRole(string(req.Role)); err != nil {
+		if _, err := domain.Parse("role", string(req.Role), domain.Roles()); err != nil {
 			writeProblem(w, a.logger, codeInvalidBody, err.Error())
 			return
 		}
