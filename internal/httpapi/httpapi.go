@@ -195,6 +195,11 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		case admin:
 			h = a.requireAdmin(h)
 		}
+		switch r.reply.(type) {
+		case asFile, asStream:
+		default:
+			h = compressJSON(h)
+		}
 		a.mux.Handle(r.pattern, h)
 	}
 	a.mux.HandleFunc("/", a.unmatched)
