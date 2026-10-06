@@ -15,5 +15,6 @@ type Library struct {
 	RefreshDays int16                  `gorm:"default:30"`
 	Previews    domain.PreviewLevel    `gorm:"default:all"`
 	Markers     domain.MarkerDetection `gorm:"default:all"`
+	Keyframes   domain.KeyframeMode    `gorm:"default:index"`
 	CreatedAt   time.Time
 }

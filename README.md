@@ -195,6 +195,20 @@ loses its old previews at the scan that finds it; a file that is simply gone kee
 so a share that is unmounted for a while does not come back to hours of remaking, and loses them
 after that.
 
+A title whose video is copied is cut into HLS segments at its keyframes, which each library finds as
+its `keyframes` setting says. `index`, the default, reads them from the file's own index, as
+Jellyfin reads a Matroska file's Cues: Matroska and WebM Cues, MP4 and MOV sample tables, and a
+fragmented MP4's `mfra`. That is a few reads of a few kilobytes however large the file, so it is the
+one to choose for a library on a network share or a debrid mount, where reading a file means
+downloading it. A file with no index (MPEG-TS, AVI, a Matroska file written without Cues) is then
+cut every six seconds at the keyframe after each, as Jellyfin cuts a file it has no keyframes for,
+so a segment runs a little longer or shorter than its playlist says. `full` walks such a file with
+ffprobe instead, reading every byte of it once, for exact segments from a library on a local disk;
+`off` finds none and cuts every file every six seconds. Files are read for keyframes in the
+background, after scans and matching; a title played before its file has been read is cut every six
+seconds that time, and its file is read next. `photon-server library set -name NAME -keyframes full`
+(or `"keyframes": "full"` in `PATCH /api/v1/admin/libraries/{id}`) changes the setting, and the library's files with no keyframes known are read again.
+
 A client downloads a title for offline viewing at a most video bitrate, and width if it says, as
 Plex's Downloads do. A copy already within both is downloaded as it is; any other is converted in
 the background, on the same device as playback, into one MP4 of H.264 and AAC (HDR tone mapped to

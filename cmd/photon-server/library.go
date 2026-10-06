@@ -21,6 +21,7 @@ const libraryUsage = `usage:
   photon-server library set -name NAME [-sources nfo,tmdb,tvdb] [-extras trailer,featurette|none]
                                        [-monitor realtime|off] [-previews off|chapters|all]
                                        [-markers off|chapters|all]
+                                       [-keyframes index|full|off]
   photon-server library list`
 
 func library(ctx context.Context, logger *slog.Logger, databaseURL string, out io.Writer, args []string) error {
@@ -82,10 +83,11 @@ func setLibrary(ctx context.Context, st *store.Store, out io.Writer, args []stri
 	monitor := fs.String("monitor", "", "realtime to scan it as its files change, off for the schedule alone")
 	previews := fs.String("previews", "", "off, chapters for an image per chapter, or all for trickplay sheets too")
 	markers := fs.String("markers", "", "off, chapters for the markers chapters name, or all to compare seasons' sound too")
+	keyframes := fs.String("keyframes", "", "index to read keyframes from a file's own index, full to read a file with none whole, or off")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *name == "" || (*sources == "" && *extras == "" && *monitor == "" && *previews == "" && *markers == "") || fs.NArg() != 0 {
+	if *name == "" || (*sources == "" && *extras == "" && *monitor == "" && *previews == "" && *markers == "" && *keyframes == "") || fs.NArg() != 0 {
 		return errors.New(libraryUsage)
 	}
 	var change store.LibraryChange
@@ -115,6 +117,11 @@ func setLibrary(ctx context.Context, st *store.Store, out io.Writer, args []stri
 			return err
 		}
 	}
+	if *keyframes != "" {
+		if change.Keyframes, err = domain.ParseKeyframeMode(*keyframes); err != nil {
+			return err
+		}
+	}
 	libs, err := st.Libraries(ctx)
 	if err != nil {
 		return err
@@ -136,9 +143,9 @@ func listLibraries(ctx context.Context, st *store.Store, out io.Writer) error {
 		return err
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "NAME\tKIND\tSOURCES\tEXTRAS\tMONITOR\tPREVIEWS\tMARKERS\tROOT\tID")
+	_, _ = fmt.Fprintln(w, "NAME\tKIND\tSOURCES\tEXTRAS\tMONITOR\tPREVIEWS\tMARKERS\tKEYFRAMES\tROOT\tID")
 	for _, l := range libs {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%v\t%v\t%s\t%s\t%s\t%s\t%s\n", l.Name, l.Kind, l.Sources, l.RemoteExtras, l.Monitor, l.Previews, l.Markers, l.Root, l.ID)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%v\t%v\t%s\t%s\t%s\t%s\t%s\t%s\n", l.Name, l.Kind, l.Sources, l.RemoteExtras, l.Monitor, l.Previews, l.Markers, l.Keyframes, l.Root, l.ID)
 	}
 	return w.Flush()
 }

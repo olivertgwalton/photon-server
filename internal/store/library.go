@@ -32,7 +32,7 @@ func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.Library
 	if err != nil {
 		return domain.Library{}, fmt.Errorf("adding library: %w", err)
 	}
-	row.Monitor, row.RefreshDays, row.Previews, row.Markers = domain.MonitorRealtime, 30, domain.PreviewsAll, domain.MarkersAll
+	row.Monitor, row.RefreshDays, row.Previews, row.Markers, row.Keyframes = domain.MonitorRealtime, 30, domain.PreviewsAll, domain.MarkersAll, domain.KeyframesIndex
 	return library(row, domain.DefaultSources(), domain.DefaultRemoteExtras()), nil
 }
 
@@ -80,8 +80,8 @@ func (s *Store) Library(ctx context.Context, id uuid.UUID) (domain.Library, erro
 	return domain.Library{}, ErrNotFound
 }
 
-// LibraryChange is what to change about a library; an empty name, monitor, previews or markers,
-// or a nil list, is left as it is.
+// LibraryChange is what to change about a library; an empty name, monitor, previews, markers or
+// keyframes, or a nil list, is left as it is.
 type LibraryChange struct {
 	Name         string
 	Sources      []domain.FieldSource
@@ -95,6 +95,9 @@ type LibraryChange struct {
 	// Markers is how it finds intros and credits; seasons not yet compared are queued by the daily
 	// marker detection.
 	Markers domain.MarkerDetection
+	// Keyframes is how its files' keyframes are found; the parts with none known are queued to be
+	// read again as it says.
+	Keyframes domain.KeyframeMode
 }
 
 // SetLibrary renames a library, changes whether it is watched, where its metadata comes from and
@@ -145,6 +148,14 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 		}
 		if change.Markers != "" {
 			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Markers, change.Markers); err != nil {
+				return err
+			}
+		}
+		if change.Keyframes != "" && change.Keyframes != row.Keyframes {
+			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Keyframes, change.Keyframes); err != nil {
+				return err
+			}
+			if err := rekeyframe(ctx, tx, row.ID, change.Keyframes); err != nil {
 				return err
 			}
 		}
@@ -219,5 +230,6 @@ func library(r model.Library, sources []domain.FieldSource, extras []domain.Extr
 	return domain.Library{
 		ID: uuid.UUID(r.ID), Name: r.Name, Kind: r.Kind, Root: r.Root, Sources: sources, RemoteExtras: extras,
 		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews, Markers: r.Markers,
+		Keyframes: r.Keyframes,
 	}
 }

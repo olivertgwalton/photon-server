@@ -30,6 +30,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"monitor":             names(domain.Monitors()),
 		"preview_level":       names(domain.PreviewLevels()),
 		"marker_detection":    names(domain.MarkerDetections()),
+		"keyframe_mode":       names(domain.KeyframeModes()),
 		"artwork_source":      plugins(names(domain.ArtworkSources())),
 		"artwork_kind":        names(domain.ArtworkKinds()),
 		"item_kind":           names(domain.ItemKinds()),
