@@ -21,7 +21,7 @@ type unlimited struct{}
 func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
 
 // Jaws as MDBList answers it, IMDb's score among others MDBList scores out of 100, one site it
-// has nothing for, and one site the server does not know.
+// has nothing for, and sites the server leaves out.
 const jaws = `{"title": "Jaws", "ratings": [
 	{"source": "imdb", "value": 8.1, "score": 81, "votes": 673852},
 	{"source": "tomatoes", "value": 97, "score": 97, "votes": 102},
@@ -61,7 +61,6 @@ func TestRatingsAreFoundByTheFirstIDMDBListKnows(t *testing.T) {
 		{Site: domain.SiteIMDb, Score: 81, Votes: 673852},
 		{Site: domain.SiteRottenTomatoes, Score: 97, Votes: 102},
 		{Site: domain.SiteRottenTomatoesAudience, Score: 90, Votes: 250000},
-		{Site: domain.SiteLetterboxd, Score: 80, Votes: 876082},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("ratings (-want +got):\n%s", diff)

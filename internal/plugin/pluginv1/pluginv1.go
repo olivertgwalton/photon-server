@@ -158,8 +158,7 @@ type RatingsResponse struct {
 }
 
 type Rating struct {
-	// Site is "imdb", "tmdb", "rotten_tomatoes", "rotten_tomatoes_audience", "metacritic",
-	// "letterboxd" or "trakt".
+	// Site is "imdb", "tmdb", "rotten_tomatoes" or "rotten_tomatoes_audience"; any other is dropped.
 	Site string `json:"site"`
 	// Score is out of 100, whatever scale the site uses.
 	Score float64 `json:"score"`

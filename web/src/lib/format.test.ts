@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { episodeLabel, playHref, runtime, score, timecode } from "./format.ts";
+import {
+	episodeLabel,
+	playHref,
+	ratingMark,
+	runtime,
+	score,
+	timecode,
+} from "./format.ts";
 
 test("a running time reads as a listing prints it", () => {
 	expect(runtime(48 * 60_000)).toBe("48m");
@@ -20,9 +27,14 @@ test("an episode is placed by season and number, a double by both ends", () => {
 
 test("each site's score is printed on that site's own scale", () => {
 	expect(score("imdb", 78)).toBe("7.8");
-	expect(score("letterboxd", 80)).toBe("4.0");
 	expect(score("rotten_tomatoes", 93)).toBe("93%");
-	expect(score("metacritic", 71)).toBe("71");
+});
+
+test("rotten tomatoes is fresh or upright from 60%, rotten or spilled below", () => {
+	expect(ratingMark("rotten_tomatoes", 60)).toBe("tomatometer-fresh");
+	expect(ratingMark("rotten_tomatoes", 59)).toBe("tomatometer-rotten");
+	expect(ratingMark("rotten_tomatoes_audience", 60)).toBe("popcorn-upright");
+	expect(ratingMark("rotten_tomatoes_audience", 59)).toBe("popcorn-spilled");
 });
 
 test("the player is told only what the reader chose", () => {

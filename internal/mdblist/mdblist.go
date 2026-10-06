@@ -1,5 +1,5 @@
 // Package mdblist reads ratings from MDBList, which gathers IMDb's, TMDB's, Rotten Tomatoes'
-// critics and audience, Metacritic's, Letterboxd's and Trakt's in one answer. Each server uses its
+// critics and audience in one answer, with other sites' the server leaves out. Each server uses its
 // own free key, set by an admin.
 package mdblist
 
@@ -43,8 +43,7 @@ func (c *Client) Info() provider.Info {
 // sites are MDBList's names for the sites it gathers.
 var sites = map[string]domain.RatingSite{
 	"imdb": domain.SiteIMDb, "tmdb": domain.SiteTMDB, "tomatoes": domain.SiteRottenTomatoes,
-	"popcorn": domain.SiteRottenTomatoesAudience, "metacritic": domain.SiteMetacritic,
-	"letterboxd": domain.SiteLetterboxd, "trakt": domain.SiteTrakt,
+	"popcorn": domain.SiteRottenTomatoesAudience,
 }
 
 // Ratings answers a title's ratings, found by its IMDb id, else its TMDB id, else its TVDB id.

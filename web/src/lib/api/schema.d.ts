@@ -5052,7 +5052,7 @@ export interface components {
             votes?: number;
         };
         /** @enum {string} */
-        RatingSite: "imdb" | "tmdb" | "rotten_tomatoes" | "rotten_tomatoes_audience" | "metacritic" | "letterboxd" | "trakt";
+        RatingSite: "imdb" | "tmdb" | "rotten_tomatoes" | "rotten_tomatoes_audience";
         /** @enum {string} */
         Reach: "start" | "resumable" | "end";
         Reached: {

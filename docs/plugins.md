@@ -193,7 +193,7 @@ plugin's own id, and the title matched again with it.
 
 Say what sites' readers and critics make of a title, found by its ids. Scores are out of 100,
 whatever scale the site uses (IMDb's 8.1 is 81). Sites: `imdb`, `tmdb`, `rotten_tomatoes`,
-`rotten_tomatoes_audience`, `metacritic`, `letterboxd`, `trakt`.
+`rotten_tomatoes_audience`; any other is dropped.
 
 ```json
 {"settings": {"api_key": "…"}, "kind": "movie", "ids": {"imdb": "tt0073195", "tmdb": "578"}}

@@ -42,26 +42,43 @@ export const ratingSites: Record<Schemas["RatingSite"], string> = {
 	tmdb: "TMDB",
 	rotten_tomatoes: "Rotten Tomatoes",
 	rotten_tomatoes_audience: "RT Audience",
-	metacritic: "Metacritic",
-	letterboxd: "Letterboxd",
-	trakt: "Trakt",
 };
 
-// A score as its site prints it: IMDb and TMDB out of ten, Letterboxd out of
-// five, the others as a percentage. The server keeps every score from 0 to 100.
+// The mark a score is drawn with, as the Photon apps draw it: Rotten Tomatoes'
+// fresh or rotten by its own line at 60%.
+export type RatingMark =
+	| "imdb"
+	| "tmdb"
+	| "tomatometer-fresh"
+	| "tomatometer-rotten"
+	| "popcorn-upright"
+	| "popcorn-spilled";
+
+export function ratingMark(
+	site: Schemas["RatingSite"],
+	value: number,
+): RatingMark {
+	switch (site) {
+		case "imdb":
+		case "tmdb":
+			return site;
+		case "rotten_tomatoes":
+			return value >= 60 ? "tomatometer-fresh" : "tomatometer-rotten";
+		case "rotten_tomatoes_audience":
+			return value >= 60 ? "popcorn-upright" : "popcorn-spilled";
+	}
+}
+
+// A score as its site prints it: IMDb and TMDB out of ten, Rotten Tomatoes as a
+// percentage. The server keeps every score from 0 to 100.
 export function score(site: Schemas["RatingSite"], value: number): string {
 	switch (site) {
 		case "imdb":
 		case "tmdb":
-		case "trakt":
 			return (value / 10).toFixed(1);
-		case "letterboxd":
-			return (value / 20).toFixed(1);
 		case "rotten_tomatoes":
 		case "rotten_tomatoes_audience":
 			return `${Math.round(value)}%`;
-		case "metacritic":
-			return String(Math.round(value));
 	}
 }
 
