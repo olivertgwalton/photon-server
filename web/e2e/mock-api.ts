@@ -99,7 +99,8 @@ const season = base("t-s1", "season", "Season 1", {
 const everything = () => [...films, ...shows, season, ...episodes, collection];
 const byID = (id: string) => everything().find((c) => c.id === id);
 
-function home(limit = 20): Schemas["Home"] {
+// The server's rows, in the reader's order and leaving out those hidden.
+function home(arranged: Schemas["HomeSection"][], limit = 20): Schemas["Home"] {
 	const rows: Schemas["HomeRow"][] = [
 		{
 			kind: "continue_watching",
@@ -112,7 +113,9 @@ function home(limit = 20): Schemas["Home"] {
 		{ kind: "recently_added_films", items: films },
 	];
 	return {
-		rows: rows
+		rows: arranged
+			.filter((s) => s.visibility === "shown")
+			.flatMap((s) => rows.filter((r) => r.kind === s.row))
 			.map((r) => ({ ...r, items: r.items.slice(0, limit).map(card) }))
 			.filter((r) => r.items.length),
 	};
@@ -523,6 +526,16 @@ const defaults: Schemas["Preferences"] = {
 	next_episode: "play",
 	intro_action: "ask",
 	credits_action: "ask",
+	home: [
+		"continue_watching",
+		"next_up",
+		"favourites",
+		"recently_added_films",
+		"recently_added_shows",
+	].map((row) => ({
+		row: row as Schemas["HomeRowKind"],
+		visibility: "shown" as const,
+	})),
 };
 const preferences = new Map<string, Schemas["Preferences"]>();
 
@@ -720,7 +733,12 @@ const server_ = Bun.serve({
 			case "GET /api/v1/libraries":
 				return Response.json(libraries);
 			case "GET /api/v1/home":
-				return Response.json(home(Number(url.searchParams.get("limit")) || 20));
+				return Response.json(
+					home(
+						(preferences.get(token as string) ?? defaults).home,
+						Number(url.searchParams.get("limit")) || 20,
+					),
+				);
 			case "GET /api/v1/events": {
 				let mine: ReadableStreamDefaultController<string>;
 				const body = new ReadableStream<string>({

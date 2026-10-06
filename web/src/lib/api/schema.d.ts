@@ -4723,6 +4723,10 @@ export interface components {
         };
         /** @enum {string} */
         HomeRowKind: "continue_watching" | "next_up" | "favourites" | "recently_added_films" | "recently_added_shows";
+        HomeSection: {
+            row: components["schemas"]["HomeRowKind"];
+            visibility: components["schemas"]["RowVisibility"];
+        };
         Info: {
             id: string;
             name: string;
@@ -5103,6 +5107,7 @@ export interface components {
             audio_language: string;
             audio_track: components["schemas"]["AudioTrack"];
             credits_action: components["schemas"]["SegmentAction"];
+            home: components["schemas"]["HomeSection"][];
             intro_action: components["schemas"]["SegmentAction"];
             max_bitrate_kbps: number;
             next_episode: components["schemas"]["NextEpisode"];
@@ -5117,6 +5122,7 @@ export interface components {
             audio_language?: string | null;
             audio_track?: components["schemas"]["AudioTrack"];
             credits_action?: components["schemas"]["SegmentAction"];
+            home?: components["schemas"]["HomeSection"][];
             intro_action?: components["schemas"]["SegmentAction"];
             max_bitrate_kbps?: number | null;
             next_episode?: components["schemas"]["NextEpisode"];
@@ -5192,6 +5198,8 @@ export interface components {
         Resolution: "sd" | "720p" | "1080p" | "4k";
         /** @enum {string} */
         Role: "admin" | "member" | "restricted";
+        /** @enum {string} */
+        RowVisibility: "shown" | "hidden";
         RunningJob: {
             attempt: number;
             /** Format: int64 */
