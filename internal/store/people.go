@@ -190,9 +190,9 @@ func saveCredits(ctx context.Context, tx *query.Query, source domain.FieldSource
 		if p.added == nil || p.added.ID != keep {
 			o := owners[p.keys[slices.IndexFunc(p.keys, func(k personKey) bool { return owners[k].PersonID == keep })]]
 			if o.Name != p.name || (p.photo != "" && deref(o.PhotoURL) != p.photo) {
-				row := &model.Person{Name: p.name, PhotoURL: o.PhotoURL, PhotoID: o.PhotoID}
+				row := &model.Person{Name: p.name, PhotoURL: o.PhotoURL, PhotoID: o.PhotoID, PhotoBlurhash: o.PhotoBlurhash}
 				setPhoto(row, p.photo)
-				if _, err := pp.WithContext(ctx).Where(pp.ID.Eq(keep)).Select(pp.Name, pp.PhotoURL, pp.PhotoID).Updates(row); err != nil {
+				if _, err := pp.WithContext(ctx).Where(pp.ID.Eq(keep)).Select(pp.Name, pp.PhotoURL, pp.PhotoID, pp.PhotoBlurhash).Updates(row); err != nil {
 					return err
 				}
 			}
@@ -216,12 +216,13 @@ func before(a, b model.UUID) bool { return bytes.Compare(a[:], b[:]) < 0 }
 
 // owner is the person an id names, as they are now.
 type owner struct {
-	PersonID model.UUID
-	Provider domain.Provider
-	Value    string
-	Name     string
-	PhotoURL *string
-	PhotoID  *model.UUID
+	PersonID      model.UUID
+	Provider      domain.Provider
+	Value         string
+	Name          string
+	PhotoURL      *string
+	PhotoID       *model.UUID
+	PhotoBlurhash *string
 }
 
 // personOwners answers who each of keys names, where anyone does.
@@ -232,7 +233,7 @@ func personOwners(ctx context.Context, tx *query.Query, keys []personKey) (map[p
 	}
 	var rows []owner
 	err := tx.Person.WithContext(ctx).UnderlyingDB().Raw(`
-		SELECT i.person_id, i.provider, i.value, p.name, p.photo_url, p.photo_id
+		SELECT i.person_id, i.provider, i.value, p.name, p.photo_url, p.photo_id, p.photo_blurhash
 		FROM person_ids i JOIN people p ON p.id = i.person_id
 		WHERE (i.provider, i.value) IN (SELECT * FROM unnest(?::text[], ?::text[]))`,
 		array(providers), array(values)).Scan(&rows).Error
@@ -266,7 +267,7 @@ func setPhoto(p *model.Person, url string) {
 		return
 	}
 	id := model.UUID(uuid.NewV7())
-	p.PhotoURL, p.PhotoID = &url, &id
+	p.PhotoURL, p.PhotoID, p.PhotoBlurhash = &url, &id, nil
 }
 
 // CreditRef is someone's part in a title, with their picture's id.
@@ -276,6 +277,8 @@ type CreditRef struct {
 	Kind     domain.CreditKind `json:"kind"`
 	Role     string            `json:"role,omitzero"`
 	Photo    uuid.UUID         `json:"photo,omitzero"`
+	// Blurhashes holds the photo's BlurHash, where it has one.
+	Blurhashes Blurhashes `json:"blurhashes,omitzero"`
 }
 
 type creditRow struct {
@@ -285,6 +288,7 @@ type creditRow struct {
 	Kind     domain.CreditKind
 	Role     string
 	PhotoID  *model.UUID
+	Blurhash *string
 }
 
 // credits answers a title's cast and crew as the highest-ranked source with any gives them.
@@ -294,7 +298,7 @@ func (s *Store) credits(ctx context.Context, item model.UUID) ([]CreditRef, erro
 		return nil, err
 	}
 	found, err := s.pool.Query(ctx, `
-		SELECT c.source, c.person_id, p.name, c.kind, c.role, p.photo_id FROM credits c
+		SELECT c.source, c.person_id, p.name, c.kind, c.role, p.photo_id, p.photo_blurhash AS blurhash FROM credits c
 		JOIN people p ON p.id = c.person_id WHERE c.item_id = $1 ORDER BY c.position`, uuid.UUID(item).String())
 	if err != nil {
 		return nil, err
@@ -315,9 +319,7 @@ func (s *Store) credits(ctx context.Context, item model.UUID) ([]CreditRef, erro
 			continue
 		}
 		ref := CreditRef{PersonID: uuid.UUID(r.PersonID), Name: r.Name, Kind: r.Kind, Role: r.Role}
-		if r.PhotoID != nil {
-			ref.Photo = uuid.UUID(*r.PhotoID)
-		}
+		ref.Photo, ref.Blurhashes = photo(r.PhotoID, r.Blurhash)
 		out = append(out, ref)
 	}
 	return out, nil
@@ -328,6 +330,7 @@ type PersonPage struct {
 	ID         uuid.UUID                  `json:"id"`
 	Name       string                     `json:"name"`
 	Photo      uuid.UUID                  `json:"photo,omitzero"`
+	Blurhashes Blurhashes                 `json:"blurhashes,omitzero"`
 	Biography  string                     `json:"biography,omitzero"`
 	Born       domain.Date                `json:"born,omitzero"`
 	Died       domain.Date                `json:"died,omitzero"`
@@ -356,9 +359,7 @@ func (s *Store) Person(ctx context.Context, id uuid.UUID) (PersonPage, error) {
 		ID: id, Name: row.Name, Biography: deref(row.Biography), Born: date(row.Born), Died: date(row.Died),
 		Birthplace: deref(row.Birthplace), DescribedAt: deref(row.DescribedAt),
 	}
-	if row.PhotoID != nil {
-		out.Photo = uuid.UUID(*row.PhotoID)
-	}
+	out.Photo, out.Blurhashes = photo(row.PhotoID, row.PhotoBlurhash)
 	pi := s.q.PersonExternalID
 	ids, err := pi.WithContext(ctx).Where(pi.PersonID.Eq(row.ID)).Find()
 	if err != nil {

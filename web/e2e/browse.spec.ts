@@ -250,6 +250,31 @@ test("a show plays where the reader is, and its season lists episodes", async ({
 	await expectAccessible(page);
 });
 
+test("a picture stands in as its blur until it arrives", async ({ page }) => {
+	let arrive = () => {};
+	const held = new Promise<void>((resolve) => {
+		arrive = resolve;
+	});
+	await page.route("**/api/v1/artwork/**", async (route) => {
+		await held;
+		await route.continue();
+	});
+	await logIn(page, "/titles/t-film");
+	const backdrop = page.locator('img[fetchpriority="high"]');
+	await expect(backdrop).toHaveCSS(
+		"background-image",
+		/^url\("data:image\/png/,
+	);
+	expect(await backdrop.evaluate((img: HTMLImageElement) => img.complete)).toBe(
+		false,
+	);
+	await expectAccessible(page);
+	arrive();
+	await expect
+		.poll(() => backdrop.evaluate((img: HTMLImageElement) => img.naturalWidth))
+		.toBeGreaterThan(0);
+});
+
 test("a box set lists its titles", async ({ page }) => {
 	await logIn(page, "/titles/c-set");
 	await expect(page.getByRole("heading", { name: "1 title" })).toBeVisible();

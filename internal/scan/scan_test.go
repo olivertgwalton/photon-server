@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -605,7 +607,15 @@ func (f *fixture) pictures(kind string) []string {
 func TestPicturesBesideFilmsAreTheirs(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
-	f.put("Heat (1995)/poster.jpg", "p")
+	poster := image.NewGray(image.Rect(0, 0, 20, 30))
+	for n := range poster.Pix {
+		poster.Pix[n] = uint8(n)
+	}
+	var jpg bytes.Buffer
+	if err := jpeg.Encode(&jpg, poster, nil); err != nil {
+		t.Fatal(err)
+	}
+	f.put("Heat (1995)/poster.jpg", jpg.String())
 	f.put("Heat (1995)/fanart.jpg", "b")
 	f.put("Heat (1995)/Heat (1995)-clearlogo.png", "l")
 	f.put("Alien (1979).mkv", "alien")
@@ -620,6 +630,17 @@ func TestPicturesBesideFilmsAreTheirs(t *testing.T) {
 	}
 	if got := f.pictures("movie"); !slices.Equal(got, want) {
 		t.Errorf("pictures = %q, want %q", got, want)
+	}
+	rows, err := f.db.Query(t.Context(), `SELECT place FROM artwork WHERE blurhash IS NOT NULL`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hashed, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(hashed, []string{"Heat (1995)/poster.jpg"}) {
+		t.Errorf("pictures with a blurhash = %q, want the one that is a picture", hashed)
 	}
 }
 

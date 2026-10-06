@@ -245,7 +245,7 @@ func (s *Scanner) saveFilms(ctx context.Context, r reading, folder library.Folde
 	lib := r.run.lib
 	var films []store.Film
 	plans := planFilms(folder)
-	pics := picturesIn(folder.Path, fileNames(folder))
+	pics := picturesIn(lib.Root, folder.Path, fileNames(folder))
 	read, err := s.readCopies(ctx, r, plansOf(plans, func(f film) []copyPlan { return f.versions }))
 	if err != nil {
 		return store.Saved{}, err
@@ -348,7 +348,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Fo
 			show.Seasons[*n] = said.Metadata
 		}
 	}
-	pics := picturesIn(folder.Path, fileNames(folder))
+	pics := picturesIn(lib.Root, folder.Path, fileNames(folder))
 	switch {
 	case series != "" && folder.Path == series:
 		show.Artwork = append([]domain.Artwork{}, pics.own...)

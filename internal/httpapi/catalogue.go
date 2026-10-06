@@ -76,6 +76,8 @@ type cardJSON struct {
 	Certificate string                  `json:"certificate,omitzero"`
 	// Ratings are each site's score out of 100, as the title's page gives them.
 	Ratings []store.RatingRef `json:"ratings,omitzero"`
+	// Blurhashes are those of its pictures that have one, by id, to draw while they load.
+	Blurhashes store.Blurhashes `json:"blurhashes,omitzero"`
 }
 
 func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
@@ -173,6 +175,7 @@ func cardsJSON(cards []store.Card) []cardJSON {
 			Poster: c.Poster, Backdrop: c.Backdrop, State: c.State, DurationMS: c.DurationMS, Show: c.Show,
 			SeasonNumber: c.SeasonNumber, EpisodeNumber: c.EpisodeNumber, EpisodeEnd: c.EpisodeEnd, Thumb: c.Thumb,
 			Origin: c.Origin, Overview: c.Overview, Logo: c.Logo, Genres: c.Genres, Certificate: c.Certificate,
+			Blurhashes: c.Blurhashes,
 		}
 		for _, r := range c.Ratings {
 			out[i].Ratings = append(out[i].Ratings, store.RatingRef(r))
@@ -182,9 +185,10 @@ func cardsJSON(cards []store.Card) []cardJSON {
 }
 
 type personRefJSON struct {
-	ID    uuid.UUID `json:"id"`
-	Name  string    `json:"name"`
-	Photo uuid.UUID `json:"photo,omitzero"`
+	ID         uuid.UUID        `json:"id"`
+	Name       string           `json:"name"`
+	Photo      uuid.UUID        `json:"photo,omitzero"`
+	Blurhashes store.Blurhashes `json:"blurhashes,omitzero"`
 }
 
 // searchJSON is a page of the titles (films, shows, collections and episodes) and of the people

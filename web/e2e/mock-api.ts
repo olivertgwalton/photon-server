@@ -66,6 +66,7 @@ const films: Schemas["Card"][] = [
 		duration_ms: 6_720_000,
 		poster: art,
 		backdrop: art,
+		blurhashes: { [art]: "LEHV6nWB2yk8pyo0adR*.7kCMdnj" },
 	}),
 	...Array.from({ length: 249 }, (_, i) =>
 		base(

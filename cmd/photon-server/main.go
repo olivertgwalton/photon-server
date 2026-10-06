@@ -172,7 +172,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	cacheRoot := cmp.Or(os.Getenv("PHOTON_CACHE_DIR"), filepath.Join(cacheDir, "photon-server"))
-	pictureCache, err := artwork.Open(filepath.Join(cacheRoot, "artwork"))
+	pictureCache, err := artwork.Open(filepath.Join(cacheRoot, "artwork"), st.SetBlurhash)
 	if err != nil {
 		return err
 	}

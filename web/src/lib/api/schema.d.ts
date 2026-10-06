@@ -4560,6 +4560,9 @@ export interface components {
             added_at: string;
             /** Format: uuid */
             backdrop?: string;
+            blurhashes?: {
+                [key: string]: string;
+            };
             certificate?: string;
             /** Format: int64 */
             duration_ms?: number;
@@ -4617,6 +4620,9 @@ export interface components {
             video: components["schemas"]["VideoSupport"][];
         };
         CollectionCard: {
+            blurhashes?: {
+                [key: string]: string;
+            };
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -4641,6 +4647,9 @@ export interface components {
             added_at: string;
             /** Format: uuid */
             backdrop?: string;
+            blurhashes?: {
+                [key: string]: string;
+            };
             certificate?: string;
             credit: components["schemas"]["CreditKind"];
             /** Format: int64 */
@@ -4672,6 +4681,9 @@ export interface components {
         /** @enum {string} */
         CreditKind: "actor" | "guest_star" | "director" | "writer" | "producer" | "composer" | "creator";
         CreditRef: {
+            blurhashes?: {
+                [key: string]: string;
+            };
             kind: components["schemas"]["CreditKind"];
             name: string;
             /** Format: uuid */
@@ -4780,6 +4792,9 @@ export interface components {
             added_at: string;
             /** Format: uuid */
             backdrop?: string;
+            blurhashes?: {
+                [key: string]: string;
+            };
             certificate?: string;
             /** Format: int64 */
             duration_ms?: number;
@@ -4815,6 +4830,9 @@ export interface components {
             total: number;
         };
         EpisodeCard: {
+            blurhashes?: {
+                [key: string]: string;
+            };
             /** Format: int64 */
             duration_ms?: number;
             episode_end?: number | null;
@@ -5155,6 +5173,9 @@ export interface components {
         Person: {
             biography?: string;
             birthplace?: string;
+            blurhashes?: {
+                [key: string]: string;
+            };
             /** Format: date */
             born?: string;
             credits: components["schemas"]["Credit"][];
@@ -5170,6 +5191,9 @@ export interface components {
             photo?: string;
         };
         PersonRef: {
+            blurhashes?: {
+                [key: string]: string;
+            };
             /** Format: uuid */
             id: string;
             name: string;
@@ -5468,6 +5492,9 @@ export interface components {
             total: number;
         };
         SeasonCard: {
+            blurhashes?: {
+                [key: string]: string;
+            };
             episodes: number;
             /** Format: uuid */
             id: string;
@@ -5609,6 +5636,9 @@ export interface components {
             added_at: string;
             artwork?: {
                 [key: string]: string[];
+            };
+            blurhashes?: {
+                [key: string]: string;
             };
             certificate?: string;
             collections?: components["schemas"]["CollectionCard"][];

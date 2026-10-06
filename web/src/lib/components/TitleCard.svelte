@@ -10,6 +10,7 @@ export type CardLike = Pick<Card, "id" | "kind" | "title"> & Partial<Card>;
 import CheckIcon from "@lucide/svelte/icons/check";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import { artworkSrc, artworkSrcset, type Shape } from "#lib/artwork.js";
+import { blurStyle } from "#lib/blurhash.js";
 import { episodeLabel } from "#lib/format.js";
 import TitleMenu from "./TitleMenu.svelte";
 
@@ -74,6 +75,7 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 					loading="lazy"
 					decoding="async"
 					class="size-full object-cover"
+					style={blurStyle(card.blurhashes?.[picture])}
 				>
 			{:else}
 				<span

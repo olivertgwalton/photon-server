@@ -110,7 +110,7 @@ func TestAListedThemeIsKeptAndFetchedAgainOnlyWhenItsLinkChanges(t *testing.T) {
 	}
 	db, _ := fakeDB(t, links)
 	ytdlp, runs := fakeYTDLP(t)
-	cache, err := artwork.Open(t.TempDir())
+	cache, err := artwork.Open(t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestNoThemeIsAnAnswerAndAFailedFetchIsNot(t *testing.T) {
 		"/tv_shows/themoviedb/2.json": "https://www.youtube.com/watch?v=flaky",
 	})
 	ytdlp, runs := fakeYTDLP(t)
-	cache, err := artwork.Open(t.TempDir())
+	cache, err := artwork.Open(t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

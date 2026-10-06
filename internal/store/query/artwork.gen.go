@@ -38,6 +38,7 @@ func newArtwork(db *gorm.DB, opts ...gen.DOOption) artwork {
 	_artwork.Language = field.NewString(tableName, "language")
 	_artwork.Width = field.NewInt(tableName, "width")
 	_artwork.Height = field.NewInt(tableName, "height")
+	_artwork.Blurhash = field.NewString(tableName, "blurhash")
 
 	_artwork.fillFieldMap()
 
@@ -58,6 +59,7 @@ type artwork struct {
 	Language field.String
 	Width    field.Int
 	Height   field.Int
+	Blurhash field.String
 
 	fieldMap map[string]field.Expr
 }
@@ -84,6 +86,7 @@ func (a *artwork) updateTableName(table string) *artwork {
 	a.Language = field.NewString(table, "language")
 	a.Width = field.NewInt(table, "width")
 	a.Height = field.NewInt(table, "height")
+	a.Blurhash = field.NewString(table, "blurhash")
 
 	a.fillFieldMap()
 
@@ -108,7 +111,7 @@ func (a *artwork) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (a *artwork) fillFieldMap() {
-	a.fieldMap = make(map[string]field.Expr, 10)
+	a.fieldMap = make(map[string]field.Expr, 11)
 	a.fieldMap["id"] = a.ID
 	a.fieldMap["item_id"] = a.ItemID
 	a.fieldMap["source"] = a.Source
@@ -119,6 +122,7 @@ func (a *artwork) fillFieldMap() {
 	a.fieldMap["language"] = a.Language
 	a.fieldMap["width"] = a.Width
 	a.fieldMap["height"] = a.Height
+	a.fieldMap["blurhash"] = a.Blurhash
 }
 
 func (a artwork) clone(db *gorm.DB) artwork {

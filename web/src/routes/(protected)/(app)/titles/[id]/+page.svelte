@@ -16,6 +16,7 @@ import { pickPlaylist, setFavourite, setWatched } from "#lib/actions.svelte.js";
 import { castOf } from "#lib/credits.js";
 import { type Extra, extrasOf } from "#lib/extras.js";
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
+import { blurStyle } from "#lib/blurhash.js";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import DownloadDialog from "#lib/components/DownloadDialog.svelte";
 import MediaInfo from "#lib/components/MediaInfo.svelte";
@@ -162,6 +163,7 @@ const poster = $derived(art("poster"));
 					alt=""
 					fetchpriority="high"
 					class="size-full object-cover object-top"
+					style={blurStyle(t.blurhashes?.[backdrop])}
 				>
 				<div
 					class="from-ground via-ground/70 absolute inset-0 bg-gradient-to-t to-transparent"
@@ -206,6 +208,7 @@ const poster = $derived(art("poster"));
 						sizes="12rem"
 						alt=""
 						class="hidden aspect-[2/3] w-48 rounded-lg object-cover sm:block"
+						style={blurStyle(t.blurhashes?.[poster])}
 					>
 				{/if}
 				<h1 class="max-w-3xl">
@@ -418,6 +421,7 @@ const poster = $derived(art("poster"));
 										alt=""
 										loading="lazy"
 										class="size-full object-cover"
+										style={blurStyle(episode.blurhashes?.[episode.thumb])}
 									>
 								{/if}
 								{#if progress}
@@ -499,6 +503,7 @@ const poster = $derived(art("poster"));
 					id={credit.person_id}
 					name={credit.name}
 					photo={credit.photo}
+					blurhashes={credit.blurhashes}
 					caption={credit.said}
 				/>
 			{/snippet}

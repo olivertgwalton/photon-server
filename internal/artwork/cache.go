@@ -32,11 +32,13 @@ type Cache struct {
 	root  *os.Root
 	http  *http.Client
 	group singleflight.Group
-	// resizing holds a place for each picture being resized, one per processor.
+	// resizing holds a place for each picture being resized or hashed, one per processor.
 	resizing chan struct{}
+	// hashed is told each fetched picture's BlurHash.
+	hashed func(ctx context.Context, id uuid.UUID, blurhash string) error
 }
 
-func Open(dir string) (*Cache, error) {
+func Open(dir string, hashed func(ctx context.Context, id uuid.UUID, blurhash string) error) (*Cache, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, err
 	}
@@ -46,6 +48,7 @@ func Open(dir string) (*Cache, error) {
 	}
 	return &Cache{
 		root: root, http: &http.Client{Timeout: fetchFor}, resizing: make(chan struct{}, runtime.NumCPU()),
+		hashed: hashed,
 	}, nil
 }
 
@@ -59,7 +62,7 @@ func (c *Cache) File(ctx context.Context, id uuid.UUID, url string) (*os.File, e
 		return f, err
 	}
 	fetched := c.group.DoChan(name, func() (any, error) {
-		return nil, c.fetch(context.WithoutCancel(ctx), name, url)
+		return nil, c.fetch(context.WithoutCancel(ctx), id, url)
 	})
 	select {
 	case <-ctx.Done():
@@ -72,7 +75,9 @@ func (c *Cache) File(ctx context.Context, id uuid.UUID, url string) (*os.File, e
 	return c.root.Open(name)
 }
 
-func (c *Cache) fetch(ctx context.Context, name, url string) error {
+// fetch keeps the picture at url under id and tells hashed its BlurHash, where it is a picture
+// decoded here.
+func (c *Cache) fetch(ctx context.Context, id uuid.UUID, url string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -88,13 +93,39 @@ func (c *Cache) fetch(ctx context.Context, name, url string) error {
 	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "image/") {
 		return fmt.Errorf("picture %s: %s is not an image", url, resp.Header.Get("Content-Type"))
 	}
-	return c.write(name, func(w io.Writer) error {
+	err = c.write(id.String(), func(w io.Writer) error {
 		n, err := io.Copy(w, io.LimitReader(resp.Body, maxPicture+1))
 		if err == nil && n > maxPicture {
 			err = fmt.Errorf("picture %s is over %d bytes", url, maxPicture)
 		}
 		return err
 	})
+	if err != nil {
+		return err
+	}
+	hash, err := c.Blurhash(ctx, id)
+	if err != nil {
+		// An SVG, or a picture too vast to decode, is still served; it has no stand-in.
+		return nil
+	}
+	return c.hashed(ctx, id, hash)
+}
+
+// Blurhash answers the BlurHash of the picture kept under id, taking a place among the pictures
+// being resized.
+func (c *Cache) Blurhash(ctx context.Context, id uuid.UUID) (string, error) {
+	select {
+	case c.resizing <- struct{}{}:
+		defer func() { <-c.resizing }()
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+	f, err := c.root.Open(id.String())
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	return Blurhash(f)
 }
 
 // partLife is how long a picture half written may be, before it is taken for one abandoned.

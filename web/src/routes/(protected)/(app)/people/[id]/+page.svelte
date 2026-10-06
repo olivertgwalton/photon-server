@@ -1,5 +1,6 @@
 <script lang="ts">
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
+import { blurStyle } from "#lib/blurhash.js";
 import Rail from "#lib/components/Rail.svelte";
 import { workOf } from "#lib/credits.js";
 import { wallSearch } from "#lib/wall.js";
@@ -35,6 +36,7 @@ const life = $derived(
 				sizes="12rem"
 				alt=""
 				class="aspect-[2/3] w-40 shrink-0 rounded-lg object-cover sm:w-48"
+				style={blurStyle(p.blurhashes?.[p.photo])}
 			>
 		{/if}
 		<div class="grid content-start gap-3">

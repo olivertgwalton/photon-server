@@ -92,7 +92,7 @@ func (c *Cache) resize(ctx context.Context, name string, width int, open func(co
 }
 
 // decode reads a picture of at most maxPixels.
-func decode(f *os.File) (image.Image, error) {
+func decode(f io.ReadSeeker) (image.Image, error) {
 	cfg, _, err := image.DecodeConfig(f)
 	if err != nil {
 		return nil, err

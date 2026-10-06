@@ -31,4 +31,6 @@ type Artwork struct {
 	Language string
 	Width    int
 	Height   int
+	// Blurhash is a file's, taken as it is scanned.
+	Blurhash string
 }

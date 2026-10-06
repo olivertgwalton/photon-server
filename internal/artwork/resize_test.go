@@ -43,7 +43,7 @@ func picture(t *testing.T, w, h int, opaque bool) (func(context.Context) (*os.Fi
 }
 
 func TestResized(t *testing.T) {
-	c, err := Open(t.TempDir())
+	c, err := Open(t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestAVastPictureIsAnsweredAsItIs(t *testing.T) {
 	if err := os.WriteFile(path, b, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	c, err := Open(t.TempDir())
+	c, err := Open(t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestAVastPictureIsAnsweredAsItIs(t *testing.T) {
 // Clients asking for one size at once share its making, which carries on when the first goes away.
 func TestAResizeOutlivesTheFirstToAsk(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		c, err := Open(t.TempDir())
+		c, err := Open(t.TempDir(), nil)
 		if err != nil {
 			t.Fatal(err)
 		}

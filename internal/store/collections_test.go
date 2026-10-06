@@ -4,7 +4,7 @@ package store
 
 import (
 	"errors"
-	"slices"
+	"reflect"
 	"testing"
 	"time"
 	"uuid"
@@ -53,7 +53,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 		t.Errorf("members = %+v, %v; want Alien then Aliens, by release", members, err)
 	}
 	page, err := s.Title(ctx, uuid.UUID{}, ids["Alien"])
-	if err != nil || !slices.Equal(page.Collections, []CollectionCard{{ID: set, Title: "Alien Collection", Poster: shown[0].Poster}}) {
+	if err != nil || !reflect.DeepEqual(page.Collections, []CollectionCard{{ID: set, Title: "Alien Collection", Poster: shown[0].Poster}}) {
 		t.Errorf("Alien is in %v, %v; want the set with its poster", page.Collections, err)
 	}
 	if shown[0].Origin != domain.CollectionTMDB {

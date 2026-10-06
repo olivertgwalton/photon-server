@@ -53,6 +53,8 @@ type TitlePage struct {
 	State TitleState `json:"state,omitzero"`
 	// Artwork is the title's pictures by kind, best first, by id: /api/v1/artwork/{id}.
 	Artwork map[domain.ArtworkKind][]uuid.UUID `json:"artwork,omitzero"`
+	// Blurhashes are those of its pictures that have one, by id.
+	Blurhashes Blurhashes `json:"blurhashes,omitzero"`
 	// Themes are the tunes to play under its page, in order, by id: /api/v1/themes/{id}. A season's
 	// and an episode's are its show's.
 	Themes []uuid.UUID `json:"themes,omitzero"`
@@ -191,6 +193,8 @@ type SeasonCard struct {
 	Episodes int         `json:"episodes"`
 	Poster   uuid.UUID   `json:"poster,omitzero"`
 	State    TitleState  `json:"state,omitzero"`
+	// Blurhashes are those of its pictures that have one, by id, as on every card.
+	Blurhashes Blurhashes `json:"blurhashes,omitzero"`
 }
 
 type EpisodeCard struct {
@@ -203,6 +207,7 @@ type EpisodeCard struct {
 	DurationMS int64       `json:"duration_ms,omitzero"`
 	Thumb      uuid.UUID   `json:"thumb,omitzero"`
 	State      TitleState  `json:"state,omitzero"`
+	Blurhashes Blurhashes  `json:"blurhashes,omitzero"`
 }
 
 // ExtraCard is a trailer or other extra, pictured by a still of its video where its previews are
@@ -218,9 +223,10 @@ type ExtraCard struct {
 }
 
 type CollectionCard struct {
-	ID     uuid.UUID `json:"id"`
-	Title  string    `json:"title"`
-	Poster uuid.UUID `json:"poster,omitzero"`
+	ID         uuid.UUID  `json:"id"`
+	Title      string     `json:"title"`
+	Poster     uuid.UUID  `json:"poster,omitzero"`
+	Blurhashes Blurhashes `json:"blurhashes,omitzero"`
 }
 
 // VideoLink is a provider's link to a video hosted elsewhere, with its site's still of it where
@@ -293,11 +299,16 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	if p.Videos, err = s.videos(ctx, item.ID); err != nil {
 		return TitlePage{}, err
 	}
-	pictures, err := s.pictureOrder(ctx, []*model.Item{item})
+	pictures, hashes, err := s.pictureOrder(ctx, []*model.Item{item})
 	if err != nil {
 		return TitlePage{}, err
 	}
 	p.Artwork = pictures[item.ID]
+	var shown []uuid.UUID
+	for _, of := range p.Artwork {
+		shown = append(shown, of...)
+	}
+	p.Blurhashes = blurhashesOf(hashes, shown...)
 	owner := id
 	if p.Show != nil {
 		owner = p.Show.ID
@@ -414,7 +425,7 @@ func (s *Store) seasons(ctx context.Context, profile uuid.UUID, show model.UUID)
 	for _, c := range counts {
 		episodes[c.ParentID] = c.N
 	}
-	pictures, err := s.pictureOrder(ctx, rows)
+	pictures, hashes, err := s.pictureOrder(ctx, rows)
 	if err != nil {
 		return nil, err
 	}
@@ -429,6 +440,7 @@ func (s *Store) seasons(ctx context.Context, profile uuid.UUID, show model.UUID)
 			Year: deref(r.Year), Aired: date(r.ReleaseDate), Episodes: episodes[r.ID],
 			Poster: first(pictures[r.ID][domain.ArtworkPoster]), State: states[r.ID],
 		}
+		out[n].Blurhashes = blurhashesOf(hashes, out[n].Poster)
 	}
 	return out, nil
 }
@@ -444,7 +456,7 @@ func (s *Store) episodes(ctx context.Context, profile uuid.UUID, season model.UU
 	if err != nil {
 		return nil, err
 	}
-	pictures, err := s.pictureOrder(ctx, rows)
+	pictures, hashes, err := s.pictureOrder(ctx, rows)
 	if err != nil {
 		return nil, err
 	}
@@ -463,6 +475,7 @@ func (s *Store) episodes(ctx context.Context, profile uuid.UUID, season model.UU
 			Overview: deref(r.Overview), Aired: date(aired), DurationMS: lengths[r.ID],
 			Thumb: first(pictures[r.ID][domain.ArtworkThumb]), State: states[r.ID],
 		}
+		out[n].Blurhashes = blurhashesOf(hashes, out[n].Thumb)
 	}
 	return out, nil
 }
