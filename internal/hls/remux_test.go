@@ -53,14 +53,17 @@ func shownIn(t *testing.T, init, segment *os.File) []time.Duration {
 	}
 	var out []time.Duration
 	for {
-		_, at, err := s.next()
+		frag, err := s.next()
 		if errors.Is(err, io.EOF) {
 			return out
+		}
+		if err == nil {
+			err = s.write(io.Discard, frag)
 		}
 		if err != nil {
 			t.Fatal(err)
 		}
-		out = append(out, at.Round(100*time.Millisecond))
+		out = append(out, frag.shown.Round(100*time.Millisecond))
 	}
 }
 

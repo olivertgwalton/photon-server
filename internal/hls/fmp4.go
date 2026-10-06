@@ -12,7 +12,8 @@ import (
 // frames, decoded before they are shown, never have a negative decode time that tfdt cannot hold.
 const clockOffset = 10 * time.Second
 
-// maxBox bounds one box read whole; a fragment is a few seconds of video.
+// maxBox bounds one box read whole. Only an mdat, which is a fragment's pictures, is not read
+// whole but copied to where it is kept.
 const maxBox = 256 << 20
 
 var errNotFMP4 = errors.New("hls: not fragmented MP4")
@@ -44,53 +45,97 @@ func readInit(r io.Reader) (*stream, []byte, error) {
 	}
 }
 
-// next answers the next fragment and when its first video frame is shown, from the start of the
-// file it was cut from. io.EOF after the last.
-func (s *stream) next() ([]byte, time.Duration, error) {
-	var frag []byte
-	var shown time.Duration
+// fragment is one fragment as far as it has been read: its moof and its mdat's header, the mdat's
+// body of body bytes still to be read by write, and when its first video frame is shown, from the
+// start of the file it was cut from.
+type fragment struct {
+	head  []byte
+	body  int64
+	shown time.Duration
+}
+
+// next reads up to the next fragment's pictures. io.EOF after the last.
+func (s *stream) next() (fragment, error) {
+	var f fragment
 	for {
-		typ, box, err := s.box()
+		head, err := s.header()
 		if err != nil {
-			if errors.Is(err, io.EOF) && frag != nil {
-				return nil, 0, io.ErrUnexpectedEOF
+			if errors.Is(err, io.EOF) && f.head != nil {
+				return f, io.ErrUnexpectedEOF
 			}
-			return nil, 0, err
+			return f, err
 		}
-		switch typ {
-		case "moof":
-			if frag != nil {
-				return nil, 0, fmt.Errorf("%w: a moof with no mdat", errNotFMP4)
+		typ := string(head[4:8])
+		if typ == "mdat" {
+			if f.head == nil {
+				return f, fmt.Errorf("%w: an mdat with no moof", errNotFMP4)
 			}
-			if shown, err = s.firstShown(box[8:]); err != nil {
-				return nil, 0, err
+			f.head = append(f.head, head...)
+			f.body = int64(binary.BigEndian.Uint32(head)) - 8
+			return f, nil
+		}
+		box, err := s.rest(head)
+		if err != nil {
+			return f, err
+		}
+		if typ == "moof" {
+			if f.head != nil {
+				return f, fmt.Errorf("%w: a moof with no mdat", errNotFMP4)
 			}
-			frag = box
-		case "mdat":
-			if frag == nil {
-				return nil, 0, fmt.Errorf("%w: an mdat with no moof", errNotFMP4)
+			if f.shown, err = s.firstShown(box[8:]); err != nil {
+				return f, err
 			}
-			return append(frag, box...), shown, nil
+			f.head = box
 		}
 	}
 }
 
+// write writes fragment f whole to w, reading its pictures as they are written.
+func (s *stream) write(w io.Writer, f fragment) error {
+	if _, err := w.Write(f.head); err != nil {
+		return err
+	}
+	_, err := io.CopyN(w, s.r, f.body)
+	if errors.Is(err, io.EOF) {
+		return io.ErrUnexpectedEOF
+	}
+	return err
+}
+
 // box reads one top-level box whole.
 func (s *stream) box() (string, []byte, error) {
-	head := make([]byte, 8)
-	if _, err := io.ReadFull(s.r, head); err != nil {
+	head, err := s.header()
+	if err != nil {
 		return "", nil, err
 	}
+	box, err := s.rest(head)
+	return string(head[4:8]), box, err
+}
+
+// header reads a box's size and type.
+func (s *stream) header() ([]byte, error) {
+	head := make([]byte, 8)
+	if _, err := io.ReadFull(s.r, head); err != nil {
+		return nil, err
+	}
+	if size := binary.BigEndian.Uint32(head); size < 8 {
+		return nil, fmt.Errorf("%w: a box of %d bytes", errNotFMP4, size)
+	}
+	return head, nil
+}
+
+// rest reads the rest of the box head begins.
+func (s *stream) rest(head []byte) ([]byte, error) {
 	size := binary.BigEndian.Uint32(head)
-	if size < 8 || size > maxBox {
-		return "", nil, fmt.Errorf("%w: a box of %d bytes", errNotFMP4, size)
+	if size > maxBox {
+		return nil, fmt.Errorf("%w: a box of %d bytes", errNotFMP4, size)
 	}
 	box := make([]byte, size)
 	copy(box, head)
 	if _, err := io.ReadFull(s.r, box[8:]); err != nil {
-		return "", nil, io.ErrUnexpectedEOF
+		return nil, io.ErrUnexpectedEOF
 	}
-	return string(head[4:8]), box, nil
+	return box, nil
 }
 
 // children calls f with each box inside b.

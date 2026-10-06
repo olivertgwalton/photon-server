@@ -27,15 +27,19 @@ func TestFragmentsAreReadWithWhenTheyAreShown(t *testing.T) {
 	var shown []time.Duration
 	total := len(init)
 	for {
-		frag, at, err := s.next()
+		frag, err := s.next()
 		if errors.Is(err, io.EOF) {
 			break
+		}
+		if err == nil {
+			var b bytes.Buffer
+			err = s.write(&b, frag)
+			total += b.Len()
 		}
 		if err != nil {
 			t.Fatal(err)
 		}
-		shown = append(shown, at)
-		total += len(frag)
+		shown = append(shown, frag.shown)
 	}
 	var want []time.Duration
 	for k := range 15 {
@@ -58,7 +62,10 @@ func TestFragmentsAreReadWithWhenTheyAreShown(t *testing.T) {
 		t.Fatal(err)
 	}
 	for err == nil {
-		_, _, err = s.next()
+		var frag fragment
+		if frag, err = s.next(); err == nil {
+			err = s.write(io.Discard, frag)
+		}
 	}
 	if !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Errorf("a file cut short ended with %v, want io.ErrUnexpectedEOF", err)

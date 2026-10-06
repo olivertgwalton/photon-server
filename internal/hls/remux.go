@@ -634,9 +634,21 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 	const slack = 5 * time.Millisecond
 	first := run.at
 	n := first
-	var segment []byte
+	// The segment being written, under a name no player asks for until it is whole.
+	var segment *os.File
+	defer func() {
+		if segment != nil {
+			_ = segment.Close()
+			_ = s.root.Remove(segmentName(n) + ".part")
+		}
+	}()
 	finish := func() error {
-		if err := keep(s.root, segmentName(n), segment); err != nil {
+		err := segment.Close()
+		segment = nil
+		if err == nil {
+			err = s.root.Rename(segmentName(n)+".part", segmentName(n))
+		}
+		if err != nil {
 			return err
 		}
 		s.mu.Lock()
@@ -646,14 +658,13 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 		n++
 		run.at = n
 		s.mu.Unlock()
-		segment = nil
 		return nil
 	}
 	for {
 		if err := r.throttle(ctx, s, run, n); err != nil {
 			return err
 		}
-		frag, shown, err := st.next()
+		frag, err := st.next()
 		if errors.Is(err, io.EOF) {
 			if segment != nil {
 				return finish()
@@ -663,10 +674,13 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 		if err != nil {
 			return err
 		}
-		if n == first && segment == nil && shown < s.plan[first].Start-slack {
+		if n == first && segment == nil && frag.shown < s.plan[first].Start-slack {
+			if err := st.write(io.Discard, frag); err != nil {
+				return err
+			}
 			continue
 		}
-		for n < len(s.plan) && s.plan[n].Part == run.part && shown >= s.plan[n].End-slack && segment != nil {
+		for n < len(s.plan) && s.plan[n].Part == run.part && frag.shown >= s.plan[n].End-slack && segment != nil {
 			if err := finish(); err != nil {
 				return err
 			}
@@ -674,7 +688,14 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 		if n >= len(s.plan) || s.plan[n].Part != run.part {
 			return nil
 		}
-		segment = append(segment, frag...)
+		if segment == nil {
+			if segment, err = s.root.Create(segmentName(n) + ".part"); err != nil {
+				return err
+			}
+		}
+		if err := st.write(segment, frag); err != nil {
+			return err
+		}
 	}
 }
 
@@ -684,8 +705,10 @@ func (r *Remuxer) throttle(ctx context.Context, s *session, run *run, n int) err
 		s.mu.Lock()
 		far := n > s.furthest+ahead
 		s.mu.Unlock()
+		// A run replaced stops at its next fragment, rather than writing on beside the run that
+		// replaced it.
 		if !far {
-			return nil
+			return ctx.Err()
 		}
 		select {
 		case <-ctx.Done():
