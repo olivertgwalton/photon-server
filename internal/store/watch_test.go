@@ -9,7 +9,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 func TestWhatAProfileHasWatched(t *testing.T) {
@@ -33,7 +32,7 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 			Season: 1, Episodes: []int{n}, Title: "episode", Folder: "The Wire/Season 1", ByNumber: true,
 			Copies: []Copy{{ContentKey: []byte{byte(n)}, Parts: []Part{{
 				RelPath: "The Wire/Season 1/" + string(rune('0'+n)) + ".mkv", Size: 1, ModTime: time.Unix(0, 0),
-				Facts: &media.Facts{Duration: time.Hour},
+				Facts: &domain.Facts{Duration: time.Hour},
 			}}}},
 		})
 	}
@@ -128,7 +127,7 @@ func TestAPlaybackIsOnePlayHoweverOftenItReportsTheEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	heat := []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
-		RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{Duration: time.Hour},
+		RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour},
 	}}}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Copies: heat}}, nil); err != nil {
 		t.Fatal(err)

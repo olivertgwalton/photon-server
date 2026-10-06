@@ -9,7 +9,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 func TestPicturesBesideATitleComeBeforeAProvidersAndItsCardShowsTheBest(t *testing.T) {
@@ -22,7 +21,7 @@ func TestPicturesBesideATitleComeBeforeAProvidersAndItsCardShowsTheBest(t *testi
 	film := Film{
 		Title: "heat", Folder: "Heat", Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, Path: "Heat/poster.jpg"}},
 		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
-			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{},
+			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}},
 	}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
@@ -104,7 +103,7 @@ func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
 	}
 	film := Film{
 		Title: "heat", Folder: "Heat", Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, Path: "Heat/poster.jpg"}},
-		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}},
+		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
 	}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)

@@ -9,7 +9,6 @@ import (
 	"gorm.io/gen/field"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
@@ -30,7 +29,7 @@ type PlayCopy struct {
 	Container   string
 	BitrateKbps int
 	Parts       []PlayPart
-	Streams     []media.Stream
+	Streams     []domain.Stream
 	Subtitles   []PlaySubtitle
 }
 
@@ -95,9 +94,9 @@ func playSubtitle(f *model.SubtitleFile) PlaySubtitle {
 }
 
 // mediaStream is a stream as it was probed.
-func mediaStream(t *model.Stream) media.Stream {
+func mediaStream(t *model.Stream) domain.Stream {
 	lang, _ := language.Parse(deref(t.Language))
-	m := media.Stream{
+	m := domain.Stream{
 		Index: t.Idx, Kind: t.Kind, Codec: t.Codec, Profile: deref(t.Profile), Language: lang, Title: deref(t.Title),
 		Default: t.IsDefault, Forced: t.Forced, HearingImpaired: t.HearingImpaired, Commentary: t.Commentary,
 		Width: deref(t.Width), Height: deref(t.Height), FrameRate: deref(t.FrameRate),
@@ -106,7 +105,7 @@ func mediaStream(t *model.Stream) media.Stream {
 		BitrateKbps: deref(t.BitrateKbps),
 	}
 	if t.DVProfile != nil {
-		m.DolbyVision = &media.DolbyVision{
+		m.DolbyVision = &domain.DolbyVision{
 			Profile: int(*t.DVProfile), Level: int(deref(t.DVLevel)), Compatibility: int(deref(t.DVCompatibility)),
 		}
 	}

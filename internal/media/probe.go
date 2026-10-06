@@ -17,67 +17,16 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-type Facts struct {
-	Container   string
-	Duration    time.Duration
-	BitrateKbps int
-	Streams     []Stream
-	Chapters    []Chapter
-}
-
-type Stream struct {
-	Index    int
-	Kind     domain.StreamKind
-	Codec    string
-	Profile  string
-	Language language.Tag
-	Title    string
-
-	Default         bool
-	Forced          bool
-	HearingImpaired bool
-	Commentary      bool
-
-	Width, Height int
-	FrameRate     float64
-	BitDepth      int
-	// Level is ffprobe's: ten times the level for H.264 (41 is 4.1), thirty times for HEVC.
-	Level       int
-	Range       domain.Range
-	DolbyVision *DolbyVision
-	// Interlaced is a picture ffprobe gives a field order for; one it calls unknown is taken as
-	// progressive.
-	Interlaced bool
-
-	Channels      int
-	ChannelLayout string
-	SampleRate    int
-	BitrateKbps   int
-}
-
-type DolbyVision struct {
-	Profile, Level   int
-	Compatibility    int // the base layer's signal: 0 none, 1 HDR10, 2 SDR, 4 HLG
-	BaseLayer        bool
-	EnhancementLayer bool
-	RPU              bool
-}
-
-type Chapter struct {
-	Start, End time.Duration
-	Title      string
-}
-
 // Probe describes an open file. ffprobe reads it through the descriptor, never a path, and reads
 // the first frame of each stream: FFmpeg 9 leaves a stream's colour unknown until a frame is
 // decoded, and HDR10+ metadata is only ever on frames.
-func (t Tools) Probe(ctx context.Context, f *os.File) (Facts, error) {
+func (t Tools) Probe(ctx context.Context, f *os.File) (domain.Facts, error) {
 	out, err := output(ctx, PartRun, []*os.File{f}, t.FFprobe.Path,
 		"-hide_banner", "-v", "error", "-protocol_whitelist", "fd", "-fd", "3",
 		"-print_format", "json", "-show_format", "-show_streams", "-show_chapters",
 		"-show_frames", "-read_intervals", "%+#1", "-i", "fd:")
 	if err != nil {
-		return Facts{}, fmt.Errorf("ffprobe: %w", err)
+		return domain.Facts{}, fmt.Errorf("ffprobe: %w", err)
 	}
 	return parseProbe(out)
 }
@@ -133,12 +82,12 @@ type probeSideData struct {
 	RPUPresent    int    `json:"rpu_present_flag"`
 }
 
-func parseProbe(out []byte) (Facts, error) {
+func parseProbe(out []byte) (domain.Facts, error) {
 	var p probeOutput
 	if err := json.Unmarshal(out, &p); err != nil {
-		return Facts{}, fmt.Errorf("ffprobe output: %w", err)
+		return domain.Facts{}, fmt.Errorf("ffprobe output: %w", err)
 	}
-	facts := Facts{
+	facts := domain.Facts{
 		Container:   p.Format.FormatName,
 		Duration:    seconds(p.Format.Duration),
 		BitrateKbps: kbps(p.Format.BitRate),
@@ -154,7 +103,7 @@ func parseProbe(out []byte) (Facts, error) {
 			continue
 		}
 		lang, _ := language.Parse(s.Tags["language"])
-		st := Stream{
+		st := domain.Stream{
 			Index:           s.Index,
 			Kind:            kind,
 			Codec:           s.CodecName,
@@ -189,17 +138,17 @@ func parseProbe(out []byte) (Facts, error) {
 		facts.Streams = append(facts.Streams, st)
 	}
 	for _, c := range p.Chapters {
-		facts.Chapters = append(facts.Chapters, Chapter{
+		facts.Chapters = append(facts.Chapters, domain.Chapter{
 			Start: seconds(c.StartTime), End: seconds(c.EndTime), Title: c.Tags["title"],
 		})
 	}
 	return facts, nil
 }
 
-func dolbyVision(side []probeSideData) *DolbyVision {
+func dolbyVision(side []probeSideData) *domain.DolbyVision {
 	for _, d := range side {
 		if d.Type == "DOVI configuration record" {
-			return &DolbyVision{
+			return &domain.DolbyVision{
 				Profile: d.Profile, Level: d.Level, Compatibility: d.Compatibility,
 				BaseLayer: d.BLPresent == 1, EnhancementLayer: d.ELPresent == 1, RPU: d.RPUPresent == 1,
 			}
@@ -208,7 +157,7 @@ func dolbyVision(side []probeSideData) *DolbyVision {
 	return nil
 }
 
-func videoRange(transfer string, dv *DolbyVision, frameSide []probeSideData) domain.Range {
+func videoRange(transfer string, dv *domain.DolbyVision, frameSide []probeSideData) domain.Range {
 	if dv != nil {
 		return domain.RangeDV
 	}

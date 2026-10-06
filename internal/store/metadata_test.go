@@ -9,7 +9,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
@@ -25,7 +24,7 @@ func TestBetterSourcesSurviveRescans(t *testing.T) {
 		t.Helper()
 		film := Film{Title: title, Year: 1982, Folder: "Thing", Copies: []Copy{{
 			ContentKey: []byte("thing"),
-			Parts:      []Part{{RelPath: "Thing/Thing.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}},
+			Parts:      []Part{{RelPath: "Thing/Thing.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}},
 		}}}
 		if _, err := s.SaveFolder(ctx, lib.ID, "Thing", []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)
@@ -80,7 +79,7 @@ func TestNFOSaysMoreThanFileNamesButNotOverTypedIDs(t *testing.T) {
 			domain.ProviderTMDB: "999", domain.ProviderIMDb: "tt0078748",
 		}},
 		Copies: []Copy{{ContentKey: []byte("alien"), Parts: []Part{{
-			RelPath: "Alien/Alien.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{},
+			RelPath: "Alien/Alien.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}},
 	}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Alien", []byte("v1"), []Film{film}, nil); err != nil {
@@ -117,7 +116,7 @@ func TestALockedFieldIsLeftForTheReader(t *testing.T) {
 		Title: "heat", Folder: "Heat",
 		NFO: &domain.Metadata{Title: "Heat", Locked: []domain.Field{domain.FieldOverview}},
 		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
-			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{},
+			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}},
 	}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
@@ -156,7 +155,7 @@ func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
 	film := Film{
 		Title: "heat", Folder: "Heat", NFO: &domain.Metadata{Title: "Heat (NFO)"},
 		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
-			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{},
+			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}},
 	}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {

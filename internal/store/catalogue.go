@@ -15,7 +15,6 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
@@ -60,7 +59,7 @@ type Part struct {
 	RelPath string
 	Size    int64
 	ModTime time.Time
-	Facts   *media.Facts
+	Facts   *domain.Facts
 }
 
 // KnownCopies answers which of the content keys are of copies already in the library, by key as
@@ -393,7 +392,7 @@ func locate(ctx context.Context, tx *query.Query, lib uuid.UUID, partID model.UU
 	})
 }
 
-func saveFacts(ctx context.Context, tx *query.Query, partID model.UUID, f *media.Facts) error {
+func saveFacts(ctx context.Context, tx *query.Query, partID model.UUID, f *domain.Facts) error {
 	streams := make([]*model.Stream, 0, len(f.Streams))
 	for _, st := range f.Streams {
 		row := &model.Stream{
@@ -530,7 +529,7 @@ func queryIDs(ctx context.Context, q interface {
 	return out, nil
 }
 
-func firstVideo(f *media.Facts) *media.Stream {
+func firstVideo(f *domain.Facts) *domain.Stream {
 	for i := range f.Streams {
 		if f.Streams[i].Kind == domain.StreamVideo {
 			return &f.Streams[i]

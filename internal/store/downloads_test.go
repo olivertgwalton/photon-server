@@ -9,7 +9,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // downloadable makes a film of one 1080p part, and two profiles to download it.
@@ -21,9 +20,9 @@ func downloadable(t *testing.T) (s *Store, film, part uuid.UUID, profiles [2]uui
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := Part{RelPath: "L/L.mkv", Size: 6_000_000_000, ModTime: time.Unix(0, 0), Facts: &media.Facts{
+	p := Part{RelPath: "L/L.mkv", Size: 6_000_000_000, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
 		Container: "matroska,webm", Duration: 2 * time.Hour, BitrateKbps: 8000,
-		Streams: []media.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 1920, Height: 1080, Range: domain.RangeSDR}},
+		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 1920, Height: 1080, Range: domain.RangeSDR}},
 	}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "L", []byte("v1"), []Film{{Title: "Lawrence", Folder: "L", Copies: []Copy{{ContentKey: []byte("k"), Parts: []Part{p}}}}}, nil); err != nil {
 		t.Fatal(err)

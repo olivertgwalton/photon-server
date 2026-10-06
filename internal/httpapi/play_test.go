@@ -24,7 +24,6 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -46,7 +45,7 @@ func (fakePlaying) Playable(_ context.Context, _, item, _ uuid.UUID) (store.Play
 		Parts: []store.PlayPart{
 			{ID: partOne, DurationMS: 3_600_000}, {ID: partTwo, OffsetMS: 3_600_000, DurationMS: 3_000_000},
 		},
-		Streams: []media.Stream{
+		Streams: []domain.Stream{
 			{Index: 0, Kind: domain.StreamVideo, Codec: "h264"},
 			{Index: 1, Kind: domain.StreamAudio, Codec: "aac", Channels: 2},
 		},

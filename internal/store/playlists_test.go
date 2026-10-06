@@ -10,7 +10,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 func TestAPlaylistKeepsItsOrder(t *testing.T) {
@@ -25,7 +24,7 @@ func TestAPlaylistKeepsItsOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	part := func(name string) Copy {
-		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{Duration: time.Hour}}}}
+		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}
 	}
 	if _, err := s.SaveFolder(ctx, films.ID, "Heat", []byte("v1"), []Film{{Title: "Heat", Folder: "Heat", Copies: []Copy{part("Heat")}}}, nil); err != nil {
 		t.Fatal(err)

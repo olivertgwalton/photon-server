@@ -108,10 +108,10 @@ func (f *fixture) film(seed string) (title, part uuid.UUID) {
 		f.t.Fatal(err)
 	}
 	key := sha256.Sum256([]byte(seed))
-	facts := &media.Facts{
+	facts := &domain.Facts{
 		Container: "matroska,webm", Duration: 1050 * time.Second,
-		Streams: []media.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Width: 640, Height: 360, Range: domain.RangeSDR}},
-		Chapters: []media.Chapter{
+		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Width: 640, Height: 360, Range: domain.RangeSDR}},
+		Chapters: []domain.Chapter{
 			{Start: 0, End: 10 * time.Minute, Title: "Opening"},
 			{Start: 10 * time.Minute, End: 1050 * time.Second, Title: "Heist"},
 		},

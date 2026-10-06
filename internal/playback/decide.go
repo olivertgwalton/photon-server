@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // Profile is what a client says it plays, sent with every play as Jellyfin's PlaybackInfo carries
@@ -67,7 +66,7 @@ type Copy struct {
 	Container   string
 	BitrateKbps int
 	Parts       int
-	Streams     []media.Stream
+	Streams     []domain.Stream
 }
 
 // Decision is how a copy reaches a client: its file as it is, its video copied into HLS, or its
@@ -106,7 +105,7 @@ func Decide(p Profile, c Copy, audio, subtitle *int, hevc domain.HEVCEncoding) (
 	var burn *int
 	var burnCodec string
 	if subtitle != nil {
-		i := slices.IndexFunc(c.Streams, func(s media.Stream) bool { return s.Kind == domain.StreamSubtitle && s.Index == *subtitle })
+		i := slices.IndexFunc(c.Streams, func(s domain.Stream) bool { return s.Kind == domain.StreamSubtitle && s.Index == *subtitle })
 		if i < 0 {
 			return Decision{}, ErrNoSuchSubtitle
 		}
@@ -190,7 +189,7 @@ func Decide(p Profile, c Copy, audio, subtitle *int, hevc domain.HEVCEncoding) (
 }
 
 // audioKbps is what the decided audio spends of the client's bitrate.
-func (d Decision) audioKbps(sound *media.Stream) int {
+func (d Decision) audioKbps(sound *domain.Stream) int {
 	switch {
 	case sound == nil:
 		return 0
@@ -201,7 +200,7 @@ func (d Decision) audioKbps(sound *media.Stream) int {
 }
 
 // pick finds the first video stream and the audio stream to play.
-func pick(streams []media.Stream, audio *int) (video, sound *media.Stream) {
+func pick(streams []domain.Stream, audio *int) (video, sound *domain.Stream) {
 	for i := range streams {
 		s := &streams[i]
 		switch s.Kind {
@@ -235,7 +234,7 @@ func (p Profile) opens(container string) bool {
 	return false
 }
 
-func (p Profile) videoReasons(s media.Stream) []domain.TranscodeReason {
+func (p Profile) videoReasons(s domain.Stream) []domain.TranscodeReason {
 	i := slices.IndexFunc(p.Video, func(v VideoSupport) bool { return v.Codec == s.Codec })
 	if i < 0 {
 		return []domain.TranscodeReason{domain.VideoCodecNotSupported}
@@ -263,7 +262,7 @@ func (p Profile) videoReasons(s media.Stream) []domain.TranscodeReason {
 
 // shows reports whether the client shows a stream's range: HDR10+ falls back to its HDR10, and a
 // Dolby Vision profile it does not take to the base layer it is compatible with.
-func (v VideoSupport) shows(s media.Stream) bool {
+func (v VideoSupport) shows(s domain.Stream) bool {
 	ranges := v.ranges()
 	r := s.Range
 	if r == "" {
@@ -293,14 +292,14 @@ func (v VideoSupport) ranges() []domain.Range {
 
 // showsDolbyVision reports whether the client shows a stream's Dolby Vision itself, not only its
 // base layer.
-func (p Profile) showsDolbyVision(s media.Stream) bool {
+func (p Profile) showsDolbyVision(s domain.Stream) bool {
 	i := slices.IndexFunc(p.Video, func(v VideoSupport) bool { return v.Codec == s.Codec })
 	return i >= 0 && slices.Contains(p.Video[i].Ranges, domain.RangeDV) &&
 		(len(p.Video[i].DolbyVisionProfiles) == 0 || slices.Contains(p.Video[i].DolbyVisionProfiles, s.DolbyVision.Profile))
 }
 
 // showsBase reports whether the client shows a Dolby Vision stream's base layer by itself.
-func (v VideoSupport) showsBase(dv *media.DolbyVision) bool {
+func (v VideoSupport) showsBase(dv *domain.DolbyVision) bool {
 	ranges := v.ranges()
 	switch dv.Compatibility {
 	case 1:
@@ -313,7 +312,7 @@ func (v VideoSupport) showsBase(dv *media.DolbyVision) bool {
 	return false
 }
 
-func (p Profile) audioReasons(s media.Stream) []domain.TranscodeReason {
+func (p Profile) audioReasons(s domain.Stream) []domain.TranscodeReason {
 	a, ok := p.audio(s.Codec)
 	switch {
 	case !ok:
@@ -343,7 +342,7 @@ var encoders = map[string]int{"aac": 8, "eac3": 6, "ac3": 6}
 // audioEncode chooses what a stream the client cannot take is encoded to: the first codec in the
 // client's list the server encodes, as Jellyfin takes a transcoding profile's codecs in order,
 // keeping as many of its channels as both allow, at Jellyfin's bitrates.
-func (p Profile) audioEncode(s media.Stream) (domain.AudioEncode, bool) {
+func (p Profile) audioEncode(s domain.Stream) (domain.AudioEncode, bool) {
 	for _, a := range p.Audio {
 		most, ok := encoders[a.Codec]
 		if !ok {
@@ -384,7 +383,7 @@ const sourceKbps = 40_000
 // larger than the client takes it, and spending no more than the client's limit or what the codec
 // needs to match the source. HEVC keeps the source's HDR10 or HLG in 10 bits where the client
 // shows it; any other HDR is tone mapped to SDR.
-func (p Profile) videoEncode(s media.Stream, copyKbps int, hevc domain.HEVCEncoding) (domain.VideoEncode, bool) {
+func (p Profile) videoEncode(s domain.Stream, copyKbps int, hevc domain.HEVCEncoding) (domain.VideoEncode, bool) {
 	codecs := []domain.VideoCodec{domain.VideoH264}
 	switch hevc {
 	case domain.HEVCAllow:
@@ -417,7 +416,7 @@ func (p Profile) videoEncode(s media.Stream, copyKbps int, hevc domain.HEVCEncod
 // hdrOf is the HDR a stream encoded again can keep: HDR10+ its HDR10, and Dolby Vision the base
 // layer it is compatible with, as Jellyfin transcodes Dolby Vision 8.1 as HDR10. SDR where there is
 // none, Dolby Vision 5's picture being nothing without its RPU.
-func hdrOf(s media.Stream) domain.Range {
+func hdrOf(s domain.Stream) domain.Range {
 	switch s.Range {
 	case domain.RangeHDR10, domain.RangeHDR10Plus:
 		return domain.RangeHDR10

@@ -12,7 +12,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
@@ -23,7 +22,7 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 		t.Fatal(err)
 	}
 	part := func(name string) Copy {
-		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}
+		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}
 	}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Alien", []byte("v1"), []Film{{Title: "Alien", Folder: "Alien", Copies: []Copy{part("Alien")}}}, nil); err != nil {
 		t.Fatal(err)
@@ -104,7 +103,7 @@ func TestAPersonIsKnownByAnyProvidersID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	film := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{{ContentKey: []byte("Heat"), Parts: []Part{{RelPath: "Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}}}
+	film := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{{ContentKey: []byte("Heat"), Parts: []Part{{RelPath: "Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +184,7 @@ func TestSimilarTitlesShareSomething(t *testing.T) {
 		{"Ronin", []string{"Thriller"}, nil},
 		{"Amélie", []string{"Comedy"}, nil},
 	} {
-		film := Film{Title: f.title, Folder: f.title, Copies: []Copy{{ContentKey: []byte(f.title), Parts: []Part{{RelPath: f.title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}}}
+		film := Film{Title: f.title, Folder: f.title, Copies: []Copy{{ContentKey: []byte(f.title), Parts: []Part{{RelPath: f.title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}}}
 		if _, err := s.SaveFolder(ctx, lib.ID, f.title, []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)
 		}
@@ -229,7 +228,7 @@ func TestTwoMatchesCreditingSomeoneNewAtOnceShareThem(t *testing.T) {
 	for _, name := range []string{"Andor", "Ahsoka"} {
 		episode := Episode{
 			Season: 1, Episodes: []int{1}, Title: name, Folder: name + "/Season 1", ByNumber: true,
-			Copies: []Copy{{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}},
+			Copies: []Copy{{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
 		}
 		if _, err := s.SaveShowFolder(ctx, lib.ID, name+"/Season 1", []byte("v1"), Show{Title: name, Folder: name}, []Episode{episode}, nil); err != nil {
 			t.Fatal(err)

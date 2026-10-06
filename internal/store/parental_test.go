@@ -10,7 +10,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
@@ -26,7 +25,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 		t.Fatal(err)
 	}
 	part := func(name string) Copy {
-		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}
+		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}
 	}
 	ids := map[string]uuid.UUID{}
 	for _, f := range []struct {
@@ -155,7 +154,7 @@ func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
 		t.Fatal(err)
 	}
 	part := func(name string) Copy {
-		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}
+		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}
 	}
 	i := s.q.Item
 	rate := func(id uuid.UUID, cert string) {

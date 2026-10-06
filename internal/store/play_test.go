@@ -12,7 +12,6 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
@@ -23,15 +22,15 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 		t.Fatal(err)
 	}
 	part := func(rel string, d time.Duration) Part {
-		return Part{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{Duration: d}}
+		return Part{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: d}}
 	}
 	theatricalPart := part("L/theatrical.mkv", 3*time.Hour)
 	theatricalPart.Facts.Container = "matroska,webm"
-	video := media.Stream{
+	video := domain.Stream{
 		Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Profile: "Main 10", Width: 3840, Height: 2160, BitDepth: 10,
-		Level: 153, Range: domain.RangeDV, DolbyVision: &media.DolbyVision{Profile: 8, Level: 6, Compatibility: 1},
+		Level: 153, Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Level: 6, Compatibility: 1},
 	}
-	theatricalPart.Facts.Streams = []media.Stream{video, {Index: 1, Kind: domain.StreamAudio, Codec: "truehd", Channels: 8}}
+	theatricalPart.Facts.Streams = []domain.Stream{video, {Index: 1, Kind: domain.StreamAudio, Codec: "truehd", Channels: 8}}
 	film := Film{Title: "Lawrence", Folder: "L", Copies: []Copy{
 		{ContentKey: []byte("cut"), Label: "theatrical", Parts: []Part{theatricalPart}, Subtitles: []Subtitle{
 			{RelPath: "L/theatrical.en.sdh.srt", Size: 1, ModTime: time.Unix(0, 0), Codec: "subrip", Language: language.English, HearingImpaired: true},
@@ -97,7 +96,7 @@ func TestPlaybackTitleSaysWhichShow(t *testing.T) {
 	}
 	ep := Episode{
 		Season: 1, Episodes: []int{2}, Title: "Seamless", Folder: "Wire", ByNumber: true,
-		Copies: []Copy{{ContentKey: []byte("e"), Parts: []Part{{RelPath: "Wire/S1E2.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{Duration: time.Hour}}}}},
+		Copies: []Copy{{ContentKey: []byte("e"), Parts: []Part{{RelPath: "Wire/S1E2.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
 	}
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, []Episode{ep}, nil); err != nil {
 		t.Fatal(err)

@@ -11,7 +11,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 func TestATitleSaysWhereItsIntroAndCreditsAre(t *testing.T) {
@@ -21,7 +20,7 @@ func TestATitleSaysWhereItsIntroAndCreditsAre(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	facts := &media.Facts{Duration: 42 * time.Minute, Chapters: []media.Chapter{
+	facts := &domain.Facts{Duration: 42 * time.Minute, Chapters: []domain.Chapter{
 		{Start: 0, End: time.Minute, Title: "Cold Open"},
 		{Start: time.Minute, End: 150 * time.Second, Title: "Opening"},
 		{Start: 150 * time.Second, End: 40 * time.Minute, Title: "Chapter 3"},

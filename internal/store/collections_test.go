@@ -10,7 +10,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
@@ -26,7 +25,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 		released time.Time
 	}{{"Aliens", time.Date(1986, 7, 18, 0, 0, 0, 0, time.UTC)}, {"Alien", time.Date(1979, 5, 25, 0, 0, 0, 0, time.UTC)}, {"Heat", time.Date(1995, 12, 15, 0, 0, 0, 0, time.UTC)}} {
 		film := Film{Title: f.title, Folder: f.title, Copies: []Copy{{ContentKey: []byte(f.title), Parts: []Part{{
-			RelPath: f.title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{},
+			RelPath: f.title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}}}
 		if _, err := s.SaveFolder(ctx, lib.ID, f.title, []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)

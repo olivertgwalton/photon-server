@@ -19,22 +19,21 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
 type fakeProber struct{}
 
-func (fakeProber) Probe(context.Context, *os.File) (media.Facts, error) {
-	return media.Facts{
+func (fakeProber) Probe(context.Context, *os.File) (domain.Facts, error) {
+	return domain.Facts{
 		Container: "matroska,webm",
 		Duration:  2 * time.Hour,
-		Streams: []media.Stream{
+		Streams: []domain.Stream{
 			{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Height: 2160, Range: domain.RangeHDR10},
 			{Index: 1, Kind: domain.StreamAudio, Codec: "truehd", Channels: 8},
 		},
-		Chapters: []media.Chapter{{Start: 0, End: time.Hour, Title: "One"}},
+		Chapters: []domain.Chapter{{Start: 0, End: time.Hour, Title: "One"}},
 	}, nil
 }
 
@@ -753,7 +752,7 @@ type gatheringProber struct {
 	all     chan struct{}
 }
 
-func (p *gatheringProber) Probe(ctx context.Context, f *os.File) (media.Facts, error) {
+func (p *gatheringProber) Probe(ctx context.Context, f *os.File) (domain.Facts, error) {
 	p.mu.Lock()
 	if p.waiting++; p.waiting == readsAtOnce {
 		close(p.all)
@@ -763,7 +762,7 @@ func (p *gatheringProber) Probe(ctx context.Context, f *os.File) (media.Facts, e
 	case <-p.all:
 		return fakeProber{}.Probe(ctx, f)
 	case <-time.After(5 * time.Second):
-		return media.Facts{}, errors.New("probed alone")
+		return domain.Facts{}, errors.New("probed alone")
 	}
 }
 

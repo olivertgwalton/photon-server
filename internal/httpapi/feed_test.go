@@ -17,7 +17,6 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
@@ -67,7 +66,7 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 		name, cert string
 	}{{films.ID, "Paddington", "PG"}, {films.ID, "Heat", "15"}, {other.ID, "Up", "U"}} {
 		saved, err := st.SaveFolder(ctx, f.lib, f.name, []byte("v1"), []store.Film{{Title: f.name, Folder: f.name, Copies: []store.Copy{{
-			ContentKey: []byte(f.name), Parts: []store.Part{{RelPath: f.name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{Duration: time.Hour}}},
+			ContentKey: []byte(f.name), Parts: []store.Part{{RelPath: f.name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 		}}}}, nil)
 		if err != nil {
 			t.Fatal(err)

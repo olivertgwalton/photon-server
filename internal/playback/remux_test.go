@@ -12,7 +12,6 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -50,7 +49,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 			Subtitles: []store.PlaySubtitle{{ID: uuid.NewV7(), Codec: "subrip", Title: "English"}},
 		}
 	}
-	h264 := Copy{BitrateKbps: 8_000, Streams: []media.Stream{
+	h264 := Copy{BitrateKbps: 8_000, Streams: []domain.Stream{
 		{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Profile: "High", Level: 41, Range: domain.RangeSDR},
 		{Index: 1, Kind: domain.StreamAudio, Codec: "aac", Profile: "LC"},
 	}}

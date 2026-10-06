@@ -8,7 +8,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // A chapter with a picture is given it at the signed-in address and at one signed for a player
@@ -20,7 +19,7 @@ func TestATitlesChapterPicturesAreSigned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	facts := &media.Facts{Duration: time.Hour, Chapters: []media.Chapter{
+	facts := &domain.Facts{Duration: time.Hour, Chapters: []domain.Chapter{
 		{Start: 0, End: time.Minute, Title: "One"}, {Start: time.Minute, End: time.Hour, Title: "Two"},
 	}}
 	film := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{{ContentKey: []byte("h"), Parts: []Part{{RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: facts}}}}}

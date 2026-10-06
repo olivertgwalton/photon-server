@@ -10,7 +10,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 func TestHome(t *testing.T) {
@@ -30,7 +29,7 @@ func TestHome(t *testing.T) {
 	}
 	part := func(rel string) []Copy {
 		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{
-			RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{Duration: time.Hour},
+			RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour},
 		}}}}
 	}
 	if _, err := s.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Copies: part("Heat/Heat.mkv")}}, nil); err != nil {
@@ -173,7 +172,7 @@ func TestNextEpisode(t *testing.T) {
 		rel := fmt.Sprintf("Wire/S%dE%d.mkv", se[0], se[1])
 		eps = append(eps, Episode{
 			Season: se[0], Episodes: []int{se[1]}, Title: fmt.Sprintf("S%dE%d", se[0], se[1]), Folder: "Wire", ByNumber: true,
-			Copies: []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{Duration: time.Hour}}}}},
+			Copies: []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
 		})
 	}
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
@@ -272,7 +271,7 @@ func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
 		rel := fmt.Sprintf("Wire/S%dE%d.mkv", se[0], se[1])
 		eps = append(eps, Episode{
 			Season: se[0], Episodes: []int{se[1]}, Title: fmt.Sprintf("S%dE%d", se[0], se[1]), Folder: "Wire", ByNumber: true,
-			Copies: []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{Duration: time.Hour}}}}},
+			Copies: []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
 		})
 	}
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {

@@ -7,7 +7,6 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // h264Profiles are H.264's profiles as ffprobe names them, written as RFC 6381's profile and
@@ -25,9 +24,9 @@ var audioCodecs = map[string]string{
 // variant describes a copy's HLS variant as Jellyfin's master playlist does: its bandwidth, the
 // formats of the video and audio as they are sent, and the video's range, size and frame rate. Codecs are left out
 // where any one is not known, since a client takes a list as all there is.
-func variant(streams []media.Stream, video domain.VideoPlan, audio *domain.AudioPlan, kbps int) hls.Variant {
+func variant(streams []domain.Stream, video domain.VideoPlan, audio *domain.AudioPlan, kbps int) hls.Variant {
 	v := hls.Variant{BandwidthKbps: kbps}
-	var picture media.Stream
+	var picture domain.Stream
 	for _, s := range streams {
 		if s.Index == video.Stream && s.Kind == domain.StreamVideo {
 			picture = s
@@ -47,7 +46,7 @@ func variant(streams []media.Stream, video domain.VideoPlan, audio *domain.Audio
 	return v
 }
 
-func videoCodec(s media.Stream, v domain.VideoPlan) string {
+func videoCodec(s domain.Stream, v domain.VideoPlan) string {
 	if e := v.Encode; e != nil {
 		// At Jellyfin's level 4.1, or 5.1 for a picture larger than 1080p: H.264's High profile,
 		// HEVC's Main, or Main 10 for HDR kept, whose level is thirty times rather than ten.
@@ -79,7 +78,7 @@ func videoCodec(s media.Stream, v domain.VideoPlan) string {
 	return ""
 }
 
-func audioCodec(streams []media.Stream, a domain.AudioPlan) string {
+func audioCodec(streams []domain.Stream, a domain.AudioPlan) string {
 	if e := a.Encode; e != nil {
 		return audioCodecs[e.Codec]
 	}
@@ -100,7 +99,7 @@ func audioCodec(streams []media.Stream, a domain.AudioPlan) string {
 
 // videoRange is the range the video is sent in: the one it is encoded in, else the stream's own,
 // Dolby Vision's being its base layer's.
-func videoRange(s media.Stream, v domain.VideoPlan) string {
+func videoRange(s domain.Stream, v domain.VideoPlan) string {
 	r := s.Range
 	if v.Encode != nil {
 		r = v.Encode.Range

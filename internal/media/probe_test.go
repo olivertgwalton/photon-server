@@ -14,7 +14,7 @@ import (
 
 // The fixtures are ffprobe 9.0.1's output for files made with ffmpeg (sdr.json, hdr10.json); dv8
 // and hdr10plus add the side data FFmpeg reports for those to hdr10.json.
-func probeFixture(t *testing.T, name string) Facts {
+func probeFixture(t *testing.T, name string) domain.Facts {
 	t.Helper()
 	out, err := os.ReadFile(filepath.Join("testdata", name))
 	if err != nil {
@@ -31,17 +31,17 @@ var tagString = cmp.Transformer("tag", func(t language.Tag) string { return t.St
 
 func TestProbeHDR10Matroska(t *testing.T) {
 	got := probeFixture(t, "hdr10.json")
-	want := Facts{
+	want := domain.Facts{
 		Container:   "matroska,webm",
 		Duration:    2023 * time.Millisecond,
 		BitrateKbps: 1050,
-		Streams: []Stream{
+		Streams: []domain.Stream{
 			{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Profile: "Main 10", Width: 640, Height: 360, FrameRate: 24, BitDepth: 10, Level: 63, Range: domain.RangeHDR10},
 			{Index: 1, Kind: domain.StreamAudio, Codec: "eac3", Language: language.English, Title: "Surround", Default: true, Channels: 6, ChannelLayout: "5.1(side)", SampleRate: 44100, BitrateKbps: 448},
 			{Index: 2, Kind: domain.StreamAudio, Codec: "aac", Profile: "LC", Language: language.French, Title: "Commentary", Commentary: true, Channels: 1, ChannelLayout: "mono", SampleRate: 44100},
 			{Index: 3, Kind: domain.StreamSubtitle, Codec: "subrip", Language: language.English, Forced: true, HearingImpaired: true},
 		},
-		Chapters: []Chapter{
+		Chapters: []domain.Chapter{
 			{Start: 0, End: time.Second, Title: "Opening"},
 			{Start: time.Second, End: 2 * time.Second, Title: "Credits"},
 		},
@@ -55,12 +55,12 @@ func TestProbeRange(t *testing.T) {
 	tests := []struct {
 		fixture string
 		want    domain.Range
-		dv      *DolbyVision
+		dv      *domain.DolbyVision
 	}{
 		{fixture: "sdr.json", want: domain.RangeSDR},
 		{fixture: "hdr10.json", want: domain.RangeHDR10},
 		{fixture: "hdr10plus.json", want: domain.RangeHDR10Plus},
-		{fixture: "dv8.json", want: domain.RangeDV, dv: &DolbyVision{Profile: 8, Level: 6, Compatibility: 1, BaseLayer: true, RPU: true}},
+		{fixture: "dv8.json", want: domain.RangeDV, dv: &domain.DolbyVision{Profile: 8, Level: 6, Compatibility: 1, BaseLayer: true, RPU: true}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.fixture, func(t *testing.T) {

@@ -13,14 +13,13 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
 // lost is a library of one season of three 44-minute episodes with sound, each with the chapters
 // given, kept as markers says.
-func lost(t *testing.T, markers domain.MarkerDetection, chapters ...media.Chapter) (*store.Store, uuid.UUID) {
+func lost(t *testing.T, markers domain.MarkerDetection, chapters ...domain.Chapter) (*store.Store, uuid.UUID) {
 	t.Helper()
 	log := slog.New(slog.DiscardHandler)
 	url := storetest.FreshDatabase(t)
@@ -52,8 +51,8 @@ func lost(t *testing.T, markers domain.MarkerDetection, chapters ...media.Chapte
 		}
 		episodes = append(episodes, store.Episode{
 			Season: 1, Episodes: []int{n}, Title: "Lost", Folder: "Lost/Season 1", ByNumber: true,
-			Copies: []store.Copy{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{
-				Duration: 44 * time.Minute, Streams: []media.Stream{{Kind: domain.StreamAudio, Codec: "aac"}}, Chapters: chapters,
+			Copies: []store.Copy{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+				Duration: 44 * time.Minute, Streams: []domain.Stream{{Kind: domain.StreamAudio, Codec: "aac"}}, Chapters: chapters,
 			}}}}},
 		})
 	}
@@ -130,9 +129,9 @@ func TestASeasonsSharedIntroIsFound(t *testing.T) {
 // its episodes' sound until it is set to compare it.
 func TestALibraryOnChaptersReadsNoSound(t *testing.T) {
 	st, lib := lost(t, domain.MarkersChapters,
-		media.Chapter{Start: 0, End: 30 * time.Second, Title: "Cold Open"},
-		media.Chapter{Start: 30 * time.Second, End: 80 * time.Second, Title: "Opening"},
-		media.Chapter{Start: 80 * time.Second, End: 44 * time.Minute, Title: "Episode"})
+		domain.Chapter{Start: 0, End: 30 * time.Second, Title: "Cold Open"},
+		domain.Chapter{Start: 30 * time.Second, End: 80 * time.Second, Title: "Opening"},
+		domain.Chapter{Start: 80 * time.Second, End: 44 * time.Minute, Title: "Episode"})
 	ctx := t.Context()
 	counts, _, err := st.JobQueue(ctx)
 	if err != nil {
