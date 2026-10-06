@@ -10,8 +10,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// A chapter with a picture is given it at the signed-in address and at one signed for a player
-// with no token; one without is given neither.
+// A chapter with a picture is given it at a signed address; one without is given none.
 func TestATitlesChapterPicturesAreSigned(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
@@ -41,8 +40,7 @@ func TestATitlesChapterPicturesAreSigned(t *testing.T) {
 	p.SignChapterImages(func(path string) string { return path + "?sig=x" })
 	chapters := p.Versions[0].Chapters
 	base := "/api/v1/parts/" + part.String()
-	if len(chapters) != 2 || chapters[0].Image != "" || chapters[0].SignedImage != "" ||
-		chapters[1].Image != base+"/chapters/1/image" || chapters[1].SignedImage != base+"/chapter-images/1?sig=x" {
-		t.Errorf("chapters: %+v, want the second's picture at both addresses", chapters)
+	if len(chapters) != 2 || chapters[0].Image != "" || chapters[1].Image != base+"/chapters/1/image?sig=x" {
+		t.Errorf("chapters: %+v, want the second's picture at a signed address", chapters)
 	}
 }

@@ -156,31 +156,27 @@ type RatingRef struct {
 }
 
 // ChapterRef is a chapter on the copy's whole timeline, across its parts. Image is the address of
-// its picture, for those that have one, and SignedImage the same picture at an address a player
-// that sends no token loads.
+// its picture, for those that have one.
 type ChapterRef struct {
-	StartMS     int64  `json:"start_ms"`
-	EndMS       int64  `json:"end_ms"`
-	Title       string `json:"title,omitzero"`
-	Image       string `json:"image,omitzero"`
-	SignedImage string `json:"signed_image,omitzero"`
-	// unsigned is the address SignedImage signs.
-	unsigned string
+	StartMS int64  `json:"start_ms"`
+	EndMS   int64  `json:"end_ms"`
+	Title   string `json:"title,omitzero"`
+	Image   string `json:"image,omitzero"`
 }
 
-// SignChapterImages gives each chapter's picture, and each extra's still, its signed address, as
+// SignChapterImages signs the address of each chapter's picture, and of each extra's still, as
 // sign signs a path.
 func (p *TitlePage) SignChapterImages(sign func(path string) string) {
 	for _, v := range p.Versions {
 		for c := range v.Chapters {
-			if ref := &v.Chapters[c]; ref.unsigned != "" {
-				ref.SignedImage = sign(ref.unsigned)
+			if ref := &v.Chapters[c]; ref.Image != "" {
+				ref.Image = sign(ref.Image)
 			}
 		}
 	}
 	for e := range p.Extras {
-		if ref := &p.Extras[e]; ref.unsigned != "" {
-			ref.SignedImage = sign(ref.unsigned)
+		if ref := &p.Extras[e]; ref.Image != "" {
+			ref.Image = sign(ref.Image)
 		}
 	}
 }
@@ -213,15 +209,13 @@ type EpisodeCard struct {
 }
 
 // ExtraCard is a trailer or other extra, pictured by a still of its video where its previews are
-// made: Image for a client with a token, SignedImage for a player with none, as a chapter's are.
+// made.
 type ExtraCard struct {
-	ID          uuid.UUID        `json:"id"`
-	Kind        domain.ExtraKind `json:"extra_kind"`
-	Title       string           `json:"title"`
-	DurationMS  int64            `json:"duration_ms,omitzero"`
-	Image       string           `json:"image,omitzero"`
-	SignedImage string           `json:"signed_image,omitzero"`
-	unsigned    string
+	ID         uuid.UUID        `json:"id"`
+	Kind       domain.ExtraKind `json:"extra_kind"`
+	Title      string           `json:"title"`
+	DurationMS int64            `json:"duration_ms,omitzero"`
+	Image      string           `json:"image,omitzero"`
 }
 
 type CollectionCard struct {
@@ -514,7 +508,6 @@ func (s *Store) extras(ctx context.Context, owner uuid.UUID) ([]ExtraCard, error
 		out[n] = ExtraCard{ID: r.ID, Kind: deref(r.ExtraKind), Title: r.Title, DurationMS: lengths[r.ID]}
 		if at, ok := stills[r.ID]; ok {
 			out[n].Image = fmt.Sprintf("/api/v1/parts/%s/chapters/%d/image", at.part, at.idx)
-			out[n].unsigned = fmt.Sprintf("/api/v1/parts/%s/chapter-images/%d", at.part, at.idx)
 		}
 	}
 	return out, nil
@@ -656,7 +649,6 @@ func (s *Store) versions(ctx context.Context, item uuid.UUID) ([]VersionPage, er
 					ref := ChapterRef{StartMS: p.OffsetMS + c.StartMS, EndMS: p.OffsetMS + c.EndMS, Title: deref(c.Title)}
 					if slices.Contains(pictured[p.ID], c.Idx) {
 						ref.Image = fmt.Sprintf("/api/v1/parts/%s/chapters/%d/image", p.ID, c.Idx)
-						ref.unsigned = fmt.Sprintf("/api/v1/parts/%s/chapter-images/%d", p.ID, c.Idx)
 					}
 					vp.Chapters = append(vp.Chapters, ref)
 				}

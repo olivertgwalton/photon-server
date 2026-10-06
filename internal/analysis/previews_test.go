@@ -203,9 +203,6 @@ func TestAPartGetsSheetsAndChapterImages(t *testing.T) {
 	if len(images) != 2 || images[0] != "/api/v1/parts/"+part.String()+"/chapters/0/image" {
 		t.Errorf("chapter images = %q, want an address for each of the two chapters", images)
 	}
-	if err := f.st.HasChapterImage(t.Context(), f.admin.ID, part, 1); err != nil {
-		t.Error(err)
-	}
 	still, err := f.previews.ChapterImage(part, 1)
 	if err != nil {
 		t.Fatalf("the second chapter's image: %v", err)

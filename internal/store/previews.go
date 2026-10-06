@@ -133,17 +133,6 @@ func sheetsOf(width, height, intervalMS, columns, rows, thumbnails int) Trickpla
 	}
 }
 
-// HasChapterImage answers ErrNotFound unless a part's chapter has an image the profile may see.
-func (s *Store) HasChapterImage(ctx context.Context, profile, part uuid.UUID, idx int) error {
-	var one int
-	err := s.pool.QueryRow(ctx, `
-		SELECT 1 FROM previews pv JOIN parts p ON p.id = pv.part_id JOIN versions v ON v.id = p.version_id
-		JOIN items i ON i.id = v.item_id, viewer($3) asking
-		WHERE pv.part_id = $1 AND $2 = ANY(pv.chapter_images) AND sees(asking, i)`,
-		part, idx, profile).Scan(&one)
-	return found(err)
-}
-
 // QueuePreviews queues every part on disk whose previews are not what its library asks for: none
 // made yet, made before its library asked for more or less, or left by a job that died. It
 // answers how many.
