@@ -140,6 +140,11 @@ over, and in one that changed, a file the same size with the same modification t
 scan is not opened. A file that changed only its modification time, as every file does when some
 mounts are remounted, is read for its first and last 64 KiB, recognised and not probed again.
 
+A scan walks four of a library's top-level folders at once (a film's folder, a show's) and reads
+four files at once among them, the folders under each one after another, so a show's seasons are
+read after the show. On a network or debrid mount, where every look at a file waits on the network,
+that makes a first scan several times faster; one library is still scanned by one scan at a time.
+
 A network mount that stops answering blocks a read forever, so every FFmpeg run over a library
 file has a limit: five minutes for one that reads part of a file (a probe, a chapter picture, an
 intro's sound), five minutes plus the file at 8 MiB a second for one that reads all of it

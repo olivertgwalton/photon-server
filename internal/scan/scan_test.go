@@ -5,10 +5,13 @@ package scan
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 	"uuid"
@@ -21,10 +24,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
-type countingProber struct{ probes int }
+type fakeProber struct{}
 
-func (p *countingProber) Probe(context.Context, *os.File) (media.Facts, error) {
-	p.probes++
+func (fakeProber) Probe(context.Context, *os.File) (media.Facts, error) {
 	return media.Facts{
 		Container: "matroska,webm",
 		Duration:  2 * time.Hour,
@@ -43,7 +45,6 @@ type fixture struct {
 	db      *pgx.Conn
 	st      *store.Store
 	scanner *Scanner
-	prober  *countingProber
 }
 
 func newFixture(t *testing.T, kind domain.LibraryKind) *fixture {
@@ -68,8 +69,7 @@ func newFixture(t *testing.T, kind domain.LibraryKind) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &countingProber{}
-	return &fixture{t: t, root: root, lib: lib, db: db, st: st, scanner: New(st, p, log), prober: p}
+	return &fixture{t: t, root: root, lib: lib, db: db, st: st, scanner: New(st, fakeProber{}, log)}
 }
 
 // put writes a file whose bytes are its seed repeated, so different seeds are different copies.
@@ -742,5 +742,39 @@ func TestAddingAnEpisodeReadsThatFileAlone(t *testing.T) {
 	}
 	if r := f.scan(); r.Probed != 0 || r.Skipped != 0 {
 		t.Errorf("touching an episode: %+v, want nothing probed or left out", r)
+	}
+}
+
+// gatheringProber answers a probe only once readsAtOnce probes are under way, and fails one left
+// waiting alone.
+type gatheringProber struct {
+	mu      sync.Mutex
+	waiting int
+	all     chan struct{}
+}
+
+func (p *gatheringProber) Probe(ctx context.Context, f *os.File) (media.Facts, error) {
+	p.mu.Lock()
+	if p.waiting++; p.waiting == readsAtOnce {
+		close(p.all)
+	}
+	p.mu.Unlock()
+	select {
+	case <-p.all:
+		return fakeProber{}.Probe(ctx, f)
+	case <-time.After(5 * time.Second):
+		return media.Facts{}, errors.New("probed alone")
+	}
+}
+
+func TestAScanReadsSeveralFilesAtOnce(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	f.scanner = New(f.st, &gatheringProber{all: make(chan struct{})}, slog.New(slog.DiscardHandler))
+	for i := range readsAtOnce {
+		name := fmt.Sprintf("Film %d (2000)", i)
+		f.put(name+"/"+name+".mkv", name)
+	}
+	if r := f.scan(); r.Skipped != 0 || r.Probed != readsAtOnce {
+		t.Errorf("%+v, want every film probed, at once", r)
 	}
 }
