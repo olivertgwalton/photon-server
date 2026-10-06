@@ -206,6 +206,8 @@ func (s *Store) StartConversion(ctx context.Context, id, node uuid.UUID) (Conver
 	c, p, v, st := s.q.Conversion, s.q.Part, s.q.Version, s.q.Stream
 	res, err := c.WithContext(ctx).
 		Where(c.ID.Eq(model.UUID(id)), c.State.In(string(domain.DownloadQueued), string(domain.DownloadConverting))).
+		// A device signed out takes its downloads with it, leaving their conversions to the sweep.
+		Where(field.NewUnsafeFieldRaw("EXISTS (SELECT 1 FROM downloads d WHERE d.conversion_id = conversions.id)")).
 		UpdateSimple(c.State.Value(string(domain.DownloadConverting)), c.NodeID.Value(model.UUID(node)), c.Progress.Value(0))
 	if err == nil && res.RowsAffected == 0 {
 		err = ErrNotFound

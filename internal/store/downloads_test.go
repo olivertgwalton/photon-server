@@ -217,4 +217,15 @@ func TestADownloadIsItsDevices(t *testing.T) {
 	if got, err := s.Downloads(ctx, profiles[0], nil); err != nil || len(got) != 1 || got[0].ID != onTV.ID {
 		t.Errorf("the profile's list once the phone is signed out: %+v, %v; want the TV's", got, err)
 	}
+	laptop := s.signIn(t, profiles[1])
+	alone, err := s.AddDownload(ctx, profiles[1], laptop, film, part, &domain.Quality{MaxBitrateKbps: 500})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteSession(ctx, laptop); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.StartConversion(ctx, alone.Conversion, uuid.NewV7()); !errors.Is(err, ErrNotFound) {
+		t.Errorf("converting for a device signed out: %v, want ErrNotFound", err)
+	}
 }
