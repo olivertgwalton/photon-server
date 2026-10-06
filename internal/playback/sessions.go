@@ -87,8 +87,11 @@ func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position
 	if err != nil {
 		return "", err
 	}
-	if err := s.saved.ChooseTracks(ctx, profile, p.Item, tracks); err != nil {
-		return "", err
+	if !tracks.Equal(p.Tracks) {
+		if err := s.saved.ChooseTracks(ctx, profile, p.Item, tracks); err != nil {
+			return "", err
+		}
+		p.Tracks = tracks
 	}
 	reach, err := s.saved.SaveProgress(ctx, profile, p.Item, position, p.Length, p.Reached, nil)
 	if err != nil {

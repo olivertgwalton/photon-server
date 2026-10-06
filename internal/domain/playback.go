@@ -48,6 +48,8 @@ type Playback struct {
 	Length time.Duration
 	// Reached is the furthest it has got, so a play is counted once, as it first reaches the end.
 	Reached Reach
+	// Tracks are those its player last said it plays with.
+	Tracks ChosenTracks
 	// Node is the server node running it, whose HLS it serves.
 	Node uuid.UUID
 	Card PlaybackCard

@@ -288,3 +288,40 @@ func TestAPlayerThatGoesQuietIsStoppedWithItsHistory(t *testing.T) {
 		}
 	})
 }
+
+// chosen keeps each choice of tracks written, after positions.
+type chosen struct {
+	positions
+	writes []domain.ChosenTracks
+}
+
+func (c *chosen) ChooseTracks(_ context.Context, _, _ uuid.UUID, t domain.ChosenTracks) error {
+	c.writes = append(c.writes, t)
+	return nil
+}
+
+func TestAPlayerKeepsTheTracksItLastChose(t *testing.T) {
+	saved := &chosen{positions: positions{}}
+	s := NewSessions(memory{}, saved, served{}, func(context.Context, domain.Event) {}, uuid.NewV7())
+	ctx := t.Context()
+	oliver := uuid.NewV7()
+	p, err := s.Start(ctx, domain.PlayDirect, card(oliver, uuid.NewV7()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	english, french, off := 1, 2, domain.NoSubtitle
+	reports := []domain.ChosenTracks{
+		{Audio: &english, Subtitle: &off},
+		{Audio: &english, Subtitle: &off},
+		{Audio: &french, Subtitle: &off},
+		{Audio: &french, Subtitle: &off},
+	}
+	for i, tracks := range reports {
+		if _, err := s.Progress(ctx, oliver, p.ID, time.Duration(i+1)*time.Minute, domain.StatePlaying, tracks); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(saved.writes) != 2 || *saved.writes[0].Audio != english || *saved.writes[1].Audio != french {
+		t.Errorf("tracks kept %+v, want English, then French once it was chosen", saved.writes)
+	}
+}
