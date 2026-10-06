@@ -176,8 +176,8 @@ func (s *Store) SaveFolder(ctx context.Context, lib uuid.UUID, path string, fing
 // analysisOf is what a library asks to be made of the media a scan adds to it.
 func analysisOf(ctx context.Context, tx db, lib uuid.UUID) (model.Library, error) {
 	var settings model.Library
-	err := tx.QueryRow(ctx, `SELECT previews, keyframes FROM libraries WHERE id = $1`, lib).
-		Scan(&settings.Previews, &settings.Keyframes)
+	err := tx.QueryRow(ctx, `SELECT previews, keyframes, markers FROM libraries WHERE id = $1`, lib).
+		Scan(&settings.Previews, &settings.Keyframes, &settings.Markers)
 	return settings, err
 }
 

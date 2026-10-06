@@ -73,6 +73,13 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 					if seasonID, err = ensureSeason(ctx, tx, lib, showID, e.Folder, e.Season, said, saved.Titles); err != nil {
 						return err
 					}
+					// The season's sound is compared again; the comparison passes over a season with
+					// nothing new.
+					if settings.Markers == domain.MarkersAll {
+						if err := enqueueAfter(ctx, tx, domain.JobMarkers, seasonID, markersQuiet); err != nil {
+							return err
+						}
+					}
 					seasons[e.Season] = seasonID
 				}
 				if err := saveEpisode(ctx, tx, lib, settings, showID, seasonID, e, saved.Titles); err != nil {
@@ -222,12 +229,7 @@ func saveEpisode(ctx context.Context, tx db, lib uuid.UUID, settings model.Libra
 			return err
 		}
 	}
-	var markers domain.MarkerDetection
-	if err := tx.QueryRow(ctx, `SELECT markers FROM libraries WHERE id = $1`, lib).Scan(&markers); err != nil || markers != domain.MarkersAll {
-		return err
-	}
-	// The season's sound is compared again; the comparison passes over a season with nothing new.
-	return enqueueAfter(ctx, tx, domain.JobMarkers, seasonID, markersQuiet)
+	return nil
 }
 
 // episodeItem is the episode a copy belongs to: the episode of a copy already known, else, for an
