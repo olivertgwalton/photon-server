@@ -166,6 +166,15 @@ A `.ignore` file keeps files out of a library, as Jellyfin's does: an empty one 
 folder, and one with gitignore patterns (`*.nfo`, `Extras/`, `!keep.mkv`, `**/sample.*`) hides
 what they match in its folder and below, until a deeper `.ignore` takes over.
 
+A title in more than one library, as a show Riven links into both `kids/shows` and `shows`, is one
+title wherever libraries are gathered: search, home's rows, a person's work and similar titles show
+it once, as it is in the library added first of those the profile may see, so a profile limited to
+one library is shown that library's. What a profile has watched, how far it got and what it
+favoured follow the title, as Plex keeps one watch state for a guid on a server: watching Victorious
+from Kids marks it watched under Shows, and `userdata.changed` names it in each. Titles are the same
+when their TMDB, TVDB or IMDb id is (a season or episode by its show's and its numbers) or, with
+none, when their files are. Each library still lists its own.
+
 A title a client cannot play as it is has its video copied into HLS where it can, with its audio
 encoded, or its video encoded again, an interlaced picture (a DVD, a 1080i recording) deinterlaced
 with yadif, as Jellyfin's default; a file probed before the server read field order is taken as

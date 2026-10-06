@@ -76,6 +76,12 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// The same Paddington is in Other, which Sam may not see.
+	if _, err := st.SaveFolder(ctx, other.ID, "Paddington", []byte("v1"), []store.Film{{Title: "Paddington", Folder: "Paddington", Copies: []store.Copy{{
+		ContentKey: []byte("Paddington"), Parts: []store.Part{{RelPath: "Paddington.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
+	}}}}, nil); err != nil {
+		t.Fatal(err)
+	}
 	oliver, err := st.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h")
 	if err != nil {
 		t.Fatal(err)
@@ -225,6 +231,9 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 		t.Errorf("Sam was told Films gained %v, want Paddington alone: Heat is rated 15", changed[0].Details)
 	}
 	if len(progress) != 1 {
-		t.Errorf("Sam's television was told of Paddington's progress %d times, want once", len(progress))
+		t.Fatalf("Sam's television was told of Paddington's progress %d times, want once", len(progress))
+	}
+	if same, _ := progress[0].Details["title_ids"].([]any); len(same) != 1 || same[0] != title["Paddington"].String() {
+		t.Errorf("Sam was told the progress is of %v, want Films' Paddington alone: Other's is the same but unseen", progress[0].Details)
 	}
 }
