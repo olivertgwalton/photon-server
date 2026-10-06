@@ -3,6 +3,7 @@ package store
 import (
 	"cmp"
 	"context"
+	"database/sql/driver"
 	"slices"
 	"time"
 	"uuid"
@@ -171,7 +172,11 @@ func (s *Store) PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.Playbac
 
 // cards answers titles as cards for a profile, with their best pictures.
 func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item) ([]Card, error) {
-	pictures, hashes, err := s.pictureOrder(ctx, rows)
+	shows, err := s.showsOf(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
+	pictures, hashes, err := s.picturesWorn(ctx, rows, shows)
 	if err != nil {
 		return nil, err
 	}
@@ -180,10 +185,6 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 		return nil, err
 	}
 	lengths, err := s.durations(ctx, ids(rows))
-	if err != nil {
-		return nil, err
-	}
-	shows, err := s.showsOf(ctx, rows)
 	if err != nil {
 		return nil, err
 	}
@@ -217,6 +218,46 @@ type seasonShow struct {
 	ID          model.UUID
 	Title       string
 	Certificate *string
+}
+
+// picturesWorn answers titles' pictures as pictureOrder does, an episode wearing its show's of
+// each kind it has none of (a poster, a backdrop, the lettering), as Plex answers an episode with its
+// show's art: its own still stays its thumb. The shows are read in the same lookup.
+func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[model.UUID]episodeShow) (map[model.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
+	var showIDs []driver.Valuer
+	for _, show := range shows {
+		if show.ref != nil {
+			showIDs = append(showIDs, model.UUID(show.ref.ID))
+		}
+	}
+	all := rows
+	if len(showIDs) > 0 {
+		i := s.q.Item
+		showRows, err := i.WithContext(ctx).Where(i.ID.In(showIDs...)).Find()
+		if err != nil {
+			return nil, nil, err
+		}
+		all = append(slices.Clone(rows), showRows...)
+	}
+	pictures, hashes, err := s.pictureOrder(ctx, all)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, r := range rows {
+		show := shows[r.ID].ref
+		if r.Kind != domain.ItemEpisode || show == nil {
+			continue
+		}
+		for _, kind := range []domain.ArtworkKind{domain.ArtworkPoster, domain.ArtworkBackdrop, domain.ArtworkLogo} {
+			if len(pictures[r.ID][kind]) == 0 && len(pictures[model.UUID(show.ID)][kind]) > 0 {
+				if pictures[r.ID] == nil {
+					pictures[r.ID] = map[domain.ArtworkKind][]uuid.UUID{}
+				}
+				pictures[r.ID][kind] = pictures[model.UUID(show.ID)][kind]
+			}
+		}
+	}
+	return pictures, hashes, nil
 }
 
 // episodeShow is the show an episode is of, and the certificate it wears where it has none of its
