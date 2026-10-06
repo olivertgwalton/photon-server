@@ -97,10 +97,15 @@ func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position
 	if err != nil {
 		return "", err
 	}
-	s.raise(ctx, domain.Event{Kind: domain.EventUserDataChanged, Profile: profile, Item: p.Item})
+	// A place moving on within a title changes nothing a client shows but its progress, which
+	// the player knows and the stop tells, as Jellyfin tells no progress.
+	if reach != p.Last {
+		s.raise(ctx, domain.Event{Kind: domain.EventUserDataChanged, Profile: profile, Item: p.Item})
+	}
 	if reach == domain.ReachEnd {
 		p.Reached = reach
 	}
+	p.Last = reach
 	was := p.State
 	p.Position, p.State, p.Updated = position, state, time.Now()
 	if err := s.live.SavePlayback(ctx, p, keptFor); err != nil {

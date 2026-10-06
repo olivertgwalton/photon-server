@@ -325,3 +325,35 @@ func TestAPlayerKeepsTheTracksItLastChose(t *testing.T) {
 		t.Errorf("tracks kept %+v, want English, then French once it was chosen", saved.writes)
 	}
 }
+
+// timed answers how far each report got through a title of the length the playback carries.
+type timed struct{ positions }
+
+func (timed) SaveProgress(_ context.Context, _, _ uuid.UUID, at, length time.Duration, _ domain.Reach, _ *time.Time) (domain.Reach, error) {
+	return domain.ReachOf(at, length), nil
+}
+
+func TestAProfileIsToldOfItsPlaceAsItsReachChanges(t *testing.T) {
+	var told int
+	raise := func(_ context.Context, e domain.Event) {
+		if e.Kind == domain.EventUserDataChanged {
+			told++
+		}
+	}
+	s := NewSessions(memory{}, timed{positions{}}, served{}, raise, uuid.NewV7())
+	ctx := t.Context()
+	oliver := uuid.NewV7()
+	p, err := s.Start(ctx, domain.PlayDirect, card(oliver, uuid.NewV7()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Two hours long: from the start, on to somewhere to resume, then the end.
+	for _, at := range []time.Duration{0, time.Second, 20 * time.Minute, 21 * time.Minute, 22 * time.Minute, 119 * time.Minute, 119 * time.Minute} {
+		if _, err := s.Progress(ctx, oliver, p.ID, at, domain.StatePlaying, domain.ChosenTracks{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if told != 3 {
+		t.Errorf("told %d times, want 3: as it started, became resumable and reached the end", told)
+	}
+}
