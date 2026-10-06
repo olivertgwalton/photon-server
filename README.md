@@ -17,7 +17,7 @@ docker compose exec server photon-server library add -name Films -kind movies /m
 ```
 
 A library added is scanned straight away. `library add` takes the same settings as `library set`
-(`-previews`, `-markers`, `-keyframes`, `-sources`…), so a library on a network or debrid mount can
+(`-previews`, `-markers`, `-keyframes`, `-metadata`…), so a library on a network or debrid mount can
 be added as `-previews off -markers chapters -keyframes index` and never read whole.
 
 The web app is in the same image and on the same port: open `http://<server>:8640` and log in.
@@ -70,10 +70,19 @@ well as its show's.
 Posters and logos are lettered in that language where TMDB has one, else in English, else not at
 all, as Jellyfin chooses them; backdrops are unlettered where one is.
 The server ships its own TMDB token and TheTVDB key; set `PHOTON_TMDB_TOKEN`, or
-`PHOTON_TVDB_KEY` (with `PHOTON_TVDB_PIN` for a subscriber key), to use yours. Each library takes
-metadata from `nfo` and `tmdb` by default, most trusted first; change that with
-`photon-server library set -name NAME -sources nfo,tvdb,tmdb`. TheTVDB describes shows only. What a reader edits
+`PHOTON_TVDB_KEY` (with `PHOTON_TVDB_PIN` for a subscriber key), to use yours. What a reader edits
 or an NFO says is never replaced by a match.
+
+A library ranks its sources for each kind of item it holds (a film; or a show, its seasons and its
+episodes), for metadata and for pictures apart, as Jellyfin's metadata downloaders and image
+fetchers are. A lower source only fills what those above it left empty, and one unticked keeps its
+place but is not asked. A new library takes `nfo` then `tmdb` for metadata and `tmdb`'s pictures
+for every kind. The settings page draws the lists; from the shell, `photon-server library set -name
+TV -metadata 'show=nfo,tmdb;episode=nfo,tvdb,tmdb' -images 'show=tvdb,tmdb'` sets those kinds and
+leaves the rest, and `library list` shows what each asks. TheTVDB knows shows only, an NFO has no
+pictures, MDBList rates films and shows, and OMDb describes no season and pictures only films and
+shows; `GET /api/v1/admin/providers` says which kinds each provider may be ranked for. The files beside a title come before every source's
+pictures. Changing a list matches the library's titles again.
 
 A film or show is matched again every 30 days (a library's `refresh_days`, 0 never). An admin can ask now, as
 with Jellyfin's and Plex's Refresh Metadata: `POST /api/v1/admin/titles/{id}/refresh` with
@@ -89,7 +98,7 @@ seasons and episodes. Those matches queue behind the titles a scan has just foun
 library's refresh, which can take hours, never holds up a new film; the dashboard shows them run.
 
 A title's pictures are the files beside it first (`poster.jpg`, `fanart.jpg`…), then each
-provider's best ten of a kind, in the library's order. An admin chooses another, as with Jellyfin's
+provider's best ten of a kind, in the order the library ranks image fetchers for its kind. An admin chooses another, as with Jellyfin's
 Edit Images and Plex's poster chooser: `GET /api/v1/admin/titles/{id}/artwork/candidates?kind=poster`
 lists what the providers had at the last match, each served like any picture at
 `/api/v1/artwork/{id}`, and `PUT /api/v1/admin/titles/{id}/artwork/poster` with `{"id": "…"}`
@@ -100,13 +109,13 @@ Metadata providers are plugins: `GET /api/v1/admin/providers` lists each with wh
 titles, rate them) and what it needs set. TMDB gives its own score; MDBList gives IMDb's and Rotten
 Tomatoes' critics and audience once an admin sets its free
 key (`PATCH /api/v1/admin/providers/mdblist` with `{"settings": {"api_key": "…"}}`) and a library
-takes it (`-sources nfo,tmdb,mdblist`). Ratings are scored out of 100.
+takes it (`-metadata 'movie=nfo,tmdb,mdblist'`). Ratings are scored out of 100.
 
 The Open Movie Database fills in what the sources above it leave out, as Jellyfin's OMDb provider
 does: a title's name, plot, certificate, release date, genres and a 300-pixel poster, each episode's
 name, plot and air date, and IMDb's score and the Tomatometer. It knows titles only by their IMDb
 ids, which an NFO, TMDB or TheTVDB finds first, so a library takes it beside them, ranked last
-(`-sources nfo,tmdb,omdb`), once an admin sets its key (`PATCH /api/v1/admin/providers/omdb` with
+(`-metadata 'movie=nfo,tmdb,omdb'`), once an admin sets its key (`PATCH /api/v1/admin/providers/omdb` with
 `{"settings": {"api_key": "…"}}`). It is asked once for a film, and once for each season and each
 episode of a show, so a free key's thousand requests a day go quickly on a large library; a refused
 or spent key passes OMDb over until it works again.
@@ -120,7 +129,7 @@ Anyone can add a metadata provider, in any language, as a web service speaking t
 protocol ([docs/plugins.md](docs/plugins.md)). Register one by its address
 (`POST /api/v1/admin/plugins` with `{"url": "http://films-plugin:9000"}`) and it is the provider
 `plugin:ID`: listed with the others, set the same way, and taken by a library like any source
-(`-sources nfo,plugin:films,tmdb`). A plugin that is down is passed over for the library's next
+(`-metadata 'movie=nfo,plugin:films,tmdb'`). A plugin that is down is passed over for the library's next
 source. Removing one keeps what it said about titles until another source says otherwise.
 
 An admin adding a library can browse the server's folders for it: `GET /api/v1/admin/folders`

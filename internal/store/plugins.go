@@ -92,10 +92,10 @@ func (s *Store) RemovePlugin(ctx context.Context, slug string) error {
 }
 
 // registered refuses a plugin's source that no registered plugin has.
-func registered(ctx context.Context, tx *query.Query, sources []domain.FieldSource) error {
+func registered(ctx context.Context, tx *query.Query, sources []*model.LibrarySource) error {
 	p := tx.Plugin
-	for _, src := range sources {
-		slug, ok := src.Plugin()
+	for _, ls := range sources {
+		slug, ok := ls.Source.Plugin()
 		if !ok {
 			continue
 		}
@@ -104,7 +104,7 @@ func registered(ctx context.Context, tx *query.Query, sources []domain.FieldSour
 			return err
 		}
 		if n == 0 {
-			return fmt.Errorf("%w: %s", ErrUnknownPlugin, src)
+			return fmt.Errorf("%w: %s", ErrUnknownPlugin, ls.Source)
 		}
 	}
 	return nil

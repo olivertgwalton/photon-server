@@ -64,7 +64,10 @@ func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetLibrary(ctx, lib.ID, store.LibraryChange{Sources: []domain.FieldSource{domain.SourceTMDB, domain.SourceMDBList}}); err != nil {
+	if err := st.SetLibrary(ctx, lib.ID, store.LibraryChange{Sources: []domain.KindSources{{
+		Kind:     domain.ItemMovie,
+		Metadata: []domain.RankedSource{{Source: domain.SourceTMDB, Enabled: true}, {Source: domain.SourceMDBList, Enabled: true}},
+	}}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.SaveFolder(ctx, lib.ID, "jaws", []byte("v1"), []store.Film{{Title: "jaws", Folder: "jaws"}}, nil); err != nil {

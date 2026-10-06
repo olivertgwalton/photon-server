@@ -25,8 +25,8 @@ manifest is not valid, or whose id is already registered. The plugin is then the
 curl -X PATCH https://photon.example/api/v1/admin/providers/plugin:films \
   -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"settings": {"api_key": "…"}}'
 
-# a library that takes it, after any NFO beside the files and before TMDB
-photon-server library set -name Films -sources nfo,plugin:films,tmdb
+# a library that takes its metadata after any NFO beside the files and before TMDB, and its pictures
+photon-server library set -name Films -metadata 'movie=nfo,plugin:films,tmdb' -images 'movie=plugin:films,tmdb'
 ```
 
 | Route | |

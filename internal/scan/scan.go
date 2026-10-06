@@ -582,7 +582,7 @@ func (s *Scanner) probe(ctx context.Context, root, rel string) (domain.Facts, er
 // readNFO reads the first of the named NFOs in dir that exists, where the library takes NFOs. One that cannot be read is
 // logged and the title goes on without it.
 func (s *Scanner) readNFO(ctx context.Context, lib domain.Library, dir string, names ...string) *nfo.File {
-	if !slices.Contains(lib.Sources, domain.SourceNFO) {
+	if !lib.Takes(domain.SourceNFO) {
 		return nil
 	}
 	for _, name := range names {

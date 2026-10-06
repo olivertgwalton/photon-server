@@ -29,8 +29,11 @@ func newLibrarySource(db *gorm.DB, opts ...gen.DOOption) librarySource {
 	tableName := _librarySource.librarySourceDo.TableName()
 	_librarySource.ALL = field.NewAsterisk(tableName)
 	_librarySource.LibraryID = field.NewField(tableName, "library_id")
+	_librarySource.ItemKind = field.NewString(tableName, "item_kind")
+	_librarySource.Fetcher = field.NewString(tableName, "fetcher")
 	_librarySource.Source = field.NewString(tableName, "source")
 	_librarySource.Position = field.NewInt(tableName, "position")
+	_librarySource.Enabled = field.NewBool(tableName, "enabled")
 
 	_librarySource.fillFieldMap()
 
@@ -42,8 +45,11 @@ type librarySource struct {
 
 	ALL       field.Asterisk
 	LibraryID field.Field
+	ItemKind  field.String
+	Fetcher   field.String
 	Source    field.String
 	Position  field.Int
+	Enabled   field.Bool
 
 	fieldMap map[string]field.Expr
 }
@@ -61,8 +67,11 @@ func (l librarySource) As(alias string) *librarySource {
 func (l *librarySource) updateTableName(table string) *librarySource {
 	l.ALL = field.NewAsterisk(table)
 	l.LibraryID = field.NewField(table, "library_id")
+	l.ItemKind = field.NewString(table, "item_kind")
+	l.Fetcher = field.NewString(table, "fetcher")
 	l.Source = field.NewString(table, "source")
 	l.Position = field.NewInt(table, "position")
+	l.Enabled = field.NewBool(table, "enabled")
 
 	l.fillFieldMap()
 
@@ -91,10 +100,13 @@ func (l *librarySource) GetFieldByName(fieldName string) (field.OrderExpr, bool)
 }
 
 func (l *librarySource) fillFieldMap() {
-	l.fieldMap = make(map[string]field.Expr, 3)
+	l.fieldMap = make(map[string]field.Expr, 6)
 	l.fieldMap["library_id"] = l.LibraryID
+	l.fieldMap["item_kind"] = l.ItemKind
+	l.fieldMap["fetcher"] = l.Fetcher
 	l.fieldMap["source"] = l.Source
 	l.fieldMap["position"] = l.Position
+	l.fieldMap["enabled"] = l.Enabled
 }
 
 func (l librarySource) clone(db *gorm.DB) librarySource {

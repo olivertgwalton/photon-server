@@ -103,6 +103,12 @@ func TestAPersonIsKnownByAnyProvidersID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := s.AddPlugin(ctx, Plugin{Slug: "films", URL: "http://films.test", Manifest: []byte("{}")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: metadataFrom(domain.LibraryMovies, domain.SourceTMDB, domain.PluginSource("films"))}); err != nil {
+		t.Fatal(err)
+	}
 	film := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{{ContentKey: []byte("Heat"), Parts: []Part{{RelPath: "Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)

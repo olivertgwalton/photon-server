@@ -100,26 +100,23 @@ func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[mode
 }
 
 // rankPictures puts the pictures of items best first: an admin's choice, files beside the title,
-// then its library's providers in the library's order, then each provider's own order.
+// then the providers its library asks for pictures of its kind in the library's order, then each
+// provider's own order.
 func (s *Store) rankPictures(ctx context.Context, rows []*model.Artwork, items []*model.Item) error {
-	taken, err := s.q.LibrarySource.WithContext(ctx).Find()
+	taken, err := rankings(ctx, s.q, items, domain.FetcherImages)
 	if err != nil {
 		return err
 	}
 	rank := map[model.UUID]map[domain.FieldSource]int{}
-	for _, t := range taken {
-		if rank[t.LibraryID] == nil {
-			rank[t.LibraryID] = map[domain.FieldSource]int{domain.SourceUser: -2, domain.SourceFile: -1}
-		}
-		rank[t.LibraryID][t.Source] = t.Position
-	}
-	library := map[model.UUID]model.UUID{}
 	for _, it := range items {
-		library[it.ID] = it.LibraryID
+		rank[it.ID] = map[domain.FieldSource]int{domain.SourceUser: -2, domain.SourceFile: -1}
+		for n, src := range taken[it.ID] {
+			rank[it.ID][src] = n
+		}
 	}
-	// A provider the library has since dropped comes after every one it takes.
+	// A provider the library no longer asks comes after every one it does.
 	order := func(x *model.Artwork) int {
-		if r, ok := rank[library[x.ItemID]][x.Source]; ok {
+		if r, ok := rank[x.ItemID][x.Source]; ok {
 			return r
 		}
 		return math.MaxInt

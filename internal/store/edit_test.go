@@ -92,7 +92,7 @@ func TestAShowRenumberedIsMatchedAgainWhole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: []domain.FieldSource{domain.SourceNFO, domain.SourceTVDB, domain.SourceTMDB}}); err != nil {
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: metadataFrom(domain.LibraryShows, domain.SourceNFO, domain.SourceTVDB, domain.SourceTMDB)}); err != nil {
 		t.Fatal(err)
 	}
 	ep := Episode{

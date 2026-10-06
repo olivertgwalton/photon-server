@@ -47,7 +47,7 @@ type adminLibraryJSON struct {
 	Name         string                 `json:"name"`
 	Kind         domain.LibraryKind     `json:"kind"`
 	Root         string                 `json:"root"`
-	Sources      []domain.FieldSource   `json:"sources"`
+	Sources      []kindSourcesJSON      `json:"sources"`
 	RemoteExtras []domain.ExtraKind     `json:"remote_extras"`
 	Monitor      domain.Monitor         `json:"monitor"`
 	RefreshDays  int                    `json:"refresh_days"`
@@ -56,12 +56,37 @@ type adminLibraryJSON struct {
 	Keyframes    domain.KeyframeMode    `json:"keyframes"`
 }
 
+// kindSourcesJSON ranks where a kind of item a library holds takes its metadata and its pictures
+// from, most trusted first, as Jellyfin's metadata downloaders and image fetchers: a lower source
+// only fills what those above it left empty. A source not enabled keeps its place but is not asked.
+type kindSourcesJSON struct {
+	Kind     domain.ItemKind    `json:"kind"`
+	Metadata []rankedSourceJSON `json:"metadata"`
+	Images   []rankedSourceJSON `json:"images"`
+}
+
+type rankedSourceJSON struct {
+	Source  domain.FieldSource `json:"source"`
+	Enabled bool               `json:"enabled"`
+}
+
 func adminLibrary(l domain.Library) adminLibraryJSON {
-	return adminLibraryJSON{
-		ID: l.ID, Name: l.Name, Kind: l.Kind, Root: l.Root, Sources: nonNil(l.Sources),
+	j := adminLibraryJSON{
+		ID: l.ID, Name: l.Name, Kind: l.Kind, Root: l.Root, Sources: []kindSourcesJSON{},
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
 		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes,
 	}
+	ranked := func(list []domain.RankedSource) []rankedSourceJSON {
+		out := make([]rankedSourceJSON, len(list))
+		for i, r := range list {
+			out[i] = rankedSourceJSON(r)
+		}
+		return out
+	}
+	for _, k := range l.Sources {
+		j.Sources = append(j.Sources, kindSourcesJSON{Kind: k.Kind, Metadata: ranked(k.Metadata), Images: ranked(k.Images)})
+	}
+	return j
 }
 
 func nonNil[T any](s []T) []T {
@@ -130,10 +155,12 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 
 // libraryChangeJSON changes what it sets and leaves the rest.
 type libraryChangeJSON struct {
-	Name         string               `json:"name,omitzero"`
-	Sources      []domain.FieldSource `json:"sources,omitzero"`
-	RemoteExtras []domain.ExtraKind   `json:"remote_extras,omitzero"`
-	Monitor      domain.Monitor       `json:"monitor,omitzero"`
+	Name string `json:"name,omitzero"`
+	// Sources replace, for each kind given, the metadata and the images rankings given; one left
+	// out is left as it is.
+	Sources      []kindSourcesChangeJSON `json:"sources,omitzero"`
+	RemoteExtras []domain.ExtraKind      `json:"remote_extras,omitzero"`
+	Monitor      domain.Monitor          `json:"monitor,omitzero"`
 	// RefreshDays is how often its metadata is refreshed, 0 for never.
 	RefreshDays *int                   `json:"refresh_days,omitzero"`
 	Previews    domain.PreviewLevel    `json:"previews,omitzero"`
@@ -143,8 +170,14 @@ type libraryChangeJSON struct {
 	Keyframes domain.KeyframeMode `json:"keyframes,omitzero"`
 }
 
-// setLibrary changes what is sent of a library: its name, whether it is watched, where its
-// metadata comes from, the kinds of video it keeps providers' links to, what previews it makes and
+type kindSourcesChangeJSON struct {
+	Kind     domain.ItemKind    `json:"kind"`
+	Metadata []rankedSourceJSON `json:"metadata,omitzero"`
+	Images   []rankedSourceJSON `json:"images,omitzero"`
+}
+
+// setLibrary changes what is sent of a library: its name, whether it is watched, where each kind
+// of item's metadata and pictures come from, the kinds of video it keeps providers' links to, what previews it makes and
 // how it finds markers and keyframes.
 func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r)
@@ -155,22 +188,39 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
+	lib, err := a.svc.Libraries.Library(r.Context(), id)
+	if a.answered(w, r, err) {
+		return
+	}
 	change := store.LibraryChange{
-		Name: req.Name, Sources: req.Sources, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays,
+		Name: req.Name, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays,
 		Previews: req.Previews, Markers: req.Markers, Keyframes: req.Keyframes,
 	}
 	if d := req.RefreshDays; d != nil && (*d < 0 || *d > 365) {
 		writeProblem(w, a.logger, codeInvalidBody, "refresh_days is from 0, never, to 365")
 		return
 	}
-	if err := domain.CheckMetadataSources(req.Sources); err != nil {
+	ranked := func(list []rankedSourceJSON) []domain.RankedSource {
+		if list == nil {
+			return nil
+		}
+		out := make([]domain.RankedSource, len(list))
+		for i, r := range list {
+			out[i] = domain.RankedSource(r)
+		}
+		return out
+	}
+	for _, k := range req.Sources {
+		change.Sources = append(change.Sources, domain.KindSources{Kind: k.Kind, Metadata: ranked(k.Metadata), Images: ranked(k.Images)})
+	}
+	if err := domain.CheckSources(lib.Kind, change.Sources); err != nil {
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())
 		return
 	}
 	if a.answered(w, r, a.svc.Libraries.SetLibrary(r.Context(), id, change)) {
 		return
 	}
-	lib, err := a.svc.Libraries.Library(r.Context(), id)
+	lib, err = a.svc.Libraries.Library(r.Context(), id)
 	if a.answered(w, r, err) {
 		return
 	}

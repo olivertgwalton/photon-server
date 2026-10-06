@@ -83,25 +83,109 @@ func applyMetadata(ctx context.Context, tx *query.Query, item model.UUID, source
 }
 
 // ranks orders the sources that may write an item's fields: what files say lowest, a reader's own
-// edit highest, and its library's sources between, in the library's order. A source the library
-// does not take is absent, and a value it once wrote ranks below everything.
+// edit highest, and those its library asks for the metadata of its kind between, in the library's
+// order. A source not asked is absent, and a value it once wrote ranks below everything.
 func ranks(ctx context.Context, tx *query.Query, item model.UUID) (map[domain.FieldSource]int, error) {
-	ls, i := tx.LibrarySource, tx.Item
-	taken, err := ls.WithContext(ctx).Join(i, i.LibraryID.EqCol(ls.LibraryID)).Where(i.ID.Eq(item)).Find()
+	i := tx.Item
+	row, err := i.WithContext(ctx).Where(i.ID.Eq(item)).Take()
 	if err != nil {
 		return nil, err
 	}
-	return rankOf(taken), nil
+	taken, err := rankings(ctx, tx, []*model.Item{row}, domain.FetcherMetadata)
+	if err != nil {
+		return nil, err
+	}
+	return rankOf(taken[item]), nil
 }
 
-// rankOf is how highly a library that takes these sources ranks each, higher first: an edit over
-// them all, a file under them all.
-func rankOf(taken []*model.LibrarySource) map[domain.FieldSource]int {
+// rankOf is how highly a library that asks these sources, most trusted first, ranks each, higher
+// first: an edit over them all, a file under them all.
+func rankOf(taken []domain.FieldSource) map[domain.FieldSource]int {
 	out := map[domain.FieldSource]int{domain.SourceFile: 1, domain.SourceUser: len(taken) + 2}
-	for _, t := range taken {
-		out[t.Source] = len(taken) + 1 - t.Position
+	for n, src := range taken {
+		out[src] = len(taken) + 1 - n
 	}
 	return out
+}
+
+// rankings answers, for each of items, the sources its library asks for f of its kind, most
+// trusted first.
+func rankings(ctx context.Context, q *query.Query, items []*model.Item, f domain.Fetcher) (map[model.UUID][]domain.FieldSource, error) {
+	var libraries []driver.Valuer
+	for _, it := range items {
+		libraries = append(libraries, it.LibraryID)
+	}
+	l, ls := q.Library, q.LibrarySource
+	libs, err := l.WithContext(ctx).Where(l.ID.In(libraries...)).Find()
+	if err != nil {
+		return nil, err
+	}
+	taken, err := ls.WithContext(ctx).Where(
+		ls.LibraryID.In(libraries...), ls.Fetcher.Eq(string(f)), ls.Enabled.Is(true),
+	).Order(ls.Position).Find()
+	if err != nil {
+		return nil, err
+	}
+	kinds := map[model.UUID]domain.LibraryKind{}
+	for _, lib := range libs {
+		kinds[lib.ID] = lib.Kind
+	}
+	type ranking struct {
+		library model.UUID
+		kind    domain.ItemKind
+	}
+	by := map[ranking][]domain.FieldSource{}
+	for _, t := range taken {
+		r := ranking{t.LibraryID, t.ItemKind}
+		by[r] = append(by[r], t.Source)
+	}
+	out := map[model.UUID][]domain.FieldSource{}
+	for _, it := range items {
+		if kind, ok := kinds[it.LibraryID]; ok {
+			out[it.ID] = by[ranking{it.LibraryID, kind.RankedAs(it.Kind)}]
+		}
+	}
+	return out, nil
+}
+
+// asked is what a title's library asks a source for: the metadata and the pictures of which kinds
+// of item.
+type asked struct {
+	title   domain.ItemKind
+	library domain.LibraryKind
+	taken   []*model.LibrarySource
+}
+
+func askedOf(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource) (asked, error) {
+	i, l, ls := tx.Item, tx.Library, tx.LibrarySource
+	title, err := i.WithContext(ctx).Where(i.ID.Eq(item)).Take()
+	if err != nil {
+		return asked{}, err
+	}
+	lib, err := l.WithContext(ctx).Where(l.ID.Eq(title.LibraryID)).Take()
+	if err != nil {
+		return asked{}, err
+	}
+	taken, err := ls.WithContext(ctx).Where(
+		ls.LibraryID.Eq(title.LibraryID), ls.Source.Eq(string(source)), ls.Enabled.Is(true),
+	).Find()
+	return asked{title.Kind, lib.Kind, taken}, err
+}
+
+// of is what of m the library asks for of an item of a kind. The rest is said as nothing, so what
+// the source said of it before is cleared; its ids stand, for the next source to find it by.
+func (a asked) of(kind domain.ItemKind, m domain.Metadata) domain.Metadata {
+	kind = a.library.RankedAs(kind)
+	asks := func(f domain.Fetcher) bool {
+		return slices.ContainsFunc(a.taken, func(t *model.LibrarySource) bool { return t.ItemKind == kind && t.Fetcher == f })
+	}
+	if !asks(domain.FetcherMetadata) {
+		m = domain.Metadata{IDs: m.IDs, Artwork: m.Artwork}
+	}
+	if !asks(domain.FetcherImages) {
+		m.Artwork = nil
+	}
+	return m
 }
 
 // describe writes what a title's file and folder names say about it, then its NFO, if it has one.

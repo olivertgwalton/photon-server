@@ -38,6 +38,10 @@ type metadataProviderJSON struct {
 	Settings     []settingJSON       `json:"settings"`
 	// Ready is whether every setting it needs is set.
 	Ready bool `json:"ready"`
+	// MetadataKinds and ImageKinds are the kinds of item a library may rank it for, as a metadata
+	// downloader and as an image fetcher.
+	MetadataKinds []domain.ItemKind `json:"metadata_kinds"`
+	ImageKinds    []domain.ItemKind `json:"image_kinds"`
 }
 
 // adminProviders lists the metadata providers the server has, what each can do, and what is set of
@@ -100,7 +104,11 @@ func (a *API) setProvider(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) provider(ctx context.Context, p provider.Provider) (metadataProviderJSON, error) {
 	info := p.Info()
-	j := metadataProviderJSON{ID: info.ID, Name: info.Name, Kinds: info.Kinds, Capabilities: provider.Capabilities(p), Settings: []settingJSON{}, Ready: true}
+	can := provider.Capabilities(p)
+	j := metadataProviderJSON{
+		ID: info.ID, Name: info.Name, Kinds: info.Kinds, Capabilities: can, Settings: []settingJSON{}, Ready: true,
+		MetadataKinds: rankedFor(info, can, domain.FetcherMetadata), ImageKinds: rankedFor(info, can, domain.FetcherImages),
+	}
 	if len(info.Settings) == 0 {
 		return j, nil
 	}
@@ -118,4 +126,28 @@ func (a *API) provider(ctx context.Context, p provider.Provider) (metadataProvid
 		j.Ready = j.Ready && (v != "" || !s.Required)
 	}
 	return j, nil
+}
+
+// rankedFor answers the kinds of item a library may rank a provider for to fetch f: a built-in's
+// as the server checks them, and a plugin's for the titles it knows and their seasons and episodes
+// where it describes them, or for the titles' metadata alone where it only rates them.
+func rankedFor(info provider.Info, can []domain.Capability, f domain.Fetcher) []domain.ItemKind {
+	out := []domain.ItemKind{}
+	for _, kind := range append(domain.LibraryMovies.ItemKinds(), domain.LibraryShows.ItemKinds()...) {
+		if _, plugin := info.ID.Plugin(); !plugin {
+			if slices.Contains(domain.Fetchable(f, kind), info.ID) {
+				out = append(out, kind)
+			}
+			continue
+		}
+		title := domain.ItemShow
+		if kind == domain.ItemMovie {
+			title = domain.ItemMovie
+		}
+		rates := f == domain.FetcherMetadata && kind == title && slices.Contains(can, domain.CapabilityRate)
+		if slices.Contains(info.Kinds, title) && (slices.Contains(can, domain.CapabilityDescribe) || rates) {
+			out = append(out, kind)
+		}
+	}
+	return out
 }

@@ -3,7 +3,6 @@ package store
 import (
 	"cmp"
 	"context"
-	"database/sql/driver"
 	"encoding/json"
 	"math"
 	"slices"
@@ -17,7 +16,11 @@ import (
 // SaveRatings replaces what a source says sites make of a title.
 func (s *Store) SaveRatings(ctx context.Context, id uuid.UUID, source domain.FieldSource, ratings []domain.Rating) error {
 	return s.q.Transaction(func(tx *query.Query) error {
-		return saveRatings(ctx, tx, model.UUID(id), source, ratings)
+		asks, err := askedOf(ctx, tx, model.UUID(id), source)
+		if err != nil {
+			return err
+		}
+		return saveRatings(ctx, tx, model.UUID(id), source, asks.of(asks.title, domain.Metadata{Ratings: ratings}).Ratings)
 	})
 }
 
@@ -52,28 +55,17 @@ func (s *Store) ratings(ctx context.Context, items []*model.Item) (map[model.UUI
 	if err != nil || len(rows) == 0 {
 		return out, err
 	}
-	library := map[model.UUID]model.UUID{}
-	var libraries []driver.Valuer
-	for _, it := range items {
-		library[it.ID] = it.LibraryID
-		libraries = append(libraries, it.LibraryID)
-	}
-	ls := s.q.LibrarySource
-	taken, err := ls.WithContext(ctx).Where(ls.LibraryID.In(libraries...)).Find()
+	taken, err := rankings(ctx, s.q, items, domain.FetcherMetadata)
 	if err != nil {
 		return nil, err
 	}
-	byLibrary := map[model.UUID][]*model.LibrarySource{}
-	for _, t := range taken {
-		byLibrary[t.LibraryID] = append(byLibrary[t.LibraryID], t)
-	}
 	ranked := map[model.UUID]map[domain.FieldSource]int{}
-	for lib, t := range byLibrary {
-		ranked[lib] = rankOf(t)
+	for _, it := range items {
+		ranked[it.ID] = rankOf(taken[it.ID])
 	}
 	best := map[model.UUID]map[domain.RatingSite]*model.Rating{}
 	for _, row := range rows {
-		rank := ranked[library[row.ItemID]]
+		rank := ranked[row.ItemID]
 		if best[row.ItemID] == nil {
 			best[row.ItemID] = map[domain.RatingSite]*model.Rating{}
 		}

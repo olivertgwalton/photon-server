@@ -52,11 +52,15 @@ type ItemField struct {
 	UpdatedAt time.Time `gorm:"default:now()"`
 }
 
-// LibrarySource is a source a library takes metadata from; position 0 is the most trusted.
+// LibrarySource is a source a library ranks for what it fetches of a kind of item; position 0 is
+// the most trusted.
 type LibrarySource struct {
 	LibraryID UUID               `gorm:"type:uuid;primaryKey"`
+	ItemKind  domain.ItemKind    `gorm:"primaryKey"`
+	Fetcher   domain.Fetcher     `gorm:"primaryKey"`
 	Source    domain.FieldSource `gorm:"primaryKey"`
 	Position  int
+	Enabled   bool
 }
 
 // LibraryRemoteExtra is a kind of video a library keeps providers' links to.

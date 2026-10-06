@@ -17,7 +17,7 @@ func TestATitleShowsEachSitesRatingFromItsBestSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: []domain.FieldSource{domain.SourceMDBList, domain.SourceTMDB}}); err != nil {
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: metadataFrom(domain.LibraryMovies, domain.SourceMDBList, domain.SourceTMDB)}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Jaws", []byte("v1"), []Film{{Title: "Jaws", Folder: "Jaws"}}, nil); err != nil {
