@@ -711,3 +711,36 @@ func TestAScanTellsWhichTitlesItChanged(t *testing.T) {
 		t.Errorf("an unchanged library told %v, want nothing", got)
 	}
 }
+
+func TestAddingAnEpisodeReadsThatFileAlone(t *testing.T) {
+	f := newFixture(t, domain.LibraryShows)
+	season := "The Wire (2002)/Season 1/"
+	f.put(season+"The Wire S01E01.mkv", "s1e1")
+	f.put(season+"The Wire S01E02.mkv", "s1e2")
+	f.scan()
+	// Its neighbours cannot be read now, so a scan that opened them would leave them out.
+	for _, name := range []string{"The Wire S01E01.mkv", "The Wire S01E02.mkv"} {
+		if err := os.Chmod(filepath.Join(f.root, season, name), 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.put(season+"The Wire S01E03.mkv", "s1e3")
+	if r := f.scan(); r.Probed != 1 || r.Skipped != 0 {
+		t.Errorf("adding an episode: %+v, want the new file probed and nothing left out", r)
+	}
+	if n := f.count(`SELECT count(*) FROM items WHERE kind = 'episode'`); n != 3 {
+		t.Errorf("%d episodes, want 3", n)
+	}
+
+	// A file only touched is read again for its content key, and is still not probed.
+	touched := filepath.Join(f.root, season, "The Wire S01E01.mkv")
+	if err := os.Chmod(touched, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(touched, time.Now(), time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if r := f.scan(); r.Probed != 0 || r.Skipped != 0 {
+		t.Errorf("touching an episode: %+v, want nothing probed or left out", r)
+	}
+}

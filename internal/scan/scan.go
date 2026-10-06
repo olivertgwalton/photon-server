@@ -81,12 +81,16 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(do
 			progress(told)
 			continue
 		}
+		r := reading{lib: lib, dir: folder.Path, report: &report}
+		if r.known, err = s.store.KnownFiles(ctx, lib.ID, videosIn(folder)); err != nil {
+			return report, err
+		}
 		var saved store.Saved
 		switch lib.Kind {
 		case domain.LibraryMovies:
-			saved, err = s.saveFilms(ctx, lib, folder, &report)
+			saved, err = s.saveFilms(ctx, r, folder)
 		case domain.LibraryShows:
-			saved, err = s.saveEpisodes(ctx, lib, folder, &report)
+			saved, err = s.saveEpisodes(ctx, r, folder)
 		}
 		if err != nil {
 			return report, fmt.Errorf("%s: %w", folder.Path, err)
@@ -105,12 +109,32 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(do
 	return report, err
 }
 
-func (s *Scanner) saveFilms(ctx context.Context, lib domain.Library, folder library.Folder, report *Report) (store.Saved, error) {
+// reading is one changed folder of a library being read: the files the last scan recorded in it,
+// and the scan's report.
+type reading struct {
+	lib    domain.Library
+	dir    string
+	known  map[string]store.KnownFile
+	report *Report
+}
+
+func videosIn(f library.Folder) []string {
+	var paths []string
+	for _, file := range f.Files {
+		if naming.IsVideo(file.Name) {
+			paths = append(paths, path.Join(f.Path, file.Name))
+		}
+	}
+	return paths
+}
+
+func (s *Scanner) saveFilms(ctx context.Context, r reading, folder library.Folder) (store.Saved, error) {
+	lib := r.lib
 	var films []store.Film
 	plans := planFilms(folder)
 	pics := picturesIn(folder.Path, fileNames(folder))
 	for _, f := range plans {
-		copies, err := s.copies(ctx, lib, folder.Path, f.versions, report)
+		copies, err := s.copies(ctx, r, f.versions)
 		if err != nil {
 			return store.Saved{}, err
 		}
@@ -131,7 +155,7 @@ func (s *Scanner) saveFilms(ctx context.Context, lib domain.Library, folder libr
 		})
 	}
 	extraPlans, inExtrasFolder := extrasIn(folder)
-	extras, err := s.extras(ctx, lib, folder, extraPlans, report, func(e extraPlan) store.Owner {
+	extras, err := s.extras(ctx, r, folder, extraPlans, func(e extraPlan) store.Owner {
 		if inExtrasFolder {
 			return store.Owner{Kind: domain.ItemMovie, Folder: path.Dir(folder.Path)}
 		}
@@ -160,10 +184,10 @@ func filmNamed(name string, films []store.Film) string {
 }
 
 // extras reads each planned extra's copy, probing it if new, and names its owner.
-func (s *Scanner) extras(ctx context.Context, lib domain.Library, folder library.Folder, plans []extraPlan, report *Report, owner func(extraPlan) store.Owner) ([]store.Extra, error) {
+func (s *Scanner) extras(ctx context.Context, r reading, folder library.Folder, plans []extraPlan, owner func(extraPlan) store.Owner) ([]store.Extra, error) {
 	var extras []store.Extra
 	for _, e := range plans {
-		c, ok, err := s.copy(ctx, lib, folder.Path, e.copy, report)
+		c, ok, err := s.copy(ctx, r, e.copy)
 		if err != nil {
 			return nil, err
 		}
@@ -182,7 +206,8 @@ func (s *Scanner) unowned(ctx context.Context, report *Report, paths []string) {
 	}
 }
 
-func (s *Scanner) saveEpisodes(ctx context.Context, lib domain.Library, folder library.Folder, report *Report) (store.Saved, error) {
+func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Folder) (store.Saved, error) {
+	lib, report := r.lib, r.report
 	series, season := seriesOf(folder.Path)
 	var show store.Show
 	if series != "" {
@@ -221,7 +246,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, lib domain.Library, folder l
 			s.skip(ctx, report, rel, errNoEpisode)
 		}
 		for _, e := range plans {
-			copies, err := s.copies(ctx, lib, folder.Path, e.versions, report)
+			copies, err := s.copies(ctx, r, e.versions)
 			if err != nil {
 				return store.Saved{}, err
 			}
@@ -247,7 +272,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, lib domain.Library, folder l
 		}
 	}
 	plans, inExtrasFolder := extrasIn(folder)
-	extras, err := s.extras(ctx, lib, folder, plans, report, func(e extraPlan) store.Owner {
+	extras, err := s.extras(ctx, r, folder, plans, func(e extraPlan) store.Owner {
 		o := store.Owner{Kind: domain.ItemShow, Folder: series}
 		if season != nil {
 			o.Kind, o.Season = domain.ItemSeason, *season
@@ -276,10 +301,10 @@ var errNoEpisode = errors.New("its name says no season or episode")
 // copies reads each copy's content key and probes only copies the catalogue does not hold. A copy
 // that cannot be read is left out and logged. A byte-identical copy in a second place is a known
 // copy: it becomes another place to read the same version.
-func (s *Scanner) copies(ctx context.Context, lib domain.Library, dir string, plans []copyPlan, report *Report) ([]store.Copy, error) {
+func (s *Scanner) copies(ctx context.Context, r reading, plans []copyPlan) ([]store.Copy, error) {
 	var copies []store.Copy
 	for _, v := range plans {
-		c, ok, err := s.copy(ctx, lib, dir, v, report)
+		c, ok, err := s.copy(ctx, r, v)
 		if err != nil {
 			return nil, err
 		}
@@ -290,7 +315,8 @@ func (s *Scanner) copies(ctx context.Context, lib domain.Library, dir string, pl
 	return copies, nil
 }
 
-func (s *Scanner) copy(ctx context.Context, lib domain.Library, dir string, v copyPlan, report *Report) (store.Copy, bool, error) {
+func (s *Scanner) copy(ctx context.Context, r reading, v copyPlan) (store.Copy, bool, error) {
+	lib, dir, report := r.lib, r.dir, r.report
 	c := store.Copy{Edition: v.edition, Label: v.label}
 	for _, sub := range v.subtitles {
 		c.Subtitles = append(c.Subtitles, store.Subtitle{
@@ -303,6 +329,10 @@ func (s *Scanner) copy(ctx context.Context, lib domain.Library, dir string, v co
 	for i, p := range v.parts {
 		paths[i] = path.Join(dir, p.Name)
 		c.Parts = append(c.Parts, store.Part{RelPath: paths[i], Size: p.Size, ModTime: p.ModTime})
+	}
+	if key, ok := r.unchanged(c.Parts); ok {
+		c.ContentKey = key
+		return c, true, nil
 	}
 	key, err := library.ContentKey(lib.Root, paths)
 	if err != nil {
@@ -327,6 +357,22 @@ func (s *Scanner) copy(ctx context.Context, lib domain.Library, dir string, v co
 		c.Parts[i].Facts = &facts
 	}
 	return c, true, nil
+}
+
+// unchanged answers the content key of a copy whose every part is where the last scan found it,
+// at the size and modification time it had then, as Plex and Silo skip a file: its bytes are not
+// read again.
+func (r reading) unchanged(parts []store.Part) ([]byte, bool) {
+	var key []byte
+	for i, p := range parts {
+		f, ok := r.known[p.RelPath]
+		if !ok || f.Size != p.Size || !f.ModTime.Equal(p.ModTime) || f.Idx != i || f.Parts != len(parts) ||
+			(key != nil && !bytes.Equal(f.ContentKey, key)) {
+			return nil, false
+		}
+		key = f.ContentKey
+	}
+	return key, true
 }
 
 func (s *Scanner) probe(ctx context.Context, root, rel string) (media.Facts, error) {
