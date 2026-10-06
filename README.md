@@ -97,6 +97,12 @@ events, so a library on one is scanned on the schedule; `photon-server library s
 -monitor off` stops watching a library. A large library may need a higher
 `fs.inotify.max_user_watches`; the server says so when it runs out.
 
+A network mount that stops answering blocks a read forever, so every FFmpeg run over a library
+file has a limit: five minutes for one that reads part of a file (a probe, a chapter picture, an
+intro's sound), five minutes plus the file at 8 MiB a second for one that reads all of it
+(keyframes, trickplay), and five minutes without progress for a download's conversion. A run past
+its limit is stopped and its job fails saying so, rather than holding its place for ever.
+
 A title a client cannot play as it is has its video copied into HLS where it can, with its audio
 encoded, or its video encoded to H.264, HDR tone mapped to SDR. Encoding is in software unless
 `PHOTON_HWACCEL` names a device: `videotoolbox`, `vaapi` or `qsv` (on `PHOTON_HWACCEL_DEVICE`,

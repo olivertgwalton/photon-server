@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func fakeTool(t *testing.T, name, firstLine string) string {
@@ -64,5 +65,21 @@ func TestFindToolsReportsStderr(t *testing.T) {
 	_, err := FindTools(t.Context())
 	if err == nil || !strings.Contains(err.Error(), "libplacebo.dylib") {
 		t.Fatalf("err = %v, want it to carry the tool's stderr", err)
+	}
+}
+
+// A tool stuck on a mount that stopped answering fails its job rather than holding it.
+func TestAToolThatHangsIsStopped(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ffprobe")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	_, err := output(t.Context(), 100*time.Millisecond, nil, path)
+	if err == nil || !strings.Contains(err.Error(), "still running after 100ms") {
+		t.Fatalf("err = %v, want it to say the tool ran too long", err)
+	}
+	if took := time.Since(start); took > stopGrace {
+		t.Errorf("took %s to stop", took)
 	}
 }
