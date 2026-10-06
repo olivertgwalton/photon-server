@@ -76,7 +76,7 @@ func TestAnAdminReadsTheActivityLog(t *testing.T) {
 		{memberToken, "/api/v1/admin/events", http.StatusForbidden, ""},
 		{goodToken, "/api/v1/admin/activity", http.StatusOK, `"kind":"auth.signed_in"`},
 		{goodToken, "/api/v1/admin/activity?kind=auth.signed_in&offset=0&limit=10", http.StatusOK, `"total":1`},
-		{goodToken, "/api/v1/admin/activity?kind=job.started", http.StatusBadRequest, "kind is one of"},
+		{goodToken, "/api/v1/admin/activity?kind=job.started", http.StatusBadRequest, "is not one of"},
 		{goodToken, "/api/v1/admin/activity?limit=0", http.StatusBadRequest, ""},
 	} {
 		req := httptest.NewRequest(http.MethodGet, tc.target, nil)

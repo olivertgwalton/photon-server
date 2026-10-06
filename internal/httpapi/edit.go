@@ -3,9 +3,9 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"slices"
-	"strconv"
 	"time"
 	"uuid"
 
@@ -130,11 +130,8 @@ func (a *API) candidates(w http.ResponseWriter, r *http.Request) {
 	if s := q.Get("title"); s != "" {
 		title, year = s, 0
 	}
-	if s := q.Get("year"); s != "" {
-		if year, err = strconv.Atoi(s); err != nil {
-			writeProblem(w, a.logger, codeInvalidParameter, "year is a year")
-			return
-		}
+	if year, ok = a.queryNumber(w, r, "year", year, 0, math.MaxInt); !ok {
+		return
 	}
 	offered, err := searcher.Candidates(r.Context(), sub.Kind, title, year)
 	if a.answered(w, r, err) {

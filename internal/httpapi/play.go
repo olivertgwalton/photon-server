@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -539,9 +538,8 @@ func subtitleFormats() []subtitleFormat { return []subtitleFormat{subtitleOrigin
 // subtitleFile serves a subtitle file beside a copy as it is, or a text one converted to WebVTT,
 // as Jellyfin's subtitle route converts, for a player that draws nothing else.
 func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
-	format := subtitleFormat(cmp.Or(r.URL.Query().Get("format"), string(subtitleOriginal)))
-	if !slices.Contains(subtitleFormats(), format) {
-		writeProblem(w, a.logger, codeInvalidParameter, fmt.Sprintf("format is one of %v", subtitleFormats()))
+	format, ok := queryEnum(a, w, r, "format", subtitleOriginal, subtitleFormats())
+	if !ok {
 		return
 	}
 	switch format {

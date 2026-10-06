@@ -298,12 +298,3 @@ func (a *API) refreshLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusAccepted)
 }
-
-func (a *API) pathID(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {
-	id, err := uuid.Parse(r.PathValue(name))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return uuid.UUID{}, false
-	}
-	return id, true
-}

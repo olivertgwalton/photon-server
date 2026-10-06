@@ -1,10 +1,8 @@
 package httpapi
 
 import (
-	"cmp"
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -166,16 +164,16 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 // ownDownloads answers the downloads this device asked for, or the profile's on every device, the
 // newest first.
 func (a *API) ownDownloads(w http.ResponseWriter, r *http.Request) {
-	scope := downloadScope(cmp.Or(r.URL.Query().Get("scope"), string(scopeDevice)))
+	scope, ok := queryEnum(a, w, r, "scope", scopeDevice, downloadScopes())
+	if !ok {
+		return
+	}
 	session := sessionOf(r)
 	var device *uuid.UUID
 	switch scope {
 	case scopeDevice:
 		device = &session.ID
 	case scopeProfile:
-	default:
-		writeProblem(w, a.logger, codeInvalidParameter, fmt.Sprintf("scope is one of %v", downloadScopes()))
-		return
 	}
 	all, err := a.svc.Downloads.Downloads(r.Context(), session.Profile.ID, device)
 	if err != nil {
