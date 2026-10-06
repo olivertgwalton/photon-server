@@ -23,6 +23,7 @@ func feedStream() asStream {
 	out := asStream{"hello": helloJSON{}}
 	for _, k := range []domain.EventKind{
 		domain.EventLibraryChanged, domain.EventTitleUpdated, domain.EventUserDataChanged, domain.EventScanProgress,
+		domain.EventLibraryScanned,
 	} {
 		out[string(k)] = eventJSON{}
 	}
@@ -67,7 +68,7 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (ev
 	case domain.EventTitleUpdated:
 		seen, err := a.svc.Audience.Visible(ctx, profile, []uuid.UUID{e.Item})
 		return eventOf(e), len(seen) == 1, err
-	case domain.EventScanProgress:
+	case domain.EventScanProgress, domain.EventLibraryScanned:
 		ok, err := a.svc.Audience.HasLibrary(ctx, profile, e.Library)
 		return eventOf(e), ok, err
 	case domain.EventLibraryChanged:
@@ -92,7 +93,7 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (ev
 	case domain.EventPlaybackStarted, domain.EventPlaybackPaused, domain.EventPlaybackResumed,
 		domain.EventPlaybackStopped, domain.EventSignedIn, domain.EventSignInRefused,
 		domain.EventProfileAdded, domain.EventProfileRemoved, domain.EventLibraryAdded,
-		domain.EventLibraryRemoved, domain.EventLibraryScanned, domain.EventTitlesAdded,
+		domain.EventLibraryRemoved, domain.EventTitlesAdded,
 		domain.EventTaskStarted, domain.EventTaskFinished, domain.EventTaskFailed, domain.EventBackupMade,
 		domain.EventJobStarted, domain.EventJobFinished, domain.EventJobFailed, domain.EventJobDead,
 		domain.EventWebhookTest:

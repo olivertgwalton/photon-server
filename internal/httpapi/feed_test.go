@@ -170,6 +170,7 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	hub.Changed(ctx, films.ID, store.Changed{domain.TitleAdded: {title["Paddington"], title["Heat"]}})
 	hub.Raise(ctx, domain.Event{Kind: domain.EventTitleUpdated, Item: title["Heat"]})
 	hub.Scanning(ctx)(domain.ScanProgress{Library: other.ID, Phase: domain.ScanReading, Done: 1, Known: 2})
+	hub.Raise(ctx, domain.Event{Kind: domain.EventLibraryScanned, Library: films.ID})
 	defer hub.Scanned(ctx, other.ID)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, srv.URL+"/api/v1/titles/"+title["Paddington"].String()+"/progress", strings.NewReader(`{"position_ms": 60000}`))
 	req.Header.Set("Authorization", "Bearer sam-phone")
@@ -202,7 +203,7 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	}
 
 	samSaw := settle(samTold, sam)
-	var changed, progress []told
+	var changed, progress, scanned []told
 	for _, e := range samSaw {
 		switch {
 		case e.LibraryID == other.ID || e.TitleID == title["Heat"] || e.TitleID == title["Up"]:
@@ -211,7 +212,12 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 			changed = append(changed, e)
 		case e.name == string(domain.EventUserDataChanged) && e.TitleID == title["Paddington"]:
 			progress = append(progress, e)
+		case e.name == string(domain.EventLibraryScanned):
+			scanned = append(scanned, e)
 		}
+	}
+	if len(scanned) != 1 || scanned[0].LibraryID != films.ID {
+		t.Errorf("Sam was told of scans ending %+v, want Films's: a wall stops saying it is being scanned", scanned)
 	}
 	if len(changed) != 1 || changed[0].LibraryID != films.ID {
 		t.Fatalf("Sam was told of library changes %+v, want Films's", changed)
