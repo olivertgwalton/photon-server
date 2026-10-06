@@ -124,3 +124,78 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 		t.Errorf("a library there is not: %v, want ErrNotFound", err)
 	}
 }
+
+func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetCertificateCountry(ctx, "in"); err != nil {
+		t.Fatal(err)
+	}
+	part := func(name string) Copy {
+		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}
+	}
+	i := s.q.Item
+	rate := func(id uuid.UUID, cert string) {
+		t.Helper()
+		if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Certificate: cert}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	films := map[string]string{"Heat": "US:R", "Fanny and Alexander": "SE:15 / SE:15+", "Sholay": "A", "Paddington": "U"}
+	ids := map[string]uuid.UUID{}
+	for title, cert := range films {
+		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{{Title: title, Folder: title, Copies: []Copy{part(title)}}}, nil); err != nil {
+			t.Fatal(err)
+		}
+		row, err := i.WithContext(ctx).Where(i.Title.Eq(title)).Take()
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[title] = uuid.UUID(row.ID)
+		rate(ids[title], cert)
+	}
+	var eps []Episode
+	for n := 1; n <= 2; n++ {
+		name := "Show" + string(rune('0'+n))
+		eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: name, Folder: "Show/Season 1", ByNumber: true, Copies: []Copy{part(name)}})
+	}
+	if _, err := s.SaveShowFolder(ctx, lib.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, eps, nil); err != nil {
+		t.Fatal(err)
+	}
+	show, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids["the show"] = uuid.UUID(show.ID)
+	rate(ids["the show"], "TV-14")
+	for n, name := range []string{"an episode rated as its show", "an episode rated TV-MA"} {
+		row, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode)), i.EpisodeNumber.Eq(n+1)).Take()
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[name] = uuid.UUID(row.ID)
+	}
+	rate(ids["an episode rated TV-MA"], "TV-MA")
+
+	teen, err := s.AddProfile(ctx, "Teen", domain.RoleRestricted, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fourteen := 14
+	if err := s.SetAccess(ctx, teen.ID, ProfileAccess{MaxAge: &fourteen, Unrated: domain.UnratedAllow}); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]bool{
+		"Heat": false, "Fanny and Alexander": false, "Sholay": false, "Paddington": true,
+		"the show": true, "an episode rated as its show": true, "an episode rated TV-MA": false,
+	} {
+		_, err := s.Title(ctx, teen.ID, ids[name])
+		if seen := err == nil; seen != want || (err != nil && !errors.Is(err, ErrNotFound)) {
+			t.Errorf("%s (%s) at 14: seen %v, %v; want seen %v", name, films[name], seen, err, want)
+		}
+	}
+}

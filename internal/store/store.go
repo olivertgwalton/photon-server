@@ -152,6 +152,14 @@ func (s *Store) SigningKey(ctx context.Context) ([]byte, error) {
 	return row.SigningKey, nil
 }
 
+// SetCertificateCountry keeps the country providers fetch certificates in, by its ISO code, so a
+// bare certificate is read in its system (India's A is for adults, Bulgaria's for anyone); "" for
+// none.
+func (s *Store) SetCertificateCountry(ctx context.Context, country string) error {
+	_, err := s.pool.Exec(ctx, "UPDATE server SET certificate_country = nullif(upper($1), '')", country)
+	return err
+}
+
 func migrationsDir() fs.FS {
 	dir, err := fs.Sub(migrations, "migrations")
 	if err != nil {
