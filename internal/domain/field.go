@@ -143,14 +143,20 @@ func DefaultSources() []FieldSource {
 func ParseMetadataSources(list string) ([]FieldSource, error) {
 	var out []FieldSource
 	for name := range strings.SplitSeq(list, ",") {
-		src := FieldSource(strings.TrimSpace(name))
-		if _, plugin := src.Plugin(); !plugin && !slices.Contains(MetadataSources(), src) {
-			return nil, fmt.Errorf("source %q is not one of %v or a plugin's", src, MetadataSources())
-		}
-		if slices.Contains(out, src) {
-			return nil, fmt.Errorf("source %q is listed twice", src)
-		}
-		out = append(out, src)
+		out = append(out, FieldSource(strings.TrimSpace(name)))
 	}
-	return out, nil
+	return out, CheckMetadataSources(out)
+}
+
+// CheckMetadataSources refuses a source a library cannot take metadata from, or one listed twice.
+func CheckMetadataSources(list []FieldSource) error {
+	for i, src := range list {
+		if _, plugin := src.Plugin(); !plugin && !slices.Contains(MetadataSources(), src) {
+			return fmt.Errorf("source %q is not one of %v or a plugin's", src, MetadataSources())
+		}
+		if slices.Contains(list[:i], src) {
+			return fmt.Errorf("source %q is listed twice", src)
+		}
+	}
+	return nil
 }

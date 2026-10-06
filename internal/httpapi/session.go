@@ -5,11 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"slices"
+	"reflect"
 	"strings"
 	"time"
 
@@ -79,7 +78,8 @@ const (
 	bodyWithin = 10 * time.Second
 )
 
-// decode reads a JSON body into v, refusing an unknown field as an unknown query parameter is.
+// decode reads a JSON body into v, refusing an unknown field as an unknown query parameter is, and
+// a value of an enum none of its values.
 func (a *API) decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	rc := http.NewResponseController(w)
 	// Not every ResponseWriter has a connection to time: a test's recorder has none.
@@ -92,6 +92,9 @@ func (a *API) decode(w http.ResponseWriter, r *http.Request, v any) bool {
 		// What follows the value is read within the deadline too, not by the server once the
 		// handler is done.
 		_, err = io.Copy(io.Discard, body)
+	}
+	if err == nil {
+		err = checkEnums(reflect.ValueOf(v), false)
 	}
 	if err != nil {
 		// The deadline stands, so what is left of the body is read within it or the connection
@@ -158,10 +161,6 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Keep = cmp.Or(req.Keep, domain.KeepToken)
-	if !slices.Contains(domain.Keeps(), req.Keep) {
-		writeProblem(w, a.logger, codeInvalidBody, fmt.Sprintf("keep is one of %v", domain.Keeps()))
-		return
-	}
 	if !a.allowed(w, r, signInsPerAddress, a.addrKey(r, "signin")) ||
 		!a.allowed(w, r, signInsPerName, nameKey("signin", req.Name)) {
 		return

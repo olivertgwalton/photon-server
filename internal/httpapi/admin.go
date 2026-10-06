@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 	"uuid"
 
@@ -91,7 +90,7 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if _, err := domain.ParseLibraryKind(string(req.Kind)); err != nil || req.Name == "" {
+	if req.Kind == "" || req.Name == "" {
 		writeProblem(w, a.logger, codeInvalidBody, "name is set and kind is movies or shows")
 		return
 	}
@@ -156,7 +155,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "refresh_days is from 0, never, to 365")
 		return
 	}
-	if err := validChange(change); err != nil {
+	if err := domain.CheckMetadataSources(req.Sources); err != nil {
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())
 		return
 	}
@@ -180,50 +179,6 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, adminLibrary(lib))
-}
-
-// validChange checks each list against its enum, as the command line's parsers do, sources for
-// repeats too.
-func validChange(c store.LibraryChange) error {
-	if len(c.Sources) > 0 {
-		if _, err := domain.ParseMetadataSources(join(c.Sources)); err != nil {
-			return err
-		}
-	}
-	if len(c.RemoteExtras) > 0 {
-		if _, err := domain.ParseExtraKinds(join(c.RemoteExtras)); err != nil {
-			return err
-		}
-	}
-	if c.Monitor != "" {
-		if _, err := domain.ParseMonitor(string(c.Monitor)); err != nil {
-			return err
-		}
-	}
-	if c.Previews != "" {
-		if _, err := domain.ParsePreviewLevel(string(c.Previews)); err != nil {
-			return err
-		}
-	}
-	if c.Markers != "" {
-		if _, err := domain.ParseMarkerDetection(string(c.Markers)); err != nil {
-			return err
-		}
-	}
-	if c.Keyframes != "" {
-		if _, err := domain.ParseKeyframeMode(string(c.Keyframes)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func join[T ~string](list []T) string {
-	s := make([]string, len(list))
-	for i, v := range list {
-		s[i] = string(v)
-	}
-	return strings.Join(s, ",")
 }
 
 func (a *API) removeLibrary(w http.ResponseWriter, r *http.Request) {

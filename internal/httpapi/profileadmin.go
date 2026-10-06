@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"slices"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
@@ -54,7 +53,7 @@ func (a *API) setProfileAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Unrated = cmp.Or(req.Unrated, domain.UnratedAllow)
-	if !slices.Contains(domain.UnratedPolicies(), req.Unrated) || (req.MaxAge != nil && (*req.MaxAge < 0 || *req.MaxAge > 21)) {
+	if req.MaxAge != nil && (*req.MaxAge < 0 || *req.MaxAge > 21) {
 		writeProblem(w, a.logger, codeInvalidBody, "max_age is an age to 21 or null, and unrated is allow or block")
 		return
 	}
@@ -83,7 +82,7 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if _, err := domain.ParseRole(string(req.Role)); err != nil || req.Name == "" {
+	if req.Role == "" || req.Name == "" {
 		writeProblem(w, a.logger, codeInvalidBody, "name is set and role is admin, member or restricted")
 		return
 	}
@@ -118,12 +117,6 @@ func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
 	var req profileChangeJSON
 	if !a.decode(w, r, &req) {
 		return
-	}
-	if req.Role != "" {
-		if _, err := domain.ParseRole(string(req.Role)); err != nil {
-			writeProblem(w, a.logger, codeInvalidBody, err.Error())
-			return
-		}
 	}
 	change := store.ProfileChange{Name: req.Name, Role: req.Role}
 	if req.Password != nil {

@@ -113,7 +113,7 @@ func (c *client) Ratings(ctx context.Context, kind domain.ItemKind, ids map[doma
 	}, &out)
 	var ratings []domain.Rating
 	for _, r := range out.Ratings {
-		if site, err := domain.ParseRatingSite(r.Site); err == nil {
+		if site, err := domain.Parse("rating site", r.Site, domain.RatingSites()); err == nil {
 			ratings = append(ratings, domain.Rating{Site: site, Score: min(max(r.Score, 0), 100), Votes: max(r.Votes, 0)})
 		}
 	}

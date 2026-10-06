@@ -1,8 +1,6 @@
 package domain
 
 import (
-	"fmt"
-	"slices"
 	"uuid"
 )
 
@@ -17,13 +15,6 @@ const (
 
 func Roles() []Role {
 	return []Role{RoleAdmin, RoleMember, RoleRestricted}
-}
-
-func ParseRole(s string) (Role, error) {
-	if r := Role(s); slices.Contains(Roles(), r) {
-		return r, nil
-	}
-	return "", fmt.Errorf("role %q is not one of %v", s, Roles())
 }
 
 type Profile struct {

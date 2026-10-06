@@ -59,7 +59,7 @@ func addLibrary(ctx context.Context, st *store.Store, out io.Writer, args []stri
 	if *name == "" || fs.NArg() != 1 {
 		return errors.New(libraryUsage)
 	}
-	k, err := domain.ParseLibraryKind(*kind)
+	k, err := domain.Parse("library kind", *kind, domain.LibraryKinds())
 	if err != nil {
 		return err
 	}
@@ -120,22 +120,22 @@ func (f librarySettings) change() (store.LibraryChange, bool, error) {
 		}
 	}
 	if *f.monitor != "" {
-		if change.Monitor, err = domain.ParseMonitor(*f.monitor); err != nil {
+		if change.Monitor, err = domain.Parse("monitor", *f.monitor, domain.Monitors()); err != nil {
 			return change, false, err
 		}
 	}
 	if *f.previews != "" {
-		if change.Previews, err = domain.ParsePreviewLevel(*f.previews); err != nil {
+		if change.Previews, err = domain.Parse("previews", *f.previews, domain.PreviewLevels()); err != nil {
 			return change, false, err
 		}
 	}
 	if *f.markers != "" {
-		if change.Markers, err = domain.ParseMarkerDetection(*f.markers); err != nil {
+		if change.Markers, err = domain.Parse("markers", *f.markers, domain.MarkerDetections()); err != nil {
 			return change, false, err
 		}
 	}
 	if *f.keyframes != "" {
-		if change.Keyframes, err = domain.ParseKeyframeMode(*f.keyframes); err != nil {
+		if change.Keyframes, err = domain.Parse("keyframes", *f.keyframes, domain.KeyframeModes()); err != nil {
 			return change, false, err
 		}
 	}

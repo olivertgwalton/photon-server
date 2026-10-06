@@ -172,10 +172,6 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if req.Profile.Parts == "" {
 		req.Profile.Parts = domain.PartsJoined
 	}
-	if !slices.Contains(domain.PartPlaybacks(), req.Profile.Parts) {
-		writeProblem(w, a.logger, codeInvalidBody, fmt.Sprintf("profile.parts is one of %v", domain.PartPlaybacks()))
-		return
-	}
 	var version uuid.UUID
 	if req.VersionID != "" {
 		var err error
@@ -477,13 +473,12 @@ func (a *API) playbackProgress(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	state, ok := domain.ParsePlayState(string(req.State))
-	if !ok || req.PositionMS < 0 {
+	if req.State == "" || req.PositionMS < 0 {
 		writeProblem(w, a.logger, codeInvalidBody, "position_ms is not negative and state is playing or paused")
 		return
 	}
 	a.reportPlayback(w, r, func(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error) {
-		return a.svc.Playbacks.Progress(ctx, profile, id, time.Duration(req.PositionMS)*time.Millisecond, state)
+		return a.svc.Playbacks.Progress(ctx, profile, id, time.Duration(req.PositionMS)*time.Millisecond, req.State)
 	})
 }
 

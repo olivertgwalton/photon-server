@@ -2,15 +2,15 @@ package domain
 
 import "testing"
 
-func TestParseDiscovery(t *testing.T) {
+func TestDiscoveryIsBroadcastOrOff(t *testing.T) {
 	for _, s := range []string{"broadcast", "off"} {
-		if _, err := ParseDiscovery(s); err != nil {
-			t.Errorf("ParseDiscovery(%q): %v", s, err)
+		if _, err := Parse("discovery", s, Discoveries()); err != nil {
+			t.Errorf("Parse(%q): %v", s, err)
 		}
 	}
 	for _, s := range []string{"", "on", "Off", "multicast"} {
-		if _, err := ParseDiscovery(s); err == nil {
-			t.Errorf("ParseDiscovery(%q) was accepted", s)
+		if _, err := Parse("discovery", s, Discoveries()); err == nil {
+			t.Errorf("%q was accepted", s)
 		}
 	}
 }

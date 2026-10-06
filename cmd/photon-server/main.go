@@ -183,7 +183,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	discoveryMode, err := domain.ParseDiscovery(cmp.Or(os.Getenv("PHOTON_DISCOVERY"), string(domain.DiscoveryBroadcast)))
+	discoveryMode, err := domain.Parse("discovery", cmp.Or(os.Getenv("PHOTON_DISCOVERY"), string(domain.DiscoveryBroadcast)), domain.Discoveries())
 	if err != nil {
 		return fmt.Errorf("PHOTON_DISCOVERY: %w", err)
 	}
@@ -351,7 +351,7 @@ func webApp() (*httpapi.Web, error) {
 			mode = string(domain.WebServe)
 		}
 	}
-	web, err := domain.ParseWeb(mode)
+	web, err := domain.Parse("web", mode, domain.Webs())
 	if err != nil {
 		return nil, fmt.Errorf("PHOTON_WEB: %w", err)
 	}
@@ -398,13 +398,13 @@ func answerDiscovery(ctx context.Context, addr string, info httpapi.Info, logger
 // HEVC is encoded unless PHOTON_HEVC_ENCODING is deny, or the device, or software for a subtitle
 // drawn in, will not encode it, which is reported and H.264 encoded alone.
 func hardware(ctx context.Context, ffmpeg string, logger *slog.Logger) (hls.Hardware, error) {
-	accel, ok := domain.ParseAcceleration(cmp.Or(os.Getenv("PHOTON_HWACCEL"), string(domain.AccelSoftware)))
-	if !ok {
-		return hls.Hardware{}, fmt.Errorf("PHOTON_HWACCEL is software, videotoolbox, vaapi, qsv or nvenc, not %q", os.Getenv("PHOTON_HWACCEL"))
+	accel, err := domain.Parse("acceleration", cmp.Or(os.Getenv("PHOTON_HWACCEL"), string(domain.AccelSoftware)), domain.Accelerations())
+	if err != nil {
+		return hls.Hardware{}, fmt.Errorf("PHOTON_HWACCEL: %w", err)
 	}
-	hevc, ok := domain.ParseHEVCEncoding(cmp.Or(os.Getenv("PHOTON_HEVC_ENCODING"), string(domain.HEVCAllow)))
-	if !ok {
-		return hls.Hardware{}, fmt.Errorf("PHOTON_HEVC_ENCODING is allow or deny, not %q", os.Getenv("PHOTON_HEVC_ENCODING"))
+	hevc, err := domain.Parse("HEVC encoding", cmp.Or(os.Getenv("PHOTON_HEVC_ENCODING"), string(domain.HEVCAllow)), domain.HEVCEncodings())
+	if err != nil {
+		return hls.Hardware{}, fmt.Errorf("PHOTON_HEVC_ENCODING: %w", err)
 	}
 	device := os.Getenv("PHOTON_HWACCEL_DEVICE")
 	switch accel {

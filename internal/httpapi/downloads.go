@@ -116,10 +116,6 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "max_bitrate_kbps is above 0, and max_width 0 or at least "+strconv.Itoa(narrowest))
 		return
 	}
-	if slices.ContainsFunc(req.VideoRanges, func(r domain.Range) bool { return !slices.Contains(domain.Ranges(), r) }) {
-		writeProblem(w, a.logger, codeInvalidBody, fmt.Sprintf("video_ranges are of %v", domain.Ranges()))
-		return
-	}
 	profile := sessionOf(r).Profile.ID
 	c, err := a.svc.Playing.Playable(r.Context(), profile, req.TitleID, req.VersionID)
 	if a.answered(w, r, err) {
