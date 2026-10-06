@@ -64,6 +64,8 @@ services:
       - "&*"
       - +@all
       - -@dangerous
+      # The server's own version, for the admin dashboard; INFO is in @dangerous.
+      - +info
     volumes:
       - valkey:/data
     healthcheck:
