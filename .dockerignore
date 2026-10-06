@@ -5,3 +5,10 @@
 !internal
 !LICENSE
 !deploy/ffmpeg-NOTICE
+!web
+web/node_modules
+web/.svelte-kit
+web/build
+web/test-results
+web/playwright-report
+web/e2e

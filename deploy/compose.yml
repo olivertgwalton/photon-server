@@ -5,8 +5,6 @@ x-server: &server
   environment:
     PHOTON_DATABASE_URL: postgres://photon:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db/photon
     PHOTON_VALKEY_URL: valkey://photon:${VALKEY_PASSWORD:?set VALKEY_PASSWORD}@valkey:6379
-    # The web app signs readers in on their behalf, so its X-Forwarded-For names them.
-    PHOTON_TRUSTED_PROXIES: 172.28.0.10
 
 services:
   server:
@@ -19,18 +17,6 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
       valkey: { condition: service_healthy }
-    restart: unless-stopped
-
-  web:
-    image: ${PHOTON_WEB_IMAGE:-ghcr.io/olivertgwalton/photon-server-web:main}
-    environment:
-      PHOTON_API_URL: http://server:8640
-    ports: ["3000:3000"]
-    networks:
-      default:
-        ipv4_address: 172.28.0.10
-    depends_on:
-      server: { condition: service_started }
     restart: unless-stopped
 
   migrate:
@@ -85,12 +71,6 @@ services:
       interval: 5s
       retries: 12
     restart: unless-stopped
-
-networks:
-  default:
-    ipam:
-      config:
-        - subnet: 172.28.0.0/24
 
 volumes:
   db:
