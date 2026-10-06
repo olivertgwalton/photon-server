@@ -135,18 +135,59 @@ func (s *Store) Refresh(ctx context.Context, id uuid.UUID, mode domain.RefreshMo
 		switch mode {
 		case domain.RefreshMissing:
 		case domain.RefreshAll:
-			err := tx.Item.WithContext(ctx).UnderlyingDB().Exec(`
-				UPDATE item_fields SET source = 'file', updated_at = now()
-				WHERE field = 'title' AND source NOT IN ('file', 'nfo', 'user') AND item_id IN (
-					SELECT id FROM items WHERE id = @item AND kind IN ('season', 'episode')
-					UNION SELECT s.id FROM items s WHERE s.parent_id = @item AND s.kind IN ('season', 'episode')
-					UNION SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id WHERE s.parent_id = @item AND e.kind = 'episode')`,
-				map[string]any{"item": item.ID}).Error
+			err := describeAgain(ctx, tx, `
+				SELECT id FROM items WHERE id = @item AND kind IN ('season', 'episode')
+				UNION SELECT s.id FROM items s WHERE s.parent_id = @item AND s.kind IN ('season', 'episode')
+				UNION SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id WHERE s.parent_id = @item AND e.kind = 'episode'`,
+				map[string]any{"item": item.ID})
 			if err != nil {
 				return err
 			}
 		}
 		return enqueueAsked(ctx, tx, domain.JobIdentify, title.ID)
+	})
+}
+
+// describeAgain says the seasons and episodes a query selects were titled by their files, so
+// their show's next match asks about each again; their values stand until then.
+func describeAgain(ctx context.Context, tx *query.Query, items string, args map[string]any) error {
+	return tx.Item.WithContext(ctx).UnderlyingDB().Exec(`
+		UPDATE item_fields SET source = 'file', updated_at = now()
+		WHERE field = 'title' AND source NOT IN ('file', 'nfo', 'user') AND item_id IN (`+items+`)`, args).Error
+}
+
+// RefreshLibrary queues a match of a library's films and shows, as Jellyfin's Refresh Metadata
+// on a library does. RefreshMissing takes only those not yet described: never
+// matched, with no overview or poster, a season still titled by its file, or a match that failed
+// every attempt. RefreshAll takes every one, and every season and episode under it. Either is
+// claimed after the titles a scan has just found, so a large refresh never holds up a new film.
+// ErrNotFound for no library.
+func (s *Store) RefreshLibrary(ctx context.Context, lib uuid.UUID, mode domain.RefreshMode) error {
+	return s.q.Transaction(func(tx *query.Query) error {
+		l := tx.Library
+		if _, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(lib))).Take(); err != nil {
+			return found(err)
+		}
+		args := map[string]any{"lib": model.UUID(lib), "priority": refreshPriority}
+		which := ""
+		switch mode {
+		case domain.RefreshMissing:
+			which = `AND (i.identified_at IS NULL
+				OR coalesce(i.overview, '') = ''
+				OR NOT EXISTS (SELECT 1 FROM artwork a WHERE a.item_id = i.id AND a.kind = 'poster')
+				OR EXISTS (SELECT 1 FROM jobs j WHERE j.kind = 'identify' AND j.subject = i.id AND j.state = 'dead')
+				OR EXISTS (SELECT 1 FROM items e JOIN item_fields f ON f.item_id = e.id AND f.field = 'title' AND f.source = 'file'
+					WHERE e.kind IN ('season', 'episode') AND (e.parent_id = i.id OR e.parent_id IN (SELECT id FROM items WHERE parent_id = i.id))))`
+		case domain.RefreshAll:
+			err := describeAgain(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind IN ('season', 'episode')`, args)
+			if err != nil {
+				return err
+			}
+		}
+		return tx.Job.WithContext(ctx).UnderlyingDB().Exec(`
+			INSERT INTO jobs (kind, subject, priority)
+			SELECT 'identify', i.id, @priority FROM items i
+			WHERE i.library_id = @lib AND i.kind IN ('movie', 'show') `+which+requeue, args).Error
 	})
 }
 
