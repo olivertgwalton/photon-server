@@ -1,12 +1,15 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,14 +24,30 @@ func sessionOf(r *http.Request) domain.Session {
 	return s
 }
 
-// requireSession admits a request carrying a valid device token in its Authorization header, the
-// only place a token is read: never from the query, where it would land in logs.
+// sessionCookie is where the web app keeps a browser's token (web/src/lib/server/session.ts), so
+// the browser calls the API itself.
+const sessionCookie = "photon_session"
+
+// crossOrigin refuses a browser's write from another site. Only a cookie needs it: a page on
+// another site can make a browser send its cookie, never a bearer token.
+var crossOrigin = http.NewCrossOriginProtection()
+
+// requireSession admits a request carrying a valid device token in its Authorization header, or in
+// the web app's cookie: never from the query, where it would land in logs.
 func (a *API) requireSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if !ok {
-			a.unauthenticated(w)
-			return
+			cookie, err := r.Cookie(sessionCookie)
+			if err != nil {
+				a.unauthenticated(w)
+				return
+			}
+			if err := crossOrigin.Check(r); err != nil {
+				writeProblem(w, a.logger, codeForbidden, "a write from another site")
+				return
+			}
+			token = cookie.Value
 		}
 		session, err := a.svc.Auth.Authenticate(r.Context(), token)
 		switch {
@@ -101,11 +120,32 @@ type loginRequest struct {
 	Password string `json:"password"`
 	Device   string `json:"device"`
 	Client   string `json:"client"`
+	// Keep is token when left out.
+	Keep domain.Keep `json:"keep,omitzero"`
 }
 
+// loginResponse has no token for a session kept in the cookie.
 type loginResponse struct {
-	Token   string      `json:"token"`
+	Token   string      `json:"token,omitzero"`
 	Profile profileJSON `json:"profile"`
+}
+
+// sessionCookieAge is as long as a browser keeps any cookie: a device's session does not lapse on
+// its own.
+const sessionCookieAge = 400 * 24 * time.Hour
+
+// keepSession sets the cookie, or with no token clears it, Secure when the browser reached the
+// server over HTTPS. A server on a home network is often reached over plain HTTP by its address,
+// where a Secure cookie would never be stored.
+func (a *API) keepSession(w http.ResponseWriter, r *http.Request, token string) {
+	maxAge := int(sessionCookieAge.Seconds())
+	if token == "" {
+		maxAge = -1
+	}
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure wherever the browser has HTTPS, as said above
+		Name: sessionCookie, Value: token, Path: "/", MaxAge: maxAge,
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: overHTTPS(r, a.svc.TrustedProxies),
+	})
 }
 
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
@@ -115,6 +155,11 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Name == "" || req.Device == "" || req.Client == "" {
 		writeProblem(w, a.logger, codeInvalidBody, "name, device and client are required")
+		return
+	}
+	req.Keep = cmp.Or(req.Keep, domain.KeepToken)
+	if !slices.Contains(domain.Keeps(), req.Keep) {
+		writeProblem(w, a.logger, codeInvalidBody, fmt.Sprintf("keep is one of %v", domain.Keeps()))
 		return
 	}
 	if !a.allowed(w, r, signInsPerAddress, a.addrKey(r, "signin")) ||
@@ -137,13 +182,22 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSignedIn, Profile: profile.ID, Details: details})
-	writeJSON(w, a.logger, "application/json", http.StatusOK, loginResponse{Token: token, Profile: profileOf(profile)})
+	switch req.Keep {
+	case domain.KeepToken:
+		writeJSON(w, a.logger, "application/json", http.StatusOK, loginResponse{Token: token, Profile: profileOf(profile)})
+	case domain.KeepCookie:
+		a.keepSession(w, r, token)
+		writeJSON(w, a.logger, "application/json", http.StatusOK, loginResponse{Profile: profileOf(profile)})
+	}
 }
 
 func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 	if err := a.svc.Auth.SignOut(r.Context(), sessionOf(r).ID); err != nil {
 		a.internal(w, r, err)
 		return
+	}
+	if _, err := r.Cookie(sessionCookie); err == nil {
+		a.keepSession(w, r, "")
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
