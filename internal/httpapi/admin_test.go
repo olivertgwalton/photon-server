@@ -75,6 +75,13 @@ func (f *fakeLibraries) ScanFolders(_ context.Context, lib uuid.UUID, folders []
 	return nil
 }
 
+func (f *fakeLibraries) RefreshLibrary(_ context.Context, lib uuid.UUID, _ domain.RefreshMode) error {
+	if !slices.ContainsFunc(f.libs, func(l domain.Library) bool { return l.ID == lib }) {
+		return store.ErrNotFound
+	}
+	return nil
+}
+
 func TestAnAdminKeepsTheLibraries(t *testing.T) {
 	libs := &fakeLibraries{}
 	told := &fakeEvents{}
@@ -116,6 +123,10 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"keyframes": "full"}`, http.StatusOK},
 		{http.MethodPost, "/api/v1/admin/libraries/" + added.ID.String() + "/scan", "", http.StatusAccepted},
 		{http.MethodPost, "/api/v1/admin/libraries/" + uuid.NewV7().String() + "/scan", "", http.StatusNotFound},
+		{http.MethodPost, "/api/v1/admin/libraries/" + added.ID.String() + "/refresh", `{"mode": "missing"}`, http.StatusAccepted},
+		{http.MethodPost, "/api/v1/admin/libraries/" + added.ID.String() + "/refresh", `{"mode": "some"}`, http.StatusBadRequest},
+		{http.MethodPost, "/api/v1/admin/libraries/" + added.ID.String() + "/refresh", `{}`, http.StatusBadRequest},
+		{http.MethodPost, "/api/v1/admin/libraries/" + uuid.NewV7().String() + "/refresh", `{"mode": "all"}`, http.StatusNotFound},
 		{http.MethodDelete, "/api/v1/admin/libraries/" + added.ID.String(), "", http.StatusNoContent},
 		{http.MethodDelete, "/api/v1/admin/libraries/" + added.ID.String(), "", http.StatusNotFound},
 	} {
