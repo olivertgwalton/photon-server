@@ -54,8 +54,8 @@ func (fakePlaying) Playable(_ context.Context, _, item, _ uuid.UUID) (store.Play
 	}, nil
 }
 
-func (fakePlaying) Card(_ context.Context, _, id uuid.UUID) (store.Card, error) {
-	return store.Card{ID: id, Kind: domain.ItemMovie, Title: "Lawrence of Arabia", Year: 1962, Poster: posterID}, nil
+func (fakePlaying) PlaybackTitle(_ context.Context, id uuid.UUID) (domain.PlaybackTitle, error) {
+	return domain.PlaybackTitle{ID: id, Kind: domain.ItemMovie, Title: "Lawrence of Arabia", Year: 1962, Poster: posterID}, nil
 }
 
 var posterID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1")

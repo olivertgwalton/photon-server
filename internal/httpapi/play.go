@@ -63,7 +63,7 @@ type hlsFiles interface {
 
 type playing interface {
 	Playable(ctx context.Context, profile, item, version uuid.UUID) (store.PlayCopy, error)
-	Card(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
+	PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.PlaybackTitle, error)
 	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
 	VisiblePartFile(ctx context.Context, profile, part uuid.UUID) (root, rel string, err error)
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
@@ -205,7 +205,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	title, err := a.svc.Playing.Card(r.Context(), sessionOf(r).Profile.ID, id)
+	title, err := a.svc.Playing.PlaybackTitle(r.Context(), id)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -270,25 +270,19 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 }
 
 // cardOf is what the dashboard shows of a playback the request starts of a copy, as decided.
-func (a *API) cardOf(r *http.Request, t store.Card, c store.PlayCopy, d playback.Decision, subtitle *int) domain.PlaybackCard {
+func (a *API) cardOf(r *http.Request, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, subtitle *int) domain.PlaybackCard {
 	s := sessionOf(r)
 	card := domain.PlaybackCard{
 		Profile: domain.PlaybackProfile{ID: s.Profile.ID, Name: s.Profile.Name},
 		Device: domain.PlaybackDevice{
 			ID: s.ID, Name: s.Device, Client: s.Client, Address: clientAddr(r, a.svc.TrustedProxies).String(),
 		},
-		Title: domain.PlaybackTitle{
-			ID: t.ID, Kind: t.Kind, Title: t.Title, Year: t.Year, SeasonNumber: t.SeasonNumber,
-			EpisodeNumber: t.EpisodeNumber, EpisodeEnd: t.EpisodeEnd, Poster: t.Poster, Thumb: t.Thumb, Backdrop: t.Backdrop,
-		},
+		Title: t,
 		Version: domain.PlaybackVersion{
 			ID: c.Version, Edition: c.Edition, Label: c.Label, Container: c.Container, BitrateKbps: c.BitrateKbps,
 			DurationMS: c.DurationMS,
 		},
 		Reasons: d.Reasons,
-	}
-	if t.Show != nil {
-		card.Title.ShowID, card.Title.Show = t.Show.ID, t.Show.Title
 	}
 	stream := func(index int) media.Stream {
 		if i := slices.IndexFunc(c.Streams, func(s media.Stream) bool { return s.Index == index }); i >= 0 {

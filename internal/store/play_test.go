@@ -87,3 +87,30 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 		t.Errorf("with every copy's files gone: %v, want ErrNotFound", err)
 	}
 }
+
+func TestPlaybackTitleSaysWhichShow(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ep := Episode{
+		Season: 1, Episodes: []int{2}, Title: "Seamless", Folder: "Wire", ByNumber: true,
+		Copies: []Copy{{ContentKey: []byte("e"), Parts: []Part{{RelPath: "Wire/S1E2.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{Duration: time.Hour}}}}},
+	}
+	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, []Episode{ep}, nil); err != nil {
+		t.Fatal(err)
+	}
+	i := s.q.Item
+	row := must(i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode))).Take())
+	show := must(i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take())
+	got, err := s.PlaybackTitle(ctx, uuid.UUID(row.ID))
+	if err != nil || got.Title != "Seamless" || got.Show != "The Wire" || got.ShowID != uuid.UUID(show.ID) ||
+		deref(got.SeasonNumber) != 1 || deref(got.EpisodeNumber) != 2 {
+		t.Errorf("PlaybackTitle = %+v, %v; want The Wire's 1x2, Seamless", got, err)
+	}
+	if _, err := s.PlaybackTitle(ctx, uuid.NewV7()); !errors.Is(err, ErrNotFound) {
+		t.Errorf("no such title: %v, want ErrNotFound", err)
+	}
+}
