@@ -10,6 +10,7 @@ export const railLimit = 20;
 export const homeRows: Record<Kind, { title: string; shape: Shape }> = {
 	continue_watching: { title: "Continue Watching", shape: "still" },
 	next_up: { title: "Next Up", shape: "still" },
+	watchlist: { title: "Watchlist", shape: "poster" },
 	favourites: { title: "Favourites", shape: "poster" },
 	recently_added_films: { title: "Recently Added Films", shape: "poster" },
 	recently_added_shows: { title: "Recently Added Shows", shape: "poster" },

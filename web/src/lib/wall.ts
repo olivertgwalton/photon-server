@@ -32,7 +32,7 @@ export type ListFilter = (typeof lists)[number];
 
 // The lists whose values are the server's own words.
 const known: Partial<Record<ListFilter, string[]>> = {
-	mark: ["watched", "unwatched", "in_progress", "favourite"],
+	mark: ["watched", "unwatched", "in_progress", "favourite", "watchlist"],
 	resolution: Object.keys(resolutionNames),
 	range: ["sdr", "hlg", "hdr10", "hdr10plus", "dv"],
 };

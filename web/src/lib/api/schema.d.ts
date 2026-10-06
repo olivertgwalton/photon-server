@@ -4969,7 +4969,7 @@ export interface components {
             kind: components["schemas"]["HomeRowKind"];
         };
         /** @enum {string} */
-        HomeRowKind: "continue_watching" | "next_up" | "favourites" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched" | "collection";
+        HomeRowKind: "continue_watching" | "next_up" | "watchlist" | "favourites" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched" | "collection";
         HomeSection: {
             row: components["schemas"]["HomeRowKind"];
             visibility: components["schemas"]["RowVisibility"];
@@ -5053,7 +5053,7 @@ export interface components {
             token?: string;
         };
         /** @enum {string} */
-        Mark: "watched" | "unwatched" | "in_progress" | "favourite";
+        Mark: "watched" | "unwatched" | "in_progress" | "favourite" | "watchlist";
         Marker: {
             /** Format: int64 */
             end_ms: number;
@@ -5723,6 +5723,8 @@ export interface components {
             unwatched?: number;
             /** Format: date-time */
             watched_at?: string | null;
+            /** Format: date-time */
+            watchlisted_at?: string | null;
         };
         Tool: {
             path: string;

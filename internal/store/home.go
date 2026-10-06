@@ -58,10 +58,8 @@ var rowQueries = map[domain.HomeRow]string{
 		WHERE coalesce(started.position_ms, 0) = 0
 			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE first_of_title(v, last.show))
 		ORDER BY last.last_played_at DESC LIMIT @limit`,
-	domain.RowFavourites: `
-		SELECT ` + itemColumnsOf("i") + ` FROM favourites f JOIN items i ON i.id = f.item_id
-		WHERE f.profile_id = @profile AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))
-		ORDER BY f.added_at DESC LIMIT @limit`,
+	domain.RowWatchlist:  listRow("watchlist"),
+	domain.RowFavourites: listRow("favourites"),
 	domain.RowRecentFilms: `
 		SELECT ` + itemColumns + ` FROM items
 		WHERE kind = 'movie' AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND first_of_title(v, items))
@@ -102,6 +100,15 @@ var rowQueries = map[domain.HomeRow]string{
 		WHERE items.kind IN ('movie', 'show') AND NOT ` + begun + `
 			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND first_of_title(v, items))
 		ORDER BY rated.score DESC, rated.item_id DESC LIMIT @limit`,
+}
+
+// listRow is the row of one of the profile's lists, its watchlist or its favourites, the latest
+// added first.
+func listRow(table string) string {
+	return `
+		SELECT ` + itemColumnsOf("i") + ` FROM ` + table + ` l JOIN items i ON i.id = l.item_id
+		WHERE l.profile_id = @profile AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))
+		ORDER BY l.added_at DESC LIMIT @limit`
 }
 
 // collectionRowsQuery is, for each collection placed on the home page that the profile sees, by

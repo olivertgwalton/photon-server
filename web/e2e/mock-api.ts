@@ -136,7 +136,7 @@ const facets: Schemas["Facets"] = {
 	resolutions: ["1080p", "4k"],
 	ranges: ["sdr", "dv"],
 	rating_sites: ["imdb", "tmdb"],
-	marks: ["watched", "unwatched", "in_progress", "favourite"],
+	marks: ["watched", "unwatched", "in_progress", "favourite", "watchlist"],
 };
 
 const stream = (

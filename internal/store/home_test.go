@@ -449,3 +449,64 @@ func TestTopRatedUnwatched(t *testing.T) {
 		t.Errorf("top rated for another profile, without the shows = %v, want %v", got, want)
 	}
 }
+
+// The watchlist holds films and shows, the latest put on it first, and lets go of a film once it is
+// watched and a show once every episode is.
+func TestWatchlist(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	admin, kid := homeLibraries(t, s, []string{"Heat", "Alien"}, []string{"The Wire"})
+	show := oneItem(t, s, `kind = 'show'`)
+	var eps []Episode
+	for _, n := range []int{1, 2} {
+		rel := fmt.Sprintf("The Wire/S1E%d.mkv", n)
+		eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: rel, Folder: "The Wire", ByNumber: true, Copies: []Copy{{
+			ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
+		}}})
+	}
+	if _, err := s.SaveShowFolder(ctx, show.LibraryID, "The Wire", []byte("v2"), Show{Title: "The Wire", Folder: "The Wire"}, eps, nil); err != nil {
+		t.Fatal(err)
+	}
+	heat, alien := oneItem(t, s, `title = 'Heat'`).ID, oneItem(t, s, `title = 'Alien'`).ID
+	first, second := oneItem(t, s, `kind = 'episode' AND episode_number = 1`).ID, oneItem(t, s, `kind = 'episode' AND episode_number = 2`).ID
+	for _, id := range []uuid.UUID{heat, first, alien} {
+		if err := s.Watchlist(ctx, admin, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, want := homeRow(t, s, admin, domain.RowWatchlist), []string{"Alien", "The Wire", "Heat"}; !slices.Equal(got, want) {
+		t.Errorf("watchlist = %v, want %v: an episode puts its show on it", got, want)
+	}
+	if got := homeRow(t, s, kid, domain.RowWatchlist); len(got) != 0 {
+		t.Errorf("another profile's watchlist = %v, want nothing", got)
+	}
+	if page, err := s.Title(ctx, admin, show.ID); err != nil || page.State.WatchlistedAt == nil {
+		t.Errorf("the show's state = %+v, %v; want it on the watchlist", page.State, err)
+	}
+	box, err := s.AddCollection(ctx, show.LibraryID, "Box")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Watchlist(ctx, admin, box); !errors.Is(err, ErrNotListable) {
+		t.Errorf("a collection put on the watchlist: %v, want %v", err, ErrNotListable)
+	}
+
+	if err := s.MarkWatched(ctx, admin, heat, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveProgress(ctx, admin, first, time.Hour, domain.ReachResumable, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := homeRow(t, s, admin, domain.RowWatchlist), []string{"Alien", "The Wire"}; !slices.Equal(got, want) {
+		t.Errorf("after watching Heat and an episode, watchlist = %v, want %v", got, want)
+	}
+	if err := s.MarkWatched(ctx, admin, second, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Unwatchlist(ctx, admin, alien); err != nil {
+		t.Fatal(err)
+	}
+	if got := homeRow(t, s, admin, domain.RowWatchlist); len(got) != 0 {
+		t.Errorf("after watching the show through and taking Alien off, watchlist = %v, want nothing", got)
+	}
+}

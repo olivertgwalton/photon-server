@@ -86,7 +86,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 	if err := s.MarkWatched(ctx, oliver.ID, episodes[0].ID, nil); err != nil {
 		t.Fatal(err)
 	}
-	// Alien watched and a favourite, Brazil part way.
+	// Alien watched and a favourite, Brazil part way and on the watchlist.
 	if err := s.MarkWatched(ctx, oliver.ID, ids["Alien"], nil); err != nil {
 		t.Fatal(err)
 	}
@@ -94,6 +94,9 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := s.SaveProgress(ctx, oliver.ID, ids["Brazil"], 30*time.Minute, domain.ReachStart, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Watchlist(ctx, oliver.ID, ids["Brazil"]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -126,6 +129,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		{"unwatched", WallPage{Filter: WallFilter{Marks: []domain.Mark{domain.MarkUnwatched}}}, []string{"Brazil", "Cosmos", "Émile"}},
 		{"in progress", WallPage{Filter: WallFilter{Marks: []domain.Mark{domain.MarkInProgress}}}, []string{"Brazil", "Cosmos"}},
 		{"favourites", WallPage{Filter: WallFilter{Marks: []domain.Mark{domain.MarkFavourite}}}, []string{"Alien"}},
+		{"on the watchlist", WallPage{Filter: WallFilter{Marks: []domain.Mark{domain.MarkWatchlist}}}, []string{"Brazil"}},
 		{"in 4K or SD", WallPage{Filter: WallFilter{Resolutions: []domain.Resolution{domain.ResolutionUHD, domain.ResolutionSD}}}, []string{"Alien", "Émile"}},
 		{"in 1080p, a show by its episodes", WallPage{Filter: WallFilter{Resolutions: []domain.Resolution{domain.ResolutionFHD}}}, []string{"Brazil", "Cosmos"}},
 		{"in HDR10", WallPage{Filter: WallFilter{Ranges: []domain.Range{domain.RangeHDR10}}}, []string{"Alien"}},
