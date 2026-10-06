@@ -73,10 +73,7 @@ func (h *Hub) Raise(ctx context.Context, e domain.Event) {
 		e.ID = id
 	}
 	if e.Kind.Hookable() {
-		body, err := h.payload(ctx, e)
-		if err == nil {
-			err = h.store.QueueWebhooks(ctx, e.Kind, body)
-		}
+		err := h.store.QueueWebhooks(ctx, e.Kind, func(ctx context.Context) ([]byte, error) { return h.payload(ctx, e) })
 		if err != nil {
 			h.log.WarnContext(ctx, "webhooks not queued", slog.String("kind", string(e.Kind)), slog.Any("err", err))
 		}

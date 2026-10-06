@@ -72,14 +72,23 @@ func (s *Store) RemoveWebhook(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-// QueueWebhooks queues a body to be sent to every webhook that asked for its kind, a job each.
-func (s *Store) QueueWebhooks(ctx context.Context, kind domain.EventKind, body []byte) error {
-	_, err := s.pool.Exec(ctx, `
+// QueueWebhooks queues the body made by body to every webhook that asked for kind, a job each.
+// The body is made only where one did, as making it costs a query and most servers have none.
+func (s *Store) QueueWebhooks(ctx context.Context, kind domain.EventKind, body func(context.Context) ([]byte, error)) error {
+	var asked bool
+	if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT FROM webhook_events WHERE kind = $1)`, string(kind)).Scan(&asked); err != nil || !asked {
+		return err
+	}
+	b, err := body(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(ctx, `
 		WITH d AS (
 			INSERT INTO webhook_deliveries (webhook_id, kind, body)
 			SELECT webhook_id, kind, $2 FROM webhook_events WHERE kind = $1
 			RETURNING id)
-		INSERT INTO jobs (kind, subject) SELECT 'deliver_webhook', id FROM d`, string(kind), string(body))
+		INSERT INTO jobs (kind, subject) SELECT 'deliver_webhook', id FROM d`, string(kind), string(b))
 	return err
 }
 
