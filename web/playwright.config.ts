@@ -3,7 +3,8 @@ import { defineConfig, devices } from "@playwright/test";
 // The suite drives the built app, served as in production beside a mock of
 // the Go server's API (e2e/mock-api.ts): everything the browser does is real,
 // and CI needs no Postgres, Valkey, FFmpeg or Go.
-const port = 4173;
+// E2E_PORT lets suites run side by side, each with its own mock.
+const port = Number(process.env.E2E_PORT ?? 4173);
 
 export default defineConfig({
 	testDir: "./e2e",
