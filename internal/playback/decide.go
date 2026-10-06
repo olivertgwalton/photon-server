@@ -3,6 +3,7 @@ package playback
 import (
 	"cmp"
 	"errors"
+	"math"
 	"slices"
 	"strings"
 
@@ -378,14 +379,7 @@ func (p Profile) videoEncode(s media.Stream, copyKbps int) (domain.VideoEncode, 
 	}
 	h264 := p.Video[i]
 	width, height := fit(s.Width, s.Height, h264.MaxWidth, h264.MaxHeight)
-	// H.264 needs more than the newer codecs for the same picture: Jellyfin's ScaleBitrate.
-	kbps := cmp.Or(copyKbps, sourceKbps)
-	switch s.Codec {
-	case "hevc", "vp9":
-		kbps = kbps * 10 / 6
-	case "av1":
-		kbps *= 2
-	}
+	kbps := scaleBitrate(cmp.Or(copyKbps, sourceKbps), s.Codec)
 	if p.MaxBitrateKbps > 0 {
 		kbps = min(kbps, p.MaxBitrateKbps)
 	}
@@ -393,6 +387,32 @@ func (p Profile) videoEncode(s media.Stream, copyKbps int) (domain.VideoEncode, 
 		Codec: "h264", Width: width, Height: height, BitrateKbps: kbps,
 		ToneMap: s.Range != "" && s.Range != domain.RangeSDR,
 	}, true
+}
+
+// scaleBitrate is what H.264 spends to match a source of codec at kbps, as Jellyfin's
+// ScaleBitrate: more than HEVC, VP9 and AV1 need for the same picture, and more again for a source
+// so small that H.264 would show its blocks; nothing more from 30 Mbps, where it is not seen.
+func scaleBitrate(kbps int, codec string) int {
+	factor := 1.0
+	switch codec {
+	case "hevc", "vp9":
+		factor = 1 / 0.6
+	case "av1":
+		factor = 2
+	}
+	switch {
+	case kbps <= 500:
+		factor = max(factor, 4)
+	case kbps <= 1000:
+		factor = max(factor, 3)
+	case kbps <= 2000:
+		factor = max(factor, 2.5)
+	case kbps <= 3000:
+		factor = max(factor, 2)
+	case kbps >= 30_000:
+		factor = 1
+	}
+	return int(math.Round(factor * float64(kbps)))
 }
 
 // fit answers a picture's size scaled down to fit within a limit, keeping its shape, each side
