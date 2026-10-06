@@ -133,6 +133,12 @@ Segments are written under `PHOTON_CACHE_DIR`'s `hls` folder and kept from a min
 each player last asked, so a film played through holds about a minute and a half of itself there;
 seeking back further makes them again. The folder is emptied at start.
 
+A copy in several files (`cd1`, `cd2`, `part1`…) plays whole. A client says how it plays one in
+its play profile: by default as one stream, so its files are joined into one HLS stream with their
+video copied (`parts_not_supported` among the reasons); with `"parts": "each"`, as Plex's players
+take a stacked item, it is given each file's own address and where it starts on the copy's
+timeline.
+
 Each node encodes at most `PHOTON_MAX_TRANSCODES` videos at once (a number, or `unlimited`): by
 default a quarter of its CPUs in software, at least one, and eight on a hardware encoder, the cap
 NVIDIA puts on a GeForce card's sessions. A download's conversion takes one of those slots too, but

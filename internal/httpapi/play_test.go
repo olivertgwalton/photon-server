@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -67,9 +68,10 @@ func (f fakePlaying) SubtitleFile(_ context.Context, id uuid.UUID) (string, stri
 	return f.root, "Lawrence/Lawrence.en.srt", nil
 }
 
-// playRequest asks to play films on a client that opens these containers and plays H.264 and AAC.
+// playRequest asks to play films on a client that opens these containers, plays H.264 and AAC, and
+// plays a copy's files each in turn.
 func playRequest(containers string) *http.Request {
-	body := `{"profile": {"containers": [` + containers + `], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}]}}`
+	body := `{"profile": {"containers": [` + containers + `], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "parts": "each"}}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+goodToken)
 	return req
@@ -259,6 +261,18 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 	if got.Method != "remux" || !strings.HasSuffix(got.Playlist, "/main.m3u8") || len(got.Reasons) != 1 || got.Reasons[0] != "container_not_supported" {
 		t.Fatalf("play = %+v, want a remux's playlist, for the container", got)
 	}
+	joined := playRequest(`"matroska"`)
+	joined.Body = io.NopCloser(strings.NewReader(`{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}]}}`))
+	var whole struct {
+		Method  string   `json:"method"`
+		Reasons []string `json:"reasons"`
+	}
+	if err := json.NewDecoder(do(joined).Body).Decode(&whole); err != nil {
+		t.Fatal(err)
+	}
+	if whole.Method != "remux" || !slices.Equal(whole.Reasons, []string{"parts_not_supported"}) {
+		t.Errorf("a film in two files on a client that plays one: %+v, want them joined in one remux", whole)
+	}
 	base := strings.TrimSuffix(got.Playlist, "main.m3u8")
 	for file, want := range map[string]string{"main.m3u8": "#EXTM3U\n", "0.m4s": "m4s", "sub0-2.vtt": "WEBVTT\n"} {
 		if rec := do(httptest.NewRequest(http.MethodGet, base+file, nil)); rec.Code != http.StatusOK || rec.Body.String() != want {
@@ -284,8 +298,9 @@ func TestAClientIsToldWhyNothingPlays(t *testing.T) {
 		{`{}`, http.StatusBadRequest, nil},
 		{
 			`{"profile": {"containers": ["mp4"], "video": [{"codec": "hevc"}], "audio": [{"codec": "aac"}]}}`, http.StatusUnprocessableEntity,
-			[]string{"container_not_supported", "video_codec_not_supported"},
+			[]string{"container_not_supported", "parts_not_supported", "video_codec_not_supported"},
 		},
+		{`{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "parts": "some"}}`, http.StatusBadRequest, nil},
 		{`{"audio_stream": 0, "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}]}}`, http.StatusBadRequest, nil},
 	} {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(tc.body))
@@ -429,7 +444,7 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 	}
 	// Two megabits is less than the film's eight, so its video is encoded.
 	transcode := func() *httptest.ResponseRecorder {
-		body := `{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000}}`
+		body := `{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000, "parts": "each"}}`
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+goodToken)
 		return do(req)
@@ -517,7 +532,7 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 		PlaybackID uuid.UUID `json:"playback_id"`
 		Playlist   string    `json:"playlist"`
 	}
-	body := `{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000}}`
+	body := `{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000, "parts": "each"}}`
 	if err := json.NewDecoder(do(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", body).Body).Decode(&started); err != nil {
 		t.Fatal(err)
 	}
