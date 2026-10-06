@@ -196,7 +196,8 @@ type personRefJSON struct {
 }
 
 // searchJSON is a page of the titles (films, shows, collections and episodes) and of the people
-// found, both from offset, and how many of each there are in all.
+// found, both from offset, and how many of each there are in all; a section the kinds asked for
+// leave out is empty.
 type searchJSON struct {
 	Items       []cardJSON      `json:"items"`
 	People      []personRefJSON `json:"people"`
@@ -219,27 +220,45 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	kinds, err := parseAll(list(q, "kind"), enum("kind", domain.SearchKinds()))
+	if err != nil {
+		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
+		return
+	}
 	var ok bool
 	if query.Offset, query.Limit, ok = a.paging(w, r, defaultWallLimit); !ok {
 		return
 	}
-	cards, total, err := a.svc.Catalogue.Search(r.Context(), query)
-	if err != nil {
-		a.internal(w, r, err)
-		return
+	findPeople := len(kinds) == 0
+	for _, k := range kinds {
+		switch k {
+		case domain.SearchPerson:
+			findPeople = true
+		case domain.SearchMovie, domain.SearchShow, domain.SearchCollection, domain.SearchEpisode:
+			query.Kinds = append(query.Kinds, domain.ItemKind(k))
+		}
 	}
-	found, peopleTotal, err := a.svc.People.SearchPeople(r.Context(), query.Text, query.Offset, query.Limit)
-	if err != nil {
-		a.internal(w, r, err)
-		return
+	out := searchJSON{Items: []cardJSON{}, People: []personRefJSON{}, Offset: query.Offset}
+	if len(kinds) == 0 || len(query.Kinds) > 0 {
+		cards, total, err := a.svc.Catalogue.Search(r.Context(), query)
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		out.Items, out.Total = cardsJSON(cards), total
 	}
-	people := make([]personRefJSON, len(found))
-	for i, p := range found {
-		people[i] = personRefJSON(p)
+	if findPeople {
+		found, total, err := a.svc.People.SearchPeople(r.Context(), query.Text, query.Offset, query.Limit)
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		out.People, out.PeopleTotal = make([]personRefJSON, len(found)), total
+		for i, p := range found {
+			out.People[i] = personRefJSON(p)
+		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, searchJSON{
-		Items: cardsJSON(cards), People: people, Offset: query.Offset, Total: total, PeopleTotal: peopleTotal,
-	})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
 
 func (a *API) title(w http.ResponseWriter, r *http.Request) {
@@ -308,35 +327,37 @@ var wallFilterParameters = []param{
 	{"person", []uuid.UUID{}, "People credited."},
 }
 
+// list is the values of the list parameter name, repeated or comma-separated.
+func list(q url.Values, name string) []string {
+	var out []string
+	for _, v := range q[name] {
+		out = append(out, strings.Split(v, ",")...)
+	}
+	return out
+}
+
 func wallFilter(q url.Values) (store.WallFilter, error) {
 	var f store.WallFilter
-	list := func(name string) []string {
-		var out []string
-		for _, v := range q[name] {
-			out = append(out, strings.Split(v, ",")...)
-		}
-		return out
-	}
 	if s := q.Get("starts_with"); s != "" {
 		if f.StartsWith = strings.ToUpper(s); f.StartsWith != "#" && (len(f.StartsWith) != 1 || f.StartsWith < "A" || f.StartsWith > "Z") {
 			return f, errors.New("starts_with is a letter or #")
 		}
 	}
 	var err error
-	if f.Marks, err = parseAll(list("mark"), enum("mark", domain.Marks())); err != nil {
+	if f.Marks, err = parseAll(list(q, "mark"), enum("mark", domain.Marks())); err != nil {
 		return f, err
 	}
-	if f.Resolutions, err = parseAll(list("resolution"), enum("resolution", domain.Resolutions())); err != nil {
+	if f.Resolutions, err = parseAll(list(q, "resolution"), enum("resolution", domain.Resolutions())); err != nil {
 		return f, err
 	}
-	if f.Ranges, err = parseAll(list("range"), enum("range", domain.Ranges())); err != nil {
+	if f.Ranges, err = parseAll(list(q, "range"), enum("range", domain.Ranges())); err != nil {
 		return f, err
 	}
-	if f.Years, err = parseAll(list("year"), strconv.Atoi); err != nil {
+	if f.Years, err = parseAll(list(q, "year"), strconv.Atoi); err != nil {
 		return f, errors.New("year is a year")
 	}
-	f.Genres, f.Certificates, f.Studios = list("genre"), list("certificate"), list("studio")
-	if f.People, err = parseAll(list("person"), uuid.Parse); err != nil {
+	f.Genres, f.Certificates, f.Studios = list(q, "genre"), list(q, "certificate"), list(q, "studio")
+	if f.People, err = parseAll(list(q, "person"), uuid.Parse); err != nil {
 		return f, errors.New("person is a person's id")
 	}
 	if s := q.Get("rating_site"); s != "" {

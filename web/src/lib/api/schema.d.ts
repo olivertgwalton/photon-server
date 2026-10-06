@@ -3801,6 +3801,8 @@ export interface paths {
                     q?: string;
                     /** @description Only this library's titles. */
                     library?: string;
+                    /** @description Only these kinds of title, or people; repeated or comma-separated, everything by default. */
+                    kind?: components["schemas"]["SearchKind"][];
                     /** @description Where the page starts, from 0. */
                     offset?: number;
                     /** @description How many to answer, from 1 to 200. */
@@ -5491,6 +5493,8 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        /** @enum {string} */
+        SearchKind: "movie" | "show" | "collection" | "episode" | "person";
         SeasonCard: {
             blurhashes?: {
                 [key: string]: string;

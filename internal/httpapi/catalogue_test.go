@@ -78,13 +78,16 @@ func (fakeCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage,
 	return store.TitlePage{ID: id, Kind: domain.ItemMovie, Title: "Heat"}, nil
 }
 
-// Search answers one card titled after what it was asked.
-// Search finds one title, on the first page alone.
+// Search finds one title, on the first page alone, titled after what it was asked.
 func (fakeCatalogue) Search(_ context.Context, q store.SearchQuery) ([]store.Card, int64, error) {
 	if q.Offset > 0 {
 		return []store.Card{}, 1, nil
 	}
-	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: q.Text + " " + q.Library.String()}}, 1, nil
+	title := q.Text + " " + q.Library.String()
+	if len(q.Kinds) > 0 {
+		title += fmt.Sprint(" ", q.Kinds)
+	}
+	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: title}}, 1, nil
 }
 
 func (fakeCatalogue) Home(_ context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error) {
@@ -127,14 +130,19 @@ func TestSearch(t *testing.T) {
 		query      string
 		wantStatus int
 		wantTitle  string
+		wantPeople int
 	}{
-		{"?q=heat", http.StatusOK, "heat 00000000-0000-0000-0000-000000000000"},
-		{"?q=sigourney", http.StatusOK, "sigourney 00000000-0000-0000-0000-000000000000"},
-		{"?q=heat&library=" + films.String(), http.StatusOK, "heat " + films.String()},
-		{"", http.StatusBadRequest, ""},
-		{"?q=heat&library=films", http.StatusBadRequest, ""},
-		{"?q=heat&offset=-1", http.StatusBadRequest, ""},
-		{"?q=heat&limit=0", http.StatusBadRequest, ""},
+		{"?q=heat", http.StatusOK, "heat 00000000-0000-0000-0000-000000000000", 0},
+		{"?q=sigourney", http.StatusOK, "sigourney 00000000-0000-0000-0000-000000000000", 1},
+		{"?q=heat&library=" + films.String(), http.StatusOK, "heat " + films.String(), 0},
+		{"?q=sigourney&kind=movie", http.StatusOK, "sigourney 00000000-0000-0000-0000-000000000000 [movie]", 0},
+		{"?q=sigourney&kind=show,episode&kind=person", http.StatusOK, "sigourney 00000000-0000-0000-0000-000000000000 [show episode]", 1},
+		{"?q=sigourney&kind=person", http.StatusOK, "", 1},
+		{"", http.StatusBadRequest, "", 0},
+		{"?q=heat&library=films", http.StatusBadRequest, "", 0},
+		{"?q=heat&kind=film", http.StatusBadRequest, "", 0},
+		{"?q=heat&offset=-1", http.StatusBadRequest, "", 0},
+		{"?q=heat&limit=0", http.StatusBadRequest, "", 0},
 	} {
 		rec := serve(t, http.MethodGet, "/api/v1/search"+tc.query, goodToken, "")
 		if rec.Code != tc.wantStatus {
@@ -155,11 +163,11 @@ func TestSearch(t *testing.T) {
 		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 			t.Fatal(err)
 		}
-		if len(got.Items) != 1 || got.Items[0].Title != tc.wantTitle {
+		if tc.wantTitle == "" && len(got.Items) != 0 || tc.wantTitle != "" && (len(got.Items) != 1 || got.Items[0].Title != tc.wantTitle) {
 			t.Errorf("%q: items = %+v, want %q", tc.query, got.Items, tc.wantTitle)
 		}
-		if wantPeople := strings.Contains(tc.query, "sigourney"); wantPeople != (len(got.People) == 1) {
-			t.Errorf("%q: people = %+v", tc.query, got.People)
+		if len(got.People) != tc.wantPeople {
+			t.Errorf("%q: people = %+v, want %d", tc.query, got.People, tc.wantPeople)
 		}
 	}
 	var next searchJSON

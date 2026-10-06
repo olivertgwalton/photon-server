@@ -17,6 +17,21 @@ func ItemKinds() []ItemKind {
 	return []ItemKind{ItemMovie, ItemShow, ItemSeason, ItemEpisode, ItemExtra, ItemCollection}
 }
 
+// SearchKind is what a search can be narrowed to: a kind of title it finds, or people.
+type SearchKind string
+
+const (
+	SearchMovie                 = SearchKind(ItemMovie)
+	SearchShow                  = SearchKind(ItemShow)
+	SearchCollection            = SearchKind(ItemCollection)
+	SearchEpisode               = SearchKind(ItemEpisode)
+	SearchPerson     SearchKind = "person"
+)
+
+func SearchKinds() []SearchKind {
+	return []SearchKind{SearchMovie, SearchShow, SearchCollection, SearchEpisode, SearchPerson}
+}
+
 // CollectionOrigin is who made a collection: a provider that names its titles part of it, or an
 // admin.
 type CollectionOrigin string
