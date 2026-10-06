@@ -19,6 +19,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 const minimumPostgres = 180000
@@ -213,6 +215,28 @@ func (s *Store) SigningKey(ctx context.Context) ([]byte, error) {
 // none.
 func (s *Store) SetCertificateCountry(ctx context.Context, country string) error {
 	_, err := s.pool.Exec(ctx, "UPDATE server SET certificate_country = nullif(upper($1), '')", country)
+	return err
+}
+
+// Maintenance answers the maintenance window and when work that reads media waits for it.
+func (s *Store) Maintenance(ctx context.Context) (domain.Maintenance, error) {
+	var m domain.Maintenance
+	var zone string
+	err := s.pool.QueryRow(ctx, `
+		SELECT maintenance_start, maintenance_end, maintenance_zone, previews_timing, markers_timing FROM server`).
+		Scan(&m.StartHour, &m.EndHour, &zone, &m.Previews, &m.Markers)
+	if err != nil {
+		return m, err
+	}
+	m.Zone, err = domain.ParseZone(zone)
+	return m, err
+}
+
+// SetMaintenance replaces the maintenance window and when work that reads media waits for it.
+func (s *Store) SetMaintenance(ctx context.Context, m domain.Maintenance) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE server SET maintenance_start = $1, maintenance_end = $2, maintenance_zone = $3, previews_timing = $4,
+			markers_timing = $5`, m.StartHour, m.EndHour, m.Zone.String(), m.Previews, m.Markers)
 	return err
 }
 

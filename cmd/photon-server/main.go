@@ -19,6 +19,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	// The image has no zoneinfo, and the maintenance window is kept in a zone named by an admin.
+	_ "time/tzdata"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/analysis"

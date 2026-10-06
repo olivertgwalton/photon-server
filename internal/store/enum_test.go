@@ -81,6 +81,8 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"conversion_video_range":   names(domain.Ranges()),
 		"activity_kind":            names(domain.LoggedEventKinds()),
 		"webhook_event":            names(domain.HookableEventKinds()),
+		"previews_timing":          names(domain.Timings()),
+		"markers_timing":           names(domain.Timings()),
 		"delivery_event":           names(append(domain.HookableEventKinds(), domain.EventWebhookTest)),
 	} {
 		var def string
