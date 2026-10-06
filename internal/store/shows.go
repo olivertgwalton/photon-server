@@ -52,6 +52,10 @@ type Episode struct {
 func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, show Show, episodes []Episode, extras []Extra) (Saved, error) {
 	saved := Saved{Titles: Changed{}}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		settings, err := analysisOf(ctx, tx, lib)
+		if err != nil {
+			return err
+		}
 		// A series' own folder, holding its NFO and extras, comes before any of its episodes.
 		if len(episodes) > 0 || ((len(extras) > 0 || show.NFO != nil || len(show.Artwork) > 0 || len(show.Themes) > 0) && show.Folder != "") {
 			showID, err := ensureShow(ctx, tx, lib, show, saved.Titles)
@@ -71,7 +75,7 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 					}
 					seasons[e.Season] = seasonID
 				}
-				if err := saveEpisode(ctx, tx, lib, showID, seasonID, e, saved.Titles); err != nil {
+				if err := saveEpisode(ctx, tx, lib, settings, showID, seasonID, e, saved.Titles); err != nil {
 					return fmt.Errorf("%s season %d %v: %w", show.Title, e.Season, e.Episodes, err)
 				}
 			}
@@ -106,8 +110,7 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 				}
 			}
 		}
-		var err error
-		if saved.Unowned, err = saveExtras(ctx, tx, lib, extras); err != nil {
+		if saved.Unowned, err = saveExtras(ctx, tx, lib, settings, extras); err != nil {
 			return err
 		}
 		return rememberFolder(ctx, tx, lib, path, fingerprint)
@@ -168,7 +171,7 @@ func seasonOf(ctx context.Context, tx db, showID uuid.UUID, number int) (uuid.UU
 	return id, err
 }
 
-func saveEpisode(ctx context.Context, tx db, lib, showID, seasonID uuid.UUID, e Episode, changed Changed) error {
+func saveEpisode(ctx context.Context, tx db, lib uuid.UUID, settings model.Library, showID, seasonID uuid.UUID, e Episode, changed Changed) error {
 	row := model.Item{
 		LibraryID: lib, Kind: domain.ItemEpisode, ParentID: &seasonID, SeasonNumber: &e.Season,
 		ScanTitle: e.Title, Title: e.Title, SortTitle: sortTitle(e.Title), Folder: e.Folder,
@@ -215,7 +218,7 @@ func saveEpisode(ctx context.Context, tx db, lib, showID, seasonID uuid.UUID, e 
 		return err
 	}
 	for _, c := range e.Copies {
-		if err := saveCopy(ctx, tx, lib, row.ID, c); err != nil {
+		if err := saveCopy(ctx, tx, lib, settings, row.ID, c); err != nil {
 			return err
 		}
 	}
