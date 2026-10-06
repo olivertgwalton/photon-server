@@ -10,6 +10,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -70,12 +71,7 @@ func Markers(st *store.Store, fingerprint fingerprinter) jobs.Handler {
 
 // take fingerprints the window of a part where kind would be.
 func take(ctx context.Context, fingerprint fingerprinter, part store.SeasonPart, kind domain.MarkerKind) (sound, error) {
-	r, err := os.OpenRoot(part.Root)
-	if err != nil {
-		return sound{}, err
-	}
-	defer r.Close()
-	f, err := r.Open(part.RelPath)
+	f, err := library.Open(part.Root, part.RelPath)
 	if err != nil {
 		return sound{}, err
 	}

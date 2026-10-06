@@ -11,6 +11,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/artwork"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -77,12 +78,7 @@ func (a *API) openPicture(ctx context.Context, id uuid.UUID, pic store.Picture, 
 		if pic.URL != "" {
 			return a.svc.Artwork.File(ctx, id, pic.URL)
 		}
-		root, err := os.OpenRoot(pic.Root)
-		if err != nil {
-			return nil, err
-		}
-		defer root.Close()
-		return root.Open(pic.Path)
+		return library.Open(pic.Root, pic.Path)
 	}
 	if width > 0 {
 		f, err := a.svc.Artwork.Resized(ctx, id.String(), width, original)

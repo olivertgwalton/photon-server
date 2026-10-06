@@ -46,19 +46,17 @@ type Report struct {
 // Scan reads a library's folders again, telling progress after each, and what each changed of the
 // library's titles.
 func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(domain.ScanProgress), changed func(store.Changed)) (Report, error) {
-	root, err := os.OpenRoot(lib.Root)
-	if err != nil {
-		return Report{}, err
-	}
-	defer root.Close()
-
 	var report Report
 	var folders, present []string
 	// The root is known before it is read; each folder read makes its subfolders known.
 	told := domain.ScanProgress{Library: lib.ID, Phase: domain.ScanReading, Known: 1}
-	for folder, err := range library.Walk(root) {
+	for folder, err := range library.Walk(lib.Root) {
 		told.Done++
 		told.Known += len(folder.Folders)
+		// A root that cannot be read is a mount that is down, not a library emptied.
+		if err != nil && folder.Path == "." {
+			return report, err
+		}
 		if err != nil {
 			s.log.WarnContext(ctx, "folder not read", slog.String("folder", folder.Path), slog.Any("err", err))
 			progress(told)
@@ -66,6 +64,9 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(do
 		}
 		report.Folders++
 		folders = append(folders, folder.Path)
+		for _, sk := range folder.Skipped {
+			s.skip(ctx, &report, path.Join(folder.Path, sk.Name), sk.Err)
+		}
 		for _, f := range folder.Files {
 			if naming.IsVideo(f.Name) || naming.IsSubtitle(f.Name) {
 				present = append(present, path.Join(folder.Path, f.Name))
@@ -83,9 +84,9 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(do
 		var saved store.Saved
 		switch lib.Kind {
 		case domain.LibraryMovies:
-			saved, err = s.saveFilms(ctx, root, lib, folder, &report)
+			saved, err = s.saveFilms(ctx, lib, folder, &report)
 		case domain.LibraryShows:
-			saved, err = s.saveEpisodes(ctx, root, lib, folder, &report)
+			saved, err = s.saveEpisodes(ctx, lib, folder, &report)
 		}
 		if err != nil {
 			return report, fmt.Errorf("%s: %w", folder.Path, err)
@@ -104,12 +105,12 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(do
 	return report, err
 }
 
-func (s *Scanner) saveFilms(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, report *Report) (store.Saved, error) {
+func (s *Scanner) saveFilms(ctx context.Context, lib domain.Library, folder library.Folder, report *Report) (store.Saved, error) {
 	var films []store.Film
 	plans := planFilms(folder)
 	pics := picturesIn(folder.Path, fileNames(folder))
 	for _, f := range plans {
-		copies, err := s.copies(ctx, root, lib, folder.Path, f.versions, report)
+		copies, err := s.copies(ctx, lib, folder.Path, f.versions, report)
 		if err != nil {
 			return store.Saved{}, err
 		}
@@ -126,11 +127,11 @@ func (s *Scanner) saveFilms(ctx context.Context, root *os.Root, lib domain.Libra
 		}
 		films = append(films, store.Film{
 			Title: f.name.Title, Year: f.name.Year, Folder: folder.Path, IDs: ids(f.name.IDs),
-			NFO: metadata(s.readNFO(ctx, root, lib, folder.Path, f.nfos...)), Artwork: art, Copies: copies,
+			NFO: metadata(s.readNFO(ctx, lib, folder.Path, f.nfos...)), Artwork: art, Copies: copies,
 		})
 	}
 	extraPlans, inExtrasFolder := extrasIn(folder)
-	extras, err := s.extras(ctx, root, lib, folder, extraPlans, report, func(e extraPlan) store.Owner {
+	extras, err := s.extras(ctx, lib, folder, extraPlans, report, func(e extraPlan) store.Owner {
 		if inExtrasFolder {
 			return store.Owner{Kind: domain.ItemMovie, Folder: path.Dir(folder.Path)}
 		}
@@ -159,10 +160,10 @@ func filmNamed(name string, films []store.Film) string {
 }
 
 // extras reads each planned extra's copy, probing it if new, and names its owner.
-func (s *Scanner) extras(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, plans []extraPlan, report *Report, owner func(extraPlan) store.Owner) ([]store.Extra, error) {
+func (s *Scanner) extras(ctx context.Context, lib domain.Library, folder library.Folder, plans []extraPlan, report *Report, owner func(extraPlan) store.Owner) ([]store.Extra, error) {
 	var extras []store.Extra
 	for _, e := range plans {
-		c, ok, err := s.copy(ctx, root, lib, folder.Path, e.copy, report)
+		c, ok, err := s.copy(ctx, lib, folder.Path, e.copy, report)
 		if err != nil {
 			return nil, err
 		}
@@ -181,12 +182,12 @@ func (s *Scanner) unowned(ctx context.Context, report *Report, paths []string) {
 	}
 }
 
-func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Library, folder library.Folder, report *Report) (store.Saved, error) {
+func (s *Scanner) saveEpisodes(ctx context.Context, lib domain.Library, folder library.Folder, report *Report) (store.Saved, error) {
 	series, season := seriesOf(folder.Path)
 	var show store.Show
 	if series != "" {
 		name := naming.SeriesName(series)
-		said := s.readNFO(ctx, root, lib, series, "tvshow.nfo")
+		said := s.readNFO(ctx, lib, series, "tvshow.nfo")
 		show = store.Show{
 			Title: name.Title, Year: name.Year, Folder: series, IDs: ids(name.IDs), NFO: metadata(said),
 			Seasons: map[int]domain.Metadata{},
@@ -197,7 +198,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 			}
 		}
 		// Jellyfin reads season.nfo only in the season's own folder.
-		if said := s.readNFO(ctx, root, lib, folder.Path, "season.nfo"); said != nil && season != nil {
+		if said := s.readNFO(ctx, lib, folder.Path, "season.nfo"); said != nil && season != nil {
 			n := cmp.Or(said.Season, season)
 			said.Title = cmp.Or(said.Title, show.Seasons[*n].Title)
 			show.Seasons[*n] = said.Metadata
@@ -210,7 +211,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 		show.SeasonArtwork = pics.seasons
 	case series != "" && season != nil:
 		show.SeasonArtwork = map[int][]domain.Artwork{
-			*season: append(pics.own, seasonPictures(root, series, *season)...),
+			*season: append(pics.own, seasonPictures(lib.Root, series, *season)...),
 		}
 	}
 	var episodes []store.Episode
@@ -220,7 +221,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 			s.skip(ctx, report, rel, errNoEpisode)
 		}
 		for _, e := range plans {
-			copies, err := s.copies(ctx, root, lib, folder.Path, e.versions, report)
+			copies, err := s.copies(ctx, lib, folder.Path, e.versions, report)
 			if err != nil {
 				return store.Saved{}, err
 			}
@@ -233,7 +234,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 				Artwork: pics.of(stem(e.versions[0].parts[0].Name), domain.ArtworkThumb),
 			}
 			// An NFO's numbers are stated, not guessed, so they win over the file name's.
-			if said := s.readNFO(ctx, root, lib, folder.Path, nfoOf(e.versions[0].parts)); said != nil {
+			if said := s.readNFO(ctx, lib, folder.Path, nfoOf(e.versions[0].parts)); said != nil {
 				ep.NFO = &said.Metadata
 				if len(said.Episodes) > 0 {
 					ep.Episodes, ep.ByNumber = said.Episodes, true
@@ -246,7 +247,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, root *os.Root, lib domain.Li
 		}
 	}
 	plans, inExtrasFolder := extrasIn(folder)
-	extras, err := s.extras(ctx, root, lib, folder, plans, report, func(e extraPlan) store.Owner {
+	extras, err := s.extras(ctx, lib, folder, plans, report, func(e extraPlan) store.Owner {
 		o := store.Owner{Kind: domain.ItemShow, Folder: series}
 		if season != nil {
 			o.Kind, o.Season = domain.ItemSeason, *season
@@ -275,10 +276,10 @@ var errNoEpisode = errors.New("its name says no season or episode")
 // copies reads each copy's content key and probes only copies the catalogue does not hold. A copy
 // that cannot be read is left out and logged. A byte-identical copy in a second place is a known
 // copy: it becomes another place to read the same version.
-func (s *Scanner) copies(ctx context.Context, root *os.Root, lib domain.Library, dir string, plans []copyPlan, report *Report) ([]store.Copy, error) {
+func (s *Scanner) copies(ctx context.Context, lib domain.Library, dir string, plans []copyPlan, report *Report) ([]store.Copy, error) {
 	var copies []store.Copy
 	for _, v := range plans {
-		c, ok, err := s.copy(ctx, root, lib, dir, v, report)
+		c, ok, err := s.copy(ctx, lib, dir, v, report)
 		if err != nil {
 			return nil, err
 		}
@@ -289,7 +290,7 @@ func (s *Scanner) copies(ctx context.Context, root *os.Root, lib domain.Library,
 	return copies, nil
 }
 
-func (s *Scanner) copy(ctx context.Context, root *os.Root, lib domain.Library, dir string, v copyPlan, report *Report) (store.Copy, bool, error) {
+func (s *Scanner) copy(ctx context.Context, lib domain.Library, dir string, v copyPlan, report *Report) (store.Copy, bool, error) {
 	c := store.Copy{Edition: v.edition, Label: v.label}
 	for _, sub := range v.subtitles {
 		c.Subtitles = append(c.Subtitles, store.Subtitle{
@@ -303,7 +304,7 @@ func (s *Scanner) copy(ctx context.Context, root *os.Root, lib domain.Library, d
 		paths[i] = path.Join(dir, p.Name)
 		c.Parts = append(c.Parts, store.Part{RelPath: paths[i], Size: p.Size, ModTime: p.ModTime})
 	}
-	key, err := library.ContentKey(root, paths)
+	key, err := library.ContentKey(lib.Root, paths)
 	if err != nil {
 		s.skip(ctx, report, paths[0], err)
 		return c, false, nil
@@ -317,7 +318,7 @@ func (s *Scanner) copy(ctx context.Context, root *os.Root, lib domain.Library, d
 		return c, true, nil
 	}
 	for i := range c.Parts {
-		facts, err := s.probe(ctx, root, paths[i])
+		facts, err := s.probe(ctx, lib.Root, paths[i])
 		report.Probed++
 		if err != nil {
 			s.skip(ctx, report, paths[i], err)
@@ -328,8 +329,8 @@ func (s *Scanner) copy(ctx context.Context, root *os.Root, lib domain.Library, d
 	return c, true, nil
 }
 
-func (s *Scanner) probe(ctx context.Context, root *os.Root, rel string) (media.Facts, error) {
-	f, err := root.Open(rel)
+func (s *Scanner) probe(ctx context.Context, root, rel string) (media.Facts, error) {
+	f, err := library.Open(root, rel)
 	if err != nil {
 		return media.Facts{}, err
 	}
@@ -339,13 +340,13 @@ func (s *Scanner) probe(ctx context.Context, root *os.Root, rel string) (media.F
 
 // readNFO reads the first of the named NFOs in dir that exists, where the library takes NFOs. One that cannot be read is
 // logged and the title goes on without it.
-func (s *Scanner) readNFO(ctx context.Context, root *os.Root, lib domain.Library, dir string, names ...string) *nfo.File {
+func (s *Scanner) readNFO(ctx context.Context, lib domain.Library, dir string, names ...string) *nfo.File {
 	if !slices.Contains(lib.Sources, domain.SourceNFO) {
 		return nil
 	}
 	for _, name := range names {
 		rel := path.Join(dir, name)
-		f, err := root.Open(rel)
+		f, err := library.Open(lib.Root, rel)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}

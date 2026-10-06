@@ -1,6 +1,8 @@
 package library
 
 import (
+	"errors"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -26,13 +28,8 @@ func write(t *testing.T, dir string, files map[string]string) {
 
 func walkAll(t *testing.T, dir string) map[string]Folder {
 	t.Helper()
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
 	got := map[string]Folder{}
-	for f, err := range Walk(root) {
+	for f, err := range Walk(dir) {
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -61,15 +58,6 @@ func TestWalkSkipsWhatIsNotALibrary(t *testing.T) {
 		"Alien (1979)/Alien (1979).en.srt":       "s",
 		"Alien (1979)/Featurettes/Making Of.mp4": "v",
 	})
-	outside := filepath.Join(t.TempDir(), "elsewhere.mkv")
-	write(t, filepath.Dir(outside), map[string]string{"elsewhere.mkv": "v"})
-	if err := os.Symlink(outside, filepath.Join(dir, "Heat (1995)", "escape.mkv")); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(filepath.Join(dir, "Alien (1979)"), filepath.Join(dir, "loop")); err != nil {
-		t.Fatal(err)
-	}
-
 	got := walkAll(t, dir)
 	want := []string{".", "Alien (1979)", "Alien (1979)/Featurettes", "Heat (1995)"}
 	if diff := cmp.Diff(want, slices.Sorted(maps.Keys(got))); diff != "" {
@@ -132,5 +120,60 @@ func TestSubsFoldersBelongToTheirParent(t *testing.T) {
 	write(t, dir, map[string]string{"Heat (1995)/Subs/German.srt": "s"})
 	if walkAll(t, dir)["Heat (1995)"].Fingerprint == before {
 		t.Error("adding a subtitle under Subs did not change the film folder's fingerprint")
+	}
+}
+
+// A library of links into another mount, as debrid and *arr setups make them, reads as the files
+// the links lead to; a link that leads nowhere, or back up, is left out and says why.
+func TestWalkFollowsLinksOutOfTheLibrary(t *testing.T) {
+	dir, mount := t.TempDir(), t.TempDir()
+	write(t, mount, map[string]string{
+		"films/Heat.1995.2160p.mkv":     "v",
+		"shows/Severance/S01E01.mkv":    "v",
+		"shows/Severance/S01E01.en.srt": "s",
+	})
+	link := func(target, name string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	link(filepath.Join(mount, "films/Heat.1995.2160p.mkv"), "Heat (1995)/Heat (1995).mkv")
+	link(filepath.Join(mount, "gone.mkv"), "Heat (1995)/Heat (1995) - 1080p.mkv")
+	link(filepath.Join(mount, "shows/Severance"), "Severance")
+	link(dir, "Heat (1995)/back up")
+
+	got := walkAll(t, dir)
+	if diff := cmp.Diff([]string{".", "Heat (1995)", "Severance"}, slices.Sorted(maps.Keys(got))); diff != "" {
+		t.Errorf("folders (-want +got):\n%s", diff)
+	}
+	heat := got["Heat (1995)"]
+	if diff := cmp.Diff([]string{"Heat (1995).mkv"}, fileNames(heat)); diff != "" {
+		t.Errorf("Heat's files (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]string{"S01E01.en.srt", "S01E01.mkv"}, fileNames(got["Severance"])); diff != "" {
+		t.Errorf("Severance's files (-want +got):\n%s", diff)
+	}
+	skipped := map[string]error{}
+	for _, s := range heat.Skipped {
+		skipped[s.Name] = s.Err
+	}
+	if err := skipped["Heat (1995) - 1080p.mkv"]; !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("a link to nothing: %v, want it left out as not there", err)
+	}
+	if err := skipped["back up"]; !errors.Is(err, errLoop) {
+		t.Errorf("a link to the library: %v, want it left out as a loop", err)
+	}
+
+	f, err := Open(dir, "Severance/S01E01.mkv")
+	if err != nil {
+		t.Fatalf("a file through a linked folder: %v", err)
+	}
+	f.Close()
+	if _, err := Open(dir, "../"+filepath.Base(mount)+"/films/Heat.1995.2160p.mkv"); !errors.Is(err, errNotInside) {
+		t.Errorf("a path climbing out of the library: %v, want it refused", err)
 	}
 }

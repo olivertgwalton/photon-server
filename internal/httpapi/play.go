@@ -22,6 +22,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -526,8 +527,8 @@ func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
 	a.serveLibraryFile(w, r, a.svc.Playing.SubtitleFile)
 }
 
-// serveLibraryFile serves the file of a library that where finds for the id in the path, through
-// the library's root, so a path can never leave it.
+// serveLibraryFile serves the file of a library that where finds for the id in the path: only a
+// file the scanner recorded.
 func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where func(context.Context, uuid.UUID) (string, string, error)) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
@@ -543,13 +544,7 @@ func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where fun
 		a.internal(w, r, err)
 		return
 	}
-	lib, err := os.OpenRoot(root)
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	defer lib.Close()
-	f, err := lib.Open(rel)
+	f, err := library.Open(root, rel)
 	if errors.Is(err, fs.ErrNotExist) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return

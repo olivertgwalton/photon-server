@@ -95,6 +95,13 @@ whose names start with a dot are left out unless asked for (`&hidden=show`). It 
 server's user can read, so only an admin may ask; in Docker that is the container's view, with your
 media under `/media`.
 
+Links in a library are followed wherever they lead, to files and to folders, as Jellyfin and Plex
+follow them, so a library of links into a remote mount (Riven, zurg, rdt-client) reads like any
+other. A link that leads nowhere, one back to a folder above it, and anything that is neither a file
+nor a folder are left out, each logged and counted in the scan's `left_out`. A library whose own
+folder cannot be read fails its scan and keeps its titles. The server only ever opens a file a scan
+recorded: no request names a path.
+
 Libraries are scanned every 12 hours, and as their files change: each folder is watched (inotify on
 Linux) and a library is scanned a minute after its last change. Network shares send no change
 events, so a library on one is scanned on the schedule; `photon-server library set -name NAME

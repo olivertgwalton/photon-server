@@ -16,6 +16,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -190,18 +191,13 @@ func chapterImages(ctx context.Context, tools media.Tools, f *os.File, chapters 
 	return made, nil
 }
 
-// openPart opens a place a part's bytes are, through its library's root.
+// openPart opens a place a part's bytes are.
 func openPart(ctx context.Context, st *store.Store, part uuid.UUID) (*os.File, error) {
 	root, rel, err := st.PartFile(ctx, part)
 	if err != nil {
 		return nil, err
 	}
-	r, err := os.OpenRoot(root)
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-	f, err := r.Open(rel)
+	f, err := library.Open(root, rel)
 	if err != nil {
 		return nil, fmt.Errorf("part %s: %w", part, err)
 	}

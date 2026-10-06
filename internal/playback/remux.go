@@ -12,6 +12,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -147,16 +148,11 @@ func (r *Remuxes) index(ctx context.Context, part uuid.UUID, open func() (*os.Fi
 	return pts, r.parts.SaveKeyframes(ctx, part, pts)
 }
 
-// openFile opens a file of a library through its root, so a path can never leave the library.
+// openFile opens a file of a library the scanner recorded.
 func openFile(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (*os.File, error) {
 	root, rel, err := where(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	lib, err := os.OpenRoot(root)
-	if err != nil {
-		return nil, err
-	}
-	defer lib.Close()
-	return lib.Open(rel)
+	return library.Open(root, rel)
 }
