@@ -44,6 +44,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/task"
 	"github.com/olivertgwalton/photon-server/internal/tmdb"
 	"github.com/olivertgwalton/photon-server/internal/tvdb"
+	"github.com/olivertgwalton/photon-server/internal/tvthemes"
 	"github.com/olivertgwalton/photon-server/internal/watch"
 	"github.com/olivertgwalton/photon-server/internal/webhook"
 )
@@ -271,6 +272,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}, hub)
 	matcher := jobs.NewWorker(st, logger, node, identifySlots, map[domain.JobKind]jobs.Handler{
 		domain.JobIdentify: identify.Handler(st, providers, hub.Raise, logger),
+		domain.JobTheme:    tvthemes.Fetch(st, pictureCache, cache, tvthemes.Host),
 	}, hub)
 	analyser := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), map[domain.JobKind]jobs.Handler{
 		domain.JobKeyframes: analysis.Keyframes(st, tools),
