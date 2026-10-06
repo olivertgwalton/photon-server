@@ -137,12 +137,7 @@ func (a *API) candidates(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	offered, err := searcher.Candidates(r.Context(), sub.Kind, title, year)
-	if errors.Is(err, provider.ErrUnavailable) {
-		writeProblem(w, a.logger, codeProviderUnavailable, err.Error())
-		return
-	}
-	if err != nil {
-		a.internal(w, r, err)
+	if a.answered(w, r, err) {
 		return
 	}
 	out := make([]candidateJSON, len(offered))
@@ -314,12 +309,7 @@ func (a *API) chooseArtwork(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	err := a.svc.Editing.ChooseArtwork(r.Context(), id, kind, req.ID)
-	if errors.Is(err, store.ErrNotACandidate) {
-		writeProblem(w, a.logger, codeInvalidBody, "id is one of the title's candidates of that kind")
-		return
-	}
-	if a.answered(w, r, err) {
+	if a.answered(w, r, a.svc.Editing.ChooseArtwork(r.Context(), id, kind, req.ID)) {
 		return
 	}
 	a.titleUpdated(r, id)
@@ -398,12 +388,8 @@ func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
 		absent[i] = domain.MarkerAbsent{Kind: m.Kind, Part: m.Part}
 	}
 	err := a.svc.Editing.SetMarkers(r.Context(), id, markers, absent)
-	switch {
-	case errors.Is(err, store.ErrNotFound):
+	if errors.Is(err, store.ErrNotFound) {
 		writeProblem(w, a.logger, codeNotFound, "no copy has that id")
-		return
-	case errors.Is(err, store.ErrMarkerOutsidePart), errors.Is(err, store.ErrMarkerRepeated), errors.Is(err, store.ErrMarkerNoPart):
-		writeProblem(w, a.logger, codeInvalidBody, err.Error())
 		return
 	}
 	if a.answered(w, r, err) {

@@ -95,7 +95,7 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := a.svc.ProfileAdmin.AddProfile(r.Context(), req.Name, req.Role, hash)
-	if a.answeredProfile(w, r, err) {
+	if a.answered(w, r, err) {
 		return
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileAdded, Profile: p.ID, Details: map[string]any{"name": p.Name}})
@@ -127,7 +127,7 @@ func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
 		change.PasswordHash = &hash
 	}
 	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), id, change)
-	if a.answeredProfile(w, r, err) {
+	if a.answered(w, r, err) {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(p))
@@ -140,7 +140,7 @@ func (a *API) removeProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name, err := a.svc.ProfileAdmin.RemoveProfile(r.Context(), id)
-	if a.answeredProfile(w, r, err) {
+	if a.answered(w, r, err) {
 		return
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileRemoved, Details: map[string]any{"name": name}})
@@ -153,29 +153,5 @@ func (a *API) hash(w http.ResponseWriter, r *http.Request, password string) (str
 		return "", true
 	}
 	hash, err := auth.HashPassword(r.Context(), password)
-	if errors.Is(err, auth.ErrPasswordTooShort) {
-		writeProblem(w, a.logger, codeInvalidBody, err.Error())
-		return "", false
-	}
-	if err != nil {
-		a.internal(w, r, err)
-		return "", false
-	}
-	return hash, true
-}
-
-func (a *API) answeredProfile(w http.ResponseWriter, r *http.Request, err error) bool {
-	switch {
-	case err == nil:
-		return false
-	case errors.Is(err, store.ErrNotFound):
-		writeProblem(w, a.logger, codeNotFound, "")
-	case errors.Is(err, store.ErrProfileExists):
-		writeProblem(w, a.logger, codeConflict, "a profile has that name")
-	case errors.Is(err, store.ErrLastAdmin), errors.Is(err, store.ErrAdminNeedsPassword):
-		writeProblem(w, a.logger, codeConflict, err.Error())
-	default:
-		a.internal(w, r, err)
-	}
-	return true
+	return hash, !a.answered(w, r, err)
 }

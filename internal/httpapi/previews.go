@@ -2,8 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"errors"
-	"io/fs"
 	"net/http"
 	"os"
 	"strconv"
@@ -93,12 +91,7 @@ func (a *API) chapterOf(w http.ResponseWriter, r *http.Request) (uuid.UUID, int,
 // so a client may keep one as long as it likes.
 func (a *API) servePreview(w http.ResponseWriter, r *http.Request, open func() (*os.File, error)) {
 	f, err := open()
-	if errors.Is(err, fs.ErrNotExist) {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
-	}
-	if err != nil {
-		a.internal(w, r, err)
+	if a.answered(w, r, err) {
 		return
 	}
 	defer f.Close()

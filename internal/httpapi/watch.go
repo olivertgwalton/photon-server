@@ -2,13 +2,11 @@ package httpapi
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 type watching interface {
@@ -81,17 +79,4 @@ func (a *API) titleID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) 
 		writeProblem(w, a.logger, codeNotFound, "")
 	}
 	return id, err == nil
-}
-
-// answered writes the problem err is, if it is one.
-func (a *API) answered(w http.ResponseWriter, r *http.Request, err error) bool {
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		writeProblem(w, a.logger, codeNotFound, "")
-	case err != nil:
-		a.internal(w, r, err)
-	default:
-		return false
-	}
-	return true
 }

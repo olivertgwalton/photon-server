@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -104,12 +103,7 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lib, err := a.svc.Libraries.AddLibrary(r.Context(), req.Name, req.Kind, root)
-	if errors.Is(err, store.ErrLibraryExists) {
-		writeProblem(w, a.logger, codeConflict, "a library has that name or root")
-		return
-	}
-	if err != nil {
-		a.internal(w, r, err)
+	if a.answered(w, r, err) {
 		return
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventLibraryAdded, Library: lib.ID, Details: map[string]any{"name": lib.Name}})
@@ -159,19 +153,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())
 		return
 	}
-	err := a.svc.Libraries.SetLibrary(r.Context(), id, change)
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
-	case errors.Is(err, store.ErrLibraryExists):
-		writeProblem(w, a.logger, codeConflict, "a library has that name")
-		return
-	case errors.Is(err, store.ErrUnknownPlugin):
-		writeProblem(w, a.logger, codeInvalidBody, err.Error())
-		return
-	case err != nil:
-		a.internal(w, r, err)
+	if a.answered(w, r, a.svc.Libraries.SetLibrary(r.Context(), id, change)) {
 		return
 	}
 	lib, err := a.svc.Libraries.Library(r.Context(), id)

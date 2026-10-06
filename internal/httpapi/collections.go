@@ -86,12 +86,9 @@ func (a *API) setMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	err := a.svc.Collections.SetMembers(r.Context(), id, req.ItemIDs)
 	switch {
-	case errors.Is(err, store.ErrNotUserCollection):
-		writeProblem(w, a.logger, codeConflict, err.Error())
 	case errors.Is(err, store.ErrNotFound):
 		writeProblem(w, a.logger, codeNotFound, "the collection, or one of its titles, is not in its library")
-	case err != nil:
-		a.internal(w, r, err)
+	case a.answered(w, r, err):
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -103,12 +100,7 @@ func (a *API) removeCollection(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	err := a.svc.Collections.RemoveCollection(r.Context(), id)
-	switch {
-	case errors.Is(err, store.ErrNotUserCollection):
-		writeProblem(w, a.logger, codeConflict, err.Error())
-	case a.answered(w, r, err):
-	default:
+	if !a.answered(w, r, a.svc.Collections.RemoveCollection(r.Context(), id)) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

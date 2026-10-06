@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"log/slog"
 	"math"
 	"net/http"
@@ -189,19 +188,12 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d, err := playback.Decide(*req.Profile, playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams}, req.AudioStream, req.SubtitleStream, a.svc.Setup.Encoder.HEVC)
-	switch {
-	case errors.Is(err, playback.ErrNoSuchAudio):
-		writeProblem(w, a.logger, codeInvalidBody, "audio_stream is not one of the copy's audio streams")
-		return
-	case errors.Is(err, playback.ErrNoSuchSubtitle):
-		writeProblem(w, a.logger, codeInvalidBody, "subtitle_stream is not one of the copy's subtitle streams")
-		return
-	case errors.Is(err, playback.ErrNoCompatibleStream):
+	if errors.Is(err, playback.ErrNoCompatibleStream) {
 		status := codeNoCompatibleStream.status()
 		writeJSON(w, a.logger, "application/problem+json", status, refusalJSON{problem{Title: http.StatusText(status), Status: status, Code: codeNoCompatibleStream}, d.Reasons})
 		return
-	case err != nil:
-		a.internal(w, r, err)
+	}
+	if a.answered(w, r, err) {
 		return
 	}
 	title, err := a.svc.Playing.PlaybackTitle(r.Context(), id)
@@ -346,7 +338,7 @@ func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.HasSuffix(name, ".m3u8"):
 		playlist, err := a.svc.HLS.Playlist(playback, name)
-		if a.answeredRemux(w, r, err) {
+		if a.answered(w, r, err) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
@@ -361,7 +353,7 @@ func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		vtt, err := a.svc.HLS.SubtitleSegment(r.Context(), playback, t, k)
-		if a.answeredRemux(w, r, err) {
+		if a.answered(w, r, err) {
 			return
 		}
 		w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
@@ -387,7 +379,7 @@ func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	if a.answeredRemux(w, r, err) {
+	if a.answered(w, r, err) {
 		return
 	}
 	defer f.Close()
@@ -397,19 +389,6 @@ func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeContent(w, r, name, info.ModTime(), f)
-}
-
-func (a *API) answeredRemux(w http.ResponseWriter, r *http.Request, err error) bool {
-	switch {
-	case errors.Is(err, hls.ErrNoRemux):
-		writeProblem(w, a.logger, codeNotFound, "the playback has stopped, or lapsed")
-	case errors.Is(err, context.Canceled):
-	case err != nil:
-		a.internal(w, r, err)
-	default:
-		return false
-	}
-	return true
 }
 
 // routeToOwner hands a request about the playback the path names by param that another node of
@@ -504,12 +483,7 @@ func (a *API) reportPlayback(w http.ResponseWriter, r *http.Request, report func
 		return
 	}
 	reach, err := report(r.Context(), sessionOf(r).Profile.ID, id)
-	switch {
-	case errors.Is(err, playback.ErrNoPlayback):
-		writeProblem(w, a.logger, codeNotFound, "the playback has stopped, or lapsed")
-	case err != nil:
-		a.internal(w, r, err)
-	default:
+	if !a.answered(w, r, err) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, reachedJSON{Reach: reach})
 	}
 }
@@ -587,9 +561,6 @@ func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		return f, err
 	}
 	vtt, err := a.svc.HLS.WebVTT(ctx, open, tagOf(sub.Language))
-	if errors.Is(err, fs.ErrNotExist) {
-		err = store.ErrNotFound
-	}
 	if a.answered(w, r, err) {
 		return
 	}
@@ -606,9 +577,6 @@ func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where fun
 		return
 	}
 	f, rel, err := openLibraryFile(r.Context(), where, id)
-	if errors.Is(err, fs.ErrNotExist) {
-		err = store.ErrNotFound
-	}
 	if a.answered(w, r, err) {
 		return
 	}

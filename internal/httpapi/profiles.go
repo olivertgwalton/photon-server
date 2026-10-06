@@ -1,13 +1,10 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
 	"uuid"
 
-	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 type profileListingJSON struct {
@@ -52,14 +49,7 @@ func (a *API) switchProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profile, err := a.svc.Auth.SwitchProfile(r.Context(), sessionOf(r), target, req.Secret)
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		writeProblem(w, a.logger, codeNotFound, "")
-	case errors.Is(err, auth.ErrWrongSecret):
-		writeProblem(w, a.logger, codeWrongSecret, "")
-	case err != nil:
-		a.internal(w, r, err)
-	default:
+	if !a.answered(w, r, err) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(profile))
 	}
 }
@@ -81,13 +71,7 @@ func (a *API) clearPIN(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) writePIN(w http.ResponseWriter, r *http.Request, pin string) {
-	err := a.svc.Auth.SetPIN(r.Context(), sessionOf(r).Profile.ID, pin)
-	switch {
-	case errors.Is(err, auth.ErrPINNotDigits):
-		writeProblem(w, a.logger, codeInvalidBody, err.Error())
-	case err != nil:
-		a.internal(w, r, err)
-	default:
+	if !a.answered(w, r, a.svc.Auth.SetPIN(r.Context(), sessionOf(r).Profile.ID, pin)) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -109,17 +93,7 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 		!a.allowed(w, r, signInsPerName, "password:profile:"+session.Profile.ID.String()) {
 		return
 	}
-	err := a.svc.Auth.ChangePassword(r.Context(), session, req.Current, req.New)
-	switch {
-	case errors.Is(err, auth.ErrWrongSecret):
-		writeProblem(w, a.logger, codeWrongSecret, "")
-	case errors.Is(err, auth.ErrPasswordTooShort):
-		writeProblem(w, a.logger, codeInvalidBody, err.Error())
-	case errors.Is(err, auth.ErrNoPassword):
-		writeProblem(w, a.logger, codeConflict, err.Error())
-	case err != nil:
-		a.internal(w, r, err)
-	default:
+	if !a.answered(w, r, a.svc.Auth.ChangePassword(r.Context(), session, req.Current, req.New)) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

@@ -2,13 +2,10 @@ package httpapi
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
-	"github.com/olivertgwalton/photon-server/internal/provider"
-	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 type pluginAdmin interface {
@@ -95,20 +92,8 @@ func (a *API) removePlugin(w http.ResponseWriter, r *http.Request) {
 
 // answeredPlugin answers a plugin's change, and has the providers read again after one.
 func (a *API) answeredPlugin(w http.ResponseWriter, r *http.Request, err error) bool {
-	switch {
-	case err == nil:
+	if err == nil {
 		a.svc.Providers.Forget()
-		return false
-	case errors.Is(err, store.ErrNotFound):
-		writeProblem(w, a.logger, codeNotFound, "")
-	case errors.Is(err, store.ErrPluginExists):
-		writeProblem(w, a.logger, codeConflict, "a plugin with that id is registered")
-	case errors.Is(err, plugin.ErrRefused):
-		writeProblem(w, a.logger, codeInvalidBody, err.Error())
-	case errors.Is(err, provider.ErrUnavailable):
-		writeProblem(w, a.logger, codeProviderUnavailable, err.Error())
-	default:
-		a.internal(w, r, err)
 	}
-	return true
+	return a.answered(w, r, err)
 }

@@ -1,9 +1,20 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"log/slog"
 	"net/http"
+
+	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/playback"
+	"github.com/olivertgwalton/photon-server/internal/plugin"
+	"github.com/olivertgwalton/photon-server/internal/provider"
+	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/task"
 )
 
 type problemCode string
@@ -78,6 +89,66 @@ func (c problemCode) status() int {
 		return http.StatusBadRequest
 	}
 	panic("httpapi: problem code without a status: " + string(c))
+}
+
+// problems are the errors a client may cause and what it is told of each: its code, and a detail,
+// or the error's own words where they are written for a client and may carry more than the
+// sentinel's.
+var problems = []struct {
+	err      error
+	code     problemCode
+	detail   string
+	ownWords bool
+}{
+	{err: store.ErrNotFound, code: codeNotFound},
+	{err: fs.ErrNotExist, code: codeNotFound},
+	{err: store.ErrNoNext, code: codeNotFound, ownWords: true},
+	{err: store.ErrLibraryExists, code: codeConflict, ownWords: true},
+	{err: store.ErrProfileExists, code: codeConflict, ownWords: true},
+	{err: store.ErrPluginExists, code: codeConflict, ownWords: true},
+	{err: store.ErrNotUserCollection, code: codeConflict, ownWords: true},
+	{err: store.ErrLastAdmin, code: codeConflict, ownWords: true},
+	{err: store.ErrAdminNeedsPassword, code: codeConflict, ownWords: true},
+	{err: store.ErrUnknownPlugin, code: codeInvalidBody, ownWords: true},
+	{err: store.ErrNotACandidate, code: codeInvalidBody, detail: "id is one of the title's candidates of that kind"},
+	{err: store.ErrMarkerOutsidePart, code: codeInvalidBody, ownWords: true},
+	{err: store.ErrMarkerRepeated, code: codeInvalidBody, ownWords: true},
+	{err: store.ErrMarkerNoPart, code: codeInvalidBody, ownWords: true},
+	{err: auth.ErrDeviceNotFound, code: codeNotFound},
+	{err: auth.ErrPairingNotFound, code: codePairingNotFound},
+	{err: auth.ErrWrongSecret, code: codeWrongSecret},
+	{err: auth.ErrPINNotDigits, code: codeInvalidBody, ownWords: true},
+	{err: auth.ErrPasswordTooShort, code: codeInvalidBody, ownWords: true},
+	{err: auth.ErrNoPassword, code: codeConflict, ownWords: true},
+	{err: task.ErrNoTask, code: codeNotFound},
+	{err: playback.ErrNoPlayback, code: codeNotFound, detail: "the playback has stopped, or lapsed"},
+	{err: hls.ErrNoRemux, code: codeNotFound, detail: "the playback has stopped, or lapsed"},
+	{err: playback.ErrNoSuchAudio, code: codeInvalidBody, detail: "audio_stream is not one of the copy's audio streams"},
+	{err: playback.ErrNoSuchSubtitle, code: codeInvalidBody, detail: "subtitle_stream is not one of the copy's subtitle streams"},
+	{err: plugin.ErrRefused, code: codeInvalidBody, ownWords: true},
+	{err: provider.ErrUnavailable, code: codeProviderUnavailable, ownWords: true},
+}
+
+// answered writes the problem err is, if it is one. A client that has gone is told nothing.
+func (a *API) answered(w http.ResponseWriter, r *http.Request, err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) && r.Context().Err() != nil {
+		return true
+	}
+	for _, p := range problems {
+		if errors.Is(err, p.err) {
+			detail := p.detail
+			if p.ownWords {
+				detail = err.Error()
+			}
+			writeProblem(w, a.logger, p.code, detail)
+			return true
+		}
+	}
+	a.internal(w, r, err)
+	return true
 }
 
 type problem struct {

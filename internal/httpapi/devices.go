@@ -1,12 +1,9 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
 	"time"
 	"uuid"
-
-	"github.com/olivertgwalton/photon-server/internal/auth"
 )
 
 type deviceListingJSON struct {
@@ -42,13 +39,7 @@ func (a *API) signOutDevice(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	err = a.svc.Auth.SignOutDevice(r.Context(), sessionOf(r), id)
-	switch {
-	case errors.Is(err, auth.ErrDeviceNotFound):
-		writeProblem(w, a.logger, codeNotFound, "")
-	case err != nil:
-		a.internal(w, r, err)
-	default:
+	if !a.answered(w, r, a.svc.Auth.SignOutDevice(r.Context(), sessionOf(r), id)) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"io/fs"
 	"net/http"
 	"os"
 	"path"
@@ -34,12 +33,7 @@ func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pic, err := a.svc.Pictures.Picture(r.Context(), id)
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
-	}
-	if err != nil {
-		a.internal(w, r, err)
+	if a.answered(w, r, err) {
 		return
 	}
 	var width int
@@ -50,12 +44,7 @@ func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	f, name, err := a.openPicture(r.Context(), id, pic, width)
-	if errors.Is(err, fs.ErrNotExist) {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
-	}
-	if err != nil {
-		a.internal(w, r, err)
+	if a.answered(w, r, err) {
 		return
 	}
 	defer f.Close()
