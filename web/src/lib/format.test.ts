@@ -1,0 +1,33 @@
+import { expect, test } from "bun:test";
+import { episodeLabel, playHref, runtime, score, timecode } from "./format.ts";
+
+test("a running time reads as a listing prints it", () => {
+	expect(runtime(48 * 60_000)).toBe("48m");
+	expect(runtime(112 * 60_000)).toBe("1h 52m");
+	expect(runtime(120 * 60_000)).toBe("2h");
+});
+
+test("a resume point reads as a player's clock", () => {
+	expect(timecode(249_000)).toBe("4:09");
+	expect(timecode(3_849_000)).toBe("1:04:09");
+});
+
+test("an episode is placed by season and number, a double by both ends", () => {
+	expect(episodeLabel(1, 2)).toBe("S1 E2");
+	expect(episodeLabel(1, 2, 3)).toBe("S1 E2–E3");
+	expect(episodeLabel(null, 5)).toBe("E5");
+});
+
+test("each site's score is printed on that site's own scale", () => {
+	expect(score("imdb", 78)).toBe("7.8");
+	expect(score("letterboxd", 80)).toBe("4.0");
+	expect(score("rotten_tomatoes", 93)).toBe("93%");
+	expect(score("metacritic", 71)).toBe("71");
+});
+
+test("the player is told only what the reader chose", () => {
+	expect(playHref("t-1")).toBe("/play/t-1");
+	expect(
+		playHref("t-1", { version: "v-2", audio: 1, subtitle: "off", t: 0 }),
+	).toBe("/play/t-1?version=v-2&audio=1&subtitle=off&t=0");
+});

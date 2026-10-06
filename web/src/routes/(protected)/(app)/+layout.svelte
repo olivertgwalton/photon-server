@@ -2,10 +2,15 @@
 import SearchIcon from "@lucide/svelte/icons/search";
 import { page } from "$app/state";
 import AppSidebar from "#lib/components/AppSidebar.svelte";
+import PlaylistPicker from "#lib/components/PlaylistPicker.svelte";
 import ProfileMenu from "#lib/components/ProfileMenu.svelte";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
+import { live } from "#lib/live.svelte.js";
 
 let { data, children } = $props();
+
+// The server's changes, for as long as the shell is open.
+$effect(() => live.connect());
 </script>
 
 <a
@@ -46,3 +51,5 @@ let { data, children } = $props();
 		</main>
 	</Sidebar.Inset>
 </Sidebar.Provider>
+
+<PlaylistPicker />

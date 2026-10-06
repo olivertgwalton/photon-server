@@ -1,19 +1,8 @@
 <script lang="ts">
-import type { Shape } from "#lib/artwork.js";
-import type { components } from "#lib/api/schema.js";
 import Rail from "#lib/components/Rail.svelte";
+import { homeRows } from "#lib/rows.js";
 
 let { data } = $props();
-
-type Kind = components["schemas"]["HomeRowKind"];
-
-const rows: Record<Kind, { title: string; shape: Shape }> = {
-	continue_watching: { title: "Continue Watching", shape: "still" },
-	next_up: { title: "Next Up", shape: "still" },
-	favourites: { title: "Favourites", shape: "poster" },
-	recently_added_films: { title: "Recently Added Films", shape: "poster" },
-	recently_added_shows: { title: "Recently Added Shows", shape: "poster" },
-};
 </script>
 
 <svelte:head><title>Home · Photon</title></svelte:head>
@@ -23,9 +12,10 @@ const rows: Record<Kind, { title: string; shape: Shape }> = {
 	<div class="grid gap-8">
 		{#each data.home.rows as row (row.kind)}
 			<Rail
-				title={rows[row.kind].title}
+				title={homeRows[row.kind].title}
 				cards={row.items}
-				shape={rows[row.kind].shape}
+				shape={homeRows[row.kind].shape}
+				href="/home/{row.kind}"
 			/>
 		{/each}
 	</div>
