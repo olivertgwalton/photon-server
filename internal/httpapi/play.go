@@ -408,7 +408,8 @@ func (a *API) answeredRemux(w http.ResponseWriter, r *http.Request, err error) b
 
 // routeToOwner hands a request about the playback the path names by param that another node of
 // the cluster runs to that node, which checks the request again: its HLS, whose signature every
-// node makes with the server's one key, or an admin's stop of it.
+// node makes with the server's one key, or its player's or an admin's stop of it, so its stream
+// ends and its transcode slot is free at once.
 func (a *API) routeToOwner(param string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		playback, err := uuid.Parse(r.PathValue(param))

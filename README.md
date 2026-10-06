@@ -155,7 +155,11 @@ the event stream's snapshot and playback events carry each playback the same way
 /api/v1/admin/playbacks/{id}` stops one: its remux ends on whichever node runs it, its player is
 refused from then on, and the play is kept in the history where its player last said it was. A
 title played as it is is read from a signed address that lasts a day, so its player can go on
-reading the file it has; only its reports are refused.
+reading the file it has; only its reports are refused. A playback lasts as long as its player
+reports, paused or playing, every ten seconds or so: its remux runs however long it is paused, and
+its player's stop ends the remux and frees its transcode slot at once, on whichever node runs it.
+A player that goes quiet for two minutes is stopped where it last said it was, as Jellyfin's
+session timeout does: the play is kept in the history and `playback.stopped` is raised.
 Each copy says where its intro, credits, recap and preview are, so a player can offer to skip them.
 A chapter named for one (Intro, Opening, End Credits, Previously…) marks it. Otherwise the server
 compares the sound of a season's episodes, as Plex and Jellyfin's Intro Skipper do: the stretch two

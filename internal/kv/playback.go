@@ -72,7 +72,9 @@ func playbackOf(id uuid.UUID, m map[string]string) (domain.Playback, error) {
 	return p, err
 }
 
-func (k *KV) EndPlayback(ctx context.Context, id uuid.UUID) error {
+// EndPlayback forgets a playback session, answering false where it had already ended or lapsed:
+// of two nodes ending one at once, only one is told it did.
+func (k *KV) EndPlayback(ctx context.Context, id uuid.UUID) (bool, error) {
 	return k.end(ctx, playbackIndex, playbackPrefix, id)
 }
 
@@ -155,18 +157,19 @@ func (k *KV) index(index string, id uuid.UUID, ttl time.Duration) valkey.Complet
 		ScoreMember(float64(time.Now().Add(ttl).UnixMilli()), id.String()).Build()
 }
 
-// end deletes the key under prefix for id and its place in index.
-func (k *KV) end(ctx context.Context, index, prefix string, id uuid.UUID) error {
+// end deletes the key under prefix for id and its place in index, answering whether the key was
+// there to delete.
+func (k *KV) end(ctx context.Context, index, prefix string, id uuid.UUID) (bool, error) {
 	cmds := k.client.B()
-	for _, r := range k.client.DoMulti(ctx,
+	res := k.client.DoMulti(ctx,
 		cmds.Del().Key(prefix+id.String()).Build(),
 		cmds.Zrem().Key(index).Member(id.String()).Build(),
-	) {
-		if err := r.Error(); err != nil {
-			return err
-		}
+	)
+	if err := res[1].Error(); err != nil {
+		return false, err
 	}
-	return nil
+	n, err := res[0].AsInt64()
+	return n == 1, err
 }
 
 type listing struct {

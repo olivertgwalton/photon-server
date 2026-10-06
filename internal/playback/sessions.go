@@ -9,9 +9,15 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// sessionLife is how long a playback lasts with no word from its player; players report every
-// ten seconds or so, as Jellyfin's and Plex's do.
-const sessionLife = 2 * time.Minute
+const (
+	// sessionLife is how long a playback lasts with no word from its player before it is ended, as
+	// Jellyfin's session timeout ends one. Players report every ten seconds or so, paused as well,
+	// as Jellyfin's and Plex's do.
+	sessionLife = 2 * time.Minute
+	// keptFor is how long Valkey keeps a playback with no word from its player: past its life, so
+	// a sweep ends it with its history. It lapses on its own only with no node left to sweep.
+	keptFor = 2 * sessionLife
+)
 
 // ErrNoPlayback is a playback that has stopped, lapsed, or is another profile's.
 var ErrNoPlayback = errors.New("no such playback")
@@ -19,7 +25,14 @@ var ErrNoPlayback = errors.New("no such playback")
 type sessionStore interface {
 	SavePlayback(ctx context.Context, p domain.Playback, ttl time.Duration) error
 	Playback(ctx context.Context, id uuid.UUID) (domain.Playback, bool, error)
-	EndPlayback(ctx context.Context, id uuid.UUID) error
+	Playbacks(ctx context.Context) ([]domain.Playback, error)
+	EndPlayback(ctx context.Context, id uuid.UUID) (bool, error)
+}
+
+// streams are what a node serves its playbacks: their remuxes.
+type streams interface {
+	Playbacks() []uuid.UUID
+	Close(playback uuid.UUID)
 }
 
 type progressStore interface {
@@ -28,20 +41,22 @@ type progressStore interface {
 }
 
 // Sessions keeps who is playing what, and keeps each profile's place in it as they go.
+//
+// A playback is going on for as long as live holds it, on every node alike: from Start until it is
+// stopped, ended by an admin, or swept for its player's silence. Its stream lives exactly as long.
 type Sessions struct {
-	live  sessionStore
-	saved progressStore
-	ended func(uuid.UUID)
-	raise func(context.Context, domain.Event)
-	node  uuid.UUID
+	live    sessionStore
+	saved   progressStore
+	streams streams
+	raise   func(context.Context, domain.Event)
+	node    uuid.UUID
 }
 
-// NewSessions keeps playbacks in live and places in saved, and calls ended as a playback stops,
-// to let go of what it held; raise says as one starts, pauses, resumes and stops, and as each
-// profile's place moves. Each playback
-// started is node's to serve.
-func NewSessions(live sessionStore, saved progressStore, ended func(uuid.UUID), raise func(context.Context, domain.Event), node uuid.UUID) *Sessions {
-	return &Sessions{live: live, saved: saved, ended: ended, raise: raise, node: node}
+// NewSessions keeps playbacks in live and places in saved, and closes this node's streams of
+// those that end; raise says as one starts, pauses, resumes and stops, and as each profile's place
+// moves. Each playback started is node's to serve.
+func NewSessions(live sessionStore, saved progressStore, st streams, raise func(context.Context, domain.Event), node uuid.UUID) *Sessions {
+	return &Sessions{live: live, saved: saved, streams: st, raise: raise, node: node}
 }
 
 // Start opens a playback of the copy of a title its card names, by its card's profile.
@@ -51,7 +66,7 @@ func (s *Sessions) Start(ctx context.Context, method domain.PlayMethod, card dom
 		ID: uuid.NewV7(), Profile: card.Profile.ID, Item: card.Title.ID, Version: card.Version.ID, Method: method,
 		State: domain.StatePlaying, Started: now, Updated: now, Node: s.node, Card: card,
 	}
-	if err := s.live.SavePlayback(ctx, p, sessionLife); err != nil {
+	if err := s.live.SavePlayback(ctx, p, keptFor); err != nil {
 		return p, err
 	}
 	s.raise(ctx, event(domain.EventPlaybackStarted, p))
@@ -74,7 +89,7 @@ func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position
 	}
 	was := p.State
 	p.Position, p.State, p.Updated = position, state, time.Now()
-	if err := s.live.SavePlayback(ctx, p, sessionLife); err != nil {
+	if err := s.live.SavePlayback(ctx, p, keptFor); err != nil {
 		return "", err
 	}
 	switch {
@@ -110,20 +125,27 @@ func (s *Sessions) End(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+// stop ends a playback once, whoever else ends it at the same time, and closes its stream at once
+// where this node serves it; another node's sweep closes its own.
 func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Duration) (domain.Reach, error) {
-	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position, p.Reached)
+	ended, err := s.live.EndPlayback(ctx, p.ID)
 	if err != nil {
 		return "", err
 	}
-	if err := s.saved.RecordPlay(ctx, p, time.Now(), position); err != nil {
-		return "", err
+	if !ended {
+		return "", ErrNoPlayback
 	}
-	s.ended(p.ID)
-	if err := s.live.EndPlayback(ctx, p.ID); err != nil {
-		return "", err
+	s.streams.Close(p.ID)
+	p.Position = position
+	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position, p.Reached)
+	if err == nil {
+		err = s.saved.RecordPlay(ctx, p, time.Now(), position)
+	}
+	if err != nil {
+		// Kept again, so its player's stop or the sweep ends it with its history once Postgres answers.
+		return "", errors.Join(err, s.live.SavePlayback(ctx, p, keptFor))
 	}
 	s.raise(ctx, domain.Event{Kind: domain.EventUserDataChanged, Profile: p.Profile, Item: p.Item})
-	p.Position = position
 	stopped := event(domain.EventPlaybackStopped, p)
 	// How far it got says whether it was watched to the end, as Plex's media.scrobble does.
 	stopped.Details["reach"] = reach
@@ -158,7 +180,37 @@ func Showing(p domain.Playback) NowPlaying {
 
 // Abandon ends a playback whose stream could not be opened, before any of it was watched.
 func (s *Sessions) Abandon(ctx context.Context, id uuid.UUID) error {
-	return s.live.EndPlayback(ctx, id)
+	_, err := s.live.EndPlayback(ctx, id)
+	return err
+}
+
+// Sweep ends every playback whose player has said nothing for sessionLife where it last said it
+// was, with its history and its stopped event, and closes the streams this node serves playbacks
+// that have ended on any node. Every node sweeps; each playback is ended once.
+func (s *Sessions) Sweep(ctx context.Context) error {
+	// Read first: a stream opened after the playbacks are read is of a playback already among them.
+	served := s.streams.Playbacks()
+	all, err := s.live.Playbacks(ctx)
+	if err != nil {
+		return err
+	}
+	going := map[uuid.UUID]bool{}
+	var errs []error
+	for _, p := range all {
+		if time.Since(p.Updated) < sessionLife {
+			going[p.ID] = true
+			continue
+		}
+		if _, err := s.stop(ctx, p, p.Position); err != nil && !errors.Is(err, ErrNoPlayback) {
+			errs = append(errs, err)
+		}
+	}
+	for _, id := range served {
+		if !going[id] {
+			s.streams.Close(id)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (s *Sessions) own(ctx context.Context, profile, id uuid.UUID) (domain.Playback, error) {

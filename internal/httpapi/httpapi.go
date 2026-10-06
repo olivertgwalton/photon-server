@@ -467,12 +467,13 @@ func (a *API) routes() []route {
 			refusals: map[int]any{codeNoCompatibleStream.status(): refusalJSON{}}, handle: a.play,
 		},
 		{
-			pattern: "POST /api/v1/playback/{id}/progress", access: signedIn, summary: "Say where a playback has got to",
+			pattern: "POST /api/v1/playback/{id}/progress", access: signedIn, summary: "Say where a playback has got to, paused too: one unheard from for two minutes is stopped",
 			body: playbackProgressJSON{}, status: http.StatusOK, reply: reachedJSON{}, handle: a.playbackProgress,
 		},
 		{
 			pattern: "POST /api/v1/playback/{id}/stop", access: signedIn, summary: "Stop a playback, and say where",
-			body: positionJSON{}, status: http.StatusOK, reply: reachedJSON{}, handle: a.playbackStop,
+			body: positionJSON{}, status: http.StatusOK, reply: reachedJSON{},
+			handle: a.routeToOwner("id", http.HandlerFunc(a.playbackStop)).ServeHTTP,
 		},
 		{
 			pattern: "GET /api/v1/hls/{playback}/{exp}/{sig}/{file}", access: signedPath,

@@ -3,12 +3,16 @@ package playback
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"maps"
 	"slices"
 	"testing"
+	"testing/synctest"
 	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/hls"
 )
 
 type memory map[uuid.UUID]domain.Playback
@@ -23,10 +27,22 @@ func (m memory) Playback(_ context.Context, id uuid.UUID) (domain.Playback, bool
 	return p, ok, nil
 }
 
-func (m memory) EndPlayback(_ context.Context, id uuid.UUID) error {
-	delete(m, id)
-	return nil
+func (m memory) Playbacks(context.Context) ([]domain.Playback, error) {
+	return slices.Collect(maps.Values(m)), nil
 }
+
+func (m memory) EndPlayback(_ context.Context, id uuid.UUID) (bool, error) {
+	_, ok := m[id]
+	delete(m, id)
+	return ok, nil
+}
+
+// served is the streams a node serves, by playback.
+type served map[uuid.UUID]bool
+
+func (s served) Playbacks() []uuid.UUID { return slices.Collect(maps.Keys(s)) }
+
+func (s served) Close(id uuid.UUID) { delete(s, id) }
 
 type positions map[uuid.UUID]time.Duration
 
@@ -42,11 +58,10 @@ func (p positions) RecordPlay(_ context.Context, pb domain.Playback, _ time.Time
 }
 
 func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
-	live, saved := memory{}, positions{}
-	var ended []uuid.UUID
+	live, saved, streams := memory{}, positions{}, served{}
 	var told []domain.EventKind
 	raise := func(_ context.Context, e domain.Event) { told = append(told, e.Kind) }
-	s := NewSessions(live, saved, func(id uuid.UUID) { ended = append(ended, id) }, raise, uuid.NewV7())
+	s := NewSessions(live, saved, streams, raise, uuid.NewV7())
 	ctx := t.Context()
 	oliver, guest, film := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
 
@@ -54,6 +69,7 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	streams[p.ID] = true
 	if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePaused); err != nil {
 		t.Fatal(err)
 	}
@@ -66,8 +82,8 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	if _, err := s.Stop(ctx, oliver, p.ID, 25*time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := live[p.ID]; ok || saved[film] != 25*time.Minute || len(ended) != 1 || ended[0] != p.ID {
-		t.Errorf("after stop: still live %v, saved %v, ended %v; want it gone, kept at 25 minutes, and let go", ok, saved[film], ended)
+	if _, ok := live[p.ID]; ok || saved[film] != 25*time.Minute || streams[p.ID] {
+		t.Errorf("after stop: still live %v, saved %v, stream open %v; want it gone, kept at 25 minutes, and closed", ok, saved[film], streams[p.ID])
 	}
 	if saved[p.ID] != 25*time.Minute {
 		t.Errorf("history kept %v, want the play at 25 minutes", saved[p.ID])
@@ -91,25 +107,25 @@ func card(profile, title uuid.UUID) domain.PlaybackCard {
 }
 
 func TestAnAdminEndsAnyonesPlaybackWhereItGotTo(t *testing.T) {
-	live, saved := memory{}, positions{}
-	var ended []uuid.UUID
+	live, saved, streams := memory{}, positions{}, served{}
 	var told []domain.Event
 	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
-	s := NewSessions(live, saved, func(id uuid.UUID) { ended = append(ended, id) }, raise, uuid.NewV7())
+	s := NewSessions(live, saved, streams, raise, uuid.NewV7())
 	ctx := t.Context()
 	guest, film := uuid.NewV7(), uuid.NewV7()
 	p, err := s.Start(ctx, domain.PlayRemux, card(guest, film))
 	if err != nil {
 		t.Fatal(err)
 	}
+	streams[p.ID] = true
 	if _, err := s.Progress(ctx, guest, p.ID, 40*time.Minute, domain.StatePlaying); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.End(ctx, p.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := live[p.ID]; ok || saved[p.ID] != 40*time.Minute || saved[film] != 40*time.Minute || !slices.Equal(ended, []uuid.UUID{p.ID}) {
-		t.Errorf("after ending: still live %v, history %v, place %v, ended %v; want it gone and kept at 40 minutes", ok, saved[p.ID], saved[film], ended)
+	if _, ok := live[p.ID]; ok || saved[p.ID] != 40*time.Minute || saved[film] != 40*time.Minute || streams[p.ID] {
+		t.Errorf("after ending: still live %v, history %v, place %v, stream open %v; want it gone and kept at 40 minutes", ok, saved[p.ID], saved[film], streams[p.ID])
 	}
 	if _, err := s.Progress(ctx, guest, p.ID, 41*time.Minute, domain.StatePlaying); !errors.Is(err, ErrNoPlayback) {
 		t.Errorf("its player reporting after: %v, want ErrNoPlayback", err)
@@ -135,7 +151,7 @@ func (*ends) RecordPlay(context.Context, domain.Playback, time.Time, time.Durati
 
 func TestAPlaybackTellsTheStoreItHasReachedTheEnd(t *testing.T) {
 	saved := &ends{}
-	s := NewSessions(memory{}, saved, func(uuid.UUID) {}, func(context.Context, domain.Event) {}, uuid.NewV7())
+	s := NewSessions(memory{}, saved, served{}, func(context.Context, domain.Event) {}, uuid.NewV7())
 	ctx := t.Context()
 	oliver := uuid.NewV7()
 	p, err := s.Start(ctx, domain.PlayDirect, card(oliver, uuid.NewV7()))
@@ -154,4 +170,81 @@ func TestAPlaybackTellsTheStoreItHasReachedTheEnd(t *testing.T) {
 	if !slices.Equal(saved.before, want) {
 		t.Errorf("reports said the viewing had got %v, want %v: only the first may count a play", saved.before, want)
 	}
+}
+
+func TestAPausedPlayerThatKeepsReportingKeepsItsStream(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		remuxer, err := hls.NewRemuxer("ffmpeg", t.TempDir(), t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, hls.Unlimited, slog.New(slog.DiscardHandler))
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := NewSessions(memory{}, positions{}, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7())
+		ctx := t.Context()
+		oliver := uuid.NewV7()
+		p, err := s.Start(ctx, domain.PlayRemux, card(oliver, uuid.NewV7()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := remuxer.Open(p.ID, hls.Copy{Parts: []hls.Source{{Part: hls.Part{Duration: time.Hour, Keyframes: hls.Forced(time.Hour)}}}}); err != nil {
+			t.Fatal(err)
+		}
+		// Paused for five minutes, saying so every ten seconds, with every node sweeping.
+		for range 30 {
+			synctest.Sleep(10 * time.Second)
+			if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePaused); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Sweep(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePlaying); err != nil {
+			t.Errorf("playing on after a five-minute pause: %v", err)
+		}
+		if _, err := remuxer.Playlist(p.ID, hls.MasterName); err != nil {
+			t.Errorf("its playlist after a five-minute pause: %v, want its remux still there", err)
+		}
+	})
+}
+
+func TestAPlayerThatGoesQuietIsStoppedWithItsHistory(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		live, saved, streams := memory{}, positions{}, served{}
+		var told []domain.Event
+		raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
+		s := NewSessions(live, saved, streams, raise, uuid.NewV7())
+		ctx := t.Context()
+		oliver, film := uuid.NewV7(), uuid.NewV7()
+		p, err := s.Start(ctx, domain.PlayTranscode, card(oliver, film))
+		if err != nil {
+			t.Fatal(err)
+		}
+		streams[p.ID] = true
+		// A stream this node serves of a playback another node has ended.
+		elsewhere := uuid.NewV7()
+		streams[elsewhere] = true
+		if _, err := s.Progress(ctx, oliver, p.ID, 40*time.Minute, domain.StatePlaying); err != nil {
+			t.Fatal(err)
+		}
+		synctest.Sleep(sessionLife - time.Second)
+		if err := s.Sweep(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := live[p.ID]; !ok || !streams[p.ID] || streams[elsewhere] {
+			t.Errorf("swept just short of its life: live %v, stream open %v, other stream open %v; want it kept, the other closed", ok, streams[p.ID], streams[elsewhere])
+		}
+		synctest.Sleep(time.Second)
+		if err := s.Sweep(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := live[p.ID]; ok || streams[p.ID] || saved[p.ID] != 40*time.Minute || saved[film] != 40*time.Minute {
+			t.Errorf("swept at its life: live %v, stream open %v, history %v, place %v; want it stopped at 40 minutes", ok, streams[p.ID], saved[p.ID], saved[film])
+		}
+		if last := told[len(told)-1]; last.Kind != domain.EventPlaybackStopped {
+			t.Errorf("told %v, want it stopped", last.Kind)
+		}
+		if _, err := s.Progress(ctx, oliver, p.ID, 41*time.Minute, domain.StatePlaying); !errors.Is(err, ErrNoPlayback) {
+			t.Errorf("its player back after: %v, want ErrNoPlayback", err)
+		}
+	})
 }

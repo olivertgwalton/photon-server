@@ -307,6 +307,10 @@ type noHLS struct{ fakeHLS }
 
 func (noHLS) Has(uuid.UUID) bool { return false }
 
+func (noHLS) Playbacks() []uuid.UUID { return nil }
+
+func (noHLS) Close(uuid.UUID) {}
+
 type owner string
 
 func (o owner) Owner(_ context.Context, playback uuid.UUID) (string, bool, error) {
@@ -327,7 +331,7 @@ func TestHLSIsServedByTheNodeRunningIt(t *testing.T) {
 	none := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
 	front := New(slog.New(slog.DiscardHandler), Info{}, Services{
 		Auth: fakeAuth{}, HLS: noHLS{}, Owners: owner(running.URL), Signer: signer,
-		Playbacks: playback.NewSessions(none, none, func(uuid.UUID) {}, func(context.Context, domain.Event) {}, uuid.NewV7()),
+		Playbacks: playback.NewSessions(none, none, noHLS{}, func(context.Context, domain.Event) {}, uuid.NewV7()),
 	})
 	subject := hlsSubject(playbackID)
 	exp, sig := signer.Token(subject, time.Now().Add(time.Hour))
@@ -342,6 +346,14 @@ func TestHLSIsServedByTheNodeRunningIt(t *testing.T) {
 	front.ServeHTTP(rec, stop)
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("an admin stopping a playback another node runs: %d %s, want it stopped there", rec.Code, rec.Body)
+	}
+	// Stopped where it runs, so its remux ends and its transcode slot is free at once.
+	stop = httptest.NewRequest(http.MethodPost, "/api/v1/playback/"+playbackID.String()+"/stop", strings.NewReader(`{"position_ms": 1000}`))
+	stop.Header.Set("Authorization", "Bearer "+goodToken)
+	rec = httptest.NewRecorder()
+	front.ServeHTTP(rec, stop)
+	if rec.Code != http.StatusOK {
+		t.Errorf("its player stopping a playback another node runs: %d %s, want it stopped there", rec.Code, rec.Body)
 	}
 	rec = httptest.NewRecorder()
 	front.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, subject+"/"+exp+"/forged/0.m4s", nil))
@@ -370,11 +382,12 @@ func (l *livePlaybacks) Playback(_ context.Context, id uuid.UUID) (domain.Playba
 	return p, ok, nil
 }
 
-func (l *livePlaybacks) EndPlayback(_ context.Context, id uuid.UUID) error {
+func (l *livePlaybacks) EndPlayback(_ context.Context, id uuid.UUID) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	_, ok := l.m[id]
 	delete(l.m, id)
-	return nil
+	return ok, nil
 }
 
 func (l *livePlaybacks) Playbacks(context.Context) ([]domain.Playback, error) {
@@ -406,7 +419,7 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 	}
 	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
 	api := New(slog.New(slog.DiscardHandler), Info{}, Services{
-		Auth: fakeAuth{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer.Close, func(context.Context, domain.Event) {}, uuid.NewV7()),
+		Auth: fakeAuth{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7()),
 		Remuxing: remuxOpener{remuxer}, HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
@@ -488,7 +501,7 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 	var told []domain.Event
 	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
 	api := New(slog.New(slog.DiscardHandler), Info{}, Services{
-		Auth: fakeAuth{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer.Close, raise, uuid.NewV7()),
+		Auth: fakeAuth{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, raise, uuid.NewV7()),
 		Remuxing: remuxOpener{remuxer}, HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(method, target, body string) *httptest.ResponseRecorder {
