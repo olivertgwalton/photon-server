@@ -27,7 +27,7 @@ func (h Hardware) Convert(ctx context.Context, ffmpeg string, src *os.File, vide
 	defer cancel(nil)
 	a := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3"}
 	if video.Encode != nil {
-		a = append(a, h.inputArgs(video.Codec)...)
+		a = append(a, h.inputArgs(video.Codec, *video.Encode)...)
 	}
 	a = append(a, "-i", "fd:")
 	a = append(a, streamArgs(h, video, audio)...)

@@ -26,6 +26,30 @@ func TestADeviceThatWillNotEncodeIsFoundAtStart(t *testing.T) {
 	}
 }
 
+// VideoToolbox refuses to decode an interlaced picture, so FFmpeg decodes it and deinterlaces it
+// before the upload.
+func TestEachDeviceDeinterlacesAnInterlacedPicture(t *testing.T) {
+	e := domain.VideoEncode{Codec: "h264", Width: 720, Height: 576, BitrateKbps: 4000, Deinterlace: true}
+	for accel, filter := range map[domain.Acceleration]string{
+		domain.AccelSoftware: "yadif=0:-1:0,scale=", domain.AccelVideoToolbox: "yadif=0:-1:0,format=nv12|p010le,hwupload,scale_vt",
+		domain.AccelVAAPI: "hwupload,deinterlace_vaapi=rate=frame,scale_vaapi", domain.AccelQSV: "vpp_qsv=w=720:h=576:format=nv12:deinterlace=2",
+		domain.AccelNVENC: "hwupload,yadif_cuda=0:-1:0,scale_cuda",
+	} {
+		hw := Hardware{Accel: accel, Device: "d"}
+		if got, _ := hw.videoArgs(e, "mpeg2video"); !strings.Contains(got, filter) {
+			t.Errorf("%s: %q lacks %q", accel, got, filter)
+		}
+		if decoded := strings.Contains(strings.Join(hw.inputArgs("h264", e), " "), "-hwaccel "); decoded == (accel == domain.AccelSoftware || accel == domain.AccelVideoToolbox) {
+			t.Errorf("%s: interlaced H.264 decoded on the device %t", accel, decoded)
+		}
+		progressive := e
+		progressive.Deinterlace = false
+		if got, _ := hw.videoArgs(progressive, "mpeg2video"); strings.Contains(got, "yadif") || strings.Contains(got, "deinterlace") {
+			t.Errorf("%s: a progressive picture is deinterlaced: %q", accel, got)
+		}
+	}
+}
+
 // Every device encodes H.264 with a keyframe each segment, decodes H.264 and HEVC itself, and has
 // anything else uploaded to it.
 func TestEachDeviceEncodesTheWholeChain(t *testing.T) {
@@ -37,7 +61,7 @@ func TestEachDeviceEncodesTheWholeChain(t *testing.T) {
 		hw := Hardware{Accel: accel, Device: "d"}
 		line := func(codec string) string {
 			filter, encoder := hw.videoArgs(e, codec)
-			return strings.Join(append(append(hw.inputArgs(codec), "-vf", filter), encoder...), " ")
+			return strings.Join(append(append(hw.inputArgs(codec, e), "-vf", filter), encoder...), " ")
 		}
 		hevc, av1 := line("hevc"), line("av1")
 		for _, want := range []string{"-c:v " + encoder, "expr:gte(t,n_forced*6)", "1280", "tonemap"} {

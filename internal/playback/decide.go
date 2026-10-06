@@ -385,7 +385,7 @@ func (p Profile) videoEncode(s media.Stream, copyKbps int) (domain.VideoEncode, 
 	}
 	return domain.VideoEncode{
 		Codec: "h264", Width: width, Height: height, BitrateKbps: kbps,
-		ToneMap: s.Range != "" && s.Range != domain.RangeSDR,
+		ToneMap: s.Range != "" && s.Range != domain.RangeSDR, Deinterlace: s.Interlaced,
 	}, true
 }
 

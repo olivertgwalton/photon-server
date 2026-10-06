@@ -33,13 +33,15 @@ func (h Hardware) encoding(video domain.VideoPlan) Hardware {
 const longGOP = "1000"
 
 // decodes reports whether a source codec is decoded on the device too. H.264 and HEVC are, on
-// every device that encodes H.264; anything else is decoded by FFmpeg and uploaded.
-func (h Hardware) decodes(codec string) bool {
-	return h.Accel != domain.AccelSoftware && (codec == "h264" || codec == "hevc")
+// every device that encodes H.264, but for an interlaced picture on VideoToolbox, which refuses
+// one; anything else is decoded by FFmpeg and uploaded.
+func (h Hardware) decodes(codec string, e domain.VideoEncode) bool {
+	return h.Accel != domain.AccelSoftware && (codec == "h264" || codec == "hevc") &&
+		(!e.Deinterlace || h.Accel != domain.AccelVideoToolbox)
 }
 
 // inputArgs opens the device, and decodes on it where it can, before the input.
-func (h Hardware) inputArgs(codec string) []string {
+func (h Hardware) inputArgs(codec string, e domain.VideoEncode) []string {
 	var init, decode []string
 	switch h.Accel {
 	case domain.AccelSoftware:
@@ -58,13 +60,14 @@ func (h Hardware) inputArgs(codec string) []string {
 		init = []string{"-init_hw_device", "cuda=hw:" + h.Device, "-filter_hw_device", "hw"}
 		decode = []string{"-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-hwaccel_device", "hw"}
 	}
-	if h.decodes(codec) {
+	if h.decodes(codec, e) {
 		return append(init, decode...)
 	}
 	return init
 }
 
-// videoArgs encodes video to H.264 on the device, scaled and tone mapped there, with a keyframe
+// videoArgs encodes video to H.264 on the device, deinterlaced, scaled and tone mapped there, with
+// a keyframe
 // where it starts and every SegmentLength after: ffmpeg counts t from the seek. It answers the
 // filter the picture goes through and the encoder's options.
 func (h Hardware) videoArgs(e domain.VideoEncode, codec string) (string, []string) {
@@ -74,16 +77,26 @@ func (h Hardware) videoArgs(e domain.VideoEncode, codec string) (string, []strin
 	keyframes := []string{"-force_key_frames", "expr:gte(t,n_forced*" + strconv.Itoa(int(SegmentLength.Seconds())) + ")"}
 	// Frames decoded by FFmpeg are uploaded to the device first.
 	upload := ""
-	if !h.decodes(codec) {
+	if !h.decodes(codec, e) {
 		upload = "format=nv12|p010le,hwupload,"
+	}
+	// Deinterlaced first, as Jellyfin's is: with its default, yadif, a frame for each frame, on the
+	// device where it has one; QSV's is vpp_qsv's own, below. VideoToolbox's yadif_videotoolbox
+	// crashes FFmpeg 9.0.1 (measured on an M-series Mac), so there it is done before the upload.
+	deinterlace := ""
+	if e.Deinterlace {
+		deinterlace = map[domain.Acceleration]string{
+			domain.AccelSoftware: "yadif=0:-1:0,", domain.AccelVideoToolbox: "yadif=0:-1:0,",
+			domain.AccelVAAPI: "deinterlace_vaapi=rate=frame,", domain.AccelNVENC: "yadif_cuda=0:-1:0,",
+		}[h.Accel]
 	}
 	var filter string
 	var encoder []string
 	switch h.Accel {
 	case domain.AccelSoftware:
-		filter = "scale=" + w + ":" + ht + ",format=yuv420p"
+		filter = deinterlace + "scale=" + w + ":" + ht + ",format=yuv420p"
 		if e.ToneMap {
-			filter = "scale=" + w + ":" + ht + "," + media.ToneMap
+			filter = deinterlace + "scale=" + w + ":" + ht + "," + media.ToneMap
 		}
 		// Jellyfin's software transcode: x264's veryfast preset at constant quality, capped.
 		encoder = []string{
@@ -93,32 +106,35 @@ func (h Hardware) videoArgs(e domain.VideoEncode, codec string) (string, []strin
 		}
 		return filter, append(encoder, keyframes...)
 	case domain.AccelVideoToolbox:
-		filter = upload + "scale_vt=w=" + w + ":h=" + ht + ":format=nv12"
+		filter = deinterlace + upload + "scale_vt=w=" + w + ":h=" + ht + ":format=nv12"
 		if e.ToneMap {
-			filter = upload + "scale_vt=w=" + w + ":h=" + ht + ",tonemap_videotoolbox=tonemap=bt2390:t=bt709:m=bt709:p=bt709:format=nv12"
+			filter = deinterlace + upload + "scale_vt=w=" + w + ":h=" + ht + ",tonemap_videotoolbox=tonemap=bt2390:t=bt709:m=bt709:p=bt709:format=nv12"
 		}
 		encoder = []string{"-c:v", "h264_videotoolbox", "-prio_speed", "1"}
 	case domain.AccelVAAPI:
-		filter = upload + "scale_vaapi=w=" + w + ":h=" + ht + ":format=nv12"
+		filter = upload + deinterlace + "scale_vaapi=w=" + w + ":h=" + ht + ":format=nv12"
 		if e.ToneMap {
-			filter = upload + "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709,scale_vaapi=w=" + w + ":h=" + ht
+			filter = upload + deinterlace + "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709,scale_vaapi=w=" + w + ":h=" + ht
 		}
 		encoder = []string{"-c:v", "h264_vaapi", "-rc_mode", "VBR"}
 	case domain.AccelQSV:
-		if h.decodes(codec) {
+		if h.decodes(codec, e) {
 			upload = "hwmap=derive_device=qsv,"
 		} else {
 			upload = "format=nv12|p010le,hwupload=extra_hw_frames=64,"
 		}
 		filter = upload + "vpp_qsv=w=" + w + ":h=" + ht + ":format=nv12"
+		if e.Deinterlace {
+			filter += ":deinterlace=2"
+		}
 		if e.ToneMap {
 			filter += ":tonemap=1"
 		}
 		encoder = []string{"-c:v", "h264_qsv", "-preset", "veryfast", "-forced_idr", "1"}
 	case domain.AccelNVENC:
-		filter = upload + "scale_cuda=w=" + w + ":h=" + ht + ":format=nv12"
+		filter = upload + deinterlace + "scale_cuda=w=" + w + ":h=" + ht + ":format=nv12"
 		if e.ToneMap {
-			filter = upload + "scale_cuda=w=" + w + ":h=" + ht + ",tonemap_cuda=format=nv12:p=bt709:t=bt709:m=bt709:tonemap=bt2390:peak=100:desat=0"
+			filter = upload + deinterlace + "scale_cuda=w=" + w + ":h=" + ht + ",tonemap_cuda=format=nv12:p=bt709:t=bt709:m=bt709:tonemap=bt2390:peak=100:desat=0"
 		}
 		encoder = []string{"-c:v", "h264_nvenc", "-preset", "p1", "-forced-idr", "1"}
 	}
@@ -130,8 +146,8 @@ func (h Hardware) videoArgs(e domain.VideoEncode, codec string) (string, []strin
 // errHardware is a device that would not encode.
 var errHardware = errors.New("hls: the hardware would not encode")
 
-// Check encodes a second of SDR and of HDR test picture through the device's whole chain, as a
-// title would be: a device that is missing, or a driver without a filter, is found at start rather
+// Check encodes a second of SDR test picture, deinterlaced, and of HDR through the device's whole
+// chain, as a title would be: a device that is missing, or a driver without a filter, is found at start rather
 // than at the first play.
 func (h Hardware) Check(ctx context.Context, ffmpeg string) error {
 	for _, tc := range []struct {
@@ -142,10 +158,11 @@ func (h Hardware) Check(ctx context.Context, ffmpeg string) error {
 		{"testsrc2=size=1280x720:rate=24,format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc", true},
 	} {
 		// The test picture is decoded by FFmpeg, so no hardware decode is asked for.
+		e := domain.VideoEncode{Codec: "h264", Width: 640, Height: 360, BitrateKbps: 2000, ToneMap: tc.hdr, Deinterlace: !tc.hdr}
 		a := []string{"-hide_banner", "-loglevel", "error", "-nostdin"}
-		a = append(a, h.inputArgs("rawvideo")...)
+		a = append(a, h.inputArgs("rawvideo", e)...)
 		a = append(a, "-f", "lavfi", "-i", tc.source, "-t", "1")
-		filter, encoder := h.videoArgs(domain.VideoEncode{Codec: "h264", Width: 640, Height: 360, BitrateKbps: 2000, ToneMap: tc.hdr}, "rawvideo")
+		filter, encoder := h.videoArgs(e, "rawvideo")
 		a = append(append(a, "-vf", filter), encoder...)
 		a = append(a, "-f", "null", "-")
 		cmd := exec.CommandContext(ctx, ffmpeg, a...)
