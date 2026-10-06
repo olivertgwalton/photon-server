@@ -179,6 +179,8 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, asked []string, 
 	return r.report, err
 }
 
+var errNoOwner = errors.New("no single title it could belong to")
+
 // folder reads one folder the walk found, or could not read.
 func (s *Scanner) folder(ctx context.Context, r *run, folder library.Folder, err error) error {
 	defer r.done(folder.Path)
@@ -216,7 +218,9 @@ func (s *Scanner) folder(ctx context.Context, r *run, folder library.Folder, err
 	if err != nil {
 		return fmt.Errorf("%s: %w", folder.Path, err)
 	}
-	s.unowned(ctx, r, saved.Unowned)
+	for _, p := range saved.Unowned {
+		s.skip(ctx, r, p, errNoOwner)
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.changed(saved.Titles)
@@ -315,14 +319,6 @@ func (s *Scanner) extras(ctx context.Context, r reading, folder library.Folder, 
 		}
 	}
 	return extras, nil
-}
-
-var errNoOwner = errors.New("no single title it could belong to")
-
-func (s *Scanner) unowned(ctx context.Context, r *run, paths []string) {
-	for _, p := range paths {
-		s.skip(ctx, r, p, errNoOwner)
-	}
 }
 
 func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Folder) (store.Saved, error) {
