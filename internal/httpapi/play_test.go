@@ -217,9 +217,10 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 
 	ranged := httptest.NewRequest(http.MethodGet, got.Parts[0].URL, nil)
 	ranged.Header.Set("Range", "bytes=2-5")
+	ranged.Header.Set("Accept-Encoding", "gzip")
 	if rec := do(ranged); rec.Code != http.StatusPartialContent || rec.Body.String() != "2345" ||
-		rec.Header().Get("Content-Type") != "video/x-matroska" {
-		t.Errorf("a range of the first part: %d %q %q, want 206 \"2345\" as Matroska", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
+		rec.Header().Get("Content-Type") != "video/x-matroska" || rec.Header().Get("Content-Encoding") != "" {
+		t.Errorf("a range of the first part: %d %q %q, want 206 \"2345\" as Matroska, as it is", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
 	}
 	if rec := do(httptest.NewRequest(http.MethodGet, "/api/v1/parts/"+partOne.String()+"/stream", nil)); rec.Code != http.StatusUnauthorized {
 		t.Errorf("an unsigned address: %d, want 401", rec.Code)

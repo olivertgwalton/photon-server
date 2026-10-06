@@ -24,6 +24,10 @@ docker compose exec server photon-server library add -name Films -kind movies /m
 
 Then open `http://<server>:8640` and log in.
 
+The server gzips its own JSON answers for a client that takes gzip, and serves the web app
+precompressed; media, artwork and event streams go out as they are. A reverse proxy in front of it
+need not compress again.
+
 ## Develop
 
 Needs PostgreSQL 18, Valkey 9 and FFmpeg 8 or newer (`ffmpeg` and `ffprobe` on the `PATH`, or
