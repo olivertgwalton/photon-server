@@ -66,7 +66,11 @@ func (q *memoryQueue) ExtendLease(_ context.Context, _ int64, _ uuid.UUID, lease
 	return nil
 }
 
-func ignore(context.Context, domain.Event) {}
+type ignore struct{}
+
+func (ignore) Raise(context.Context, domain.Event) {}
+
+func (ignore) JobEnded(context.Context, domain.JobKind) {}
 
 func TestWorkerRunsJobsWithinItsSlots(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -89,7 +93,7 @@ func TestWorkerRunsJobsWithinItsSlots(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 3, map[domain.JobKind]Handler{domain.JobKeyframes: handler}, ignore)
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 3, map[domain.JobKind]Handler{domain.JobKeyframes: handler}, ignore{})
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -112,7 +116,7 @@ func TestWorkerReportsFailures(t *testing.T) {
 		failing := func(context.Context, uuid.UUID) error { return errors.New("no video stream") }
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobKeyframes: failing}, ignore)
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobKeyframes: failing}, ignore{})
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -132,7 +136,7 @@ func TestAJobWithNoRoomIsPostponedNotFailed(t *testing.T) {
 		busy := func(context.Context, uuid.UUID) error { return ErrNotNow }
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobConvert: busy}, ignore)
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobConvert: busy}, ignore{})
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -163,7 +167,7 @@ func TestALongJobKeepsItsLease(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobKeyframes: long}, ignore)
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobKeyframes: long}, ignore{})
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -188,7 +192,7 @@ func TestAJobCutShortByShutdownIsQueuedAgainAtOnce(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobScanLibrary: scanning}, ignore)
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobScanLibrary: scanning}, ignore{})
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -219,7 +223,7 @@ func TestAJobWhoseLeaseWasLostStopsAndRecordsNothing(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobScanLibrary: scanning}, ignore)
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobScanLibrary: scanning}, ignore{})
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -234,6 +238,45 @@ func TestAJobWhoseLeaseWasLostStopsAndRecordsNothing(t *testing.T) {
 		if !stopped || len(q.completed)+len(q.failed)+len(q.postponed) != 0 {
 			t.Errorf("stopped %t, completed %v, failed %v, postponed %v; want the job stopped and nothing recorded",
 				stopped, q.completed, q.failed, q.postponed)
+		}
+	})
+}
+
+type endings struct {
+	ignore
+	mu    sync.Mutex
+	ended int
+}
+
+func (e *endings) JobEnded(context.Context, domain.JobKind) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.ended++
+}
+
+func TestOnlyAJobThatEndsIsDoneInItsBacklog(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := &memoryQueue{pending: []domain.Job{{ID: 1, Kind: domain.JobKeyframes}, {ID: 2, Kind: domain.JobKeyframes}}}
+		handler := func(_ context.Context, subject uuid.UUID) error {
+			if subject == (uuid.UUID{}) {
+				return nil
+			}
+			return errors.New("no video stream")
+		}
+		q.pending[1].Subject = uuid.NewV7()
+		told := &endings{}
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 2, map[domain.JobKind]Handler{domain.JobKeyframes: handler}, told)
+		go func() {
+			w.Run(ctx)
+			close(done)
+		}()
+		synctest.Sleep(10 * time.Second)
+		cancel()
+		<-done
+		if told.ended != 1 {
+			t.Errorf("%d jobs done in the backlog; want the one finished, not the one to be tried again", told.ended)
 		}
 	})
 }

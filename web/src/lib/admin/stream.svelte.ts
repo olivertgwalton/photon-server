@@ -26,6 +26,7 @@ const names = [
 	"job.finished",
 	"job.failed",
 	"job.dead",
+	"jobs.progress",
 	"webhook.test",
 ] as const satisfies readonly ("snapshot" | EventKind)[];
 

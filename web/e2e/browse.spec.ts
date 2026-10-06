@@ -112,7 +112,7 @@ test("a wall follows the server as it finds titles", async ({ page }) => {
 	await expect(page.getByRole("link", { name: /Aardvark/ })).toBeVisible();
 });
 
-test("the bar says what the server is doing: a scan as it goes and the tasks running", async ({
+test("the bar says what the server is doing: a scan as it goes, the tasks running and a backlog counting down", async ({
 	page,
 }) => {
 	await logIn(page, "/libraries/l-films");
@@ -125,6 +125,13 @@ test("the bar says what the server is doing: a scan as it goes and the tasks run
 	await expect(
 		menu.getByRole("list", { name: "Scheduled tasks running" }),
 	).toContainText("Scan libraries");
+	const jobs = menu.getByRole("list", { name: "Jobs running" });
+	await expect(jobs).toContainText("Make previews");
+	await expect(jobs).toContainText(/[\d,]+ of 8,607/);
+	await expect(jobs).not.toContainText("585 of 8,607");
+	await expect(
+		jobs.getByRole("progressbar", { name: /^Make previews: [\d,]+ of 8,607$/ }),
+	).toBeVisible();
 	await expectAccessible(page);
 });
 

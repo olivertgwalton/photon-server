@@ -23,8 +23,15 @@ const state = $derived({
 		(t) => clock.now - Date.parse(t.started_at) >= brief,
 	),
 });
+// A backlog keeps the icon between one job and the next, as previews run one
+// at a time.
 const running = $derived(
-	state.scans.length + state.tasks.length + state.jobs.length,
+	state.scans.length +
+		state.tasks.length +
+		new Set([
+			...state.jobs.map((j) => j.kind),
+			...state.backlogs.map((b) => b.kind),
+		]).size,
 );
 </script>
 

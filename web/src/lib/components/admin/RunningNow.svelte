@@ -3,19 +3,33 @@ import { ticking } from "#lib/admin/clock.svelte.js";
 import type { Live } from "#lib/admin/live.js";
 import { jobKinds, relative, tasks } from "#lib/admin/words.js";
 import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
+import { Progress } from "#lib/components/ui/progress/index.js";
 
 // What the server is doing now, as the admin stream tells it: scans with their
-// progress, scheduled tasks and when they started, and running jobs by kind (a
-// scan can run hundreds at once).
+// progress, scheduled tasks and when they started, and jobs by kind, each with
+// how far its backlog has got, as Plex's activity panel does (a scan can queue
+// thousands).
 let { live, libraries }: { live: Live; libraries: Map<string, string> } =
 	$props();
 
 const clock = ticking();
+const running = $derived(Object.groupBy(live.jobs, (j) => j.kind));
+// A job running before its backlog is first told still has a line.
 const jobs = $derived(
-	Object.entries(Object.groupBy(live.jobs, (j) => j.kind)).map(
-		([kind, list]) =>
-			[kind as keyof typeof jobKinds, list?.length ?? 0] as const,
-	),
+	[
+		...new Set([
+			...live.backlogs.map((b) => b.kind),
+			...live.jobs.map((j) => j.kind),
+		]),
+	].map((kind) => {
+		const backlog = live.backlogs.find((b) => b.kind === kind);
+		return {
+			kind,
+			running: running[kind]?.length ?? 0,
+			done: backlog?.done ?? 0,
+			total: backlog ? backlog.done + backlog.left : 0,
+		};
+	}),
 );
 </script>
 
@@ -39,11 +53,24 @@ const jobs = $derived(
 	</ul>
 {/if}
 {#if jobs.length}
-	<ul class="grid gap-1 text-sm" aria-label="Jobs running">
-		{#each jobs as [kind, count] (kind)}
-			<li class="flex justify-between gap-4">
-				<span class="text-ink">{jobKinds[kind]}</span>
-				<span class="text-ink-3">{count} running</span>
+	<ul class="grid gap-3 text-sm" aria-label="Jobs running">
+		{#each jobs as job (job.kind)}
+			{@const name = jobKinds[job.kind]}
+			{@const said = `${job.done.toLocaleString()} of ${job.total.toLocaleString()}`}
+			<li class="grid gap-1.5">
+				<p class="flex justify-between gap-4">
+					<span class="text-ink">{name}</span>
+					<span class="text-ink-3 tabular-nums">
+						{job.total ? said : `${job.running} running`}
+					</span>
+				</p>
+				{#if job.total}
+					<Progress
+						value={job.done}
+						max={job.total}
+						aria-label="{name}: {said}"
+					/>
+				{/if}
 			</li>
 		{/each}
 	</ul>

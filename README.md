@@ -354,6 +354,13 @@ every node, then each event as it happens, named by its kind (`task.finished`, `
 `playback.paused`…), with a comment every 15 seconds so proxies leave it open. It asks nginx not
 to buffer it; another proxy may need buffering turned off for its path.
 
+The dashboard says how far each kind of job's backlog has got, as Plex's activity panel does with
+its preview thumbnails: the snapshot's `backlogs` and the `jobs.progress` event (at most once a
+second for each kind, and once more when none is left) give how many are `left`, queued or
+running, and how many are `done` since the kind last had none left, so a dashboard draws "585 of
+8,607" with a bar whose end moves out as more is queued. The count of done is kept in Valkey for a
+day after its last job, so any node tells it right.
+
 Clients keep their pages right without polling through `GET /api/v1/events`, the same kind of
 stream for any signed-in profile, as Jellyfin's WebSocket and Plex's notifications do: a `hello`
 with the scans going on, then `library.changed` (a library's titles `added`, `updated` and

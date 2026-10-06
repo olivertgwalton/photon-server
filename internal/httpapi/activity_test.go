@@ -37,6 +37,8 @@ func (f *fakeEvents) Subscribe() (<-chan domain.Event, func()) {
 
 func (f *fakeEvents) Scans(context.Context) ([]domain.ScanProgress, error) { return nil, nil }
 
+func (f *fakeEvents) Backlogs(context.Context) ([]domain.Backlog, error) { return nil, nil }
+
 func (f *fakeEvents) TestWebhook(_ context.Context, id uuid.UUID) error {
 	if !slices.Contains(f.webhooks, id) {
 		return store.ErrNotFound

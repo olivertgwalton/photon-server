@@ -109,3 +109,75 @@ func TestAScansChangesAreToldAFewAtATime(t *testing.T) {
 		t.Errorf("told %v; want 299 added, the one removed removed, and nothing as only updated", events[0].Details)
 	}
 }
+
+func TestABacklogCountsDownAndStartsAgainOnceDrained(t *testing.T) {
+	hub, st := newHub(t)
+	ctx := t.Context()
+	running, stop := context.WithCancel(ctx)
+	defer stop()
+	go hub.Run(running)
+	told, unsubscribe := hub.Subscribe()
+	defer unsubscribe()
+	again := time.NewTicker(100 * time.Millisecond)
+	defer again.Stop()
+	for heard := false; !heard; {
+		hub.Raise(ctx, domain.Event{Kind: domain.EventWebhookTest})
+		select {
+		case e := <-told:
+			heard = e.Kind == domain.EventWebhookTest
+		case <-again.C:
+		}
+	}
+	queue := func(n int) {
+		for range n {
+			if err := st.AskKeyframes(ctx, uuid.NewV7()); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	finish := func(n int) {
+		jobs, err := st.ClaimJobs(ctx, []domain.JobKind{domain.JobKeyframes}, uuid.NewV7(), time.Minute, n)
+		if err != nil || len(jobs) != n {
+			t.Fatalf("claimed %d, %v; want %d", len(jobs), err, n)
+		}
+		for _, j := range jobs {
+			if err := st.CompleteJob(ctx, j.ID); err != nil {
+				t.Fatal(err)
+			}
+			hub.JobEnded(ctx, j.Kind)
+		}
+	}
+	backlogs := func() []domain.Backlog {
+		b, err := hub.Backlogs(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+
+	queue(3)
+	finish(1)
+	if got := backlogs(); len(got) != 1 || got[0] != (domain.Backlog{Kind: domain.JobKeyframes, Left: 2, Done: 1}) {
+		t.Errorf("backlogs %+v; want keyframes, 1 of 3 done", got)
+	}
+	finish(2)
+	if got := backlogs(); len(got) != 0 {
+		t.Errorf("backlogs %+v once drained; want none", got)
+	}
+	deadline := time.After(10 * time.Second)
+	for drained := false; !drained; {
+		select {
+		case e := <-told:
+			drained = e.Kind == domain.EventJobsProgress && e.Details["left"] == 0.0
+			if drained && (e.Details["done"] != 3.0 || e.Details["job_kind"] != string(domain.JobKeyframes)) {
+				t.Errorf("drained as %v; want the keyframes' 3 done", e.Details)
+			}
+		case <-deadline:
+			t.Fatal("the backlog's end was not told")
+		}
+	}
+	queue(1)
+	if got := backlogs(); len(got) != 1 || got[0].Done != 0 {
+		t.Errorf("backlogs %+v; want the next one counted from none", got)
+	}
+}
