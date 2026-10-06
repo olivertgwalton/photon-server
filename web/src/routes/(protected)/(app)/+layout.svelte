@@ -6,12 +6,57 @@ import AppSidebar from "#lib/components/AppSidebar.svelte";
 import PlaylistPicker from "#lib/components/PlaylistPicker.svelte";
 import ProfileMenu from "#lib/components/ProfileMenu.svelte";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
+import { onMount } from "svelte";
+import { invalidate } from "$app/navigation";
+import { LiveStream, setLiveStream } from "#lib/admin/stream.svelte.js";
 import { live } from "#lib/live.svelte.js";
 
 let { data, children } = $props();
 
 // The server's changes, for as long as the shell is open.
 $effect(() => live.connect());
+
+// What a page loaded that an event says has changed. A busy scan tells many
+// jobs a second, so each is reloaded once a second at most.
+const changes: Record<string, string> = {
+	"task.started": "admin:tasks",
+	"task.finished": "admin:tasks",
+	"task.failed": "admin:tasks",
+	"job.started": "admin:jobs",
+	"job.finished": "admin:jobs",
+	"job.failed": "admin:jobs",
+	"job.dead": "admin:jobs",
+	"playback.started": "admin:playbacks",
+	"playback.stopped": "admin:playbacks",
+	"library.added": "admin:libraries",
+	"library.removed": "admin:libraries",
+	"profile.added": "admin:profiles",
+	"profile.removed": "admin:profiles",
+};
+
+// What the server is doing, for an admin: the activity menu and the dashboard
+// read the one stream.
+const stream = setLiveStream(new LiveStream());
+
+onMount(() => {
+	if (data.me.role !== "admin") return;
+	const pending = new Set<string>();
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const close = stream.open((name) => {
+		const changed = changes[name];
+		if (!changed) return;
+		pending.add(changed);
+		timer ??= setTimeout(() => {
+			for (const key of pending) invalidate(key);
+			pending.clear();
+			timer = undefined;
+		}, 1_000);
+	});
+	return () => {
+		clearTimeout(timer);
+		close();
+	};
+});
 </script>
 
 <a

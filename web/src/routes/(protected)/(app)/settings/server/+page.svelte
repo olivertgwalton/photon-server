@@ -1,10 +1,10 @@
 <script lang="ts">
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
-import { jobKinds, relative, tasks } from "#lib/admin/words.js";
+import { relative } from "#lib/admin/words.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
 import NowPlayingCard from "#lib/components/admin/NowPlayingCard.svelte";
-import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
+import RunningNow from "#lib/components/admin/RunningNow.svelte";
 import ServerInfo from "#lib/components/admin/ServerInfo.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
@@ -72,14 +72,6 @@ const attention = $derived(
 				go: "Set it up",
 			})),
 	].filter((a) => !!a),
-);
-
-// Running jobs by kind: a scan can run hundreds at once.
-const jobs = $derived(
-	Object.entries(Object.groupBy(live.state.jobs, (j) => j.kind)).map(
-		([kind, list]) =>
-			[kind as keyof typeof jobKinds, list?.length ?? 0] as const,
-	),
 );
 </script>
 
@@ -170,46 +162,7 @@ const jobs = $derived(
 			<Card.Title><h2 class="heading">Running</h2></Card.Title>
 		</Card.Header>
 		<Card.Content class="grid gap-4">
-			{#each live.state.scans as scan, i (`${scan.library_id}-${i}`)}
-				<div class="grid gap-1">
-					<p class="text-ink font-semibold">
-						Scanning {libraries.get(scan.library_id) ?? "a library"}
-					</p>
-					<ScanProgress
-						{scan}
-						name={libraries.get(scan.library_id) ?? "a library"}
-					/>
-				</div>
-			{/each}
-			{#if live.state.tasks.length}
-				<ul class="grid gap-1 text-sm">
-					{#each live.state.tasks as task (task.key)}
-						<li class="flex justify-between gap-4">
-							<span class="text-ink">{tasks[task.key].name}</span>
-							<span class="text-ink-3">
-								started {relative(task.started_at, clock.now)}
-							</span>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-			{#if jobs.length}
-				<ul class="grid gap-1 text-sm">
-					{#each jobs as [kind, count] (kind)}
-						<li class="flex justify-between gap-4">
-							<span class="text-ink">{jobKinds[kind]}</span>
-							<span class="text-ink-3">{count} running</span>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-			{#if !live.state.scans.length && !live.state.tasks.length && !jobs.length}
-				<p class="text-ink-3 text-sm">
-					{live.state.ready
-						? "The server is idle."
-						: "Waiting for live updates…"}
-				</p>
-			{/if}
+			<RunningNow live={live.state} {libraries} />
 		</Card.Content>
 	</Card.Root>
 

@@ -226,10 +226,21 @@ function events() {
 					encoder.encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`),
 				);
 			send("snapshot", {
-				tasks: [{ key: "scan_libraries", started_at: "2026-10-06T20:00:00Z" }],
+				tasks: [
+					{
+						key: "scan_libraries",
+						started_at: new Date(Date.now() - 60_000).toISOString(),
+					},
+				],
 				jobs: [],
 				scans: [
-					{ library_id: "l-films", phase: "reading", done: 3, known: 10 },
+					{
+						library_id: "l-films",
+						phase: "reading",
+						done: 3,
+						known: 10,
+						folder: "Heat (1995)",
+					},
 				],
 				playbacks: [playing],
 			} satisfies Schemas["Snapshot"]);
@@ -240,7 +251,7 @@ function events() {
 					kind: "scan.progress",
 					at: new Date().toISOString(),
 					library_id: "l-films",
-					details: { phase: "reading", done, known: 40 },
+					details: { phase: "reading", done, known: 40, folder: "Heat (1995)" },
 				} satisfies Schemas["Event"]);
 			}, 400);
 		},

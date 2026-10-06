@@ -95,9 +95,7 @@ test("a wall is sorted, filtered and drawn as the reader asks", async ({
 	await page.getByRole("radio", { name: "Posters" }).click();
 });
 
-test("a wall follows the server: a scan's progress in the bar, then what it found", async ({
-	page,
-}) => {
+test("a wall follows the server as it finds titles", async ({ page }) => {
 	await logIn(page, "/libraries/l-films");
 	await expect(page.getByText("250 titles")).toBeVisible();
 	const emit = (event: string, data: object, add?: string) =>
@@ -105,19 +103,6 @@ test("a wall follows the server: a scan's progress in the bar, then what it foun
 	await expect
 		.poll(async () => (await page.request.get("/mock/listening")).json())
 		.toBeGreaterThan(0);
-
-	await emit("scan.progress", {
-		kind: "scan.progress",
-		library_id: "l-films",
-		details: { phase: "reading", done: 40, known: 100, folder: "Heat (1995)" },
-	});
-	const activity = page.getByRole("button", { name: /^Activity/ });
-	await activity.click();
-	const scan = page.getByRole("menu").getByRole("status");
-	await expect(scan).toContainText("Scanning Films");
-	await expect(scan).toContainText("Reading folders: 40 of 100");
-	await expect(scan).toContainText("Heat (1995)");
-	await page.keyboard.press("Escape");
 	await emit(
 		"library.changed",
 		{ kind: "library.changed", library_id: "l-films" },
@@ -125,11 +110,22 @@ test("a wall follows the server: a scan's progress in the bar, then what it foun
 	);
 	await expect(page.getByText("251 titles")).toBeVisible();
 	await expect(page.getByRole("link", { name: /Aardvark/ })).toBeVisible();
-	await emit("library.scanned", {
-		kind: "library.scanned",
-		library_id: "l-films",
-	});
-	await expect(activity).toHaveCount(0);
+});
+
+test("the bar says what the server is doing: a scan as it goes and the tasks running", async ({
+	page,
+}) => {
+	await logIn(page, "/libraries/l-films");
+	await page.getByRole("button", { name: /^Activity/ }).click();
+	const menu = page.getByRole("dialog", { name: "Activity" });
+	const scan = menu.getByRole("status");
+	await expect(scan).toContainText("Scanning Films");
+	await expect(scan).toContainText(/Reading folders: \d+ of 40/);
+	await expect(scan).toContainText("Heat (1995)");
+	await expect(
+		menu.getByRole("list", { name: "Scheduled tasks running" }),
+	).toContainText("Scan libraries");
+	await expectAccessible(page);
 });
 
 test("a film's page plays the copy and tracks chosen", async ({ page }) => {
