@@ -315,3 +315,18 @@ func (r *Registry) DescribePerson(ctx context.Context, ids map[domain.Provider]s
 	}
 	return domain.Person{}, false, errors.Join(errs...)
 }
+
+// Date reads a provider's YYYY-MM-DD date; one it does not give, or gives malformed, is the zero
+// time.
+func Date(s string) time.Time {
+	t, _ := time.Parse(time.DateOnly, s)
+	return t
+}
+
+// Year is the year of a date, or zero for the zero time.
+func Year(t time.Time) int {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Year()
+}

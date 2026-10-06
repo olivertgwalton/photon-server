@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/plugin/pluginv1"
@@ -126,7 +125,7 @@ func (c *client) DescribePerson(ctx context.Context, ids map[domain.Provider]str
 		return pluginv1.PersonRequest{Settings: s, IDs: sentIDs(ids)}
 	}, &out)
 	return domain.Person{
-		Name: out.Name, Biography: out.Biography, Born: date(out.Born), Died: date(out.Died),
+		Name: out.Name, Biography: out.Biography, Born: provider.Date(out.Born), Died: provider.Date(out.Died),
 		Birthplace: out.Birthplace, Photo: web(out.Photo),
 	}, err
 }
@@ -136,7 +135,7 @@ func (c *client) DescribePerson(ctx context.Context, ids map[domain.Provider]str
 func (c *client) metadata(m pluginv1.Metadata) domain.Metadata {
 	out := domain.Metadata{
 		Title: m.Title, SortTitle: m.SortTitle, OriginalTitle: m.OriginalTitle, Overview: m.Overview,
-		Tagline: m.Tagline, Certificate: m.Certificate, ReleaseDate: date(m.ReleaseDate), Year: m.Year,
+		Tagline: m.Tagline, Certificate: m.Certificate, ReleaseDate: provider.Date(m.ReleaseDate), Year: m.Year,
 		Genres: m.Genres, Studios: m.Studios, IDs: c.ids(m.IDs),
 	}
 	for _, a := range m.Artwork {
@@ -184,9 +183,4 @@ func web(address string) string {
 		return ""
 	}
 	return address
-}
-
-func date(s string) time.Time {
-	t, _ := time.Parse(time.DateOnly, s)
-	return t
 }

@@ -85,7 +85,7 @@ type result struct {
 func (r result) match() domain.Candidate {
 	c := domain.Candidate{
 		ID: strconv.Itoa(r.ID), Title: cmp.Or(r.Title, r.Name), OriginalTitle: cmp.Or(r.OriginalTitle, r.OriginalName),
-		Year: year(date(cmp.Or(r.ReleaseDate, r.FirstAirDate))),
+		Year: provider.Year(provider.Date(cmp.Or(r.ReleaseDate, r.FirstAirDate))),
 	}
 	if r.Poster != "" {
 		c.Poster = imageURL + r.Poster
@@ -201,10 +201,10 @@ func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadat
 		return domain.Metadata{}, err
 	}
 	m := d.match()
-	released := date(cmp.Or(d.ReleaseDate, d.FirstAirDate))
+	released := provider.Date(cmp.Or(d.ReleaseDate, d.FirstAirDate))
 	out := domain.Metadata{
 		Title: m.Title, OriginalTitle: m.OriginalTitle, Overview: d.Overview, Tagline: d.Tagline,
-		ReleaseDate: released, Year: year(released),
+		ReleaseDate: released, Year: provider.Year(released),
 		Genres: names(d.Genres), Studios: names(append(d.ProductionCompanies, d.Networks...)),
 		IDs: map[domain.Provider]string{domain.ProviderTMDB: strconv.Itoa(id)},
 	}
@@ -351,18 +351,18 @@ func (c *Client) Season(ctx context.Context, show, number int) (domain.SeasonMet
 	if err := c.get(ctx, fmt.Sprintf("/tv/%d/season/%d", show, number), nil, &s); err != nil {
 		return domain.SeasonMetadata{}, err
 	}
-	aired := date(s.AirDate)
+	aired := provider.Date(s.AirDate)
 	out := domain.SeasonMetadata{
 		Metadata: domain.Metadata{
-			Title: s.Name, Overview: s.Overview, ReleaseDate: aired, Year: year(aired),
+			Title: s.Name, Overview: s.Overview, ReleaseDate: aired, Year: provider.Year(aired),
 			Artwork: picture(domain.ArtworkPoster, s.Poster),
 		},
 		Episodes: make(map[int]domain.Metadata, len(s.Episodes)),
 	}
 	for _, e := range s.Episodes {
-		aired := date(e.AirDate)
+		aired := provider.Date(e.AirDate)
 		out.Episodes[e.Number] = domain.Metadata{
-			Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: year(aired),
+			Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: provider.Year(aired),
 			Artwork: picture(domain.ArtworkThumb, e.Still),
 			Credits: credits{Cast: e.GuestStars, Crew: e.Crew}.list(domain.CreditGuestStar),
 		}
@@ -455,7 +455,7 @@ func (c *Client) Person(ctx context.Context, id string) (domain.Person, error) {
 	if err := c.get(ctx, "/person/"+url.PathEscape(id), nil, &p); err != nil {
 		return domain.Person{}, err
 	}
-	out := domain.Person{Name: p.Name, Biography: p.Biography, Born: date(p.Birthday), Died: date(p.Deathday), Birthplace: p.Birthplace}
+	out := domain.Person{Name: p.Name, Biography: p.Biography, Born: provider.Date(p.Birthday), Died: provider.Date(p.Deathday), Birthplace: p.Birthplace}
 	if p.Profile != "" {
 		out.Photo = imageURL + p.Profile
 	}
@@ -474,14 +474,3 @@ func names(ns []named) []string {
 }
 
 // date reads TMDB's dates; an absent one is the zero time.
-func date(s string) time.Time {
-	t, _ := time.Parse(time.DateOnly, s)
-	return t
-}
-
-func year(t time.Time) int {
-	if t.IsZero() {
-		return 0
-	}
-	return t.Year()
-}
