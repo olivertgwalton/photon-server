@@ -53,8 +53,8 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 		t.Errorf("members = %+v, %v; want Alien then Aliens, by release", members, err)
 	}
 	page, err := s.Title(ctx, uuid.UUID{}, ids["Alien"])
-	if err != nil || !slices.Equal(page.Collections, []TitleRef{{ID: set, Title: "Alien Collection"}}) {
-		t.Errorf("Alien is in %v, %v", page.Collections, err)
+	if err != nil || !slices.Equal(page.Collections, []CollectionCard{{ID: set, Title: "Alien Collection", Poster: shown[0].Poster}}) {
+		t.Errorf("Alien is in %v, %v; want the set with its poster", page.Collections, err)
 	}
 	if shown[0].Origin != domain.CollectionTMDB {
 		t.Errorf("the set's card says it was made by %q, want tmdb", shown[0].Origin)

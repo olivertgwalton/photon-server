@@ -371,3 +371,49 @@ func TestTheSweepClearsPreviewsNoPartHas(t *testing.T) {
 		t.Errorf("the part's own sheet: %v", err)
 	}
 }
+
+// An extra has no chapters, so it is pictured as one, and its card on its film's page shows it.
+func TestAnExtraIsPicturedByAStill(t *testing.T) {
+	f := newFixture(t)
+	rel := "Heat (1995)/Heat-trailer.mkv"
+	if err := os.MkdirAll(filepath.Join(f.root, "Heat (1995)"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(f.root, rel), []byte("trailer"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	facts := &domain.Facts{
+		Container: "matroska,webm", Duration: 150 * time.Second,
+		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Width: 640, Height: 360, Range: domain.RangeSDR}},
+	}
+	film := store.Film{Title: "Heat", Year: 1995, Folder: "Heat (1995)"}
+	trailer := store.Extra{
+		Kind: domain.ExtraTrailer, Title: "Trailer", Folder: "Heat (1995)",
+		Owner: store.Owner{Kind: domain.ItemMovie, Folder: "Heat (1995)", Title: "Heat"},
+		Copy:  store.Copy{ContentKey: []byte("trailer"), Parts: []store.Part{{RelPath: rel, Size: 7, ModTime: time.Now(), Facts: facts}}},
+	}
+	if _, err := f.st.SaveFolder(t.Context(), f.lib.ID, "Heat (1995)", []byte("v1"), []store.Film{film}, []store.Extra{trailer}); err != nil {
+		t.Fatal(err)
+	}
+	var title, part string
+	err := f.db.QueryRow(t.Context(), `
+		SELECT i.parent_id::text, p.id::text FROM part_files pf JOIN parts p ON p.id = pf.part_id
+		JOIN versions v ON v.id = p.version_id JOIN items i ON i.id = v.item_id WHERE pf.rel_path = $1`, rel).Scan(&title, &part)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.run(uuid.MustParse(part))
+
+	page, err := f.st.Title(t.Context(), f.admin.ID, uuid.MustParse(title))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "/api/v1/parts/" + part + "/chapters/0/image"; len(page.Extras) != 1 || page.Extras[0].Image != want {
+		t.Fatalf("extras = %+v, want the trailer pictured at %s", page.Extras, want)
+	}
+	still, err := f.previews.ChapterImage(uuid.MustParse(part), 0)
+	if err != nil {
+		t.Fatalf("the trailer's still: %v", err)
+	}
+	_ = still.Close()
+}

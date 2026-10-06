@@ -31,7 +31,7 @@ type TitlePage struct {
 	IDs           map[domain.Provider]string `json:"ids,omitzero"`
 	Ratings       []RatingRef                `json:"ratings,omitzero"`
 	// Collections are the box sets it is in.
-	Collections []TitleRef `json:"collections,omitzero"`
+	Collections []CollectionCard `json:"collections,omitzero"`
 	// Credits are its cast and crew, as the highest-ranked source gives them.
 	Credits []CreditRef `json:"credits,omitzero"`
 	// Origin is who made a collection: an admin's is changed by hand, a provider's only by it.
@@ -155,13 +155,19 @@ type ChapterRef struct {
 	unsigned string
 }
 
-// SignChapterImages gives each chapter's picture its signed address, as sign signs a path.
+// SignChapterImages gives each chapter's picture, and each extra's still, its signed address, as
+// sign signs a path.
 func (p *TitlePage) SignChapterImages(sign func(path string) string) {
 	for _, v := range p.Versions {
 		for c := range v.Chapters {
 			if ref := &v.Chapters[c]; ref.unsigned != "" {
 				ref.SignedImage = sign(ref.unsigned)
 			}
+		}
+	}
+	for e := range p.Extras {
+		if ref := &p.Extras[e]; ref.unsigned != "" {
+			ref.SignedImage = sign(ref.unsigned)
 		}
 	}
 }
@@ -190,11 +196,22 @@ type EpisodeCard struct {
 	State      TitleState  `json:"state,omitzero"`
 }
 
+// ExtraCard is a trailer or other extra, pictured by a still of its video where its previews are
+// made: Image for a client with a token, SignedImage for a player with none, as a chapter's are.
 type ExtraCard struct {
-	ID         uuid.UUID        `json:"id"`
-	Kind       domain.ExtraKind `json:"extra_kind"`
-	Title      string           `json:"title"`
-	DurationMS int64            `json:"duration_ms,omitzero"`
+	ID          uuid.UUID        `json:"id"`
+	Kind        domain.ExtraKind `json:"extra_kind"`
+	Title       string           `json:"title"`
+	DurationMS  int64            `json:"duration_ms,omitzero"`
+	Image       string           `json:"image,omitzero"`
+	SignedImage string           `json:"signed_image,omitzero"`
+	unsigned    string
+}
+
+type CollectionCard struct {
+	ID     uuid.UUID `json:"id"`
+	Title  string    `json:"title"`
+	Poster uuid.UUID `json:"poster,omitzero"`
 }
 
 // VideoLink is a provider's link to a video hosted elsewhere.
@@ -430,11 +447,59 @@ func (s *Store) extras(ctx context.Context, owner model.UUID) ([]ExtraCard, erro
 	if err != nil {
 		return nil, err
 	}
+	stills, err := s.stills(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]ExtraCard, len(rows))
 	for n, r := range rows {
 		out[n] = ExtraCard{ID: uuid.UUID(r.ID), Kind: deref(r.ExtraKind), Title: r.Title, DurationMS: lengths[r.ID]}
+		if at, ok := stills[r.ID]; ok {
+			out[n].Image = fmt.Sprintf("/api/v1/parts/%s/chapters/%d/image", at.part, at.idx)
+			out[n].unsigned = fmt.Sprintf("/api/v1/parts/%s/chapter-images/%d", at.part, at.idx)
+		}
 	}
 	return out, nil
+}
+
+// still is a chapter's picture: its part, and the chapter's idx in it.
+type still struct {
+	part uuid.UUID
+	idx  int
+}
+
+// stills answers each title's first chapter picture: of its first copy's first part pictured.
+func (s *Store) stills(ctx context.Context, items []*model.Item) (map[model.UUID]still, error) {
+	in := make([]string, len(items))
+	for n, i := range items {
+		in[n] = uuid.UUID(i.ID).String()
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (v.item_id) v.item_id::text, p.id::text, (SELECT min(x) FROM unnest(pv.chapter_images) x)
+		FROM versions v JOIN parts p ON p.version_id = v.id JOIN previews pv ON pv.part_id = p.id
+		WHERE v.item_id::text = ANY($1) AND v.missing_since IS NULL AND cardinality(pv.chapter_images) > 0
+		ORDER BY v.item_id, v.id, p.idx`, in)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[model.UUID]still{}
+	for rows.Next() {
+		var item, part string
+		var at still
+		if err := rows.Scan(&item, &part, &at.idx); err != nil {
+			return nil, err
+		}
+		id, err := uuid.Parse(item)
+		if err != nil {
+			return nil, err
+		}
+		if at.part, err = uuid.Parse(part); err != nil {
+			return nil, err
+		}
+		out[model.UUID(id)] = at
+	}
+	return out, rows.Err()
 }
 
 // durations answers how long each title runs: its longest copy still on disk.

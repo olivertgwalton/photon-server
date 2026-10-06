@@ -4330,6 +4330,13 @@ export interface components {
             subtitles?: string[];
             video: components["schemas"]["VideoSupport"][];
         };
+        CollectionCard: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            poster?: string;
+            title: string;
+        };
         /** @enum {string} */
         CollectionOrigin: "tmdb" | "user";
         Created: {
@@ -4561,6 +4568,8 @@ export interface components {
             extra_kind: components["schemas"]["ExtraKind"];
             /** Format: uuid */
             id: string;
+            image?: string;
+            signed_image?: string;
             title: string;
         };
         /** @enum {string} */
@@ -5232,7 +5241,7 @@ export interface components {
                 [key: string]: string[];
             };
             certificate?: string;
-            collections?: components["schemas"]["TitleRef"][];
+            collections?: components["schemas"]["CollectionCard"][];
             credits?: components["schemas"]["CreditRef"][];
             episode_end?: number | null;
             episode_number?: number | null;
