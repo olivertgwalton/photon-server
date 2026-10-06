@@ -203,19 +203,15 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidParameter, "q is what to search for")
 		return
 	}
-	var err error
-	if s := q.Get("library"); s != "" {
-		if query.Library, err = uuid.Parse(s); err != nil {
-			writeProblem(w, a.logger, codeInvalidParameter, "library is not an id")
-			return
-		}
+	var ok bool
+	if query.Library, ok = a.queryID(w, r, "library"); !ok {
+		return
 	}
 	kinds, err := parseAll(list(q, "kind"), enum("kind", domain.SearchKinds()))
 	if err != nil {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
 	}
-	var ok bool
 	if query.Offset, query.Limit, ok = a.paging(w, r, defaultWallLimit); !ok {
 		return
 	}
