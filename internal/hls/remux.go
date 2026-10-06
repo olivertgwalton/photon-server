@@ -21,9 +21,12 @@ import (
 )
 
 const (
-	// ahead is how far the remux runs past the furthest segment asked for before it waits: ffmpeg
-	// then blocks on its pipe and costs nothing.
-	ahead = 5
+	// ahead is how far, in segments, a remux copying video runs past the furthest segment asked
+	// for before it waits: ffmpeg then blocks on its pipe and costs nothing. aheadEncoding is a
+	// remux encoding video's: an encode near realtime needs more room, as Plex's runs a minute or
+	// more ahead.
+	ahead         = 5
+	aheadEncoding = 10
 	// idleRun is how long a waiting run is kept with no segment asked for before its ffmpeg is
 	// stopped, giving back its encoder to the node; a player that comes back starts another.
 	idleRun = time.Minute
@@ -716,9 +719,13 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 // throttle waits while the run is far enough ahead of what has been asked for, and gives up with
 // errIdle once nothing has been asked for r.idle.
 func (r *Remuxer) throttle(ctx context.Context, s *session, run *run, n int) error {
+	lead := ahead
+	if s.encodes() {
+		lead = aheadEncoding
+	}
 	for {
 		s.mu.Lock()
-		far := n > s.furthest+ahead
+		far := n > s.furthest+lead
 		s.mu.Unlock()
 		if !far {
 			return nil
