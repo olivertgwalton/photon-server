@@ -22,17 +22,9 @@ type cluster struct {
 	window  domain.Maintenance
 }
 
-// newCluster keeps the window from 02:00 to 05:00, the work of kind done as timing says; a test
-// starts at midnight.
-func newCluster(kind domain.JobKind, timing domain.Timing) *cluster {
-	w := domain.Maintenance{StartHour: 2, EndHour: 5, Zone: time.UTC, Previews: domain.TimingWindowAndAdded, Markers: domain.TimingWindowAndAdded}
-	switch kind {
-	case domain.JobPreviews:
-		w.Previews = timing
-	case domain.JobMarkers:
-		w.Markers = timing
-	case domain.JobKeyframes, domain.JobKeyframeWalk, domain.JobIdentify, domain.JobScanLibrary, domain.JobConvert, domain.JobDeliverWebhook, domain.JobTheme:
-	}
+// newCluster keeps the window from 02:00 to 05:00; a test starts at midnight.
+func newCluster() *cluster {
+	w := domain.Maintenance{StartHour: 2, EndHour: 5, Zone: time.UTC, Previews: domain.TimingWindow, Markers: domain.TimingWindow}
 	return &cluster{events: make(chan domain.Event, 8), window: w}
 }
 
@@ -71,10 +63,10 @@ func (c *cluster) play(node *uuid.UUID) {
 	c.events <- domain.Event{Kind: kind}
 }
 
-func runReader(t *testing.T, q *memoryQueue, c *cluster, kind domain.JobKind, h Handler) func() {
+func runReader(t *testing.T, q *memoryQueue, c *cluster, h Handler) func() {
 	t.Helper()
 	gate := NewGate(c, c, c.subscribe, slog.New(slog.DiscardHandler))
-	w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{kind: h}, ignore{}, gate)
+	w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobPreviews: h}, ignore{}, gate)
 	ctx, cancel := context.WithCancel(t.Context())
 	var wg sync.WaitGroup
 	wg.Go(func() { gate.Run(ctx) })
@@ -89,10 +81,10 @@ func runReader(t *testing.T, q *memoryQueue, c *cluster, kind domain.JobKind, h 
 // be made later without spending one of its attempts.
 func TestAPlaybackStopsMediaWorkAndGivesItsAttemptBack(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews}}}
-		c := newCluster(domain.JobPreviews, domain.TimingWindowAndAdded)
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews, Due: domain.JobDueNow}}}
+		c := newCluster()
 		started, stopped := make(chan struct{}), make(chan error, 1)
-		stop := runReader(t, q, c, domain.JobPreviews, func(ctx context.Context, _ uuid.UUID) error {
+		stop := runReader(t, q, c, func(ctx context.Context, _ uuid.UUID) error {
 			close(started)
 			<-ctx.Done()
 			stopped <- context.Cause(ctx)
@@ -112,16 +104,16 @@ func TestAPlaybackStopsMediaWorkAndGivesItsAttemptBack(t *testing.T) {
 	})
 }
 
-// While anything plays on any node, no media work starts, and none is even claimed; once the last
-// playback stops it starts.
+// While anything plays on any node, no media work starts, not even what an admin asked for now, and
+// none is even claimed; once the last playback stops it starts.
 func TestNoMediaWorkStartsWhileAnythingPlays(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews}}}
-		c := newCluster(domain.JobPreviews, domain.TimingWindowAndAdded)
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews, Due: domain.JobDueNow}}}
+		c := newCluster()
 		other := uuid.NewV7()
 		c.playing = []domain.Playback{{ID: uuid.NewV7(), Node: other}}
 		ran := 0
-		stop := runReader(t, q, c, domain.JobPreviews, func(context.Context, uuid.UUID) error {
+		stop := runReader(t, q, c, func(context.Context, uuid.UUID) error {
 			ran++
 			return nil
 		})
@@ -138,16 +130,17 @@ func TestNoMediaWorkStartsWhileAnythingPlays(t *testing.T) {
 	})
 }
 
-// Previews held to the window wait for it to open, and one still being made as it closes stops, to
-// be made in the next, without spending one of its attempts.
+// Previews due in the window, as the window's own backfill queues them, wait for it to open, and
+// one still being made as it closes stops, to be made in the next, without spending one of its
+// attempts.
 func TestWindowedWorkStartsInTheWindowAndStopsAsItCloses(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews}}}
-		c := newCluster(domain.JobPreviews, domain.TimingWindow)
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews, Due: domain.JobDueWindow}}}
+		c := newCluster()
 		var mu sync.Mutex
 		var startedAt time.Time
 		var cause error
-		stop := runReader(t, q, c, domain.JobPreviews, func(ctx context.Context, _ uuid.UUID) error {
+		stop := runReader(t, q, c, func(ctx context.Context, _ uuid.UUID) error {
 			mu.Lock()
 			startedAt = time.Now()
 			mu.Unlock()
@@ -172,45 +165,27 @@ func TestWindowedWorkStartsInTheWindowAndStopsAsItCloses(t *testing.T) {
 	})
 }
 
-// Of intros and credits found as parts are added too, an added part's start whenever they are
-// queued, outside the window as well, and what the window's backfill queued waits for the window
-// and stops as it closes, as Plex's butler stops.
-func TestAddedWorkStartsAtOnceAndBackfilledWorkKeepsToTheWindow(t *testing.T) {
+// A job due now, as an admin's Run now makes a task's backlog, starts at midnight and runs to its
+// end through the window's close, as Jellyfin's manual run carries no time limit.
+func TestWorkDueNowRunsOutsideTheWindowToItsEnd(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		q := &memoryQueue{pending: []domain.Job{
-			{ID: 7, Kind: domain.JobMarkers, Due: domain.JobDueNow},
-			{ID: 8, Kind: domain.JobMarkers, Due: domain.JobDueWindow},
-		}}
-		c := newCluster(domain.JobMarkers, domain.TimingWindowAndAdded)
-		var mu sync.Mutex
-		var backfilledAt time.Time
-		stop := runReader(t, q, c, domain.JobMarkers, func(ctx context.Context, _ uuid.UUID) error {
-			mu.Lock()
-			if time.Now().Hour() < 2 {
-				mu.Unlock()
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews, Due: domain.JobDueNow}}}
+		c := newCluster()
+		var startedAt time.Time
+		stop := runReader(t, q, c, func(ctx context.Context, _ uuid.UUID) error {
+			startedAt = time.Now()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(6 * time.Hour):
 				return nil
 			}
-			backfilledAt = time.Now()
-			mu.Unlock()
-			<-ctx.Done()
-			return ctx.Err()
 		})
 		defer stop()
-		synctest.Sleep(time.Minute)
-		q.mu.Lock()
-		if len(q.completed) != 1 || q.completed[0] != 7 {
-			t.Errorf("completed %v at midnight; want the added part's job alone", q.completed)
-		}
-		q.mu.Unlock()
-		synctest.Sleep(6 * time.Hour)
-		mu.Lock()
-		defer mu.Unlock()
-		opens := time.Date(2000, 1, 1, 2, 0, 0, 0, time.UTC)
-		if backfilledAt.Before(opens) || backfilledAt.After(opens.Add(2*time.Minute)) {
-			t.Errorf("the backfilled job started at %s, want as the window opens", backfilledAt)
-		}
-		if len(q.postponed) != 1 || q.postponed[0] != 8 {
-			t.Errorf("postponed %v; want the backfilled job stopped as the window closed", q.postponed)
+		synctest.Sleep(7 * time.Hour)
+		if startedAt.Hour() != 0 || len(q.completed) != 1 || len(q.postponed) != 0 {
+			t.Errorf("started at %s, completed %v, postponed %v; want started at once and run past 05:00 to its end",
+				startedAt, q.completed, q.postponed)
 		}
 	})
 }
@@ -219,11 +194,11 @@ func TestAddedWorkStartsAtOnceAndBackfilledWorkKeepsToTheWindow(t *testing.T) {
 // at the next minute.
 func TestAChangedWindowIsKeptToAtOnce(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews, Due: domain.JobDueNow}}}
-		c := newCluster(domain.JobPreviews, domain.TimingWindow)
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews, Due: domain.JobDueWindow}}}
+		c := newCluster()
 		c.window.StartHour = 0
 		started, stopped := make(chan struct{}), make(chan error, 1)
-		stop := runReader(t, q, c, domain.JobPreviews, func(ctx context.Context, _ uuid.UUID) error {
+		stop := runReader(t, q, c, func(ctx context.Context, _ uuid.UUID) error {
 			close(started)
 			<-ctx.Done()
 			stopped <- context.Cause(ctx)
@@ -235,25 +210,6 @@ func TestAChangedWindowIsKeptToAtOnce(t *testing.T) {
 		c.change(2, 5)
 		if err := <-stopped; !errors.Is(err, errWindowClosed) || time.Since(changed) > 0 {
 			t.Errorf("stopped for %v after %s; want stopped as the window changed", err, time.Since(changed))
-		}
-	})
-}
-
-// A walk through a whole file for its keyframes waits for the window, however it was queued.
-func TestKeyframeWalksKeepToTheWindow(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobKeyframeWalk, Due: domain.JobDueNow}}}
-		c := newCluster(domain.JobKeyframeWalk, domain.TimingWindowAndAdded)
-		var startedAt time.Time
-		stop := runReader(t, q, c, domain.JobKeyframeWalk, func(context.Context, uuid.UUID) error {
-			startedAt = time.Now()
-			return nil
-		})
-		defer stop()
-		synctest.Sleep(3 * time.Hour)
-		opens := time.Date(2000, 1, 1, 2, 0, 0, 0, time.UTC)
-		if startedAt.Before(opens) || startedAt.After(opens.Add(2*time.Minute)) {
-			t.Errorf("the walk started at %s, want as the window opens", startedAt)
 		}
 	})
 }

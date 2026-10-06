@@ -131,8 +131,8 @@ func TestAFullLibraryWalksAFileWithNoIndex(t *testing.T) {
 		t.Error("a file with no index was walked as its index was read")
 	}
 	var walks int
-	if err := f.db.QueryRow(t.Context(), `SELECT count(*) FROM jobs WHERE kind = 'keyframe_walk' AND subject = $1`, ts.String()).Scan(&walks); err != nil || walks != 1 {
-		t.Fatalf("%d walks queued (%v), want one", walks, err)
+	if err := f.db.QueryRow(t.Context(), `SELECT count(*) FROM jobs WHERE kind = 'keyframe_walk' AND subject = $1 AND due = 'window'`, ts.String()).Scan(&walks); err != nil || walks != 1 {
+		t.Fatalf("%d walks queued (%v), want one due in the window", walks, err)
 	}
 	if err := WalkKeyframes(f.st, tools)(t.Context(), ts); err != nil {
 		t.Fatal(err)

@@ -68,7 +68,7 @@ function took(started?: string, finished?: string) {
 
 <PageHeader
 	title="Scheduled tasks"
-	description="What the server does by itself, and when it next will. Run one now to have it sooner."
+	description="What the server does by itself, and when it next will. Run one now to have it sooner: what it finds to do starts at once, outside the maintenance window too, and runs to its end."
 />
 
 <form onsubmit={saveWindow} class="grid max-w-2xl gap-6">

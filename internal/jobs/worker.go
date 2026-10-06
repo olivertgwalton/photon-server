@@ -101,7 +101,7 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	jobCtx, lose := context.WithCancelCause(ctx)
 	defer lose(nil)
 	if w.gate != nil {
-		held, release, ok := w.gate.Hold(jobCtx, job.Kind, job.Due)
+		held, release, ok := w.gate.Hold(jobCtx, job.Due)
 		if !ok {
 			w.postpone(ctx, log, job)
 			return
@@ -158,15 +158,13 @@ func (w *Worker) open(kinds []domain.JobKind) (open, nowOnly []domain.JobKind) {
 	if w.gate == nil {
 		return kinds, nil
 	}
-	for _, k := range kinds {
-		switch {
-		case w.gate.Open(k, domain.JobDueWindow):
-			open = append(open, k)
-		case w.gate.Open(k, domain.JobDueNow):
-			open, nowOnly = append(open, k), append(nowOnly, k)
-		}
+	switch {
+	case w.gate.Open(domain.JobDueWindow):
+		return kinds, nil
+	case w.gate.Open(domain.JobDueNow):
+		return kinds, kinds
 	}
-	return open, nowOnly
+	return nil, nil
 }
 
 // postpone queues a job its gate would not let start, its attempt given back.

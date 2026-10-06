@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -116,7 +117,7 @@ func TestSchedulerRunsDueTasksOneAtATime(t *testing.T) {
 		task := Task{
 			Key:     domain.TaskScanLibraries,
 			Trigger: Trigger{Kind: TriggerEvery, Every: time.Hour},
-			Run: func(context.Context) error {
+			Run: func(context.Context, Start) error {
 				mu.Lock()
 				runs++
 				concurrent++
@@ -158,7 +159,7 @@ func TestSchedulerRunsNothingWithoutTheLease(t *testing.T) {
 		task := Task{
 			Key:     domain.TaskScanLibraries,
 			Trigger: Trigger{Kind: TriggerEvery, Every: time.Hour},
-			Run:     func(context.Context) error { ran = true; return nil },
+			Run:     func(context.Context, Start) error { ran = true; return nil },
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		go NewScheduler(st, discard(), uuid.NewV7(), ignore, task).Run(ctx)
@@ -177,7 +178,7 @@ func TestLosingTheLeaseCancelsTheRunningTask(t *testing.T) {
 		task := Task{
 			Key:     domain.TaskScanLibraries,
 			Trigger: Trigger{Kind: TriggerEvery, Every: 24 * time.Hour},
-			Run: func(ctx context.Context) error {
+			Run: func(ctx context.Context, _ Start) error {
 				<-ctx.Done()
 				return ctx.Err()
 			},
@@ -198,11 +199,11 @@ func TestLosingTheLeaseCancelsTheRunningTask(t *testing.T) {
 func TestATaskAskedForRunsBeforeItIsDue(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		st := &memoryStore{leader: true, starts: map[domain.TaskKey]time.Time{}, requested: map[domain.TaskKey]time.Time{}}
-		runs := 0
+		var starts []Start
 		task := Task{
 			Key:     domain.TaskScanLibraries,
 			Trigger: Trigger{Kind: TriggerEvery, Every: 12 * time.Hour},
-			Run:     func(context.Context) error { runs++; return nil },
+			Run:     func(_ context.Context, start Start) error { starts = append(starts, start); return nil },
 		}
 		s := NewScheduler(st, discard(), uuid.NewV7(), ignore, task)
 		ctx, cancel := context.WithCancel(t.Context())
@@ -221,8 +222,8 @@ func TestATaskAskedForRunsBeforeItIsDue(t *testing.T) {
 		}
 		synctest.Sleep(time.Minute)
 		synctest.Wait()
-		if runs != 2 {
-			t.Errorf("%d runs, want the first and the one asked for", runs)
+		if want := []Start{StartTrigger, StartRequest}; !slices.Equal(starts, want) {
+			t.Errorf("runs started %v, want the trigger's and then the one asked for", starts)
 		}
 	})
 }

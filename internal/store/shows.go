@@ -76,7 +76,7 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 					// The season's sound is compared again; the comparison passes over a season with
 					// nothing new.
 					if settings.Markers == domain.MarkersAll {
-						if err := enqueueAfter(ctx, tx, domain.JobMarkers, seasonID, markersQuiet); err != nil {
+						if err := insertJob(ctx, tx, domain.JobMarkers, seasonID, markersQuiet, 0, settings.MarkersDue); err != nil {
 							return err
 						}
 					}
@@ -178,7 +178,7 @@ func seasonOf(ctx context.Context, tx db, showID uuid.UUID, number int) (uuid.UU
 	return id, err
 }
 
-func saveEpisode(ctx context.Context, tx db, lib uuid.UUID, settings model.Library, showID, seasonID uuid.UUID, e Episode, changed Changed) error {
+func saveEpisode(ctx context.Context, tx db, lib uuid.UUID, settings analysis, showID, seasonID uuid.UUID, e Episode, changed Changed) error {
 	row := model.Item{
 		LibraryID: lib, Kind: domain.ItemEpisode, ParentID: &seasonID, SeasonNumber: &e.Season,
 		ScanTitle: e.Title, Title: e.Title, SortTitle: sortTitle(e.Title), Folder: e.Folder,
