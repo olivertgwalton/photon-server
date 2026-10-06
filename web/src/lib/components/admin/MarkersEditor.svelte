@@ -2,7 +2,7 @@
 import PlusIcon from "@lucide/svelte/icons/plus";
 import XIcon from "@lucide/svelte/icons/x";
 import type { components } from "#lib/api/schema.js";
-import { clock, markerKinds } from "#lib/admin/words.js";
+import { markerKinds } from "#lib/admin/words.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -11,6 +11,7 @@ import { Label } from "#lib/components/ui/label/index.js";
 import { act, fields } from "#lib/admin/act.js";
 import { markersOf } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
+import { timecode } from "#lib/format.js";
 import Choice from "./Choice.svelte";
 
 type Schemas = components["schemas"];
@@ -59,8 +60,8 @@ $effect.pre(() => {
 	rows = (version.markers ?? []).map((m) => ({
 		key: next++,
 		kind: m.kind,
-		start: clock(m.start_ms),
-		end: clock(m.end_ms),
+		start: timecode(m.start_ms),
+		end: timecode(m.end_ms),
 		source: sources[m.source],
 	}));
 });
