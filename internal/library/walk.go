@@ -47,7 +47,8 @@ var (
 )
 
 // Walk yields every folder under root, parents before children. Housekeeping names are skipped,
-// and so is any folder holding a .ignore file. A Subs or Subtitles folder is not a folder of its
+// and so is what a .ignore file hides, as Jellyfin's: an empty one its whole folder, else what its
+// gitignore patterns match below it, until a deeper .ignore takes over. A Subs or Subtitles folder is not a folder of its
 // own: its subtitles are listed as its parent's, so adding one changes the parent's fingerprint.
 // Links are followed wherever they lead, to files and folders, as Jellyfin and Plex follow them:
 // a library of links into a remote mount is a library like any other.
@@ -58,20 +59,23 @@ func Walk(root string) iter.Seq2[Folder, error] {
 			yield(Folder{Path: "."}, err)
 			return
 		}
-		walk(root, ".", []fs.FileInfo{info}, yield)
+		walk(root, ".", []fs.FileInfo{info}, ignoreFile{}, yield)
 	}
 }
 
 // walk reads dir, above being the folders it is in, itself last, so a link back to one of them is
 // left out rather than walked forever.
-func walk(root, dir string, above []fs.FileInfo, yield func(Folder, error) bool) bool {
+func walk(root, dir string, above []fs.FileInfo, ign ignoreFile, yield func(Folder, error) bool) bool {
 	full := filepath.Join(root, filepath.FromSlash(dir))
 	entries, err := os.ReadDir(full)
 	if err != nil {
 		return yield(Folder{Path: dir}, err)
 	}
-	if slices.ContainsFunc(entries, func(e fs.DirEntry) bool { return e.Name() == ".ignore" }) {
-		return true
+	if content, err := os.ReadFile(filepath.Join(full, ".ignore")); err == nil {
+		var ok bool
+		if ign, ok = parseIgnore(dir, string(content)); !ok {
+			return true
+		}
 	}
 	folder := Folder{Path: dir}
 	var below []fs.FileInfo
@@ -82,6 +86,10 @@ func walk(root, dir string, above []fs.FileInfo, yield func(Folder, error) bool)
 			continue
 		}
 		info, err := os.Stat(filepath.Join(full, name))
+		rel := path.Join(dir, name)
+		if ign.ignores(rel, err == nil && info.IsDir()) {
+			continue
+		}
 		switch {
 		case err != nil:
 			folder.Skipped = append(folder.Skipped, Skip{name, err})
@@ -92,7 +100,7 @@ func walk(root, dir string, above []fs.FileInfo, yield func(Folder, error) bool)
 				continue
 			}
 			for _, sub := range subs {
-				if naming.IsSubtitle(sub.Name()) {
+				if naming.IsSubtitle(sub.Name()) && !ign.ignores(path.Join(rel, sub.Name()), false) {
 					folder.add(full, h, path.Join(name, sub.Name()))
 				}
 			}
@@ -111,7 +119,7 @@ func walk(root, dir string, above []fs.FileInfo, yield func(Folder, error) bool)
 		return false
 	}
 	for i, sub := range folder.Folders {
-		if !walk(root, path.Join(dir, sub), append(slices.Clip(above), below[i]), yield) {
+		if !walk(root, path.Join(dir, sub), append(slices.Clip(above), below[i]), ign, yield) {
 			return false
 		}
 	}

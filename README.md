@@ -114,6 +114,10 @@ intro's sound), five minutes plus the file at 8 MiB a second for one that reads 
 (keyframes, trickplay), and five minutes without progress for a download's conversion. A run past
 its limit is stopped and its job fails saying so, rather than holding its place for ever.
 
+A `.ignore` file keeps files out of a library, as Jellyfin's does: an empty one hides its whole
+folder, and one with gitignore patterns (`*.nfo`, `Extras/`, `!keep.mkv`, `**/sample.*`) hides
+what they match in its folder and below, until a deeper `.ignore` takes over.
+
 A title a client cannot play as it is has its video copied into HLS where it can, with its audio
 encoded, or its video encoded to H.264, HDR tone mapped to SDR and an interlaced picture (a DVD, a
 1080i recording) deinterlaced with yadif, as Jellyfin's default; a file probed before the server

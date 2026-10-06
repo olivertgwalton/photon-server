@@ -654,7 +654,7 @@ func TestAScanTellsHowFarItHasGot(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
 	f.put("Alien (1979)/Alien (1979).mkv", "alien")
-	f.put("Ignored/.ignore", "x")
+	f.put("Ignored/.ignore", "")
 	var told []domain.ScanProgress
 	if _, err := f.scanner.Scan(t.Context(), f.lib, func(p domain.ScanProgress) { told = append(told, p) }, func(store.Changed) {}); err != nil {
 		t.Fatal(err)
