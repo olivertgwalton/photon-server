@@ -248,12 +248,25 @@ const (
 	AudioChannelsNotSupported   TranscodeReason = "audio_channels_not_supported"
 	BitrateExceedsLimit         TranscodeReason = "bitrate_exceeds_limit"
 	SubtitleCodecNotSupported   TranscodeReason = "subtitle_codec_not_supported"
+	// PartsNotSupported is a copy in several files for a client that plays one.
+	PartsNotSupported TranscodeReason = "parts_not_supported"
 )
 
 func TranscodeReasons() []TranscodeReason {
 	return []TranscodeReason{
 		ContainerNotSupported, VideoCodecNotSupported, VideoProfileNotSupported, VideoLevelNotSupported,
 		VideoResolutionNotSupported, VideoBitDepthNotSupported, VideoRangeNotSupported, AudioCodecNotSupported,
-		AudioChannelsNotSupported, BitrateExceedsLimit, SubtitleCodecNotSupported,
+		AudioChannelsNotSupported, BitrateExceedsLimit, SubtitleCodecNotSupported, PartsNotSupported,
 	}
 }
+
+// PartPlayback is how a client plays a copy in several files: as one stream the server joins
+// them into, or each file in turn from its own address.
+type PartPlayback string
+
+const (
+	PartsJoined PartPlayback = "joined"
+	PartsEach   PartPlayback = "each"
+)
+
+func PartPlaybacks() []PartPlayback { return []PartPlayback{PartsJoined, PartsEach} }

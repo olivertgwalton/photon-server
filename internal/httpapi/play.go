@@ -161,6 +161,13 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "profile says what the client plays")
 		return
 	}
+	if req.Profile.Parts == "" {
+		req.Profile.Parts = domain.PartsJoined
+	}
+	if !slices.Contains(domain.PartPlaybacks(), req.Profile.Parts) {
+		writeProblem(w, a.logger, codeInvalidBody, fmt.Sprintf("profile.parts is one of %v", domain.PartPlaybacks()))
+		return
+	}
 	var version uuid.UUID
 	if req.VersionID != "" {
 		var err error
@@ -177,7 +184,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	d, err := playback.Decide(*req.Profile, playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Streams: c.Streams}, req.AudioStream, req.SubtitleStream)
+	d, err := playback.Decide(*req.Profile, playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams}, req.AudioStream, req.SubtitleStream)
 	switch {
 	case errors.Is(err, playback.ErrNoSuchAudio):
 		writeProblem(w, a.logger, codeInvalidBody, "audio_stream is not one of the copy's audio streams")
