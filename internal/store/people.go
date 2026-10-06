@@ -412,7 +412,8 @@ func (s *Store) PersonCredits(ctx context.Context, profile, person uuid.UUID) ([
 		SELECT DISTINCT ON (t.id, c.kind) t.id AS item_id, c.kind, c.role FROM credits c
 		JOIN items i ON i.id = c.item_id
 		JOIN items t ON t.id = CASE i.kind WHEN 'episode' THEN (SELECT s.parent_id FROM items s WHERE s.id = i.parent_id) ELSE i.id END
-		WHERE c.person_id = ? AND t.kind IN ('movie', 'show') AND visible(t.id, ?)
+		WHERE c.person_id = ? AND t.kind IN ('movie', 'show')
+			AND EXISTS (SELECT 1 FROM viewer(?) v WHERE sees(v, t))
 		ORDER BY t.id, c.kind, c.position`, person.String(), profile.String()).Scan(&links).Error
 	if err != nil || len(links) == 0 {
 		return nil, err
@@ -479,7 +480,8 @@ func (s *Store) Similar(ctx context.Context, profile, id uuid.UUID) ([]Card, err
 			GROUP BY other.item_id
 		), candidates AS (
 			SELECT i.*, ARRAY(SELECT jsonb_array_elements_text(coalesce(i.genres, '[]'))) AS genre_list FROM items i, src
-			WHERE i.kind = src.kind AND i.id <> src.id AND visible(i.id, @profile)
+			WHERE i.kind = src.kind AND i.id <> src.id
+				AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i))
 		)
 		SELECT c.* FROM candidates c CROSS JOIN src_genres g
 		LEFT JOIN shared_people p ON p.item_id = c.id

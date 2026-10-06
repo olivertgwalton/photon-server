@@ -114,7 +114,7 @@ func (s *Store) wallQuery(ctx context.Context, lib, profile uuid.UUID, f WallFil
 	}
 	i := s.q.Item
 	q := i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib)), i.Kind.In(string(domain.ItemMovie), string(domain.ItemShow))).UnderlyingDB().
-		Where("visible(items.id, ?)", profile.String())
+		Where("EXISTS (SELECT 1 FROM viewer(?) v WHERE sees(v, items))", profile.String())
 	return f.apply(q, profile), nil
 }
 

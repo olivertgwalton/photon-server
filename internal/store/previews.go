@@ -115,7 +115,8 @@ func (s *Store) Trickplay(ctx context.Context, profile, part uuid.UUID) (Trickpl
 	err := s.pool.QueryRow(ctx, `
 		SELECT t.width, t.height, t.interval_ms, t.columns, t.rows, t.thumbnails
 		FROM trickplay t JOIN parts p ON p.id = t.part_id JOIN versions v ON v.id = p.version_id
-		WHERE t.part_id = $1 AND coalesce(visible(v.item_id, $2), false)`, part.String(), profile.String()).
+		JOIN items i ON i.id = v.item_id, viewer($2) asking
+		WHERE t.part_id = $1 AND sees(asking, i)`, part.String(), profile.String()).
 		Scan(&w, &h, &interval, &cols, &rows, &n)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Trickplay{}, ErrNotFound
@@ -138,7 +139,8 @@ func (s *Store) HasChapterImage(ctx context.Context, profile, part uuid.UUID, id
 	var one int
 	err := s.pool.QueryRow(ctx, `
 		SELECT 1 FROM previews pv JOIN parts p ON p.id = pv.part_id JOIN versions v ON v.id = p.version_id
-		WHERE pv.part_id = $1 AND $2 = ANY(pv.chapter_images) AND coalesce(visible(v.item_id, $3), false)`,
+		JOIN items i ON i.id = v.item_id, viewer($3) asking
+		WHERE pv.part_id = $1 AND $2 = ANY(pv.chapter_images) AND sees(asking, i)`,
 		part.String(), idx, profile.String()).Scan(&one)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound

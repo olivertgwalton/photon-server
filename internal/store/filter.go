@@ -138,10 +138,12 @@ func (s *Store) Facets(ctx context.Context, lib, profile uuid.UUID) (Facets, err
 		return f, err
 	}
 	db := s.q.Item.WithContext(ctx).UnderlyingDB()
-	titles := `SELECT * FROM items WHERE library_id = @lib AND kind IN ('movie', 'show') AND visible(id, @profile)`
+	titles := `SELECT items.* FROM items, viewer(@profile) v
+		WHERE library_id = @lib AND kind IN ('movie', 'show') AND sees(v, items)`
 	// Copies on disk of the library's films and episodes.
 	copies := `SELECT v.* FROM versions v JOIN items e ON e.id = v.item_id
-		WHERE e.library_id = @lib AND v.missing_since IS NULL AND visible(e.id, @profile)`
+		CROSS JOIN viewer(@profile) asking
+		WHERE e.library_id = @lib AND v.missing_since IS NULL AND sees(asking, e)`
 	at := map[string]any{"lib": lib.String(), "profile": profile.String()}
 	for _, q := range []struct {
 		sql  string
@@ -152,7 +154,8 @@ func (s *Store) Facets(ctx context.Context, lib, profile uuid.UUID) (Facets, err
 		{`SELECT DISTINCT certificate FROM (` + titles + `) t WHERE certificate IS NOT NULL ORDER BY certificate`, &f.Certificates},
 		{`SELECT DISTINCT st FROM (` + titles + `) t, jsonb_array_elements_text(t.studios) st ORDER BY st`, &f.Studios},
 		{`SELECT DISTINCT video_range FROM (` + copies + `) c WHERE video_range IS NOT NULL`, &f.Ranges},
-		{`SELECT DISTINCT r.site FROM ratings r JOIN items t ON t.id = r.item_id WHERE t.library_id = @lib AND visible(t.id, @profile)`, &f.RatingSites},
+		{`SELECT DISTINCT r.site FROM ratings r JOIN items t ON t.id = r.item_id, viewer(@profile) v
+			WHERE t.library_id = @lib AND sees(v, t)`, &f.RatingSites},
 	} {
 		if err := db.Raw(q.sql, at).Scan(q.into).Error; err != nil {
 			return Facets{}, err

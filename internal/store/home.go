@@ -24,7 +24,8 @@ type HomeRow struct {
 var rowQueries = map[domain.HomeRow]string{
 	domain.RowContinueWatching: `
 		SELECT i.* FROM watch_state w JOIN items i ON i.id = w.item_id
-		WHERE w.profile_id = @profile AND w.position_ms > 0 AND i.kind IN ('movie', 'episode') AND visible(i.id, @profile)
+		WHERE w.profile_id = @profile AND w.position_ms > 0 AND i.kind IN ('movie', 'episode')
+			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i))
 		ORDER BY w.last_played_at DESC LIMIT @limit`,
 	// As Jellyfin's: the episode after the furthest one watched of each show, in the show's order
 	// and specials aside, unless it is under way already and so in Continue Watching; the shows
@@ -37,7 +38,8 @@ var rowQueries = map[domain.HomeRow]string{
 			JOIN items e ON e.id = w.item_id AND e.kind = 'episode'
 			JOIN items season ON season.id = e.parent_id
 			JOIN items show ON show.id = season.parent_id
-			WHERE w.profile_id = @profile AND w.watched_at IS NOT NULL AND e.season_number > 0 AND visible(show.id, @profile)
+			WHERE w.profile_id = @profile AND w.watched_at IS NOT NULL AND e.season_number > 0
+				AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, show))
 			ORDER BY show.id, e.season_number DESC, e.episode_number DESC NULLS LAST
 		)
 		SELECT next.* FROM last
@@ -55,9 +57,9 @@ var rowQueries = map[domain.HomeRow]string{
 		ORDER BY last.last_played_at DESC LIMIT @limit`,
 	domain.RowFavourites: `
 		SELECT i.* FROM favourites f JOIN items i ON i.id = f.item_id
-		WHERE f.profile_id = @profile AND visible(i.id, @profile) ORDER BY f.added_at DESC LIMIT @limit`,
+		WHERE f.profile_id = @profile AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i)) ORDER BY f.added_at DESC LIMIT @limit`,
 	domain.RowRecentFilms: `
-		SELECT * FROM items WHERE kind = 'movie' AND visible(id, @profile)
+		SELECT * FROM items WHERE kind = 'movie' AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
 		ORDER BY added_at DESC, id DESC LIMIT @limit`,
 	domain.RowRecentShows: `
 		SELECT show.* FROM items show
@@ -66,7 +68,7 @@ var rowQueries = map[domain.HomeRow]string{
 			JOIN items e ON e.parent_id = season.id AND e.kind = 'episode'
 			WHERE season.parent_id = show.id AND season.kind = 'season'
 		) latest
-		WHERE show.kind = 'show' AND latest.added_at IS NOT NULL AND visible(show.id, @profile)
+		WHERE show.kind = 'show' AND latest.added_at IS NOT NULL AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, show))
 		ORDER BY latest.added_at DESC, show.id DESC LIMIT @limit`,
 }
 

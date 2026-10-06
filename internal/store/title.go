@@ -273,7 +273,8 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 // age; a title it may not is not there to it.
 func (s *Store) visible(ctx context.Context, profile, id uuid.UUID) (bool, error) {
 	var ok bool
-	err := s.pool.QueryRow(ctx, `SELECT coalesce(visible($1, $2), false)`, id.String(), profile.String()).Scan(&ok)
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM items i, viewer($2) v WHERE i.id = $1 AND sees(v, i))`,
+		id.String(), profile.String()).Scan(&ok)
 	return ok, err
 }
 
@@ -288,11 +289,12 @@ func (s *Store) Visible(ctx context.Context, profile uuid.UUID, titles []uuid.UU
 	}
 	return queryIDs(ctx, s.pool, `
 		SELECT t.id::text FROM unnest($1::text[]::uuid[]) WITH ORDINALITY AS t(id, n)
-		WHERE coalesce(visible(t.id, $2), false) ORDER BY t.n`, ids, profile.String())
+		JOIN items i ON i.id = t.id, viewer($2) v
+		WHERE sees(v, i) ORDER BY t.n`, ids, profile.String())
 }
 
 // HasLibrary reports whether a library is there and a profile may see its titles at all: as
-// visible() asks, it has every library where none are listed for it.
+// sees() asks, it has every library where none are listed for it.
 func (s *Store) HasLibrary(ctx context.Context, profile, lib uuid.UUID) (bool, error) {
 	var ok bool
 	err := s.pool.QueryRow(ctx, `
