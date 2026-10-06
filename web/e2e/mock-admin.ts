@@ -146,6 +146,15 @@ const film: Schemas["TitlePage"] = {
 			duration_ms: 6_000_000,
 			size_bytes: 4_000_000_000,
 			parts: 1,
+			files: [
+				{
+					id: "p-quiet",
+					index: 0,
+					size_bytes: 4_000_000_000,
+					duration_ms: 6_000_000,
+					offset_ms: 0,
+				},
+			],
 			streams: [],
 			markers: [
 				{

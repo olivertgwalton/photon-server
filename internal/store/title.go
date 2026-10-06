@@ -79,9 +79,21 @@ type VersionPage struct {
 	Subtitles    []SubtitleRef `json:"subtitles,omitzero"`
 	Chapters     []ChapterRef  `json:"chapters,omitzero"`
 	Markers      []MarkerRef   `json:"markers,omitzero"`
+	// Files are its parts in order, each where it starts on the copy's timeline, by the id the
+	// /api/v1/parts/{id} routes take.
+	Files []PartRef `json:"files"`
 	// Trickplay is the thumbnail sheets of each part that has them; a part's sheets are at
 	// /api/v1/parts/{part_id}/trickplay/{n}.
 	Trickplay []PartTrickplay `json:"trickplay,omitzero"`
+}
+
+// PartRef is one file of a copy.
+type PartRef struct {
+	ID         uuid.UUID `json:"id"`
+	Index      int       `json:"index"`
+	SizeBytes  int64     `json:"size_bytes"`
+	DurationMS int64     `json:"duration_ms"`
+	OffsetMS   int64     `json:"offset_ms"`
 }
 
 // PartTrickplay is a part's thumbnail sheets, its thumbnails timed from OffsetMS on the copy's
@@ -519,6 +531,9 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 			Parts: len(byVersion[r.ID]), MissingSince: r.MissingSince, Streams: []StreamPage{},
 		}
 		for k, p := range byVersion[r.ID] {
+			vp.Files = append(vp.Files, PartRef{
+				ID: uuid.UUID(p.ID), Index: int(p.Idx), SizeBytes: p.SizeBytes, DurationMS: p.DurationMS, OffsetMS: p.OffsetMS,
+			})
 			var own []*model.Chapter
 			for _, c := range chapters {
 				if c.PartID == p.ID {
