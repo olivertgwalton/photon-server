@@ -209,11 +209,11 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	if err := s.parents(ctx, item, &p); err != nil {
 		return TitlePage{}, err
 	}
-	ratings, err := s.ratings(ctx, item.ID)
+	ratings, err := s.ratings(ctx, []*model.Item{item})
 	if err != nil {
 		return TitlePage{}, err
 	}
-	for _, r := range ratings {
+	for _, r := range ratings[item.ID] {
 		p.Ratings = append(p.Ratings, RatingRef(r))
 	}
 	if p.Collections, err = s.collectionsOf(ctx, item.ID); err != nil {
