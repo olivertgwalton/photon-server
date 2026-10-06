@@ -227,7 +227,7 @@ func titlePageOf(p store.TitlePage) titlePageJSON {
 		ID: p.ID, Kind: p.Kind, Title: p.Title, OriginalTitle: p.OriginalTitle, Overview: p.Overview,
 		Tagline: p.Tagline, Certificate: p.Certificate, Year: p.Year, ReleaseDate: p.ReleaseDate,
 		Genres: p.Genres, Studios: p.Studios, IDs: p.IDs,
-		Ratings:     each(p.Ratings, func(r store.RatingRef) ratingRefJSON { return ratingRefJSON(r) }),
+		Ratings:     each(p.Ratings, func(r domain.Rating) ratingRefJSON { return ratingRefJSON(r) }),
 		Collections: each(p.Collections, func(c store.CollectionCard) collectionCardJSON { return collectionCardJSON(c) }),
 		Credits:     each(p.Credits, func(c store.CreditRef) creditRefJSON { return creditRefJSON(c) }),
 		Origin:      p.Origin, Placement: p.Placement, EpisodeOrder: p.EpisodeOrder, AddedAt: p.AddedAt, SeasonNumber: p.SeasonNumber,

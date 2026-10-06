@@ -30,7 +30,7 @@ type TitlePage struct {
 	Genres        []string
 	Studios       []string
 	IDs           map[domain.Provider]string
-	Ratings       []RatingRef
+	Ratings       []domain.Rating
 	// Collections are the box sets it is in.
 	Collections []CollectionCard
 	// Credits are its cast and crew, as the highest-ranked source gives them.
@@ -148,13 +148,6 @@ type SubtitleRef struct {
 	HearingImpaired bool
 }
 
-// RatingRef is what a site's readers or critics make of a title, out of 100.
-type RatingRef struct {
-	Site  domain.RatingSite
-	Score float64
-	Votes int
-}
-
 // ChapterRef is a chapter on the copy's whole timeline, across its parts. Image is the address of
 // its picture, for those that have one.
 type ChapterRef struct {
@@ -263,9 +256,7 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	if err != nil {
 		return TitlePage{}, err
 	}
-	for _, r := range ratings[item.ID] {
-		p.Ratings = append(p.Ratings, RatingRef(r))
-	}
+	p.Ratings = ratings[item.ID]
 	if p.Collections, err = s.collectionsOf(ctx, item.ID); err != nil {
 		return TitlePage{}, err
 	}
