@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { libraryChange } from "./library";
+import type { components } from "#lib/api/schema.js";
+import { libraryChange, offeredSources } from "./library";
+
+type Schemas = components["schemas"];
 
 function form(fields: [string, string][]) {
 	const f = new FormData();
@@ -7,46 +10,56 @@ function form(fields: [string, string][]) {
 	return f;
 }
 
-const films = {
-	id: "l-films",
-	name: "Films",
-	kind: "movies",
-	root: "/media/films",
-	sources: ["nfo", "tmdb"],
+const tv: Schemas["AdminLibrary"] = {
+	id: "l-tv",
+	name: "TV",
+	kind: "shows",
+	root: "/media/tv",
+	sources: (["show", "season", "episode"] as const).map((kind) => ({
+		kind,
+		metadata: [
+			{ source: "nfo", enabled: true },
+			{ source: "tmdb", enabled: true },
+		],
+		images: [{ source: "tmdb", enabled: true }],
+	})),
 	remote_extras: ["trailer", "featurette"],
 	monitor: "realtime",
 	refresh_days: 30,
 	previews: "all",
 	markers: "all",
 	keyframes: "index",
-} as const;
+};
 
 const fields: [string, string][] = [
-	["name", "Movies"],
+	["name", "Television"],
 	["monitor", "off"],
 	["previews", "chapters"],
 	["refresh_days", "0"],
 	["markers", "chapters"],
 	["keyframes", "full"],
+	["remote_extras", "featurette"],
+	["remote_extras", "trailer"],
 ];
 
-test("a library's sources and extras are sent only where they changed", () => {
+const list = (...sources: [string, boolean][]) =>
+	JSON.stringify(sources.map(([source, enabled]) => ({ source, enabled })));
+
+test("a kind's sources are sent only where what they ask changed", () => {
 	const unchanged = libraryChange(
 		form([
 			...fields,
-			["sources", "nfo"],
-			["sources", "tmdb"],
-			["remote_extras", "featurette"],
-			["remote_extras", "trailer"],
+			// A source never ranked is drawn unticked at the foot: no change.
+			[
+				"sources-show-metadata",
+				list(["nfo", true], ["tmdb", true], ["tvdb", false]),
+			],
+			["sources-show-images", list(["tmdb", true], ["tvdb", false])],
 		]),
-		{
-			...films,
-			sources: [...films.sources],
-			remote_extras: [...films.remote_extras],
-		},
+		tv,
 	);
 	expect(unchanged).toEqual({
-		name: "Movies",
+		name: "Television",
 		monitor: "off",
 		previews: "chapters",
 		refresh_days: 0,
@@ -54,15 +67,70 @@ test("a library's sources and extras are sent only where they changed", () => {
 		keyframes: "full",
 	});
 
-	const reordered = libraryChange(
-		form([...fields, ["sources", "tmdb"], ["sources", "nfo"]]),
-		{
-			...films,
-			sources: [...films.sources],
-			remote_extras: [...films.remote_extras],
-		},
+	const changed = libraryChange(
+		form([
+			...fields,
+			["sources-show-metadata", list(["nfo", true], ["tmdb", true])],
+			[
+				"sources-episode-metadata",
+				list(["tvdb", true], ["nfo", false], ["tmdb", true]),
+			],
+			["sources-episode-images", list(["tmdb", false], ["tvdb", true])],
+		]),
+		tv,
 	);
-	expect(reordered.sources).toEqual(["tmdb", "nfo"]);
-	// Every extra unticked is a change to none, not no change.
-	expect(reordered.remote_extras).toEqual([]);
+	expect(changed.sources).toEqual([
+		{
+			kind: "episode",
+			metadata: [
+				{ source: "tvdb", enabled: true },
+				{ source: "nfo", enabled: false },
+				{ source: "tmdb", enabled: true },
+			],
+			images: [
+				{ source: "tmdb", enabled: false },
+				{ source: "tvdb", enabled: true },
+			],
+		},
+	]);
+});
+
+const provider = (
+	id: string,
+	name: string,
+	metadata_kinds: Schemas["ItemKind"][],
+	image_kinds: Schemas["ItemKind"][],
+): Schemas["MetadataProvider"] => ({
+	id,
+	name,
+	kinds: [],
+	capabilities: [],
+	settings: [],
+	ready: true,
+	metadata_kinds,
+	image_kinds,
+});
+
+const providers = [
+	provider(
+		"tmdb",
+		"TMDB",
+		["movie", "show", "season", "episode"],
+		["movie", "show", "season", "episode"],
+	),
+	provider(
+		"omdb",
+		"The Open Movie Database",
+		["movie", "show", "episode"],
+		["movie", "show"],
+	),
+];
+
+test("each kind offers the NFO for metadata and the providers that say they can", () => {
+	const ids = (f: "metadata" | "images", kind: Schemas["ItemKind"]) =>
+		offeredSources(providers, f, kind).map((s) => s.id);
+	expect(ids("metadata", "episode")).toEqual(["nfo", "tmdb", "omdb"]);
+	expect(ids("metadata", "season")).toEqual(["nfo", "tmdb"]);
+	expect(ids("images", "episode")).toEqual(["tmdb"]);
+	expect(ids("images", "movie")).toEqual(["tmdb", "omdb"]);
 });

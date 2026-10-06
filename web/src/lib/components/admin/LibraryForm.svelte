@@ -1,5 +1,10 @@
 <script lang="ts">
 import type { components } from "#lib/api/schema.js";
+import {
+	defaultSources,
+	itemKinds,
+	offeredSources,
+} from "#lib/admin/library.js";
 import { extraKinds } from "#lib/admin/words.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -22,7 +27,6 @@ let {
 } = $props();
 
 const defaults = {
-	sources: ["nfo", "tmdb"],
 	remote_extras: ["trailer", "featurette", "behind_the_scenes"],
 	monitor: "realtime",
 	refresh_days: 30,
@@ -35,12 +39,21 @@ const defaults = {
 const kindOf = () => library?.kind ?? "movies";
 let kind = $state<Schemas["LibraryKind"]>(kindOf());
 
-const offered = $derived([
-	{ id: "nfo" as const, name: "NFO files beside the media", ready: true },
-	...providers
-		.filter((p) => p.kinds.includes(kind === "movies" ? "movie" : "show"))
-		.map((p) => ({ id: String(p.id), name: p.name, ready: p.ready })),
-]);
+const fetchers = [
+	{
+		f: "metadata",
+		title: "Metadata downloaders",
+		said: "Enable and rank your preferred metadata downloaders in order of priority. Lower priority downloaders will only be used to fill in missing information.",
+	},
+	{
+		f: "images",
+		title: "Image fetchers",
+		said: "Enable and rank your preferred image fetchers in order of priority.",
+	},
+] as const;
+
+const chosen = (item: Schemas["ItemKind"]) =>
+	library?.sources.find((s) => s.kind === item) ?? defaultSources(item);
 
 const extras = $derived(library?.remote_extras ?? defaults.remote_extras);
 
@@ -99,20 +112,26 @@ const refreshOptions = $derived(
 		</Field.Field>
 	{/if}
 
-	<Field.Set>
-		<Field.Legend>Metadata, most trusted first</Field.Legend>
+	{#key kind}
+		{#each itemKinds(kind) as [item, items] (item)}
+			{#each fetchers as { f, title, said } (f)}
+				{@const id = `sources-${item}-${f}`}
+				<Field.Set>
+					<Field.Legend id="{id}-legend">{title} ({items})</Field.Legend>
+					<Field.Description>{said}</Field.Description>
+					<SourceRanker
+						name={id}
+						labelledby="{id}-legend"
+						offered={offeredSources(providers, f, item)}
+						chosen={chosen(item)[f]}
+					/>
+				</Field.Set>
+			{/each}
+		{/each}
 		<Field.Description>
-			Drag a source, or move it with its arrows. Changing these identifies every
-			title in the library again.
+			Changing these identifies every title in the library again.
 		</Field.Description>
-		{#key kind}
-			<SourceRanker
-				name="sources"
-				{offered}
-				chosen={(library?.sources ?? defaults.sources).map(String)}
-			/>
-		{/key}
-	</Field.Set>
+	{/key}
 
 	<Field.Set>
 		<Field.Legend>Videos to link from the providers</Field.Legend>

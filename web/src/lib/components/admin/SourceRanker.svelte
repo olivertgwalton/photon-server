@@ -2,32 +2,36 @@
 import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
 import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
 import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
+import type { components } from "#lib/api/schema.js";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 
-// A source's id: a built-in's name or plugin:<slug>.
-type Source = string;
+// A built-in's name or plugin:<slug>.
+type Source = components["schemas"]["FieldSource"];
 
-// Where a library's metadata comes from, most trusted first. A source left
-// unticked is not asked; what an admin edits by hand outranks them all.
+// Where a library takes something from, most trusted first. A source left
+// unticked keeps its place but is not asked; one the library has never
+// ranked comes last, unticked. What an admin edits by hand outranks them all.
 let {
 	name,
+	labelledby,
 	offered,
 	chosen,
 }: {
 	name: string;
+	labelledby: string;
 	offered: { id: Source; name: string; ready: boolean }[];
-	chosen: Source[];
+	chosen: { source: Source; enabled: boolean }[];
 } = $props();
 
 const initial = () => [
-	...chosen.flatMap((id) => {
-		const o = offered.find((x) => x.id === id);
-		return o ? [{ ...o, used: true }] : [];
+	...chosen.flatMap((c) => {
+		const o = offered.find((x) => x.id === c.source);
+		return o ? [{ ...o, used: c.enabled }] : [];
 	}),
 	...offered
-		.filter((o) => !chosen.includes(o.id))
+		.filter((o) => !chosen.some((c) => c.source === o.id))
 		.map((o) => ({ ...o, used: false })),
 ];
 let ranked = $state(initial());
@@ -42,7 +46,15 @@ function move(from: number, to: number) {
 }
 </script>
 
-<ol class="divide-line border-line divide-y rounded-lg border">
+<input
+	type="hidden"
+	{name}
+	value={JSON.stringify(ranked.map((s) => ({ source: s.id, enabled: s.used })))}
+>
+<ol
+	class="divide-line border-line divide-y rounded-lg border"
+	aria-labelledby={labelledby}
+>
 	{#each ranked as source, i (source.id)}
 		<li
 			class={[
@@ -52,7 +64,7 @@ function move(from: number, to: number) {
 			draggable="true"
 			ondragstart={(e) => {
 				dragging = i;
-				e.dataTransfer?.setData("text/plain", source.id);
+				e.dataTransfer?.setData("text/plain", String(source.id));
 			}}
 			ondragover={(e) => e.preventDefault()}
 			ondrop={(e) => {
@@ -72,9 +84,6 @@ function move(from: number, to: number) {
 			</label>
 			{#if !source.ready}
 				<Badge variant="outline">Needs settings</Badge>
-			{/if}
-			{#if source.used}
-				<input type="hidden" {name} value={source.id}>
 			{/if}
 			<Button
 				variant="ghost"

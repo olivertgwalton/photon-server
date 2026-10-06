@@ -87,11 +87,25 @@ test("a library is added from a folder found by browsing the server", async ({
 	await expect(page.getByRole("textbox", { name: "Folder" })).toHaveValue(
 		"/media/films",
 	);
-	await page.getByRole("button", { name: "Trust TMDB more" }).click();
+	// A shows library ranks its sources for shows, seasons and episodes.
+	await page.getByRole("button", { name: "Holds" }).click();
+	await page.getByRole("option", { name: "Shows" }).click();
+	for (const items of ["Shows", "Seasons", "Episodes"]) {
+		await expect(
+			page.getByRole("list", { name: `Metadata downloaders (${items})` }),
+		).toBeVisible();
+		await expect(
+			page.getByRole("list", { name: `Image fetchers (${items})` }),
+		).toBeVisible();
+	}
 	await expect(
-		page.getByRole("listitem").filter({ hasText: "TMDB" }).first(),
-	).toBeVisible();
+		page
+			.getByRole("list", { name: "Image fetchers (Episodes)" })
+			.getByRole("checkbox", { name: "TheTVDB" }),
+	).not.toBeChecked();
 	await expectAccessible(page);
+	await page.getByRole("button", { name: "Holds" }).click();
+	await page.getByRole("option", { name: "Films" }).click();
 	await page.getByRole("button", { name: "Add and scan" }).click();
 	await expect(page).toHaveURL("/settings/server/libraries");
 
@@ -108,7 +122,35 @@ test("a library is added from a folder found by browsing the server", async ({
 		"/media/films",
 	);
 	await expectAccessible(page);
+
+	// MDBList is ticked and trusted over TMDB; the NFO keeps its place unticked.
+	const metadata = page.getByRole("list", {
+		name: "Metadata downloaders (Films)",
+	});
+	await expect(metadata.getByRole("listitem")).toHaveText([
+		/Nfo/,
+		/TMDB/,
+		/MDBList/,
+	]);
+	await metadata.getByRole("checkbox", { name: "Nfo" }).click();
+	await metadata.getByRole("checkbox", { name: "MDBList" }).click();
+	await metadata.getByRole("button", { name: "Trust MDBList more" }).click();
+	const saved = page.waitForRequest(
+		(r) =>
+			r.method() === "PATCH" &&
+			r.url().endsWith("/api/v1/admin/libraries/l-films"),
+	);
 	await page.getByRole("button", { name: "Save" }).click();
+	expect((await saved).postDataJSON().sources).toEqual([
+		{
+			kind: "movie",
+			metadata: [
+				{ source: "nfo", enabled: false },
+				{ source: "mdblist", enabled: true },
+				{ source: "tmdb", enabled: true },
+			],
+		},
+	]);
 	await expect(page.getByText("Saved.")).toBeVisible();
 });
 

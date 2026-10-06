@@ -82,7 +82,16 @@ const films: Schemas["AdminLibrary"] = {
 	name: "Films",
 	kind: "movies",
 	root: "/media/films",
-	sources: ["nfo", "tmdb"],
+	sources: [
+		{
+			kind: "movie",
+			metadata: [
+				{ source: "nfo", enabled: true },
+				{ source: "tmdb", enabled: true },
+			],
+			images: [{ source: "tmdb", enabled: true }],
+		},
+	],
 	remote_extras: ["trailer"],
 	monitor: "realtime",
 	refresh_days: 30,
@@ -99,6 +108,18 @@ const providers: Schemas["MetadataProvider"][] = [
 		capabilities: ["describe", "search", "person"],
 		settings: [],
 		ready: true,
+		metadata_kinds: ["movie", "show", "season", "episode"],
+		image_kinds: ["movie", "show", "season", "episode"],
+	},
+	{
+		id: "tvdb",
+		name: "TheTVDB",
+		kinds: ["show"],
+		capabilities: ["describe", "search"],
+		settings: [],
+		ready: true,
+		metadata_kinds: ["show", "season", "episode"],
+		image_kinds: ["show", "season", "episode"],
 	},
 	{
 		id: "mdblist",
@@ -115,6 +136,8 @@ const providers: Schemas["MetadataProvider"][] = [
 			},
 		],
 		ready: false,
+		metadata_kinds: ["movie", "show"],
+		image_kinds: [],
 	},
 ];
 
@@ -336,7 +359,7 @@ export async function admin(
 		case "GET /api/v1/admin/providers":
 			return json({ items: providers });
 		case "PATCH /api/v1/admin/providers/mdblist":
-			return json({ ...providers[1], ready: true });
+			return json({ ...providers[2], ready: true });
 		case "GET /api/v1/admin/plugins":
 			return json({ items: [] });
 		case "POST /api/v1/admin/profiles":
