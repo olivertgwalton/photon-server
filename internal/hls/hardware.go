@@ -1,11 +1,9 @@
 package hls
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strconv"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -211,12 +209,18 @@ func (h Hardware) Check(ctx context.Context, ffmpeg string, codec domain.VideoCo
 		filter, encoder := h.videoArgs(e, "rawvideo")
 		a = append(append(a, "-vf", filter), encoder...)
 		a = append(a, "-f", "null", "-")
-		cmd := exec.CommandContext(ctx, ffmpeg, a...)
-		var stderr bytes.Buffer
-		cmd.Stderr = &stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("%w: %s %s (%s, tone mapped %t): %w: %s", errHardware, h.Accel, codec, e.Range, e.ToneMap, err, bytes.TrimSpace(stderr.Bytes()))
+		if err := encodeTest(ctx, ffmpeg, a); err != nil {
+			return fmt.Errorf("%w: %s %s (%s, tone mapped %t): %w", errHardware, h.Accel, codec, e.Range, e.ToneMap, err)
 		}
 	}
 	return nil
+}
+
+// encodeTest runs one of Check's encodes, as long as a tool reading part of a file may: a driver
+// that hangs is a device that would not encode.
+func encodeTest(ctx context.Context, ffmpeg string, args []string) error {
+	ctx, cancel := media.Within(ctx, ffmpeg, media.PartRun)
+	defer cancel()
+	cmd := media.NewCommand(ctx, nil, ffmpeg, args...)
+	return cmd.Err(cmd.Run())
 }

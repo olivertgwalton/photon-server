@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -121,15 +120,9 @@ func (r *Remuxer) WebVTT(ctx context.Context, open func() (*os.File, error), lan
 		a = append(a, "-sub_charenc", charset)
 	}
 	a = append(a, "-i", "fd:", "-map", "0:s:0", "-c:s", "webvtt", "-f", "webvtt", "-")
-	cmd := exec.CommandContext(ctx, r.ffmpeg, a...) //nolint:gosec // the configured ffmpeg; every argument is built here
-	cmd.ExtraFiles = []*os.File{f}
-	stderr := &tail{}
-	cmd.Stderr = stderr
+	cmd := media.NewCommand(ctx, []*os.File{f}, r.ffmpeg, a...)
 	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("ffmpeg: %w: %s", err, stderr)
-	}
-	return string(out), nil
+	return string(out), cmd.Err(err)
 }
 
 // embedded reads a stream of a part as WebVTT. Reading one means reading the whole file, so every
@@ -192,8 +185,7 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, streams []int
 		return err
 	}
 	defer f.Close()
-	limit := media.WholeRun(f)
-	ctx, cancel := context.WithTimeoutCause(ctx, limit, fmt.Errorf("ffmpeg still reading subtitles after %s", limit))
+	ctx, cancel := media.Within(ctx, r.ffmpeg, media.WholeRun(f))
 	defer cancel()
 	made, err := os.MkdirTemp(r.subtitles, extracting)
 	if err != nil {
@@ -204,15 +196,9 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, streams []int
 	for _, n := range streams {
 		a = append(a, "-map", "0:"+strconv.Itoa(n), "-c:s", "webvtt", "-f", "webvtt", filepath.Join(made, strconv.Itoa(n)+".vtt"))
 	}
-	cmd := exec.CommandContext(ctx, r.ffmpeg, a...) //nolint:gosec // the configured ffmpeg; every argument is built here
-	cmd.ExtraFiles = []*os.File{f}
-	stderr := &tail{}
-	cmd.Stderr = stderr
+	cmd := media.NewCommand(ctx, []*os.File{f}, r.ffmpeg, a...)
 	if err := cmd.Run(); err != nil {
-		if ctx.Err() != nil {
-			return context.Cause(ctx)
-		}
-		return fmt.Errorf("ffmpeg: %w: %s", err, stderr)
+		return cmd.Err(err)
 	}
 	return os.Rename(made, dir)
 }

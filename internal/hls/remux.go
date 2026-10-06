@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 const (
@@ -523,25 +523,23 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	}
 	defer f.Close()
 	start := s.plan[run.at].Start
-	cmd := exec.CommandContext(ctx, r.ffmpeg, args(r.hw, start, src.Video, src.Audio)...) //nolint:gosec // the configured ffmpeg; every argument is built here
-	cmd.ExtraFiles = []*os.File{f}
+	ctx, stop := context.WithCancelCause(ctx)
+	defer stop(nil)
+	cmd := media.NewCommand(ctx, []*os.File{f}, r.ffmpeg, args(r.hw, start, src.Video, src.Audio)...)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
-	stderr := &tail{}
-	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	err = r.cut(ctx, s, run, out)
-	if err != nil {
-		_ = cmd.Process.Kill()
+	if err := r.cut(ctx, s, run, out); err != nil {
+		stop(err)
 	}
-	if werr := cmd.Wait(); err == nil && werr != nil && ctx.Err() == nil {
-		err = fmt.Errorf("ffmpeg: %w: %s", werr, stderr)
-	}
-	return err
+	// Nothing reads what ffmpeg writes now, so a write it is blocked on fails at once rather than
+	// holding it past the grace a stop gives it.
+	_ = out.Close()
+	return cmd.Err(cmd.Wait())
 }
 
 // args copies or encodes a file's video and its audio into fragmented MP4 on stdout, from start,
@@ -702,14 +700,3 @@ func keep(root *os.Root, name string, data []byte) error {
 }
 
 // tail keeps the end of what ffmpeg says, for its error.
-type tail struct{ b []byte }
-
-func (t *tail) Write(p []byte) (int, error) {
-	t.b = append(t.b, p...)
-	if len(t.b) > 2048 {
-		t.b = t.b[len(t.b)-2048:]
-	}
-	return len(p), nil
-}
-
-func (t *tail) String() string { return string(t.b) }
