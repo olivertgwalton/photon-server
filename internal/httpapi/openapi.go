@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // openAPIType is the registered media type of an OpenAPI description in JSON.
@@ -42,12 +44,12 @@ var wildcard = regexp.MustCompile(`\{(\w+)\}`)
 
 // Describe answers the API's OpenAPI description for a server of this version, as
 // GET /api/v1/openapi.json does, with no server behind it.
-func Describe(info Info) ([]byte, error) {
+func Describe(info domain.Info) ([]byte, error) {
 	return describe(info, new(API).routes())
 }
 
 // describe answers the API's OpenAPI description, from its routes.
-func describe(info Info, routes []route) ([]byte, error) {
+func describe(info domain.Info, routes []route) ([]byte, error) {
 	s := newSchemas()
 	problemRef := s.of(reflect.TypeFor[problem]())
 	paths := map[string]map[string]any{}

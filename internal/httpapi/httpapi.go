@@ -17,12 +17,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-type Info struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Version string `json:"version"`
-}
-
 // listJSON is every item there is; pageJSON is total's items from offset.
 type listJSON[T any] struct {
 	Items []T `json:"items"`
@@ -168,14 +162,14 @@ type Services struct {
 
 type API struct {
 	logger *slog.Logger
-	info   Info
+	info   domain.Info
 	svc    Services
 	mux    *http.ServeMux
 	// description is the API's OpenAPI description, made once.
 	description []byte
 }
 
-func New(logger *slog.Logger, info Info, svc Services) *API {
+func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a := &API{logger: logger, info: info, svc: svc, mux: http.NewServeMux()}
 	routes := a.routes()
 	var err error
@@ -205,7 +199,7 @@ func (a *API) routes() []route {
 	return []route{
 		{
 			pattern: "GET /api/v1/server", access: public, summary: "Say which server this is",
-			status: http.StatusOK, reply: Info{}, handle: a.server,
+			status: http.StatusOK, reply: domain.Info{}, handle: a.server,
 		},
 		{
 			pattern: "GET /api/v1/openapi.json", access: public, summary: "Describe the API in OpenAPI 3.1",

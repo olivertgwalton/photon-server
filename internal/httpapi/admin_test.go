@@ -78,7 +78,7 @@ func (f *fakeLibraries) ScanFolders(_ context.Context, lib uuid.UUID, folders []
 func TestAnAdminKeepsTheLibraries(t *testing.T) {
 	libs := &fakeLibraries{}
 	told := &fakeEvents{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Libraries: libs, Events: told})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Libraries: libs, Events: told})
 	do := func(token, method, target, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -136,7 +136,7 @@ func TestAnAdminScansTheFolderAPathIsIn(t *testing.T) {
 	}
 	lib := domain.Library{ID: uuid.NewV7(), Name: "Films", Kind: domain.LibraryMovies, Root: root}
 	libs := &fakeLibraries{libs: []domain.Library{lib}}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Libraries: libs})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Libraries: libs})
 	for _, tc := range []struct {
 		path string
 		want int

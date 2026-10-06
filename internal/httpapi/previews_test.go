@@ -12,6 +12,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -55,7 +56,7 @@ func TestPreviewsAreServedToThoseWhoMaySeeTheTitle(t *testing.T) {
 	}
 	p := fakePreviews{dir: dir}
 	signer := playback.NewSigner([]byte("key"))
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Previews: p, PreviewFiles: p, Signer: signer})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Previews: p, PreviewFiles: p, Signer: signer})
 	get := func(token, target string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, target, nil)
 		if token != "" {

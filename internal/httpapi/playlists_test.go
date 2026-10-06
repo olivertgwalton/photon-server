@@ -69,7 +69,7 @@ func (fakePlaylists) RemovePlaylist(_ context.Context, profile, playlist uuid.UU
 
 func TestAProfileKeepsItsPlaylists(t *testing.T) {
 	p := &fakePlaylists{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Playlists: p, Events: &fakeEvents{}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Playlists: p, Events: &fakeEvents{}})
 	base := "/api/v1/playlists/" + nightIn.String()
 	for _, tc := range []struct {
 		token, method, target, body string

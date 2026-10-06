@@ -16,6 +16,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 type describedParameter struct {
@@ -130,9 +132,9 @@ func TestARouteMustSayWhatItIs(t *testing.T) {
 		route route
 		want  string
 	}{
-		{"no summary", route{pattern: "GET /x", status: http.StatusOK, reply: Info{}}, "no summary"},
+		{"no summary", route{pattern: "GET /x", status: http.StatusOK, reply: domain.Info{}}, "no summary"},
 		{"no reply", route{pattern: "GET /x", summary: "x", status: http.StatusOK}, "reply"},
-		{"a reply where none is sent", route{pattern: "GET /x", summary: "x", status: http.StatusNoContent, reply: Info{}}, "reply"},
+		{"a reply where none is sent", route{pattern: "GET /x", summary: "x", status: http.StatusNoContent, reply: domain.Info{}}, "reply"},
 		{
 			"an enum with no values",
 			route{pattern: "GET /x", summary: "x", status: http.StatusOK, reply: struct {
@@ -148,7 +150,7 @@ func TestARouteMustSayWhatItIs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := describe(Info{}, []route{tt.route})
+			_, err := describe(domain.Info{}, []route{tt.route})
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("err = %v, want one saying %q", err, tt.want)
 			}
@@ -236,7 +238,7 @@ func TestEveryProblemCodeIsListed(t *testing.T) {
 
 // The description a client generates its types from offline is the one the server serves.
 func TestTheOfflineDescriptionIsTheServedOne(t *testing.T) {
-	offline, err := Describe(Info{Version: "v0.1.0"})
+	offline, err := Describe(domain.Info{Version: "v0.1.0"})
 	if err != nil {
 		t.Fatal(err)
 	}

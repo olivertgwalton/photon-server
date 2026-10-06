@@ -8,6 +8,8 @@ import (
 	"net/netip"
 	"strings"
 	"testing"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // A device being paired is told the web app's page to enter its code at, and the same with the
@@ -29,7 +31,7 @@ func TestAPairingSaysWhereToEnterItsCode(t *testing.T) {
 		{"behind a trusted proxy on TLS", Setup{}, "10.0.0.2:5000", "https", "https://den.local:8640/link"},
 		{"told TLS by anyone else", Setup{}, "192.0.2.1:5000", "https", "http://den.local:8640/link"},
 	} {
-		api := New(slog.New(slog.DiscardHandler), Info{}, Services{
+		api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 			Auth: fakeAuth{}, Limits: &fakeLimiter{}, Setup: tc.setup, TrustedProxies: proxy,
 		})
 		req := httptest.NewRequest(http.MethodPost, "http://den.local:8640/api/v1/auth/device/start", strings.NewReader(`{"device": "TV", "client": "Photon"}`))

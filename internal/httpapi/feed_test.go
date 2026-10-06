@@ -93,7 +93,7 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	running, shutDown := context.WithCancel(ctx)
 	defer shutDown()
 	go hub.Run(running)
-	srv := httptest.NewServer(New(log, Info{}, Services{
+	srv := httptest.NewServer(New(log, domain.Info{}, Services{
 		Auth:   tokenAuth{tokens: map[string]domain.Profile{"oliver": oliver, "sam-tv": sam, "sam-phone": sam}},
 		Events: hub, Audience: st, Watching: st,
 	}))

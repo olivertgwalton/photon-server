@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 )
 
@@ -36,7 +37,7 @@ func (f *fakeLimiter) Allow(_ context.Context, key string, l kv.Limit) (time.Dur
 
 func TestSignInsAreLimitedByAddressAndName(t *testing.T) {
 	limits := &fakeLimiter{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Limits: limits, Events: &fakeEvents{}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Limits: limits, Events: &fakeEvents{}})
 	attempt := func(peer, forwarded string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login",
 			strings.NewReader(`{"name":"Oliver","password":"guess","device":"d","client":"c"}`))

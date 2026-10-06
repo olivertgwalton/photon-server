@@ -64,7 +64,7 @@ func TestADownloadIsTheFileOrAConversionServedInRanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	signer := playback.NewSigner([]byte("key"))
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Auth: fakeAuth{}, Playing: fakePlaying{}, Downloads: fakeDownloads{},
 		Conversions: fakeConversions{path: converted}, Signer: signer, Setup: Setup{Encoder: hls.Hardware{HEVC: domain.HEVCAllow}},
 	})
@@ -124,7 +124,7 @@ func TestADownloadIsTheFileOrAConversionServedInRanges(t *testing.T) {
 }
 
 func TestADeviceListsItsOwnDownloadsUnlessItAsksForTheProfiles(t *testing.T) {
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Downloads: fakeDownloads{}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Downloads: fakeDownloads{}})
 	for _, tc := range []struct {
 		target string
 		code   int

@@ -56,7 +56,7 @@ func (f *fakeWork) Playbacks(context.Context) ([]domain.Playback, error) {
 
 func TestAnAdminSeesTheServersWork(t *testing.T) {
 	work := &fakeWork{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, HLS: fakeHLS{}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, HLS: fakeHLS{}})
 	do := func(token, method, target string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, nil)
 		req.Header.Set("Authorization", "Bearer "+token)

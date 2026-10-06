@@ -65,7 +65,7 @@ func (fakeCollections) RemoveCollection(_ context.Context, id uuid.UUID) error {
 
 func TestCollectionsAreBrowsedAndAnAdminsAreKept(t *testing.T) {
 	c := &fakeCollections{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Collections: c})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Collections: c})
 	for _, tc := range []struct {
 		token, method, target, body string
 		want                        int

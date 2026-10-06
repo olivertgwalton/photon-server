@@ -12,10 +12,12 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 func newAPI(readiness error) *API {
-	info := Info{ID: "0199b3c0-0000-7000-8000-000000000000", Name: "den", Version: "v0.1.0"}
+	info := domain.Info{ID: "0199b3c0-0000-7000-8000-000000000000", Name: "den", Version: "v0.1.0"}
 	return New(slog.New(slog.DiscardHandler), info, Services{
 		Ready:     func(context.Context) error { return readiness },
 		Auth:      fakeAuth{},
@@ -37,11 +39,11 @@ func TestServer(t *testing.T) {
 	if got := rec.Header().Get("Content-Type"); got != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", got)
 	}
-	var got Info
+	var got domain.Info
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(Info{ID: "0199b3c0-0000-7000-8000-000000000000", Name: "den", Version: "v0.1.0"}, got); diff != "" {
+	if diff := cmp.Diff(domain.Info{ID: "0199b3c0-0000-7000-8000-000000000000", Name: "den", Version: "v0.1.0"}, got); diff != "" {
 		t.Errorf("body (-want +got):\n%s", diff)
 	}
 }

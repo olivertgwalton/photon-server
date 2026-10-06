@@ -64,7 +64,7 @@ func (f *fakeActivity) Activity(_ context.Context, kind domain.EventKind, _, _ i
 
 func TestAnAdminReadsTheActivityLog(t *testing.T) {
 	log := &fakeActivity{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Activity: log, Events: &fakeEvents{}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Activity: log, Events: &fakeEvents{}})
 	for _, tc := range []struct {
 		token, target string
 		want          int
@@ -92,7 +92,7 @@ func TestAnAdminReadsTheActivityLog(t *testing.T) {
 
 func TestSignInsAreTold(t *testing.T) {
 	told := &fakeEvents{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Limits: &fakeLimiter{}, Events: told})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Limits: &fakeLimiter{}, Events: told})
 	for _, password := range []string{"correct horse", "guess"} {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login",
 			strings.NewReader(`{"name":"Oliver","password":"`+password+`","device":"Living room","client":"Photon"}`))
@@ -134,7 +134,7 @@ func TestAStreamNobodyReadsIsGivenUp(t *testing.T) {
 	t.Parallel()
 	work := &fakeWork{}
 	told := streamingEvents{fakeEvents: &fakeEvents{}, events: make(chan domain.Event), gone: make(chan struct{})}
-	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: told}))
+	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: told}))
 	defer srv.Close()
 	conn, err := net.Dial("tcp", srv.Listener.Addr().String())
 	if err != nil {

@@ -38,7 +38,7 @@ func (f *fakeWebhooks) RemoveWebhook(_ context.Context, id uuid.UUID) error {
 func TestAnAdminKeepsTheWebhooks(t *testing.T) {
 	hooks := &fakeWebhooks{}
 	told := &fakeEvents{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Webhooks: hooks, Events: told})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Webhooks: hooks, Events: told})
 	do := func(token, method, target, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+token)

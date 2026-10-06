@@ -205,7 +205,7 @@ func TestSwitchingNeedsTheLocksSecret(t *testing.T) {
 
 func TestChangingYourOwnPassword(t *testing.T) {
 	limits := &fakeLimiter{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Limits: limits, Events: &fakeEvents{}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Limits: limits, Events: &fakeEvents{}})
 	change := func(token, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/me/password", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -242,7 +242,7 @@ func TestChangingYourOwnPassword(t *testing.T) {
 // good; signing in needs no token, so anyone could hold requests open so.
 func TestABodyThatNeverArrivesIsRefused(t *testing.T) {
 	t.Parallel()
-	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}}))
+	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}}))
 	defer srv.Close()
 	conn, err := net.Dial("tcp", srv.Listener.Addr().String())
 	if err != nil {
