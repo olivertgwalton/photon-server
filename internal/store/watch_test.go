@@ -318,3 +318,124 @@ func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 		}
 	}
 }
+
+// A show TMDB matched in one library and TheTVDB alone in another, from files of their own, is one
+// show once TMDB has given its TVDB id, as it gives every show's.
+func TestATitleMatchedByDifferentProvidersIsOneTitle(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sam, err := s.AddProfile(ctx, "Sam", domain.RoleMember, "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	add := func(name string, source domain.FieldSource, ids map[domain.Provider]string) (uuid.UUID, uuid.UUID, uuid.UUID) {
+		t.Helper()
+		lib, err := s.AddLibrary(ctx, name, domain.LibraryShows, "/srv/"+name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rel := "Victorious/S01E01.mkv"
+		saved, err := s.SaveShowFolder(ctx, lib.ID, "Victorious", []byte("v"), Show{Title: "Victorious", Folder: "Victorious"}, []Episode{{
+			Season: 1, Episodes: []int{1}, Title: "Pilot", Folder: "Victorious", ByNumber: true, Copies: []Copy{{
+				ContentKey: []byte(name + rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
+			}},
+		}}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		i := s.q.Item
+		show, err := i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib.ID)), i.Kind.Eq(string(domain.ItemShow))).Take()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SaveIdentity(ctx, uuid.UUID(show.ID), source, domain.Metadata{Title: "Victorious", IDs: ids}, nil); err != nil {
+			t.Fatal(err)
+		}
+		var episode uuid.UUID
+		for _, id := range saved.Titles[domain.TitleAdded] {
+			if row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id)), i.Kind.Eq(string(domain.ItemEpisode))).Take(); err == nil {
+				episode = uuid.UUID(row.ID)
+			}
+		}
+		return lib.ID, uuid.UUID(show.ID), episode
+	}
+	_, inKids, kidsPilot := add("Kids", domain.SourceTMDB, map[domain.Provider]string{domain.ProviderTMDB: "36685", domain.ProviderTVDB: "175901"})
+	shows, inShows, showsPilot := add("Shows", domain.SourceTVDB, map[domain.Provider]string{domain.ProviderTVDB: "175901"})
+	if err := s.SetAccess(ctx, sam.ID, ProfileAccess{Libraries: []uuid.UUID{shows}}); err != nil {
+		t.Fatal(err)
+	}
+
+	for profile, want := range map[uuid.UUID]uuid.UUID{oliver.ID: inKids, sam.ID: inShows} {
+		found, total, err := s.Search(ctx, SearchQuery{Profile: profile, Text: "victorious", Limit: 10})
+		if err != nil || total != 1 || len(found) != 1 || found[0].ID != want {
+			t.Errorf("search for %v = %v of %d (%v), want only %v", profile, found, total, err, want)
+		}
+	}
+	if err := s.MarkWatched(ctx, oliver.ID, showsPilot); err != nil {
+		t.Fatal(err)
+	}
+	i := s.q.Item
+	row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(kidsPilot))).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if states, err := s.states(ctx, oliver.ID, []*model.Item{row}); err != nil || states[row.ID].WatchedAt == nil {
+		t.Errorf("the pilot watched under Shows is %+v under Kids (%v), want watched", states[row.ID], err)
+	}
+}
+
+// Titles are the same through one they each share an id with: a film TMDB and IMDb know, one IMDb
+// and TVDB know, and one only TVDB knows are one film, until the one joining them goes.
+func TestTitlesSharingAnIDThroughAnotherAreOneTitle(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	add := func(name string, ids map[domain.Provider]string) (uuid.UUID, uuid.UUID) {
+		t.Helper()
+		lib, err := s.AddLibrary(ctx, name, domain.LibraryMovies, "/srv/"+name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rel := "Heat (1995)/Heat.mkv"
+		if _, err := s.SaveFolder(ctx, lib.ID, "Heat (1995)", []byte("v"), []Film{{Title: "Heat", Year: 1995, Folder: "Heat (1995)", IDs: ids, Copies: []Copy{{
+			ContentKey: []byte(name + rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
+		}}}}, nil); err != nil {
+			t.Fatal(err)
+		}
+		i := s.q.Item
+		film, err := i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib.ID))).Take()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return lib.ID, uuid.UUID(film.ID)
+	}
+	_, a := add("A", map[domain.Provider]string{domain.ProviderTMDB: "949", domain.ProviderIMDb: "tt0113277"})
+	_, c := add("C", map[domain.Provider]string{domain.ProviderTVDB: "1234"})
+	if same, err := s.SameTitles(ctx, oliver.ID, c); err != nil || len(same) != 1 {
+		t.Errorf("before anything joins them C is the same as %v (%v), want only itself", same, err)
+	}
+	b, _ := add("B", map[domain.Provider]string{domain.ProviderIMDb: "tt0113277", domain.ProviderTVDB: "1234"})
+	if same, err := s.SameTitles(ctx, oliver.ID, c); err != nil || len(same) != 3 || !slices.Contains(same, a) {
+		t.Errorf("C is the same as %v (%v), want A, B and itself", same, err)
+	}
+	if found, total, err := s.Search(ctx, SearchQuery{Profile: oliver.ID, Text: "heat", Limit: 10}); err != nil || total != 1 || found[0].ID != a {
+		t.Errorf("search = %v of %d (%v), want A's film once", found, total, err)
+	}
+
+	if err := s.RemoveLibrary(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	if same, err := s.SameTitles(ctx, oliver.ID, c); err != nil || len(same) != 1 {
+		t.Errorf("with B gone C is the same as %v (%v), want only itself", same, err)
+	}
+	if _, total, err := s.Search(ctx, SearchQuery{Profile: oliver.ID, Text: "heat", Limit: 10}); err != nil || total != 2 {
+		t.Errorf("with B gone search finds %d (%v), want A's and C's", total, err)
+	}
+}
