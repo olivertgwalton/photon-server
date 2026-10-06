@@ -490,7 +490,7 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "POST /api/v1/downloads", access: signedIn,
-			summary: "Download a film or episode no larger than a bitrate: its file as it is, else converted",
+			summary: "Download a film or episode no larger than a bitrate: its file as it is, else converted to the video the device plays",
 			body:    downloadRequestJSON{}, status: http.StatusOK, reply: downloadJSON{}, handle: a.addDownload,
 		},
 		{
