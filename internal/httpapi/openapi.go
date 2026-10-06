@@ -24,6 +24,9 @@ type param struct {
 	doc  string
 }
 
+// optionalBody is a JSON body a client may leave out.
+type optionalBody struct{ of any }
+
 // asFile is a body or reply that is a file, by the types it may be.
 type asFile []string
 
@@ -148,6 +151,10 @@ func operation(s *schemas, r route, path string) (map[string]any, error) {
 			content[t] = map[string]any{"schema": map[string]any{"type": "string", "contentMediaType": t}}
 		}
 		op["requestBody"] = map[string]any{"required": true, "content": content}
+	case optionalBody:
+		op["requestBody"] = map[string]any{
+			"content": map[string]any{"application/json": map[string]any{"schema": s.of(reflect.TypeOf(body.of))}},
+		}
 	default:
 		op["requestBody"] = map[string]any{
 			"required": true,

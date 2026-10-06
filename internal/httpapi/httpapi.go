@@ -462,8 +462,8 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "PUT /api/v1/titles/{id}/progress", access: signedIn,
-			summary: "Record where the profile stopped a film or episode",
-			body:    positionJSON{}, status: http.StatusOK, reply: reachedJSON{}, handle: a.progress,
+			summary: "Record where the profile stopped a film or episode, and when: progress from before the title's state last changed is refused as a conflict",
+			body:    progressJSON{}, status: http.StatusOK, reply: reachedJSON{}, handle: a.progress,
 		},
 		{
 			pattern: "DELETE /api/v1/titles/{id}/progress", access: signedIn,
@@ -471,10 +471,9 @@ func (a *API) routes() []route {
 			status:  http.StatusNoContent, handle: a.mark(watching.ClearProgress),
 		},
 		{
-			pattern: "PUT /api/v1/titles/{id}/watched", access: signedIn, summary: "Mark a title watched",
-			status: http.StatusNoContent, handle: a.mark(func(w watching, ctx context.Context, profile, item uuid.UUID) error {
-				return w.MarkWatched(ctx, profile, item, nil)
-			}),
+			pattern: "PUT /api/v1/titles/{id}/watched", access: signedIn,
+			summary: "Mark a title watched, and when: each film or episode whose state changed since is left as it is",
+			body:    optionalBody{watchedJSON{}}, status: http.StatusNoContent, handle: a.watched,
 		},
 		{
 			pattern: "DELETE /api/v1/titles/{id}/watched", access: signedIn, summary: "Mark a title unwatched",
