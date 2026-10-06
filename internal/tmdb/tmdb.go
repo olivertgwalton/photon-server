@@ -151,6 +151,12 @@ type details struct {
 	CreatedBy        []person `json:"created_by"`
 	VoteAverage      float64  `json:"vote_average"`
 	VoteCount        int      `json:"vote_count"`
+	NextEpisode      *struct {
+		Season  int    `json:"season_number"`
+		Number  int    `json:"episode_number"`
+		Name    string `json:"name"`
+		AirDate string `json:"air_date"`
+	} `json:"next_episode_to_air"`
 	result
 	Overview            string  `json:"overview"`
 	Tagline             string  `json:"tagline"`
@@ -221,6 +227,10 @@ func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadat
 		out.Credits = append(out.Credits, d.AggregateCredits.list(domain.CreditActor)...)
 	} else {
 		out.Credits = d.Credits.list(domain.CreditActor)
+	}
+	// TMDB can list the next episode before its date is known: it is not yet upcoming.
+	if n := d.NextEpisode; n != nil && !provider.Date(n.AirDate).IsZero() {
+		out.NextAiring = &domain.Airing{SeasonNumber: n.Season, EpisodeNumber: n.Number, Title: n.Name, Date: provider.Date(n.AirDate)}
 	}
 	if d.VoteCount > 0 {
 		out.Ratings = []domain.Rating{{Site: domain.SiteTMDB, Score: d.VoteAverage * 10, Votes: d.VoteCount}}

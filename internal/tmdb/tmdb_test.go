@@ -212,3 +212,27 @@ func TestAnEpisodeIsRatedByItsVotesAlone(t *testing.T) {
 		t.Errorf("an episode nobody voted on is rated %+v, want nothing", r)
 	}
 }
+
+func TestAShowSaysItsNextEpisodeToAir(t *testing.T) {
+	const path = "/tv/1399?append_to_response=content_ratings%2Cexternal_ids%2Cvideos%2Cimages%2Caggregate_credits&include_image_language=en%2Cnull&include_video_language=en%2Cnull&language=en-GB"
+	c := serve(t, map[string]string{
+		path: `{"id":1399,"name":"Dragons","next_episode_to_air":{"id":7,"name":"The Return","season_number":3,"episode_number":4,"air_date":"2026-11-02"}}`,
+	})
+	got, err := c.Details(t.Context(), Show, 1399)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &domain.Airing{SeasonNumber: 3, EpisodeNumber: 4, Title: "The Return", Date: time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)}
+	if diff := cmp.Diff(want, got.NextAiring); diff != "" {
+		t.Errorf("next airing (-want +got):\n%s", diff)
+	}
+	for name, body := range map[string]string{
+		"an ended show":            `{"id":1399,"name":"Dragons","next_episode_to_air":null}`,
+		"an episode not yet dated": `{"id":1399,"name":"Dragons","next_episode_to_air":{"season_number":4,"episode_number":1,"air_date":null}}`,
+	} {
+		got, err := serve(t, map[string]string{path: body}).Details(t.Context(), Show, 1399)
+		if err != nil || got.NextAiring != nil {
+			t.Errorf("%s: next airing %+v, %v; want none", name, got.NextAiring, err)
+		}
+	}
+}
