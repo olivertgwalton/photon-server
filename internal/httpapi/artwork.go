@@ -21,7 +21,7 @@ type pictures interface {
 
 type pictureCache interface {
 	File(ctx context.Context, id uuid.UUID, url string) (*os.File, error)
-	Resized(ctx context.Context, key string, width int, open func() (*os.File, error)) (*os.File, error)
+	Resized(ctx context.Context, key string, width int, open func(context.Context) (*os.File, error)) (*os.File, error)
 }
 
 // artwork serves a picture, or with width a copy that wide, for a client that does not size
@@ -74,7 +74,7 @@ func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) openPicture(ctx context.Context, id uuid.UUID, pic store.Picture, width int) (*os.File, string, error) {
 	name := path.Base(pic.Path + pic.URL)
-	original := func() (*os.File, error) {
+	original := func(ctx context.Context) (*os.File, error) {
 		if pic.URL != "" {
 			return a.svc.Artwork.File(ctx, id, pic.URL)
 		}
@@ -87,6 +87,6 @@ func (a *API) openPicture(ctx context.Context, id uuid.UUID, pic store.Picture, 
 			return f, "", err
 		}
 	}
-	f, err := original()
+	f, err := original(ctx)
 	return f, name, err
 }

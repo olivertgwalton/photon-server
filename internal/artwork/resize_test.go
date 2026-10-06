@@ -2,6 +2,7 @@ package artwork
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"hash/crc32"
@@ -13,10 +14,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"testing/synctest"
 )
 
 // picture writes a w×h image, opaque or with a transparent corner, and answers how to open it.
-func picture(t *testing.T, w, h int, opaque bool) (func() (*os.File, error), *int) {
+func picture(t *testing.T, w, h int, opaque bool) (func(context.Context) (*os.File, error), *int) {
 	t.Helper()
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
 	for x := range w {
@@ -37,7 +39,7 @@ func picture(t *testing.T, w, h int, opaque bool) (func() (*os.File, error), *in
 	}
 	_ = f.Close()
 	opens := 0
-	return func() (*os.File, error) { opens++; return os.Open(path) }, &opens
+	return func(context.Context) (*os.File, error) { opens++; return os.Open(path) }, &opens
 }
 
 func TestResized(t *testing.T) {
@@ -102,7 +104,7 @@ func TestAVastPictureIsAnsweredAsItIs(t *testing.T) {
 
 	var before, after runtime.MemStats
 	runtime.ReadMemStats(&before)
-	_, err = c.Resized(t.Context(), "vast", 320, func() (*os.File, error) { return os.Open(path) })
+	_, err = c.Resized(t.Context(), "vast", 320, func(context.Context) (*os.File, error) { return os.Open(path) })
 	runtime.ReadMemStats(&after)
 	if !errors.Is(err, ErrNotResizable) {
 		t.Errorf("resizing a vast picture: %v, want it answered as it is", err)
@@ -110,4 +112,41 @@ func TestAVastPictureIsAnsweredAsItIs(t *testing.T) {
 	if grew := after.TotalAlloc - before.TotalAlloc; grew > 64<<20 {
 		t.Errorf("resizing a %d-byte picture allocated %d MiB", len(b), grew>>20)
 	}
+}
+
+// Clients asking for one size at once share its making, which carries on when the first goes away.
+func TestAResizeOutlivesTheFirstToAsk(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c, err := Open(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = c.Close() })
+		poster, _ := picture(t, 1000, 1500, true)
+		first, leave := context.WithCancel(t.Context())
+		release := make(chan struct{})
+		slow := func(ctx context.Context) (*os.File, error) {
+			<-release
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			return poster(ctx)
+		}
+		go func() { _, _ = c.Resized(first, "poster", 320, slow) }()
+		stayed := make(chan error)
+		go func() {
+			f, err := c.Resized(t.Context(), "poster", 320, slow)
+			if err == nil {
+				_ = f.Close()
+			}
+			stayed <- err
+		}()
+		synctest.Wait()
+		leave()
+		synctest.Wait()
+		close(release)
+		if err := <-stayed; err != nil {
+			t.Errorf("the client still waiting got %v once the first went away, want the picture", err)
+		}
+	})
 }
