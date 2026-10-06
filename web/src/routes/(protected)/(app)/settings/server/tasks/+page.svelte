@@ -34,7 +34,7 @@ function took(started?: string, finished?: string) {
 		<Table.Row>
 			<Table.Head>Task</Table.Head>
 			<Table.Head>Last run</Table.Head>
-			<Table.Head>Next run</Table.Head>
+			<Table.Head class="hidden sm:table-cell">Next run</Table.Head>
 			<Table.Head><span class="sr-only">Run</span></Table.Head>
 		</Table.Row>
 	</Table.Header>
@@ -68,8 +68,12 @@ function took(started?: string, finished?: string) {
 					{:else}
 						Never
 					{/if}
+					<!-- A phone has no room for a column of its own. -->
+					<p class="text-ink-3 text-xs sm:hidden">
+						Next {relative(task.next_at, clock.now)}
+					</p>
 				</Table.Cell>
-				<Table.Cell>
+				<Table.Cell class="hidden sm:table-cell">
 					<time
 						datetime={task.next_at}
 						title={when.format(new Date(task.next_at))}
@@ -91,7 +95,8 @@ function took(started?: string, finished?: string) {
 							)}
 					>
 						<PlayIcon aria-hidden="true" />
-						Run now <span class="sr-only">{tasks[task.key].name}</span>
+						<span class="max-sm:sr-only">Run now</span>
+						<span class="sr-only">{tasks[task.key].name}</span>
 					</Button>
 				</Table.Cell>
 			</Table.Row>
