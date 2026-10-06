@@ -472,9 +472,9 @@ func (*livePlaybacks) RecordPlay(context.Context, domain.Playback, time.Time, ti
 // remuxOpener opens a copy's first part, as decided, on a real remuxer.
 type remuxOpener struct{ *hls.Remuxer }
 
-func (r remuxOpener) Open(_ context.Context, id uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan) error {
+func (r remuxOpener) Open(ctx context.Context, id uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan) error {
 	d := time.Duration(c.Parts[0].DurationMS) * time.Millisecond
-	return r.Remuxer.Open(id, hls.Copy{Parts: []hls.Source{{Part: hls.Part{Duration: d, Keyframes: hls.Forced(d)}, Video: video, Audio: audio}}})
+	return r.Remuxer.Open(ctx, id, hls.Copy{Parts: []hls.Source{{Open: func() (*os.File, error) { return nil, os.ErrNotExist }, Part: hls.Part{Duration: d, Keyframes: hls.Forced(d)}, Video: video, Audio: audio}}})
 }
 
 func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {

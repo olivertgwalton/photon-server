@@ -35,7 +35,7 @@ func (indexed) AskKeyframes(context.Context, uuid.UUID) error { return nil }
 // opened keeps the HLS each playback was opened as.
 type opened map[uuid.UUID]hls.Copy
 
-func (o opened) Open(playback uuid.UUID, c hls.Copy) error {
+func (o opened) Open(_ context.Context, playback uuid.UUID, c hls.Copy) error {
 	o[playback] = c
 	return nil
 }

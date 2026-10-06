@@ -76,7 +76,7 @@ func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
 	}
 	open := func() (*os.File, error) { return os.Open("testdata/fragments.mp4") }
 	playback := uuid.NewV7()
-	if err := r.Open(playback, Copy{Parts: []Source{{
+	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
 		Open: open, Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
 		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
 	}}}); err != nil {
@@ -138,7 +138,7 @@ func TestSegmentsFarBehindThePlayerAreRemoved(t *testing.T) {
 	}
 	// Five parts of five segments each.
 	playback := uuid.NewV7()
-	if err := r.Open(playback, Copy{Parts: []Source{part, part, part, part, part}}); err != nil {
+	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{part, part, part, part, part}}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { r.Close(playback) })
@@ -205,7 +205,7 @@ func TestASegmentPastAShortFilesEndFails(t *testing.T) {
 		keyframes = append(keyframes, time.Duration(2*k)*time.Second)
 	}
 	playback := uuid.NewV7()
-	if err := r.Open(playback, Copy{Parts: []Source{{
+	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
 		Open:  func() (*os.File, error) { return os.Open("testdata/fragments.mp4") },
 		Part:  Part{Duration: time.Minute, Keyframes: keyframes},
 		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
@@ -280,8 +280,12 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 	}
 }
 
+// unplayed is a file a test never plays: the run its remux starts with ends at once.
+func unplayed() (*os.File, error) { return nil, os.ErrNotExist }
+
 // transcode is a minute of video encoded to H.264.
 var transcode = Copy{Parts: []Source{{
+	Open:  unplayed,
 	Part:  Part{Duration: time.Minute, Keyframes: Forced(time.Minute)},
 	Video: domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 4000}},
 }}}
@@ -300,7 +304,7 @@ func TestTranscodesAtOnceNeverPassTheLimit(t *testing.T) {
 	for range 20 {
 		wg.Go(func() {
 			id := uuid.NewV7()
-			err := r.Open(id, transcode)
+			err := r.Open(t.Context(), id, transcode)
 			mu.Lock()
 			defer mu.Unlock()
 			switch {
@@ -318,15 +322,15 @@ func TestTranscodesAtOnceNeverPassTheLimit(t *testing.T) {
 		t.Fatalf("20 at once: %d opened, %d refused, %d/%d active; want 3 and 17", len(opened), refused, active, limit)
 	}
 
-	remux := Copy{Parts: []Source{{Part: transcode.Parts[0].Part, Video: domain.VideoPlan{Codec: "h264"}}}}
-	if err := r.Open(uuid.NewV7(), remux); err != nil {
+	remux := Copy{Parts: []Source{{Open: unplayed, Part: transcode.Parts[0].Part, Video: domain.VideoPlan{Codec: "h264"}}}}
+	if err := r.Open(t.Context(), uuid.NewV7(), remux); err != nil {
 		t.Errorf("a remux at the limit: %v, want it opened, as its video is copied", err)
 	}
 	r.Close(opened[0])
-	if err := r.Open(uuid.NewV7(), transcode); err != nil {
+	if err := r.Open(t.Context(), uuid.NewV7(), transcode); err != nil {
 		t.Errorf("a transcode after one closed: %v, want its slot", err)
 	}
-	if err := r.Open(uuid.NewV7(), transcode); !errors.Is(err, ErrTranscodeLimit) {
+	if err := r.Open(t.Context(), uuid.NewV7(), transcode); !errors.Is(err, ErrTranscodeLimit) {
 		t.Errorf("one more: %v, want ErrTranscodeLimit", err)
 	}
 }
@@ -354,7 +358,7 @@ func TestPlaybacksTakeTheirSlotsFromConversions(t *testing.T) {
 				}
 				return
 			}
-			err := r.Open(uuid.NewV7(), transcode)
+			err := r.Open(t.Context(), uuid.NewV7(), transcode)
 			mu.Lock()
 			defer mu.Unlock()
 			switch {
@@ -391,7 +395,7 @@ func TestAConversionWaitsForAFreeSlot(t *testing.T) {
 		t.Fatal(err)
 	}
 	play := uuid.NewV7()
-	if err := r.Open(play, transcode); err != nil {
+	if err := r.Open(t.Context(), play, transcode); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, ok := r.HoldConversion(t.Context()); ok {
@@ -432,7 +436,7 @@ func TestARemuxWaitsAheadOfAPlayerThatSeeksBack(t *testing.T) {
 		keyframes = append(keyframes, time.Duration(2*k)*time.Second)
 	}
 	playback := uuid.NewV7()
-	if err := r.Open(playback, Copy{Parts: []Source{{
+	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
 		Open: func() (*os.File, error) { return os.Open(src) }, Part: Part{Duration: 240 * time.Second, Keyframes: keyframes},
 		Video: domain.VideoPlan{Codec: "h264"},
 	}}}); err != nil {
@@ -488,7 +492,7 @@ func TestAnInitIsAnsweredBeforeAnySegmentIsMade(t *testing.T) {
 		t.Fatal(err)
 	}
 	playback := uuid.NewV7()
-	if err := r.Open(playback, Copy{Parts: []Source{{
+	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
 		Open: func() (*os.File, error) { return os.Open(fixture) }, Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)},
 		Video: domain.VideoPlan{Codec: "h264"},
 	}}}); err != nil {
@@ -505,5 +509,40 @@ func TestAnInitIsAnsweredBeforeAnySegmentIsMade(t *testing.T) {
 	got, err := io.ReadAll(f)
 	if err != nil || !bytes.Equal(got, init) {
 		t.Errorf("init holds %d bytes (%v), want the %d ffmpeg wrote", len(got), err, len(init))
+	}
+}
+
+// A playback opened partway in is being made from there before its player asks for anything.
+func TestARemuxIsUnderWayWhereThePlayerStarts(t *testing.T) {
+	dir := t.TempDir()
+	r, err := NewRemuxer(fakeFFmpeg(t), dir, t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keyframes []time.Duration
+	for k := range 15 {
+		keyframes = append(keyframes, time.Duration(2*k)*time.Second)
+	}
+	playback := uuid.NewV7()
+	if err := r.Open(t.Context(), playback, Copy{Start: 13 * time.Second, Parts: []Source{{
+		Open: func() (*os.File, error) { return os.Open("testdata/fragments.mp4") }, Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
+		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close(playback)
+	kept := func(n int) bool {
+		_, err := os.Stat(filepath.Join(dir, playback.String(), segmentName(n)))
+		return err == nil
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for !kept(2) {
+		if time.Now().After(deadline) {
+			t.Fatal("segment 2, holding 0:13, was not made before it was asked for")
+		}
+		<-time.After(10 * time.Millisecond)
+	}
+	if kept(0) {
+		t.Error("segment 0 was made for a player starting at 0:13")
 	}
 }

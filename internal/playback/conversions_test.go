@@ -201,6 +201,7 @@ func TestAConversionWaitsForASlotAndGivesItUpToAPlay(t *testing.T) {
 		t.Fatal(err)
 	}
 	transcode := hls.Copy{Parts: []hls.Source{{
+		Open:  func() (*os.File, error) { return nil, os.ErrNotExist },
 		Part:  hls.Part{Duration: time.Minute, Keyframes: hls.Forced(time.Minute)},
 		Video: domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 4000}},
 	}}}
@@ -214,7 +215,7 @@ func TestAConversionWaitsForASlotAndGivesItUpToAPlay(t *testing.T) {
 	}
 
 	play := uuid.NewV7()
-	if err := r.Open(play, transcode); err != nil {
+	if err := r.Open(t.Context(), play, transcode); err != nil {
 		t.Fatal(err)
 	}
 	if err := conv.Convert(ctx, d.Conversion); !errors.Is(err, jobs.ErrNotNow) {
@@ -241,7 +242,7 @@ func TestAConversionWaitsForASlotAndGivesItUpToAPlay(t *testing.T) {
 		t.Errorf("transcodes while converting: %d, %d of them conversions; want the one conversion", active, conversions)
 	}
 	second := uuid.NewV7()
-	if err := r.Open(second, transcode); err != nil {
+	if err := r.Open(t.Context(), second, transcode); err != nil {
 		t.Fatalf("a play while a conversion holds the only slot: %v, want it to take the slot", err)
 	}
 	if err := <-converted; !errors.Is(err, jobs.ErrNotNow) {

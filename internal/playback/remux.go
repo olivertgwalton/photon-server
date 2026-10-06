@@ -24,7 +24,7 @@ type partStore interface {
 }
 
 type remuxer interface {
-	Open(playback uuid.UUID, c hls.Copy) error
+	Open(ctx context.Context, playback uuid.UUID, c hls.Copy) error
 }
 
 // Remuxes opens a playback's copy as HLS: each of its files cut at its keyframes where the video
@@ -77,7 +77,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 	// A subtitle drawn into the picture is the only one offered, as Jellyfin's master playlist
 	// has it: another turned on by a player would be drawn over it.
 	if e := video.Encode; e != nil && e.Burn != nil {
-		return r.hls.Open(playback, h)
+		return r.hls.Open(ctx, playback, h)
 	}
 	// The parts of a copy are cut from one master, so each holds the first's streams.
 	for _, st := range c.Streams {
@@ -100,7 +100,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 		sub.Sources = []hls.SubtitleSource{{Open: func() (*os.File, error) { return openFile(opening, r.parts.SubtitleFile, f.ID) }, Language: sub.Language}}
 		h.Subtitles = append(h.Subtitles, sub)
 	}
-	return r.hls.Open(playback, h)
+	return r.hls.Open(ctx, playback, h)
 }
 
 // subtitle names a subtitle by its title, else its language in English.

@@ -100,12 +100,13 @@ func NewRemuxer(ffmpeg, dir, subtitles string, hw Hardware, limit int, log *slog
 	}, nil
 }
 
-// Copy is what a playback's HLS is made of: its parts in order, its text subtitles, and how the
-// master playlist describes its video.
+// Copy is what a playback's HLS is made of: its parts in order, its text subtitles, how the
+// master playlist describes its video, and where on its timeline the player starts.
 type Copy struct {
 	Parts     []Source
 	Subtitles []Subtitle
 	Variant   Variant
+	Start     time.Duration
 }
 
 // Variant is the video's one variant as the master playlist describes it: the bitrate it is sent
@@ -166,11 +167,12 @@ func (s *session) textStreams(part uuid.UUID) []int {
 	return streams
 }
 
-// Open starts the remux of a playback's copy; nothing is run until a segment is asked for.
-// Addresses in its playlists are relative to the playlists' own. A copy whose video is encoded is
-// refused with ErrTranscodeLimit while playbacks hold every transcode slot; where a conversion
-// holds one, the conversion is stopped and the playback has its slot.
-func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
+// Open starts the remux of a playback's copy at the segment holding c.Start, so it is under way
+// while the player reads its playlists. Addresses in its playlists are relative to the playlists'
+// own. A copy whose video is encoded is refused with ErrTranscodeLimit while playbacks hold every
+// transcode slot; where a conversion holds one, the conversion is stopped and the playback has its
+// slot.
+func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 	parts := make([]Part, len(c.Parts))
 	offsets := make([]time.Duration, len(c.Parts))
 	var at time.Duration
@@ -204,6 +206,16 @@ func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
 		_ = root.Close()
 		_ = os.RemoveAll(s.dir)
 		return ErrTranscodeLimit
+	}
+	if len(s.plan) > 0 {
+		first := 0
+		for n, seg := range s.plan {
+			if offsets[seg.Part]+seg.Start <= c.Start {
+				first = n
+			}
+		}
+		// Nothing else has the session yet to hold its lock against.
+		r.start(ctx, s, first)
 	}
 	r.sessions[playback] = s
 	return nil
