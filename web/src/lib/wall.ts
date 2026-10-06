@@ -9,8 +9,6 @@ export type WallQuery = NonNullable<
 	paths["/api/v1/libraries/{id}/titles"]["get"]["parameters"]["query"]
 >;
 
-export type Filters = Omit<WallQuery, "sort" | "order" | "offset" | "limit">;
-
 const sorts: Schemas["WallSort"][] = [
 	"title",
 	"added",

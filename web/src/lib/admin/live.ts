@@ -1,10 +1,10 @@
 import type { components } from "#lib/api/schema.js";
 
 type Schemas = components["schemas"];
-export type Event = Schemas["Event"];
+type Event = Schemas["Event"];
 export type EventKind = Schemas["EventKind"];
 export type NowPlaying = Schemas["NowPlaying"];
-export type Snapshot = Schemas["Snapshot"];
+type Snapshot = Schemas["Snapshot"];
 
 // What is going on now, as the admin event stream has told it: the snapshot it
 // opens with, kept current by each event after it.

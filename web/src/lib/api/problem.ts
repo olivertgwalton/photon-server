@@ -1,6 +1,6 @@
 import type { components } from "./schema.js";
 
-export type Problem = components["schemas"]["Problem"];
+type Problem = components["schemas"]["Problem"];
 
 // What a refusal says to a reader where the server gives no detail of its own.
 const messages: Partial<Record<Problem["code"], string>> = {
@@ -14,7 +14,7 @@ const messages: Partial<Record<Problem["code"], string>> = {
 	not_found: "That isn't here any more.",
 };
 
-export function isProblem(value: unknown): value is Problem {
+function isProblem(value: unknown): value is Problem {
 	return (
 		typeof value === "object" &&
 		value !== null &&

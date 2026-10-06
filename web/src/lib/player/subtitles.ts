@@ -5,7 +5,7 @@ type Schemas = components["schemas"];
 
 // A subtitle the reader can choose: a track inside the copy, by its stream
 // index, or a file beside it, by its place among the copy's files.
-export type Choice = {
+type Choice = {
 	key: string;
 	label: string;
 	codec: string;

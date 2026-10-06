@@ -1,7 +1,7 @@
 import type { components } from "#lib/api/schema.js";
 
 type Schemas = components["schemas"];
-export type ClientProfile = Schemas["ClientProfile"];
+type ClientProfile = Schemas["ClientProfile"];
 
 // What a browser says it plays, as asked: the types its video element and
 // media sources take, whether it shows HDR, and whether it plays HLS itself.
@@ -53,7 +53,7 @@ const containers = {
 	matroska: "video/x-matroska",
 };
 
-export const questions = [
+const questions = [
 	...Object.values(h264),
 	...Object.values(hevc),
 	...Object.values(av1),

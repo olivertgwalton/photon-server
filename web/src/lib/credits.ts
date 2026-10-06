@@ -12,10 +12,9 @@ const jobs: Record<Kind, string> = {
 	creator: "Creator",
 };
 
-export const performs = (kind: Kind) =>
-	kind === "actor" || kind === "guest_star";
+const performs = (kind: Kind) => kind === "actor" || kind === "guest_star";
 
-export type Folded<T> = {
+type Folded<T> = {
 	// Every credit folded in, in the order given.
 	all: T[];
 	kinds: Kind[];
