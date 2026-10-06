@@ -17,7 +17,7 @@ var ErrLibraryExists = errors.New("a library with that name or root already exis
 // libraryColumns and librarySourceColumns are model.Library's and model.LibrarySource's, for a
 // statement that reads whole rows.
 const (
-	libraryColumns       = `id, name, kind, root, monitor, refresh_days, previews, markers, keyframes, themes, created_at`
+	libraryColumns       = `id, name, kind, root, monitor, refresh_days, previews, markers, keyframes, themes`
 	librarySourceColumns = `library_id, item_kind, fetcher, source, position, enabled`
 )
 
@@ -256,11 +256,7 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 
 // RemoveLibrary forgets a library and everything in it; its files are left alone.
 func (s *Store) RemoveLibrary(ctx context.Context, id uuid.UUID) error {
-	res, err := s.pool.Exec(ctx, `DELETE FROM libraries WHERE id = $1`, id)
-	if err == nil && res.RowsAffected() == 0 {
-		err = ErrNotFound
-	}
-	return err
+	return affected(s.pool.Exec(ctx, `DELETE FROM libraries WHERE id = $1`, id))
 }
 
 func saveRemoteExtras(ctx context.Context, tx db, lib uuid.UUID, kinds []domain.ExtraKind) error {

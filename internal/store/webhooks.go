@@ -54,11 +54,7 @@ func (s *Store) Webhooks(ctx context.Context) ([]Webhook, error) {
 
 // RemoveWebhook forgets a webhook and what was waiting to be sent to it.
 func (s *Store) RemoveWebhook(ctx context.Context, id uuid.UUID) error {
-	res, err := s.pool.Exec(ctx, `DELETE FROM webhooks WHERE id = $1`, id)
-	if err == nil && res.RowsAffected() == 0 {
-		err = ErrNotFound
-	}
-	return err
+	return affected(s.pool.Exec(ctx, `DELETE FROM webhooks WHERE id = $1`, id))
 }
 
 // QueueWebhooks queues the body made by body to every webhook that asked for kind, a job each.
@@ -84,16 +80,12 @@ func (s *Store) QueueWebhooks(ctx context.Context, kind domain.EventKind, body f
 // QueueDelivery queues a body to be sent to one webhook, whatever it asked for. ErrNotFound for
 // no such webhook.
 func (s *Store) QueueDelivery(ctx context.Context, webhook uuid.UUID, kind domain.EventKind, body []byte) error {
-	tag, err := s.pool.Exec(ctx, `
+	return affected(s.pool.Exec(ctx, `
 		WITH d AS (
 			INSERT INTO webhook_deliveries (webhook_id, kind, body)
 			SELECT id, $2, $3 FROM webhooks WHERE id = $1
 			RETURNING id)
-		INSERT INTO jobs (kind, subject) SELECT 'deliver_webhook', id FROM d`, webhook, kind, string(body))
-	if err == nil && tag.RowsAffected() == 0 {
-		err = ErrNotFound
-	}
-	return err
+		INSERT INTO jobs (kind, subject) SELECT 'deliver_webhook', id FROM d`, webhook, kind, string(body)))
 }
 
 // Delivery is a body waiting to be sent, where to, and the secret it is signed with.
@@ -108,11 +100,9 @@ type Delivery struct {
 // removed.
 func (s *Store) Delivery(ctx context.Context, id uuid.UUID) (Delivery, error) {
 	var d Delivery
-	var kind, body string
 	err := s.pool.QueryRow(ctx, `
 		SELECT w.url, w.secret, d.kind, d.body FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id
-		WHERE d.id = $1`, id).Scan(&d.URL, &d.Secret, &kind, &body)
-	d.Kind, d.Body = domain.EventKind(kind), []byte(body)
+		WHERE d.id = $1`, id).Scan(&d.URL, &d.Secret, &d.Kind, &d.Body)
 	return d, found(err)
 }
 
@@ -134,14 +124,10 @@ type Described struct {
 
 func (s *Store) Describe(ctx context.Context, e domain.Event) (Described, error) {
 	var d Described
-	var kind *string
 	err := s.pool.QueryRow(ctx, `
 		SELECT (SELECT name FROM profiles WHERE id = $1), i.title, i.kind, i.year,
 			(SELECT name FROM libraries WHERE id = $3)
 		FROM (SELECT 1) one LEFT JOIN items i ON i.id = $2`,
-		e.Profile, e.Item, e.Library).Scan(&d.ProfileName, &d.Title, &kind, &d.Year, &d.LibraryName)
-	if kind != nil {
-		d.TitleKind = new(domain.ItemKind(*kind))
-	}
+		e.Profile, e.Item, e.Library).Scan(&d.ProfileName, &d.Title, &d.TitleKind, &d.Year, &d.LibraryName)
 	return d, err
 }

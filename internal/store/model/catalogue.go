@@ -32,7 +32,6 @@ type Item struct {
 	ReleaseDate   *time.Time
 	Genres        []string
 	Studios       []string
-	IdentifiedAt  *time.Time
 	EpisodeOrder  domain.EpisodeOrder
 }
 
@@ -95,8 +94,6 @@ type Part struct {
 	SizeBytes  int64
 	DurationMS int64
 	OffsetMS   int64
-	// FingerprintedAt is when the part's sound was last compared with its season's.
-	FingerprintedAt *time.Time
 }
 
 type Stream struct {
@@ -149,16 +146,12 @@ type Marker struct {
 type SubtitleFile struct {
 	ID              uuid.UUID
 	VersionID       uuid.UUID
-	LibraryID       uuid.UUID
-	RelPath         string
 	Codec           string
 	Language        *string
 	Title           *string
 	Forced          bool
 	IsDefault       bool
 	HearingImpaired bool
-	SizeBytes       int64
-	MtimeNS         int64
 }
 
 type Rating struct {
@@ -170,10 +163,9 @@ type Rating struct {
 }
 
 type PlaylistEntry struct {
-	ID         uuid.UUID
-	PlaylistID uuid.UUID
-	ItemID     uuid.UUID
-	Position   int
+	ID       uuid.UUID
+	ItemID   uuid.UUID
+	Position int
 }
 
 type Person struct {

@@ -250,7 +250,7 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	p := TitlePage{
 		ID: id, Kind: item.Kind, Title: item.Title, OriginalTitle: deref(item.OriginalTitle),
 		Overview: deref(item.Overview), Tagline: deref(item.Tagline), Certificate: deref(item.Certificate),
-		Year: deref(item.Year), ReleaseDate: date(item.ReleaseDate), Genres: item.Genres, Studios: item.Studios,
+		Year: deref(item.Year), ReleaseDate: domain.Date(deref(item.ReleaseDate)), Genres: item.Genres, Studios: item.Studios,
 		AddedAt: item.AddedAt, SeasonNumber: item.SeasonNumber, EpisodeNumber: item.EpisodeNumber,
 		EpisodeEnd: item.EpisodeEnd,
 	}
@@ -445,7 +445,7 @@ func (s *Store) seasons(ctx context.Context, profile, show uuid.UUID) ([]SeasonC
 	for n, r := range rows {
 		out[n] = SeasonCard{
 			ID: r.ID, Number: deref(r.SeasonNumber), Title: r.Title, Overview: deref(r.Overview),
-			Year: deref(r.Year), Aired: date(r.ReleaseDate), Episodes: episodes[r.ID],
+			Year: deref(r.Year), Aired: domain.Date(deref(r.ReleaseDate)), Episodes: episodes[r.ID],
 			Poster: first(pictures[r.ID][domain.ArtworkPoster]), State: states[r.ID],
 		}
 		out[n].Blurhashes = blurhashesOf(hashes, out[n].Poster)
@@ -480,7 +480,7 @@ func (s *Store) episodes(ctx context.Context, profile, season uuid.UUID) ([]Epis
 		}
 		out[n] = EpisodeCard{
 			ID: r.ID, Number: r.EpisodeNumber, End: r.EpisodeEnd, Title: r.Title,
-			Overview: deref(r.Overview), Aired: date(aired), DurationMS: lengths[r.ID],
+			Overview: deref(r.Overview), Aired: domain.Date(deref(aired)), DurationMS: lengths[r.ID],
 			Thumb: first(pictures[r.ID][domain.ArtworkThumb]), State: states[r.ID],
 		}
 		out[n].Blurhashes = blurhashesOf(hashes, out[n].Thumb)
@@ -749,7 +749,7 @@ func streamPage(t *model.Stream) StreamPage {
 // itemColumns are model.Item's, for a statement that reads whole items.
 const itemColumns = `id, library_id, kind, title, sort_title, year, folder, added_at, parent_id, season_number,
 	episode_number, episode_end, air_date, extra_kind, scan_title, original_title, overview, tagline, certificate,
-	release_date, genres, studios, identified_at, episode_order`
+	release_date, genres, studios, episode_order`
 
 // itemColumnsOf is itemColumns read through alias, for a statement that joins items to others.
 func itemColumnsOf(alias string) string {
@@ -764,14 +764,13 @@ func itemColumnsOf(alias string) string {
 const (
 	versionColumns = `id, item_id, library_id, fingerprint, edition, label, container, width, height, video_codec,
 		video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms, missing_since`
-	partColumns   = `id, version_id, idx, size_bytes, duration_ms, offset_ms, fingerprinted_at`
+	partColumns   = `id, version_id, idx, size_bytes, duration_ms, offset_ms`
 	streamColumns = `part_id, idx, kind, codec, profile, language, title, is_default, forced, hearing_impaired,
 		commentary, width, height, frame_rate, bit_depth, level, video_range, interlaced, dv_profile, dv_level,
 		dv_compatibility, channels, channel_layout, sample_rate, bitrate_kbps`
 	chapterColumns      = `part_id, idx, start_ms, end_ms, title`
 	markerColumns       = `part_id, kind, source, start_ms, end_ms`
-	subtitleFileColumns = `id, version_id, library_id, rel_path, codec, language, title, forced, is_default,
-		hearing_impaired, size_bytes, mtime_ns`
+	subtitleFileColumns = `id, version_id, codec, language, title, forced, is_default, hearing_impaired`
 )
 
 // readRow answers the one row a statement finds, each column into the field of its name, or
@@ -809,13 +808,6 @@ func deref[T any](p *T) T {
 		return zero
 	}
 	return *p
-}
-
-func date(t *time.Time) domain.Date {
-	if t == nil {
-		return domain.Date{}
-	}
-	return domain.Date(*t)
 }
 
 func first(ids []uuid.UUID) uuid.UUID {

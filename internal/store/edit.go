@@ -186,11 +186,7 @@ func (s *Store) RefreshLibrary(ctx context.Context, lib uuid.UUID, mode domain.R
 // The episodes keep their old titles until then.
 func (s *Store) SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		res, err := tx.Exec(ctx, `UPDATE items SET episode_order = $2 WHERE id = $1 AND kind = 'show'`, id, order)
-		if err == nil && res.RowsAffected() == 0 {
-			err = ErrNotFound
-		}
-		if err != nil {
+		if err := affected(tx.Exec(ctx, `UPDATE items SET episode_order = $2 WHERE id = $1 AND kind = 'show'`, id, order)); err != nil {
 			return err
 		}
 		// What providers said under the old numbers: their claims, stills and credits. What files

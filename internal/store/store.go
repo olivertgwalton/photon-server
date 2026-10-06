@@ -70,20 +70,17 @@ func Migrate(ctx context.Context, url string, log *slog.Logger) error {
 	return err
 }
 
-// poolSize is how many connections a node holds unless its database address says otherwise with
-// pool_max_conns: as many as its job slots, conversions and background tasks may want (half its
-// CPUs for analysis, and two dozen more for scans, matches, webhooks, previews, conversions and
-// tasks), and as many again for requests. pgx's own default, one a CPU, let a small machine's long
-// scan or match queue every request behind it.
-func poolSize() int32 { return int32(runtime.NumCPU() + 48) }
-
 func connect(ctx context.Context, url string, log *slog.Logger) (*Store, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, err
 	}
 	if !strings.Contains(url, "pool_max_conns") {
-		cfg.MaxConns = poolSize()
+		// As many connections as a node's job slots, conversions and background tasks may want (half
+		// its CPUs for analysis, and two dozen more for scans, matches, webhooks, previews,
+		// conversions and tasks), and as many again for requests. pgx's own default, one a CPU, let
+		// a small machine's long scan or match queue every request behind it.
+		cfg.MaxConns = int32(runtime.NumCPU() + 48)
 	}
 	cfg.ConnConfig.Tracer = queryLog{log}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
@@ -171,7 +168,11 @@ func (s *Store) checkPostgres(ctx context.Context) error {
 }
 
 func (s *Store) migrator() (*goose.Provider, error) {
-	return goose.NewProvider(goose.DialectPostgres, s.sql, migrationsDir())
+	dir, err := fs.Sub(migrations, "migrations")
+	if err != nil {
+		return nil, err
+	}
+	return goose.NewProvider(goose.DialectPostgres, s.sql, dir)
 }
 
 var errSchema = errors.New("schema version mismatch")
@@ -223,6 +224,14 @@ func found(err error) error {
 	return err
 }
 
+// affected turns a write that touched no row into ErrNotFound.
+func affected(tag pgconn.CommandTag, err error) error {
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
+}
+
 // violation is the SQLSTATE Postgres refuses a write with for breaking a kind of constraint.
 type violation string
 
@@ -233,16 +242,8 @@ const (
 
 // violates reports whether a write was refused for breaking a constraint of the kind.
 func violates(err error, v violation) bool {
-	var pg *pgconn.PgError
-	return errors.As(err, &pg) && violation(pg.Code) == v
-}
-
-func migrationsDir() fs.FS {
-	dir, err := fs.Sub(migrations, "migrations")
-	if err != nil {
-		panic(err)
-	}
-	return dir
+	pg, ok := errors.AsType[*pgconn.PgError](err)
+	return ok && violation(pg.Code) == v
 }
 
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
