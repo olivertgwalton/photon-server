@@ -4626,6 +4626,7 @@ export interface components {
         /** @enum {string} */
         CollectionOrigin: "tmdb" | "user";
         Counts: {
+            collections: number;
             episodes: number;
             movies: number;
             seasons: number;

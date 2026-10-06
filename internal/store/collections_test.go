@@ -134,3 +134,61 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 		t.Errorf("after removing it, Heat is in %v, %v", page.Collections, err)
 	}
 }
+
+func TestALibraryCountsTheCollectionsItLists(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	empty, err := s.AddLibrary(ctx, "Other", domain.LibraryMovies, "/srv/other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddCollection(ctx, films.ID, "Sunday Films"); err != nil {
+		t.Fatal(err)
+	}
+	// A provider's set of one title is not listed, so it is not counted either.
+	film := Film{Title: "Alien", Folder: "Alien", Copies: []Copy{{ContentKey: []byte("Alien"), Parts: []Part{{
+		RelPath: "Alien.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
+	}}}}}
+	if _, err := s.SaveFolder(ctx, films.ID, "Alien", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	cards, _, err := s.Wall(ctx, films.ID, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := domain.Metadata{Title: "Alien", Certificate: "18", Collections: []domain.Grouping{{ID: "8091", Title: "Alien Collection"}}}
+	if err := s.SaveIdentity(ctx, cards[0].ID, domain.SourceTMDB, m, nil); err != nil {
+		t.Fatal(err)
+	}
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	agree := func(profile uuid.UUID, want map[uuid.UUID]int) {
+		t.Helper()
+		counts, err := s.LibraryCounts(ctx, profile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for lib, n := range want {
+			_, listed, err := s.Collections(ctx, lib, profile, 0, 10)
+			if err != nil || counts[lib].Collections != n || listed != int64(n) {
+				t.Errorf("library %s counts %d collections and lists %d, %v; want %d", lib, counts[lib].Collections, listed, err, n)
+			}
+		}
+	}
+	agree(uuid.UUID{}, map[uuid.UUID]int{films.ID: 1, empty.ID: 0})
+	twelve := 12
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedBlock}); err != nil {
+		t.Fatal(err)
+	}
+	agree(kid.ID, map[uuid.UUID]int{films.ID: 1, empty.ID: 0})
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{empty.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	agree(kid.ID, map[uuid.UUID]int{films.ID: 0, empty.ID: 0})
+}
