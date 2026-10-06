@@ -39,7 +39,7 @@ type playbacks interface {
 }
 
 type remuxing interface {
-	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan) error
+	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, start time.Duration) error
 }
 
 // owners say which node of the cluster serves a playback's HLS.
@@ -129,6 +129,9 @@ type playJSON struct {
 	// video where the client cannot draw it.
 	SubtitleStream *int              `json:"subtitle_stream,omitzero"`
 	Profile        *playback.Profile `json:"profile"`
+	// StartMS is where on the copy's timeline the player starts, so an HLS playlist is made from
+	// there before the player asks for it.
+	StartMS int64 `json:"start_ms,omitzero"`
 }
 
 // playbackJSON is a playback opened: its parts and subtitles played as they are, or its playlist,
@@ -164,6 +167,10 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Profile == nil {
 		writeProblem(w, a.logger, codeInvalidBody, "profile says what the client plays")
+		return
+	}
+	if req.StartMS < 0 {
+		writeProblem(w, a.logger, codeInvalidBody, "start_ms is not negative")
 		return
 	}
 	if req.Profile.Parts == "" {
@@ -233,7 +240,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if d.Method != domain.PlayDirect {
-		if err := a.svc.Remuxing.Open(r.Context(), session.ID, c, *d.Video, d.Audio); err != nil {
+		if err := a.svc.Remuxing.Open(r.Context(), session.ID, c, *d.Video, d.Audio, time.Duration(req.StartMS)*time.Millisecond); err != nil {
 			if aerr := a.svc.Playbacks.Abandon(context.WithoutCancel(r.Context()), session.ID); aerr != nil {
 				a.internal(w, r, aerr)
 				return

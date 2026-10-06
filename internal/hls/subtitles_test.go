@@ -56,7 +56,7 @@ func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
 	}
 	playback := uuid.NewV7()
 	// An external file over a film in two parts, the second an hour in.
-	err = r.Open(playback, Copy{
+	err = r.Open(t.Context(), playback, Copy{
 		Parts:     []Source{part(time.Hour), part(time.Hour)},
 		Subtitles: []Subtitle{{Name: "English", Language: "en", Default: true, HearingImpaired: true, Sources: []SubtitleSource{{Open: open}}}},
 		Variant:   Variant{BandwidthKbps: 8000, Codecs: []string{"avc1.640029", "mp4a.40.2"}, Range: "SDR", Width: 1920, Height: 1080, FrameRate: 24000.0 / 1001},
@@ -149,7 +149,7 @@ func TestEmbeddedSubtitlesAreReadOnce(t *testing.T) {
 	part := uuid.NewV7()
 	english, french := 1, 2
 	c := Copy{
-		Parts: []Source{{Open: open, Part: Part{Duration: 10 * time.Second, Keyframes: Forced(10 * time.Second)}}},
+		Parts: []Source{{Open: unplayed, Part: Part{Duration: 10 * time.Second, Keyframes: Forced(10 * time.Second)}}},
 		Subtitles: []Subtitle{
 			{Name: "English", Sources: []SubtitleSource{{Open: open, Stream: &english, Part: part}}},
 			{Name: "French", Sources: []SubtitleSource{{Open: open, Stream: &french, Part: part}}},
@@ -157,7 +157,7 @@ func TestEmbeddedSubtitlesAreReadOnce(t *testing.T) {
 	}
 	first, second := uuid.NewV7(), uuid.NewV7()
 	for _, p := range []uuid.UUID{first, second} {
-		if err := r.Open(p, c); err != nil {
+		if err := r.Open(t.Context(), p, c); err != nil {
 			t.Fatal(err)
 		}
 	}

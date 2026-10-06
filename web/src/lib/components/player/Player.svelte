@@ -240,6 +240,7 @@ async function open(at: number) {
 			audio_stream: audio,
 			subtitle_stream: asked.subtitle_stream,
 			profile,
+			start_ms: Math.round(at * 1000),
 		},
 	});
 	// A playback opened after the reader moved on is stopped where it began.

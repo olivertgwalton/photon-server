@@ -100,12 +100,13 @@ func NewRemuxer(ffmpeg, dir, subtitles string, hw Hardware, limit int, log *slog
 	}, nil
 }
 
-// Copy is what a playback's HLS is made of: its parts in order, its text subtitles, and how the
-// master playlist describes its video.
+// Copy is what a playback's HLS is made of: its parts in order, its text subtitles, how the
+// master playlist describes its video, and where on its timeline the player starts.
 type Copy struct {
 	Parts     []Source
 	Subtitles []Subtitle
 	Variant   Variant
+	Start     time.Duration
 }
 
 // Variant is the video's one variant as the master playlist describes it: the bitrate it is sent
@@ -132,7 +133,7 @@ type session struct {
 	mu       sync.Mutex
 	ready    map[int]chan struct{}
 	failed   map[int]error
-	inits    map[int]bool
+	inits    map[int]chan struct{}
 	run      *run
 	furthest int
 }
@@ -166,11 +167,12 @@ func (s *session) textStreams(part uuid.UUID) []int {
 	return streams
 }
 
-// Open starts the remux of a playback's copy; nothing is run until a segment is asked for.
-// Addresses in its playlists are relative to the playlists' own. A copy whose video is encoded is
-// refused with ErrTranscodeLimit while playbacks hold every transcode slot; where a conversion
-// holds one, the conversion is stopped and the playback has its slot.
-func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
+// Open starts the remux of a playback's copy at the segment holding c.Start, so it is under way
+// while the player reads its playlists. Addresses in its playlists are relative to the playlists'
+// own. A copy whose video is encoded is refused with ErrTranscodeLimit while playbacks hold every
+// transcode slot; where a conversion holds one, the conversion is stopped and the playback has its
+// slot.
+func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 	parts := make([]Part, len(c.Parts))
 	offsets := make([]time.Duration, len(c.Parts))
 	var at time.Duration
@@ -180,7 +182,7 @@ func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
 	}
 	s := &session{
 		dir: filepath.Join(r.dir, playback.String()), sources: c.Parts, offsets: offsets, plan: Plan(parts),
-		ready: map[int]chan struct{}{}, failed: map[int]error{}, inits: map[int]bool{},
+		ready: map[int]chan struct{}{}, failed: map[int]error{}, inits: map[int]chan struct{}{},
 	}
 	s.playlists = map[string]string{
 		MasterName: Master(c.Subtitles, c.Variant, videoName, subtitleName),
@@ -204,6 +206,16 @@ func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
 		_ = root.Close()
 		_ = os.RemoveAll(s.dir)
 		return ErrTranscodeLimit
+	}
+	if len(s.plan) > 0 {
+		first := 0
+		for n, seg := range s.plan {
+			if offsets[seg.Part]+seg.Start <= c.Start {
+				first = n
+			}
+		}
+		// Nothing else has the session yet to hold its lock against.
+		r.start(ctx, s, first)
 	}
 	r.sessions[playback] = s
 	return nil
@@ -360,7 +372,8 @@ func (r *Remuxer) session(playback uuid.UUID) (*session, error) {
 	return s, nil
 }
 
-// Init opens a part's initialisation, waiting for it to be made.
+// Init opens a part's initialisation, waiting for it to be made: a run of the part writes it
+// before any segment, so one is started at the part's first segment where none runs.
 func (r *Remuxer) Init(ctx context.Context, playback uuid.UUID, part int) (*os.File, error) {
 	s, err := r.session(playback)
 	if err != nil {
@@ -369,24 +382,18 @@ func (r *Remuxer) Init(ctx context.Context, playback uuid.UUID, part int) (*os.F
 	if part < 0 || part >= len(s.sources) {
 		return nil, ErrNoRemux
 	}
-	first := 0
-	for n, seg := range s.plan {
-		if seg.Part == part {
-			first = n
-			break
-		}
-	}
 	s.mu.Lock()
-	made := s.inits[part]
-	s.mu.Unlock()
-	if !made {
-		// The initialisation is written before any segment, so the part's first one brings it.
-		f, err := r.Segment(ctx, playback, first)
-		if err != nil {
-			return nil, err
-		}
-		_ = f.Close()
+	wait := s.initWaiter(part)
+	if !closed(wait) && (s.run == nil || s.run.part != part) {
+		r.start(ctx, s, slices.IndexFunc(s.plan, func(seg Segment) bool { return seg.Part == part }))
 	}
+	s.mu.Unlock()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-wait:
+	}
+	// A run that failed before writing it leaves none, and the next one asked for starts again.
 	return s.root.Open(initName(part))
 }
 
@@ -455,6 +462,17 @@ func (s *session) waiter(n int) chan struct{} {
 	return c
 }
 
+// initWaiter answers the channel closed when part's initialisation is made; the session's lock is
+// held.
+func (s *session) initWaiter(part int) chan struct{} {
+	c, ok := s.inits[part]
+	if !ok {
+		c = make(chan struct{})
+		s.inits[part] = c
+	}
+	return c
+}
+
 // forget removes the segments made before segment n; the session's lock is held. One asked for
 // again is made again.
 func (s *session) forget(n int) {
@@ -494,6 +512,10 @@ func (r *Remuxer) start(ctx context.Context, s *session, n int) {
 		}
 		// Whoever waits on a segment this run would have made learns it will not be.
 		if err != nil && ctx.Err() == nil {
+			if c, ok := s.inits[run.part]; ok && !closed(c) {
+				close(c)
+				delete(s.inits, run.part)
+			}
 			for m := run.at; m < len(s.plan) && s.plan[m].Part == run.part; m++ {
 				if c, ok := s.ready[m]; ok && !closed(c) {
 					s.failed[m] = err
@@ -622,9 +644,10 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 		return err
 	}
 	s.mu.Lock()
-	if !s.inits[run.part] {
-		err = keep(s.root, initName(run.part), init)
-		s.inits[run.part] = err == nil
+	if c := s.initWaiter(run.part); !closed(c) {
+		if err = keep(s.root, initName(run.part), init); err == nil {
+			close(c)
+		}
 	}
 	s.mu.Unlock()
 	if err != nil {
