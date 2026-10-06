@@ -7,14 +7,14 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
+import { fields } from "#lib/form.js";
 
 let { data } = $props();
 let message = $state<string>();
 let linked = $state<components["schemas"]["Device"]>();
 
 async function link(event: SubmitEvent) {
-	event.preventDefault();
-	const code = new FormData(event.currentTarget as HTMLFormElement).get("code");
+	const code = fields(event).get("code");
 	const { data: device, error } = await client().POST(
 		"/api/v1/auth/device/approve",
 		{ body: { user_code: String(code) } },
