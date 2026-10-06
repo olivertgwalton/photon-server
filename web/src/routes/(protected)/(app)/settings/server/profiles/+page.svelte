@@ -1,4 +1,5 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { act, fields } from "#lib/admin/act.js";
 import { relative, roles } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
@@ -36,62 +37,70 @@ async function add(event: SubmitEvent) {
 }
 </script>
 
-<svelte:head><title>Profiles · Dashboard · Photon</title></svelte:head>
-
-<div class="flex flex-wrap items-center justify-between gap-4">
-	<h1 class="title">Profiles</h1>
-	<Dialog.Root bind:open={adding}>
-		<Dialog.Trigger>
-			{#snippet child({
-				props,
-			})}
-				<Button {...props}>Add a profile</Button>
-			{/snippet}
-		</Dialog.Trigger>
-		<Dialog.Content>
-			<form onsubmit={add} class="grid gap-6">
-				<Dialog.Header>
-					<Dialog.Title>Add a profile</Dialog.Title>
-					<Dialog.Description>
-						A profile with no password is chosen on a device someone has already
-						signed in to, as a household's are. An admin always has one.
-					</Dialog.Description>
-				</Dialog.Header>
-				<Field.Group>
-					<Field.Field>
-						<Field.Label for="profile-name">Name</Field.Label>
-						<Input id="profile-name" name="name" required autocomplete="off" />
-					</Field.Field>
-					<Field.Field>
-						<Field.Label for="profile-role">Role</Field.Label>
-						<Choice
-							id="profile-role"
-							name="role"
-							bind:value={role}
-							options={roleOptions}
-						/>
-						<Field.Description>
-							A restricted profile sees only what its access allows.
-						</Field.Description>
-					</Field.Field>
-					<Field.Field>
-						<Field.Label for="profile-password">Password</Field.Label>
-						<Input
-							id="profile-password"
-							name="password"
-							type="password"
-							autocomplete="new-password"
-							required={role === "admin"}
-						/>
-					</Field.Field>
-				</Field.Group>
-				<Dialog.Footer>
-					<Button type="submit">Add profile</Button>
-				</Dialog.Footer>
-			</form>
-		</Dialog.Content>
-	</Dialog.Root>
-</div>
+<PageHeader
+	title="Profiles"
+	description="Who watches here. Each keeps their own progress, favourites and playlists; an admin also decides what each may see."
+>
+	{#snippet actions()}
+		<Dialog.Root bind:open={adding}>
+			<Dialog.Trigger>
+				{#snippet child({
+					props,
+				})}
+					<Button {...props}>Add a profile</Button>
+				{/snippet}
+			</Dialog.Trigger>
+			<Dialog.Content>
+				<form onsubmit={add} class="grid gap-6">
+					<Dialog.Header>
+						<Dialog.Title>Add a profile</Dialog.Title>
+						<Dialog.Description>
+							A profile with no password is chosen on a device someone has
+							already signed in to, as a household's are. An admin always has
+							one.
+						</Dialog.Description>
+					</Dialog.Header>
+					<Field.Group>
+						<Field.Field>
+							<Field.Label for="profile-name">Name</Field.Label>
+							<Input
+								id="profile-name"
+								name="name"
+								required
+								autocomplete="off"
+							/>
+						</Field.Field>
+						<Field.Field>
+							<Field.Label for="profile-role">Role</Field.Label>
+							<Choice
+								id="profile-role"
+								name="role"
+								bind:value={role}
+								options={roleOptions}
+							/>
+							<Field.Description>
+								A restricted profile sees only what its access allows.
+							</Field.Description>
+						</Field.Field>
+						<Field.Field>
+							<Field.Label for="profile-password">Password</Field.Label>
+							<Input
+								id="profile-password"
+								name="password"
+								type="password"
+								autocomplete="new-password"
+								required={role === "admin"}
+							/>
+						</Field.Field>
+					</Field.Group>
+					<Dialog.Footer>
+						<Button type="submit">Add profile</Button>
+					</Dialog.Footer>
+				</form>
+			</Dialog.Content>
+		</Dialog.Root>
+	{/snippet}
+</PageHeader>
 
 <Table.Root>
 	<Table.Header>

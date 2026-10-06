@@ -1,4 +1,5 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { client } from "#lib/api/client.js";
 import { change } from "#lib/actions.svelte.js";
 import { logOut } from "#lib/logout.js";
@@ -19,15 +20,10 @@ const signOut = (id: string) =>
 	);
 </script>
 
-<svelte:head><title>Devices · Settings · Photon</title></svelte:head>
-
-<header class="grid max-w-2xl gap-1">
-	<h1 class="title">Devices</h1>
-	<p class="text-ink-2 text-sm">
-		Everything signed in to this household. Signing a device out ends its
-		session at once; to sign in a television, use Link a device.
-	</p>
-</header>
+<PageHeader
+	title="Devices"
+	description={`Everything signed in to this household. Signing a device out ends its session at once; to sign in a television, use Link a device.`}
+/>
 
 <Card.Root>
 	<Card.Content>

@@ -10,6 +10,7 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
 import { act } from "#lib/admin/act.js";
+import { count } from "#lib/format.js";
 import { client } from "#lib/api/client.js";
 
 let { data } = $props();
@@ -38,6 +39,35 @@ const activity = $derived(
 	].slice(0, 10),
 );
 
+// What an admin should look at, as Plex's and Jellyfin's dashboards put
+// warnings first: each with where to put it right.
+const attention = $derived(
+	[
+		!data.libraries.length && {
+			said: "There are no libraries yet: add a folder of films or shows.",
+			href: "/settings/server/libraries/new",
+			go: "Add a library",
+		},
+		data.dead > 0 && {
+			said: `${count(data.dead, "job")} failed every attempt and ${data.dead === 1 ? "waits" : "wait"} to be tried again.`,
+			href: "/settings/server/jobs",
+			go: "See jobs",
+		},
+		...data.providers
+			.filter((p) => !p.ready)
+			.map((p) => ({
+				p,
+				asking: data.libraries.filter((l) => l.sources.includes(p.id)),
+			}))
+			.filter(({ asking }) => asking.length)
+			.map(({ p, asking }) => ({
+				said: `${p.name} needs its settings, and ${asking.map((l) => l.name).join(", ")} ${asking.length === 1 ? "asks" : "ask"} it for metadata.`,
+				href: "/settings/server/providers",
+				go: "Set it up",
+			})),
+	].filter((a) => !!a),
+);
+
 // Running jobs by kind: a scan can run hundreds at once.
 const jobs = $derived(
 	Object.entries(Object.groupBy(live.state.jobs, (j) => j.kind)).map(
@@ -47,7 +77,7 @@ const jobs = $derived(
 );
 </script>
 
-<svelte:head><title>Dashboard · Photon</title></svelte:head>
+<svelte:head><title>Dashboard · Settings · Photon</title></svelte:head>
 
 <div class="flex flex-wrap items-end justify-between gap-4">
 	<div>
@@ -73,6 +103,23 @@ const jobs = $derived(
 		Scan all libraries
 	</Button>
 </div>
+
+{#if attention.length}
+	<section
+		aria-labelledby="attention"
+		class="border-destructive/40 grid gap-3 rounded-xl border p-4"
+	>
+		<h2 id="attention" class="heading">Needs attention</h2>
+		<ul class="grid gap-2">
+			{#each attention as a (a.said)}
+				<li class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+					<p class="text-ink text-sm">{a.said}</p>
+					<Button href={a.href} variant="outline" size="sm">{a.go}</Button>
+				</li>
+			{/each}
+		</ul>
+	</section>
+{/if}
 
 <section aria-labelledby="playing" class="grid gap-4">
 	<div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">

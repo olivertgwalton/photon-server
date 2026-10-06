@@ -1,11 +1,12 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
+import { goto } from "$app/navigation";
 import { page } from "$app/state";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { loggedKinds } from "#lib/admin/words.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
 import Choice from "#lib/components/admin/Choice.svelte";
 import Pager from "#lib/components/admin/Pager.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
 import { Label } from "#lib/components/ui/label/index.js";
 
 let { data } = $props();
@@ -37,13 +38,22 @@ const profiles = $derived(
 const libraries = $derived(
 	new Map(data.libraries.map((l) => [l.id, l.name] as const)),
 );
+// The list for one choice, from its first page.
+function narrow(key: string, value: string) {
+	const query = new URLSearchParams(page.url.search);
+	query.delete("offset");
+	if (value === "all") query.delete(key);
+	else query.set(key, value);
+	goto(`?${query}`, { replace: true, reset: false });
+}
 </script>
 
-<svelte:head><title>Activity · Dashboard · Photon</title></svelte:head>
-
-<div class="flex flex-wrap items-end justify-between gap-4">
-	<h1 class="title">Activity</h1>
-	<form method="get" class="flex items-end gap-2">
+<PageHeader
+	title="Activity"
+	description="What has happened on the server, the latest first: sign-ins, plays, libraries and profiles added or removed."
+>
+	{#snippet actions()}
+		<!-- Applied as it is chosen, as the library's filters are. -->
 		<div class="grid gap-1.5">
 			<Label for="kind">Show</Label>
 			<Choice
@@ -51,12 +61,12 @@ const libraries = $derived(
 				name="kind"
 				value={data.kind ?? "all"}
 				options={kinds}
+				onchange={(v: string) => narrow("kind", v)}
 				class="w-48"
 			/>
 		</div>
-		<Button type="submit" variant="outline">Filter</Button>
-	</form>
-</div>
+	{/snippet}
+</PageHeader>
 <p class="text-sm">Kept for 30 days.</p>
 
 <ActivityList {events} {profiles} {libraries} {now} />

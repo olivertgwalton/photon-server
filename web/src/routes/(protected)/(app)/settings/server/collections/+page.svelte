@@ -1,4 +1,5 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { toast } from "svelte-sonner";
 import { goto } from "$app/navigation";
 import { fields } from "#lib/admin/act.js";
@@ -32,14 +33,10 @@ const libraries = $derived(
 );
 </script>
 
-<svelte:head><title>Collections · Dashboard · Photon</title></svelte:head>
-
-<h1 class="title">Collections</h1>
-<p class="max-w-2xl text-sm">
-	Box sets of a library's titles. The providers make some as they match films;
-	those follow the provider and are only read here. Ones made here are yours to
-	fill and order.
-</p>
+<PageHeader
+	title="Collections"
+	description="Box sets of a library's titles. The providers make some as they match films; those follow the provider and are only read here. Ones made here are yours to fill and order."
+/>
 
 {#if libraries.length}
 	<form onsubmit={add} class="max-w-2xl">

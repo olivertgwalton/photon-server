@@ -1,4 +1,5 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
 import FilmIcon from "@lucide/svelte/icons/film";
 import TvIcon from "@lucide/svelte/icons/tv";
 import { act } from "#lib/admin/act.js";
@@ -16,12 +17,14 @@ const api = client();
 const path = (id: string) => ({ params: { path: { id } } });
 </script>
 
-<svelte:head><title>Libraries · Dashboard · Photon</title></svelte:head>
-
-<div class="flex flex-wrap items-center justify-between gap-4">
-	<h1 class="title">Libraries</h1>
-	<Button href="/settings/server/libraries/new">Add a library</Button>
-</div>
+<PageHeader
+	title="Libraries"
+	description="The folders the server reads films and shows from. A scan finds new and changed files; a refresh asks the metadata providers about the titles again."
+>
+	{#snippet actions()}
+		<Button href="/settings/server/libraries/new">Add a library</Button>
+	{/snippet}
+</PageHeader>
 
 {#if data.libraries.length}
 	<ul class="grid gap-3">

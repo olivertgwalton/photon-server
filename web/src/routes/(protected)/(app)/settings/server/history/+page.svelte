@@ -1,9 +1,10 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
+import { goto } from "$app/navigation";
 import { page } from "$app/state";
 import { methods, when } from "#lib/admin/words.js";
 import Choice from "#lib/components/admin/Choice.svelte";
 import Pager from "#lib/components/admin/Pager.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
 import { Label } from "#lib/components/ui/label/index.js";
 import * as Table from "#lib/components/ui/table/index.js";
 
@@ -27,13 +28,22 @@ function reached(position: number, duration?: number) {
 		? `${Math.min(Math.round((position / duration) * 100), 100)}%`
 		: "";
 }
+// The list for one choice, from its first page.
+function narrow(key: string, value: string) {
+	const query = new URLSearchParams(page.url.search);
+	query.delete("offset");
+	if (value === "all") query.delete(key);
+	else query.set(key, value);
+	goto(`?${query}`, { replace: true, reset: false });
+}
 </script>
 
-<svelte:head><title>History · Dashboard · Photon</title></svelte:head>
-
-<div class="flex flex-wrap items-end justify-between gap-4">
-	<h1 class="title">History</h1>
-	<form method="get" class="flex items-end gap-2">
+<PageHeader
+	title="Play history"
+	description="Every play on the server, the latest first, and how it was played."
+>
+	{#snippet actions()}
+		<!-- Applied as it is chosen, as the library's filters are. -->
 		<div class="grid gap-1.5">
 			<Label for="profile">Who</Label>
 			<Choice
@@ -41,12 +51,12 @@ function reached(position: number, duration?: number) {
 				name="profile"
 				value={data.profile ?? "all"}
 				options={everyone}
+				onchange={(v: string) => narrow("profile", v)}
 				class="w-48"
 			/>
 		</div>
-		<Button type="submit" variant="outline">Filter</Button>
-	</form>
-</div>
+	{/snippet}
+</PageHeader>
 
 {#if data.page.items.length}
 	<Table.Root>

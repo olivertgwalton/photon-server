@@ -1,4 +1,5 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { toast } from "svelte-sonner";
 import { goto } from "$app/navigation";
 import { fields } from "#lib/admin/act.js";
@@ -40,10 +41,12 @@ async function add(event: SubmitEvent) {
 }
 </script>
 
-<svelte:head><title>Add a library · Dashboard · Photon</title></svelte:head>
+<PageHeader
+	title="Add a library"
+	description="A folder of films or of shows. It is scanned as soon as it is added, and watched for changes after."
+/>
 
 <form onsubmit={add} class="grid max-w-2xl gap-6">
-	<h1 class="title">Add a library</h1>
 	<LibraryForm providers={data.providers} />
 	<div class="flex gap-2">
 		<Button type="submit" disabled={adding}>Add and scan</Button>

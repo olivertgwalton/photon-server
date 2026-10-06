@@ -18,6 +18,14 @@ test("the overview follows the server live: who is playing, and a scan as it gro
 }) => {
 	await logIn(page, "/settings/server");
 	await expect(page.getByRole("heading", { name: "Den" })).toBeVisible();
+	// What wants looking at comes first, with where to put it right.
+	const attention = page.getByRole("region", { name: "Needs attention" });
+	await expect(attention).toContainText(
+		"1 job failed every attempt and waits to be tried again.",
+	);
+	await expect(
+		attention.getByRole("link", { name: "See jobs" }),
+	).toHaveAttribute("href", "/settings/server/jobs");
 
 	const card = page.locator("article", { hasText: "Quiet Hours" });
 	await expect(card).toContainText("Kids · Living Room · Photon for tvOS");
@@ -87,6 +95,14 @@ test("a library is added from a folder found by browsing the server", async ({
 	await expect(page).toHaveURL("/settings/server/libraries");
 
 	await page.getByRole("link", { name: "Edit Films" }).click();
+	// The library's own page does what the list does.
+	await expect(
+		page.getByRole("button", { name: /Scan now|Scanning/ }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Refresh metadata of Films" }),
+	).toBeVisible();
+	await expect(page.getByRole("button", { name: "Remove" })).toBeVisible();
 	await expect(page.getByRole("textbox", { name: "Folder" })).toHaveValue(
 		"/media/films",
 	);
@@ -176,7 +192,11 @@ test("tasks run, dead jobs are retried, and the logs read", async ({
 	await expect(page.getByText("The job is queued again.")).toBeVisible();
 	await expect(page.getByText("Nothing has been given up on.")).toBeVisible();
 
-	await page.goto("/settings/server/activity?kind=library.added");
+	await page.goto("/settings/server/activity");
+	// The choice applies as it is made.
+	await page.getByLabel("Show").click();
+	await page.getByRole("option", { name: "Libraries added" }).click();
+	await expect(page).toHaveURL("/settings/server/activity?kind=library.added");
 	await expect(page.getByText("Library Films was added")).toBeVisible();
 	await expect(page.getByText("Back up the database failed")).toHaveCount(0);
 	await expectAccessible(page);

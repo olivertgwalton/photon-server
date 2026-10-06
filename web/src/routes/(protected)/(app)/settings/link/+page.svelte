@@ -1,4 +1,5 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { page } from "$app/state";
 import type { components } from "#lib/api/schema.js";
 import { client, problemMessage } from "#lib/api/client.js";
@@ -23,15 +24,10 @@ async function link(event: SubmitEvent) {
 }
 </script>
 
-<svelte:head><title>Link a device · Settings · Photon</title></svelte:head>
-
-<header class="grid max-w-2xl gap-1">
-	<h1 class="title">Link a device</h1>
-	<p class="text-ink-2 text-sm">
-		Enter the code your TV or other device is showing to sign it in as
-		{data.me.name}.
-	</p>
-</header>
+<PageHeader
+	title="Link a device"
+	description={`Enter the code your TV or other device is showing to sign it in as ${data.me.name}.`}
+/>
 
 <Card.Root class="max-w-sm">
 	<Card.Content>
