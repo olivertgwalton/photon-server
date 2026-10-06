@@ -4,6 +4,7 @@ import { keys } from "#lib/changes.js";
 import type { PageLoad } from "./$types";
 
 const runs = {
+	seasons: "Seasons",
 	cast: "Cast & crew",
 	extras: "Extras",
 	collections: "Collections",
