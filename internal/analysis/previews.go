@@ -37,6 +37,11 @@ const (
 	madeLife = time.Hour
 )
 
+// stillLimit is as long as one chapter's picture may take. A file that needs longer cannot be
+// sought in (a broken index read across a network mount) and would hold the previews slot for an
+// hour, so its other chapters are left without. A variable for the test to shorten.
+var stillLimit = time.Minute
+
 // Previews keeps parts' previews: a folder per part holding trickplay/{n}.jpg and
 // chapters/{idx}.jpg.
 type Previews struct {
@@ -167,7 +172,8 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 }
 
 // chapterImages pictures each chapter into dir, answering the idx of those pictured. A chapter
-// whose picture cannot be made, one starting past the end of the video say, is left without.
+// whose picture cannot be made, one starting past the end of the video say, is left without, and
+// so is every chapter after one that took past stillLimit.
 func chapterImages(ctx context.Context, tools media.Tools, f *os.File, chapters []store.ChapterSpan, toneMap bool, dir string, log *slog.Logger) ([]int, error) {
 	if err := os.Mkdir(dir, 0o750); err != nil {
 		return nil, err
@@ -178,9 +184,17 @@ func chapterImages(ctx context.Context, tools media.Tools, f *os.File, chapters 
 		if at == 0 {
 			at = min(openingChapterAt, c.End/2)
 		}
-		err := tools.Still(ctx, f, at, chapterWidth, toneMap, filepath.Join(dir, strconv.Itoa(c.Idx)+".jpg"))
+		still, cancel := context.WithTimeout(ctx, stillLimit)
+		err := tools.Still(still, f, at, chapterWidth, toneMap, filepath.Join(dir, strconv.Itoa(c.Idx)+".jpg"))
+		slow := still.Err() != nil
+		cancel()
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
+		}
+		if slow {
+			log.WarnContext(ctx, "chapters not pictured: the file is too slow to seek in",
+				slog.Int("chapter", c.Idx), slog.Duration("limit", stillLimit))
+			break
 		}
 		if err != nil {
 			log.WarnContext(ctx, "chapter not pictured", slog.Int("chapter", c.Idx), slog.Any("err", err))

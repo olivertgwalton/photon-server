@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 	"uuid"
@@ -416,4 +417,47 @@ func TestAnExtraIsPicturedByAStill(t *testing.T) {
 		t.Fatalf("the trailer's still: %v", err)
 	}
 	_ = still.Close()
+}
+
+// A file too slow to seek in gives up its chapters at the first picture past the limit, rather
+// than holding the previews slot for every chapter in turn.
+func TestAFileTooSlowToSeekInIsLeftWithoutChapters(t *testing.T) {
+	limit := stillLimit
+	stillLimit = 200 * time.Millisecond
+	t.Cleanup(func() { stillLimit = limit })
+	dir := t.TempDir()
+	calls := filepath.Join(dir, "calls")
+	hang := filepath.Join(dir, "ffmpeg")
+	if err := os.WriteFile(hang, []byte("#!/bin/sh\necho >> '"+calls+"'\nexec sleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(hang)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	chapters := []store.ChapterSpan{
+		{Idx: 0, Start: 0, End: time.Minute},
+		{Idx: 1, Start: time.Minute, End: 2 * time.Minute},
+		{Idx: 2, Start: 2 * time.Minute, End: 3 * time.Minute},
+	}
+	began := time.Now()
+	made, err := chapterImages(t.Context(), media.Tools{FFmpeg: media.Tool{Path: hang}}, f, chapters, false,
+		filepath.Join(dir, "chapters"), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(made) != 0 {
+		t.Errorf("pictured %v, want none", made)
+	}
+	asked, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(asked), "\n"); n != 1 {
+		t.Errorf("ffmpeg asked %d times, want once", n)
+	}
+	if took := time.Since(began); took > 5*time.Second {
+		t.Errorf("took %s, want about the limit", took)
+	}
 }
