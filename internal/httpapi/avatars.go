@@ -33,13 +33,13 @@ func (a *API) clearOwnAvatar(w http.ResponseWriter, r *http.Request) {
 
 // setProfileAvatar is an admin giving any profile its picture.
 func (a *API) setProfileAvatar(w http.ResponseWriter, r *http.Request) {
-	if id, ok := a.pathID(w, r); ok {
+	if id, ok := a.pathID(w, r, "id"); ok {
 		a.setAvatar(w, r, id)
 	}
 }
 
 func (a *API) clearProfileAvatar(w http.ResponseWriter, r *http.Request) {
-	if id, ok := a.pathID(w, r); ok {
+	if id, ok := a.pathID(w, r, "id"); ok {
 		a.clearAvatar(w, r, id)
 	}
 }

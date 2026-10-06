@@ -87,7 +87,7 @@ func (a *API) addWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) removeWebhook(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -99,7 +99,7 @@ func (a *API) removeWebhook(w http.ResponseWriter, r *http.Request) {
 
 // testWebhook queues a webhook.test event to one webhook, whatever it asked for.
 func (a *API) testWebhook(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}

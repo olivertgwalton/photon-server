@@ -20,9 +20,8 @@ type themes interface {
 // theme serves a theme tune as a picture is served: public, so a player that sends no headers of
 // its own plays it, and kept for good, as its id changes whenever the file does.
 func (a *API) theme(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
 		return
 	}
 	t, err := a.svc.Themes.Theme(r.Context(), id)

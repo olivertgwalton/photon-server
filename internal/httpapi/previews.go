@@ -24,7 +24,7 @@ type previewFiles interface {
 // trickplay answers how a part's thumbnail sheets are laid out, so a client can find the
 // thumbnail for any time: sheet floor(t / interval / (columns × rows)), counted from zero.
 func (a *API) trickplay(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -36,7 +36,7 @@ func (a *API) trickplay(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) trickplaySheet(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -76,7 +76,7 @@ func (a *API) signedChapterImage(w http.ResponseWriter, r *http.Request) {
 
 // chapterOf reads the part and chapter a path names.
 func (a *API) chapterOf(w http.ResponseWriter, r *http.Request) (uuid.UUID, int, bool) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return id, 0, false
 	}

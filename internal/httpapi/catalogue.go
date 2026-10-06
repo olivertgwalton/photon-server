@@ -99,13 +99,13 @@ func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) wall(w http.ResponseWriter, r *http.Request) {
-	lib, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	lib, ok := a.pathID(w, r, "id")
+	if !ok {
 		return
 	}
 	q := r.URL.Query()
 	page := store.WallPage{Profile: sessionOf(r).Profile.ID, Limit: defaultWallLimit}
+	var err error
 	if page.Sort, err = domain.Parse("sort", cmp.Or(q.Get("sort"), string(domain.SortTitle)), domain.WallSorts()); err != nil {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
@@ -141,9 +141,8 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 // letters answers how many of a library's titles sort under each letter, in title order, so a
 // client jumps to a letter at the sum of those before it.
 func (a *API) letters(w http.ResponseWriter, r *http.Request) {
-	lib, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	lib, ok := a.pathID(w, r, "id")
+	if !ok {
 		return
 	}
 	f, err := wallFilter(r.URL.Query())
@@ -239,9 +238,8 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) title(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
 		return
 	}
 	profile := sessionOf(r).Profile.ID
@@ -380,9 +378,8 @@ type facetsJSON struct {
 
 // facets answers the values a library's titles have, which its wall can be narrowed to.
 func (a *API) facets(w http.ResponseWriter, r *http.Request) {
-	lib, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	lib, ok := a.pathID(w, r, "id")
+	if !ok {
 		return
 	}
 	f, err := a.svc.Catalogue.Facets(r.Context(), lib, sessionOf(r).Profile.ID)
@@ -397,7 +394,7 @@ func (a *API) facets(w http.ResponseWriter, r *http.Request) {
 
 // similar answers the titles most like one, for "More like this".
 func (a *API) similar(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -411,7 +408,7 @@ func (a *API) similar(w http.ResponseWriter, r *http.Request) {
 // next answers the episode to play after a title: after an episode the one that follows it, and
 // of a show or season the one the profile is at, as Jellyfin's NextUp and Plex's onDeck.
 func (a *API) next(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}

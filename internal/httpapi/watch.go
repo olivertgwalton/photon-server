@@ -28,7 +28,7 @@ func (a *API) progress(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "position_ms is not negative")
 		return
 	}
-	id, ok := a.titleID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -62,7 +62,7 @@ func (a *API) titleUpdated(r *http.Request, id uuid.UUID) {
 // methods.
 func (a *API) mark(set func(w watching, ctx context.Context, profile, item uuid.UUID) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := a.titleID(w, r)
+		id, ok := a.pathID(w, r, "id")
 		if !ok {
 			return
 		}
@@ -71,12 +71,4 @@ func (a *API) mark(set func(w watching, ctx context.Context, profile, item uuid.
 			w.WriteHeader(http.StatusNoContent)
 		}
 	}
-}
-
-func (a *API) titleID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
-	}
-	return id, err == nil
 }

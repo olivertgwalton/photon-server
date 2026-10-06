@@ -19,7 +19,7 @@ type collections interface {
 
 // libraryCollections answers a page of a library's collections, by title, as walls page.
 func (a *API) libraryCollections(w http.ResponseWriter, r *http.Request) {
-	lib, ok := a.pathID(w, r)
+	lib, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -36,7 +36,7 @@ func (a *API) libraryCollections(w http.ResponseWriter, r *http.Request) {
 
 // members answers a collection's titles.
 func (a *API) members(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -76,7 +76,7 @@ func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
 
 // setMembers replaces an admin's collection's titles, in the order given.
 func (a *API) setMembers(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -96,7 +96,7 @@ func (a *API) setMembers(w http.ResponseWriter, r *http.Request) {
 
 // removeCollection removes an admin's collection, leaving its titles.
 func (a *API) removeCollection(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}

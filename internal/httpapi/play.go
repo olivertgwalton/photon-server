@@ -178,7 +178,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	id, ok := a.titleID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -335,13 +335,13 @@ func hlsSubject(playback uuid.UUID) string { return "/api/v1/hls/" + playback.St
 // hlsFile serves a remux's playlist, a part's initialisation or a segment, made as they are asked
 // for. The playlist addresses everything else relative to itself, so one signature covers it all.
 func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
-	playback, err := uuid.Parse(r.PathValue("playback"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	playback, ok := a.pathID(w, r, "playback")
+	if !ok {
 		return
 	}
 	name := r.PathValue("file")
 	var f *os.File
+	var err error
 	switch {
 	case strings.HasSuffix(name, ".m3u8"):
 		playlist, err := a.svc.HLS.Playlist(playback, name)
@@ -489,9 +489,8 @@ func (a *API) playbackStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) reportPlayback(w http.ResponseWriter, r *http.Request, report func(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error)) {
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
 		return
 	}
 	reach, err := report(r.Context(), sessionOf(r).Profile.ID, id)
@@ -554,9 +553,8 @@ func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
 		return
 	}
 	sub, err := a.svc.Playing.Subtitle(r.Context(), id)
@@ -583,9 +581,8 @@ func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 // serveLibraryFile serves the first limit bytes of the file of a library that where finds for the
 // id in the path: only a file the scanner recorded.
 func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where func(context.Context, uuid.UUID) (string, string, error), limit int64) {
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
 		return
 	}
 	f, rel, err := openLibraryFile(r.Context(), where, id)
