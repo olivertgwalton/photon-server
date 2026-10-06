@@ -299,7 +299,11 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	if p.Videos, err = s.videos(ctx, item.ID); err != nil {
 		return TitlePage{}, err
 	}
-	pictures, hashes, err := s.pictureOrder(ctx, []*model.Item{item})
+	shows, err := s.showsOf(ctx, []*model.Item{item})
+	if err != nil {
+		return TitlePage{}, err
+	}
+	pictures, hashes, err := s.picturesWorn(ctx, []*model.Item{item}, shows)
 	if err != nil {
 		return TitlePage{}, err
 	}
