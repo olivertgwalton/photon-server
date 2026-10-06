@@ -468,7 +468,7 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "GET /api/v1/titles/{id}", access: signedIn, summary: "A title's page",
-			status: http.StatusOK, reply: store.TitlePage{}, handle: a.title,
+			status: http.StatusOK, reply: titlePageJSON{}, handle: a.title,
 		},
 		{
 			pattern: "PUT /api/v1/titles/{id}/progress", access: signedIn,

@@ -27,10 +27,10 @@ const markersQuiet = 10 * time.Minute
 
 // MarkerRef is a stretch a player may offer to skip, on the copy's whole timeline like a chapter.
 type MarkerRef struct {
-	Kind    domain.MarkerKind   `json:"kind"`
-	StartMS int64               `json:"start_ms"`
-	EndMS   int64               `json:"end_ms"`
-	Source  domain.MarkerSource `json:"source"`
+	Kind    domain.MarkerKind
+	StartMS int64
+	EndMS   int64
+	Source  domain.MarkerSource
 }
 
 // partMarkers is one marker of each kind a part has, the most trusted source's its library

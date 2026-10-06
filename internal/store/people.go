@@ -283,13 +283,13 @@ func setPhoto(p *model.Person, url string) {
 
 // CreditRef is someone's part in a title, with their picture's id.
 type CreditRef struct {
-	PersonID uuid.UUID         `json:"person_id"`
-	Name     string            `json:"name"`
-	Kind     domain.CreditKind `json:"kind"`
-	Role     string            `json:"role,omitzero"`
-	Photo    uuid.UUID         `json:"photo,omitzero"`
+	PersonID uuid.UUID
+	Name     string
+	Kind     domain.CreditKind
+	Role     string
+	Photo    uuid.UUID
 	// Blurhashes holds the photo's BlurHash, where it has one.
-	Blurhashes Blurhashes `json:"blurhashes,omitzero"`
+	Blurhashes Blurhashes
 }
 
 type creditRow struct {

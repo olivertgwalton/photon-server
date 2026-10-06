@@ -14,13 +14,13 @@ import (
 // every IntervalMS from the part's start, Columns by Rows to a sheet left to right then down, and
 // Thumbnails in all.
 type Trickplay struct {
-	Width      int `json:"width"`
-	Height     int `json:"height"`
-	IntervalMS int `json:"interval_ms"`
-	Columns    int `json:"columns"`
-	Rows       int `json:"rows"`
-	Thumbnails int `json:"thumbnails"`
-	Sheets     int `json:"sheets"`
+	Width      int
+	Height     int
+	IntervalMS int
+	Columns    int
+	Rows       int
+	Thumbnails int
+	Sheets     int
 }
 
 // ChapterSpan is a chapter on its part's own timeline.
