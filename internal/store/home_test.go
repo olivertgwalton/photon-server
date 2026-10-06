@@ -390,6 +390,23 @@ func homeLibraries(t *testing.T, s *Store, films, shows []string) (admin, kid uu
 	return a.ID, k.ID
 }
 
+func TestRecentlyAddedShows(t *testing.T) {
+	s := migrated(t)
+	admin, kid := homeLibraries(t, s, nil, []string{"Alpha", "Bravo", "Charlie"})
+	// Each show by when its newest episode came, whenever the show itself did.
+	for title, daysAgo := range map[string]int{"Alpha S1E1": 3, "Bravo S1E1": 1, "Charlie S1E1": 2, "Bravo": 9} {
+		if _, err := s.pool.Exec(t.Context(), `UPDATE items SET added_at = now() - make_interval(days => $2) WHERE title = $1`, title, daysAgo); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, want := homeRow(t, s, admin, domain.RowRecentShows), []string{"Bravo", "Charlie", "Alpha"}; !slices.Equal(got, want) {
+		t.Errorf("recently added shows = %v, want %v", got, want)
+	}
+	if got := homeRow(t, s, kid, domain.RowRecentShows); len(got) != 0 {
+		t.Errorf("recently added shows for a profile without the shows = %v, want none", got)
+	}
+}
+
 func TestRecentlyReleased(t *testing.T) {
 	s := migrated(t)
 	admin, kid := homeLibraries(t, s, []string{"Weeks", "Months", "Long Ago", "To Come", "Undated"}, []string{"The Wire"})

@@ -64,16 +64,34 @@ var rowQueries = map[domain.HomeRow]string{
 		SELECT ` + itemColumns + ` FROM items
 		WHERE kind = 'movie' AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND first_of_title(v, items))
 		ORDER BY added_at DESC, id DESC LIMIT @limit`,
+	// A show by its newest episode. The episodes are walked newest first, one step to the next
+	// show not yet found, so only the newest are read rather than every episode of every show.
+	// Whether a show is seen is asked of that one show once it is found: asked in the walk's
+	// step, the planner would judge every show and sort all their episodes at each step.
 	domain.RowRecentShows: `
-		SELECT ` + itemColumnsOf("show") + ` FROM items show
-		CROSS JOIN LATERAL (
-			SELECT max(e.added_at) AS added_at FROM items season
-			JOIN items e ON e.parent_id = season.id AND e.kind = 'episode'
-			WHERE season.parent_id = show.id AND season.kind = 'season'
-		) latest
-		WHERE show.kind = 'show' AND latest.added_at IS NOT NULL
-			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, show) AND first_of_title(v, show))
-		ORDER BY latest.added_at DESC, show.id DESC LIMIT @limit`,
+		WITH RECURSIVE latest AS (
+			SELECT 'infinity'::timestamptz AS added_at, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid AS id,
+				NULL::uuid AS show_id, '{}'::uuid[] AS found, 0 AS shown, false AS seen
+			UNION ALL
+			SELECT next.added_at, next.id, next.show_id, latest.found || next.show_id,
+				latest.shown + judged.seen::int, judged.seen
+			FROM latest
+			CROSS JOIN LATERAL (
+				SELECT e.added_at, e.id, season.parent_id AS show_id FROM items e
+				JOIN items season ON season.id = e.parent_id AND season.kind = 'season'
+				WHERE e.kind = 'episode' AND (e.added_at, e.id) < (latest.added_at, latest.id)
+					AND season.parent_id <> ALL (latest.found)
+				ORDER BY e.added_at DESC, e.id DESC LIMIT 1
+			) next
+			CROSS JOIN LATERAL (
+				SELECT EXISTS (SELECT 1 FROM items show, viewer(@profile) v
+					WHERE show.id = next.show_id AND show.kind = 'show' AND sees(v, show) AND first_of_title(v, show)) AS seen
+			) judged
+			WHERE latest.shown < @limit
+		)
+		SELECT ` + itemColumnsOf("show") + ` FROM latest JOIN items show ON show.id = latest.show_id
+		WHERE latest.seen
+		ORDER BY latest.added_at DESC, show.id DESC`,
 	// A film by its release date, else the first of its year, as the wall sorts; a show by when its
 	// newest episode aired, as its page dates it; nothing yet to come.
 	domain.RowRecentlyReleased: `
