@@ -4,7 +4,7 @@ A media server for films and television, written in Go.
 
 ## Tech stack
 
-- **Server**: Go, PostgreSQL (GORM, pgx, goose migrations), Valkey
+- **Server**: Go, PostgreSQL (pgx, goose migrations), Valkey
 - **Media**: FFmpeg (jellyfin-ffmpeg in the image, with VAAPI, Quick Sync, NVIDIA and Vulkan)
 - **Metadata**: TMDB, TheTVDB, Kodi NFO
 - **Web**: SvelteKit (static build served by the Go server), Tailwind, bits-ui, Bun, Biome,

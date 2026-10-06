@@ -68,11 +68,11 @@ linters:
       context: scope
     depguard:
       rules:
-        orm-boundary:
-          files: ["!**/internal/store/**"]
+        store-boundary:
+          files: ["!**/internal/store/**", "!$test"]
           deny:
-            - pkg: gorm.io
-              desc: only internal/store talks to GORM and gen
+            - pkg: github.com/jackc/pgx
+              desc: only internal/store talks to Postgres
         main:
           deny:
             - pkg: github.com/pkg/errors
