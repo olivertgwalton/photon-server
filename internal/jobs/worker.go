@@ -22,6 +22,8 @@ const (
 	lease = 10 * time.Minute
 	// notNow is how long a job with no room to run waits before it is claimed again.
 	notNow = 30 * time.Second
+	// recordTimeout bounds writing a job's outcome once the worker is stopping.
+	recordTimeout = 5 * time.Second
 )
 
 // ErrNotNow is a handler's answer for a job that cannot run on its node yet: it is queued again for
@@ -34,7 +36,7 @@ type queue interface {
 	ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]store.Job, error)
 	CompleteJob(ctx context.Context, id int64) error
 	FailJob(ctx context.Context, job store.Job, err error) (bool, error)
-	ExtendLease(ctx context.Context, id int64, lease time.Duration) error
+	ExtendLease(ctx context.Context, id int64, node uuid.UUID, lease time.Duration) error
 	PostponeJob(ctx context.Context, job store.Job, delay time.Duration) error
 }
 
@@ -87,29 +89,38 @@ func (w *Worker) Run(ctx context.Context) {
 func (w *Worker) run(ctx context.Context, job store.Job) {
 	log := w.log.With(slog.String("job", string(job.Kind)), slog.String("subject", job.Subject.String()))
 	done := make(chan struct{})
-	go w.renew(ctx, log, job.ID, done)
+	jobCtx, lose := context.WithCancelCause(ctx)
+	defer lose(nil)
+	go w.renew(ctx, log, job.ID, lose, done)
 	w.raise(ctx, event(domain.EventJobStarted, job, nil))
-	runErr := w.handlers[job.Kind](ctx, job.Subject)
+	runErr := w.handlers[job.Kind](jobCtx, job.Subject)
 	close(done)
-	// A job cut short by shutdown is left to the lease sweep rather than counted as a failure.
-	if ctx.Err() != nil {
+	// Another node may hold it now, so what this run made of it is not the job's outcome.
+	if errors.Is(context.Cause(jobCtx), store.ErrLeaseLost) {
+		log.WarnContext(ctx, "job stopped", slog.Any("err", store.ErrLeaseLost))
 		return
 	}
+	// The outcome is written even as the worker stops, so no job waits out its lease for a sweep.
+	record, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordTimeout)
+	defer cancel()
 	var err error
 	switch {
+	case runErr != nil && ctx.Err() != nil:
+		// Cut short by shutdown, which is no fault of its subject's: any node takes it now.
+		err = w.queue.PostponeJob(record, job, 0)
 	case errors.Is(runErr, ErrNotNow):
-		err = w.queue.PostponeJob(ctx, job, notNow)
+		err = w.queue.PostponeJob(record, job, notNow)
 	case runErr != nil:
 		log.WarnContext(ctx, "job failed", slog.Int("attempt", job.Attempts), slog.Any("err", runErr))
 		var dead bool
-		dead, err = w.queue.FailJob(ctx, job, runErr)
+		dead, err = w.queue.FailJob(record, job, runErr)
 		kind := domain.EventJobFailed
 		if dead {
 			kind = domain.EventJobDead
 		}
 		w.raise(ctx, event(kind, job, runErr))
 	default:
-		err = w.queue.CompleteJob(ctx, job.ID)
+		err = w.queue.CompleteJob(record, job.ID)
 		w.raise(ctx, event(domain.EventJobFinished, job, nil))
 	}
 	if err != nil {
@@ -117,8 +128,9 @@ func (w *Worker) run(ctx context.Context, job store.Job) {
 	}
 }
 
-// renew keeps a job's lease until done is closed.
-func (w *Worker) renew(ctx context.Context, log *slog.Logger, id int64, done <-chan struct{}) {
+// renew keeps a job's lease until done is closed, and stops the job through lose if the lease was
+// lost all the same, as when the database was out of reach for longer than a lease.
+func (w *Worker) renew(ctx context.Context, log *slog.Logger, id int64, lose context.CancelCauseFunc, done <-chan struct{}) {
 	t := time.NewTicker(lease / 3)
 	defer t.Stop()
 	for {
@@ -128,7 +140,12 @@ func (w *Worker) renew(ctx context.Context, log *slog.Logger, id int64, done <-c
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			if err := w.queue.ExtendLease(ctx, id, lease); err != nil && ctx.Err() == nil {
+			err := w.queue.ExtendLease(ctx, id, w.node, lease)
+			switch {
+			case errors.Is(err, store.ErrLeaseLost):
+				lose(err)
+				return
+			case err != nil && ctx.Err() == nil:
 				log.WarnContext(ctx, "job lease not renewed", slog.Any("err", err))
 			}
 		}
