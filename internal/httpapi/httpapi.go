@@ -571,8 +571,10 @@ func (a *API) routes() []route {
 			status: http.StatusNoContent, handle: a.removeLibrary,
 		},
 		{
-			pattern: "POST /api/v1/admin/libraries/{id}/scan", access: admin, summary: "Scan a library now",
-			status: http.StatusAccepted, handle: a.scanLibrary,
+			pattern: "POST /api/v1/admin/libraries/{id}/scan", access: admin,
+			summary: "Scan a library now, or only the folder of it a path is in",
+			query:   []param{{"path", "", "An absolute path inside the library: the folder it is, or the nearest folder above it that is there, is scanned with everything under it."}},
+			status:  http.StatusAccepted, handle: a.scanLibrary,
 		},
 		{
 			pattern: "GET /api/v1/subtitles/{id}/file", access: signedAddress,

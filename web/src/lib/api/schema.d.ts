@@ -540,12 +540,15 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Scan a library now
+         * Scan a library now, or only the folder of it a path is in
          * @description Admin only.
          */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description An absolute path inside the library: the folder it is, or the nearest folder above it that is there, is scanned with everything under it. */
+                    path?: string;
+                };
                 header?: never;
                 path: {
                     id: string;

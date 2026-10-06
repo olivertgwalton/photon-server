@@ -11,6 +11,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -31,7 +32,7 @@ type libraryAdmin interface {
 	AddLibrary(ctx context.Context, name string, kind domain.LibraryKind, root string) (domain.Library, error)
 	SetLibrary(ctx context.Context, id uuid.UUID, change store.LibraryChange) error
 	RemoveLibrary(ctx context.Context, id uuid.UUID) error
-	ScanLibrary(ctx context.Context, lib uuid.UUID, delay time.Duration) error
+	ScanFolders(ctx context.Context, lib uuid.UUID, folders []string, delay time.Duration) error
 }
 
 // adminLibraryJSON is a library as an admin sees it: where it is and how it is kept.
@@ -113,7 +114,7 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventLibraryAdded, Library: lib.ID, Details: map[string]any{"name": lib.Name}})
-	if err := a.svc.Libraries.ScanLibrary(r.Context(), lib.ID, 0); err != nil {
+	if err := a.svc.Libraries.ScanFolders(r.Context(), lib.ID, []string{"."}, 0); err != nil {
 		a.internal(w, r, err)
 		return
 	}
@@ -238,16 +239,29 @@ func (a *API) removeLibrary(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// scanLibrary queues a scan of a library now.
+// scanLibrary queues a scan of a library now, or with path, of the folder of it a path is in, as
+// Plex's refresh?path= scans one after a download lands.
 func (a *API) scanLibrary(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r)
 	if !ok {
 		return
 	}
-	if _, err := a.svc.Libraries.Library(r.Context(), id); a.answered(w, r, err) {
+	lib, err := a.svc.Libraries.Library(r.Context(), id)
+	if a.answered(w, r, err) {
 		return
 	}
-	if err := a.svc.Libraries.ScanLibrary(r.Context(), id, 0); err != nil {
+	folder := "."
+	if p := r.URL.Query().Get("path"); p != "" {
+		if !filepath.IsAbs(p) {
+			writeProblem(w, a.logger, codeInvalidParameter, "path is an absolute path")
+			return
+		}
+		if folder, ok = library.Changed(lib.Root, filepath.Clean(p)); !ok {
+			writeProblem(w, a.logger, codeInvalidParameter, "path is not inside the library")
+			return
+		}
+	}
+	if err := a.svc.Libraries.ScanFolders(r.Context(), id, []string{folder}, 0); err != nil {
 		a.internal(w, r, err)
 		return
 	}
