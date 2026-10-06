@@ -97,6 +97,18 @@ func slots(t *testing.T) *hls.Remuxer {
 	return r
 }
 
+// signIn signs a device in as a profile.
+func signIn(t *testing.T, st *store.Store, profile uuid.UUID) uuid.UUID {
+	t.Helper()
+	id, err := st.CreateSession(t.Context(), store.NewSession{
+		ProfileID: profile, TokenHash: []byte(uuid.NewV7().String()), DeviceName: "TV", Client: "Photon", ExpiresAt: time.Now().Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
 func TestTwoProfilesShareOneConversionUntilBothRemoveIt(t *testing.T) {
 	st, item, part := filmToDownload(t)
 	ctx := t.Context()
@@ -111,7 +123,7 @@ func TestTwoProfilesShareOneConversionUntilBothRemoveIt(t *testing.T) {
 	q := domain.Quality{MaxBitrateKbps: 2000}
 	var downloads []store.Download
 	for _, p := range profiles {
-		d, err := st.AddDownload(ctx, p, item, part, &q)
+		d, err := st.AddDownload(ctx, p, signIn(t, st, p), item, part, &q)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -170,7 +182,7 @@ func TestAConversionWaitsForASlotAndGivesItUpToAPlay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := st.AddDownload(ctx, profile.ID, item, part, &domain.Quality{MaxBitrateKbps: 2000})
+	d, err := st.AddDownload(ctx, profile.ID, signIn(t, st, profile.ID), item, part, &domain.Quality{MaxBitrateKbps: 2000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +274,7 @@ func TestARestartedNodeKeepsItsReadyDownloads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := st.AddDownload(ctx, profile.ID, item, part, &domain.Quality{MaxBitrateKbps: 2000})
+	d, err := st.AddDownload(ctx, profile.ID, signIn(t, st, profile.ID), item, part, &domain.Quality{MaxBitrateKbps: 2000})
 	if err != nil {
 		t.Fatal(err)
 	}

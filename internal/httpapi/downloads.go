@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,8 +19,8 @@ import (
 )
 
 type downloads interface {
-	AddDownload(ctx context.Context, profile, item, part uuid.UUID, q *domain.Quality) (store.Download, error)
-	Downloads(ctx context.Context, profile uuid.UUID) ([]store.Download, error)
+	AddDownload(ctx context.Context, profile, device, item, part uuid.UUID, q *domain.Quality) (store.Download, error)
+	Downloads(ctx context.Context, profile uuid.UUID, device *uuid.UUID) ([]store.Download, error)
 	Download(ctx context.Context, profile, id uuid.UUID) (store.Download, error)
 }
 
@@ -27,6 +29,18 @@ type conversions interface {
 	Remove(ctx context.Context, profile, id uuid.UUID) error
 	File(ctx context.Context, download uuid.UUID) (*os.File, string, error)
 }
+
+// downloadScope is whose downloads a list answers.
+type downloadScope string
+
+const (
+	// scopeDevice is the downloads the device asking asked for.
+	scopeDevice downloadScope = "device"
+	// scopeProfile is the profile's, on every device.
+	scopeProfile downloadScope = "profile"
+)
+
+func downloadScopes() []downloadScope { return []downloadScope{scopeDevice, scopeProfile} }
 
 // narrowest is the least max_width a download may ask for: one H.264 macroblock.
 const narrowest = 16
@@ -43,9 +57,11 @@ type downloadRequestJSON struct {
 }
 
 type downloadJSON struct {
-	ID      uuid.UUID `json:"id"`
-	TitleID uuid.UUID `json:"title_id"`
-	PartID  uuid.UUID `json:"part_id"`
+	ID uuid.UUID `json:"id"`
+	// DeviceID is the device that asked for it, as the signed-in devices list it.
+	DeviceID uuid.UUID `json:"device_id"`
+	TitleID  uuid.UUID `json:"title_id"`
+	PartID   uuid.UUID `json:"part_id"`
 	// Method is direct for the part's own file and transcode for a conversion.
 	Method         domain.PlayMethod    `json:"method"`
 	MaxBitrateKbps int                  `json:"max_bitrate_kbps,omitzero"`
@@ -62,7 +78,7 @@ type downloadJSON struct {
 
 func (a *API) downloadJSON(d store.Download) downloadJSON {
 	out := downloadJSON{
-		ID: d.ID, TitleID: d.Item, PartID: d.Part, Method: domain.PlayDirect, State: d.State,
+		ID: d.ID, DeviceID: d.Device, TitleID: d.Item, PartID: d.Part, Method: domain.PlayDirect, State: d.State,
 		Progress: d.Progress, SizeBytes: d.SizeBytes, Error: d.Error, CreatedAt: d.Created,
 	}
 	path := "/api/v1/parts/" + d.Part.String() + "/stream"
@@ -117,16 +133,28 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 		}
 		convert = &q
 	}
-	d, err := a.svc.Downloads.AddDownload(r.Context(), profile, req.TitleID, part.ID, convert)
+	d, err := a.svc.Downloads.AddDownload(r.Context(), profile, sessionOf(r).ID, req.TitleID, part.ID, convert)
 	if a.answered(w, r, err) {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, a.downloadJSON(d))
 }
 
-// ownDownloads answers the profile's downloads, the newest first.
+// ownDownloads answers the downloads this device asked for, or the profile's on every device, the
+// newest first.
 func (a *API) ownDownloads(w http.ResponseWriter, r *http.Request) {
-	all, err := a.svc.Downloads.Downloads(r.Context(), sessionOf(r).Profile.ID)
+	scope := downloadScope(cmp.Or(r.URL.Query().Get("scope"), string(scopeDevice)))
+	session := sessionOf(r)
+	var device *uuid.UUID
+	switch scope {
+	case scopeDevice:
+		device = &session.ID
+	case scopeProfile:
+	default:
+		writeProblem(w, a.logger, codeInvalidParameter, fmt.Sprintf("scope is one of %v", downloadScopes()))
+		return
+	}
+	all, err := a.svc.Downloads.Downloads(r.Context(), session.Profile.ID, device)
 	if err != nil {
 		a.internal(w, r, err)
 		return

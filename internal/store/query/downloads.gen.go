@@ -30,6 +30,7 @@ func newDownload(db *gorm.DB, opts ...gen.DOOption) download {
 	_download.ALL = field.NewAsterisk(tableName)
 	_download.ID = field.NewField(tableName, "id")
 	_download.ProfileID = field.NewField(tableName, "profile_id")
+	_download.SessionID = field.NewField(tableName, "session_id")
 	_download.ItemID = field.NewField(tableName, "item_id")
 	_download.PartID = field.NewField(tableName, "part_id")
 	_download.ConversionID = field.NewField(tableName, "conversion_id")
@@ -46,6 +47,7 @@ type download struct {
 	ALL          field.Asterisk
 	ID           field.Field
 	ProfileID    field.Field
+	SessionID    field.Field
 	ItemID       field.Field
 	PartID       field.Field
 	ConversionID field.Field
@@ -68,6 +70,7 @@ func (d *download) updateTableName(table string) *download {
 	d.ALL = field.NewAsterisk(table)
 	d.ID = field.NewField(table, "id")
 	d.ProfileID = field.NewField(table, "profile_id")
+	d.SessionID = field.NewField(table, "session_id")
 	d.ItemID = field.NewField(table, "item_id")
 	d.PartID = field.NewField(table, "part_id")
 	d.ConversionID = field.NewField(table, "conversion_id")
@@ -96,9 +99,10 @@ func (d *download) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (d *download) fillFieldMap() {
-	d.fieldMap = make(map[string]field.Expr, 6)
+	d.fieldMap = make(map[string]field.Expr, 7)
 	d.fieldMap["id"] = d.ID
 	d.fieldMap["profile_id"] = d.ProfileID
+	d.fieldMap["session_id"] = d.SessionID
 	d.fieldMap["item_id"] = d.ItemID
 	d.fieldMap["part_id"] = d.PartID
 	d.fieldMap["conversion_id"] = d.ConversionID

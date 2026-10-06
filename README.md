@@ -219,7 +219,9 @@ likes. Each node converts one title at a time, and only in a free transcode slot
 take back (see `PHOTON_MAX_TRANSCODES`), so playback is not starved; a title asked for at the same
 quality by several profiles is converted once. A converted file is deleted when the last
 download needing it is removed, and downloads are forgotten a week after they are ready if no one
-removes them; size the cache folder for the conversions waiting to be fetched.
+removes them; size the cache folder for the conversions waiting to be fetched. A download is the
+device's that asked for it, as Plex's are its client's: `GET /api/v1/downloads` lists this device's,
+`?scope=profile` the profile's on every device, and signing a device out forgets its downloads.
 
 Run several nodes against one Postgres and Valkey behind a load balancer and each says where its
 peers reach it in `PHOTON_NODE_ADDRESS` (`http://10.0.0.5:8640`): a request for a stream's segments

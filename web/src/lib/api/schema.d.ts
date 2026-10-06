@@ -2093,10 +2093,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the profile's downloads, the newest first */
+        /** List this device's downloads, or the profile's on every device, the newest first */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description device, the default, is this device's; profile is the profile's on every device. */
+                    scope?: components["schemas"]["DownloadScope"];
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -4263,6 +4266,8 @@ export interface components {
         Download: {
             /** Format: date-time */
             created_at: string;
+            /** Format: uuid */
+            device_id: string;
             error?: string;
             /** Format: uuid */
             id: string;
@@ -4294,6 +4299,8 @@ export interface components {
             /** Format: uuid */
             version_id?: string;
         };
+        /** @enum {string} */
+        DownloadScope: "device" | "profile";
         /** @enum {string} */
         DownloadState: "queued" | "converting" | "ready" | "failed";
         Edit: {

@@ -22,6 +22,7 @@ type Conversion struct {
 type Download struct {
 	ID           UUID      `gorm:"type:uuid;default:uuidv7()"`
 	ProfileID    UUID      `gorm:"type:uuid"`
+	SessionID    UUID      `gorm:"type:uuid"`
 	ItemID       UUID      `gorm:"type:uuid"`
 	PartID       UUID      `gorm:"type:uuid"`
 	ConversionID *UUID     `gorm:"type:uuid"`

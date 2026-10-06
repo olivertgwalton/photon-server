@@ -16,7 +16,9 @@ import (
 // Download is a profile's download of a part: the part's own file where Quality is nil, ready as
 // it is, else its conversion to that quality, as far as it has got.
 type Download struct {
-	ID         uuid.UUID
+	ID uuid.UUID
+	// Device is the session of the device that asked for it.
+	Device     uuid.UUID
 	Item       uuid.UUID
 	Part       uuid.UUID
 	Quality    *domain.Quality
@@ -28,10 +30,11 @@ type Download struct {
 	Created    time.Time
 }
 
-// AddDownload records a profile's download of a part of a title, converted to a quality unless q
-// is nil. The conversion is shared with every profile that asks for the part at that quality and
-// queued where it is new or last failed. A download asked for again is answered as it stands.
-func (s *Store) AddDownload(ctx context.Context, profile, item, part uuid.UUID, q *domain.Quality) (Download, error) {
+// AddDownload records a profile's download of a part of a title on a device, converted to a
+// quality unless q is nil. The conversion is shared with every download of the part at that
+// quality and queued where it is new or last failed. A download the device asks for again is
+// answered as it stands.
+func (s *Store) AddDownload(ctx context.Context, profile, device, item, part uuid.UUID, q *domain.Quality) (Download, error) {
 	var added struct{ ID model.UUID }
 	err := s.q.Transaction(func(tx *query.Query) error {
 		db := tx.Download.WithContext(ctx).UnderlyingDB()
@@ -59,9 +62,9 @@ func (s *Store) AddDownload(ctx context.Context, profile, item, part uuid.UUID, 
 			conversion = &c.ID
 		}
 		return db.Raw(`
-			INSERT INTO downloads (profile_id, item_id, part_id, conversion_id) VALUES (?, ?, ?, ?)
-			ON CONFLICT (profile_id, part_id, conversion_id) DO UPDATE SET item_id = excluded.item_id
-			RETURNING id`, profile.String(), item.String(), part.String(), conversion).Scan(&added).Error
+			INSERT INTO downloads (profile_id, session_id, item_id, part_id, conversion_id) VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT (profile_id, session_id, part_id, conversion_id) DO UPDATE SET item_id = excluded.item_id
+			RETURNING id`, profile.String(), device.String(), item.String(), part.String(), conversion).Scan(&added).Error
 	})
 	if err != nil {
 		return Download{}, err
@@ -72,6 +75,7 @@ func (s *Store) AddDownload(ctx context.Context, profile, item, part uuid.UUID, 
 // downloadRow is a download read with its part and conversion.
 type downloadRow struct {
 	ID             model.UUID
+	SessionID      model.UUID
 	ItemID         model.UUID
 	PartID         model.UUID
 	CreatedAt      time.Time
@@ -84,10 +88,11 @@ type downloadRow struct {
 	Error          string
 }
 
-// downloads reads a profile's downloads, the newest first, or the one of them with an id.
-func (s *Store) downloads(ctx context.Context, profile uuid.UUID, id *uuid.UUID) ([]Download, error) {
+// downloads reads a profile's downloads, the newest first: those of a device where device is set,
+// the one with an id where id is.
+func (s *Store) downloads(ctx context.Context, profile uuid.UUID, device, id *uuid.UUID) ([]Download, error) {
 	sql := `
-		SELECT d.id, d.item_id, d.part_id, d.created_at, d.conversion_id,
+		SELECT d.id, d.session_id, d.item_id, d.part_id, d.created_at, d.conversion_id,
 			coalesce(c.max_bitrate_kbps, 0) AS max_bitrate_kbps, coalesce(c.max_width, 0) AS max_width,
 			coalesce(c.state, 'ready') AS state, coalesce(c.progress, 1) AS progress,
 			coalesce(c.size_bytes, CASE WHEN c.id IS NULL THEN p.size_bytes END, 0) AS size_bytes,
@@ -95,6 +100,10 @@ func (s *Store) downloads(ctx context.Context, profile uuid.UUID, id *uuid.UUID)
 		FROM downloads d JOIN parts p ON p.id = d.part_id LEFT JOIN conversions c ON c.id = d.conversion_id
 		WHERE d.profile_id = ?`
 	args := []any{profile.String()}
+	if device != nil {
+		sql += ` AND d.session_id = ?`
+		args = append(args, device.String())
+	}
 	if id != nil {
 		sql += ` AND d.id = ?`
 		args = append(args, id.String())
@@ -106,7 +115,7 @@ func (s *Store) downloads(ctx context.Context, profile uuid.UUID, id *uuid.UUID)
 	out := make([]Download, len(rows))
 	for n, r := range rows {
 		out[n] = Download{
-			ID: uuid.UUID(r.ID), Item: uuid.UUID(r.ItemID), Part: uuid.UUID(r.PartID), State: r.State,
+			ID: uuid.UUID(r.ID), Device: uuid.UUID(r.SessionID), Item: uuid.UUID(r.ItemID), Part: uuid.UUID(r.PartID), State: r.State,
 			Progress: r.Progress, SizeBytes: r.SizeBytes, Error: r.Error, Created: r.CreatedAt,
 		}
 		if r.ConversionID != nil {
@@ -117,14 +126,15 @@ func (s *Store) downloads(ctx context.Context, profile uuid.UUID, id *uuid.UUID)
 	return out, nil
 }
 
-// Downloads answers a profile's downloads, the newest first.
-func (s *Store) Downloads(ctx context.Context, profile uuid.UUID) ([]Download, error) {
-	return s.downloads(ctx, profile, nil)
+// Downloads answers a profile's downloads, the newest first: every one, or with device set only
+// that device's.
+func (s *Store) Downloads(ctx context.Context, profile uuid.UUID, device *uuid.UUID) ([]Download, error) {
+	return s.downloads(ctx, profile, device, nil)
 }
 
 // Download answers one of a profile's downloads. ErrNotFound for none of that id of the profile's.
 func (s *Store) Download(ctx context.Context, profile, id uuid.UUID) (Download, error) {
-	d, err := s.downloads(ctx, profile, &id)
+	d, err := s.downloads(ctx, profile, nil, &id)
 	if err != nil {
 		return Download{}, err
 	}
@@ -196,6 +206,8 @@ func (s *Store) StartConversion(ctx context.Context, id, node uuid.UUID) (Conver
 	c, p, v, st := s.q.Conversion, s.q.Part, s.q.Version, s.q.Stream
 	res, err := c.WithContext(ctx).
 		Where(c.ID.Eq(model.UUID(id)), c.State.In(string(domain.DownloadQueued), string(domain.DownloadConverting))).
+		// A device signed out takes its downloads with it, leaving their conversions to the sweep.
+		Where(field.NewUnsafeFieldRaw("EXISTS (SELECT 1 FROM downloads d WHERE d.conversion_id = conversions.id)")).
 		UpdateSimple(c.State.Value(string(domain.DownloadConverting)), c.NodeID.Value(model.UUID(node)), c.Progress.Value(0))
 	if err == nil && res.RowsAffected == 0 {
 		err = ErrNotFound
