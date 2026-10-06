@@ -4,6 +4,7 @@ import CalendarClockIcon from "@lucide/svelte/icons/calendar-clock";
 import DatabaseIcon from "@lucide/svelte/icons/database";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
 import HistoryIcon from "@lucide/svelte/icons/history";
+import HouseIcon from "@lucide/svelte/icons/house";
 import LayersIcon from "@lucide/svelte/icons/layers";
 import LibraryIcon from "@lucide/svelte/icons/library";
 import ListChecksIcon from "@lucide/svelte/icons/list-checks";
@@ -23,6 +24,7 @@ let { data, children } = $props();
 const you: [string, string, Component][] = [
 	["/settings", "Profile", UserIcon],
 	["/settings/playback", "Playback", SlidersHorizontalIcon],
+	["/settings/home", "Home", HouseIcon],
 	["/settings/devices", "Devices", MonitorSmartphoneIcon],
 	["/settings/link", "Link a device", TvIcon],
 ];

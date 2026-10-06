@@ -7,7 +7,13 @@ test("an admin's settings are one place: their account, then the server", async 
 	await logIn(page, "/settings");
 	await expect(page.getByRole("heading", { name: "Ada" })).toBeVisible();
 	const nav = page.getByRole("navigation", { name: "Settings" });
-	for (const name of ["Profile", "Playback", "Devices", "Link a device"]) {
+	for (const name of [
+		"Profile",
+		"Playback",
+		"Home",
+		"Devices",
+		"Link a device",
+	]) {
 		await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
 	}
 	await expect(nav.getByRole("link", { name: "Libraries" })).toBeVisible();
@@ -111,4 +117,46 @@ test("the address a TV shows fills in its code", async ({ page }) => {
 	await expect(page.getByRole("status")).toHaveText(
 		"Living Room (Photon for tvOS) is signed in.",
 	);
+});
+
+test("the home's rows are put in order and hidden, by pointer or keyboard", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/home");
+	await expectAccessible(page);
+	const rows = page
+		.getByRole("list", { name: "Home rows" })
+		.getByRole("listitem");
+	await expect(rows).toHaveText([
+		"Continue Watching",
+		"Next Up",
+		"Favourites",
+		"Recently Added Films",
+		"Recently Added Shows",
+	]);
+
+	// The arrow keeps focus as its row climbs, so Enter climbs again.
+	await page
+		.getByRole("button", { name: "Move Recently Added Films up" })
+		.focus();
+	for (let i = 0; i < 3; i++) await page.keyboard.press("Enter");
+	await expect(rows.first()).toHaveText("Recently Added Films");
+	await expect(
+		page.getByText("Recently Added Films moved to 1 of 5."),
+	).toBeAttached();
+	await page.getByRole("switch", { name: "Show Continue Watching" }).click();
+
+	await page.reload();
+	await expect(rows.first()).toHaveText("Recently Added Films");
+	await expect(
+		page.getByRole("switch", { name: "Show Continue Watching" }),
+	).toHaveAttribute("aria-checked", "false");
+
+	await page.getByRole("link", { name: "Home", exact: true }).first().click();
+	await expect(
+		page.getByRole("heading", { name: "Recently Added Films" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "Continue Watching" }),
+	).toHaveCount(0);
 });

@@ -12,17 +12,26 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
+	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 // Preferences answers how a profile plays: the defaults, for one that never changed them.
 func (s *Store) Preferences(ctx context.Context, profile uuid.UUID) (domain.Preferences, error) {
-	pp := s.q.ProfilePreference
+	pp, hs := s.q.ProfilePreference, s.q.HomeSection
 	row, err := pp.WithContext(ctx).Where(pp.ProfileID.Eq(model.UUID(profile))).Take()
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return domain.DefaultPreferences(), nil
 	}
 	if err != nil {
 		return domain.Preferences{}, err
+	}
+	sections, err := hs.WithContext(ctx).Where(hs.ProfileID.Eq(model.UUID(profile))).Order(hs.Position).Find()
+	if err != nil {
+		return domain.Preferences{}, err
+	}
+	home := make([]domain.HomeSection, len(sections))
+	for i, h := range sections {
+		home[i] = domain.HomeSection{Row: h.HomeRow, Visibility: h.Visibility}
 	}
 	audio, _ := language.Parse(row.AudioLanguage)
 	subtitles, _ := language.Parse(row.SubtitleLanguage)
@@ -31,7 +40,8 @@ func (s *Store) Preferences(ctx context.Context, profile uuid.UUID) (domain.Pref
 		SubtitleLanguage: subtitles, SubtitleMode: row.SubtitleMode,
 		RememberAudio: row.RememberAudio, RememberSubtitles: row.RememberSubtitles,
 		MaxBitrateKbps: int(row.MaxBitrateKbps), NextEpisode: row.NextEpisode,
-		IntroAction: row.IntroAction, CreditsAction: row.CreditsAction, SavedAt: row.SavedAt,
+		IntroAction: row.IntroAction, CreditsAction: row.CreditsAction,
+		Home: domain.ArrangeHome(home), SavedAt: row.SavedAt,
 	}, nil
 }
 
@@ -44,7 +54,21 @@ func (s *Store) SetPreferences(ctx context.Context, profile uuid.UUID, p domain.
 		MaxBitrateKbps: int32(p.MaxBitrateKbps), NextEpisode: p.NextEpisode,
 		IntroAction: p.IntroAction, CreditsAction: p.CreditsAction, SavedAt: time.Now(),
 	}
-	err := s.q.ProfilePreference.WithContext(ctx).Clauses(clause.OnConflict{UpdateAll: true}).Create(&row)
+	err := s.q.Transaction(func(tx *query.Query) error {
+		if err := tx.ProfilePreference.WithContext(ctx).Clauses(clause.OnConflict{UpdateAll: true}).Create(&row); err != nil {
+			return err
+		}
+		hs := tx.HomeSection
+		if _, err := hs.WithContext(ctx).Where(hs.ProfileID.Eq(row.ProfileID)).Delete(); err != nil {
+			return err
+		}
+		home := domain.ArrangeHome(p.Home)
+		sections := make([]*model.HomeSection, len(home))
+		for i, h := range home {
+			sections[i] = &model.HomeSection{ProfileID: row.ProfileID, HomeRow: h.Row, Position: int16(i), Visibility: h.Visibility}
+		}
+		return hs.WithContext(ctx).Create(sections...)
+	})
 	if errors.Is(err, gorm.ErrForeignKeyViolated) {
 		return domain.Preferences{}, ErrNotFound
 	}

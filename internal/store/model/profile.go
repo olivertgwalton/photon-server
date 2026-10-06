@@ -32,6 +32,13 @@ type ProfilePreference struct {
 	SavedAt           time.Time `gorm:"default:now()"`
 }
 
+type HomeSection struct {
+	ProfileID  UUID           `gorm:"type:uuid;primaryKey"`
+	HomeRow    domain.HomeRow `gorm:"primaryKey"`
+	Position   int16
+	Visibility domain.RowVisibility
+}
+
 type ProfileLibrary struct {
 	ProfileID UUID `gorm:"type:uuid;primaryKey"`
 	LibraryID UUID `gorm:"type:uuid;primaryKey"`

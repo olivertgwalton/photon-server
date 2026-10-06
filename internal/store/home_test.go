@@ -5,6 +5,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -149,6 +150,30 @@ func TestHome(t *testing.T) {
 				t.Errorf("%s: episode card %+v, want its show and its length", r.Kind, c)
 			}
 		}
+	}
+
+	// The profile's own arrangement: shows first, films hidden, the rest as they were.
+	prefs := domain.DefaultPreferences()
+	prefs.Home = []domain.HomeSection{
+		{Row: domain.RowRecentShows, Visibility: domain.RowShown}, {Row: domain.RowRecentFilms, Visibility: domain.RowHidden},
+	}
+	if _, err := s.SetPreferences(ctx, profile.ID, prefs); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = s.Home(ctx, profile.ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []domain.HomeRow
+	for _, r := range rows {
+		order = append(order, r.Kind)
+	}
+	if want := []domain.HomeRow{domain.RowRecentShows, domain.RowNextUp}; !slices.Equal(order, want) {
+		t.Errorf("arranged home = %v, want %v", order, want)
+	}
+	kept, err := s.Preferences(ctx, profile.ID)
+	if err != nil || len(kept.Home) != len(domain.HomeRows()) || kept.Home[1] != prefs.Home[1] {
+		t.Errorf("kept home = %+v, %v; want every row, as arranged", kept.Home, err)
 	}
 }
 

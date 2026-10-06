@@ -65,6 +65,8 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"next_episode":           names(domain.NextEpisodes()),
 		"intro_action":           names(domain.SegmentActions()),
 		"credits_action":         names(domain.SegmentActions()),
+		"home_row":               names(domain.HomeRows()),
+		"row_visibility":         names(domain.RowVisibilities()),
 		"play_method":            names(domain.PlayMethods()),
 		"episode_order":          names(domain.EpisodeOrders()),
 		"marker_kind":            names(domain.MarkerKinds()),

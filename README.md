@@ -388,7 +388,10 @@ subtitle languages and when subtitles come on are the server's to apply: a title
 each copy, the tracks it plays with for that profile, and a play that asks for no sound gets that
 track. Where the profile keeps them (the default), the tracks a player reports playing are
 remembered for that title and chosen again next time. The highest quality, playing the next episode
-and skipping intros and credits are each player's to follow.
+and skipping intros and credits are each player's to follow. The preferences hold the profile's
+home too, as Jellyfin's home sections and Plex's pinned rows: `home` lists every row in the order
+`GET /api/v1/home` answers them, each `shown` or `hidden`; a row the server gains later is shown at
+the foot of a home arranged before it.
 
 The API describes itself: `GET /api/v1/openapi.json` answers its OpenAPI 3.1 description, built
 from the server's own routes as it starts, so it says what the running server takes and answers.
