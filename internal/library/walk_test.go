@@ -29,7 +29,7 @@ func write(t *testing.T, dir string, files map[string]string) {
 func walkAll(t *testing.T, dir string) map[string]Folder {
 	t.Helper()
 	got := map[string]Folder{}
-	for f, err := range Walk(dir) {
+	for f, err := range Walk(dir, ".") {
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -217,6 +217,38 @@ func TestAnIgnoreFileHidesWhatItsPatternsMatch(t *testing.T) {
 	} {
 		if diff := cmp.Diff(files, fileNames(got[folder])); diff != "" {
 			t.Errorf("%s's files (-want +got):\n%s", folder, diff)
+		}
+	}
+}
+
+func TestWalkingAFolderWalksWhatTheWholeWalkFindsThere(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, map[string]string{
+		".ignore":                          "**/Season 2/\n",
+		"The Wire/Season 1/E01.mkv":        "v",
+		"The Wire/Season 1/Extras/Cut.mkv": "v",
+		"The Wire/Season 2/E01.mkv":        "v",
+		"Private/.ignore":                  "",
+		"Private/Diary/Home Video.mkv":     "v",
+	})
+	whole := walkAll(t, dir)
+	part := map[string]Folder{}
+	for f, err := range Walk(dir, "The Wire/Season 1") {
+		if err != nil {
+			t.Fatal(err)
+		}
+		part[f.Path] = f
+	}
+	if diff := cmp.Diff([]string{"The Wire/Season 1", "The Wire/Season 1/Extras"}, slices.Sorted(maps.Keys(part))); diff != "" {
+		t.Errorf("folders (-want +got):\n%s", diff)
+	}
+	if part["The Wire/Season 1"].Fingerprint != whole["The Wire/Season 1"].Fingerprint {
+		t.Error("the folder walked alone has another fingerprint")
+	}
+	// A .ignore above the folder still hides it.
+	for _, hidden := range []string{"The Wire/Season 2", "Private/Diary"} {
+		for f := range Walk(dir, hidden) {
+			t.Errorf("walking %s yielded %s", hidden, f.Path)
 		}
 	}
 }

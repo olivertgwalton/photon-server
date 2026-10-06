@@ -55,7 +55,7 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(do
 	if err != nil {
 		return report, err
 	}
-	for folder, err := range library.Walk(lib.Root) {
+	for folder, err := range library.Walk(lib.Root, ".") {
 		told.Done++
 		told.Known += len(folder.Folders)
 		// A root that cannot be read is a mount that is down, not a library emptied.

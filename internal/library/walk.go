@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/naming"
@@ -46,20 +47,47 @@ var (
 	errNotInside = errors.New("not a path inside a library")
 )
 
-// Walk yields every folder under root, parents before children. Housekeeping names are skipped,
-// and so is what a .ignore file hides, as Jellyfin's: an empty one its whole folder, else what its
-// gitignore patterns match below it, until a deeper .ignore takes over. A Subs or Subtitles folder is not a folder of its
+// Walk yields dir and every folder under it, dir being a path inside the library at root ("." for
+// all of it), parents before children. Housekeeping names are skipped, and so is what a .ignore
+// file hides, as Jellyfin's: an empty one its whole folder, else what its gitignore patterns match
+// below it, until a deeper .ignore takes over. A Subs or Subtitles folder is not a folder of its
 // own: its subtitles are listed as its parent's, so adding one changes the parent's fingerprint.
 // Links are followed wherever they lead, to files and folders, as Jellyfin and Plex follow them:
-// a library of links into a remote mount is a library like any other.
-func Walk(root string) iter.Seq2[Folder, error] {
+// a library of links into a remote mount is a library like any other. A root that cannot be read
+// is yielded as "." with its error.
+func Walk(root, dir string) iter.Seq2[Folder, error] {
 	return func(yield func(Folder, error) bool) {
 		info, err := os.Stat(root)
 		if err != nil {
 			yield(Folder{Path: "."}, err)
 			return
 		}
-		walk(root, ".", []fs.FileInfo{info}, ignoreFile{}, yield)
+		above, ign := []fs.FileInfo{info}, ignoreFile{}
+		// The folders above dir are not read, but what they say of it holds: a .ignore in one,
+		// and a link back to one.
+		at := "."
+		for name := range strings.SplitSeq(dir, "/") {
+			if name == "." {
+				break
+			}
+			if content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(at), ".ignore")); err == nil {
+				var ok bool
+				if ign, ok = parseIgnore(at, string(content)); !ok {
+					return
+				}
+			}
+			at = path.Join(at, name)
+			info, err := os.Stat(filepath.Join(root, filepath.FromSlash(at)))
+			if err != nil {
+				yield(Folder{Path: dir}, err)
+				return
+			}
+			if naming.Ignored(name) || ign.ignores(at, info.IsDir()) {
+				return
+			}
+			above = append(above, info)
+		}
+		walk(root, dir, above, ign, yield)
 	}
 }
 
