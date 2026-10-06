@@ -1,4 +1,4 @@
-// Package watch scans a library again when its files change.
+// Package watch scans the folders of a library again when their files change.
 package watch
 
 import (
@@ -6,8 +6,10 @@ import (
 	"errors"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -16,23 +18,24 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/naming"
 )
 
 const (
-	// Settle is how long a library has to be quiet before it is scanned: Jellyfin's
+	// Settle is how long a library has to be quiet before its changed folders are scanned: Jellyfin's
 	// LibraryMonitorDelay, long enough for a file being copied in to finish.
 	Settle = time.Minute
 	// resync is how often the list of libraries to watch is read again.
 	resync = time.Minute
-	// askEvery is how often the libraries changed since are asked to be scanned: copying a file in
+	// askEvery is how often the folders changed since are asked to be scanned: copying a file in
 	// changes it on every write, which is too often to ask the database each time.
 	askEvery = time.Second
 )
 
 type libraries interface {
 	Libraries(ctx context.Context) ([]domain.Library, error)
-	ScanLibrary(ctx context.Context, id uuid.UUID, delay time.Duration) error
+	ScanFolders(ctx context.Context, id uuid.UUID, folders []string, delay time.Duration) error
 }
 
 // Watcher watches every folder of each library set to realtime monitoring. inotify watches one
@@ -58,7 +61,7 @@ func (w *Watcher) Run(ctx context.Context) error {
 	defer tick.Stop()
 	ask := time.NewTicker(askEvery)
 	defer ask.Stop()
-	changed := map[uuid.UUID]bool{}
+	changed := map[uuid.UUID]map[string]bool{}
 	for {
 		select {
 		case <-ctx.Done():
@@ -66,8 +69,8 @@ func (w *Watcher) Run(ctx context.Context) error {
 		case <-tick.C:
 			w.sync(ctx, n)
 		case <-ask.C:
-			for lib := range changed {
-				w.scan(ctx, lib)
+			for lib, folders := range changed {
+				w.scan(ctx, lib, slices.Collect(maps.Keys(folders)))
 			}
 			clear(changed)
 		case ev := <-n.Events:
@@ -80,24 +83,29 @@ func (w *Watcher) Run(ctx context.Context) error {
 					w.add(ctx, n, lib, ev.Name)
 				}
 			}
-			changed[lib] = true
+			if dir, ok := library.Changed(w.roots[lib], ev.Name); ok {
+				if changed[lib] == nil {
+					changed[lib] = map[string]bool{}
+				}
+				changed[lib][dir] = true
+			}
 		case err := <-n.Errors:
 			if !errors.Is(err, fsnotify.ErrEventOverflow) {
 				w.log.WarnContext(ctx, "watching libraries", slog.Any("err", err))
 				continue
 			}
-			// Events were lost: every watched library may have changed.
+			// Events were lost: any folder of a watched library may have changed.
 			for lib := range w.roots {
-				changed[lib] = true
+				changed[lib] = map[string]bool{".": true}
 			}
 		}
 	}
 }
 
-// scan asks for a library to be scanned once it has been quiet for Settle: each ask moves the
-// scan later, so it runs after the last change.
-func (w *Watcher) scan(ctx context.Context, lib uuid.UUID) {
-	if err := w.libs.ScanLibrary(ctx, lib, Settle); err != nil && ctx.Err() == nil {
+// scan asks for folders of a library to be scanned once it has been quiet for Settle: each ask
+// moves the scan later, so it runs after the last change.
+func (w *Watcher) scan(ctx context.Context, lib uuid.UUID, folders []string) {
+	if err := w.libs.ScanFolders(ctx, lib, folders, Settle); err != nil && ctx.Err() == nil {
 		w.log.WarnContext(ctx, "library scan not queued", slog.Any("err", err))
 	}
 }
