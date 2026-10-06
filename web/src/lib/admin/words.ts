@@ -47,6 +47,7 @@ export const tasks: Record<Schemas["TaskKey"], { name: string; does: string }> =
 
 export const jobKinds: Record<Schemas["JobKind"], string> = {
 	keyframes: "Read keyframes",
+	keyframe_walk: "Walk files for keyframes",
 	identify: "Identify",
 	scan_library: "Scan a library",
 	markers: "Find intros and credits",
@@ -228,6 +229,8 @@ export function describe(e: Schemas["Event"], names: Names): string {
 			return `${jobName(d.job_kind)}: ${d.left} left`;
 		case "webhook.test":
 			return "A webhook test was sent";
+		case "maintenance.changed":
+			return "The maintenance window was changed";
 	}
 }
 

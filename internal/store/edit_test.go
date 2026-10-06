@@ -170,7 +170,7 @@ func TestARefreshIsAskedAheadOfTheQueue(t *testing.T) {
 	if err := s.Refresh(ctx, season.ID, domain.RefreshMissing); err != nil {
 		t.Fatal(err)
 	}
-	claimed, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobScanLibrary, domain.JobIdentify}, uuid.NewV7(), time.Minute, 1)
+	claimed, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobScanLibrary, domain.JobIdentify}, nil, uuid.NewV7(), time.Minute, 1)
 	if err != nil || len(claimed) != 1 || claimed[0].Kind != domain.JobIdentify || claimed[0].Subject != id {
 		t.Fatalf("claimed %+v, %v; want the show's match, asked after the scan was queued", claimed, err)
 	}
@@ -254,7 +254,7 @@ func TestALibraryRefreshTakesWhatIsMissingAfterNewTitles(t *testing.T) {
 		t.Errorf("refreshing what is missing queued %v; want Alien, with no overview, and Ronin, with no poster", got)
 	}
 	ids[film("Thief")] = "Thief"
-	claimed, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobIdentify}, uuid.NewV7(), time.Minute, 1)
+	claimed, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobIdentify}, nil, uuid.NewV7(), time.Minute, 1)
 	if err != nil || len(claimed) != 1 || ids[claimed[0].Subject] != "Thief" {
 		t.Errorf("claimed %+v, %v; want Thief, just found, ahead of the refresh", claimed, err)
 	}

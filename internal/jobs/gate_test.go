@@ -31,12 +31,24 @@ func newCluster(kind domain.JobKind, timing domain.Timing) *cluster {
 		w.Previews = timing
 	case domain.JobMarkers:
 		w.Markers = timing
-	case domain.JobKeyframes, domain.JobIdentify, domain.JobScanLibrary, domain.JobConvert, domain.JobDeliverWebhook, domain.JobTheme:
+	case domain.JobKeyframes, domain.JobKeyframeWalk, domain.JobIdentify, domain.JobScanLibrary, domain.JobConvert, domain.JobDeliverWebhook, domain.JobTheme:
 	}
 	return &cluster{events: make(chan domain.Event, 8), window: w}
 }
 
-func (c *cluster) Maintenance(context.Context) (domain.Maintenance, error) { return c.window, nil }
+func (c *cluster) Maintenance(context.Context) (domain.Maintenance, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.window, nil
+}
+
+// change sets the window anew, telling every node.
+func (c *cluster) change(start, end int) {
+	c.mu.Lock()
+	c.window.StartHour, c.window.EndHour = start, end
+	c.mu.Unlock()
+	c.events <- domain.Event{Kind: domain.EventMaintenanceChanged}
+}
 
 func (c *cluster) Playbacks(context.Context) ([]domain.Playback, error) {
 	c.mu.Lock()
@@ -160,17 +172,88 @@ func TestWindowedWorkStartsInTheWindowAndStopsAsItCloses(t *testing.T) {
 	})
 }
 
-// Intros and credits found as parts are added too start whenever they are queued, outside the
-// window as well.
-func TestWorkAlsoDoneAsPartsAreAddedStartsOutsideTheWindow(t *testing.T) {
+// Of intros and credits found as parts are added too, an added part's start whenever they are
+// queued, outside the window as well, and what the window's backfill queued waits for the window
+// and stops as it closes, as Plex's butler stops.
+func TestAddedWorkStartsAtOnceAndBackfilledWorkKeepsToTheWindow(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobMarkers}}}
+		q := &memoryQueue{pending: []domain.Job{
+			{ID: 7, Kind: domain.JobMarkers, Due: domain.JobDueNow},
+			{ID: 8, Kind: domain.JobMarkers, Due: domain.JobDueWindow},
+		}}
 		c := newCluster(domain.JobMarkers, domain.TimingWindowAndAdded)
-		stop := runReader(t, q, c, domain.JobMarkers, func(context.Context, uuid.UUID) error { return nil })
+		var mu sync.Mutex
+		var backfilledAt time.Time
+		stop := runReader(t, q, c, domain.JobMarkers, func(ctx context.Context, _ uuid.UUID) error {
+			mu.Lock()
+			if time.Now().Hour() < 2 {
+				mu.Unlock()
+				return nil
+			}
+			backfilledAt = time.Now()
+			mu.Unlock()
+			<-ctx.Done()
+			return ctx.Err()
+		})
 		defer stop()
 		synctest.Sleep(time.Minute)
-		if len(q.completed) != 1 {
-			t.Errorf("completed %v at midnight; want the job run outside the window", q.completed)
+		q.mu.Lock()
+		if len(q.completed) != 1 || q.completed[0] != 7 {
+			t.Errorf("completed %v at midnight; want the added part's job alone", q.completed)
+		}
+		q.mu.Unlock()
+		synctest.Sleep(6 * time.Hour)
+		mu.Lock()
+		defer mu.Unlock()
+		opens := time.Date(2000, 1, 1, 2, 0, 0, 0, time.UTC)
+		if backfilledAt.Before(opens) || backfilledAt.After(opens.Add(2*time.Minute)) {
+			t.Errorf("the backfilled job started at %s, want as the window opens", backfilledAt)
+		}
+		if len(q.postponed) != 1 || q.postponed[0] != 8 {
+			t.Errorf("postponed %v; want the backfilled job stopped as the window closed", q.postponed)
+		}
+	})
+}
+
+// An admin moving the window off the present hour stops work held to it on every node at once, not
+// at the next minute.
+func TestAChangedWindowIsKeptToAtOnce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews, Due: domain.JobDueNow}}}
+		c := newCluster(domain.JobPreviews, domain.TimingWindow)
+		c.window.StartHour = 0
+		started, stopped := make(chan struct{}), make(chan error, 1)
+		stop := runReader(t, q, c, domain.JobPreviews, func(ctx context.Context, _ uuid.UUID) error {
+			close(started)
+			<-ctx.Done()
+			stopped <- context.Cause(ctx)
+			return ctx.Err()
+		})
+		defer stop()
+		<-started
+		changed := time.Now()
+		c.change(2, 5)
+		if err := <-stopped; !errors.Is(err, errWindowClosed) || time.Since(changed) > 0 {
+			t.Errorf("stopped for %v after %s; want stopped as the window changed", err, time.Since(changed))
+		}
+	})
+}
+
+// A walk through a whole file for its keyframes waits for the window, however it was queued.
+func TestKeyframeWalksKeepToTheWindow(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobKeyframeWalk, Due: domain.JobDueNow}}}
+		c := newCluster(domain.JobKeyframeWalk, domain.TimingWindowAndAdded)
+		var startedAt time.Time
+		stop := runReader(t, q, c, domain.JobKeyframeWalk, func(context.Context, uuid.UUID) error {
+			startedAt = time.Now()
+			return nil
+		})
+		defer stop()
+		synctest.Sleep(3 * time.Hour)
+		opens := time.Date(2000, 1, 1, 2, 0, 0, 0, time.UTC)
+		if startedAt.Before(opens) || startedAt.After(opens.Add(2*time.Minute)) {
+			t.Errorf("the walk started at %s, want as the window opens", startedAt)
 		}
 	})
 }

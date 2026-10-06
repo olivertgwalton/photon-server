@@ -45,7 +45,7 @@ func matroskaKeyframes(r *io.SectionReader) ([]int64, error) {
 		return nil, err
 	}
 	if length == unknownSize {
-		return nil, fmt.Errorf("%w: an EBML header of unknown size", errNoIndex)
+		return nil, fmt.Errorf("%w: an EBML header of unknown size", ErrNoIndex)
 	}
 	segment := int64(n) + length
 	id, n, length, err := ebmlElement(r, segment)
@@ -53,7 +53,7 @@ func matroskaKeyframes(r *io.SectionReader) ([]int64, error) {
 		return nil, err
 	}
 	if id != idSegment {
-		return nil, fmt.Errorf("%w: no Segment", errNoIndex)
+		return nil, fmt.Errorf("%w: no Segment", ErrNoIndex)
 	}
 	start := segment + int64(n)
 	end := size
@@ -68,7 +68,7 @@ func matroskaKeyframes(r *io.SectionReader) ([]int64, error) {
 			return nil
 		}
 		if len(seen) == maxHeads {
-			return fmt.Errorf("%w: more than %d SeekHeads", errNoIndex, maxHeads)
+			return fmt.Errorf("%w: more than %d SeekHeads", ErrNoIndex, maxHeads)
 		}
 		seen[at] = true
 		body, err := ebmlBody(r, at)
@@ -104,7 +104,7 @@ func matroskaKeyframes(r *io.SectionReader) ([]int64, error) {
 	}
 	for at, heads := start, 0; at < end; heads++ {
 		if heads == maxHeads {
-			return nil, fmt.Errorf("%w: more than %d elements before the first Cluster", errNoIndex, maxHeads)
+			return nil, fmt.Errorf("%w: more than %d elements before the first Cluster", ErrNoIndex, maxHeads)
 		}
 		id, n, length, err := ebmlElement(r, at)
 		if err != nil {
@@ -127,7 +127,7 @@ func matroskaKeyframes(r *io.SectionReader) ([]int64, error) {
 	}
 	for _, id := range []uint32{idInfo, idTracks, idCues} {
 		if _, ok := found[id]; !ok {
-			return nil, fmt.Errorf("%w: no element %x before the first Cluster or in the SeekHead", errNoIndex, id)
+			return nil, fmt.Errorf("%w: no element %x before the first Cluster or in the SeekHead", ErrNoIndex, id)
 		}
 	}
 	scale, video, err := matroskaTrack(r, found[idInfo], found[idTracks])
@@ -182,7 +182,7 @@ func matroskaTrack(r *io.SectionReader, info, tracks int64) (scale, video uint64
 		return 0, 0, err
 	}
 	if scale == 0 {
-		return 0, 0, fmt.Errorf("%w: a timestamp scale of zero", errNoIndex)
+		return 0, 0, fmt.Errorf("%w: a timestamp scale of zero", ErrNoIndex)
 	}
 	if body, err = ebmlBody(r, tracks); err != nil {
 		return 0, 0, err
@@ -207,7 +207,7 @@ func matroskaTrack(r *io.SectionReader, info, tracks int64) (scale, video uint64
 		return err
 	})
 	if err == nil && video == 0 {
-		err = fmt.Errorf("%w: no video track", errNoIndex)
+		err = fmt.Errorf("%w: no video track", ErrNoIndex)
 	}
 	return scale, video, err
 }
@@ -220,7 +220,7 @@ func ebmlElement(r *io.SectionReader, off int64) (id uint32, n int, length int64
 	got, rerr := r.ReadAt(head[:], off)
 	if got == 0 {
 		if rerr == nil || rerr == io.EOF {
-			return 0, 0, 0, fmt.Errorf("%w: the file ends at %d", errNoIndex, off)
+			return 0, 0, 0, fmt.Errorf("%w: the file ends at %d", ErrNoIndex, off)
 		}
 		return 0, 0, 0, rerr
 	}
@@ -229,11 +229,11 @@ func ebmlElement(r *io.SectionReader, off int64) (id uint32, n int, length int64
 	}
 	idLen, idValue, ok := vint(head[:got], 4)
 	if !ok {
-		return 0, 0, 0, fmt.Errorf("%w: a malformed element id at %d", errNoIndex, off)
+		return 0, 0, 0, fmt.Errorf("%w: a malformed element id at %d", ErrNoIndex, off)
 	}
 	sizeLen, size, ok := vint(head[idLen:got], 8)
 	if !ok {
-		return 0, 0, 0, fmt.Errorf("%w: a malformed element size at %d", errNoIndex, off)
+		return 0, 0, 0, fmt.Errorf("%w: a malformed element size at %d", ErrNoIndex, off)
 	}
 	// The id keeps its length marker; the size does not, and all ones means unknown.
 	id = uint32(idValue | 1<<(7*idLen))
@@ -241,7 +241,7 @@ func ebmlElement(r *io.SectionReader, off int64) (id uint32, n int, length int64
 	if size == 1<<(7*sizeLen)-1 {
 		length = unknownSize
 	} else if size > math.MaxInt64/2 {
-		return 0, 0, 0, fmt.Errorf("%w: an element of %d bytes", errNoIndex, size)
+		return 0, 0, 0, fmt.Errorf("%w: an element of %d bytes", ErrNoIndex, size)
 	}
 	return id, idLen + sizeLen, length, nil
 }
@@ -253,7 +253,7 @@ func ebmlBody(r *io.SectionReader, off int64) ([]byte, error) {
 		return nil, err
 	}
 	if length == unknownSize {
-		return nil, fmt.Errorf("%w: an index element of unknown size", errNoIndex)
+		return nil, fmt.Errorf("%w: an index element of unknown size", ErrNoIndex)
 	}
 	return readWhole(r, off+int64(n), length)
 }
@@ -263,11 +263,11 @@ func ebmlChildren(b []byte, f func(id uint32, body []byte) error) error {
 	for len(b) > 0 {
 		idLen, idValue, ok := vint(b, 4)
 		if !ok {
-			return fmt.Errorf("%w: a malformed element id", errNoIndex)
+			return fmt.Errorf("%w: a malformed element id", ErrNoIndex)
 		}
 		sizeLen, size, ok := vint(b[idLen:], 8)
 		if !ok || size > uint64(len(b)-idLen-sizeLen) {
-			return fmt.Errorf("%w: an element overruns its parent", errNoIndex)
+			return fmt.Errorf("%w: an element overruns its parent", ErrNoIndex)
 		}
 		body := b[idLen+sizeLen : idLen+sizeLen+int(size)]
 		if err := f(uint32(idValue|1<<(7*idLen)), body); err != nil {

@@ -38,7 +38,7 @@ func (a *API) adminMaintenance(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, showMaintenance(m))
 }
 
-// setMaintenance replaces the maintenance window; every node keeps to it within a minute.
+// setMaintenance replaces the maintenance window, and tells every node, which keeps to it at once.
 func (a *API) setMaintenance(w http.ResponseWriter, r *http.Request) {
 	var req maintenanceJSON
 	if !a.decode(w, r, &req) {
@@ -57,5 +57,6 @@ func (a *API) setMaintenance(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventMaintenanceChanged})
 	writeJSON(w, a.logger, "application/json", http.StatusOK, showMaintenance(m))
 }

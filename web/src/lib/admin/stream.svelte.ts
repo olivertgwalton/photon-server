@@ -28,6 +28,7 @@ const names = [
 	"job.dead",
 	"jobs.progress",
 	"webhook.test",
+	"maintenance.changed",
 ] as const satisfies readonly ("snapshot" | EventKind)[];
 
 // A refused or dropped stream is not retried by the browser once it has

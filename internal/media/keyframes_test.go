@@ -12,8 +12,6 @@ import (
 	"testing"
 
 	gocmp "github.com/google/go-cmp/cmp"
-
-	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // keyframes.csv is ffprobe 9.0.1's packet list for ten seconds of 24 fps H.264 with a keyframe
@@ -105,7 +103,7 @@ func TestKeyframesAreReadFromTheContainersIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := indexedKeyframes(io.NewSectionReader(f, 0, info.Size())); !errors.Is(err, errNoIndex) {
+		if _, err := indexedKeyframes(io.NewSectionReader(f, 0, info.Size())); !errors.Is(err, ErrNoIndex) {
 			t.Errorf("%s: %v, want no index", name, err)
 		}
 	}
@@ -125,7 +123,7 @@ func ffprobe(t *testing.T) Tools {
 func TestIndexedKeyframesAreFFprobes(t *testing.T) {
 	tools := ffprobe(t)
 	for name, want := range indexed {
-		got, err := tools.walkKeyframes(t.Context(), fixture(t, name))
+		got, err := tools.WalkKeyframes(t.Context(), fixture(t, name))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -135,27 +133,21 @@ func TestIndexedKeyframesAreFFprobes(t *testing.T) {
 	}
 }
 
-func TestEachModeFindsKeyframesAsItSays(t *testing.T) {
+func TestAFileWithNoIndexIsWalkedToItsKeyframes(t *testing.T) {
 	tools := ffprobe(t)
-	cases := []struct {
-		mode domain.KeyframeMode
-		file string
-		want []int64
-	}{
-		{domain.KeyframesIndex, "cues-end.mkv", indexed["cues-end.mkv"]},
-		{domain.KeyframesIndex, "transport.ts", nil},
-		{domain.KeyframesFull, "cues-end.mkv", indexed["cues-end.mkv"]},
-		{domain.KeyframesFull, "transport.ts", []int64{1483, 2818, 3485, 6196, 6614, 8741}},
-		{domain.KeyframesFull, "no-cues.mkv", []int64{0, 1335, 2002, 4713, 5130, 7257}},
-		{domain.KeyframesOff, "cues-end.mkv", nil},
-	}
-	for _, c := range cases {
-		got, err := tools.Keyframes(t.Context(), fixture(t, c.file), c.mode)
-		if err != nil {
-			t.Fatalf("%s, %s: %v", c.mode, c.file, err)
+	for file, want := range map[string][]int64{
+		"transport.ts": {1483, 2818, 3485, 6196, 6614, 8741},
+		"no-cues.mkv":  {0, 1335, 2002, 4713, 5130, 7257},
+	} {
+		if _, err := IndexedKeyframes(fixture(t, file)); !errors.Is(err, ErrNoIndex) {
+			t.Errorf("%s: index read %v, want none", file, err)
 		}
-		if diff := gocmp.Diff(c.want, got); diff != "" {
-			t.Errorf("%s, %s (-want +got):\n%s", c.mode, c.file, diff)
+		got, err := tools.WalkKeyframes(t.Context(), fixture(t, file))
+		if err != nil {
+			t.Fatalf("%s: %v", file, err)
+		}
+		if diff := gocmp.Diff(want, got); diff != "" {
+			t.Errorf("%s (-want +got):\n%s", file, diff)
 		}
 	}
 }
@@ -170,7 +162,7 @@ func TestADamagedIndexIsRefused(t *testing.T) {
 		}
 		for cut := 0; cut < len(data); cut += max(1, len(data)/500) {
 			got, err := indexedKeyframes(io.NewSectionReader(bytes.NewReader(data[:cut]), 0, int64(cut)))
-			if err != nil && !errors.Is(err, errNoIndex) || err == nil && !slices.Equal(got, want) {
+			if err != nil && !errors.Is(err, ErrNoIndex) || err == nil && !slices.Equal(got, want) {
 				t.Errorf("%s cut at %d: %v, %v", name, cut, got, err)
 			}
 			damaged := bytes.Clone(data)
@@ -191,7 +183,7 @@ func FuzzIndexedKeyframes(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		c := &counting{r: bytes.NewReader(data)}
 		_, err := indexedKeyframes(io.NewSectionReader(c, 0, int64(len(data))))
-		if err != nil && !errors.Is(err, errNoIndex) {
+		if err != nil && !errors.Is(err, ErrNoIndex) {
 			t.Errorf("an error that is not the index's: %v", err)
 		}
 	})

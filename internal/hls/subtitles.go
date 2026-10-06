@@ -120,7 +120,7 @@ func (r *Remuxer) WebVTT(ctx context.Context, open func() (*os.File, error), lan
 		a = append(a, "-sub_charenc", charset)
 	}
 	a = append(a, "-i", "fd:", "-map", "0:s:0", "-c:s", "webvtt", "-f", "webvtt", "-")
-	cmd := media.NewCommand(ctx, []*os.File{f}, r.ffmpeg, a...)
+	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.ffmpeg, a...)
 	out, err := cmd.Output()
 	return string(out), cmd.Err(err)
 }
@@ -196,7 +196,7 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, streams []int
 	for _, n := range streams {
 		a = append(a, "-map", "0:"+strconv.Itoa(n), "-c:s", "webvtt", "-f", "webvtt", filepath.Join(made, strconv.Itoa(n)+".vtt"))
 	}
-	cmd := media.NewCommand(ctx, []*os.File{f}, r.ffmpeg, a...)
+	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.ffmpeg, a...)
 	if err := cmd.Run(); err != nil {
 		return cmd.Err(err)
 	}

@@ -61,7 +61,7 @@ func findYTDLP(ctx context.Context, name string) (Tool, error) {
 	if err != nil {
 		return Tool{}, err
 	}
-	out, err := output(ctx, PartRun, nil, path, "--version")
+	out, err := output(ctx, Foreground, PartRun, nil, path, "--version")
 	if err != nil {
 		return Tool{}, fmt.Errorf("%s --version: %w", path, err)
 	}
@@ -73,7 +73,7 @@ func findTool(ctx context.Context, name string) (Tool, error) {
 	if err != nil {
 		return Tool{}, err
 	}
-	out, err := output(ctx, PartRun, nil, path, "-hide_banner", "-version")
+	out, err := output(ctx, Foreground, PartRun, nil, path, "-hide_banner", "-version")
 	if err != nil {
 		return Tool{}, fmt.Errorf("%s -version: %w", path, err)
 	}
@@ -125,23 +125,75 @@ func Within(ctx context.Context, path string, limit time.Duration) (context.Cont
 	return context.WithTimeoutCause(ctx, limit, fmt.Errorf("%s still running after %s", filepath.Base(path), limit))
 }
 
-// Command is a tool run as every one is run: files are its descriptors from 3 up; once ctx ends it
-// is asked to stop with SIGTERM, so ffmpeg can finish what it is writing, and killed after
-// stopGrace; and the end of what it writes to stderr is kept for Err.
+// Priority is how a tool's process is scheduled beside the server's own.
+type Priority string
+
+const (
+	// Foreground is a tool a playback waits on: its remux or transcode, a subtitle served to its
+	// player, and the server's checks of its tools as it starts.
+	Foreground Priority = "foreground"
+	// Background is every other tool that reads media, as Jellyfin lowers every ffmpeg and ffprobe
+	// it runs but a playback's transcode: a scan's probe, previews, fingerprints, keyframe walks,
+	// downloads' conversions and theme tunes.
+	Background Priority = "background"
+)
+
+// backgroundNice is the niceness a Background tool's process is given as it starts: 10, which is
+// what .NET makes of BelowNormal, the priority Jellyfin gives each such process as it starts it. It
+// is fixed, as Jellyfin's is everywhere but trickplay.
+const backgroundNice = 10
+
+// Command is a tool run as every one is run: at its priority; files are its descriptors from 3 up;
+// once ctx ends it is asked to stop with SIGTERM, so ffmpeg can finish what it is writing, and
+// killed after stopGrace; and the end of what it writes to stderr is kept for Err. It is started by
+// its own Start, Run and Output, which give a Background tool its priority.
 type Command struct {
 	*exec.Cmd
-	ctx    context.Context
-	stderr tail
+	ctx      context.Context
+	priority Priority
+	stderr   tail
 }
 
-func NewCommand(ctx context.Context, files []*os.File, path string, args ...string) *Command {
+func NewCommand(ctx context.Context, priority Priority, files []*os.File, path string, args ...string) *Command {
 	cmd := exec.CommandContext(ctx, path, args...) //nolint:gosec // path is the operator's configured tool; its callers build every argument
 	cmd.ExtraFiles = files
 	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 	cmd.WaitDelay = stopGrace
-	c := &Command{Cmd: cmd, ctx: ctx}
+	c := &Command{Cmd: cmd, ctx: ctx, priority: priority}
 	cmd.Stderr = &c.stderr
 	return c
+}
+
+// Start starts the tool and, for a Background one, lowers it to backgroundNice at once, as Jellyfin
+// sets a process's priority class straight after starting it. A tool not lowered runs all the same:
+// that fails only for one already gone, or on a server already running lower than backgroundNice.
+// Jellyfin says so at debug, which this server's log never shows, so nothing is said.
+func (c *Command) Start() error {
+	if err := c.Cmd.Start(); err != nil {
+		return err
+	}
+	switch c.priority {
+	case Foreground:
+	case Background:
+		_ = lower(c.Process.Pid)
+	}
+	return nil
+}
+
+// Run starts the tool, as Start does, and waits for it.
+func (c *Command) Run() error {
+	if err := c.Start(); err != nil {
+		return err
+	}
+	return c.Wait()
+}
+
+// Output runs the tool, as Run does, and answers what it wrote to stdout.
+func (c *Command) Output() ([]byte, error) {
+	var out bytes.Buffer
+	c.Stdout = &out
+	err := c.Run()
+	return out.Bytes(), err
 }
 
 // Err is what running c came to, err being what running it answered: why ctx ended where it did,
@@ -170,11 +222,11 @@ func (t *tail) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// output runs a tool to completion within limit and returns its stdout.
-func output(ctx context.Context, limit time.Duration, files []*os.File, path string, args ...string) ([]byte, error) {
+// output runs a tool to completion within limit, at priority, and returns its stdout.
+func output(ctx context.Context, priority Priority, limit time.Duration, files []*os.File, path string, args ...string) ([]byte, error) {
 	ctx, cancel := Within(ctx, path, limit)
 	defer cancel()
-	c := NewCommand(ctx, files, path, args...)
+	c := NewCommand(ctx, priority, files, path, args...)
 	out, err := c.Output()
 	return out, c.Err(err)
 }

@@ -70,9 +70,9 @@ func (f *fixture) stored(part uuid.UUID) ([]int64, bool) {
 }
 
 // index runs the part's keyframes job and, as the worker would, finishes it.
-func (f *fixture) index(tools media.Tools, part uuid.UUID) {
+func (f *fixture) index(part uuid.UUID) {
 	f.t.Helper()
-	if err := Keyframes(f.st, tools)(f.t.Context(), part); err != nil {
+	if err := Keyframes(f.st)(f.t.Context(), part); err != nil {
 		f.t.Fatal(err)
 	}
 	if _, err := f.db.Exec(f.t.Context(), `DELETE FROM jobs WHERE kind = 'keyframes' AND subject = $1`, part.String()); err != nil {
@@ -86,15 +86,15 @@ func TestAnIndexLibraryReadsOnlyTheContainersIndex(t *testing.T) {
 	if !f.keyframesQueued(mkv) {
 		t.Fatal("a new part was not queued for keyframes")
 	}
-	// No ffprobe: the index is read here, and a file without one is not walked.
-	f.index(media.Tools{}, mkv)
+	// No ffprobe: the index is read here.
+	f.index(mkv)
 	if got, _ := f.stored(mkv); !gocmp.Equal(got, indexedKeyframes) {
 		t.Errorf("keyframes %v, want %v", got, indexedKeyframes)
 	}
 
 	f = newFixture(t)
 	_, ts := f.film(media9(t, unindexedFile))
-	f.index(media.Tools{}, ts)
+	f.index(ts)
 	if got, ok := f.stored(ts); !ok || len(got) != 0 {
 		t.Errorf("a file with no index was saved with %v, %t; want none known", got, ok)
 	}
@@ -112,7 +112,7 @@ func TestAFullLibraryWalksAFileWithNoIndex(t *testing.T) {
 	tools := media.Tools{FFprobe: media.Tool{Path: path}}
 	f := newFixture(t)
 	_, ts := f.film(media9(t, unindexedFile))
-	f.index(tools, ts)
+	f.index(ts)
 	if got, _ := f.stored(ts); len(got) != 0 {
 		t.Fatalf("an index library walked the file: %v", got)
 	}
@@ -125,7 +125,18 @@ func TestAFullLibraryWalksAFileWithNoIndex(t *testing.T) {
 	if _, ok := f.stored(ts); ok {
 		t.Error("a part queued again kept its empty keyframes")
 	}
-	f.index(tools, ts)
+	// Its index read finds none, and leaves the walk to the window's work.
+	f.index(ts)
+	if _, ok := f.stored(ts); ok {
+		t.Error("a file with no index was walked as its index was read")
+	}
+	var walks int
+	if err := f.db.QueryRow(t.Context(), `SELECT count(*) FROM jobs WHERE kind = 'keyframe_walk' AND subject = $1`, ts.String()).Scan(&walks); err != nil || walks != 1 {
+		t.Fatalf("%d walks queued (%v), want one", walks, err)
+	}
+	if err := WalkKeyframes(f.st, tools)(t.Context(), ts); err != nil {
+		t.Fatal(err)
+	}
 	want := []int64{1483, 2818, 3485, 6196, 6614, 8741}
 	if got, _ := f.stored(ts); !gocmp.Equal(got, want) {
 		t.Errorf("walked keyframes %v, want %v", got, want)
@@ -134,7 +145,7 @@ func TestAFullLibraryWalksAFileWithNoIndex(t *testing.T) {
 	// A part whose keyframes are known keeps them.
 	f = newFixture(t)
 	_, mkv := f.film(media9(t, indexedFile))
-	f.index(tools, mkv)
+	f.index(mkv)
 	f.setKeyframes(domain.KeyframesFull)
 	if f.keyframesQueued(mkv) {
 		t.Error("a part whose keyframes are known was queued again")
@@ -152,7 +163,7 @@ func TestAnOffLibraryFindsNoKeyframes(t *testing.T) {
 		t.Error("a part of a library finding no keyframes was queued for them")
 	}
 	// A job queued before the switch reads nothing.
-	f.index(media.Tools{}, part)
+	f.index(part)
 	if _, ok := f.stored(part); ok {
 		t.Error("a part of a library finding no keyframes had them saved")
 	}
@@ -173,7 +184,7 @@ func TestKeyframesJobsWaitBehindWhatAReaderSees(t *testing.T) {
 	}
 	claim := func() domain.JobKind {
 		t.Helper()
-		jobs, err := f.st.ClaimJobs(t.Context(), []domain.JobKind{domain.JobKeyframes, domain.JobScanLibrary}, uuid.NewV7(), time.Minute, 1)
+		jobs, err := f.st.ClaimJobs(t.Context(), []domain.JobKind{domain.JobKeyframes, domain.JobScanLibrary}, nil, uuid.NewV7(), time.Minute, 1)
 		if err != nil || len(jobs) != 1 {
 			t.Fatalf("claimed %v, %v", jobs, err)
 		}

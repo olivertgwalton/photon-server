@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +24,8 @@ func (s *memoryMaintenance) SetMaintenance(_ context.Context, m domain.Maintenan
 
 func TestAnAdminSetsTheMaintenanceWindow(t *testing.T) {
 	settings := &memoryMaintenance{domain.Maintenance{StartHour: 2, EndHour: 5, Zone: time.UTC, Previews: domain.TimingWindow, Markers: domain.TimingWindowAndAdded}}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Maintenance: settings})
+	told := &fakeEvents{}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Maintenance: settings, Events: told})
 	do := func(token, method, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, "/api/v1/admin/maintenance", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -60,5 +62,8 @@ func TestAnAdminSetsTheMaintenanceWindow(t *testing.T) {
 	}
 	if settings.m.StartHour != 23 {
 		t.Errorf("a refused change was kept: %+v", settings.m)
+	}
+	if got, want := told.kinds(), []domain.EventKind{domain.EventMaintenanceChanged}; !slices.Equal(got, want) {
+		t.Errorf("told %v, want every node told of the one change kept", got)
 	}
 }

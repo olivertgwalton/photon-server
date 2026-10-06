@@ -12,40 +12,23 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-
-	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// Keyframes lists the presentation times, in milliseconds, of the first video stream's keyframes,
-// found as a library asks: from the container's own index, as Jellyfin reads a Matroska file's
-// Cues, which costs a few reads however large the file; under KeyframesFull, a file with no index
-// is walked whole with ffprobe. A file it finds none for answers an empty list, and is planned
-// without them.
-func (t Tools) Keyframes(ctx context.Context, f *os.File, mode domain.KeyframeMode) ([]int64, error) {
-	switch mode {
-	case domain.KeyframesOff:
-		return nil, nil
-	case domain.KeyframesIndex, domain.KeyframesFull:
-	}
+// IndexedKeyframes lists the presentation times, in milliseconds, of the first video stream's
+// keyframes that a Matroska or MP4 file lists in its own index, as Jellyfin reads a Matroska file's
+// Cues: a few reads however large the file. ErrNoIndex for a file that keeps none.
+func IndexedKeyframes(f *os.File) ([]int64, error) {
 	info, err := f.Stat()
 	if err != nil {
 		return nil, err
 	}
-	pts, err := indexedKeyframes(io.NewSectionReader(f, 0, info.Size()))
-	switch {
-	case err == nil:
-		return pts, nil
-	case !errors.Is(err, errNoIndex):
-		return nil, err
-	case mode == domain.KeyframesIndex:
-		return nil, nil
-	}
-	return t.walkKeyframes(ctx, f)
+	return indexedKeyframes(io.NewSectionReader(f, 0, info.Size()))
 }
 
-// walkKeyframes reads every packet's flags with ffprobe, without decoding: the whole file.
-func (t Tools) walkKeyframes(ctx context.Context, f *os.File) ([]int64, error) {
-	out, err := output(ctx, WholeRun(f), []*os.File{f}, t.FFprobe.Path,
+// WalkKeyframes reads every packet's flags with ffprobe, without decoding: the whole file. A file
+// it finds none in answers an empty list.
+func (t Tools) WalkKeyframes(ctx context.Context, f *os.File) ([]int64, error) {
+	out, err := output(ctx, Background, WholeRun(f), []*os.File{f}, t.FFprobe.Path,
 		"-hide_banner", "-v", "error", "-protocol_whitelist", "fd", "-fd", "3",
 		"-select_streams", "v:0", "-show_entries", "packet=pts_time,flags", "-of", "csv=p=0", "-i", "fd:")
 	if err != nil {
@@ -74,9 +57,9 @@ func parseKeyframes(out []byte) ([]int64, error) {
 	return pts, sc.Err()
 }
 
-// errNoIndex is a file whose container keeps no usable keyframe index: none at all, or one cut
+// ErrNoIndex is a file whose container keeps no usable keyframe index: none at all, or one cut
 // short or malformed.
-var errNoIndex = errors.New("no keyframe index")
+var ErrNoIndex = errors.New("no keyframe index")
 
 // maxIndex bounds one element or box of an index read whole: a three-hour film's composition
 // offsets are a few megabytes.
@@ -101,13 +84,13 @@ func indexedKeyframes(r *io.SectionReader) ([]int64, error) {
 	case slices.Contains(isobmffStarts, string(head[4:8])):
 		pts, err = mp4Keyframes(r)
 	default:
-		return nil, fmt.Errorf("%w: not Matroska or MP4", errNoIndex)
+		return nil, fmt.Errorf("%w: not Matroska or MP4", ErrNoIndex)
 	}
 	if err != nil {
 		return nil, err
 	}
 	if len(pts) == 0 {
-		return nil, fmt.Errorf("%w: an empty index", errNoIndex)
+		return nil, fmt.Errorf("%w: an empty index", ErrNoIndex)
 	}
 	slices.Sort(pts)
 	return slices.Compact(pts), nil
@@ -121,7 +104,7 @@ func readAt(r *io.SectionReader, b []byte, off int64) error {
 		return nil
 	}
 	if err == nil || errors.Is(err, io.EOF) {
-		return fmt.Errorf("%w: the file ends at %d", errNoIndex, off+int64(n))
+		return fmt.Errorf("%w: the file ends at %d", ErrNoIndex, off+int64(n))
 	}
 	return err
 }
@@ -129,7 +112,7 @@ func readAt(r *io.SectionReader, b []byte, off int64) error {
 // readWhole reads size bytes at off, refusing more than maxIndex or than the file holds.
 func readWhole(r *io.SectionReader, off, size int64) ([]byte, error) {
 	if size < 0 || size > maxIndex || off+size > r.Size() {
-		return nil, fmt.Errorf("%w: an index of %d bytes", errNoIndex, size)
+		return nil, fmt.Errorf("%w: an index of %d bytes", ErrNoIndex, size)
 	}
 	b := make([]byte, size)
 	return b, readAt(r, b, off)

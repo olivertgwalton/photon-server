@@ -32,7 +32,7 @@ var ErrNotNow = errors.New("jobs: no room to run this job here now")
 type Handler func(ctx context.Context, subject uuid.UUID) error
 
 type queue interface {
-	ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error)
+	ClaimJobs(ctx context.Context, kinds, nowOnly []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error)
 	CompleteJob(ctx context.Context, id int64) error
 	FailJob(ctx context.Context, job domain.Job, err error) (bool, error)
 	ExtendLease(ctx context.Context, id int64, node uuid.UUID, lease time.Duration) error
@@ -75,8 +75,9 @@ func (w *Worker) Run(ctx context.Context) {
 	t := time.NewTicker(poll)
 	defer t.Stop()
 	for ctx.Err() == nil {
-		if n, open := len(free), w.open(kinds); n > 0 && len(open) > 0 {
-			claimed, err := w.queue.ClaimJobs(ctx, open, w.node, lease, n)
+		open, nowOnly := w.open(kinds)
+		if n := len(free); n > 0 && len(open) > 0 {
+			claimed, err := w.queue.ClaimJobs(ctx, open, nowOnly, w.node, lease, n)
 			if err != nil && ctx.Err() == nil {
 				w.log.WarnContext(ctx, "jobs not claimed", slog.Any("err", err))
 			}
@@ -100,7 +101,7 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	jobCtx, lose := context.WithCancelCause(ctx)
 	defer lose(nil)
 	if w.gate != nil {
-		held, release, ok := w.gate.Hold(jobCtx, job.Kind)
+		held, release, ok := w.gate.Hold(jobCtx, job.Kind, job.Due)
 		if !ok {
 			w.postpone(ctx, log, job)
 			return
@@ -151,12 +152,21 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	}
 }
 
-// open answers the kinds of job its gate lets start now: all of them where it has none.
-func (w *Worker) open(kinds []domain.JobKind) []domain.JobKind {
+// open answers the kinds of job its gate lets start now, all of them where it has none, and of
+// those the kinds it lets start only when due now.
+func (w *Worker) open(kinds []domain.JobKind) (open, nowOnly []domain.JobKind) {
 	if w.gate == nil {
-		return kinds
+		return kinds, nil
 	}
-	return slices.DeleteFunc(slices.Clone(kinds), func(k domain.JobKind) bool { return !w.gate.Open(k) })
+	for _, k := range kinds {
+		switch {
+		case w.gate.Open(k, domain.JobDueWindow):
+			open = append(open, k)
+		case w.gate.Open(k, domain.JobDueNow):
+			open, nowOnly = append(open, k), append(nowOnly, k)
+		}
+	}
+	return open, nowOnly
 }
 
 // postpone queues a job its gate would not let start, its attempt given back.

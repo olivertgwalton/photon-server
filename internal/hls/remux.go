@@ -525,7 +525,7 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	start := s.plan[run.at].Start
 	ctx, stop := context.WithCancelCause(ctx)
 	defer stop(nil)
-	cmd := media.NewCommand(ctx, []*os.File{f}, r.ffmpeg, args(r.hw, start, src.Video, src.Audio)...)
+	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.ffmpeg, args(r.hw, start, src.Video, src.Audio)...)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return err

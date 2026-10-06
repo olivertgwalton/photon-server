@@ -14,9 +14,9 @@ import (
 const maxAttempts = 5
 
 // enqueue adds a job inside the transaction whose write made it necessary, so the job and its
-// cause commit together. A job already queued for the subject stands; one running will run again
-// once it ends, since it may have read the subject before this write; a dead one gets a fresh
-// set of attempts, as its subject has changed.
+// cause commit together. A job already queued for the subject stands, due now if it was due in
+// the window; one running will run again once it ends, since it may have read the subject before
+// this write; a dead one gets a fresh set of attempts, as its subject has changed.
 func enqueue(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID) error {
 	return enqueueAfter(ctx, tx, kind, subject, 0)
 }
@@ -57,7 +57,7 @@ func insertJob(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUI
 			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
 			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END,
 			run_after = CASE WHEN jobs.state IN ('queued', 'dead') THEN excluded.run_after ELSE jobs.run_after END,
-			priority = greatest(jobs.priority, excluded.priority)`,
+			priority = greatest(jobs.priority, excluded.priority), due = 'now'`,
 		kind, subject, delay, priority)
 	return err
 }
@@ -104,19 +104,21 @@ func (s *Store) ScanAnswered(ctx context.Context, lib uuid.UUID, folders []strin
 	return err
 }
 
-// ClaimJobs leases up to limit queued jobs of the given kinds to node. Workers that ask together
+// ClaimJobs leases up to limit queued jobs of the given kinds to node, of those in nowOnly only the
+// ones due now. Workers that ask together
 // never receive the same job: each row is taken by one transaction and skipped by the others. The
 // rows are picked once, in a materialized CTE: as `id IN (SELECT … SKIP LOCKED LIMIT n)` the
 // planner may run the subquery again for each row it scans, each run skipping what the last
 // locked, and lease far more than n.
-func (s *Store) ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error) {
+func (s *Store) ClaimJobs(ctx context.Context, kinds, nowOnly []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error) {
 	rows, err := s.pool.Query(ctx, `
 		WITH picked AS MATERIALIZED (
 			SELECT id FROM jobs WHERE state = 'queued' AND run_after <= now() AND kind = ANY($1)
+				AND (due = 'now' OR NOT kind = ANY(coalesce($5::text[], '{}')))
 			ORDER BY priority DESC, id FOR UPDATE SKIP LOCKED LIMIT $4)
 		UPDATE jobs SET state = 'running', lease_until = now() + $2, attempts = attempts + 1, node_id = $3
 		FROM picked WHERE jobs.id = picked.id
-		RETURNING jobs.id, jobs.kind, jobs.subject, jobs.attempts`, kinds, lease, node, limit)
+		RETURNING jobs.id, jobs.kind, jobs.subject, jobs.attempts, jobs.due`, kinds, lease, node, limit, nowOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +169,7 @@ func (s *Store) PostponeJob(ctx context.Context, job domain.Job, delay time.Dura
 // RunningJobs answers the jobs being run now, on every node, the oldest first.
 func (s *Store) RunningJobs(ctx context.Context) ([]domain.Job, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, kind, subject, attempts FROM jobs WHERE state IN ('running', 'rerun') ORDER BY id`)
+		SELECT id, kind, subject, attempts, due FROM jobs WHERE state IN ('running', 'rerun') ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -252,6 +254,12 @@ func rekeyframe(ctx context.Context, tx db, lib uuid.UUID, mode domain.KeyframeM
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'video')
 			AND NOT EXISTS (SELECT 1 FROM keyframes k WHERE k.part_id = p.id)`+requeue, indexPriority, lib)
 	return err
+}
+
+// QueueKeyframeWalk queues a part with no keyframe index to be walked through for them, after the
+// other analysis, as its keyframes job is.
+func (s *Store) QueueKeyframeWalk(ctx context.Context, part uuid.UUID) error {
+	return insertJob(ctx, s.pool, domain.JobKeyframeWalk, part, 0, indexPriority)
 }
 
 // AskKeyframes queues a part's keyframes job ahead of the rest, for a part played before its turn.

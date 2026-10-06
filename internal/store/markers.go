@@ -224,12 +224,12 @@ func (s *Store) SaveFingerprintMarkers(ctx context.Context, compared []uuid.UUID
 }
 
 // QueueMarkers queues a comparison of every season with an episode whose sound has not been
-// compared, in a library that compares sound. A season whose comparison failed every attempt waits
-// for its episodes to change.
+// compared, in a library that compares sound, due in the maintenance window. A season whose
+// comparison failed every attempt waits for its episodes to change.
 func (s *Store) QueueMarkers(ctx context.Context) (int64, error) {
 	tag, err := s.pool.Exec(ctx, `
-		INSERT INTO jobs (kind, subject)
-		SELECT DISTINCT 'markers', e.parent_id FROM items e
+		INSERT INTO jobs (kind, subject, due)
+		SELECT DISTINCT 'markers', e.parent_id, 'window' FROM items e
 		JOIN versions v ON v.item_id = e.id AND v.missing_since IS NULL
 		JOIN libraries l ON l.id = v.library_id AND l.markers = 'all'
 		JOIN parts p ON p.version_id = v.id
