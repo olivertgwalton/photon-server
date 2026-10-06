@@ -235,7 +235,7 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 // fakeHLS remuxes into a playlist and one segment, of the playback it was opened for.
 type fakeHLS struct{ dir string }
 
-func (fakeHLS) Open(context.Context, uuid.UUID, store.PlayCopy, domain.VideoPlan, *domain.AudioPlan) error {
+func (fakeHLS) Open(context.Context, uuid.UUID, store.PlayCopy, domain.VideoPlan, *domain.AudioPlan, time.Duration) error {
 	return nil
 }
 
@@ -348,6 +348,7 @@ func TestAClientIsToldWhyNothingPlays(t *testing.T) {
 		},
 		{`{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "parts": "some"}}`, http.StatusBadRequest, nil},
 		{`{"audio_stream": 0, "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}]}}`, http.StatusBadRequest, nil},
+		{`{"start_ms": -1, "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}]}}`, http.StatusBadRequest, nil},
 	} {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(tc.body))
 		req.Header.Set("Authorization", "Bearer "+goodToken)
@@ -472,9 +473,9 @@ func (*livePlaybacks) RecordPlay(context.Context, domain.Playback, time.Time, ti
 // remuxOpener opens a copy's first part, as decided, on a real remuxer.
 type remuxOpener struct{ *hls.Remuxer }
 
-func (r remuxOpener) Open(ctx context.Context, id uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan) error {
+func (r remuxOpener) Open(ctx context.Context, id uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, start time.Duration) error {
 	d := time.Duration(c.Parts[0].DurationMS) * time.Millisecond
-	return r.Remuxer.Open(ctx, id, hls.Copy{Parts: []hls.Source{{Open: func() (*os.File, error) { return nil, os.ErrNotExist }, Part: hls.Part{Duration: d, Keyframes: hls.Forced(d)}, Video: video, Audio: audio}}})
+	return r.Remuxer.Open(ctx, id, hls.Copy{Parts: []hls.Source{{Open: func() (*os.File, error) { return nil, os.ErrNotExist }, Part: hls.Part{Duration: d, Keyframes: hls.Forced(d)}, Video: video, Audio: audio}}, Start: start})
 }
 
 func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {

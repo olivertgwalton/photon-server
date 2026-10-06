@@ -5409,6 +5409,8 @@ export interface components {
         Play: {
             audio_stream?: number | null;
             profile: components["schemas"]["ClientProfile"] | null;
+            /** Format: int64 */
+            start_ms?: number;
             subtitle_stream?: number | null;
             version_id?: string;
         };

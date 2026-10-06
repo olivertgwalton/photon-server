@@ -108,7 +108,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			hlsOf := opened{}
 			playback := uuid.NewV7()
-			if err := NewRemuxes(indexed{}, hlsOf).Open(t.Context(), playback, copyOf(tc.copy), tc.video, tc.audio); err != nil {
+			if err := NewRemuxes(indexed{}, hlsOf).Open(t.Context(), playback, copyOf(tc.copy), tc.video, tc.audio, 0); err != nil {
 				t.Fatal(err)
 			}
 			got := hlsOf[playback]
@@ -168,7 +168,7 @@ func TestACopyIsCutAtTheKeyframesItsLibraryFound(t *testing.T) {
 			parts := &knownKeyframes{known: c.known}
 			hlsOf, playback := opened{}, uuid.NewV7()
 			copied := store.PlayCopy{Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: duration.Milliseconds()}}}
-			if err := NewRemuxes(parts, hlsOf).Open(t.Context(), playback, copied, domain.VideoPlan{Codec: "h264"}, nil); err != nil {
+			if err := NewRemuxes(parts, hlsOf).Open(t.Context(), playback, copied, domain.VideoPlan{Codec: "h264"}, nil, 0); err != nil {
 				t.Fatal(err)
 			}
 			if diff := cmp.Diff(c.want, hlsOf[playback].Parts[0].Part.Keyframes); diff != "" {
