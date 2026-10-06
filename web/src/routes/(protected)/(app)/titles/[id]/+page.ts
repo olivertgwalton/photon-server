@@ -7,7 +7,7 @@ export const load: PageLoad = async ({ fetch, params, depends }) => {
 	const api = client(fetch);
 	const path = { params: { path: { id: params.id } } };
 	const title = await need(api.GET("/api/v1/titles/{id}", path));
-	const [members, next] = await Promise.all([
+	const [members, next, themeMusic] = await Promise.all([
 		title.kind === "collection"
 			? need(api.GET("/api/v1/titles/{id}/members", path))
 			: undefined,
@@ -15,11 +15,18 @@ export const load: PageLoad = async ({ fetch, params, depends }) => {
 		title.kind === "show" || title.kind === "season"
 			? api.GET("/api/v1/titles/{id}/next", path).then(({ data }) => data)
 			: undefined,
+		// Asked only of a page with a tune to play.
+		title.themes?.length
+			? api
+					.GET("/api/v1/me/preferences")
+					.then(({ data }) => data?.theme_music === "play")
+			: false,
 	]);
 	return {
 		title,
 		members: members?.items,
 		next,
+		themeMusic,
 		// Not awaited: the page is drawn before the server has looked.
 		similar:
 			title.kind === "movie" || title.kind === "show"

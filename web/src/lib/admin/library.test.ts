@@ -29,6 +29,7 @@ const tv: Schemas["AdminLibrary"] = {
 	previews: "all",
 	markers: "all",
 	keyframes: "index",
+	themes: "all",
 };
 
 const fields: [string, string][] = [
@@ -38,6 +39,7 @@ const fields: [string, string][] = [
 	["refresh_days", "0"],
 	["markers", "chapters"],
 	["keyframes", "full"],
+	["themes", "local"],
 	["remote_extras", "featurette"],
 	["remote_extras", "trailer"],
 ];
@@ -65,6 +67,7 @@ test("a kind's sources are sent only where what they ask changed", () => {
 		refresh_days: 0,
 		markers: "chapters",
 		keyframes: "full",
+		themes: "local",
 	});
 
 	const changed = libraryChange(

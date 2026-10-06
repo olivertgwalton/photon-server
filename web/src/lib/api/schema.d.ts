@@ -3958,6 +3958,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/themes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A theme tune, in byte ranges, kept for good: its id changes when it does */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "audio/*": unknown;
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/titles/{id}": {
         parameters: {
             query?: never;
@@ -4440,6 +4479,7 @@ export interface components {
             remote_extras: components["schemas"]["ExtraKind"][];
             root: string;
             sources: components["schemas"]["KindSources"][];
+            themes: components["schemas"]["ThemeLookup"];
         };
         AdminLibraryListing: {
             counts: components["schemas"]["Counts"];
@@ -4455,6 +4495,7 @@ export interface components {
             remote_extras: components["schemas"]["ExtraKind"][];
             root: string;
             sources: components["schemas"]["KindSources"][];
+            themes: components["schemas"]["ThemeLookup"];
         };
         AdminLibraryListingList: {
             items: components["schemas"]["AdminLibraryListing"][];
@@ -4909,7 +4950,7 @@ export interface components {
             state: components["schemas"]["JobState"];
         };
         /** @enum {string} */
-        JobKind: "keyframes" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook";
+        JobKind: "keyframes" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme";
         JobQueue: {
             counts: components["schemas"]["JobCount"][];
             dead: components["schemas"]["DeadJob"][];
@@ -4953,6 +4994,7 @@ export interface components {
             refresh_days?: number | null;
             remote_extras?: components["schemas"]["ExtraKind"][];
             sources?: components["schemas"]["KindSourcesChange"][];
+            themes?: components["schemas"]["ThemeLookup"];
         };
         /** @enum {string} */
         LibraryKind: "movies" | "shows";
@@ -5295,6 +5337,7 @@ export interface components {
             saved_at?: string | null;
             subtitle_language: string;
             subtitle_mode: components["schemas"]["SubtitleMode"];
+            theme_music: components["schemas"]["ThemeMusic"];
         };
         PreferencesChange: {
             audio_language?: string | null;
@@ -5308,6 +5351,7 @@ export interface components {
             remember_subtitles?: components["schemas"]["TrackMemory"];
             subtitle_language?: string | null;
             subtitle_mode?: components["schemas"]["SubtitleMode"];
+            theme_music?: components["schemas"]["ThemeMusic"];
         };
         /** @enum {string} */
         PreviewLevel: "off" | "chapters" | "all";
@@ -5554,6 +5598,10 @@ export interface components {
         };
         /** @enum {string} */
         TaskResult: "succeeded" | "failed" | "cancelled";
+        /** @enum {string} */
+        ThemeLookup: "all" | "local" | "off";
+        /** @enum {string} */
+        ThemeMusic: "play" | "off";
         TitlePage: {
             /** Format: date-time */
             added_at: string;
@@ -5588,6 +5636,7 @@ export interface components {
             state?: components["schemas"]["TitleState"];
             studios?: string[];
             tagline?: string;
+            themes?: string[];
             title: string;
             versions?: components["schemas"]["VersionPage"][];
             videos?: components["schemas"]["VideoLink"][];

@@ -92,6 +92,20 @@ test("playback settings are the profile's, kept by the server", async ({
 	).toHaveAttribute("aria-checked", "false");
 });
 
+test("a show's page plays its theme once the profile asks for theme music", async ({
+	page,
+}) => {
+	const tune = page.locator("audio[data-theme-tune]");
+	await logIn(page, "/titles/t-show");
+	await expect(page.getByRole("heading", { name: "Small Show" })).toBeVisible();
+	await expect(tune).toHaveCount(0);
+	await page.goto("/settings/playback");
+	await page.getByRole("switch", { name: "Play theme music" }).click();
+	await expect(page.getByText("Saved for every device.")).toBeVisible();
+	await page.goto("/titles/t-show");
+	await expect(tune).toHaveAttribute("src", "/api/v1/themes/th-small-show");
+});
+
 test("a TV is linked by the code it shows", async ({ page }) => {
 	await logIn(page, "/settings/link");
 	await expectAccessible(page);

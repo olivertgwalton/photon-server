@@ -25,6 +25,7 @@ import PlayChoices from "#lib/components/PlayChoices.svelte";
 import RatingScore from "#lib/components/RatingScore.svelte";
 import Rail from "#lib/components/Rail.svelte";
 import TitleCard from "#lib/components/TitleCard.svelte";
+import ThemeTune from "#lib/components/ThemeTune.svelte";
 import TitleMenu from "#lib/components/TitleMenu.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
@@ -357,6 +358,12 @@ const poster = $derived(art("poster"));
 						{/if}
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
+				{#if data.themeMusic && t.themes?.length}
+					<!-- An episode of the same show goes on with the tune already playing. -->
+					{#key t.themes.join()}
+						<ThemeTune themes={t.themes} />
+					{/key}
+				{/if}
 			</div>
 
 			{#if playable && t.versions?.length}

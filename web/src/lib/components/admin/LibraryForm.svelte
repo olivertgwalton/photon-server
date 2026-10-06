@@ -33,6 +33,7 @@ const defaults = {
 	previews: "all",
 	markers: "all",
 	keyframes: "index",
+	themes: "all",
 } as const;
 
 // A new library's kind changes the sources offered; a library's own is fixed.
@@ -216,6 +217,23 @@ const refreshOptions = $derived(
 			<Field.Description>
 				The index is a few small reads, right for a network share; reading
 				through gives exact segments from a local disk.
+			</Field.Description>
+		</Field.Field>
+		<Field.Field>
+			<Field.Label for="library-themes">Theme music</Field.Label>
+			<Choice
+				id="library-themes"
+				name="themes"
+				value={library?.themes ?? defaults.themes}
+				options={[
+					{ value: "all", label: "Local files and Plex's" },
+					{ value: "local", label: "Local files only" },
+					{ value: "off", label: "None" },
+				]}
+			/>
+			<Field.Description>
+				A theme.mp3 or a theme-music folder beside a title; a show with neither
+				takes Plex's theme for it.
 			</Field.Description>
 		</Field.Field>
 	</div>
