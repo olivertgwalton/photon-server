@@ -41,6 +41,14 @@ jobs and the requests it answers. Set another number with `pool_max_conns` in
 `PHOTON_DATABASE_URL` (`postgres://db/photon?pool_max_conns=40`); with several nodes, keep their sum
 under PostgreSQL's `max_connections`, 100 unless it is changed.
 
+A device that signs in by a code it shows (a television) is told where to enter it, as RFC 8628's
+`verification_uri`: the web app's `/link` page, and `verification_uri_complete` with the code filled
+in, for a QR code. That is at `PHOTON_PUBLIC_URL` (`https://photon.example.com`) where it is set,
+else at the address the device reached the server on, over HTTPS where it came over TLS or a trusted
+proxy says `X-Forwarded-Proto: https`. The web app is on the server's own port, so that address is
+already right; set it only where readers reach the web app at another address than devices reach
+the API (`PHOTON_WEB=off` with the app served elsewhere).
+
 Clients on the local network find the server without being given its address: it listens on UDP at
 the same port number as HTTP (`8640`, so open both protocols on that port), and answers a datagram
 reading `who is PhotonServer?` (in any case) with its id, name, version and the address to reach it

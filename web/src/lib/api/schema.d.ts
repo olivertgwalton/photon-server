@@ -4734,6 +4734,8 @@ export interface components {
             /** Format: int64 */
             poll_interval_ms: number;
             user_code: string;
+            verification_uri: string;
+            verification_uri_complete: string;
         };
         Part: {
             /** Format: int64 */
@@ -5063,6 +5065,7 @@ export interface components {
             nodes: components["schemas"]["Node"][];
             os: string;
             postgres: components["schemas"]["Backend"];
+            public_url?: string;
             /** Format: date-time */
             started_at: string;
             transcode_limit?: number;

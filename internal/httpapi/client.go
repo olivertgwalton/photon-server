@@ -1,10 +1,12 @@
 package httpapi
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"slices"
 	"strings"
 )
@@ -74,4 +76,30 @@ func ParseTrustedProxies(list string) ([]netip.Prefix, error) {
 		out = append(out, netip.PrefixFrom(a, a.BitLen()))
 	}
 	return out, nil
+}
+
+// ParsePublicURL reads PHOTON_PUBLIC_URL, the http or https address readers reach the server's
+// web app at; nil where it is not set.
+func ParsePublicURL(s string) (*url.URL, error) {
+	if s == "" {
+		return nil, nil
+	}
+	u, err := url.Parse(s)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return nil, errors.New("PHOTON_PUBLIC_URL is not an http or https address with a host, and no credentials, query or fragment")
+	}
+	return u, nil
+}
+
+// publicURL is where a reader reaches the web app: PHOTON_PUBLIC_URL, else the address this
+// request came to, over HTTPS where it came that way.
+func (a *API) publicURL(r *http.Request) *url.URL {
+	if u := a.svc.Setup.PublicURL; u != nil {
+		return u
+	}
+	scheme := "http"
+	if overHTTPS(r, a.svc.TrustedProxies) {
+		scheme = "https"
+	}
+	return &url.URL{Scheme: scheme, Host: r.Host}
 }

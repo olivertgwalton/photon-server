@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"runtime"
 	"time"
 	"uuid"
@@ -25,6 +26,8 @@ type Setup struct {
 	MetadataLanguage string
 	CacheDir         string
 	BackupDir        string
+	// PublicURL is where readers reach the web app, where it is set.
+	PublicURL *url.URL
 }
 
 type versioned interface {
@@ -82,6 +85,7 @@ type serverJSON struct {
 	TranscodeLimit   int              `json:"transcode_limit,omitzero"`
 	Discovery        domain.Discovery `json:"discovery"`
 	Listen           string           `json:"listen"`
+	PublicURL        string           `json:"public_url,omitzero"`
 	TrustedProxies   []string         `json:"trusted_proxies"`
 	Folders          foldersJSON      `json:"folders"`
 	MetadataLanguage string           `json:"metadata_language"`
@@ -103,6 +107,9 @@ func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
 		TranscodeLimit: limit, Discovery: s.Discovery, Listen: s.Listen, TrustedProxies: []string{},
 		Folders:          foldersJSON{folder(s.CacheDir), folder(s.BackupDir)},
 		MetadataLanguage: s.MetadataLanguage, Nodes: []nodeJSON{},
+	}
+	if s.PublicURL != nil {
+		out.PublicURL = s.PublicURL.String()
 	}
 	for _, p := range a.svc.TrustedProxies {
 		out.TrustedProxies = append(out.TrustedProxies, p.String())

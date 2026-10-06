@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"net/url"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/kv"
@@ -14,10 +15,14 @@ type deviceJSON struct {
 }
 
 type pairingStartJSON struct {
-	DeviceCode     string `json:"device_code"`
-	UserCode       string `json:"user_code"`
-	PollIntervalMS int64  `json:"poll_interval_ms"`
-	ExpiresInMS    int64  `json:"expires_in_ms"`
+	DeviceCode string `json:"device_code"`
+	UserCode   string `json:"user_code"`
+	// VerificationURI is the web app's page a reader enters the code at, and
+	// VerificationURIComplete the same with the code filled in, for a QR code (RFC 8628 3.3.1).
+	VerificationURI         string `json:"verification_uri"`
+	VerificationURIComplete string `json:"verification_uri_complete"`
+	PollIntervalMS          int64  `json:"poll_interval_ms"`
+	ExpiresInMS             int64  `json:"expires_in_ms"`
 }
 
 type approvalJSON struct {
@@ -45,8 +50,12 @@ func (a *API) startPairing(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
+	link := a.publicURL(r).JoinPath("link")
+	complete := *link
+	complete.RawQuery = url.Values{"code": {start.UserCode}}.Encode()
 	writeJSON(w, a.logger, "application/json", http.StatusOK, pairingStartJSON{
 		DeviceCode: start.DeviceCode, UserCode: start.UserCode,
+		VerificationURI: link.String(), VerificationURIComplete: complete.String(),
 		PollIntervalMS: auth.PollInterval.Milliseconds(), ExpiresInMS: start.ExpiresIn.Milliseconds(),
 	})
 }
