@@ -70,10 +70,10 @@ func (f WallFilter) where(args pgx.NamedArgs) string {
 		and(markSQL(m), "", nil)
 	}
 	if len(f.Genres) > 0 {
-		and("EXISTS (SELECT 1 FROM jsonb_array_elements_text(items.genres) g WHERE g = ANY(@genres))", "genres", f.Genres)
+		and("items.genres ?| @genres", "genres", f.Genres)
 	}
 	if len(f.Studios) > 0 {
-		and("EXISTS (SELECT 1 FROM jsonb_array_elements_text(items.studios) g WHERE g = ANY(@studios))", "studios", f.Studios)
+		and("items.studios ?| @studios", "studios", f.Studios)
 	}
 	if len(f.Years) > 0 {
 		and("items.year = ANY(@years)", "years", f.Years)
