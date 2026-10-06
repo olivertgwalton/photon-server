@@ -34,6 +34,8 @@ type preferencesJSON struct {
 	NextEpisode       domain.NextEpisode   `json:"next_episode"`
 	IntroAction       domain.SegmentAction `json:"intro_action"`
 	CreditsAction     domain.SegmentAction `json:"credits_action"`
+	// Home is every row of the profile's home, in the order /api/v1/home answers them.
+	Home []homeSectionJSON `json:"home"`
 	// SavedAt is when they were last changed: absent while every one is its default.
 	SavedAt *time.Time `json:"saved_at,omitzero"`
 }
@@ -50,6 +52,13 @@ type preferencesChangeJSON struct {
 	NextEpisode       domain.NextEpisode   `json:"next_episode,omitzero"`
 	IntroAction       domain.SegmentAction `json:"intro_action,omitzero"`
 	CreditsAction     domain.SegmentAction `json:"credits_action,omitzero"`
+	// Home is the rows in the order wanted, each once; any left out follow, shown.
+	Home []homeSectionJSON `json:"home,omitzero"`
+}
+
+type homeSectionJSON struct {
+	Row        domain.HomeRow       `json:"row"`
+	Visibility domain.RowVisibility `json:"visibility"`
 }
 
 func preferencesOf(p domain.Preferences) preferencesJSON {
@@ -59,6 +68,10 @@ func preferencesOf(p domain.Preferences) preferencesJSON {
 		RememberAudio: p.RememberAudio, RememberSubtitles: p.RememberSubtitles,
 		MaxBitrateKbps: p.MaxBitrateKbps, NextEpisode: p.NextEpisode,
 		IntroAction: p.IntroAction, CreditsAction: p.CreditsAction,
+		Home: make([]homeSectionJSON, len(p.Home)),
+	}
+	for i, h := range p.Home {
+		out.Home[i] = homeSectionJSON(h)
 	}
 	if !p.SavedAt.IsZero() {
 		out.SavedAt = &p.SavedAt
@@ -109,6 +122,18 @@ func (a *API) setOwnPreferences(w http.ResponseWriter, r *http.Request) {
 	p.RememberSubtitles = cmp.Or(req.RememberSubtitles, p.RememberSubtitles)
 	p.NextEpisode = cmp.Or(req.NextEpisode, p.NextEpisode)
 	p.IntroAction, p.CreditsAction = cmp.Or(req.IntroAction, p.IntroAction), cmp.Or(req.CreditsAction, p.CreditsAction)
+	if req.Home != nil {
+		seen := map[domain.HomeRow]bool{}
+		p.Home = make([]domain.HomeSection, len(req.Home))
+		for i, h := range req.Home {
+			if h.Row == "" || h.Visibility == "" || seen[h.Row] {
+				writeProblem(w, a.logger, codeInvalidBody, "home is rows, each once, with their visibility")
+				return
+			}
+			seen[h.Row] = true
+			p.Home[i] = domain.HomeSection(h)
+		}
+	}
 	p, err = a.svc.Preferences.SetPreferences(r.Context(), profile, p)
 	if !a.answered(w, r, err) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, preferencesOf(p))

@@ -74,7 +74,15 @@ func TestAProfileKeepsHowItPlays(t *testing.T) {
 		t.Errorf("an empty language is any: %s", body)
 	}
 
-	for _, bad := range []string{`{"subtitle_mode": "foreign"}`, `{"audio_language": "not a language"}`, `{"max_bitrate_kbps": -1}`} {
+	if _, body = call(http.MethodPatch, `{"home": [{"row": "next_up", "visibility": "shown"}, {"row": "favourites", "visibility": "hidden"}]}`); !strings.Contains(body, `"home":[{"row":"next_up","visibility":"shown"},{"row":"favourites","visibility":"hidden"}`) {
+		t.Errorf("the home arranged: %s", body)
+	}
+
+	for _, bad := range []string{
+		`{"subtitle_mode": "foreign"}`, `{"audio_language": "not a language"}`, `{"max_bitrate_kbps": -1}`,
+		`{"home": [{"row": "next_up", "visibility": "shown"}, {"row": "next_up", "visibility": "hidden"}]}`,
+		`{"home": [{"row": "next_up"}]}`, `{"home": [{"row": "trending", "visibility": "shown"}]}`,
+	} {
 		if code, body := call(http.MethodPatch, bad); code != http.StatusBadRequest {
 			t.Errorf("PATCH %s = %d %s, want 400", bad, code, body)
 		}
