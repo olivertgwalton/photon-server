@@ -120,6 +120,13 @@ func Master(subs []Subtitle, v Variant, video string, subtitle func(track int) s
 	if v.Range != "" {
 		b.WriteString(",VIDEO-RANGE=" + v.Range)
 	}
+	if v.Width > 0 && v.Height > 0 {
+		fmt.Fprintf(&b, ",RESOLUTION=%dx%d", v.Width, v.Height)
+	}
+	// Apple's players refuse an HDR variant that does not say its frame rate.
+	if v.FrameRate > 0 {
+		fmt.Fprintf(&b, ",FRAME-RATE=%.3f", v.FrameRate)
+	}
 	if len(subs) > 0 {
 		b.WriteString(",SUBTITLES=\"subs\"")
 	}

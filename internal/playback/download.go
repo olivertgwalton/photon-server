@@ -28,16 +28,21 @@ func Fits(c Copy, q domain.Quality) bool {
 }
 
 // Conversion decides how a copy is converted to a quality for downloading, as it would be
-// transcoded for a client playing H.264 and AAC within it: video encoded to H.264 within the
-// bitrate and width, HDR and Dolby Vision tone mapped to SDR, and audio AAC.
-// ErrNoCompatibleStream for a copy with no video.
-func Conversion(c Copy, q domain.Quality) (Decision, error) {
+// transcoded for a client playing plays and AAC within it: video encoded to HEVC or H.264 within
+// the bitrate and width, HDR kept or tone mapped to SDR as the client shows it, and audio AAC.
+// ErrNoCompatibleStream for a copy with no video, or none plays can be made of.
+func Conversion(c Copy, q domain.Quality, plays []VideoSupport, hevc domain.HEVCEncoding) (Decision, error) {
 	c.BitrateKbps = cmp.Or(c.BitrateKbps, sourceKbps)
-	return Decide(Profile{
-		Video:          []VideoSupport{{Codec: "h264", MaxWidth: q.MaxWidth}},
-		Audio:          []AudioSupport{{Codec: "aac"}},
-		MaxBitrateKbps: q.MaxBitrateKbps,
-	}, c, nil, nil)
+	video := make([]VideoSupport, len(plays))
+	for i, v := range plays {
+		video[i] = VideoSupport{Codec: v.Codec, MaxWidth: q.MaxWidth, Ranges: v.Ranges}
+	}
+	return Decide(Profile{Video: video, Audio: []AudioSupport{{Codec: "aac"}}, MaxBitrateKbps: q.MaxBitrateKbps}, c, nil, nil, hevc)
+}
+
+// Converted is what a device plays of a conversion decided already: its codec, in its range.
+func Converted(q domain.Quality) []VideoSupport {
+	return []VideoSupport{{Codec: string(q.Codec), Ranges: []domain.Range{q.Range}}}
 }
 
 // MaxConversions is how many conversions a node makes at once: Plex's downloads transcode one at
@@ -109,7 +114,7 @@ func (c *Conversions) Convert(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	d, err := Conversion(Copy{Container: job.Container, BitrateKbps: job.BitrateKbps, Streams: job.Streams}, job.Quality)
+	d, err := Conversion(Copy{Container: job.Container, BitrateKbps: job.BitrateKbps, Streams: job.Streams}, job.Quality, Converted(job.Quality), c.hw.HEVC)
 	if err != nil {
 		return c.fail(ctx, id, err)
 	}

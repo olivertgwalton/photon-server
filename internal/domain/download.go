@@ -18,9 +18,11 @@ func DownloadStates() []DownloadState {
 	return []DownloadState{DownloadQueued, DownloadConverting, DownloadReady, DownloadFailed}
 }
 
-// Quality is the most a download may be: a video bitrate, and a picture width where it is not
-// zero.
+// Quality is the most a download may be, a video bitrate and a picture width where it is not
+// zero, and what its video is converted to: a codec, and SDR or the source's HDR kept.
 type Quality struct {
 	MaxBitrateKbps int
 	MaxWidth       int
+	Codec          VideoCodec
+	Range          Range
 }

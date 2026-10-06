@@ -54,6 +54,12 @@ type downloadRequestJSON struct {
 	MaxBitrateKbps int       `json:"max_bitrate_kbps"`
 	// MaxWidth is the widest the picture may be; zero keeps it as shot.
 	MaxWidth int `json:"max_width,omitzero"`
+	// VideoCodecs are the codecs the device plays, by FFmpeg's names; a conversion is HEVC where
+	// it lists hevc, else H.264, which is all it is taken to play where it lists none.
+	VideoCodecs []string `json:"video_codecs,omitzero"`
+	// VideoRanges are the ranges it shows, SDR alone where it lists none: HEVC keeps HDR10 or HLG
+	// it shows, and anything else is tone mapped to SDR.
+	VideoRanges []domain.Range `json:"video_ranges,omitzero"`
 }
 
 type downloadJSON struct {
@@ -63,13 +69,16 @@ type downloadJSON struct {
 	TitleID  uuid.UUID `json:"title_id"`
 	PartID   uuid.UUID `json:"part_id"`
 	// Method is direct for the part's own file and transcode for a conversion.
-	Method         domain.PlayMethod    `json:"method"`
-	MaxBitrateKbps int                  `json:"max_bitrate_kbps,omitzero"`
-	MaxWidth       int                  `json:"max_width,omitzero"`
-	State          domain.DownloadState `json:"state"`
-	Progress       float64              `json:"progress"`
-	SizeBytes      int64                `json:"size_bytes,omitzero"`
-	Error          string               `json:"error,omitzero"`
+	Method         domain.PlayMethod `json:"method"`
+	MaxBitrateKbps int               `json:"max_bitrate_kbps,omitzero"`
+	MaxWidth       int               `json:"max_width,omitzero"`
+	// VideoCodec and VideoRange are what a conversion's video is encoded to.
+	VideoCodec domain.VideoCodec    `json:"video_codec,omitzero"`
+	VideoRange domain.Range         `json:"video_range,omitzero"`
+	State      domain.DownloadState `json:"state"`
+	Progress   float64              `json:"progress"`
+	SizeBytes  int64                `json:"size_bytes,omitzero"`
+	Error      string               `json:"error,omitzero"`
 	// URL is where a ready download is fetched, signed until URLExpiresAt.
 	URL          string    `json:"url,omitzero"`
 	URLExpiresAt time.Time `json:"url_expires_at,omitzero"`
@@ -84,6 +93,7 @@ func (a *API) downloadJSON(d store.Download) downloadJSON {
 	path := "/api/v1/parts/" + d.Part.String() + "/stream"
 	if q := d.Quality; q != nil {
 		out.Method, out.MaxBitrateKbps, out.MaxWidth = domain.PlayTranscode, q.MaxBitrateKbps, q.MaxWidth
+		out.VideoCodec, out.VideoRange = q.Codec, q.Range
 		path = "/api/v1/downloads/" + d.ID.String() + "/file"
 	}
 	if d.State == domain.DownloadReady {
@@ -104,6 +114,10 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.MaxBitrateKbps <= 0 || (req.MaxWidth != 0 && req.MaxWidth < narrowest) {
 		writeProblem(w, a.logger, codeInvalidBody, "max_bitrate_kbps is above 0, and max_width 0 or at least "+strconv.Itoa(narrowest))
+		return
+	}
+	if slices.ContainsFunc(req.VideoRanges, func(r domain.Range) bool { return !slices.Contains(domain.Ranges(), r) }) {
+		writeProblem(w, a.logger, codeInvalidBody, fmt.Sprintf("video_ranges are of %v", domain.Ranges()))
 		return
 	}
 	profile := sessionOf(r).Profile.ID
@@ -127,10 +141,19 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 	pc := playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Streams: c.Streams}
 	var convert *domain.Quality
 	if !playback.Fits(pc, q) {
-		if _, err := playback.Conversion(pc, q); errors.Is(err, playback.ErrNoCompatibleStream) {
-			writeProblem(w, a.logger, codeNoCompatibleStream, "the copy has no video to convert")
+		plays := []playback.VideoSupport{{Codec: string(domain.VideoH264)}}
+		if len(req.VideoCodecs) > 0 {
+			plays = nil
+			for _, codec := range req.VideoCodecs {
+				plays = append(plays, playback.VideoSupport{Codec: codec, Ranges: req.VideoRanges})
+			}
+		}
+		d, err := playback.Conversion(pc, q, plays, a.svc.Setup.Encoder.HEVC)
+		if errors.Is(err, playback.ErrNoCompatibleStream) {
+			writeProblem(w, a.logger, codeNoCompatibleStream, "the copy has no video to convert to a codec the device plays")
 			return
 		}
+		q.Codec, q.Range = d.Video.Encode.Codec, d.Video.Encode.Range
 		convert = &q
 	}
 	d, err := a.svc.Downloads.AddDownload(r.Context(), profile, sessionOf(r).ID, req.TitleID, part.ID, convert)

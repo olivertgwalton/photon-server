@@ -34,7 +34,11 @@ const rows = $derived<[string, string][]>([
 	],
 	[
 		"Encoder",
-		[accelerations[s.encoder.acceleration], s.encoder.device]
+		[
+			accelerations[s.encoder.acceleration],
+			s.encoder.device,
+			s.encoder.hevc === "allow" ? "HEVC and H.264" : "H.264 only",
+		]
 			.filter(Boolean)
 			.join(", "),
 	],

@@ -2122,7 +2122,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Download a film or episode no larger than a bitrate: its file as it is, else converted */
+        /** Download a film or episode no larger than a bitrate: its file as it is, else converted to the video the device plays */
         post: {
             parameters: {
                 query?: never;
@@ -4391,6 +4391,8 @@ export interface components {
             url?: string;
             /** Format: date-time */
             url_expires_at?: string;
+            video_codec?: components["schemas"]["VideoCodec"];
+            video_range?: components["schemas"]["Range"];
         };
         DownloadList: {
             items: components["schemas"]["Download"][];
@@ -4404,6 +4406,8 @@ export interface components {
             title_id: string;
             /** Format: uuid */
             version_id?: string;
+            video_codecs?: string[];
+            video_ranges?: components["schemas"]["Range"][];
         };
         /** @enum {string} */
         DownloadScope: "device" | "profile";
@@ -4425,6 +4429,7 @@ export interface components {
         Encoder: {
             acceleration: components["schemas"]["Acceleration"];
             device?: string;
+            hevc: components["schemas"]["HEVCEncoding"];
         };
         Entry: {
             /** Format: date-time */
@@ -4544,6 +4549,8 @@ export interface components {
             backups: components["schemas"]["Folder"];
             cache: components["schemas"]["Folder"];
         };
+        /** @enum {string} */
+        HEVCEncoding: "allow" | "deny";
         Hello: {
             scans: components["schemas"]["Scan"][];
         };
@@ -4855,6 +4862,7 @@ export interface components {
             channels?: number;
             codec: string;
             height?: number;
+            range?: components["schemas"]["Range"];
             tone_mapped?: boolean;
             width?: number;
         };
@@ -5275,14 +5283,17 @@ export interface components {
         Video: {
             bitrate_kbps?: number;
             burned_subtitle?: number | null;
-            codec?: string;
+            codec?: components["schemas"]["VideoCodec"];
             decision: components["schemas"]["Decision"];
             dolby_vision?: components["schemas"]["DolbyVisionHandling"];
             height?: number;
+            range?: components["schemas"]["Range"];
             stream: number;
             tone_mapped?: boolean;
             width?: number;
         };
+        /** @enum {string} */
+        VideoCodec: "h264" | "hevc";
         VideoLink: {
             extra_kind: components["schemas"]["ExtraKind"];
             key: string;

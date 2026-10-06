@@ -138,12 +138,13 @@ type PlaybackAudio struct {
 	Encode      *PlaybackEncode `json:"encode,omitzero"`
 }
 
-// PlaybackEncode is what a stream is encoded to: a picture's size and tone mapping, or a sound's
-// channels.
+// PlaybackEncode is what a stream is encoded to: a picture's size, the range it is sent in and
+// whether HDR was tone mapped to reach it, or a sound's channels.
 type PlaybackEncode struct {
 	Codec       string `json:"codec"`
 	Width       int    `json:"width,omitzero"`
 	Height      int    `json:"height,omitzero"`
+	Range       Range  `json:"range,omitzero"`
 	Channels    int    `json:"channels,omitzero"`
 	BitrateKbps int    `json:"bitrate_kbps,omitzero"`
 	ToneMapped  bool   `json:"tone_mapped,omitzero"`
@@ -169,15 +170,44 @@ type VideoPlan struct {
 }
 
 // VideoEncode is video encoded again: the codec, the picture's size, the most bitrate it may
-// spend, and whether HDR is tone mapped to SDR and an interlaced picture deinterlaced on the way.
+// spend, the range it is encoded in, and whether HDR is tone mapped to SDR and an interlaced
+// picture deinterlaced on the way.
 type VideoEncode struct {
-	Codec         string
+	Codec         VideoCodec
 	Width, Height int
 	BitrateKbps   int
-	ToneMap       bool
-	Deinterlace   bool
+	// Range is SDR, or the HDR10 or HLG of the source kept in HEVC's 10 bits.
+	Range       Range
+	ToneMap     bool
+	Deinterlace bool
 	// Burn is a picture subtitle stream of the file drawn into the picture, by its index.
 	Burn *int
+}
+
+// VideoCodec is a codec the server encodes video to.
+type VideoCodec string
+
+const (
+	VideoH264 VideoCodec = "h264"
+	VideoHEVC VideoCodec = "hevc"
+)
+
+func VideoCodecs() []VideoCodec { return []VideoCodec{VideoH264, VideoHEVC} }
+
+// HEVCEncoding is whether the server encodes video to HEVC for a client that plays it, as
+// Jellyfin's AllowHevcEncoding, or only ever to H.264.
+type HEVCEncoding string
+
+const (
+	HEVCAllow HEVCEncoding = "allow"
+	HEVCDeny  HEVCEncoding = "deny"
+)
+
+func HEVCEncodings() []HEVCEncoding { return []HEVCEncoding{HEVCAllow, HEVCDeny} }
+
+func ParseHEVCEncoding(s string) (HEVCEncoding, bool) {
+	v := HEVCEncoding(s)
+	return v, slices.Contains(HEVCEncodings(), v)
 }
 
 // DolbyVisionHandling is what a copy does with a stream's Dolby Vision.

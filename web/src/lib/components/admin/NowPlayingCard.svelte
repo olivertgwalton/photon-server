@@ -146,6 +146,9 @@ async function stop() {
 						p.video.encode,
 						[
 							resolution(p.video.encode?.width, p.video.encode?.height),
+							p.video.encode?.range && p.video.encode.range !== "sdr"
+								? p.video.encode.range.toUpperCase()
+								: "",
 							rate(p.video.encode?.bitrate_kbps),
 							p.video.encode?.tone_mapped ? "tone mapped" : "",
 						],

@@ -32,7 +32,7 @@ type Download struct {
 
 // AddDownload records a profile's download of a part of a title on a device, converted to a
 // quality unless q is nil. The conversion is shared with every download of the part at that
-// quality and queued where it is new or last failed. A download the device asks for again is
+// quality and video and queued where it is new or last failed. A download the device asks for again is
 // answered as it stands.
 func (s *Store) AddDownload(ctx context.Context, profile, device, item, part uuid.UUID, q *domain.Quality) (Download, error) {
 	var added struct{ ID model.UUID }
@@ -45,13 +45,13 @@ func (s *Store) AddDownload(ctx context.Context, profile, device, item, part uui
 				State domain.DownloadState
 			}
 			if err := db.Raw(`
-				INSERT INTO conversions (part_id, max_bitrate_kbps, max_width) VALUES (?, ?, ?)
-				ON CONFLICT (part_id, max_bitrate_kbps, max_width) DO UPDATE SET
+				INSERT INTO conversions (part_id, max_bitrate_kbps, max_width, video_codec, video_range) VALUES (?, ?, ?, ?, ?)
+				ON CONFLICT (part_id, max_bitrate_kbps, max_width, video_codec, video_range) DO UPDATE SET
 					state = CASE conversions.state WHEN 'failed' THEN 'queued' ELSE conversions.state END,
 					progress = CASE conversions.state WHEN 'failed' THEN 0 ELSE conversions.progress END,
 					error = CASE conversions.state WHEN 'failed' THEN NULL ELSE conversions.error END,
 					finished_at = CASE conversions.state WHEN 'failed' THEN NULL ELSE conversions.finished_at END
-				RETURNING id, state`, part.String(), q.MaxBitrateKbps, q.MaxWidth).Scan(&c).Error; err != nil {
+				RETURNING id, state`, part.String(), q.MaxBitrateKbps, q.MaxWidth, q.Codec, q.Range).Scan(&c).Error; err != nil {
 				return err
 			}
 			if c.State == domain.DownloadQueued {
@@ -82,6 +82,8 @@ type downloadRow struct {
 	ConversionID   *model.UUID
 	MaxBitrateKbps int
 	MaxWidth       int
+	VideoCodec     domain.VideoCodec
+	VideoRange     domain.Range
 	State          domain.DownloadState
 	Progress       float64
 	SizeBytes      int64
@@ -94,6 +96,7 @@ func (s *Store) downloads(ctx context.Context, profile uuid.UUID, device, id *uu
 	sql := `
 		SELECT d.id, d.session_id, d.item_id, d.part_id, d.created_at, d.conversion_id,
 			coalesce(c.max_bitrate_kbps, 0) AS max_bitrate_kbps, coalesce(c.max_width, 0) AS max_width,
+			coalesce(c.video_codec, '') AS video_codec, coalesce(c.video_range, '') AS video_range,
 			coalesce(c.state, 'ready') AS state, coalesce(c.progress, 1) AS progress,
 			coalesce(c.size_bytes, CASE WHEN c.id IS NULL THEN p.size_bytes END, 0) AS size_bytes,
 			coalesce(c.error, '') AS error
@@ -120,7 +123,7 @@ func (s *Store) downloads(ctx context.Context, profile uuid.UUID, device, id *uu
 		}
 		if r.ConversionID != nil {
 			out[n].Conversion = uuid.UUID(*r.ConversionID)
-			out[n].Quality = &domain.Quality{MaxBitrateKbps: r.MaxBitrateKbps, MaxWidth: r.MaxWidth}
+			out[n].Quality = &domain.Quality{MaxBitrateKbps: r.MaxBitrateKbps, MaxWidth: r.MaxWidth, Codec: r.VideoCodec, Range: r.VideoRange}
 		}
 	}
 	return out, nil
@@ -219,11 +222,13 @@ func (s *Store) StartConversion(ctx context.Context, id, node uuid.UUID) (Conver
 		PartID         model.UUID
 		MaxBitrateKbps int
 		MaxWidth       int
+		VideoCodec     domain.VideoCodec
+		VideoRange     domain.Range
 		Container      string
 		BitrateKbps    int
 		DurationMS     int64
 	}
-	if err := c.WithContext(ctx).Select(c.PartID, c.MaxBitrateKbps, c.MaxWidth, v.Container, v.BitrateKbps, p.DurationMS).
+	if err := c.WithContext(ctx).Select(c.PartID, c.MaxBitrateKbps, c.MaxWidth, c.VideoCodec, c.VideoRange, v.Container, v.BitrateKbps, p.DurationMS).
 		Join(p, p.ID.EqCol(c.PartID)).Join(v, v.ID.EqCol(p.VersionID)).Where(c.ID.Eq(model.UUID(id))).Scan(&row); err != nil {
 		return Conversion{}, err
 	}
@@ -232,7 +237,9 @@ func (s *Store) StartConversion(ctx context.Context, id, node uuid.UUID) (Conver
 		return Conversion{}, err
 	}
 	out := Conversion{
-		Part: uuid.UUID(row.PartID), Quality: domain.Quality{MaxBitrateKbps: row.MaxBitrateKbps, MaxWidth: row.MaxWidth},
+		Part: uuid.UUID(row.PartID), Quality: domain.Quality{
+			MaxBitrateKbps: row.MaxBitrateKbps, MaxWidth: row.MaxWidth, Codec: row.VideoCodec, Range: row.VideoRange,
+		},
 		Container: row.Container, BitrateKbps: row.BitrateKbps, Duration: time.Duration(row.DurationMS) * time.Millisecond,
 	}
 	for _, t := range streams {

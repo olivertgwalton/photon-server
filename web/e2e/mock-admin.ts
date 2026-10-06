@@ -58,7 +58,11 @@ const server: Schemas["Server"] = {
 	ffmpeg: { path: "/usr/bin/ffmpeg", version: "9.0" },
 	ffprobe: { path: "/usr/bin/ffprobe", version: "9.0" },
 	chromaprint: true,
-	encoder: { acceleration: "vaapi", device: "/dev/dri/renderD128" },
+	encoder: {
+		acceleration: "vaapi",
+		device: "/dev/dri/renderD128",
+		hevc: "allow",
+	},
 	transcode_limit: 2,
 	discovery: "broadcast",
 	listen: ":8640",

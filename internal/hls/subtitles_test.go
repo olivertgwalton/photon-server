@@ -59,7 +59,7 @@ func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
 	err = r.Open(playback, Copy{
 		Parts:     []Source{part(time.Hour), part(time.Hour)},
 		Subtitles: []Subtitle{{Name: "English", Language: "en", Default: true, HearingImpaired: true, Sources: []SubtitleSource{{Open: open}}}},
-		Variant:   Variant{BandwidthKbps: 8000, Codecs: []string{"avc1.640029", "mp4a.40.2"}, Range: "SDR"},
+		Variant:   Variant{BandwidthKbps: 8000, Codecs: []string{"avc1.640029", "mp4a.40.2"}, Range: "SDR", Width: 1920, Height: 1080, FrameRate: 24000.0 / 1001},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +70,7 @@ func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
 	}
 	for _, want := range []string{
 		`#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",LANGUAGE="en",DEFAULT=YES,AUTOSELECT=YES,FORCED=NO,CHARACTERISTICS="public.accessibility.transcribes-spoken-dialog,public.accessibility.describes-music-and-sound",URI="sub0.m3u8"`,
-		"#EXT-X-STREAM-INF:BANDWIDTH=8000000,CODECS=\"avc1.640029,mp4a.40.2\",VIDEO-RANGE=SDR,SUBTITLES=\"subs\"\nvideo.m3u8\n",
+		"#EXT-X-STREAM-INF:BANDWIDTH=8000000,CODECS=\"avc1.640029,mp4a.40.2\",VIDEO-RANGE=SDR,RESOLUTION=1920x1080,FRAME-RATE=23.976,SUBTITLES=\"subs\"\nvideo.m3u8\n",
 	} {
 		if !strings.Contains(master, want) {
 			t.Errorf("master =\n%s\nwant %s", master, want)

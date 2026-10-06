@@ -93,11 +93,14 @@ type videoJSON struct {
 	Stream      int                        `json:"stream"`
 	Decision    decision                   `json:"decision"`
 	DolbyVision domain.DolbyVisionHandling `json:"dolby_vision,omitzero"`
-	Codec       string                     `json:"codec,omitzero"`
+	Codec       domain.VideoCodec          `json:"codec,omitzero"`
 	Width       int                        `json:"width,omitzero"`
 	Height      int                        `json:"height,omitzero"`
 	BitrateKbps int                        `json:"bitrate_kbps,omitzero"`
-	ToneMapped  bool                       `json:"tone_mapped,omitzero"`
+	// Range is the range it is encoded in: SDR, or the copy's HDR kept; tone_mapped says HDR was
+	// mapped to SDR to reach it.
+	Range      domain.Range `json:"range,omitzero"`
+	ToneMapped bool         `json:"tone_mapped,omitzero"`
 	// BurnedSubtitle is the subtitle stream drawn into the picture.
 	BurnedSubtitle *int `json:"burned_subtitle,omitzero"`
 }
@@ -189,7 +192,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	d, err := playback.Decide(*req.Profile, playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams}, req.AudioStream, req.SubtitleStream)
+	d, err := playback.Decide(*req.Profile, playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams}, req.AudioStream, req.SubtitleStream, a.svc.Setup.Encoder.HEVC)
 	switch {
 	case errors.Is(err, playback.ErrNoSuchAudio):
 		writeProblem(w, a.logger, codeInvalidBody, "audio_stream is not one of the copy's audio streams")
@@ -224,7 +227,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		if e := v.Encode; e != nil {
 			answer.Video = &videoJSON{
 				Stream: v.Stream, Decision: decisionTranscode, Codec: e.Codec, Width: e.Width, Height: e.Height,
-				BitrateKbps: e.BitrateKbps, ToneMapped: e.ToneMap, BurnedSubtitle: e.Burn,
+				BitrateKbps: e.BitrateKbps, Range: e.Range, ToneMapped: e.ToneMap, BurnedSubtitle: e.Burn,
 			}
 		}
 	}
@@ -298,7 +301,8 @@ func (a *API) cardOf(r *http.Request, t domain.PlaybackTitle, c store.PlayCopy, 
 		}
 		if e := v.Encode; e != nil {
 			card.Video.Encode = &domain.PlaybackEncode{
-				Codec: e.Codec, Width: e.Width, Height: e.Height, BitrateKbps: e.BitrateKbps, ToneMapped: e.ToneMap,
+				Codec: string(e.Codec), Width: e.Width, Height: e.Height, Range: e.Range, BitrateKbps: e.BitrateKbps,
+				ToneMapped: e.ToneMap,
 			}
 			card.Acceleration = a.svc.HLS.Encoder(*v)
 		}

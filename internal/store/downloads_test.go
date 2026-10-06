@@ -69,7 +69,7 @@ func (s *Store) convertJobs(t *testing.T) int64 {
 }
 
 // The part's own file is ready at once; a conversion is made once for every profile asking for
-// the same quality, and forgotten, with its job, when the last of their downloads is removed.
+// the same quality and video, and forgotten, with its job, when the last of their downloads is removed.
 func TestAConversionIsSharedUntilNoDownloadNeedsIt(t *testing.T) {
 	s, film, part, profiles := downloadable(t)
 	ctx := t.Context()
@@ -81,7 +81,7 @@ func TestAConversionIsSharedUntilNoDownloadNeedsIt(t *testing.T) {
 	if n := s.convertJobs(t); n != 0 {
 		t.Errorf("%d conversions queued for the original, want none", n)
 	}
-	q := domain.Quality{MaxBitrateKbps: 2000, MaxWidth: 1280}
+	q := domain.Quality{MaxBitrateKbps: 2000, MaxWidth: 1280, Codec: domain.VideoH264, Range: domain.RangeSDR}
 	mine, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, &q)
 	if err != nil {
 		t.Fatal(err)
@@ -99,6 +99,15 @@ func TestAConversionIsSharedUntilNoDownloadNeedsIt(t *testing.T) {
 	}
 	if n := s.convertJobs(t); n != 1 {
 		t.Errorf("%d conversions queued, want one", n)
+	}
+	hdr := q
+	hdr.Codec, hdr.Range = domain.VideoHEVC, domain.RangeHDR10
+	other, err := s.AddDownload(ctx, profiles[1], devices[1], film, part, &hdr)
+	if err != nil || other.Conversion == mine.Conversion || *other.Quality != hdr {
+		t.Fatalf("HEVC HDR10 at the same quality: %+v, %v; want a conversion of its own", other, err)
+	}
+	if err := s.RemoveDownload(ctx, profiles[1], other.ID); err != nil {
+		t.Fatal(err)
 	}
 	node := uuid.NewV7()
 	c, err := s.StartConversion(ctx, mine.Conversion, node)
@@ -140,7 +149,7 @@ func TestFailedConversionsAreTriedAgainAndFinishedOnesExpire(t *testing.T) {
 	s, film, part, profiles := downloadable(t)
 	ctx := t.Context()
 	devices := [2]uuid.UUID{s.signIn(t, profiles[0]), s.signIn(t, profiles[1])}
-	q := domain.Quality{MaxBitrateKbps: 1000}
+	q := domain.Quality{MaxBitrateKbps: 1000, Codec: domain.VideoH264, Range: domain.RangeSDR}
 	d, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, &q)
 	if err != nil {
 		t.Fatal(err)
@@ -193,7 +202,7 @@ func TestADownloadIsItsDevices(t *testing.T) {
 	s, film, part, profiles := downloadable(t)
 	ctx := t.Context()
 	tv, phone := s.signIn(t, profiles[0]), s.signIn(t, profiles[0])
-	q := domain.Quality{MaxBitrateKbps: 2000}
+	q := domain.Quality{MaxBitrateKbps: 2000, Codec: domain.VideoH264, Range: domain.RangeSDR}
 	onTV, err := s.AddDownload(ctx, profiles[0], tv, film, part, &q)
 	if err != nil {
 		t.Fatal(err)
@@ -218,7 +227,7 @@ func TestADownloadIsItsDevices(t *testing.T) {
 		t.Errorf("the profile's list once the phone is signed out: %+v, %v; want the TV's", got, err)
 	}
 	laptop := s.signIn(t, profiles[1])
-	alone, err := s.AddDownload(ctx, profiles[1], laptop, film, part, &domain.Quality{MaxBitrateKbps: 500})
+	alone, err := s.AddDownload(ctx, profiles[1], laptop, film, part, &domain.Quality{MaxBitrateKbps: 500, Codec: domain.VideoH264, Range: domain.RangeSDR})
 	if err != nil {
 		t.Fatal(err)
 	}

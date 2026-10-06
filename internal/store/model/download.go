@@ -11,6 +11,8 @@ type Conversion struct {
 	PartID         UUID `gorm:"type:uuid"`
 	MaxBitrateKbps int
 	MaxWidth       int
+	VideoCodec     domain.VideoCodec
+	VideoRange     domain.Range
 	State          domain.DownloadState `gorm:"default:queued"`
 	Progress       float64
 	SizeBytes      *int64

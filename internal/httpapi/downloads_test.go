@@ -14,6 +14,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -65,7 +66,7 @@ func TestADownloadIsTheFileOrAConversionServedInRanges(t *testing.T) {
 	signer := playback.NewSigner([]byte("key"))
 	api := New(slog.New(slog.DiscardHandler), Info{}, Services{
 		Auth: fakeAuth{}, Playing: fakePlaying{}, Downloads: fakeDownloads{},
-		Conversions: fakeConversions{path: converted}, Signer: signer,
+		Conversions: fakeConversions{path: converted}, Signer: signer, Setup: Setup{Encoder: hls.Hardware{HEVC: domain.HEVCAllow}},
 	})
 	ask := func(body string) (int, downloadJSON) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/downloads", strings.NewReader(body))
@@ -91,6 +92,16 @@ func TestADownloadIsTheFileOrAConversionServedInRanges(t *testing.T) {
 	if code != http.StatusOK || d.Method != domain.PlayTranscode || d.State != domain.DownloadQueued || d.URL != "" ||
 		d.MaxBitrateKbps != 2000 || d.MaxWidth != 1280 {
 		t.Errorf("over it: %d %+v; want a conversion queued, with no address yet", code, d)
+	}
+	if d.VideoCodec != domain.VideoH264 || d.VideoRange != domain.RangeSDR {
+		t.Errorf("for a device that says nothing of its video: %s in %s, want H.264 in SDR", d.VideoCodec, d.VideoRange)
+	}
+	code, d = ask(`{` + film + part + `, "max_bitrate_kbps": 2000, "video_codecs": ["h264", "hevc"], "video_ranges": ["sdr", "hdr10"]}`)
+	if code != http.StatusOK || d.VideoCodec != domain.VideoHEVC || d.VideoRange != domain.RangeSDR {
+		t.Errorf("for a device of HEVC: %d %+v; want the SDR film converted to HEVC", code, d)
+	}
+	if code, _ := ask(`{` + film + part + `, "max_bitrate_kbps": 2000, "video_codecs": ["hevc"], "video_ranges": ["hdr"]}`); code != http.StatusBadRequest {
+		t.Errorf("a range there is none of: %d, want 400", code)
 	}
 
 	file := signer.Sign("/api/v1/downloads/"+downloadID.String()+"/file", time.Now().Add(time.Hour))

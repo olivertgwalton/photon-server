@@ -92,12 +92,13 @@ var (
 // Decide chooses how a copy plays on a client, with its audio stream as asked, else its default
 // one, else its first. It plays as it is where the client opens the container and plays every
 // stream; else in HLS with its video copied where the client plays that, encoding the audio where
-// it does not; else in HLS with its video encoded to H.264. ErrNoCompatibleStream, with the reasons
-// it could not play as it is, where the client takes none of these.
+// it does not; else in HLS with its video encoded, to HEVC where the client plays it and hevc
+// allows it, else to H.264. ErrNoCompatibleStream, with the reasons it could not play as it is,
+// where the client takes none of these.
 //
 // A picture subtitle asked for (PGS, DVD) is drawn into the video where the client cannot draw it
 // from the file itself, as HLS carries no pictures: as Jellyfin's subtitle Encode method does.
-func Decide(p Profile, c Copy, audio, subtitle *int) (Decision, error) {
+func Decide(p Profile, c Copy, audio, subtitle *int, hevc domain.HEVCEncoding) (Decision, error) {
 	video, sound := pick(c.Streams, audio)
 	if audio != nil && sound == nil {
 		return Decision{}, ErrNoSuchAudio
@@ -154,7 +155,7 @@ func Decide(p Profile, c Copy, audio, subtitle *int) (Decision, error) {
 	d.Method = domain.PlayRemux
 	// Out of a file played as it is, a picture subtitle reaches the client only drawn in.
 	if len(videoReasons) > 0 || tooMuch || burn != nil || !slices.Contains(fragmentableVideo, video.Codec) {
-		enc, ok := p.videoEncode(*video, c.BitrateKbps)
+		enc, ok := p.videoEncode(*video, c.BitrateKbps, hevc)
 		if !ok {
 			return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
 		}
@@ -263,10 +264,7 @@ func (p Profile) videoReasons(s media.Stream) []domain.TranscodeReason {
 // shows reports whether the client shows a stream's range: HDR10+ falls back to its HDR10, and a
 // Dolby Vision profile it does not take to the base layer it is compatible with.
 func (v VideoSupport) shows(s media.Stream) bool {
-	ranges := v.Ranges
-	if len(ranges) == 0 {
-		ranges = []domain.Range{domain.RangeSDR}
-	}
+	ranges := v.ranges()
 	r := s.Range
 	if r == "" {
 		r = domain.RangeSDR
@@ -285,6 +283,14 @@ func (v VideoSupport) shows(s media.Stream) bool {
 	return false
 }
 
+// ranges are the ranges the client shows, SDR alone where it lists none.
+func (v VideoSupport) ranges() []domain.Range {
+	if len(v.Ranges) == 0 {
+		return []domain.Range{domain.RangeSDR}
+	}
+	return v.Ranges
+}
+
 // showsDolbyVision reports whether the client shows a stream's Dolby Vision itself, not only its
 // base layer.
 func (p Profile) showsDolbyVision(s media.Stream) bool {
@@ -295,10 +301,7 @@ func (p Profile) showsDolbyVision(s media.Stream) bool {
 
 // showsBase reports whether the client shows a Dolby Vision stream's base layer by itself.
 func (v VideoSupport) showsBase(dv *media.DolbyVision) bool {
-	ranges := v.Ranges
-	if len(ranges) == 0 {
-		ranges = []domain.Range{domain.RangeSDR}
-	}
+	ranges := v.ranges()
 	switch dv.Compatibility {
 	case 1:
 		return slices.Contains(ranges, domain.RangeHDR10)
@@ -376,37 +379,87 @@ func (p Profile) audioEncode(s media.Stream) (domain.AudioEncode, bool) {
 // sourceKbps stands in for a copy whose bitrate is unknown, as Jellyfin's does.
 const sourceKbps = 40_000
 
-// videoEncode chooses what video the client cannot take as it is is encoded to: H.264, 8-bit and
-// SDR, no larger than the client takes it, and spending no more than the client's limit or what
-// H.264 needs to match the source.
-func (p Profile) videoEncode(s media.Stream, copyKbps int) (domain.VideoEncode, bool) {
-	i := slices.IndexFunc(p.Video, func(v VideoSupport) bool { return v.Codec == "h264" })
-	if i < 0 {
-		return domain.VideoEncode{}, false
+// videoEncode chooses what video the client cannot take as it is is encoded to: HEVC where the
+// client plays it and hevc allows it, as Jellyfin prefers HEVC where it is allowed, else H.264; no
+// larger than the client takes it, and spending no more than the client's limit or what the codec
+// needs to match the source. HEVC keeps the source's HDR10 or HLG in 10 bits where the client
+// shows it; any other HDR is tone mapped to SDR.
+func (p Profile) videoEncode(s media.Stream, copyKbps int, hevc domain.HEVCEncoding) (domain.VideoEncode, bool) {
+	codecs := []domain.VideoCodec{domain.VideoH264}
+	switch hevc {
+	case domain.HEVCAllow:
+		codecs = []domain.VideoCodec{domain.VideoHEVC, domain.VideoH264}
+	case domain.HEVCDeny:
 	}
-	h264 := p.Video[i]
-	width, height := fit(s.Width, s.Height, h264.MaxWidth, h264.MaxHeight)
-	kbps := scaleBitrate(cmp.Or(copyKbps, sourceKbps), s.Codec)
-	if p.MaxBitrateKbps > 0 {
-		kbps = min(kbps, p.MaxBitrateKbps)
+	for _, codec := range codecs {
+		i := slices.IndexFunc(p.Video, func(v VideoSupport) bool { return v.Codec == string(codec) })
+		if i < 0 {
+			continue
+		}
+		v := p.Video[i]
+		width, height := fit(s.Width, s.Height, v.MaxWidth, v.MaxHeight)
+		kbps := scaleBitrate(cmp.Or(copyKbps, sourceKbps), s.Codec, codec)
+		if p.MaxBitrateKbps > 0 {
+			kbps = min(kbps, p.MaxBitrateKbps)
+		}
+		r := domain.RangeSDR
+		if kept := hdrOf(s); codec == domain.VideoHEVC && kept != domain.RangeSDR && v.showsTen(kept) {
+			r = kept
+		}
+		return domain.VideoEncode{
+			Codec: codec, Width: width, Height: height, BitrateKbps: kbps, Range: r,
+			ToneMap: s.Range != "" && s.Range != domain.RangeSDR && r == domain.RangeSDR, Deinterlace: s.Interlaced,
+		}, true
 	}
-	return domain.VideoEncode{
-		Codec: "h264", Width: width, Height: height, BitrateKbps: kbps,
-		ToneMap: s.Range != "" && s.Range != domain.RangeSDR, Deinterlace: s.Interlaced,
-	}, true
+	return domain.VideoEncode{}, false
 }
 
-// scaleBitrate is what H.264 spends to match a source of codec at kbps, as Jellyfin's
-// ScaleBitrate: more than HEVC, VP9 and AV1 need for the same picture, and more again for a source
-// so small that H.264 would show its blocks; nothing more from 30 Mbps, where it is not seen.
-func scaleBitrate(kbps int, codec string) int {
-	factor := 1.0
+// hdrOf is the HDR a stream encoded again can keep: HDR10+ its HDR10, and Dolby Vision the base
+// layer it is compatible with, as Jellyfin transcodes Dolby Vision 8.1 as HDR10. SDR where there is
+// none, Dolby Vision 5's picture being nothing without its RPU.
+func hdrOf(s media.Stream) domain.Range {
+	switch s.Range {
+	case domain.RangeHDR10, domain.RangeHDR10Plus:
+		return domain.RangeHDR10
+	case domain.RangeHLG:
+		return domain.RangeHLG
+	case domain.RangeDV:
+		// 6 is a Blu-ray's profile 7, whose base layer is HDR10.
+		if dv := s.DolbyVision; dv != nil && (dv.Compatibility == 1 || dv.Compatibility == 6) {
+			return domain.RangeHDR10
+		} else if dv != nil && dv.Compatibility == 4 {
+			return domain.RangeHLG
+		}
+	case domain.RangeSDR:
+	}
+	return domain.RangeSDR
+}
+
+// showsTen reports whether the client shows a range in 10-bit HEVC: it lists the range, and takes
+// Main 10.
+func (v VideoSupport) showsTen(r domain.Range) bool {
+	return slices.Contains(v.ranges(), r) && (v.MaxBitDepth == 0 || v.MaxBitDepth >= 10) &&
+		(len(v.Profiles) == 0 || slices.ContainsFunc(v.Profiles, func(name string) bool { return strings.EqualFold(name, "Main 10") }))
+}
+
+// efficiency is how much less than H.264 a codec spends on the same picture, as Jellyfin's
+// GetVideoBitrateScaleFactor.
+func efficiency(codec string) float64 {
 	switch codec {
 	case "hevc", "vp9":
-		factor = 1 / 0.6
+		return 0.6
 	case "av1":
-		factor = 2
+		return 0.5
 	}
+	return 1
+}
+
+// scaleBitrate is what codec spends to match a source of from at kbps, as Jellyfin's
+// ScaleBitrate: more where the source's codec is the more efficient, never less, and more again
+// for a source so small that the encode would show its blocks; nothing more from 30 Mbps, where it
+// is not seen.
+func scaleBitrate(kbps int, from string, to domain.VideoCodec) int {
+	factor := max(efficiency(string(to))/efficiency(from), 1)
 	switch {
 	case kbps <= 500:
 		factor = max(factor, 4)
@@ -423,7 +476,7 @@ func scaleBitrate(kbps int, codec string) int {
 }
 
 // fit answers a picture's size scaled down to fit within a limit, keeping its shape, each side
-// even as H.264's 4:2:0 needs. A zero limit is none.
+// even as 4:2:0 needs. A zero limit is none.
 func fit(width, height, maxWidth, maxHeight int) (int, int) {
 	scale := 1.0
 	if maxWidth > 0 && width > maxWidth {

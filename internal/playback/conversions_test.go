@@ -120,7 +120,7 @@ func TestTwoProfilesShareOneConversionUntilBothRemoveIt(t *testing.T) {
 		}
 		profiles = append(profiles, p.ID)
 	}
-	q := domain.Quality{MaxBitrateKbps: 2000}
+	q := domain.Quality{MaxBitrateKbps: 2000, Codec: domain.VideoH264, Range: domain.RangeSDR}
 	var downloads []store.Download
 	for _, p := range profiles {
 		d, err := st.AddDownload(ctx, p, signIn(t, st, p), item, part, &q)
@@ -182,7 +182,7 @@ func TestAConversionWaitsForASlotAndGivesItUpToAPlay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := st.AddDownload(ctx, profile.ID, signIn(t, st, profile.ID), item, part, &domain.Quality{MaxBitrateKbps: 2000})
+	d, err := st.AddDownload(ctx, profile.ID, signIn(t, st, profile.ID), item, part, &domain.Quality{MaxBitrateKbps: 2000, Codec: domain.VideoH264, Range: domain.RangeSDR})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +274,7 @@ func TestARestartedNodeKeepsItsReadyDownloads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := st.AddDownload(ctx, profile.ID, signIn(t, st, profile.ID), item, part, &domain.Quality{MaxBitrateKbps: 2000})
+	d, err := st.AddDownload(ctx, profile.ID, signIn(t, st, profile.ID), item, part, &domain.Quality{MaxBitrateKbps: 2000, Codec: domain.VideoH264, Range: domain.RangeSDR})
 	if err != nil {
 		t.Fatal(err)
 	}
