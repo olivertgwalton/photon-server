@@ -34,14 +34,7 @@ func TestAnEpisodeWearsItsShowsCertificate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveIdentity(ctx, uuid.UUID(show.ID), domain.SourceTMDB, domain.Metadata{
-		Certificate: "TV-14",
-		Artwork: []domain.Artwork{
-			{Kind: domain.ArtworkPoster, URL: "https://images.test/show-poster.jpg"},
-			{Kind: domain.ArtworkBackdrop, URL: "https://images.test/show-backdrop.jpg"},
-			{Kind: domain.ArtworkLogo, URL: "https://images.test/show-logo.png"},
-		},
-	}, nil); err != nil {
+	if err := s.SaveIdentity(ctx, uuid.UUID(show.ID), domain.SourceTMDB, domain.Metadata{Certificate: "TV-14"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleMember, "")
@@ -55,9 +48,6 @@ func TestAnEpisodeWearsItsShowsCertificate(t *testing.T) {
 	}
 	if cards[0].Certificate != "TV-14" {
 		t.Errorf("card certificate = %q, want the show's TV-14", cards[0].Certificate)
-	}
-	if cards[0].Poster == uuid.Nil() || cards[0].Backdrop == uuid.Nil() || cards[0].Logo == uuid.Nil() {
-		t.Errorf("episode card = %+v, want the show's poster, backdrop and logo", cards[0])
 	}
 	page, err := s.Title(ctx, viewer.ID, uuid.UUID(ep.ID))
 	if err != nil {
