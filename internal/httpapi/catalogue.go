@@ -30,12 +30,22 @@ type catalogue interface {
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Home(ctx context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
+	LibraryCounts(ctx context.Context, profile uuid.UUID) (map[uuid.UUID]domain.TitleCounts, error)
 }
 
 type libraryJSON struct {
-	ID   uuid.UUID          `json:"id"`
-	Name string             `json:"name"`
-	Kind domain.LibraryKind `json:"kind"`
+	ID     uuid.UUID          `json:"id"`
+	Name   string             `json:"name"`
+	Kind   domain.LibraryKind `json:"kind"`
+	Counts countsJSON         `json:"counts"`
+}
+
+// countsJSON is how many of each kind of title a library holds.
+type countsJSON struct {
+	Movies   int `json:"movies"`
+	Shows    int `json:"shows"`
+	Seasons  int `json:"seasons"`
+	Episodes int `json:"episodes"`
 }
 
 type cardJSON struct {
@@ -71,9 +81,14 @@ func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
+	counts, err := a.svc.Catalogue.LibraryCounts(r.Context(), sessionOf(r).Profile.ID)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
 	out := make([]libraryJSON, len(libs))
 	for i, l := range libs {
-		out[i] = libraryJSON{ID: l.ID, Name: l.Name, Kind: l.Kind}
+		out[i] = libraryJSON{ID: l.ID, Name: l.Name, Kind: l.Kind, Counts: countsJSON(counts[l.ID])}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[libraryJSON]{Items: out})
 }

@@ -87,9 +87,22 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 		}
 		return uuid.UUID(part.ID)
 	}
+	counted := func(want map[uuid.UUID]domain.TitleCounts) {
+		t.Helper()
+		got, err := s.LibraryCounts(ctx, kid.ID)
+		if err != nil || len(got) != len(want) {
+			t.Fatalf("counts = %+v, %v; want %+v", got, err, want)
+		}
+		for lib, n := range want {
+			if got[lib] != n {
+				t.Errorf("counts of %s = %+v, want %+v", lib, got[lib], n)
+			}
+		}
+	}
 	if got := walls(); len(got) != 5 {
 		t.Errorf("with no limits: %q, want everything", got)
 	}
+	counted(map[uuid.UUID]domain.TitleCounts{films.ID: {Movies: 3, Shows: 1, Seasons: 1, Episodes: 1}, other.ID: {Movies: 1}})
 	twelve := 12
 	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedBlock, Libraries: []uuid.UUID{films.ID}}); err != nil {
 		t.Fatal(err)
@@ -97,6 +110,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 	if got := walls(); !slices.Equal(got, []string{"Paddington"}) {
 		t.Errorf("12 and under, rated, Films alone: %q, want Paddington", got)
 	}
+	counted(map[uuid.UUID]domain.TitleCounts{films.ID: {Movies: 1}})
 	for name, id := range map[string]uuid.UUID{"a film rated 15": ids["Heat"], "a TV-14 show's episode": uuid.UUID(ep.ID), "Up, in a library it lacks": ids["Up"]} {
 		if _, err := s.Title(ctx, kid.ID, id); !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s: %v, want ErrNotFound", name, err)
@@ -134,6 +148,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 	if got := walls(); !slices.Equal(got, []string{"Home Movie", "Paddington", "Up"}) {
 		t.Errorf("12 and under, unrated allowed, every library: %q", got)
 	}
+	counted(map[uuid.UUID]domain.TitleCounts{films.ID: {Movies: 2}, other.ID: {Movies: 1}})
 	got, err := s.Access(ctx, kid.ID)
 	if err != nil || got.MaxAge == nil || *got.MaxAge != 12 || got.Unrated != domain.UnratedAllow || len(got.Libraries) != 0 {
 		t.Errorf("access = %+v, %v", got, err)
@@ -215,5 +230,14 @@ func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
 		if seen := err == nil; seen != want || (err != nil && !errors.Is(err, ErrNotFound)) {
 			t.Errorf("%s (%s) at 14: seen %v, %v; want seen %v", name, films[name], seen, err, want)
 		}
+	}
+	// A library's counts are what the profile sees, its own episode's certificate too.
+	counts, err := s.LibraryCounts(ctx, teen.ID)
+	if want := (domain.TitleCounts{Movies: 1, Shows: 1, Seasons: 1, Episodes: 1}); err != nil || counts[lib.ID] != want {
+		t.Errorf("counts at 14: %+v, %v; want %+v", counts[lib.ID], err, want)
+	}
+	counts, _ = s.LibraryCounts(ctx, uuid.UUID{})
+	if want := (domain.TitleCounts{Movies: 4, Shows: 1, Seasons: 1, Episodes: 2}); counts[lib.ID] != want {
+		t.Errorf("the server's counts: %+v, want %+v", counts[lib.ID], want)
 	}
 }

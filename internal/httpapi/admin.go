@@ -32,6 +32,13 @@ type libraryAdmin interface {
 	RemoveLibrary(ctx context.Context, id uuid.UUID) error
 	ScanFolders(ctx context.Context, lib uuid.UUID, folders []string, delay time.Duration) error
 	RefreshLibrary(ctx context.Context, lib uuid.UUID, mode domain.RefreshMode) error
+	LibraryCounts(ctx context.Context, profile uuid.UUID) (map[uuid.UUID]domain.TitleCounts, error)
+}
+
+// adminLibraryListingJSON is a library as an admin keeps it, with everything it holds.
+type adminLibraryListingJSON struct {
+	adminLibraryJSON
+	Counts countsJSON `json:"counts"`
 }
 
 // adminLibraryJSON is a library as an admin sees it: where it is and how it is kept.
@@ -70,11 +77,17 @@ func (a *API) adminLibraries(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	out := make([]adminLibraryJSON, len(libs))
-	for i, l := range libs {
-		out[i] = adminLibrary(l)
+	// Counted as the server sees them, whatever the admin's own profile may.
+	counts, err := a.svc.Libraries.LibraryCounts(r.Context(), uuid.UUID{})
+	if err != nil {
+		a.internal(w, r, err)
+		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[adminLibraryJSON]{Items: out})
+	out := make([]adminLibraryListingJSON, len(libs))
+	for i, l := range libs {
+		out[i] = adminLibraryListingJSON{adminLibrary(l), countsJSON(counts[l.ID])}
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[adminLibraryListingJSON]{Items: out})
 }
 
 type addLibraryJSON struct {
