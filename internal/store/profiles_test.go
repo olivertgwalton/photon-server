@@ -39,6 +39,10 @@ func TestTheServerKeepsAnAdminWithAPassword(t *testing.T) {
 			_, err := s.SetProfile(ctx, kid.ID, ProfileChange{Role: domain.RoleAdmin})
 			return err
 		}, ErrAdminNeedsPassword},
+		{"adding an admin with no password", func() error {
+			_, err := s.AddProfile(ctx, "Guest", domain.RoleAdmin, "")
+			return err
+		}, ErrAdminNeedsPassword},
 		{"renaming onto another's name", func() error {
 			_, err := s.SetProfile(ctx, kid.ID, ProfileChange{Name: "Oliver"})
 			return err

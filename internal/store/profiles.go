@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -34,9 +35,12 @@ func found(err error) error {
 
 func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, passwordHash string) (domain.Profile, error) {
 	row := model.Profile{Name: name, Role: role, PasswordHash: optional(passwordHash)}
-	if err := s.q.Profile.WithContext(ctx).Create(&row); err != nil {
+	if err := adminPassword(s.q.Profile.WithContext(ctx).Create(&row)); err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
 			return domain.Profile{}, ErrProfileExists
+		}
+		if errors.Is(err, ErrAdminNeedsPassword) {
+			return domain.Profile{}, err
 		}
 		return domain.Profile{}, fmt.Errorf("adding profile: %w", err)
 	}
@@ -255,9 +259,17 @@ func (s *Store) DeleteDevice(ctx context.Context, id uuid.UUID, profile *uuid.UU
 var (
 	// ErrLastAdmin is a change that would leave the server with no admin.
 	ErrLastAdmin = errors.New("the server's last admin cannot stop being one")
-	// ErrAdminNeedsPassword is an admin left with no password to sign in with.
+	// ErrAdminNeedsPassword is an admin left with no password to sign in with, which the
+	// admin_password constraint refuses.
 	ErrAdminNeedsPassword = errors.New("an admin profile needs a password")
 )
+
+func adminPassword(err error) error {
+	if pg, ok := errors.AsType[*pgconn.PgError](err); ok && pg.ConstraintName == "admin_password" {
+		return ErrAdminNeedsPassword
+	}
+	return err
+}
 
 // ProfileChange is what to change about a profile; an empty name or role, or a nil hash, is left
 // as it is, and an empty hash clears the password.
@@ -286,16 +298,13 @@ func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange) (
 		if c.PasswordHash != nil {
 			row.PasswordHash = optional(*c.PasswordHash)
 		}
-		if row.Role == domain.RoleAdmin && row.PasswordHash == nil {
-			return ErrAdminNeedsPassword
-		}
 		password := p.PasswordHash.Null()
 		if row.PasswordHash != nil {
 			password = p.PasswordHash.Value(*row.PasswordHash)
 		}
 		if _, err := p.WithContext(ctx).Where(p.ID.Eq(row.ID)).
 			UpdateSimple(p.Name.Value(row.Name), p.Role.Value(string(row.Role)), password); err != nil {
-			return err
+			return adminPassword(err)
 		}
 		out = profile(*row)
 		return nil
