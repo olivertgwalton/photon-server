@@ -70,16 +70,15 @@ func applyMetadata(ctx context.Context, tx db, item uuid.UUID, source domain.Fie
 	if len(written) == 0 {
 		return nil
 	}
+	b := &pgx.Batch{}
 	if len(assigns) > 0 {
-		if _, err := tx.Exec(ctx, `UPDATE items SET `+strings.Join(assigns, ", ")+` WHERE id = $1`, args...); err != nil {
-			return err
-		}
+		b.Queue(`UPDATE items SET `+strings.Join(assigns, ", ")+` WHERE id = $1`, args...)
 	}
-	_, err = tx.Exec(ctx, `
+	b.Queue(`
 		INSERT INTO item_fields (item_id, field, source) SELECT $1, unnest($2::text[]), $3
 		ON CONFLICT (item_id, field) DO UPDATE SET source = excluded.source, updated_at = now()`,
 		item, written, source)
-	return err
+	return tx.SendBatch(ctx, b).Close()
 }
 
 // ranks orders the sources that may write an item's fields: what files say lowest, a reader's own
