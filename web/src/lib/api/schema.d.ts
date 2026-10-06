@@ -3523,7 +3523,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Page the titles and the people a search finds */
+        /** Page the titles, episodes among them, and the people a search finds */
         get: {
             parameters: {
                 query?: {
