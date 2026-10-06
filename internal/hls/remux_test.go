@@ -546,3 +546,63 @@ func TestARemuxIsUnderWayWhereThePlayerStarts(t *testing.T) {
 		t.Error("segment 0 was made for a player starting at 0:13")
 	}
 }
+
+// A player gone without a word gives back its run's ffmpeg once it has asked for nothing for a
+// while, keeping its playback; asking again starts another.
+func TestARunNobodyAsksOfStopsUntilAskedAgain(t *testing.T) {
+	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
+	src := filepath.Join(t.TempDir(), "film.mkv")
+	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc2=size=160x90:rate=24", "-t", "240",
+		"-c:v", "libx264", "-preset", "ultrafast", "-g", "48", "-keyint_min", "48", "-sc_threshold", "0", src)
+	if out, err := made.CombinedOutput(); err != nil {
+		t.Fatalf("making the film: %v: %s", err, out)
+	}
+	r, err := NewRemuxer(ffmpeg, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.idle = 200 * time.Millisecond
+	var keyframes []time.Duration
+	for k := range 120 {
+		keyframes = append(keyframes, time.Duration(2*k)*time.Second)
+	}
+	playback := uuid.NewV7()
+	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
+		Open: func() (*os.File, error) { return os.Open(src) }, Part: Part{Duration: 240 * time.Second, Keyframes: keyframes},
+		Video: domain.VideoPlan{Codec: "h264"},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close(playback)
+	s, err := r.session(playback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	running := func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.run != nil
+	}
+	get := func(n int) {
+		t.Helper()
+		f, err := r.Segment(t.Context(), playback, n)
+		if err != nil {
+			t.Fatalf("segment %d: %v", n, err)
+		}
+		_ = f.Close()
+	}
+	get(0)
+	deadline := time.Now().Add(10 * time.Second)
+	for running() {
+		if time.Now().After(deadline) {
+			t.Fatal("the run is still going with nothing asked of it")
+		}
+		<-time.After(10 * time.Millisecond)
+	}
+	if !r.Has(playback) {
+		t.Fatal("the playback went with its run")
+	}
+	get(1)
+	get(20)
+}

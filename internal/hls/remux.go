@@ -1,6 +1,7 @@
 package hls
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -23,6 +24,9 @@ const (
 	// ahead is how far the remux runs past the furthest segment asked for before it waits: ffmpeg
 	// then blocks on its pipe and costs nothing.
 	ahead = 5
+	// idleRun is how long a waiting run is kept with no segment asked for before its ffmpeg is
+	// stopped, giving back its encoder to the node; a player that comes back starts another.
+	idleRun = time.Minute
 	// jump is how far beyond the remux's place a request may be before it restarts there rather
 	// than waits, as Jellyfin's does about 24 seconds out.
 	jump = 4
@@ -42,6 +46,9 @@ var ErrPreempted = errors.New("hls: conversion stopped for a playback")
 
 // errEnded is a file that ends before the segments its length promised.
 var errEnded = errors.New("hls: the file ends early")
+
+// errIdle is a run stopped for having had no segment asked of it for idleRun.
+var errIdle = errors.New("hls: no segment asked for")
 
 // Unlimited is a remuxer that encodes as many videos at once as it is asked to.
 const Unlimited = 0
@@ -65,6 +72,7 @@ type Remuxer struct {
 	subtitles string
 	hw        Hardware
 	limit     int
+	idle      time.Duration
 	log       *slog.Logger
 
 	mu          sync.Mutex
@@ -95,7 +103,7 @@ func NewRemuxer(ffmpeg, dir, subtitles string, hw Hardware, limit int, log *slog
 		_ = os.RemoveAll(a)
 	}
 	return &Remuxer{
-		ffmpeg: ffmpeg, dir: dir, subtitles: subtitles, hw: hw, limit: limit, log: log,
+		ffmpeg: ffmpeg, dir: dir, subtitles: subtitles, hw: hw, limit: limit, idle: idleRun, log: log,
 		sessions: map[uuid.UUID]*session{}, conversions: map[*conversion]struct{}{}, extractions: map[uuid.UUID]*extraction{},
 	}, nil
 }
@@ -500,15 +508,18 @@ func (r *Remuxer) start(ctx context.Context, s *session, n int) {
 		err := r.produce(ctx, s, run)
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		if s.run == run {
+			s.run = nil
+		}
+		if errors.Is(err, errIdle) {
+			return
+		}
 		// A file shorter than it says ends before the part's last segments.
 		if err == nil && run.at < len(s.plan) && s.plan[run.at].Part == run.part {
 			err = fmt.Errorf("%w: segment %d", errEnded, run.at)
 		}
 		if err != nil && ctx.Err() == nil {
 			r.log.WarnContext(ctx, "remux failed", slog.String("dir", s.dir), slog.Any("err", err))
-		}
-		if s.run == run {
-			s.run = nil
 		}
 		// Whoever waits on a segment this run would have made learns it will not be.
 		if err != nil && ctx.Err() == nil {
@@ -555,13 +566,14 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	if err := r.cut(ctx, s, run, out); err != nil {
+	err = r.cut(ctx, s, run, out)
+	if err != nil {
 		stop(err)
 	}
 	// Nothing reads what ffmpeg writes now, so a write it is blocked on fails at once rather than
 	// holding it past the grace a stop gives it.
 	_ = out.Close()
-	return cmd.Err(cmd.Wait())
+	return cmp.Or(err, cmd.Err(cmd.Wait()))
 }
 
 // fdInput starts an ffmpeg run that reads the file media.NewCommand passes it as descriptor 3.
@@ -701,7 +713,8 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 	}
 }
 
-// throttle waits while the run is far enough ahead of what has been asked for.
+// throttle waits while the run is far enough ahead of what has been asked for, and gives up with
+// errIdle once nothing has been asked for r.idle.
 func (r *Remuxer) throttle(ctx context.Context, s *session, run *run, n int) error {
 	for {
 		s.mu.Lock()
@@ -714,6 +727,8 @@ func (r *Remuxer) throttle(ctx context.Context, s *session, run *run, n int) err
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-run.more:
+		case <-time.After(r.idle):
+			return errIdle
 		}
 	}
 }
