@@ -207,6 +207,13 @@ const collection: Schemas["TitlePage"] = {
 
 let webhooks: Schemas["Webhook"][] = [];
 let chosenPoster = "a-1";
+let maintenance: Schemas["Maintenance"] = {
+	start_hour: 2,
+	end_hour: 5,
+	time_zone: "UTC",
+	previews: "window",
+	markers: "window_and_added",
+};
 const deadJobs: Schemas["DeadJob"][] = [
 	{
 		id: 41,
@@ -420,6 +427,11 @@ export async function admin(
 			} satisfies Schemas["TaskList"]);
 		case "POST /api/v1/admin/tasks/backup_database/run":
 			return done(202);
+		case "GET /api/v1/admin/maintenance":
+			return json(maintenance);
+		case "PUT /api/v1/admin/maintenance":
+			maintenance = (await request.json()) as Schemas["Maintenance"];
+			return json(maintenance);
 		case "GET /api/v1/admin/jobs":
 			return json({
 				counts: [

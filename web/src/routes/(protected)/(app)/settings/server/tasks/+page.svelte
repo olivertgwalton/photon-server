@@ -9,6 +9,10 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Table from "#lib/components/ui/table/index.js";
 import { act } from "#lib/admin/act.js";
 import { client } from "#lib/api/client.js";
+import type { components } from "#lib/api/schema.js";
+import Choice from "#lib/components/admin/Choice.svelte";
+import * as Field from "#lib/components/ui/field/index.js";
+import { fields } from "#lib/form.js";
 
 let { data } = $props();
 
@@ -16,6 +20,44 @@ const api = client();
 
 const live = liveStream();
 const clock = ticking(30_000);
+
+const hours = Array.from({ length: 24 }, (_, h) => ({
+	value: String(h),
+	label: `${String(h).padStart(2, "0")}:00`,
+}));
+
+const zones = $derived(
+	[
+		...new Set([
+			data.maintenance.time_zone,
+			"UTC",
+			...Intl.supportedValuesOf("timeZone"),
+		]),
+	].map((z) => ({ value: z, label: z.replaceAll("_", " ") })),
+);
+
+const timings = [
+	{ value: "window", label: "In the window" },
+	{ value: "window_and_added", label: "In the window and as titles are added" },
+] as const;
+
+function saveWindow(event: SubmitEvent) {
+	const form = fields(event);
+	const timing = (name: string) =>
+		String(form.get(name)) as components["schemas"]["Timing"];
+	return act(
+		api.PUT("/api/v1/admin/maintenance", {
+			body: {
+				start_hour: Number(form.get("start_hour")),
+				end_hour: Number(form.get("end_hour")),
+				time_zone: String(form.get("time_zone")),
+				previews: timing("previews"),
+				markers: timing("markers"),
+			},
+		}),
+		"Saved.",
+	);
+}
 
 function took(started?: string, finished?: string) {
 	if (!started || !finished) return "";
@@ -28,6 +70,67 @@ function took(started?: string, finished?: string) {
 	title="Scheduled tasks"
 	description="What the server does by itself, and when it next will. Run one now to have it sooner."
 />
+
+<form onsubmit={saveWindow} class="grid max-w-2xl gap-6">
+	<Field.Set>
+		<Field.Legend>Maintenance window</Field.Legend>
+		<Field.Description>
+			When previews are made and intros and credits are found by sound. Nothing
+			that reads the libraries' files in the background starts while anything
+			plays.
+		</Field.Description>
+		<div class="grid gap-4 sm:grid-cols-3">
+			<Field.Field>
+				<Field.Label for="window-start">From</Field.Label>
+				<Choice
+					id="window-start"
+					name="start_hour"
+					value={String(data.maintenance.start_hour)}
+					options={hours}
+				/>
+			</Field.Field>
+			<Field.Field>
+				<Field.Label for="window-end">Until</Field.Label>
+				<Choice
+					id="window-end"
+					name="end_hour"
+					value={String(data.maintenance.end_hour)}
+					options={hours}
+				/>
+			</Field.Field>
+			<Field.Field>
+				<Field.Label for="window-zone">Time zone</Field.Label>
+				<Choice
+					id="window-zone"
+					name="time_zone"
+					value={data.maintenance.time_zone}
+					options={zones}
+				/>
+			</Field.Field>
+		</div>
+		<div class="grid gap-4 sm:grid-cols-2">
+			<Field.Field>
+				<Field.Label for="window-previews">Make previews</Field.Label>
+				<Choice
+					id="window-previews"
+					name="previews"
+					value={data.maintenance.previews}
+					options={timings}
+				/>
+			</Field.Field>
+			<Field.Field>
+				<Field.Label for="window-markers">Find intros and credits</Field.Label>
+				<Choice
+					id="window-markers"
+					name="markers"
+					value={data.maintenance.markers}
+					options={timings}
+				/>
+			</Field.Field>
+		</div>
+	</Field.Set>
+	<div><Button type="submit">Save</Button></div>
+</form>
 
 <Table.Root>
 	<Table.Header>
