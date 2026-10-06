@@ -122,12 +122,16 @@ func (web *Web) serveFile(w http.ResponseWriter, r *http.Request, name string) e
 	return nil
 }
 
+// accepts is whether the client takes the content coding token.
+// ponytail: Accept-Encoding is matched by name, not weighed by q; no client refuses br or gzip by q=0.
+func accepts(r *http.Request, token string) bool {
+	return strings.Contains(r.Header.Get("Accept-Encoding"), token)
+}
+
 // open opens the best compressed copy the browser takes, saying which, else the file itself.
-// ponytail: Accept-Encoding is matched by name, not weighed by q; no browser refuses br or gzip.
 func (web *Web) open(w http.ResponseWriter, r *http.Request, name string) (fs.File, error) {
-	accepted := r.Header.Get("Accept-Encoding")
 	for _, e := range encodings {
-		if !strings.Contains(accepted, e.token) {
+		if !accepts(r, e.token) {
 			continue
 		}
 		if f, err := web.files.Open(name + e.ext); err == nil {
