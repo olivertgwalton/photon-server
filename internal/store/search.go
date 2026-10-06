@@ -14,8 +14,8 @@ import (
 )
 
 // SearchQuery asks for the films, shows, collections and episodes whose title has words starting
-// with each word typed, ignoring case and accents: "amel" finds Amélie. Library narrows it to one
-// library. Limit of them are answered from Offset.
+// with each word typed, ignoring case and accents: "amel" finds Amélie, once however many libraries
+// hold it. Library narrows it to one library. Limit of them are answered from Offset.
 type SearchQuery struct {
 	Profile uuid.UUID
 	Text    string
@@ -37,7 +37,7 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error
 		FROM items
 		WHERE kind IN (@movie, @show, @collection, @episode) AND search @@ to_tsquery('simple', search_text(@query))
 			AND (CAST(@library AS uuid) IS NULL OR library_id = CAST(@library AS uuid))
-			AND EXISTS (SELECT 1 FROM viewer(CAST(@profile AS uuid)) v WHERE sees(v, items))`
+			AND EXISTS (SELECT 1 FROM viewer(CAST(@profile AS uuid)) v WHERE sees(v, items) AND first_of_title(v, items))`
 	var library *model.UUID
 	if q.Library != (uuid.UUID{}) {
 		library = new(model.UUID(q.Library))
