@@ -16,6 +16,8 @@ type watching interface {
 	ClearProgress(ctx context.Context, profile, item uuid.UUID) error
 	Favourite(ctx context.Context, profile, item uuid.UUID) error
 	Unfavourite(ctx context.Context, profile, item uuid.UUID) error
+	Watchlist(ctx context.Context, profile, item uuid.UUID) error
+	Unwatchlist(ctx context.Context, profile, item uuid.UUID) error
 }
 
 // clockSkew is how far ahead of the server's a client's clock may run; atRule says it.
