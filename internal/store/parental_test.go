@@ -109,8 +109,11 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 			t.Errorf("timing the connection on %s: %v, want ErrNotFound", name, err)
 		}
 	}
-	if found, total, _ := s.Search(ctx, SearchQuery{Profile: kid.ID, Text: "heat", Limit: 10}); len(found) != 0 || total != 0 {
-		t.Errorf("searching for Heat: %+v, want nothing", found)
+	// The episode is called Show too, and is rated by its show.
+	for _, text := range []string{"heat", "show"} {
+		if found, total, _ := s.Search(ctx, SearchQuery{Profile: kid.ID, Text: text, Limit: 10}); len(found) != 0 || total != 0 {
+			t.Errorf("searching for %q: %+v, want nothing", text, found)
+		}
 	}
 	rows, err := s.Home(ctx, kid.ID, 10)
 	if err != nil {

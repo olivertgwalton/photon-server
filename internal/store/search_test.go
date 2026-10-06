@@ -39,6 +39,8 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 	add(films.ID, domain.ItemMovie, "Theatre of Blood", "")
 	add(films.ID, domain.ItemMovie, "Heat Wave", "")
 	add(tv.ID, domain.ItemShow, "The Heat", "")
+	// An episode comes after the films and shows matched as well, but before those matched worse.
+	add(tv.ID, domain.ItemEpisode, "Heat Seeker", "")
 	search := func(text string, lib uuid.UUID) []string {
 		t.Helper()
 		cards, total, err := s.Search(ctx, SearchQuery{Text: text, Library: lib, Limit: 20})
@@ -56,8 +58,8 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 		lib  uuid.UUID
 		want []string
 	}{
-		{"heat", uuid.UUID{}, []string{"Heat", "Heat Wave", "The Heat"}},
-		{"heat", tv.ID, []string{"The Heat"}},
+		{"heat", uuid.UUID{}, []string{"Heat", "Heat Wave", "Heat Seeker", "The Heat"}},
+		{"heat", tv.ID, []string{"Heat Seeker", "The Heat"}},
 		{"AMEL", uuid.UUID{}, []string{"Amélie"}},
 		{"destin poul", uuid.UUID{}, []string{"Amélie"}},
 		{"eat", uuid.UUID{}, nil},
@@ -69,7 +71,7 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 	}
 	// A page past the first goes on where it left off and counts every match.
 	cards, total, err := s.Search(ctx, SearchQuery{Text: "heat", Offset: 1, Limit: 1})
-	if err != nil || total != 3 || len(cards) != 1 || cards[0].Title != "Heat Wave" {
-		t.Errorf("the second of three: %+v of %d, %v; want Heat Wave", cards, total, err)
+	if err != nil || total != 4 || len(cards) != 1 || cards[0].Title != "Heat Wave" {
+		t.Errorf("the second of four: %+v of %d, %v; want Heat Wave", cards, total, err)
 	}
 }

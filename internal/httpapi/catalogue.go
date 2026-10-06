@@ -169,8 +169,8 @@ type personRefJSON struct {
 	Photo uuid.UUID `json:"photo,omitzero"`
 }
 
-// searchJSON is a page of the titles and of the people found, both from offset, and how many of
-// each there are in all.
+// searchJSON is a page of the titles (films, shows, collections and episodes) and of the people
+// found, both from offset, and how many of each there are in all.
 type searchJSON struct {
 	Items       []cardJSON      `json:"items"`
 	People      []personRefJSON `json:"people"`
