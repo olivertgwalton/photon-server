@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -458,5 +459,51 @@ func TestARemuxWaitsAheadOfAPlayerThatSeeksBack(t *testing.T) {
 		if kept(n) {
 			t.Fatalf("segment %d was made with the player at 2; want the remux waiting %d ahead of it", n, ahead)
 		}
+	}
+}
+
+// A player has a part's initialisation as soon as ffmpeg has written it, not once a whole segment
+// has been made after it.
+func TestAnInitIsAnsweredBeforeAnySegmentIsMade(t *testing.T) {
+	fixture, err := filepath.Abs("testdata/fragments.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, init, err := readInit(bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// An encoder slow to make its first segment: it writes the initialisation, then nothing.
+	ffmpeg := filepath.Join(t.TempDir(), "ffmpeg")
+	script := "#!/bin/sh\nhead -c " + strconv.Itoa(len(init)) + " '" + fixture + "'\nexec sleep 60\n"
+	if err := os.WriteFile(ffmpeg, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRemuxer(ffmpeg, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	playback := uuid.NewV7()
+	if err := r.Open(playback, Copy{Parts: []Source{{
+		Open: func() (*os.File, error) { return os.Open(fixture) }, Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)},
+		Video: domain.VideoPlan{Codec: "h264"},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close(playback)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	f, err := r.Init(ctx, playback, 0)
+	if err != nil {
+		t.Fatalf("init: %v, want it answered with no segment made", err)
+	}
+	defer f.Close()
+	got, err := io.ReadAll(f)
+	if err != nil || !bytes.Equal(got, init) {
+		t.Errorf("init holds %d bytes (%v), want the %d ffmpeg wrote", len(got), err, len(init))
 	}
 }
