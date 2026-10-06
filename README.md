@@ -16,6 +16,10 @@ docker compose exec server photon-server profile add -name Admin -role admin
 docker compose exec server photon-server library add -name Films -kind movies /media/Films
 ```
 
+A library added is scanned straight away. `library add` takes the same settings as `library set`
+(`-previews`, `-markers`, `-keyframes`, `-sources`…), so a library on a network or debrid mount can
+be added as `-previews off -markers chapters -keyframes index` and never read whole.
+
 The web app is in the same image and on the same port: open `http://<server>:8640` and log in.
 
 ## Develop
