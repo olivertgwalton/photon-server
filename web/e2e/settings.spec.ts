@@ -147,6 +147,7 @@ test("the home's rows are put in order and hidden, by pointer or keyboard", asyn
 		"Favourites",
 		"Recently Added Films",
 		"Recently Added Shows",
+		"Recently Released",
 	]);
 
 	// The arrow keeps focus as its row climbs, so Enter climbs again.
@@ -156,7 +157,7 @@ test("the home's rows are put in order and hidden, by pointer or keyboard", asyn
 	for (let i = 0; i < 3; i++) await page.keyboard.press("Enter");
 	await expect(rows.first()).toHaveText("Recently Added Films");
 	await expect(
-		page.getByText("Recently Added Films moved to 1 of 5."),
+		page.getByText("Recently Added Films moved to 1 of 6."),
 	).toBeAttached();
 	await page.getByRole("switch", { name: "Show Continue Watching" }).click();
 

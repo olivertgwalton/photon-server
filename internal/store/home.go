@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"strconv"
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
@@ -75,6 +76,20 @@ var rowQueries = map[domain.HomeRow]string{
 		WHERE show.kind = 'show' AND latest.added_at IS NOT NULL
 			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, show) AND first_of_title(v, show))
 		ORDER BY latest.added_at DESC, show.id DESC LIMIT @limit`,
+	// A film by its release date, else the first of its year, as the wall sorts; a show by when its
+	// newest episode aired, as its page dates it; nothing yet to come.
+	domain.RowRecentlyReleased: `
+		WITH released AS (
+			SELECT id, released_desc AS released FROM items
+			WHERE kind = 'movie' AND released_desc BETWEEN current_date - ` + strconv.Itoa(releasedWithinDays) + ` AND current_date
+			UNION ALL
+			SELECT season.parent_id, max(coalesce(e.release_date, e.air_date)) FROM items e JOIN items season ON season.id = e.parent_id
+			WHERE e.kind = 'episode' AND coalesce(e.release_date, e.air_date) BETWEEN current_date - ` + strconv.Itoa(releasedWithinDays) + ` AND current_date
+			GROUP BY season.parent_id
+		)
+		SELECT ` + itemColumnsOf("i") + ` FROM released JOIN items i ON i.id = released.id
+		WHERE EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))
+		ORDER BY released.released DESC, i.id DESC LIMIT @limit`,
 }
 
 // collectionRowsQuery is, for each collection placed on the home page that the profile sees, by
@@ -97,6 +112,10 @@ type collectionMember struct {
 	CollectionTitle string
 	model.Item
 }
+
+// releasedWithinDays is how lately a title is released to be on the recently released row: a
+// year, as a film's files come months after it opens in cinemas.
+const releasedWithinDays = 365
 
 // Home answers a profile's home page: each row it shows with anything in it, in the order it
 // arranged them, up to limit cards each.

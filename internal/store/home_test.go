@@ -330,3 +330,79 @@ func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
 		t.Errorf("a peek at the start moved last played from %v to %v, want it left", before.State.LastPlayedAt, after.State.LastPlayedAt)
 	}
 }
+
+// homeRow answers the titles on one of a profile's home rows, in order.
+func homeRow(t *testing.T, s *Store, profile uuid.UUID, row domain.HomeRow) []string {
+	t.Helper()
+	rows, err := s.Home(t.Context(), profile, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, r := range rows {
+		if r.Kind == row {
+			for _, c := range r.Cards {
+				out = append(out, c.Title)
+			}
+		}
+	}
+	return out
+}
+
+// homeLibraries adds a films library holding films and a shows library holding shows of one
+// episode each, and an admin and a profile allowed only the films.
+func homeLibraries(t *testing.T, s *Store, films, shows []string) (admin, kid uuid.UUID) {
+	t.Helper()
+	ctx := t.Context()
+	filmLib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	part := func(rel string) []Copy {
+		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
+	}
+	for _, f := range films {
+		if _, err := s.SaveFolder(ctx, filmLib.ID, f, []byte("v"), []Film{{Title: f, Folder: f, Copies: part(f + "/" + f + ".mkv")}}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, sh := range shows {
+		ep := Episode{Season: 1, Episodes: []int{1}, Title: sh + " S1E1", Folder: sh, ByNumber: true, Copies: part(sh + "/S1E1.mkv")}
+		if _, err := s.SaveShowFolder(ctx, tv.ID, sh, []byte("v"), Show{Title: sh, Folder: sh}, []Episode{ep}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	k, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAccess(ctx, k.ID, ProfileAccess{Libraries: []uuid.UUID{filmLib.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	return a.ID, k.ID
+}
+
+func TestRecentlyReleased(t *testing.T) {
+	s := migrated(t)
+	admin, kid := homeLibraries(t, s, []string{"Weeks", "Months", "Long Ago", "To Come", "Undated"}, []string{"The Wire"})
+	for title, daysAgo := range map[string]int{"Weeks": 10, "Months": 100, "Long Ago": 800, "To Come": -30, "The Wire S1E1": 30} {
+		if _, err := s.pool.Exec(t.Context(), `UPDATE items SET release_date = current_date - $2::int WHERE title = $1`, title, daysAgo); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if got, want := homeRow(t, s, admin, domain.RowRecentlyReleased), []string{"Weeks", "The Wire", "Months"}; !slices.Equal(got, want) {
+		t.Errorf("recently released = %v, want %v: the newest first, a show by its episode, nothing old or yet to come", got, want)
+	}
+	if got, want := homeRow(t, s, kid, domain.RowRecentlyReleased), []string{"Weeks", "Months"}; !slices.Equal(got, want) {
+		t.Errorf("recently released for a profile without the shows = %v, want %v", got, want)
+	}
+}
