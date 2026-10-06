@@ -51,7 +51,10 @@ func TestIdentityDescribesAShowsEpisodes(t *testing.T) {
 
 	err = s.SaveIdentity(ctx, uuid.UUID(row.ID), domain.SourceTMDB, domain.Metadata{Title: "The Wire", IDs: map[domain.Provider]string{
 		domain.ProviderTMDB: "1438", domain.ProviderTVDB: "1",
-	}}, map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Title: "The Target"}}}})
+	}}, map[int]domain.SeasonMetadata{1: {
+		Metadata: domain.Metadata{Title: "Book One: The Target", Overview: "The drug trade."},
+		Episodes: map[int]domain.Metadata{1: {Title: "The Target"}},
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,6 +64,9 @@ func TestIdentityDescribesAShowsEpisodes(t *testing.T) {
 	}
 	got := map[string]string{}
 	for _, it := range items {
+		if it.Kind == domain.ItemSeason && (it.Overview == nil || *it.Overview != "The drug trade.") {
+			t.Errorf("season overview %v, want the provider's", it.Overview)
+		}
 		key := string(it.Kind)
 		if it.EpisodeNumber != nil {
 			key += string(rune('0' + *it.EpisodeNumber))
