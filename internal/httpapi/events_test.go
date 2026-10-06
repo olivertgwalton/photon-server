@@ -149,9 +149,9 @@ func TestAnAdminsStreamTellsWhatHappensOnEveryNode(t *testing.T) {
 	}
 
 	progress := await(domain.EventScanProgress, func() {
-		there.Scanning(t.Context())(domain.ScanProgress{Library: lib, Phase: domain.ScanReading, Done: 3, Known: 10})
+		there.Scanning(t.Context())(domain.ScanProgress{Library: lib, Phase: domain.ScanReading, Done: 3, Known: 10, Folder: "Heat (1995)"})
 	})
-	if progress.Details["phase"] != string(domain.ScanReading) || progress.Details["done"] != 3.0 || progress.Details["known"] != 10.0 {
+	if progress.Details["phase"] != string(domain.ScanReading) || progress.Details["done"] != 3.0 || progress.Details["known"] != 10.0 || progress.Details["folder"] != "Heat (1995)" {
 		t.Errorf("scan progress told as %+v", progress)
 	}
 	scanning := func() bool {

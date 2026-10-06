@@ -658,6 +658,12 @@ func TestAScanTellsHowFarItHasGot(t *testing.T) {
 	if _, err := f.scanner.Scan(t.Context(), f.lib, []string{"."}, func(p domain.ScanProgress) { told = append(told, p) }, func(store.Changed) {}); err != nil {
 		t.Fatal(err)
 	}
+	// The library's folders are read at once, so either may be told first.
+	var folders []string
+	for i := range told {
+		folders = append(folders, told[i].Folder)
+		told[i].Folder = ""
+	}
 	want := []domain.ScanProgress{
 		{Library: f.lib.ID, Phase: domain.ScanReading, Done: 1, Known: 4},
 		{Library: f.lib.ID, Phase: domain.ScanReading, Done: 2, Known: 4},
@@ -666,6 +672,9 @@ func TestAScanTellsHowFarItHasGot(t *testing.T) {
 	}
 	if !slices.Equal(told, want) {
 		t.Errorf("told %+v, want %+v", told, want)
+	}
+	if want := []string{"", "", "Alien (1979)", "Heat (1995)"}; !slices.Equal(slices.Sorted(slices.Values(folders)), want) {
+		t.Errorf("told folders %q, want %q", folders, want)
 	}
 }
 

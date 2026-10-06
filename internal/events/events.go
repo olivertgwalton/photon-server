@@ -222,7 +222,7 @@ func (h *Hub) Scanning(ctx context.Context) func(domain.ScanProgress) {
 			h.log.WarnContext(ctx, "scan progress not kept", slog.Any("err", err))
 		}
 		h.Raise(ctx, domain.Event{Kind: domain.EventScanProgress, Library: p.Library, Details: map[string]any{
-			"phase": p.Phase, "done": p.Done, "known": p.Known,
+			"phase": p.Phase, "done": p.Done, "known": p.Known, "folder": p.Folder,
 		}})
 	}
 }

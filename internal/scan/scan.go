@@ -85,10 +85,11 @@ func (r *run) count(f func(*Report)) {
 }
 
 // done tells that one more folder has been read.
-func (r *run) done() {
+func (r *run) done(folder string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.told.Done++
+	r.told.Folder = strings.TrimPrefix(folder, ".")
 	r.progress(r.told)
 }
 
@@ -169,7 +170,7 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, asked []string, 
 		return r.report, err
 	}
 	// A folder an empty .ignore hides was known and never read.
-	r.told.Phase, r.told.Known = domain.ScanRemoving, r.told.Done
+	r.told.Phase, r.told.Known, r.told.Folder = domain.ScanRemoving, r.told.Done, ""
 	progress(r.told)
 	titles, err := s.store.FinishScan(ctx, lib.ID, scoped, r.folders, r.present)
 	if err == nil {
@@ -180,7 +181,7 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, asked []string, 
 
 // folder reads one folder the walk found, or could not read.
 func (s *Scanner) folder(ctx context.Context, r *run, folder library.Folder, err error) error {
-	defer r.done()
+	defer r.done(folder.Path)
 	if err != nil {
 		s.log.WarnContext(ctx, "folder not read", slog.String("folder", folder.Path), slog.Any("err", err))
 		return nil
