@@ -4,9 +4,12 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"strconv"
 	"uuid"
 
 	"gorm.io/gorm"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -85,8 +88,8 @@ func saveGroupings(ctx context.Context, tx *query.Query, item model.UUID, source
 
 // shownCollections are a library's collections worth showing: an admin's, and a provider's once
 // it holds minShown titles.
-const shownCollections = `SELECT c.item_id FROM collections c
-	WHERE c.origin = 'user' OR (SELECT count(*) FROM collection_members m WHERE m.collection_id = c.item_id) >= ?`
+var shownCollections = `SELECT c.item_id FROM collections c
+	WHERE c.origin = 'user' OR (SELECT count(*) FROM collection_members m WHERE m.collection_id = c.item_id) >= ` + strconv.Itoa(minShown)
 
 // Collections answers a page of a library's collections, by title, and how many there are.
 func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]Card, int64, error) {
@@ -95,7 +98,7 @@ func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset,
 		return nil, 0, found(err)
 	}
 	q := s.q.Item.WithContext(ctx).UnderlyingDB().
-		Where("items.library_id = ? AND items.kind = 'collection' AND items.id IN ("+shownCollections+")", lib.String(), minShown).
+		Where("items.library_id = ? AND items.kind = 'collection' AND items.id IN ("+shownCollections+")", lib.String()).
 		Where("EXISTS (SELECT 1 FROM viewer(?) v WHERE sees(v, items))", profile.String())
 	var total int64
 	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
@@ -154,11 +157,13 @@ func (s *Store) origins(ctx context.Context, rows []*model.Item) (map[model.UUID
 
 // collectionsOf answers the shown collections a title is in, by title.
 func (s *Store) collectionsOf(ctx context.Context, item model.UUID) ([]TitleRef, error) {
-	var out []TitleRef
-	err := s.q.Item.WithContext(ctx).UnderlyingDB().Raw(`
+	rows, err := s.pool.Query(ctx, `
 		SELECT i.id, i.title FROM items i JOIN collection_members m ON m.collection_id = i.id
-		WHERE m.item_id = ? AND i.id IN (`+shownCollections+`) ORDER BY i.sort_title`, item, minShown).Scan(&out).Error
-	return out, err
+		WHERE m.item_id = $1 AND i.id IN (`+shownCollections+`) ORDER BY i.sort_title`, uuid.UUID(item).String())
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[TitleRef])
 }
 
 // AddCollection makes an admin's collection in a library.

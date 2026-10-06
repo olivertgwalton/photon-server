@@ -636,6 +636,15 @@ func streamPage(t *model.Stream) StreamPage {
 	}
 }
 
+// texts is the items' ids as text, for an array parameter.
+func texts(rows []*model.Item) []string {
+	out := make([]string, len(rows))
+	for n, r := range rows {
+		out[n] = uuid.UUID(r.ID).String()
+	}
+	return out
+}
+
 // ids is the items' ids as gen's In takes them.
 func ids(rows []*model.Item) []driver.Valuer {
 	out := make([]driver.Valuer, len(rows))

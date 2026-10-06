@@ -133,6 +133,12 @@ func (s *Store) FolderFingerprints(ctx context.Context, lib uuid.UUID) (map[stri
 // Changed is the titles a write added, changed and removed.
 type Changed map[domain.TitleChange][]uuid.UUID
 
+func (c Changed) add(change domain.TitleChange, ids []model.UUID) {
+	for _, id := range ids {
+		c[change] = append(c[change], uuid.UUID(id))
+	}
+}
+
 // note records a title written: added if it was made, else changed.
 func (c Changed) note(made bool, id model.UUID) {
 	change := domain.TitleUpdated
@@ -444,7 +450,6 @@ func saveFacts(ctx context.Context, tx *query.Query, partID model.UUID, f *media
 // and a show left with nothing in them. A folder in scope the walk did not visit is forgotten. It
 // answers the titles whose copies went missing or came back, and those removed.
 func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, present []string) (Changed, error) {
-	// pgx sends each list as one text[] parameter; GORM would expand it into a parameter per path.
 	// A nil slice would go as NULL, and NOT x = ANY(NULL) matches nothing, so an emptied library
 	// would keep every path it ever had.
 	if folders == nil {
@@ -454,52 +459,53 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 		present = []string{}
 	}
 	var changed Changed
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := s.q.Transaction(func(tx *query.Query) error {
 		changed = Changed{}
+		db := tx.Item.WithContext(ctx).UnderlyingDB()
 		for _, table := range []string{"part_files", "subtitle_files"} {
-			_, err := tx.Exec(ctx, `DELETE FROM `+table+` WHERE library_id = $1 AND NOT rel_path = ANY($2)
-				AND `+inScope("rel_path", "$3"), lib.String(), present, scopes)
+			err := db.Exec(`DELETE FROM `+table+` WHERE library_id = ? AND NOT rel_path = ANY(?) AND `+inScope("rel_path"),
+				lib.String(), array(present), array(scopes)).Error
 			if err != nil {
 				return err
 			}
 		}
 		// Only a version whose part went missing, or came back, is written.
-		updated, err := queryIDs(ctx, tx, `
+		var updated []model.UUID
+		err := db.Raw(`
 			UPDATE versions v SET missing_since = CASE WHEN v.missing_since IS NULL THEN now() END
-			WHERE v.library_id = $1 AND (v.missing_since IS NULL) = EXISTS (SELECT 1 FROM parts p
+			WHERE v.library_id = ? AND (v.missing_since IS NULL) = EXISTS (SELECT 1 FROM parts p
 				WHERE p.version_id = v.id AND NOT EXISTS (SELECT 1 FROM part_files f WHERE f.part_id = p.id))
-			RETURNING v.item_id::text`, lib.String())
+			RETURNING v.item_id`, lib.String()).Scan(&updated).Error
 		if err != nil {
 			return err
 		}
-		changed[domain.TitleUpdated] = updated
+		changed.add(domain.TitleUpdated, updated)
 		for _, sql := range []string{
-			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode', 'extra')
+			`DELETE FROM items i WHERE i.library_id = ? AND i.kind IN ('movie', 'episode', 'extra')
 				AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.item_id = i.id)`,
-			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'season'
+			`DELETE FROM items i WHERE i.library_id = ? AND i.kind = 'season'
 				AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
-			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'show'
+			`DELETE FROM items i WHERE i.library_id = ? AND i.kind = 'show'
 				AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
-			`DELETE FROM items i USING collections c WHERE c.item_id = i.id AND i.library_id = $1
+			`DELETE FROM items i USING collections c WHERE c.item_id = i.id AND i.library_id = ?
 				AND c.origin <> 'user' AND NOT EXISTS (SELECT 1 FROM collection_members m WHERE m.collection_id = c.item_id)`,
 		} {
-			removed, err := queryIDs(ctx, tx, sql+` RETURNING i.id::text`, lib.String())
-			if err != nil {
+			var removed []model.UUID
+			if err := db.Raw(sql+` RETURNING i.id`, lib.String()).Scan(&removed).Error; err != nil {
 				return err
 			}
-			changed[domain.TitleRemoved] = append(changed[domain.TitleRemoved], removed...)
+			changed.add(domain.TitleRemoved, removed)
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND NOT path = ANY($2) AND `+inScope("path", "$3"),
-			lib.String(), folders, scopes)
-		return err
+		return db.Exec(`DELETE FROM folders WHERE library_id = ? AND NOT path = ANY(?) AND `+inScope("path"),
+			lib.String(), array(folders), array(scopes)).Error
 	})
 	return changed, err
 }
 
-// inScope is the condition that a path column is one of the folders of a text[] parameter, or
+// inScope is the condition that a path column is one of the folders of an array parameter, or
 // under one.
-func inScope(column, scopes string) string {
-	return `EXISTS (SELECT 1 FROM unnest(` + scopes + `::text[]) s WHERE s = '.' OR ` + column + ` = s OR starts_with(` + column + `, s || '/'))`
+func inScope(column string) string {
+	return `EXISTS (SELECT 1 FROM unnest(?::text[]) s WHERE s = '.' OR ` + column + ` = s OR starts_with(` + column + `, s || '/'))`
 }
 
 // queryIDs answers the ids a statement returns, as text.

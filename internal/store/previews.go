@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 // Trickplay is how a part's thumbnail sheets are laid out: each thumbnail Width by Height, one
@@ -70,21 +71,21 @@ func (s *Store) SavePreviews(ctx context.Context, part uuid.UUID, chapters []int
 	if chapters == nil {
 		chapters = []int{}
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `
-			INSERT INTO previews (part_id, chapter_images) VALUES ($1, $2)
-			ON CONFLICT (part_id) DO UPDATE SET chapter_images = excluded.chapter_images`, part.String(), chapters)
+	return s.q.Transaction(func(tx *query.Query) error {
+		db := tx.Part.WithContext(ctx).UnderlyingDB()
+		err := db.Exec(`
+			INSERT INTO previews (part_id, chapter_images) VALUES (?, ?)
+			ON CONFLICT (part_id) DO UPDATE SET chapter_images = excluded.chapter_images`, part.String(), array(chapters)).Error
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM trickplay WHERE part_id = $1`, part.String()); err != nil || t == nil {
+		if err := db.Exec(`DELETE FROM trickplay WHERE part_id = ?`, part.String()).Error; err != nil || t == nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `
+		return db.Exec(`
 			INSERT INTO trickplay (part_id, width, height, interval_ms, columns, rows, thumbnails)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			part.String(), t.Width, t.Height, t.IntervalMS, t.Columns, t.Rows, t.Thumbnails)
-		return err
+			VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			part.String(), t.Width, t.Height, t.IntervalMS, t.Columns, t.Rows, t.Thumbnails).Error
 	})
 }
 

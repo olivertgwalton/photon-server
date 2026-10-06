@@ -7,6 +7,8 @@ import (
 
 	"gorm.io/gen/field"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -101,18 +103,21 @@ func (s *Store) downloads(ctx context.Context, profile uuid.UUID, device, id *uu
 			coalesce(c.size_bytes, CASE WHEN c.id IS NULL THEN p.size_bytes END, 0) AS size_bytes,
 			coalesce(c.error, '') AS error
 		FROM downloads d JOIN parts p ON p.id = d.part_id LEFT JOIN conversions c ON c.id = d.conversion_id
-		WHERE d.profile_id = ?`
-	args := []any{profile.String()}
+		WHERE d.profile_id = $1 AND ($2::uuid IS NULL OR d.session_id = $2) AND ($3::uuid IS NULL OR d.id = $3)
+		ORDER BY d.created_at DESC, d.id`
+	var deviceID, downloadID *string
 	if device != nil {
-		sql += ` AND d.session_id = ?`
-		args = append(args, device.String())
+		deviceID = new(device.String())
 	}
 	if id != nil {
-		sql += ` AND d.id = ?`
-		args = append(args, id.String())
+		downloadID = new(id.String())
 	}
-	var rows []downloadRow
-	if err := s.q.Download.WithContext(ctx).UnderlyingDB().Raw(sql+` ORDER BY d.created_at DESC, d.id`, args...).Scan(&rows).Error; err != nil {
+	found, err := s.pool.Query(ctx, sql, profile.String(), deviceID, downloadID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := pgx.CollectRows(found, pgx.RowToStructByName[downloadRow])
+	if err != nil {
 		return nil, err
 	}
 	out := make([]Download, len(rows))

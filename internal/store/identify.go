@@ -8,6 +8,8 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 	"github.com/olivertgwalton/photon-server/internal/store/query"
@@ -56,12 +58,15 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	if item.Kind == domain.ItemShow {
 		// Only a season holding something still titled by its file name, as Jellyfin asks a
 		// provider only about items it has never refreshed: a show's new episode costs one season.
-		err := i.WithContext(ctx).UnderlyingDB().Raw(`
+		rows, err := s.pool.Query(ctx, `
 			SELECT DISTINCT s.season_number FROM items s
 			JOIN items e ON e.parent_id = s.id OR e.id = s.id
 			JOIN item_fields f ON f.item_id = e.id AND f.field = 'title' AND f.source = 'file'
-			WHERE s.parent_id = ? AND s.kind = 'season'
-			ORDER BY s.season_number`, item.ID).Scan(&sub.Seasons).Error
+			WHERE s.parent_id = $1 AND s.kind = 'season'
+			ORDER BY s.season_number`, id.String())
+		if err == nil {
+			sub.Seasons, err = pgx.CollectRows(rows, pgx.RowTo[int])
+		}
 		if err != nil {
 			return Subject{}, false, err
 		}
