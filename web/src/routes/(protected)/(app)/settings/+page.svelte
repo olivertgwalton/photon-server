@@ -8,6 +8,7 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
+import { fields } from "#lib/form.js";
 
 let { data } = $props();
 // Why a change was refused, beside the card it was made in.
@@ -29,10 +30,7 @@ async function change(
 }
 
 function rename(event: SubmitEvent) {
-	event.preventDefault();
-	const name = String(
-		new FormData(event.currentTarget as HTMLFormElement).get("name"),
-	);
+	const name = String(fields(event).get("name"));
 	return change(
 		client().PATCH("/api/v1/me", { body: { name } }),
 		"name",
@@ -41,9 +39,8 @@ function rename(event: SubmitEvent) {
 }
 
 async function setPIN(event: SubmitEvent) {
-	event.preventDefault();
 	const form = event.currentTarget as HTMLFormElement;
-	const pin = String(new FormData(form).get("pin"));
+	const pin = String(fields(event).get("pin"));
 	if (
 		await change(
 			client().PUT("/api/v1/me/pin", { body: { pin } }),
@@ -59,16 +56,15 @@ const clearPIN = () =>
 	change(client().DELETE("/api/v1/me/pin"), "pin", "PIN removed.");
 
 async function setPassword(event: SubmitEvent) {
-	event.preventDefault();
 	const form = event.currentTarget as HTMLFormElement;
-	const fields = new FormData(form);
-	const next = String(fields.get("new"));
-	if (next !== fields.get("again")) {
+	const values = fields(event);
+	const next = String(values.get("new"));
+	if (next !== values.get("again")) {
 		refused = { password: "The new password and its repeat differ." };
 		return;
 	}
 	const asked = client().PUT("/api/v1/me/password", {
-		body: { current: String(fields.get("current")), new: next },
+		body: { current: String(values.get("current")), new: next },
 	});
 	if (
 		await change(

@@ -9,12 +9,12 @@ import * as Sidebar from "#lib/components/ui/sidebar/index.js";
 import { onMount } from "svelte";
 import { invalidate } from "$app/navigation";
 import { LiveStream, setLiveStream } from "#lib/admin/stream.svelte.js";
-import { live } from "#lib/live.svelte.js";
+import { connectLive } from "#lib/live.svelte.js";
 
 let { data, children } = $props();
 
 // The server's changes, for as long as the shell is open.
-$effect(() => live.connect());
+$effect(() => connectLive());
 
 // What a page loaded that an event says has changed. A busy scan tells many
 // jobs a second, so each is reloaded once a second at most.

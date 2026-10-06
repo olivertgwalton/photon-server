@@ -1,5 +1,6 @@
 <script lang="ts">
-import { act, fields } from "#lib/admin/act.js";
+import { act } from "#lib/admin/act.js";
+import { fields } from "#lib/form.js";
 import { roles } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";

@@ -1,10 +1,10 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { goto } from "$app/navigation";
 import { page } from "$app/state";
 import { methods, when } from "#lib/admin/words.js";
 import Choice from "#lib/components/admin/Choice.svelte";
 import Pager from "#lib/components/admin/Pager.svelte";
+import { narrow } from "#lib/admin/narrow.js";
 import { Label } from "#lib/components/ui/label/index.js";
 import * as Table from "#lib/components/ui/table/index.js";
 
@@ -27,14 +27,6 @@ function reached(position: number, duration?: number) {
 	return duration
 		? `${Math.min(Math.round((position / duration) * 100), 100)}%`
 		: "";
-}
-// The list for one choice, from its first page.
-function narrow(key: string, value: string) {
-	const query = new URLSearchParams(page.url.search);
-	query.delete("offset");
-	if (value === "all") query.delete(key);
-	else query.set(key, value);
-	goto(`?${query}`, { replace: true, reset: false });
 }
 </script>
 

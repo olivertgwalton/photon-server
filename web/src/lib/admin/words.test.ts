@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
-import { clock, describe, parseClock } from "./words";
+import { timecode } from "../format";
+import { describe, parseClock } from "./words";
 
 test("a marker's time reads and writes as a clock", () => {
-	expect(clock(83_000)).toBe("1:23");
-	expect(clock(3_723_000)).toBe("1:02:03");
+	expect(timecode(83_000)).toBe("1:23");
+	expect(timecode(3_723_000)).toBe("1:02:03");
 	expect(parseClock("1:23")).toBe(83_000);
 	expect(parseClock("1:02:03")).toBe(3_723_000);
 	expect(parseClock("45.5")).toBe(45_500);

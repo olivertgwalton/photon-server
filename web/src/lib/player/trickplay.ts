@@ -2,7 +2,7 @@ import type { components } from "#lib/api/schema.js";
 
 type PartTrickplay = components["schemas"]["PartTrickplay"];
 
-export type Thumbnail = {
+type Thumbnail = {
 	url: string;
 	x: number;
 	y: number;

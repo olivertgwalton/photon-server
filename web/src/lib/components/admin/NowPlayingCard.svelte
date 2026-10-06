@@ -4,10 +4,10 @@ import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
+import { timecode } from "#lib/format.js";
 import { positionAt } from "#lib/admin/live.js";
 import {
 	accelerations,
-	clock,
 	methods,
 	playedTitle,
 	reasons,
@@ -98,8 +98,10 @@ async function stop() {
 				aria-label="How far {p.profile.name} is through {name}"
 			/>
 			<p class="text-ink-3 flex justify-between font-mono text-xs">
-				<span>{clock(position)}{p.state === "paused" ? " · paused" : ""}</span>
-				<span>{clock(p.version.duration_ms)}</span>
+				<span
+					>{timecode(position)}{p.state === "paused" ? " · paused" : ""}</span
+				>
+				<span>{timecode(p.version.duration_ms)}</span>
 			</p>
 		</div>
 		<div class="flex flex-wrap gap-1.5">

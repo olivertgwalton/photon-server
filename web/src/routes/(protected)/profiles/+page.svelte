@@ -6,6 +6,7 @@ import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
+import { fields } from "#lib/form.js";
 
 let { data } = $props();
 let message = $state<string>();
@@ -13,8 +14,7 @@ let message = $state<string>();
 // Watches as the profile, with its PIN or password if it is locked, then goes
 // back to where the reader was.
 async function choose(event: SubmitEvent) {
-	event.preventDefault();
-	const form = new FormData(event.currentTarget as HTMLFormElement);
+	const form = fields(event);
 	const profileID = String(form.get("profile_id"));
 	const secret = form.get("secret");
 	const { error } = await client().PUT("/api/v1/session/profile", {

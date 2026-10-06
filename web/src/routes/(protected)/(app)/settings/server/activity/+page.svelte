@@ -1,12 +1,12 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { goto } from "$app/navigation";
 import { page } from "$app/state";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { loggedKinds } from "#lib/admin/words.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
 import Choice from "#lib/components/admin/Choice.svelte";
 import Pager from "#lib/components/admin/Pager.svelte";
+import { narrow } from "#lib/admin/narrow.js";
 import { Label } from "#lib/components/ui/label/index.js";
 
 let { data } = $props();
@@ -38,14 +38,6 @@ const profiles = $derived(
 const libraries = $derived(
 	new Map(data.libraries.map((l) => [l.id, l.name] as const)),
 );
-// The list for one choice, from its first page.
-function narrow(key: string, value: string) {
-	const query = new URLSearchParams(page.url.search);
-	query.delete("offset");
-	if (value === "all") query.delete(key);
-	else query.set(key, value);
-	goto(`?${query}`, { replace: true, reset: false });
-}
 </script>
 
 <PageHeader

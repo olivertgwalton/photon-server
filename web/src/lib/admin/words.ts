@@ -239,16 +239,7 @@ function jobName(kind: unknown): string {
 	return jobKinds[kind as Schemas["JobKind"]] ?? String(kind);
 }
 
-// A stretch of a title as h:mm:ss, or m:ss under an hour.
-export function clock(ms: number): string {
-	const s = Math.floor(ms / 1000);
-	const h = Math.floor(s / 3600);
-	const m = Math.floor((s % 3600) / 60);
-	const ss = String(s % 60).padStart(2, "0");
-	return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
-}
-
-// The reverse of clock: "1:02:03", "2:03" or "3" seconds, with an optional
+// The reverse of timecode: "1:02:03", "2:03" or "3" seconds, with an optional
 // fraction; undefined for anything else.
 export function parseClock(text: string): number | undefined {
 	const match = /^(?:(?:(\d+):)?(\d{1,2}):)?(\d{1,2}(?:\.\d{1,3})?)$/.exec(

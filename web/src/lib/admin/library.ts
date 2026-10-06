@@ -3,7 +3,7 @@ import type { components } from "#lib/api/schema.js";
 type Schemas = components["schemas"];
 type Ranked = Schemas["RankedSource"];
 
-export type Fetcher = "metadata" | "images";
+type Fetcher = "metadata" | "images";
 
 // The kinds of item a library ranks its sources for, as Jellyfin titles
 // its downloaders and fetchers.

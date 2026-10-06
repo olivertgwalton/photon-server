@@ -7,7 +7,7 @@ export type PreferencesChange = Schemas["PreferencesChange"];
 // Where this browser kept them before the server did.
 export const kept = "photon.playback";
 
-export type Kept = {
+type Kept = {
 	quality?: number;
 	audioLanguage?: string;
 	subtitleLanguage?: string;
