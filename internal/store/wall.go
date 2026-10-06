@@ -74,7 +74,9 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, in
 	if p.Order == domain.Descending {
 		dir = "DESC"
 	}
-	var key string
+	// What has no value to sort by comes last whichever way the rest run. The columns are never
+	// null, and saying so of them would stop their indexes reading a page in descending order.
+	var key, nulls string
 	switch p.Sort {
 	case domain.SortAdded:
 		key = "items.added_at"
@@ -84,19 +86,18 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, in
 			key = "items.released_desc"
 		}
 	case domain.SortRating:
-		key = "(SELECT max(r.score) FROM ratings r WHERE r.item_id = items.id AND r.site = @sort_site)"
+		key, nulls = "(SELECT max(r.score) FROM ratings r WHERE r.item_id = items.id AND r.site = @sort_site)", " NULLS LAST"
 		args["sort_site"] = p.RatingSite
 	case domain.SortRuntime:
-		key = "(SELECT max(v.duration_ms) FROM versions v WHERE v.item_id = items.id AND v.missing_since IS NULL)"
+		key, nulls = "(SELECT max(v.duration_ms) FROM versions v WHERE v.item_id = items.id AND v.missing_since IS NULL)", " NULLS LAST"
 	case domain.SortPlayed:
-		key = "(SELECT max(w.last_played_at) FROM watch_state w WHERE w.profile_id = @profile AND w.item_id IN (" + episodesOf + "))"
+		key, nulls = "(SELECT max(w.last_played_at) FROM watch_state w WHERE w.profile_id = @profile AND w.item_id IN ("+episodesOf+"))", " NULLS LAST"
 	case domain.SortTitle:
 		key = "items.sort_title"
 	}
 	args["offset"], args["limit"] = p.Offset, p.Limit
-	// What has no value to sort by comes last whichever way the rest run.
 	rows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` `+titles+`
-		ORDER BY `+key+` `+dir+` NULLS LAST, items.id `+dir+` OFFSET @offset LIMIT @limit`, args)
+		ORDER BY `+key+` `+dir+nulls+`, items.id `+dir+` OFFSET @offset LIMIT @limit`, args)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -104,14 +105,16 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, in
 	return cards, total, err
 }
 
-// wallQuery is the FROM and WHERE of a library's films and shows a profile may see, as a filter
-// narrows them, and the values they take; ErrNotFound for no such library.
+// wallQuery is the FROM and WHERE of a library's films or shows a profile may see, as a filter
+// narrows them, and the values they take; ErrNotFound for no such library. A library holds one kind
+// of title, and naming it lets the wall's sort indexes read a page in order.
 func (s *Store) wallQuery(ctx context.Context, lib, profile uuid.UUID, f WallFilter) (string, pgx.NamedArgs, error) {
-	if err := hasLibrary(ctx, s.pool, lib); err != nil {
-		return "", nil, err
+	var kind domain.LibraryKind
+	if err := s.pool.QueryRow(ctx, `SELECT kind FROM libraries WHERE id = $1`, lib).Scan(&kind); err != nil {
+		return "", nil, found(err)
 	}
-	args := pgx.NamedArgs{"lib": lib, "profile": profile}
-	return `FROM items WHERE library_id = @lib AND kind IN ('movie', 'show')
+	args := pgx.NamedArgs{"lib": lib, "profile": profile, "kind": kind.ItemKinds()[0]}
+	return `FROM items WHERE library_id = @lib AND kind = @kind
 		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))` + f.where(args), args, nil
 }
 

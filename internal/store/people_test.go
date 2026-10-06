@@ -17,7 +17,11 @@ import (
 func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Mixed", domain.LibraryMovies, "/srv/mixed")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +32,7 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 		t.Fatal(err)
 	}
 	episode := Episode{Season: 1, Episodes: []int{1}, Title: "Show", Folder: "Show/Season 1", ByNumber: true, Copies: []Copy{part("Show1")}}
-	if _, err := s.SaveShowFolder(ctx, lib.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, []Episode{episode}, nil); err != nil {
+	if _, err := s.SaveShowFolder(ctx, shows.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, []Episode{episode}, nil); err != nil {
 		t.Fatal(err)
 	}
 	film := oneItem(t, s, "kind = 'movie'")
@@ -89,9 +93,11 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 	if found, total, _ := s.SearchPeople(ctx, "gourney", 0, 10); len(found) != 0 || total != 0 {
 		t.Errorf("search inside a word: %+v, want no one", found)
 	}
-	cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{People: []uuid.UUID{her}}})
-	if err != nil || len(cards) != 2 {
-		t.Errorf("titles she is in: %+v, %v; want the film and the show", cards, err)
+	for _, l := range []uuid.UUID{lib.ID, shows.ID} {
+		cards, _, err := s.Wall(ctx, l, WallPage{Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{People: []uuid.UUID{her}}})
+		if err != nil || len(cards) != 1 {
+			t.Errorf("titles she is in: %+v, %v; want the film and the show", cards, err)
+		}
 	}
 }
 

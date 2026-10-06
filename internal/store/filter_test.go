@@ -18,7 +18,11 @@ import (
 func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Mixed", domain.LibraryMovies, "/srv/mixed")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +80,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 			Copies: []Copy{copyOf("Cosmos"+string(rune('0'+n)), 1920, domain.RangeSDR, time.Hour)},
 		}
 	}
-	if _, err := s.SaveShowFolder(ctx, lib.ID, "Cosmos/Season 1", []byte("v1"), Show{Title: "Cosmos", Folder: "Cosmos"}, []Episode{episode(1), episode(2)}, nil); err != nil {
+	if _, err := s.SaveShowFolder(ctx, shows.ID, "Cosmos/Season 1", []byte("v1"), Show{Title: "Cosmos", Folder: "Cosmos"}, []Episode{episode(1), episode(2)}, nil); err != nil {
 		t.Fatal(err)
 	}
 	episodes, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE kind = 'episode' ORDER BY episode_number`)
@@ -100,12 +104,12 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	titles := func(p WallPage) []string {
+	titlesIn := func(lib uuid.UUID, p WallPage) []string {
 		t.Helper()
 		p.Profile, p.Limit = oliver.ID, 10
 		p.Order = stdcmp.Or(p.Order, domain.Ascending)
 		p.Sort = stdcmp.Or(p.Sort, domain.SortTitle)
-		cards, total, err := s.Wall(ctx, lib.ID, p)
+		cards, total, err := s.Wall(ctx, lib, p)
 		if err != nil || int(total) != len(cards) {
 			t.Fatalf("%+v: %d of %d, %v", p, len(cards), total, err)
 		}
@@ -115,6 +119,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		}
 		return out
 	}
+	titles := func(p WallPage) []string { return titlesIn(lib.ID, p) }
 	for _, tc := range []struct {
 		name string
 		page WallPage
@@ -126,21 +131,31 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		{"by a studio", WallPage{Filter: WallFilter{Studios: []string{"Studio Alien"}}}, []string{"Alien"}},
 		{"under E, unaccented", WallPage{Filter: WallFilter{StartsWith: "E"}}, []string{"Émile"}},
 		{"watched", WallPage{Filter: WallFilter{Marks: []domain.Mark{domain.MarkWatched}}}, []string{"Alien"}},
-		{"unwatched", WallPage{Filter: WallFilter{Marks: []domain.Mark{domain.MarkUnwatched}}}, []string{"Brazil", "Cosmos", "Émile"}},
-		{"in progress", WallPage{Filter: WallFilter{Marks: []domain.Mark{domain.MarkInProgress}}}, []string{"Brazil", "Cosmos"}},
+		{"unwatched", WallPage{Filter: WallFilter{Marks: []domain.Mark{domain.MarkUnwatched}}}, []string{"Brazil", "Émile"}},
+		{"in progress", WallPage{Filter: WallFilter{Marks: []domain.Mark{domain.MarkInProgress}}}, []string{"Brazil"}},
 		{"favourites", WallPage{Filter: WallFilter{Marks: []domain.Mark{domain.MarkFavourite}}}, []string{"Alien"}},
 		{"on the watchlist", WallPage{Filter: WallFilter{Marks: []domain.Mark{domain.MarkWatchlist}}}, []string{"Brazil"}},
 		{"in 4K or SD", WallPage{Filter: WallFilter{Resolutions: []domain.Resolution{domain.ResolutionUHD, domain.ResolutionSD}}}, []string{"Alien", "Émile"}},
-		{"in 1080p, a show by its episodes", WallPage{Filter: WallFilter{Resolutions: []domain.Resolution{domain.ResolutionFHD}}}, []string{"Brazil", "Cosmos"}},
+		{"in 1080p", WallPage{Filter: WallFilter{Resolutions: []domain.Resolution{domain.ResolutionFHD}}}, []string{"Brazil"}},
 		{"in HDR10", WallPage{Filter: WallFilter{Ranges: []domain.Range{domain.RangeHDR10}}}, []string{"Alien"}},
 		{"IMDb 80 and up", WallPage{Filter: WallFilter{RatingSite: domain.SiteIMDb, MinRating: 80}}, []string{"Alien"}},
 		{"science fiction, unwatched", WallPage{Filter: WallFilter{Genres: []string{"Science Fiction"}, Marks: []domain.Mark{domain.MarkUnwatched}}}, []string{"Brazil"}},
-		{"best on IMDb, the unrated last", WallPage{Sort: domain.SortRating, RatingSite: domain.SiteIMDb, Order: domain.Descending}, []string{"Alien", "Brazil", "Cosmos", "Émile"}},
-		{"longest first, a show last", WallPage{Sort: domain.SortRuntime, Order: domain.Descending}, []string{"Brazil", "Alien", "Émile", "Cosmos"}},
+		{"best on IMDb, the unrated last", WallPage{Sort: domain.SortRating, RatingSite: domain.SiteIMDb, Order: domain.Descending}, []string{"Alien", "Brazil", "Émile"}},
+		{"longest first", WallPage{Sort: domain.SortRuntime, Order: domain.Descending}, []string{"Brazil", "Alien", "Émile"}},
 		{"last played first, the unplayed last", WallPage{Sort: domain.SortPlayed, Order: domain.Descending, Filter: WallFilter{Genres: []string{"Science Fiction", "Drama"}}}, []string{"Brazil", "Alien", "Émile"}},
 	} {
 		if got := titles(tc.page); !slices.Equal(got, tc.want) {
 			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
+		}
+	}
+	// A show is unwatched, under way and in 1080p by its episodes.
+	for _, f := range []WallFilter{
+		{Marks: []domain.Mark{domain.MarkUnwatched}},
+		{Marks: []domain.Mark{domain.MarkInProgress}},
+		{Resolutions: []domain.Resolution{domain.ResolutionFHD}},
+	} {
+		if got := titlesIn(shows.ID, WallPage{Filter: f}); !slices.Equal(got, []string{"Cosmos"}) {
+			t.Errorf("shows %+v: %q, want Cosmos", f, got)
 		}
 	}
 
@@ -158,7 +173,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		t.Errorf("facets (-want +got):\n%s", diff)
 	}
 	letters, err := s.Letters(ctx, lib.ID, oliver.ID, WallFilter{Marks: []domain.Mark{domain.MarkUnwatched}})
-	if err != nil || !slices.Equal(letters, []Letter{{"B", 1}, {"C", 1}, {"E", 1}}) {
+	if err != nil || !slices.Equal(letters, []Letter{{"B", 1}, {"E", 1}}) {
 		t.Errorf("letters of the unwatched = %v, %v", letters, err)
 	}
 }
