@@ -26,5 +26,5 @@ type Rating struct {
 
 // RatingSources are the sources that give ratings.
 func RatingSources() []FieldSource {
-	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList}
+	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList, SourceOMDb}
 }
