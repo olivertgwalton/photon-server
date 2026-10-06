@@ -43,6 +43,14 @@ func JobStates() []JobState {
 	return []JobState{JobQueued, JobRunning, JobRerun, JobDead}
 }
 
+// Backlog is how far the jobs of a kind have got: left to run, queued or running, and done since
+// the kind last had none left, so its total grows as more are queued, as Plex's activity does.
+type Backlog struct {
+	Kind JobKind
+	Left int
+	Done int
+}
+
 type Job struct {
 	ID       int64
 	Kind     JobKind

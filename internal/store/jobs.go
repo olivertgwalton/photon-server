@@ -192,6 +192,21 @@ func (s *Store) RunningJobs(ctx context.Context) ([]domain.Job, error) {
 	return out, nil
 }
 
+// JobsLeft answers how many jobs of each kind are left to run, queued or running, leaving out
+// kinds with none.
+func (s *Store) JobsLeft(ctx context.Context) (map[domain.JobKind]int, error) {
+	j := s.q.Job
+	var counts []JobCount
+	err := j.WithContext(ctx).Select(j.Kind, j.ID.Count().As("count")).
+		Where(j.State.In(string(domain.JobQueued), string(domain.JobRunning), string(domain.JobRerun))).
+		Group(j.Kind).Scan(&counts)
+	out := make(map[domain.JobKind]int, len(counts))
+	for _, c := range counts {
+		out[c.Kind] = c.Count
+	}
+	return out, err
+}
+
 // ExtendLease keeps a running job's lease while node is at it.
 func (s *Store) ExtendLease(ctx context.Context, id int64, node uuid.UUID, lease time.Duration) error {
 	j := s.q.Job
