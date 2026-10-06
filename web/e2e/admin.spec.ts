@@ -95,6 +95,32 @@ test("a library is added from a folder found by browsing the server", async ({
 	await expect(page.getByText("Saved.")).toBeVisible();
 });
 
+test("a library's metadata is refreshed, what is missing or all of it", async ({
+	page,
+}) => {
+	await logIn(page, "/admin/libraries");
+	await page.getByRole("button", { name: "Refresh metadata of Films" }).click();
+	const dialog = page.getByRole("dialog", { name: "Refresh library metadata" });
+	await expect(dialog.getByText("Choose how much of Films")).toBeVisible();
+	await expectAccessible(page);
+
+	const asked = page.waitForRequest(
+		"**/api/v1/admin/libraries/l-films/refresh",
+	);
+	await dialog
+		.getByRole("button", { name: /Refresh missing metadata/ })
+		.click();
+	expect((await asked).postDataJSON()).toEqual({ mode: "missing" });
+	await expect(
+		page.getByText("Films is being filled in where it's missing."),
+	).toBeVisible();
+	await expect(dialog).toBeHidden();
+
+	await page.getByRole("button", { name: "Refresh metadata of Films" }).click();
+	await dialog.getByRole("button", { name: "Cancel" }).click();
+	await expect(dialog).toBeHidden();
+});
+
 test("a profile is added, and what another may see is set", async ({
 	page,
 }) => {

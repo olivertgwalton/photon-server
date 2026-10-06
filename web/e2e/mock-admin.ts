@@ -305,6 +305,8 @@ export async function admin(
 			return json(films);
 		case "POST /api/v1/admin/libraries/l-films/scan":
 			return done(202);
+		case "POST /api/v1/admin/libraries/l-films/refresh":
+			return done(202);
 		case "GET /api/v1/admin/folders": {
 			const path = url.searchParams.get("path");
 			if (!path) return json({ items: [{ name: "media", path: "/media" }] });

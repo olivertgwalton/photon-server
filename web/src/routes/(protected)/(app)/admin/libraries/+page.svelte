@@ -5,6 +5,7 @@ import { act } from "#lib/admin/act.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { client } from "#lib/api/client.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
+import LibraryRefresh from "#lib/components/admin/LibraryRefresh.svelte";
 import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 
@@ -67,6 +68,7 @@ const path = (id: string) => ({ params: { path: { id } } });
 						{scan ? "Scanning…" : "Scan now"}
 						<span class="sr-only">{library.name}</span>
 					</Button>
+					<LibraryRefresh id={library.id} name={library.name} />
 					<Button
 						href="/admin/libraries/{library.id}"
 						variant="outline"
