@@ -367,6 +367,14 @@ limited as sign-ins are. A household profile, one with no password, is only ever
 signed-in device and cannot give itself one: an admin does, which lets it sign in by itself. It can
 still set a PIN with `PUT /api/v1/me/pin`.
 
+How a profile plays is kept on the server, so every device it plays on follows it, as Jellyfin's
+user settings are: `GET /api/v1/me/preferences` and `PATCH` with what to change. The sound and
+subtitle languages and when subtitles come on are the server's to apply: a title's page names, for
+each copy, the tracks it plays with for that profile, and a play that asks for no sound gets that
+track. Where the profile keeps them (the default), the tracks a player reports playing are
+remembered for that title and chosen again next time. The highest quality, playing the next episode
+and skipping intros and credits are each player's to follow.
+
 The API describes itself: `GET /api/v1/openapi.json` answers its OpenAPI 3.1 description, built
 from the server's own routes as it starts, so it says what the running server takes and answers.
 Point a client generator or a viewer such as Swagger UI at it; no token is needed.

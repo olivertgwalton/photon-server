@@ -109,6 +109,8 @@ type Services struct {
 	// People are those credited on titles, and PersonDescriber says who they are.
 	People          people
 	PersonDescriber personDescriber
+	// Preferences are how each profile plays, and the tracks it last chose for each title.
+	Preferences preferences
 	// Playlists are each profile's own.
 	Playlists playlists
 	// Collections are box sets, a provider's and an admin's.
@@ -256,6 +258,16 @@ func (a *API) routes() []route {
 			pattern: "PUT /api/v1/me/password", access: signedIn,
 			summary: "Change the profile's password, signing out its other devices",
 			body:    passwordChangeJSON{}, status: http.StatusNoContent, handle: a.changePassword,
+		},
+		{
+			pattern: "GET /api/v1/me/preferences", access: signedIn,
+			summary: "How the profile plays on every device: Jellyfin's defaults until it changes them",
+			status:  http.StatusOK, reply: preferencesJSON{}, handle: a.ownPreferences,
+		},
+		{
+			pattern: "PATCH /api/v1/me/preferences", access: signedIn,
+			summary: "Change how the profile plays on every device; what is left out stays",
+			body:    preferencesChangeJSON{}, status: http.StatusOK, reply: preferencesJSON{}, handle: a.setOwnPreferences,
 		},
 		{
 			pattern: "GET /api/v1/auth/devices", access: signedIn, summary: "List the devices signed in",

@@ -82,6 +82,11 @@ type VersionPage struct {
 	// Trickplay is the thumbnail sheets of each part that has them; a part's sheets are at
 	// /api/v1/parts/{part_id}/trickplay/{n}.
 	Trickplay []PartTrickplay `json:"trickplay,omitzero"`
+	// DefaultAudioStream and DefaultSubtitleStream or DefaultSubtitleFile are the tracks it plays
+	// with unasked, for the profile asking: none where no subtitle comes on.
+	DefaultAudioStream    *int       `json:"default_audio_stream,omitzero"`
+	DefaultSubtitleStream *int       `json:"default_subtitle_stream,omitzero"`
+	DefaultSubtitleFile   *uuid.UUID `json:"default_subtitle_file,omitzero"`
 }
 
 // PartRef is one file of a copy.
@@ -127,12 +132,13 @@ type StreamPage struct {
 }
 
 type SubtitleRef struct {
-	Codec           string `json:"codec"`
-	Language        string `json:"language,omitzero"`
-	Title           string `json:"title,omitzero"`
-	Default         bool   `json:"default,omitzero"`
-	Forced          bool   `json:"forced,omitzero"`
-	HearingImpaired bool   `json:"hearing_impaired,omitzero"`
+	ID              uuid.UUID `json:"id"`
+	Codec           string    `json:"codec"`
+	Language        string    `json:"language,omitzero"`
+	Title           string    `json:"title,omitzero"`
+	Default         bool      `json:"default,omitzero"`
+	Forced          bool      `json:"forced,omitzero"`
+	HearingImpaired bool      `json:"hearing_impaired,omitzero"`
 }
 
 // RatingRef is what a site's readers or critics make of a title, out of 100.
@@ -643,7 +649,7 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 		for _, f := range subs {
 			if f.VersionID == r.ID {
 				vp.Subtitles = append(vp.Subtitles, SubtitleRef{
-					Codec: f.Codec, Language: deref(f.Language), Title: deref(f.Title), Default: f.IsDefault,
+					ID: uuid.UUID(f.ID), Codec: f.Codec, Language: deref(f.Language), Title: deref(f.Title), Default: f.IsDefault,
 					Forced: f.Forced, HearingImpaired: f.HearingImpaired,
 				})
 			}

@@ -222,8 +222,12 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	page, err := a.svc.Catalogue.Title(r.Context(), sessionOf(r).Profile.ID, id)
+	profile := sessionOf(r).Profile.ID
+	page, err := a.svc.Catalogue.Title(r.Context(), profile, id)
 	if a.answered(w, r, err) {
+		return
+	}
+	if a.answered(w, r, a.chooseTracks(r.Context(), profile, &page)) {
 		return
 	}
 	// Signed until the end of the day after next, so an address stands all day and a client's

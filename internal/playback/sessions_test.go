@@ -52,6 +52,10 @@ func (p positions) SaveProgress(_ context.Context, _, item uuid.UUID, at time.Du
 }
 
 // RecordPlay keeps a play as how far it got, under its playback's id.
+func (positions) ChooseTracks(context.Context, uuid.UUID, uuid.UUID, domain.ChosenTracks) error {
+	return nil
+}
+
 func (p positions) RecordPlay(_ context.Context, pb domain.Playback, _ time.Time, at time.Duration) error {
 	p[pb.ID] = at
 	return nil
@@ -70,13 +74,13 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 		t.Fatal(err)
 	}
 	streams[p.ID] = true
-	if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePaused); err != nil {
+	if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePaused, domain.ChosenTracks{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := live[p.ID]; got.Position != 20*time.Minute || got.State != domain.StatePaused || saved[film] != 20*time.Minute {
 		t.Errorf("after progress: live %+v, saved %v; want both at 20 minutes, paused", got, saved[film])
 	}
-	if _, err := s.Progress(ctx, guest, p.ID, time.Hour, domain.StatePlaying); !errors.Is(err, ErrNoPlayback) {
+	if _, err := s.Progress(ctx, guest, p.ID, time.Hour, domain.StatePlaying, domain.ChosenTracks{}); !errors.Is(err, ErrNoPlayback) {
 		t.Errorf("another profile reporting: %v, want ErrNoPlayback", err)
 	}
 	if _, err := s.Stop(ctx, oliver, p.ID, 25*time.Minute); err != nil {
@@ -88,7 +92,7 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	if saved[p.ID] != 25*time.Minute {
 		t.Errorf("history kept %v, want the play at 25 minutes", saved[p.ID])
 	}
-	if _, err := s.Progress(ctx, oliver, p.ID, time.Hour, domain.StatePlaying); !errors.Is(err, ErrNoPlayback) {
+	if _, err := s.Progress(ctx, oliver, p.ID, time.Hour, domain.StatePlaying, domain.ChosenTracks{}); !errors.Is(err, ErrNoPlayback) {
 		t.Errorf("reporting a stopped playback: %v, want ErrNoPlayback", err)
 	}
 	want := []domain.EventKind{
@@ -118,7 +122,7 @@ func TestAnAdminEndsAnyonesPlaybackWhereItGotTo(t *testing.T) {
 		t.Fatal(err)
 	}
 	streams[p.ID] = true
-	if _, err := s.Progress(ctx, guest, p.ID, 40*time.Minute, domain.StatePlaying); err != nil {
+	if _, err := s.Progress(ctx, guest, p.ID, 40*time.Minute, domain.StatePlaying, domain.ChosenTracks{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.End(ctx, p.ID); err != nil {
@@ -127,7 +131,7 @@ func TestAnAdminEndsAnyonesPlaybackWhereItGotTo(t *testing.T) {
 	if _, ok := live[p.ID]; ok || saved[p.ID] != 40*time.Minute || saved[film] != 40*time.Minute || streams[p.ID] {
 		t.Errorf("after ending: still live %v, history %v, place %v, stream open %v; want it gone and kept at 40 minutes", ok, saved[p.ID], saved[film], streams[p.ID])
 	}
-	if _, err := s.Progress(ctx, guest, p.ID, 41*time.Minute, domain.StatePlaying); !errors.Is(err, ErrNoPlayback) {
+	if _, err := s.Progress(ctx, guest, p.ID, 41*time.Minute, domain.StatePlaying, domain.ChosenTracks{}); !errors.Is(err, ErrNoPlayback) {
 		t.Errorf("its player reporting after: %v, want ErrNoPlayback", err)
 	}
 	if err := s.End(ctx, p.ID); !errors.Is(err, ErrNoPlayback) {
@@ -149,6 +153,10 @@ func (e *ends) SaveProgress(_ context.Context, _, _ uuid.UUID, _ time.Duration, 
 
 func (*ends) RecordPlay(context.Context, domain.Playback, time.Time, time.Duration) error { return nil }
 
+func (*ends) ChooseTracks(context.Context, uuid.UUID, uuid.UUID, domain.ChosenTracks) error {
+	return nil
+}
+
 func TestAPlaybackTellsTheStoreItHasReachedTheEnd(t *testing.T) {
 	saved := &ends{}
 	s := NewSessions(memory{}, saved, served{}, func(context.Context, domain.Event) {}, uuid.NewV7())
@@ -159,7 +167,7 @@ func TestAPlaybackTellsTheStoreItHasReachedTheEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 3 {
-		if _, err := s.Progress(ctx, oliver, p.ID, time.Hour, domain.StatePlaying); err != nil {
+		if _, err := s.Progress(ctx, oliver, p.ID, time.Hour, domain.StatePlaying, domain.ChosenTracks{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -191,14 +199,14 @@ func TestAPausedPlayerThatKeepsReportingKeepsItsStream(t *testing.T) {
 		// Paused for five minutes, saying so every ten seconds, with every node sweeping.
 		for range 30 {
 			synctest.Sleep(10 * time.Second)
-			if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePaused); err != nil {
+			if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePaused, domain.ChosenTracks{}); err != nil {
 				t.Fatal(err)
 			}
 			if err := s.Sweep(ctx); err != nil {
 				t.Fatal(err)
 			}
 		}
-		if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePlaying); err != nil {
+		if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePlaying, domain.ChosenTracks{}); err != nil {
 			t.Errorf("playing on after a five-minute pause: %v", err)
 		}
 		if _, err := remuxer.Playlist(p.ID, hls.MasterName); err != nil {
@@ -223,7 +231,7 @@ func TestAPlayerThatGoesQuietIsStoppedWithItsHistory(t *testing.T) {
 		// A stream this node serves of a playback another node has ended.
 		elsewhere := uuid.NewV7()
 		streams[elsewhere] = true
-		if _, err := s.Progress(ctx, oliver, p.ID, 40*time.Minute, domain.StatePlaying); err != nil {
+		if _, err := s.Progress(ctx, oliver, p.ID, 40*time.Minute, domain.StatePlaying, domain.ChosenTracks{}); err != nil {
 			t.Fatal(err)
 		}
 		synctest.Sleep(sessionLife - time.Second)
@@ -243,7 +251,7 @@ func TestAPlayerThatGoesQuietIsStoppedWithItsHistory(t *testing.T) {
 		if last := told[len(told)-1]; last.Kind != domain.EventPlaybackStopped {
 			t.Errorf("told %v, want it stopped", last.Kind)
 		}
-		if _, err := s.Progress(ctx, oliver, p.ID, 41*time.Minute, domain.StatePlaying); !errors.Is(err, ErrNoPlayback) {
+		if _, err := s.Progress(ctx, oliver, p.ID, 41*time.Minute, domain.StatePlaying, domain.ChosenTracks{}); !errors.Is(err, ErrNoPlayback) {
 			t.Errorf("its player back after: %v, want ErrNoPlayback", err)
 		}
 	})
