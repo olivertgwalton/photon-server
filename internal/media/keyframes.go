@@ -16,7 +16,7 @@ import (
 // ffprobe reads packet flags without decoding, which is what the remux needs to cut segments at
 // keyframes.
 func (t Tools) Keyframes(ctx context.Context, f *os.File) ([]int64, error) {
-	out, err := output(ctx, wholeRun(f), []*os.File{f}, t.FFprobe.Path,
+	out, err := output(ctx, WholeRun(f), []*os.File{f}, t.FFprobe.Path,
 		"-hide_banner", "-v", "error", "-protocol_whitelist", "fd", "-fd", "3",
 		"-select_streams", "v:0", "-show_entries", "packet=pts_time,flags", "-of", "csv=p=0", "-i", "fd:")
 	if err != nil {

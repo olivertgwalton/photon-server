@@ -7,10 +7,14 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // Subtitle is a text subtitle published beside the video as WebVTT, read from one or more files.
@@ -30,6 +34,8 @@ type SubtitleSource struct {
 	Open func() (*os.File, error)
 	// Stream is the file's stream to read, by its index; nil for a subtitle file.
 	Stream *int
+	// Part is the part a stream is read from, whose text streams are kept together under its id.
+	Part   uuid.UUID
 	Offset time.Duration
 	// Language is a subtitle file's, which says what it was written in where it is not UTF-8.
 	Language string
@@ -51,31 +57,60 @@ func TextSubtitle(codec string) bool {
 	return false
 }
 
-// extract converts a subtitle source to WebVTT and reads its cues onto the copy's timeline.
-func (r *Remuxer) extract(ctx context.Context, src SubtitleSource) ([]Cue, error) {
+const (
+	// subtitlesKept is how long a part's extracted text streams are kept unread: a month, as the
+	// previews of a missing file are.
+	subtitlesKept = 30 * 24 * time.Hour
+	// extractRetry is how long an extraction that failed is answered with its failure before a file
+	// is read again, so a file ffmpeg cannot read is not read whole for every segment asked for.
+	extractRetry = 10 * time.Minute
+	// extracting names the folders extractions are written in before they are moved into place.
+	extracting = ".making-"
+)
+
+// extraction is a part's text streams being read out, which every request for any of them waits on.
+type extraction struct {
+	done chan struct{}
+	err  error
+	at   time.Time
+}
+
+// cues reads a subtitle source's cues onto the copy's timeline. streams are the text streams of
+// the source's part that the playback carries.
+func (r *Remuxer) cues(ctx context.Context, src SubtitleSource, streams []int) ([]Cue, error) {
+	var cues []Cue
+	var err error
+	if src.Stream == nil {
+		cues, err = r.convert(ctx, src)
+	} else {
+		cues, err = r.embedded(ctx, src, streams)
+	}
+	for i := range cues {
+		cues[i].Start += src.Offset
+		cues[i].End += src.Offset
+	}
+	return cues, err
+}
+
+// convert reads a subtitle file as WebVTT.
+func (r *Remuxer) convert(ctx context.Context, src SubtitleSource) ([]Cue, error) {
 	f, err := src.Open()
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 	a := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3"}
-	stream := "0:s:0"
-	if src.Stream != nil {
-		// A container's text is UTF-8 by its specification.
-		stream = "0:" + strconv.Itoa(*src.Stream)
-	} else {
-		charset, err := subtitleCharset(f, src.Language)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
-			return nil, err
-		}
-		if charset != "" {
-			a = append(a, "-sub_charenc", charset)
-		}
+	charset, err := subtitleCharset(f, src.Language)
+	if err != nil {
+		return nil, err
 	}
-	a = append(a, "-i", "fd:", "-map", stream, "-c:s", "webvtt", "-f", "webvtt", "-")
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	if charset != "" {
+		a = append(a, "-sub_charenc", charset)
+	}
+	a = append(a, "-i", "fd:", "-map", "0:s:0", "-c:s", "webvtt", "-f", "webvtt", "-")
 	cmd := exec.CommandContext(ctx, r.ffmpeg, a...) //nolint:gosec // the configured ffmpeg; every argument is built here
 	cmd.ExtraFiles = []*os.File{f}
 	stderr := &tail{}
@@ -84,12 +119,106 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource) ([]Cue, error
 	if err != nil {
 		return nil, fmt.Errorf("ffmpeg: %w: %s", err, stderr)
 	}
-	cues, err := readVTT(strings.NewReader(string(out)))
-	for i := range cues {
-		cues[i].Start += src.Offset
-		cues[i].End += src.Offset
+	return readVTT(strings.NewReader(string(out)))
+}
+
+// embedded reads a stream of a part as WebVTT. Reading one means reading the whole file, so every
+// text stream of the part is read out in the same pass and kept, for this playback and the next.
+// The pass outlives the request that started it: a player that gives up waiting finds it further
+// on when it asks again.
+func (r *Remuxer) embedded(ctx context.Context, src SubtitleSource, streams []int) ([]Cue, error) {
+	dir := filepath.Join(r.subtitles, src.Part.String())
+	if err := r.extracted(ctx, src, streams, dir); err != nil {
+		return nil, err
 	}
-	return cues, err
+	f, err := os.Open(filepath.Join(dir, strconv.Itoa(*src.Stream)+".vtt"))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return readVTT(f)
+}
+
+// extracted waits for a part's text streams to be in dir, reading them out if no one is.
+func (r *Remuxer) extracted(ctx context.Context, src SubtitleSource, streams []int, dir string) error {
+	r.mu.Lock()
+	x, ok := r.extractions[src.Part]
+	if ok && closed(x.done) && time.Since(x.at) > extractRetry {
+		ok = false
+	}
+	if !ok {
+		if _, err := os.Stat(dir); err == nil {
+			r.mu.Unlock()
+			now := time.Now()
+			return os.Chtimes(dir, now, now)
+		}
+		x = &extraction{done: make(chan struct{})}
+		r.extractions[src.Part] = x
+		go func() {
+			x.err = r.extract(context.WithoutCancel(ctx), src, streams, dir)
+			r.mu.Lock()
+			if x.err == nil {
+				delete(r.extractions, src.Part)
+			}
+			x.at = time.Now()
+			r.mu.Unlock()
+			close(x.done)
+		}()
+	}
+	r.mu.Unlock()
+	select {
+	case <-x.done:
+		return x.err
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	}
+}
+
+// extract writes each of a part's text streams into dir as {index}.vtt, in one read of the file.
+// A container's text is UTF-8 by its specification.
+func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, streams []int, dir string) error {
+	f, err := src.Open()
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	limit := media.WholeRun(f)
+	ctx, cancel := context.WithTimeoutCause(ctx, limit, fmt.Errorf("ffmpeg still reading subtitles after %s", limit))
+	defer cancel()
+	made, err := os.MkdirTemp(r.subtitles, extracting)
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(made)
+	a := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3", "-i", "fd:"}
+	for _, n := range streams {
+		a = append(a, "-map", "0:"+strconv.Itoa(n), "-c:s", "webvtt", "-f", "webvtt", filepath.Join(made, strconv.Itoa(n)+".vtt"))
+	}
+	cmd := exec.CommandContext(ctx, r.ffmpeg, a...) //nolint:gosec // the configured ffmpeg; every argument is built here
+	cmd.ExtraFiles = []*os.File{f}
+	stderr := &tail{}
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return context.Cause(ctx)
+		}
+		return fmt.Errorf("ffmpeg: %w: %s", err, stderr)
+	}
+	return os.Rename(made, dir)
+}
+
+// sweepSubtitles removes the text streams of parts no one has read for subtitlesKept.
+func (r *Remuxer) sweepSubtitles() {
+	entries, err := os.ReadDir(r.subtitles)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		info, err := e.Info()
+		if err == nil && !strings.HasPrefix(e.Name(), extracting) && time.Since(info.ModTime()) > subtitlesKept {
+			_ = os.RemoveAll(filepath.Join(r.subtitles, e.Name()))
+		}
+	}
 }
 
 // readVTT reads the cues of a WebVTT file, dropping its header, notes, styles and cue names.

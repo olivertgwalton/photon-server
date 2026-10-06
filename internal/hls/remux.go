@@ -50,18 +50,21 @@ type Source struct {
 }
 
 // Remuxer runs the remuxes of copies played as HLS, one per playback, each writing its segments
-// into a folder of its own under dir. It keeps the node's one account of transcode slots, its
-// download conversions' as well as its own.
+// into a folder of its own under dir, and keeps the text streams read out of parts under
+// subtitles. It keeps the node's one account of transcode slots, its download conversions' as well
+// as its own.
 type Remuxer struct {
-	ffmpeg string
-	dir    string
-	hw     Hardware
-	limit  int
-	log    *slog.Logger
+	ffmpeg    string
+	dir       string
+	subtitles string
+	hw        Hardware
+	limit     int
+	log       *slog.Logger
 
 	mu          sync.Mutex
 	sessions    map[uuid.UUID]*session
 	conversions map[*conversion]struct{}
+	extractions map[uuid.UUID]*extraction
 }
 
 // conversion is a download's conversion holding a transcode slot until it ends or a playback
@@ -69,11 +72,21 @@ type Remuxer struct {
 type conversion struct{ stop context.CancelCauseFunc }
 
 // NewRemuxer runs remuxes on hw, at most limit of them encoding video at once, or Unlimited.
-func NewRemuxer(ffmpeg, dir string, hw Hardware, limit int, log *slog.Logger) (*Remuxer, error) {
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return nil, err
+func NewRemuxer(ffmpeg, dir, subtitles string, hw Hardware, limit int, log *slog.Logger) (*Remuxer, error) {
+	for _, d := range []string{dir, subtitles} {
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			return nil, err
+		}
 	}
-	return &Remuxer{ffmpeg: ffmpeg, dir: dir, hw: hw, limit: limit, log: log, sessions: map[uuid.UUID]*session{}, conversions: map[*conversion]struct{}{}}, nil
+	// No extraction outlives its process.
+	abandoned, _ := filepath.Glob(filepath.Join(subtitles, extracting+"*"))
+	for _, a := range abandoned {
+		_ = os.RemoveAll(a)
+	}
+	return &Remuxer{
+		ffmpeg: ffmpeg, dir: dir, subtitles: subtitles, hw: hw, limit: limit, log: log,
+		sessions: map[uuid.UUID]*session{}, conversions: map[*conversion]struct{}{}, extractions: map[uuid.UUID]*extraction{},
+	}, nil
 }
 
 // Copy is what a playback's HLS is made of: its parts in order, its text subtitles, and the
@@ -117,6 +130,19 @@ type subtitle struct {
 	mu   sync.Mutex
 	cues []Cue
 	read bool
+}
+
+// textStreams are the streams of part the session carries as subtitles.
+func (s *session) textStreams(part uuid.UUID) []int {
+	var streams []int
+	for _, sub := range s.subtitles {
+		for _, src := range sub.Sources {
+			if src.Stream != nil && src.Part == part {
+				streams = append(streams, *src.Stream)
+			}
+		}
+	}
+	return streams
 }
 
 // Open starts the remux of a playback's copy; nothing is run until a segment is asked for.
@@ -241,7 +267,7 @@ func (r *Remuxer) Playlist(playback uuid.UUID, name string) (string, error) {
 }
 
 // SubtitleSegment answers segment n of subtitle track as WebVTT, reading the track's cues the
-// first time it is asked for.
+// first time it is asked for. A request given up while they are read leaves them being read.
 func (r *Remuxer) SubtitleSegment(ctx context.Context, playback uuid.UUID, track, n int) (string, error) {
 	s, err := r.session(playback)
 	if err != nil {
@@ -255,20 +281,22 @@ func (r *Remuxer) SubtitleSegment(ctx context.Context, playback uuid.UUID, track
 	s.mu.Unlock()
 	sub := s.subtitles[track]
 	sub.mu.Lock()
-	defer sub.mu.Unlock()
-	if !sub.read {
-		var cues []Cue
+	cues, read := sub.cues, sub.read
+	sub.mu.Unlock()
+	if !read {
 		for _, src := range sub.Sources {
-			c, err := r.extract(ctx, src)
+			c, err := r.cues(ctx, src, s.textStreams(src.Part))
 			if err != nil {
 				return "", err
 			}
 			cues = append(cues, c...)
 		}
+		sub.mu.Lock()
 		sub.cues, sub.read = cues, true
+		sub.mu.Unlock()
 	}
 	seg := s.plan[n]
-	return writeVTT(sub.cues, s.offsets[seg.Part], seg.Start, seg.End), nil
+	return writeVTT(cues, s.offsets[seg.Part], seg.Start, seg.End), nil
 }
 
 // Encoder answers the device video planned so is encoded on, or nothing where it is copied.
@@ -297,8 +325,10 @@ func (r *Remuxer) Close(playback uuid.UUID) {
 	_ = os.RemoveAll(s.dir)
 }
 
-// Sweep closes every remux nobody has asked anything of for a while: a player that went away.
+// Sweep closes every remux nobody has asked anything of for a while, a player that went away, and
+// forgets the subtitles of parts no one has played in a long while.
 func (r *Remuxer) Sweep() {
+	r.sweepSubtitles()
 	r.mu.Lock()
 	var stale []uuid.UUID
 	for id, s := range r.sessions {

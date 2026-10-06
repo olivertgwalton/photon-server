@@ -121,6 +121,12 @@ is freed as it stops, or a couple of minutes after its player goes quiet.
 answering is transcoding against its limit (`transcodes.limit` is absent when unlimited), with
 `transcodes.conversions` saying how many of them are conversions.
 
+A text subtitle inside a file is sent beside an HLS playback as WebVTT. Reading one out means
+reading the whole file, so the first time any of a file's text subtitles is asked for, all of them
+are read out in that one pass, as Jellyfin does, and kept under `PHOTON_CACHE_DIR` in `subtitles`
+until no one has played the file for a month. A player that gives up waiting does not stop the
+pass, and finds the subtitles there when it asks again.
+
 An admin's dashboard sees each playback as Jellyfin's does: `GET /api/v1/admin/playbacks` names the
 profile, the device and app that started it and the address it played from, the title with its
 pictures, the copy and its length, where it has got to, and how it plays: the reasons it could not

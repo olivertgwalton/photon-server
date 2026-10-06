@@ -90,7 +90,7 @@ func filmToDownload(t *testing.T) (st *store.Store, item, part uuid.UUID) {
 // slots is a node's transcode slots, at most one at once.
 func slots(t *testing.T) *hls.Remuxer {
 	t.Helper()
-	r, err := hls.NewRemuxer("ffmpeg", t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, 1, slog.New(slog.DiscardHandler))
+	r, err := hls.NewRemuxer("ffmpeg", t.TempDir(), t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, 1, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

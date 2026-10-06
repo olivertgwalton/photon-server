@@ -86,8 +86,8 @@ const (
 	slowestRead = 8 << 20
 )
 
-// wholeRun is how long a tool reading all of f may run.
-func wholeRun(f *os.File) time.Duration {
+// WholeRun is how long a tool reading all of f may run.
+func WholeRun(f *os.File) time.Duration {
 	info, err := f.Stat()
 	if err != nil {
 		return partRun
