@@ -43,7 +43,7 @@ func (c *Client) Describe(ctx context.Context, kind domain.ItemKind, id string, 
 	}
 	for _, number := range seasons.Numbers {
 		s, err := c.Season(ctx, n, number)
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, provider.ErrNotFound) {
 			continue
 		}
 		if err != nil {
@@ -54,11 +54,12 @@ func (c *Client) Describe(ctx context.Context, kind domain.ItemKind, id string, 
 	return m, said, nil
 }
 
-// DescribePerson answers what TMDB knows of someone with a TMDB id; ErrNotFound for anyone else.
+// DescribePerson answers what TMDB knows of someone with a TMDB id; provider.ErrNotFound for anyone
+// else.
 func (c *Client) DescribePerson(ctx context.Context, ids map[domain.Provider]string) (domain.Person, error) {
 	id := ids[domain.ProviderTMDB]
 	if id == "" {
-		return domain.Person{}, ErrNotFound
+		return domain.Person{}, provider.ErrNotFound
 	}
 	return c.Person(ctx, id)
 }

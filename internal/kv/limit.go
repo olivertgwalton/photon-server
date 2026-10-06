@@ -38,12 +38,13 @@ func (k *KV) Allow(ctx context.Context, key string, l Limit) (time.Duration, err
 	return time.Duration(wait) * time.Microsecond, err
 }
 
-type limiter interface {
+// Limiter is the allowance requests are taken from: KV, or a test's own.
+type Limiter interface {
 	Allow(ctx context.Context, key string, l Limit) (time.Duration, error)
 }
 
 // Wait blocks until key's allowance lets one more request through.
-func Wait(ctx context.Context, l limiter, key string, limit Limit) error {
+func Wait(ctx context.Context, l Limiter, key string, limit Limit) error {
 	for {
 		wait, err := l.Allow(ctx, key, limit)
 		if err != nil || wait == 0 {

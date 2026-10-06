@@ -34,22 +34,13 @@ var limit = kv.Limit{Every: 50 * time.Millisecond, Burst: 20}
 // A token lasts a month; it is renewed a few days early.
 const tokenLife = 25 * 24 * time.Hour
 
-var ErrNotFound = errors.New("tvdb: not found")
-
-var errExpired = errors.New("tvdb: token refused")
-
-type limiter interface {
-	Allow(ctx context.Context, key string, l kv.Limit) (time.Duration, error)
-}
-
 type Client struct {
 	base     string
 	key      string
 	pin      string
 	language string // ISO 639-2, as TVDB names languages
 	country  string // ISO 3166-1 alpha-3, lower case
-	http     *http.Client
-	limits   limiter
+	api      provider.Client
 
 	mu      sync.Mutex
 	token   string
@@ -59,13 +50,13 @@ type Client struct {
 // New makes a client for a project key and, for a key subscribers pay for, a subscriber's PIN.
 // language is an IETF tag such as en-GB: TVDB is asked for its language, and its region picks the
 // certificates.
-func New(key, pin, lang string, limits limiter) *Client {
+func New(key, pin, lang string, limits kv.Limiter) *Client {
 	tag := language.Make(lang)
 	base, _ := tag.Base()
 	region, _ := tag.Region()
 	return &Client{
 		base: baseURL, key: key, pin: pin, language: base.ISO3(), country: strings.ToLower(region.ISO3()),
-		http: &http.Client{Timeout: 30 * time.Second}, limits: limits,
+		api: provider.Client{Name: "tvdb", Limits: limits, Limit: limit},
 	}
 }
 
@@ -92,7 +83,7 @@ func (c *Client) login(ctx context.Context) (string, error) {
 			Token string `json:"token"`
 		} `json:"data"`
 	}
-	if err := c.do(req, &out); err != nil {
+	if err := c.api.Do(req, &out); err != nil {
 		return "", fmt.Errorf("tvdb login: %w", err)
 	}
 	c.token, c.expires = out.Data.Token, time.Now().Add(tokenLife)
@@ -101,9 +92,6 @@ func (c *Client) login(ctx context.Context) (string, error) {
 
 func (c *Client) get(ctx context.Context, path string, into any) error {
 	for attempt := 0; ; attempt++ {
-		if err := kv.Wait(ctx, c.limits, "tvdb", limit); err != nil {
-			return err
-		}
 		token, err := c.login(ctx)
 		if err != nil {
 			return err
@@ -113,32 +101,14 @@ func (c *Client) get(ctx context.Context, path string, into any) error {
 			return err
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
-		err = c.do(req, into)
-		if !errors.Is(err, errExpired) || attempt > 0 {
+		err = c.api.Do(req, into)
+		if refused, ok := errors.AsType[*provider.Refusal](err); !ok || refused.Code != http.StatusUnauthorized || attempt > 0 {
 			return err
 		}
 		c.mu.Lock()
 		c.token = ""
 		c.mu.Unlock()
 	}
-}
-
-func (c *Client) do(req *http.Request, into any) error {
-	req.Header.Set("Accept", "application/json")
-	resp, err := provider.Send(c.http, req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	switch resp.StatusCode {
-	case http.StatusOK:
-		return provider.Decode(resp.Body, into)
-	case http.StatusNotFound:
-		return ErrNotFound
-	case http.StatusUnauthorized:
-		return errExpired
-	}
-	return fmt.Errorf("tvdb %s: %s", req.URL.Path, resp.Status)
 }
 
 // Search answers TVDB's ranking of shows named title, first aired in year where it is not zero.

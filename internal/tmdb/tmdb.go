@@ -4,7 +4,6 @@ package tmdb
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -33,8 +32,6 @@ const DefaultToken = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJkYzYwYTNmZmYyZTRlOWQyZmU3Z
 // limit keeps every node together well under TMDB's rate limit of about 50 requests a second.
 var limit = kv.Limit{Every: 50 * time.Millisecond, Burst: 20}
 
-var ErrNotFound = errors.New("tmdb: not found")
-
 type Kind string
 
 const (
@@ -42,34 +39,26 @@ const (
 	Show  Kind = "tv"
 )
 
-type limiter interface {
-	Allow(ctx context.Context, key string, l kv.Limit) (time.Duration, error)
-}
-
 type Client struct {
 	base          string
 	token         string
 	language      string
 	videoLanguage string
 	country       string
-	http          *http.Client
-	limits        limiter
+	api           provider.Client
 }
 
 // New makes a client that authenticates with an API read access token and asks for metadata in
 // language, an IETF tag such as en-US whose region picks the certificates.
-func New(token, language string, limits limiter) *Client {
+func New(token, language string, limits kv.Limiter) *Client {
 	videoLanguage, country, _ := strings.Cut(language, "-")
 	return &Client{
 		base: baseURL, token: token, language: language, videoLanguage: videoLanguage, country: strings.ToUpper(country),
-		http: &http.Client{Timeout: 30 * time.Second}, limits: limits,
+		api: provider.Client{Name: "tmdb", Limits: limits, Limit: limit},
 	}
 }
 
 func (c *Client) get(ctx context.Context, path string, query url.Values, into any) error {
-	if err := kv.Wait(ctx, c.limits, "tmdb", limit); err != nil {
-		return err
-	}
 	if query == nil {
 		query = url.Values{}
 	}
@@ -79,19 +68,7 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, into an
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Accept", "application/json")
-	resp, err := provider.Send(c.http, req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	switch resp.StatusCode {
-	case http.StatusOK:
-		return provider.Decode(resp.Body, into)
-	case http.StatusNotFound:
-		return ErrNotFound
-	}
-	return fmt.Errorf("tmdb %s: %s", path, resp.Status)
+	return c.api.Do(req, into)
 }
 
 type result struct {

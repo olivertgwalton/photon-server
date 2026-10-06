@@ -5,18 +5,21 @@
 package provider
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/kv"
 )
 
 var (
@@ -25,35 +28,86 @@ var (
 	// ErrUnavailable is a provider that could not be reached, as a plugin that is down: it is
 	// passed over too, so the next source is asked.
 	ErrUnavailable = errors.New("provider: unavailable")
+	// ErrNotFound is a provider answering 404.
+	ErrNotFound = errors.New("provider: not found")
+	// ErrUnreached is a request a provider never answered whole: no connection, a timeout, an
+	// answer cut short. A built-in provider's fails its job, to be tried again; a plugin's is
+	// ErrUnavailable.
+	ErrUnreached = errors.New("provider: not reached")
 )
 
-// maxAnswer bounds what a built-in provider may answer to one request, as plugins' answers are
-// bounded; a long show described whole is the largest.
+// maxAnswer bounds what a provider may answer to one request rather than holding whatever it sends
+// in memory; a long show described whole is the largest.
 const maxAnswer = 8 << 20
 
-// Decode reads a provider's JSON answer into v, refusing one over maxAnswer rather than holding
-// whatever it sends in memory.
-func Decode(r io.Reader, v any) error {
-	data, err := io.ReadAll(io.LimitReader(r, maxAnswer+1))
+// builtinHTTP is the built-in providers' HTTP client.
+var builtinHTTP = &http.Client{Timeout: 30 * time.Second}
+
+// Client asks a provider for JSON, as every provider is asked: after its share of Limit where
+// Limits is set, again after a 429 as the provider says (send), and reading at most maxAnswer. An
+// error names Name and the address's path, never the address, which may carry a key.
+type Client struct {
+	Name string
+	// HTTP is nil for a built-in provider's.
+	HTTP   *http.Client
+	Limits kv.Limiter
+	Limit  kv.Limit
+}
+
+// Refusal is a provider's answer other than 200: its status, and its body for what it says.
+type Refusal struct {
+	Code   int
+	Status string
+	Body   []byte
+}
+
+func (r *Refusal) Error() string { return r.Status }
+
+func (r *Refusal) Is(target error) bool {
+	return target == ErrNotFound && r.Code == http.StatusNotFound
+}
+
+// Do sends req and decodes a 200's JSON into out; any other status is a *Refusal.
+func (c Client) Do(req *http.Request, out any) error {
+	if c.Limits != nil {
+		if err := kv.Wait(req.Context(), c.Limits, c.Name, c.Limit); err != nil {
+			return err
+		}
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := send(cmp.Or(c.HTTP, builtinHTTP), req)
 	if err != nil {
-		return err
+		if ue, ok := errors.AsType[*url.Error](err); ok {
+			err = ue.Err
+		}
+		return fmt.Errorf("%s %s: %w: %w", c.Name, req.URL.Path, ErrUnreached, err)
 	}
-	if len(data) > maxAnswer {
-		return fmt.Errorf("answered more than %d bytes", maxAnswer)
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxAnswer+1))
+	switch {
+	case err != nil:
+		return fmt.Errorf("%s %s: %w: %w", c.Name, req.URL.Path, ErrUnreached, err)
+	case len(data) > maxAnswer:
+		return fmt.Errorf("%s %s: answered more than %d bytes", c.Name, req.URL.Path, maxAnswer)
+	case resp.StatusCode != http.StatusOK:
+		return fmt.Errorf("%s %s: %w", c.Name, req.URL.Path, &Refusal{Code: resp.StatusCode, Status: resp.Status, Body: data})
 	}
-	return json.Unmarshal(data, v)
+	if err := json.Unmarshal(data, out); err != nil {
+		return fmt.Errorf("%s %s: %w", c.Name, req.URL.Path, err)
+	}
+	return nil
 }
 
 // maxRetryAfter is the longest a provider's asking to be given time is waited out within one
 // request; one asking longer fails it, and its job is tried again later.
 const maxRetryAfter = 30 * time.Second
 
-// Send sends req, and sends it again once a provider answering 429 Too Many Requests says it may,
+// send sends req, and sends it again once a provider answering 429 Too Many Requests says it may,
 // so a burst of identifying waits a moment rather than failing titles into their backoff.
-func Send(hc *http.Client, req *http.Request) (*http.Response, error) {
+func send(hc *http.Client, req *http.Request) (*http.Response, error) {
 	var waited time.Duration
 	for {
-		resp, err := hc.Do(req) //nolint:gosec // a built-in provider's own address
+		resp, err := hc.Do(req) //nolint:gosec // a built-in provider's own address, or a plugin's an admin registered
 		if err != nil || resp.StatusCode != http.StatusTooManyRequests {
 			return resp, err
 		}

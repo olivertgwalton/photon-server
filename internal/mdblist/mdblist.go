@@ -6,7 +6,6 @@ package mdblist
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"time"
@@ -24,21 +23,14 @@ const keySetting = "api_key"
 // limit keeps well inside the free tier, which counts requests a day.
 var limit = kv.Limit{Every: 200 * time.Millisecond, Burst: 5}
 
-var errNotFound = errors.New("mdblist: not found")
-
-type limiter interface {
-	Allow(ctx context.Context, key string, l kv.Limit) (time.Duration, error)
-}
-
 type Client struct {
 	base     string
 	settings provider.Settings
-	http     *http.Client
-	limits   limiter
+	api      provider.Client
 }
 
-func New(settings provider.Settings, limits limiter) *Client {
-	return &Client{base: baseURL, settings: settings, http: &http.Client{Timeout: 30 * time.Second}, limits: limits}
+func New(settings provider.Settings, limits kv.Limiter) *Client {
+	return &Client{base: baseURL, settings: settings, api: provider.Client{Name: "mdblist", Limits: limits, Limit: limit}}
 }
 
 func (c *Client) Info() provider.Info {
@@ -73,7 +65,7 @@ func (c *Client) Ratings(ctx context.Context, kind domain.ItemKind, ids map[doma
 			continue
 		}
 		ratings, err := c.ratings(ctx, key, string(by)+"/"+media+"/"+url.PathEscape(id))
-		if errors.Is(err, errNotFound) {
+		if errors.Is(err, provider.ErrNotFound) {
 			continue
 		}
 		return ratings, err
@@ -82,30 +74,9 @@ func (c *Client) Ratings(ctx context.Context, kind domain.ItemKind, ids map[doma
 }
 
 func (c *Client) ratings(ctx context.Context, key, path string) ([]domain.Rating, error) {
-	if err := kv.Wait(ctx, c.limits, "mdblist", limit); err != nil {
-		return nil, err
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/"+path+"?"+url.Values{"apikey": {key}}.Encode(), nil)
 	if err != nil {
 		return nil, err
-	}
-	req.Header.Set("Accept", "application/json")
-	resp, err := provider.Send(c.http, req)
-	if ue, ok := errors.AsType[*url.Error](err); ok {
-		// Its address carries the key.
-		return nil, fmt.Errorf("mdblist %s: %w", path, ue.Err)
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	switch resp.StatusCode {
-	case http.StatusOK:
-	case http.StatusNotFound:
-		return nil, errNotFound
-	default:
-		// The path, never the address: the key rides in it.
-		return nil, fmt.Errorf("mdblist %s: %s", path, resp.Status)
 	}
 	var body struct {
 		Ratings []struct {
@@ -114,7 +85,7 @@ func (c *Client) ratings(ctx context.Context, key, path string) ([]domain.Rating
 			Votes  *int     `json:"votes"`
 		} `json:"ratings"`
 	}
-	if err := provider.Decode(resp.Body, &body); err != nil {
+	if err := c.api.Do(req, &body); err != nil {
 		return nil, err
 	}
 	var out []domain.Rating

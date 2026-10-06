@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
@@ -97,10 +96,6 @@ type authenticator interface {
 	SignOutDevice(ctx context.Context, session domain.Session, device uuid.UUID) error
 }
 
-type limiter interface {
-	Allow(ctx context.Context, key string, l kv.Limit) (time.Duration, error)
-}
-
 type profileLister interface {
 	Profiles(ctx context.Context) ([]store.ProfileListing, error)
 }
@@ -160,7 +155,7 @@ type Services struct {
 	// Previews are parts' chapter images and trickplay sheets, as recorded and as files.
 	Previews     previews
 	PreviewFiles previewFiles
-	Limits       limiter
+	Limits       kv.Limiter
 	// Web is the web app, served for every path the API does not own; nil serves the API alone.
 	Web *Web
 	// TrustedProxies are the peers whose X-Forwarded-For names the client. None by default.
