@@ -61,10 +61,13 @@ var rowQueries = map[domain.HomeRow]string{
 		ORDER BY added_at DESC, id DESC LIMIT @limit`,
 	domain.RowRecentShows: `
 		SELECT show.* FROM items show
-		JOIN items season ON season.parent_id = show.id AND season.kind = 'season'
-		JOIN items e ON e.parent_id = season.id AND e.kind = 'episode'
-		WHERE show.kind = 'show' AND visible(show.id, @profile)
-		GROUP BY show.id ORDER BY max(e.added_at) DESC, show.id DESC LIMIT @limit`,
+		CROSS JOIN LATERAL (
+			SELECT max(e.added_at) AS added_at FROM items season
+			JOIN items e ON e.parent_id = season.id AND e.kind = 'episode'
+			WHERE season.parent_id = show.id AND season.kind = 'season'
+		) latest
+		WHERE show.kind = 'show' AND latest.added_at IS NOT NULL AND visible(show.id, @profile)
+		ORDER BY latest.added_at DESC, show.id DESC LIMIT @limit`,
 }
 
 // Home answers a profile's home page: each row with anything in it, up to limit cards each.
