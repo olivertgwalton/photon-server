@@ -205,8 +205,11 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 			SELECT g.id, count(e.id) AS episodes, count(ws.watched_at) AS watched,
 				max(ws.last_played_at) AS last_played, max(ws.watched_at) AS watched_at
 			FROM items g
-			JOIN items e ON e.kind = 'episode'
-				AND (e.parent_id = g.id OR e.parent_id IN (SELECT id FROM items s WHERE s.parent_id = g.id))
+			CROSS JOIN LATERAL (
+				SELECT e.id FROM items e WHERE e.parent_id = g.id AND e.kind = 'episode'
+				UNION ALL
+				SELECT e.id FROM items s JOIN items e ON e.parent_id = s.id WHERE s.parent_id = g.id AND e.kind = 'episode'
+			) e
 			LEFT JOIN watch_state ws ON ws.item_id = e.id AND ws.profile_id = ?
 			WHERE g.id IN ?
 			GROUP BY g.id`, p, ids(groups)).Scan(&counts).Error
