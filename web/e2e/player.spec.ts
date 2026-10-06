@@ -20,8 +20,8 @@ async function settings(page: Page, ...path: string[]) {
 test("a film plays as it is from where it was left, and stops where it was", async ({
 	page,
 }) => {
-	const asked = page.waitForRequest("**/api/v1/titles/t-film/play");
-	await logIn(page, "/play/t-film");
+	const asked = page.waitForRequest("**/api/v1/titles/p-film/play");
+	await logIn(page, "/play/p-film");
 	const body = (await asked).postDataJSON();
 	expect(body.profile.video.map((v: { codec: string }) => v.codec)).toContain(
 		"h264",
@@ -40,14 +40,14 @@ test("a film plays as it is from where it was left, and stops where it was", asy
 	await page.getByRole("link", { name: "Back to Quiet Hours" }).click();
 	await expect
 		.poll(async () => {
-			const title = await page.request.get("/api/v1/titles/t-film");
+			const title = await page.request.get("/api/v1/titles/p-film");
 			return (await title.json()).state.position_ms;
 		})
 		.toBeGreaterThan(2_000);
 });
 
 test("Skip Intro jumps past the intro", async ({ page }) => {
-	await logIn(page, "/play/t-film?t=0.6");
+	await logIn(page, "/play/p-film?t=0.6");
 	await page.getByRole("button", { name: "Skip Intro" }).click();
 	await expect.poll(() => time(page)).toBeGreaterThanOrEqual(3);
 });
@@ -55,7 +55,7 @@ test("Skip Intro jumps past the intro", async ({ page }) => {
 test("the keys play, pause, seek and mute as YouTube's do", async ({
 	page,
 }) => {
-	await logIn(page, "/play/t-film?t=0");
+	await logIn(page, "/play/p-film?t=0");
 	await page.waitForRequest("**/api/v1/playback/*/progress");
 	await page.keyboard.press("k");
 	await expect(
@@ -70,7 +70,7 @@ test("the keys play, pause, seek and mute as YouTube's do", async ({
 });
 
 test("subtitles beside the file show as a track", async ({ page }) => {
-	await logIn(page, "/play/t-film?t=1");
+	await logIn(page, "/play/p-film?t=1");
 	await page.getByRole("button", { name: "Subtitles" }).click();
 	await expect
 		.poll(() =>
@@ -85,10 +85,10 @@ test("subtitles beside the file show as a track", async ({ page }) => {
 test("a lower quality stops the playback and plays the server's HLS", async ({
 	page,
 }) => {
-	await logIn(page, "/play/t-film?t=0");
+	await logIn(page, "/play/p-film?t=0");
 	await page.waitForRequest("**/api/v1/playback/*/progress");
 	const stop = page.waitForRequest("**/api/v1/playback/*/stop");
-	const asked = page.waitForRequest("**/api/v1/titles/t-film/play");
+	const asked = page.waitForRequest("**/api/v1/titles/p-film/play");
 	await settings(page, "Quality", "420 kbps");
 	await stop;
 	expect((await asked).postDataJSON().profile.max_bitrate_kbps).toBe(420);
@@ -125,11 +125,11 @@ test("a busy server and an unplayable file are said plainly", async ({
 test("the next episode is offered in the credits and plays", async ({
 	page,
 }) => {
-	await logIn(page, "/play/t-ep?t=3.5");
+	await logIn(page, "/play/p-ep?t=3.5");
 	const upNext = page.getByRole("region", { name: "Up next" });
 	await expect(upNext).toContainText("S1 E2 · Second");
 	await upNext.getByRole("button", { name: "Play now" }).click();
-	await expect(page).toHaveURL("/play/t-ep2");
+	await expect(page).toHaveURL("/play/p-ep2");
 	await expect(
 		page.getByRole("heading", { name: "Small Show · S1 E2 · Second" }),
 	).toBeVisible();
@@ -138,7 +138,7 @@ test("the next episode is offered in the credits and plays", async ({
 test("scrubbing shows the chapter and the thumbnail under the pointer", async ({
 	page,
 }) => {
-	await logIn(page, "/play/t-film?t=0");
+	await logIn(page, "/play/p-film?t=0");
 	const seek = page.getByRole("slider", { name: "Seek" });
 	const box = await seek.boundingBox();
 	if (!box) throw new Error("no seek bar");

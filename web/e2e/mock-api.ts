@@ -19,38 +19,232 @@ const libraries: Schemas["LibraryList"] = {
 	],
 };
 
-const home: Schemas["Home"] = {
-	rows: [
+// The catalogue: a film with everything a title page draws, a show of two
+// episodes, a box set, and enough plain films to page a wall.
+const person = "5f0c1d8e-2b1a-4c3d-9e8f-0a1b2c3d4e5f";
+const art = "0b4e2f1a-9c8d-4e7f-a6b5-c4d3e2f1a0b9";
+
+type State = Schemas["TitleState"];
+const states = new Map<string, State>([
+	["t-ep", { position_ms: 600_000 }],
+	["t-film", { position_ms: 1_200_000 }],
+]);
+
+const base = (
+	id: string,
+	kind: Schemas["ItemKind"],
+	title: string,
+	extra: Partial<Schemas["Card"]> = {},
+): Schemas["Card"] => ({
+	id,
+	kind,
+	title,
+	added_at: "2026-10-01T20:00:00Z",
+	...extra,
+});
+
+const films: Schemas["Card"][] = [
+	base("t-film", "movie", "Quiet Hours", {
+		year: 2018,
+		duration_ms: 6_720_000,
+		poster: art,
+		backdrop: art,
+	}),
+	...Array.from({ length: 249 }, (_, i) =>
+		base(
+			`t-f${i}`,
+			"movie",
+			`${"BCDEFGH"[i % 7]}ilm ${String(i).padStart(3, "0")}`,
+			{
+				year: 1990 + (i % 30),
+			},
+		),
+	),
+];
+// The wall's order, where `films` is the order they were added.
+const byTitle = (cards: Schemas["Card"][]) =>
+	[...cards].sort((a, b) => a.title.localeCompare(b.title));
+
+const shows = [base("t-show", "show", "Small Show", { year: 2020 })];
+const episode = (id: string, n: number, title: string) =>
+	base(id, "episode", title, {
+		duration_ms: 1_800_000,
+		show: { id: "t-show", title: "Small Show" },
+		season_number: 1,
+		episode_number: n,
+	});
+const episodes = [episode("t-ep", 1, "Pilot"), episode("t-ep2", 2, "Second")];
+const collection = base("c-set", "collection", "Quiet Collection", {
+	origin: "tmdb",
+});
+
+const card = (c: Schemas["Card"]): Schemas["Card"] => {
+	const state = states.get(c.id);
+	return state ? { ...c, state } : c;
+};
+const season = base("t-s1", "season", "Season 1", {
+	show: { id: "t-show", title: "Small Show" },
+});
+const everything = () => [...films, ...shows, season, ...episodes, collection];
+const byID = (id: string) => everything().find((c) => c.id === id);
+
+function home(limit = 20): Schemas["Home"] {
+	const rows: Schemas["HomeRow"][] = [
 		{
 			kind: "continue_watching",
-			items: [
-				{
-					id: "t-ep",
-					kind: "episode",
-					title: "Pilot",
-					added_at: "2026-10-01T20:00:00Z",
-					duration_ms: 1_800_000,
-					state: { position_ms: 600_000 },
-					show: { id: "t-show", title: "Small Show" },
-					season_number: 1,
-					episode_number: 1,
-				},
-			],
+			items: everything().filter((c) => states.get(c.id)?.position_ms),
 		},
 		{
-			kind: "recently_added_films",
-			items: [
+			kind: "favourites",
+			items: everything().filter((c) => states.get(c.id)?.favourite_at),
+		},
+		{ kind: "recently_added_films", items: films },
+	];
+	return {
+		rows: rows
+			.map((r) => ({ ...r, items: r.items.slice(0, limit).map(card) }))
+			.filter((r) => r.items.length),
+	};
+}
+
+const facets: Schemas["Facets"] = {
+	genres: ["Comedy", "Drama"],
+	years: [2018, 2019],
+	certificates: ["12A", "15"],
+	studios: ["Ealing"],
+	resolutions: ["1080p", "4k"],
+	ranges: ["sdr", "dv"],
+	rating_sites: ["imdb", "tmdb"],
+	marks: ["watched", "unwatched", "in_progress", "favourite"],
+};
+
+const stream = (
+	index: number,
+	kind: Schemas["StreamKind"],
+	extra: Partial<Schemas["StreamPage"]>,
+): Schemas["StreamPage"] => ({ index, kind, codec: "h264", ...extra });
+
+function page(id: string): Schemas["TitlePage"] | undefined {
+	const c = byID(id);
+	if (!c) return;
+	const out: Schemas["TitlePage"] = {
+		...card(c),
+		artwork: c.poster ? { poster: [art], backdrop: [art] } : {},
+	};
+	if (id === "t-film") {
+		Object.assign(out, {
+			overview: "A night shift at a radio station.",
+			tagline: "Nobody is listening.",
+			certificate: "15",
+			genres: ["Drama"],
+			studios: ["Ealing"],
+			ids: { imdb: "tt0000001", tmdb: "1" },
+			ratings: [
+				{ site: "imdb", score: 78, votes: 1200 },
+				{ site: "rotten_tomatoes", score: 93 },
+			],
+			collections: [{ id: "c-set", title: "Quiet Collection" }],
+			credits: [
+				{ person_id: person, name: "Ada Lane", kind: "actor", role: "Host" },
+				{ person_id: person, name: "Ada Lane", kind: "director" },
+			],
+			extras: [{ id: "t-trailer", extra_kind: "trailer", title: "Trailer" }],
+			versions: [
 				{
-					id: "t-film",
-					kind: "movie",
-					title: "Quiet Hours",
-					year: 2018,
-					added_at: "2026-10-01T20:00:00Z",
+					id: "v-4k",
+					label: "4K",
+					container: "mkv",
+					duration_ms: 6_720_000,
+					size_bytes: 40_000_000_000,
+					bitrate_kbps: 48_000,
+					parts: 1,
+					streams: [
+						stream(0, "video", {
+							codec: "hevc",
+							width: 3840,
+							height: 2160,
+							range: "dv",
+							dv_profile: 8,
+						}),
+						stream(1, "audio", {
+							codec: "truehd",
+							language: "eng",
+							channel_layout: "7.1",
+							default: true,
+						}),
+						stream(2, "audio", {
+							codec: "ac3",
+							language: "eng",
+							channels: 2,
+							commentary: true,
+						}),
+						stream(3, "subtitle", { codec: "subrip", language: "fra" }),
+					],
+					chapters: [
+						{ start_ms: 0, end_ms: 600_000, title: "Sign on" },
+						{ start_ms: 600_000, end_ms: 6_720_000 },
+					],
+				},
+				{
+					id: "v-hd",
+					label: "1080p",
+					container: "mp4",
+					duration_ms: 6_720_000,
+					size_bytes: 8_000_000_000,
+					parts: 1,
+					streams: [
+						stream(0, "video", { width: 1920, height: 1080 }),
+						stream(1, "audio", { codec: "aac", language: "eng", channels: 2 }),
+					],
 				},
 			],
-		},
-	],
-};
+		});
+	}
+	if (id === "t-show") {
+		out.seasons = [
+			{
+				id: "t-s1",
+				number: 1,
+				title: "Season 1",
+				episodes: 2,
+				state: { unwatched: 2 },
+			},
+		];
+	}
+	if (id === "t-s1") {
+		out.show = { id: "t-show", title: "Small Show" };
+		out.episodes = episodes.map((e) => ({
+			id: e.id,
+			title: e.title,
+			episode_number: e.episode_number,
+			duration_ms: e.duration_ms,
+			state: states.get(e.id),
+		}));
+	}
+	if (c.kind === "episode") {
+		out.season = { id: "t-s1", title: "Season 1" };
+		out.versions = [
+			{
+				id: `v-${id}`,
+				container: "mkv",
+				duration_ms: 1_800_000,
+				size_bytes: 1_000_000_000,
+				parts: 1,
+				streams: [stream(0, "video", {}), stream(1, "audio", { codec: "aac" })],
+			},
+		];
+	}
+	return out;
+}
+
+let playlists: (Schemas["Playlist"] & { items: string[] })[] = [];
+const downloads: Schemas["Download"][] = [];
+
+// The change feed's open streams, and a way for a test to speak on them.
+const feeds = new Set<ReadableStreamDefaultController<string>>();
+
+const json = (request: Request) => request.json() as Promise<never>;
+const none = () => new Response(null, { status: 204 });
 
 // A film and two episodes to play, each six seconds of e2e/fixtures/film.mp4.
 const version = (id: string): Schemas["VersionPage"] => ({
@@ -97,16 +291,16 @@ const version = (id: string): Schemas["VersionPage"] => ({
 });
 
 const titles: Record<string, Schemas["TitlePage"]> = {
-	"t-film": {
-		id: "t-film",
+	"p-film": {
+		id: "p-film",
 		kind: "movie",
 		title: "Quiet Hours",
 		added_at: "2026-10-01T20:00:00Z",
 		versions: [version("v-film")],
 		state: { position_ms: 1_000 },
 	},
-	"t-ep": {
-		id: "t-ep",
+	"p-ep": {
+		id: "p-ep",
 		kind: "episode",
 		title: "Pilot",
 		added_at: "2026-10-01T20:00:00Z",
@@ -115,8 +309,8 @@ const titles: Record<string, Schemas["TitlePage"]> = {
 		episode_number: 1,
 		versions: [version("v-ep")],
 	},
-	"t-ep2": {
-		id: "t-ep2",
+	"p-ep2": {
+		id: "p-ep2",
 		kind: "episode",
 		title: "Second",
 		added_at: "2026-10-01T20:00:00Z",
@@ -222,6 +416,14 @@ const problem = (status: number, code: Schemas["ProblemCode"], title: string) =>
 		headers: { "content-type": "application/problem+json" },
 	});
 
+// A 1×1 PNG, for every picture.
+const pixel = Uint8Array.from(
+	atob(
+		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkqGcAAAIEAQDeEycgAAAAAElFTkSuQmCC",
+	),
+	(c) => c.charCodeAt(0),
+);
+
 // token → who it is watching as, and whether the profile has a PIN.
 const sessions = new Map<string, Schemas["Profile"]>();
 let kidsPIN = "";
@@ -248,6 +450,27 @@ const server_ = Bun.serve({
 		const me = token ? sessions.get(token) : undefined;
 
 		if (route === "GET /api/v1/server") return Response.json(server);
+		// Not the API: how a test knows a page is listening, and makes the server
+		// announce a change.
+		if (route === "GET /mock/listening") return Response.json(feeds.size);
+		if (route === "POST /mock/emit") {
+			const { event, data, add } = (await request.json()) as {
+				event: string;
+				data: object;
+				add?: string;
+			};
+			if (add) films.unshift(base(`t-new${films.length}`, "movie", add));
+			for (const feed of feeds) {
+				feed.enqueue(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+			}
+			return none();
+		}
+		if (
+			request.method === "GET" &&
+			url.pathname.startsWith("/api/v1/artwork/")
+		) {
+			return new Response(pixel, { headers: { "content-type": "image/png" } });
+		}
 		if (route === "POST /api/v1/auth/login") {
 			const body = (await request.json()) as Schemas["LoginRequest"];
 			if (body.name !== "Ada" || body.password !== "correct horse") {
@@ -288,8 +511,8 @@ const server_ = Bun.serve({
 			if (action === "/play" && request.method === "POST") {
 				return play(id, (await request.json()) as Schemas["Play"]);
 			}
-			if (action === "/next" && id === "t-ep") {
-				const { versions: _, ...card } = titles["t-ep2"];
+			if (action === "/next" && id === "p-ep") {
+				const { versions: _, ...card } = titles["p-ep2"];
 				return Response.json(card satisfies Schemas["Card"]);
 			}
 			if (action === "/next") return problem(404, "not_found", "Not Found");
@@ -364,7 +587,115 @@ const server_ = Bun.serve({
 			case "GET /api/v1/libraries":
 				return Response.json(libraries);
 			case "GET /api/v1/home":
-				return Response.json(home);
+				return Response.json(home(Number(url.searchParams.get("limit")) || 20));
+			case "GET /api/v1/events": {
+				let mine: ReadableStreamDefaultController<string>;
+				const body = new ReadableStream<string>({
+					start(controller) {
+						mine = controller;
+						feeds.add(controller);
+						controller.enqueue(
+							`event: hello\ndata: ${JSON.stringify({ scans: [] })}\n\n`,
+						);
+					},
+					cancel() {
+						feeds.delete(mine);
+					},
+				});
+				return new Response(body, {
+					headers: { "content-type": "text/event-stream" },
+				});
+			}
+			case "GET /api/v1/playlists":
+				return Response.json({
+					items: playlists.map(({ items, ...p }) => ({
+						...p,
+						entries: items.length,
+					})),
+				} satisfies Schemas["PlaylistList"]);
+			case "POST /api/v1/playlists": {
+				const body: Schemas["AddPlaylist"] = await json(request);
+				const id = `pl-${playlists.length + 1}`;
+				playlists.push({
+					id,
+					name: body.name,
+					entries: 0,
+					duration_ms: 0,
+					updated_at: "2026-10-05T20:00:00Z",
+					items: body.item_ids ?? [],
+				});
+				return Response.json({ id } satisfies Schemas["Created"], {
+					status: 201,
+				});
+			}
+			case "GET /api/v1/downloads":
+				return Response.json({
+					items: downloads,
+				} satisfies Schemas["DownloadList"]);
+			case "POST /api/v1/downloads": {
+				const body: Schemas["DownloadRequest"] = await json(request);
+				const d: Schemas["Download"] = {
+					id: `d-${downloads.length + 1}`,
+					title_id: body.title_id,
+					part_id: "part-1",
+					device_id: "device-1",
+					method: body.max_bitrate_kbps >= 1_000_000 ? "direct" : "transcode",
+					max_bitrate_kbps: body.max_bitrate_kbps,
+					state: "ready",
+					progress: 1,
+					size_bytes: 1_500_000_000,
+					url: "/api/v1/parts/part-1/stream?exp=1&sig=x",
+					created_at: "2026-10-05T20:00:00Z",
+				};
+				downloads.unshift(d);
+				return Response.json(d);
+			}
+			case "GET /api/v1/history":
+				return Response.json({
+					items: [
+						{
+							id: "h-1",
+							profile_id: me.id,
+							title: card(byID("t-ep") as Schemas["Card"]),
+							method: "direct",
+							started_at: "2026-10-04T20:00:00Z",
+							stopped_at: "2026-10-04T20:10:00Z",
+							position_ms: 600_000,
+						},
+					],
+					offset: 0,
+					total: 1,
+				} satisfies Schemas["HistoryEntryPage"]);
+			case "GET /api/v1/search": {
+				const q = (url.searchParams.get("q") ?? "").toLowerCase();
+				const found = everything().filter((c) =>
+					c.title.toLowerCase().includes(q),
+				);
+				const people = "ada lane".includes(q)
+					? [{ id: person, name: "Ada Lane" }]
+					: [];
+				return Response.json({
+					items: found.slice(0, 20).map(card),
+					people,
+					offset: 0,
+					total: found.length,
+					people_total: people.length,
+				} satisfies Schemas["Search"]);
+			}
+			case `GET /api/v1/people/${person}`:
+				return Response.json({
+					id: person,
+					name: "Ada Lane",
+					biography: "Broadcaster.",
+					born: "1970-01-02",
+					credits: [
+						{
+							...card(films.find((f) => f.id === "t-film") as Schemas["Card"]),
+							credit: "actor",
+							role: "Host",
+						},
+					],
+				} satisfies Schemas["Person"]);
 			case "GET /api/v1/auth/devices":
 				return Response.json({
 					items: [
@@ -403,6 +734,116 @@ const server_ = Bun.serve({
 		}
 		const answered = (await admin(request, url, me)) ?? adminTitles(route);
 		if (answered) return answered;
+		const parts = url.pathname.split("/").slice(3);
+		const [kind, id, sub, entry, leaf] = parts;
+		const path = `${request.method} ${kind}/${sub ?? ""}`;
+		switch (path) {
+			case "GET libraries/titles": {
+				const pool = byTitle(id === "l-shows" ? shows : films);
+				const genre = url.searchParams.get("genre");
+				const sorted =
+					url.searchParams.get("order") === "desc" ? [...pool].reverse() : pool;
+				const items = genre ? sorted.filter((f) => f.id === "t-film") : sorted;
+				const offset = Number(url.searchParams.get("offset") ?? 0);
+				const limit = Number(url.searchParams.get("limit") ?? 50);
+				return Response.json({
+					items: items.slice(offset, offset + limit).map(card),
+					offset,
+					total: items.length,
+				} satisfies Schemas["CardPage"]);
+			}
+			case "GET libraries/letters": {
+				const pool = byTitle(id === "l-shows" ? shows : films);
+				const counts = new Map<string, number>();
+				for (const f of pool) {
+					const l = f.title[0].toUpperCase();
+					counts.set(l, (counts.get(l) ?? 0) + 1);
+				}
+				return Response.json({
+					items: [...counts].map(([letter, count]) => ({ letter, count })),
+				} satisfies Schemas["LetterList"]);
+			}
+			case "GET libraries/facets":
+				return Response.json(facets);
+			case "GET libraries/collections":
+				return Response.json({
+					items: id === "l-films" ? [collection] : [],
+					offset: 0,
+					total: id === "l-films" ? 1 : 0,
+				} satisfies Schemas["CardPage"]);
+			case "GET titles/": {
+				const out = page(id);
+				return out
+					? Response.json(out)
+					: problem(404, "not_found", "Not Found");
+			}
+			case "GET titles/members":
+				return Response.json({
+					items: [
+						card(films.find((f) => f.id === "t-film") as Schemas["Card"]),
+					],
+				});
+			case "GET titles/similar":
+				return Response.json({ items: films.slice(1, 4).map(card) });
+			case "GET titles/next":
+				return Response.json(card(episodes[0]));
+			case "PUT titles/watched":
+			case "DELETE titles/watched":
+			case "PUT titles/favourite":
+			case "DELETE titles/favourite":
+			case "DELETE titles/progress": {
+				const now = request.method === "PUT" ? "2026-10-05T20:00:00Z" : null;
+				const state = { ...states.get(id) };
+				if (sub === "watched") {
+					state.watched_at = now;
+					state.position_ms = 0;
+				} else if (sub === "favourite") state.favourite_at = now;
+				else state.position_ms = 0;
+				states.set(id, state);
+				return none();
+			}
+			case "PATCH playlists/":
+			case "DELETE playlists/": {
+				const list = playlists.find((p) => p.id === id);
+				if (!list) return problem(404, "not_found", "Not Found");
+				if (request.method === "DELETE") {
+					playlists = playlists.filter((p) => p !== list);
+				} else list.name = ((await json(request)) as Schemas["Name"]).name;
+				return none();
+			}
+			case "GET playlists/entries":
+			case "POST playlists/entries":
+			case "PUT playlists/entries":
+			case "DELETE playlists/entries": {
+				const list = playlists.find((p) => p.id === id);
+				if (!list) return problem(404, "not_found", "Not Found");
+				if (request.method === "POST") {
+					list.items.push(
+						...((await json(request)) as Schemas["ItemIDs"]).item_ids,
+					);
+					return none();
+				}
+				const at = list.items.findIndex((_, i) => `e-${i}` === entry);
+				if (request.method === "DELETE") list.items.splice(at, 1);
+				if (request.method === "PUT" && leaf === "position") {
+					const [moved] = list.items.splice(at, 1);
+					list.items.splice(
+						((await json(request)) as Schemas["Move"]).position,
+						0,
+						moved,
+					);
+				}
+				if (request.method !== "GET") return none();
+				return Response.json({
+					items: list.items.map((item, i) => ({
+						...card(byID(item) as Schemas["Card"]),
+						entry_id: `e-${i}`,
+					})),
+					offset: 0,
+					total: list.items.length,
+				} satisfies Schemas["EntryPage"]);
+			}
+		}
 		return problem(404, "not_found", "Not Found");
 	},
 });

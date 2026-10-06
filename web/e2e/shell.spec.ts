@@ -13,7 +13,9 @@ test("home draws the rows and the shell lists every library", async ({
 		"href",
 		"/titles/t-ep",
 	);
-	await expect(page.getByRole("link", { name: /Quiet Hours/ })).toBeVisible();
+	await expect(
+		page.getByRole("link", { name: /Quiet Hours/ }).first(),
+	).toBeVisible();
 	await expectAccessible(page);
 
 	if (isMobile)
