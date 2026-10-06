@@ -43,8 +43,8 @@ func (f *fakeWork) RetryJob(_ context.Context, id int64) error {
 	return nil
 }
 
-func (f *fakeWork) RunningJobs(context.Context) ([]store.Job, error) {
-	return []store.Job{{ID: 9, Kind: domain.JobScanLibrary, Subject: films, Attempts: 1}}, nil
+func (f *fakeWork) RunningJobs(context.Context) ([]domain.Job, error) {
+	return []domain.Job{{ID: 9, Kind: domain.JobScanLibrary, Subject: films, Attempts: 1}}, nil
 }
 
 func (f *fakeWork) Playbacks(context.Context) ([]domain.Playback, error) {

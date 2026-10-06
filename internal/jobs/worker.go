@@ -11,7 +11,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 const (
@@ -33,11 +32,11 @@ var ErrNotNow = errors.New("jobs: no room to run this job here now")
 type Handler func(ctx context.Context, subject uuid.UUID) error
 
 type queue interface {
-	ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]store.Job, error)
+	ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error)
 	CompleteJob(ctx context.Context, id int64) error
-	FailJob(ctx context.Context, job store.Job, err error) (bool, error)
+	FailJob(ctx context.Context, job domain.Job, err error) (bool, error)
 	ExtendLease(ctx context.Context, id int64, node uuid.UUID, lease time.Duration) error
-	PostponeJob(ctx context.Context, job store.Job, delay time.Duration) error
+	PostponeJob(ctx context.Context, job domain.Job, delay time.Duration) error
 }
 
 // Worker runs queued jobs of the kinds it has handlers for, at most slots at a time.
@@ -86,7 +85,7 @@ func (w *Worker) Run(ctx context.Context) {
 	}
 }
 
-func (w *Worker) run(ctx context.Context, job store.Job) {
+func (w *Worker) run(ctx context.Context, job domain.Job) {
 	log := w.log.With(slog.String("job", string(job.Kind)), slog.String("subject", job.Subject.String()))
 	done := make(chan struct{})
 	jobCtx, lose := context.WithCancelCause(ctx)
@@ -96,8 +95,8 @@ func (w *Worker) run(ctx context.Context, job store.Job) {
 	runErr := w.handlers[job.Kind](jobCtx, job.Subject)
 	close(done)
 	// Another node may hold it now, so what this run made of it is not the job's outcome.
-	if errors.Is(context.Cause(jobCtx), store.ErrLeaseLost) {
-		log.WarnContext(ctx, "job stopped", slog.Any("err", store.ErrLeaseLost))
+	if errors.Is(context.Cause(jobCtx), domain.ErrLeaseLost) {
+		log.WarnContext(ctx, "job stopped", slog.Any("err", domain.ErrLeaseLost))
 		return
 	}
 	// The outcome is written even as the worker stops, so no job waits out its lease for a sweep.
@@ -142,7 +141,7 @@ func (w *Worker) renew(ctx context.Context, log *slog.Logger, id int64, lose con
 		case <-t.C:
 			err := w.queue.ExtendLease(ctx, id, w.node, lease)
 			switch {
-			case errors.Is(err, store.ErrLeaseLost):
+			case errors.Is(err, domain.ErrLeaseLost):
 				lose(err)
 				return
 			case err != nil && ctx.Err() == nil:
@@ -152,7 +151,7 @@ func (w *Worker) renew(ctx context.Context, log *slog.Logger, id int64, lose con
 	}
 }
 
-func event(kind domain.EventKind, job store.Job, runErr error) domain.Event {
+func event(kind domain.EventKind, job domain.Job, runErr error) domain.Event {
 	e := domain.Event{Kind: kind, Details: map[string]any{
 		"job_id": job.ID, "job_kind": job.Kind, "subject": job.Subject, "attempt": job.Attempts,
 	}}

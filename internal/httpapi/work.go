@@ -21,7 +21,7 @@ type tasks interface {
 type jobQueue interface {
 	JobQueue(ctx context.Context) ([]store.JobCount, []store.DeadJob, error)
 	RetryJob(ctx context.Context, id int64) error
-	RunningJobs(ctx context.Context) ([]store.Job, error)
+	RunningJobs(ctx context.Context) ([]domain.Job, error)
 }
 
 type nowPlaying interface {

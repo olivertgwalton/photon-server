@@ -185,7 +185,7 @@ func TestALeaseIsRenewedOnlyByTheNodeHoldingIt(t *testing.T) {
 	if _, err := s.ClaimJobs(t.Context(), kinds, second, time.Hour, 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ExtendLease(t.Context(), jobs[0].ID, first, time.Hour); !errors.Is(err, ErrLeaseLost) {
+	if err := s.ExtendLease(t.Context(), jobs[0].ID, first, time.Hour); !errors.Is(err, domain.ErrLeaseLost) {
 		t.Errorf("the node that lost the job renewed it: %v", err)
 	}
 	if err := s.ExtendLease(t.Context(), jobs[0].ID, second, time.Hour); err != nil {
@@ -205,7 +205,7 @@ func TestAJobAskedForWhileRunningRunsAgain(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	claim := func() []Job {
+	claim := func() []domain.Job {
 		t.Helper()
 		jobs, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobIdentify}, uuid.NewV7(), time.Minute, 5)
 		if err != nil {

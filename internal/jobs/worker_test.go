@@ -11,12 +11,11 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 type memoryQueue struct {
 	mu        sync.Mutex
-	pending   []store.Job
+	pending   []domain.Job
 	completed []int64
 	failed    []int64
 	postponed []int64
@@ -26,7 +25,7 @@ type memoryQueue struct {
 	taken bool
 }
 
-func (q *memoryQueue) ClaimJobs(_ context.Context, _ []domain.JobKind, _ uuid.UUID, lease time.Duration, limit int) ([]store.Job, error) {
+func (q *memoryQueue) ClaimJobs(_ context.Context, _ []domain.JobKind, _ uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	n := min(limit, len(q.pending))
@@ -43,14 +42,14 @@ func (q *memoryQueue) CompleteJob(_ context.Context, id int64) error {
 	return nil
 }
 
-func (q *memoryQueue) FailJob(_ context.Context, job store.Job, _ error) (bool, error) {
+func (q *memoryQueue) FailJob(_ context.Context, job domain.Job, _ error) (bool, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.failed = append(q.failed, job.ID)
 	return false, nil
 }
 
-func (q *memoryQueue) PostponeJob(_ context.Context, job store.Job, _ time.Duration) error {
+func (q *memoryQueue) PostponeJob(_ context.Context, job domain.Job, _ time.Duration) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.postponed = append(q.postponed, job.ID)
@@ -61,7 +60,7 @@ func (q *memoryQueue) ExtendLease(_ context.Context, _ int64, _ uuid.UUID, lease
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.taken {
-		return store.ErrLeaseLost
+		return domain.ErrLeaseLost
 	}
 	q.leaseUntil = time.Now().Add(lease)
 	return nil
@@ -73,7 +72,7 @@ func TestWorkerRunsJobsWithinItsSlots(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		q := &memoryQueue{}
 		for id := range int64(10) {
-			q.pending = append(q.pending, store.Job{ID: id, Kind: domain.JobKeyframes, Subject: uuid.NewV7()})
+			q.pending = append(q.pending, domain.Job{ID: id, Kind: domain.JobKeyframes, Subject: uuid.NewV7()})
 		}
 		var mu sync.Mutex
 		running, most := 0, 0
@@ -109,7 +108,7 @@ func TestWorkerRunsJobsWithinItsSlots(t *testing.T) {
 
 func TestWorkerReportsFailures(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		q := &memoryQueue{pending: []store.Job{{ID: 7, Kind: domain.JobKeyframes}}}
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobKeyframes}}}
 		failing := func(context.Context, uuid.UUID) error { return errors.New("no video stream") }
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
@@ -129,7 +128,7 @@ func TestWorkerReportsFailures(t *testing.T) {
 
 func TestAJobWithNoRoomIsPostponedNotFailed(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		q := &memoryQueue{pending: []store.Job{{ID: 7, Kind: domain.JobConvert}}}
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobConvert}}}
 		busy := func(context.Context, uuid.UUID) error { return ErrNotNow }
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
@@ -151,7 +150,7 @@ func TestAJobWithNoRoomIsPostponedNotFailed(t *testing.T) {
 // so the sweep never hands it to a second worker.
 func TestALongJobKeepsItsLease(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		q := &memoryQueue{pending: []store.Job{{ID: 1, Kind: domain.JobKeyframes}}}
+		q := &memoryQueue{pending: []domain.Job{{ID: 1, Kind: domain.JobKeyframes}}}
 		var lost bool
 		long := func(context.Context, uuid.UUID) error {
 			for range 60 {
@@ -182,7 +181,7 @@ func TestALongJobKeepsItsLease(t *testing.T) {
 // rather than waiting out its lease.
 func TestAJobCutShortByShutdownIsQueuedAgainAtOnce(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		q := &memoryQueue{pending: []store.Job{{ID: 7, Kind: domain.JobScanLibrary}}}
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobScanLibrary}}}
 		scanning := func(ctx context.Context, _ uuid.UUID) error {
 			<-ctx.Done()
 			return ctx.Err()
@@ -207,7 +206,7 @@ func TestAJobCutShortByShutdownIsQueuedAgainAtOnce(t *testing.T) {
 // the job and leaves its outcome to the node that has it.
 func TestAJobWhoseLeaseWasLostStopsAndRecordsNothing(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		q := &memoryQueue{pending: []store.Job{{ID: 7, Kind: domain.JobScanLibrary}}}
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobScanLibrary}}}
 		var stopped bool
 		scanning := func(ctx context.Context, _ uuid.UUID) error {
 			select {
