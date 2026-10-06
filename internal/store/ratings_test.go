@@ -29,7 +29,7 @@ func TestATitleShowsEachSitesRatingFromItsBestSource(t *testing.T) {
 	}
 	id := uuid.UUID(item.ID)
 	// TMDB's own score, and MDBList's of TMDB and IMDb: MDBList is ranked first in this library.
-	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Title: "Jaws", Ratings: []domain.Rating{
+	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Title: "Jaws", Overview: "A shark.", Certificate: "12", Genres: []string{"Thriller"}, Ratings: []domain.Rating{
 		{Site: domain.SiteTMDB, Score: 76, Votes: 10000},
 	}}, nil); err != nil {
 		t.Fatal(err)
@@ -46,6 +46,15 @@ func TestATitleShowsEachSitesRatingFromItsBestSource(t *testing.T) {
 	want := []RatingRef{{domain.SiteIMDb, 81, 673852}, {domain.SiteTMDB, 77, 10114}, {domain.SiteRottenTomatoes, 97, 0}}
 	if !slices.Equal(page.Ratings, want) {
 		t.Errorf("ratings = %v, want %v", page.Ratings, want)
+	}
+	// Its card on the wall says the same, with what a showcase writes beside it.
+	cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 1})
+	if err != nil || len(cards) != 1 {
+		t.Fatal(cards, err)
+	}
+	c := cards[0]
+	if len(c.Ratings) != len(want) || RatingRef(c.Ratings[0]) != want[0] || c.Overview != "A shark." || c.Certificate != "12" || !slices.Equal(c.Genres, []string{"Thriller"}) {
+		t.Errorf("card = %+v, want the page's ratings, overview, certificate and genres", c)
 	}
 	// Asked again, MDBList has nothing: TMDB's own score stands.
 	if err := s.SaveRatings(ctx, id, domain.SourceMDBList, nil); err != nil {

@@ -3,6 +3,7 @@ package store
 import (
 	"cmp"
 	"context"
+	"database/sql/driver"
 	"encoding/json"
 	"math"
 	"slices"
@@ -39,33 +40,59 @@ func saveRatings(ctx context.Context, tx *query.Query, item model.UUID, source d
 	return r.WithContext(ctx).Create(rows...)
 }
 
-// ratings answers a title's rating from each site, each from the source its library ranks
+// ratings answers each title's rating from each site, each from the source its library ranks
 // highest, in the order of domain.RatingSites.
-func (s *Store) ratings(ctx context.Context, item model.UUID) ([]domain.Rating, error) {
-	r := s.q.Rating
-	rows, err := r.WithContext(ctx).Where(r.ItemID.Eq(item)).Find()
-	if err != nil || len(rows) == 0 {
-		return nil, err
+func (s *Store) ratings(ctx context.Context, items []*model.Item) (map[model.UUID][]domain.Rating, error) {
+	out := map[model.UUID][]domain.Rating{}
+	if len(items) == 0 {
+		return out, nil
 	}
-	ranked, err := ranks(ctx, s.q, item)
+	r := s.q.Rating
+	rows, err := r.WithContext(ctx).Where(r.ItemID.In(ids(items)...)).Find()
+	if err != nil || len(rows) == 0 {
+		return out, err
+	}
+	library := map[model.UUID]model.UUID{}
+	var libraries []driver.Valuer
+	for _, it := range items {
+		library[it.ID] = it.LibraryID
+		libraries = append(libraries, it.LibraryID)
+	}
+	ls := s.q.LibrarySource
+	taken, err := ls.WithContext(ctx).Where(ls.LibraryID.In(libraries...)).Find()
 	if err != nil {
 		return nil, err
 	}
-	best := map[domain.RatingSite]*model.Rating{}
+	byLibrary := map[model.UUID][]*model.LibrarySource{}
+	for _, t := range taken {
+		byLibrary[t.LibraryID] = append(byLibrary[t.LibraryID], t)
+	}
+	ranked := map[model.UUID]map[domain.FieldSource]int{}
+	for lib, t := range byLibrary {
+		ranked[lib] = rankOf(t)
+	}
+	best := map[model.UUID]map[domain.RatingSite]*model.Rating{}
 	for _, row := range rows {
-		if b, ok := best[row.Site]; !ok || ranked[row.Source] > ranked[b.Source] {
-			best[row.Site] = row
+		rank := ranked[library[row.ItemID]]
+		if best[row.ItemID] == nil {
+			best[row.ItemID] = map[domain.RatingSite]*model.Rating{}
+		}
+		if b, ok := best[row.ItemID][row.Site]; !ok || rank[row.Source] > rank[b.Source] {
+			best[row.ItemID][row.Site] = row
 		}
 	}
-	out := make([]domain.Rating, 0, len(best))
-	for _, row := range best {
-		// Kept as a real; a tenth of a point is as fine as any site scores.
-		out = append(out, domain.Rating{Site: row.Site, Score: math.Round(float64(row.Score)*10) / 10, Votes: deref(row.Votes)})
-	}
 	order := domain.RatingSites()
-	slices.SortFunc(out, func(a, b domain.Rating) int {
-		return cmp.Compare(slices.Index(order, a.Site), slices.Index(order, b.Site))
-	})
+	for item, sites := range best {
+		list := make([]domain.Rating, 0, len(sites))
+		for _, row := range sites {
+			// Kept as a real; a tenth of a point is as fine as any site scores.
+			list = append(list, domain.Rating{Site: row.Site, Score: math.Round(float64(row.Score)*10) / 10, Votes: deref(row.Votes)})
+		}
+		slices.SortFunc(list, func(a, b domain.Rating) int {
+			return cmp.Compare(slices.Index(order, a.Site), slices.Index(order, b.Site))
+		})
+		out[item] = list
+	}
 	return out, nil
 }
 

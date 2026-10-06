@@ -4138,16 +4138,22 @@ export interface components {
             added_at: string;
             /** Format: uuid */
             backdrop?: string;
+            certificate?: string;
             /** Format: int64 */
             duration_ms?: number;
             episode_end?: number | null;
             episode_number?: number | null;
+            genres?: string[];
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["ItemKind"];
+            /** Format: uuid */
+            logo?: string;
             origin?: components["schemas"]["CollectionOrigin"];
+            overview?: string;
             /** Format: uuid */
             poster?: string;
+            ratings?: components["schemas"]["RatingRef"][];
             /** Format: date */
             release_date?: string;
             season_number?: number | null;
@@ -4197,17 +4203,23 @@ export interface components {
             added_at: string;
             /** Format: uuid */
             backdrop?: string;
+            certificate?: string;
             credit: components["schemas"]["CreditKind"];
             /** Format: int64 */
             duration_ms?: number;
             episode_end?: number | null;
             episode_number?: number | null;
+            genres?: string[];
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["ItemKind"];
+            /** Format: uuid */
+            logo?: string;
             origin?: components["schemas"]["CollectionOrigin"];
+            overview?: string;
             /** Format: uuid */
             poster?: string;
+            ratings?: components["schemas"]["RatingRef"][];
             /** Format: date */
             release_date?: string;
             role?: string;
@@ -4325,18 +4337,24 @@ export interface components {
             added_at: string;
             /** Format: uuid */
             backdrop?: string;
+            certificate?: string;
             /** Format: int64 */
             duration_ms?: number;
             /** Format: uuid */
             entry_id: string;
             episode_end?: number | null;
             episode_number?: number | null;
+            genres?: string[];
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["ItemKind"];
+            /** Format: uuid */
+            logo?: string;
             origin?: components["schemas"]["CollectionOrigin"];
+            overview?: string;
             /** Format: uuid */
             poster?: string;
+            ratings?: components["schemas"]["RatingRef"][];
             /** Format: date */
             release_date?: string;
             season_number?: number | null;

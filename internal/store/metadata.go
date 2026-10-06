@@ -91,11 +91,17 @@ func ranks(ctx context.Context, tx *query.Query, item model.UUID) (map[domain.Fi
 	if err != nil {
 		return nil, err
 	}
+	return rankOf(taken), nil
+}
+
+// rankOf is how highly a library that takes these sources ranks each, higher first: an edit over
+// them all, a file under them all.
+func rankOf(taken []*model.LibrarySource) map[domain.FieldSource]int {
 	out := map[domain.FieldSource]int{domain.SourceFile: 1, domain.SourceUser: len(taken) + 2}
 	for _, t := range taken {
 		out[t.Source] = len(taken) + 1 - t.Position
 	}
-	return out, nil
+	return out
 }
 
 // describe writes what a title's file and folder names say about it, then its NFO, if it has one.
