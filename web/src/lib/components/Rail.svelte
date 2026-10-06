@@ -40,7 +40,9 @@ const sizes = $derived(
 
 <!-- min-w-0: in a grid or flex row, the cards would otherwise widen the page.
 	The list is relative so what a card places absolutely (words for a screen
-	reader) scrolls with it rather than past the page's edge. -->
+	reader) scrolls with it rather than past the page's edge. It scrolls sideways
+	only: its padding holds a card's focus ring above and, below, a scrollbar
+	that takes room (Safari's, with scroll bars always shown). -->
 <section aria-labelledby={id} class="min-w-0">
 	<h2 {id} class="heading mb-3">
 		{#if href}
@@ -56,7 +58,7 @@ const sizes = $derived(
 		{/if}
 	</h2>
 	<ul
-		class="relative -mx-3 flex snap-x scroll-px-3 gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:scroll-px-6 sm:gap-4 sm:px-6"
+		class="relative -mx-3 flex snap-x scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 pt-1 pb-4 sm:-mx-6 sm:scroll-px-6 sm:gap-4 sm:px-6"
 	>
 		{#each cards as c (c.id)}
 			<li class="shrink-0 snap-start {width}">

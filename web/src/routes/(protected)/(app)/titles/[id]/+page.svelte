@@ -481,7 +481,7 @@ const poster = $derived(art("poster"));
 		<section aria-labelledby="seasons" class="min-w-0">
 			<h2 id="seasons" class="heading mb-3">Seasons</h2>
 			<ul
-				class="relative -mx-3 flex gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:gap-4 sm:px-6"
+				class="relative -mx-3 flex gap-3 overflow-x-auto overflow-y-hidden px-3 pt-1 pb-4 sm:-mx-6 sm:gap-4 sm:px-6"
 			>
 				{#each t.seasons as season (season.id)}
 					<li class="w-32 shrink-0 sm:w-36 lg:w-40">
@@ -629,7 +629,7 @@ const poster = $derived(art("poster"));
 		<section aria-labelledby="cast" class="min-w-0">
 			<h2 id="cast" class="heading mb-3">Cast &amp; crew</h2>
 			<ul
-				class="relative -mx-3 flex gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:gap-4 sm:px-6"
+				class="relative -mx-3 flex gap-3 overflow-x-auto overflow-y-hidden px-3 pt-1 pb-4 sm:-mx-6 sm:gap-4 sm:px-6"
 			>
 				{#each credits as credit (credit.person_id)}
 					<li class="w-28 shrink-0 sm:w-32">
