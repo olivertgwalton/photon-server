@@ -293,7 +293,7 @@ func (s *Store) History(ctx context.Context, profile uuid.UUID, offset, limit in
 		return nil, 0, err
 	}
 	rows, err := queryRows[model.Play](ctx, s.pool, `
-		SELECT id, profile_id, item_id, version_id, method, started_at, stopped_at, position_ms`+whose+`
+		SELECT id, profile_id, item_id, method, started_at, stopped_at, position_ms`+whose+`
 		ORDER BY stopped_at DESC, id DESC OFFSET $2 LIMIT $3`, who, offset, limit)
 	if err != nil || len(rows) == 0 {
 		return []Play{}, total, err

@@ -17,7 +17,7 @@ var ErrLibraryExists = errors.New("a library with that name or root already exis
 // libraryColumns and librarySourceColumns are model.Library's and model.LibrarySource's, for a
 // statement that reads whole rows.
 const (
-	libraryColumns       = `id, name, kind, root, monitor, refresh_days, previews, markers, keyframes, themes, created_at`
+	libraryColumns       = `id, name, kind, root, monitor, refresh_days, previews, markers, keyframes, themes`
 	librarySourceColumns = `library_id, item_kind, fetcher, source, position, enabled`
 )
 

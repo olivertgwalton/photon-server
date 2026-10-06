@@ -67,13 +67,13 @@ func addItem(t *testing.T, s *Store, i model.Item) uuid.UUID {
 	err := s.pool.QueryRow(t.Context(), `
 		INSERT INTO items (id, library_id, kind, title, sort_title, year, folder, added_at, parent_id, season_number,
 			episode_number, episode_end, air_date, extra_kind, scan_title, original_title, overview, tagline,
-			certificate, release_date, genres, studios, identified_at, episode_order)
+			certificate, release_date, genres, studios, episode_order)
 		VALUES (coalesce($1, uuidv7()), $2, $3, $4, $5, $6, $7, coalesce($8, now()), $9, $10, $11, $12, $13, $14, $15,
-			$16, $17, $18, $19, $20, $21, $22, $23, coalesce(nullif($24, ''), 'aired'))
+			$16, $17, $18, $19, $20, $21, $22, coalesce(nullif($23, ''), 'aired'))
 		RETURNING id`,
 		zeroNull(i.ID), i.LibraryID, i.Kind, i.Title, i.SortTitle, i.Year, i.Folder, zeroNull(i.AddedAt), i.ParentID,
 		i.SeasonNumber, i.EpisodeNumber, i.EpisodeEnd, i.AirDate, i.ExtraKind, i.ScanTitle, i.OriginalTitle, i.Overview,
-		i.Tagline, i.Certificate, i.ReleaseDate, i.Genres, i.Studios, i.IdentifiedAt, i.EpisodeOrder).Scan(&id)
+		i.Tagline, i.Certificate, i.ReleaseDate, i.Genres, i.Studios, i.EpisodeOrder).Scan(&id)
 	if err != nil {
 		t.Fatal(err)
 	}

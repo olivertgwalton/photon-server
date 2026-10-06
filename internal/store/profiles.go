@@ -21,7 +21,7 @@ var (
 )
 
 // profileColumns are model.Profile's, for a statement that reads whole profiles.
-const profileColumns = `id, name, role, password_hash, pin_hash, created_at, max_age, unrated, avatar_id`
+const profileColumns = `id, name, role, password_hash, pin_hash, avatar_id`
 
 func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, passwordHash string) (domain.Profile, error) {
 	row := model.Profile{Name: name, Role: role, PasswordHash: optional(passwordHash)}

@@ -67,7 +67,7 @@ func (s *Store) PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID
 		return nil, 0, err
 	}
 	entries, err := queryRows[model.PlaylistEntry](ctx, s.pool, `
-		SELECT e.id, e.playlist_id, e.item_id, e.position `+seen+` ORDER BY e.position, e.id OFFSET $3 LIMIT $4`,
+		SELECT e.id, e.item_id, e.position `+seen+` ORDER BY e.position, e.id OFFSET $3 LIMIT $4`,
 		playlist, profile, offset, limit)
 	if err != nil {
 		return nil, 0, err
@@ -127,7 +127,7 @@ func (s *Store) MovePlaylistEntry(ctx context.Context, profile, playlist, entry 
 			return err
 		}
 		entries, err := queryRows[model.PlaylistEntry](ctx, tx, `
-			SELECT id, playlist_id, item_id, position FROM playlist_entries WHERE playlist_id = $1 ORDER BY position, id`,
+			SELECT id, item_id, position FROM playlist_entries WHERE playlist_id = $1 ORDER BY position, id`,
 			playlist)
 		if err != nil {
 			return err
