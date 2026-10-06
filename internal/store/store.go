@@ -171,7 +171,11 @@ func (s *Store) checkPostgres(ctx context.Context) error {
 }
 
 func (s *Store) migrator() (*goose.Provider, error) {
-	return goose.NewProvider(goose.DialectPostgres, s.sql, migrationsDir())
+	dir, err := fs.Sub(migrations, "migrations")
+	if err != nil {
+		return nil, err
+	}
+	return goose.NewProvider(goose.DialectPostgres, s.sql, dir)
 }
 
 var errSchema = errors.New("schema version mismatch")
@@ -243,14 +247,6 @@ const (
 func violates(err error, v violation) bool {
 	var pg *pgconn.PgError
 	return errors.As(err, &pg) && violation(pg.Code) == v
-}
-
-func migrationsDir() fs.FS {
-	dir, err := fs.Sub(migrations, "migrations")
-	if err != nil {
-		panic(err)
-	}
-	return dir
 }
 
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
