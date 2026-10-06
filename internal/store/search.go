@@ -13,9 +13,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
-// SearchQuery asks for the films and shows whose title has words starting with each word typed,
-// ignoring case and accents: "amel" finds Amélie. Library narrows it to one library. Limit of them
-// are answered from Offset.
+// SearchQuery asks for the films, shows, collections and episodes whose title has words starting
+// with each word typed, ignoring case and accents: "amel" finds Amélie. Library narrows it to one
+// library. Limit of them are answered from Offset.
 type SearchQuery struct {
 	Profile uuid.UUID
 	Text    string
@@ -25,7 +25,8 @@ type SearchQuery struct {
 }
 
 // Search answers a page of the matching titles, and how many match in all: one named exactly what
-// was typed, then those starting with it, then the closest matches.
+// was typed, then those starting with it, then the closest matches; an episode after the films,
+// shows and collections matched as well, as Jellyfin ranks them.
 func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error) {
 	query := prefixes(q.Text)
 	if query == "" {
@@ -34,7 +35,7 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error
 	// gen cannot write a full-text match, so this one query is SQL.
 	matching := `
 		FROM items
-		WHERE kind IN (@movie, @show, @collection) AND search @@ to_tsquery('simple', search_text(@query))
+		WHERE kind IN (@movie, @show, @collection, @episode) AND search @@ to_tsquery('simple', search_text(@query))
 			AND (CAST(@library AS uuid) IS NULL OR library_id = CAST(@library AS uuid))
 			AND EXISTS (SELECT 1 FROM viewer(CAST(@profile AS uuid)) v WHERE sees(v, items))`
 	var library *model.UUID
@@ -42,8 +43,8 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error
 		library = new(model.UUID(q.Library))
 	}
 	args := map[string]any{
-		"movie": domain.ItemMovie, "show": domain.ItemShow, "collection": domain.ItemCollection, "query": query,
-		"text": q.Text, "library": library, "offset": q.Offset, "limit": q.Limit, "profile": q.Profile.String(),
+		"movie": domain.ItemMovie, "show": domain.ItemShow, "collection": domain.ItemCollection, "episode": domain.ItemEpisode,
+		"query": query, "text": q.Text, "library": library, "offset": q.Offset, "limit": q.Limit, "profile": q.Profile.String(),
 	}
 	db := s.q.Item.WithContext(ctx).UnderlyingDB()
 	var total int64
@@ -53,7 +54,7 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error
 	var rows []*model.Item
 	err := db.Raw(`SELECT * `+matching+`
 		ORDER BY search_text(title) = search_text(@text) DESC,
-			starts_with(search_text(title), search_text(@text)) DESC,
+			starts_with(search_text(title), search_text(@text)) DESC, kind = @episode,
 			ts_rank_cd(search, to_tsquery('simple', search_text(@query))) DESC, sort_title, id
 		OFFSET @offset LIMIT @limit`, args).Find(&rows).Error
 	if err != nil {
