@@ -31,6 +31,7 @@ type eventHub interface {
 	Raise(ctx context.Context, e domain.Event)
 	Subscribe() (<-chan domain.Event, func())
 	Scans(ctx context.Context) ([]domain.ScanProgress, error)
+	Backlogs(ctx context.Context) ([]domain.Backlog, error)
 	TestWebhook(ctx context.Context, id uuid.UUID) error
 }
 
@@ -170,6 +171,7 @@ func eventStream() asStream {
 type snapshotJSON struct {
 	Tasks     []runningTaskJSON     `json:"tasks"`
 	Jobs      []runningJobJSON      `json:"jobs"`
+	Backlogs  []backlogJSON         `json:"backlogs"`
 	Scans     []scanJSON            `json:"scans"`
 	Playbacks []playback.NowPlaying `json:"playbacks"`
 }
@@ -188,6 +190,14 @@ type runningJobJSON struct {
 	LibraryID uuid.UUID      `json:"library_id,omitzero"`
 }
 
+// backlogJSON is how far a kind of job has got: left to run, and done since none was left, so
+// done / (done + left) of it is through.
+type backlogJSON struct {
+	Kind domain.JobKind `json:"kind"`
+	Left int            `json:"left"`
+	Done int            `json:"done"`
+}
+
 type scanJSON struct {
 	LibraryID uuid.UUID        `json:"library_id"`
 	Phase     domain.ScanPhase `json:"phase"`
@@ -197,10 +207,10 @@ type scanJSON struct {
 	Folder string `json:"folder,omitempty"`
 }
 
-// snapshot is what is going on across the cluster now: tasks and jobs running, libraries being
-// scanned, and who is playing what.
+// snapshot is what is going on across the cluster now: tasks and jobs running, how far each kind of
+// job's backlog has got, libraries being scanned, and who is playing what.
 func (a *API) snapshot(ctx context.Context) (snapshotJSON, error) {
-	out := snapshotJSON{Tasks: []runningTaskJSON{}, Jobs: []runningJobJSON{}, Scans: []scanJSON{}}
+	out := snapshotJSON{Tasks: []runningTaskJSON{}, Jobs: []runningJobJSON{}, Backlogs: []backlogJSON{}, Scans: []scanJSON{}}
 	statuses, err := a.svc.Tasks.Statuses(ctx)
 	if err != nil {
 		return out, err
@@ -217,6 +227,13 @@ func (a *API) snapshot(ctx context.Context) (snapshotJSON, error) {
 	for _, j := range jobs {
 		item, lib := j.About()
 		out.Jobs = append(out.Jobs, runningJobJSON{ID: j.ID, Kind: j.Kind, Subject: j.Subject, Attempt: j.Attempts, TitleID: item, LibraryID: lib})
+	}
+	backlogs, err := a.svc.Events.Backlogs(ctx)
+	if err != nil {
+		return out, err
+	}
+	for _, b := range backlogs {
+		out.Backlogs = append(out.Backlogs, backlogJSON{Kind: b.Kind, Left: b.Left, Done: b.Done})
 	}
 	scans, err := a.svc.Events.Scans(ctx)
 	if err != nil {
