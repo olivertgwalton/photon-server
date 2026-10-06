@@ -1,6 +1,9 @@
 package domain
 
 import (
+	"strings"
+	"unicode"
+	"unicode/utf8"
 	"uuid"
 )
 
@@ -69,4 +72,14 @@ const (
 
 func UnratedPolicies() []Unrated {
 	return []Unrated{UnratedAllow, UnratedBlock}
+}
+
+// MaxProfileName is the longest a profile's name may be, in characters.
+const MaxProfileName = 64
+
+// ProfileName is a name a profile may have, trimmed, as Jellyfin's user names are: something
+// besides space, and no control characters.
+func ProfileName(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	return s, s != "" && utf8.RuneCountInString(s) <= MaxProfileName && !strings.ContainsFunc(s, unicode.IsControl)
 }

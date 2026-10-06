@@ -683,6 +683,18 @@ const server_ = Bun.serve({
 			case "DELETE /api/v1/me/avatar":
 				delete me.avatar;
 				return new Response(null, { status: 204 });
+			case "PATCH /api/v1/me": {
+				const { name } = (await request.json()) as Schemas["Name"];
+				if ([ada, kids].some((p) => p !== me && p.name === name.trim())) {
+					return problem(
+						409,
+						"conflict",
+						"a profile with that name already exists",
+					);
+				}
+				me.name = name.trim();
+				return Response.json(me);
+			}
 			case "POST /api/v1/auth/logout":
 				sessions.delete(token as string);
 				return new Response(null, {

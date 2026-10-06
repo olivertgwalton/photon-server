@@ -195,3 +195,27 @@ test("a profile is given a picture, shown wherever it is", async ({ page }) => {
 	// Its initial shows again.
 	await expect(menu.getByText("A", { exact: true })).toBeVisible();
 });
+
+test("a profile renames itself, to a name no other has", async ({ page }) => {
+	await logIn(page, "/settings");
+	const name = page.getByLabel("Name", { exact: true });
+	await name.fill("Kids");
+	await page.getByRole("button", { name: "Rename" }).click();
+	await expect(page.getByText(/already exists/)).toBeVisible();
+
+	await name.fill("  Ada Lovelace ");
+	await page.getByRole("button", { name: "Rename" }).click();
+	await expect(page.getByText("Renamed, on every device.")).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "Ada Lovelace" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Ada Lovelace's profile" }),
+	).toBeVisible();
+
+	await name.fill("Ada");
+	await page.getByRole("button", { name: "Rename" }).click();
+	await expect(
+		page.getByRole("heading", { name: "Ada", exact: true }),
+	).toBeVisible();
+});

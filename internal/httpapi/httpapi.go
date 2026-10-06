@@ -249,6 +249,11 @@ func (a *API) routes() []route {
 			body: switchJSON{}, status: http.StatusOK, reply: profileJSON{}, handle: a.switchProfile,
 		},
 		{
+			pattern: "PATCH /api/v1/me", access: signedIn,
+			summary: "Rename the profile; names are unique, and every device shows the new one at once",
+			body:    nameJSON{}, status: http.StatusOK, reply: profileJSON{}, handle: a.renameSelf,
+		},
+		{
 			pattern: "PUT /api/v1/me/pin", access: signedIn, summary: "Set the profile's PIN",
 			body: pinJSON{}, status: http.StatusNoContent, handle: a.setPIN,
 		},

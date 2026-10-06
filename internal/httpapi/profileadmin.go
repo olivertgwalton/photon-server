@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
@@ -82,10 +83,12 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if req.Role == "" || req.Name == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "name is set and role is admin, member or restricted")
+	name, ok := domain.ProfileName(req.Name)
+	if req.Role == "" || !ok {
+		writeProblem(w, a.logger, codeInvalidBody, badName+", and role is admin, member or restricted")
 		return
 	}
+	req.Name = name
 	hash, ok := a.hash(w, r, req.Password)
 	if !ok {
 		return
@@ -97,6 +100,9 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileAdded, Profile: p.ID, Details: map[string]any{"name": p.Name}})
 	writeJSON(w, a.logger, "application/json", http.StatusCreated, profileOf(p))
 }
+
+// badName is what a profile's name must be.
+var badName = "name is up to " + strconv.Itoa(domain.MaxProfileName) + " characters, besides space and control characters"
 
 type profileChangeJSON struct {
 	Name     string      `json:"name,omitzero"`
@@ -114,7 +120,14 @@ func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	change := store.ProfileChange{Name: req.Name, Role: req.Role}
+	change := store.ProfileChange{Role: req.Role}
+	if req.Name != "" {
+		var ok bool
+		if change.Name, ok = domain.ProfileName(req.Name); !ok {
+			writeProblem(w, a.logger, codeInvalidBody, badName)
+			return
+		}
+	}
 	if req.Password != nil {
 		hash, ok := a.hash(w, r, *req.Password)
 		if !ok {

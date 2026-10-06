@@ -11,7 +11,7 @@ import { Input } from "#lib/components/ui/input/index.js";
 
 let { data } = $props();
 // Why a change was refused, beside the card it was made in.
-let refused = $state<{ pin?: string; password?: string }>({});
+let refused = $state<{ name?: string; pin?: string; password?: string }>({});
 
 // A change that worked says so in a toast and redraws the page; one refused
 // says why beside it.
@@ -26,6 +26,18 @@ async function change(
 	toast.success(said);
 	await invalidateAll();
 	return true;
+}
+
+function rename(event: SubmitEvent) {
+	event.preventDefault();
+	const name = String(
+		new FormData(event.currentTarget as HTMLFormElement).get("name"),
+	);
+	return change(
+		client().PATCH("/api/v1/me", { body: { name } }),
+		"name",
+		"Renamed, on every device.",
+	);
 }
 
 async function setPIN(event: SubmitEvent) {
@@ -86,12 +98,12 @@ const roles = { admin: "Admin", member: "Member", restricted: "Restricted" };
 			<p class="text-ink-2 text-sm">
 				{roles[data.me.role]}.
 				{#if data.me.role === "admin"}
-					Names, and what each profile may see, are changed under
+					What each profile may see is changed under
 					<a href="/settings/server/profiles" class="text-ink underline"
 						>Profiles</a
 					>.
 				{:else}
-					An admin changes this profile's name and what it may see.
+					An admin changes what this profile may see.
 				{/if}
 			</p>
 			<AvatarPicker
@@ -101,6 +113,38 @@ const roles = { admin: "Admin", member: "Member", restricted: "Restricted" };
 			/>
 		</div>
 	</header>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title><h2 class="heading">Name</h2></Card.Title>
+			<Card.Description>
+				What every device calls you. No two profiles share a name.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content>
+			<form onsubmit={rename}>
+				<Field.Group>
+					<Field.Field data-invalid={refused.name ? true : undefined}>
+						<Field.Label for="name">Name</Field.Label>
+						<Input
+							id="name"
+							name="name"
+							required
+							maxlength={64}
+							class="max-w-sm"
+							autocomplete="nickname"
+							value={data.me.name}
+							aria-invalid={refused.name ? true : undefined}
+						/>
+						<Field.Error errors={[{ message: refused.name }]} />
+					</Field.Field>
+					<Field.Field orientation="horizontal">
+						<Button type="submit">Rename</Button>
+					</Field.Field>
+				</Field.Group>
+			</form>
+		</Card.Content>
+	</Card.Root>
 
 	{#if data.lock === "password"}
 		<Card.Root>
