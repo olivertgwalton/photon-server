@@ -92,9 +92,7 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 		if err := saveGroupings(ctx, tx, item, source, m.Collections); err != nil {
 			return err
 		}
-		if err := saveCredits(ctx, tx, item, source, m.Credits); err != nil {
-			return err
-		}
+		credits := []credited{{item, m.Credits}}
 		i := tx.Item
 		for number, season := range seasons {
 			row, err := i.WithContext(ctx).Where(
@@ -127,13 +125,11 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 					if err := saveProviderArtwork(ctx, tx, e.ID, source, said.Artwork); err != nil {
 						return err
 					}
-					if err := saveCredits(ctx, tx, e.ID, source, said.Credits); err != nil {
-						return err
-					}
+					credits = append(credits, credited{e.ID, said.Credits})
 				}
 			}
 		}
-		return nil
+		return saveCredits(ctx, tx, source, credits)
 	})
 }
 

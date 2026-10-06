@@ -1,14 +1,17 @@
 package store
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"database/sql/driver"
 	"errors"
+	"maps"
 	"slices"
 	"time"
 	"uuid"
 
-	"gorm.io/gen/field"
+	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -17,92 +20,233 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
-// saveCredits replaces what a source credits on a title, keeping one row per person whatever
-// titles credit them. A person is known by any of their ids; one with none is passed over.
-func saveCredits(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, credits []domain.Credit) error {
+// credited is what a source credits on one title.
+type credited struct {
+	item    model.UUID
+	credits []domain.Credit
+}
+
+// personKey is one provider's id for someone.
+type personKey struct {
+	provider domain.Provider
+	value    string
+}
+
+// creditBatch is how many credits go in one statement.
+const creditBatch = 1000
+
+// saveCredits replaces what a source credits on titles, keeping one row per person whatever titles
+// credit them, in a handful of statements however many credits there are. A person is known by
+// any of their ids; a credit with none is passed over. Credits sharing an id, or whose ids name
+// people already, are one person, and people found by different ids of one are merged into the
+// first added. The ids a person lacks are added, and their name and picture follow the last
+// credit; a new picture gets a new id. Someone another match adds at the same moment is theirs.
+func saveCredits(ctx context.Context, tx *query.Query, source domain.FieldSource, titles []credited) error {
+	type entry struct {
+		item     model.UUID
+		position int
+		credit   domain.Credit
+		keys     []personKey
+	}
+	var entries []entry
+	var keys []personKey
+	var cleared []driver.Valuer
+	for _, t := range titles {
+		cleared = append(cleared, t.item)
+		for n, cr := range t.credits {
+			e := entry{item: t.item, position: n, credit: cr}
+			for _, provider := range slices.Sorted(maps.Keys(cr.IDs)) {
+				if value := cr.IDs[provider]; value != "" {
+					e.keys = append(e.keys, personKey{provider, value})
+				}
+			}
+			if len(e.keys) > 0 {
+				entries = append(entries, e)
+				keys = append(keys, e.keys...)
+			}
+		}
+	}
 	c := tx.Credit
-	if _, err := c.WithContext(ctx).Where(c.ItemID.Eq(item), c.Source.Eq(string(source))).Delete(); err != nil {
+	if _, err := c.WithContext(ctx).Where(c.ItemID.In(cleared...), c.Source.Eq(string(source))).Delete(); err != nil || len(entries) == 0 {
 		return err
 	}
-	for n, cr := range credits {
-		person, ok, err := personByIDs(ctx, tx, cr)
+	owners, err := personOwners(ctx, tx, keys)
+	if err != nil {
+		return err
+	}
+
+	// Credits are one person where they share an id, or name one person by different ids.
+	parent := make([]int, len(entries))
+	find := func(n int) int {
+		for parent[n] != n {
+			n = parent[n]
+		}
+		return n
+	}
+	first := map[any]int{}
+	join := func(at any, n int) {
+		if m, ok := first[at]; ok {
+			parent[find(m)] = find(n)
+		} else {
+			first[at] = n
+		}
+	}
+	for n, e := range entries {
+		parent[n] = n
+		for _, k := range e.keys {
+			join(k, n)
+			if o, ok := owners[k]; ok {
+				join(o.PersonID, n)
+			}
+		}
+	}
+	type person struct {
+		entries     []int
+		keys        []personKey
+		name, photo string
+		added       *model.Person
+	}
+	var people []*person
+	byRoot := map[int]*person{}
+	for n, e := range entries {
+		p := byRoot[find(n)]
+		if p == nil {
+			p = &person{}
+			byRoot[find(n)] = p
+			people = append(people, p)
+		}
+		p.entries = append(p.entries, n)
+		p.keys = append(p.keys, e.keys...)
+		p.name = e.credit.Name
+		p.photo = cmp.Or(e.credit.Photo, p.photo)
+	}
+
+	// Someone none of whose ids is known is added, as the last credit names them.
+	var added []*model.Person
+	for _, p := range people {
+		if !slices.ContainsFunc(p.keys, func(k personKey) bool { _, ok := owners[k]; return ok }) {
+			p.added = &model.Person{Name: p.name}
+			setPhoto(p.added, p.photo)
+			added = append(added, p.added)
+		}
+	}
+	if len(added) > 0 {
+		if err := tx.Person.WithContext(ctx).Create(added...); err != nil {
+			return err
+		}
+	}
+	// The ids not yet known go in in one order, so two matches adding the same people wait on
+	// each other rather than deadlock; an id another took first is left with them.
+	var newIDs [3][]string
+	for _, p := range people {
+		var to model.UUID
+		if p.added != nil {
+			to = p.added.ID
+		}
+		for _, k := range p.keys {
+			if o, ok := owners[k]; ok && (to == (model.UUID{}) || before(o.PersonID, to)) {
+				to = o.PersonID
+			}
+		}
+		for _, k := range p.keys {
+			if _, ok := owners[k]; !ok {
+				newIDs[0] = append(newIDs[0], uuid.UUID(to).String())
+				newIDs[1] = append(newIDs[1], string(k.provider))
+				newIDs[2] = append(newIDs[2], k.value)
+			}
+		}
+	}
+	if len(newIDs[0]) > 0 {
+		err := tx.PersonExternalID.WithContext(ctx).UnderlyingDB().Exec(`
+			INSERT INTO person_ids (person_id, provider, value)
+			SELECT * FROM unnest(?::uuid[], ?::text[], ?::text[]) ORDER BY 2, 3
+			ON CONFLICT DO NOTHING`, array(newIDs[0]), array(newIDs[1]), array(newIDs[2])).Error
 		if err != nil {
 			return err
 		}
-		if !ok {
-			continue
-		}
-		// Each row goes in as its person is found, since finding a later one may merge an earlier.
-		// A source may credit one person twice for one part: an actor billed as two names of one role.
-		row := &model.Credit{ItemID: item, PersonID: person, Source: source, Kind: cr.Kind, Role: cr.Role, Position: n}
-		if err := c.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(row); err != nil {
+		if owners, err = personOwners(ctx, tx, keys); err != nil {
 			return err
 		}
 	}
-	return nil
+
+	pp := tx.Person
+	var rows []*model.Credit
+	var orphans []driver.Valuer
+	for _, p := range people {
+		var found []model.UUID
+		for _, k := range p.keys {
+			found = append(found, owners[k].PersonID)
+		}
+		slices.SortFunc(found, func(a, b model.UUID) int { return bytes.Compare(a[:], b[:]) })
+		found = slices.Compact(found)
+		keep := found[0]
+		for _, other := range found[1:] {
+			if err := mergePerson(ctx, tx, keep, other); err != nil {
+				return err
+			}
+		}
+		if p.added != nil && !slices.Contains(found, p.added.ID) {
+			orphans = append(orphans, p.added.ID)
+		}
+		if p.added == nil || p.added.ID != keep {
+			o := owners[p.keys[slices.IndexFunc(p.keys, func(k personKey) bool { return owners[k].PersonID == keep })]]
+			if o.Name != p.name || (p.photo != "" && deref(o.PhotoURL) != p.photo) {
+				row := &model.Person{Name: p.name, PhotoURL: o.PhotoURL, PhotoID: o.PhotoID}
+				setPhoto(row, p.photo)
+				if _, err := pp.WithContext(ctx).Where(pp.ID.Eq(keep)).Select(pp.Name, pp.PhotoURL, pp.PhotoID).Updates(row); err != nil {
+					return err
+				}
+			}
+		}
+		for _, n := range p.entries {
+			e := entries[n]
+			rows = append(rows, &model.Credit{ItemID: e.item, PersonID: keep, Source: source, Kind: e.credit.Kind, Role: e.credit.Role, Position: e.position})
+		}
+	}
+	if len(orphans) > 0 {
+		if _, err := pp.WithContext(ctx).Where(pp.ID.In(orphans...)).Delete(); err != nil {
+			return err
+		}
+	}
+	// A source may credit one person twice for one part: an actor billed as two names of one role.
+	return c.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(rows, creditBatch)
 }
 
-// personByIDs answers the person a credit names by any of their ids, adding them the first time,
-// and false for a credit with none. People found by different ids of one credit are the same
-// person and are merged into the first added. The ids a credit brings that its person lacks are
-// added, and their name and picture follow the latest credit; a new picture gets a new id.
-func personByIDs(ctx context.Context, tx *query.Query, cr domain.Credit) (model.UUID, bool, error) {
-	pi := tx.PersonExternalID
-	var ids []*model.PersonExternalID
-	var match []field.Expr
-	for provider, value := range cr.IDs {
-		if value != "" {
-			ids = append(ids, &model.PersonExternalID{Provider: provider, Value: value})
-			match = append(match, field.And(pi.Provider.Eq(string(provider)), pi.Value.Eq(value)))
-		}
+// before reports whether a was added before b, as ids are minted in time order.
+func before(a, b model.UUID) bool { return bytes.Compare(a[:], b[:]) < 0 }
+
+// owner is the person an id names, as they are now.
+type owner struct {
+	PersonID model.UUID
+	Provider domain.Provider
+	Value    string
+	Name     string
+	PhotoURL *string
+	PhotoID  *model.UUID
+}
+
+// personOwners answers who each of keys names, where anyone does.
+func personOwners(ctx context.Context, tx *query.Query, keys []personKey) (map[personKey]owner, error) {
+	providers, values := make([]string, len(keys)), make([]string, len(keys))
+	for n, k := range keys {
+		providers[n], values[n] = string(k.provider), k.value
 	}
-	if len(ids) == 0 {
-		return model.UUID{}, false, nil
+	var rows []owner
+	err := tx.Person.WithContext(ctx).UnderlyingDB().Raw(`
+		SELECT i.person_id, i.provider, i.value, p.name, p.photo_url, p.photo_id
+		FROM person_ids i JOIN people p ON p.id = i.person_id
+		WHERE (i.provider, i.value) IN (SELECT * FROM unnest(?::text[], ?::text[]))`,
+		array(providers), array(values)).Scan(&rows).Error
+	out := make(map[personKey]owner, len(rows))
+	for _, r := range rows {
+		out[personKey{r.Provider, r.Value}] = r
 	}
-	found, err := pi.WithContext(ctx).Where(field.Or(match...)).Order(pi.PersonID).Find()
-	if err != nil {
-		return model.UUID{}, false, err
-	}
-	people := make([]model.UUID, 0, len(found))
-	for _, f := range found {
-		people = append(people, f.PersonID)
-	}
-	people = slices.Compact(people)
-	p := tx.Person
-	var row *model.Person
-	if len(people) == 0 {
-		row = &model.Person{Name: cr.Name}
-		setPhoto(row, cr.Photo)
-		if err := p.WithContext(ctx).Create(row); err != nil {
-			return model.UUID{}, false, err
-		}
-	} else {
-		for _, other := range people[1:] {
-			if err := mergePerson(ctx, tx, people[0], other); err != nil {
-				return model.UUID{}, false, err
-			}
-		}
-		if row, err = p.WithContext(ctx).Where(p.ID.Eq(people[0])).Take(); err != nil {
-			return model.UUID{}, false, err
-		}
-		if row.Name != cr.Name || deref(row.PhotoURL) != cr.Photo {
-			row.Name = cr.Name
-			setPhoto(row, cr.Photo)
-			if err := p.WithContext(ctx).Save(row); err != nil {
-				return model.UUID{}, false, err
-			}
-		}
-	}
-	for _, id := range ids {
-		id.PersonID = row.ID
-	}
-	create := pi.WithContext(ctx)
-	if len(people) > 0 {
-		// A second id for a provider they already have one for is not taken. For someone new, a
-		// conflict is another job adding them at once: this one fails rather than keep them twice.
-		create = create.Clauses(clause.OnConflict{DoNothing: true})
-	}
-	return row.ID, true, create.Create(ids...)
+	return out, err
+}
+
+// array is a list as one parameter, where GORM would expand it into a parameter per element.
+func array(values []string) pgtype.Array[string] {
+	return pgtype.Array[string]{Elements: values, Dims: []pgtype.ArrayDimension{{Length: int32(len(values)), LowerBound: 1}}, Valid: true}
 }
 
 // mergePerson folds other into into: their credits and the ids into has no id of the provider for.
