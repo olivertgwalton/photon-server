@@ -71,6 +71,8 @@ type route struct {
 	// status is what success answers, with reply; 204 and 202 answer nothing.
 	status int
 	reply  any
+	// again is what success answers, with reply, to a request already met.
+	again int
 	// refusals are problems with more to say than their code, by status.
 	refusals map[int]any
 	handle   http.HandlerFunc
@@ -514,8 +516,8 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "POST /api/v1/downloads", access: signedIn,
-			summary: "Download a film or episode no larger than a bitrate: its file as it is, else converted to the video the device plays",
-			body:    downloadRequestJSON{}, status: http.StatusOK, reply: downloadJSON{}, handle: a.addDownload,
+			summary: "Download a film or episode no larger than a bitrate: its file as it is, else converted to the video the device plays; asked again, the same download",
+			body:    downloadRequestJSON{}, status: http.StatusCreated, reply: downloadJSON{}, again: http.StatusOK, handle: a.addDownload,
 		},
 		{
 			pattern: "GET /api/v1/downloads", access: signedIn,

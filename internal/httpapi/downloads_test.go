@@ -21,16 +21,16 @@ import (
 
 var downloadID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1")
 
-// fakeDownloads answers every download asked for as one: the part's file, ready, or a conversion
-// queued.
+// fakeDownloads answers every download asked for as one: the part's file, ready and asked for
+// before, or a conversion queued, new.
 type fakeDownloads struct{}
 
-func (fakeDownloads) AddDownload(_ context.Context, _, device, item, part uuid.UUID, q *domain.Quality) (store.Download, error) {
+func (fakeDownloads) AddDownload(_ context.Context, _, device, item, part uuid.UUID, q *domain.Quality) (store.Download, bool, error) {
 	d := store.Download{ID: downloadID, Device: device, Item: item, Part: part, Quality: q, State: domain.DownloadReady}
 	if q != nil {
 		d.State = domain.DownloadQueued
 	}
-	return d, nil
+	return d, q != nil, nil
 }
 
 // Downloads holds one download on the device asking and one on another.
@@ -86,18 +86,18 @@ func TestADownloadIsTheFileOrAConversionServedInRanges(t *testing.T) {
 	code, d := ask(`{` + film + part + `, "max_bitrate_kbps": 10000}`)
 	if code != http.StatusOK || d.Method != domain.PlayDirect || d.State != domain.DownloadReady ||
 		!strings.HasPrefix(d.URL, "/api/v1/parts/"+partOne.String()+"/stream?") {
-		t.Errorf("within the quality: %d %+v; want the part's own file, ready", code, d)
+		t.Errorf("within the quality, asked before: %d %+v; want 200 and the part's own file, ready", code, d)
 	}
 	code, d = ask(`{` + film + part + `, "max_bitrate_kbps": 2000, "max_width": 1280}`)
-	if code != http.StatusOK || d.Method != domain.PlayTranscode || d.State != domain.DownloadQueued || d.URL != "" ||
+	if code != http.StatusCreated || d.Method != domain.PlayTranscode || d.State != domain.DownloadQueued || d.URL != "" ||
 		d.MaxBitrateKbps != 2000 || d.MaxWidth != 1280 {
-		t.Errorf("over it: %d %+v; want a conversion queued, with no address yet", code, d)
+		t.Errorf("over it: %d %+v; want 201 and a conversion queued, with no address yet", code, d)
 	}
 	if d.VideoCodec != domain.VideoH264 || d.VideoRange != domain.RangeSDR {
 		t.Errorf("for a device that says nothing of its video: %s in %s, want H.264 in SDR", d.VideoCodec, d.VideoRange)
 	}
 	code, d = ask(`{` + film + part + `, "max_bitrate_kbps": 2000, "video_codecs": ["h264", "hevc"], "video_ranges": ["sdr", "hdr10"]}`)
-	if code != http.StatusOK || d.VideoCodec != domain.VideoHEVC || d.VideoRange != domain.RangeSDR {
+	if code != http.StatusCreated || d.VideoCodec != domain.VideoHEVC || d.VideoRange != domain.RangeSDR {
 		t.Errorf("for a device of HEVC: %d %+v; want the SDR film converted to HEVC", code, d)
 	}
 	if code, _ := ask(`{` + film + part + `, "max_bitrate_kbps": 2000, "video_codecs": ["hevc"], "video_ranges": ["hdr"]}`); code != http.StatusBadRequest {

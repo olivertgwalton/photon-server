@@ -2239,7 +2239,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Download a film or episode no larger than a bitrate: its file as it is, else converted to the video the device plays */
+        /** Download a film or episode no larger than a bitrate: its file as it is, else converted to the video the device plays; asked again, the same download */
         post: {
             parameters: {
                 query?: never;
@@ -2255,6 +2255,15 @@ export interface paths {
             responses: {
                 /** @description OK */
                 200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Download"];
+                    };
+                };
+                /** @description Created */
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };

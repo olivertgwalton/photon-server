@@ -178,6 +178,9 @@ func operation(s *schemas, r route, path string) (map[string]any, error) {
 		strconv.Itoa(r.status): success,
 		"default":              map[string]any{"$ref": "#/components/responses/Problem"},
 	}
+	if r.again != 0 {
+		responses[strconv.Itoa(r.again)] = map[string]any{"description": http.StatusText(r.again), "content": success["content"]}
+	}
 	for status, refusal := range r.refusals {
 		responses[strconv.Itoa(status)] = map[string]any{
 			"description": http.StatusText(status),

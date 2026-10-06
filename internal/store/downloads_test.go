@@ -68,7 +68,7 @@ func TestAConversionIsSharedUntilNoDownloadNeedsIt(t *testing.T) {
 	s, film, part, profiles := downloadable(t)
 	ctx := t.Context()
 	devices := [2]uuid.UUID{s.signIn(t, profiles[0]), s.signIn(t, profiles[1])}
-	original, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, nil)
+	original, _, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, nil)
 	if err != nil || original.State != domain.DownloadReady || original.Quality != nil || original.SizeBytes != 6_000_000_000 {
 		t.Fatalf("the original: %+v, %v; want it ready at the part's size", original, err)
 	}
@@ -76,17 +76,17 @@ func TestAConversionIsSharedUntilNoDownloadNeedsIt(t *testing.T) {
 		t.Errorf("%d conversions queued for the original, want none", n)
 	}
 	q := domain.Quality{MaxBitrateKbps: 2000, MaxWidth: 1280, Codec: domain.VideoH264, Range: domain.RangeSDR}
-	mine, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, &q)
+	mine, created, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, &q)
+	if err != nil || !created {
+		t.Fatalf("mine: created %v, %v; want it created", created, err)
+	}
+	theirs, _, err := s.AddDownload(ctx, profiles[1], devices[1], film, part, &q)
 	if err != nil {
 		t.Fatal(err)
 	}
-	theirs, err := s.AddDownload(ctx, profiles[1], devices[1], film, part, &q)
-	if err != nil {
-		t.Fatal(err)
-	}
-	again, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, &q)
-	if err != nil {
-		t.Fatal(err)
+	again, created, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, &q)
+	if err != nil || created {
+		t.Fatalf("again: created %v, %v; want mine answered as it stands", created, err)
 	}
 	if mine.Conversion != theirs.Conversion || mine.ID == theirs.ID || again.ID != mine.ID || mine.State != domain.DownloadQueued {
 		t.Fatalf("mine %+v, theirs %+v, again %+v; want two queued downloads of one conversion", mine, theirs, again)
@@ -96,7 +96,7 @@ func TestAConversionIsSharedUntilNoDownloadNeedsIt(t *testing.T) {
 	}
 	hdr := q
 	hdr.Codec, hdr.Range = domain.VideoHEVC, domain.RangeHDR10
-	other, err := s.AddDownload(ctx, profiles[1], devices[1], film, part, &hdr)
+	other, _, err := s.AddDownload(ctx, profiles[1], devices[1], film, part, &hdr)
 	if err != nil || other.Conversion == mine.Conversion || *other.Quality != hdr {
 		t.Fatalf("HEVC HDR10 at the same quality: %+v, %v; want a conversion of its own", other, err)
 	}
@@ -144,7 +144,7 @@ func TestFailedConversionsAreTriedAgainAndFinishedOnesExpire(t *testing.T) {
 	ctx := t.Context()
 	devices := [2]uuid.UUID{s.signIn(t, profiles[0]), s.signIn(t, profiles[1])}
 	q := domain.Quality{MaxBitrateKbps: 1000, Codec: domain.VideoH264, Range: domain.RangeSDR}
-	d, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, &q)
+	d, _, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, &q)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,11 +161,11 @@ func TestFailedConversionsAreTriedAgainAndFinishedOnesExpire(t *testing.T) {
 	if _, err := s.StartConversion(ctx, d.Conversion, node); !errors.Is(err, ErrNotFound) {
 		t.Errorf("starting a failed conversion: %v, want ErrNotFound", err)
 	}
-	retried, err := s.AddDownload(ctx, profiles[1], devices[1], film, part, &q)
+	retried, _, err := s.AddDownload(ctx, profiles[1], devices[1], film, part, &q)
 	if err != nil || retried.Conversion != d.Conversion || retried.State != domain.DownloadQueued || retried.Error != "" {
 		t.Fatalf("asked for again: %+v, %v; want the conversion queued afresh", retried, err)
 	}
-	if _, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, nil); err != nil {
+	if _, _, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, nil); err != nil {
 		t.Fatal(err)
 	}
 	n, err := s.ExpireDownloads(ctx, time.Now().Add(time.Hour))
@@ -197,11 +197,11 @@ func TestADownloadIsItsDevices(t *testing.T) {
 	ctx := t.Context()
 	tv, phone := s.signIn(t, profiles[0]), s.signIn(t, profiles[0])
 	q := domain.Quality{MaxBitrateKbps: 2000, Codec: domain.VideoH264, Range: domain.RangeSDR}
-	onTV, err := s.AddDownload(ctx, profiles[0], tv, film, part, &q)
+	onTV, _, err := s.AddDownload(ctx, profiles[0], tv, film, part, &q)
 	if err != nil {
 		t.Fatal(err)
 	}
-	onPhone, err := s.AddDownload(ctx, profiles[0], phone, film, part, &q)
+	onPhone, _, err := s.AddDownload(ctx, profiles[0], phone, film, part, &q)
 	if err != nil || onPhone.ID == onTV.ID || onPhone.Conversion != onTV.Conversion || onPhone.Device != phone {
 		t.Fatalf("the phone's: %+v, %v; want a download of its own, of the TV's conversion", onPhone, err)
 	}
@@ -221,7 +221,7 @@ func TestADownloadIsItsDevices(t *testing.T) {
 		t.Errorf("the profile's list once the phone is signed out: %+v, %v; want the TV's", got, err)
 	}
 	laptop := s.signIn(t, profiles[1])
-	alone, err := s.AddDownload(ctx, profiles[1], laptop, film, part, &domain.Quality{MaxBitrateKbps: 500, Codec: domain.VideoH264, Range: domain.RangeSDR})
+	alone, _, err := s.AddDownload(ctx, profiles[1], laptop, film, part, &domain.Quality{MaxBitrateKbps: 500, Codec: domain.VideoH264, Range: domain.RangeSDR})
 	if err != nil {
 		t.Fatal(err)
 	}

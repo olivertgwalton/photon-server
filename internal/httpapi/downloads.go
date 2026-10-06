@@ -19,7 +19,7 @@ import (
 )
 
 type downloads interface {
-	AddDownload(ctx context.Context, profile, device, item, part uuid.UUID, q *domain.Quality) (store.Download, error)
+	AddDownload(ctx context.Context, profile, device, item, part uuid.UUID, q *domain.Quality) (store.Download, bool, error)
 	Downloads(ctx context.Context, profile uuid.UUID, device *uuid.UUID) ([]store.Download, error)
 	Download(ctx context.Context, profile, id uuid.UUID) (store.Download, error)
 }
@@ -152,11 +152,15 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 		q.Codec, q.Range = d.Video.Encode.Codec, d.Video.Encode.Range
 		convert = &q
 	}
-	d, err := a.svc.Downloads.AddDownload(r.Context(), profile, sessionOf(r).ID, req.TitleID, part.ID, convert)
+	d, created, err := a.svc.Downloads.AddDownload(r.Context(), profile, sessionOf(r).ID, req.TitleID, part.ID, convert)
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, a.downloadJSON(d))
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, a.logger, "application/json", status, a.downloadJSON(d))
 }
 
 // ownDownloads answers the downloads this device asked for, or the profile's on every device, the
