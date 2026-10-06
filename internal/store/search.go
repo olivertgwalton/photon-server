@@ -14,11 +14,13 @@ import (
 
 // SearchQuery asks for the films, shows, collections and episodes whose title has words starting
 // with each word typed, ignoring case and accents: "amel" finds Amélie, once however many libraries
-// hold it. Library narrows it to one library. Limit of them are answered from Offset.
+// hold it. Library narrows it to one library, and Kinds to those kinds of title. Limit of them are
+// answered from Offset.
 type SearchQuery struct {
 	Profile uuid.UUID
 	Text    string
 	Library uuid.UUID
+	Kinds   []domain.ItemKind
 	Offset  int
 	Limit   int
 }
@@ -33,15 +35,19 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error
 	}
 	matching := `
 		FROM items
-		WHERE kind IN (@movie, @show, @collection, @episode) AND search @@ to_tsquery('simple', search_text(@query))
+		WHERE kind = ANY(@kinds) AND search @@ to_tsquery('simple', search_text(@query))
 			AND (CAST(@library AS uuid) IS NULL OR library_id = CAST(@library AS uuid))
 			AND EXISTS (SELECT 1 FROM viewer(CAST(@profile AS uuid)) v WHERE sees(v, items) AND first_of_title(v, items))`
 	var library *uuid.UUID
 	if q.Library != (uuid.UUID{}) {
 		library = &q.Library
 	}
+	kinds := q.Kinds
+	if len(kinds) == 0 {
+		kinds = []domain.ItemKind{domain.ItemMovie, domain.ItemShow, domain.ItemCollection, domain.ItemEpisode}
+	}
 	args := pgx.NamedArgs{
-		"movie": domain.ItemMovie, "show": domain.ItemShow, "collection": domain.ItemCollection, "episode": domain.ItemEpisode,
+		"kinds": kinds, "episode": domain.ItemEpisode,
 		"query": query, "text": q.Text, "library": library, "offset": q.Offset, "limit": q.Limit, "profile": q.Profile,
 	}
 	var total int64

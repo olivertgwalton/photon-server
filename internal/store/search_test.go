@@ -39,9 +39,9 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 	add(tv.ID, domain.ItemShow, "The Heat", "")
 	// An episode comes after the films and shows matched as well, but before those matched worse.
 	add(tv.ID, domain.ItemEpisode, "Heat Seeker", "")
-	search := func(text string, lib uuid.UUID) []string {
+	search := func(text string, lib uuid.UUID, kinds ...domain.ItemKind) []string {
 		t.Helper()
-		cards, total, err := s.Search(ctx, SearchQuery{Text: text, Library: lib, Limit: 20})
+		cards, total, err := s.Search(ctx, SearchQuery{Text: text, Library: lib, Kinds: kinds, Limit: 20})
 		if err != nil || int(total) != len(cards) {
 			t.Fatal(cards, total, err)
 		}
@@ -52,19 +52,22 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 		return titles
 	}
 	for _, tc := range []struct {
-		text string
-		lib  uuid.UUID
-		want []string
+		text  string
+		lib   uuid.UUID
+		kinds []domain.ItemKind
+		want  []string
 	}{
-		{"heat", uuid.UUID{}, []string{"Heat", "Heat Wave", "Heat Seeker", "The Heat"}},
-		{"heat", tv.ID, []string{"Heat Seeker", "The Heat"}},
-		{"AMEL", uuid.UUID{}, []string{"Amélie"}},
-		{"destin poul", uuid.UUID{}, []string{"Amélie"}},
-		{"eat", uuid.UUID{}, nil},
-		{"?!", uuid.UUID{}, nil},
+		{"heat", uuid.UUID{}, nil, []string{"Heat", "Heat Wave", "Heat Seeker", "The Heat"}},
+		{"heat", tv.ID, nil, []string{"Heat Seeker", "The Heat"}},
+		{"heat", uuid.UUID{}, []domain.ItemKind{domain.ItemMovie}, []string{"Heat", "Heat Wave"}},
+		{"heat", uuid.UUID{}, []domain.ItemKind{domain.ItemShow, domain.ItemEpisode}, []string{"Heat Seeker", "The Heat"}},
+		{"AMEL", uuid.UUID{}, nil, []string{"Amélie"}},
+		{"destin poul", uuid.UUID{}, nil, []string{"Amélie"}},
+		{"eat", uuid.UUID{}, nil, nil},
+		{"?!", uuid.UUID{}, nil, nil},
 	} {
-		if got := search(tc.text, tc.lib); !slices.Equal(got, tc.want) {
-			t.Errorf("search %q: %q, want %q", tc.text, got, tc.want)
+		if got := search(tc.text, tc.lib, tc.kinds...); !slices.Equal(got, tc.want) {
+			t.Errorf("search %q %v: %q, want %q", tc.text, tc.kinds, got, tc.want)
 		}
 	}
 	// A page past the first goes on where it left off and counts every match.
