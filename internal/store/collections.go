@@ -119,20 +119,20 @@ func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset,
 	return cards, total, err
 }
 
-// Members answers a collection's titles: an admin's in the order they were put, a provider's from
-// the first released. ErrNotFound for no such collection.
+// memberOrder is a collection's titles' order, with its row as c and theirs as m and items: an
+// admin's in the order they were put, a provider's from the first released.
+const memberOrder = `CASE WHEN c.origin = 'user' THEN m.position END, items.released_asc, items.sort_title, items.id`
+
+// Members answers a collection's titles, in memberOrder. ErrNotFound for no such collection.
 func (s *Store) Members(ctx context.Context, profile, collection uuid.UUID) ([]Card, error) {
-	var origin domain.CollectionOrigin
-	if err := s.pool.QueryRow(ctx, `SELECT origin FROM collections WHERE item_id = $1`, collection).Scan(&origin); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT 1 FROM collections WHERE item_id = $1`, collection).Scan(new(int)); err != nil {
 		return nil, found(err)
 	}
-	order := "items.released_asc, items.sort_title, items.id"
-	if origin == domain.CollectionUser {
-		order = "m.position, items.id"
-	}
 	rows, err := queryRows[model.Item](ctx, s.pool, `
-		SELECT `+itemColumns+` FROM items JOIN collection_members m ON m.item_id = items.id AND m.collection_id = $1
-		WHERE EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, items)) ORDER BY `+order, collection, profile)
+		SELECT `+itemColumns+` FROM items
+		JOIN collection_members m ON m.item_id = items.id AND m.collection_id = $1
+		JOIN collections c ON c.item_id = m.collection_id
+		WHERE EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, items)) ORDER BY `+memberOrder, collection, profile)
 	if err != nil {
 		return nil, err
 	}
