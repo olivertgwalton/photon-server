@@ -2,6 +2,7 @@
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
 import type { components } from "#lib/api/schema.js";
 import CardGrid from "#lib/components/CardGrid.svelte";
+import { fold } from "#lib/credits.js";
 import { wallSearch } from "#lib/wall.js";
 
 type Credit = components["schemas"]["Credit"];
@@ -10,7 +11,8 @@ let { data } = $props();
 
 const p = $derived(data.person);
 
-// Their work here, by what they did on it, acting first.
+// Their work here, one card a title whatever they did on it, under the first
+// of these they did, acting first.
 const groups: [string, Credit["credit"][]][] = [
 	["Acting", ["actor", "guest_star"]],
 	["Directing", ["director"]],
@@ -19,13 +21,25 @@ const groups: [string, Credit["credit"][]][] = [
 	["Producing", ["producer"]],
 	["Music", ["composer"]],
 ];
+const titles = $derived(
+	fold(
+		p.credits,
+		(c) => c.id,
+		(c) => c.credit,
+		(c) => c.role,
+	),
+);
 const work = $derived(
 	groups
 		.map(([name, kinds]) => ({
 			name,
-			credits: p.credits.filter((c) => kinds.includes(c.credit)),
+			titles: titles.filter(
+				(f) =>
+					groups.find(([, ks]) => f.kinds.some((k) => ks.includes(k)))?.[1] ===
+					kinds,
+			),
 		}))
-		.filter((g) => g.credits.length),
+		.filter((g) => g.titles.length),
 );
 
 const date = (d: string) =>
@@ -57,7 +71,7 @@ const life = $derived(
 		{/if}
 		<div class="grid content-start gap-3">
 			<h1 class="title">{p.name}</h1>
-			{#each life as line (line)}
+			{#each life as line, i (i)}
 				<p class="text-ink-2 text-sm">{line}</p>
 			{/each}
 			{#if p.biography}
@@ -84,10 +98,10 @@ const life = $derived(
 		<section aria-labelledby="work-{group.name}">
 			<h2 id="work-{group.name}" class="heading mb-3">{group.name}</h2>
 			<CardGrid
-				cards={group.credits}
+				cards={group.titles.map((f) => f.all[0])}
 				caption={(i: number) => {
-					const c = group.credits[i];
-					return [c.year, c.role].filter(Boolean).join(" · ");
+					const f = group.titles[i];
+					return [f.all[0].year, f.said].filter(Boolean).join(" · ");
 				}}
 			/>
 		</section>

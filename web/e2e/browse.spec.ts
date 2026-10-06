@@ -140,9 +140,21 @@ test("a film's page plays the copy and tracks chosen", async ({ page }) => {
 	await page.getByRole("button", { name: "Download", exact: true }).click();
 	await expect(page.getByText(/Download requested/)).toBeVisible();
 
-	await page.getByRole("link", { name: "Ada Lane" }).first().click();
+	// One card for one person, however many jobs they did, and performers first.
+	const cast = page.getByRole("region", { name: "Cast & crew" });
+	await expect(cast.getByRole("listitem")).toHaveCount(2);
+	await expect(cast.getByRole("listitem").first()).toContainText(
+		"Host, Creator, Director, Writer",
+	);
+	const details = page.getByRole("region", { name: "Details" });
+	await expect(details.getByRole("link", { name: "Ada Lane" })).toHaveCount(2);
+
+	await cast.getByRole("link", { name: /Ada Lane/ }).click();
 	await expect(page.getByRole("heading", { name: "Ada Lane" })).toBeVisible();
 	await expect(page.getByRole("heading", { name: "Acting" })).toBeVisible();
+	// Acted in and directed: one card, under acting.
+	await expect(page.getByRole("heading", { name: "Directing" })).toHaveCount(0);
+	await expect(page.getByText("2018 · Host, Director")).toBeVisible();
 	await expectAccessible(page);
 });
 

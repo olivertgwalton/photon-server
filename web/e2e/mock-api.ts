@@ -22,6 +22,7 @@ const libraries: Schemas["LibraryList"] = {
 // The catalogue: a film with everything a title page draws, a show of two
 // episodes, a box set, and enough plain films to page a wall.
 const person = "5f0c1d8e-2b1a-4c3d-9e8f-0a1b2c3d4e5f";
+const guest = "6a1d2e9f-3c2b-4d4e-8f9a-1b2c3d4e5f6a";
 const art = "0b4e2f1a-9c8d-4e7f-a6b5-c4d3e2f1a0b9";
 
 type State = Schemas["TitleState"];
@@ -144,9 +145,19 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 				{ site: "rotten_tomatoes", score: 93 },
 			],
 			collections: [{ id: "c-set", title: "Quiet Collection" }],
+			// As a provider credits one person for several jobs.
 			credits: [
+				{ person_id: person, name: "Ada Lane", kind: "creator" },
 				{ person_id: person, name: "Ada Lane", kind: "actor", role: "Host" },
 				{ person_id: person, name: "Ada Lane", kind: "director" },
+				{ person_id: person, name: "Ada Lane", kind: "writer" },
+				{ person_id: person, name: "Ada Lane", kind: "writer" },
+				{
+					person_id: guest,
+					name: "Ben Hale",
+					kind: "guest_star",
+					role: "Caller",
+				},
 			],
 			extras: [{ id: "t-trailer", extra_kind: "trailer", title: "Trailer" }],
 			versions: [
@@ -729,6 +740,10 @@ const server_ = Bun.serve({
 							...card(films.find((f) => f.id === "t-film") as Schemas["Card"]),
 							credit: "actor",
 							role: "Host",
+						},
+						{
+							...card(films.find((f) => f.id === "t-film") as Schemas["Card"]),
+							credit: "director",
 						},
 					],
 				} satisfies Schemas["Person"]);
