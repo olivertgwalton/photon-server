@@ -26,8 +26,9 @@ var rowQueries = map[domain.HomeRow]string{
 		SELECT i.* FROM watch_state w JOIN items i ON i.id = w.item_id
 		WHERE w.profile_id = @profile AND w.position_ms > 0 AND i.kind IN ('movie', 'episode') AND visible(i.id, @profile)
 		ORDER BY w.last_played_at DESC LIMIT @limit`,
-	// As Jellyfin's: the episode after the last one watched of each show, in the show's order and
-	// specials aside, unless it is under way already and so in Continue Watching.
+	// As Jellyfin's: the episode after the furthest one watched of each show, in the show's order
+	// and specials aside, unless it is under way already and so in Continue Watching; the shows
+	// in the order that episode was last played.
 	domain.RowNextUp: `
 		WITH last AS (
 			SELECT DISTINCT ON (show.id) show.id AS show_id, e.season_number, e.episode_number,
@@ -37,7 +38,7 @@ var rowQueries = map[domain.HomeRow]string{
 			JOIN items season ON season.id = e.parent_id
 			JOIN items show ON show.id = season.parent_id
 			WHERE w.profile_id = @profile AND w.watched_at IS NOT NULL AND e.season_number > 0 AND visible(show.id, @profile)
-			ORDER BY show.id, w.last_played_at DESC
+			ORDER BY show.id, e.season_number DESC, e.episode_number DESC NULLS LAST
 		)
 		SELECT next.* FROM last
 		CROSS JOIN LATERAL (
@@ -106,7 +107,7 @@ var nextQueries = map[domain.ItemKind]string{
 			AND (e.season_number > 0 OR here.season_number = 0)
 		ORDER BY e.season_number, e.episode_number, e.id LIMIT 1`,
 	// Of a show or a season, where the profile is: the episode under way, else the first unwatched
-	// after the last one watched, else the first.
+	// after the furthest one watched, else the first.
 	domain.ItemShow:   resumeQuery,
 	domain.ItemSeason: resumeQuery,
 }
@@ -120,7 +121,7 @@ const resumeQuery = `
 		LEFT JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
 		WHERE e.kind = 'episode' AND (season.id = @id OR (season.parent_id = @id AND season.season_number > 0))
 	), last AS (
-		SELECT n FROM e WHERE watched ORDER BY last_played_at DESC NULLS LAST, n DESC LIMIT 1
+		SELECT max(n) AS n FROM e WHERE watched
 	)
 	SELECT * FROM items WHERE id = (
 		SELECT id FROM e ORDER BY
