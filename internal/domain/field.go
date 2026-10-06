@@ -135,9 +135,11 @@ func Capabilities() []Capability {
 	return []Capability{CapabilityDescribe, CapabilitySearch, CapabilityRate, CapabilityPerson}
 }
 
-// DefaultSources trust an NFO beside the file over a provider, as Jellyfin's default order does.
+// DefaultSources trust an NFO beside the file over a provider, as Jellyfin's default order does,
+// and rate titles from MDBList too, as Jellyfin's OMDb and Plex's agent give IMDb's and Rotten
+// Tomatoes' scores out of the box; MDBList is passed over until an admin sets its key.
 func DefaultSources() []FieldSource {
-	return []FieldSource{SourceNFO, SourceTMDB}
+	return []FieldSource{SourceNFO, SourceTMDB, SourceMDBList}
 }
 
 func ParseMetadataSources(list string) ([]FieldSource, error) {

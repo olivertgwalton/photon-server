@@ -71,8 +71,9 @@ Posters and logos are lettered in that language where TMDB has one, else in Engl
 all, as Jellyfin chooses them; backdrops are unlettered where one is.
 The server ships its own TMDB token and TheTVDB key; set `PHOTON_TMDB_TOKEN`, or
 `PHOTON_TVDB_KEY` (with `PHOTON_TVDB_PIN` for a subscriber key), to use yours. Each library takes
-metadata from `nfo` and `tmdb` by default, most trusted first; change that with
-`photon-server library set -name NAME -sources nfo,tvdb,tmdb`. TheTVDB describes shows only. What a reader edits
+metadata from `nfo` and `tmdb`, and ratings from `mdblist`, by default, most trusted first; change
+that with `photon-server library set -name NAME -sources nfo,tvdb,tmdb,mdblist`. TheTVDB describes
+shows only. What a reader edits
 or an NFO says is never replaced by a match.
 
 A film or show is matched again every 30 days (a library's `refresh_days`, 0 never). An admin can ask now, as
