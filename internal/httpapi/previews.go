@@ -20,6 +20,16 @@ type previewFiles interface {
 	ChapterImage(part uuid.UUID, idx int) (*os.File, error)
 }
 
+type trickplayJSON struct {
+	Width      int `json:"width"`
+	Height     int `json:"height"`
+	IntervalMS int `json:"interval_ms"`
+	Columns    int `json:"columns"`
+	Rows       int `json:"rows"`
+	Thumbnails int `json:"thumbnails"`
+	Sheets     int `json:"sheets"`
+}
+
 // trickplay answers how a part's thumbnail sheets are laid out, so a client can find the
 // thumbnail for any time: sheet floor(t / interval / (columns × rows)), counted from zero.
 func (a *API) trickplay(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +41,7 @@ func (a *API) trickplay(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, t)
+	writeJSON(w, a.logger, "application/json", http.StatusOK, trickplayJSON(t))
 }
 
 func (a *API) trickplaySheet(w http.ResponseWriter, r *http.Request) {

@@ -52,22 +52,22 @@ type countsJSON struct {
 }
 
 type cardJSON struct {
-	ID          uuid.UUID        `json:"id"`
-	Kind        domain.ItemKind  `json:"kind"`
-	Title       string           `json:"title"`
-	Year        int              `json:"year,omitzero"`
-	ReleaseDate domain.Date      `json:"release_date,omitzero"`
-	AddedAt     time.Time        `json:"added_at"`
-	Poster      uuid.UUID        `json:"poster,omitzero"`
-	Backdrop    uuid.UUID        `json:"backdrop,omitzero"`
-	State       store.TitleState `json:"state,omitzero"`
-	DurationMS  int64            `json:"duration_ms,omitzero"`
+	ID          uuid.UUID       `json:"id"`
+	Kind        domain.ItemKind `json:"kind"`
+	Title       string          `json:"title"`
+	Year        int             `json:"year,omitzero"`
+	ReleaseDate domain.Date     `json:"release_date,omitzero"`
+	AddedAt     time.Time       `json:"added_at"`
+	Poster      uuid.UUID       `json:"poster,omitzero"`
+	Backdrop    uuid.UUID       `json:"backdrop,omitzero"`
+	State       titleStateJSON  `json:"state,omitzero"`
+	DurationMS  int64           `json:"duration_ms,omitzero"`
 	// An episode's card names its show and where in it it is, and carries its still.
-	Show          *store.TitleRef `json:"show,omitzero"`
-	SeasonNumber  *int            `json:"season_number,omitzero"`
-	EpisodeNumber *int            `json:"episode_number,omitzero"`
-	EpisodeEnd    *int            `json:"episode_end,omitzero"`
-	Thumb         uuid.UUID       `json:"thumb,omitzero"`
+	Show          *titleRefJSON `json:"show,omitzero"`
+	SeasonNumber  *int          `json:"season_number,omitzero"`
+	EpisodeNumber *int          `json:"episode_number,omitzero"`
+	EpisodeEnd    *int          `json:"episode_end,omitzero"`
+	Thumb         uuid.UUID     `json:"thumb,omitzero"`
 	// Origin is who made a collection: only an admin's is changed through the admin routes.
 	Origin      domain.CollectionOrigin `json:"origin,omitzero"`
 	Overview    string                  `json:"overview,omitzero"`
@@ -75,7 +75,7 @@ type cardJSON struct {
 	Genres      []string                `json:"genres,omitzero"`
 	Certificate string                  `json:"certificate,omitzero"`
 	// Ratings are each site's score out of 100, as the title's page gives them.
-	Ratings []store.RatingRef `json:"ratings,omitzero"`
+	Ratings []ratingRefJSON `json:"ratings,omitzero"`
 	// Blurhashes are those of its pictures that have one, by id, to draw while they load.
 	Blurhashes store.Blurhashes `json:"blurhashes,omitzero"`
 }
@@ -177,13 +177,13 @@ func cardsJSON(cards []store.Card) []cardJSON {
 func cardOf(c store.Card) cardJSON {
 	out := cardJSON{
 		ID: c.ID, Kind: c.Kind, Title: c.Title, Year: c.Year, ReleaseDate: domain.Date(c.ReleaseDate), AddedAt: c.AddedAt,
-		Poster: c.Poster, Backdrop: c.Backdrop, State: c.State, DurationMS: c.DurationMS, Show: c.Show,
+		Poster: c.Poster, Backdrop: c.Backdrop, State: titleStateJSON(c.State), DurationMS: c.DurationMS, Show: (*titleRefJSON)(c.Show),
 		SeasonNumber: c.SeasonNumber, EpisodeNumber: c.EpisodeNumber, EpisodeEnd: c.EpisodeEnd, Thumb: c.Thumb,
 		Origin: c.Origin, Overview: c.Overview, Logo: c.Logo, Genres: c.Genres, Certificate: c.Certificate,
 		Blurhashes: c.Blurhashes,
 	}
 	for _, r := range c.Ratings {
-		out.Ratings = append(out.Ratings, store.RatingRef(r))
+		out.Ratings = append(out.Ratings, ratingRefJSON(r))
 	}
 	return out
 }
@@ -278,7 +278,7 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 	// cache keeps finding the picture under it.
 	until := time.Now().Truncate(24 * time.Hour).Add(48 * time.Hour)
 	page.SignChapterImages(func(path string) string { return a.svc.Signer.Sign(path, until) })
-	writeJSON(w, a.logger, "application/json", http.StatusOK, page)
+	writeJSON(w, a.logger, "application/json", http.StatusOK, titlePageOf(page))
 }
 
 const defaultHomeLimit = 20
@@ -286,8 +286,8 @@ const defaultHomeLimit = 20
 type homeRowJSON struct {
 	Kind domain.HomeRow `json:"kind"`
 	// Collection is the collection a row of kind collection is.
-	Collection *store.TitleRef `json:"collection,omitzero"`
-	Items      []cardJSON      `json:"items"`
+	Collection *titleRefJSON `json:"collection,omitzero"`
+	Items      []cardJSON    `json:"items"`
 }
 
 type homeJSON struct {
@@ -308,7 +308,7 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 	}
 	out := homeJSON{Rows: make([]homeRowJSON, len(rows))}
 	for i, row := range rows {
-		out.Rows[i] = homeRowJSON{Kind: row.Kind, Collection: row.Collection, Items: cardsJSON(row.Cards)}
+		out.Rows[i] = homeRowJSON{Kind: row.Kind, Collection: (*titleRefJSON)(row.Collection), Items: cardsJSON(row.Cards)}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }

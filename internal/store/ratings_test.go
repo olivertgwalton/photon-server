@@ -39,7 +39,7 @@ func TestATitleShowsEachSitesRatingFromItsBestSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []RatingRef{{domain.SiteIMDb, 81, 673852}, {domain.SiteTMDB, 77, 10114}, {domain.SiteRottenTomatoes, 97, 0}}
+	want := []domain.Rating{{Site: domain.SiteIMDb, Score: 81, Votes: 673852}, {Site: domain.SiteTMDB, Score: 77, Votes: 10114}, {Site: domain.SiteRottenTomatoes, Score: 97}}
 	if !slices.Equal(page.Ratings, want) {
 		t.Errorf("ratings = %v, want %v", page.Ratings, want)
 	}
@@ -49,14 +49,14 @@ func TestATitleShowsEachSitesRatingFromItsBestSource(t *testing.T) {
 		t.Fatal(cards, err)
 	}
 	c := cards[0]
-	if len(c.Ratings) != len(want) || RatingRef(c.Ratings[0]) != want[0] || c.Overview != "A shark." || c.Certificate != "12" || !slices.Equal(c.Genres, []string{"Thriller"}) {
+	if len(c.Ratings) != len(want) || c.Ratings[0] != want[0] || c.Overview != "A shark." || c.Certificate != "12" || !slices.Equal(c.Genres, []string{"Thriller"}) {
 		t.Errorf("card = %+v, want the page's ratings, overview, certificate and genres", c)
 	}
 	// Asked again, MDBList has nothing: TMDB's own score stands.
 	if err := s.SaveRatings(ctx, id, domain.SourceMDBList, nil); err != nil {
 		t.Fatal(err)
 	}
-	if page, err = s.Title(ctx, uuid.UUID{}, id); err != nil || !slices.Equal(page.Ratings, []RatingRef{{domain.SiteTMDB, 76, 10000}}) {
+	if page, err = s.Title(ctx, uuid.UUID{}, id); err != nil || !slices.Equal(page.Ratings, []domain.Rating{{Site: domain.SiteTMDB, Score: 76, Votes: 10000}}) {
 		t.Errorf("after MDBList forgets it: %v, %v; want TMDB's own", page.Ratings, err)
 	}
 }

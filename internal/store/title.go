@@ -15,154 +15,146 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
-// TitlePage is everything a title's page shows, read in one go and answered to clients as it
-// stands: a film's or episode's versions, a show's seasons, a season's episodes, and whatever
-// extras and videos the title has.
+// TitlePage is everything a title's page shows, read in one go: a film's or episode's versions, a
+// show's seasons, a season's episodes, and whatever extras and videos the title has.
 type TitlePage struct {
-	ID            uuid.UUID                  `json:"id"`
-	Kind          domain.ItemKind            `json:"kind"`
-	Title         string                     `json:"title"`
-	OriginalTitle string                     `json:"original_title,omitzero"`
-	Overview      string                     `json:"overview,omitzero"`
-	Tagline       string                     `json:"tagline,omitzero"`
-	Certificate   string                     `json:"certificate,omitzero"`
-	Year          int                        `json:"year,omitzero"`
-	ReleaseDate   domain.Date                `json:"release_date,omitzero"`
-	Genres        []string                   `json:"genres,omitzero"`
-	Studios       []string                   `json:"studios,omitzero"`
-	IDs           map[domain.Provider]string `json:"ids,omitzero"`
-	Ratings       []RatingRef                `json:"ratings,omitzero"`
+	ID            uuid.UUID
+	Kind          domain.ItemKind
+	Title         string
+	OriginalTitle string
+	Overview      string
+	Tagline       string
+	Certificate   string
+	Year          int
+	ReleaseDate   domain.Date
+	Genres        []string
+	Studios       []string
+	IDs           map[domain.Provider]string
+	Ratings       []domain.Rating
 	// Collections are the box sets it is in.
-	Collections []CollectionCard `json:"collections,omitzero"`
+	Collections []CollectionCard
 	// Credits are its cast and crew, as the highest-ranked source gives them.
-	Credits []CreditRef `json:"credits,omitzero"`
+	Credits []CreditRef
 	// Origin is who made a collection: an admin's is changed by hand, a provider's only by it.
-	Origin    domain.CollectionOrigin    `json:"origin,omitzero"`
-	Placement domain.CollectionPlacement `json:"placement,omitzero"`
+	Origin    domain.CollectionOrigin
+	Placement domain.CollectionPlacement
 	// EpisodeOrder is the order a show's episode files are numbered in.
-	EpisodeOrder  domain.EpisodeOrder `json:"episode_order,omitzero"`
-	AddedAt       time.Time           `json:"added_at"`
-	SeasonNumber  *int                `json:"season_number,omitzero"`
-	EpisodeNumber *int                `json:"episode_number,omitzero"`
-	EpisodeEnd    *int                `json:"episode_end,omitzero"`
-	Show          *TitleRef           `json:"show,omitzero"`
-	Season        *TitleRef           `json:"season,omitzero"`
-	Versions      []VersionPage       `json:"versions,omitzero"`
-	Seasons       []SeasonCard        `json:"seasons,omitzero"`
-	Episodes      []EpisodeCard       `json:"episodes,omitzero"`
-	Extras        []ExtraCard         `json:"extras,omitzero"`
-	Videos        []VideoLink         `json:"videos,omitzero"`
+	EpisodeOrder  domain.EpisodeOrder
+	AddedAt       time.Time
+	SeasonNumber  *int
+	EpisodeNumber *int
+	EpisodeEnd    *int
+	Show          *TitleRef
+	Season        *TitleRef
+	Versions      []VersionPage
+	Seasons       []SeasonCard
+	Episodes      []EpisodeCard
+	Extras        []ExtraCard
+	Videos        []VideoLink
 	// State is what the profile asking has made of it.
-	State TitleState `json:"state,omitzero"`
+	State TitleState
 	// Artwork is the title's pictures by kind, best first, by id: /api/v1/artwork/{id}.
-	Artwork map[domain.ArtworkKind][]uuid.UUID `json:"artwork,omitzero"`
+	Artwork map[domain.ArtworkKind][]uuid.UUID
 	// Blurhashes are those of its pictures that have one, by id.
-	Blurhashes Blurhashes `json:"blurhashes,omitzero"`
+	Blurhashes Blurhashes
 	// Themes are the tunes to play under its page, in order, by id: /api/v1/themes/{id}. A season's
 	// and an episode's are its show's.
-	Themes []uuid.UUID `json:"themes,omitzero"`
+	Themes []uuid.UUID
 }
 
 type TitleRef struct {
-	ID    uuid.UUID `json:"id"`
-	Title string    `json:"title"`
+	ID    uuid.UUID
+	Title string
 }
 
 // VersionPage is one copy: what it is, the tracks in it and the subtitles beside it. A copy whose
 // files are gone says since when.
 type VersionPage struct {
-	ID           uuid.UUID     `json:"id"`
-	Edition      string        `json:"edition,omitzero"`
-	Label        string        `json:"label,omitzero"`
-	Container    string        `json:"container"`
-	DurationMS   int64         `json:"duration_ms"`
-	SizeBytes    int64         `json:"size_bytes"`
-	BitrateKbps  int           `json:"bitrate_kbps,omitzero"`
-	Parts        int           `json:"parts"`
-	MissingSince *time.Time    `json:"missing_since,omitzero"`
-	Streams      []StreamPage  `json:"streams"`
-	Subtitles    []SubtitleRef `json:"subtitles,omitzero"`
-	Chapters     []ChapterRef  `json:"chapters,omitzero"`
-	Markers      []MarkerRef   `json:"markers,omitzero"`
+	ID           uuid.UUID
+	Edition      string
+	Label        string
+	Container    string
+	DurationMS   int64
+	SizeBytes    int64
+	BitrateKbps  int
+	Parts        int
+	MissingSince *time.Time
+	Streams      []StreamPage
+	Subtitles    []SubtitleRef
+	Chapters     []ChapterRef
+	Markers      []MarkerRef
 	// Files are its parts in order, each where it starts on the copy's timeline, by the id the
 	// /api/v1/parts/{id} routes take.
-	Files []PartRef `json:"files"`
+	Files []PartRef
 	// Trickplay is the thumbnail sheets of each part that has them; a part's sheets are at
 	// /api/v1/parts/{part_id}/trickplay/{n}.
-	Trickplay []PartTrickplay `json:"trickplay,omitzero"`
+	Trickplay []PartTrickplay
 	// DefaultAudioStream and DefaultSubtitleStream or DefaultSubtitleFile are the tracks it plays
 	// with unasked, for the profile asking: none where no subtitle comes on.
-	DefaultAudioStream    *int       `json:"default_audio_stream,omitzero"`
-	DefaultSubtitleStream *int       `json:"default_subtitle_stream,omitzero"`
-	DefaultSubtitleFile   *uuid.UUID `json:"default_subtitle_file,omitzero"`
+	DefaultAudioStream    *int
+	DefaultSubtitleStream *int
+	DefaultSubtitleFile   *uuid.UUID
 }
 
 // PartRef is one file of a copy.
 type PartRef struct {
-	ID         uuid.UUID `json:"id"`
-	Index      int       `json:"index"`
-	SizeBytes  int64     `json:"size_bytes"`
-	DurationMS int64     `json:"duration_ms"`
-	OffsetMS   int64     `json:"offset_ms"`
+	ID         uuid.UUID
+	Index      int
+	SizeBytes  int64
+	DurationMS int64
+	OffsetMS   int64
 }
 
 // PartTrickplay is a part's thumbnail sheets, its thumbnails timed from OffsetMS on the copy's
 // timeline.
 type PartTrickplay struct {
-	PartID   uuid.UUID `json:"part_id"`
-	OffsetMS int64     `json:"offset_ms"`
+	PartID   uuid.UUID
+	OffsetMS int64
 	Trickplay
 }
 
 // StreamPage is a track of a copy's first part; the parts of one copy are cut from one master.
 type StreamPage struct {
-	Index           int               `json:"index"`
-	Kind            domain.StreamKind `json:"kind"`
-	Codec           string            `json:"codec"`
-	Profile         string            `json:"profile,omitzero"`
-	Language        string            `json:"language,omitzero"`
-	Title           string            `json:"title,omitzero"`
-	Default         bool              `json:"default,omitzero"`
-	Forced          bool              `json:"forced,omitzero"`
-	HearingImpaired bool              `json:"hearing_impaired,omitzero"`
-	Commentary      bool              `json:"commentary,omitzero"`
-	Width           int               `json:"width,omitzero"`
-	Height          int               `json:"height,omitzero"`
-	FrameRate       float64           `json:"frame_rate,omitzero"`
-	BitDepth        int16             `json:"bit_depth,omitzero"`
-	Level           int               `json:"level,omitzero"`
-	Range           domain.Range      `json:"range,omitzero"`
-	DVProfile       int16             `json:"dv_profile,omitzero"`
-	Channels        int               `json:"channels,omitzero"`
-	ChannelLayout   string            `json:"channel_layout,omitzero"`
-	SampleRate      int               `json:"sample_rate,omitzero"`
-	BitrateKbps     int               `json:"bitrate_kbps,omitzero"`
+	Index           int
+	Kind            domain.StreamKind
+	Codec           string
+	Profile         string
+	Language        string
+	Title           string
+	Default         bool
+	Forced          bool
+	HearingImpaired bool
+	Commentary      bool
+	Width           int
+	Height          int
+	FrameRate       float64
+	BitDepth        int16
+	Level           int
+	Range           domain.Range
+	DVProfile       int16
+	Channels        int
+	ChannelLayout   string
+	SampleRate      int
+	BitrateKbps     int
 }
 
 type SubtitleRef struct {
-	ID              uuid.UUID `json:"id"`
-	Codec           string    `json:"codec"`
-	Language        string    `json:"language,omitzero"`
-	Title           string    `json:"title,omitzero"`
-	Default         bool      `json:"default,omitzero"`
-	Forced          bool      `json:"forced,omitzero"`
-	HearingImpaired bool      `json:"hearing_impaired,omitzero"`
-}
-
-// RatingRef is what a site's readers or critics make of a title, out of 100.
-type RatingRef struct {
-	Site  domain.RatingSite `json:"site"`
-	Score float64           `json:"score"`
-	Votes int               `json:"votes,omitzero"`
+	ID              uuid.UUID
+	Codec           string
+	Language        string
+	Title           string
+	Default         bool
+	Forced          bool
+	HearingImpaired bool
 }
 
 // ChapterRef is a chapter on the copy's whole timeline, across its parts. Image is the address of
 // its picture, for those that have one.
 type ChapterRef struct {
-	StartMS int64  `json:"start_ms"`
-	EndMS   int64  `json:"end_ms"`
-	Title   string `json:"title,omitzero"`
-	Image   string `json:"image,omitzero"`
+	StartMS int64
+	EndMS   int64
+	Title   string
+	Image   string
 }
 
 // SignChapterImages signs the address of each chapter's picture, and of each extra's still, as
@@ -183,59 +175,59 @@ func (p *TitlePage) SignChapterImages(sign func(path string) string) {
 }
 
 type SeasonCard struct {
-	ID       uuid.UUID   `json:"id"`
-	Number   int         `json:"number"`
-	Title    string      `json:"title"`
-	Overview string      `json:"overview,omitzero"`
-	Year     int         `json:"year,omitzero"`
-	Aired    domain.Date `json:"release_date,omitzero"`
-	Episodes int         `json:"episodes"`
-	Poster   uuid.UUID   `json:"poster,omitzero"`
-	State    TitleState  `json:"state,omitzero"`
+	ID       uuid.UUID
+	Number   int
+	Title    string
+	Overview string
+	Year     int
+	Aired    domain.Date
+	Episodes int
+	Poster   uuid.UUID
+	State    TitleState
 	// Blurhashes are those of its pictures that have one, by id, as on every card.
-	Blurhashes Blurhashes `json:"blurhashes,omitzero"`
+	Blurhashes Blurhashes
 }
 
 type EpisodeCard struct {
-	ID         uuid.UUID   `json:"id"`
-	Number     *int        `json:"episode_number,omitzero"`
-	End        *int        `json:"episode_end,omitzero"`
-	Title      string      `json:"title"`
-	Overview   string      `json:"overview,omitzero"`
-	Aired      domain.Date `json:"release_date,omitzero"`
-	DurationMS int64       `json:"duration_ms,omitzero"`
-	Thumb      uuid.UUID   `json:"thumb,omitzero"`
-	State      TitleState  `json:"state,omitzero"`
-	Blurhashes Blurhashes  `json:"blurhashes,omitzero"`
+	ID         uuid.UUID
+	Number     *int
+	End        *int
+	Title      string
+	Overview   string
+	Aired      domain.Date
+	DurationMS int64
+	Thumb      uuid.UUID
+	State      TitleState
+	Blurhashes Blurhashes
 }
 
 // ExtraCard is a trailer or other extra, pictured by a still of its video where its previews are
 // made.
 type ExtraCard struct {
-	ID         uuid.UUID        `json:"id"`
-	Kind       domain.ExtraKind `json:"extra_kind"`
-	Title      string           `json:"title"`
-	DurationMS int64            `json:"duration_ms,omitzero"`
-	Image      string           `json:"image,omitzero"`
+	ID         uuid.UUID
+	Kind       domain.ExtraKind
+	Title      string
+	DurationMS int64
+	Image      string
 }
 
 type CollectionCard struct {
-	ID         uuid.UUID  `json:"id"`
-	Title      string     `json:"title"`
-	Poster     uuid.UUID  `json:"poster,omitzero"`
-	Blurhashes Blurhashes `json:"blurhashes,omitzero"`
+	ID         uuid.UUID
+	Title      string
+	Poster     uuid.UUID
+	Blurhashes Blurhashes
 }
 
 // VideoLink is a provider's link to a video hosted elsewhere, with its site's still of it where
 // the site publishes one, served at /api/v1/artwork/{thumb}.
 type VideoLink struct {
-	Kind      domain.ExtraKind `json:"extra_kind"`
-	Site      string           `json:"site"`
-	Key       string           `json:"key"`
-	Name      string           `json:"name"`
-	Language  string           `json:"language,omitzero"`
-	Published *time.Time       `json:"published_at,omitzero"`
-	Thumb     uuid.UUID        `json:"thumb,omitzero"`
+	Kind      domain.ExtraKind
+	Site      string
+	Key       string
+	Name      string
+	Language  string
+	Published *time.Time
+	Thumb     uuid.UUID
 }
 
 // Title answers a title's page for a profile, or ErrNotFound.
@@ -264,9 +256,7 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	if err != nil {
 		return TitlePage{}, err
 	}
-	for _, r := range ratings[item.ID] {
-		p.Ratings = append(p.Ratings, RatingRef(r))
-	}
+	p.Ratings = ratings[item.ID]
 	if p.Collections, err = s.collectionsOf(ctx, item.ID); err != nil {
 		return TitlePage{}, err
 	}

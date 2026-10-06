@@ -16,12 +16,12 @@ import (
 // TitleState is what a profile has made of a title. A show's and a season's are their episodes':
 // watched once every one is, with how many are left.
 type TitleState struct {
-	PositionMS   int64      `json:"position_ms,omitzero"`
-	Plays        int        `json:"plays,omitzero"`
-	WatchedAt    *time.Time `json:"watched_at,omitzero"`
-	LastPlayedAt *time.Time `json:"last_played_at,omitzero"`
-	FavouriteAt  *time.Time `json:"favourite_at,omitzero"`
-	Unwatched    int        `json:"unwatched,omitzero"`
+	PositionMS   int64
+	Plays        int
+	WatchedAt    *time.Time
+	LastPlayedAt *time.Time
+	FavouriteAt  *time.Time
+	Unwatched    int
 }
 
 // ErrSuperseded is progress from before the profile's state of the title last changed.

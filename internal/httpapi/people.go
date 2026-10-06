@@ -33,8 +33,16 @@ type creditJSON struct {
 }
 
 type personJSON struct {
-	store.PersonPage
-	Credits []creditJSON `json:"credits"`
+	ID         uuid.UUID                  `json:"id"`
+	Name       string                     `json:"name"`
+	Photo      uuid.UUID                  `json:"photo,omitzero"`
+	Blurhashes store.Blurhashes           `json:"blurhashes,omitzero"`
+	Biography  string                     `json:"biography,omitzero"`
+	Born       domain.Date                `json:"born,omitzero"`
+	Died       domain.Date                `json:"died,omitzero"`
+	Birthplace string                     `json:"birthplace,omitzero"`
+	IDs        map[domain.Provider]string `json:"ids,omitzero"`
+	Credits    []creditJSON               `json:"credits"`
 }
 
 // person answers someone's page: who they are, as a provider says the first time it is opened and
@@ -66,7 +74,10 @@ func (a *API) person(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	out := personJSON{PersonPage: p, Credits: []creditJSON{}}
+	out := personJSON{
+		ID: p.ID, Name: p.Name, Photo: p.Photo, Blurhashes: p.Blurhashes, Biography: p.Biography, Born: p.Born,
+		Died: p.Died, Birthplace: p.Birthplace, IDs: p.IDs, Credits: []creditJSON{},
+	}
 	for _, c := range credits {
 		out.Credits = append(out.Credits, creditJSON{Credit: c.Kind, Role: c.Role, cardJSON: cardOf(c.Card)})
 	}
