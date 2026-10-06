@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -62,6 +63,7 @@ type playing interface {
 	Playable(ctx context.Context, profile, item, version uuid.UUID) (store.PlayCopy, error)
 	Card(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
+	VisiblePartFile(ctx context.Context, profile, part uuid.UUID) (root, rel string, err error)
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
 }
 
@@ -527,17 +529,30 @@ var fileTypes = map[string]string{
 
 // partStream serves one file of a copy as it is, in byte ranges.
 func (a *API) partStream(w http.ResponseWriter, r *http.Request) {
-	a.serveLibraryFile(w, r, a.svc.Playing.PartFile)
+	a.serveLibraryFile(w, r, a.svc.Playing.PartFile, math.MaxInt64)
+}
+
+// sampleBytes is as much of a part as a connection test may read: enough to time a fast link,
+// too little to stand in for a download.
+const sampleBytes = 16 << 20
+
+// partSample serves the start of a part's file to time the connection, as Jellyfin's bitrate test
+// does, but of the file itself. It is no playback: nothing is recorded of it.
+func (a *API) partSample(w http.ResponseWriter, r *http.Request) {
+	visible := func(ctx context.Context, part uuid.UUID) (string, string, error) {
+		return a.svc.Playing.VisiblePartFile(ctx, sessionOf(r).Profile.ID, part)
+	}
+	a.serveLibraryFile(w, r, visible, sampleBytes)
 }
 
 // subtitleFile serves a subtitle file beside a copy as it is.
 func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
-	a.serveLibraryFile(w, r, a.svc.Playing.SubtitleFile)
+	a.serveLibraryFile(w, r, a.svc.Playing.SubtitleFile, math.MaxInt64)
 }
 
-// serveLibraryFile serves the file of a library that where finds for the id in the path: only a
-// file the scanner recorded.
-func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where func(context.Context, uuid.UUID) (string, string, error)) {
+// serveLibraryFile serves the first limit bytes of the file of a library that where finds for the
+// id in the path: only a file the scanner recorded.
+func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where func(context.Context, uuid.UUID) (string, string, error), limit int64) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
 		writeProblem(w, a.logger, codeNotFound, "")
@@ -570,7 +585,7 @@ func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where fun
 	if t, ok := fileTypes[strings.ToLower(path.Ext(rel))]; ok {
 		w.Header().Set("Content-Type", t)
 	}
-	http.ServeContent(w, r, rel, info.ModTime(), f)
+	http.ServeContent(w, r, rel, info.ModTime(), io.NewSectionReader(f, 0, min(info.Size(), limit)))
 }
 
 // requireSignature admits a request whose address the server signed and which has not lapsed.
