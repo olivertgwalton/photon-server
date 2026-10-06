@@ -215,11 +215,12 @@ func backfillBlurhashes(ctx context.Context, st *store.Store, cache *artwork.Cac
 }
 
 // markersTask queues the comparison of every season with an episode whose sound has not been
-// compared: those from before the server could, and those whose comparison was cut short.
-func markersTask(st *store.Store, tools media.Tools, logger *slog.Logger) task.Task {
+// compared: those from before the server could, and those whose comparison was cut short. It runs
+// as the maintenance window opens, window.
+func markersTask(st *store.Store, tools media.Tools, window task.Trigger, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:     domain.TaskDetectMarkers,
-		Trigger: task.Trigger{Kind: task.TriggerDaily, At: refreshAt},
+		Trigger: window,
 		Run: func(ctx context.Context) error {
 			if !tools.Chromaprint {
 				return nil
@@ -233,10 +234,6 @@ func markersTask(st *store.Store, tools media.Tools, logger *slog.Logger) task.T
 	}
 }
 
-// previewsAt is when previews are brought into line with their libraries: the small hours, before
-// the metadata refresh.
-const previewsAt = 2 * time.Hour
-
 // missingPreviewsKept is how long a part on no disk keeps its previews. Jellyfin and Plex drop a
 // missing file's at the next scan or emptied trash; a month covers a share down for repair or
 // over a holiday, which would otherwise come back to hours of remaking, for a few megabytes a
@@ -245,11 +242,12 @@ const missingPreviewsKept = 30 * 24 * time.Hour
 
 // previewsTask queues the parts whose previews are not what their library asks for, among them
 // those of a library switched on since and those whose job died, forgets the previews of parts
-// missing past missingPreviewsKept, and clears the folders of previews no part has any more.
-func previewsTask(st *store.Store, previews *analysis.Previews, logger *slog.Logger) task.Task {
+// missing past missingPreviewsKept, and clears the folders of previews no part has any more. It
+// runs as the maintenance window opens, window.
+func previewsTask(st *store.Store, previews *analysis.Previews, window task.Trigger, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:     domain.TaskBackfillPreviews,
-		Trigger: task.Trigger{Kind: task.TriggerDaily, At: previewsAt},
+		Trigger: window,
 		Run: func(ctx context.Context) error {
 			n, err := st.QueuePreviews(ctx)
 			if n > 0 {

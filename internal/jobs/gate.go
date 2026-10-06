@@ -11,18 +11,27 @@ import (
 )
 
 const (
-	// rereadEvery is how often a gate reads again what plays, besides as each playback starts or
-	// stops: an event lost with Valkey's connection is made good within it.
+	// rereadEvery is how often a gate reads again what plays and the maintenance window, besides as
+	// each playback starts or stops: the window's edges, a window changed on another node and an
+	// event lost with Valkey's connection are each noticed within it.
 	rereadEvery = time.Minute
 	// resubscribeAfter is the wait before a gate follows events again once its stream has ended.
 	resubscribeAfter = time.Second
 )
 
-// errPlayback stops a job holding a gate as a playback starts.
-var errPlayback = fmt.Errorf("%w: a playback started", ErrNotNow)
+var (
+	// errPlayback stops a job holding a gate as a playback starts.
+	errPlayback = fmt.Errorf("%w: a playback started", ErrNotNow)
+	// errWindowClosed stops a job held to the maintenance window as it closes.
+	errWindowClosed = fmt.Errorf("%w: the maintenance window closed", ErrNotNow)
+)
 
 type playbacks interface {
 	Playbacks(ctx context.Context) ([]domain.Playback, error)
+}
+
+type maintenance interface {
+	Maintenance(ctx context.Context) (domain.Maintenance, error)
 }
 
 // Gate keeps the jobs that read media out of playback's way. A chapter's still, a fingerprint or a
@@ -31,29 +40,35 @@ type playbacks interface {
 // starts while anything plays on any node of the cluster, and one running as a playback starts is
 // stopped, to be queued again with its attempt given back, as a conversion gives way to a
 // playback's transcode. Jellyfin's and Plex's background work pays playback no such regard.
+//
+// Work its timing holds to the maintenance window starts only inside it and is stopped as it
+// closes, as Plex's butler is.
 type Gate struct {
 	playbacks playbacks
+	settings  maintenance
 	subscribe func() (<-chan domain.Event, func())
 	log       *slog.Logger
 
 	mu sync.Mutex
-	// read is whether what plays has been read; until it has, nothing starts.
+	// read is whether what plays and the window have been read; until they have, nothing starts.
 	read    bool
 	playing bool
+	window  domain.Maintenance
 	holds   map[*hold]struct{}
 }
 
 type hold struct {
+	kind domain.JobKind
 	stop context.CancelCauseFunc
 }
 
 // NewGate reads what plays across the cluster from p, again as each event subscribe streams tells
-// of a playback starting or stopping on any node.
-func NewGate(p playbacks, subscribe func() (<-chan domain.Event, func()), log *slog.Logger) *Gate {
-	return &Gate{playbacks: p, subscribe: subscribe, log: log, holds: map[*hold]struct{}{}}
+// of a playback starting or stopping on any node, and the maintenance window from settings.
+func NewGate(p playbacks, settings maintenance, subscribe func() (<-chan domain.Event, func()), log *slog.Logger) *Gate {
+	return &Gate{playbacks: p, settings: settings, subscribe: subscribe, log: log, holds: map[*hold]struct{}{}}
 }
 
-// Run keeps the gate told what plays until ctx ends.
+// Run keeps the gate told what plays and when the window is until ctx ends.
 func (g *Gate) Run(ctx context.Context) {
 	t := time.NewTicker(rereadEvery)
 	defer t.Stop()
@@ -90,49 +105,83 @@ func (g *Gate) follow(ctx context.Context, events <-chan domain.Event, tick <-ch
 	}
 }
 
-// reread reads what plays, and stops every job holding the gate if anything does. What is not read
-// leaves the gate as it was.
+// reread reads what plays and the window, and stops each job holding the gate that may not go on.
+// What is not read leaves the gate as it was.
 func (g *Gate) reread(ctx context.Context) {
 	going, err := g.playbacks.Playbacks(ctx)
+	var window domain.Maintenance
+	if err == nil {
+		window, err = g.settings.Maintenance(ctx)
+	}
 	if err != nil {
 		if ctx.Err() == nil {
-			g.log.WarnContext(ctx, "playbacks not read for background work", slog.Any("err", err))
+			g.log.WarnContext(ctx, "background work's gate not read", slog.Any("err", err))
 		}
 		return
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.read, g.playing = true, len(going) > 0
-	if !g.playing {
-		return
-	}
+	g.read, g.playing, g.window = true, len(going) > 0, window
+	now := time.Now()
 	for h := range g.holds {
+		var cause error
+		switch {
+		case g.playing:
+			cause = errPlayback
+		case !g.inTime(h.kind, now):
+			cause = errWindowClosed
+		default:
+			continue
+		}
 		delete(g.holds, h)
-		h.stop(errPlayback)
+		h.stop(cause)
 	}
 }
 
-// Open reports whether a job may start now.
-func (g *Gate) Open() bool {
+// inTime reports whether work of kind may run at now as its timing has it; the caller holds g.mu.
+// Keyframes are what a play is cut at, read from a file's own index as it is added, as Plex
+// analyses a file as it is added, so no window holds them.
+func (g *Gate) inTime(kind domain.JobKind, now time.Time) bool {
+	var timing domain.Timing
+	switch kind {
+	case domain.JobPreviews:
+		timing = g.window.Previews
+	case domain.JobMarkers:
+		timing = g.window.Markers
+	case domain.JobKeyframes, domain.JobIdentify, domain.JobScanLibrary, domain.JobConvert, domain.JobDeliverWebhook, domain.JobTheme:
+		return true
+	}
+	switch timing {
+	case domain.TimingWindow:
+		return g.window.Holds(now)
+	case domain.TimingWindowAndAdded:
+	}
+	return true
+}
+
+// Open reports whether a job of kind may start now.
+func (g *Gate) Open(kind domain.JobKind) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.open()
+	return g.open(kind)
 }
 
 // open is Open; the caller holds g.mu.
-func (g *Gate) open() bool { return g.read && !g.playing }
+func (g *Gate) open(kind domain.JobKind) bool {
+	return g.read && !g.playing && g.inTime(kind, time.Now())
+}
 
-// Hold lets a job run for as long as nothing plays: ok is false where something does, and held is
-// cancelled with a cause that is ErrNotNow when a playback starts. release gives the gate back
-// once the job ends.
-func (g *Gate) Hold(ctx context.Context) (held context.Context, release func(), ok bool) {
+// Hold lets a job of kind run for as long as nothing plays and, for work held to the window, the
+// window is open: ok is false where it may not start, and held is cancelled with a cause that is
+// ErrNotNow when it may not go on. release gives the gate back once the job ends.
+func (g *Gate) Hold(ctx context.Context, kind domain.JobKind) (held context.Context, release func(), ok bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if !g.open() {
+	if !g.open(kind) {
 		return nil, nil, false
 	}
 	held, stop := context.WithCancelCause(ctx)
-	h := &hold{stop: stop}
+	h := &hold{kind: kind, stop: stop}
 	g.holds[h] = struct{}{}
 	return held, func() {
 		g.mu.Lock()
@@ -140,4 +189,12 @@ func (g *Gate) Hold(ctx context.Context) (held context.Context, release func(), 
 		g.mu.Unlock()
 		stop(nil)
 	}, true
+}
+
+// Opens answers when past midnight the maintenance window opens, in its zone, or false until it
+// has been read.
+func (g *Gate) Opens() (at time.Duration, zone *time.Location, ok bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return time.Duration(g.window.StartHour) * time.Hour, g.window.Zone, g.read
 }

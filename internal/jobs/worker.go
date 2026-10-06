@@ -75,8 +75,8 @@ func (w *Worker) Run(ctx context.Context) {
 	t := time.NewTicker(poll)
 	defer t.Stop()
 	for ctx.Err() == nil {
-		if n := len(free); n > 0 && (w.gate == nil || w.gate.Open()) {
-			claimed, err := w.queue.ClaimJobs(ctx, kinds, w.node, lease, n)
+		if n, open := len(free), w.open(kinds); n > 0 && len(open) > 0 {
+			claimed, err := w.queue.ClaimJobs(ctx, open, w.node, lease, n)
 			if err != nil && ctx.Err() == nil {
 				w.log.WarnContext(ctx, "jobs not claimed", slog.Any("err", err))
 			}
@@ -100,7 +100,7 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	jobCtx, lose := context.WithCancelCause(ctx)
 	defer lose(nil)
 	if w.gate != nil {
-		held, release, ok := w.gate.Hold(jobCtx)
+		held, release, ok := w.gate.Hold(jobCtx, job.Kind)
 		if !ok {
 			w.postpone(ctx, log, job)
 			return
@@ -149,6 +149,14 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	if ended {
 		w.tell.JobEnded(record, job.Kind)
 	}
+}
+
+// open answers the kinds of job its gate lets start now: all of them where it has none.
+func (w *Worker) open(kinds []domain.JobKind) []domain.JobKind {
+	if w.gate == nil {
+		return kinds
+	}
+	return slices.DeleteFunc(slices.Clone(kinds), func(k domain.JobKind) bool { return !w.gate.Open(k) })
 }
 
 // postpone queues a job its gate would not let start, its attempt given back.

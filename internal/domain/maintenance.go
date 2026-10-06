@@ -30,6 +30,15 @@ type Maintenance struct {
 	Markers   Timing
 }
 
+// Holds reports whether t is inside the window.
+func (m Maintenance) Holds(t time.Time) bool {
+	h := t.In(m.Zone).Hour()
+	if m.StartHour < m.EndHour {
+		return h >= m.StartHour && h < m.EndHour
+	}
+	return h >= m.StartHour || h < m.EndHour
+}
+
 // ParseZone answers the time zone of an IANA name, such as Europe/London or UTC. The server's own
 // local zone is refused by name: every node keeps the window in the same zone.
 func ParseZone(name string) (*time.Location, error) {

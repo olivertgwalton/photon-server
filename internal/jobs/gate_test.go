@@ -13,14 +13,30 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// cluster is what plays on every node, as Valkey keeps it, and the events every node is told.
+// cluster is what plays on every node, as Valkey keeps it, the events every node is told, and the
+// maintenance window, as Postgres keeps it.
 type cluster struct {
 	mu      sync.Mutex
 	playing []domain.Playback
 	events  chan domain.Event
+	window  domain.Maintenance
 }
 
-func newCluster() *cluster { return &cluster{events: make(chan domain.Event, 8)} }
+// newCluster keeps the window from 02:00 to 05:00, the work of kind done as timing says; a test
+// starts at midnight.
+func newCluster(kind domain.JobKind, timing domain.Timing) *cluster {
+	w := domain.Maintenance{StartHour: 2, EndHour: 5, Zone: time.UTC, Previews: domain.TimingWindowAndAdded, Markers: domain.TimingWindowAndAdded}
+	switch kind {
+	case domain.JobPreviews:
+		w.Previews = timing
+	case domain.JobMarkers:
+		w.Markers = timing
+	case domain.JobKeyframes, domain.JobIdentify, domain.JobScanLibrary, domain.JobConvert, domain.JobDeliverWebhook, domain.JobTheme:
+	}
+	return &cluster{events: make(chan domain.Event, 8), window: w}
+}
+
+func (c *cluster) Maintenance(context.Context) (domain.Maintenance, error) { return c.window, nil }
 
 func (c *cluster) Playbacks(context.Context) ([]domain.Playback, error) {
 	c.mu.Lock()
@@ -43,10 +59,10 @@ func (c *cluster) play(node *uuid.UUID) {
 	c.events <- domain.Event{Kind: kind}
 }
 
-func runReader(t *testing.T, q *memoryQueue, c *cluster, h Handler) func() {
+func runReader(t *testing.T, q *memoryQueue, c *cluster, kind domain.JobKind, h Handler) func() {
 	t.Helper()
-	gate := NewGate(c, c.subscribe, slog.New(slog.DiscardHandler))
-	w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobPreviews: h}, ignore{}, gate)
+	gate := NewGate(c, c, c.subscribe, slog.New(slog.DiscardHandler))
+	w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{kind: h}, ignore{}, gate)
 	ctx, cancel := context.WithCancel(t.Context())
 	var wg sync.WaitGroup
 	wg.Go(func() { gate.Run(ctx) })
@@ -62,9 +78,9 @@ func runReader(t *testing.T, q *memoryQueue, c *cluster, h Handler) func() {
 func TestAPlaybackStopsMediaWorkAndGivesItsAttemptBack(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews}}}
-		c := newCluster()
+		c := newCluster(domain.JobPreviews, domain.TimingWindowAndAdded)
 		started, stopped := make(chan struct{}), make(chan error, 1)
-		stop := runReader(t, q, c, func(ctx context.Context, _ uuid.UUID) error {
+		stop := runReader(t, q, c, domain.JobPreviews, func(ctx context.Context, _ uuid.UUID) error {
 			close(started)
 			<-ctx.Done()
 			stopped <- context.Cause(ctx)
@@ -89,11 +105,11 @@ func TestAPlaybackStopsMediaWorkAndGivesItsAttemptBack(t *testing.T) {
 func TestNoMediaWorkStartsWhileAnythingPlays(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews}}}
-		c := newCluster()
+		c := newCluster(domain.JobPreviews, domain.TimingWindowAndAdded)
 		other := uuid.NewV7()
 		c.playing = []domain.Playback{{ID: uuid.NewV7(), Node: other}}
 		ran := 0
-		stop := runReader(t, q, c, func(context.Context, uuid.UUID) error {
+		stop := runReader(t, q, c, domain.JobPreviews, func(context.Context, uuid.UUID) error {
 			ran++
 			return nil
 		})
@@ -106,6 +122,55 @@ func TestNoMediaWorkStartsWhileAnythingPlays(t *testing.T) {
 		synctest.Sleep(time.Minute)
 		if ran != 1 || len(q.completed) != 1 {
 			t.Errorf("ran %d, completed %v once playback stopped; want job 7 made", ran, q.completed)
+		}
+	})
+}
+
+// Previews held to the window wait for it to open, and one still being made as it closes stops, to
+// be made in the next, without spending one of its attempts.
+func TestWindowedWorkStartsInTheWindowAndStopsAsItCloses(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews}}}
+		c := newCluster(domain.JobPreviews, domain.TimingWindow)
+		var mu sync.Mutex
+		var startedAt time.Time
+		var cause error
+		stop := runReader(t, q, c, domain.JobPreviews, func(ctx context.Context, _ uuid.UUID) error {
+			mu.Lock()
+			startedAt = time.Now()
+			mu.Unlock()
+			<-ctx.Done()
+			mu.Lock()
+			cause = context.Cause(ctx)
+			mu.Unlock()
+			return ctx.Err()
+		})
+		defer stop()
+		opens := time.Now().Add(2 * time.Hour)
+		synctest.Sleep(6 * time.Hour)
+		mu.Lock()
+		defer mu.Unlock()
+		if startedAt.Before(opens) || startedAt.After(opens.Add(2*time.Minute)) {
+			t.Errorf("started at %s, want as the window opens at %s", startedAt, opens)
+		}
+		if !errors.Is(cause, errWindowClosed) || len(q.postponed) != 1 || len(q.failed) != 0 {
+			t.Errorf("stopped for %v, postponed %v, failed %v; want stopped as the window closed and queued again",
+				cause, q.postponed, q.failed)
+		}
+	})
+}
+
+// Intros and credits found as parts are added too start whenever they are queued, outside the
+// window as well.
+func TestWorkAlsoDoneAsPartsAreAddedStartsOutsideTheWindow(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobMarkers}}}
+		c := newCluster(domain.JobMarkers, domain.TimingWindowAndAdded)
+		stop := runReader(t, q, c, domain.JobMarkers, func(context.Context, uuid.UUID) error { return nil })
+		defer stop()
+		synctest.Sleep(time.Minute)
+		if len(q.completed) != 1 {
+			t.Errorf("completed %v at midnight; want the job run outside the window", q.completed)
 		}
 	})
 }

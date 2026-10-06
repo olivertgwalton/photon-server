@@ -18,6 +18,13 @@ func TestTriggerDue(t *testing.T) {
 	at := func(h, m int) time.Time { return day.Add(time.Duration(h)*time.Hour + time.Duration(m)*time.Minute) }
 	every := Trigger{Kind: TriggerEvery, Every: 12 * time.Hour}
 	nightly := Trigger{Kind: TriggerDaily, At: 3 * time.Hour}
+	// The window opens at 02:00 in New York, 06:00 here in UTC in October.
+	newYork, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	window := Trigger{Kind: TriggerWindow, Opens: func() (time.Duration, *time.Location, bool) { return 2 * time.Hour, newYork, true }}
+	unknown := Trigger{Kind: TriggerWindow, Opens: func() (time.Duration, *time.Location, bool) { return 0, nil, false }}
 	tests := []struct {
 		name      string
 		trigger   Trigger
@@ -31,6 +38,9 @@ func TestTriggerDue(t *testing.T) {
 		{"daily after today's time", nightly, at(3, 5).AddDate(0, 0, -1), at(3, 0), true},
 		{"daily already run today", nightly, at(3, 1), at(23, 0), false},
 		{"daily missed while down for days", nightly, at(3, 0).AddDate(0, 0, -3), at(10, 0), true},
+		{"window not yet open in its zone", window, at(6, 30).AddDate(0, 0, -1), at(5, 0), false},
+		{"window open in its zone", window, at(6, 30).AddDate(0, 0, -1), at(6, 0), true},
+		{"window not known", unknown, time.Time{}, at(6, 0), false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
