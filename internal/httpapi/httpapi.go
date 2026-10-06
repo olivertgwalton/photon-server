@@ -750,8 +750,11 @@ func (a *API) routes() []route {
 		{
 			pattern: "GET /api/v1/artwork/{id}", access: public,
 			summary: "A picture, kept for good: its id changes when it does",
-			query:   []param{{"width", 0, "A copy this many pixels wide."}},
-			status:  http.StatusOK, reply: asFile{"image/*"}, handle: a.artwork,
+			query: []param{
+				{"width", 0, "A copy at most this many pixels wide, keeping its shape; rounded up to one of a few sizes."},
+				{"height", 0, "A copy at most this many pixels high, keeping its shape; rounded up as width is."},
+			},
+			status: http.StatusOK, reply: asFile{"image/*"}, handle: a.artwork,
 		},
 		{
 			pattern: "GET /api/v1/themes/{id}", access: public,

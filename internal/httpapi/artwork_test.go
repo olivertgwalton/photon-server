@@ -41,7 +41,7 @@ func (f fakePictures) File(context.Context, uuid.UUID, string) (*os.File, error)
 }
 
 // Resized answers a copy only of the provider's picture, and the local one as it is.
-func (f fakePictures) Resized(_ context.Context, key string, _ int, _ func(context.Context) (*os.File, error)) (*os.File, error) {
+func (f fakePictures) Resized(_ context.Context, key string, _, _ int, _ func(context.Context) (*os.File, error)) (*os.File, error) {
 	if key == providerPoster.String() {
 		return os.Open(filepath.Join(f.root, "small"))
 	}
@@ -86,6 +86,12 @@ func TestArtwork(t *testing.T) {
 	}
 	if rec := get(providerPoster, "?width=320"); rec.Body.String() != "\xff\xd8\xff\xe0small" || rec.Header().Get("Content-Type") != "image/jpeg" {
 		t.Errorf("a resized picture: %q as %q, want the copy, typed by its content", rec.Body.String(), rec.Header().Get("Content-Type"))
+	}
+	if rec := get(providerPoster, "?height=480"); rec.Body.String() != "\xff\xd8\xff\xe0small" {
+		t.Errorf("a picture asked for by height: %q, want the copy", rec.Body.String())
+	}
+	if rec := get(localPoster, "?height=0"); rec.Code != http.StatusBadRequest {
+		t.Errorf("height=0: %d, want 400", rec.Code)
 	}
 	if rec := get(localPoster, "?width=320"); rec.Body.String() != "local jpeg" {
 		t.Errorf("a picture that cannot be resized: %q, want it as it is", rec.Body.String())
