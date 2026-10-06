@@ -129,6 +129,8 @@ type Services struct {
 	ProfileAdmin profileAdmin
 	Tasks        tasks
 	Jobs         jobQueue
+	// Maintenance is when work that reads media, and that no one waits on, is done.
+	Maintenance maintenanceSettings
 	// Activity is the log of what has happened, and Events tells it, and more, as it happens.
 	Activity activityLog
 	Events   eventHub
@@ -694,6 +696,16 @@ func (a *API) routes() []route {
 			pattern: "POST /api/v1/admin/tasks/{key}/run", access: admin, summary: "Run a task now",
 			path:   []param{{"key", domain.TaskKey(""), "The task."}},
 			status: http.StatusAccepted, handle: a.runTask,
+		},
+		{
+			pattern: "GET /api/v1/admin/maintenance", access: admin,
+			summary: "Say when the server reads its media for previews and markers",
+			status:  http.StatusOK, reply: maintenanceJSON{}, handle: a.adminMaintenance,
+		},
+		{
+			pattern: "PUT /api/v1/admin/maintenance", access: admin,
+			summary: "Replace the maintenance window and when previews and markers wait for it",
+			body:    maintenanceJSON{}, status: http.StatusOK, reply: maintenanceJSON{}, handle: a.setMaintenance,
 		},
 		{
 			pattern: "GET /api/v1/admin/jobs", access: admin, summary: "Count the job queue and list the dead jobs",

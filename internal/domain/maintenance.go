@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"fmt"
 	"time"
 )
@@ -28,6 +29,22 @@ type Maintenance struct {
 	Zone      *time.Location
 	Previews  Timing
 	Markers   Timing
+}
+
+// Check refuses a window of no hours, of an hour no day has, or without a timing for each kind of
+// work.
+func (m Maintenance) Check() error {
+	switch {
+	case m.StartHour < 0 || m.StartHour > 23 || m.EndHour < 0 || m.EndHour > 23:
+		return errors.New("the window's hours are from 0 to 23")
+	case m.StartHour == m.EndHour:
+		return errors.New("the window ends at another hour than it starts")
+	}
+	if _, err := Parse("previews", string(m.Previews), Timings()); err != nil {
+		return err
+	}
+	_, err := Parse("markers", string(m.Markers), Timings())
+	return err
 }
 
 // Holds reports whether t is inside the window.
