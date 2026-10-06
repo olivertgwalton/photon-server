@@ -400,7 +400,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the libraries as an admin keeps them
+         * List the libraries as an admin keeps them, with everything each holds
          * @description Admin only.
          */
         get: {
@@ -418,7 +418,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["AdminLibraryList"];
+                        "application/json": components["schemas"]["AdminLibraryListingList"];
                     };
                 };
                 default: components["responses"]["Problem"];
@@ -2476,7 +2476,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the libraries the profile sees */
+        /** List the libraries the profile sees, with how many of each kind of title it may see in each */
         get: {
             parameters: {
                 query?: never;
@@ -4280,8 +4280,23 @@ export interface components {
             root: string;
             sources: components["schemas"]["FieldSource"][];
         };
-        AdminLibraryList: {
-            items: components["schemas"]["AdminLibrary"][];
+        AdminLibraryListing: {
+            counts: components["schemas"]["Counts"];
+            /** Format: uuid */
+            id: string;
+            keyframes: components["schemas"]["KeyframeMode"];
+            kind: components["schemas"]["LibraryKind"];
+            markers: components["schemas"]["MarkerDetection"];
+            monitor: components["schemas"]["Monitor"];
+            name: string;
+            previews: components["schemas"]["PreviewLevel"];
+            refresh_days: number;
+            remote_extras: components["schemas"]["ExtraKind"][];
+            root: string;
+            sources: components["schemas"]["FieldSource"][];
+        };
+        AdminLibraryListingList: {
+            items: components["schemas"]["AdminLibraryListing"][];
         };
         Approval: {
             user_code: string;
@@ -4403,6 +4418,12 @@ export interface components {
         };
         /** @enum {string} */
         CollectionOrigin: "tmdb" | "user";
+        Counts: {
+            episodes: number;
+            movies: number;
+            seasons: number;
+            shows: number;
+        };
         Created: {
             /** Format: uuid */
             id: string;
@@ -4737,6 +4758,7 @@ export interface components {
             items: components["schemas"]["Letter"][];
         };
         Library: {
+            counts: components["schemas"]["Counts"];
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["LibraryKind"];

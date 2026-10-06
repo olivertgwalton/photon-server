@@ -1,5 +1,6 @@
 <script lang="ts">
 import { page } from "$app/state";
+import { holding } from "#lib/format.js";
 
 let { data, children } = $props();
 
@@ -18,7 +19,12 @@ const tabs = $derived(
 </script>
 
 <div class="grid gap-4">
-	<h1 class="title">{data.library.name}</h1>
+	<div class="grid gap-1">
+		<h1 class="title">{data.library.name}</h1>
+		<p class="text-ink-3 text-sm">
+			{holding(data.library.kind, data.library.counts)}
+		</p>
+	</div>
 	<nav aria-label="{data.library.name} views" class="border-line border-b">
 		<ul class="-mb-px flex gap-1 overflow-x-auto">
 			{#each tabs as tab (tab.href)}

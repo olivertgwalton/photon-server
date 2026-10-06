@@ -16,6 +16,20 @@ export function count(n: number, thing: string): string {
 	return `${n.toLocaleString()} ${thing}${n === 1 ? "" : "s"}`;
 }
 
+// "1,204 films", "12 shows · 40 seasons · 512 episodes": what a library holds,
+// as its kind counts it.
+export function holding(
+	kind: Schemas["LibraryKind"],
+	c: Schemas["Counts"],
+): string {
+	if (kind === "movies") return count(c.movies, "film");
+	return [
+		count(c.shows, "show"),
+		count(c.seasons, "season"),
+		count(c.episodes, "episode"),
+	].join(" · ");
+}
+
 // "1:04:09", "4:09": a position on a title's timeline.
 export function timecode(ms: number): string {
 	const s = Math.floor(ms / 1000);

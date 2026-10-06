@@ -72,6 +72,7 @@ test("a library is added from a folder found by browsing the server", async ({
 }) => {
 	await logIn(page, "/settings/server/libraries");
 	await expect(page.getByRole("heading", { name: "Films" })).toBeVisible();
+	await expect(page.getByText("250 films")).toBeVisible();
 	await expect(page.getByText(/Reading folders/)).toBeVisible();
 	await expectAccessible(page);
 

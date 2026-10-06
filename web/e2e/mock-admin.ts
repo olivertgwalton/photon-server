@@ -292,7 +292,14 @@ export async function admin(
 				total: 1,
 			} satisfies Schemas["HistoryEntryPage"]);
 		case "GET /api/v1/admin/libraries":
-			return json({ items: [films] } satisfies Schemas["AdminLibraryList"]);
+			return json({
+				items: [
+					{
+						...films,
+						counts: { movies: 250, shows: 0, seasons: 0, episodes: 0 },
+					},
+				],
+			} satisfies Schemas["AdminLibraryListingList"]);
 		case "POST /api/v1/admin/libraries": {
 			const body = (await request.json()) as Schemas["AddLibrary"];
 			return json(

@@ -5,6 +5,7 @@ import TvIcon from "@lucide/svelte/icons/tv";
 import { act } from "#lib/admin/act.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { client } from "#lib/api/client.js";
+import { holding } from "#lib/format.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import LibraryRefresh from "#lib/components/admin/LibraryRefresh.svelte";
 import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
@@ -54,6 +55,9 @@ const path = (id: string) => ({ params: { path: { id } } });
 								{library.name}
 							</a>
 						</h2>
+						<p class="text-ink-2 text-sm">
+							{holding(library.kind, library.counts)}
+						</p>
 						<p class="text-ink-3 truncate font-mono text-xs">{library.root}</p>
 						{#if scan}
 							<ScanProgress {scan} name={library.name} />

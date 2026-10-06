@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+	holding,
 	episodeLabel,
 	playHref,
 	ratingMark,
@@ -42,4 +43,10 @@ test("the player is told only what the reader chose", () => {
 	expect(
 		playHref("t-1", { version: "v-2", audio: 1, subtitle: "off", t: 0 }),
 	).toBe("/play/t-1?version=v-2&audio=1&subtitle=off&t=0");
+});
+
+test("a library says what it holds as its kind counts it", () => {
+	const c = { movies: 1204, shows: 1, seasons: 4, episodes: 40 };
+	expect(holding("movies", c)).toBe("1,204 films");
+	expect(holding("shows", c)).toBe("1 show · 4 seasons · 40 episodes");
 });
