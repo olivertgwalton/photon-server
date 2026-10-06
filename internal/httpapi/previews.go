@@ -13,7 +13,6 @@ import (
 
 type previews interface {
 	Trickplay(ctx context.Context, profile, part uuid.UUID) (store.Trickplay, error)
-	HasChapterImage(ctx context.Context, profile, part uuid.UUID, idx int) error
 }
 
 type previewFiles interface {
@@ -56,36 +55,19 @@ func (a *API) trickplaySheet(w http.ResponseWriter, r *http.Request) {
 	a.servePreview(w, r, func() (*os.File, error) { return a.svc.PreviewFiles.Sheet(id, n) })
 }
 
+// chapterImage serves a chapter's picture at the address a title's page signed for the profile
+// that could see it.
 func (a *API) chapterImage(w http.ResponseWriter, r *http.Request) {
-	part, idx, ok := a.chapterOf(w, r)
-	if !ok || a.answered(w, r, a.svc.Previews.HasChapterImage(r.Context(), sessionOf(r).Profile.ID, part, idx)) {
-		return
-	}
-	a.servePreview(w, r, func() (*os.File, error) { return a.svc.PreviewFiles.ChapterImage(part, idx) })
-}
-
-// signedChapterImage serves a chapter's picture at the address a title's page signed for the
-// profile that could see it.
-func (a *API) signedChapterImage(w http.ResponseWriter, r *http.Request) {
-	part, idx, ok := a.chapterOf(w, r)
+	part, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
-	}
-	a.servePreview(w, r, func() (*os.File, error) { return a.svc.PreviewFiles.ChapterImage(part, idx) })
-}
-
-// chapterOf reads the part and chapter a path names.
-func (a *API) chapterOf(w http.ResponseWriter, r *http.Request) (uuid.UUID, int, bool) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return id, 0, false
 	}
 	idx, err := strconv.Atoi(r.PathValue("idx"))
 	if err != nil {
 		writeProblem(w, a.logger, codeNotFound, "")
-		return id, 0, false
+		return
 	}
-	return id, idx, true
+	a.servePreview(w, r, func() (*os.File, error) { return a.svc.PreviewFiles.ChapterImage(part, idx) })
 }
 
 // servePreview serves a preview's JPEG. A part's previews are made again only from the same bytes,

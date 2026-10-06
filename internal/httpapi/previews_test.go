@@ -29,13 +29,6 @@ func (fakePreviews) Trickplay(_ context.Context, profile, part uuid.UUID) (store
 	return store.Trickplay{Width: 320, Height: 180, IntervalMS: 10_000, Columns: 10, Rows: 10, Thumbnails: 105, Sheets: 2}, nil
 }
 
-func (fakePreviews) HasChapterImage(_ context.Context, profile, part uuid.UUID, idx int) error {
-	if profile != oliver.ID || part != previewedPart || idx != 0 {
-		return store.ErrNotFound
-	}
-	return nil
-}
-
 func (f fakePreviews) Sheet(_ uuid.UUID, n int) (*os.File, error) {
 	return os.Open(filepath.Join(f.dir, "sheet"+string(rune('0'+n))+".jpg"))
 }
@@ -78,10 +71,7 @@ func TestPreviewsAreServedToThoseWhoMaySeeTheTitle(t *testing.T) {
 		rec.Header().Get("Cache-Control") != "private, max-age=31536000, immutable" {
 		t.Errorf("the second sheet: %d %v %q", rec.Code, rec.Header(), rec.Body)
 	}
-	if rec := get(goodToken, base+"/chapters/0/image"); rec.Code != http.StatusOK || rec.Body.String() != "\xff\xd8chapter.jpg" {
-		t.Errorf("the first chapter's image: %d %q", rec.Code, rec.Body)
-	}
-	signed := signer.Sign(base+"/chapter-images/0", time.Now().Add(time.Hour))
+	signed := signer.Sign(base+"/chapters/0/image", time.Now().Add(time.Hour))
 	if rec := get("", signed); rec.Code != http.StatusOK || rec.Body.String() != "\xff\xd8chapter.jpg" {
 		t.Errorf("the first chapter's image at its signed address, with no token: %d %q", rec.Code, rec.Body)
 	}
@@ -89,15 +79,14 @@ func TestPreviewsAreServedToThoseWhoMaySeeTheTitle(t *testing.T) {
 		token, target string
 		want          int
 	}{
-		{"", base + "/chapter-images/0", http.StatusUnauthorized},
-		{"", signer.Sign(base+"/chapter-images/1", time.Now().Add(time.Hour)), http.StatusNotFound},
+		{"", base + "/chapters/0/image", http.StatusUnauthorized},
+		{goodToken, base + "/chapters/0/image", http.StatusUnauthorized},
+		{"", signer.Sign(base+"/chapters/1/image", time.Now().Add(time.Hour)), http.StatusNotFound},
 		{goodToken, base + "/trickplay/2", http.StatusNotFound},
 		{goodToken, base + "/trickplay/-1", http.StatusNotFound},
-		{goodToken, base + "/chapters/1/image", http.StatusNotFound},
 		{goodToken, "/api/v1/parts/" + uuid.NewV7().String() + "/trickplay", http.StatusNotFound},
 		{memberToken, base + "/trickplay", http.StatusNotFound},
 		{memberToken, base + "/trickplay/0", http.StatusNotFound},
-		{memberToken, base + "/chapters/0/image", http.StatusNotFound},
 		{"", base + "/trickplay/0", http.StatusUnauthorized},
 	} {
 		if rec := get(tc.token, tc.target); rec.Code != tc.want {
