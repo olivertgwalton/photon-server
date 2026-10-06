@@ -703,5 +703,3 @@ func keep(root *os.Root, name string, data []byte) error {
 	}
 	return root.Rename(part, name)
 }
-
-// tail keeps the end of what ffmpeg says, for its error.
