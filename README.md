@@ -135,6 +135,11 @@ intros, one preview, one conversion and two webhook deliveries. A large import's
 holds up its matching, nor matching a scan, and a title a scan has just found is matched before the
 nightly refresh of those matched already.
 
+A scan reads only what changed, as Plex does: a folder whose files are all as they were is passed
+over, and in one that changed, a file the same size with the same modification time as at the last
+scan is not opened. A file that changed only its modification time, as every file does when some
+mounts are remounted, is read for its first and last 64 KiB, recognised and not probed again.
+
 A network mount that stops answering blocks a read forever, so every FFmpeg run over a library
 file has a limit: five minutes for one that reads part of a file (a probe, a chapter picture, an
 intro's sound), five minutes plus the file at 8 MiB a second for one that reads all of it
