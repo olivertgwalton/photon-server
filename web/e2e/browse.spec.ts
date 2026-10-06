@@ -176,13 +176,19 @@ test("a film's page plays the copy and tracks chosen", async ({ page }) => {
 		"href",
 		"/play/t-trailer",
 	);
-	await expect(extras.locator("img")).toHaveAttribute(
-		"src",
-		"/api/v1/parts/p-trailer/chapters/0/image",
-	);
 	await expect(
-		extras.getByRole("link", { name: /Making Quiet Hours/ }),
-	).toHaveAttribute("href", "https://www.youtube.com/watch?v=quiet");
+		extras.getByRole("link", { name: /Trailer/ }).locator("img"),
+	).toHaveAttribute("src", "/api/v1/parts/p-trailer/chapters/0/image");
+	const remote = extras.getByRole("link", { name: /Making Quiet Hours/ });
+	await expect(remote).toHaveAttribute(
+		"href",
+		"https://www.youtube.com/watch?v=quiet",
+	);
+	// Its still comes from this server, never from YouTube.
+	await expect(remote.locator("img")).toHaveAttribute(
+		"src",
+		/^\/api\/v1\/artwork\//,
+	);
 	const collections = page.getByRole("region", { name: "Collections" });
 	await expect(
 		collections.getByRole("link", { name: /Quiet Collection/ }),

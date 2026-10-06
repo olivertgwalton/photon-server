@@ -49,7 +49,7 @@ const collections = $derived(
 			{#snippet card(
 				item: Extra,
 			)}
-				<ExtraCard {item} />
+				<ExtraCard {item} sizes="20rem" />
 			{/snippet}
 		</CardGrid>
 	{:else if data.run === "collections"}
