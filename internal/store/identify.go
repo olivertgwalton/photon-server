@@ -106,6 +106,9 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 		if err := saveGroupings(ctx, tx, item, source, m.Collections); err != nil {
 			return err
 		}
+		if err := saveAiring(ctx, tx, item, source, m.NextAiring); err != nil {
+			return err
+		}
 		credits := []credited{{item, m.Credits}}
 		for number, season := range seasons {
 			var seasonID uuid.UUID

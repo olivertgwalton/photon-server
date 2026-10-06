@@ -57,6 +57,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"remote_video_source":      plugins([]string{string(domain.SourceTMDB), string(domain.SourceTVDB)}),
 		"task_key":                 names(domain.TaskKeys()),
 		"task_result":              names(domain.TaskResults()),
+		"airing_source":            plugins([]string{string(domain.SourceTMDB)}),
 		"rating_source":            plugins(names(domain.RatingSources())),
 		"rating_site":              names(domain.RatingSites()),
 		"collection_origin":        names(domain.CollectionOrigins()),

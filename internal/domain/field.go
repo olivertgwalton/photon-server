@@ -26,9 +26,20 @@ type Metadata struct {
 	Collections []Grouping
 	// Credits are its cast and crew, in the source's order.
 	Credits []Credit
+	// NextAiring is a show's next episode to air, nil where the source knows of none. It too is
+	// kept per source.
+	NextAiring *Airing
 	// Locked fields are claimed at this source's rank even where it gives no value, so no lower
 	// source fills them.
 	Locked []Field
+}
+
+// Airing is an episode a provider lists as yet to air, which may have no file yet.
+type Airing struct {
+	SeasonNumber  int
+	EpisodeNumber int
+	Title         string
+	Date          time.Time
 }
 
 // Candidate is a title a provider offers as a match, and its poster to tell it by.
