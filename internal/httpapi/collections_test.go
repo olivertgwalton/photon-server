@@ -19,7 +19,10 @@ var (
 )
 
 // fakeCollections has TMDB's Alien set in the films library, and one an admin made.
-type fakeCollections struct{ set []uuid.UUID }
+type fakeCollections struct {
+	set    []uuid.UUID
+	placed domain.CollectionPlacement
+}
 
 func (fakeCollections) Collections(_ context.Context, lib, _ uuid.UUID, offset, _ int) ([]store.Card, int64, error) {
 	if lib != films {
@@ -53,6 +56,14 @@ func (f *fakeCollections) SetMembers(_ context.Context, id uuid.UUID, items []uu
 	return store.ErrNotFound
 }
 
+func (f *fakeCollections) SetPlacement(_ context.Context, id uuid.UUID, placement domain.CollectionPlacement) error {
+	if id != alienSet && id != mySet {
+		return store.ErrNotFound
+	}
+	f.placed = placement
+	return nil
+}
+
 func (fakeCollections) RemoveCollection(_ context.Context, id uuid.UUID) error {
 	switch id {
 	case alienSet:
@@ -79,6 +90,11 @@ func TestCollectionsAreBrowsedAndAnAdminsAreKept(t *testing.T) {
 		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `"}`, http.StatusBadRequest, ""},
 		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + mySet.String() + "/members", `{"item_ids": ["` + films.String() + `"]}`, http.StatusNoContent, ""},
 		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + alienSet.String() + "/members", `{"item_ids": []}`, http.StatusConflict, ""},
+		{memberToken, http.MethodPut, "/api/v1/admin/collections/" + alienSet.String() + "/placement", `{"placement": "home"}`, http.StatusForbidden, ""},
+		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + alienSet.String() + "/placement", `{"placement": "pinned"}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + alienSet.String() + "/placement", `{}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + uuid.NewV7().String() + "/placement", `{"placement": "home"}`, http.StatusNotFound, ""},
+		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + alienSet.String() + "/placement", `{"placement": "home"}`, http.StatusNoContent, ""},
 		{goodToken, http.MethodDelete, "/api/v1/admin/collections/" + alienSet.String(), "", http.StatusConflict, ""},
 		{goodToken, http.MethodDelete, "/api/v1/admin/collections/" + mySet.String(), "", http.StatusNoContent, ""},
 	} {
@@ -92,5 +108,8 @@ func TestCollectionsAreBrowsedAndAnAdminsAreKept(t *testing.T) {
 	}
 	if len(c.set) != 1 || c.set[0] != films {
 		t.Errorf("members set: %v", c.set)
+	}
+	if c.placed != domain.PlacementHome {
+		t.Errorf("TMDB's set is placed %q, want home", c.placed)
 	}
 }

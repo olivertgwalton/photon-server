@@ -179,6 +179,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/collections/{id}/placement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Show a collection on the home page, or in its library only
+         * @description Admin only.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Placement"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/events": {
         parameters: {
             query?: never;
@@ -5209,6 +5253,9 @@ export interface components {
         PinMatch: {
             id: string;
             provider: components["schemas"]["Provider"];
+        };
+        Placement: {
+            placement: components["schemas"]["CollectionPlacement"];
         };
         Play: {
             audio_stream?: number | null;
