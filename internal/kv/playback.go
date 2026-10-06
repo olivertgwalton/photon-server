@@ -3,9 +3,7 @@ package kv
 import (
 	"context"
 	"encoding/json"
-	"iter"
 	"strconv"
-	"strings"
 	"time"
 	"uuid"
 
@@ -14,7 +12,10 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-const playbackPrefix = "photon:play:"
+const (
+	playbackPrefix = "photon:play:"
+	playbackIndex  = "photon:plays"
+)
 
 func playbackKey(id uuid.UUID) string { return playbackPrefix + id.String() }
 
@@ -35,6 +36,7 @@ func (k *KV) SavePlayback(ctx context.Context, p domain.Playback, ttl time.Durat
 			FieldValue("updated", strconv.FormatInt(p.Updated.Unix(), 10)).
 			FieldValue("node", p.Node.String()).FieldValue("card", string(card)).Build(),
 		cmds.Expire().Key(key).Seconds(int64(ttl.Seconds())).Build(),
+		k.index(playbackIndex, p.ID, ttl),
 	) {
 		if err := r.Error(); err != nil {
 			return err
@@ -49,6 +51,11 @@ func (k *KV) Playback(ctx context.Context, id uuid.UUID) (domain.Playback, bool,
 	if err != nil || len(m) == 0 {
 		return domain.Playback{}, false, err
 	}
+	p, err := playbackOf(id, m)
+	return p, err == nil, err
+}
+
+func playbackOf(id uuid.UUID, m map[string]string) (domain.Playback, error) {
 	p := domain.Playback{ID: id, Method: domain.PlayMethod(m["method"]), State: domain.PlayState(m["state"])}
 	p.Profile, _ = uuid.Parse(m["profile"])
 	p.Item, _ = uuid.Parse(m["item"])
@@ -59,17 +66,18 @@ func (k *KV) Playback(ctx context.Context, id uuid.UUID) (domain.Playback, bool,
 	started, _ := strconv.ParseInt(m["started"], 10, 64)
 	updated, _ := strconv.ParseInt(m["updated"], 10, 64)
 	p.Started, p.Updated = time.Unix(started, 0), time.Unix(updated, 0)
-	if err := json.Unmarshal([]byte(m["card"]), &p.Card); err != nil {
-		return domain.Playback{}, false, err
-	}
-	return p, true, nil
+	err := json.Unmarshal([]byte(m["card"]), &p.Card)
+	return p, err
 }
 
 func (k *KV) EndPlayback(ctx context.Context, id uuid.UUID) error {
-	return k.client.Do(ctx, k.client.B().Del().Key(playbackKey(id)).Build()).Error()
+	return k.end(ctx, playbackIndex, playbackPrefix, id)
 }
 
-const nodePrefix = "photon:node:"
+const (
+	nodePrefix = "photon:node:"
+	nodeIndex  = "photon:nodes"
+)
 
 func nodeKey(id uuid.UUID) string { return nodePrefix + id.String() }
 
@@ -88,6 +96,7 @@ func (k *KV) SetNode(ctx context.Context, id uuid.UUID, address string, ttl time
 		cmds.Hset().Key(key).FieldValue().FieldValue("address", address).
 			FieldValue("seen", strconv.FormatInt(time.Now().Unix(), 10)).Build(),
 		cmds.Expire().Key(key).Seconds(int64(ttl.Seconds())).Build(),
+		k.index(nodeIndex, id, ttl),
 	) {
 		if err := r.Error(); err != nil {
 			return err
@@ -107,61 +116,95 @@ func (k *KV) NodeAddress(ctx context.Context, id uuid.UUID) (string, bool, error
 
 // Nodes answers every node that has said where its peers reach it and not gone quiet.
 func (k *KV) Nodes(ctx context.Context) ([]Node, error) {
-	var out []Node
-	for id, err := range k.ids(ctx, nodePrefix) {
-		if err != nil {
-			return nil, err
-		}
-		m, err := k.client.Do(ctx, k.client.B().Hgetall().Key(nodeKey(id)).Build()).AsStrMap()
-		if err != nil {
-			return nil, err
-		}
-		// One may go quiet between the scan and the read.
-		if len(m) == 0 {
-			continue
-		}
-		seen, _ := strconv.ParseInt(m["seen"], 10, 64)
-		out = append(out, Node{ID: id, Address: m["address"], Seen: time.Unix(seen, 0)})
+	listed, err := k.listed(ctx, nodeIndex, nodePrefix)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Node, len(listed))
+	for i, l := range listed {
+		seen, _ := strconv.ParseInt(l.fields["seen"], 10, 64)
+		out[i] = Node{ID: l.id, Address: l.fields["address"], Seen: time.Unix(seen, 0)}
 	}
 	return out, nil
 }
 
-// Playbacks answers every playback going on, across the cluster, by scanning their keys: there are
-// as many as there are people watching.
+// Playbacks answers every playback going on, across the cluster.
 func (k *KV) Playbacks(ctx context.Context) ([]domain.Playback, error) {
-	var out []domain.Playback
-	for id, err := range k.ids(ctx, playbackPrefix) {
-		if err != nil {
+	listed, err := k.listed(ctx, playbackIndex, playbackPrefix)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Playback, len(listed))
+	for i, l := range listed {
+		if out[i], err = playbackOf(l.id, l.fields); err != nil {
 			return nil, err
-		}
-		// One may lapse between the scan and the read.
-		if p, ok, err := k.Playback(ctx, id); err != nil {
-			return nil, err
-		} else if ok {
-			out = append(out, p)
 		}
 	}
 	return out, nil
 }
 
-// ids yields the id each key under prefix ends in.
-func (k *KV) ids(ctx context.Context, prefix string) iter.Seq2[uuid.UUID, error] {
-	return func(yield func(uuid.UUID, error) bool) {
-		var cursor uint64
-		for {
-			e, err := k.client.Do(ctx, k.client.B().Scan().Cursor(cursor).Match(prefix+"*").Count(100).Build()).AsScanEntry()
-			if err != nil {
-				yield(uuid.UUID{}, err)
-				return
-			}
-			for _, key := range e.Elements {
-				if id, err := uuid.Parse(strings.TrimPrefix(key, prefix)); err == nil && !yield(id, nil) {
-					return
-				}
-			}
-			if cursor = e.Cursor; cursor == 0 {
-				return
-			}
+// An index lists the ids of one kind of key, each scored by when it lapses, so they are listed
+// without scanning every key in a Valkey that may be shared. A key is the truth: one that lapsed
+// or was ended is left out however its index reads.
+
+// index is the command that lists id in index until ttl has passed.
+func (k *KV) index(index string, id uuid.UUID, ttl time.Duration) valkey.Completed {
+	return k.client.B().Zadd().Key(index).ScoreMember().
+		ScoreMember(float64(time.Now().Add(ttl).UnixMilli()), id.String()).Build()
+}
+
+// end deletes the key under prefix for id and its place in index.
+func (k *KV) end(ctx context.Context, index, prefix string, id uuid.UUID) error {
+	cmds := k.client.B()
+	for _, r := range k.client.DoMulti(ctx,
+		cmds.Del().Key(prefix+id.String()).Build(),
+		cmds.Zrem().Key(index).Member(id.String()).Build(),
+	) {
+		if err := r.Error(); err != nil {
+			return err
 		}
 	}
+	return nil
+}
+
+type listing struct {
+	id     uuid.UUID
+	fields map[string]string
+}
+
+// listed answers the fields of every key index lists that has not lapsed, read together, and
+// forgets what has lapsed.
+func (k *KV) listed(ctx context.Context, index, prefix string) ([]listing, error) {
+	cmds := k.client.B()
+	now := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	res := k.client.DoMulti(ctx,
+		cmds.Zremrangebyscore().Key(index).Min("-inf").Max(now).Build(),
+		cmds.Zrange().Key(index).Min("0").Max("-1").Build(),
+	)
+	if err := res[0].Error(); err != nil {
+		return nil, err
+	}
+	members, err := res[1].AsStrSlice()
+	if err != nil || len(members) == 0 {
+		return nil, err
+	}
+	var ids []uuid.UUID
+	reads := make(valkey.Commands, 0, len(members))
+	for _, m := range members {
+		if id, err := uuid.Parse(m); err == nil {
+			ids = append(ids, id)
+			reads = append(reads, cmds.Hgetall().Key(prefix+m).Build())
+		}
+	}
+	var out []listing
+	for i, r := range k.client.DoMulti(ctx, reads...) {
+		fields, err := r.AsStrMap()
+		if err != nil {
+			return nil, err
+		}
+		if len(fields) > 0 {
+			out = append(out, listing{ids[i], fields})
+		}
+	}
+	return out, nil
 }

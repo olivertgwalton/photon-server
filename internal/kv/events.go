@@ -25,7 +25,10 @@ func (k *KV) ReceiveEvents(ctx context.Context, fn func(message string)) error {
 	})
 }
 
-const scanPrefix = "photon:scan:"
+const (
+	scanPrefix = "photon:scan:"
+	scanIndex  = "photon:scans"
+)
 
 func scanKey(lib uuid.UUID) string { return scanPrefix + lib.String() }
 
@@ -37,6 +40,7 @@ func (k *KV) SaveScan(ctx context.Context, p domain.ScanProgress, ttl time.Durat
 		cmds.Hset().Key(key).FieldValue().FieldValue("phase", string(p.Phase)).
 			FieldValue("done", strconv.Itoa(p.Done)).FieldValue("known", strconv.Itoa(p.Known)).Build(),
 		cmds.Expire().Key(key).Seconds(int64(ttl.Seconds())).Build(),
+		k.index(scanIndex, p.Library, ttl),
 	) {
 		if err := r.Error(); err != nil {
 			return err
@@ -46,27 +50,20 @@ func (k *KV) SaveScan(ctx context.Context, p domain.ScanProgress, ttl time.Durat
 }
 
 func (k *KV) EndScan(ctx context.Context, lib uuid.UUID) error {
-	return k.client.Do(ctx, k.client.B().Del().Key(scanKey(lib)).Build()).Error()
+	return k.end(ctx, scanIndex, scanPrefix, lib)
 }
 
 // Scans answers every scan going on, across the cluster.
 func (k *KV) Scans(ctx context.Context) ([]domain.ScanProgress, error) {
-	var out []domain.ScanProgress
-	for lib, err := range k.ids(ctx, scanPrefix) {
-		if err != nil {
-			return nil, err
-		}
-		m, err := k.client.Do(ctx, k.client.B().Hgetall().Key(scanKey(lib)).Build()).AsStrMap()
-		if err != nil {
-			return nil, err
-		}
-		if len(m) == 0 {
-			continue
-		}
-		p := domain.ScanProgress{Library: lib, Phase: domain.ScanPhase(m["phase"])}
-		p.Done, _ = strconv.Atoi(m["done"])
-		p.Known, _ = strconv.Atoi(m["known"])
-		out = append(out, p)
+	listed, err := k.listed(ctx, scanIndex, scanPrefix)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.ScanProgress, len(listed))
+	for i, l := range listed {
+		out[i] = domain.ScanProgress{Library: l.id, Phase: domain.ScanPhase(l.fields["phase"])}
+		out[i].Done, _ = strconv.Atoi(l.fields["done"])
+		out[i].Known, _ = strconv.Atoi(l.fields["known"])
 	}
 	return out, nil
 }
