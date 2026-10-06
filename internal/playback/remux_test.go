@@ -40,8 +40,6 @@ func (o opened) Open(playback uuid.UUID, c hls.Copy) error {
 	return nil
 }
 
-func (opened) Close(uuid.UUID) {}
-
 func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 	copyOf := func(c Copy) store.PlayCopy {
 		return store.PlayCopy{

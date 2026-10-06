@@ -40,12 +40,12 @@ func Theme(name string) bool {
 	return (dir == "" && strings.EqualFold(strings.TrimSuffix(file, path.Ext(file)), "theme")) || ThemeFolder(path.Clean(dir))
 }
 
-func IsVideo(name string) bool {
-	return slices.Contains(videoExtensions, strings.ToLower(path.Ext(name)))
-}
+func IsVideo(name string) bool { return hasExt(videoExtensions, name) }
 
-func IsSubtitle(name string) bool {
-	return slices.Contains(subtitleExtensions, strings.ToLower(path.Ext(name)))
+func IsSubtitle(name string) bool { return hasExt(subtitleExtensions, name) }
+
+func hasExt(list []string, name string) bool {
+	return slices.Contains(list, strings.ToLower(path.Ext(name)))
 }
 
 // ignoredNames are folders and files a library never holds titles in: NAS and OS housekeeping,

@@ -108,7 +108,7 @@ func (r *Remuxer) WebVTT(ctx context.Context, open func() (*os.File, error), lan
 		return "", err
 	}
 	defer f.Close()
-	a := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3"}
+	a := fdInput()
 	charset, err := subtitleCharset(f, language)
 	if err != nil {
 		return "", err
@@ -192,7 +192,7 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, streams []int
 		return err
 	}
 	defer os.RemoveAll(made)
-	a := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3", "-i", "fd:"}
+	a := append(fdInput(), "-i", "fd:")
 	for _, n := range streams {
 		a = append(a, "-map", "0:"+strconv.Itoa(n), "-c:s", "webvtt", "-f", "webvtt", filepath.Join(made, strconv.Itoa(n)+".vtt"))
 	}

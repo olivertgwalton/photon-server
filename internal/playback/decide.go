@@ -235,11 +235,10 @@ func (p Profile) opens(container string) bool {
 }
 
 func (p Profile) videoReasons(s domain.Stream) []domain.TranscodeReason {
-	i := slices.IndexFunc(p.Video, func(v VideoSupport) bool { return v.Codec == s.Codec })
-	if i < 0 {
+	v, ok := p.video(s.Codec)
+	if !ok {
 		return []domain.TranscodeReason{domain.VideoCodecNotSupported}
 	}
-	v := p.Video[i]
 	var r []domain.TranscodeReason
 	if len(v.Profiles) > 0 && s.Profile != "" &&
 		!slices.ContainsFunc(v.Profiles, func(name string) bool { return strings.EqualFold(name, s.Profile) }) {
@@ -293,9 +292,9 @@ func (v VideoSupport) ranges() []domain.Range {
 // showsDolbyVision reports whether the client shows a stream's Dolby Vision itself, not only its
 // base layer.
 func (p Profile) showsDolbyVision(s domain.Stream) bool {
-	i := slices.IndexFunc(p.Video, func(v VideoSupport) bool { return v.Codec == s.Codec })
-	return i >= 0 && slices.Contains(p.Video[i].Ranges, domain.RangeDV) &&
-		(len(p.Video[i].DolbyVisionProfiles) == 0 || slices.Contains(p.Video[i].DolbyVisionProfiles, s.DolbyVision.Profile))
+	v, ok := p.video(s.Codec)
+	return ok && slices.Contains(v.Ranges, domain.RangeDV) &&
+		(len(v.DolbyVisionProfiles) == 0 || slices.Contains(v.DolbyVisionProfiles, s.DolbyVision.Profile))
 }
 
 // showsBase reports whether the client shows a Dolby Vision stream's base layer by itself.
@@ -321,6 +320,14 @@ func (p Profile) audioReasons(s domain.Stream) []domain.TranscodeReason {
 		return []domain.TranscodeReason{domain.AudioChannelsNotSupported}
 	}
 	return nil
+}
+
+func (p Profile) video(codec string) (VideoSupport, bool) {
+	i := slices.IndexFunc(p.Video, func(v VideoSupport) bool { return v.Codec == codec })
+	if i < 0 {
+		return VideoSupport{}, false
+	}
+	return p.Video[i], true
 }
 
 func (p Profile) audio(codec string) (AudioSupport, bool) {
@@ -391,11 +398,10 @@ func (p Profile) videoEncode(s domain.Stream, copyKbps int, hevc domain.HEVCEnco
 	case domain.HEVCDeny:
 	}
 	for _, codec := range codecs {
-		i := slices.IndexFunc(p.Video, func(v VideoSupport) bool { return v.Codec == string(codec) })
-		if i < 0 {
+		v, ok := p.video(string(codec))
+		if !ok {
 			continue
 		}
-		v := p.Video[i]
 		width, height := fit(s.Width, s.Height, v.MaxWidth, v.MaxHeight)
 		kbps := scaleBitrate(cmp.Or(copyKbps, sourceKbps), s.Codec, codec)
 		if p.MaxBitrateKbps > 0 {

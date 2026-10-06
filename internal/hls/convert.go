@@ -25,7 +25,7 @@ const convertStall = 5 * time.Minute
 func (h Hardware) Convert(ctx context.Context, ffmpeg string, src *os.File, video domain.VideoPlan, audio *domain.AudioPlan, duration time.Duration, dst string, progress func(float64) error) error {
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
-	a := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3"}
+	a := fdInput()
 	if video.Encode != nil {
 		a = append(a, h.inputArgs(video.Codec, *video.Encode)...)
 	}

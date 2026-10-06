@@ -68,7 +68,7 @@ func TestParseEpisode(t *testing.T) {
 			if !ok {
 				t.Fatalf("ParseEpisode(%q): no episode", tt.stem)
 			}
-			got.Rule, got.Title = "", ""
+			got.Title = ""
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("ParseEpisode(%q) (-want +got):\n%s", tt.stem, diff)
 			}

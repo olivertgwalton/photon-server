@@ -542,11 +542,16 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	return cmd.Err(cmd.Wait())
 }
 
+// fdInput starts an ffmpeg run that reads the file media.NewCommand passes it as descriptor 3.
+func fdInput() []string {
+	return []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3"}
+}
+
 // args copies or encodes a file's video and its audio into fragmented MP4 on stdout, from start,
 // on the file's own clock (see clockOffset). Copied video starts at the keyframe at start; encoded
 // video makes one there and every SegmentLength after, on hw.
 func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan) []string {
-	a := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3"}
+	a := fdInput()
 	hw = hw.encoding(video)
 	if video.Encode != nil {
 		a = append(a, hw.inputArgs(video.Codec, *video.Encode)...)
@@ -698,5 +703,3 @@ func keep(root *os.Root, name string, data []byte) error {
 	}
 	return root.Rename(part, name)
 }
-
-// tail keeps the end of what ffmpeg says, for its error.

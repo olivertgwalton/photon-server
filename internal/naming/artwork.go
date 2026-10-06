@@ -3,7 +3,6 @@ package naming
 import (
 	"path"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -12,9 +11,7 @@ import (
 
 var imageExtensions = []string{".jpg", ".jpeg", ".png", ".webp", ".tbn"}
 
-func IsImage(name string) bool {
-	return slices.Contains(imageExtensions, strings.ToLower(path.Ext(name)))
-}
+func IsImage(name string) bool { return hasExt(imageExtensions, name) }
 
 // artworkNames are Jellyfin's and Kodi's names for a folder's own pictures.
 var artworkNames = map[string]domain.ArtworkKind{

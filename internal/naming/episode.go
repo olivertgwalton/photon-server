@@ -25,11 +25,9 @@ type Episode struct {
 	// Title is what the name says after its marker ("S01E01 - Pilot"), empty where it says nothing.
 	Title      string
 	Confidence Confidence
-	Rule       string
 }
 
 type episodeRule struct {
-	name       string
 	confidence Confidence
 	parse      func(stem, series string) (Episode, bool)
 }
@@ -37,18 +35,18 @@ type episodeRule struct {
 // episodeRules are tried in order; canonical forms come before the bare numbers that would
 // otherwise read a canonical name's digits as an episode.
 var episodeRules = []episodeRule{
-	{"sxxeyy", ConfidenceHigh, parseSxxEyy},
-	{"nxnn", ConfidenceHigh, parseNxNN},
-	{"season_episode_words", ConfidenceHigh, parseSeasonEpisodeWords},
-	{"air_date", ConfidenceHigh, parseAirDate},
-	{"episode_word", ConfidenceHigh, parseEpisodeWord},
-	{"e_token", ConfidenceHigh, parseEToken},
-	{"dash_number", ConfidenceMedium, parseDashNumber},
-	{"bracket_number", ConfidenceMedium, parseBracketNumber},
-	{"series_then_season_episode_digits", ConfidenceMedium, parseSeriesDigits},
-	{"leading_number", ConfidenceMedium, parseLeadingNumber},
-	{"dash_number_inside", ConfidenceMedium, parseInnerDashNumber},
-	{"trailing_number", ConfidenceMedium, parseTrailingNumber},
+	{ConfidenceHigh, parseSxxEyy},
+	{ConfidenceHigh, parseNxNN},
+	{ConfidenceHigh, parseSeasonEpisodeWords},
+	{ConfidenceHigh, parseAirDate},
+	{ConfidenceHigh, parseEpisodeWord},
+	{ConfidenceHigh, parseEToken},
+	{ConfidenceMedium, parseDashNumber},
+	{ConfidenceMedium, parseBracketNumber},
+	{ConfidenceMedium, parseSeriesDigits},
+	{ConfidenceMedium, parseLeadingNumber},
+	{ConfidenceMedium, parseInnerDashNumber},
+	{ConfidenceMedium, parseTrailingNumber},
 }
 
 // ParseEpisode reads an episode's file name. series is the series folder's name, which a few
@@ -57,7 +55,6 @@ func ParseEpisode(stem, series string) (Episode, bool) {
 	for _, r := range episodeRules {
 		if ep, ok := r.parse(stem, series); ok {
 			ep.Confidence = r.confidence
-			ep.Rule = r.name
 			return ep, true
 		}
 	}

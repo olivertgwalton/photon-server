@@ -25,7 +25,6 @@ type partStore interface {
 
 type remuxer interface {
 	Open(playback uuid.UUID, c hls.Copy) error
-	Close(playback uuid.UUID)
 }
 
 // Remuxes opens a playback's copy as HLS: each of its files cut at its keyframes where the video
@@ -113,8 +112,6 @@ func subtitle(title string, lang language.Tag, def, forced, sdh bool) hls.Subtit
 	}
 	return s
 }
-
-func (r *Remuxes) Close(playback uuid.UUID) { r.hls.Close(playback) }
 
 // keyframes answers a part's keyframes where they are known. One its library finds but has not
 // reached yet has its job moved to the front, so the next play is cut at them.
