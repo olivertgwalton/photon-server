@@ -3,13 +3,16 @@
 package kv
 
 import (
+	"context"
 	"os"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 	"uuid"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/valkey-io/valkey-go"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
@@ -95,5 +98,87 @@ func TestValkeySaysItsVersion(t *testing.T) {
 	defer k.Close()
 	if v, err := k.Version(t.Context()); v == "" || err != nil {
 		t.Errorf("Version = %q, %v", v, err)
+	}
+}
+
+// counting is a client that counts the round trips made through it and the commands sent.
+type counting struct {
+	valkey.Client
+	mu    sync.Mutex
+	trips int
+	sent  []string
+}
+
+func (c *counting) note(cmds ...valkey.Completed) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.trips++
+	for _, cmd := range cmds {
+		c.sent = append(c.sent, cmd.Commands()[0])
+	}
+}
+
+func (c *counting) Do(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+	c.note(cmd)
+	return c.Client.Do(ctx, cmd)
+}
+
+func (c *counting) DoMulti(ctx context.Context, cmds ...valkey.Completed) []valkey.ValkeyResult {
+	c.note(cmds...)
+	return c.Client.DoMulti(ctx, cmds...)
+}
+
+// Listing what is going on reads the few keys it lists, together, however many other keys a
+// shared Valkey holds: it never walks the keyspace.
+func TestListingReadsNoKeyItDoesNotList(t *testing.T) {
+	k, err := Open(os.Getenv("TEST_VALKEY_URL"))
+	if err != nil {
+		t.Fatalf("TEST_VALKEY_URL: %v", err)
+	}
+	defer k.Close()
+	ctx := t.Context()
+	var ids []uuid.UUID
+	for range 5 {
+		id := uuid.NewV7()
+		ids = append(ids, id)
+		if err := k.SavePlayback(ctx, domain.Playback{ID: id, Card: domain.PlaybackCard{}}, time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		if err := k.SetNode(ctx, id, "http://10.0.0.5:8640", time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		if err := k.SaveScan(ctx, domain.ScanProgress{Library: id, Phase: domain.ScanReading}, time.Minute); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		for _, id := range ids {
+			_ = k.EndPlayback(context.WithoutCancel(ctx), id)
+			_ = k.EndScan(context.WithoutCancel(ctx), id)
+		}
+	})
+	c := &counting{Client: k.client}
+	k.client = c
+	plays, err := k.Playbacks(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodes, err := k.Nodes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scans, err := k.Scans(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids {
+		if !slices.ContainsFunc(plays, func(p domain.Playback) bool { return p.ID == id }) ||
+			!slices.ContainsFunc(nodes, func(n Node) bool { return n.ID == id }) ||
+			!slices.ContainsFunc(scans, func(s domain.ScanProgress) bool { return s.Library == id }) {
+			t.Fatalf("%v is not listed among %d playbacks, %d nodes and %d scans", id, len(plays), len(nodes), len(scans))
+		}
+	}
+	if slices.Contains(c.sent, "SCAN") || c.trips > 6 {
+		t.Errorf("listing three kinds took %d round trips, sending %v; want two each and no SCAN", c.trips, slices.Compact(slices.Sorted(slices.Values(c.sent))))
 	}
 }
