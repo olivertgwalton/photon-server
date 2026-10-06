@@ -100,11 +100,9 @@ type Delivery struct {
 // removed.
 func (s *Store) Delivery(ctx context.Context, id uuid.UUID) (Delivery, error) {
 	var d Delivery
-	var kind, body string
 	err := s.pool.QueryRow(ctx, `
 		SELECT w.url, w.secret, d.kind, d.body FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id
-		WHERE d.id = $1`, id).Scan(&d.URL, &d.Secret, &kind, &body)
-	d.Kind, d.Body = domain.EventKind(kind), []byte(body)
+		WHERE d.id = $1`, id).Scan(&d.URL, &d.Secret, &d.Kind, &d.Body)
 	return d, found(err)
 }
 
@@ -126,14 +124,10 @@ type Described struct {
 
 func (s *Store) Describe(ctx context.Context, e domain.Event) (Described, error) {
 	var d Described
-	var kind *string
 	err := s.pool.QueryRow(ctx, `
 		SELECT (SELECT name FROM profiles WHERE id = $1), i.title, i.kind, i.year,
 			(SELECT name FROM libraries WHERE id = $3)
 		FROM (SELECT 1) one LEFT JOIN items i ON i.id = $2`,
-		e.Profile, e.Item, e.Library).Scan(&d.ProfileName, &d.Title, &kind, &d.Year, &d.LibraryName)
-	if kind != nil {
-		d.TitleKind = new(domain.ItemKind(*kind))
-	}
+		e.Profile, e.Item, e.Library).Scan(&d.ProfileName, &d.Title, &d.TitleKind, &d.Year, &d.LibraryName)
 	return d, err
 }
