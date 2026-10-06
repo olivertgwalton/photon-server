@@ -88,10 +88,10 @@ func Playlist(segs []Segment, init func(part int) string, segment func(n int) st
 	return b.String()
 }
 
-// Master writes the master playlist: the video's variant at its bandwidth and its subtitles as
-// renditions in one group, the first marked default chosen by default. Names within a group must
-// differ, so a repeated one is numbered.
-func Master(subs []Subtitle, kbps int, video string, subtitle func(track int) string) string {
+// Master writes the master playlist: the video's variant and its subtitles as renditions in one
+// group, the first marked default chosen by default. Names within a group must differ, so a
+// repeated one is numbered.
+func Master(subs []Subtitle, v Variant, video string, subtitle func(track int) string) string {
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-INDEPENDENT-SEGMENTS\n")
 	seen := map[string]int{}
@@ -113,7 +113,13 @@ func Master(subs []Subtitle, kbps int, video string, subtitle func(track int) st
 		}
 		fmt.Fprintf(&b, ",URI=%q\n", subtitle(n))
 	}
-	fmt.Fprintf(&b, "#EXT-X-STREAM-INF:BANDWIDTH=%d", max(kbps, 1)*1000)
+	fmt.Fprintf(&b, "#EXT-X-STREAM-INF:BANDWIDTH=%d", max(v.BandwidthKbps, 1)*1000)
+	if len(v.Codecs) > 0 {
+		fmt.Fprintf(&b, ",CODECS=\"%s\"", strings.Join(v.Codecs, ","))
+	}
+	if v.Range != "" {
+		b.WriteString(",VIDEO-RANGE=" + v.Range)
+	}
 	if len(subs) > 0 {
 		b.WriteString(",SUBTITLES=\"subs\"")
 	}

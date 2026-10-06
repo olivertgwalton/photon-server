@@ -67,13 +67,14 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 			Part: hls.Part{Duration: duration, Keyframes: keyframes},
 		}
 	}
-	h := hls.Copy{Parts: sources, BandwidthKbps: c.BitrateKbps}
+	kbps := c.BitrateKbps
 	if e := video.Encode; e != nil {
-		h.BandwidthKbps = e.BitrateKbps
+		kbps = e.BitrateKbps
 		if audio != nil && audio.Encode != nil {
-			h.BandwidthKbps += audio.Encode.BitrateKbps
+			kbps += audio.Encode.BitrateKbps
 		}
 	}
+	h := hls.Copy{Parts: sources, Variant: variant(c.Streams, video, audio, kbps)}
 	// The parts of a copy are cut from one master, so each holds the first's streams.
 	for _, st := range c.Streams {
 		if st.Kind != domain.StreamSubtitle || !hls.TextSubtitle(st.Codec) {

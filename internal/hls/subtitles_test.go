@@ -57,9 +57,9 @@ func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
 	playback := uuid.NewV7()
 	// An external file over a film in two parts, the second an hour in.
 	err = r.Open(playback, Copy{
-		Parts:         []Source{part(time.Hour), part(time.Hour)},
-		Subtitles:     []Subtitle{{Name: "English", Language: "en", Default: true, HearingImpaired: true, Sources: []SubtitleSource{{Open: open}}}},
-		BandwidthKbps: 8000,
+		Parts:     []Source{part(time.Hour), part(time.Hour)},
+		Subtitles: []Subtitle{{Name: "English", Language: "en", Default: true, HearingImpaired: true, Sources: []SubtitleSource{{Open: open}}}},
+		Variant:   Variant{BandwidthKbps: 8000, Codecs: []string{"avc1.640029", "mp4a.40.2"}, Range: "SDR"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +70,7 @@ func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
 	}
 	for _, want := range []string{
 		`#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",LANGUAGE="en",DEFAULT=YES,AUTOSELECT=YES,FORCED=NO,CHARACTERISTICS="public.accessibility.transcribes-spoken-dialog,public.accessibility.describes-music-and-sound",URI="sub0.m3u8"`,
-		"#EXT-X-STREAM-INF:BANDWIDTH=8000000,SUBTITLES=\"subs\"\nvideo.m3u8\n",
+		"#EXT-X-STREAM-INF:BANDWIDTH=8000000,CODECS=\"avc1.640029,mp4a.40.2\",VIDEO-RANGE=SDR,SUBTITLES=\"subs\"\nvideo.m3u8\n",
 	} {
 		if !strings.Contains(master, want) {
 			t.Errorf("master =\n%s\nwant %s", master, want)
@@ -111,7 +111,7 @@ func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
 }
 
 func TestRepeatedNamesAreNumbered(t *testing.T) {
-	m := Master([]Subtitle{{Name: "English"}, {Name: "English", Forced: true}, {Language: "fr"}, {Name: "The \"Director\"\nCommentary"}}, 1, "v", subtitleName)
+	m := Master([]Subtitle{{Name: "English"}, {Name: "English", Forced: true}, {Language: "fr"}, {Name: "The \"Director\"\nCommentary"}}, Variant{BandwidthKbps: 1}, "v", subtitleName)
 	for _, want := range []string{`NAME="English",`, `NAME="English 2",DEFAULT=NO,AUTOSELECT=YES,FORCED=YES`, `NAME="fr",LANGUAGE="fr"`, `NAME="The 'Director' Commentary"`} {
 		if !strings.Contains(m, want) {
 			t.Errorf("master =\n%s\nwant %s", m, want)

@@ -89,12 +89,21 @@ func NewRemuxer(ffmpeg, dir, subtitles string, hw Hardware, limit int, log *slog
 	}, nil
 }
 
-// Copy is what a playback's HLS is made of: its parts in order, its text subtitles, and the
-// bitrate it is sent at.
+// Copy is what a playback's HLS is made of: its parts in order, its text subtitles, and how the
+// master playlist describes its video.
 type Copy struct {
-	Parts         []Source
-	Subtitles     []Subtitle
+	Parts     []Source
+	Subtitles []Subtitle
+	Variant   Variant
+}
+
+// Variant is the video's one variant as the master playlist describes it: the bitrate it is sent
+// at, its formats as RFC 6381 names them, and its VIDEO-RANGE (SDR, PQ or HLG); either of the last
+// two left out where it is not known.
+type Variant struct {
 	BandwidthKbps int
+	Codecs        []string
+	Range         string
 }
 
 // session is one playback's remux: its plan, the segments made so far, and the ffmpeg making more.
@@ -162,7 +171,7 @@ func (r *Remuxer) Open(playback uuid.UUID, c Copy) error {
 		ready: map[int]chan struct{}{}, failed: map[int]error{}, inits: map[int]bool{}, touched: time.Now(),
 	}
 	s.playlists = map[string]string{
-		MasterName: Master(c.Subtitles, c.BandwidthKbps, videoName, subtitleName),
+		MasterName: Master(c.Subtitles, c.Variant, videoName, subtitleName),
 		videoName:  Playlist(s.plan, initName, segmentName),
 	}
 	for n, sub := range c.Subtitles {
