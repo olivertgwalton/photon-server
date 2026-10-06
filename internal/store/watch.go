@@ -197,6 +197,22 @@ func (s *Store) Unwatchlist(ctx context.Context, profile, item uuid.UUID) error 
 	return s.unlist(ctx, "watchlist", profile, title)
 }
 
+// WatchlistPage answers a page of the profile's watchlist, the latest added first, and how many
+// are on it.
+func (s *Store) WatchlistPage(ctx context.Context, profile uuid.UUID, offset, limit int) ([]Card, int64, error) {
+	args := pgx.NamedArgs{"profile": profile, "offset": offset, "limit": limit}
+	var total int64
+	if err := s.pool.QueryRow(ctx, `SELECT count(*)`+onList("watchlist"), args).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := queryRows[model.Item](ctx, s.pool, listRow("watchlist"), args)
+	if err != nil {
+		return nil, 0, err
+	}
+	cards, err := s.cards(ctx, profile, rows)
+	return cards, total, err
+}
+
 // listable answers the title that goes on the watchlist for a title, as Plex lists only films and
 // shows.
 func (s *Store) listable(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {

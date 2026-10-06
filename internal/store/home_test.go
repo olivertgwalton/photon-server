@@ -510,3 +510,51 @@ func TestWatchlist(t *testing.T) {
 		t.Errorf("after watching the show through and taking Alien off, watchlist = %v, want nothing", got)
 	}
 }
+
+// The watchlist is paged across every library the profile sees, the latest put on it first.
+func TestWatchlistPage(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	admin, kid := homeLibraries(t, s, []string{"Heat", "Alien"}, []string{"The Wire"})
+	heat, alien, show := oneItem(t, s, `title = 'Heat'`).ID, oneItem(t, s, `title = 'Alien'`).ID, oneItem(t, s, `kind = 'show'`).ID
+	for _, profile := range []uuid.UUID{admin, kid} {
+		for _, id := range []uuid.UUID{heat, show, alien} {
+			if err := s.Watchlist(ctx, profile, id); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	page := func(profile uuid.UUID, offset, limit int) ([]string, int64) {
+		t.Helper()
+		cards, total, err := s.WatchlistPage(ctx, profile, offset, limit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, c := range cards {
+			out = append(out, c.Title)
+		}
+		return out, total
+	}
+	for _, tc := range []struct {
+		name          string
+		profile       uuid.UUID
+		offset, limit int
+		want          []string
+		total         int64
+	}{
+		{"everything", admin, 0, 10, []string{"Alien", "The Wire", "Heat"}, 3},
+		{"the second page of one", admin, 1, 1, []string{"The Wire"}, 3},
+		{"a profile that does not see the show", kid, 0, 10, []string{"Alien", "Heat"}, 2},
+	} {
+		if got, total := page(tc.profile, tc.offset, tc.limit); !slices.Equal(got, tc.want) || total != tc.total {
+			t.Errorf("%s: %v of %d, want %v of %d", tc.name, got, total, tc.want, tc.total)
+		}
+	}
+	if err := s.Unwatchlist(ctx, admin, show); err != nil {
+		t.Fatal(err)
+	}
+	if got, total := page(admin, 0, 10); !slices.Equal(got, []string{"Alien", "Heat"}) || total != 2 {
+		t.Errorf("after taking the show off: %v of %d, want Alien and Heat", got, total)
+	}
+}

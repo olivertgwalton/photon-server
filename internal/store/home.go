@@ -102,13 +102,17 @@ var rowQueries = map[domain.HomeRow]string{
 		ORDER BY rated.score DESC, rated.item_id DESC LIMIT @limit`,
 }
 
-// listRow is the row of one of the profile's lists, its watchlist or its favourites, the latest
-// added first.
+// onList is the titles on one of the profile's lists, its watchlist or its favourites, that it
+// sees.
+func onList(table string) string {
+	return ` FROM ` + table + ` l JOIN items i ON i.id = l.item_id
+		WHERE l.profile_id = @profile AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))`
+}
+
+// listRow is a page of one of the profile's lists, the latest added first: its home row is the
+// first.
 func listRow(table string) string {
-	return `
-		SELECT ` + itemColumnsOf("i") + ` FROM ` + table + ` l JOIN items i ON i.id = l.item_id
-		WHERE l.profile_id = @profile AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))
-		ORDER BY l.added_at DESC LIMIT @limit`
+	return `SELECT ` + itemColumnsOf("i") + onList(table) + ` ORDER BY l.added_at DESC, i.id DESC OFFSET @offset LIMIT @limit`
 }
 
 // collectionRowsQuery is, for each collection placed on the home page that the profile sees, by
@@ -150,7 +154,7 @@ func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeR
 	var rows []HomeRow
 	var lengths []int
 	var all []*model.Item
-	args := pgx.NamedArgs{"profile": profile, "limit": limit}
+	args := pgx.NamedArgs{"profile": profile, "limit": limit, "offset": 0}
 	for _, section := range prefs.Home {
 		kind := section.Row
 		if section.Visibility == domain.RowHidden {
