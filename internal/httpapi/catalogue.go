@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"uuid"
 
@@ -225,24 +226,30 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	out := searchJSON{Items: []cardJSON{}, People: []personRefJSON{}, Offset: query.Offset}
+	ctx := r.Context()
+	var wg sync.WaitGroup
+	var titlesErr, peopleErr error
 	if len(kinds) == 0 || len(query.Kinds) > 0 {
-		cards, total, err := a.svc.Catalogue.Search(r.Context(), query)
-		if err != nil {
-			a.internal(w, r, err)
-			return
-		}
-		out.Items, out.Total = cardsJSON(cards), total
+		wg.Go(func() {
+			var cards []store.Card
+			cards, out.Total, titlesErr = a.svc.Catalogue.Search(ctx, query)
+			out.Items = cardsJSON(cards)
+		})
 	}
 	if findPeople {
-		found, total, err := a.svc.People.SearchPeople(r.Context(), query.Text, query.Offset, query.Limit)
-		if err != nil {
-			a.internal(w, r, err)
-			return
-		}
-		out.People, out.PeopleTotal = make([]personRefJSON, len(found)), total
-		for i, p := range found {
-			out.People[i] = personRefJSON(p)
-		}
+		wg.Go(func() {
+			var found []store.PersonRef
+			found, out.PeopleTotal, peopleErr = a.svc.People.SearchPeople(ctx, query.Text, query.Offset, query.Limit)
+			out.People = make([]personRefJSON, len(found))
+			for i, p := range found {
+				out.People[i] = personRefJSON(p)
+			}
+		})
+	}
+	wg.Wait()
+	if err := errors.Join(titlesErr, peopleErr); err != nil {
+		a.internal(w, r, err)
+		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
