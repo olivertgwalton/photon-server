@@ -32,7 +32,7 @@ function remove() {
 	return act(
 		api.DELETE("/api/v1/admin/collections/{id}", path),
 		`${data.collection.title} was removed.`,
-		"/admin/collections",
+		"/settings/server/collections",
 	);
 }
 
@@ -80,7 +80,7 @@ function caption(card: Card) {
 		<p class="text-ink-3 mt-1 text-sm">
 			{#if editable}
 				Made here.
-				<a href="/admin/titles/{data.collection.id}" class="underline"
+				<a href="/settings/server/titles/{data.collection.id}" class="underline"
 					>Rename it, or choose its artwork</a
 				>.
 			{:else}

@@ -24,7 +24,7 @@ async function add(event: SubmitEvent) {
 		},
 	);
 	if (error) return toast.error(problemMessage(error));
-	await goto(`/admin/collections/${made.id}`);
+	await goto(`/settings/server/collections/${made.id}`);
 }
 
 const libraries = $derived(
@@ -78,7 +78,7 @@ const libraries = $derived(
 				{#each shelf.collections as collection (collection.id)}
 					<li>
 						<a
-							href="/admin/collections/{collection.id}"
+							href="/settings/server/collections/{collection.id}"
 							class="bg-raise hover:ring-line-strong flex items-center justify-between gap-3 rounded-xl p-4 ring-2 ring-transparent"
 						>
 							<span class="text-ink truncate font-semibold"

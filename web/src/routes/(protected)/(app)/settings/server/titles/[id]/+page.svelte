@@ -60,7 +60,7 @@ const name = $derived(
 	</div>
 
 	{#if refreshes}
-		<Card.Root>
+		<Card.Root id="refresh" class="scroll-mt-20">
 			<Card.Header>
 				<Card.Title><h2 class="heading">Refresh</h2></Card.Title>
 				<Card.Description>
@@ -82,7 +82,7 @@ const name = $derived(
 	{/if}
 
 	{#if matched}
-		<Card.Root>
+		<Card.Root id="identify" class="scroll-mt-20">
 			<Card.Header>
 				<Card.Title><h2 class="heading">Match</h2></Card.Title>
 				<Card.Description>
@@ -133,7 +133,7 @@ const name = $derived(
 		</Card.Root>
 	{/if}
 
-	<Card.Root>
+	<Card.Root id="edit" class="scroll-mt-20">
 		<Card.Header>
 			<Card.Title><h2 class="heading">Details</h2></Card.Title>
 			<Card.Description>
@@ -149,7 +149,7 @@ const name = $derived(
 	</Card.Root>
 
 	{#if t.kind !== "extra"}
-		<Card.Root>
+		<Card.Root id="artwork" class="scroll-mt-20">
 			<Card.Header>
 				<Card.Title><h2 class="heading">Artwork</h2></Card.Title>
 			</Card.Header>
@@ -159,8 +159,8 @@ const name = $derived(
 		</Card.Root>
 	{/if}
 
-	{#each versions as version (version.id)}
-		<Card.Root>
+	{#each versions as version, i (version.id)}
+		<Card.Root id={i ? undefined : "markers"} class="scroll-mt-20">
 			<Card.Header>
 				<Card.Title>
 					<h2 class="heading">

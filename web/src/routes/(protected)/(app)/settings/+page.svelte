@@ -2,7 +2,7 @@
 import { toast } from "svelte-sonner";
 import { invalidateAll } from "$app/navigation";
 import { client, problemMessage } from "#lib/api/client.js";
-import { logOut } from "#lib/logout.js";
+import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -10,12 +10,7 @@ import { Input } from "#lib/components/ui/input/index.js";
 
 let { data } = $props();
 // Why a change was refused, beside the card it was made in.
-let refused = $state<{ pin?: string; devices?: string }>({});
-
-const when = new Intl.DateTimeFormat(undefined, {
-	dateStyle: "medium",
-	timeStyle: "short",
-});
+let refused = $state<{ pin?: string; password?: string }>({});
 
 // A change that worked says so in a toast and redraws the page; one refused
 // says why beside it.
@@ -50,18 +45,106 @@ async function setPIN(event: SubmitEvent) {
 const clearPIN = () =>
 	change(client().DELETE("/api/v1/me/pin"), "pin", "PIN removed.");
 
-const signOut = (id: string) =>
-	change(
-		client().DELETE("/api/v1/auth/devices/{id}", { params: { path: { id } } }),
-		"devices",
-		"That device is signed out.",
-	);
+async function setPassword(event: SubmitEvent) {
+	event.preventDefault();
+	const form = event.currentTarget as HTMLFormElement;
+	const fields = new FormData(form);
+	const next = String(fields.get("new"));
+	if (next !== fields.get("again")) {
+		refused = { password: "The new password and its repeat differ." };
+		return;
+	}
+	const asked = client().PUT("/api/v1/me/password", {
+		body: { current: String(fields.get("current")), new: next },
+	});
+	if (
+		await change(
+			asked,
+			"password",
+			"Password changed. Your other devices are signed out.",
+		)
+	) {
+		form.reset();
+	}
+}
+
+const roles = { admin: "Admin", member: "Member", restricted: "Restricted" };
 </script>
 
-<svelte:head><title>Settings · Photon</title></svelte:head>
+<svelte:head><title>Profile · Settings · Photon</title></svelte:head>
 
-<div class="mx-auto grid max-w-2xl gap-6">
-	<h1 class="title">Settings</h1>
+<div class="grid max-w-2xl gap-6">
+	<header class="flex items-center gap-4">
+		<ProfileAvatar name={data.me.name} class="size-16 text-2xl" />
+		<div>
+			<h1 class="title">{data.me.name}</h1>
+			<p class="text-ink-2 text-sm">
+				{roles[data.me.role]}.
+				{#if data.me.role === "admin"}
+					Names, and what each profile may see, are changed under
+					<a href="/settings/server/profiles" class="text-ink underline"
+						>Profiles</a
+					>.
+				{:else}
+					An admin changes this profile's name and what it may see.
+				{/if}
+			</p>
+		</div>
+	</header>
+
+	{#if data.lock === "password"}
+		<Card.Root>
+			<Card.Header>
+				<Card.Title><h2 class="heading">Password</h2></Card.Title>
+				<Card.Description>
+					Changing it signs out every other device signed in as you.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content>
+				<form onsubmit={setPassword}>
+					<Field.Group>
+						<Field.Field>
+							<Field.Label for="current">Current password</Field.Label>
+							<Input
+								id="current"
+								name="current"
+								type="password"
+								autocomplete="current-password"
+								class="max-w-sm"
+								required
+							/>
+						</Field.Field>
+						<Field.Field>
+							<Field.Label for="new">New password</Field.Label>
+							<Input
+								id="new"
+								name="new"
+								type="password"
+								autocomplete="new-password"
+								class="max-w-sm"
+								required
+							/>
+						</Field.Field>
+						<Field.Field>
+							<Field.Label for="again">Repeat the new password</Field.Label>
+							<Input
+								id="again"
+								name="again"
+								type="password"
+								autocomplete="new-password"
+								class="max-w-sm"
+								required
+							/>
+						</Field.Field>
+						<Field.Error errors={[{ message: refused.password }]} />
+						<Field.Field orientation="horizontal">
+							<Button type="submit">Change password</Button>
+						</Field.Field>
+					</Field.Group>
+				</form>
+			</Card.Content>
+		</Card.Root>
+	{/if}
 
 	<Card.Root>
 		<Card.Header>
@@ -114,46 +197,5 @@ const signOut = (id: string) =>
 				</form>
 			</Card.Content>
 		{/if}
-	</Card.Root>
-
-	<Card.Root>
-		<Card.Header>
-			<Card.Title><h2 class="heading">Signed-in devices</h2></Card.Title>
-			<Card.Description>
-				Everything signed in to this household. Signing a device out ends its
-				session at once.
-			</Card.Description>
-		</Card.Header>
-		<Card.Content>
-			<ul class="divide-line divide-y">
-				{#each data.devices as device (device.id)}
-					<li class="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
-						<div class="min-w-0 flex-1">
-							<p class="text-ink font-semibold">
-								{device.device}
-								{#if device.this_device}
-									<span class="label ml-2">This browser</span>
-								{/if}
-							</p>
-							<p class="text-ink-3 text-sm">
-								{device.client}
-								· {device.profile} · last seen
-								{when.format(new Date(device.last_seen_at))}
-							</p>
-						</div>
-						<Button
-							variant="outline"
-							size="sm"
-							aria-label="Sign out {device.device}"
-							onclick={() =>
-								device.this_device ? logOut() : signOut(device.id)}
-						>
-							Sign out
-						</Button>
-					</li>
-				{/each}
-			</ul>
-			<Field.Error errors={[{ message: refused.devices }]} />
-		</Card.Content>
 	</Card.Root>
 </div>

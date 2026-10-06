@@ -23,16 +23,17 @@ async function link(event: SubmitEvent) {
 }
 </script>
 
-<svelte:head><title>Link a device · Photon</title></svelte:head>
+<svelte:head><title>Link a device · Settings · Photon</title></svelte:head>
 
-<Card.Root class="mx-auto mt-6 max-w-sm">
-	<Card.Header>
-		<Card.Title><h1 class="heading text-xl">Link a device</h1></Card.Title>
-		<Card.Description>
-			Enter the code your TV or other device is showing to sign it in as
-			{data.me.name}.
-		</Card.Description>
-	</Card.Header>
+<header class="grid max-w-2xl gap-1">
+	<h1 class="title">Link a device</h1>
+	<p class="text-ink-2 text-sm">
+		Enter the code your TV or other device is showing to sign it in as
+		{data.me.name}.
+	</p>
+</header>
+
+<Card.Root class="max-w-sm">
 	<Card.Content>
 		<form onsubmit={link}>
 			<Field.Group>

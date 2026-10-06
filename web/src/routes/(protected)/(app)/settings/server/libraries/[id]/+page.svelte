@@ -40,6 +40,8 @@ function save(event: SubmitEvent) {
 	{/key}
 	<div class="flex gap-2">
 		<Button type="submit">Save</Button>
-		<Button href="/admin/libraries" variant="outline">Back to libraries</Button>
+		<Button href="/settings/server/libraries" variant="outline"
+			>Back to libraries</Button
+		>
 	</div>
 </form>

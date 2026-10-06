@@ -36,7 +36,7 @@ async function add(event: SubmitEvent) {
 	adding = false;
 	if (error) toast.error(problemMessage(error));
 	else toast.success(`${added.data.name} was added and is being scanned.`);
-	await goto("/admin/libraries", { invalidateAll: true });
+	await goto("/settings/server/libraries", { invalidateAll: true });
 }
 </script>
 
@@ -47,6 +47,6 @@ async function add(event: SubmitEvent) {
 	<LibraryForm providers={data.providers} />
 	<div class="flex gap-2">
 		<Button type="submit" disabled={adding}>Add and scan</Button>
-		<Button href="/admin/libraries" variant="outline">Cancel</Button>
+		<Button href="/settings/server/libraries" variant="outline">Cancel</Button>
 	</div>
 </form>

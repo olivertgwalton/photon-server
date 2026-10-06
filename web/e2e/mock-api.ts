@@ -648,6 +648,12 @@ const server_ = Bun.serve({
 				kidsPIN = body.pin;
 				return new Response(null, { status: 204 });
 			}
+			case "PUT /api/v1/me/password": {
+				const body = (await request.json()) as Schemas["PasswordChange"];
+				return body.current === "correct horse"
+					? new Response(null, { status: 204 })
+					: problem(403, "wrong_secret", "That isn't the current password.");
+			}
 			case "DELETE /api/v1/me/pin":
 				kidsPIN = "";
 				return new Response(null, { status: 204 });
