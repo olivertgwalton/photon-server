@@ -152,6 +152,12 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 			&domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "eac3", Channels: 6, BitrateKbps: 640}},
 			[]string{"-map 0:1 -c:a eac3 -ac 6 -b:a 640k"},
 		},
+		{
+			"audio mixed down to stereo is made louder",
+			domain.VideoPlan{Codec: "h264"},
+			&domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 2, BitrateKbps: 256, Boost: 2}},
+			[]string{"-map 0:1 -af volume=2 -c:a aac -ac 2 -b:a 256k"},
+		},
 	} {
 		got := strings.Join(args(Hardware{Accel: domain.AccelSoftware}, 12*time.Second, tc.video, tc.audio), " ")
 		for _, w := range tc.want {

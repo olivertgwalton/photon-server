@@ -321,6 +321,10 @@ func (p Profile) audio(codec string) (AudioSupport, bool) {
 	return p.Audio[i], true
 }
 
+// downmixBoost is how much louder sound mixed down to stereo is made, as Jellyfin's
+// DownMixAudioBoost: with the centre and surrounds folded in, the dialogue is quiet otherwise.
+const downmixBoost = 2
+
 // encoders are the audio codecs the server encodes to, with the most channels FFmpeg's encoder
 // writes.
 var encoders = map[string]int{"aac": 8, "eac3": 6, "ac3": 6}
@@ -352,7 +356,11 @@ func (p Profile) audioEncode(s media.Stream) (domain.AudioEncode, bool) {
 		if channels >= 6 {
 			kbps = 640
 		}
-		return domain.AudioEncode{Codec: a.Codec, Channels: channels, BitrateKbps: kbps}, true
+		enc := domain.AudioEncode{Codec: a.Codec, Channels: channels, BitrateKbps: kbps}
+		if channels == 2 && s.Channels > 2 {
+			enc.Boost = downmixBoost
+		}
+		return enc, true
 	}
 	return domain.AudioEncode{}, false
 }

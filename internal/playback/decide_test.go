@@ -93,7 +93,7 @@ func TestDecide(t *testing.T) {
 			name: "a stereo client gets stereo AAC", profile: stereo, audio: new(2),
 			want: Decision{
 				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep),
-				Audio:   &domain.AudioPlan{Stream: 2, Encode: &domain.AudioEncode{Codec: "aac", Channels: 2, BitrateKbps: 256}},
+				Audio:   &domain.AudioPlan{Stream: 2, Encode: &domain.AudioEncode{Codec: "aac", Channels: 2, BitrateKbps: 256, Boost: 2}},
 				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported, domain.AudioChannelsNotSupported},
 			},
 		},
