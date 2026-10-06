@@ -96,6 +96,7 @@ type Artwork struct {
 	Language *string
 	Width    *int
 	Height   *int
+	Blurhash *string
 }
 
 func (Artwork) TableName() string { return "artwork" }
@@ -284,15 +285,17 @@ type PlaylistEntry struct {
 }
 
 type Person struct {
-	ID          UUID `gorm:"type:uuid;default:uuidv7()"`
-	Name        string
-	PhotoURL    *string
-	PhotoID     *UUID `gorm:"type:uuid"`
-	Biography   *string
-	Born        *time.Time `gorm:"type:date"`
-	Died        *time.Time `gorm:"type:date"`
-	Birthplace  *string
-	DescribedAt *time.Time
+	ID       UUID `gorm:"type:uuid;default:uuidv7()"`
+	Name     string
+	PhotoURL *string
+	PhotoID  *UUID `gorm:"type:uuid"`
+	// PhotoBlurhash is taken when the photo is first fetched, and dropped with it.
+	PhotoBlurhash *string
+	Biography     *string
+	Born          *time.Time `gorm:"type:date"`
+	Died          *time.Time `gorm:"type:date"`
+	Birthplace    *string
+	DescribedAt   *time.Time
 }
 
 func (Person) TableName() string { return "people" }

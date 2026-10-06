@@ -1,7 +1,9 @@
 package artwork
 
 import (
+	"bytes"
 	"context"
+	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +16,11 @@ import (
 	"uuid"
 )
 
-func TestAPictureIsFetchedOnce(t *testing.T) {
+func TestAPictureIsFetchedOnceAndHashed(t *testing.T) {
+	var poster bytes.Buffer
+	if err := png.Encode(&poster, gradient(20, 30)); err != nil {
+		t.Fatal(err)
+	}
 	var fetches atomic.Int32
 	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -25,11 +31,21 @@ func TestAPictureIsFetchedOnce(t *testing.T) {
 			_, _ = w.Write([]byte("<html>"))
 			return
 		}
-		w.Header().Set("Content-Type", "image/jpeg")
-		_, _ = w.Write([]byte("jpeg bytes"))
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(poster.Bytes())
 	}))
 	t.Cleanup(srv.Close)
-	c, err := Open(t.TempDir())
+	var mu sync.Mutex
+	hashed := map[uuid.UUID]string{}
+	c, err := Open(t.TempDir(), func(_ context.Context, id uuid.UUID, hash string) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if _, ok := hashed[id]; ok {
+			t.Errorf("%s hashed twice", id)
+		}
+		hashed[id] = hash
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,8 +61,8 @@ func TestAPictureIsFetchedOnce(t *testing.T) {
 				return
 			}
 			defer f.Close()
-			if b, _ := io.ReadAll(f); string(b) != "jpeg bytes" {
-				t.Errorf("read %q", b)
+			if b, _ := io.ReadAll(f); !bytes.Equal(b, poster.Bytes()) {
+				t.Errorf("read %d bytes, want the poster's %d", len(b), poster.Len())
 			}
 		})
 	}
@@ -58,6 +74,9 @@ func TestAPictureIsFetchedOnce(t *testing.T) {
 	if n := fetches.Load(); n != 1 {
 		t.Errorf("fetched %d times for six asks, want once", n)
 	}
+	if hashed[id] == "" {
+		t.Error("the poster fetched has no BlurHash")
+	}
 
 	if _, err := c.File(t.Context(), uuid.NewV7(), srv.URL+"/page.html"); err == nil {
 		t.Error("a page that is not an image was kept as a picture")
@@ -66,7 +85,7 @@ func TestAPictureIsFetchedOnce(t *testing.T) {
 
 func TestASweepClearsReplacedPictures(t *testing.T) {
 	dir := t.TempDir()
-	c, err := Open(dir)
+	c, err := Open(dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

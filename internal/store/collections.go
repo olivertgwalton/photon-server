@@ -168,13 +168,14 @@ func (s *Store) collectionsOf(ctx context.Context, item model.UUID) ([]Collectio
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}
-	pictures, err := s.pictureOrder(ctx, rows)
+	pictures, hashes, err := s.pictureOrder(ctx, rows)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]CollectionCard, len(rows))
 	for n, r := range rows {
-		out[n] = CollectionCard{ID: uuid.UUID(r.ID), Title: r.Title, Poster: first(pictures[r.ID][domain.ArtworkPoster])}
+		poster := first(pictures[r.ID][domain.ArtworkPoster])
+		out[n] = CollectionCard{ID: uuid.UUID(r.ID), Title: r.Title, Poster: poster, Blurhashes: blurhashesOf(hashes, poster)}
 	}
 	return out, nil
 }

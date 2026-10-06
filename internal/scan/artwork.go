@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/naming"
 )
@@ -18,25 +19,33 @@ type pictures struct {
 	seasons map[int][]domain.Artwork
 }
 
-func picturesIn(dir string, names []string) pictures {
+// picturesIn sorts the pictures among names in dir, each with its BlurHash, as Jellyfin takes one
+// as it saves a picture.
+func picturesIn(root, dir string, names []string) pictures {
 	p := pictures{byStem: map[string][]domain.Artwork{}, seasons: map[int][]domain.Artwork{}}
 	for _, name := range names {
 		rel := path.Join(dir, name)
 		if season, kind, ok := naming.SeasonArtwork(name); ok {
-			p.seasons[season] = append(p.seasons[season], domain.Artwork{Kind: kind, Path: rel})
+			p.seasons[season] = append(p.seasons[season], picture(root, rel, kind))
 			continue
 		}
 		stem, kind, ok := naming.Artwork(name)
 		switch {
 		case !ok:
 		case stem == "":
-			p.own = append(p.own, domain.Artwork{Kind: kind, Path: rel})
+			p.own = append(p.own, picture(root, rel, kind))
 		default:
 			key := strings.ToLower(stem)
-			p.byStem[key] = append(p.byStem[key], domain.Artwork{Kind: kind, Path: rel})
+			p.byStem[key] = append(p.byStem[key], picture(root, rel, kind))
 		}
 	}
 	return p
+}
+
+// picture is the file at rel, with its BlurHash where it is a picture decoded here.
+func picture(root, rel string, kind domain.ArtworkKind) domain.Artwork {
+	hash, _ := artwork.FileBlurhash(root, rel)
+	return domain.Artwork{Kind: kind, Path: rel, Blurhash: hash}
 }
 
 // of answers the pictures named after a file's stem, its main picture as main.
@@ -57,9 +66,11 @@ func seasonPictures(root, series string, season int) []domain.Artwork {
 	if err != nil {
 		return nil
 	}
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.Name()
+	var names []string
+	for _, e := range entries {
+		if n, _, ok := naming.SeasonArtwork(e.Name()); ok && n == season {
+			names = append(names, e.Name())
+		}
 	}
-	return picturesIn(series, names).seasons[season]
+	return picturesIn(root, series, names).seasons[season]
 }

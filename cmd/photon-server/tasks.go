@@ -158,7 +158,8 @@ func refreshTask(st *store.Store, logger *slog.Logger) task.Task {
 // sweepArtworkEvery is how often replaced pictures are cleared from the cache.
 const sweepArtworkEvery = 7 * 24 * time.Hour
 
-// sweepArtworkTask clears the cache of pictures no title or person has any more.
+// sweepArtworkTask clears the cache of pictures no title or person has any more, and takes the
+// BlurHash of every picture kept without one.
 func sweepArtworkTask(st *store.Store, cache *artwork.Cache, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:      domain.TaskSweepArtwork,
@@ -168,8 +169,48 @@ func sweepArtworkTask(st *store.Store, cache *artwork.Cache, logger *slog.Logger
 			if n > 0 {
 				logger.InfoContext(ctx, "replaced pictures cleared", slog.Int("files", n))
 			}
+			if err != nil {
+				return err
+			}
+			n, err = backfillBlurhashes(ctx, st, cache)
+			if n > 0 {
+				logger.InfoContext(ctx, "pictures given a blurhash", slog.Int("pictures", n))
+			}
 			return err
 		},
+	}
+}
+
+// blurhashBatch is how many pictures without a BlurHash are asked for at once.
+const blurhashBatch = 500
+
+// backfillBlurhashes takes the BlurHash of each library file and each cached picture that has
+// none: those kept before the server took them. A provider's picture not fetched yet is left to
+// be hashed as it is, and one not decoded here, such as SVG, is passed over.
+func backfillBlurhashes(ctx context.Context, st *store.Store, cache *artwork.Cache) (int, error) {
+	hashed := 0
+	var after uuid.UUID
+	for {
+		batch, err := st.Unhashed(ctx, after, blurhashBatch)
+		if err != nil || len(batch) == 0 {
+			return hashed, err
+		}
+		for _, p := range batch {
+			var hash string
+			if p.Path == "" {
+				hash, err = cache.Blurhash(ctx, p.ID)
+			} else {
+				hash, err = artwork.FileBlurhash(p.Root, p.Path)
+			}
+			if err != nil {
+				continue
+			}
+			if err := st.SetBlurhash(ctx, p.ID, hash); err != nil {
+				return hashed, err
+			}
+			hashed++
+		}
+		after = batch[len(batch)-1].ID
 	}
 }
 

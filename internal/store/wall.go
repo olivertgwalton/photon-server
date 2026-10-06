@@ -46,6 +46,7 @@ type Card struct {
 	Genres      []string
 	Certificate string
 	Ratings     []domain.Rating
+	Blurhashes  Blurhashes
 }
 
 // WallPage asks for one page of a library's titles: Limit of them from Offset, as Jellyfin's
@@ -149,7 +150,7 @@ func (s *Store) PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.Playbac
 		return domain.PlaybackTitle{}, found(err)
 	}
 	rows := []*model.Item{row}
-	pictures, err := s.pictureOrder(ctx, rows)
+	pictures, _, err := s.pictureOrder(ctx, rows)
 	if err != nil {
 		return domain.PlaybackTitle{}, err
 	}
@@ -170,7 +171,7 @@ func (s *Store) PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.Playbac
 
 // cards answers titles as cards for a profile, with their best pictures.
 func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item) ([]Card, error) {
-	pictures, err := s.pictureOrder(ctx, rows)
+	pictures, hashes, err := s.pictureOrder(ctx, rows)
 	if err != nil {
 		return nil, err
 	}
@@ -205,6 +206,8 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 			Origin: origins[r.ID], Overview: deref(r.Overview), Logo: first(pictures[r.ID][domain.ArtworkLogo]),
 			Genres: r.Genres, Certificate: cmp.Or(deref(r.Certificate), shows[r.ID].certificate), Ratings: ratings[r.ID],
 		}
+		c := &cards[n]
+		c.Blurhashes = blurhashesOf(hashes, c.Poster, c.Backdrop, c.Thumb, c.Logo)
 	}
 	return cards, nil
 }

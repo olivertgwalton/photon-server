@@ -64,7 +64,7 @@ func claiming(w, h uint32) []byte {
 }
 
 func TestAProfileIsGivenAPicture(t *testing.T) {
-	cache, err := artwork.Open(t.TempDir())
+	cache, err := artwork.Open(t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -32,6 +32,7 @@ func newPerson(db *gorm.DB, opts ...gen.DOOption) person {
 	_person.Name = field.NewString(tableName, "name")
 	_person.PhotoURL = field.NewString(tableName, "photo_url")
 	_person.PhotoID = field.NewField(tableName, "photo_id")
+	_person.PhotoBlurhash = field.NewString(tableName, "photo_blurhash")
 	_person.Biography = field.NewString(tableName, "biography")
 	_person.Born = field.NewTime(tableName, "born")
 	_person.Died = field.NewTime(tableName, "died")
@@ -46,16 +47,17 @@ func newPerson(db *gorm.DB, opts ...gen.DOOption) person {
 type person struct {
 	personDo personDo
 
-	ALL         field.Asterisk
-	ID          field.Field
-	Name        field.String
-	PhotoURL    field.String
-	PhotoID     field.Field
-	Biography   field.String
-	Born        field.Time
-	Died        field.Time
-	Birthplace  field.String
-	DescribedAt field.Time
+	ALL           field.Asterisk
+	ID            field.Field
+	Name          field.String
+	PhotoURL      field.String
+	PhotoID       field.Field
+	PhotoBlurhash field.String
+	Biography     field.String
+	Born          field.Time
+	Died          field.Time
+	Birthplace    field.String
+	DescribedAt   field.Time
 
 	fieldMap map[string]field.Expr
 }
@@ -76,6 +78,7 @@ func (p *person) updateTableName(table string) *person {
 	p.Name = field.NewString(table, "name")
 	p.PhotoURL = field.NewString(table, "photo_url")
 	p.PhotoID = field.NewField(table, "photo_id")
+	p.PhotoBlurhash = field.NewString(table, "photo_blurhash")
 	p.Biography = field.NewString(table, "biography")
 	p.Born = field.NewTime(table, "born")
 	p.Died = field.NewTime(table, "died")
@@ -105,11 +108,12 @@ func (p *person) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (p *person) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 9)
+	p.fieldMap = make(map[string]field.Expr, 10)
 	p.fieldMap["id"] = p.ID
 	p.fieldMap["name"] = p.Name
 	p.fieldMap["photo_url"] = p.PhotoURL
 	p.fieldMap["photo_id"] = p.PhotoID
+	p.fieldMap["photo_blurhash"] = p.PhotoBlurhash
 	p.fieldMap["biography"] = p.Biography
 	p.fieldMap["born"] = p.Born
 	p.fieldMap["died"] = p.Died

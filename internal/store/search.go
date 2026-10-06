@@ -66,9 +66,10 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error
 
 // PersonRef is someone a search finds, with their picture's id.
 type PersonRef struct {
-	ID    uuid.UUID
-	Name  string
-	Photo uuid.UUID
+	ID         uuid.UUID
+	Name       string
+	Photo      uuid.UUID
+	Blurhashes Blurhashes
 }
 
 // SearchPeople answers limit of the people from offset whose names have a word starting with each
@@ -86,20 +87,19 @@ func (s *Store) SearchPeople(ctx context.Context, text string, offset, limit int
 		return nil, 0, err
 	}
 	var rows []struct {
-		ID      model.UUID
-		Name    string
-		PhotoID *model.UUID
+		ID            model.UUID
+		Name          string
+		PhotoID       *model.UUID
+		PhotoBlurhash *string
 	}
-	err := db.Select("p.id, p.name, p.photo_id").
+	err := db.Select("p.id, p.name, p.photo_id, p.photo_blurhash").
 		Order(clause.Expr{SQL: "starts_with(search_text(p.name), search_text(?)) DESC", Vars: []any{text}}).
 		Order("(SELECT count(*) FROM credits c WHERE c.person_id = p.id) DESC, p.name, p.id").
 		Offset(offset).Limit(limit).Scan(&rows).Error
 	out := make([]PersonRef, len(rows))
 	for n, r := range rows {
 		out[n] = PersonRef{ID: uuid.UUID(r.ID), Name: r.Name}
-		if r.PhotoID != nil {
-			out[n].Photo = uuid.UUID(*r.PhotoID)
-		}
+		out[n].Photo, out[n].Blurhashes = photo(r.PhotoID, r.PhotoBlurhash)
 	}
 	return out, total, err
 }

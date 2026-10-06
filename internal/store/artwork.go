@@ -35,6 +35,7 @@ func saveFolderArtwork(ctx context.Context, tx *query.Query, item model.UUID, fo
 		}
 		rows = append(rows, &model.Artwork{
 			ItemID: item, Source: domain.SourceFile, Kind: p.Kind, Place: p.Path, Position: n, Folder: &folder,
+			Blurhash: optional(p.Blurhash),
 		})
 	}
 	return createArtwork(ctx, tx, rows)
@@ -64,20 +65,51 @@ func createArtwork(ctx context.Context, tx *query.Query, rows []*model.Artwork) 
 	return tx.Artwork.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(rows...)
 }
 
-// pictureOrder answers each title's pictures by kind, best first. A picture listed again under a
-// lower source, as one an admin chose is under its provider, is left out.
-func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[model.UUID]map[domain.ArtworkKind][]uuid.UUID, error) {
+// Blurhashes are the BlurHashes of the pictures an answer carries, by picture id, for those that
+// have one, as Jellyfin answers ImageBlurHashes beside its image tags.
+type Blurhashes map[uuid.UUID]string
+
+// blurhashesOf answers the BlurHashes in hashes of those of ids that have one.
+func blurhashesOf(hashes map[uuid.UUID]string, ids ...uuid.UUID) Blurhashes {
+	var out Blurhashes
+	for _, id := range ids {
+		if h, ok := hashes[id]; ok {
+			if out == nil {
+				out = Blurhashes{}
+			}
+			out[id] = h
+		}
+	}
+	return out
+}
+
+// photo answers a person's photo, where they have one, and its BlurHash.
+func photo(id *model.UUID, hash *string) (uuid.UUID, Blurhashes) {
+	if id == nil {
+		return uuid.UUID{}, nil
+	}
+	if hash == nil {
+		return uuid.UUID(*id), nil
+	}
+	return uuid.UUID(*id), Blurhashes{uuid.UUID(*id): *hash}
+}
+
+// pictureOrder answers each title's pictures by kind, best first, and the BlurHashes of those
+// that have one. A picture listed again under a lower source, as one an admin chose is under its
+// provider, is left out.
+func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[model.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
 	out := map[model.UUID]map[domain.ArtworkKind][]uuid.UUID{}
+	hashes := map[uuid.UUID]string{}
 	if len(items) == 0 {
-		return out, nil
+		return out, hashes, nil
 	}
 	a := s.q.Artwork
 	rows, err := a.WithContext(ctx).Where(a.ItemID.In(ids(items)...)).Find()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := s.rankPictures(ctx, rows, items); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	type place struct {
 		item  model.UUID
@@ -95,8 +127,11 @@ func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[mode
 			out[r.ItemID] = map[domain.ArtworkKind][]uuid.UUID{}
 		}
 		out[r.ItemID][r.Kind] = append(out[r.ItemID][r.Kind], uuid.UUID(r.ID))
+		if r.Blurhash != nil {
+			hashes[uuid.UUID(r.ID)] = *r.Blurhash
+		}
 	}
-	return out, nil
+	return out, hashes, nil
 }
 
 // rankPictures puts the pictures of items best first: an admin's choice, files beside the title,
@@ -197,7 +232,7 @@ func (s *Store) ChooseArtwork(ctx context.Context, id uuid.UUID, kind domain.Art
 		}
 		return a.WithContext(ctx).Create(&model.Artwork{
 			ItemID: item.ID, Source: domain.SourceUser, Kind: kind, Place: pick.Place,
-			Language: pick.Language, Width: pick.Width, Height: pick.Height,
+			Language: pick.Language, Width: pick.Width, Height: pick.Height, Blurhash: pick.Blurhash,
 		})
 	})
 }
@@ -290,6 +325,46 @@ func (s *Store) LivePictures(ctx context.Context, ids []uuid.UUID) (map[uuid.UUI
 	out := make(map[uuid.UUID]bool, len(live))
 	for _, id := range live {
 		out[id] = true
+	}
+	return out, err
+}
+
+// SetBlurhash keeps the BlurHash of the picture with id, a title's or a person's.
+func (s *Store) SetBlurhash(ctx context.Context, id uuid.UUID, hash string) error {
+	_, err := s.pool.Exec(ctx, `
+		WITH titles AS (UPDATE artwork SET blurhash = $2 WHERE id = $1)
+		UPDATE people SET photo_blurhash = $2 WHERE photo_id = $1`, id.String(), hash)
+	return err
+}
+
+// Unhashed is a picture with no BlurHash yet: a file under Root, or, with no Path, one fetched
+// into the picture cache under its id, if it has been.
+type Unhashed struct {
+	ID   uuid.UUID
+	Root string
+	Path string
+}
+
+// Unhashed answers up to limit of the titles' pictures and people's photos with no BlurHash, in
+// id order from after.
+func (s *Store) Unhashed(ctx context.Context, after uuid.UUID, limit int) ([]Unhashed, error) {
+	var rows []struct {
+		ID   model.UUID
+		Root string
+		Path string
+	}
+	err := s.q.Artwork.WithContext(ctx).UnderlyingDB().Raw(`
+		(SELECT a.id, CASE a.source WHEN 'file' THEN l.root ELSE '' END AS root,
+			CASE a.source WHEN 'file' THEN a.place ELSE '' END AS path
+		FROM artwork a JOIN items i ON i.id = a.item_id JOIN libraries l ON l.id = i.library_id
+		WHERE a.blurhash IS NULL AND a.id > @after ORDER BY a.id LIMIT @limit)
+		UNION ALL
+		(SELECT photo_id, '', '' FROM people WHERE photo_blurhash IS NULL AND photo_id > @after ORDER BY photo_id LIMIT @limit)
+		ORDER BY id LIMIT @limit`,
+		map[string]any{"after": model.UUID(after), "limit": limit}).Scan(&rows).Error
+	out := make([]Unhashed, len(rows))
+	for n, r := range rows {
+		out[n] = Unhashed{ID: uuid.UUID(r.ID), Root: r.Root, Path: r.Path}
 	}
 	return out, err
 }
