@@ -5093,6 +5093,7 @@ export interface components {
         };
         Scan: {
             done: number;
+            folder?: string;
             known: number;
             /** Format: uuid */
             library_id: string;

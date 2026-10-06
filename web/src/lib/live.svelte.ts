@@ -1,7 +1,8 @@
 import { invalidate, invalidateAll } from "$app/navigation";
+import type { components } from "./api/schema.js";
 import { affected, type Change, changeKinds } from "./changes.js";
 
-export type Scan = { done: number; known: number };
+export type Scan = components["schemas"]["Scan"];
 
 // A scan sends a burst of changes; the pages reload once for the burst.
 const settle = 1000;
@@ -16,12 +17,8 @@ class Live {
 		const source = new EventSource("/api/v1/events");
 		let reconnected = false;
 		source.addEventListener("hello", (event: MessageEvent<string>) => {
-			const { scans } = JSON.parse(event.data) as {
-				scans: ({ library_id: string } & Scan)[];
-			};
-			this.scans = Object.fromEntries(
-				scans.map((s) => [s.library_id, { done: s.done, known: s.known }]),
-			);
+			const { scans } = JSON.parse(event.data) as { scans: Scan[] };
+			this.scans = Object.fromEntries(scans.map((s) => [s.library_id, s]));
 			if (reconnected) invalidateAll();
 			reconnected = true;
 		});
@@ -32,8 +29,11 @@ class Live {
 			const lib = change.library_id;
 			if (change.kind === "scan.progress" && lib) {
 				this.scans[lib] = {
+					library_id: lib,
+					phase: change.details?.phase ?? "reading",
 					done: change.details?.done ?? 0,
 					known: change.details?.known ?? 0,
+					folder: change.details?.folder,
 				};
 			}
 			if (change.kind === "library.scanned" && lib) delete this.scans[lib];

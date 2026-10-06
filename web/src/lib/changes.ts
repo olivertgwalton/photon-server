@@ -13,7 +13,12 @@ export type Change = {
 	kind: string;
 	library_id?: string;
 	title_id?: string;
-	details?: { done?: number; known?: number };
+	details?: {
+		phase?: "reading" | "removing";
+		done?: number;
+		known?: number;
+		folder?: string;
+	};
 };
 
 export const changeKinds = [

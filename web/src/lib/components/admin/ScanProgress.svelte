@@ -16,6 +16,11 @@ const said = $derived(
 
 <div class="grid gap-1.5">
 	<p class="text-ink-2 text-sm">{said}</p>
+	{#if scan.phase === "reading" && scan.folder}
+		<p class="text-ink-3 truncate font-mono text-xs" title={scan.folder}>
+			{scan.folder}
+		</p>
+	{/if}
 	<Progress
 		value={scan.phase === "reading" ? scan.done : null}
 		max={Math.max(scan.known, 1)}
