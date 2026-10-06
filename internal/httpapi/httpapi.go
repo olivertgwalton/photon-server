@@ -535,6 +535,12 @@ func (a *API) routes() []route {
 			status:  http.StatusOK, reply: asFile{"image/jpeg"}, handle: a.chapterImage,
 		},
 		{
+			pattern: "GET /api/v1/parts/{id}/chapter-images/{idx}", access: signedAddress,
+			summary: "A picture of a chapter, at the signed address the title's page gives, for a player with no token",
+			path:    []param{{"idx", 0, "The chapter, counted from 0 in its part."}},
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"image/jpeg"}, handle: a.signedChapterImage,
+		},
+		{
 			pattern: "GET /api/v1/admin/libraries", access: admin, summary: "List the libraries as an admin keeps them",
 			status: http.StatusOK, reply: listJSON[adminLibraryJSON]{}, handle: a.adminLibraries,
 		},

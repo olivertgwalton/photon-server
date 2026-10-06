@@ -2831,6 +2831,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/parts/{id}/chapter-images/{idx}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A picture of a chapter, at the signed address the title's page gives, for a player with no token */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description When the address lapses, as the server signed it. */
+                    exp?: string;
+                    /** @description The server's signature of the path and exp. */
+                    sig?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                    /** @description The chapter, counted from 0 in its part. */
+                    idx: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/jpeg": unknown;
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/parts/{id}/chapters/{idx}/image": {
         parameters: {
             query?: never;
@@ -4179,6 +4225,7 @@ export interface components {
             /** Format: int64 */
             end_ms: number;
             image?: string;
+            signed_image?: string;
             /** Format: int64 */
             start_ms: number;
             title?: string;

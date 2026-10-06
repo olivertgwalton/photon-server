@@ -58,19 +58,35 @@ func (a *API) trickplaySheet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) chapterImage(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	part, idx, ok := a.chapterOf(w, r)
+	if !ok || a.answered(w, r, a.svc.Previews.HasChapterImage(r.Context(), sessionOf(r).Profile.ID, part, idx)) {
+		return
+	}
+	a.servePreview(w, r, func() (*os.File, error) { return a.svc.PreviewFiles.ChapterImage(part, idx) })
+}
+
+// signedChapterImage serves a chapter's picture at the address a title's page signed for the
+// profile that could see it.
+func (a *API) signedChapterImage(w http.ResponseWriter, r *http.Request) {
+	part, idx, ok := a.chapterOf(w, r)
 	if !ok {
 		return
+	}
+	a.servePreview(w, r, func() (*os.File, error) { return a.svc.PreviewFiles.ChapterImage(part, idx) })
+}
+
+// chapterOf reads the part and chapter a path names.
+func (a *API) chapterOf(w http.ResponseWriter, r *http.Request) (uuid.UUID, int, bool) {
+	id, ok := a.pathID(w, r)
+	if !ok {
+		return id, 0, false
 	}
 	idx, err := strconv.Atoi(r.PathValue("idx"))
 	if err != nil {
 		writeProblem(w, a.logger, codeNotFound, "")
-		return
+		return id, 0, false
 	}
-	if a.answered(w, r, a.svc.Previews.HasChapterImage(r.Context(), sessionOf(r).Profile.ID, id, idx)) {
-		return
-	}
-	a.servePreview(w, r, func() (*os.File, error) { return a.svc.PreviewFiles.ChapterImage(id, idx) })
+	return id, idx, true
 }
 
 // servePreview serves a preview's JPEG. A part's previews are made again only from the same bytes,
