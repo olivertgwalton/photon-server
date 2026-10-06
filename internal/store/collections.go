@@ -9,8 +9,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/jackc/pgx/v5"
-
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 	"github.com/olivertgwalton/photon-server/internal/store/query"
@@ -156,14 +154,23 @@ func (s *Store) origins(ctx context.Context, rows []*model.Item) (map[model.UUID
 }
 
 // collectionsOf answers the shown collections a title is in, by title.
-func (s *Store) collectionsOf(ctx context.Context, item model.UUID) ([]TitleRef, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT i.id, i.title FROM items i JOIN collection_members m ON m.collection_id = i.id
-		WHERE m.item_id = $1 AND i.id IN (`+shownCollections+`) ORDER BY i.sort_title`, uuid.UUID(item).String())
+func (s *Store) collectionsOf(ctx context.Context, item model.UUID) ([]CollectionCard, error) {
+	var rows []*model.Item
+	err := s.q.Item.WithContext(ctx).UnderlyingDB().
+		Where("items.id IN (SELECT collection_id FROM collection_members WHERE item_id = ?) AND items.id IN ("+shownCollections+")", item).
+		Order("items.sort_title").Find(&rows).Error
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	pictures, err := s.pictureOrder(ctx, rows)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[TitleRef])
+	out := make([]CollectionCard, len(rows))
+	for n, r := range rows {
+		out[n] = CollectionCard{ID: uuid.UUID(r.ID), Title: r.Title, Poster: first(pictures[r.ID][domain.ArtworkPoster])}
+	}
+	return out, nil
 }
 
 // AddCollection makes an admin's collection in a library.
