@@ -263,7 +263,8 @@ offered again if it goes back to `all`, whose next 3 a.m. run queues the seasons
 An admin's own markers stand whatever the setting.
 
 Each library makes previews of its videos ahead of time, as Plex and Jellyfin do: a picture of each
-chapter, and trickplay sheets for scrubbing (a 320-pixel thumbnail every ten seconds, a hundred to
+chapter (a video with none is pictured once, fifteen seconds in, which is what a trailer's or other
+extra's card shows), and trickplay sheets for scrubbing (a 320-pixel thumbnail every ten seconds, a hundred to
 a JPEG sheet, HDR tone mapped). They are made from keyframes in the background, one part at a time
 per node beside the other jobs, and kept under `PHOTON_CACHE_DIR` in `previews`; a two-hour film's
 come to a few megabytes. `photon-server library set -name NAME -previews chapters` makes only the
