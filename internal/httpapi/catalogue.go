@@ -169,16 +169,21 @@ type letterJSON struct {
 func cardsJSON(cards []store.Card) []cardJSON {
 	out := make([]cardJSON, len(cards))
 	for i, c := range cards {
-		out[i] = cardJSON{
-			ID: c.ID, Kind: c.Kind, Title: c.Title, Year: c.Year, ReleaseDate: domain.Date(c.ReleaseDate), AddedAt: c.AddedAt,
-			Poster: c.Poster, Backdrop: c.Backdrop, State: c.State, DurationMS: c.DurationMS, Show: c.Show,
-			SeasonNumber: c.SeasonNumber, EpisodeNumber: c.EpisodeNumber, EpisodeEnd: c.EpisodeEnd, Thumb: c.Thumb,
-			Origin: c.Origin, Overview: c.Overview, Logo: c.Logo, Genres: c.Genres, Certificate: c.Certificate,
-			Blurhashes: c.Blurhashes,
-		}
-		for _, r := range c.Ratings {
-			out[i].Ratings = append(out[i].Ratings, store.RatingRef(r))
-		}
+		out[i] = cardOf(c)
+	}
+	return out
+}
+
+func cardOf(c store.Card) cardJSON {
+	out := cardJSON{
+		ID: c.ID, Kind: c.Kind, Title: c.Title, Year: c.Year, ReleaseDate: domain.Date(c.ReleaseDate), AddedAt: c.AddedAt,
+		Poster: c.Poster, Backdrop: c.Backdrop, State: c.State, DurationMS: c.DurationMS, Show: c.Show,
+		SeasonNumber: c.SeasonNumber, EpisodeNumber: c.EpisodeNumber, EpisodeEnd: c.EpisodeEnd, Thumb: c.Thumb,
+		Origin: c.Origin, Overview: c.Overview, Logo: c.Logo, Genres: c.Genres, Certificate: c.Certificate,
+		Blurhashes: c.Blurhashes,
+	}
+	for _, r := range c.Ratings {
+		out.Ratings = append(out.Ratings, store.RatingRef(r))
 	}
 	return out
 }
@@ -416,7 +421,7 @@ func (a *API) next(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, cardsJSON([]store.Card{card})[0])
+	writeJSON(w, a.logger, "application/json", http.StatusOK, cardOf(card))
 }
 
 // paging reads a page's offset and limit, as walls page.

@@ -68,7 +68,7 @@ func (a *API) person(w http.ResponseWriter, r *http.Request) {
 	}
 	out := personJSON{PersonPage: p, Credits: []creditJSON{}}
 	for _, c := range credits {
-		out.Credits = append(out.Credits, creditJSON{Credit: c.Kind, Role: c.Role, cardJSON: cardsJSON([]store.Card{c.Card})[0]})
+		out.Credits = append(out.Credits, creditJSON{Credit: c.Kind, Role: c.Role, cardJSON: cardOf(c.Card)})
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }

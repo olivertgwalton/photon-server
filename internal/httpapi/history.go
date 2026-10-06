@@ -56,7 +56,7 @@ func (a *API) history(w http.ResponseWriter, r *http.Request, profile uuid.UUID)
 	out := make([]historyEntryJSON, len(plays))
 	for i, p := range plays {
 		out[i] = historyEntryJSON{
-			ID: p.ID, ProfileID: p.Profile, Title: cardsJSON([]store.Card{p.Card})[0], Method: p.Method,
+			ID: p.ID, ProfileID: p.Profile, Title: cardOf(p.Card), Method: p.Method,
 			StartedAt: p.StartedAt.UTC(), StoppedAt: p.StoppedAt.UTC(), PositionMS: p.PositionMS,
 		}
 	}

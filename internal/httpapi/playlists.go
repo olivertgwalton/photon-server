@@ -96,7 +96,7 @@ func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]entryJSON, len(entries))
 	for i, e := range entries {
-		out[i] = entryJSON{EntryID: e.ID, cardJSON: cardsJSON([]store.Card{e.Card})[0]}
+		out[i] = entryJSON{EntryID: e.ID, cardJSON: cardOf(e.Card)}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[entryJSON]{out, offset, total})
 }
