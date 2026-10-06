@@ -15,7 +15,11 @@ import (
 // changed at the start of 2026.
 type fakeWatching struct{}
 
-func (fakeWatching) SaveProgress(_ context.Context, profile, item uuid.UUID, position time.Duration, _ domain.Reach, at *time.Time) (domain.Reach, error) {
+func (fakeWatching) Length(context.Context, uuid.UUID) (time.Duration, error) {
+	return 2 * time.Hour, nil
+}
+
+func (fakeWatching) SaveProgress(_ context.Context, profile, item uuid.UUID, position, _ time.Duration, _ domain.Reach, at *time.Time) (domain.Reach, error) {
 	switch {
 	case item != films || profile != oliver.ID:
 		return "", store.ErrNotFound

@@ -97,7 +97,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 	if err := s.Favourite(ctx, oliver.ID, ids["Alien"]); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveProgress(ctx, oliver.ID, ids["Brazil"], 30*time.Minute, domain.ReachStart, nil); err != nil {
+	if _, err := saveProgress(ctx, s, oliver.ID, ids["Brazil"], 30*time.Minute, domain.ReachStart, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Watchlist(ctx, oliver.ID, ids["Brazil"]); err != nil {

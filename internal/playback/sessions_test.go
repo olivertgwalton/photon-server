@@ -50,7 +50,9 @@ type positions map[uuid.UUID]time.Duration
 
 var gone = uuid.MustParse("0199b3c0-0000-7000-8000-00000000d0e5")
 
-func (p positions) SaveProgress(_ context.Context, _, item uuid.UUID, at time.Duration, _ domain.Reach, _ *time.Time) (domain.Reach, error) {
+func (positions) Length(context.Context, uuid.UUID) (time.Duration, error) { return 2 * time.Hour, nil }
+
+func (p positions) SaveProgress(_ context.Context, _, item uuid.UUID, at, _ time.Duration, _ domain.Reach, _ *time.Time) (domain.Reach, error) {
 	if item == gone {
 		return "", store.ErrNotFound
 	}
@@ -174,7 +176,9 @@ func TestAPlaybackOfARemovedTitleIsSweptOnce(t *testing.T) {
 // ends answers the end for every report, and keeps how far each report said the viewing had got.
 type ends struct{ before []domain.Reach }
 
-func (e *ends) SaveProgress(_ context.Context, _, _ uuid.UUID, _ time.Duration, before domain.Reach, _ *time.Time) (domain.Reach, error) {
+func (*ends) Length(context.Context, uuid.UUID) (time.Duration, error) { return time.Hour, nil }
+
+func (e *ends) SaveProgress(_ context.Context, _, _ uuid.UUID, _, _ time.Duration, before domain.Reach, _ *time.Time) (domain.Reach, error) {
 	e.before = append(e.before, before)
 	return domain.ReachEnd, nil
 }
@@ -283,4 +287,73 @@ func TestAPlayerThatGoesQuietIsStoppedWithItsHistory(t *testing.T) {
 			t.Errorf("its player back after: %v, want ErrNoPlayback", err)
 		}
 	})
+}
+
+// chosen keeps each choice of tracks written, after positions.
+type chosen struct {
+	positions
+	writes []domain.ChosenTracks
+}
+
+func (c *chosen) ChooseTracks(_ context.Context, _, _ uuid.UUID, t domain.ChosenTracks) error {
+	c.writes = append(c.writes, t)
+	return nil
+}
+
+func TestAPlayerKeepsTheTracksItLastChose(t *testing.T) {
+	saved := &chosen{positions: positions{}}
+	s := NewSessions(memory{}, saved, served{}, func(context.Context, domain.Event) {}, uuid.NewV7())
+	ctx := t.Context()
+	oliver := uuid.NewV7()
+	p, err := s.Start(ctx, domain.PlayDirect, card(oliver, uuid.NewV7()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	english, french, off := 1, 2, domain.NoSubtitle
+	reports := []domain.ChosenTracks{
+		{Audio: &english, Subtitle: &off},
+		{Audio: &english, Subtitle: &off},
+		{Audio: &french, Subtitle: &off},
+		{Audio: &french, Subtitle: &off},
+	}
+	for i, tracks := range reports {
+		if _, err := s.Progress(ctx, oliver, p.ID, time.Duration(i+1)*time.Minute, domain.StatePlaying, tracks); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(saved.writes) != 2 || *saved.writes[0].Audio != english || *saved.writes[1].Audio != french {
+		t.Errorf("tracks kept %+v, want English, then French once it was chosen", saved.writes)
+	}
+}
+
+// timed answers how far each report got through a title of the length the playback carries.
+type timed struct{ positions }
+
+func (timed) SaveProgress(_ context.Context, _, _ uuid.UUID, at, length time.Duration, _ domain.Reach, _ *time.Time) (domain.Reach, error) {
+	return domain.ReachOf(at, length), nil
+}
+
+func TestAProfileIsToldOfItsPlaceAsItsReachChanges(t *testing.T) {
+	var told int
+	raise := func(_ context.Context, e domain.Event) {
+		if e.Kind == domain.EventUserDataChanged {
+			told++
+		}
+	}
+	s := NewSessions(memory{}, timed{positions{}}, served{}, raise, uuid.NewV7())
+	ctx := t.Context()
+	oliver := uuid.NewV7()
+	p, err := s.Start(ctx, domain.PlayDirect, card(oliver, uuid.NewV7()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Two hours long: from the start, on to somewhere to resume, then the end.
+	for _, at := range []time.Duration{0, time.Second, 20 * time.Minute, 21 * time.Minute, 22 * time.Minute, 119 * time.Minute, 119 * time.Minute} {
+		if _, err := s.Progress(ctx, oliver, p.ID, at, domain.StatePlaying, domain.ChosenTracks{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if told != 3 {
+		t.Errorf("told %d times, want 3: as it started, became resumable and reached the end", told)
+	}
 }

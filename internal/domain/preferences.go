@@ -125,3 +125,11 @@ type ChosenTracks struct {
 	Subtitle     *int
 	SubtitleFile *uuid.UUID
 }
+
+func (t ChosenTracks) Equal(o ChosenTracks) bool {
+	return same(t.Audio, o.Audio) && same(t.Subtitle, o.Subtitle) && same(t.SubtitleFile, o.SubtitleFile)
+}
+
+func same[T comparable](a, b *T) bool {
+	return a == b || a != nil && b != nil && *a == *b
+}

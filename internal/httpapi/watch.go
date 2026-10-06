@@ -11,7 +11,8 @@ import (
 )
 
 type watching interface {
-	SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration, before domain.Reach, at *time.Time) (domain.Reach, error)
+	Length(ctx context.Context, item uuid.UUID) (time.Duration, error)
+	SaveProgress(ctx context.Context, profile, item uuid.UUID, position, length time.Duration, before domain.Reach, at *time.Time) (domain.Reach, error)
 	MarkWatched(ctx context.Context, profile, item uuid.UUID, at *time.Time) error
 	MarkUnwatched(ctx context.Context, profile, item uuid.UUID) error
 	ClearProgress(ctx context.Context, profile, item uuid.UUID) error
@@ -58,7 +59,11 @@ func (a *API) progress(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	reach, err := a.svc.Watching.SaveProgress(r.Context(), sessionOf(r).Profile.ID, id, time.Duration(req.PositionMS)*time.Millisecond, domain.ReachStart, req.At)
+	length, err := a.svc.Watching.Length(r.Context(), id)
+	if a.answered(w, r, err) {
+		return
+	}
+	reach, err := a.svc.Watching.SaveProgress(r.Context(), sessionOf(r).Profile.ID, id, time.Duration(req.PositionMS)*time.Millisecond, length, domain.ReachStart, req.At)
 	if !a.answered(w, r, err) {
 		a.titleStateChanged(r, id)
 		writeJSON(w, a.logger, "application/json", http.StatusOK, reachedJSON{Reach: reach})

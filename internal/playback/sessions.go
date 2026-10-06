@@ -37,7 +37,8 @@ type streams interface {
 }
 
 type progressStore interface {
-	SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration, before domain.Reach, at *time.Time) (domain.Reach, error)
+	Length(ctx context.Context, item uuid.UUID) (time.Duration, error)
+	SaveProgress(ctx context.Context, profile, item uuid.UUID, position, length time.Duration, before domain.Reach, at *time.Time) (domain.Reach, error)
 	ChooseTracks(ctx context.Context, profile, item uuid.UUID, t domain.ChosenTracks) error
 	RecordPlay(ctx context.Context, p domain.Playback, stopped time.Time, position time.Duration) error
 }
@@ -63,10 +64,14 @@ func NewSessions(live sessionStore, saved progressStore, st streams, raise func(
 
 // Start opens a playback of the copy of a title its card names, by its card's profile.
 func (s *Sessions) Start(ctx context.Context, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
+	length, err := s.saved.Length(ctx, card.Title.ID)
+	if err != nil {
+		return domain.Playback{}, err
+	}
 	now := time.Now()
 	p := domain.Playback{
 		ID: uuid.NewV7(), Profile: card.Profile.ID, Item: card.Title.ID, Version: card.Version.ID, Method: method,
-		State: domain.StatePlaying, Started: now, Updated: now, Node: s.node, Card: card,
+		State: domain.StatePlaying, Started: now, Updated: now, Length: length, Node: s.node, Card: card,
 	}
 	if err := s.live.SavePlayback(ctx, p, keptFor); err != nil {
 		return p, err
@@ -82,17 +87,25 @@ func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position
 	if err != nil {
 		return "", err
 	}
-	if err := s.saved.ChooseTracks(ctx, profile, p.Item, tracks); err != nil {
-		return "", err
+	if !tracks.Equal(p.Tracks) {
+		if err := s.saved.ChooseTracks(ctx, profile, p.Item, tracks); err != nil {
+			return "", err
+		}
+		p.Tracks = tracks
 	}
-	reach, err := s.saved.SaveProgress(ctx, profile, p.Item, position, p.Reached, nil)
+	reach, err := s.saved.SaveProgress(ctx, profile, p.Item, position, p.Length, p.Reached, nil)
 	if err != nil {
 		return "", err
 	}
-	s.raise(ctx, domain.Event{Kind: domain.EventUserDataChanged, Profile: profile, Item: p.Item})
+	// A place moving on within a title changes nothing a client shows but its progress, which
+	// the player knows and the stop tells, as Jellyfin tells no progress.
+	if reach != p.Last {
+		s.raise(ctx, domain.Event{Kind: domain.EventUserDataChanged, Profile: profile, Item: p.Item})
+	}
 	if reach == domain.ReachEnd {
 		p.Reached = reach
 	}
+	p.Last = reach
 	was := p.State
 	p.Position, p.State, p.Updated = position, state, time.Now()
 	if err := s.live.SavePlayback(ctx, p, keptFor); err != nil {
@@ -143,7 +156,7 @@ func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Du
 	}
 	s.streams.Close(p.ID)
 	p.Position = position
-	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position, p.Reached, nil)
+	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position, p.Length, p.Reached, nil)
 	if errors.Is(err, store.ErrNotFound) {
 		// A title removed while it played leaves no place to keep, and its playback ends all the
 		// same, rather than kept to be swept again for ever.
