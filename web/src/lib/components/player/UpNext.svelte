@@ -5,16 +5,18 @@ import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 
 // The next episode, offered as the credits roll, playing by itself once the
-// count runs out unless the reader says otherwise. The count holds while the
-// title is paused.
+// count runs out unless the reader says otherwise, or has turned autoplay off.
+// The count holds while the title is paused.
 let {
 	card,
 	paused,
+	autoplay,
 	onplay,
 	ondismiss,
 }: {
 	card: components["schemas"]["Card"];
 	paused: boolean;
+	autoplay: boolean;
 	onplay: () => void;
 	ondismiss: () => void;
 } = $props();
@@ -23,7 +25,7 @@ const countdown = 10;
 let left = $state(countdown);
 
 const timer = setInterval(() => {
-	if (paused) return;
+	if (paused || !autoplay) return;
 	left -= 1;
 	if (left <= 0) {
 		clearInterval(timer);
@@ -59,7 +61,9 @@ const where = $derived(
 			<p class="text-ink truncate text-sm font-semibold">
 				{[where, card.title].filter(Boolean).join(" · ")}
 			</p>
-			<p class="text-ink-3 text-xs tabular-nums">Plays in {left} s</p>
+			{#if autoplay}
+				<p class="text-ink-3 text-xs tabular-nums">Plays in {left} s</p>
+			{/if}
 		</div>
 		<div class="flex gap-2">
 			<Button size="sm" onclick={onplay}>Play now</Button>

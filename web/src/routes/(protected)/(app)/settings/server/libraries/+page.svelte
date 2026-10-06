@@ -20,7 +20,7 @@ const path = (id: string) => ({ params: { path: { id } } });
 
 <div class="flex flex-wrap items-center justify-between gap-4">
 	<h1 class="title">Libraries</h1>
-	<Button href="/admin/libraries/new">Add a library</Button>
+	<Button href="/settings/server/libraries/new">Add a library</Button>
 </div>
 
 {#if data.libraries.length}
@@ -44,7 +44,10 @@ const path = (id: string) => ({ params: { path: { id } } });
 					{/if}
 					<div class="grid min-w-0 flex-1 gap-1">
 						<h2 class="heading">
-							<a href="/admin/libraries/{library.id}" class="hover:underline">
+							<a
+								href="/settings/server/libraries/{library.id}"
+								class="hover:underline"
+							>
 								{library.name}
 							</a>
 						</h2>
@@ -70,7 +73,7 @@ const path = (id: string) => ({ params: { path: { id } } });
 					</Button>
 					<LibraryRefresh id={library.id} name={library.name} />
 					<Button
-						href="/admin/libraries/{library.id}"
+						href="/settings/server/libraries/{library.id}"
 						variant="outline"
 						size="sm"
 					>

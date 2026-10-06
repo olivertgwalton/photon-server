@@ -21,6 +21,8 @@ const number = (name: string) => {
 		start={number("t") ?? (data.title.state?.position_ms ?? 0) / 1000}
 		version={page.url.searchParams.get("version") ?? undefined}
 		audio={number("audio")}
-		subtitle={number("subtitle")}
+		subtitle={page.url.searchParams.get("subtitle") === "off"
+			? "off"
+			: number("subtitle")}
 	/>
 {/key}

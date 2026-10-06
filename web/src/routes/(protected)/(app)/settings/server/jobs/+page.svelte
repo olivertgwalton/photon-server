@@ -35,7 +35,7 @@ function count(kind: Schemas["JobKind"], state: Schemas["JobState"]) {
 function subject(job: Schemas["DeadJob"]) {
 	switch (job.kind) {
 		case "scan_library":
-			return `/admin/libraries/${job.subject}`;
+			return `/settings/server/libraries/${job.subject}`;
 		case "identify":
 			return `/titles/${job.subject}`;
 		default:

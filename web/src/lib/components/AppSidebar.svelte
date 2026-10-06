@@ -6,6 +6,7 @@ import HeartIcon from "@lucide/svelte/icons/heart";
 import HistoryIcon from "@lucide/svelte/icons/history";
 import HouseIcon from "@lucide/svelte/icons/house";
 import ListVideoIcon from "@lucide/svelte/icons/list-video";
+import SettingsIcon from "@lucide/svelte/icons/settings";
 import TvIcon from "@lucide/svelte/icons/tv";
 import type { Component } from "svelte";
 import { page } from "$app/state";
@@ -25,9 +26,10 @@ const sidebar = Sidebar.useSidebar();
 
 function current(href: string) {
 	const path = page.url.pathname;
-	return href === "/"
-		? path === "/"
-		: path === href || path.startsWith(`${href}/`);
+	if (href === "/") return path === "/";
+	// The server's settings are the dashboard's, not the reader's.
+	if (href === "/settings" && path.startsWith("/settings/server")) return false;
+	return path === href || path.startsWith(`${href}/`);
 }
 </script>
 
@@ -89,8 +91,13 @@ function current(href: string) {
 					{@render item("/playlists", "Playlists", ListVideoIcon)}
 					{@render item("/history", "History", HistoryIcon)}
 					{@render item("/downloads", "Downloads", DownloadIcon)}
+				</Sidebar.Menu>
+			</Sidebar.Group>
+			<Sidebar.Group>
+				<Sidebar.Menu>
+					{@render item("/settings", "Settings", SettingsIcon)}
 					{#if admin}
-						{@render item("/admin", "Dashboard", GaugeIcon)}
+						{@render item("/settings/server", "Dashboard", GaugeIcon)}
 					{/if}
 				</Sidebar.Menu>
 			</Sidebar.Group>

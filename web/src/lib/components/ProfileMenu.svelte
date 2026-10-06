@@ -1,4 +1,5 @@
 <script lang="ts">
+import GaugeIcon from "@lucide/svelte/icons/gauge";
 import LogOutIcon from "@lucide/svelte/icons/log-out";
 import MonitorSmartphoneIcon from "@lucide/svelte/icons/monitor-smartphone";
 import SettingsIcon from "@lucide/svelte/icons/settings";
@@ -33,12 +34,17 @@ const here = $derived(encodeURIComponent(page.url.pathname + page.url.search));
 		<DropdownMenu.Item onSelect={() => goto(`/profiles?to=${here}`)}>
 			<UsersIcon />Switch profile
 		</DropdownMenu.Item>
-		<DropdownMenu.Item onSelect={() => goto("/link")}>
-			<MonitorSmartphoneIcon />Link a device
-		</DropdownMenu.Item>
 		<DropdownMenu.Item onSelect={() => goto("/settings")}>
 			<SettingsIcon />Settings
 		</DropdownMenu.Item>
+		<DropdownMenu.Item onSelect={() => goto("/settings/link")}>
+			<MonitorSmartphoneIcon />Link a device
+		</DropdownMenu.Item>
+		{#if profile.role === "admin"}
+			<DropdownMenu.Item onSelect={() => goto("/settings/server")}>
+				<GaugeIcon />Server dashboard
+			</DropdownMenu.Item>
+		{/if}
 		<DropdownMenu.Separator />
 		<DropdownMenu.Item onSelect={logOut}>
 			<LogOutIcon />Log out

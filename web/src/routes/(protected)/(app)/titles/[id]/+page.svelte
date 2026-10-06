@@ -356,7 +356,8 @@ const poster = $derived(art("poster"));
 								<DropdownMenu.GroupHeading>Admin</DropdownMenu.GroupHeading>
 								{#each adminTools as [tool, name] (tool)}
 									<DropdownMenu.Item
-										onSelect={() => goto(`/admin/titles/${t.id}/${tool}`)}
+										onSelect={() =>
+											goto(`/settings/server/titles/${t.id}#${tool}`)}
 									>
 										<WrenchIcon />{name}
 									</DropdownMenu.Item>

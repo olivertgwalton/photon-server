@@ -91,7 +91,7 @@ function remove() {
 	return act(
 		api.DELETE("/api/v1/admin/profiles/{id}", path),
 		`${data.profile.name} was removed.`,
-		"/admin/profiles",
+		"/settings/server/profiles",
 	);
 }
 </script>
@@ -241,6 +241,8 @@ function remove() {
 			Its devices are signed out, and what it has watched is forgotten. The last
 			admin cannot be removed.
 		</ConfirmButton>
-		<Button href="/admin/profiles" variant="ghost">Back to profiles</Button>
+		<Button href="/settings/server/profiles" variant="ghost"
+			>Back to profiles</Button
+		>
 	</div>
 </div>

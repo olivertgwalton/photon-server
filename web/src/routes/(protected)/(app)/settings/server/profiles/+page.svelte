@@ -107,7 +107,7 @@ async function add(event: SubmitEvent) {
 			<Table.Row>
 				<Table.Cell>
 					<a
-						href="/admin/profiles/{profile.id}"
+						href="/settings/server/profiles/{profile.id}"
 						class="text-ink flex items-center gap-3 font-semibold hover:underline"
 					>
 						<ProfileAvatar name={profile.name} class="size-8 text-sm" />

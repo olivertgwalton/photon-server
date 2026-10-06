@@ -164,7 +164,7 @@ const jobs = $derived(
 		<Card.Header>
 			<Card.Title><h2 class="heading">Recent activity</h2></Card.Title>
 			<Card.Action>
-				<Button href="/admin/activity" variant="ghost" size="sm"
+				<Button href="/settings/server/activity" variant="ghost" size="sm"
 					>All activity</Button
 				>
 			</Card.Action>

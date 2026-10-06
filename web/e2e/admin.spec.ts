@@ -16,7 +16,7 @@ async function asKids(page: Page) {
 test("the overview follows the server live: who is playing, and a scan as it grows", async ({
 	page,
 }) => {
-	await logIn(page, "/admin");
+	await logIn(page, "/settings/server");
 	await expect(page.getByRole("heading", { name: "Den" })).toBeVisible();
 
 	const card = page.locator("article", { hasText: "Quiet Hours" });
@@ -52,7 +52,7 @@ test("the overview follows the server live: who is playing, and a scan as it gro
 
 test("a member is told the dashboard is not theirs", async ({ page }) => {
 	await asKids(page);
-	await page.goto("/admin");
+	await page.goto("/settings/server");
 	await expect(
 		page.getByRole("heading", { name: "only an admin may" }),
 	).toBeVisible();
@@ -62,7 +62,7 @@ test("a member is told the dashboard is not theirs", async ({ page }) => {
 test("a library is added from a folder found by browsing the server", async ({
 	page,
 }) => {
-	await logIn(page, "/admin/libraries");
+	await logIn(page, "/settings/server/libraries");
 	await expect(page.getByRole("heading", { name: "Films" })).toBeVisible();
 	await expect(page.getByText(/Reading folders/)).toBeVisible();
 	await expectAccessible(page);
@@ -84,7 +84,7 @@ test("a library is added from a folder found by browsing the server", async ({
 	).toBeVisible();
 	await expectAccessible(page);
 	await page.getByRole("button", { name: "Add and scan" }).click();
-	await expect(page).toHaveURL("/admin/libraries");
+	await expect(page).toHaveURL("/settings/server/libraries");
 
 	await page.getByRole("link", { name: "Edit Films" }).click();
 	await expect(page.getByRole("textbox", { name: "Folder" })).toHaveValue(
@@ -98,7 +98,7 @@ test("a library is added from a folder found by browsing the server", async ({
 test("a library's metadata is refreshed, what is missing or all of it", async ({
 	page,
 }) => {
-	await logIn(page, "/admin/libraries");
+	await logIn(page, "/settings/server/libraries");
 	await page.getByRole("button", { name: "Refresh metadata of Films" }).click();
 	const dialog = page.getByRole("dialog", { name: "Refresh library metadata" });
 	await expect(dialog.getByText("Choose how much of Films")).toBeVisible();
@@ -124,7 +124,7 @@ test("a library's metadata is refreshed, what is missing or all of it", async ({
 test("a profile is added, and what another may see is set", async ({
 	page,
 }) => {
-	await logIn(page, "/admin/profiles");
+	await logIn(page, "/settings/server/profiles");
 	await expectAccessible(page);
 	await page.getByRole("button", { name: "Add a profile" }).click();
 	await page.getByRole("textbox", { name: "Name" }).fill("Guest");
@@ -148,7 +148,7 @@ test("a profile is added, and what another may see is set", async ({
 test("a provider is given its key, which is never shown back", async ({
 	page,
 }) => {
-	await logIn(page, "/admin/providers");
+	await logIn(page, "/settings/server/providers");
 	await expect(page.getByText("Needs settings").first()).toBeVisible();
 	await expectAccessible(page);
 	await page.getByLabel("API key (required)").fill("abc123");
@@ -159,7 +159,7 @@ test("a provider is given its key, which is never shown back", async ({
 test("tasks run, dead jobs are retried, and the logs read", async ({
 	page,
 }) => {
-	await logIn(page, "/admin/tasks");
+	await logIn(page, "/settings/server/tasks");
 	await expect(page.getByText("Failed: disk full")).toBeVisible();
 	await expectAccessible(page);
 	await page
@@ -169,26 +169,26 @@ test("tasks run, dead jobs are retried, and the logs read", async ({
 		page.getByText("Back up the database is running."),
 	).toBeVisible();
 
-	await page.goto("/admin/jobs");
+	await page.goto("/settings/server/jobs");
 	await expect(page.getByText("TMDB said 503")).toBeVisible();
 	await expectAccessible(page);
 	await page.getByRole("button", { name: "Try again job 41" }).click();
 	await expect(page.getByText("The job is queued again.")).toBeVisible();
 	await expect(page.getByText("Nothing has been given up on.")).toBeVisible();
 
-	await page.goto("/admin/activity?kind=library.added");
+	await page.goto("/settings/server/activity?kind=library.added");
 	await expect(page.getByText("Library Films was added")).toBeVisible();
 	await expect(page.getByText("Back up the database failed")).toHaveCount(0);
 	await expectAccessible(page);
 
-	await page.goto("/admin/history");
+	await page.goto("/settings/server/history");
 	await expect(page.getByRole("cell", { name: "Kids" })).toBeVisible();
 	await expect(page.getByRole("cell", { name: "100%" })).toBeVisible();
 	await expectAccessible(page);
 });
 
 test("a webhook's secret is shown once, to copy", async ({ page }) => {
-	await logIn(page, "/admin/webhooks");
+	await logIn(page, "/settings/server/webhooks");
 	await page.getByRole("button", { name: "Add a webhook" }).click();
 	await page.getByLabel("Address").fill("https://example.com/hook");
 	await page.getByLabel("A play starts").click();
@@ -208,7 +208,7 @@ test("a webhook's secret is shown once, to copy", async ({ page }) => {
 });
 
 test("a collection made here is filled from its library", async ({ page }) => {
-	await logIn(page, "/admin/collections");
+	await logIn(page, "/settings/server/collections");
 	await expect(page.getByText("Made here", { exact: true })).toBeVisible();
 	await expectAccessible(page);
 	await page.getByRole("link", { name: /Lighthouse Films/ }).click();
@@ -226,7 +226,7 @@ test("a collection made here is filled from its library", async ({ page }) => {
 test("a title is edited, matched, given a poster and marked", async ({
 	page,
 }) => {
-	await logIn(page, "/admin/titles/t-quiet");
+	await logIn(page, "/settings/server/titles/t-quiet");
 	await expect(page.getByText("Matched to tmdb 101.")).toBeVisible();
 	await expect(
 		page.getByRole("button", { name: /tmdb · en · 1000×1500 · chosen/ }),
