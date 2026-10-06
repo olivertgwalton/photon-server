@@ -158,6 +158,15 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 					size_bytes: 40_000_000_000,
 					bitrate_kbps: 48_000,
 					parts: 1,
+					files: [
+						{
+							id: "p-4k",
+							index: 0,
+							size_bytes: 40_000_000_000,
+							duration_ms: 6_720_000,
+							offset_ms: 0,
+						},
+					],
 					streams: [
 						stream(0, "video", {
 							codec: "hevc",
@@ -192,6 +201,15 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 					duration_ms: 6_720_000,
 					size_bytes: 8_000_000_000,
 					parts: 1,
+					files: [
+						{
+							id: "p-hd",
+							index: 0,
+							size_bytes: 8_000_000_000,
+							duration_ms: 6_720_000,
+							offset_ms: 0,
+						},
+					],
 					streams: [
 						stream(0, "video", { width: 1920, height: 1080 }),
 						stream(1, "audio", { codec: "aac", language: "eng", channels: 2 }),
@@ -230,6 +248,15 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 				duration_ms: 1_800_000,
 				size_bytes: 1_000_000_000,
 				parts: 1,
+				files: [
+					{
+						id: `p-${id}`,
+						index: 0,
+						size_bytes: 1_000_000_000,
+						duration_ms: 1_800_000,
+						offset_ms: 0,
+					},
+				],
 				streams: [stream(0, "video", {}), stream(1, "audio", { codec: "aac" })],
 			},
 		];
@@ -254,6 +281,15 @@ const version = (id: string): Schemas["VersionPage"] => ({
 	size_bytes: 152_341,
 	bitrate_kbps: 200,
 	parts: 1,
+	files: [
+		{
+			id: `p-${id}`,
+			index: 0,
+			size_bytes: 152_341,
+			duration_ms: 6_000,
+			offset_ms: 0,
+		},
+	],
 	streams: [
 		{
 			index: 0,

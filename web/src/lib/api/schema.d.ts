@@ -4748,6 +4748,17 @@ export interface components {
         };
         /** @enum {string} */
         PartPlayback: "joined" | "each";
+        PartRef: {
+            /** Format: int64 */
+            duration_ms: number;
+            /** Format: uuid */
+            id: string;
+            index: number;
+            /** Format: int64 */
+            offset_ms: number;
+            /** Format: int64 */
+            size_bytes: number;
+        };
         PartTrickplay: {
             columns: number;
             height: number;
@@ -5244,6 +5255,7 @@ export interface components {
             /** Format: int64 */
             duration_ms: number;
             edition?: string;
+            files: components["schemas"]["PartRef"][];
             /** Format: uuid */
             id: string;
             label?: string;

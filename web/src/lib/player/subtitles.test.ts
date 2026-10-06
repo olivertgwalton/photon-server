@@ -10,6 +10,7 @@ const version: Schemas["VersionPage"] = {
 	duration_ms: 1,
 	size_bytes: 1,
 	parts: 1,
+	files: [{ id: "p", index: 0, size_bytes: 1, duration_ms: 1, offset_ms: 0 }],
 	streams: [
 		{ index: 0, kind: "video", codec: "h264" },
 		{ index: 2, kind: "subtitle", codec: "hdmv_pgs_subtitle", language: "en" },
