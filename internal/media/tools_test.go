@@ -75,7 +75,7 @@ func TestAToolThatHangsIsStopped(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Now()
-	_, err := output(t.Context(), 100*time.Millisecond, nil, path)
+	_, err := output(t.Context(), Background, 100*time.Millisecond, nil, path)
 	if err == nil || !strings.Contains(err.Error(), "still running after 100ms") {
 		t.Fatalf("err = %v, want it to say the tool ran too long", err)
 	}

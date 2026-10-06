@@ -28,7 +28,7 @@ func IndexedKeyframes(f *os.File) ([]int64, error) {
 // WalkKeyframes reads every packet's flags with ffprobe, without decoding: the whole file. A file
 // it finds none in answers an empty list.
 func (t Tools) WalkKeyframes(ctx context.Context, f *os.File) ([]int64, error) {
-	out, err := output(ctx, WholeRun(f), []*os.File{f}, t.FFprobe.Path,
+	out, err := output(ctx, Background, WholeRun(f), []*os.File{f}, t.FFprobe.Path,
 		"-hide_banner", "-v", "error", "-protocol_whitelist", "fd", "-fd", "3",
 		"-select_streams", "v:0", "-show_entries", "packet=pts_time,flags", "-of", "csv=p=0", "-i", "fd:")
 	if err != nil {

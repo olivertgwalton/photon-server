@@ -175,7 +175,7 @@ func download(ctx context.Context, ytdlp, ffmpeg, link string, keep func(io.Read
 	defer os.RemoveAll(dir)
 	ctx, cancel := media.Within(ctx, ytdlp, media.PartRun)
 	defer cancel()
-	c := media.NewCommand(ctx, nil, ytdlp,
+	c := media.NewCommand(ctx, media.Background, nil, ytdlp,
 		"--ignore-config", "--no-cache-dir", "--no-playlist", "--quiet", "--no-warnings",
 		"--use-extractors", "youtube", "--max-filesize", maxSize,
 		"--format", "bestaudio[ext=m4a]/bestaudio", "--extract-audio", "--audio-format", "m4a",

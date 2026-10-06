@@ -32,7 +32,7 @@ func (h Hardware) Convert(ctx context.Context, ffmpeg string, src *os.File, vide
 	a = append(a, "-i", "fd:")
 	a = append(a, streamArgs(h, video, audio)...)
 	a = append(a, "-f", "mp4", "-movflags", "+faststart", "-progress", "pipe:1", "-nostats", "-y", dst)
-	cmd := media.NewCommand(ctx, []*os.File{src}, ffmpeg, a...)
+	cmd := media.NewCommand(ctx, media.Background, []*os.File{src}, ffmpeg, a...)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
