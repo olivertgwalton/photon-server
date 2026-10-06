@@ -104,6 +104,10 @@ type WatchState struct {
 	Plays        int
 	WatchedAt    *time.Time
 	LastPlayedAt *time.Time
+	// AudioStream, SubtitleStream and SubtitleFile are the tracks last chosen.
+	AudioStream    *int16
+	SubtitleStream *int16
+	SubtitleFile   *UUID `gorm:"type:uuid"`
 }
 
 func (WatchState) TableName() string { return "watch_state" }
