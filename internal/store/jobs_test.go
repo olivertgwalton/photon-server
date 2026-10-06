@@ -316,6 +316,46 @@ func TestTitlesDueAFreshMatchAreQueued(t *testing.T) {
 	}
 }
 
+// A show is asked about again the day after its next episode airs, though its library refreshes
+// monthly, so the episode after is known; once asked since, it waits for its month.
+func TestAShowIsMatchedAgainOnceItsNextEpisodeAirs(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	episode := Episode{
+		Season: 1, Episodes: []int{1}, Title: "Show", Folder: "Show/Season 1", ByNumber: true,
+		Copies: []Copy{{ContentKey: []byte("1"), Parts: []Part{{RelPath: "Show/Season 1/1.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
+	}
+	if _, err := s.SaveShowFolder(ctx, lib.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, []Episode{episode}, nil); err != nil {
+		t.Fatal(err)
+	}
+	show := oneItem(t, s, "kind = 'show'").ID
+	var twoDaysAgo time.Time
+	if err := s.pool.QueryRow(ctx, `SELECT current_date - 2`).Scan(&twoDaysAgo); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveIdentity(ctx, show, domain.SourceTMDB, domain.Metadata{NextAiring: &domain.Airing{SeasonNumber: 1, EpisodeNumber: 2, Date: twoDaysAgo}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		identified string
+		want       int64
+	}{{"3 days", 1}, {"1 day", 0}} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE kind = 'identify'`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.pool.Exec(ctx, `UPDATE items SET identified_at = now() - $1::interval WHERE id = $2`, tc.identified, show); err != nil {
+			t.Fatal(err)
+		}
+		if n, err := s.RefreshStale(ctx); err != nil || n != tc.want {
+			t.Errorf("matched %s ago, its next episode aired two days ago: queued %d, %v; want %d", tc.identified, n, err, tc.want)
+		}
+	}
+}
+
 func TestATitleAScanFindsIsMatchedBeforeTheRefresh(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()

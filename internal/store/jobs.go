@@ -321,13 +321,16 @@ func (s *Store) Identified(ctx context.Context, id uuid.UUID) error {
 }
 
 // RefreshStale queues a match of every film and show its library refreshes and that was last
-// matched longer ago than the library says, as Jellyfin's scheduled metadata refresh does. It
-// answers how many.
+// matched longer ago than the library says, as Jellyfin's scheduled metadata refresh does, and
+// every show whose next episode has aired since it was, so the one after is known. It answers how
+// many.
 func (s *Store) RefreshStale(ctx context.Context) (int64, error) {
 	tag, err := s.pool.Exec(ctx, `
 		INSERT INTO jobs (kind, subject, priority)
 		SELECT 'identify', i.id, $1 FROM items i JOIN libraries l ON l.id = i.library_id
 		WHERE i.kind IN ('movie', 'show') AND l.refresh_days > 0
-			AND coalesce(i.identified_at, '-infinity') < now() - make_interval(days => l.refresh_days)`+requeue, refreshPriority)
+			AND (coalesce(i.identified_at, '-infinity') < now() - make_interval(days => l.refresh_days)
+				OR EXISTS (SELECT 1 FROM next_airings a WHERE a.item_id = i.id
+					AND a.air_date < current_date AND i.identified_at < a.air_date + 1))`+requeue, refreshPriority)
 	return tag.RowsAffected(), err
 }
