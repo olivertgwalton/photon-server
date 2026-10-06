@@ -7,13 +7,16 @@ export const load: PageLoad = async ({ fetch }) => {
 	const shelves = await Promise.all(
 		items.map(async (library) => ({
 			library,
-			collections: (
-				await need(
-					api.GET("/api/v1/libraries/{id}/collections", {
-						params: { path: { id: library.id }, query: { limit: 200 } },
-					}),
-				)
-			).items,
+			// The server's count is everything, so none there is none to list.
+			collections: library.counts.collections
+				? (
+						await need(
+							api.GET("/api/v1/libraries/{id}/collections", {
+								params: { path: { id: library.id }, query: { limit: 200 } },
+							}),
+						)
+					).items
+				: [],
 		})),
 	);
 	return { shelves };
