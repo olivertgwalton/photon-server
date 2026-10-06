@@ -96,7 +96,9 @@ test("a library is added from a folder found by browsing the server", async ({
 
 	await page.getByRole("link", { name: "Edit Films" }).click();
 	// The library's own page does what the list does.
-	await expect(page.getByRole("button", { name: "Scan now" })).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: /Scan now|Scanning/ }),
+	).toBeVisible();
 	await expect(
 		page.getByRole("button", { name: "Refresh metadata of Films" }),
 	).toBeVisible();
@@ -190,7 +192,11 @@ test("tasks run, dead jobs are retried, and the logs read", async ({
 	await expect(page.getByText("The job is queued again.")).toBeVisible();
 	await expect(page.getByText("Nothing has been given up on.")).toBeVisible();
 
-	await page.goto("/settings/server/activity?kind=library.added");
+	await page.goto("/settings/server/activity");
+	// The choice applies as it is made.
+	await page.getByLabel("Show").click();
+	await page.getByRole("option", { name: "Libraries added" }).click();
+	await expect(page).toHaveURL("/settings/server/activity?kind=library.added");
 	await expect(page.getByText("Library Films was added")).toBeVisible();
 	await expect(page.getByText("Back up the database failed")).toHaveCount(0);
 	await expectAccessible(page);
