@@ -87,6 +87,12 @@ func TestArtwork(t *testing.T) {
 	if rec := get(providerPoster, "?width=320"); rec.Body.String() != "\xff\xd8\xff\xe0small" || rec.Header().Get("Content-Type") != "image/jpeg" {
 		t.Errorf("a resized picture: %q as %q, want the copy, typed by its content", rec.Body.String(), rec.Header().Get("Content-Type"))
 	}
+	if rec := get(providerPoster, "?height=480"); rec.Body.String() != "\xff\xd8\xff\xe0small" {
+		t.Errorf("a picture asked for by height: %q, want the copy", rec.Body.String())
+	}
+	if rec := get(localPoster, "?height=0"); rec.Code != http.StatusBadRequest {
+		t.Errorf("height=0: %d, want 400", rec.Code)
+	}
 	if rec := get(localPoster, "?width=320"); rec.Body.String() != "local jpeg" {
 		t.Errorf("a picture that cannot be resized: %q, want it as it is", rec.Body.String())
 	}

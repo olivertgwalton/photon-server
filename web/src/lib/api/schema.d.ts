@@ -1902,8 +1902,10 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description A copy this many pixels wide. */
+                    /** @description A copy at most this many pixels wide, keeping its shape; rounded up to one of a few sizes. */
                     width?: number;
+                    /** @description A copy at most this many pixels high, keeping its shape; rounded up as width is. */
+                    height?: number;
                 };
                 header?: never;
                 path: {

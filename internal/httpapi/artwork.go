@@ -26,8 +26,8 @@ type pictureCache interface {
 	Kept(id uuid.UUID) (*os.File, error)
 }
 
-// artwork serves a picture, or with width a copy that wide, for a client that does not size
-// pictures itself. Its id changes whenever the picture does, so a client keeps it for good. It is
+// artwork serves a picture, or with width or height a copy that fits inside them, for a client that
+// does not size pictures itself. Its id changes whenever the picture does, so a client keeps it for good. It is
 // public, as Jellyfin's are, so a page can show it without a token; ids are random.
 func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r, "id")
@@ -38,14 +38,16 @@ func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	var width int
-	if v := r.URL.Query().Get("width"); v != "" {
-		if width, err = strconv.Atoi(v); err != nil || width < 1 {
-			writeProblem(w, a.logger, codeInvalidParameter, "width is a number of pixels")
-			return
+	var size [2]int
+	for i, param := range []string{"width", "height"} {
+		if v := r.URL.Query().Get(param); v != "" {
+			if size[i], err = strconv.Atoi(v); err != nil || size[i] < 1 {
+				writeProblem(w, a.logger, codeInvalidParameter, param+" is a number of pixels")
+				return
+			}
 		}
 	}
-	f, name, err := a.openPicture(r.Context(), id, pic, width)
+	f, name, err := a.openPicture(r.Context(), id, pic, size[0], size[1])
 	if a.answered(w, r, err) {
 		return
 	}
@@ -57,7 +59,7 @@ func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *API) openPicture(ctx context.Context, id uuid.UUID, pic store.Picture, width int) (*os.File, string, error) {
+func (a *API) openPicture(ctx context.Context, id uuid.UUID, pic store.Picture, width, height int) (*os.File, string, error) {
 	name := path.Base(pic.Path + pic.URL)
 	original := func(ctx context.Context) (*os.File, error) {
 		switch {
@@ -68,8 +70,8 @@ func (a *API) openPicture(ctx context.Context, id uuid.UUID, pic store.Picture, 
 		}
 		return library.Open(pic.Root, pic.Path)
 	}
-	if width > 0 {
-		f, err := a.svc.Artwork.Resized(ctx, id.String(), width, 0, original)
+	if width > 0 || height > 0 {
+		f, err := a.svc.Artwork.Resized(ctx, id.String(), width, height, original)
 		// A resized copy is named for no format; its content says which.
 		if !errors.Is(err, artwork.ErrNotResizable) {
 			return f, "", err
