@@ -7,6 +7,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 const (
@@ -143,6 +144,11 @@ func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Du
 	s.streams.Close(p.ID)
 	p.Position = position
 	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position, p.Reached)
+	if errors.Is(err, store.ErrNotFound) {
+		// A title removed while it played leaves no place to keep, and its playback ends all the
+		// same, rather than kept to be swept again for ever.
+		reach, err = domain.ReachStart, nil
+	}
 	if err == nil {
 		err = s.saved.RecordPlay(ctx, p, time.Now(), position)
 	}
