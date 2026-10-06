@@ -40,6 +40,9 @@ var ErrTranscodeLimit = errors.New("hls: at the limit of transcodes at once")
 // ErrPreempted is a conversion stopped so a playback could have its transcode slot.
 var ErrPreempted = errors.New("hls: conversion stopped for a playback")
 
+// errEnded is a file that ends before the segments its length promised.
+var errEnded = errors.New("hls: the file ends early")
+
 // Unlimited is a remuxer that encodes as many videos at once as it is asked to.
 const Unlimited = 0
 
@@ -475,11 +478,15 @@ func (r *Remuxer) start(ctx context.Context, s *session, n int) {
 	s.run = run
 	go func() {
 		err := r.produce(ctx, s, run)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		// A file shorter than it says ends before the part's last segments.
+		if err == nil && run.at < len(s.plan) && s.plan[run.at].Part == run.part {
+			err = fmt.Errorf("%w: segment %d", errEnded, run.at)
+		}
 		if err != nil && ctx.Err() == nil {
 			r.log.WarnContext(ctx, "remux failed", slog.String("dir", s.dir), slog.Any("err", err))
 		}
-		s.mu.Lock()
-		defer s.mu.Unlock()
 		if s.run == run {
 			s.run = nil
 		}
