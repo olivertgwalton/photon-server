@@ -1,5 +1,10 @@
 package domain
 
+import (
+	"errors"
+	"uuid"
+)
+
 type JobKind string
 
 const (
@@ -37,3 +42,27 @@ const (
 func JobStates() []JobState {
 	return []JobState{JobQueued, JobRunning, JobRerun, JobDead}
 }
+
+type Job struct {
+	ID       int64
+	Kind     JobKind
+	Subject  uuid.UUID
+	Attempts int
+}
+
+// About is the title, season or library a job is about, where its subject is one; a part's
+// keyframes or previews, a download's conversion and a webhook's delivery are neither.
+func (j Job) About() (item, library uuid.UUID) {
+	switch j.Kind {
+	case JobIdentify, JobMarkers:
+		return j.Subject, uuid.UUID{}
+	case JobScanLibrary:
+		return uuid.UUID{}, j.Subject
+	case JobKeyframes, JobPreviews, JobConvert, JobDeliverWebhook:
+	}
+	return uuid.UUID{}, uuid.UUID{}
+}
+
+// ErrLeaseLost is a node's answer for a job it no longer holds: its lease ran out and the job was
+// queued again, and may be running elsewhere.
+var ErrLeaseLost = errors.New("the job's lease ran out and it was queued again")

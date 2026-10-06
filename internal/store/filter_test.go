@@ -12,7 +12,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
@@ -27,8 +26,8 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		t.Fatal(err)
 	}
 	copyOf := func(name string, width int, rng domain.Range, d time.Duration) Copy {
-		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{
-			Duration: d, Streams: []media.Stream{{Kind: domain.StreamVideo, Codec: "hevc", Width: width, Height: width * 9 / 16, Range: rng}},
+		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+			Duration: d, Streams: []domain.Stream{{Kind: domain.StreamVideo, Codec: "hevc", Width: width, Height: width * 9 / 16, Range: rng}},
 		}}}}
 	}
 	ids := map[string]uuid.UUID{}

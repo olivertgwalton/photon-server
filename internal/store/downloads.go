@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
@@ -205,7 +204,7 @@ type Conversion struct {
 	Container   string
 	BitrateKbps int
 	Duration    time.Duration
-	Streams     []media.Stream
+	Streams     []domain.Stream
 }
 
 // StartConversion records that a node is converting a part, and answers what it needs to.

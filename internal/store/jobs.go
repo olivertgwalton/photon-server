@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"errors"
 	"time"
 	"uuid"
 
@@ -15,26 +14,6 @@ import (
 
 // maxAttempts is how often a job is tried before it is dead and waits for its subject to change.
 const maxAttempts = 5
-
-type Job struct {
-	ID       int64
-	Kind     domain.JobKind
-	Subject  uuid.UUID
-	Attempts int
-}
-
-// About is the title, season or library a job is about, where its subject is one; a part's
-// keyframes or previews, a download's conversion and a webhook's delivery are neither.
-func (j Job) About() (item, library uuid.UUID) {
-	switch j.Kind {
-	case domain.JobIdentify, domain.JobMarkers:
-		return j.Subject, uuid.UUID{}
-	case domain.JobScanLibrary:
-		return uuid.UUID{}, j.Subject
-	case domain.JobKeyframes, domain.JobPreviews, domain.JobConvert, domain.JobDeliverWebhook:
-	}
-	return uuid.UUID{}, uuid.UUID{}
-}
 
 // enqueue adds a job inside the transaction whose write made it necessary, so the job and its
 // cause commit together. A job already queued for the subject stands; one running will run again
@@ -123,7 +102,7 @@ func (s *Store) ScanAnswered(ctx context.Context, lib uuid.UUID, folders []strin
 
 // ClaimJobs leases up to limit queued jobs of the given kinds to node. Workers that ask together
 // never receive the same job: each row is taken by one transaction and skipped by the others.
-func (s *Store) ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]Job, error) {
+func (s *Store) ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error) {
 	names := make([]string, len(kinds))
 	for i, k := range kinds {
 		names[i] = string(k)
@@ -137,8 +116,8 @@ func (s *Store) ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Job, error) {
-		var j Job
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (domain.Job, error) {
+		var j domain.Job
 		var kind, subject string
 		if err := r.Scan(&j.ID, &kind, &subject, &j.Attempts); err != nil {
 			return j, err
@@ -165,7 +144,7 @@ func (s *Store) CompleteJob(ctx context.Context, id int64) error {
 // FailJob queues a job again after a backoff that doubles with each attempt, up to an hour, or
 // marks it dead once it has had maxAttempts and its subject has not changed since it was claimed,
 // answering whether it did.
-func (s *Store) FailJob(ctx context.Context, job Job, runErr error) (bool, error) {
+func (s *Store) FailJob(ctx context.Context, job domain.Job, runErr error) (bool, error) {
 	j := s.q.Job
 	q := j.WithContext(ctx).Where(j.ID.Eq(job.ID))
 	if job.Attempts >= maxAttempts {
@@ -185,7 +164,7 @@ func (s *Store) FailJob(ctx context.Context, job Job, runErr error) (bool, error
 
 // PostponeJob queues a job again once a delay has passed, giving back its attempt: it could not
 // start for want of room on its node, which is no fault of its subject's.
-func (s *Store) PostponeJob(ctx context.Context, job Job, delay time.Duration) error {
+func (s *Store) PostponeJob(ctx context.Context, job domain.Job, delay time.Duration) error {
 	j := s.q.Job
 	_, err := j.WithContext(ctx).Where(j.ID.Eq(job.ID)).UpdateSimple(
 		j.State.Value(string(domain.JobQueued)), j.Attempts.Sub(1), j.LeaseUntil.Null(), j.NodeID.Null(),
@@ -194,22 +173,18 @@ func (s *Store) PostponeJob(ctx context.Context, job Job, delay time.Duration) e
 }
 
 // RunningJobs answers the jobs being run now, on every node, the oldest first.
-func (s *Store) RunningJobs(ctx context.Context) ([]Job, error) {
+func (s *Store) RunningJobs(ctx context.Context) ([]domain.Job, error) {
 	j := s.q.Job
 	rows, err := j.WithContext(ctx).Where(j.State.In(string(domain.JobRunning), string(domain.JobRerun))).Order(j.ID).Find()
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Job, len(rows))
+	out := make([]domain.Job, len(rows))
 	for i, r := range rows {
-		out[i] = Job{ID: r.ID, Kind: r.Kind, Subject: uuid.UUID(r.Subject), Attempts: int(r.Attempts)}
+		out[i] = domain.Job{ID: r.ID, Kind: r.Kind, Subject: uuid.UUID(r.Subject), Attempts: int(r.Attempts)}
 	}
 	return out, nil
 }
-
-// ErrLeaseLost is a node's answer for a job it no longer holds: its lease ran out and the job was
-// queued again, and may be running elsewhere.
-var ErrLeaseLost = errors.New("the job's lease ran out and it was queued again")
 
 // ExtendLease keeps a running job's lease while node is at it.
 func (s *Store) ExtendLease(ctx context.Context, id int64, node uuid.UUID, lease time.Duration) error {
@@ -218,7 +193,7 @@ func (s *Store) ExtendLease(ctx context.Context, id int64, node uuid.UUID, lease
 		Where(j.ID.Eq(id), j.State.In(string(domain.JobRunning), string(domain.JobRerun)), j.NodeID.Eq(model.UUID(node))).
 		UpdateSimple(j.LeaseUntil.Value(time.Now().Add(lease)))
 	if err == nil && info.RowsAffected == 0 {
-		return ErrLeaseLost
+		return domain.ErrLeaseLost
 	}
 	return err
 }
@@ -299,7 +274,7 @@ type JobCount struct {
 
 // DeadJob is a job that failed every attempt, and why it last did.
 type DeadJob struct {
-	Job
+	domain.Job
 	Error string
 }
 

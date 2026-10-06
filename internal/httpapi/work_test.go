@@ -43,8 +43,8 @@ func (f *fakeWork) RetryJob(_ context.Context, id int64) error {
 	return nil
 }
 
-func (f *fakeWork) RunningJobs(context.Context) ([]store.Job, error) {
-	return []store.Job{{ID: 9, Kind: domain.JobScanLibrary, Subject: films, Attempts: 1}}, nil
+func (f *fakeWork) RunningJobs(context.Context) ([]domain.Job, error) {
+	return []domain.Job{{ID: 9, Kind: domain.JobScanLibrary, Subject: films, Attempts: 1}}, nil
 }
 
 func (f *fakeWork) Playbacks(context.Context) ([]domain.Playback, error) {
@@ -56,7 +56,7 @@ func (f *fakeWork) Playbacks(context.Context) ([]domain.Playback, error) {
 
 func TestAnAdminSeesTheServersWork(t *testing.T) {
 	work := &fakeWork{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, HLS: fakeHLS{}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, HLS: fakeHLS{}})
 	do := func(token, method, target string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, nil)
 		req.Header.Set("Authorization", "Bearer "+token)

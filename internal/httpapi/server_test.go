@@ -51,7 +51,7 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/server", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec := httptest.NewRecorder()
-		New(slog.New(slog.DiscardHandler), Info{Name: "den"}, svc).ServeHTTP(rec, req)
+		New(slog.New(slog.DiscardHandler), domain.Info{Name: "den"}, svc).ServeHTTP(rec, req)
 		return rec
 	}
 	if rec := get(svc, memberToken); rec.Code != http.StatusForbidden {

@@ -63,7 +63,7 @@ func (f *fakeProfiles) SetAccess(_ context.Context, id uuid.UUID, a store.Profil
 func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 	profiles := &fakeProfiles{hashes: map[string]string{}}
 	told := &fakeEvents{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, ProfileAdmin: profiles, Events: told})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, ProfileAdmin: profiles, Events: told})
 	for _, tc := range []struct {
 		token, method, target, body string
 		want                        int

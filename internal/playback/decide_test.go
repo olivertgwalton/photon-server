@@ -8,16 +8,15 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // A film as rips have it: Dolby Vision 8.1 HEVC in Matroska, with TrueHD 7.1 and an AC-3 5.1 dub.
 var film = Copy{
 	Container: "matroska,webm", BitrateKbps: 40_000,
-	Streams: []media.Stream{
+	Streams: []domain.Stream{
 		{
 			Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Profile: "Main 10", Level: 153, Width: 3840, Height: 2160,
-			FrameRate: 24000.0 / 1001, BitDepth: 10, Range: domain.RangeDV, DolbyVision: &media.DolbyVision{Profile: 8, Compatibility: 1},
+			FrameRate: 24000.0 / 1001, BitDepth: 10, Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Compatibility: 1},
 		},
 		{Index: 1, Kind: domain.StreamAudio, Codec: "truehd", Channels: 8, Default: true},
 		{Index: 2, Kind: domain.StreamAudio, Codec: "ac3", Channels: 6},
@@ -216,7 +215,7 @@ func TestDecide(t *testing.T) {
 }
 
 func TestAnInterlacedPictureIsDeinterlacedAsItIsEncoded(t *testing.T) {
-	broadcast := Copy{Container: "mpegts", BitrateKbps: 8_000, Streams: []media.Stream{
+	broadcast := Copy{Container: "mpegts", BitrateKbps: 8_000, Streams: []domain.Stream{
 		{Index: 0, Kind: domain.StreamVideo, Codec: "mpeg2video", Width: 1920, Height: 1080, Interlaced: true},
 		{Index: 1, Kind: domain.StreamAudio, Codec: "ac3", Channels: 6},
 	}}
@@ -230,7 +229,7 @@ func TestAnInterlacedPictureIsDeinterlacedAsItIsEncoded(t *testing.T) {
 }
 
 func TestVideoLimits(t *testing.T) {
-	h264 := media.Stream{Kind: domain.StreamVideo, Codec: "h264", Profile: "High 10", Level: 51, Width: 1920, Height: 1080, BitDepth: 10}
+	h264 := domain.Stream{Kind: domain.StreamVideo, Codec: "h264", Profile: "High 10", Level: 51, Width: 1920, Height: 1080, BitDepth: 10}
 	for _, tc := range []struct {
 		support VideoSupport
 		want    []domain.TranscodeReason
@@ -254,7 +253,7 @@ func TestSurroundIsKeptInLayoutsPlayersKnow(t *testing.T) {
 		want           int
 	}{{5, 0, 6}, {5, 5, 2}, {7, 0, 8}, {7, 7, 6}, {3, 0, 2}, {1, 0, 1}} {
 		p := Profile{Audio: []AudioSupport{{Codec: "aac", MaxChannels: tc.most}}}
-		got, _ := p.audioEncode(media.Stream{Codec: "dts", Channels: tc.channels})
+		got, _ := p.audioEncode(domain.Stream{Codec: "dts", Channels: tc.channels})
 		if got.Channels != tc.want {
 			t.Errorf("%d channels to a client of %d: %d, want %d", tc.channels, tc.most, got.Channels, tc.want)
 		}
@@ -282,7 +281,7 @@ func TestTheEncodeIsGivenTheRoomItNeedsToMatchTheSource(t *testing.T) {
 		{"h264", domain.VideoHEVC, 1_000, 0, 3_000},
 	} {
 		p := Profile{Video: []VideoSupport{{Codec: string(tc.to)}}, MaxBitrateKbps: tc.limit}
-		got, _ := p.videoEncode(media.Stream{Codec: tc.codec, Width: 1920, Height: 1080}, tc.kbps, domain.HEVCAllow)
+		got, _ := p.videoEncode(domain.Stream{Codec: tc.codec, Width: 1920, Height: 1080}, tc.kbps, domain.HEVCAllow)
 		if got.Codec != tc.to || got.BitrateKbps != tc.want {
 			t.Errorf("%s at %d kbps to %s, limit %d: %s at %d kbps, want %d", tc.codec, tc.kbps, tc.to, tc.limit, got.Codec, got.BitrateKbps, tc.want)
 		}
@@ -292,16 +291,16 @@ func TestTheEncodeIsGivenTheRoomItNeedsToMatchTheSource(t *testing.T) {
 // HEVC is chosen over H.264 where the client plays it and the server may encode it, and keeps the
 // source's HDR10 or HLG where the client shows it in 10 bits; anything else is tone mapped.
 func TestTheEncodeKeepsHDROnlyWhereTheClientShowsIt(t *testing.T) {
-	hdr10 := media.Stream{Codec: "hevc", Range: domain.RangeHDR10}
-	hlg := media.Stream{Codec: "hevc", Range: domain.RangeHLG}
-	dv := func(compatibility int) media.Stream {
-		return media.Stream{Codec: "hevc", Range: domain.RangeDV, DolbyVision: &media.DolbyVision{Profile: 8, Compatibility: compatibility}}
+	hdr10 := domain.Stream{Codec: "hevc", Range: domain.RangeHDR10}
+	hlg := domain.Stream{Codec: "hevc", Range: domain.RangeHLG}
+	dv := func(compatibility int) domain.Stream {
+		return domain.Stream{Codec: "hevc", Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Compatibility: compatibility}}
 	}
 	shows := func(ranges ...domain.Range) VideoSupport { return VideoSupport{Codec: "hevc", Ranges: ranges} }
 	h264 := VideoSupport{Codec: "h264"}
 	for _, tc := range []struct {
 		name    string
-		source  media.Stream
+		source  domain.Stream
 		plays   []VideoSupport
 		hevc    domain.HEVCEncoding
 		codec   domain.VideoCodec
@@ -314,13 +313,13 @@ func TestTheEncodeKeepsHDROnlyWhereTheClientShowsIt(t *testing.T) {
 		{"HDR10 to a client of 8 bits", hdr10, []VideoSupport{{Codec: "hevc", MaxBitDepth: 8, Ranges: []domain.Range{domain.RangeHDR10}}}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, true},
 		{"HDR10 to a client of Main alone", hdr10, []VideoSupport{{Codec: "hevc", Profiles: []string{"Main"}, Ranges: []domain.Range{domain.RangeHDR10}}}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, true},
 		{"HDR10 to an H.264 client", hdr10, []VideoSupport{h264}, domain.HEVCAllow, domain.VideoH264, domain.RangeSDR, true},
-		{"HDR10+ as its HDR10", media.Stream{Codec: "hevc", Range: domain.RangeHDR10Plus}, []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHDR10, false},
+		{"HDR10+ as its HDR10", domain.Stream{Codec: "hevc", Range: domain.RangeHDR10Plus}, []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHDR10, false},
 		{"HLG to an HLG client", hlg, []VideoSupport{shows(domain.RangeHLG)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHLG, false},
 		{"HLG to an HDR10 client", hlg, []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, true},
 		{"Dolby Vision 8.1 as HDR10", dv(1), []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHDR10, false},
 		{"Dolby Vision 8.4 as HLG", dv(4), []VideoSupport{shows(domain.RangeHLG)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHLG, false},
 		{"Dolby Vision 5, which no base layer shows", dv(0), []VideoSupport{shows(domain.RangeHDR10, domain.RangeDV)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, true},
-		{"SDR to HEVC", media.Stream{Codec: "mpeg2video"}, []VideoSupport{h264, shows()}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, false},
+		{"SDR to HEVC", domain.Stream{Codec: "mpeg2video"}, []VideoSupport{h264, shows()}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, false},
 	} {
 		got, ok := Profile{Video: tc.plays}.videoEncode(tc.source, 8000, tc.hevc)
 		if !ok || got.Codec != tc.codec || got.Range != tc.r || got.ToneMap != tc.toneMap {

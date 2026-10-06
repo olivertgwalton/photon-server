@@ -23,7 +23,7 @@ func (f *fakeHistory) History(_ context.Context, profile uuid.UUID, _, _ int) ([
 
 func TestHistoryIsAProfilesOwnAndAnAdminsWhole(t *testing.T) {
 	h := &fakeHistory{}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, History: h})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, History: h})
 	for _, tc := range []struct {
 		token, target string
 		want          int

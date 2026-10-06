@@ -11,3 +11,10 @@ const (
 func Discoveries() []Discovery {
 	return []Discovery{DiscoveryBroadcast, DiscoveryOff}
 }
+
+// Info is what the server says of itself, to a client asking over HTTP or on the network.
+type Info struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}

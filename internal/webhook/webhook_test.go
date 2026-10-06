@@ -84,7 +84,7 @@ func TestAWebhookIsToldWhatItAskedFor(t *testing.T) {
 	}
 	deliver := Deliver(st)
 	node := uuid.NewV7()
-	claim := func() []store.Job {
+	claim := func() []domain.Job {
 		t.Helper()
 		jobs, err := st.ClaimJobs(ctx, []domain.JobKind{domain.JobDeliverWebhook}, node, time.Minute, 10)
 		if err != nil {

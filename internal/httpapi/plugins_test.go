@@ -102,7 +102,7 @@ func TestAPluginDescribesTheTitlesOfALibraryThatTakesIt(t *testing.T) {
 	ctx := t.Context()
 	plugins := plugin.New(st)
 	providers := provider.NewRegistry(plugins.Load)
-	api := New(log, Info{}, Services{Auth: fakeAuth{}, Libraries: st, Providers: providers, ProviderSettings: st, Plugins: plugins})
+	api := New(log, domain.Info{}, Services{Auth: fakeAuth{}, Libraries: st, Providers: providers, ProviderSettings: st, Plugins: plugins})
 	do := func(method, target, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+goodToken)

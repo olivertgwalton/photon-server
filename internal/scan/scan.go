@@ -18,14 +18,13 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/naming"
 	"github.com/olivertgwalton/photon-server/internal/nfo"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 type prober interface {
-	Probe(ctx context.Context, f *os.File) (media.Facts, error)
+	Probe(ctx context.Context, f *os.File) (domain.Facts, error)
 }
 
 type Scanner struct {
@@ -570,10 +569,10 @@ func (r reading) unchanged(parts []store.Part) ([]byte, bool) {
 	return key, true
 }
 
-func (s *Scanner) probe(ctx context.Context, root, rel string) (media.Facts, error) {
+func (s *Scanner) probe(ctx context.Context, root, rel string) (domain.Facts, error) {
 	f, err := library.Open(root, rel)
 	if err != nil {
-		return media.Facts{}, err
+		return domain.Facts{}, err
 	}
 	defer f.Close()
 	return s.prober.Probe(ctx, f)

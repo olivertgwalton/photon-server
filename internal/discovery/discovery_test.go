@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/olivertgwalton/photon-server/internal/httpapi"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 func TestServeAnswersTheQuestion(t *testing.T) {
@@ -20,7 +20,7 @@ func TestServeAnswersTheQuestion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	info := httpapi.Info{ID: "0199d1b2-0000-7000-8000-000000000001", Name: "Lounge", Version: "1.2.3"}
+	info := domain.Info{ID: "0199d1b2-0000-7000-8000-000000000001", Name: "Lounge", Version: "1.2.3"}
 	done := make(chan error)
 	ctx, stop := context.WithCancel(t.Context())
 	go func() { done <- Serve(ctx, server, info, slog.New(slog.DiscardHandler)) }()

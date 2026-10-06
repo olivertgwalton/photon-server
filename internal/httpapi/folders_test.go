@@ -11,6 +11,8 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 func TestAnAdminBrowsesTheServersFolders(t *testing.T) {
@@ -29,7 +31,7 @@ func TestAnAdminBrowsesTheServersFolders(t *testing.T) {
 	if err := os.Symlink(filepath.Join(root, "notes.txt"), filepath.Join(root, "Notes")); err != nil {
 		t.Fatal(err)
 	}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}})
 	get := func(token string, query url.Values) (*httptest.ResponseRecorder, folderListJSON) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/folders?"+query.Encode(), nil)
 		req.Header.Set("Authorization", "Bearer "+token)

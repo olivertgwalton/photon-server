@@ -12,6 +12,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/artwork"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -56,7 +57,7 @@ func TestArtwork(t *testing.T) {
 		}
 	}
 	pics := fakePictures{root: root}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Pictures: pics, Artwork: pics})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Pictures: pics, Artwork: pics})
 	get := func(id uuid.UUID, query ...string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
 		api.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/artwork/"+id.String()+strings.Join(query, ""), nil))

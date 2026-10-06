@@ -75,7 +75,7 @@ type nodeJSON struct {
 
 // serverJSON is the server as its dashboard shows it. transcode_limit is absent when unlimited.
 type serverJSON struct {
-	Info
+	domain.Info
 	NodeID           uuid.UUID        `json:"node_id"`
 	StartedAt        time.Time        `json:"started_at"`
 	OS               string           `json:"os"`

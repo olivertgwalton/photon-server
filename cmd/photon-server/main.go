@@ -107,7 +107,7 @@ func run(logger *slog.Logger, args []string) error {
 // writeDescription writes the API's OpenAPI description, so a client's types are generated
 // without a server or database.
 func writeDescription(w io.Writer) error {
-	doc, err := httpapi.Describe(httpapi.Info{Version: version})
+	doc, err := httpapi.Describe(domain.Info{Version: version})
 	if err != nil {
 		return err
 	}
@@ -211,7 +211,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	info := httpapi.Info{
+	info := domain.Info{
 		ID:      id.String(),
 		Name:    cmp.Or(os.Getenv("PHOTON_NAME"), hostname),
 		Version: version,
@@ -382,7 +382,7 @@ func ready(st *store.Store, cache *kv.KV) func(context.Context) error {
 
 // answerDiscovery answers clients looking for the server on UDP at the HTTP listener's port.
 // Clients can still be given the address, so a port it cannot have is only a warning.
-func answerDiscovery(ctx context.Context, addr string, info httpapi.Info, logger *slog.Logger) {
+func answerDiscovery(ctx context.Context, addr string, info domain.Info, logger *slog.Logger) {
 	conn, err := new(net.ListenConfig).ListenPacket(ctx, "udp", addr)
 	if err == nil {
 		err = discovery.Serve(ctx, conn, info, logger)

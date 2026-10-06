@@ -24,7 +24,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/library"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -275,11 +274,11 @@ func (a *API) cardOf(r *http.Request, t domain.PlaybackTitle, c store.PlayCopy, 
 		},
 		Reasons: d.Reasons,
 	}
-	stream := func(index int) media.Stream {
-		if i := slices.IndexFunc(c.Streams, func(s media.Stream) bool { return s.Index == index }); i >= 0 {
+	stream := func(index int) domain.Stream {
+		if i := slices.IndexFunc(c.Streams, func(s domain.Stream) bool { return s.Index == index }); i >= 0 {
 			return c.Streams[i]
 		}
-		return media.Stream{Index: index}
+		return domain.Stream{Index: index}
 	}
 	if v := d.Video; v != nil {
 		src := stream(v.Stream)

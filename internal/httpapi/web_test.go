@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 const startScript = `kit.start(app, element);`
@@ -25,7 +27,7 @@ func webAPI(t *testing.T) *API {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(slog.New(slog.DiscardHandler), Info{}, Services{
+	return New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Ready: func(context.Context) error { return nil }, Auth: fakeAuth{}, Limits: &fakeLimiter{}, Web: web,
 	})
 }

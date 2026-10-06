@@ -18,7 +18,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
@@ -63,8 +62,8 @@ func filmToDownload(t *testing.T) (st *store.Store, item, part uuid.UUID) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := store.Part{RelPath: "L/L.mkv", Size: 4, ModTime: time.Unix(0, 0), Facts: &media.Facts{
-		Container: "matroska,webm", Duration: 4 * time.Second, BitrateKbps: 8000, Streams: []media.Stream{
+	p := store.Part{RelPath: "L/L.mkv", Size: 4, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+		Container: "matroska,webm", Duration: 4 * time.Second, BitrateKbps: 8000, Streams: []domain.Stream{
 			{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Width: 1920, Height: 1080, Range: domain.RangeSDR},
 			{Index: 1, Kind: domain.StreamAudio, Codec: "ac3", Channels: 6},
 		},
