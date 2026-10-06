@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
 	"net/url"
 
@@ -69,12 +68,7 @@ func (a *API) approvePairing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d, err := a.svc.Auth.ApprovePairing(r.Context(), sessionOf(r), req.UserCode)
-	switch {
-	case errors.Is(err, auth.ErrPairingNotFound):
-		writeProblem(w, a.logger, codePairingNotFound, "")
-		return
-	case err != nil:
-		a.internal(w, r, err)
+	if a.answered(w, r, err) {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, deviceJSON{Device: d.Name, Client: d.Client})

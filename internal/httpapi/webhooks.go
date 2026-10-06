@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"crypto/rand"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -104,13 +103,7 @@ func (a *API) testWebhook(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	err := a.svc.Events.TestWebhook(r.Context(), id)
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
-	}
-	if err != nil {
-		a.internal(w, r, err)
+	if a.answered(w, r, a.svc.Events.TestWebhook(r.Context(), id)) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)

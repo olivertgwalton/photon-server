@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -59,13 +58,7 @@ func (a *API) adminTasks(w http.ResponseWriter, r *http.Request) {
 
 // runTask asks for a task to run now, on whichever node schedules tasks.
 func (a *API) runTask(w http.ResponseWriter, r *http.Request) {
-	err := a.svc.Tasks.Request(r.Context(), domain.TaskKey(r.PathValue("key")))
-	switch {
-	case errors.Is(err, task.ErrNoTask):
-		writeProblem(w, a.logger, codeNotFound, "")
-	case err != nil:
-		a.internal(w, r, err)
-	default:
+	if !a.answered(w, r, a.svc.Tasks.Request(r.Context(), domain.TaskKey(r.PathValue("key")))) {
 		w.WriteHeader(http.StatusAccepted)
 	}
 }
@@ -160,13 +153,7 @@ func (a *API) stopPlayback(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	err = a.svc.Playbacks.End(r.Context(), id)
-	switch {
-	case errors.Is(err, playback.ErrNoPlayback):
-		writeProblem(w, a.logger, codeNotFound, "the playback has stopped, or lapsed")
-	case err != nil:
-		a.internal(w, r, err)
-	default:
+	if !a.answered(w, r, a.svc.Playbacks.End(r.Context(), id)) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

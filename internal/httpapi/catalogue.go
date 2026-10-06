@@ -223,18 +223,14 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page, err := a.svc.Catalogue.Title(r.Context(), sessionOf(r).Profile.ID, id)
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		writeProblem(w, a.logger, codeNotFound, "")
-	case err != nil:
-		a.internal(w, r, err)
-	default:
-		// Signed until the end of the day after next, so an address stands all day and a client's
-		// cache keeps finding the picture under it.
-		until := time.Now().Truncate(24 * time.Hour).Add(48 * time.Hour)
-		page.SignChapterImages(func(path string) string { return a.svc.Signer.Sign(path, until) })
-		writeJSON(w, a.logger, "application/json", http.StatusOK, page)
+	if a.answered(w, r, err) {
+		return
 	}
+	// Signed until the end of the day after next, so an address stands all day and a client's
+	// cache keeps finding the picture under it.
+	until := time.Now().Truncate(24 * time.Hour).Add(48 * time.Hour)
+	page.SignChapterImages(func(path string) string { return a.svc.Signer.Sign(path, until) })
+	writeJSON(w, a.logger, "application/json", http.StatusOK, page)
 }
 
 const defaultHomeLimit = 20
@@ -397,10 +393,6 @@ func (a *API) next(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	card, err := a.svc.Catalogue.Next(r.Context(), sessionOf(r).Profile.ID, id)
-	if errors.Is(err, store.ErrNoNext) {
-		writeProblem(w, a.logger, codeNotFound, err.Error())
-		return
-	}
 	if a.answered(w, r, err) {
 		return
 	}
