@@ -84,17 +84,18 @@ const (
 	SourceUser FieldSource = "user"
 	// SourceMDBList gives ratings alone.
 	SourceMDBList FieldSource = "mdblist"
+	SourceOMDb    FieldSource = "omdb"
 )
 
 func FieldSources() []FieldSource {
-	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceMDBList}
+	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceMDBList, SourceOMDb}
 }
 
 // MetadataSources are the built-in sources a library may take metadata from, in an order it
 // chooses: what files say always ranks lowest, and a reader's own edit highest. A registered
 // plugin is one too.
 func MetadataSources() []FieldSource {
-	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList}
+	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList, SourceOMDb}
 }
 
 // PluginPattern is a metadata plugin's source id: its slug after "plugin:", so none collides with

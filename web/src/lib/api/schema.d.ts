@@ -4671,7 +4671,7 @@ export interface components {
         };
         /** @enum {string} */
         Field: "title" | "sort_title" | "original_title" | "overview" | "tagline" | "certificate" | "release_date" | "year" | "genres" | "studios";
-        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "mdblist") | unknown;
+        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "mdblist" | "omdb") | unknown;
         Folder: {
             /** Format: int64 */
             free_bytes?: number | null;
