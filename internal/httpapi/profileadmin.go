@@ -90,10 +90,6 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if req.Role == domain.RoleAdmin && hash == "" {
-		writeProblem(w, a.logger, codeInvalidBody, store.ErrAdminNeedsPassword.Error())
-		return
-	}
 	p, err := a.svc.ProfileAdmin.AddProfile(r.Context(), req.Name, req.Role, hash)
 	if a.answered(w, r, err) {
 		return
