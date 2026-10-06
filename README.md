@@ -172,8 +172,10 @@ it once, as it is in the library added first of those the profile may see, so a 
 one library is shown that library's. What a profile has watched, how far it got and what it
 favoured follow the title, as Plex keeps one watch state for a guid on a server: watching Victorious
 from Kids marks it watched under Shows, and `userdata.changed` names it in each. Titles are the same
-when their TMDB, TVDB or IMDb id is (a season or episode by its show's and its numbers) or, with
-none, when their files are. Each library still lists its own.
+when they share any TMDB, TVDB or IMDb id (a season or episode its show's, with its numbers) or a
+file, or are each the same as a third: a show TMDB matched in Kids is the show TheTVDB matched in
+Shows, since TMDB gives a show's TVDB and IMDb ids and TheTVDB its IMDb and TMDB ids, and every
+match keeps them. Each library still lists its own.
 
 A title a client cannot play as it is has its video copied into HLS where it can, with its audio
 encoded, or its video encoded again, an interlaced picture (a DVD, a 1080i recording) deinterlaced
