@@ -16,6 +16,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -30,6 +31,12 @@ const minimumPostgres = 180000
 
 //go:embed migrations/*.sql
 var migrations embed.FS
+
+// array is a list as one parameter, where GORM would expand it into a parameter per element: as
+// many as a library has files, past Postgres's limit.
+func array[T any](values []T) pgtype.Array[T] {
+	return pgtype.Array[T]{Elements: values, Dims: []pgtype.ArrayDimension{{Length: int32(len(values)), LowerBound: 1}}, Valid: true}
+}
 
 type Store struct {
 	pool *pgxpool.Pool

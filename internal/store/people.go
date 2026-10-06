@@ -10,7 +10,6 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"gorm.io/gorm/clause"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -240,11 +239,6 @@ func personOwners(ctx context.Context, tx *query.Query, keys []personKey) (map[p
 		out[personKey{r.Provider, r.Value}] = r
 	}
 	return out, err
-}
-
-// array is a list as one parameter, where GORM would expand it into a parameter per element.
-func array(values []string) pgtype.Array[string] {
-	return pgtype.Array[string]{Elements: values, Dims: []pgtype.ArrayDimension{{Length: int32(len(values)), LowerBound: 1}}, Valid: true}
 }
 
 // mergePerson folds other into into: their credits and the ids into has no id of the provider for.
