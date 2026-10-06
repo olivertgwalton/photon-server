@@ -4483,6 +4483,8 @@ export interface components {
         /** @enum {string} */
         JobState: "queued" | "running" | "rerun" | "dead";
         /** @enum {string} */
+        Keep: "token" | "cookie";
+        /** @enum {string} */
         KeyframeMode: "index" | "full" | "off";
         Letter: {
             count: number;
@@ -4515,12 +4517,13 @@ export interface components {
         LoginRequest: {
             client: string;
             device: string;
+            keep?: components["schemas"]["Keep"];
             name: string;
             password: string;
         };
         LoginResponse: {
             profile: components["schemas"]["Profile"];
-            token: string;
+            token?: string;
         };
         /** @enum {string} */
         Mark: "watched" | "unwatched" | "in_progress" | "favourite";

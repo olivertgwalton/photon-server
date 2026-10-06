@@ -1,10 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// The suite drives the built app, served as in production, against a mock of
-// the Go server's API (e2e/mock-api.ts): everything the browser and the Bun
-// server do is real, and CI needs no Postgres, Valkey, FFmpeg or Go.
-const api = 4180;
-const web = 4173;
+// The suite drives the built app, served as in production beside a mock of
+// the Go server's API (e2e/mock-api.ts): everything the browser does is real,
+// and CI needs no Postgres, Valkey, FFmpeg or Go.
+const port = 4173;
 
 export default defineConfig({
 	testDir: "./e2e",
@@ -14,7 +13,7 @@ export default defineConfig({
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
 	reporter: process.env.CI ? "github" : "list",
-	use: { baseURL: `http://localhost:${web}`, trace: "on-first-retry" },
+	use: { baseURL: `http://localhost:${port}`, trace: "on-first-retry" },
 	projects: [
 		{ name: "chromium", use: { ...devices["Desktop Chrome"] } },
 		{
@@ -23,17 +22,10 @@ export default defineConfig({
 			testMatch: /shell\.spec\.ts$/,
 		},
 	],
-	webServer: [
-		{
-			command: `MOCK_API_PORT=${api} bun e2e/mock-api.ts`,
-			url: `http://localhost:${api}/api/v1/server`,
-			reuseExistingServer: !process.env.CI,
-		},
-		{
-			command: `bun run build && PORT=${web} PHOTON_API_URL=http://localhost:${api} bun ./build/index.js`,
-			url: `http://localhost:${web}/auth/login`,
-			reuseExistingServer: !process.env.CI,
-			timeout: 120_000,
-		},
-	],
+	webServer: {
+		command: `bun run build && PORT=${port} bun e2e/mock-api.ts`,
+		url: `http://localhost:${port}/api/v1/server`,
+		reuseExistingServer: !process.env.CI,
+		timeout: 120_000,
+	},
 });
