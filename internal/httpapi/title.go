@@ -214,12 +214,13 @@ type creditRefJSON struct {
 }
 
 type titleStateJSON struct {
-	PositionMS   int64      `json:"position_ms,omitzero"`
-	Plays        int        `json:"plays,omitzero"`
-	WatchedAt    *time.Time `json:"watched_at,omitzero"`
-	LastPlayedAt *time.Time `json:"last_played_at,omitzero"`
-	FavouriteAt  *time.Time `json:"favourite_at,omitzero"`
-	Unwatched    int        `json:"unwatched,omitzero"`
+	PositionMS    int64      `json:"position_ms,omitzero"`
+	Plays         int        `json:"plays,omitzero"`
+	WatchedAt     *time.Time `json:"watched_at,omitzero"`
+	LastPlayedAt  *time.Time `json:"last_played_at,omitzero"`
+	FavouriteAt   *time.Time `json:"favourite_at,omitzero"`
+	WatchlistedAt *time.Time `json:"watchlisted_at,omitzero"`
+	Unwatched     int        `json:"unwatched,omitzero"`
 }
 
 func titlePageOf(p store.TitlePage) titlePageJSON {

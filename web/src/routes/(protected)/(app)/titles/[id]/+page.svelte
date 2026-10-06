@@ -1,4 +1,5 @@
 <script lang="ts">
+import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 import CheckIcon from "@lucide/svelte/icons/check";
 import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 import DownloadIcon from "@lucide/svelte/icons/download";
@@ -12,7 +13,12 @@ import PlayIcon from "@lucide/svelte/icons/play";
 import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
 import { goto } from "$app/navigation";
-import { pickPlaylist, setFavourite, setWatched } from "#lib/actions.svelte.js";
+import {
+	pickPlaylist,
+	setFavourite,
+	setWatched,
+	setWatchlisted,
+} from "#lib/actions.svelte.js";
 import { castOf } from "#lib/credits.js";
 import { type Extra, extrasOf } from "#lib/extras.js";
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
@@ -66,6 +72,7 @@ const choice = $derived({
 });
 const watched = $derived(!!t.state?.watched_at);
 const favourite = $derived(!!t.state?.favourite_at);
+const watchlisted = $derived(!!t.state?.watchlisted_at);
 
 // Drawn in the browser only, where the clock is the reader's.
 let now = $state<Date>();
@@ -308,6 +315,18 @@ const poster = $derived(art("poster"));
 				>
 					<HeartIcon class={favourite ? "fill-current" : "text-ink-3"} />
 				</Button>
+				{#if t.kind !== "collection"}
+					<Button
+						variant="outline"
+						size="icon-lg"
+						aria-pressed={watchlisted}
+						aria-label="Watchlist"
+						title={watchlisted ? "Remove from watchlist" : "Add to watchlist"}
+						onclick={() => setWatchlisted(t.id, !watchlisted)}
+					>
+						<BookmarkIcon class={watchlisted ? "fill-current" : "text-ink-3"} />
+					</Button>
+				{/if}
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
 						{#snippet child({

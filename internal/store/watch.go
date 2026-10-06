@@ -21,8 +21,13 @@ type TitleState struct {
 	WatchedAt    *time.Time
 	LastPlayedAt *time.Time
 	FavouriteAt  *time.Time
-	Unwatched    int
+	// WatchlistedAt is when a film or show went on the watchlist.
+	WatchlistedAt *time.Time
+	Unwatched     int
 }
+
+// ErrNotListable is a title that cannot go on the watchlist.
+var ErrNotListable = errors.New("only a film or a show, or a show's season or episode, goes on the watchlist")
 
 // ErrSuperseded is progress from before the profile's state of the title last changed.
 var ErrSuperseded = errors.New("the title's state has changed since then")
@@ -93,7 +98,7 @@ func (s *Store) watched(ctx context.Context, profile uuid.UUID, items []*model.I
 	if len(items) == 0 {
 		return pgconn.CommandTag{}, nil
 	}
-	return s.pool.Exec(ctx, `
+	return s.finish(ctx, profile, ids(items), `
 		INSERT INTO watch_state (profile_id, item_id, plays, watched_at, last_played_at, changed_at)
 		SELECT DISTINCT $1::uuid, t, 1, w, w, w
 		FROM unnest($2::uuid[]) i, same_title(i) t, least($3::timestamptz, now()) w ORDER BY t
@@ -106,7 +111,7 @@ func (s *Store) watched(ctx context.Context, profile uuid.UUID, items []*model.I
 
 // played counts a viewing that reached the end.
 func (s *Store) played(ctx context.Context, profile uuid.UUID, item *model.Item, at *time.Time) (pgconn.CommandTag, error) {
-	return s.pool.Exec(ctx, `
+	return s.finish(ctx, profile, []uuid.UUID{item.ID}, `
 		INSERT INTO watch_state (profile_id, item_id, plays, watched_at, last_played_at, changed_at)
 		SELECT $1, t, 1, w, w, w FROM same_title($2) t, least($3::timestamptz, now()) w ORDER BY t
 		ON CONFLICT (profile_id, item_id) DO UPDATE SET
@@ -114,6 +119,28 @@ func (s *Store) played(ctx context.Context, profile uuid.UUID, item *model.Item,
 			watched_at = coalesce(watch_state.watched_at, excluded.watched_at),
 			last_played_at = excluded.last_played_at, changed_at = excluded.changed_at`+newest,
 		profile, item.ID, at)
+}
+
+// finish runs write, which marks films or episodes watched, and takes from the watchlist each film
+// it marked and each show it left watched through, as Plex takes a title watched off it. Nothing is
+// taken off for a write superseded.
+func (s *Store) finish(ctx context.Context, profile uuid.UUID, items []uuid.UUID, write string, args ...any) (pgconn.CommandTag, error) {
+	var tag pgconn.CommandTag
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		if tag, err = tx.Exec(ctx, write, args...); err != nil || tag.RowsAffected() == 0 {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
+			DELETE FROM watchlist USING items
+			WHERE watchlist.profile_id = @profile AND items.id = watchlist.item_id AND items.id IN (
+				SELECT same_title(coalesce(season.parent_id, i.id)) FROM items i
+				LEFT JOIN items season ON season.id = i.parent_id AND i.kind = 'episode'
+				WHERE i.id = ANY(@items))
+			AND `+markSQL(domain.MarkWatched), pgx.NamedArgs{"profile": profile, "items": items})
+		return err
+	})
+	return tag, err
 }
 
 // MarkUnwatched forgets that a film or episode, or every episode of a season or show, was
@@ -144,14 +171,75 @@ func (s *Store) Favourite(ctx context.Context, profile, item uuid.UUID) error {
 	if _, err := s.leaves(ctx, item); err != nil {
 		return err
 	}
+	return s.list(ctx, "favourites", profile, item)
+}
+
+func (s *Store) Unfavourite(ctx context.Context, profile, item uuid.UUID) error {
+	return s.unlist(ctx, "favourites", profile, item)
+}
+
+// Watchlist puts a film or show on the profile's watchlist: a season or episode, its show.
+// ErrNotListable for anything else.
+func (s *Store) Watchlist(ctx context.Context, profile, item uuid.UUID) error {
+	title, err := s.listable(ctx, item)
+	if err != nil {
+		return err
+	}
+	return s.list(ctx, "watchlist", profile, title)
+}
+
+// Unwatchlist takes a film or show from the profile's watchlist: a season or episode, its show.
+func (s *Store) Unwatchlist(ctx context.Context, profile, item uuid.UUID) error {
+	title, err := s.listable(ctx, item)
+	if err != nil {
+		return err
+	}
+	return s.unlist(ctx, "watchlist", profile, title)
+}
+
+// WatchlistPage answers a page of the profile's watchlist, the latest added first, and how many
+// are on it.
+func (s *Store) WatchlistPage(ctx context.Context, profile uuid.UUID, offset, limit int) ([]Card, int64, error) {
+	args := pgx.NamedArgs{"profile": profile, "offset": offset, "limit": limit}
+	var total int64
+	if err := s.pool.QueryRow(ctx, `SELECT count(*)`+onList("watchlist"), args).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := queryRows[model.Item](ctx, s.pool, listRow("watchlist"), args)
+	if err != nil {
+		return nil, 0, err
+	}
+	cards, err := s.cards(ctx, profile, rows)
+	return cards, total, err
+}
+
+// listable answers the title that goes on the watchlist for a title, as Plex lists only films and
+// shows.
+func (s *Store) listable(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row, err := readItem(ctx, s.pool, id)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	switch row.Kind {
+	case domain.ItemMovie, domain.ItemShow:
+		return row.ID, nil
+	case domain.ItemSeason, domain.ItemEpisode:
+		return s.listable(ctx, *row.ParentID)
+	case domain.ItemExtra, domain.ItemCollection:
+	}
+	return uuid.UUID{}, ErrNotListable
+}
+
+// list puts a title, wherever it is listed, on one of the profile's lists: favourites or watchlist.
+func (s *Store) list(ctx context.Context, table string, profile, item uuid.UUID) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO favourites (profile_id, item_id) SELECT $1, t FROM same_title($2) t ORDER BY t
+		INSERT INTO `+table+` (profile_id, item_id) SELECT $1, t FROM same_title($2) t ORDER BY t
 		ON CONFLICT DO NOTHING`, profile, item)
 	return err
 }
 
-func (s *Store) Unfavourite(ctx context.Context, profile, item uuid.UUID) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM favourites WHERE profile_id = $1 AND item_id IN (SELECT same_title($2))`,
+func (s *Store) unlist(ctx context.Context, table string, profile, item uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE profile_id = $1 AND item_id IN (SELECT same_title($2))`,
 		profile, item)
 	return err
 }
@@ -254,15 +342,18 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 			out[c.ID] = st
 		}
 	}
-	rows, err = s.pool.Query(ctx, `SELECT item_id, added_at FROM favourites WHERE profile_id = $1 AND item_id = ANY($2)`,
+	rows, err = s.pool.Query(ctx, `
+		SELECT item_id, f.added_at, l.added_at
+		FROM (SELECT item_id, added_at FROM favourites WHERE profile_id = $1 AND item_id = ANY($2)) f
+		FULL JOIN (SELECT item_id, added_at FROM watchlist WHERE profile_id = $1 AND item_id = ANY($2)) l USING (item_id)`,
 		profile, ids(items))
 	if err != nil {
 		return nil, err
 	}
-	var added time.Time
-	_, err = pgx.ForEachRow(rows, []any{&item, &added}, func() error {
+	var favourite, listed *time.Time
+	_, err = pgx.ForEachRow(rows, []any{&item, &favourite, &listed}, func() error {
 		st := out[item]
-		st.FavouriteAt = new(added)
+		st.FavouriteAt, st.WatchlistedAt = favourite, listed
 		out[item] = st
 		return nil
 	})

@@ -29,10 +29,11 @@ const (
 	// MarkInProgress is a film part watched, or a show some of whose episodes are.
 	MarkInProgress Mark = "in_progress"
 	MarkFavourite  Mark = "favourite"
+	MarkWatchlist  Mark = "watchlist"
 )
 
 func Marks() []Mark {
-	return []Mark{MarkWatched, MarkUnwatched, MarkInProgress, MarkFavourite}
+	return []Mark{MarkWatched, MarkUnwatched, MarkInProgress, MarkFavourite, MarkWatchlist}
 }
 
 // Resolution is a picture's size class, by its width: a scope master is no less 4K for being

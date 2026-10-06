@@ -125,6 +125,8 @@ func markSQL(m domain.Mark) string {
 		return unwatched + ` AND ` + begun
 	case domain.MarkFavourite:
 		return "EXISTS (SELECT 1 FROM favourites f WHERE f.item_id = items.id AND f.profile_id = @profile)"
+	case domain.MarkWatchlist:
+		return "EXISTS (SELECT 1 FROM watchlist l WHERE l.item_id = items.id AND l.profile_id = @profile)"
 	}
 	return "true"
 }

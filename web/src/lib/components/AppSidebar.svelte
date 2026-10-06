@@ -1,4 +1,5 @@
 <script lang="ts">
+import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 import FilmIcon from "@lucide/svelte/icons/film";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import HeartIcon from "@lucide/svelte/icons/heart";
@@ -85,6 +86,7 @@ function current(href: string) {
 			{/if}
 			<Sidebar.Group>
 				<Sidebar.Menu>
+					{@render item("/watchlist", "Watchlist", BookmarkIcon)}
 					{@render item("/favourites", "Favourites", HeartIcon)}
 					{@render item("/playlists", "Playlists", ListVideoIcon)}
 					{@render item("/history", "History", HistoryIcon)}

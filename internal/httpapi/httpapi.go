@@ -498,6 +498,16 @@ func (a *API) routes() []route {
 			status: http.StatusNoContent, handle: a.mark(watching.Unfavourite),
 		},
 		{
+			pattern: "PUT /api/v1/titles/{id}/watchlist", access: signedIn,
+			summary: "Put a film or show on the watchlist, a season or episode its show; watching a film, or every episode of a show, takes it off",
+			status:  http.StatusNoContent, handle: a.mark(watching.Watchlist),
+		},
+		{
+			pattern: "DELETE /api/v1/titles/{id}/watchlist", access: signedIn,
+			summary: "Take a film or show from the watchlist, a season or episode its show",
+			status:  http.StatusNoContent, handle: a.mark(watching.Unwatchlist),
+		},
+		{
 			pattern: "POST /api/v1/titles/{id}/play", access: signedIn,
 			summary: "Open a playback of a film or episode, as the client's profile can play it",
 			body:    playJSON{}, status: http.StatusOK, reply: playbackJSON{},
@@ -740,6 +750,11 @@ func (a *API) routes() []route {
 		{
 			pattern: "POST /api/v1/admin/webhooks/{id}/test", access: admin, summary: "Send a webhook.test event to one webhook",
 			status: http.StatusAccepted, handle: a.testWebhook,
+		},
+		{
+			pattern: "GET /api/v1/watchlist", access: signedIn,
+			summary: "Page the profile's watchlist, the latest added first",
+			query:   pageParams, status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.watchlist,
 		},
 		{
 			pattern: "GET /api/v1/home", access: signedIn, summary: "The profile's home rows, in order",

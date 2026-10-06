@@ -7,6 +7,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 type watching interface {
@@ -16,6 +17,9 @@ type watching interface {
 	ClearProgress(ctx context.Context, profile, item uuid.UUID) error
 	Favourite(ctx context.Context, profile, item uuid.UUID) error
 	Unfavourite(ctx context.Context, profile, item uuid.UUID) error
+	Watchlist(ctx context.Context, profile, item uuid.UUID) error
+	Unwatchlist(ctx context.Context, profile, item uuid.UUID) error
+	WatchlistPage(ctx context.Context, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
 }
 
 // clockSkew is how far ahead of the server's a client's clock may run; atRule says it.
@@ -74,6 +78,19 @@ func (a *API) watched(w http.ResponseWriter, r *http.Request) {
 	a.mark(func(s watching, ctx context.Context, profile, item uuid.UUID) error {
 		return s.MarkWatched(ctx, profile, item, req.At)
 	})(w, r)
+}
+
+// watchlist answers a page of the profile's watchlist, the latest added first.
+func (a *API) watchlist(w http.ResponseWriter, r *http.Request) {
+	offset, limit, ok := a.paging(w, r, defaultWallLimit)
+	if !ok {
+		return
+	}
+	cards, total, err := a.svc.Watching.WatchlistPage(r.Context(), sessionOf(r).Profile.ID, offset, limit)
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[cardJSON]{cardsJSON(cards), offset, total})
 }
 
 // titleStateChanged tells the profile's other devices its own state of a title changed.

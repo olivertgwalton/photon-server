@@ -29,6 +29,7 @@ const marks: Record<components["schemas"]["Mark"], string> = {
 	in_progress: "In progress",
 	watched: "Watched",
 	favourite: "Favourites",
+	watchlist: "Watchlist",
 };
 
 // Each list a library has values for, as the server named them.

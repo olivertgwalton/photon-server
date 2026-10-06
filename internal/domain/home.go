@@ -7,7 +7,9 @@ const (
 	// RowContinueWatching is films and episodes stopped part way, the most recent first.
 	RowContinueWatching HomeRow = "continue_watching"
 	// RowNextUp is, for each show under way, the episode after the last one watched.
-	RowNextUp     HomeRow = "next_up"
+	RowNextUp HomeRow = "next_up"
+	// RowWatchlist is what the profile put on its watchlist, the latest first.
+	RowWatchlist  HomeRow = "watchlist"
 	RowFavourites HomeRow = "favourites"
 	// RowRecentFilms and RowRecentShows are what was added last; a show by its newest episode.
 	RowRecentFilms HomeRow = "recently_added_films"
@@ -21,7 +23,7 @@ const (
 )
 
 func HomeRows() []HomeRow {
-	return []HomeRow{RowContinueWatching, RowNextUp, RowFavourites, RowRecentFilms, RowRecentShows, RowRecentlyReleased, RowTopRatedUnwatched, RowCollection}
+	return []HomeRow{RowContinueWatching, RowNextUp, RowWatchlist, RowFavourites, RowRecentFilms, RowRecentShows, RowRecentlyReleased, RowTopRatedUnwatched, RowCollection}
 }
 
 // RowVisibility is whether a profile's home shows a row.

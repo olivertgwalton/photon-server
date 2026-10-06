@@ -4405,6 +4405,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/titles/{id}/watchlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put a film or show on the watchlist, a season or episode its show; watching a film, or every episode of a show, takes it off */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        /** Take a film or show from the watchlist, a season or episode its show */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/watchlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page the profile's watchlist, the latest added first */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Where the page starts, from 0. */
+                    offset?: number;
+                    /** @description How many to answer, from 1 to 200. */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CardPage"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/readyz": {
         parameters: {
             query?: never;
@@ -4969,7 +5069,7 @@ export interface components {
             kind: components["schemas"]["HomeRowKind"];
         };
         /** @enum {string} */
-        HomeRowKind: "continue_watching" | "next_up" | "favourites" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched" | "collection";
+        HomeRowKind: "continue_watching" | "next_up" | "watchlist" | "favourites" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched" | "collection";
         HomeSection: {
             row: components["schemas"]["HomeRowKind"];
             visibility: components["schemas"]["RowVisibility"];
@@ -5053,7 +5153,7 @@ export interface components {
             token?: string;
         };
         /** @enum {string} */
-        Mark: "watched" | "unwatched" | "in_progress" | "favourite";
+        Mark: "watched" | "unwatched" | "in_progress" | "favourite" | "watchlist";
         Marker: {
             /** Format: int64 */
             end_ms: number;
@@ -5723,6 +5823,8 @@ export interface components {
             unwatched?: number;
             /** Format: date-time */
             watched_at?: string | null;
+            /** Format: date-time */
+            watchlisted_at?: string | null;
         };
         Tool: {
             path: string;

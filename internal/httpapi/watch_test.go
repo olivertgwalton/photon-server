@@ -52,6 +52,26 @@ func (f fakeWatching) Unfavourite(ctx context.Context, p, i uuid.UUID) error {
 	return f.mark(ctx, p, i)
 }
 
+// The one film goes on the watchlist; anything else is refused.
+func (f fakeWatching) Watchlist(ctx context.Context, p, i uuid.UUID) error {
+	if i != films {
+		return store.ErrNotListable
+	}
+	return f.mark(ctx, p, i)
+}
+
+func (f fakeWatching) Unwatchlist(ctx context.Context, p, i uuid.UUID) error {
+	return f.Watchlist(ctx, p, i)
+}
+
+// The watchlist holds the one film, from offset 0.
+func (fakeWatching) WatchlistPage(_ context.Context, _ uuid.UUID, offset, _ int) ([]store.Card, int64, error) {
+	if offset > 0 {
+		return []store.Card{}, 1, nil
+	}
+	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat"}}, 1, nil
+}
+
 func TestWatching(t *testing.T) {
 	title := "/api/v1/titles/" + films.String()
 	// A client's clock a minute ahead is skew; an hour ahead is wrong.
@@ -80,6 +100,10 @@ func TestWatching(t *testing.T) {
 		{http.MethodPut, title + "/watched", "", http.StatusNoContent, ""},
 		{http.MethodDelete, title + "/favourite", "", http.StatusNoContent, ""},
 		{http.MethodPut, "/api/v1/titles/" + uuid.NewV7().String() + "/favourite", "", http.StatusNotFound, ""},
+		{http.MethodPut, title + "/watchlist", "", http.StatusNoContent, ""},
+		{http.MethodDelete, title + "/watchlist", "", http.StatusNoContent, ""},
+		{http.MethodPut, "/api/v1/titles/" + uuid.NewV7().String() + "/watchlist", "", http.StatusConflict, ""},
+		{http.MethodGet, "/api/v1/watchlist?offset=1", "", http.StatusOK, `{"items":[],"offset":1,"total":1}`},
 	} {
 		rec := serve(t, tc.method, tc.target, goodToken, tc.body)
 		if rec.Code != tc.want {

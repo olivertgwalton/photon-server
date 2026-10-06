@@ -144,6 +144,7 @@ test("the home's rows are put in order and hidden, by pointer or keyboard", asyn
 	await expect(rows).toHaveText([
 		"Continue Watching",
 		"Next Up",
+		"Watchlist",
 		"Favourites",
 		"Recently Added Films",
 		"Recently Added Shows",
@@ -155,10 +156,10 @@ test("the home's rows are put in order and hidden, by pointer or keyboard", asyn
 	await page
 		.getByRole("button", { name: "Move Recently Added Films up" })
 		.focus();
-	for (let i = 0; i < 3; i++) await page.keyboard.press("Enter");
+	for (let i = 0; i < 4; i++) await page.keyboard.press("Enter");
 	await expect(rows.first()).toHaveText("Recently Added Films");
 	await expect(
-		page.getByText("Recently Added Films moved to 1 of 7."),
+		page.getByText("Recently Added Films moved to 1 of 8."),
 	).toBeAttached();
 	await page.getByRole("switch", { name: "Show Continue Watching" }).click();
 

@@ -248,7 +248,7 @@ func TestWall(t *testing.T) {
 		t.Errorf("nothing next: %d %s, want a 404 saying so", rec.Code, rec.Body)
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/facets", goodToken, ""); rec.Code != http.StatusOK ||
-		!strings.Contains(rec.Body.String(), `"genres":["Crime"]`) || !strings.Contains(rec.Body.String(), `"marks":["watched","unwatched","in_progress","favourite"]`) {
+		!strings.Contains(rec.Body.String(), `"genres":["Crime"]`) || !strings.Contains(rec.Body.String(), `"marks":["watched","unwatched","in_progress","favourite","watchlist"]`) {
 		t.Errorf("facets: %d %s", rec.Code, rec.Body)
 	}
 }

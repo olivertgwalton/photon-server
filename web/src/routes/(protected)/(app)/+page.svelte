@@ -17,7 +17,9 @@ let { data } = $props();
 				shape={homeRows[row.kind].shape}
 				href={row.collection
 					? `/titles/${row.collection.id}`
-					: `/home/${row.kind}`}
+					: row.kind === "watchlist"
+						? "/watchlist"
+						: `/home/${row.kind}`}
 			/>
 		{/each}
 	</div>
