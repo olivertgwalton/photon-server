@@ -576,9 +576,11 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "GET /api/v1/subtitles/{id}/file", access: signedAddress,
-			summary: "A subtitle file beside a copy, at the address play answered",
-			query:   signatureParams, status: http.StatusOK,
-			reply: asFile{"application/x-subrip", "text/vtt", "text/x-ssa"}, handle: a.subtitleFile,
+			summary: "A subtitle file beside a copy, as it is or as WebVTT, at the address play answered",
+			query: append([]param{
+				{"format", subtitleOriginal, "webvtt converts a text subtitle to WebVTT; original, the default, is the file as it is."},
+			}, signatureParams...),
+			status: http.StatusOK, reply: asFile{"application/x-subrip", "text/vtt", "text/x-ssa"}, handle: a.subtitleFile,
 		},
 		{
 			pattern: "POST /api/v1/admin/profiles", access: admin, summary: "Add a profile",

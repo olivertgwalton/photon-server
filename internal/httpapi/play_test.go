@@ -60,7 +60,21 @@ func (fakePlaying) Card(_ context.Context, _, id uuid.UUID) (store.Card, error) 
 
 var posterID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1")
 
-var subtitleID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000d1")
+var (
+	subtitleID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000d1")
+	// pictureID is a VobSub beside the film.
+	pictureID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000d2")
+)
+
+func (fakePlaying) Subtitle(_ context.Context, id uuid.UUID) (store.PlaySubtitle, error) {
+	switch id {
+	case subtitleID:
+		return store.PlaySubtitle{ID: id, Codec: "subrip", Language: language.English}, nil
+	case pictureID:
+		return store.PlaySubtitle{ID: id, Codec: "dvd_subtitle"}, nil
+	}
+	return store.PlaySubtitle{}, store.ErrNotFound
+}
 
 func (f fakePlaying) SubtitleFile(_ context.Context, id uuid.UUID) (string, string, error) {
 	if id != subtitleID {
@@ -155,7 +169,8 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), Info{}, Services{
-		Auth: fakeAuth{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{}, Signer: playback.NewSigner([]byte("key")),
+		Auth: fakeAuth{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{}, HLS: fakeHLS{},
+		Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
@@ -188,6 +203,17 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 	if rec := do(httptest.NewRequest(http.MethodGet, got.Subtitles[0].URL, nil)); rec.Code != http.StatusOK ||
 		rec.Body.String() != "1\n" || rec.Header().Get("Content-Type") != "application/x-subrip" {
 		t.Errorf("the subtitle file: %d %q %q, want it as SubRip", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
+	}
+	if rec := do(httptest.NewRequest(http.MethodGet, got.Subtitles[0].URL+"&format=webvtt", nil)); rec.Code != http.StatusOK ||
+		rec.Body.String() != "WEBVTT en\n\n1\n" || rec.Header().Get("Content-Type") != "text/vtt; charset=utf-8" {
+		t.Errorf("the subtitle file as WebVTT: %d %q %q, want it converted as English", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
+	}
+	if rec := do(httptest.NewRequest(http.MethodGet, got.Subtitles[0].URL+"&format=ass", nil)); rec.Code != http.StatusBadRequest {
+		t.Errorf("as a format there is not: %d, want 400", rec.Code)
+	}
+	picture := playback.NewSigner([]byte("key")).Sign("/api/v1/subtitles/"+pictureID.String()+"/file", time.Now().Add(time.Hour))
+	if rec := do(httptest.NewRequest(http.MethodGet, picture+"&format=webvtt", nil)); rec.Code != http.StatusBadRequest {
+		t.Errorf("pictures as WebVTT: %d, want 400", rec.Code)
 	}
 
 	ranged := httptest.NewRequest(http.MethodGet, got.Parts[0].URL, nil)
@@ -231,6 +257,17 @@ func (fakeHLS) SubtitleSegment(_ context.Context, playback uuid.UUID, track, n i
 		return "", hls.ErrNoRemux
 	}
 	return "WEBVTT\n", nil
+}
+
+// WebVTT answers the file's text under a WebVTT header naming its language.
+func (fakeHLS) WebVTT(_ context.Context, open func() (*os.File, error), language string) (string, error) {
+	f, err := open()
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	b, err := io.ReadAll(f)
+	return "WEBVTT " + language + "\n\n" + string(b), err
 }
 
 func (f fakeHLS) Init(context.Context, uuid.UUID, int) (*os.File, error) {

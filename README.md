@@ -144,6 +144,11 @@ video copied (`parts_not_supported` among the reasons); with `"parts": "each"`, 
 take a stacked item, it is given each file's own address and where it starts on the copy's
 timeline.
 
+A title played as it is lists the subtitle files beside it, each at a signed address serving the
+file as it is; add `&format=webvtt` and a text one (SubRip, ASS, SSA, WebVTT and the rest FFmpeg
+reads as text) is converted to WebVTT, as Jellyfin's subtitle route converts, read in the charset
+its byte order mark or language says where it is not UTF-8. Pictures (VobSub, PGS) are refused.
+
 Each node encodes at most `PHOTON_MAX_TRANSCODES` videos at once (a number, or `unlimited`): by
 default a quarter of its CPUs in software, at least one, and eight on a hardware encoder, the cap
 NVIDIA puts on a GeForce card's sessions. A download's conversion takes one of those slots too, but
