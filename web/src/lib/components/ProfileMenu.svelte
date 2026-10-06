@@ -6,23 +6,14 @@ import UsersIcon from "@lucide/svelte/icons/users";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 import type { components } from "#lib/api/schema.js";
+import { logOut } from "#lib/logout.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
 import ProfileAvatar from "./ProfileAvatar.svelte";
 
 let { profile }: { profile: components["schemas"]["Profile"] } = $props();
 
-let logout: HTMLFormElement;
-
 const here = $derived(encodeURIComponent(page.url.pathname + page.url.search));
 </script>
-
-<!-- Logging out is the login page's action, so it is a POST and not a page. -->
-<form
-	method="post"
-	action="/auth/login?/logout"
-	bind:this={logout}
-	hidden
-></form>
 
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger
@@ -49,7 +40,7 @@ const here = $derived(encodeURIComponent(page.url.pathname + page.url.search));
 			<SettingsIcon />Settings
 		</DropdownMenu.Item>
 		<DropdownMenu.Separator />
-		<DropdownMenu.Item onSelect={() => logout.requestSubmit()}>
+		<DropdownMenu.Item onSelect={logOut}>
 			<LogOutIcon />Log out
 		</DropdownMenu.Item>
 	</DropdownMenu.Content>

@@ -1,12 +1,30 @@
 <script lang="ts">
 import LockIcon from "@lucide/svelte/icons/lock";
-import { enhance } from "$app/forms";
+import { goto } from "$app/navigation";
+import { client, problemMessage } from "#lib/api/client.js";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 
-let { data, form } = $props();
+let { data } = $props();
+let message = $state<string>();
+
+// Watches as the profile, with its PIN or password if it is locked, then goes
+// back to where the reader was.
+async function choose(event: SubmitEvent) {
+	event.preventDefault();
+	const form = new FormData(event.currentTarget as HTMLFormElement);
+	const profileID = String(form.get("profile_id"));
+	const secret = form.get("secret");
+	const { error } = await client().PUT("/api/v1/session/profile", {
+		body: secret
+			? { profile_id: profileID, secret: String(secret) }
+			: { profile_id: profileID },
+	});
+	message = error ? problemMessage(error) : undefined;
+	if (!error) await goto(data.to, { invalidateAll: true });
+}
 
 const avatar =
 	"size-24 text-4xl sm:size-32 sm:text-5xl group-hover:**:data-[slot=avatar-fallback]:bg-ink group-hover:**:data-[slot=avatar-fallback]:text-ground group-focus-visible:**:data-[slot=avatar-fallback]:bg-ink group-focus-visible:**:data-[slot=avatar-fallback]:text-ground";
@@ -20,9 +38,8 @@ const target = "group grid justify-items-center gap-3 rounded-xl outline-none";
 <main class="grid min-h-svh place-items-center p-6">
 	{#if data.chosen}
 		<form
-			method="post"
 			class="grid w-full max-w-xs justify-items-center gap-4"
-			use:enhance
+			onsubmit={choose}
 		>
 			<ProfileAvatar name={data.chosen.name} class="size-24 text-4xl" />
 			<h1 class="title">{data.chosen.name}</h1>
@@ -54,7 +71,7 @@ const target = "group grid justify-items-center gap-3 rounded-xl outline-none";
 						/>
 					{/if}
 				</Field.Field>
-				<Field.Error errors={[{ message: form?.message }]} />
+				<Field.Error errors={[{ message }]} />
 				<Field.Field orientation="horizontal" class="justify-center">
 					<Button
 						variant="ghost"
@@ -74,7 +91,7 @@ const target = "group grid justify-items-center gap-3 rounded-xl outline-none";
 					{@const current = profile.id === data.current}
 					<li>
 						{#if profile.lock === "none" || current}
-							<form method="post" use:enhance>
+							<form onsubmit={choose}>
 								<input type="hidden" name="profile_id" value={profile.id}>
 								<button
 									type="submit"
@@ -107,7 +124,7 @@ const target = "group grid justify-items-center gap-3 rounded-xl outline-none";
 					</li>
 				{/each}
 			</ul>
-			<Field.Error errors={[{ message: form?.message }]} />
+			<Field.Error errors={[{ message }]} />
 		</div>
 	{/if}
 </main>

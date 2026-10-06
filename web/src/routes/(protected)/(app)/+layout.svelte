@@ -16,10 +16,7 @@ let { data, children } = $props();
 </a>
 
 <Sidebar.Provider open={data.sidebarOpen}>
-	<AppSidebar
-		libraries={data.libraries}
-		admin={data.profile.role === "admin"}
-	/>
+	<AppSidebar libraries={data.libraries} admin={data.me.role === "admin"} />
 	<Sidebar.Inset>
 		<header
 			class="border-line bg-ground/85 sticky top-0 z-20 flex h-14 items-center gap-3 border-b px-3 backdrop-blur-xl sm:px-4"
@@ -42,7 +39,7 @@ let { data, children } = $props();
 					>
 				</form>
 			</search>
-			<ProfileMenu profile={data.profile} />
+			<ProfileMenu profile={data.me} />
 		</header>
 		<main id="main" tabindex="-1" class="min-w-0 flex-1 px-3 py-6 sm:px-6">
 			{@render children()}

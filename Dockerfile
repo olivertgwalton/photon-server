@@ -1,5 +1,13 @@
 # syntax=docker/dockerfile:1
 
+# The web app is files, the same on every platform, so it is built once on the builder's.
+FROM --platform=$BUILDPLATFORM oven/bun:1.4 AS web
+WORKDIR /web
+COPY web/package.json web/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY web .
+RUN bun run build
+
 FROM --platform=$BUILDPLATFORM golang:1.27-trixie AS build
 ARG TARGETOS TARGETARCH VERSION=(devel)
 WORKDIR /src
@@ -37,6 +45,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 COPY deploy/ffmpeg-NOTICE /usr/share/licenses/jellyfin-ffmpeg/NOTICE
 COPY --from=build /out/photon-server /usr/local/bin/photon-server
+COPY --from=web /web/build /usr/local/share/photon-server/web
 COPY LICENSE /usr/share/licenses/photon-server/LICENSE
 ENV PHOTON_CACHE_DIR=/var/cache/photon-server
 RUN install -d -o 10001 -g 10001 /var/cache/photon-server

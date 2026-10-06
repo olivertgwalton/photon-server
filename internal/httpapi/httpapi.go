@@ -161,6 +161,8 @@ type Services struct {
 	Previews     previews
 	PreviewFiles previewFiles
 	Limits       limiter
+	// Web is the web app, served for every path the API does not own; nil serves the API alone.
+	Web *Web
 	// TrustedProxies are the peers whose X-Forwarded-For names the client. None by default.
 	TrustedProxies []netip.Prefix
 	// Setup is how this node was started, and Postgres and Valkey what it reaches.
@@ -720,6 +722,10 @@ func (a *API) checkQuery(rt route) http.Handler {
 
 // The catch-all "/" takes wrong-method requests too, so 405 is worked out by asking the mux.
 func (a *API) unmatched(w http.ResponseWriter, r *http.Request) {
+	if a.svc.Web != nil && !ownedByAPI(r.URL.Path) {
+		a.serveWeb(w, r)
+		return
+	}
 	var allowed []string
 	for _, method := range []string{
 		http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,

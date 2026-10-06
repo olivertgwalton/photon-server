@@ -1,6 +1,7 @@
-// The Go server's API as the web sees it, for the e2e suite: the answers a
-// real server gave, typed by the same schema the app is, so a change to the
-// API that the app would feel fails `bun run check` here too.
+// The Go server as the web sees it, for the e2e suite: the built app's files
+// and the API on one origin, the answers a real server gave, typed by the same
+// schema the app is, so a change to the API that the app would feel fails
+// `bun run check` here too.
 import type { components } from "../src/lib/api/schema.d.ts";
 
 type Schemas = components["schemas"];
@@ -60,12 +61,25 @@ const problem = (status: number, code: Schemas["ProblemCode"], title: string) =>
 const sessions = new Map<string, Schemas["Profile"]>();
 let kidsPIN = "";
 
+const cookie = "photon_session";
+
+// The app's page for every path that is not a file, as the server answers it.
+async function app(url: URL) {
+	const file = Bun.file(`build${url.pathname}`);
+	if (url.pathname !== "/" && (await file.exists())) return new Response(file);
+	return new Response(Bun.file("build/index.html"));
+}
+
 const server_ = Bun.serve({
-	port: Number(process.env.MOCK_API_PORT ?? 4180),
+	port: Number(process.env.PORT ?? 4173),
 	async fetch(request) {
 		const url = new URL(request.url);
+		if (!url.pathname.startsWith("/api/")) return app(url);
 		const route = `${request.method} ${url.pathname}`;
-		const token = request.headers.get("authorization")?.replace("Bearer ", "");
+		const token =
+			request.headers.get("authorization")?.replace("Bearer ", "") ??
+			new Bun.CookieMap(request.headers.get("cookie") ?? "").get(cookie) ??
+			undefined;
 		const me = token ? sessions.get(token) : undefined;
 
 		if (route === "GET /api/v1/server") return Response.json(server);
@@ -76,10 +90,20 @@ const server_ = Bun.serve({
 			}
 			const issued = crypto.randomUUID();
 			sessions.set(issued, ada);
-			return Response.json({
-				token: issued,
-				profile: ada,
-			} satisfies Schemas["LoginResponse"]);
+			if (body.keep !== "cookie") {
+				return Response.json({
+					token: issued,
+					profile: ada,
+				} satisfies Schemas["LoginResponse"]);
+			}
+			return Response.json(
+				{ profile: ada } satisfies Schemas["LoginResponse"],
+				{
+					headers: {
+						"set-cookie": `${cookie}=${issued}; Path=/; HttpOnly; SameSite=Lax`,
+					},
+				},
+			);
 		}
 		if (!me) return problem(401, "unauthenticated", "Unauthorized");
 
@@ -88,7 +112,10 @@ const server_ = Bun.serve({
 				return Response.json(me);
 			case "POST /api/v1/auth/logout":
 				sessions.delete(token as string);
-				return new Response(null, { status: 204 });
+				return new Response(null, {
+					status: 204,
+					headers: { "set-cookie": `${cookie}=; Path=/; Max-Age=0` },
+				});
 			case "GET /api/v1/profiles":
 				return Response.json({
 					items: [
@@ -174,4 +201,4 @@ const server_ = Bun.serve({
 	},
 });
 
-console.log(`mock API on ${server_.url}`);
+console.log(`mock server on ${server_.url}`);

@@ -16,6 +16,8 @@ docker compose exec server photon-server profile add -name Admin -role admin
 docker compose exec server photon-server library add -name Films -kind movies /media/Films
 ```
 
+The web app is in the same image and on the same port: open `http://<server>:8640` and log in.
+
 ## Develop
 
 Needs PostgreSQL 18, Valkey, and FFmpeg 8 or newer (`ffmpeg` and `ffprobe` on the `PATH`, or
@@ -290,28 +292,30 @@ Integration tests create and drop a database per test on the server `TEST_DATABA
 
 ## Web
 
-`web/` is the server's web app, a SvelteKit app run by Bun: people log in, browse and play there,
-and admins run the server from it. It is a thin server of its own in front of the API: it keeps
-the session's token in an HTTP-only cookie and passes the browser's API calls on to
-`PHOTON_API_URL` with the token added, so the browser talks to one origin and never sees a token.
-Compose runs it as `web` on port 3000 (`ghcr.io/olivertgwalton/photon-server-web`), and the
-server trusts its `X-Forwarded-For`, so sign-in limits and the activity log see each reader's own
-address. It is reached over plain HTTP at its address (`http://192.168.1.10:3000`) or behind a reverse
-proxy at HTTPS, where the session cookie is Secure; behind a proxy, give it
-`ADDRESS_HEADER=x-forwarded-for` so it sees readers' addresses, and pass the `Host` header through (or set `HOST_HEADER=x-forwarded-host`).
+`web/` is the server's web app, a SvelteKit app built to static files: people log in, browse and
+play there, and admins run the server from it. The server serves the build on its own port for every
+path the API does not own, as Jellyfin and Plex serve their web clients: `PHOTON_WEB=serve` from
+`PHOTON_WEB_DIR` (in the image, `/usr/local/share/photon-server/web`), which is the default wherever
+a build is there, or `PHOTON_WEB=off` for the API alone; `serve` with no build stops the server at
+start. The browser calls the API itself on the same origin. Logging in with `"keep": "cookie"` has
+the server keep the session in an HTTP-only, SameSite=Lax cookie, Secure when the browser came over
+HTTPS (here, or at a trusted proxy that says so in `X-Forwarded-Proto`), and answer the profile with
+no token; the cookie is taken wherever a bearer token is, and a write carrying it is refused unless
+it comes from the server's own pages (its `Origin` is this server's `Host`), so behind a reverse
+proxy pass the `Host` header through. Apps keep the token, as before.
 
 To work on it, run the server as above and, from `web/`:
 
 ```sh
 bun install
-PHOTON_API_URL=http://localhost:8640 bun run dev   # http://localhost:5173
+bun run dev   # http://localhost:5173, with /api passed on to PHOTON_API_URL (default http://localhost:8640)
 bun run check && bun run lint && bun test src && bun run test:e2e
 bun run api   # after changing a route: regenerates src/lib/api/schema.d.ts
 ```
 
 The API's types are generated from `photon-server openapi`; CI fails when
 `web/src/lib/api/schema.d.ts` is older than the routes. The end-to-end tests run the built app
-against a mock of the API (`web/e2e/mock-api.ts`), typed by the same schema.
+beside a mock of the API on one origin (`web/e2e/mock-api.ts`), typed by the same schema.
 
 ## Contributing
 

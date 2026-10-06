@@ -1,28 +1,61 @@
 <script lang="ts">
 import { toast } from "svelte-sonner";
-import { enhance, type SubmitFunction } from "$app/forms";
+import { invalidateAll } from "$app/navigation";
+import { client, problemMessage } from "#lib/api/client.js";
+import { logOut } from "#lib/logout.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 
-let { data, form } = $props();
+let { data } = $props();
+// Why a change was refused, beside the card it was made in.
+let refused = $state<{ pin?: string; devices?: string }>({});
 
 const when = new Intl.DateTimeFormat(undefined, {
 	dateStyle: "medium",
 	timeStyle: "short",
 });
 
-// A change that worked says so in a toast; one refused says why beside it.
-const enhanced: SubmitFunction =
-	({ formElement }) =>
-	async ({ result, update }) => {
-		await update();
-		if (result.type === "success" && typeof result.data?.said === "string") {
-			toast.success(result.data.said);
-			formElement.reset();
-		}
-	};
+// A change that worked says so in a toast and redraws the page; one refused
+// says why beside it.
+async function change(
+	call: Promise<{ error?: unknown }>,
+	card: keyof typeof refused,
+	said: string,
+) {
+	const { error } = await call;
+	refused = error ? { [card]: problemMessage(error) } : {};
+	if (error) return false;
+	toast.success(said);
+	await invalidateAll();
+	return true;
+}
+
+async function setPIN(event: SubmitEvent) {
+	event.preventDefault();
+	const form = event.currentTarget as HTMLFormElement;
+	const pin = String(new FormData(form).get("pin"));
+	if (
+		await change(
+			client().PUT("/api/v1/me/pin", { body: { pin } }),
+			"pin",
+			"PIN set.",
+		)
+	) {
+		form.reset();
+	}
+}
+
+const clearPIN = () =>
+	change(client().DELETE("/api/v1/me/pin"), "pin", "PIN removed.");
+
+const signOut = (id: string) =>
+	change(
+		client().DELETE("/api/v1/auth/devices/{id}", { params: { path: { id } } }),
+		"devices",
+		"That device is signed out.",
+	);
 </script>
 
 <svelte:head><title>Settings · Photon</title></svelte:head>
@@ -47,7 +80,7 @@ const enhanced: SubmitFunction =
 		</Card.Header>
 		{#if data.lock !== "password"}
 			<Card.Content>
-				<form method="post" action="?/setPIN" use:enhance={enhanced}>
+				<form onsubmit={setPIN}>
 					<Field.Group>
 						<Field.Field>
 							<Field.Label for="new-pin">
@@ -66,18 +99,13 @@ const enhanced: SubmitFunction =
 								class="max-w-36"
 							/>
 						</Field.Field>
-						<Field.Error errors={[{ message: form?.pin }]} />
+						<Field.Error errors={[{ message: refused.pin }]} />
 						<Field.Field orientation="horizontal">
 							<Button type="submit">
 								{data.lock === "pin" ? "Change PIN" : "Set PIN"}
 							</Button>
 							{#if data.lock === "pin"}
-								<Button
-									type="submit"
-									variant="outline"
-									formaction="?/clearPIN"
-									formnovalidate
-								>
+								<Button type="button" variant="outline" onclick={clearPIN}>
 									Remove PIN
 								</Button>
 							{/if}
@@ -113,27 +141,19 @@ const enhanced: SubmitFunction =
 								{when.format(new Date(device.last_seen_at))}
 							</p>
 						</div>
-						<form
-							method="post"
-							action={device.this_device
-								? "/auth/login?/logout"
-								: "?/signOutDevice"}
-							use:enhance={device.this_device ? undefined : enhanced}
+						<Button
+							variant="outline"
+							size="sm"
+							aria-label="Sign out {device.device}"
+							onclick={() =>
+								device.this_device ? logOut() : signOut(device.id)}
 						>
-							<input type="hidden" name="id" value={device.id}>
-							<Button
-								type="submit"
-								variant="outline"
-								size="sm"
-								aria-label="Sign out {device.device}"
-							>
-								Sign out
-							</Button>
-						</form>
+							Sign out
+						</Button>
 					</li>
 				{/each}
 			</ul>
-			<Field.Error errors={[{ message: form?.devices }]} />
+			<Field.Error errors={[{ message: refused.devices }]} />
 		</Card.Content>
 	</Card.Root>
 </div>

@@ -13,16 +13,8 @@ import (
 // peer is a trusted proxy, and then only back to the first hop that is not one, so a client cannot
 // name its own address by sending the header (Emby's CVE-2021-25827).
 func clientAddr(r *http.Request, trusted []netip.Prefix) netip.Addr {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	peer, err := netip.ParseAddr(host)
-	if err != nil {
-		return netip.Addr{}
-	}
-	peer = peer.Unmap()
-	if !isTrusted(peer, trusted) {
+	peer := peerAddr(r)
+	if !peer.IsValid() || !isTrusted(peer, trusted) {
 		return peer
 	}
 	hops := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
@@ -36,6 +28,27 @@ func clientAddr(r *http.Request, trusted []netip.Prefix) netip.Addr {
 		}
 	}
 	return peer
+}
+
+func peerAddr(r *http.Request) netip.Addr {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	peer, err := netip.ParseAddr(host)
+	if err != nil {
+		return netip.Addr{}
+	}
+	return peer.Unmap()
+}
+
+// overHTTPS is whether the browser reached the server over HTTPS, here or at a trusted proxy that
+// says so in X-Forwarded-Proto.
+func overHTTPS(r *http.Request, trusted []netip.Prefix) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return isTrusted(peerAddr(r), trusted) && r.Header.Get("X-Forwarded-Proto") == "https"
 }
 
 func isTrusted(a netip.Addr, trusted []netip.Prefix) bool {

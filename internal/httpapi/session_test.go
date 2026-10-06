@@ -264,3 +264,87 @@ func TestABodyThatNeverArrivesIsRefused(t *testing.T) {
 		t.Errorf("a body that never came: %d, want 400", res.StatusCode)
 	}
 }
+
+func TestABrowserKeepsItsSessionInACookie(t *testing.T) {
+	a := newAPI(nil)
+	rec := httptest.NewRecorder()
+	a.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(
+		`{"name":"Oliver","password":"correct horse","device":"Firefox on macOS","client":"Photon Web","keep":"cookie"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body)
+	}
+	if strings.Contains(rec.Body.String(), goodToken) {
+		t.Errorf("the token was answered to the page: %s", rec.Body)
+	}
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookies %v", cookies)
+	}
+	c := cookies[0]
+	if c.Name != "photon_session" || c.Value != goodToken || !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Path != "/" || c.Secure {
+		t.Errorf("cookie %+v", c)
+	}
+
+	logout := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	logout.AddCookie(c)
+	logout.Header.Set("Origin", "http://example.com")
+	rec = httptest.NewRecorder()
+	a.ServeHTTP(rec, logout)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("logout status %d", rec.Code)
+	}
+	if cookies := rec.Result().Cookies(); len(cookies) != 1 || cookies[0].MaxAge >= 0 {
+		t.Errorf("logout left the cookie: %v", cookies)
+	}
+}
+
+func TestTheCookieIsSecureBehindAnHTTPSProxy(t *testing.T) {
+	a := newAPI(nil)
+	a.svc.TrustedProxies, _ = ParseTrustedProxies("192.0.2.1")
+	for peer, want := range map[string]bool{"192.0.2.1:4000": true, "198.51.100.7:4000": false} {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(
+			`{"name":"Oliver","password":"correct horse","device":"d","client":"c","keep":"cookie"}`))
+		req.RemoteAddr = peer
+		req.Header.Set("X-Forwarded-Proto", "https")
+		rec := httptest.NewRecorder()
+		a.ServeHTTP(rec, req)
+		if c := rec.Result().Cookies(); len(c) != 1 || c[0].Secure != want {
+			t.Errorf("from %s: cookies %v, want Secure %v", peer, c, want)
+		}
+	}
+}
+
+func TestTheCookieIsRefusedForAnotherSitesWrites(t *testing.T) {
+	cookie := &http.Cookie{Name: "photon_session", Value: goodToken}
+	tests := []struct {
+		name, method, origin string
+		cookie               bool
+		want                 int
+	}{
+		{"a read from anywhere", http.MethodGet, "https://evil.example", true, http.StatusOK},
+		{"a write from this server's page", http.MethodPut, "http://photon.test", true, http.StatusNoContent},
+		{"a write from another site", http.MethodPut, "https://evil.example", true, http.StatusForbidden},
+		{"a write from another port", http.MethodPut, "http://photon.test:3000", true, http.StatusForbidden},
+		{"an app's write with its token", http.MethodPut, "https://evil.example", false, http.StatusNoContent},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target, body := "/api/v1/me", ""
+			if tt.method == http.MethodPut {
+				target, body = "/api/v1/me/pin", `{"pin":"2468"}`
+			}
+			req := httptest.NewRequest(tt.method, "http://photon.test"+target, strings.NewReader(body))
+			req.Header.Set("Origin", tt.origin)
+			if tt.cookie {
+				req.AddCookie(cookie)
+			} else {
+				req.Header.Set("Authorization", "Bearer "+goodToken)
+			}
+			rec := httptest.NewRecorder()
+			newAPI(nil).ServeHTTP(rec, req)
+			if rec.Code != tt.want {
+				t.Errorf("status %d, want %d: %s", rec.Code, tt.want, rec.Body)
+			}
+		})
+	}
+}

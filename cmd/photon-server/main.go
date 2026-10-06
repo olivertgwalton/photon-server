@@ -113,6 +113,10 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	web, err := webApp()
+	if err != nil {
+		return err
+	}
 	tools, err := media.FindTools(ctx)
 	if err != nil {
 		return err
@@ -230,7 +234,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	srv := &http.Server{
 		Addr: listen,
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: sessions, Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Setup: setup, Postgres: st, Valkey: cache,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: sessions, Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Setup: setup, Postgres: st, Valkey: cache, Web: web,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -301,6 +305,36 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	return nil
+}
+
+// defaultWebDir is where the image puts the web app's build.
+const defaultWebDir = "/usr/local/share/photon-server/web"
+
+// webApp is the web app's build in PHOTON_WEB_DIR, served when PHOTON_WEB is serve, as it is by
+// default wherever there is a build; nil when the server answers the API alone.
+func webApp() (*httpapi.Web, error) {
+	build := os.DirFS(cmp.Or(os.Getenv("PHOTON_WEB_DIR"), defaultWebDir))
+	mode := os.Getenv("PHOTON_WEB")
+	if mode == "" {
+		mode = string(domain.WebOff)
+		if _, err := fs.Stat(build, "index.html"); err == nil {
+			mode = string(domain.WebServe)
+		}
+	}
+	web, err := domain.ParseWeb(mode)
+	if err != nil {
+		return nil, fmt.Errorf("PHOTON_WEB: %w", err)
+	}
+	switch web {
+	case domain.WebServe:
+		app, err := httpapi.NewWeb(build)
+		if err != nil {
+			return nil, fmt.Errorf("PHOTON_WEB is serve but PHOTON_WEB_DIR has no build: %w", err)
+		}
+		return app, nil
+	case domain.WebOff:
+	}
+	return nil, nil
 }
 
 func ready(st *store.Store, cache *kv.KV) func(context.Context) error {

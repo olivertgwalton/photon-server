@@ -1,20 +1,21 @@
-import adapter from "@sveltejs/adapter-bun";
+import adapter from "@sveltejs/adapter-static";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
-import { cspDirectives } from "./src/lib/csp.ts";
+
+// In development the API is another process; the proxy keeps it on this
+// origin, as the server keeps it in production, so the session cookie works.
+const api = process.env.PHOTON_API_URL ?? "http://localhost:8640";
 
 export default defineConfig({
 	plugins: [
 		tailwindcss(),
-		// Kit 3 takes its options flat, not nested under `kit`.
+		// Kit 3 takes its options flat, not nested under `kit`. The server serves
+		// the build, with its own Content-Security-Policy.
 		sveltekit({
-			adapter: adapter(),
-			csp: { mode: "auto", directives: cspDirectives },
-			// Kit's own check compares the scheme too, which adapter-bun can only
-			// guess; hooks.server.ts makes the same check by host instead.
-			csrf: { trustedOrigins: ["*"] },
+			adapter: adapter({ fallback: "index.html", precompress: true }),
 			compilerOptions: { runes: true },
 		}),
 	],
+	server: { proxy: { "/api": api, "/readyz": api } },
 });

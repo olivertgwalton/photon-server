@@ -40,9 +40,7 @@ test("the session cookie never reaches the page's script", async ({ page }) => {
 	expect(cookie?.sameSite).toBe("Lax");
 });
 
-test("the browser reaches the API through the proxy, as its session", async ({
-	page,
-}) => {
+test("the browser calls the API itself, as its session", async ({ page }) => {
 	await logIn(page);
 	const me = await page.evaluate(() =>
 		fetch("/api/v1/me").then((r) => r.json()),

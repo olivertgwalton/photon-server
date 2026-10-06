@@ -1,20 +1,50 @@
 <script lang="ts">
-import { enhance } from "$app/forms";
+import { goto } from "$app/navigation";
 import { page } from "$app/state";
+import { client, problemMessage } from "#lib/api/client.js";
+import { CLIENT, deviceName } from "#lib/device.js";
+import { returnPath } from "#lib/session.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 
-let { data, form } = $props();
+let { data } = $props();
 let pending = $state(false);
+let message = $state<string>();
 
-// The action keeps the page's query, so a failed attempt still knows where to
-// return to.
-const action = $derived.by(() => {
-	const to = page.url.searchParams.get("to");
-	return to ? `?/login&to=${encodeURIComponent(to)}` : "?/login";
-});
+async function login(event: SubmitEvent) {
+	event.preventDefault();
+	const form = new FormData(event.currentTarget as HTMLFormElement);
+	pending = true;
+	const api = client();
+	const { data: signedIn, error } = await api
+		.POST("/api/v1/auth/login", {
+			body: {
+				name: String(form.get("name")),
+				password: String(form.get("password")),
+				device: deviceName(navigator.userAgent),
+				client: CLIENT,
+				keep: "cookie",
+			},
+		})
+		.catch(() => ({ data: undefined, error: undefined }));
+	if (!signedIn) {
+		pending = false;
+		message = error ? problemMessage(error) : "The server isn't answering.";
+		return;
+	}
+	// A household of several is asked who is watching, as Plex and Netflix
+	// ask; a household of one goes straight on.
+	const to = returnPath(page.url);
+	const profiles = await api.GET("/api/v1/profiles");
+	await goto(
+		(profiles.data?.items.length ?? 0) > 1
+			? `/profiles?to=${encodeURIComponent(to)}`
+			: to,
+		{ invalidateAll: true },
+	);
+}
 </script>
 
 <svelte:head><title>Log in · Photon</title></svelte:head>
@@ -33,27 +63,11 @@ const action = $derived.by(() => {
 		</Card.Description>
 	</Card.Header>
 	<Card.Content>
-		<form
-			method="post"
-			{action}
-			use:enhance={() => {
-				pending = true;
-				return async ({ update }) => {
-					await update();
-					pending = false;
-				};
-			}}
-		>
+		<form onsubmit={login}>
 			<Field.Group>
 				<Field.Field>
 					<Field.Label for="name">Name</Field.Label>
-					<Input
-						id="name"
-						name="name"
-						autocomplete="username"
-						required
-						value={form?.name ?? ""}
-					/>
+					<Input id="name" name="name" autocomplete="username" required />
 				</Field.Field>
 				<Field.Field>
 					<Field.Label for="password">Password</Field.Label>
@@ -64,7 +78,7 @@ const action = $derived.by(() => {
 						autocomplete="current-password"
 					/>
 				</Field.Field>
-				<Field.Error errors={[{ message: form?.message }]} />
+				<Field.Error errors={[{ message }]} />
 				<Field.Field>
 					<Button type="submit" disabled={pending}>Log in</Button>
 					<Field.Description class="text-center">

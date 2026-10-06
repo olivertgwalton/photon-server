@@ -87,7 +87,12 @@ func describe(info Info, routes []route) ([]byte, error) {
 			"securitySchemes": map[string]any{
 				"session": map[string]any{
 					"type": "http", "scheme": "bearer",
-					"description": "A device's token, from signing in or pairing, in the Authorization header alone.",
+					"description": "A device's token, from signing in or pairing, in the Authorization header.",
+				},
+				"cookie": map[string]any{
+					"type": "apiKey", "in": "cookie", "name": sessionCookie,
+					"description": "The web app's session: the same token, kept by the browser. " +
+						"A write carrying it is refused as forbidden unless it comes from this server's own pages.",
 				},
 			},
 		},
@@ -123,7 +128,7 @@ func operation(s *schemas, r route, path string) (map[string]any, error) {
 		"security": []any{},
 	}
 	if r.access == signedIn || r.access == admin {
-		op["security"] = []any{map[string]any{"session": []string{}}}
+		op["security"] = []any{map[string]any{"session": []string{}}, map[string]any{"cookie": []string{}}}
 	}
 	if r.access == admin {
 		op["description"] = "Admin only."
