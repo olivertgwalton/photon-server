@@ -61,6 +61,16 @@ type DescribeRequest struct {
 type DescribeResponse struct {
 	Metadata
 	Seasons []Season `json:"seasons,omitempty"`
+	// NextEpisode is a show's next episode to air; left out, there is none.
+	NextEpisode *NextEpisode `json:"next_episode,omitempty"`
+}
+
+type NextEpisode struct {
+	Season int    `json:"season"`
+	Number int    `json:"number"`
+	Title  string `json:"title,omitempty"`
+	// AirDate is a date, as 2006-01-02.
+	AirDate string `json:"air_date"`
 }
 
 // Metadata is what the plugin knows of a title, a season or an episode. A field left out says

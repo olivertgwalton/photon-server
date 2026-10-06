@@ -88,7 +88,11 @@ func (c *client) Describe(ctx context.Context, kind domain.ItemKind, id string, 
 		}
 		said[s.Number] = season
 	}
-	return c.metadata(out.Metadata), said, nil
+	m := c.metadata(out.Metadata)
+	if n := out.NextEpisode; n != nil && !provider.Date(n.AirDate).IsZero() {
+		m.NextAiring = &domain.Airing{SeasonNumber: n.Season, EpisodeNumber: n.Number, Title: n.Title, Date: provider.Date(n.AirDate)}
+	}
+	return m, said, nil
 }
 
 func (c *client) Candidates(ctx context.Context, kind domain.ItemKind, title string, year int) ([]domain.Candidate, error) {

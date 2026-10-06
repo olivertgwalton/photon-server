@@ -155,7 +155,8 @@ numbered in `order` (`aired`, `dvd` or `absolute`); describe those you have.
          "artwork": [{"kind": "thumb", "url": "https://img.example/wire-1x01.jpg"}]}
       ]
     }
-  ]
+  ],
+  "next_episode": {"season": 2, "number": 1, "title": "Ebb Tide", "air_date": "2003-06-01"}
 }
 ```
 
@@ -170,6 +171,8 @@ besides `number`; of them the server keeps the fields and pictures, and an episo
   The server knows a person by any of their `ids`, your own included: two credits sharing an id,
   from any source, are one person, who gains the ids each brings. A credit with no ids is not kept.
 - `ids` are kept on the title, so the next match is handed them; give your own as `plugin:{id}`.
+- `next_episode` is a show's next episode to air, numbered as aired, once its `air_date` is known;
+  leave it out when there is none, and the one you gave before is forgotten.
 
 ### `POST /search` (search)
 
