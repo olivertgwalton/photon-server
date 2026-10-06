@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -89,11 +91,7 @@ func (p *Previews) Sweep(ctx context.Context, live func(ctx context.Context, par
 			stale = append(stale, e.Name())
 		}
 	}
-	ids := make([]uuid.UUID, 0, len(byID))
-	for id := range byID {
-		ids = append(ids, id)
-	}
-	alive, err := live(ctx, ids)
+	alive, err := live(ctx, slices.Collect(maps.Keys(byID)))
 	if err != nil {
 		return 0, err
 	}

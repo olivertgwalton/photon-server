@@ -10,9 +10,11 @@ import (
 	"image"
 	"io"
 	"io/fs"
+	"maps"
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 	"uuid"
@@ -154,11 +156,7 @@ func (c *Cache) Sweep(ctx context.Context, live func(ctx context.Context, ids []
 		}
 		byID[id] = append(byID[id], name)
 	}
-	ids := make([]uuid.UUID, 0, len(byID))
-	for id := range byID {
-		ids = append(ids, id)
-	}
-	alive, err := live(ctx, ids)
+	alive, err := live(ctx, slices.Collect(maps.Keys(byID)))
 	if err != nil {
 		return 0, err
 	}
