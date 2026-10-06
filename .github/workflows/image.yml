@@ -25,6 +25,7 @@ jobs:
             docker run --rm --platform "$platform" -e PHOTON_DATABASE_URL=postgres://none/none \
               -e PHOTON_VALKEY_URL=valkey://none:6379 check 2>&1 | tee run.log || true
             grep -q '"msg":"media tools"' run.log
+            grep -q '"yt_dlp":"/usr/local/bin/yt-dlp"' run.log
           done
       - name: Run the compose stack on the image until it is ready and serves the web app
         env:

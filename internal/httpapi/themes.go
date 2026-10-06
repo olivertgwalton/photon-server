@@ -7,6 +7,7 @@ import (
 	"path"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/naming"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -29,10 +30,15 @@ func (a *API) theme(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var f *os.File
-	if t.URL != "" {
-		f, err = a.svc.Artwork.Sound(r.Context(), id, t.URL)
-	} else {
+	// The standard library knows no sound file's type by its name.
+	var kind string
+	switch t.Source {
+	case domain.ThemeFromFile:
 		f, err = library.Open(t.Root, t.Path)
+		kind, _ = naming.AudioType(path.Base(t.Path))
+	case domain.ThemeFromThemerr:
+		f, err = a.svc.Artwork.Kept(id)
+		kind = "audio/mp4"
 	}
 	if a.answered(w, r, err) {
 		return
@@ -44,8 +50,7 @@ func (a *API) theme(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h := w.Header()
-	// The standard library knows no sound file's type by its name.
-	if kind, ok := naming.AudioType(path.Base(t.Path + t.URL)); ok {
+	if kind != "" {
 		h.Set("Content-Type", kind)
 	}
 	h.Set("Cache-Control", "public, max-age=31536000, immutable")

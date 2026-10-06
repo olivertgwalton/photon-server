@@ -21,7 +21,7 @@ const (
 	JobConvert JobKind = "convert"
 	// JobDeliverWebhook sends one event to one webhook.
 	JobDeliverWebhook JobKind = "deliver_webhook"
-	// JobTheme fetches a show's theme tune from Plex's theme host.
+	// JobTheme fetches a film's or show's theme tune from the YouTube link ThemerrDB lists.
 	JobTheme JobKind = "theme"
 )
 

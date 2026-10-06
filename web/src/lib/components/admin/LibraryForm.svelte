@@ -33,7 +33,7 @@ const defaults = {
 	previews: "all",
 	markers: "all",
 	keyframes: "index",
-	themes: "all",
+	themes: "local",
 } as const;
 
 // A new library's kind changes the sources offered; a library's own is fixed.
@@ -226,14 +226,15 @@ const refreshOptions = $derived(
 				name="themes"
 				value={library?.themes ?? defaults.themes}
 				options={[
-					{ value: "all", label: "Local files and Plex's" },
 					{ value: "local", label: "Local files only" },
+					{ value: "themerr", label: "Local files and ThemerrDB's" },
 					{ value: "off", label: "None" },
 				]}
 			/>
 			<Field.Description>
-				A theme.mp3 or a theme-music folder beside a title; a show with neither
-				takes Plex's theme for it.
+				A theme.mp3 or a theme-music folder beside a title. With ThemerrDB's, a
+				film or show with neither downloads the theme audio from the YouTube
+				link ThemerrDB lists for it, which needs yt-dlp on the server.
 			</Field.Description>
 		</Field.Field>
 	</div>

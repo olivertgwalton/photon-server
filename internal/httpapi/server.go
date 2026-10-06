@@ -76,13 +76,15 @@ type nodeJSON struct {
 // serverJSON is the server as its dashboard shows it. transcode_limit is absent when unlimited.
 type serverJSON struct {
 	domain.Info
-	NodeID           uuid.UUID        `json:"node_id"`
-	StartedAt        time.Time        `json:"started_at"`
-	OS               string           `json:"os"`
-	Arch             string           `json:"arch"`
-	FFmpeg           toolJSON         `json:"ffmpeg"`
-	FFprobe          toolJSON         `json:"ffprobe"`
-	Chromaprint      bool             `json:"chromaprint"`
+	NodeID      uuid.UUID `json:"node_id"`
+	StartedAt   time.Time `json:"started_at"`
+	OS          string    `json:"os"`
+	Arch        string    `json:"arch"`
+	FFmpeg      toolJSON  `json:"ffmpeg"`
+	FFprobe     toolJSON  `json:"ffprobe"`
+	Chromaprint bool      `json:"chromaprint"`
+	// YTDLP fetches theme tunes from ThemerrDB's links; its path and version are empty without it.
+	YTDLP            toolJSON         `json:"yt_dlp"`
 	Encoder          encoderJSON      `json:"encoder"`
 	TranscodeLimit   int              `json:"transcode_limit,omitzero"`
 	Discovery        domain.Discovery `json:"discovery"`
@@ -105,6 +107,7 @@ func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
 		Info: a.info, NodeID: s.Node, StartedAt: s.Started.UTC(), OS: runtime.GOOS, Arch: runtime.GOARCH,
 		FFmpeg:      toolJSON{s.Tools.FFmpeg.Path, s.Tools.FFmpeg.Version},
 		FFprobe:     toolJSON{s.Tools.FFprobe.Path, s.Tools.FFprobe.Version},
+		YTDLP:       toolJSON{s.Tools.YTDLP.Path, s.Tools.YTDLP.Version},
 		Chromaprint: s.Tools.Chromaprint, Encoder: encoderJSON{s.Encoder.Accel, s.Encoder.Device, s.Encoder.HEVC},
 		TranscodeLimit: limit, Discovery: s.Discovery, Listen: s.Listen, TrustedProxies: []string{},
 		Folders:          foldersJSON{folder(s.CacheDir), folder(s.BackupDir)},

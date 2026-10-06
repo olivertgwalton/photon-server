@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	localTheme  = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b1")
-	hostedTheme = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b2")
+	localTheme   = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b1")
+	fetchedTheme = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b2")
 )
 
 type fakeThemes struct{ root string }
@@ -24,9 +24,9 @@ type fakeThemes struct{ root string }
 func (f fakeThemes) Theme(_ context.Context, id uuid.UUID) (store.ThemeFile, error) {
 	switch id {
 	case localTheme:
-		return store.ThemeFile{Root: f.root, Path: "Heat (1995)/theme-music/Main Title.FLAC"}, nil
-	case hostedTheme:
-		return store.ThemeFile{URL: "https://tvthemes.plexapp.com/81189.mp3"}, nil
+		return store.ThemeFile{Source: domain.ThemeFromFile, Root: f.root, Path: "Heat (1995)/theme-music/Main Title.FLAC"}, nil
+	case fetchedTheme:
+		return store.ThemeFile{Source: domain.ThemeFromThemerr}, nil
 	}
 	return store.ThemeFile{}, store.ErrNotFound
 }
@@ -34,7 +34,7 @@ func (f fakeThemes) Theme(_ context.Context, id uuid.UUID) (store.ThemeFile, err
 // A player sends no token for a theme, names its type by its file, and reads it in ranges.
 func TestTheme(t *testing.T) {
 	root := t.TempDir()
-	for name, body := range map[string]string{"Heat (1995)/theme-music/Main Title.FLAC": "local flac", "tune": "hosted mp3"} {
+	for name, body := range map[string]string{"Heat (1995)/theme-music/Main Title.FLAC": "local flac", "tune": "fetched m4a"} {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -54,14 +54,14 @@ func TestTheme(t *testing.T) {
 		api.ServeHTTP(rec, req)
 		return rec
 	}
-	for id, want := range map[uuid.UUID][2]string{localTheme: {"local flac", "audio/flac"}, hostedTheme: {"hosted mp3", "audio/mpeg"}} {
+	for id, want := range map[uuid.UUID][2]string{localTheme: {"local flac", "audio/flac"}, fetchedTheme: {"fetched m4a", "audio/mp4"}} {
 		rec := get(id, "")
 		if rec.Code != http.StatusOK || rec.Body.String() != want[0] || rec.Header().Get("Content-Type") != want[1] {
 			t.Errorf("%v: %d %q as %q, want 200 %q as %s", id, rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"), want[0], want[1])
 		}
 	}
-	if rec := get(hostedTheme, "bytes=7-"); rec.Code != http.StatusPartialContent || rec.Body.String() != "mp3" {
-		t.Errorf("a range: %d %q, want 206 %q", rec.Code, rec.Body.String(), "mp3")
+	if rec := get(fetchedTheme, "bytes=8-"); rec.Code != http.StatusPartialContent || rec.Body.String() != "m4a" {
+		t.Errorf("a range: %d %q, want 206 %q", rec.Code, rec.Body.String(), "m4a")
 	}
 	if rec := get(uuid.NewV7(), ""); rec.Code != http.StatusNotFound {
 		t.Errorf("an unknown theme: %d, want 404", rec.Code)

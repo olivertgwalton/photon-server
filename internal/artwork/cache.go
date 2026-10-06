@@ -1,5 +1,5 @@
-// Package artwork keeps providers' pictures, and shows' theme tunes, on disk once they have been
-// fetched.
+// Package artwork keeps providers' pictures, and titles' theme tunes fetched from ThemerrDB's
+// links, on disk once they have been fetched.
 package artwork
 
 import (
@@ -21,8 +21,7 @@ import (
 )
 
 const (
-	// maxPicture bounds what a provider may send for one picture, or a tune; posters run to a few
-	// MiB, and the theme host's tunes, half a minute long, to less.
+	// maxPicture bounds what a provider may send for one picture; posters run to a few MiB.
 	maxPicture = 32 << 20
 	fetchFor   = 30 * time.Second
 )
@@ -55,26 +54,12 @@ func (c *Cache) Close() error { return c.root.Close() }
 // File answers the picture with id, fetching it from url the first time it is asked for. Callers
 // asking together share one fetch, which carries on if the first of them goes away.
 func (c *Cache) File(ctx context.Context, id uuid.UUID, url string) (*os.File, error) {
-	return c.file(ctx, id, url, "image/")
-}
-
-// Sound answers a theme tune kept under id as File answers a picture: fetched from url the first
-// time, ErrMissing where url has none.
-func (c *Cache) Sound(ctx context.Context, id uuid.UUID, url string) (*os.File, error) {
-	return c.file(ctx, id, url, "audio/")
-}
-
-// ErrMissing is an address that answers it has nothing there.
-var ErrMissing = errors.New("nothing there")
-
-// file answers the file with id, fetched from url if it is not here, of a type under kind.
-func (c *Cache) file(ctx context.Context, id uuid.UUID, url, kind string) (*os.File, error) {
 	name := id.String()
 	if f, err := c.root.Open(name); !errors.Is(err, fs.ErrNotExist) {
 		return f, err
 	}
 	fetched := c.group.DoChan(name, func() (any, error) {
-		return nil, c.fetch(context.WithoutCancel(ctx), name, url, kind)
+		return nil, c.fetch(context.WithoutCancel(ctx), name, url)
 	})
 	select {
 	case <-ctx.Done():
@@ -87,7 +72,7 @@ func (c *Cache) file(ctx context.Context, id uuid.UUID, url, kind string) (*os.F
 	return c.root.Open(name)
 }
 
-func (c *Cache) fetch(ctx context.Context, name, url, kind string) error {
+func (c *Cache) fetch(ctx context.Context, name, url string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -97,18 +82,16 @@ func (c *Cache) fetch(ctx context.Context, name, url, kind string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	switch {
-	case resp.StatusCode == http.StatusNotFound:
-		return fmt.Errorf("%s: %w", url, ErrMissing)
-	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("%s: %s", url, resp.Status)
-	case !strings.HasPrefix(resp.Header.Get("Content-Type"), kind):
-		return fmt.Errorf("%s: %s is not %s", url, resp.Header.Get("Content-Type"), strings.TrimSuffix(kind, "/"))
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("picture %s: %s", url, resp.Status)
+	}
+	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "image/") {
+		return fmt.Errorf("picture %s: %s is not an image", url, resp.Header.Get("Content-Type"))
 	}
 	return c.write(name, func(w io.Writer) error {
 		n, err := io.Copy(w, io.LimitReader(resp.Body, maxPicture+1))
 		if err == nil && n > maxPicture {
-			err = fmt.Errorf("%s is over %d bytes", url, maxPicture)
+			err = fmt.Errorf("picture %s is over %d bytes", url, maxPicture)
 		}
 		return err
 	})
@@ -197,7 +180,15 @@ func (c *Cache) Keep(id uuid.UUID, r io.Reader) error {
 	})
 }
 
-// Kept answers a picture kept by Keep.
+// KeepSound keeps a theme tune the server fetched under id, as it is.
+func (c *Cache) KeepSound(id uuid.UUID, r io.Reader) error {
+	return c.write(id.String(), func(w io.Writer) error {
+		_, err := io.Copy(w, r)
+		return err
+	})
+}
+
+// Kept answers a picture kept by Keep, or a tune kept by KeepSound.
 func (c *Cache) Kept(id uuid.UUID) (*os.File, error) {
 	return c.root.Open(id.String())
 }

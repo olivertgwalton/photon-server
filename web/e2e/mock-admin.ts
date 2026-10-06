@@ -57,6 +57,7 @@ const server: Schemas["Server"] = {
 	arch: "arm64",
 	ffmpeg: { path: "/usr/bin/ffmpeg", version: "9.0" },
 	ffprobe: { path: "/usr/bin/ffprobe", version: "9.0" },
+	yt_dlp: { path: "", version: "" },
 	chromaprint: true,
 	encoder: {
 		acceleration: "vaapi",
@@ -98,7 +99,7 @@ const films: Schemas["AdminLibrary"] = {
 	previews: "all",
 	markers: "all",
 	keyframes: "index",
-	themes: "all",
+	themes: "local",
 };
 
 const providers: Schemas["MetadataProvider"][] = [

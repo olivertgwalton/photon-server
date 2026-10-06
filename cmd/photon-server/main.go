@@ -42,9 +42,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/task"
+	"github.com/olivertgwalton/photon-server/internal/themerr"
 	"github.com/olivertgwalton/photon-server/internal/tmdb"
 	"github.com/olivertgwalton/photon-server/internal/tvdb"
-	"github.com/olivertgwalton/photon-server/internal/tvthemes"
 	"github.com/olivertgwalton/photon-server/internal/watch"
 	"github.com/olivertgwalton/photon-server/internal/webhook"
 )
@@ -140,7 +140,8 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	logger.InfoContext(ctx, "media tools",
 		slog.String("ffmpeg", tools.FFmpeg.Path), slog.String("ffmpeg_version", tools.FFmpeg.Version),
-		slog.String("ffprobe", tools.FFprobe.Path), slog.String("ffprobe_version", tools.FFprobe.Version))
+		slog.String("ffprobe", tools.FFprobe.Path), slog.String("ffprobe_version", tools.FFprobe.Version),
+		slog.String("yt_dlp", tools.YTDLP.Path), slog.String("yt_dlp_version", tools.YTDLP.Version))
 	if !tools.Chromaprint {
 		logger.WarnContext(ctx, "intros and credits are found from chapters only: ffmpeg has no chromaprint muxer")
 	}
@@ -270,10 +271,14 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	scanner := jobs.NewWorker(st, logger, node, scanSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobScanLibrary: scanLibrary(st, scan.New(st, tools, logger), hub, logger),
 	}, hub)
-	matcher := jobs.NewWorker(st, logger, node, identifySlots, map[domain.JobKind]jobs.Handler{
+	matching := map[domain.JobKind]jobs.Handler{
 		domain.JobIdentify: identify.Handler(st, providers, hub.Raise, logger),
-		domain.JobTheme:    tvthemes.Fetch(st, pictureCache, cache, tvthemes.Host),
-	}, hub)
+	}
+	// A node without yt-dlp leaves themes to one with it.
+	if tools.YTDLP.Path != "" {
+		matching[domain.JobTheme] = themerr.Fetch(st, pictureCache, cache, themerr.DB, tools.YTDLP.Path, tools.FFmpeg.Path, logger)
+	}
+	matcher := jobs.NewWorker(st, logger, node, identifySlots, matching, hub)
 	analyser := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), map[domain.JobKind]jobs.Handler{
 		domain.JobKeyframes: analysis.Keyframes(st, tools),
 		domain.JobMarkers:   analysis.Markers(st, tools.Fingerprint),
