@@ -167,6 +167,8 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 					duration_ms: 150_000,
 					image: "/api/v1/parts/p-trailer/chapters/0/image",
 				},
+				{ id: "t-scene", extra_kind: "deleted_scene", title: "The Lost Call" },
+				{ id: "t-blooper", extra_kind: "blooper", title: "Outtakes" },
 			],
 			videos: [
 				{
