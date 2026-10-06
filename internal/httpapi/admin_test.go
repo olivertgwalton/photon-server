@@ -28,6 +28,15 @@ type fakeLibraries struct {
 
 func (f *fakeLibraries) Libraries(context.Context) ([]domain.Library, error) { return f.libs, nil }
 
+// LibraryCounts holds one film in every library.
+func (f *fakeLibraries) LibraryCounts(context.Context, uuid.UUID) (map[uuid.UUID]domain.TitleCounts, error) {
+	out := map[uuid.UUID]domain.TitleCounts{}
+	for _, l := range f.libs {
+		out[l.ID] = domain.TitleCounts{Movies: 1}
+	}
+	return out, nil
+}
+
 func (f *fakeLibraries) Library(_ context.Context, id uuid.UUID) (domain.Library, error) {
 	for _, l := range f.libs {
 		if l.ID == id {

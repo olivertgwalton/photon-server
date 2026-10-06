@@ -278,7 +278,7 @@ func (a *API) routes() []route {
 			status: http.StatusNoContent, handle: a.signOutDevice,
 		},
 		{
-			pattern: "GET /api/v1/libraries", access: signedIn, summary: "List the libraries the profile sees",
+			pattern: "GET /api/v1/libraries", access: signedIn, summary: "List the libraries the profile sees, with how many of each kind of title it may see in each",
 			status: http.StatusOK, reply: listJSON[libraryJSON]{}, handle: a.libraries,
 		},
 		{
@@ -547,8 +547,8 @@ func (a *API) routes() []route {
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"image/jpeg"}, handle: a.signedChapterImage,
 		},
 		{
-			pattern: "GET /api/v1/admin/libraries", access: admin, summary: "List the libraries as an admin keeps them",
-			status: http.StatusOK, reply: listJSON[adminLibraryJSON]{}, handle: a.adminLibraries,
+			pattern: "GET /api/v1/admin/libraries", access: admin, summary: "List the libraries as an admin keeps them, with everything each holds",
+			status: http.StatusOK, reply: listJSON[adminLibraryListingJSON]{}, handle: a.adminLibraries,
 		},
 		{
 			pattern: "POST /api/v1/admin/libraries", access: admin, summary: "Add a library of a folder and scan it",
