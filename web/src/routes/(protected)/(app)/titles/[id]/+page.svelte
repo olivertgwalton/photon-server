@@ -515,8 +515,9 @@ const poster = $derived(art("poster"));
 		>
 			{#snippet card(
 				item: Extra,
+				sizes: string,
 			)}
-				<ExtraCard {item} />
+				<ExtraCard {item} {sizes} />
 			{/snippet}
 		</Rail>
 	{/if}

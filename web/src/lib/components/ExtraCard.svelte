@@ -1,15 +1,17 @@
 <script lang="ts">
 import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
 import PlayIcon from "@lucide/svelte/icons/play";
+import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
 import { type Extra, extraKinds } from "#lib/extras.js";
 import { playHref, runtime } from "#lib/format.js";
 
 // An extra by a still of its video, played here; or a video a provider links
-// to elsewhere, opened there.
-let { item }: { item: Extra } = $props();
+// to elsewhere, by its site's still served from this server, opened there.
+let { item, sizes }: { item: Extra; sizes: string } = $props();
 
 const remote = $derived("video" in item);
 const image = $derived("extra" in item ? item.extra.image : undefined);
+const thumb = $derived("video" in item ? item.video.thumb : undefined);
 </script>
 
 <a
@@ -21,7 +23,17 @@ const image = $derived("extra" in item ? item.extra.image : undefined);
 	<span
 		class="bg-raise group-hover:ring-line-strong group-focus-visible:ring-signal relative grid aspect-video place-items-center overflow-hidden rounded-lg ring-2 ring-transparent transition-shadow"
 	>
-		{#if image}
+		{#if thumb}
+			<img
+				src={artworkSrc(thumb, "still")}
+				srcset={artworkSrcset(thumb, "still")}
+				{sizes}
+				alt=""
+				loading="lazy"
+				decoding="async"
+				class="size-full object-cover"
+			>
+		{:else if image}
 			<img
 				src={image}
 				alt=""

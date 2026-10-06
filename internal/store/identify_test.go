@@ -210,3 +210,51 @@ func TestAMatchKeepsItsProvidersPictures(t *testing.T) {
 		t.Errorf("after a second match, pictures = %v, want its poster alone and the still", got)
 	}
 }
+
+func TestAVideoOnYouTubeIsPicturedByItsStill(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	film := Film{Title: "alien", Folder: "Alien", Copies: []Copy{{ContentKey: []byte("alien"), Parts: []Part{{
+		RelPath: "Alien/Alien.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
+	}}}}}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Alien", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	item, err := s.q.Item.WithContext(ctx).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	match := domain.Metadata{Videos: []domain.RemoteVideo{
+		{Kind: domain.ExtraTrailer, Site: "YouTube", Key: "LjLamj-b0I8", Name: "Trailer"},
+		{Kind: domain.ExtraTrailer, Site: "Vimeo", Key: "1234", Name: "Teaser"},
+	}}
+	videos := func() []VideoLink {
+		t.Helper()
+		if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, match, nil); err != nil {
+			t.Fatal(err)
+		}
+		page, err := s.Title(ctx, uuid.UUID{}, uuid.UUID(item.ID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return page.Videos
+	}
+	first := videos()
+	if len(first) != 2 || first[0].Thumb == (uuid.UUID{}) || first[1].Thumb != (uuid.UUID{}) {
+		t.Fatalf("videos %+v; want YouTube's pictured and Vimeo's not", first)
+	}
+	pic, err := s.Picture(ctx, first[0].Thumb)
+	if err != nil || pic.URL != "https://i.ytimg.com/vi/LjLamj-b0I8/hqdefault.jpg" {
+		t.Errorf("the still is %+v, %v; want YouTube's", pic, err)
+	}
+	if live, err := s.LivePictures(ctx, []uuid.UUID{first[0].Thumb}); err != nil || !live[first[0].Thumb] {
+		t.Errorf("the still is not kept by the sweep: %v, %v", live, err)
+	}
+	if again := videos(); again[0].Thumb != first[0].Thumb {
+		t.Error("matching again gave the same video a new still, to fetch again")
+	}
+}

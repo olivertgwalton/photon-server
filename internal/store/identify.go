@@ -142,11 +142,20 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 // of the kinds the title's library keeps.
 func saveRemoteVideos(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, videos []domain.RemoteVideo) error {
 	rv, ex, i := tx.RemoteVideo, tx.LibraryRemoteExtra, tx.Item
+	// A video linked again keeps its still's id, so the still is not fetched again.
+	before, err := rv.WithContext(ctx).Where(rv.ItemID.Eq(item), rv.Source.Eq(string(source)), rv.ThumbID.IsNotNull()).Find()
+	if err != nil {
+		return err
+	}
+	stills := map[string]*model.UUID{}
+	for _, v := range before {
+		stills[v.Site+"/"+v.Key] = v.ThumbID
+	}
 	if _, err := rv.WithContext(ctx).Where(rv.ItemID.Eq(item), rv.Source.Eq(string(source))).Delete(); err != nil {
 		return err
 	}
 	var kept []domain.ExtraKind
-	err := ex.WithContext(ctx).Select(ex.Kind).Join(i, i.LibraryID.EqCol(ex.LibraryID)).Where(i.ID.Eq(item)).Scan(&kept)
+	err = ex.WithContext(ctx).Select(ex.Kind).Join(i, i.LibraryID.EqCol(ex.LibraryID)).Where(i.ID.Eq(item)).Scan(&kept)
 	if err != nil {
 		return err
 	}
@@ -161,6 +170,13 @@ func saveRemoteVideos(ctx context.Context, tx *query.Query, item model.UUID, sou
 		}
 		if !v.Published.IsZero() {
 			row.PublishedAt = &v.Published
+		}
+		if videoStill(v.Site, v.Key) != "" {
+			row.ThumbID = stills[v.Site+"/"+v.Key]
+			if row.ThumbID == nil {
+				id := model.UUID(uuid.NewV7())
+				row.ThumbID = &id
+			}
 		}
 		rows = append(rows, row)
 	}

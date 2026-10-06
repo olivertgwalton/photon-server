@@ -214,7 +214,8 @@ type CollectionCard struct {
 	Poster uuid.UUID `json:"poster,omitzero"`
 }
 
-// VideoLink is a provider's link to a video hosted elsewhere.
+// VideoLink is a provider's link to a video hosted elsewhere, with its site's still of it where
+// the site publishes one, served at /api/v1/artwork/{thumb}.
 type VideoLink struct {
 	Kind      domain.ExtraKind `json:"extra_kind"`
 	Site      string           `json:"site"`
@@ -222,6 +223,7 @@ type VideoLink struct {
 	Name      string           `json:"name"`
 	Language  string           `json:"language,omitzero"`
 	Published *time.Time       `json:"published_at,omitzero"`
+	Thumb     uuid.UUID        `json:"thumb,omitzero"`
 }
 
 // Title answers a title's page for a profile, or ErrNotFound.
@@ -526,6 +528,9 @@ func (s *Store) videos(ctx context.Context, item model.UUID) ([]VideoLink, error
 	for n, r := range rows {
 		out[n] = VideoLink{
 			Kind: r.Kind, Site: r.Site, Key: r.Key, Name: r.Name, Language: deref(r.Language), Published: r.PublishedAt,
+		}
+		if r.ThumbID != nil {
+			out[n].Thumb = uuid.UUID(*r.ThumbID)
 		}
 	}
 	return out, nil

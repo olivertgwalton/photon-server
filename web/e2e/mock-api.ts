@@ -176,6 +176,7 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 					site: "YouTube",
 					key: "quiet",
 					name: "Making Quiet Hours",
+					thumb: art,
 				},
 			],
 			versions: [
