@@ -65,13 +65,13 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 		{
 			name: "Dolby Vision and TrueHD copied", copy: film,
 			video: domain.VideoPlan{Stream: 0, Codec: "hevc", DolbyVision: domain.DolbyVisionKeep}, audio: &domain.AudioPlan{Stream: 1},
-			want:      hls.Variant{BandwidthKbps: 40_000, Codecs: []string{"dvh1.08.00", "mlpa"}, Range: "PQ"},
+			want:      hls.Variant{BandwidthKbps: 40_000, Codecs: []string{"dvh1.08.00", "mlpa"}, Range: "PQ", Width: 3840, Height: 2160, FrameRate: 24000.0 / 1001},
 			subtitles: []string{"", "English"},
 		},
 		{
 			name: "Dolby Vision's base layer alone", copy: film,
 			video: domain.VideoPlan{Stream: 0, Codec: "hevc", DolbyVision: domain.DolbyVisionStrip}, audio: &domain.AudioPlan{Stream: 2},
-			want:      hls.Variant{BandwidthKbps: 40_000, Codecs: []string{"hvc1.2.4.L153.B0", "ac-3"}, Range: "PQ"},
+			want:      hls.Variant{BandwidthKbps: 40_000, Codecs: []string{"hvc1.2.4.L153.B0", "ac-3"}, Range: "PQ", Width: 3840, Height: 2160, FrameRate: 24000.0 / 1001},
 			subtitles: []string{"", "English"},
 		},
 		{
@@ -87,7 +87,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 				Codec: domain.VideoH264, Width: 3840, Height: 2160, BitrateKbps: 20_000, Range: domain.RangeSDR, ToneMap: true, Burn: new(4),
 			}},
 			audio: &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 2, BitrateKbps: 256}},
-			want:  hls.Variant{BandwidthKbps: 20_256, Codecs: []string{"avc1.640033", "mp4a.40.2"}, Range: "SDR"},
+			want:  hls.Variant{BandwidthKbps: 20_256, Codecs: []string{"avc1.640033", "mp4a.40.2"}, Range: "SDR", Width: 3840, Height: 2160, FrameRate: 24000.0 / 1001},
 		},
 		{
 			name: "HDR10 kept in HEVC", copy: film,
@@ -95,7 +95,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 				Codec: domain.VideoHEVC, Width: 1920, Height: 1080, BitrateKbps: 8_000, Range: domain.RangeHDR10,
 			}},
 			audio:     &domain.AudioPlan{Stream: 2},
-			want:      hls.Variant{BandwidthKbps: 8_000, Codecs: []string{"hvc1.2.4.L123.B0", "ac-3"}, Range: "PQ"},
+			want:      hls.Variant{BandwidthKbps: 8_000, Codecs: []string{"hvc1.2.4.L123.B0", "ac-3"}, Range: "PQ", Width: 1920, Height: 1080, FrameRate: 24000.0 / 1001},
 			subtitles: []string{"", "English"},
 		},
 		{
@@ -104,7 +104,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 				Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 8_000, Range: domain.RangeSDR, ToneMap: true,
 			}},
 			audio:     &domain.AudioPlan{Stream: 2},
-			want:      hls.Variant{BandwidthKbps: 8_000, Codecs: []string{"hvc1.1.6.L153.B0", "ac-3"}, Range: "SDR"},
+			want:      hls.Variant{BandwidthKbps: 8_000, Codecs: []string{"hvc1.1.6.L153.B0", "ac-3"}, Range: "SDR", Width: 3840, Height: 2160, FrameRate: 24000.0 / 1001},
 			subtitles: []string{"", "English"},
 		},
 	} {

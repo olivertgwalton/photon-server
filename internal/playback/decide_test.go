@@ -17,7 +17,7 @@ var film = Copy{
 	Streams: []media.Stream{
 		{
 			Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Profile: "Main 10", Level: 153, Width: 3840, Height: 2160,
-			BitDepth: 10, Range: domain.RangeDV, DolbyVision: &media.DolbyVision{Profile: 8, Compatibility: 1},
+			FrameRate: 24000.0 / 1001, BitDepth: 10, Range: domain.RangeDV, DolbyVision: &media.DolbyVision{Profile: 8, Compatibility: 1},
 		},
 		{Index: 1, Kind: domain.StreamAudio, Codec: "truehd", Channels: 8, Default: true},
 		{Index: 2, Kind: domain.StreamAudio, Codec: "ac3", Channels: 6},
