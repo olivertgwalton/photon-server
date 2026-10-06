@@ -17,10 +17,20 @@ const (
 	tick      = 5 * time.Second
 )
 
+// Start is how a task's run began: by its trigger, or by an admin asking for it. As Jellyfin's
+// manual run carries none of its trigger's limits, work a run queues may be held to the
+// maintenance window by its trigger and never by an admin's asking.
+type Start string
+
+const (
+	StartTrigger Start = "trigger"
+	StartRequest Start = "request"
+)
+
 type Task struct {
 	Key     domain.TaskKey
 	Trigger Trigger
-	Run     func(ctx context.Context) error
+	Run     func(ctx context.Context, start Start) error
 }
 
 type stateStore interface {
@@ -84,6 +94,10 @@ func (s *Scheduler) lead(ctx context.Context, t *time.Ticker) {
 			if err != nil || busy || !isDue(task, states[task.Key], now) {
 				continue
 			}
+			start := StartTrigger
+			if st := states[task.Key]; st.Requested.After(st.Started) {
+				start = StartRequest
+			}
 			if err := s.store.TaskStarted(ctx, task.Key, now); err != nil {
 				s.log.WarnContext(ctx, "task not started", slog.String("task", string(task.Key)), slog.Any("err", err))
 				continue
@@ -92,7 +106,7 @@ func (s *Scheduler) lead(ctx context.Context, t *time.Ticker) {
 			running[task.Key] = true
 			mu.Unlock()
 			wg.Go(func() {
-				s.run(ctx, task)
+				s.run(ctx, task, start)
 				mu.Lock()
 				delete(running, task.Key)
 				mu.Unlock()
@@ -163,11 +177,11 @@ func (s *Scheduler) Request(ctx context.Context, key domain.TaskKey) error {
 	return ErrNoTask
 }
 
-func (s *Scheduler) run(ctx context.Context, task Task) {
+func (s *Scheduler) run(ctx context.Context, task Task, start Start) {
 	log := s.log.With(slog.String("task", string(task.Key)))
 	log.InfoContext(ctx, "task started")
 	s.raise(ctx, domain.Event{Kind: domain.EventTaskStarted, Details: map[string]any{"task": task.Key}})
-	err := task.Run(ctx)
+	err := task.Run(ctx, start)
 	result, kind := domain.TaskSucceeded, domain.EventTaskFinished
 	switch {
 	case errors.Is(err, context.Canceled):

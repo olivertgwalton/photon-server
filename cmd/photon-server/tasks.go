@@ -28,7 +28,7 @@ func scanTask(st *store.Store) task.Task {
 	return task.Task{
 		Key:     domain.TaskScanLibraries,
 		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: scanEvery},
-		Run: func(ctx context.Context) error {
+		Run: func(ctx context.Context, _ task.Start) error {
 			libs, err := st.Libraries(ctx)
 			if err != nil {
 				return err
@@ -87,7 +87,7 @@ func sweepTask(st *store.Store, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:     domain.TaskSweepJobs,
 		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: time.Minute},
-		Run: func(ctx context.Context) error {
+		Run: func(ctx context.Context, _ task.Start) error {
 			n, err := st.SweepJobs(ctx)
 			if n > 0 {
 				logger.InfoContext(ctx, "jobs requeued after their worker's lease ran out", slog.Int64("jobs", n))
@@ -105,7 +105,7 @@ func backupTask(d backup.Dumper, hub *events.Hub, logger *slog.Logger) task.Task
 	return task.Task{
 		Key:     domain.TaskBackupDatabase,
 		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: backupEvery},
-		Run: func(ctx context.Context) error {
+		Run: func(ctx context.Context, _ task.Start) error {
 			name, err := d.Dump(ctx, time.Now())
 			if err == nil {
 				logger.InfoContext(ctx, "database backed up", slog.String("file", name))
@@ -126,7 +126,7 @@ func pruneActivityTask(st *store.Store, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:     domain.TaskPruneActivity,
 		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: pruneActivityEvery},
-		Run: func(ctx context.Context) error {
+		Run: func(ctx context.Context, _ task.Start) error {
 			n, err := st.PruneActivity(ctx, time.Now().Add(-activityKept))
 			if n > 0 {
 				logger.InfoContext(ctx, "old activity forgotten", slog.Int64("entries", n))
@@ -145,7 +145,7 @@ func refreshTask(st *store.Store, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:     domain.TaskRefreshMetadata,
 		Trigger: task.Trigger{Kind: task.TriggerDaily, At: refreshAt},
-		Run: func(ctx context.Context) error {
+		Run: func(ctx context.Context, _ task.Start) error {
 			n, err := st.RefreshStale(ctx)
 			if n > 0 {
 				logger.InfoContext(ctx, "titles queued to be matched again", slog.Int64("titles", n))
@@ -164,7 +164,7 @@ func sweepArtworkTask(st *store.Store, cache *artwork.Cache, logger *slog.Logger
 	return task.Task{
 		Key:     domain.TaskSweepArtwork,
 		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: sweepArtworkEvery},
-		Run: func(ctx context.Context) error {
+		Run: func(ctx context.Context, _ task.Start) error {
 			n, err := cache.Sweep(ctx, st.LivePictures)
 			if n > 0 {
 				logger.InfoContext(ctx, "replaced pictures cleared", slog.Int("files", n))
@@ -221,7 +221,7 @@ func markersTask(st *store.Store, tools media.Tools, window task.Trigger, logger
 	return task.Task{
 		Key:     domain.TaskDetectMarkers,
 		Trigger: window,
-		Run: func(ctx context.Context) error {
+		Run: func(ctx context.Context, _ task.Start) error {
 			if !tools.Chromaprint {
 				return nil
 			}
@@ -248,7 +248,7 @@ func previewsTask(st *store.Store, previews *analysis.Previews, window task.Trig
 	return task.Task{
 		Key:     domain.TaskBackfillPreviews,
 		Trigger: window,
-		Run: func(ctx context.Context) error {
+		Run: func(ctx context.Context, _ task.Start) error {
 			n, err := st.QueuePreviews(ctx)
 			if n > 0 {
 				logger.InfoContext(ctx, "parts queued for previews", slog.Int64("parts", n))
@@ -283,7 +283,7 @@ func sweepDownloadsTask(st *store.Store, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:     domain.TaskSweepDownloads,
 		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: time.Hour},
-		Run: func(ctx context.Context) error {
+		Run: func(ctx context.Context, _ task.Start) error {
 			n, err := st.ExpireDownloads(ctx, time.Now().Add(-downloadsKept))
 			if n > 0 {
 				logger.InfoContext(ctx, "downloads expired", slog.Int64("downloads", n))
