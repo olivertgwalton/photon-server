@@ -100,3 +100,12 @@ type Library struct {
 	Markers     MarkerDetection
 	Keyframes   KeyframeMode
 }
+
+// TitleCounts are how many of each kind of title a library holds, as a profile may see them, as
+// Jellyfin's item counts and Plex's section sizes say.
+type TitleCounts struct {
+	Movies   int
+	Shows    int
+	Seasons  int
+	Episodes int
+}
