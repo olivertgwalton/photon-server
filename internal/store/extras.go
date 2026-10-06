@@ -34,7 +34,7 @@ var errNoOwner = errors.New("no single title owns it")
 
 // saveExtras saves each extra under its owner, answering the paths of those whose owner the
 // catalogue does not hold, or holds twice, so the scanner can say so rather than guess.
-func saveExtras(ctx context.Context, tx db, lib uuid.UUID, extras []Extra) ([]string, error) {
+func saveExtras(ctx context.Context, tx db, lib uuid.UUID, settings model.Library, extras []Extra) ([]string, error) {
 	var unowned []string
 	for _, e := range extras {
 		owner, err := ownerOf(ctx, tx, lib, e.Owner)
@@ -45,7 +45,7 @@ func saveExtras(ctx context.Context, tx db, lib uuid.UUID, extras []Extra) ([]st
 		if err != nil {
 			return nil, err
 		}
-		if err := saveExtra(ctx, tx, lib, owner, e); err != nil {
+		if err := saveExtra(ctx, tx, lib, settings, owner, e); err != nil {
 			return nil, err
 		}
 	}
@@ -95,7 +95,7 @@ func one(ctx context.Context, tx db, sql string, args ...any) (uuid.UUID, error)
 	return found[0], nil
 }
 
-func saveExtra(ctx context.Context, tx db, lib, owner uuid.UUID, e Extra) error {
+func saveExtra(ctx context.Context, tx db, lib uuid.UUID, settings model.Library, owner uuid.UUID, e Extra) error {
 	row := model.Item{
 		LibraryID: lib, Kind: domain.ItemExtra, ParentID: &owner, ExtraKind: &e.Kind,
 		ScanTitle: e.Title, Title: e.Title, SortTitle: sortTitle(e.Title), Folder: e.Folder,
@@ -123,5 +123,5 @@ func saveExtra(ctx context.Context, tx db, lib, owner uuid.UUID, e Extra) error 
 	if err := describe(ctx, tx, row.ID, e.Title, 0, nil, nil); err != nil {
 		return err
 	}
-	return saveCopy(ctx, tx, lib, row.ID, e.Copy)
+	return saveCopy(ctx, tx, lib, settings, row.ID, e.Copy)
 }

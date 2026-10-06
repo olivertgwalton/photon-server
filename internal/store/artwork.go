@@ -22,10 +22,8 @@ const artworkColumns = `id, item_id, source, kind, place, position, folder, lang
 // saveFolderArtwork replaces a title's pictures that are files in folder with those found there
 // now; pictures it has in other folders stand.
 func saveFolderArtwork(ctx context.Context, tx db, item uuid.UUID, folder string, pictures []domain.Artwork) error {
-	_, err := tx.Exec(ctx, `DELETE FROM artwork WHERE item_id = $1 AND source = $2 AND folder = $3`, item, domain.SourceFile, folder)
-	if err != nil {
-		return err
-	}
+	b := &pgx.Batch{}
+	b.Queue(`DELETE FROM artwork WHERE item_id = $1 AND source = $2 AND folder = $3`, item, domain.SourceFile, folder)
 	rows := make([]*model.Artwork, 0, len(pictures))
 	for n, p := range pictures {
 		if path.Dir(p.Path) != folder {
@@ -36,14 +34,14 @@ func saveFolderArtwork(ctx context.Context, tx db, item uuid.UUID, folder string
 			Blurhash: optional(p.Blurhash),
 		})
 	}
-	return createArtwork(ctx, tx, rows)
+	queueArtwork(b, rows)
+	return tx.SendBatch(ctx, b).Close()
 }
 
 // saveProviderArtwork replaces what a provider has for a title with what it has now.
 func saveProviderArtwork(ctx context.Context, tx db, item uuid.UUID, source domain.FieldSource, pictures []domain.Artwork) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM artwork WHERE item_id = $1 AND source = $2`, item, source); err != nil {
-		return err
-	}
+	b := &pgx.Batch{}
+	b.Queue(`DELETE FROM artwork WHERE item_id = $1 AND source = $2`, item, source)
 	rows := make([]*model.Artwork, len(pictures))
 	for n, p := range pictures {
 		rows[n] = &model.Artwork{
@@ -51,14 +49,11 @@ func saveProviderArtwork(ctx context.Context, tx db, item uuid.UUID, source doma
 			Language: optional(p.Language), Width: optionalInt(p.Width), Height: optionalInt(p.Height),
 		}
 	}
-	return createArtwork(ctx, tx, rows)
+	queueArtwork(b, rows)
+	return tx.SendBatch(ctx, b).Close()
 }
 
-func createArtwork(ctx context.Context, tx db, rows []*model.Artwork) error {
-	if len(rows) == 0 {
-		return nil
-	}
-	b := &pgx.Batch{}
+func queueArtwork(b *pgx.Batch, rows []*model.Artwork) {
 	for _, r := range rows {
 		// A provider may list one picture twice.
 		b.Queue(`
@@ -66,7 +61,6 @@ func createArtwork(ctx context.Context, tx db, rows []*model.Artwork) error {
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING`,
 			r.ItemID, r.Source, r.Kind, r.Place, r.Position, r.Folder, r.Language, r.Width, r.Height, r.Blurhash)
 	}
-	return tx.SendBatch(ctx, b).Close()
 }
 
 // Blurhashes are the BlurHashes of the pictures an answer carries, by picture id, for those that

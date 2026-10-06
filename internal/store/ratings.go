@@ -27,13 +27,8 @@ func (s *Store) SaveRatings(ctx context.Context, id uuid.UUID, source domain.Fie
 }
 
 func saveRatings(ctx context.Context, tx db, item uuid.UUID, source domain.FieldSource, ratings []domain.Rating) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM ratings WHERE item_id = $1 AND source = $2`, item, source); err != nil {
-		return err
-	}
-	if len(ratings) == 0 {
-		return nil
-	}
 	b := &pgx.Batch{}
+	b.Queue(`DELETE FROM ratings WHERE item_id = $1 AND source = $2`, item, source)
 	for _, x := range ratings {
 		var votes *int
 		if x.Votes > 0 {

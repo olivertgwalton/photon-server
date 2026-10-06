@@ -156,18 +156,29 @@ type Saved struct {
 func (s *Store) SaveFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, films []Film, extras []Extra) (Saved, error) {
 	saved := Saved{Titles: Changed{}}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		settings, err := analysisOf(ctx, tx, lib)
+		if err != nil {
+			return err
+		}
 		for _, f := range films {
-			if err := saveFilm(ctx, tx, lib, f, saved.Titles); err != nil {
+			if err := saveFilm(ctx, tx, lib, settings, f, saved.Titles); err != nil {
 				return fmt.Errorf("%s: %w", f.Title, err)
 			}
 		}
-		var err error
-		if saved.Unowned, err = saveExtras(ctx, tx, lib, extras); err != nil {
+		if saved.Unowned, err = saveExtras(ctx, tx, lib, settings, extras); err != nil {
 			return err
 		}
 		return rememberFolder(ctx, tx, lib, path, fingerprint)
 	})
 	return saved, err
+}
+
+// analysisOf is what a library asks to be made of the media a scan adds to it.
+func analysisOf(ctx context.Context, tx db, lib uuid.UUID) (model.Library, error) {
+	var settings model.Library
+	err := tx.QueryRow(ctx, `SELECT previews, keyframes, markers FROM libraries WHERE id = $1`, lib).
+		Scan(&settings.Previews, &settings.Keyframes, &settings.Markers)
+	return settings, err
 }
 
 // rememberFolder keeps the fingerprint a folder had when it was scanned.
@@ -188,7 +199,7 @@ func insertItem(ctx context.Context, tx db, row *model.Item) error {
 		row.ExtraKind, row.ScanTitle, row.Title, row.SortTitle, row.Folder).Scan(&row.ID)
 }
 
-func saveFilm(ctx context.Context, tx db, lib uuid.UUID, f Film, changed Changed) error {
+func saveFilm(ctx context.Context, tx db, lib uuid.UUID, settings model.Library, f Film, changed Changed) error {
 	itemID, err := filmItem(ctx, tx, lib, f, changed)
 	if err != nil {
 		return err
@@ -200,7 +211,7 @@ func saveFilm(ctx context.Context, tx db, lib uuid.UUID, f Film, changed Changed
 		return err
 	}
 	for _, c := range f.Copies {
-		if err := saveCopy(ctx, tx, lib, itemID, c); err != nil {
+		if err := saveCopy(ctx, tx, lib, settings, itemID, c); err != nil {
 			return err
 		}
 	}
@@ -262,7 +273,7 @@ func knownItem(ctx context.Context, tx db, lib uuid.UUID, kind domain.ItemKind, 
 	return uuid.UUID{}, false, nil
 }
 
-func saveCopy(ctx context.Context, tx db, lib, itemID uuid.UUID, c Copy) error {
+func saveCopy(ctx context.Context, tx db, lib uuid.UUID, settings model.Library, itemID uuid.UUID, c Copy) error {
 	edition, label := optional(c.Edition), optional(c.Label)
 	var known uuid.UUID
 	err := tx.QueryRow(ctx, `SELECT id FROM versions WHERE library_id = $1 AND fingerprint = $2 LIMIT 1`,
@@ -307,12 +318,6 @@ func saveCopy(ctx context.Context, tx db, lib, itemID uuid.UUID, c Copy) error {
 		version.ItemID, version.LibraryID, version.Fingerprint, version.Edition, version.Label, version.Container,
 		version.Width, version.Height, version.VideoCodec, version.VideoRange, version.DVProfile,
 		version.BitrateKbps, version.SizeBytes, version.DurationMS).Scan(&version.ID)
-	if err != nil {
-		return err
-	}
-	var settings model.Library
-	err = tx.QueryRow(ctx, `SELECT previews, keyframes FROM libraries WHERE id = $1`, lib).
-		Scan(&settings.Previews, &settings.Keyframes)
 	if err != nil {
 		return err
 	}
