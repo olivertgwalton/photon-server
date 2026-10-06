@@ -4,16 +4,22 @@ import (
 	"cmp"
 	"context"
 	"strings"
+	"uuid"
 
 	"github.com/valkey-io/valkey-go"
 )
 
+// KV is one server's keys in a Valkey that other servers may share: each is named under the
+// server's id, which every node of a cluster has, as they share its Postgres.
 type KV struct {
 	client valkey.Client
+	ns     string
 }
 
+func (k *KV) key(name string) string { return k.ns + name }
+
 // Open takes a valkey:// or valkeys:// URL; credentials and TLS ride in it.
-func Open(url string) (*KV, error) {
+func Open(url string, server uuid.UUID) (*KV, error) {
 	opt, err := valkey.ParseURL(url)
 	if err != nil {
 		return nil, err
@@ -22,7 +28,7 @@ func Open(url string) (*KV, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &KV{client: client}, nil
+	return &KV{client: client, ns: "photon:" + server.String() + ":"}, nil
 }
 
 func (k *KV) Close() { k.client.Close() }

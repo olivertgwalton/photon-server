@@ -14,7 +14,7 @@ import (
 // A pairing is one hash, named by its user code so every script touches the single key it
 // declares, as Valkey Cluster requires. It holds the hash of the device's secret, what asked and,
 // once approved, for whom.
-func pairingKey(userCode string) string { return "photon:pair:" + userCode }
+func (k *KV) pairingKey(userCode string) string { return k.key("pair:" + userCode) }
 
 var ErrUserCodeTaken = errors.New("that user code is in use")
 
@@ -40,7 +40,7 @@ redis.call('EXPIRE', KEYS[1], ARGV[4])
 return 1`)
 
 func (k *KV) StartPairing(ctx context.Context, userCode string, secretHash []byte, p Pairing, ttl time.Duration) error {
-	created, err := start.Exec(ctx, k.client, []string{pairingKey(userCode)}, []string{
+	created, err := start.Exec(ctx, k.client, []string{k.pairingKey(userCode)}, []string{
 		hex.EncodeToString(secretHash), p.Device, p.Client, strconv.Itoa(int(ttl.Seconds())),
 	}).AsInt64()
 	if err != nil {
@@ -62,7 +62,7 @@ return redis.call('HMGET', KEYS[1], 'device', 'client')`)
 // ApprovePairing gives the pairing waiting under userCode to profile, answering what asked.
 // ok is false for a code that is unknown, expired or already approved.
 func (k *KV) ApprovePairing(ctx context.Context, userCode string, profile uuid.UUID) (Pairing, bool, error) {
-	vals, err := approve.Exec(ctx, k.client, []string{pairingKey(userCode)}, []string{profile.String()}).AsStrSlice()
+	vals, err := approve.Exec(ctx, k.client, []string{k.pairingKey(userCode)}, []string{profile.String()}).AsStrSlice()
 	if valkey.IsValkeyNil(err) {
 		return Pairing{}, false, nil
 	}
@@ -90,7 +90,7 @@ return {'approved', profile, fields[1], fields[2]}`)
 // PollPairing answers a device asking after its pairing. A wrong secret reads as expired, so a
 // guessed user code reveals nothing.
 func (k *KV) PollPairing(ctx context.Context, userCode string, secretHash []byte, interval time.Duration) (PairingState, Pairing, error) {
-	vals, err := poll.Exec(ctx, k.client, []string{pairingKey(userCode)},
+	vals, err := poll.Exec(ctx, k.client, []string{k.pairingKey(userCode)},
 		[]string{hex.EncodeToString(secretHash), strconv.Itoa(int(interval.Seconds()))}).AsStrSlice()
 	if err != nil || len(vals) == 0 {
 		return "", Pairing{}, err

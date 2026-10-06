@@ -13,6 +13,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 type memory map[uuid.UUID]domain.Playback
@@ -44,9 +45,15 @@ func (s served) Playbacks() []uuid.UUID { return slices.Collect(maps.Keys(s)) }
 
 func (s served) Close(id uuid.UUID) { delete(s, id) }
 
+// positions keeps each title's place; gone is a title removed.
 type positions map[uuid.UUID]time.Duration
 
+var gone = uuid.MustParse("0199b3c0-0000-7000-8000-00000000d0e5")
+
 func (p positions) SaveProgress(_ context.Context, _, item uuid.UUID, at time.Duration, _ domain.Reach) (domain.Reach, error) {
+	if item == gone {
+		return "", store.ErrNotFound
+	}
 	p[item] = at
 	return domain.ReachResumable, nil
 }
@@ -140,6 +147,27 @@ func TestAnAdminEndsAnyonesPlaybackWhereItGotTo(t *testing.T) {
 	last := told[len(told)-1]
 	if shown, _ := last.Details["playback"].(NowPlaying); last.Kind != domain.EventPlaybackStopped || shown.PositionMS != (40*time.Minute).Milliseconds() || shown.Title.ID != film {
 		t.Errorf("told %v %+v, want it stopped at 40 minutes", last.Kind, last.Details)
+	}
+}
+
+// A playback of a title removed while it played is swept like any other, once: it is not kept to
+// be swept, and fail, again.
+func TestAPlaybackOfARemovedTitleIsSweptOnce(t *testing.T) {
+	live := memory{}
+	var told []domain.Event
+	s := NewSessions(live, positions{}, served{}, func(_ context.Context, e domain.Event) { told = append(told, e) }, uuid.NewV7())
+	ctx := t.Context()
+	p, err := s.Start(ctx, domain.PlayDirect, card(uuid.NewV7(), gone))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Updated = time.Now().Add(-time.Hour)
+	live[p.ID] = p
+	if err := s.Sweep(ctx); err != nil {
+		t.Fatalf("Sweep = %v, want nothing to fail", err)
+	}
+	if _, ok := live[p.ID]; ok || told[len(told)-1].Kind != domain.EventPlaybackStopped {
+		t.Errorf("after the sweep: still live %v, last told %v; want it stopped and gone", ok, told[len(told)-1].Kind)
 	}
 }
 

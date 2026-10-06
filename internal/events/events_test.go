@@ -28,7 +28,7 @@ func newHub(t *testing.T) (*Hub, *store.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	k, err := kv.Open(os.Getenv("TEST_VALKEY_URL"))
+	k, err := kv.Open(os.Getenv("TEST_VALKEY_URL"), uuid.NewV7())
 	if err != nil {
 		t.Fatalf("TEST_VALKEY_URL: %v", err)
 	}

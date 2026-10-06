@@ -32,7 +32,7 @@ return 0`)
 // Allow takes one request from key's allowance. When refused, it answers how long until the next
 // is allowed. The limit is the same on every node, as the state is in Valkey.
 func (k *KV) Allow(ctx context.Context, key string, l Limit) (time.Duration, error) {
-	wait, err := gcra.Exec(ctx, k.client, []string{"photon:limit:" + key}, []string{
+	wait, err := gcra.Exec(ctx, k.client, []string{k.key("limit:" + key)}, []string{
 		strconv.FormatInt(l.Every.Microseconds(), 10), strconv.Itoa(l.Burst),
 	}).AsInt64()
 	return time.Duration(wait) * time.Microsecond, err
