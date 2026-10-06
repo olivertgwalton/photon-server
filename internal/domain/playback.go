@@ -167,12 +167,13 @@ type VideoPlan struct {
 }
 
 // VideoEncode is video encoded again: the codec, the picture's size, the most bitrate it may
-// spend, and whether HDR is tone mapped to SDR on the way.
+// spend, and whether HDR is tone mapped to SDR and an interlaced picture deinterlaced on the way.
 type VideoEncode struct {
 	Codec         string
 	Width, Height int
 	BitrateKbps   int
 	ToneMap       bool
+	Deinterlace   bool
 	// Burn is a picture subtitle stream of the file drawn into the picture, by its index.
 	Burn *int
 }

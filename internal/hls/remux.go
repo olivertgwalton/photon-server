@@ -527,7 +527,7 @@ func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domai
 	a := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3"}
 	hw = hw.encoding(video)
 	if video.Encode != nil {
-		a = append(a, hw.inputArgs(video.Codec)...)
+		a = append(a, hw.inputArgs(video.Codec, *video.Encode)...)
 	}
 	a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts", "-i", "fd:")
 	a = append(a, streamArgs(hw, video, audio)...)

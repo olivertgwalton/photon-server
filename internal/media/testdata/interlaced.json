@@ -1,0 +1,120 @@
+{
+    "frames": [
+        {
+            "media_type": "video",
+            "stream_index": 0,
+            "key_frame": 1,
+            "pts": 129600,
+            "pts_time": "1.440000",
+            "best_effort_timestamp": 129600,
+            "best_effort_timestamp_time": "1.440000",
+            "duration": 3600,
+            "duration_time": "0.040000",
+            "pkt_pos": "564",
+            "pkt_size": "26175",
+            "width": 720,
+            "height": 576,
+            "crop_top": 0,
+            "crop_bottom": 0,
+            "crop_left": 0,
+            "crop_right": 0,
+            "pix_fmt": "yuv420p",
+            "sample_aspect_ratio": "1:1",
+            "pict_type": "I",
+            "interlaced_frame": 1,
+            "top_field_first": 1,
+            "lossless": 0,
+            "repeat_pict": 0,
+            "color_range": "tv",
+            "chroma_location": "left",
+            "side_data_list": [
+                {
+                    "side_data_type": "AVPanScan"
+                }
+            ]
+        }
+    ],
+    "streams": [
+        {
+            "index": 0,
+            "codec_name": "mpeg2video",
+            "codec_long_name": "MPEG-2 video",
+            "profile": "Main",
+            "codec_type": "video",
+            "codec_tag_string": "[2][0][0][0]",
+            "codec_tag": "0x0002",
+            "width": 720,
+            "height": 576,
+            "coded_width": 720,
+            "coded_height": 576,
+            "has_b_frames": 1,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "5:4",
+            "pix_fmt": "yuv420p",
+            "level": 8,
+            "color_range": "tv",
+            "chroma_location": "left",
+            "field_order": "tt",
+            "refs": 1,
+            "ts_id": "1",
+            "ts_packetsize": "188",
+            "id": "0x100",
+            "r_frame_rate": "25/1",
+            "avg_frame_rate": "25/1",
+            "time_base": "1/90000",
+            "start_pts": 129600,
+            "start_time": "1.440000",
+            "duration_ts": 90000,
+            "duration": "1.000000",
+            "nb_read_frames": "1",
+            "extradata_size": 22,
+            "disposition": {
+                "default": 0,
+                "dub": 0,
+                "original": 0,
+                "comment": 0,
+                "lyrics": 0,
+                "karaoke": 0,
+                "forced": 0,
+                "hearing_impaired": 0,
+                "visual_impaired": 0,
+                "clean_effects": 0,
+                "attached_pic": 0,
+                "timed_thumbnails": 0,
+                "non_diegetic": 0,
+                "captions": 0,
+                "descriptions": 0,
+                "metadata": 0,
+                "dependent": 0,
+                "still_image": 0,
+                "multilayer": 0
+            },
+            "side_data_list": [
+                {
+                    "side_data_type": "CPB properties",
+                    "max_bitrate": 0,
+                    "min_bitrate": 0,
+                    "avg_bitrate": 0,
+                    "buffer_size": 1130496,
+                    "vbv_delay": -1
+                }
+            ]
+        }
+    ],
+    "chapters": [
+
+    ],
+    "format": {
+        "filename": "interlaced.ts",
+        "nb_streams": 1,
+        "nb_programs": 1,
+        "nb_stream_groups": 0,
+        "format_name": "mpegts",
+        "format_long_name": "MPEG-TS (MPEG-2 Transport Stream)",
+        "start_time": "1.440000",
+        "duration": "1.000000",
+        "size": "689208",
+        "bit_rate": "5513664",
+        "probe_score": 100
+    }
+}

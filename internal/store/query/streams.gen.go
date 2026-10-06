@@ -45,6 +45,7 @@ func newStream(db *gorm.DB, opts ...gen.DOOption) stream {
 	_stream.BitDepth = field.NewInt16(tableName, "bit_depth")
 	_stream.Level = field.NewInt(tableName, "level")
 	_stream.VideoRange = field.NewString(tableName, "video_range")
+	_stream.Interlaced = field.NewBool(tableName, "interlaced")
 	_stream.DVProfile = field.NewInt16(tableName, "dv_profile")
 	_stream.DVLevel = field.NewInt16(tableName, "dv_level")
 	_stream.DVCompatibility = field.NewInt16(tableName, "dv_compatibility")
@@ -79,6 +80,7 @@ type stream struct {
 	BitDepth        field.Int16
 	Level           field.Int
 	VideoRange      field.String
+	Interlaced      field.Bool
 	DVProfile       field.Int16
 	DVLevel         field.Int16
 	DVCompatibility field.Int16
@@ -119,6 +121,7 @@ func (s *stream) updateTableName(table string) *stream {
 	s.BitDepth = field.NewInt16(table, "bit_depth")
 	s.Level = field.NewInt(table, "level")
 	s.VideoRange = field.NewString(table, "video_range")
+	s.Interlaced = field.NewBool(table, "interlaced")
 	s.DVProfile = field.NewInt16(table, "dv_profile")
 	s.DVLevel = field.NewInt16(table, "dv_level")
 	s.DVCompatibility = field.NewInt16(table, "dv_compatibility")
@@ -150,7 +153,7 @@ func (s *stream) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (s *stream) fillFieldMap() {
-	s.fieldMap = make(map[string]field.Expr, 24)
+	s.fieldMap = make(map[string]field.Expr, 25)
 	s.fieldMap["part_id"] = s.PartID
 	s.fieldMap["idx"] = s.Idx
 	s.fieldMap["kind"] = s.Kind
@@ -168,6 +171,7 @@ func (s *stream) fillFieldMap() {
 	s.fieldMap["bit_depth"] = s.BitDepth
 	s.fieldMap["level"] = s.Level
 	s.fieldMap["video_range"] = s.VideoRange
+	s.fieldMap["interlaced"] = s.Interlaced
 	s.fieldMap["dv_profile"] = s.DVProfile
 	s.fieldMap["dv_level"] = s.DVLevel
 	s.fieldMap["dv_compatibility"] = s.DVCompatibility

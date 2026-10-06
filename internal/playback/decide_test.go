@@ -174,6 +174,20 @@ func TestDecide(t *testing.T) {
 	}
 }
 
+func TestAnInterlacedPictureIsDeinterlacedAsItIsEncoded(t *testing.T) {
+	broadcast := Copy{Container: "mpegts", BitrateKbps: 8_000, Streams: []media.Stream{
+		{Index: 0, Kind: domain.StreamVideo, Codec: "mpeg2video", Width: 1920, Height: 1080, Interlaced: true},
+		{Index: 1, Kind: domain.StreamAudio, Codec: "ac3", Channels: 6},
+	}}
+	got, err := Decide(appleTV, broadcast, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Video.Encode == nil || !got.Video.Encode.Deinterlace {
+		t.Errorf("video = %+v, want it encoded and deinterlaced", got.Video)
+	}
+}
+
 func TestVideoLimits(t *testing.T) {
 	h264 := media.Stream{Kind: domain.StreamVideo, Codec: "h264", Profile: "High 10", Level: 51, Width: 1920, Height: 1080, BitDepth: 10}
 	for _, tc := range []struct {

@@ -354,7 +354,7 @@ func saveFacts(ctx context.Context, tx *query.Query, partID model.UUID, f *media
 		switch st.Kind {
 		case domain.StreamVideo:
 			row.Width, row.Height, row.FrameRate = optionalInt(st.Width), optionalInt(st.Height), &st.FrameRate
-			row.VideoRange, row.Level = &st.Range, optionalInt(st.Level)
+			row.VideoRange, row.Level, row.Interlaced = &st.Range, optionalInt(st.Level), st.Interlaced
 			if st.BitDepth > 0 {
 				depth := int16(st.BitDepth)
 				row.BitDepth = &depth

@@ -103,7 +103,7 @@ func mediaStream(t *model.Stream) media.Stream {
 		Index: t.Idx, Kind: t.Kind, Codec: t.Codec, Profile: deref(t.Profile), Language: lang, Title: deref(t.Title),
 		Default: t.IsDefault, Forced: t.Forced, HearingImpaired: t.HearingImpaired, Commentary: t.Commentary,
 		Width: deref(t.Width), Height: deref(t.Height), FrameRate: deref(t.FrameRate),
-		BitDepth: int(deref(t.BitDepth)), Level: deref(t.Level), Range: deref(t.VideoRange),
+		BitDepth: int(deref(t.BitDepth)), Level: deref(t.Level), Range: deref(t.VideoRange), Interlaced: t.Interlaced,
 		Channels: deref(t.Channels), ChannelLayout: deref(t.ChannelLayout), SampleRate: deref(t.SampleRate),
 		BitrateKbps: deref(t.BitrateKbps),
 	}
