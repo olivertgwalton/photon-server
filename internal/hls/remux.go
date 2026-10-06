@@ -447,6 +447,9 @@ func (r *Remuxer) start(ctx context.Context, s *session, n int) {
 	if s.run != nil {
 		s.run.cancel()
 	}
+	// The player is where it asked the run to start, wherever it had been: after a seek back the
+	// run waits ahead of that, not ahead of the furthest it ever asked for.
+	s.furthest = n
 	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	run := &run{cancel: cancel, part: s.plan[n].Part, at: n, more: make(chan struct{}, 1)}
 	s.run = run

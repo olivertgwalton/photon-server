@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -299,5 +300,56 @@ func TestAConversionWaitsForAFreeSlot(t *testing.T) {
 	release()
 	if active, _, _ := r.Transcodes(); active != 0 {
 		t.Errorf("%d transcodes once the conversion ended, want none", active)
+	}
+}
+
+// A player that resumes far in and seeks back to the start has the remux wait a few segments
+// ahead of it again, as Jellyfin's throttling does, rather than run on to where it had been.
+func TestARemuxWaitsAheadOfAPlayerThatSeeksBack(t *testing.T) {
+	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
+	src := filepath.Join(t.TempDir(), "film.mkv")
+	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc2=size=160x90:rate=24", "-t", "240",
+		"-c:v", "libx264", "-preset", "ultrafast", "-g", "48", "-keyint_min", "48", "-sc_threshold", "0", src)
+	if out, err := made.CombinedOutput(); err != nil {
+		t.Fatalf("making the film: %v: %s", err, out)
+	}
+	dir := t.TempDir()
+	r, err := NewRemuxer(ffmpeg, dir, t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keyframes []time.Duration
+	for k := range 120 {
+		keyframes = append(keyframes, time.Duration(2*k)*time.Second)
+	}
+	playback := uuid.NewV7()
+	if err := r.Open(playback, Copy{Parts: []Source{{
+		Open: func() (*os.File, error) { return os.Open(src) }, Part: Part{Duration: 240 * time.Second, Keyframes: keyframes},
+		Video: domain.VideoPlan{Codec: "h264"},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close(playback)
+	kept := func(n int) bool {
+		_, err := os.Stat(filepath.Join(dir, playback.String(), segmentName(n)))
+		return err == nil
+	}
+	for _, n := range []int{30, 2} {
+		f, err := r.Segment(t.Context(), playback, n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = f.Close()
+	}
+	for !kept(2 + ahead) {
+		<-time.After(10 * time.Millisecond)
+	}
+	// The remux copies a segment in well under this; one not throttled would be far along.
+	<-time.After(time.Second)
+	for n := 2 + ahead + 2; n < 30; n++ {
+		if kept(n) {
+			t.Fatalf("segment %d was made with the player at 2; want the remux waiting %d ahead of it", n, ahead)
+		}
 	}
 }
