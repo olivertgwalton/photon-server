@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"errors"
 	"time"
 	"uuid"
 
@@ -47,11 +46,8 @@ func (s *Store) PreviewSource(ctx context.Context, part uuid.UUID) (PreviewSourc
 		SELECT l.previews, (SELECT video_range FROM streams WHERE part_id = p.id AND kind = 'video' ORDER BY idx LIMIT 1)
 		FROM parts p JOIN versions v ON v.id = p.version_id JOIN libraries l ON l.id = v.library_id
 		WHERE p.id = $1`, part.String()).Scan(&level, &vr)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return src, ErrNotFound
-	}
 	if err != nil {
-		return src, err
+		return src, found(err)
 	}
 	src.Level, src.Range = domain.PreviewLevel(level), domain.Range(deref(vr))
 	rows, err := s.pool.Query(ctx, `SELECT idx, start_ms, end_ms FROM chapters WHERE part_id = $1 ORDER BY idx`, part.String())
@@ -118,11 +114,8 @@ func (s *Store) Trickplay(ctx context.Context, profile, part uuid.UUID) (Trickpl
 		JOIN items i ON i.id = v.item_id, viewer($2) asking
 		WHERE t.part_id = $1 AND sees(asking, i)`, part.String(), profile.String()).
 		Scan(&w, &h, &interval, &cols, &rows, &n)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Trickplay{}, ErrNotFound
-	}
 	if err != nil {
-		return Trickplay{}, err
+		return Trickplay{}, found(err)
 	}
 	return sheetsOf(w, h, interval, cols, rows, n), nil
 }
@@ -142,10 +135,7 @@ func (s *Store) HasChapterImage(ctx context.Context, profile, part uuid.UUID, id
 		JOIN items i ON i.id = v.item_id, viewer($3) asking
 		WHERE pv.part_id = $1 AND $2 = ANY(pv.chapter_images) AND sees(asking, i)`,
 		part.String(), idx, profile.String()).Scan(&one)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-	return err
+	return found(err)
 }
 
 // QueuePreviews queues every part on disk whose previews are not what its library asks for: none

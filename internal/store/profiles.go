@@ -12,6 +12,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 	"github.com/olivertgwalton/photon-server/internal/store/query"
@@ -21,6 +23,14 @@ var (
 	ErrProfileExists = errors.New("a profile with that name already exists")
 	ErrNotFound      = errors.New("not found")
 )
+
+// found answers err with a row that is not there as ErrNotFound, however it was read.
+func found(err error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
+}
 
 func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, passwordHash string) (domain.Profile, error) {
 	row := model.Profile{Name: name, Role: role, PasswordHash: optional(passwordHash)}
@@ -38,11 +48,8 @@ func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, p
 func (s *Store) ProfileByName(ctx context.Context, name string) (domain.Profile, string, error) {
 	p := s.q.Profile
 	row, err := p.WithContext(ctx).Where(p.Name.Eq(name)).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return domain.Profile{}, "", ErrNotFound
-	}
 	if err != nil {
-		return domain.Profile{}, "", err
+		return domain.Profile{}, "", found(err)
 	}
 	hash := ""
 	if row.PasswordHash != nil {
@@ -136,11 +143,8 @@ func profile(r model.Profile) domain.Profile {
 func (s *Store) ProfileByID(ctx context.Context, id uuid.UUID) (domain.Profile, error) {
 	p := s.q.Profile
 	row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return domain.Profile{}, ErrNotFound
-	}
 	if err != nil {
-		return domain.Profile{}, err
+		return domain.Profile{}, found(err)
 	}
 	return profile(*row), nil
 }
@@ -172,11 +176,8 @@ func (s *Store) Profiles(ctx context.Context) ([]ProfileListing, error) {
 func (s *Store) ProfileSecrets(ctx context.Context, id uuid.UUID) (domain.Profile, Secrets, error) {
 	p := s.q.Profile
 	row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return domain.Profile{}, Secrets{}, ErrNotFound
-	}
 	if err != nil {
-		return domain.Profile{}, Secrets{}, err
+		return domain.Profile{}, Secrets{}, found(err)
 	}
 	var sec Secrets
 	if row.PasswordHash != nil {
@@ -273,11 +274,8 @@ func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange) (
 	err := s.q.Transaction(func(tx *query.Query) error {
 		p := tx.Profile
 		row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrNotFound
-		}
 		if err != nil {
-			return err
+			return found(err)
 		}
 		if c.Role != "" && c.Role != domain.RoleAdmin && row.Role == domain.RoleAdmin {
 			if err := otherAdmin(ctx, tx, row.ID); err != nil {
@@ -315,11 +313,8 @@ func (s *Store) RemoveProfile(ctx context.Context, id uuid.UUID) (string, error)
 	err := s.q.Transaction(func(tx *query.Query) error {
 		p := tx.Profile
 		row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrNotFound
-		}
 		if err != nil {
-			return err
+			return found(err)
 		}
 		if row.Role == domain.RoleAdmin {
 			if err := otherAdmin(ctx, tx, row.ID); err != nil {
@@ -362,11 +357,8 @@ type ProfileAccess struct {
 func (s *Store) Access(ctx context.Context, id uuid.UUID) (ProfileAccess, error) {
 	p, pl := s.q.Profile, s.q.ProfileLibrary
 	row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return ProfileAccess{}, ErrNotFound
-	}
 	if err != nil {
-		return ProfileAccess{}, err
+		return ProfileAccess{}, found(err)
 	}
 	out := ProfileAccess{Unrated: row.Unrated, Libraries: []uuid.UUID{}}
 	if row.MaxAge != nil {

@@ -2,12 +2,9 @@ package store
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"time"
 	"uuid"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -123,11 +120,8 @@ func (s *Store) Delivery(ctx context.Context, id uuid.UUID) (Delivery, error) {
 	err := s.pool.QueryRow(ctx, `
 		SELECT w.url, w.secret, d.kind, d.body FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id
 		WHERE d.id = $1`, id.String()).Scan(&d.URL, &d.Secret, &kind, &body)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Delivery{}, ErrNotFound
-	}
 	d.Kind, d.Body = domain.EventKind(kind), []byte(body)
-	return d, err
+	return d, found(err)
 }
 
 // Delivered forgets a delivery that has been sent.

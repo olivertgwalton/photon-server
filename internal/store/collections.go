@@ -91,10 +91,8 @@ const shownCollections = `SELECT c.item_id FROM collections c
 // Collections answers a page of a library's collections, by title, and how many there are.
 func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]Card, int64, error) {
 	l := s.q.Library
-	if _, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(lib))).Take(); errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, 0, ErrNotFound
-	} else if err != nil {
-		return nil, 0, err
+	if _, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(lib))).Take(); err != nil {
+		return nil, 0, found(err)
 	}
 	q := s.q.Item.WithContext(ctx).UnderlyingDB().
 		Where("items.library_id = ? AND items.kind = 'collection' AND items.id IN ("+shownCollections+")", lib.String(), minShown).
@@ -116,11 +114,8 @@ func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset,
 func (s *Store) Members(ctx context.Context, profile, collection uuid.UUID) ([]Card, error) {
 	c := s.q.Collection
 	row, err := c.WithContext(ctx).Where(c.ItemID.Eq(model.UUID(collection))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrNotFound
-	}
 	if err != nil {
-		return nil, err
+		return nil, found(err)
 	}
 	order := "items.released_asc, items.sort_title, items.id"
 	if row.Origin == domain.CollectionUser {
@@ -171,10 +166,8 @@ func (s *Store) AddCollection(ctx context.Context, lib uuid.UUID, title string) 
 	var id model.UUID
 	err := s.q.Transaction(func(tx *query.Query) error {
 		l := tx.Library
-		if _, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(lib))).Take(); errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrNotFound
-		} else if err != nil {
-			return err
+		if _, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(lib))).Take(); err != nil {
+			return found(err)
 		}
 		row := model.Item{LibraryID: model.UUID(lib), Kind: domain.ItemCollection, Title: title, ScanTitle: title, SortTitle: sortTitle(title)}
 		if err := tx.Item.WithContext(ctx).Create(&row); err != nil {
@@ -245,11 +238,8 @@ func (s *Store) RemoveCollection(ctx context.Context, collection uuid.UUID) erro
 func userCollection(ctx context.Context, tx *query.Query, collection uuid.UUID) (model.UUID, error) {
 	c, i := tx.Collection, tx.Item
 	row, err := c.WithContext(ctx).Where(c.ItemID.Eq(model.UUID(collection))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return model.UUID{}, ErrNotFound
-	}
 	if err != nil {
-		return model.UUID{}, err
+		return model.UUID{}, found(err)
 	}
 	if row.Origin != domain.CollectionUser {
 		return model.UUID{}, ErrNotUserCollection

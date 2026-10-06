@@ -234,11 +234,8 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (Picture, error) {
 		// Or a person's.
 		p := s.q.Person
 		person, err := p.WithContext(ctx).Where(p.PhotoID.Eq(model.UUID(id))).Take()
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return Picture{}, ErrNotFound
-		}
 		if err != nil {
-			return Picture{}, err
+			return Picture{}, found(err)
 		}
 		return Picture{URL: deref(person.PhotoURL)}, nil
 	}

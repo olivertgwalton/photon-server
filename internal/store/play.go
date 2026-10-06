@@ -3,13 +3,10 @@ package store
 import (
 	"cmp"
 	"context"
-	"errors"
 	"uuid"
 
-	"github.com/jackc/pgx/v5"
 	"golang.org/x/text/language"
 	"gorm.io/gen/field"
-	"gorm.io/gorm"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -58,11 +55,8 @@ func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) 
 		q = q.Where(v.ID.Eq(model.UUID(version)))
 	}
 	row, err := q.Order(v.DurationMS.Desc(), v.ID).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return PlayCopy{}, ErrNotFound
-	}
 	if err != nil {
-		return PlayCopy{}, err
+		return PlayCopy{}, found(err)
 	}
 	parts, err := p.WithContext(ctx).Where(p.VersionID.Eq(row.ID)).Order(p.Idx).Find()
 	if err != nil || len(parts) == 0 {
@@ -143,21 +137,15 @@ func (s *Store) VisiblePartFile(ctx context.Context, profile, part uuid.UUID) (r
 			JOIN items i ON i.id = v.item_id, viewer($2) asking
 		WHERE f.part_id = $1 AND sees(asking, i) ORDER BY f.rel_path LIMIT 1`,
 		part.String(), profile.String()).Scan(&root, &rel)
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = ErrNotFound
-	}
-	return root, rel, err
+	return root, rel, found(err)
 }
 
 // Subtitle answers what a subtitle file beside a copy is, or ErrNotFound.
 func (s *Store) Subtitle(ctx context.Context, id uuid.UUID) (PlaySubtitle, error) {
 	sf := s.q.SubtitleFile
 	f, err := sf.WithContext(ctx).Where(sf.ID.Eq(model.UUID(id))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return PlaySubtitle{}, ErrNotFound
-	}
 	if err != nil {
-		return PlaySubtitle{}, err
+		return PlaySubtitle{}, found(err)
 	}
 	return playSubtitle(f), nil
 }
@@ -178,9 +166,6 @@ func (s *Store) Keyframes(ctx context.Context, part uuid.UUID) (PartKeyframes, e
 		FROM parts p JOIN versions v ON v.id = p.version_id JOIN libraries l ON l.id = v.library_id
 		LEFT JOIN keyframes k ON k.part_id = p.id
 		WHERE p.id = $1`, part.String()).Scan(&mode, &k.PtsMS)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return k, ErrNotFound
-	}
 	k.Mode = domain.KeyframeMode(mode)
-	return k, err
+	return k, found(err)
 }

@@ -4,13 +4,10 @@ import (
 	"cmp"
 	"context"
 	"database/sql/driver"
-	"errors"
 	"fmt"
 	"slices"
 	"time"
 	"uuid"
-
-	"gorm.io/gorm"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -214,11 +211,8 @@ type VideoLink struct {
 func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, error) {
 	i := s.q.Item
 	item, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return TitlePage{}, ErrNotFound
-	}
 	if err != nil {
-		return TitlePage{}, err
+		return TitlePage{}, found(err)
 	}
 	if ok, err := s.visible(ctx, profile, id); err != nil || !ok {
 		return TitlePage{}, cmp.Or(err, ErrNotFound)

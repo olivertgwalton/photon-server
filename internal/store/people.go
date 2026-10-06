@@ -5,14 +5,12 @@ import (
 	"cmp"
 	"context"
 	"database/sql/driver"
-	"errors"
 	"maps"
 	"slices"
 	"time"
 	"uuid"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -350,11 +348,8 @@ type PersonCredit struct {
 func (s *Store) Person(ctx context.Context, id uuid.UUID) (PersonPage, error) {
 	p := s.q.Person
 	row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return PersonPage{}, ErrNotFound
-	}
 	if err != nil {
-		return PersonPage{}, err
+		return PersonPage{}, found(err)
 	}
 	out := PersonPage{
 		ID: id, Name: row.Name, Biography: deref(row.Biography), Born: date(row.Born), Died: date(row.Died),
@@ -451,11 +446,8 @@ const similarShown = 20
 func (s *Store) Similar(ctx context.Context, profile, id uuid.UUID) ([]Card, error) {
 	i := s.q.Item
 	item, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrNotFound
-	}
 	if err != nil {
-		return nil, err
+		return nil, found(err)
 	}
 	if item.Kind != domain.ItemMovie && item.Kind != domain.ItemShow {
 		return []Card{}, nil

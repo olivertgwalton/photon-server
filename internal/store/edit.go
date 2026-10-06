@@ -2,10 +2,7 @@ package store
 
 import (
 	"context"
-	"errors"
 	"uuid"
-
-	"gorm.io/gorm"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -76,10 +73,7 @@ func (s *Store) PinMatch(ctx context.Context, id uuid.UUID, provider domain.Prov
 func editable(ctx context.Context, tx *query.Query, id uuid.UUID) (*model.Item, error) {
 	i := tx.Item
 	item, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrNotFound
-	}
-	return item, err
+	return item, found(err)
 }
 
 // rematch has a title's folder read again, and its film or show matched again.

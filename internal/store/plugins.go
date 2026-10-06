@@ -44,11 +44,8 @@ func (s *Store) Plugins(ctx context.Context) ([]Plugin, error) {
 func (s *Store) Plugin(ctx context.Context, slug string) (Plugin, error) {
 	p := s.q.Plugin
 	row, err := p.WithContext(ctx).Where(p.Slug.Eq(slug)).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return Plugin{}, ErrNotFound
-	}
 	if err != nil {
-		return Plugin{}, err
+		return Plugin{}, found(err)
 	}
 	return Plugin{Slug: row.Slug, URL: row.URL, Manifest: row.Manifest}, nil
 }
