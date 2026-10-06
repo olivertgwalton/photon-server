@@ -83,3 +83,21 @@ func TestAToolThatHangsIsStopped(t *testing.T) {
 		t.Errorf("took %s to stop", took)
 	}
 }
+
+// yt-dlp is reported with its version where it is installed, and is no reason not to start where
+// it is not.
+func TestYTDLPIsOptional(t *testing.T) {
+	t.Setenv("PHOTON_FFMPEG", fakeTool(t, "ffmpeg", "ffmpeg version 9.0.2 Copyright"))
+	t.Setenv("PHOTON_FFPROBE", fakeTool(t, "ffprobe", "ffprobe version 9.0.2 Copyright"))
+	ytdlp := filepath.Join(t.TempDir(), "yt-dlp")
+	if err := os.WriteFile(ytdlp, []byte("#!/bin/sh\necho 2026.08.19\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]Tool{ytdlp: {Path: ytdlp, Version: "2026.08.19"}, filepath.Join(t.TempDir(), "none"): {}} {
+		t.Setenv("PHOTON_YTDLP", path)
+		tools, err := FindTools(t.Context())
+		if err != nil || tools.YTDLP != want {
+			t.Errorf("yt-dlp at %s: %+v, %v; want %+v", path, tools.YTDLP, err, want)
+		}
+	}
+}

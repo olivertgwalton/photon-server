@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +25,9 @@ type Tools struct {
 	FFprobe Tool
 	// Chromaprint is whether FFmpeg can fingerprint sound, which finding a season's intros needs.
 	Chromaprint bool
+	// YTDLP fetches theme tunes from ThemerrDB's YouTube links; its Path is empty where there is
+	// none, and no theme is fetched.
+	YTDLP Tool
 }
 
 type Tool struct {
@@ -39,7 +44,28 @@ func FindTools(ctx context.Context) (Tools, error) {
 	if err != nil {
 		return Tools{}, err
 	}
-	return Tools{FFmpeg: ffmpeg, FFprobe: ffprobe, Chromaprint: hasChromaprint(ctx, ffmpeg.Path)}, nil
+	ytdlp, err := findYTDLP(ctx, cmp.Or(os.Getenv("PHOTON_YTDLP"), "yt-dlp"))
+	if err != nil {
+		return Tools{}, err
+	}
+	return Tools{FFmpeg: ffmpeg, FFprobe: ffprobe, Chromaprint: hasChromaprint(ctx, ffmpeg.Path), YTDLP: ytdlp}, nil
+}
+
+// findYTDLP answers yt-dlp where it is installed, and nothing where it is not; one that will not
+// say its version is broken.
+func findYTDLP(ctx context.Context, name string) (Tool, error) {
+	path, err := exec.LookPath(name)
+	if errors.Is(err, exec.ErrNotFound) || errors.Is(err, fs.ErrNotExist) {
+		return Tool{}, nil
+	}
+	if err != nil {
+		return Tool{}, err
+	}
+	out, err := output(ctx, PartRun, nil, path, "--version")
+	if err != nil {
+		return Tool{}, fmt.Errorf("%s --version: %w", path, err)
+	}
+	return Tool{Path: path, Version: string(bytes.TrimSpace(out))}, nil
 }
 
 func findTool(ctx context.Context, name string) (Tool, error) {
