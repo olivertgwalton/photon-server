@@ -82,11 +82,7 @@ func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) 
 		Container: row.Container, BitrateKbps: row.BitrateKbps,
 	}
 	for _, f := range subs {
-		lang, _ := language.Parse(deref(f.Language))
-		c.Subtitles = append(c.Subtitles, PlaySubtitle{
-			ID: uuid.UUID(f.ID), Codec: f.Codec, Language: lang, Title: deref(f.Title), Default: f.IsDefault,
-			Forced: f.Forced, HearingImpaired: f.HearingImpaired,
-		})
+		c.Subtitles = append(c.Subtitles, playSubtitle(f))
 	}
 	for _, pt := range parts {
 		c.Parts = append(c.Parts, PlayPart{ID: uuid.UUID(pt.ID), OffsetMS: pt.OffsetMS, DurationMS: pt.DurationMS})
@@ -95,6 +91,14 @@ func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) 
 		c.Streams = append(c.Streams, mediaStream(t))
 	}
 	return c, nil
+}
+
+func playSubtitle(f *model.SubtitleFile) PlaySubtitle {
+	lang, _ := language.Parse(deref(f.Language))
+	return PlaySubtitle{
+		ID: uuid.UUID(f.ID), Codec: f.Codec, Language: lang, Title: deref(f.Title), Default: f.IsDefault,
+		Forced: f.Forced, HearingImpaired: f.HearingImpaired,
+	}
 }
 
 // mediaStream is a stream as it was probed.
@@ -144,6 +148,19 @@ func (s *Store) VisiblePartFile(ctx context.Context, profile, part uuid.UUID) (r
 		err = ErrNotFound
 	}
 	return root, rel, err
+}
+
+// Subtitle answers what a subtitle file beside a copy is, or ErrNotFound.
+func (s *Store) Subtitle(ctx context.Context, id uuid.UUID) (PlaySubtitle, error) {
+	sf := s.q.SubtitleFile
+	f, err := sf.WithContext(ctx).Where(sf.ID.Eq(model.UUID(id))).Take()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return PlaySubtitle{}, ErrNotFound
+	}
+	if err != nil {
+		return PlaySubtitle{}, err
+	}
+	return playSubtitle(f), nil
 }
 
 // PartKeyframes is how a part's library finds keyframes, and those found: none where the part has

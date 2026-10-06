@@ -62,6 +62,8 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 		t.Errorf("its subtitles: %+v, want the English SDH file", got.Subtitles)
 	} else if root, rel, err := s.SubtitleFile(ctx, got.Subtitles[0].ID); err != nil || root != "/srv/films" || rel != "L/theatrical.en.sdh.srt" {
 		t.Errorf("SubtitleFile = %q %q %v, want the file in the library", root, rel, err)
+	} else if sub, err := s.Subtitle(ctx, got.Subtitles[0].ID); err != nil || !reflect.DeepEqual(sub, got.Subtitles[0]) {
+		t.Errorf("Subtitle = %+v %v, want it as the copy lists it", sub, err)
 	}
 	if len(got.Streams) != 2 || !reflect.DeepEqual(got.Streams[0], video) || got.Streams[1].Channels != 8 {
 		t.Errorf("its streams: %+v, want the Dolby Vision video as probed and TrueHD 7.1", got.Streams)

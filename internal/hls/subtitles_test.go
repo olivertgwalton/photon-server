@@ -186,3 +186,27 @@ func TestEmbeddedSubtitlesAreReadOnce(t *testing.T) {
 		t.Errorf("the film was read %d times, want once", n)
 	}
 }
+
+// A SubRip file written in Windows' Western European codepage and an ASS file come out as UTF-8
+// WebVTT, their italics kept as WebVTT's.
+func TestASubtitleFileReadsAsWebVTT(t *testing.T) {
+	r, err := NewRemuxer(tool(t, "ffmpeg", "PHOTON_FFMPEG"), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, file, lang, want string }{
+		{"a.srt", "1\r\n00:00:01,000 --> 00:00:03,500\r\nCaf\xe9 <i>au lait</i>\r\n", "fr", "00:01.000 --> 00:03.500\nCafé <i>au lait</i>"},
+		{"a.ass", "[Script Info]\nScriptType: v4.00+\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
+			"Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,{\\i1}Bonjour{\\i0} le monde\n", "fr", "<i>Bonjour</i> le monde"},
+	} {
+		path := filepath.Join(dir, tc.name)
+		if err := os.WriteFile(path, []byte(tc.file), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		vtt, err := r.WebVTT(t.Context(), func() (*os.File, error) { return os.Open(path) }, tc.lang)
+		if err != nil || !strings.HasPrefix(vtt, "WEBVTT") || !strings.Contains(vtt, tc.want) {
+			t.Errorf("%s: %q, %v; want WebVTT holding %q", tc.name, vtt, err, tc.want)
+		}
+	}
+}

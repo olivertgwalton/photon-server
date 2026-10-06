@@ -92,20 +92,30 @@ func (r *Remuxer) cues(ctx context.Context, src SubtitleSource, streams []int) (
 	return cues, err
 }
 
-// convert reads a subtitle file as WebVTT.
+// convert reads a subtitle file's cues.
 func (r *Remuxer) convert(ctx context.Context, src SubtitleSource) ([]Cue, error) {
-	f, err := src.Open()
+	vtt, err := r.WebVTT(ctx, src.Open, src.Language)
 	if err != nil {
 		return nil, err
+	}
+	return readVTT(strings.NewReader(vtt))
+}
+
+// WebVTT reads a text subtitle file as WebVTT, in what its byte order mark says it is written in,
+// else UTF-8, else the codepage of its language.
+func (r *Remuxer) WebVTT(ctx context.Context, open func() (*os.File, error), language string) (string, error) {
+	f, err := open()
+	if err != nil {
+		return "", err
 	}
 	defer f.Close()
 	a := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3"}
-	charset, err := subtitleCharset(f, src.Language)
+	charset, err := subtitleCharset(f, language)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return nil, err
+		return "", err
 	}
 	if charset != "" {
 		a = append(a, "-sub_charenc", charset)
@@ -117,9 +127,9 @@ func (r *Remuxer) convert(ctx context.Context, src SubtitleSource) ([]Cue, error
 	cmd.Stderr = stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("ffmpeg: %w: %s", err, stderr)
+		return "", fmt.Errorf("ffmpeg: %w: %s", err, stderr)
 	}
-	return readVTT(strings.NewReader(string(out)))
+	return string(out), nil
 }
 
 // embedded reads a stream of a part as WebVTT. Reading one means reading the whole file, so every

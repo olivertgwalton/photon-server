@@ -3647,10 +3647,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A subtitle file beside a copy, at the address play answered */
+        /** A subtitle file beside a copy, as it is or as WebVTT, at the address play answered */
         get: {
             parameters: {
                 query?: {
+                    /** @description webvtt converts a text subtitle to WebVTT; original, the default, is the file as it is. */
+                    format?: components["schemas"]["SubtitleFormat"];
                     /** @description When the address lapses, as the server signed it. */
                     exp?: string;
                     /** @description The server's signature of the path and exp. */
@@ -5121,6 +5123,8 @@ export interface components {
             title?: string;
             url: string;
         };
+        /** @enum {string} */
+        SubtitleFormat: "original" | "webvtt";
         SubtitleRef: {
             codec: string;
             default?: boolean;

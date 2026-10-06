@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -57,6 +58,7 @@ type hlsFiles interface {
 	Segment(ctx context.Context, playback uuid.UUID, n int) (*os.File, error)
 	Transcodes() (active, conversions, limit int)
 	Encoder(video domain.VideoPlan) domain.Acceleration
+	WebVTT(ctx context.Context, open func() (*os.File, error), language string) (string, error)
 }
 
 type playing interface {
@@ -65,6 +67,7 @@ type playing interface {
 	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
 	VisiblePartFile(ctx context.Context, profile, part uuid.UUID) (root, rel string, err error)
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
+	Subtitle(ctx context.Context, id uuid.UUID) (store.PlaySubtitle, error)
 }
 
 type partJSON struct {
@@ -545,9 +548,60 @@ func (a *API) partSample(w http.ResponseWriter, r *http.Request) {
 	a.serveLibraryFile(w, r, visible, sampleBytes)
 }
 
-// subtitleFile serves a subtitle file beside a copy as it is.
+// subtitleFormat is how a subtitle file beside a copy is served.
+type subtitleFormat string
+
+const (
+	subtitleOriginal subtitleFormat = "original"
+	subtitleWebVTT   subtitleFormat = "webvtt"
+)
+
+func subtitleFormats() []subtitleFormat { return []subtitleFormat{subtitleOriginal, subtitleWebVTT} }
+
+// subtitleFile serves a subtitle file beside a copy as it is, or a text one converted to WebVTT,
+// as Jellyfin's subtitle route converts, for a player that draws nothing else.
 func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
-	a.serveLibraryFile(w, r, a.svc.Playing.SubtitleFile, math.MaxInt64)
+	format := subtitleFormat(cmp.Or(r.URL.Query().Get("format"), string(subtitleOriginal)))
+	if !slices.Contains(subtitleFormats(), format) {
+		writeProblem(w, a.logger, codeInvalidParameter, fmt.Sprintf("format is one of %v", subtitleFormats()))
+		return
+	}
+	switch format {
+	case subtitleOriginal:
+		a.serveLibraryFile(w, r, a.svc.Playing.SubtitleFile, math.MaxInt64)
+	case subtitleWebVTT:
+		a.subtitleVTT(w, r)
+	}
+}
+
+func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeProblem(w, a.logger, codeNotFound, "")
+		return
+	}
+	sub, err := a.svc.Playing.Subtitle(r.Context(), id)
+	if a.answered(w, r, err) {
+		return
+	}
+	if !hls.TextSubtitle(sub.Codec) {
+		writeProblem(w, a.logger, codeInvalidParameter, "format webvtt is for text subtitles, and this one is pictures")
+		return
+	}
+	ctx := r.Context()
+	open := func() (*os.File, error) {
+		f, _, err := openLibraryFile(ctx, a.svc.Playing.SubtitleFile, id)
+		return f, err
+	}
+	vtt, err := a.svc.HLS.WebVTT(ctx, open, tagOf(sub.Language))
+	if errors.Is(err, fs.ErrNotExist) {
+		err = store.ErrNotFound
+	}
+	if a.answered(w, r, err) {
+		return
+	}
+	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	_, _ = io.WriteString(w, vtt)
 }
 
 // serveLibraryFile serves the first limit bytes of the file of a library that where finds for the
@@ -558,22 +612,11 @@ func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where fun
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	root, rel, err := where(r.Context(), id)
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
-	}
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	f, err := library.Open(root, rel)
+	f, rel, err := openLibraryFile(r.Context(), where, id)
 	if errors.Is(err, fs.ErrNotExist) {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
+		err = store.ErrNotFound
 	}
-	if err != nil {
-		a.internal(w, r, err)
+	if a.answered(w, r, err) {
 		return
 	}
 	defer f.Close()
@@ -586,6 +629,16 @@ func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where fun
 		w.Header().Set("Content-Type", t)
 	}
 	http.ServeContent(w, r, rel, info.ModTime(), io.NewSectionReader(f, 0, min(info.Size(), limit)))
+}
+
+// openLibraryFile opens the file of a library that where finds for an id.
+func openLibraryFile(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (*os.File, string, error) {
+	root, rel, err := where(ctx, id)
+	if err != nil {
+		return nil, "", err
+	}
+	f, err := library.Open(root, rel)
+	return f, rel, err
 }
 
 // requireSignature admits a request whose address the server signed and which has not lapsed.
