@@ -177,3 +177,46 @@ func TestWalkFollowsLinksOutOfTheLibrary(t *testing.T) {
 		t.Errorf("a path climbing out of the library: %v, want it refused", err)
 	}
 }
+
+func TestAnIgnoreFileHidesWhatItsPatternsMatch(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, map[string]string{
+		"Heat (1995)/.ignore":                   "# Kodi's files\n*.nfo\nExtras/\n!keep.nfo\n",
+		"Heat (1995)/Heat (1995).mkv":           "v",
+		"Heat (1995)/Heat (1995).nfo":           "n",
+		"Heat (1995)/keep.nfo":                  "n",
+		"Heat (1995)/Extras/Making Of.mkv":      "v",
+		"Heat (1995)/Subs/English.nfo":          "n",
+		"Heat (1995)/Subs/English.srt":          "s",
+		"Heat (1995)/Deleted/Scene.mkv":         "v",
+		"Heat (1995)/Deleted/Scene.nfo":         "n",
+		"Heat (1995)/Deleted/Old/.ignore":       "*.mkv",
+		"Heat (1995)/Deleted/Old/Take.mkv":      "v",
+		"Heat (1995)/Deleted/Old/Take.nfo":      "n",
+		"The Wire/.ignore":                      "/Season 2/\n**/sample.*",
+		"The Wire/Season 1/S01E01.mkv":          "v",
+		"The Wire/Season 1/sample.mkv":          "v",
+		"The Wire/Season 2/S02E01.mkv":          "v",
+		"The Wire/Specials/Season 2/S00E01.mkv": "v",
+		"Private/.ignore":                       " \n\n",
+		"Private/Home Video.mkv":                "v",
+	})
+	got := walkAll(t, dir)
+	want := []string{
+		".", "Heat (1995)", "Heat (1995)/Deleted", "Heat (1995)/Deleted/Old",
+		"The Wire", "The Wire/Season 1", "The Wire/Specials", "The Wire/Specials/Season 2",
+	}
+	if diff := cmp.Diff(want, slices.Sorted(maps.Keys(got))); diff != "" {
+		t.Errorf("folders (-want +got):\n%s", diff)
+	}
+	for folder, files := range map[string][]string{
+		"Heat (1995)":             {"Heat (1995).mkv", "Subs/English.srt", "keep.nfo"},
+		"Heat (1995)/Deleted":     {"Scene.mkv"},
+		"Heat (1995)/Deleted/Old": {"Take.nfo"},
+		"The Wire/Season 1":       {"S01E01.mkv"},
+	} {
+		if diff := cmp.Diff(files, fileNames(got[folder])); diff != "" {
+			t.Errorf("%s's files (-want +got):\n%s", folder, diff)
+		}
+	}
+}

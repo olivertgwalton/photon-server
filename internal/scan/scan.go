@@ -95,7 +95,7 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(do
 		changed(saved.Titles)
 		progress(told)
 	}
-	// A folder holding a .ignore file was known and never read.
+	// A folder an empty .ignore hides was known and never read.
 	told.Phase, told.Known = domain.ScanRemoving, told.Done
 	progress(told)
 	titles, err := s.store.FinishScan(ctx, lib.ID, folders, present)
