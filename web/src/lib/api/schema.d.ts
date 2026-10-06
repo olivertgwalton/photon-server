@@ -3399,7 +3399,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/playback/{id}/progress": {
+    "/api/v1/playbacks/{id}/progress": {
         parameters: {
             query?: never;
             header?: never;
@@ -3442,7 +3442,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/playback/{id}/stop": {
+    "/api/v1/playbacks/{id}/stop": {
         parameters: {
             query?: never;
             header?: never;

@@ -185,7 +185,7 @@ function send(id: string) {
 		// tick later, after a closing page has gone.
 		const call =
 			r.kind === "stop"
-				? fetch(`/api/v1/playback/${id}/stop`, {
+				? fetch(`/api/v1/playbacks/${id}/stop`, {
 						method: "POST",
 						headers: { "content-type": "application/json" },
 						body: JSON.stringify({
@@ -193,7 +193,7 @@ function send(id: string) {
 						} satisfies Schemas["Position"]),
 						keepalive: r.keepalive,
 					})
-				: api.POST("/api/v1/playback/{id}/progress", {
+				: api.POST("/api/v1/playbacks/{id}/progress", {
 						params: { path: { id } },
 						body: { position_ms: r.position_ms, state: r.state, ...tracks() },
 					});

@@ -141,10 +141,10 @@ func TestAPlaybackReportsWhereItIs(t *testing.T) {
 		target, body string
 		want         int
 	}{
-		{"/api/v1/playback/" + playbackID.String() + "/progress", `{"position_ms": 60000, "state": "paused"}`, http.StatusOK},
-		{"/api/v1/playback/" + playbackID.String() + "/progress", `{"position_ms": 60000, "state": "rewinding"}`, http.StatusBadRequest},
-		{"/api/v1/playback/" + playbackID.String() + "/stop", `{"position_ms": 61000}`, http.StatusOK},
-		{"/api/v1/playback/" + uuid.NewV7().String() + "/stop", `{"position_ms": 1}`, http.StatusNotFound},
+		{"/api/v1/playbacks/" + playbackID.String() + "/progress", `{"position_ms": 60000, "state": "paused"}`, http.StatusOK},
+		{"/api/v1/playbacks/" + playbackID.String() + "/progress", `{"position_ms": 60000, "state": "rewinding"}`, http.StatusBadRequest},
+		{"/api/v1/playbacks/" + playbackID.String() + "/stop", `{"position_ms": 61000}`, http.StatusOK},
+		{"/api/v1/playbacks/" + uuid.NewV7().String() + "/stop", `{"position_ms": 1}`, http.StatusNotFound},
 	} {
 		req := httptest.NewRequest(http.MethodPost, tc.target, strings.NewReader(tc.body))
 		req.Header.Set("Authorization", "Bearer "+goodToken)
@@ -409,7 +409,7 @@ func TestHLSIsServedByTheNodeRunningIt(t *testing.T) {
 		t.Errorf("an admin stopping a playback another node runs: %d %s, want it stopped there", rec.Code, rec.Body)
 	}
 	// Stopped where it runs, so its remux ends and its transcode slot is free at once.
-	stop = httptest.NewRequest(http.MethodPost, "/api/v1/playback/"+playbackID.String()+"/stop", strings.NewReader(`{"position_ms": 1000}`))
+	stop = httptest.NewRequest(http.MethodPost, "/api/v1/playbacks/"+playbackID.String()+"/stop", strings.NewReader(`{"position_ms": 1000}`))
 	stop.Header.Set("Authorization", "Bearer "+goodToken)
 	rec = httptest.NewRecorder()
 	front.ServeHTTP(rec, stop)
@@ -547,7 +547,7 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 		t.Errorf("admin playbacks = %+v, %v; want the transcode and the remux, one of one transcoding", playing, err)
 	}
 
-	stop := httptest.NewRequest(http.MethodPost, "/api/v1/playback/"+first.PlaybackID.String()+"/stop", strings.NewReader(`{"position_ms": 1000}`))
+	stop := httptest.NewRequest(http.MethodPost, "/api/v1/playbacks/"+first.PlaybackID.String()+"/stop", strings.NewReader(`{"position_ms": 1000}`))
 	stop.Header.Set("Authorization", "Bearer "+goodToken)
 	if rec := do(stop); rec.Code != http.StatusOK {
 		t.Fatalf("stop: %d %s", rec.Code, rec.Body)
@@ -629,7 +629,7 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 	if last := told[len(told)-1]; last.Kind != domain.EventPlaybackStopped {
 		t.Errorf("told %v, want it stopped", last.Kind)
 	}
-	if rec := do(http.MethodPost, "/api/v1/playback/"+started.PlaybackID.String()+"/progress", `{"position_ms": 5000, "state": "playing"}`); rec.Code != http.StatusNotFound {
+	if rec := do(http.MethodPost, "/api/v1/playbacks/"+started.PlaybackID.String()+"/progress", `{"position_ms": 5000, "state": "playing"}`); rec.Code != http.StatusNotFound {
 		t.Errorf("its player reporting after: %d, want 404", rec.Code)
 	}
 	if rec := do(http.MethodGet, started.Playlist, ""); rec.Code != http.StatusNotFound {

@@ -29,7 +29,7 @@ test("a film plays as it is from where it was left, and stops where it was", asy
 	expect(body.profile.containers).toContain("mp4");
 
 	// It says which tracks are playing, so the title plays with them again.
-	const report = await page.waitForRequest("**/api/v1/playback/*/progress");
+	const report = await page.waitForRequest("**/api/v1/playbacks/*/progress");
 	expect(report.postDataJSON()).toMatchObject({
 		audio_stream: 1,
 		subtitle_stream: -1,
@@ -61,7 +61,7 @@ test("the keys play, pause, seek and mute as YouTube's do", async ({
 	page,
 }) => {
 	await logIn(page, "/play/p-film?t=0");
-	await page.waitForRequest("**/api/v1/playback/*/progress");
+	await page.waitForRequest("**/api/v1/playbacks/*/progress");
 	await page.keyboard.press("k");
 	await expect(
 		page.getByRole("button", { name: "Play", exact: true }),
@@ -91,8 +91,8 @@ test("a lower quality stops the playback and plays the server's HLS", async ({
 	page,
 }) => {
 	await logIn(page, "/play/p-film?t=0");
-	await page.waitForRequest("**/api/v1/playback/*/progress");
-	const stop = page.waitForRequest("**/api/v1/playback/*/stop");
+	await page.waitForRequest("**/api/v1/playbacks/*/progress");
+	const stop = page.waitForRequest("**/api/v1/playbacks/*/stop");
 	const asked = page.waitForRequest("**/api/v1/titles/p-film/play");
 	await settings(page, "Quality", "420 kbps");
 	await stop;
