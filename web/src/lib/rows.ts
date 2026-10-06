@@ -13,6 +13,8 @@ export const homeRows: Record<Kind, { title: string; shape: Shape }> = {
 	favourites: { title: "Favourites", shape: "poster" },
 	recently_added_films: { title: "Recently Added Films", shape: "poster" },
 	recently_added_shows: { title: "Recently Added Shows", shape: "poster" },
+	recently_released: { title: "Recently Released", shape: "poster" },
+	top_rated_unwatched: { title: "Top Rated", shape: "poster" },
 	// A row each, under the collection's own name, leading to its page.
 	collection: { title: "Collections", shape: "poster" },
 };
