@@ -6,7 +6,10 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"slices"
 	"sync"
 	"time"
@@ -21,6 +24,23 @@ var (
 	// passed over too, so the next source is asked.
 	ErrUnavailable = errors.New("provider: unavailable")
 )
+
+// maxAnswer bounds what a built-in provider may answer to one request, as plugins' answers are
+// bounded; a long show described whole is the largest.
+const maxAnswer = 8 << 20
+
+// Decode reads a provider's JSON answer into v, refusing one over maxAnswer rather than holding
+// whatever it sends in memory.
+func Decode(r io.Reader, v any) error {
+	data, err := io.ReadAll(io.LimitReader(r, maxAnswer+1))
+	if err != nil {
+		return err
+	}
+	if len(data) > maxAnswer {
+		return fmt.Errorf("answered more than %d bytes", maxAnswer)
+	}
+	return json.Unmarshal(data, v)
+}
 
 // Info is what a provider is and what an admin may set of it.
 type Info struct {
