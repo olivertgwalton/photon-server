@@ -134,12 +134,17 @@ func sheetsOf(width, height, intervalMS, columns, rows, thumbnails int) Trickpla
 }
 
 // QueuePreviews queues every part on disk whose previews are not what its library asks for: none
-// made yet, made before its library asked for more or less, or left by a job that died, due in the
-// maintenance window. It answers how many.
-func (s *Store) QueuePreviews(ctx context.Context) (int64, error) {
-	tag, err := s.pool.Exec(ctx, `
+// made yet, made before its library asked for more or less, or left by a job that died, due as
+// said; due now, every previews job already queued is due now too. It answers how many.
+func (s *Store) QueuePreviews(ctx context.Context, due domain.JobDue) (int64, error) {
+	var n int64
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := promoteFor(ctx, tx, domain.JobPreviews, due); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `
 		INSERT INTO jobs (kind, subject, due)
-		SELECT 'previews', p.id, 'window' FROM parts p JOIN versions v ON v.id = p.version_id JOIN libraries l ON l.id = v.library_id
+		SELECT 'previews', p.id, $1 FROM parts p JOIN versions v ON v.id = p.version_id JOIN libraries l ON l.id = v.library_id
 		WHERE EXISTS (SELECT 1 FROM part_files f WHERE f.part_id = p.id)
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'video')
 			AND l.previews <> CASE
@@ -149,8 +154,11 @@ func (s *Store) QueuePreviews(ctx context.Context) (int64, error) {
 		ON CONFLICT (kind, subject) DO UPDATE SET
 			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
 			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END,
-			due = CASE jobs.state WHEN 'dead' THEN excluded.due ELSE jobs.due END`)
-	return tag.RowsAffected(), err
+			due = CASE jobs.state WHEN 'dead' THEN excluded.due ELSE jobs.due END`, due)
+		n = tag.RowsAffected()
+		return err
+	})
+	return n, err
 }
 
 // LivePreviews answers which of these parts have previews recorded.

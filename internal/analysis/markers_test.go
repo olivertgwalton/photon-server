@@ -72,7 +72,7 @@ func TestASeasonsSharedIntroIsFound(t *testing.T) {
 	if len(jobs) != 0 {
 		t.Fatalf("claimed %v at once, want the season left to settle first", jobs)
 	}
-	if n, err := st.QueueMarkers(ctx); err != nil || n != 0 {
+	if n, err := st.QueueMarkers(ctx, domain.JobDueWindow); err != nil || n != 0 {
 		t.Errorf("the backfill queued %d (%v), want the season already queued", n, err)
 	}
 
@@ -120,7 +120,7 @@ func TestASeasonsSharedIntroIsFound(t *testing.T) {
 	if err := Markers(st, fake)(ctx, season); err != nil || asked != 0 {
 		t.Errorf("again: %d fingerprints taken, %v; want none", asked, err)
 	}
-	if n, err := st.QueueMarkers(ctx); err != nil || n != 0 {
+	if n, err := st.QueueMarkers(ctx, domain.JobDueWindow); err != nil || n != 0 {
 		t.Errorf("the backfill queued %d (%v), want nothing left to compare", n, err)
 	}
 }
@@ -142,7 +142,7 @@ func TestALibraryOnChaptersReadsNoSound(t *testing.T) {
 			t.Errorf("the scan queued %+v, want no comparison", c)
 		}
 	}
-	if n, err := st.QueueMarkers(ctx); err != nil || n != 0 {
+	if n, err := st.QueueMarkers(ctx, domain.JobDueWindow); err != nil || n != 0 {
 		t.Errorf("the daily task queued %d (%v), want none", n, err)
 	}
 	season := seasonOf(t, st, lib)
@@ -180,7 +180,7 @@ func TestALibraryOnChaptersReadsNoSound(t *testing.T) {
 	if err := st.SetLibrary(ctx, lib, store.LibraryChange{Markers: domain.MarkersAll}); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := st.QueueMarkers(ctx); err != nil || n != 1 {
+	if n, err := st.QueueMarkers(ctx, domain.JobDueWindow); err != nil || n != 1 {
 		t.Errorf("set to compare sound, the daily task queued %d (%v), want the season", n, err)
 	}
 	if err := Markers(st, fake)(ctx, season); err != nil || asked != 6 {

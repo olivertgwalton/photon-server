@@ -217,7 +217,7 @@ func TestALibraryWithPreviewsOffGetsNone(t *testing.T) {
 	if f.queued(part) {
 		t.Error("a part of a library making no previews was queued for them")
 	}
-	if n, err := f.st.QueuePreviews(t.Context()); err != nil || n != 0 {
+	if n, err := f.st.QueuePreviews(t.Context(), domain.JobDueWindow); err != nil || n != 0 {
 		t.Errorf("the backfill queued %d parts (%v), want none", n, err)
 	}
 	f.run(part)
@@ -235,7 +235,7 @@ func TestPreviewsFollowTheirLibrary(t *testing.T) {
 	f.run(part)
 
 	f.setPreviews(domain.PreviewsChapters)
-	if n, err := f.st.QueuePreviews(t.Context()); err != nil || n != 1 {
+	if n, err := f.st.QueuePreviews(t.Context(), domain.JobDueWindow); err != nil || n != 1 {
 		t.Fatalf("the backfill queued %d parts (%v), want the one with sheets", n, err)
 	}
 	f.run(part)
@@ -247,7 +247,7 @@ func TestPreviewsFollowTheirLibrary(t *testing.T) {
 	}
 
 	f.setPreviews(domain.PreviewsOff)
-	if n, err := f.st.QueuePreviews(t.Context()); err != nil || n != 1 {
+	if n, err := f.st.QueuePreviews(t.Context(), domain.JobDueWindow); err != nil || n != 1 {
 		t.Fatalf("the backfill queued %d parts (%v), want the one with chapter images", n, err)
 	}
 	f.run(part)
@@ -458,30 +458,61 @@ func TestAChapterTooSlowToPictureIsLeftWithout(t *testing.T) {
 	}
 }
 
-// A part a scan finds is due its previews at once; one the window's backfill finds is due in the
-// window, as Plex makes new items' as they are added and existing items' during maintenance.
-func TestAnAddedPartIsDueNowAndABackfilledOneInTheWindow(t *testing.T) {
+func (f *fixture) previewsDue(part uuid.UUID) domain.JobDue {
+	f.t.Helper()
+	var d domain.JobDue
+	if err := f.db.QueryRow(f.t.Context(), `SELECT due FROM jobs WHERE kind = 'previews' AND subject = $1`, part.String()).Scan(&d); err != nil {
+		f.t.Fatal(err)
+	}
+	return d
+}
+
+func (f *fixture) setPreviewsTiming(timing domain.Timing) {
+	f.t.Helper()
+	m, err := f.st.Maintenance(f.t.Context())
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	m.Previews = timing
+	if err := f.st.SetMaintenance(f.t.Context(), m); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+// A part a scan finds waits for the window where previews are made in it alone, and is due at once
+// where they are made as parts are added too, as Plex's two scheduled settings have it.
+func TestAnAddedPartIsDueAsItsTimingSays(t *testing.T) {
 	f := newFixture(t)
 	_, part := f.film("heat")
-	due := func() domain.JobDue {
-		var d domain.JobDue
-		if err := f.db.QueryRow(t.Context(), `SELECT due FROM jobs WHERE kind = 'previews' AND subject = $1`, part.String()).Scan(&d); err != nil {
-			t.Fatal(err)
-		}
-		return d
+	if d := f.previewsDue(part); d != domain.JobDueWindow {
+		t.Errorf("under window: a part just added is due %q, want window", d)
 	}
-	if d := due(); d != domain.JobDueNow {
-		t.Errorf("a part just added is due %q, want now", d)
+	f = newFixture(t)
+	f.setPreviewsTiming(domain.TimingWindowAndAdded)
+	_, part = f.film("heat")
+	if d := f.previewsDue(part); d != domain.JobDueNow {
+		t.Errorf("under window_and_added: a part just added is due %q, want now", d)
 	}
-	f.run(part)
-	if _, err := f.db.Exec(t.Context(), `DELETE FROM jobs`); err != nil {
+}
+
+// The window's backfill queues its parts due in the window; an admin's Run now makes them, and
+// every previews job already waiting for the window, due now.
+func TestRunNowMakesTheWholeBacklogDueNow(t *testing.T) {
+	f := newFixture(t)
+	_, waiting := f.film("heat")
+	if d := f.previewsDue(waiting); d != domain.JobDueWindow {
+		t.Fatalf("a part just added is due %q, want window", d)
+	}
+	if n, err := f.st.QueuePreviews(t.Context(), domain.JobDueWindow); err != nil || n != 1 {
+		t.Fatalf("the window's backfill queued %d (%v), want the part", n, err)
+	}
+	if d := f.previewsDue(waiting); d != domain.JobDueWindow {
+		t.Errorf("after the window's backfill the part is due %q, want window", d)
+	}
+	if _, err := f.st.QueuePreviews(t.Context(), domain.JobDueNow); err != nil {
 		t.Fatal(err)
 	}
-	f.setPreviews(domain.PreviewsChapters)
-	if n, err := f.st.QueuePreviews(t.Context()); err != nil || n != 1 {
-		t.Fatalf("the backfill queued %d parts (%v), want one", n, err)
-	}
-	if d := due(); d != domain.JobDueWindow {
-		t.Errorf("a part the backfill queued is due %q, want window", d)
+	if d := f.previewsDue(waiting); d != domain.JobDueNow {
+		t.Errorf("after Run now the part is due %q, want now", d)
 	}
 }

@@ -224,17 +224,26 @@ func (s *Store) SaveFingerprintMarkers(ctx context.Context, compared []uuid.UUID
 }
 
 // QueueMarkers queues a comparison of every season with an episode whose sound has not been
-// compared, in a library that compares sound, due in the maintenance window. A season whose
-// comparison failed every attempt waits for its episodes to change.
-func (s *Store) QueueMarkers(ctx context.Context) (int64, error) {
-	tag, err := s.pool.Exec(ctx, `
+// compared, in a library that compares sound, due as said; due now, every markers job already
+// queued is due now too. A season whose comparison failed every attempt waits for its episodes to
+// change.
+func (s *Store) QueueMarkers(ctx context.Context, due domain.JobDue) (int64, error) {
+	var n int64
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := promoteFor(ctx, tx, domain.JobMarkers, due); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `
 		INSERT INTO jobs (kind, subject, due)
-		SELECT DISTINCT 'markers', e.parent_id, 'window' FROM items e
+		SELECT DISTINCT 'markers', e.parent_id, $1 FROM items e
 		JOIN versions v ON v.item_id = e.id AND v.missing_since IS NULL
 		JOIN libraries l ON l.id = v.library_id AND l.markers = 'all'
 		JOIN parts p ON p.version_id = v.id
 		WHERE e.kind = 'episode' AND p.fingerprinted_at IS NULL
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'audio')
-		ON CONFLICT (kind, subject) DO NOTHING`)
-	return tag.RowsAffected(), err
+		ON CONFLICT (kind, subject) DO NOTHING`, due)
+		n = tag.RowsAffected()
+		return err
+	})
+	return n, err
 }

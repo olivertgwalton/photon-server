@@ -13,8 +13,8 @@ import (
 // maxAttempts is how often a job is tried before it is dead and waits for its subject to change.
 const maxAttempts = 5
 
-// enqueue adds a job inside the transaction whose write made it necessary, so the job and its
-// cause commit together. A job already queued for the subject stands, due now if it was due in
+// enqueue adds a job due now inside the transaction whose write made it necessary, so the job and
+// its cause commit together. A job already queued for the subject stands, due now if it was due in
 // the window; one running will run again once it ends, since it may have read the subject before
 // this write; a dead one gets a fresh set of attempts, as its subject has changed.
 func enqueue(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID) error {
@@ -24,7 +24,33 @@ func enqueue(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID)
 // enqueueAfter is enqueue for a job due after a quiet delay: asking again before it is due moves it
 // later, so a burst of causes is answered once, when the burst ends.
 func enqueueAfter(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID, delay time.Duration) error {
-	return insertJob(ctx, tx, kind, subject, delay, 0)
+	return insertJob(ctx, tx, kind, subject, delay, 0, domain.JobDueNow)
+}
+
+// addedDue is when the work a scan queues for what it added is due under its timing: now where it
+// is done as parts are added, else in the window, as Plex leaves a new item's to maintenance where
+// it is set to a scheduled task alone. A timing changed later leaves queued jobs as they are, as
+// Plex decides as an item is added.
+func addedDue(t domain.Timing) domain.JobDue {
+	switch t {
+	case domain.TimingWindow:
+		return domain.JobDueWindow
+	case domain.TimingWindowAndAdded:
+	}
+	return domain.JobDueNow
+}
+
+// promoteFor makes every job of kind left to run due now where due is now, as an admin asking for a
+// task has its whole backlog run, to its end, rather than in the window.
+func promoteFor(ctx context.Context, tx db, kind domain.JobKind, due domain.JobDue) error {
+	switch due {
+	case domain.JobDueNow:
+	case domain.JobDueWindow:
+		return nil
+	}
+	_, err := tx.Exec(ctx, `
+		UPDATE jobs SET due = 'now' WHERE kind = $1 AND due = 'window' AND state IN ('queued', 'running', 'rerun')`, kind)
+	return err
 }
 
 // askedPriority is a job an admin asked for by hand: it is claimed before everything a schedule
@@ -41,7 +67,7 @@ const refreshPriority = -1
 
 // enqueueAsked is enqueue for a job an admin is waiting on.
 func enqueueAsked(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID) error {
-	return insertJob(ctx, tx, kind, subject, 0, askedPriority)
+	return insertJob(ctx, tx, kind, subject, 0, askedPriority, domain.JobDueNow)
 }
 
 // requeue ends an INSERT of jobs as enqueue answers a job already there, keeping its priority.
@@ -50,15 +76,18 @@ const requeue = `
 		state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
 		attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END`
 
-func insertJob(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID, delay time.Duration, priority int16) error {
+// insertJob queues a job due as said. Asking again may bring a job due in the window forward to
+// now, never put one due now back to the window; a dead one takes what it is asked for afresh.
+func insertJob(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID, delay time.Duration, priority int16, due domain.JobDue) error {
 	_, err := tx.Exec(ctx, `
-		INSERT INTO jobs (kind, subject, run_after, priority) VALUES ($1, $2, now() + $3, $4)
+		INSERT INTO jobs (kind, subject, run_after, priority, due) VALUES ($1, $2, now() + $3, $4, $5)
 		ON CONFLICT (kind, subject) DO UPDATE SET
 			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
 			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END,
 			run_after = CASE WHEN jobs.state IN ('queued', 'dead') THEN excluded.run_after ELSE jobs.run_after END,
-			priority = greatest(jobs.priority, excluded.priority), due = 'now'`,
-		kind, subject, delay, priority)
+			priority = greatest(jobs.priority, excluded.priority),
+			due = CASE WHEN jobs.state = 'dead' OR excluded.due = 'now' THEN excluded.due ELSE jobs.due END`,
+		kind, subject, delay, priority, due)
 	return err
 }
 
@@ -265,10 +294,10 @@ func rekeyframe(ctx context.Context, tx db, lib uuid.UUID, mode domain.KeyframeM
 	return err
 }
 
-// QueueKeyframeWalk queues a part with no keyframe index to be walked through for them, after the
-// other analysis, as its keyframes job is.
+// QueueKeyframeWalk queues a part with no keyframe index to be walked through for them in the
+// maintenance window, after the other analysis, as its keyframes job is.
 func (s *Store) QueueKeyframeWalk(ctx context.Context, part uuid.UUID) error {
-	return insertJob(ctx, s.pool, domain.JobKeyframeWalk, part, 0, indexPriority)
+	return insertJob(ctx, s.pool, domain.JobKeyframeWalk, part, 0, indexPriority, domain.JobDueWindow)
 }
 
 // AskKeyframes queues a part's keyframes job ahead of the rest, for a part played before its turn.

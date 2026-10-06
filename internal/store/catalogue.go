@@ -173,12 +173,21 @@ func (s *Store) SaveFolder(ctx context.Context, lib uuid.UUID, path string, fing
 	return saved, err
 }
 
-// analysisOf is what a library asks to be made of the media a scan adds to it.
-func analysisOf(ctx context.Context, tx db, lib uuid.UUID) (model.Library, error) {
-	var settings model.Library
-	err := tx.QueryRow(ctx, `SELECT previews, keyframes, markers FROM libraries WHERE id = $1`, lib).
-		Scan(&settings.Previews, &settings.Keyframes, &settings.Markers)
-	return settings, err
+// analysis is what a library asks to be made of the media a scan adds to it, and when the server's
+// timings have that work done.
+type analysis struct {
+	model.Library
+	PreviewsDue, MarkersDue domain.JobDue
+}
+
+func analysisOf(ctx context.Context, tx db, lib uuid.UUID) (analysis, error) {
+	var a analysis
+	var previews, markers domain.Timing
+	err := tx.QueryRow(ctx, `
+		SELECT l.previews, l.keyframes, l.markers, s.previews_timing, s.markers_timing FROM libraries l, server s
+		WHERE l.id = $1`, lib).Scan(&a.Previews, &a.Keyframes, &a.Markers, &previews, &markers)
+	a.PreviewsDue, a.MarkersDue = addedDue(previews), addedDue(markers)
+	return a, err
 }
 
 // rememberFolder keeps the fingerprint a folder had when it was scanned.
@@ -199,7 +208,7 @@ func insertItem(ctx context.Context, tx db, row *model.Item) error {
 		row.ExtraKind, row.ScanTitle, row.Title, row.SortTitle, row.Folder).Scan(&row.ID)
 }
 
-func saveFilm(ctx context.Context, tx db, lib uuid.UUID, settings model.Library, f Film, changed Changed) error {
+func saveFilm(ctx context.Context, tx db, lib uuid.UUID, settings analysis, f Film, changed Changed) error {
 	itemID, err := filmItem(ctx, tx, lib, f, changed)
 	if err != nil {
 		return err
@@ -273,7 +282,7 @@ func knownItem(ctx context.Context, tx db, lib uuid.UUID, kind domain.ItemKind, 
 	return uuid.UUID{}, false, nil
 }
 
-func saveCopy(ctx context.Context, tx db, lib uuid.UUID, settings model.Library, itemID uuid.UUID, c Copy) error {
+func saveCopy(ctx context.Context, tx db, lib uuid.UUID, settings analysis, itemID uuid.UUID, c Copy) error {
 	edition, label := optional(c.Edition), optional(c.Label)
 	var known uuid.UUID
 	err := tx.QueryRow(ctx, `SELECT id FROM versions WHERE library_id = $1 AND fingerprint = $2 LIMIT 1`,
@@ -342,12 +351,12 @@ func saveCopy(ctx context.Context, tx db, lib uuid.UUID, settings model.Library,
 		}
 		if firstVideo(part.Facts) != nil {
 			if settings.Keyframes != domain.KeyframesOff {
-				if err := insertJob(ctx, tx, domain.JobKeyframes, row.ID, 0, indexPriority); err != nil {
+				if err := insertJob(ctx, tx, domain.JobKeyframes, row.ID, 0, indexPriority, domain.JobDueNow); err != nil {
 					return err
 				}
 			}
 			if previews {
-				if err := enqueue(ctx, tx, domain.JobPreviews, row.ID); err != nil {
+				if err := insertJob(ctx, tx, domain.JobPreviews, row.ID, 0, 0, settings.PreviewsDue); err != nil {
 					return err
 				}
 			}

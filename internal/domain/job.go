@@ -50,9 +50,10 @@ func JobStates() []JobState {
 
 // Backlog is how far the jobs of a kind have got: left to run, queued or running, and done since
 // the kind last had none left, so its total grows as more are queued, as Plex's activity does.
-// JobDue is when a job is meant to run: as soon as there is room, as one a scan queues for a part
-// it found is; or in the maintenance window, as the work the window's backfill queues is, Plex's
-// "existing items during the maintenance period".
+// JobDue is when a job is meant to run, decided as it is queued: as soon as there is room, as what
+// an admin asks for is and what a scan finds where its timing says so; or in the maintenance
+// window, as the work the window's own backfill queues is, Plex's "existing items during the
+// maintenance period".
 type JobDue string
 
 const (
