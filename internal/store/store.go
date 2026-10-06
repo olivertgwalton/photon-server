@@ -242,8 +242,8 @@ const (
 
 // violates reports whether a write was refused for breaking a constraint of the kind.
 func violates(err error, v violation) bool {
-	var pg *pgconn.PgError
-	return errors.As(err, &pg) && violation(pg.Code) == v
+	pg, ok := errors.AsType[*pgconn.PgError](err)
+	return ok && violation(pg.Code) == v
 }
 
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
