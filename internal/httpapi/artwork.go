@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path"
-	"strconv"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/artwork"
@@ -38,16 +38,15 @@ func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	var size [2]int
-	for i, param := range []string{"width", "height"} {
-		if v := r.URL.Query().Get(param); v != "" {
-			if size[i], err = strconv.Atoi(v); err != nil || size[i] < 1 {
-				writeProblem(w, a.logger, codeInvalidParameter, param+" is a number of pixels")
-				return
-			}
-		}
+	width, ok := a.queryNumber(w, r, "width", 0, 1, math.MaxInt)
+	if !ok {
+		return
 	}
-	f, name, err := a.openPicture(r.Context(), id, pic, size[0], size[1])
+	height, ok := a.queryNumber(w, r, "height", 0, 1, math.MaxInt)
+	if !ok {
+		return
+	}
+	f, name, err := a.openPicture(r.Context(), id, pic, width, height)
 	if a.answered(w, r, err) {
 		return
 	}

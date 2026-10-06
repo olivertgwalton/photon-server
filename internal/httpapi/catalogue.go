@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -104,7 +105,7 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	page := store.WallPage{Profile: sessionOf(r).Profile.ID, Limit: defaultWallLimit}
+	page := store.WallPage{Profile: sessionOf(r).Profile.ID}
 	var err error
 	if page.Sort, err = domain.Parse("sort", cmp.Or(q.Get("sort"), string(domain.SortTitle)), domain.WallSorts()); err != nil {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
@@ -114,22 +115,13 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
 	}
-	if s := q.Get("limit"); s != "" {
-		if page.Limit, err = strconv.Atoi(s); err != nil || page.Limit < 1 || page.Limit > maxWallLimit {
-			writeProblem(w, a.logger, codeInvalidParameter, "limit is a number from 1 to "+strconv.Itoa(maxWallLimit))
-			return
-		}
-	}
 	if page.Filter, err = wallFilter(q); err != nil {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
 	}
 	page.RatingSite = cmp.Or(page.Filter.RatingSite, domain.SiteIMDb)
-	if s := q.Get("offset"); s != "" {
-		if page.Offset, err = strconv.Atoi(s); err != nil || page.Offset < 0 {
-			writeProblem(w, a.logger, codeInvalidParameter, "offset is a number from 0")
-			return
-		}
+	if page.Offset, page.Limit, ok = a.paging(w, r, defaultWallLimit); !ok {
+		return
 	}
 	cards, total, err := a.svc.Catalogue.Wall(r.Context(), lib, page)
 	if a.answered(w, r, err) {
@@ -449,20 +441,9 @@ func (a *API) next(w http.ResponseWriter, r *http.Request) {
 
 // paging reads a page's offset and limit, as walls page.
 func (a *API) paging(w http.ResponseWriter, r *http.Request, defaultLimit int) (offset, limit int, ok bool) {
-	q := r.URL.Query()
-	offset, limit = 0, defaultLimit
-	var err error
-	if s := q.Get("offset"); s != "" {
-		if offset, err = strconv.Atoi(s); err != nil || offset < 0 {
-			writeProblem(w, a.logger, codeInvalidParameter, "offset is a number from 0")
-			return 0, 0, false
-		}
+	if offset, ok = a.queryNumber(w, r, "offset", 0, 0, math.MaxInt); !ok {
+		return 0, 0, false
 	}
-	if s := q.Get("limit"); s != "" {
-		if limit, err = strconv.Atoi(s); err != nil || limit < 1 || limit > maxWallLimit {
-			writeProblem(w, a.logger, codeInvalidParameter, "limit is a number from 1 to "+strconv.Itoa(maxWallLimit))
-			return 0, 0, false
-		}
-	}
-	return offset, limit, true
+	limit, ok = a.queryNumber(w, r, "limit", defaultLimit, 1, maxWallLimit)
+	return offset, limit, ok
 }

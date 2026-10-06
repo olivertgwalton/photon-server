@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"uuid"
@@ -23,4 +25,21 @@ func (a *API) pathNumber(w http.ResponseWriter, r *http.Request, name string) (i
 		return 0, false
 	}
 	return n, true
+}
+
+// queryNumber reads a whole number from least to most, or def where the query leaves name out.
+func (a *API) queryNumber(w http.ResponseWriter, r *http.Request, name string, def, least, most int) (int, bool) {
+	s := r.URL.Query().Get(name)
+	if s == "" {
+		return def, true
+	}
+	if n, err := strconv.Atoi(s); err == nil && n >= least && n <= most {
+		return n, true
+	}
+	detail := fmt.Sprintf("%s is a number from %d", name, least)
+	if most < math.MaxInt {
+		detail += fmt.Sprintf(" to %d", most)
+	}
+	writeProblem(w, a.logger, codeInvalidParameter, detail)
+	return 0, false
 }
