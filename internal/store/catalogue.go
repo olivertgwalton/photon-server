@@ -63,12 +63,20 @@ type Part struct {
 	Facts   *media.Facts
 }
 
-// KnownCopy reports whether a copy with this content key is already in the library. The same file
-// in two libraries is a copy in each.
-func (s *Store) KnownCopy(ctx context.Context, lib uuid.UUID, key []byte) (bool, error) {
-	v := s.q.Version
-	n, err := v.WithContext(ctx).Where(v.LibraryID.Eq(model.UUID(lib)), v.Fingerprint.Eq(key)).Count()
-	return n > 0, err
+// KnownCopies answers which of the content keys are of copies already in the library, by key as
+// a string. The same file in two libraries is a copy in each.
+func (s *Store) KnownCopies(ctx context.Context, lib uuid.UUID, keys [][]byte) (map[string]bool, error) {
+	rows, err := s.pool.Query(ctx, `SELECT fingerprint FROM versions WHERE library_id = $1 AND fingerprint = ANY($2)`,
+		lib.String(), keys)
+	if err != nil {
+		return nil, err
+	}
+	found, err := pgx.CollectRows(rows, pgx.RowTo[[]byte])
+	known := map[string]bool{}
+	for _, k := range found {
+		known[string(k)] = true
+	}
+	return known, err
 }
 
 // KnownFile is a file the last scan recorded as a part of a copy: its size and modification time
@@ -107,17 +115,19 @@ func (s *Store) KnownFiles(ctx context.Context, lib uuid.UUID, paths []string) (
 	return known, err
 }
 
-// FolderFingerprint is the fingerprint the folder had when it was last scanned.
-func (s *Store) FolderFingerprint(ctx context.Context, lib uuid.UUID, path string) ([]byte, error) {
+// FolderFingerprints answers the fingerprint each of a library's folders had when it was last
+// scanned, by path.
+func (s *Store) FolderFingerprints(ctx context.Context, lib uuid.UUID) (map[string][]byte, error) {
 	f := s.q.Folder
-	row, err := f.WithContext(ctx).Where(f.LibraryID.Eq(model.UUID(lib)), f.Path.Eq(path)).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil
-	}
+	rows, err := f.WithContext(ctx).Where(f.LibraryID.Eq(model.UUID(lib))).Find()
 	if err != nil {
 		return nil, err
 	}
-	return row.Fingerprint, nil
+	known := make(map[string][]byte, len(rows))
+	for _, r := range rows {
+		known[r.Path] = r.Fingerprint
+	}
+	return known, nil
 }
 
 // Changed is the titles a write added, changed and removed.
