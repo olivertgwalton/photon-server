@@ -6,6 +6,8 @@ import (
 	"errors"
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
@@ -17,11 +19,10 @@ type HomeRow struct {
 }
 
 // rowQueries are the rows' queries, each taking the profile and a limit, and holding only what the
-// profile may see, a title in several libraries once. gen cannot write a lateral join or a window,
-// so they are SQL.
+// profile may see, a title in several libraries once.
 var rowQueries = map[domain.HomeRow]string{
 	domain.RowContinueWatching: `
-		SELECT i.* FROM watch_state w JOIN items i ON i.id = w.item_id
+		SELECT ` + itemColumnsOf("i") + ` FROM watch_state w JOIN items i ON i.id = w.item_id
 		WHERE w.profile_id = @profile AND w.position_ms > 0 AND i.kind IN ('movie', 'episode')
 			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))
 		ORDER BY w.last_played_at DESC LIMIT @limit`,
@@ -40,9 +41,9 @@ var rowQueries = map[domain.HomeRow]string{
 				AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, show))
 			ORDER BY show.id, e.season_number DESC, e.episode_number DESC NULLS LAST
 		)
-		SELECT next.* FROM last
+		SELECT ` + itemColumnsOf("next") + ` FROM last
 		CROSS JOIN LATERAL (
-			SELECT e.* FROM items season
+			SELECT ` + itemColumnsOf("e") + ` FROM items season
 			JOIN items e ON e.parent_id = season.id AND e.kind = 'episode'
 			LEFT JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
 			WHERE season.parent_id = last.show_id AND season.kind = 'season' AND season.season_number > 0
@@ -55,15 +56,15 @@ var rowQueries = map[domain.HomeRow]string{
 			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE first_of_title(v, last.show))
 		ORDER BY last.last_played_at DESC LIMIT @limit`,
 	domain.RowFavourites: `
-		SELECT i.* FROM favourites f JOIN items i ON i.id = f.item_id
+		SELECT ` + itemColumnsOf("i") + ` FROM favourites f JOIN items i ON i.id = f.item_id
 		WHERE f.profile_id = @profile AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))
 		ORDER BY f.added_at DESC LIMIT @limit`,
 	domain.RowRecentFilms: `
-		SELECT * FROM items
+		SELECT ` + itemColumns + ` FROM items
 		WHERE kind = 'movie' AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND first_of_title(v, items))
 		ORDER BY added_at DESC, id DESC LIMIT @limit`,
 	domain.RowRecentShows: `
-		SELECT show.* FROM items show
+		SELECT ` + itemColumnsOf("show") + ` FROM items show
 		CROSS JOIN LATERAL (
 			SELECT max(e.added_at) AS added_at FROM items season
 			JOIN items e ON e.parent_id = season.id AND e.kind = 'episode'
@@ -84,14 +85,12 @@ func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeR
 	var rows []HomeRow
 	var lengths []int
 	var all []*model.Item
-	db := s.q.Item.WithContext(ctx).UnderlyingDB()
 	for _, section := range prefs.Home {
 		kind := section.Row
 		if section.Visibility == domain.RowHidden {
 			continue
 		}
-		var items []*model.Item
-		err := db.Raw(rowQueries[kind], map[string]any{"profile": model.UUID(profile), "limit": limit}).Find(&items).Error
+		items, err := queryRows[model.Item](ctx, s.pool, rowQueries[kind], pgx.NamedArgs{"profile": profile, "limit": limit})
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +125,7 @@ var ErrNoNext = errors.New("no episode follows")
 var nextQueries = map[domain.ItemKind]string{
 	// After an episode, the one after it, watched or not, as a player's Up Next.
 	domain.ItemEpisode: `
-		SELECT e.* FROM items e
+		SELECT ` + itemColumnsOf("e") + ` FROM items e
 		JOIN items season ON season.id = e.parent_id
 		JOIN items here ON here.id = @id
 		WHERE e.kind = 'episode' AND season.parent_id = (SELECT parent_id FROM items WHERE id = here.parent_id)
@@ -150,7 +149,7 @@ const resumeQuery = `
 	), last AS (
 		SELECT max(n) AS n FROM e WHERE watched
 	)
-	SELECT * FROM items WHERE id = (
+	SELECT ` + itemColumns + ` FROM items WHERE id = (
 		SELECT id FROM e ORDER BY
 			CASE WHEN started THEN 0 WHEN NOT watched AND n > coalesce((SELECT n FROM last), 0) THEN 1 ELSE 2 END,
 			CASE WHEN started THEN last_played_at END DESC NULLS LAST, n
@@ -159,10 +158,9 @@ const resumeQuery = `
 // Next answers the episode to play after a title, as a card: ErrNotFound for a title the profile
 // may not see, ErrNoNext where nothing follows.
 func (s *Store) Next(ctx context.Context, profile, id uuid.UUID) (Card, error) {
-	i := s.q.Item
-	item, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
+	item, err := readItem(ctx, s.pool, id)
 	if err != nil {
-		return Card{}, found(err)
+		return Card{}, err
 	}
 	if ok, err := s.visible(ctx, profile, id); err != nil || !ok {
 		return Card{}, cmp.Or(err, ErrNotFound)
@@ -171,8 +169,7 @@ func (s *Store) Next(ctx context.Context, profile, id uuid.UUID) (Card, error) {
 	if !ok {
 		return Card{}, ErrNoNext
 	}
-	var rows []*model.Item
-	err = i.WithContext(ctx).UnderlyingDB().Raw(q, map[string]any{"profile": model.UUID(profile), "id": model.UUID(id)}).Find(&rows).Error
+	rows, err := queryRows[model.Item](ctx, s.pool, q, pgx.NamedArgs{"profile": profile, "id": id})
 	if err != nil {
 		return Card{}, err
 	}

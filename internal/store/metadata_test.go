@@ -8,9 +8,10 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 func TestBetterSourcesSurviveRescans(t *testing.T) {
@@ -29,15 +30,15 @@ func TestBetterSourcesSurviveRescans(t *testing.T) {
 		if _, err := s.SaveFolder(ctx, lib.ID, "Thing", []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)
 		}
-		items, err := s.q.Item.WithContext(ctx).Find()
+		items, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items`)
 		if err != nil || len(items) != 1 {
 			t.Fatalf("items = %v, %v; want one", items, err)
 		}
 		return *items[0]
 	}
-	apply := func(id model.UUID, source domain.FieldSource, m domain.Metadata) {
+	apply := func(id uuid.UUID, source domain.FieldSource, m domain.Metadata) {
 		t.Helper()
-		if err := s.q.Transaction(func(tx *query.Query) error {
+		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 			return applyMetadata(ctx, tx, id, source, m)
 		}); err != nil {
 			t.Fatal(err)
@@ -85,20 +86,22 @@ func TestNFOSaysMoreThanFileNamesButNotOverTypedIDs(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Alien", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	item, err := s.q.Item.WithContext(ctx).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
+	item := oneItem(t, s, "true")
 	if item.Title != "Alien" || item.Year == nil || *item.Year != 1979 {
 		t.Errorf("title, year = %q, %v; want the NFO's", item.Title, item.Year)
 	}
-	ids, err := s.q.ExternalID.WithContext(ctx).Find()
+	rows, err := s.pool.Query(ctx, `SELECT provider, value FROM external_ids`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := map[domain.Provider]string{}
-	for _, id := range ids {
-		got[id.Provider] = id.Value
+	var provider domain.Provider
+	var value string
+	if _, err := pgx.ForEachRow(rows, []any{&provider, &value}, func() error {
+		got[provider] = value
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 	if got[domain.ProviderTMDB] != "348" || got[domain.ProviderIMDb] != "tt0078748" {
 		t.Errorf("ids = %v; want the folder's TMDB id and the NFO's IMDb id", got)
@@ -122,24 +125,21 @@ func TestALockedFieldIsLeftForTheReader(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	item, err := s.q.Item.WithContext(ctx).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
-	id := uuid.UUID(item.ID)
+	item := oneItem(t, s, "true")
+	id := item.ID
 	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Overview: "A crime saga.", Tagline: "A Los Angeles crime saga."}, nil); err != nil {
 		t.Fatal(err)
 	}
-	item, _ = s.q.Item.WithContext(ctx).Take()
+	item = oneItem(t, s, "true")
 	if item.Overview != nil || item.Tagline == nil {
 		t.Errorf("after a match, overview = %v and tagline = %v; want the locked overview empty and the tagline TMDB's", item.Overview, item.Tagline)
 	}
-	if err := s.q.Transaction(func(tx *query.Query) error {
+	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		return applyMetadata(ctx, tx, item.ID, domain.SourceUser, domain.Metadata{Overview: "Pacino and De Niro."})
 	}); err != nil {
 		t.Fatal(err)
 	}
-	item, _ = s.q.Item.WithContext(ctx).Take()
+	item = oneItem(t, s, "true")
 	if item.Overview == nil || *item.Overview != "Pacino and De Niro." {
 		t.Errorf("a reader's overview on a locked field = %v, want it written", item.Overview)
 	}
@@ -161,21 +161,14 @@ func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	item, err := s.q.Item.WithContext(ctx).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
+	item := oneItem(t, s, "true")
 	title := func() string {
 		t.Helper()
-		it, err := s.q.Item.WithContext(ctx).Where(s.q.Item.ID.Eq(item.ID)).Take()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return it.Title
+		return oneItem(t, s, "id = $1", item.ID).Title
 	}
 	match := domain.Metadata{Title: "Heat (TMDB)"}
 
-	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, match, nil); err != nil {
+	if err := s.SaveIdentity(ctx, item.ID, domain.SourceTMDB, match, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := title(); got != "Heat (NFO)" {
@@ -185,13 +178,13 @@ func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
 	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: metadataFrom(domain.LibraryMovies, domain.SourceTMDB, domain.SourceNFO)}); err != nil {
 		t.Fatal(err)
 	}
-	if n, _ := s.q.Folder.WithContext(ctx).Count(); n != 0 {
+	if n := countRows(t, s, `SELECT count(*) FROM folders`); n != 0 {
 		t.Errorf("%d folders still fingerprinted after the sources changed, want none", n)
 	}
-	if n, _ := s.q.Job.WithContext(ctx).Where(s.q.Job.Kind.Eq(string(domain.JobIdentify))).Count(); n != 1 {
+	if n := countRows(t, s, `SELECT count(*) FROM jobs WHERE kind = 'identify'`); n != 1 {
 		t.Errorf("%d identify jobs after the sources changed, want the film's", n)
 	}
-	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, match, nil); err != nil {
+	if err := s.SaveIdentity(ctx, item.ID, domain.SourceTMDB, match, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := title(); got != "Heat (TMDB)" {
@@ -201,10 +194,10 @@ func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
 	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: metadataFrom(domain.LibraryMovies, domain.SourceNFO)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, domain.Metadata{Overview: "From TMDB."}, nil); err != nil {
+	if err := s.SaveIdentity(ctx, item.ID, domain.SourceTMDB, domain.Metadata{Overview: "From TMDB."}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if it, _ := s.q.Item.WithContext(ctx).Where(s.q.Item.ID.Eq(item.ID)).Take(); it.Overview != nil {
+	if it := oneItem(t, s, "id = $1", item.ID); it.Overview != nil {
 		t.Errorf("a library that takes no TMDB took its overview %q", *it.Overview)
 	}
 	libs, err := s.Libraries(ctx)
@@ -246,30 +239,33 @@ func TestEachKindOfItemTakesItsOwnSources(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, lib.ID, "Firefly/Season 1", []byte("v1"), Show{Title: "Firefly", Folder: "Firefly"}, []Episode{ep}, nil); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
-	row, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
+	row := oneItem(t, s, "kind = 'show'")
 	for _, src := range []domain.FieldSource{domain.SourceTMDB, domain.SourceTVDB} {
 		said := func(what string) string { return what + " (" + string(src) + ")" }
 		picture := func(kind domain.ArtworkKind) []domain.Artwork {
 			return []domain.Artwork{{Kind: kind, URL: "https://images.test/" + string(src) + ".jpg"}}
 		}
-		if err := s.SaveIdentity(ctx, uuid.UUID(row.ID), src, domain.Metadata{Title: said("Firefly"), Artwork: picture(domain.ArtworkPoster)},
+		if err := s.SaveIdentity(ctx, row.ID, src, domain.Metadata{Title: said("Firefly"), Artwork: picture(domain.ArtworkPoster)},
 			map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Title: said("The Train Job"), Artwork: picture(domain.ArtworkThumb)}}}}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	title := func(kind domain.ItemKind) (string, []domain.FieldSource) {
 		t.Helper()
-		it, err := i.WithContext(ctx).Where(i.Kind.Eq(string(kind))).Take()
+		var id uuid.UUID
+		var name string
+		if err := s.pool.QueryRow(ctx, `SELECT id, title FROM items WHERE kind = $1`, kind).Scan(&id, &name); err != nil {
+			t.Fatal(err)
+		}
+		rows, err := s.pool.Query(ctx, `SELECT source FROM artwork WHERE item_id = $1 ORDER BY source`, id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		var pictures []domain.FieldSource
-		a := s.q.Artwork
-		if err := a.WithContext(ctx).Where(a.ItemID.Eq(it.ID)).Order(a.Source).Pluck(a.Source, &pictures); err != nil {
+		pictures, err := pgx.CollectRows(rows, pgx.RowTo[domain.FieldSource])
+		if err != nil {
 			t.Fatal(err)
 		}
-		return it.Title, pictures
+		return name, pictures
 	}
 	if got, pictures := title(domain.ItemShow); got != "Firefly (tmdb)" || !slices.Equal(pictures, []domain.FieldSource{domain.SourceTVDB}) {
 		t.Errorf("show = %q with pictures from %v; want TMDB's title and TheTVDB's pictures alone", got, pictures)
@@ -289,7 +285,7 @@ func TestEachKindOfItemTakesItsOwnSources(t *testing.T) {
 	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: []domain.KindSources{episode}}); err != nil {
 		t.Fatal(err)
 	}
-	if sub, _, err := s.IdentifySubject(ctx, uuid.UUID(row.ID)); err != nil || !slices.Equal(sub.Seasons, []int{1}) {
+	if sub, _, err := s.IdentifySubject(ctx, row.ID); err != nil || !slices.Equal(sub.Seasons, []int{1}) {
 		t.Errorf("seasons asked about = %v, %v; want the first again", sub.Seasons, err)
 	}
 }

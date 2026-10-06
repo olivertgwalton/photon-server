@@ -8,7 +8,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 // Trickplay is how a part's thumbnail sheets are laid out: each thumbnail Width by Height, one
@@ -47,12 +46,12 @@ func (s *Store) PreviewSource(ctx context.Context, part uuid.UUID) (PreviewSourc
 	err := s.pool.QueryRow(ctx, `
 		SELECT l.previews, (SELECT video_range FROM streams WHERE part_id = p.id AND kind = 'video' ORDER BY idx LIMIT 1), p.duration_ms
 		FROM parts p JOIN versions v ON v.id = p.version_id JOIN libraries l ON l.id = v.library_id
-		WHERE p.id = $1`, part.String()).Scan(&level, &vr, &length)
+		WHERE p.id = $1`, part).Scan(&level, &vr, &length)
 	if err != nil {
 		return src, found(err)
 	}
 	src.Level, src.Range = domain.PreviewLevel(level), domain.Range(deref(vr))
-	rows, err := s.pool.Query(ctx, `SELECT idx, start_ms, end_ms FROM chapters WHERE part_id = $1 ORDER BY idx`, part.String())
+	rows, err := s.pool.Query(ctx, `SELECT idx, start_ms, end_ms FROM chapters WHERE part_id = $1 ORDER BY idx`, part)
 	if err != nil {
 		return src, err
 	}
@@ -77,27 +76,27 @@ func (s *Store) SavePreviews(ctx context.Context, part uuid.UUID, chapters []int
 	if chapters == nil {
 		chapters = []int{}
 	}
-	return s.q.Transaction(func(tx *query.Query) error {
-		db := tx.Part.WithContext(ctx).UnderlyingDB()
-		err := db.Exec(`
-			INSERT INTO previews (part_id, chapter_images) VALUES (?, ?)
-			ON CONFLICT (part_id) DO UPDATE SET chapter_images = excluded.chapter_images`, part.String(), array(chapters)).Error
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `
+			INSERT INTO previews (part_id, chapter_images) VALUES ($1, $2)
+			ON CONFLICT (part_id) DO UPDATE SET chapter_images = excluded.chapter_images`, part, chapters)
 		if err != nil {
 			return err
 		}
-		if err := db.Exec(`DELETE FROM trickplay WHERE part_id = ?`, part.String()).Error; err != nil || t == nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM trickplay WHERE part_id = $1`, part); err != nil || t == nil {
 			return err
 		}
-		return db.Exec(`
+		_, err = tx.Exec(ctx, `
 			INSERT INTO trickplay (part_id, width, height, interval_ms, columns, rows, thumbnails)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			part.String(), t.Width, t.Height, t.IntervalMS, t.Columns, t.Rows, t.Thumbnails).Error
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			part, t.Width, t.Height, t.IntervalMS, t.Columns, t.Rows, t.Thumbnails)
+		return err
 	})
 }
 
 // ForgetPreviews records that a part has no previews.
 func (s *Store) ForgetPreviews(ctx context.Context, part uuid.UUID) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM previews WHERE part_id = $1`, part.String())
+	_, err := s.pool.Exec(ctx, `DELETE FROM previews WHERE part_id = $1`, part)
 	return err
 }
 
@@ -119,7 +118,7 @@ func (s *Store) Trickplay(ctx context.Context, profile, part uuid.UUID) (Trickpl
 		SELECT t.width, t.height, t.interval_ms, t.columns, t.rows, t.thumbnails
 		FROM trickplay t JOIN parts p ON p.id = t.part_id JOIN versions v ON v.id = p.version_id
 		JOIN items i ON i.id = v.item_id, viewer($2) asking
-		WHERE t.part_id = $1 AND sees(asking, i)`, part.String(), profile.String()).
+		WHERE t.part_id = $1 AND sees(asking, i)`, part, profile).
 		Scan(&w, &h, &interval, &cols, &rows, &n)
 	if err != nil {
 		return Trickplay{}, found(err)
@@ -141,7 +140,7 @@ func (s *Store) HasChapterImage(ctx context.Context, profile, part uuid.UUID, id
 		SELECT 1 FROM previews pv JOIN parts p ON p.id = pv.part_id JOIN versions v ON v.id = p.version_id
 		JOIN items i ON i.id = v.item_id, viewer($3) asking
 		WHERE pv.part_id = $1 AND $2 = ANY(pv.chapter_images) AND sees(asking, i)`,
-		part.String(), idx, profile.String()).Scan(&one)
+		part, idx, profile).Scan(&one)
 	return found(err)
 }
 
@@ -166,20 +165,15 @@ func (s *Store) QueuePreviews(ctx context.Context) (int64, error) {
 
 // LivePreviews answers which of these parts have previews recorded.
 func (s *Store) LivePreviews(ctx context.Context, parts []uuid.UUID) (map[uuid.UUID]bool, error) {
-	in := make([]string, len(parts))
-	for n, id := range parts {
-		in[n] = id.String()
-	}
-	rows, err := s.pool.Query(ctx, `SELECT part_id::text FROM previews WHERE part_id::text = ANY($1)`, in)
+	rows, err := s.pool.Query(ctx, `SELECT part_id FROM previews WHERE part_id = ANY($1)`, parts)
 	if err != nil {
 		return nil, err
 	}
-	found, err := pgx.CollectRows(rows, pgx.RowTo[string])
-	out := make(map[uuid.UUID]bool, len(found))
-	for _, f := range found {
-		if id, err := uuid.Parse(f); err == nil {
-			out[id] = true
-		}
-	}
+	out := map[uuid.UUID]bool{}
+	var id uuid.UUID
+	_, err = pgx.ForEachRow(rows, []any{&id}, func() error {
+		out[id] = true
+		return nil
+	})
 	return out, err
 }

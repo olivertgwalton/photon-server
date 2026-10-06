@@ -3,11 +3,13 @@ package store
 import (
 	"cmp"
 	"context"
-	"database/sql/driver"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 	"uuid"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -243,10 +245,9 @@ type VideoLink struct {
 
 // Title answers a title's page for a profile, or ErrNotFound.
 func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, error) {
-	i := s.q.Item
-	item, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
+	item, err := readItem(ctx, s.pool, id)
 	if err != nil {
-		return TitlePage{}, found(err)
+		return TitlePage{}, err
 	}
 	if ok, err := s.visible(ctx, profile, id); err != nil || !ok {
 		return TitlePage{}, cmp.Or(err, ErrNotFound)
@@ -286,7 +287,7 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
 		p.Versions, err = s.versions(ctx, item.ID)
 	case domain.ItemCollection:
-		var origins map[model.UUID]domain.CollectionOrigin
+		var origins map[uuid.UUID]domain.CollectionOrigin
 		origins, err = s.origins(ctx, []*model.Item{item})
 		p.Origin = origins[item.ID]
 	}
@@ -329,12 +330,21 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	return p, err
 }
 
+// readItem answers a title's row, or ErrNotFound.
+func readItem(ctx context.Context, q db, id uuid.UUID) (*model.Item, error) {
+	row, err := readRow[model.Item](ctx, q, `SELECT `+itemColumns+` FROM items WHERE id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
 // visible reports whether a profile may see a title: a library it has, and a certificate within its
 // age; a title it may not is not there to it.
 func (s *Store) visible(ctx context.Context, profile, id uuid.UUID) (bool, error) {
 	var ok bool
 	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM items i, viewer($2) v WHERE i.id = $1 AND sees(v, i))`,
-		id.String(), profile.String()).Scan(&ok)
+		id, profile).Scan(&ok)
 	return ok, err
 }
 
@@ -343,21 +353,17 @@ func (s *Store) Visible(ctx context.Context, profile uuid.UUID, titles []uuid.UU
 	if len(titles) == 0 {
 		return nil, nil
 	}
-	ids := make([]string, len(titles))
-	for i, t := range titles {
-		ids[i] = t.String()
-	}
 	return queryIDs(ctx, s.pool, `
-		SELECT t.id::text FROM unnest($1::text[]::uuid[]) WITH ORDINALITY AS t(id, n)
+		SELECT t.id FROM unnest($1::uuid[]) WITH ORDINALITY AS t(id, n)
 		JOIN items i ON i.id = t.id, viewer($2) v
-		WHERE sees(v, i) ORDER BY t.n`, ids, profile.String())
+		WHERE sees(v, i) ORDER BY t.n`, titles, profile)
 }
 
 // SameTitles answers a title and those the same as it in other libraries that a profile may see.
 func (s *Store) SameTitles(ctx context.Context, profile, title uuid.UUID) ([]uuid.UUID, error) {
 	return queryIDs(ctx, s.pool, `
-		SELECT t::text FROM same_title($1) t JOIN items i ON i.id = t, viewer($2) v
-		WHERE sees(v, i) ORDER BY t`, title.String(), profile.String())
+		SELECT t FROM same_title($1) t JOIN items i ON i.id = t, viewer($2) v
+		WHERE sees(v, i) ORDER BY t`, title, profile)
 }
 
 // HasLibrary reports whether a library is there and a profile may see its titles at all: as
@@ -368,33 +374,37 @@ func (s *Store) HasLibrary(ctx context.Context, profile, lib uuid.UUID) (bool, e
 		SELECT EXISTS (SELECT 1 FROM libraries WHERE id = $2)
 			AND (NOT EXISTS (SELECT 1 FROM profile_libraries WHERE profile_id = $1)
 				OR EXISTS (SELECT 1 FROM profile_libraries WHERE profile_id = $1 AND library_id = $2))`,
-		profile.String(), lib.String()).Scan(&ok)
+		profile, lib).Scan(&ok)
 	return ok, err
 }
 
-func (s *Store) externalIDs(ctx context.Context, item model.UUID) (map[domain.Provider]string, error) {
-	e := s.q.ExternalID
-	rows, err := e.WithContext(ctx).Where(e.ItemID.Eq(item)).Find()
-	if err != nil || len(rows) == 0 {
+func (s *Store) externalIDs(ctx context.Context, item uuid.UUID) (map[domain.Provider]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT provider, value FROM external_ids WHERE item_id = $1`, item)
+	if err != nil {
 		return nil, err
 	}
-	ids := make(map[domain.Provider]string, len(rows))
-	for _, r := range rows {
-		ids[r.Provider] = r.Value
-	}
-	return ids, nil
+	var ids map[domain.Provider]string
+	var provider domain.Provider
+	var value string
+	_, err = pgx.ForEachRow(rows, []any{&provider, &value}, func() error {
+		if ids == nil {
+			ids = map[domain.Provider]string{}
+		}
+		ids[provider] = value
+		return nil
+	})
+	return ids, err
 }
 
 // parents names the show a season belongs to, and the season and show an episode does.
 func (s *Store) parents(ctx context.Context, item *model.Item, p *TitlePage) error {
-	i := s.q.Item
 	parent := item.ParentID
 	for parent != nil && (item.Kind == domain.ItemSeason || item.Kind == domain.ItemEpisode) {
-		row, err := i.WithContext(ctx).Where(i.ID.Eq(*parent)).Take()
+		row, err := readItem(ctx, s.pool, *parent)
 		if err != nil {
 			return err
 		}
-		ref := &TitleRef{ID: uuid.UUID(row.ID), Title: row.Title}
+		ref := &TitleRef{ID: row.ID, Title: row.Title}
 		// A season or episode with no certificate of its own wears the nearest it is under.
 		p.Certificate = cmp.Or(p.Certificate, deref(row.Certificate))
 		switch row.Kind {
@@ -409,25 +419,26 @@ func (s *Store) parents(ctx context.Context, item *model.Item, p *TitlePage) err
 	return nil
 }
 
-func (s *Store) seasons(ctx context.Context, profile uuid.UUID, show model.UUID) ([]SeasonCard, error) {
-	i := s.q.Item
-	rows, err := i.WithContext(ctx).Where(i.ParentID.Eq(show), i.Kind.Eq(string(domain.ItemSeason))).
-		Order(i.SeasonNumber).Find()
+func (s *Store) seasons(ctx context.Context, profile, show uuid.UUID) ([]SeasonCard, error) {
+	rows, err := queryRows[model.Item](ctx, s.pool, `
+		SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind = 'season' ORDER BY season_number`, show)
 	if err != nil {
 		return nil, err
 	}
-	var counts []struct {
-		ParentID model.UUID
-		N        int
-	}
-	err = i.WithContext(ctx).Select(i.ParentID, i.ID.Count().As("n")).
-		Where(i.ParentID.In(ids(rows)...), i.Kind.Eq(string(domain.ItemEpisode))).Group(i.ParentID).Scan(&counts)
+	counted, err := s.pool.Query(ctx, `
+		SELECT parent_id, count(*) FROM items WHERE parent_id = ANY($1) AND kind = 'episode' GROUP BY parent_id`,
+		ids(rows))
 	if err != nil {
 		return nil, err
 	}
-	episodes := map[model.UUID]int{}
-	for _, c := range counts {
-		episodes[c.ParentID] = c.N
+	episodes := map[uuid.UUID]int{}
+	var season uuid.UUID
+	var n int
+	if _, err := pgx.ForEachRow(counted, []any{&season, &n}, func() error {
+		episodes[season] = n
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 	pictures, hashes, err := s.pictureOrder(ctx, rows)
 	if err != nil {
@@ -440,7 +451,7 @@ func (s *Store) seasons(ctx context.Context, profile uuid.UUID, show model.UUID)
 	out := make([]SeasonCard, len(rows))
 	for n, r := range rows {
 		out[n] = SeasonCard{
-			ID: uuid.UUID(r.ID), Number: deref(r.SeasonNumber), Title: r.Title, Overview: deref(r.Overview),
+			ID: r.ID, Number: deref(r.SeasonNumber), Title: r.Title, Overview: deref(r.Overview),
 			Year: deref(r.Year), Aired: date(r.ReleaseDate), Episodes: episodes[r.ID],
 			Poster: first(pictures[r.ID][domain.ArtworkPoster]), State: states[r.ID],
 		}
@@ -449,10 +460,10 @@ func (s *Store) seasons(ctx context.Context, profile uuid.UUID, show model.UUID)
 	return out, nil
 }
 
-func (s *Store) episodes(ctx context.Context, profile uuid.UUID, season model.UUID) ([]EpisodeCard, error) {
-	i := s.q.Item
-	rows, err := i.WithContext(ctx).Where(i.ParentID.Eq(season), i.Kind.Eq(string(domain.ItemEpisode))).
-		Order(i.EpisodeNumber, i.AirDate, i.SortTitle).Find()
+func (s *Store) episodes(ctx context.Context, profile, season uuid.UUID) ([]EpisodeCard, error) {
+	rows, err := queryRows[model.Item](ctx, s.pool, `
+		SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind = 'episode'
+		ORDER BY episode_number, air_date, sort_title`, season)
 	if err != nil {
 		return nil, err
 	}
@@ -475,7 +486,7 @@ func (s *Store) episodes(ctx context.Context, profile uuid.UUID, season model.UU
 			aired = r.AirDate
 		}
 		out[n] = EpisodeCard{
-			ID: uuid.UUID(r.ID), Number: r.EpisodeNumber, End: r.EpisodeEnd, Title: r.Title,
+			ID: r.ID, Number: r.EpisodeNumber, End: r.EpisodeEnd, Title: r.Title,
 			Overview: deref(r.Overview), Aired: date(aired), DurationMS: lengths[r.ID],
 			Thumb: first(pictures[r.ID][domain.ArtworkThumb]), State: states[r.ID],
 		}
@@ -484,10 +495,9 @@ func (s *Store) episodes(ctx context.Context, profile uuid.UUID, season model.UU
 	return out, nil
 }
 
-func (s *Store) extras(ctx context.Context, owner model.UUID) ([]ExtraCard, error) {
-	i := s.q.Item
-	rows, err := i.WithContext(ctx).Where(i.ParentID.Eq(owner), i.Kind.Eq(string(domain.ItemExtra))).
-		Order(i.ExtraKind, i.SortTitle).Find()
+func (s *Store) extras(ctx context.Context, owner uuid.UUID) ([]ExtraCard, error) {
+	rows, err := queryRows[model.Item](ctx, s.pool, `
+		SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind = 'extra' ORDER BY extra_kind, sort_title`, owner)
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}
@@ -501,7 +511,7 @@ func (s *Store) extras(ctx context.Context, owner model.UUID) ([]ExtraCard, erro
 	}
 	out := make([]ExtraCard, len(rows))
 	for n, r := range rows {
-		out[n] = ExtraCard{ID: uuid.UUID(r.ID), Kind: deref(r.ExtraKind), Title: r.Title, DurationMS: lengths[r.ID]}
+		out[n] = ExtraCard{ID: r.ID, Kind: deref(r.ExtraKind), Title: r.Title, DurationMS: lengths[r.ID]}
 		if at, ok := stills[r.ID]; ok {
 			out[n].Image = fmt.Sprintf("/api/v1/parts/%s/chapters/%d/image", at.part, at.idx)
 			out[n].unsigned = fmt.Sprintf("/api/v1/parts/%s/chapter-images/%d", at.part, at.idx)
@@ -517,75 +527,66 @@ type still struct {
 }
 
 // stills answers each title's first chapter picture: of its first copy's first part pictured.
-func (s *Store) stills(ctx context.Context, items []*model.Item) (map[model.UUID]still, error) {
-	in := make([]string, len(items))
-	for n, i := range items {
-		in[n] = uuid.UUID(i.ID).String()
-	}
+func (s *Store) stills(ctx context.Context, items []*model.Item) (map[uuid.UUID]still, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT ON (v.item_id) v.item_id::text, p.id::text, (SELECT min(x) FROM unnest(pv.chapter_images) x)
+		SELECT DISTINCT ON (v.item_id) v.item_id, p.id, (SELECT min(x) FROM unnest(pv.chapter_images) x)
 		FROM versions v JOIN parts p ON p.version_id = v.id JOIN previews pv ON pv.part_id = p.id
-		WHERE v.item_id::text = ANY($1) AND v.missing_since IS NULL AND cardinality(pv.chapter_images) > 0
-		ORDER BY v.item_id, v.id, p.idx`, in)
+		WHERE v.item_id = ANY($1) AND v.missing_since IS NULL AND cardinality(pv.chapter_images) > 0
+		ORDER BY v.item_id, v.id, p.idx`, ids(items))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := map[model.UUID]still{}
-	for rows.Next() {
-		var item, part string
-		var at still
-		if err := rows.Scan(&item, &part, &at.idx); err != nil {
-			return nil, err
-		}
-		id, err := uuid.Parse(item)
-		if err != nil {
-			return nil, err
-		}
-		if at.part, err = uuid.Parse(part); err != nil {
-			return nil, err
-		}
-		out[model.UUID(id)] = at
-	}
-	return out, rows.Err()
+	out := map[uuid.UUID]still{}
+	var item uuid.UUID
+	var at still
+	_, err = pgx.ForEachRow(rows, []any{&item, &at.part, &at.idx}, func() error {
+		out[item] = at
+		return nil
+	})
+	return out, err
 }
 
 // durations answers how long each title runs: its longest copy still on disk.
-func (s *Store) durations(ctx context.Context, items []driver.Valuer) (map[model.UUID]int64, error) {
-	v := s.q.Version
-	rows, err := v.WithContext(ctx).Where(v.ItemID.In(items...), v.MissingSince.IsNull()).Find()
+func (s *Store) durations(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]int64, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT item_id, max(duration_ms) FROM versions WHERE item_id = ANY($1) AND missing_since IS NULL
+		GROUP BY item_id`, items)
 	if err != nil {
 		return nil, err
 	}
-	out := map[model.UUID]int64{}
-	for _, r := range rows {
-		out[r.ItemID] = max(out[r.ItemID], r.DurationMS)
-	}
-	return out, nil
+	out := map[uuid.UUID]int64{}
+	var item uuid.UUID
+	var ms int64
+	_, err = pgx.ForEachRow(rows, []any{&item, &ms}, func() error {
+		out[item] = ms
+		return nil
+	})
+	return out, err
 }
 
-func (s *Store) videos(ctx context.Context, item model.UUID) ([]VideoLink, error) {
-	rv := s.q.RemoteVideo
-	rows, err := rv.WithContext(ctx).Where(rv.ItemID.Eq(item)).Order(rv.Source, rv.Position).Find()
-	if err != nil || len(rows) == 0 {
+func (s *Store) videos(ctx context.Context, item uuid.UUID) ([]VideoLink, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT kind, site, key, name, coalesce(language, ''), published_at, thumb_id
+		FROM remote_videos WHERE item_id = $1 ORDER BY source, position`, item)
+	if err != nil {
 		return nil, err
 	}
-	out := make([]VideoLink, len(rows))
-	for n, r := range rows {
-		out[n] = VideoLink{
-			Kind: r.Kind, Site: r.Site, Key: r.Key, Name: r.Name, Language: deref(r.Language), Published: r.PublishedAt,
-		}
-		if r.ThumbID != nil {
-			out[n].Thumb = uuid.UUID(*r.ThumbID)
-		}
+	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (VideoLink, error) {
+		var v VideoLink
+		var thumb *uuid.UUID
+		err := r.Scan(&v.Kind, &v.Site, &v.Key, &v.Name, &v.Language, &v.Published, &thumb)
+		v.Thumb = deref(thumb)
+		return v, err
+	})
+	if len(out) == 0 {
+		out = nil
 	}
-	return out, nil
+	return out, err
 }
 
 // versions answers a film's or episode's copies, those on disk first, the longest first.
-func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, error) {
-	v, pt, st, ch, sf, mk := s.q.Version, s.q.Part, s.q.Stream, s.q.Chapter, s.q.SubtitleFile, s.q.Marker
-	rows, err := v.WithContext(ctx).Where(v.ItemID.Eq(item)).Find()
+func (s *Store) versions(ctx context.Context, item uuid.UUID) ([]VersionPage, error) {
+	rows, err := queryRows[model.Version](ctx, s.pool, `SELECT `+versionColumns+` FROM versions WHERE item_id = $1`, item)
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}
@@ -595,33 +596,37 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 		}
 		return cmp.Compare(b.DurationMS, a.DurationMS)
 	})
-	vids := make([]driver.Valuer, len(rows))
+	vids := make([]uuid.UUID, len(rows))
 	for n, r := range rows {
 		vids[n] = r.ID
 	}
-	parts, err := pt.WithContext(ctx).Where(pt.VersionID.In(vids...)).Order(pt.VersionID, pt.Idx).Find()
+	parts, err := queryRows[model.Part](ctx, s.pool, `
+		SELECT `+partColumns+` FROM parts WHERE version_id = ANY($1) ORDER BY version_id, idx`, vids)
 	if err != nil {
 		return nil, err
 	}
-	byVersion := map[model.UUID][]*model.Part{}
-	var pids []driver.Valuer
+	byVersion := map[uuid.UUID][]*model.Part{}
+	var pids []uuid.UUID
 	for _, p := range parts {
 		byVersion[p.VersionID] = append(byVersion[p.VersionID], p)
 		pids = append(pids, p.ID)
 	}
-	streams, err := st.WithContext(ctx).Where(st.PartID.In(pids...)).Order(st.PartID, st.Idx).Find()
+	streams, err := queryRows[model.Stream](ctx, s.pool, `
+		SELECT `+streamColumns+` FROM streams WHERE part_id = ANY($1) ORDER BY part_id, idx`, pids)
 	if err != nil {
 		return nil, err
 	}
-	chapters, err := ch.WithContext(ctx).Where(ch.PartID.In(pids...)).Order(ch.PartID, ch.Idx).Find()
+	chapters, err := queryRows[model.Chapter](ctx, s.pool, `
+		SELECT `+chapterColumns+` FROM chapters WHERE part_id = ANY($1) ORDER BY part_id, idx`, pids)
 	if err != nil {
 		return nil, err
 	}
-	markers, err := mk.WithContext(ctx).Where(mk.PartID.In(pids...)).Find()
+	markers, err := queryRows[model.Marker](ctx, s.pool, `SELECT `+markerColumns+` FROM markers WHERE part_id = ANY($1)`, pids)
 	if err != nil {
 		return nil, err
 	}
-	subs, err := sf.WithContext(ctx).Where(sf.VersionID.In(vids...)).Order(sf.RelPath).Find()
+	subs, err := queryRows[model.SubtitleFile](ctx, s.pool, `
+		SELECT `+subtitleFileColumns+` FROM subtitle_files WHERE version_id = ANY($1) ORDER BY rel_path`, vids)
 	if err != nil {
 		return nil, err
 	}
@@ -636,13 +641,13 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 	out := make([]VersionPage, len(rows))
 	for n, r := range rows {
 		vp := VersionPage{
-			ID: uuid.UUID(r.ID), Edition: deref(r.Edition), Label: deref(r.Label), Container: r.Container,
+			ID: r.ID, Edition: deref(r.Edition), Label: deref(r.Label), Container: r.Container,
 			DurationMS: r.DurationMS, SizeBytes: r.SizeBytes, BitrateKbps: r.BitrateKbps,
 			Parts: len(byVersion[r.ID]), MissingSince: r.MissingSince, Streams: []StreamPage{},
 		}
 		for k, p := range byVersion[r.ID] {
 			vp.Files = append(vp.Files, PartRef{
-				ID: uuid.UUID(p.ID), Index: int(p.Idx), SizeBytes: p.SizeBytes, DurationMS: p.DurationMS, OffsetMS: p.OffsetMS,
+				ID: p.ID, Index: int(p.Idx), SizeBytes: p.SizeBytes, DurationMS: p.DurationMS, OffsetMS: p.OffsetMS,
 			})
 			var own []*model.Chapter
 			for _, c := range chapters {
@@ -650,8 +655,8 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 					own = append(own, c)
 					ref := ChapterRef{StartMS: p.OffsetMS + c.StartMS, EndMS: p.OffsetMS + c.EndMS, Title: deref(c.Title)}
 					if slices.Contains(pictured[p.ID], c.Idx) {
-						ref.Image = fmt.Sprintf("/api/v1/parts/%s/chapters/%d/image", uuid.UUID(p.ID), c.Idx)
-						ref.unsigned = fmt.Sprintf("/api/v1/parts/%s/chapter-images/%d", uuid.UUID(p.ID), c.Idx)
+						ref.Image = fmt.Sprintf("/api/v1/parts/%s/chapters/%d/image", p.ID, c.Idx)
+						ref.unsigned = fmt.Sprintf("/api/v1/parts/%s/chapter-images/%d", p.ID, c.Idx)
 					}
 					vp.Chapters = append(vp.Chapters, ref)
 				}
@@ -668,7 +673,7 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 				vp.Markers = append(vp.Markers, m)
 			}
 			if t, ok := sheets[p.ID]; ok {
-				vp.Trickplay = append(vp.Trickplay, PartTrickplay{PartID: uuid.UUID(p.ID), OffsetMS: p.OffsetMS, Trickplay: t})
+				vp.Trickplay = append(vp.Trickplay, PartTrickplay{PartID: p.ID, OffsetMS: p.OffsetMS, Trickplay: t})
 			}
 			if k > 0 {
 				continue
@@ -682,7 +687,7 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 		for _, f := range subs {
 			if f.VersionID == r.ID {
 				vp.Subtitles = append(vp.Subtitles, SubtitleRef{
-					ID: uuid.UUID(f.ID), Codec: f.Codec, Language: deref(f.Language), Title: deref(f.Title), Default: f.IsDefault,
+					ID: f.ID, Codec: f.Codec, Language: deref(f.Language), Title: deref(f.Title), Default: f.IsDefault,
 					Forced: f.Forced, HearingImpaired: f.HearingImpaired,
 				})
 			}
@@ -693,52 +698,50 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 }
 
 // markerDetection answers how each copy's library finds markers.
-func (s *Store) markerDetection(ctx context.Context, versions []*model.Version) (map[model.UUID]domain.MarkerDetection, error) {
-	ids := make([]driver.Valuer, len(versions))
+func (s *Store) markerDetection(ctx context.Context, versions []*model.Version) (map[uuid.UUID]domain.MarkerDetection, error) {
+	libs := make([]uuid.UUID, len(versions))
 	for n, v := range versions {
-		ids[n] = v.LibraryID
+		libs[n] = v.LibraryID
 	}
-	l := s.q.Library
-	libs, err := l.WithContext(ctx).Select(l.ID, l.Markers).Where(l.ID.In(ids...)).Find()
-	out := map[model.UUID]domain.MarkerDetection{}
-	for _, lib := range libs {
-		out[lib.ID] = lib.Markers
+	rows, err := s.pool.Query(ctx, `SELECT id, markers FROM libraries WHERE id = ANY($1)`, libs)
+	if err != nil {
+		return nil, err
 	}
+	out := map[uuid.UUID]domain.MarkerDetection{}
+	var lib uuid.UUID
+	var detection domain.MarkerDetection
+	_, err = pgx.ForEachRow(rows, []any{&lib, &detection}, func() error {
+		out[lib] = detection
+		return nil
+	})
 	return out, err
 }
 
 // partPreviews answers the idx of each part's chapters that have an image, and each part's
 // trickplay sheets.
-func (s *Store) partPreviews(ctx context.Context, parts []*model.Part) (map[model.UUID][]int, map[model.UUID]Trickplay, error) {
-	ids := make([]string, len(parts))
+func (s *Store) partPreviews(ctx context.Context, parts []*model.Part) (map[uuid.UUID][]int, map[uuid.UUID]Trickplay, error) {
+	ids := make([]uuid.UUID, len(parts))
 	for n, p := range parts {
-		ids[n] = uuid.UUID(p.ID).String()
+		ids[n] = p.ID
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT pv.part_id::text, pv.chapter_images, t.width, t.height, t.interval_ms, t.columns, t.rows, t.thumbnails
-		FROM previews pv LEFT JOIN trickplay t ON t.part_id = pv.part_id WHERE pv.part_id::text = ANY($1)`, ids)
+		SELECT pv.part_id, pv.chapter_images, t.width, t.height, t.interval_ms, t.columns, t.rows, t.thumbnails
+		FROM previews pv LEFT JOIN trickplay t ON t.part_id = pv.part_id WHERE pv.part_id = ANY($1)`, ids)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer rows.Close()
-	pictured, sheets := map[model.UUID][]int{}, map[model.UUID]Trickplay{}
-	for rows.Next() {
-		var id string
-		var idx []int
-		var w, h, interval, cols, rws, n *int
-		if err := rows.Scan(&id, &idx, &w, &h, &interval, &cols, &rws, &n); err != nil {
-			return nil, nil, err
-		}
-		part, err := uuid.Parse(id)
-		if err != nil {
-			return nil, nil, err
-		}
-		pictured[model.UUID(part)] = idx
+	pictured, sheets := map[uuid.UUID][]int{}, map[uuid.UUID]Trickplay{}
+	var part uuid.UUID
+	var idx []int
+	var w, h, interval, cols, rws, n *int
+	_, err = pgx.ForEachRow(rows, []any{&part, &idx, &w, &h, &interval, &cols, &rws, &n}, func() error {
+		pictured[part] = idx
 		if n != nil {
-			sheets[model.UUID(part)] = sheetsOf(*w, *h, *interval, *cols, *rws, *n)
+			sheets[part] = sheetsOf(*w, *h, *interval, *cols, *rws, *n)
 		}
-	}
-	return pictured, sheets, rows.Err()
+		return nil
+	})
+	return pictured, sheets, err
 }
 
 func streamPage(t *model.Stream) StreamPage {
@@ -752,18 +755,57 @@ func streamPage(t *model.Stream) StreamPage {
 	}
 }
 
-// texts is the items' ids as text, for an array parameter.
-func texts(rows []*model.Item) []string {
-	out := make([]string, len(rows))
-	for n, r := range rows {
-		out[n] = uuid.UUID(r.ID).String()
+// itemColumns are model.Item's, for a statement that reads whole items.
+const itemColumns = `id, library_id, kind, title, sort_title, year, folder, added_at, parent_id, season_number,
+	episode_number, episode_end, air_date, extra_kind, scan_title, original_title, overview, tagline, certificate,
+	release_date, genres, studios, identified_at, episode_order`
+
+// itemColumnsOf is itemColumns read through alias, for a statement that joins items to others.
+func itemColumnsOf(alias string) string {
+	cols := strings.Split(itemColumns, ",")
+	for n, c := range cols {
+		cols[n] = alias + "." + strings.TrimSpace(c)
 	}
-	return out
+	return strings.Join(cols, ", ")
 }
 
-// ids is the items' ids as gen's In takes them.
-func ids(rows []*model.Item) []driver.Valuer {
-	out := make([]driver.Valuer, len(rows))
+// The columns of the other rows read whole.
+const (
+	versionColumns = `id, item_id, library_id, fingerprint, edition, label, container, width, height, video_codec,
+		video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms, missing_since`
+	partColumns   = `id, version_id, idx, size_bytes, duration_ms, offset_ms, fingerprinted_at`
+	streamColumns = `part_id, idx, kind, codec, profile, language, title, is_default, forced, hearing_impaired,
+		commentary, width, height, frame_rate, bit_depth, level, video_range, interlaced, dv_profile, dv_level,
+		dv_compatibility, channels, channel_layout, sample_rate, bitrate_kbps`
+	chapterColumns      = `part_id, idx, start_ms, end_ms, title`
+	markerColumns       = `part_id, kind, source, start_ms, end_ms`
+	subtitleFileColumns = `id, version_id, library_id, rel_path, codec, language, title, forced, is_default,
+		hearing_impaired, size_bytes, mtime_ns`
+)
+
+// readRow answers the one row a statement finds, each column into the field of its name, or
+// ErrNotFound.
+func readRow[T any](ctx context.Context, q db, sql string, args ...any) (T, error) {
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return *new(T), err
+	}
+	row, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[T])
+	return row, found(err)
+}
+
+// queryRows answers the rows a statement finds, each column into the field of its name.
+func queryRows[T any](ctx context.Context, q db, sql string, args ...any) ([]*T, error) {
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[T])
+}
+
+// ids is the items' ids, for an array parameter.
+func ids(rows []*model.Item) []uuid.UUID {
+	out := make([]uuid.UUID, len(rows))
 	for n, r := range rows {
 		out[n] = r.ID
 	}

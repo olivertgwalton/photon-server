@@ -10,16 +10,16 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 func enqueueN(t *testing.T, s *Store, n int) {
 	t.Helper()
-	err := s.q.Transaction(func(tx *query.Query) error {
+	err := pgx.BeginFunc(t.Context(), s.pool, func(tx pgx.Tx) error {
 		for range n {
-			if err := enqueue(t.Context(), tx, domain.JobKeyframes, model.UUID(uuid.NewV7())); err != nil {
+			if err := enqueue(t.Context(), tx, domain.JobKeyframes, uuid.NewV7()); err != nil {
 				return err
 			}
 		}
@@ -69,15 +69,14 @@ func TestConcurrentClaimsNeverShareAJob(t *testing.T) {
 
 func TestEnqueueIsIdempotent(t *testing.T) {
 	s := migrated(t)
-	subject := model.UUID(uuid.NewV7())
+	subject := uuid.NewV7()
 	for range 2 {
-		err := s.q.Transaction(func(tx *query.Query) error { return enqueue(t.Context(), tx, domain.JobKeyframes, subject) })
-		if err != nil {
+		if err := enqueue(t.Context(), s.pool, domain.JobKeyframes, subject); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if n, err := s.q.Job.WithContext(t.Context()).Count(); err != nil || n != 1 {
-		t.Errorf("%d jobs for one subject (err %v), want 1", n, err)
+	if n := countRows(t, s, `SELECT count(*) FROM jobs`); n != 1 {
+		t.Errorf("%d jobs for one subject, want 1", n)
 	}
 }
 
@@ -97,33 +96,34 @@ func TestFailedJobsBackOffThenDie(t *testing.T) {
 		if again, _ := s.ClaimJobs(t.Context(), kinds, node, time.Minute, 1); len(again) != 0 {
 			t.Fatalf("attempt %d: a failed job was claimable before its backoff", attempt)
 		}
-		j := s.q.Job
-		if _, err := j.WithContext(t.Context()).Where(j.ID.Eq(jobs[0].ID)).UpdateSimple(j.RunAfter.Value(time.Now().Add(-time.Second))); err != nil {
+		if _, err := s.pool.Exec(t.Context(), `UPDATE jobs SET run_after = now() - interval '1 second' WHERE id = $1`, jobs[0].ID); err != nil {
 			t.Fatal(err)
 		}
 	}
-	job, err := s.q.Job.WithContext(t.Context()).Take()
-	if err != nil {
+	var id int64
+	var state domain.JobState
+	var lastError *string
+	if err := s.pool.QueryRow(t.Context(), `SELECT id, state, last_error FROM jobs`).Scan(&id, &state, &lastError); err != nil {
 		t.Fatal(err)
 	}
-	if job.State != domain.JobDead || job.LastError == nil || *job.LastError != "unreadable" {
-		t.Errorf("after %d failures: state %q, error %v; want dead with the reason", maxAttempts, job.State, job.LastError)
+	if state != domain.JobDead || lastError == nil || *lastError != "unreadable" {
+		t.Errorf("after %d failures: state %q, error %v; want dead with the reason", maxAttempts, state, lastError)
 	}
 	counts, dead, err := s.JobQueue(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(counts) != 1 || counts[0] != (JobCount{Kind: domain.JobKeyframes, State: domain.JobDead, Count: 1}) ||
-		len(dead) != 1 || dead[0].ID != job.ID || dead[0].Error != "unreadable" {
+		len(dead) != 1 || dead[0].ID != id || dead[0].Error != "unreadable" {
 		t.Errorf("queue = %+v, %+v; want the one dead job with its reason", counts, dead)
 	}
-	if err := s.RetryJob(t.Context(), job.ID); err != nil {
+	if err := s.RetryJob(t.Context(), id); err != nil {
 		t.Fatal(err)
 	}
 	if again, _ := s.ClaimJobs(t.Context(), kinds, node, time.Minute, 1); len(again) != 1 || again[0].Attempts != 1 {
 		t.Errorf("after a retry: claimed %+v, want the job on a fresh first attempt", again)
 	}
-	if err := s.RetryJob(t.Context(), job.ID); !errors.Is(err, ErrNotFound) {
+	if err := s.RetryJob(t.Context(), id); !errors.Is(err, ErrNotFound) {
 		t.Errorf("retrying a job that is not dead: %v, want ErrNotFound", err)
 	}
 }
@@ -144,8 +144,7 @@ func TestAPostponedJobNeverDies(t *testing.T) {
 		if again, _ := s.ClaimJobs(t.Context(), kinds, node, time.Minute, 1); len(again) != 0 {
 			t.Fatalf("claim %d: a postponed job was claimable before its delay", attempt)
 		}
-		j := s.q.Job
-		if _, err := j.WithContext(t.Context()).Where(j.ID.Eq(jobs[0].ID)).UpdateSimple(j.RunAfter.Value(time.Now().Add(-time.Second))); err != nil {
+		if _, err := s.pool.Exec(t.Context(), `UPDATE jobs SET run_after = now() - interval '1 second' WHERE id = $1`, jobs[0].ID); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -196,12 +195,10 @@ func TestALeaseIsRenewedOnlyByTheNodeHoldingIt(t *testing.T) {
 func TestAJobAskedForWhileRunningRunsAgain(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	subject := model.UUID(uuid.NewV7())
+	subject := uuid.NewV7()
 	ask := func() {
 		t.Helper()
-		if err := s.q.Transaction(func(tx *query.Query) error {
-			return enqueue(ctx, tx, domain.JobIdentify, subject)
-		}); err != nil {
+		if err := enqueue(ctx, s.pool, domain.JobIdentify, subject); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -231,7 +228,7 @@ func TestAJobAskedForWhileRunningRunsAgain(t *testing.T) {
 	if err := s.CompleteJob(ctx, again[0].ID); err != nil {
 		t.Fatal(err)
 	}
-	if n, _ := s.q.Job.WithContext(ctx).Count(); n != 0 {
+	if n := countRows(t, s, `SELECT count(*) FROM jobs`); n != 0 {
 		t.Errorf("%d jobs left after the rerun finished, want none", n)
 	}
 
@@ -271,7 +268,7 @@ func TestAScanWaitsForItsLibraryToGoQuiet(t *testing.T) {
 	if n := due(); n != 0 {
 		t.Errorf("%d scans due while the library is still changing, want none", n)
 	}
-	if n, _ := s.q.Job.WithContext(ctx).Count(); n != 1 {
+	if n := countRows(t, s, `SELECT count(*) FROM jobs`); n != 1 {
 		t.Errorf("%d jobs for three changes, want one", n)
 	}
 	if err := s.ScanLibrary(ctx, lib.ID, 0); err != nil {
@@ -295,13 +292,10 @@ func TestTitlesDueAFreshMatchAreQueued(t *testing.T) {
 		}
 	}
 	// Scanning queued both; they ran.
-	j := s.q.Job
-	if _, err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobIdentify))).Delete(); err != nil {
+	if _, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE kind = 'identify'`); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
-	heat, _ := i.WithContext(ctx).Where(i.Title.Eq("Heat")).Take()
-	if err := s.Identified(ctx, uuid.UUID(heat.ID)); err != nil {
+	if err := s.Identified(ctx, oneItem(t, s, "title = $1", "Heat").ID); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := s.RefreshStale(ctx); err != nil || n != 1 {
@@ -311,7 +305,7 @@ func TestTitlesDueAFreshMatchAreQueued(t *testing.T) {
 	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{RefreshDays: &never}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobIdentify))).Delete(); err != nil {
+	if _, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE kind = 'identify'`); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := s.RefreshStale(ctx); err != nil || n != 0 {
@@ -332,8 +326,7 @@ func TestATitleAScanFindsIsMatchedBeforeTheRefresh(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{{Title: "Heat", Folder: "Heat"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	j := s.q.Job
-	if _, err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobIdentify))).Delete(); err != nil {
+	if _, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE kind = 'identify'`); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := s.RefreshStale(ctx); err != nil || n != 1 {
@@ -346,8 +339,7 @@ func TestATitleAScanFindsIsMatchedBeforeTheRefresh(t *testing.T) {
 	if err != nil || len(claimed) != 1 {
 		t.Fatalf("claimed %v, %v", claimed, err)
 	}
-	i := s.q.Item
-	if ronin, _ := i.WithContext(ctx).Where(i.Title.Eq("Ronin")).Take(); claimed[0].Subject != uuid.UUID(ronin.ID) {
+	if claimed[0].Subject != oneItem(t, s, "title = $1", "Ronin").ID {
 		t.Error("the scheduled refresh was matched before the title the scan found")
 	}
 }

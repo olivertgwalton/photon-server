@@ -24,15 +24,13 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 	}
 	add := func(lib uuid.UUID, kind domain.ItemKind, title, original string) {
 		t.Helper()
-		item := &model.Item{
-			LibraryID: model.UUID(lib), Kind: kind, Title: title, ScanTitle: title, SortTitle: sortTitle(title), Folder: title,
+		item := model.Item{
+			LibraryID: lib, Kind: kind, Title: title, ScanTitle: title, SortTitle: sortTitle(title), Folder: title,
 		}
 		if original != "" {
 			item.OriginalTitle = &original
 		}
-		if err := s.q.Item.WithContext(ctx).Create(item); err != nil {
-			t.Fatal(err)
-		}
+		addItem(t, s, item)
 	}
 	add(films.ID, domain.ItemMovie, "Amélie", "Le Fabuleux Destin d'Amélie Poulain")
 	add(films.ID, domain.ItemMovie, "Heat", "")

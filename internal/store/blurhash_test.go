@@ -29,8 +29,8 @@ func TestPicturesAnswerTheirBlurhashesWhereverTheyAreShown(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	item, err := s.q.Item.WithContext(ctx).Take()
-	if err != nil {
+	var item uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items`).Scan(&item); err != nil {
 		t.Fatal(err)
 	}
 	pacino := func(photo string) domain.Metadata {
@@ -39,11 +39,11 @@ func TestPicturesAnswerTheirBlurhashesWhereverTheyAreShown(t *testing.T) {
 			Credits: []domain.Credit{{Name: "Al Pacino", IDs: map[domain.Provider]string{domain.ProviderTMDB: "1158"}, Photo: photo, Kind: domain.CreditActor}},
 		}
 	}
-	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, pacino("https://image.tmdb.org/t/p/original/a.jpg"), nil); err != nil {
+	if err := s.SaveIdentity(ctx, item, domain.SourceTMDB, pacino("https://image.tmdb.org/t/p/original/a.jpg"), nil); err != nil {
 		t.Fatal(err)
 	}
 
-	page, err := s.Title(ctx, uuid.UUID{}, uuid.UUID(item.ID))
+	page, err := s.Title(ctx, uuid.UUID{}, item)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestPicturesAnswerTheirBlurhashesWhereverTheyAreShown(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if page, err = s.Title(ctx, uuid.UUID{}, uuid.UUID(item.ID)); err != nil {
+	if page, err = s.Title(ctx, uuid.UUID{}, item); err != nil {
 		t.Fatal(err)
 	}
 	if got := slices.Sorted(maps.Values(page.Blurhashes)); len(got) != 2 || page.Blurhashes[poster] == "" || page.Blurhashes[backdrop] == "" {
@@ -89,7 +89,7 @@ func TestPicturesAnswerTheirBlurhashesWhereverTheyAreShown(t *testing.T) {
 		t.Errorf("people found = %+v, %v; want the photo's blurhash", found, err)
 	}
 
-	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, pacino("https://image.tmdb.org/t/p/original/b.jpg"), nil); err != nil {
+	if err := s.SaveIdentity(ctx, item, domain.SourceTMDB, pacino("https://image.tmdb.org/t/p/original/b.jpg"), nil); err != nil {
 		t.Fatal(err)
 	}
 	if person, err = s.Person(ctx, person.ID); err != nil || person.Photo == photo || person.Blurhashes != nil {

@@ -4,66 +4,68 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"slices"
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 // SaveRatings replaces what a source says sites make of a title.
 func (s *Store) SaveRatings(ctx context.Context, id uuid.UUID, source domain.FieldSource, ratings []domain.Rating) error {
-	return s.q.Transaction(func(tx *query.Query) error {
-		asks, err := askedOf(ctx, tx, model.UUID(id), source)
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		asks, err := askedOf(ctx, tx, id, source)
 		if err != nil {
 			return err
 		}
-		return saveRatings(ctx, tx, model.UUID(id), source, asks.of(asks.title, domain.Metadata{Ratings: ratings}).Ratings)
+		return saveRatings(ctx, tx, id, source, asks.of(asks.title, domain.Metadata{Ratings: ratings}).Ratings)
 	})
 }
 
-func saveRatings(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, ratings []domain.Rating) error {
-	r := tx.Rating
-	if _, err := r.WithContext(ctx).Where(r.ItemID.Eq(item), r.Source.Eq(string(source))).Delete(); err != nil {
+func saveRatings(ctx context.Context, tx db, item uuid.UUID, source domain.FieldSource, ratings []domain.Rating) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM ratings WHERE item_id = $1 AND source = $2`, item, source); err != nil {
 		return err
 	}
-	rows := make([]*model.Rating, 0, len(ratings))
-	for _, x := range ratings {
-		row := &model.Rating{ItemID: item, Source: source, Site: x.Site, Score: float32(x.Score)}
-		if x.Votes > 0 {
-			row.Votes = &x.Votes
-		}
-		rows = append(rows, row)
-	}
-	if len(rows) == 0 {
+	if len(ratings) == 0 {
 		return nil
 	}
-	return r.WithContext(ctx).Create(rows...)
+	b := &pgx.Batch{}
+	for _, x := range ratings {
+		var votes *int
+		if x.Votes > 0 {
+			votes = &x.Votes
+		}
+		b.Queue(`INSERT INTO ratings (item_id, source, site, score, votes) VALUES ($1, $2, $3, $4, $5)`,
+			item, source, x.Site, float32(x.Score), votes)
+	}
+	return tx.SendBatch(ctx, b).Close()
 }
 
 // ratings answers each title's rating from each site, each from the source its library ranks
 // highest, in the order of domain.RatingSites.
-func (s *Store) ratings(ctx context.Context, items []*model.Item) (map[model.UUID][]domain.Rating, error) {
-	out := map[model.UUID][]domain.Rating{}
+func (s *Store) ratings(ctx context.Context, items []*model.Item) (map[uuid.UUID][]domain.Rating, error) {
+	out := map[uuid.UUID][]domain.Rating{}
 	if len(items) == 0 {
 		return out, nil
 	}
-	r := s.q.Rating
-	rows, err := r.WithContext(ctx).Where(r.ItemID.In(ids(items)...)).Find()
+	rows, err := queryRows[model.Rating](ctx, s.pool,
+		`SELECT item_id, source, site, score, votes FROM ratings WHERE item_id = ANY($1)`, ids(items))
 	if err != nil || len(rows) == 0 {
 		return out, err
 	}
-	taken, err := rankings(ctx, s.q, items, domain.FetcherMetadata)
+	taken, err := rankings(ctx, s.pool, items, domain.FetcherMetadata)
 	if err != nil {
 		return nil, err
 	}
-	ranked := map[model.UUID]map[domain.FieldSource]int{}
+	ranked := map[uuid.UUID]map[domain.FieldSource]int{}
 	for _, it := range items {
 		ranked[it.ID] = rankOf(taken[it.ID])
 	}
-	best := map[model.UUID]map[domain.RatingSite]*model.Rating{}
+	best := map[uuid.UUID]map[domain.RatingSite]*model.Rating{}
 	for _, row := range rows {
 		rank := ranked[row.ItemID]
 		if best[row.ItemID] == nil {
@@ -90,29 +92,29 @@ func (s *Store) ratings(ctx context.Context, items []*model.Item) (map[model.UUI
 
 // ProviderSettings answers what an admin has set for a provider.
 func (s *Store) ProviderSettings(ctx context.Context, id domain.FieldSource) (map[string]string, error) {
-	p := s.q.Provider
-	rows, err := p.WithContext(ctx).Where(p.ID.Eq(string(id))).Find()
-	if err != nil || len(rows) == 0 {
-		return map[string]string{}, err
-	}
+	return providerSettings(ctx, s.pool, id)
+}
+
+func providerSettings(ctx context.Context, q db, id domain.FieldSource) (map[string]string, error) {
 	out := map[string]string{}
-	return out, json.Unmarshal(rows[0].Settings, &out)
+	var raw []byte
+	err := q.QueryRow(ctx, `SELECT settings FROM providers WHERE id = $1`, id).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return out, nil
+	}
+	if err != nil {
+		return out, err
+	}
+	return out, json.Unmarshal(raw, &out)
 }
 
 // SetProviderSettings changes a provider's settings: a value set replaces what was there, and an
 // empty one clears it.
 func (s *Store) SetProviderSettings(ctx context.Context, id domain.FieldSource, change map[string]string) error {
-	return s.q.Transaction(func(tx *query.Query) error {
-		p := tx.Provider
-		rows, err := p.WithContext(ctx).Where(p.ID.Eq(string(id))).Find()
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		set, err := providerSettings(ctx, tx, id)
 		if err != nil {
 			return err
-		}
-		set := map[string]string{}
-		if len(rows) > 0 {
-			if err := json.Unmarshal(rows[0].Settings, &set); err != nil {
-				return err
-			}
 		}
 		for k, v := range change {
 			if v == "" {
@@ -125,6 +127,9 @@ func (s *Store) SetProviderSettings(ctx context.Context, id domain.FieldSource, 
 		if err != nil {
 			return err
 		}
-		return p.WithContext(ctx).Save(&model.Provider{ID: string(id), Settings: raw})
+		_, err = tx.Exec(ctx, `
+			INSERT INTO providers (id, settings) VALUES ($1, $2)
+			ON CONFLICT (id) DO UPDATE SET settings = excluded.settings`, id, raw)
+		return err
 	})
 }

@@ -2,18 +2,17 @@ package model
 
 import (
 	"time"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 type Activity struct {
-	ID        UUID      `gorm:"type:uuid;default:uuidv7()"`
-	At        time.Time `gorm:"default:now()"`
+	ID        uuid.UUID
+	At        time.Time
 	Kind      domain.EventKind
-	ProfileID *UUID  `gorm:"type:uuid"`
-	ItemID    *UUID  `gorm:"type:uuid"`
-	LibraryID *UUID  `gorm:"type:uuid"`
-	Details   []byte `gorm:"type:jsonb;default:'{}'"`
+	ProfileID *uuid.UUID
+	ItemID    *uuid.UUID
+	LibraryID *uuid.UUID
+	Details   []byte
 }
-
-func (Activity) TableName() string { return "activity" }

@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
 func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
@@ -78,12 +79,11 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, lib.ID, "Cosmos/Season 1", []byte("v1"), Show{Title: "Cosmos", Folder: "Cosmos"}, []Episode{episode(1), episode(2)}, nil); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
-	episodes, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode))).Order(i.EpisodeNumber).Find()
+	episodes, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE kind = 'episode' ORDER BY episode_number`)
 	if err != nil || len(episodes) != 2 {
 		t.Fatal(episodes, err)
 	}
-	if err := s.MarkWatched(ctx, oliver.ID, uuid.UUID(episodes[0].ID)); err != nil {
+	if err := s.MarkWatched(ctx, oliver.ID, episodes[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	// Alien watched and a favourite, Brazil part way.

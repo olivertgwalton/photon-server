@@ -9,7 +9,6 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
-	"gorm.io/gorm"
 
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
@@ -60,32 +59,53 @@ func TestServerIDSurvivesReopening(t *testing.T) {
 	}
 }
 
-// Every model field must have a column of the same name in the migrated schema.
-func TestModelsMatchSchema(t *testing.T) {
-	s := migrated(t)
-	db := s.q.Server.WithContext(t.Context()).UnderlyingDB().Session(&gorm.Session{NewDB: true})
-	for _, m := range model.All() {
-		stmt := db.Model(m).Statement
-		if err := stmt.Parse(m); err != nil {
-			t.Fatal(err)
-		}
-		cols, err := db.Migrator().ColumnTypes(m)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(cols) == 0 {
-			t.Errorf("%s: table %s does not exist", stmt.Schema.Name, stmt.Schema.Table)
-		}
-		have := map[string]bool{}
-		for _, c := range cols {
-			have[c.Name()] = true
-		}
-		for _, f := range stmt.Schema.Fields {
-			if f.DBName != "" && !have[f.DBName] {
-				t.Errorf("%s.%s: no column %q in table %s", stmt.Schema.Name, f.Name, f.DBName, stmt.Schema.Table)
-			}
-		}
+// addItem writes a title as a scan would, answering its id; a zero ID, AddedAt or EpisodeOrder takes
+// the column's default.
+func addItem(t *testing.T, s *Store, i model.Item) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	err := s.pool.QueryRow(t.Context(), `
+		INSERT INTO items (id, library_id, kind, title, sort_title, year, folder, added_at, parent_id, season_number,
+			episode_number, episode_end, air_date, extra_kind, scan_title, original_title, overview, tagline,
+			certificate, release_date, genres, studios, identified_at, episode_order)
+		VALUES (coalesce($1, uuidv7()), $2, $3, $4, $5, $6, $7, coalesce($8, now()), $9, $10, $11, $12, $13, $14, $15,
+			$16, $17, $18, $19, $20, $21, $22, $23, coalesce(nullif($24, ''), 'aired'))
+		RETURNING id`,
+		zeroNull(i.ID), i.LibraryID, i.Kind, i.Title, i.SortTitle, i.Year, i.Folder, zeroNull(i.AddedAt), i.ParentID,
+		i.SeasonNumber, i.EpisodeNumber, i.EpisodeEnd, i.AirDate, i.ExtraKind, i.ScanTitle, i.OriginalTitle, i.Overview,
+		i.Tagline, i.Certificate, i.ReleaseDate, i.Genres, i.Studios, i.IdentifiedAt, i.EpisodeOrder).Scan(&id)
+	if err != nil {
+		t.Fatal(err)
 	}
+	return id
+}
+
+// oneItem answers an item a condition finds.
+func oneItem(t *testing.T, s *Store, where string, args ...any) *model.Item {
+	t.Helper()
+	rows, err := queryRows[model.Item](t.Context(), s.pool, `SELECT `+itemColumns+` FROM items WHERE `+where+` LIMIT 1`, args...)
+	if err != nil || len(rows) == 0 {
+		t.Fatalf("no item where %s: %v", where, err)
+	}
+	return rows[0]
+}
+
+// countRows answers how many rows a query counts.
+func countRows(t *testing.T, s *Store, query string, args ...any) int {
+	t.Helper()
+	var n int
+	if err := s.pool.QueryRow(t.Context(), query, args...).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// zeroNull is nil for a zero value, so its column takes its default.
+func zeroNull[T comparable](v T) *T {
+	if v == *new(T) {
+		return nil
+	}
+	return &v
 }
 
 // Every foreign key leads an index, or removing what it points at scans the whole table for

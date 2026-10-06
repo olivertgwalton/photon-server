@@ -27,18 +27,18 @@ func TestPicturesBesideATitleComeBeforeAProvidersAndItsCardShowsTheBest(t *testi
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	item, err := s.q.Item.WithContext(ctx).Take()
-	if err != nil {
+	var item uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items`).Scan(&item); err != nil {
 		t.Fatal(err)
 	}
-	err = s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, domain.Metadata{Artwork: []domain.Artwork{
+	err = s.SaveIdentity(ctx, item, domain.SourceTMDB, domain.Metadata{Artwork: []domain.Artwork{
 		{Kind: domain.ArtworkPoster, URL: "https://image.tmdb.org/t/p/original/heat.jpg"},
 		{Kind: domain.ArtworkBackdrop, URL: "https://image.tmdb.org/t/p/original/heat-wide.jpg"},
 	}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := s.Title(ctx, uuid.UUID{}, uuid.UUID(item.ID))
+	page, err := s.Title(ctx, uuid.UUID{}, item)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,27 +69,23 @@ func TestOnlyPicturesStillInUseAreLive(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{{Title: "Heat", Folder: "Heat"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	item, err := s.q.Item.WithContext(ctx).Take()
-	if err != nil {
+	var item uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items`).Scan(&item); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, domain.Metadata{
+	if err := s.SaveIdentity(ctx, item, domain.SourceTMDB, domain.Metadata{
 		Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, URL: "https://image.tmdb.org/t/p/original/p.jpg"}},
 		Credits: []domain.Credit{{Name: "Al Pacino", IDs: map[domain.Provider]string{domain.ProviderTMDB: "1158"}, Photo: "https://image.tmdb.org/t/p/original/a.jpg", Kind: domain.CreditActor}},
 	}, nil); err != nil {
 		t.Fatal(err)
 	}
-	poster, err := s.q.Artwork.WithContext(ctx).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
-	person, err := s.q.Person.WithContext(ctx).Take()
-	if err != nil {
+	var poster, photo uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT (SELECT id FROM artwork), (SELECT photo_id FROM people)`).Scan(&poster, &photo); err != nil {
 		t.Fatal(err)
 	}
 	gone := uuid.NewV7()
-	live, err := s.LivePictures(ctx, []uuid.UUID{uuid.UUID(poster.ID), uuid.UUID(*person.PhotoID), gone})
-	if err != nil || !live[uuid.UUID(poster.ID)] || !live[uuid.UUID(*person.PhotoID)] || live[gone] {
+	live, err := s.LivePictures(ctx, []uuid.UUID{poster, photo, gone})
+	if err != nil || !live[poster] || !live[photo] || live[gone] {
 		t.Errorf("live = %v, %v; want the poster and the photo, not the replaced one", live, err)
 	}
 }
@@ -108,11 +104,11 @@ func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	item, err := s.q.Item.WithContext(ctx).Take()
-	if err != nil {
+	var item uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items`).Scan(&item); err != nil {
 		t.Fatal(err)
 	}
-	id := uuid.UUID(item.ID)
+	id := item
 	match := func(posters ...string) {
 		t.Helper()
 		var m domain.Metadata
@@ -155,9 +151,10 @@ func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
 	if got, _ := best(); got != "b.jpg" {
 		t.Errorf("after a match that no longer offers it, best poster %q; want the choice to stand", got)
 	}
-	file, _ := s.q.Artwork.WithContext(ctx).Where(s.q.Artwork.Source.Eq(string(domain.SourceFile))).Take()
+	var file uuid.UUID
+	_ = s.pool.QueryRow(ctx, `SELECT id FROM artwork WHERE source = 'file'`).Scan(&file)
 	offered, _ = s.ArtworkCandidates(ctx, id, domain.ArtworkPoster)
-	for _, pick := range []uuid.UUID{uuid.UUID(file.ID), uuid.NewV7()} {
+	for _, pick := range []uuid.UUID{file, uuid.NewV7()} {
 		if err := s.ChooseArtwork(ctx, id, domain.ArtworkPoster, pick); !errors.Is(err, ErrNotACandidate) {
 			t.Errorf("choosing %v: %v; want ErrNotACandidate", pick, err)
 		}

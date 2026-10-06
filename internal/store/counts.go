@@ -27,7 +27,7 @@ func (s *Store) LibraryCounts(ctx context.Context, profile uuid.UUID) (map[uuid.
 			FROM v, (SELECT DISTINCT certificate FROM t WHERE certificate IS NOT NULL) d (c)
 			WHERE v.max_age IS NOT NULL
 		)
-		SELECT i.library_id::text, i.kind, count(*) FROM v, t i
+		SELECT i.library_id, i.kind, count(*) FROM v, t i
 		LEFT JOIN t s ON s.id = i.parent_id
 		LEFT JOIN t g ON g.id = s.parent_id
 		LEFT JOIN ok oi ON oi.c = i.certificate
@@ -37,23 +37,19 @@ func (s *Store) LibraryCounts(ctx context.Context, profile uuid.UUID) (map[uuid.
 			AND (coalesce(i.certificate, s.certificate, g.certificate) IS NOT NULL OR v.unrated = 'allow'))
 		GROUP BY 1, 2
 		UNION ALL
-		SELECT items.library_id::text, items.kind, count(*) FROM items, viewer($1) v
+		SELECT items.library_id, items.kind, count(*) FROM items, viewer($1) v
 		WHERE `+listedCollection+`
-		GROUP BY 1, 2`, profile.String())
+		GROUP BY 1, 2`, profile)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := map[uuid.UUID]domain.TitleCounts{}
 	for rows.Next() {
-		var lib string
+		var id uuid.UUID
 		var kind domain.ItemKind
 		var n int
-		if err := rows.Scan(&lib, &kind, &n); err != nil {
-			return nil, err
-		}
-		id, err := uuid.Parse(lib)
-		if err != nil {
+		if err := rows.Scan(&id, &kind, &n); err != nil {
 			return nil, err
 		}
 		c := out[id]

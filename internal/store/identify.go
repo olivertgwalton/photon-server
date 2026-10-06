@@ -4,15 +4,12 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"time"
 	"uuid"
-
-	"gorm.io/gorm"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 // Subject is what a film or show is matched to a provider by, with the seasons of a show that
@@ -31,9 +28,8 @@ type Subject struct {
 
 // IdentifySubject answers what is known of a title to match it by, or false for one that has gone.
 func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, bool, error) {
-	i, e := s.q.Item, s.q.ExternalID
-	item, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+	item, err := readItem(ctx, s.pool, id)
+	if errors.Is(err, ErrNotFound) {
 		return Subject{}, false, nil
 	}
 	if err != nil {
@@ -43,17 +39,24 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	if item.Year != nil {
 		sub.Year = *item.Year
 	}
-	ls := s.q.LibrarySource
-	if err := ls.WithContext(ctx).Distinct(ls.Source).Where(ls.LibraryID.Eq(item.LibraryID), ls.Enabled.Is(true)).
-		Pluck(ls.Source, &sub.Sources); err != nil {
-		return Subject{}, false, err
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT source FROM library_sources WHERE library_id = $1 AND enabled`, item.LibraryID)
+	if err == nil {
+		sub.Sources, err = pgx.CollectRows(rows, pgx.RowTo[domain.FieldSource])
 	}
-	ids, err := e.WithContext(ctx).Where(e.ItemID.Eq(item.ID)).Find()
 	if err != nil {
 		return Subject{}, false, err
 	}
-	for _, x := range ids {
-		sub.IDs[x.Provider] = x.Value
+	var provider domain.Provider
+	var value string
+	rows, err = s.pool.Query(ctx, `SELECT provider, value FROM external_ids WHERE item_id = $1`, id)
+	if err == nil {
+		_, err = pgx.ForEachRow(rows, []any{&provider, &value}, func() error {
+			sub.IDs[provider] = value
+			return nil
+		})
+	}
+	if err != nil {
+		return Subject{}, false, err
 	}
 	if item.Kind == domain.ItemShow {
 		// Only a season holding an episode still titled by its file name, as Jellyfin asks a
@@ -64,7 +67,7 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 			JOIN items e ON e.parent_id = s.id
 			JOIN item_fields f ON f.item_id = e.id AND f.field = 'title' AND f.source = 'file'
 			WHERE s.parent_id = $1 AND s.kind = 'season'
-			ORDER BY s.season_number`, id.String())
+			ORDER BY s.season_number`, id)
 		if err == nil {
 			sub.Seasons, err = pgx.CollectRows(rows, pgx.RowTo[int])
 		}
@@ -78,8 +81,8 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 // SaveIdentity writes what a provider says about a title, and about the seasons and episodes of a
 // show, under every source that ranks above it, of what its library asks the provider for of each.
 func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.FieldSource, m domain.Metadata, seasons map[int]domain.SeasonMetadata) error {
-	return s.q.Transaction(func(tx *query.Query) error {
-		item := model.UUID(id)
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		item := id
 		asks, err := askedOf(ctx, tx, item, source)
 		if err != nil {
 			return err
@@ -104,12 +107,11 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 			return err
 		}
 		credits := []credited{{item, m.Credits}}
-		i := tx.Item
 		for number, season := range seasons {
-			row, err := i.WithContext(ctx).Where(
-				i.ParentID.Eq(item), i.Kind.Eq(string(domain.ItemSeason)), i.SeasonNumber.Eq(number),
-			).Take()
-			if errors.Is(err, gorm.ErrRecordNotFound) {
+			var seasonID uuid.UUID
+			err := tx.QueryRow(ctx, `SELECT id FROM items WHERE parent_id = $1 AND kind = 'season' AND season_number = $2 LIMIT 1`,
+				item, number).Scan(&seasonID)
+			if errors.Is(err, pgx.ErrNoRows) {
 				continue
 			}
 			if err != nil {
@@ -121,21 +123,27 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 			if source != domain.SourceNFO {
 				said.Title, said.SortTitle = "", ""
 			}
-			if err := applyMetadata(ctx, tx, row.ID, source, said); err != nil {
+			if err := applyMetadata(ctx, tx, seasonID, source, said); err != nil {
 				return err
 			}
-			if err := saveProviderArtwork(ctx, tx, row.ID, source, said.Artwork); err != nil {
+			if err := saveProviderArtwork(ctx, tx, seasonID, source, said.Artwork); err != nil {
 				return err
 			}
-			episodes, err := i.WithContext(ctx).Where(i.ParentID.Eq(row.ID), i.Kind.Eq(string(domain.ItemEpisode))).Find()
+			rows, err := tx.Query(ctx, `
+				SELECT id, episode_number FROM items WHERE parent_id = $1 AND kind = 'episode' AND episode_number IS NOT NULL`, seasonID)
+			if err != nil {
+				return err
+			}
+			type episode struct {
+				ID            uuid.UUID
+				EpisodeNumber int
+			}
+			episodes, err := pgx.CollectRows(rows, pgx.RowToStructByName[episode])
 			if err != nil {
 				return err
 			}
 			for _, e := range episodes {
-				if e.EpisodeNumber == nil {
-					continue
-				}
-				if said, ok := season.Episodes[*e.EpisodeNumber]; ok {
+				if said, ok := season.Episodes[e.EpisodeNumber]; ok {
 					said = asks.of(domain.ItemEpisode, said)
 					if err := applyMetadata(ctx, tx, e.ID, source, said); err != nil {
 						return err
@@ -159,48 +167,58 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 
 // saveRemoteVideos replaces what a provider links to for a title with the videos it links to now,
 // of the kinds the title's library keeps.
-func saveRemoteVideos(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, videos []domain.RemoteVideo) error {
-	rv, ex, i := tx.RemoteVideo, tx.LibraryRemoteExtra, tx.Item
+func saveRemoteVideos(ctx context.Context, tx db, item uuid.UUID, source domain.FieldSource, videos []domain.RemoteVideo) error {
 	// A video linked again keeps its still's id, so the still is not fetched again.
-	before, err := rv.WithContext(ctx).Where(rv.ItemID.Eq(item), rv.Source.Eq(string(source)), rv.ThumbID.IsNotNull()).Find()
+	stills := map[string]uuid.UUID{}
+	var site, key string
+	var still uuid.UUID
+	rows, err := tx.Query(ctx, `
+		SELECT site, key, thumb_id FROM remote_videos WHERE item_id = $1 AND source = $2 AND thumb_id IS NOT NULL`, item, source)
 	if err != nil {
 		return err
 	}
-	stills := map[string]*model.UUID{}
-	for _, v := range before {
-		stills[v.Site+"/"+v.Key] = v.ThumbID
-	}
-	if _, err := rv.WithContext(ctx).Where(rv.ItemID.Eq(item), rv.Source.Eq(string(source))).Delete(); err != nil {
+	if _, err := pgx.ForEachRow(rows, []any{&site, &key, &still}, func() error {
+		stills[site+"/"+key] = still
+		return nil
+	}); err != nil {
 		return err
 	}
-	var kept []domain.ExtraKind
-	err = ex.WithContext(ctx).Select(ex.Kind).Join(i, i.LibraryID.EqCol(ex.LibraryID)).Where(i.ID.Eq(item)).Scan(&kept)
+	if _, err := tx.Exec(ctx, `DELETE FROM remote_videos WHERE item_id = $1 AND source = $2`, item, source); err != nil {
+		return err
+	}
+	rows, err = tx.Query(ctx, `
+		SELECT e.kind FROM library_remote_extras e JOIN items i ON i.library_id = e.library_id WHERE i.id = $1`, item)
 	if err != nil {
 		return err
 	}
-	var rows []*model.RemoteVideo
+	kept, err := pgx.CollectRows(rows, pgx.RowTo[domain.ExtraKind])
+	if err != nil {
+		return err
+	}
+	b := &pgx.Batch{}
 	for _, v := range videos {
 		if !slices.Contains(kept, v.Kind) {
 			continue
 		}
-		row := &model.RemoteVideo{
-			ItemID: item, Source: source, Position: len(rows), Kind: v.Kind, Site: v.Site, Key: v.Key, Name: v.Name,
-			Language: optional(v.Language),
-		}
+		var published *time.Time
 		if !v.Published.IsZero() {
-			row.PublishedAt = &v.Published
+			published = &v.Published
 		}
+		var thumb *uuid.UUID
 		if videoStill(v.Site, v.Key) != "" {
-			row.ThumbID = stills[v.Site+"/"+v.Key]
-			if row.ThumbID == nil {
-				id := model.UUID(uuid.NewV7())
-				row.ThumbID = &id
+			id, ok := stills[v.Site+"/"+v.Key]
+			if !ok {
+				id = uuid.NewV7()
 			}
+			thumb = &id
 		}
-		rows = append(rows, row)
+		b.Queue(`
+			INSERT INTO remote_videos (item_id, source, position, kind, site, key, name, language, published_at, thumb_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+			item, source, b.Len(), v.Kind, v.Site, v.Key, v.Name, optional(v.Language), published, thumb)
 	}
-	if len(rows) == 0 {
+	if b.Len() == 0 {
 		return nil
 	}
-	return rv.WithContext(ctx).Create(rows...)
+	return tx.SendBatch(ctx, b).Close()
 }

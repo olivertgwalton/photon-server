@@ -25,26 +25,27 @@ func TestAnEpisodeWearsItsShowsPictures(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, shows.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, []Episode{episode}, nil); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
-	show, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
+	shown, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE kind = 'show'`)
 	if err != nil {
 		t.Fatal(err)
 	}
+	show := shown[0]
 	art := func(kind domain.ArtworkKind, name string) domain.Artwork {
 		return domain.Artwork{Kind: kind, URL: "https://image.tmdb.org/t/p/original/" + name + ".jpg"}
 	}
 	seasons := map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{
 		1: {Title: "Pilot", Artwork: []domain.Artwork{art(domain.ArtworkThumb, "still")}},
 	}}}
-	if err := s.SaveIdentity(ctx, uuid.UUID(show.ID), domain.SourceTMDB, domain.Metadata{Title: "Show", Artwork: []domain.Artwork{
+	if err := s.SaveIdentity(ctx, show.ID, domain.SourceTMDB, domain.Metadata{Title: "Show", Artwork: []domain.Artwork{
 		art(domain.ArtworkPoster, "poster"), art(domain.ArtworkBackdrop, "backdrop"), art(domain.ArtworkLogo, "logo"),
 	}}, seasons); err != nil {
 		t.Fatal(err)
 	}
-	ep, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode))).Take()
+	eps, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE kind = 'episode'`)
 	if err != nil {
 		t.Fatal(err)
 	}
+	ep := eps[0]
 	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleMember, "")
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +75,7 @@ func TestAnEpisodeWearsItsShowsPictures(t *testing.T) {
 	if c.Thumb != still {
 		t.Errorf("card thumb = %v, want the episode's own still %v", c.Thumb, still)
 	}
-	page, err := s.Title(ctx, viewer.ID, uuid.UUID(ep.ID))
+	page, err := s.Title(ctx, viewer.ID, ep.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

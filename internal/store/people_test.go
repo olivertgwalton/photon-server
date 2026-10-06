@@ -31,13 +31,12 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, lib.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, []Episode{episode}, nil); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
-	film, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemMovie))).Take()
-	show, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
+	film := oneItem(t, s, "kind = 'movie'")
+	show := oneItem(t, s, "kind = 'show'")
 	weaver := func(photo string) domain.Credit {
 		return domain.Credit{Name: "Sigourney Weaver", IDs: map[domain.Provider]string{domain.ProviderTMDB: "10205"}, Photo: photo, Kind: domain.CreditActor, Role: "Ripley"}
 	}
-	if err := s.SaveIdentity(ctx, uuid.UUID(film.ID), domain.SourceTMDB, domain.Metadata{Title: "Alien", Credits: []domain.Credit{
+	if err := s.SaveIdentity(ctx, film.ID, domain.SourceTMDB, domain.Metadata{Title: "Alien", Credits: []domain.Credit{
 		weaver("https://image.tmdb.org/t/p/original/sw.jpg"),
 		{Name: "Ridley Scott", IDs: map[domain.Provider]string{domain.ProviderTMDB: "578"}, Kind: domain.CreditDirector, Role: "Director"},
 		{Name: "Nobody", Kind: domain.CreditActor, Role: "Unknown"},
@@ -47,12 +46,12 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 	// She guest stars in the show's first episode.
 	guest := weaver("https://image.tmdb.org/t/p/original/sw.jpg")
 	guest.Kind, guest.Role = domain.CreditGuestStar, "Herself"
-	if err := s.SaveIdentity(ctx, uuid.UUID(show.ID), domain.SourceTMDB, domain.Metadata{Title: "Show"},
+	if err := s.SaveIdentity(ctx, show.ID, domain.SourceTMDB, domain.Metadata{Title: "Show"},
 		map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Title: "Pilot", Credits: []domain.Credit{guest}}}}}); err != nil {
 		t.Fatal(err)
 	}
 
-	page, err := s.Title(ctx, uuid.UUID{}, uuid.UUID(film.ID))
+	page, err := s.Title(ctx, uuid.UUID{}, film.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,12 +238,7 @@ func TestTwoMatchesCreditingSomeoneNewAtOnceShareThem(t *testing.T) {
 		if _, err := s.SaveShowFolder(ctx, lib.ID, name+"/Season 1", []byte("v1"), Show{Title: name, Folder: name}, []Episode{episode}, nil); err != nil {
 			t.Fatal(err)
 		}
-		i := s.q.Item
-		show, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow)), i.Title.Eq(name)).Take()
-		if err != nil {
-			t.Fatal(err)
-		}
-		shows = append(shows, uuid.UUID(show.ID))
+		shows = append(shows, oneItem(t, s, "kind = 'show' AND title = $1", name).ID)
 	}
 	for round := range 3 {
 		// The same thirty people, new to the server, cast in both shows and guests in their episodes.

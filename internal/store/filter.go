@@ -2,12 +2,12 @@ package store
 
 import (
 	"context"
-	"database/sql"
+	"fmt"
 	"slices"
+	"strings"
 	"uuid"
 
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
@@ -48,56 +48,64 @@ const episodesOf = `SELECT items.id WHERE items.kind = 'movie'
 	UNION ALL SELECT e.id FROM items s JOIN items e ON e.parent_id = s.id
 		WHERE s.parent_id = items.id AND e.kind = 'episode'`
 
-// apply narrows a query over items to what the filter lets through, for a profile.
-func (f WallFilter) apply(q *gorm.DB, profile uuid.UUID) *gorm.DB {
+// where is the conditions, each led by AND, that narrow a statement over items to what the filter
+// lets through, for the profile args holds as @profile; it adds the values they take to args.
+func (f WallFilter) where(args pgx.NamedArgs) string {
+	var w strings.Builder
+	and := func(cond, name string, value any) {
+		w.WriteString(" AND " + cond)
+		if name != "" {
+			args[name] = value
+		}
+	}
 	if f.StartsWith != "" {
-		q = q.Where(firstLetter+" = ?", f.StartsWith)
+		and(firstLetter+" = @letter", "letter", f.StartsWith)
 	}
 	for _, m := range f.Marks {
-		q = q.Where(markSQL(m), sql.Named("profile", profile.String()))
+		and(markSQL(m), "", nil)
 	}
 	if len(f.Genres) > 0 {
-		q = q.Where("EXISTS (SELECT 1 FROM jsonb_array_elements_text(items.genres) g WHERE g IN ?)", f.Genres)
+		and("EXISTS (SELECT 1 FROM jsonb_array_elements_text(items.genres) g WHERE g = ANY(@genres))", "genres", f.Genres)
 	}
 	if len(f.Studios) > 0 {
-		q = q.Where("EXISTS (SELECT 1 FROM jsonb_array_elements_text(items.studios) g WHERE g IN ?)", f.Studios)
+		and("EXISTS (SELECT 1 FROM jsonb_array_elements_text(items.studios) g WHERE g = ANY(@studios))", "studios", f.Studios)
 	}
 	if len(f.Years) > 0 {
-		q = q.Where("items.year IN ?", f.Years)
+		and("items.year = ANY(@years)", "years", f.Years)
 	}
 	if len(f.Certificates) > 0 {
-		q = q.Where("items.certificate IN ?", f.Certificates)
+		and("items.certificate = ANY(@certificates)", "certificates", f.Certificates)
 	}
 	if len(f.Resolutions) > 0 {
-		var widths []clause.Expression
-		for _, r := range f.Resolutions {
+		widths := make([]string, len(f.Resolutions))
+		for n, r := range f.Resolutions {
 			from, to := r.Widths()
-			if to == 0 {
-				widths = append(widths, clause.Expr{SQL: "v.width >= ?", Vars: []any{from}})
-			} else {
-				widths = append(widths, clause.Expr{SQL: "v.width >= ? AND v.width < ?", Vars: []any{from, to}})
+			args[fmt.Sprint("from", n)] = from
+			widths[n] = fmt.Sprintf("v.width >= @from%d", n)
+			if to > 0 {
+				args[fmt.Sprint("to", n)] = to
+				widths[n] += fmt.Sprintf(" AND v.width < @to%d", n)
 			}
 		}
-		q = q.Where("EXISTS ("+versionOf+" AND (?))", clause.OrConditions{Exprs: widths})
+		and("EXISTS ("+versionOf+" AND ("+strings.Join(widths, " OR ")+"))", "", nil)
 	}
 	if len(f.Ranges) > 0 {
-		q = q.Where("EXISTS ("+versionOf+" AND v.video_range IN ?)", f.Ranges)
+		and("EXISTS ("+versionOf+" AND v.video_range = ANY(@ranges))", "ranges", f.Ranges)
 	}
 	if len(f.People) > 0 {
-		people := make([]string, len(f.People))
-		for n, p := range f.People {
-			people[n] = p.String()
-		}
-		q = q.Where(`EXISTS (SELECT 1 FROM credits c WHERE c.person_id IN ? AND (c.item_id = items.id
-			OR c.item_id IN (SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id WHERE s.parent_id = items.id)))`, people)
+		and(`EXISTS (SELECT 1 FROM credits c WHERE c.person_id = ANY(@people) AND (c.item_id = items.id
+			OR c.item_id IN (SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id WHERE s.parent_id = items.id)))`,
+			"people", f.People)
 	}
 	if f.MinRating > 0 {
-		q = q.Where("EXISTS (SELECT 1 FROM ratings r WHERE r.item_id = items.id AND r.site = ? AND r.score >= ?)", f.RatingSite, f.MinRating)
+		args["rating_site"] = f.RatingSite
+		and("EXISTS (SELECT 1 FROM ratings r WHERE r.item_id = items.id AND r.site = @rating_site AND r.score >= @min_rating)",
+			"min_rating", f.MinRating)
 	}
-	return q
+	return w.String()
 }
 
-// markSQL is the condition a mark sets on a title, for the profile given as its one argument. A
+// markSQL is the condition a mark sets on a title, for the profile given as @profile. A
 // show is watched when every episode is, as Jellyfin and Plex count it.
 func markSQL(m domain.Mark) string {
 	unwatched := `EXISTS (SELECT 1 FROM (` + episodesOf + `) e
@@ -134,36 +142,33 @@ type Facets struct {
 // such library.
 func (s *Store) Facets(ctx context.Context, lib, profile uuid.UUID) (Facets, error) {
 	var f Facets
-	if _, err := s.wallQuery(ctx, lib, profile, WallFilter{}); err != nil {
+	if _, _, err := s.wallQuery(ctx, lib, profile, WallFilter{}); err != nil {
 		return f, err
 	}
-	db := s.q.Item.WithContext(ctx).UnderlyingDB()
-	titles := `SELECT items.* FROM items, viewer(@profile) v
+	titles := `SELECT items.genres, items.studios, items.year, items.certificate FROM items, viewer(@profile) v
 		WHERE library_id = @lib AND kind IN ('movie', 'show') AND sees(v, items)`
 	// Copies on disk of the library's films and episodes.
-	copies := `SELECT v.* FROM versions v JOIN items e ON e.id = v.item_id
+	copies := `SELECT v.video_range, v.width FROM versions v JOIN items e ON e.id = v.item_id
 		CROSS JOIN viewer(@profile) asking
 		WHERE e.library_id = @lib AND v.missing_since IS NULL AND sees(asking, e)`
-	at := map[string]any{"lib": lib.String(), "profile": profile.String()}
+	at := pgx.NamedArgs{"lib": lib, "profile": profile}
+	var widths []int
 	for _, q := range []struct {
 		sql  string
 		into any
 	}{
-		{`SELECT DISTINCT g FROM (` + titles + `) t, jsonb_array_elements_text(t.genres) g ORDER BY g`, &f.Genres},
-		{`SELECT DISTINCT year FROM (` + titles + `) t WHERE year IS NOT NULL ORDER BY year DESC`, &f.Years},
-		{`SELECT DISTINCT certificate FROM (` + titles + `) t WHERE certificate IS NOT NULL ORDER BY certificate`, &f.Certificates},
-		{`SELECT DISTINCT st FROM (` + titles + `) t, jsonb_array_elements_text(t.studios) st ORDER BY st`, &f.Studios},
-		{`SELECT DISTINCT video_range FROM (` + copies + `) c WHERE video_range IS NOT NULL`, &f.Ranges},
-		{`SELECT DISTINCT r.site FROM ratings r JOIN items t ON t.id = r.item_id, viewer(@profile) v
+		{`SELECT array_agg(DISTINCT g ORDER BY g) FROM (` + titles + `) t, jsonb_array_elements_text(t.genres) g`, &f.Genres},
+		{`SELECT array_agg(DISTINCT year ORDER BY year DESC) FROM (` + titles + `) t WHERE year IS NOT NULL`, &f.Years},
+		{`SELECT array_agg(DISTINCT certificate ORDER BY certificate) FROM (` + titles + `) t WHERE certificate IS NOT NULL`, &f.Certificates},
+		{`SELECT array_agg(DISTINCT st ORDER BY st) FROM (` + titles + `) t, jsonb_array_elements_text(t.studios) st`, &f.Studios},
+		{`SELECT array_agg(DISTINCT video_range) FROM (` + copies + `) c WHERE video_range IS NOT NULL`, &f.Ranges},
+		{`SELECT array_agg(DISTINCT width) FROM (` + copies + `) c WHERE width IS NOT NULL`, &widths},
+		{`SELECT array_agg(DISTINCT r.site) FROM ratings r JOIN items t ON t.id = r.item_id, viewer(@profile) v
 			WHERE t.library_id = @lib AND sees(v, t)`, &f.RatingSites},
 	} {
-		if err := db.Raw(q.sql, at).Scan(q.into).Error; err != nil {
+		if err := s.pool.QueryRow(ctx, q.sql, at).Scan(q.into); err != nil {
 			return Facets{}, err
 		}
-	}
-	var widths []int
-	if err := db.Raw(`SELECT DISTINCT width FROM (`+copies+`) c WHERE width IS NOT NULL`, at).Scan(&widths).Error; err != nil {
-		return Facets{}, err
 	}
 	for _, r := range domain.Resolutions() {
 		from, to := r.Widths()

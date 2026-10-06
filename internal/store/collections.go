@@ -2,16 +2,14 @@ package store
 
 import (
 	"context"
-	"database/sql/driver"
 	"errors"
 	"strconv"
 	"uuid"
 
-	"gorm.io/gorm"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 // ErrNotUserCollection is a collection a provider made, which only that provider changes.
@@ -27,37 +25,26 @@ var groupingProviders = map[domain.FieldSource]domain.Provider{domain.SourceTMDB
 
 // saveGroupings puts a title in the box sets a source names it part of, making each the first
 // time, and takes it out of that source's others.
-func saveGroupings(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, groupings []domain.Grouping) error {
+func saveGroupings(ctx context.Context, tx db, item uuid.UUID, source domain.FieldSource, groupings []domain.Grouping) error {
 	by, ok := groupingProviders[source]
 	if !ok {
 		return nil
 	}
-	i, c, cm := tx.Item, tx.Collection, tx.CollectionMember
-	title, err := i.WithContext(ctx).Where(i.ID.Eq(item)).Take()
-	if err != nil {
-		return err
+	var lib uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT library_id FROM items WHERE id = $1`, item).Scan(&lib); err != nil {
+		return found(err)
 	}
-	var keep []model.UUID
+	keep := []uuid.UUID{}
 	for _, g := range groupings {
-		var found []model.UUID
-		err := tx.Item.WithContext(ctx).UnderlyingDB().Raw(`
+		var id uuid.UUID
+		err := tx.QueryRow(ctx, `
 			SELECT c.item_id FROM collections c
-			JOIN items i ON i.id = c.item_id AND i.library_id = ?
-			JOIN external_ids e ON e.item_id = c.item_id AND e.provider = ? AND e.value = ?
-			WHERE c.origin = ?`, title.LibraryID, by, g.ID, source).Scan(&found).Error
-		if err != nil {
-			return err
-		}
-		var id model.UUID
-		if len(found) > 0 {
-			id = found[0]
-		} else {
-			row := model.Item{LibraryID: title.LibraryID, Kind: domain.ItemCollection, Title: g.Title, ScanTitle: g.Title, SortTitle: sortTitle(g.Title)}
-			if err := i.WithContext(ctx).Create(&row); err != nil {
-				return err
-			}
-			id = row.ID
-			if err := c.WithContext(ctx).Create(&model.Collection{ItemID: id, Origin: domain.CollectionOrigin(source)}); err != nil {
+			JOIN items i ON i.id = c.item_id AND i.library_id = $1
+			JOIN external_ids e ON e.item_id = c.item_id AND e.provider = $2 AND e.value = $3
+			WHERE c.origin = $4 LIMIT 1`, lib, by, g.ID, source).Scan(&id)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			if id, err = newCollection(ctx, tx, lib, g.Title, domain.CollectionOrigin(source)); err != nil {
 				return err
 			}
 			if err := saveIDs(ctx, tx, id, domain.IDFromMatch, map[domain.Provider]string{by: g.ID}); err != nil {
@@ -66,6 +53,8 @@ func saveGroupings(ctx context.Context, tx *query.Query, item model.UUID, source
 			if err := keyTitle(ctx, tx, id); err != nil {
 				return err
 			}
+		case err != nil:
+			return err
 		}
 		if err := applyMetadata(ctx, tx, id, source, domain.Metadata{Title: g.Title}); err != nil {
 			return err
@@ -73,18 +62,33 @@ func saveGroupings(ctx context.Context, tx *query.Query, item model.UUID, source
 		if err := saveProviderArtwork(ctx, tx, id, source, g.Artwork); err != nil {
 			return err
 		}
-		if err := cm.WithContext(ctx).Save(&model.CollectionMember{CollectionID: id, ItemID: item}); err != nil {
+		_, err = tx.Exec(ctx, `
+			INSERT INTO collection_members (collection_id, item_id, position) VALUES ($1, $2, 0)
+			ON CONFLICT (collection_id, item_id) DO UPDATE SET position = excluded.position`, id, item)
+		if err != nil {
 			return err
 		}
 		keep = append(keep, id)
 	}
 	// Out of the source's sets it no longer names; one left empty goes at the next scan.
-	gone := `DELETE FROM collection_members m USING collections c
-		WHERE m.collection_id = c.item_id AND c.origin = ? AND m.item_id = ?`
-	if len(keep) == 0 {
-		return tx.Item.WithContext(ctx).UnderlyingDB().Exec(gone, source, item).Error
+	_, err := tx.Exec(ctx, `
+		DELETE FROM collection_members m USING collections c
+		WHERE m.collection_id = c.item_id AND c.origin = $1 AND m.item_id = $2 AND m.collection_id <> ALL($3)`,
+		source, item, keep)
+	return err
+}
+
+// newCollection makes a collection in a library, made by origin.
+func newCollection(ctx context.Context, tx db, lib uuid.UUID, title string, origin domain.CollectionOrigin) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `
+		INSERT INTO items (library_id, kind, title, scan_title, sort_title, folder) VALUES ($1, 'collection', $2, $2, $3, '')
+		RETURNING id`, lib, title, sortTitle(title)).Scan(&id)
+	if err != nil {
+		return id, err
 	}
-	return tx.Item.WithContext(ctx).UnderlyingDB().Exec(gone+" AND m.collection_id NOT IN ?", source, item, keep).Error
+	_, err = tx.Exec(ctx, `INSERT INTO collections (item_id, origin) VALUES ($1, $2)`, id, origin)
+	return id, err
 }
 
 // shownCollections are a library's collections worth showing: an admin's, and a provider's once
@@ -98,18 +102,17 @@ var listedCollection = `items.kind = 'collection' AND items.id IN (` + shownColl
 
 // Collections answers a page of a library's collections, by title, and how many there are.
 func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]Card, int64, error) {
-	l := s.q.Library
-	if _, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(lib))).Take(); err != nil {
-		return nil, 0, found(err)
-	}
-	q := s.q.Item.WithContext(ctx).UnderlyingDB().
-		Where("items.library_id = ? AND EXISTS (SELECT 1 FROM viewer(?) v WHERE "+listedCollection+")", lib.String(), profile.String())
-	var total int64
-	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := hasLibrary(ctx, s.pool, lib); err != nil {
 		return nil, 0, err
 	}
-	var rows []*model.Item
-	if err := q.Order("items.sort_title, items.id").Offset(offset).Limit(limit).Find(&rows).Error; err != nil {
+	where := ` FROM items WHERE items.library_id = $1 AND EXISTS (SELECT 1 FROM viewer($2) v WHERE ` + listedCollection + `)`
+	var total int64
+	if err := s.pool.QueryRow(ctx, `SELECT count(*)`+where, lib, profile).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+where+` ORDER BY items.sort_title, items.id OFFSET $3 LIMIT $4`,
+		lib, profile, offset, limit)
+	if err != nil {
 		return nil, 0, err
 	}
 	cards, err := s.cards(ctx, profile, rows)
@@ -119,20 +122,17 @@ func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset,
 // Members answers a collection's titles: an admin's in the order they were put, a provider's from
 // the first released. ErrNotFound for no such collection.
 func (s *Store) Members(ctx context.Context, profile, collection uuid.UUID) ([]Card, error) {
-	c := s.q.Collection
-	row, err := c.WithContext(ctx).Where(c.ItemID.Eq(model.UUID(collection))).Take()
-	if err != nil {
+	var origin domain.CollectionOrigin
+	if err := s.pool.QueryRow(ctx, `SELECT origin FROM collections WHERE item_id = $1`, collection).Scan(&origin); err != nil {
 		return nil, found(err)
 	}
 	order := "items.released_asc, items.sort_title, items.id"
-	if row.Origin == domain.CollectionUser {
+	if origin == domain.CollectionUser {
 		order = "m.position, items.id"
 	}
-	var rows []*model.Item
-	err = s.q.Item.WithContext(ctx).UnderlyingDB().
-		Joins("JOIN collection_members m ON m.item_id = items.id AND m.collection_id = ?", collection.String()).
-		Where("EXISTS (SELECT 1 FROM viewer(?) v WHERE sees(v, items))", profile.String()).
-		Order(order).Find(&rows).Error
+	rows, err := queryRows[model.Item](ctx, s.pool, `
+		SELECT `+itemColumns+` FROM items JOIN collection_members m ON m.item_id = items.id AND m.collection_id = $1
+		WHERE EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, items)) ORDER BY `+order, collection, profile)
 	if err != nil {
 		return nil, err
 	}
@@ -140,9 +140,9 @@ func (s *Store) Members(ctx context.Context, profile, collection uuid.UUID) ([]C
 }
 
 // origins answers who made each collection among rows.
-func (s *Store) origins(ctx context.Context, rows []*model.Item) (map[model.UUID]domain.CollectionOrigin, error) {
-	out := map[model.UUID]domain.CollectionOrigin{}
-	var in []driver.Valuer
+func (s *Store) origins(ctx context.Context, rows []*model.Item) (map[uuid.UUID]domain.CollectionOrigin, error) {
+	out := map[uuid.UUID]domain.CollectionOrigin{}
+	var in []uuid.UUID
 	for _, r := range rows {
 		if r.Kind == domain.ItemCollection {
 			in = append(in, r.ID)
@@ -151,20 +151,25 @@ func (s *Store) origins(ctx context.Context, rows []*model.Item) (map[model.UUID
 	if len(in) == 0 {
 		return out, nil
 	}
-	c := s.q.Collection
-	found, err := c.WithContext(ctx).Where(c.ItemID.In(in...)).Find()
-	for _, f := range found {
-		out[f.ItemID] = f.Origin
+	var id uuid.UUID
+	var origin domain.CollectionOrigin
+	found, err := s.pool.Query(ctx, `SELECT item_id, origin FROM collections WHERE item_id = ANY($1)`, in)
+	if err != nil {
+		return out, err
 	}
+	_, err = pgx.ForEachRow(found, []any{&id, &origin}, func() error {
+		out[id] = origin
+		return nil
+	})
 	return out, err
 }
 
 // collectionsOf answers the shown collections a title is in, by title.
-func (s *Store) collectionsOf(ctx context.Context, item model.UUID) ([]CollectionCard, error) {
-	var rows []*model.Item
-	err := s.q.Item.WithContext(ctx).UnderlyingDB().
-		Where("items.id IN (SELECT collection_id FROM collection_members WHERE item_id = ?) AND items.id IN ("+shownCollections+")", item).
-		Order("items.sort_title").Find(&rows).Error
+func (s *Store) collectionsOf(ctx context.Context, item uuid.UUID) ([]CollectionCard, error) {
+	rows, err := queryRows[model.Item](ctx, s.pool, `
+		SELECT `+itemColumns+` FROM items
+		WHERE items.id IN (SELECT collection_id FROM collection_members WHERE item_id = $1) AND items.id IN (`+shownCollections+`)
+		ORDER BY items.sort_title`, item)
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}
@@ -175,100 +180,91 @@ func (s *Store) collectionsOf(ctx context.Context, item model.UUID) ([]Collectio
 	out := make([]CollectionCard, len(rows))
 	for n, r := range rows {
 		poster := first(pictures[r.ID][domain.ArtworkPoster])
-		out[n] = CollectionCard{ID: uuid.UUID(r.ID), Title: r.Title, Poster: poster, Blurhashes: blurhashesOf(hashes, poster)}
+		out[n] = CollectionCard{ID: r.ID, Title: r.Title, Poster: poster, Blurhashes: blurhashesOf(hashes, poster)}
 	}
 	return out, nil
 }
 
 // AddCollection makes an admin's collection in a library.
 func (s *Store) AddCollection(ctx context.Context, lib uuid.UUID, title string) (uuid.UUID, error) {
-	var id model.UUID
-	err := s.q.Transaction(func(tx *query.Query) error {
-		l := tx.Library
-		if _, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(lib))).Take(); err != nil {
-			return found(err)
-		}
-		row := model.Item{LibraryID: model.UUID(lib), Kind: domain.ItemCollection, Title: title, ScanTitle: title, SortTitle: sortTitle(title)}
-		if err := tx.Item.WithContext(ctx).Create(&row); err != nil {
+	var id uuid.UUID
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := hasLibrary(ctx, tx, lib); err != nil {
 			return err
 		}
-		id = row.ID
-		if err := tx.Collection.WithContext(ctx).Create(&model.Collection{ItemID: id, Origin: domain.CollectionUser}); err != nil {
+		var err error
+		if id, err = newCollection(ctx, tx, lib, title, domain.CollectionUser); err != nil {
 			return err
 		}
 		return applyMetadata(ctx, tx, id, domain.SourceUser, domain.Metadata{Title: title})
 	})
-	return uuid.UUID(id), err
+	return id, err
 }
 
 // SetMembers replaces an admin's collection's titles with these, in this order. Each must be a
 // film or show of the collection's library.
 func (s *Store) SetMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error {
-	return s.q.Transaction(func(tx *query.Query) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		lib, err := userCollection(ctx, tx, collection)
 		if err != nil {
 			return err
 		}
-		i := tx.Item
-		ids := make([]model.UUID, len(items))
-		in := make([]driver.Valuer, len(items))
-		for n, id := range items {
-			ids[n], in[n] = model.UUID(id), model.UUID(id)
-		}
-		if hasRepeats(ids) {
+		if hasRepeats(items) {
 			return ErrNotFound
 		}
-		titles, err := i.WithContext(ctx).Where(i.LibraryID.Eq(lib), i.Kind.In(string(domain.ItemMovie), string(domain.ItemShow))).
-			Where(i.ID.In(in...)).Count()
+		var titles int
+		err = tx.QueryRow(ctx, `
+			SELECT count(*) FROM items WHERE library_id = $1 AND kind IN ('movie', 'show') AND id = ANY($2)`,
+			lib, items).Scan(&titles)
 		if err != nil {
 			return err
 		}
-		if int(titles) != len(ids) {
+		if titles != len(items) {
 			return ErrNotFound
 		}
-		cm := tx.CollectionMember
-		if _, err := cm.WithContext(ctx).Where(cm.CollectionID.Eq(model.UUID(collection))).Delete(); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM collection_members WHERE collection_id = $1`, collection); err != nil {
 			return err
 		}
-		rows := make([]*model.CollectionMember, len(ids))
-		for n, id := range ids {
-			rows[n] = &model.CollectionMember{CollectionID: model.UUID(collection), ItemID: id, Position: n}
-		}
-		if len(rows) == 0 {
+		if len(items) == 0 {
 			return nil
 		}
-		return cm.WithContext(ctx).Create(rows...)
+		_, err = tx.Exec(ctx, `
+			INSERT INTO collection_members (collection_id, item_id, position)
+			SELECT $1, id, position - 1 FROM unnest($2::uuid[]) WITH ORDINALITY AS m(id, position)`, collection, items)
+		return err
 	})
 }
 
 // RemoveCollection removes an admin's collection; its titles are left as they are.
 func (s *Store) RemoveCollection(ctx context.Context, collection uuid.UUID) error {
-	return s.q.Transaction(func(tx *query.Query) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if _, err := userCollection(ctx, tx, collection); err != nil {
 			return err
 		}
-		_, err := tx.Item.WithContext(ctx).Where(tx.Item.ID.Eq(model.UUID(collection))).Delete()
+		_, err := tx.Exec(ctx, `DELETE FROM items WHERE id = $1`, collection)
 		return err
 	})
 }
 
 // userCollection answers the library of an admin's collection; ErrNotFound for no collection, and
 // ErrNotUserCollection for a provider's.
-func userCollection(ctx context.Context, tx *query.Query, collection uuid.UUID) (model.UUID, error) {
-	c, i := tx.Collection, tx.Item
-	row, err := c.WithContext(ctx).Where(c.ItemID.Eq(model.UUID(collection))).Take()
+func userCollection(ctx context.Context, tx db, collection uuid.UUID) (uuid.UUID, error) {
+	var origin domain.CollectionOrigin
+	var lib uuid.UUID
+	err := tx.QueryRow(ctx, `
+		SELECT c.origin, i.library_id FROM collections c JOIN items i ON i.id = c.item_id WHERE c.item_id = $1`,
+		collection).Scan(&origin, &lib)
 	if err != nil {
-		return model.UUID{}, found(err)
+		return uuid.UUID{}, found(err)
 	}
-	if row.Origin != domain.CollectionUser {
-		return model.UUID{}, ErrNotUserCollection
+	if origin != domain.CollectionUser {
+		return uuid.UUID{}, ErrNotUserCollection
 	}
-	item, err := i.WithContext(ctx).Where(i.ID.Eq(row.ItemID)).Take()
-	return item.LibraryID, err
+	return lib, nil
 }
 
-func hasRepeats(ids []model.UUID) bool {
-	seen := map[model.UUID]bool{}
+func hasRepeats(ids []uuid.UUID) bool {
+	seen := map[uuid.UUID]bool{}
 	for _, id := range ids {
 		if seen[id] {
 			return true

@@ -23,11 +23,7 @@ func TestATitleShowsEachSitesRatingFromItsBestSource(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Jaws", []byte("v1"), []Film{{Title: "Jaws", Folder: "Jaws"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	item, err := s.q.Item.WithContext(ctx).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
-	id := uuid.UUID(item.ID)
+	id := oneItem(t, s, "true").ID
 	// TMDB's own score, and MDBList's of TMDB and IMDb: MDBList is ranked first in this library.
 	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Title: "Jaws", Overview: "A shark.", Certificate: "12", Genres: []string{"Thriller"}, Ratings: []domain.Rating{
 		{Site: domain.SiteTMDB, Score: 76, Votes: 10000},

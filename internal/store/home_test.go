@@ -48,12 +48,7 @@ func TestHome(t *testing.T) {
 	}
 	episode := func(season, n int) uuid.UUID {
 		t.Helper()
-		i := s.q.Item
-		row, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode)), i.SeasonNumber.Eq(season), i.EpisodeNumber.Eq(n)).Take()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return uuid.UUID(row.ID)
+		return oneItem(t, s, `kind = 'episode' AND season_number = $1 AND episode_number = $2`, season, n).ID
 	}
 	home := func() map[domain.HomeRow][]string {
 		t.Helper()
@@ -88,11 +83,8 @@ func TestHome(t *testing.T) {
 	if _, err := s.SaveProgress(ctx, profile.ID, episode(1, 2), 20*time.Minute, domain.ReachStart); err != nil {
 		t.Fatal(err)
 	}
-	heat, err := s.q.Item.WithContext(ctx).Where(s.q.Item.Kind.Eq(string(domain.ItemMovie))).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.SaveProgress(ctx, profile.ID, uuid.UUID(heat.ID), 30*time.Minute, domain.ReachStart); err != nil {
+	heat := oneItem(t, s, `kind = 'movie'`).ID
+	if _, err := s.SaveProgress(ctx, profile.ID, heat, 30*time.Minute, domain.ReachStart); err != nil {
 		t.Fatal(err)
 	}
 	got := home()
@@ -103,7 +95,7 @@ func TestHome(t *testing.T) {
 		t.Errorf("next up = %v, want nothing: the next episode is under way", got[domain.RowNextUp])
 	}
 
-	if err := s.ClearProgress(ctx, profile.ID, uuid.UUID(heat.ID)); err != nil {
+	if err := s.ClearProgress(ctx, profile.ID, heat); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.ClearProgress(ctx, profile.ID, uuid.NewV7()); !errors.Is(err, ErrNotFound) {
@@ -112,11 +104,8 @@ func TestHome(t *testing.T) {
 	if c := home()[domain.RowContinueWatching]; len(c) != 1 || c[0] != "Wire/S1E2.mkv" {
 		t.Errorf("continue watching = %v, want Heat gone and the episode left", c)
 	}
-	show, err := s.q.Item.WithContext(ctx).Where(s.q.Item.Kind.Eq(string(domain.ItemShow))).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.ClearProgress(ctx, profile.ID, uuid.UUID(show.ID)); err != nil {
+	show := oneItem(t, s, `kind = 'show'`).ID
+	if err := s.ClearProgress(ctx, profile.ID, show); err != nil {
 		t.Fatal(err)
 	}
 	got = home()
@@ -126,7 +115,7 @@ func TestHome(t *testing.T) {
 	if c := got[domain.RowNextUp]; len(c) != 1 || c[0] != "Wire/S1E2.mkv" {
 		t.Errorf("next up = %v, want the episode after the one still watched", c)
 	}
-	page, err := s.Title(ctx, profile.ID, uuid.UUID(heat.ID))
+	page, err := s.Title(ctx, profile.ID, heat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,21 +192,10 @@ func TestNextEpisode(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
 	title := func(kind domain.ItemKind, season, n int) uuid.UUID {
 		t.Helper()
-		q := i.WithContext(ctx).Where(i.Kind.Eq(string(kind)))
-		if kind != domain.ItemShow {
-			q = q.Where(i.SeasonNumber.Eq(season))
-		}
-		if kind == domain.ItemEpisode {
-			q = q.Where(i.EpisodeNumber.Eq(n))
-		}
-		row, err := q.Take()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return uuid.UUID(row.ID)
+		return oneItem(t, s, `kind = $1 AND ($1 = 'show' OR season_number = $2) AND ($1 <> 'episode' OR episode_number = $3)`,
+			kind, season, n).ID
 	}
 	show, season1 := title(domain.ItemShow, 0, 0), title(domain.ItemSeason, 1, 0)
 	next := func(id uuid.UUID) string {
@@ -302,19 +280,11 @@ func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
 	episode := func(season, n int) uuid.UUID {
 		t.Helper()
-		row, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode)), i.SeasonNumber.Eq(season), i.EpisodeNumber.Eq(n)).Take()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return uuid.UUID(row.ID)
+		return oneItem(t, s, `kind = 'episode' AND season_number = $1 AND episode_number = $2`, season, n).ID
 	}
-	show, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
+	show := oneItem(t, s, `kind = 'show'`).ID
 	nextUp := func() []string {
 		t.Helper()
 		rows, err := s.Home(ctx, profile.ID, 10)
@@ -341,7 +311,7 @@ func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
 	if got := nextUp(); len(got) != 1 || got[0] != "S2E1" {
 		t.Errorf("next up = %v, want S2E1, after the furthest episode watched", got)
 	}
-	if c, err := s.Next(ctx, profile.ID, uuid.UUID(show.ID)); err != nil || c.Title != "S2E1" {
+	if c, err := s.Next(ctx, profile.ID, show); err != nil || c.Title != "S2E1" {
 		t.Errorf("the show's next = %q, %v; want S2E1", c.Title, err)
 	}
 

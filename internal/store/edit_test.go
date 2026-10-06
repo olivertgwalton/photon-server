@@ -9,8 +9,9 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
 func TestAnEditStandsUntilItIsReset(t *testing.T) {
@@ -24,11 +25,7 @@ func TestAnEditStandsUntilItIsReset(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	row, err := s.q.Item.WithContext(ctx).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
-	id := uuid.UUID(row.ID)
+	id := oneItem(t, s, "true").ID
 	matched := domain.Metadata{Title: "Heat", Overview: "A heist.", Tagline: "A Los Angeles crime saga", IDs: map[domain.Provider]string{domain.ProviderTMDB: "999", domain.ProviderIMDb: "tt0000001"}}
 	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, matched, nil); err != nil {
 		t.Fatal(err)
@@ -58,11 +55,10 @@ func TestAnEditStandsUntilItIsReset(t *testing.T) {
 	if page, _ = s.Title(ctx, uuid.UUID{}, id); page.Title != "Heat" || page.Tagline != "A Los Angeles crime saga" {
 		t.Errorf("after resetting the title alone: %q, tagline %q; want TMDB's title and the tagline kept as it was locked", page.Title, page.Tagline)
 	}
-	j := s.q.Job
-	if n, _ := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobScanLibrary))).Count(); n != 1 {
+	if n := countRows(t, s, `SELECT count(*) FROM jobs WHERE kind = 'scan_library'`); n != 1 {
 		t.Errorf("%d library scans queued after a reset, want 1", n)
 	}
-	if n, _ := s.q.Folder.WithContext(ctx).Count(); n != 0 {
+	if n := countRows(t, s, `SELECT count(*) FROM folders`); n != 0 {
 		t.Errorf("%d folders remembered after a reset, want its folder to be read again", n)
 	}
 
@@ -102,9 +98,7 @@ func TestAShowRenumberedIsMatchedAgainWhole(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, lib.ID, "Firefly/Season 1", []byte("v1"), Show{Title: "Firefly", Folder: "Firefly"}, []Episode{ep}, nil); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
-	show, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
-	id := uuid.UUID(show.ID)
+	id := oneItem(t, s, "kind = 'show'").ID
 	// Matched as aired: the first file is titled as broadcast's first.
 	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Title: "Firefly"},
 		map[int]domain.SeasonMetadata{1: {Metadata: domain.Metadata{Title: "Season 1"}, Episodes: map[int]domain.Metadata{1: {Title: "The Train Job", Artwork: []domain.Artwork{{Kind: domain.ArtworkThumb, URL: "https://image.tmdb.org/t/p/original/train.jpg"}}}}}}); err != nil {
@@ -127,12 +121,12 @@ func TestAShowRenumberedIsMatchedAgainWhole(t *testing.T) {
 		map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Title: "Serenity"}}}}); err != nil {
 		t.Fatal(err)
 	}
-	e, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode))).Take()
-	page, err := s.Title(ctx, uuid.UUID{}, uuid.UUID(e.ID))
+	e := oneItem(t, s, "kind = 'episode'")
+	page, err := s.Title(ctx, uuid.UUID{}, e.ID)
 	if err != nil || page.Title != "Serenity" || len(page.Artwork[domain.ArtworkThumb]) != 0 {
 		t.Errorf("the first file on DVD: %q, stills %v, %v; want Serenity and the aired still gone", page.Title, page.Artwork, err)
 	}
-	if err := s.SetEpisodeOrder(ctx, uuid.UUID(e.ID), domain.OrderDVD); !errors.Is(err, ErrNotFound) {
+	if err := s.SetEpisodeOrder(ctx, e.ID, domain.OrderDVD); !errors.Is(err, ErrNotFound) {
 		t.Errorf("renumbering an episode: %v, want ErrNotFound", err)
 	}
 }
@@ -153,29 +147,27 @@ func TestARefreshIsAskedAheadOfTheQueue(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, lib.ID, "Firefly/Season 1", []byte("v1"), Show{Title: "Firefly", Folder: "Firefly"}, []Episode{ep(1), ep(2)}, nil); err != nil {
 		t.Fatal(err)
 	}
-	i, j := s.q.Item, s.q.Job
-	show, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
-	id := uuid.UUID(show.ID)
+	id := oneItem(t, s, "kind = 'show'").ID
 	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Title: "Firefly"},
 		map[int]domain.SeasonMetadata{1: {Metadata: domain.Metadata{Title: "Season 1"}, Episodes: map[int]domain.Metadata{
 			1: {Title: "Serenity"}, 2: {Title: "The Train Job"},
 		}}}); err != nil {
 		t.Fatal(err)
 	}
-	second, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode)), i.EpisodeNumber.Eq(2)).Take()
-	if err := s.EditMetadata(ctx, uuid.UUID(second.ID), domain.Metadata{Title: "Mine"}); err != nil {
+	second := oneItem(t, s, "kind = 'episode' AND episode_number = 2")
+	if err := s.EditMetadata(ctx, second.ID, domain.Metadata{Title: "Mine"}); err != nil {
 		t.Fatal(err)
 	}
 	// The match is done; a scan of the library is waiting.
-	if _, err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobIdentify))).Delete(); err != nil {
+	if _, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE kind = 'identify'`); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.ScanLibrary(ctx, lib.ID, 0); err != nil {
 		t.Fatal(err)
 	}
 
-	season, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemSeason))).Take()
-	if err := s.Refresh(ctx, uuid.UUID(season.ID), domain.RefreshMissing); err != nil {
+	season := oneItem(t, s, "kind = 'season'")
+	if err := s.Refresh(ctx, season.ID, domain.RefreshMissing); err != nil {
 		t.Fatal(err)
 	}
 	claimed, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobScanLibrary, domain.JobIdentify}, uuid.NewV7(), time.Minute, 1)
@@ -193,7 +185,7 @@ func TestARefreshIsAskedAheadOfTheQueue(t *testing.T) {
 		t.Errorf("refreshing all asks about seasons %v; want season 1 again", sub.Seasons)
 	}
 	for n, want := range map[int]string{1: "Serenity", 2: "Mine"} {
-		page, err := s.Title(ctx, uuid.UUID{}, uuid.UUID(must(i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode)), i.EpisodeNumber.Eq(n)).Take()).ID))
+		page, err := s.Title(ctx, uuid.UUID{}, oneItem(t, s, "kind = 'episode' AND episode_number = $1", n).ID)
 		if err != nil || page.Title != want {
 			t.Errorf("episode %d before the match: %q, %v; want %q to stand", n, page.Title, err, want)
 		}
@@ -210,12 +202,12 @@ func TestALibraryRefreshTakesWhatIsMissingAfterNewTitles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	i, j := s.q.Item, s.q.Job
 	film := func(title string) uuid.UUID {
-		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{{Title: title, Folder: title}}, nil); err != nil {
+		saved, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{{Title: title, Folder: title}}, nil)
+		if err != nil {
 			t.Fatal(err)
 		}
-		return uuid.UUID(must(i.WithContext(ctx).Where(i.Title.Eq(title)).Take()).ID)
+		return saved.Titles[domain.TitleAdded][0]
 	}
 	poster := []domain.Artwork{{Kind: domain.ArtworkPoster, URL: "https://image.example/heat.jpg"}}
 	described := map[string]domain.Metadata{
@@ -235,19 +227,23 @@ func TestALibraryRefreshTakesWhatIsMissingAfterNewTitles(t *testing.T) {
 		}
 	}
 	queued := func() []string {
-		var subjects []model.UUID
-		if err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobIdentify))).Pluck(j.Subject, &subjects); err != nil {
+		rows, err := s.pool.Query(ctx, `SELECT subject FROM jobs WHERE kind = 'identify'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		subjects, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
 			t.Fatal(err)
 		}
 		var titles []string
 		for _, id := range subjects {
-			titles = append(titles, ids[uuid.UUID(id)])
+			titles = append(titles, ids[id])
 		}
 		slices.Sort(titles)
 		return titles
 	}
 	// Each was matched when the scan found it.
-	if _, err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobIdentify))).Delete(); err != nil {
+	if _, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE kind = 'identify'`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -288,8 +284,7 @@ func TestALibraryRefreshOfAllAsksAboutEverySeason(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, lib.ID, "Firefly/Season 1", []byte("v1"), Show{Title: "Firefly", Folder: "Firefly"}, []Episode{ep}, nil); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
-	id := uuid.UUID(must(i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()).ID)
+	id := oneItem(t, s, "kind = 'show'").ID
 	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Title: "Firefly"},
 		map[int]domain.SeasonMetadata{1: {Metadata: domain.Metadata{Title: "Season 1"}, Episodes: map[int]domain.Metadata{1: {Title: "Serenity"}}}}); err != nil {
 		t.Fatal(err)

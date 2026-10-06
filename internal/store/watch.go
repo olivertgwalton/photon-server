@@ -2,19 +2,13 @@ package store
 
 import (
 	"context"
-	"database/sql/driver"
-	"errors"
 	"time"
 	"uuid"
-
-	"gorm.io/gen/field"
-	"gorm.io/gorm"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 // TitleState is what a profile has made of a title. A show's and a season's are their episodes':
@@ -33,10 +27,9 @@ type TitleState struct {
 // before is how far the viewing had already got: the play is counted as it first reaches the end,
 // once however often a player reports from there, as Jellyfin counts a play and Plex scrobbles.
 func (s *Store) SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration, before domain.Reach) (domain.Reach, error) {
-	i := s.q.Item
-	row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(item))).Take()
+	row, err := readItem(ctx, s.pool, item)
 	if err != nil {
-		return "", found(err)
+		return "", err
 	}
 	lengths, err := s.durations(ctx, ids([]*model.Item{row}))
 	if err != nil {
@@ -61,7 +54,7 @@ func (s *Store) SaveProgress(ctx context.Context, profile, item uuid.UUID, posit
 		SELECT $1, t, $3, $4 FROM same_title($2) t ORDER BY t
 		ON CONFLICT (profile_id, item_id) DO UPDATE SET position_ms = excluded.position_ms,
 			last_played_at = coalesce(excluded.last_played_at, watch_state.last_played_at)`,
-		profile.String(), uuid.UUID(row.ID).String(), position.Milliseconds(), played)
+		profile, row.ID, position.Milliseconds(), played)
 	return reach, err
 }
 
@@ -87,47 +80,43 @@ func (s *Store) watched(ctx context.Context, profile uuid.UUID, items []*model.I
 		ON CONFLICT (profile_id, item_id) DO UPDATE SET
 			position_ms = 0, plays = greatest(watch_state.plays, 1),
 			watched_at = coalesce(watch_state.watched_at, now()), last_played_at = now()`,
-		profile.String(), texts(items))
+		profile, ids(items))
 	return err
 }
 
 // played counts a viewing that reached the end.
 func (s *Store) played(ctx context.Context, profile uuid.UUID, item *model.Item) error {
-	// A play counted adds to the plays before it, which GORM's upsert cannot say.
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO watch_state (profile_id, item_id, plays, watched_at, last_played_at)
 		SELECT $1, t, 1, now(), now() FROM same_title($2) t ORDER BY t
 		ON CONFLICT (profile_id, item_id) DO UPDATE SET
 			position_ms = 0, plays = watch_state.plays + 1,
 			watched_at = coalesce(watch_state.watched_at, now()), last_played_at = now()`,
-		profile.String(), uuid.UUID(item.ID).String())
+		profile, item.ID)
 	return err
 }
 
 // MarkUnwatched forgets that a film or episode, or every episode of a season or show, was
 // watched, and where it stopped.
 func (s *Store) MarkUnwatched(ctx context.Context, profile, item uuid.UUID) error {
-	w := s.q.WatchState
-	return s.setLeaves(ctx, profile, item, w.WatchedAt.Null(), w.PositionMS.Value(0))
+	return s.setLeaves(ctx, profile, item, `watched_at = NULL, position_ms = 0`)
 }
 
 // ClearProgress forgets where a film or episode, or each episode of a season or show, stopped,
 // taking it out of Continue Watching; whether it was watched, and its plays, stay.
 func (s *Store) ClearProgress(ctx context.Context, profile, item uuid.UUID) error {
-	return s.setLeaves(ctx, profile, item, s.q.WatchState.PositionMS.Value(0))
+	return s.setLeaves(ctx, profile, item, `position_ms = 0`)
 }
 
-func (s *Store) setLeaves(ctx context.Context, profile, item uuid.UUID, set ...field.AssignExpr) error {
+// setLeaves writes set to a profile's state of a title's leaves, wherever each is listed.
+func (s *Store) setLeaves(ctx context.Context, profile, item uuid.UUID, set string) error {
 	leaves, err := s.leaves(ctx, item)
 	if err != nil || len(leaves) == 0 {
 		return err
 	}
-	same, err := s.sameTitles(ctx, leaves)
-	if err != nil {
-		return err
-	}
-	w := s.q.WatchState
-	_, err = w.WithContext(ctx).Where(w.ProfileID.Eq(model.UUID(profile)), w.ItemID.In(same...)).UpdateSimple(set...)
+	_, err = s.pool.Exec(ctx, `
+		UPDATE watch_state SET `+set+`
+		WHERE profile_id = $1 AND item_id IN (SELECT same_title(i) FROM unnest($2::uuid[]) i)`, profile, ids(leaves))
 	return err
 }
 
@@ -137,65 +126,53 @@ func (s *Store) Favourite(ctx context.Context, profile, item uuid.UUID) error {
 	}
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO favourites (profile_id, item_id) SELECT $1, t FROM same_title($2) t ORDER BY t
-		ON CONFLICT DO NOTHING`, profile.String(), item.String())
+		ON CONFLICT DO NOTHING`, profile, item)
 	return err
 }
 
 func (s *Store) Unfavourite(ctx context.Context, profile, item uuid.UUID) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM favourites WHERE profile_id = $1 AND item_id IN (SELECT same_title($2))`,
-		profile.String(), item.String())
+		profile, item)
 	return err
 }
 
 // keyTitle keys a title, its seasons and episodes by what they are wherever they are listed, and
 // makes each profile's state of them its state of the titles they are the same as.
-func keyTitle(ctx context.Context, tx *query.Query, title model.UUID) error {
-	return tx.Item.WithContext(ctx).UnderlyingDB().Exec(`SELECT key_titles(ARRAY[?::uuid])`, title).Error
-}
-
-// sameTitles answers items and every title the same as one of them in any library, as gen's In
-// takes them.
-func (s *Store) sameTitles(ctx context.Context, items []*model.Item) ([]driver.Valuer, error) {
-	same, err := queryIDs(ctx, s.pool, `SELECT DISTINCT same_title(i)::text FROM unnest($1::uuid[]) i`, texts(items))
-	out := make([]driver.Valuer, len(same))
-	for n, id := range same {
-		out[n] = model.UUID(id)
-	}
-	return out, err
+func keyTitle(ctx context.Context, tx db, title uuid.UUID) error {
+	_, err := tx.Exec(ctx, `SELECT key_titles(ARRAY[$1::uuid])`, title)
+	return err
 }
 
 // leaves answers the films or episodes a title is watched by: itself, or a season's or show's
 // episodes. ErrNotFound for no title.
 func (s *Store) leaves(ctx context.Context, id uuid.UUID) ([]*model.Item, error) {
-	i := s.q.Item
-	row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
+	row, err := readItem(ctx, s.pool, id)
 	if err != nil {
-		return nil, found(err)
+		return nil, err
 	}
 	parents := []*model.Item{row}
 	switch row.Kind {
 	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
 		return parents, nil
 	case domain.ItemShow:
-		if parents, err = i.WithContext(ctx).Where(i.ParentID.Eq(row.ID), i.Kind.Eq(string(domain.ItemSeason))).Find(); err != nil {
+		parents, err = queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind = 'season'`, row.ID)
+		if err != nil {
 			return nil, err
 		}
 	case domain.ItemSeason:
 	case domain.ItemCollection:
 		// A box set marked is each of its titles marked, as Jellyfin's is.
-		var leaves []*model.Item
-		err := i.WithContext(ctx).UnderlyingDB().Raw(`
-			SELECT e.* FROM items e JOIN collection_members m ON m.collection_id = ?
-			WHERE (e.id = m.item_id AND e.kind = 'movie')
-				OR (e.kind = 'episode' AND e.parent_id IN (SELECT s.id FROM items s WHERE s.parent_id = m.item_id))`,
-			row.ID).Scan(&leaves).Error
-		return leaves, err
+		return queryRows[model.Item](ctx, s.pool, `
+			SELECT `+itemColumns+` FROM items
+			WHERE (kind = 'movie' AND id IN (SELECT item_id FROM collection_members WHERE collection_id = $1))
+				OR (kind = 'episode' AND parent_id IN (SELECT s.id FROM items s
+					JOIN collection_members m ON s.parent_id = m.item_id WHERE m.collection_id = $1))`, row.ID)
 	}
-	return i.WithContext(ctx).Where(i.ParentID.In(ids(parents)...), i.Kind.Eq(string(domain.ItemEpisode))).Find()
+	return queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE parent_id = ANY($1) AND kind = 'episode'`, ids(parents))
 }
 
 type episodeCount struct {
-	ID         model.UUID
+	ID         uuid.UUID
 	Episodes   int
 	Watched    int
 	LastPlayed *time.Time
@@ -203,20 +180,25 @@ type episodeCount struct {
 }
 
 // states answers what a profile has made of each title.
-func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.Item) (map[model.UUID]TitleState, error) {
-	out := map[model.UUID]TitleState{}
+func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.Item) (map[uuid.UUID]TitleState, error) {
+	out := map[uuid.UUID]TitleState{}
 	if len(items) == 0 {
 		return out, nil
 	}
-	w, f := s.q.WatchState, s.q.Favourite
-	p := model.UUID(profile)
-	own, err := w.WithContext(ctx).Where(w.ProfileID.Eq(p), w.ItemID.In(ids(items)...)).Find()
+	rows, err := s.pool.Query(ctx, `
+		SELECT item_id, position_ms, plays, watched_at, last_played_at FROM watch_state
+		WHERE profile_id = $1 AND item_id = ANY($2)`, profile, ids(items))
 	if err != nil {
 		return nil, err
 	}
-	for _, r := range own {
-		st := TitleState{PositionMS: r.PositionMS, Plays: r.Plays, WatchedAt: r.WatchedAt, LastPlayedAt: r.LastPlayedAt}
-		out[r.ItemID] = st
+	var item uuid.UUID
+	var st TitleState
+	_, err = pgx.ForEachRow(rows, []any{&item, &st.PositionMS, &st.Plays, &st.WatchedAt, &st.LastPlayedAt}, func() error {
+		out[item] = st
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	var groups []*model.Item
 	for _, it := range items {
@@ -225,7 +207,6 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 		}
 	}
 	if len(groups) > 0 {
-		// gen cannot count down two levels of episodes, so this one query is SQL.
 		found, err := s.pool.Query(ctx, `
 			SELECT g.id, count(e.id) AS episodes, count(ws.watched_at) AS watched,
 				max(ws.last_played_at) AS last_played, max(ws.watched_at) AS watched_at
@@ -237,7 +218,7 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 			) e
 			LEFT JOIN watch_state ws ON ws.item_id = e.id AND ws.profile_id = $1
 			WHERE g.id = ANY($2::uuid[])
-			GROUP BY g.id`, profile.String(), texts(groups))
+			GROUP BY g.id`, profile, ids(groups))
 		if err != nil {
 			return nil, err
 		}
@@ -253,30 +234,36 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 			out[c.ID] = st
 		}
 	}
-	favs, err := f.WithContext(ctx).Where(f.ProfileID.Eq(p), f.ItemID.In(ids(items)...)).Find()
+	rows, err = s.pool.Query(ctx, `SELECT item_id, added_at FROM favourites WHERE profile_id = $1 AND item_id = ANY($2)`,
+		profile, ids(items))
 	if err != nil {
 		return nil, err
 	}
-	for _, r := range favs {
-		st := out[r.ItemID]
-		st.FavouriteAt = &r.AddedAt
-		out[r.ItemID] = st
+	var added time.Time
+	_, err = pgx.ForEachRow(rows, []any{&item, &added}, func() error {
+		st := out[item]
+		st.FavouriteAt = new(added)
+		out[item] = st
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
 
 // RecordPlay keeps a playback in the history as it stops.
 func (s *Store) RecordPlay(ctx context.Context, p domain.Playback, stopped time.Time, position time.Duration) error {
-	row := model.Play{
-		ProfileID: model.UUID(p.Profile), ItemID: model.UUID(p.Item), Method: p.Method,
-		StartedAt: p.Started, StoppedAt: stopped, PositionMS: position.Milliseconds(),
-	}
+	var version *uuid.UUID
 	if p.Version != (uuid.UUID{}) {
-		row.VersionID = new(model.UUID(p.Version))
+		version = &p.Version
 	}
-	err := s.q.Play.WithContext(ctx).Create(&row)
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO plays (profile_id, item_id, version_id, method, started_at, stopped_at, position_ms)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		p.Profile, p.Item, version, p.Method, p.Started, stopped, position.Milliseconds())
 	// A title removed while it played leaves nothing to keep.
-	if errors.Is(err, gorm.ErrForeignKeyViolated) {
+	if violates(err, foreignKeyViolation) {
 		return nil
 	}
 	return err
@@ -296,25 +283,26 @@ type Play struct {
 // History answers a page of plays, the latest first, and how many there are: a profile's, or
 // everyone's for none.
 func (s *Store) History(ctx context.Context, profile uuid.UUID, offset, limit int) ([]Play, int64, error) {
-	p := s.q.Play
-	q := p.WithContext(ctx)
+	var who *uuid.UUID
 	if profile != (uuid.UUID{}) {
-		q = q.Where(p.ProfileID.Eq(model.UUID(profile)))
+		who = &profile
 	}
-	total, err := q.Count()
-	if err != nil {
+	const whose = ` FROM plays WHERE $1::uuid IS NULL OR profile_id = $1`
+	var total int64
+	if err := s.pool.QueryRow(ctx, `SELECT count(*)`+whose, who).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := q.Order(p.StoppedAt.Desc(), p.ID.Desc()).Offset(offset).Limit(limit).Find()
+	rows, err := queryRows[model.Play](ctx, s.pool, `
+		SELECT id, profile_id, item_id, version_id, method, started_at, stopped_at, position_ms`+whose+`
+		ORDER BY stopped_at DESC, id DESC OFFSET $2 LIMIT $3`, who, offset, limit)
 	if err != nil || len(rows) == 0 {
 		return []Play{}, total, err
 	}
-	in := make([]driver.Valuer, len(rows))
+	in := make([]uuid.UUID, len(rows))
 	for n, r := range rows {
 		in[n] = r.ItemID
 	}
-	i := s.q.Item
-	items, err := i.WithContext(ctx).Where(i.ID.In(in...)).Find()
+	items, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE id = ANY($1)`, in)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -329,7 +317,7 @@ func (s *Store) History(ctx context.Context, profile uuid.UUID, offset, limit in
 	out := make([]Play, len(rows))
 	for n, r := range rows {
 		out[n] = Play{
-			ID: uuid.UUID(r.ID), Profile: uuid.UUID(r.ProfileID), Card: byID[uuid.UUID(r.ItemID)], Method: r.Method,
+			ID: r.ID, Profile: r.ProfileID, Card: byID[r.ItemID], Method: r.Method,
 			StartedAt: r.StartedAt, StoppedAt: r.StoppedAt, PositionMS: r.PositionMS,
 		}
 	}

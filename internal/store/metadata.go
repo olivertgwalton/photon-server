@@ -3,34 +3,31 @@ package store
 import (
 	"cmp"
 	"context"
-	"database/sql/driver"
-	"encoding/json"
+	"fmt"
 	"slices"
-	"time"
+	"strings"
+	"uuid"
 
-	"gorm.io/gen/field"
-	"gorm.io/gorm/clause"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
-
-// jsonList writes a list column as the JSON its serializer reads back.
-type jsonList []string
-
-func (l jsonList) Value() (driver.Value, error) {
-	b, err := json.Marshal([]string(l))
-	return string(b), err
-}
 
 // applyMetadata writes what source says about a title, field by field, wherever no source its
 // library ranks higher has spoken, and remembers the source of each field it writes. A source the
 // library does not take writes nothing. A list is replaced whole, never merged, so two providers'
 // genres never stand side by side.
-func applyMetadata(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, m domain.Metadata) error {
-	f := tx.ItemField
-	rows, err := f.WithContext(ctx).Where(f.ItemID.Eq(item)).Find()
+func applyMetadata(ctx context.Context, tx db, item uuid.UUID, source domain.FieldSource, m domain.Metadata) error {
+	rows, err := tx.Query(ctx, `SELECT field, source FROM item_fields WHERE item_id = $1`, item)
+	if err != nil {
+		return err
+	}
+	type itemField struct {
+		Field  domain.Field
+		Source domain.FieldSource
+	}
+	fields, err := pgx.CollectRows(rows, pgx.RowToStructByName[itemField])
 	if err != nil {
 		return err
 	}
@@ -42,54 +39,57 @@ func applyMetadata(ctx context.Context, tx *query.Query, item model.UUID, source
 	if !taken {
 		return nil
 	}
-	current := make(map[domain.Field]int, len(rows))
-	for _, r := range rows {
+	current := make(map[domain.Field]int, len(fields))
+	for _, r := range fields {
 		current[r.Field] = ranked[r.Source]
 	}
-	i := tx.Item
-	var assigns []field.AssignExpr
-	var written []*model.ItemField
-	set := func(name domain.Field, said bool, a field.AssignExpr) {
+	var assigns []string
+	args := []any{item}
+	var written []domain.Field
+	// A field is named as the column it is written to.
+	set := func(name domain.Field, said bool, value any) {
 		if cur, ok := current[name]; (said || slices.Contains(m.Locked, name)) && (!ok || rank >= cur) {
 			if said {
-				assigns = append(assigns, a)
+				args = append(args, value)
+				assigns = append(assigns, fmt.Sprintf("%s = $%d", name, len(args)))
 			}
-			written = append(written, &model.ItemField{ItemID: item, Field: name, Source: source})
+			written = append(written, name)
 		}
 	}
-	set(domain.FieldTitle, m.Title != "", i.Title.Value(m.Title))
+	set(domain.FieldTitle, m.Title != "", m.Title)
 	sort := cmp.Or(m.SortTitle, m.Title)
-	set(domain.FieldSortTitle, sort != "", i.SortTitle.Value(sortTitle(sort)))
-	set(domain.FieldOriginalTitle, m.OriginalTitle != "", i.OriginalTitle.Value(m.OriginalTitle))
-	set(domain.FieldOverview, m.Overview != "", i.Overview.Value(m.Overview))
-	set(domain.FieldTagline, m.Tagline != "", i.Tagline.Value(m.Tagline))
-	set(domain.FieldCertificate, m.Certificate != "", i.Certificate.Value(m.Certificate))
-	set(domain.FieldReleaseDate, !m.ReleaseDate.IsZero(), i.ReleaseDate.Value(m.ReleaseDate))
-	set(domain.FieldYear, m.Year != 0, i.Year.Value(m.Year))
-	set(domain.FieldGenres, len(m.Genres) > 0, i.Genres.Value(jsonList(m.Genres)))
-	set(domain.FieldStudios, len(m.Studios) > 0, i.Studios.Value(jsonList(m.Studios)))
+	set(domain.FieldSortTitle, sort != "", sortTitle(sort))
+	set(domain.FieldOriginalTitle, m.OriginalTitle != "", m.OriginalTitle)
+	set(domain.FieldOverview, m.Overview != "", m.Overview)
+	set(domain.FieldTagline, m.Tagline != "", m.Tagline)
+	set(domain.FieldCertificate, m.Certificate != "", m.Certificate)
+	set(domain.FieldReleaseDate, !m.ReleaseDate.IsZero(), m.ReleaseDate)
+	set(domain.FieldYear, m.Year != 0, m.Year)
+	set(domain.FieldGenres, len(m.Genres) > 0, m.Genres)
+	set(domain.FieldStudios, len(m.Studios) > 0, m.Studios)
 	if len(written) == 0 {
 		return nil
 	}
 	if len(assigns) > 0 {
-		if _, err := i.WithContext(ctx).Where(i.ID.Eq(item)).UpdateSimple(assigns...); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE items SET `+strings.Join(assigns, ", ")+` WHERE id = $1`, args...); err != nil {
 			return err
 		}
 	}
-	return f.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "item_id"}, {Name: "field"}},
-		DoUpdates: clause.Assignments(map[string]any{"source": source, "updated_at": time.Now()}),
-	}).Create(written...)
+	_, err = tx.Exec(ctx, `
+		INSERT INTO item_fields (item_id, field, source) SELECT $1, unnest($2::text[]), $3
+		ON CONFLICT (item_id, field) DO UPDATE SET source = excluded.source, updated_at = now()`,
+		item, written, source)
+	return err
 }
 
 // ranks orders the sources that may write an item's fields: what files say lowest, a reader's own
 // edit highest, and those its library asks for the metadata of its kind between, in the library's
 // order. A source not asked is absent, and a value it once wrote ranks below everything.
-func ranks(ctx context.Context, tx *query.Query, item model.UUID) (map[domain.FieldSource]int, error) {
-	i := tx.Item
-	row, err := i.WithContext(ctx).Where(i.ID.Eq(item)).Take()
+func ranks(ctx context.Context, tx db, item uuid.UUID) (map[domain.FieldSource]int, error) {
+	row := &model.Item{ID: item}
+	err := tx.QueryRow(ctx, `SELECT library_id, kind FROM items WHERE id = $1`, item).Scan(&row.LibraryID, &row.Kind)
 	if err != nil {
-		return nil, err
+		return nil, found(err)
 	}
 	taken, err := rankings(ctx, tx, []*model.Item{row}, domain.FetcherMetadata)
 	if err != nil {
@@ -110,36 +110,44 @@ func rankOf(taken []domain.FieldSource) map[domain.FieldSource]int {
 
 // rankings answers, for each of items, the sources its library asks for f of its kind, most
 // trusted first.
-func rankings(ctx context.Context, q *query.Query, items []*model.Item, f domain.Fetcher) (map[model.UUID][]domain.FieldSource, error) {
-	var libraries []driver.Valuer
-	for _, it := range items {
-		libraries = append(libraries, it.LibraryID)
+func rankings(ctx context.Context, q db, items []*model.Item, f domain.Fetcher) (map[uuid.UUID][]domain.FieldSource, error) {
+	libraries := make([]uuid.UUID, len(items))
+	for n, it := range items {
+		libraries[n] = it.LibraryID
 	}
-	l, ls := q.Library, q.LibrarySource
-	libs, err := l.WithContext(ctx).Where(l.ID.In(libraries...)).Find()
+	kinds := map[uuid.UUID]domain.LibraryKind{}
+	var id uuid.UUID
+	var kind domain.LibraryKind
+	rows, err := q.Query(ctx, `SELECT id, kind FROM libraries WHERE id = ANY($1)`, libraries)
 	if err != nil {
 		return nil, err
 	}
-	taken, err := ls.WithContext(ctx).Where(
-		ls.LibraryID.In(libraries...), ls.Fetcher.Eq(string(f)), ls.Enabled.Is(true),
-	).Order(ls.Position).Find()
-	if err != nil {
+	if _, err := pgx.ForEachRow(rows, []any{&id, &kind}, func() error {
+		kinds[id] = kind
+		return nil
+	}); err != nil {
 		return nil, err
-	}
-	kinds := map[model.UUID]domain.LibraryKind{}
-	for _, lib := range libs {
-		kinds[lib.ID] = lib.Kind
 	}
 	type ranking struct {
-		library model.UUID
+		library uuid.UUID
 		kind    domain.ItemKind
 	}
 	by := map[ranking][]domain.FieldSource{}
-	for _, t := range taken {
-		r := ranking{t.LibraryID, t.ItemKind}
-		by[r] = append(by[r], t.Source)
+	var r ranking
+	var source domain.FieldSource
+	rows, err = q.Query(ctx, `
+		SELECT library_id, item_kind, source FROM library_sources
+		WHERE library_id = ANY($1) AND fetcher = $2 AND enabled ORDER BY position`, libraries, f)
+	if err != nil {
+		return nil, err
 	}
-	out := map[model.UUID][]domain.FieldSource{}
+	if _, err := pgx.ForEachRow(rows, []any{&r.library, &r.kind, &source}, func() error {
+		by[r] = append(by[r], source)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	out := map[uuid.UUID][]domain.FieldSource{}
 	for _, it := range items {
 		if kind, ok := kinds[it.LibraryID]; ok {
 			out[it.ID] = by[ranking{it.LibraryID, kind.RankedAs(it.Kind)}]
@@ -156,20 +164,19 @@ type asked struct {
 	taken   []*model.LibrarySource
 }
 
-func askedOf(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource) (asked, error) {
-	i, l, ls := tx.Item, tx.Library, tx.LibrarySource
-	title, err := i.WithContext(ctx).Where(i.ID.Eq(item)).Take()
+func askedOf(ctx context.Context, tx db, item uuid.UUID, source domain.FieldSource) (asked, error) {
+	var a asked
+	var lib uuid.UUID
+	err := tx.QueryRow(ctx, `
+		SELECT i.kind, l.kind, l.id FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.id = $1`,
+		item).Scan(&a.title, &a.library, &lib)
 	if err != nil {
-		return asked{}, err
+		return asked{}, found(err)
 	}
-	lib, err := l.WithContext(ctx).Where(l.ID.Eq(title.LibraryID)).Take()
-	if err != nil {
-		return asked{}, err
-	}
-	taken, err := ls.WithContext(ctx).Where(
-		ls.LibraryID.Eq(title.LibraryID), ls.Source.Eq(string(source)), ls.Enabled.Is(true),
-	).Find()
-	return asked{title.Kind, lib.Kind, taken}, err
+	a.taken, err = queryRows[model.LibrarySource](ctx, tx, `
+		SELECT `+librarySourceColumns+` FROM library_sources
+		WHERE library_id = $1 AND source = $2 AND enabled`, lib, source)
+	return a, err
 }
 
 // of is what of m the library asks for of an item of a kind. The rest is said as nothing, so what
@@ -189,7 +196,7 @@ func (a asked) of(kind domain.ItemKind, m domain.Metadata) domain.Metadata {
 }
 
 // describe writes what a title's file and folder names say about it, then its NFO, if it has one.
-func describe(ctx context.Context, tx *query.Query, item model.UUID, title string, year int, ids map[domain.Provider]string, nfo *domain.Metadata) error {
+func describe(ctx context.Context, tx db, item uuid.UUID, title string, year int, ids map[domain.Provider]string, nfo *domain.Metadata) error {
 	if err := applyMetadata(ctx, tx, item, domain.SourceFile, domain.Metadata{Title: title, Year: year}); err != nil {
 		return err
 	}
@@ -206,22 +213,31 @@ func describe(ctx context.Context, tx *query.Query, item model.UUID, title strin
 }
 
 // saveIDs records a title's provider ids, each unless a higher-ranking source already gave one.
-func saveIDs(ctx context.Context, tx *query.Query, item model.UUID, source domain.IDSource, ids map[domain.Provider]string) error {
+func saveIDs(ctx context.Context, tx db, item uuid.UUID, source domain.IDSource, ids map[domain.Provider]string) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	e := tx.ExternalID
-	known, err := e.WithContext(ctx).Where(e.ItemID.Eq(item)).Find()
+	known := map[domain.Provider]domain.IDSource{}
+	var provider domain.Provider
+	var from domain.IDSource
+	rows, err := tx.Query(ctx, `SELECT provider, source FROM external_ids WHERE item_id = $1`, item)
 	if err != nil {
 		return err
 	}
+	if _, err := pgx.ForEachRow(rows, []any{&provider, &from}, func() error {
+		known[provider] = from
+		return nil
+	}); err != nil {
+		return err
+	}
 	for provider, value := range ids {
-		if slices.ContainsFunc(known, func(k *model.ExternalID) bool {
-			return k.Provider == provider && k.Source.Rank() > source.Rank()
-		}) {
+		if from, ok := known[provider]; ok && from.Rank() > source.Rank() {
 			continue
 		}
-		err := e.WithContext(ctx).Save(&model.ExternalID{ItemID: item, Provider: provider, Value: value, Source: source})
+		_, err := tx.Exec(ctx, `
+			INSERT INTO external_ids (item_id, provider, value, source) VALUES ($1, $2, $3, $4)
+			ON CONFLICT (item_id, provider) DO UPDATE SET value = excluded.value, source = excluded.source`,
+			item, provider, value, source)
 		if err != nil {
 			return err
 		}

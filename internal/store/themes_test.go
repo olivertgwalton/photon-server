@@ -28,20 +28,17 @@ func TestAThemeComesFromItsFolderElseThemerrDB(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, lib.ID, "The Wire", []byte("v1"), wire, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	i, j := s.q.Item, s.q.Job
-	row, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
-	if err != nil {
+	var show uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE kind = 'show'`).Scan(&show); err != nil {
 		t.Fatal(err)
 	}
-	show := uuid.UUID(row.ID)
 	asked := func() int64 {
 		t.Helper()
-		n, err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobTheme))).Count()
+		tag, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE kind = 'theme'`)
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, _ = j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobTheme))).Delete()
-		return n
+		return tag.RowsAffected()
 	}
 	themes := func() []uuid.UUID {
 		t.Helper()
@@ -150,12 +147,11 @@ func TestAFilmIsAskedByIMDbsID(t *testing.T) {
 	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Themes: domain.ThemesThemerr}); err != nil {
 		t.Fatal(err)
 	}
-	j := s.q.Job
-	job, err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobTheme))).Take()
-	if err != nil {
+	var job uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT subject FROM jobs WHERE kind = 'theme'`).Scan(&job); err != nil {
 		t.Fatalf("no theme fetch queued for Heat: %v", err)
 	}
-	if subject, ok, err := s.ThemeSubject(ctx, uuid.UUID(job.Subject)); err != nil || !ok || subject != (ThemeSubject{Kind: domain.ItemMovie, IMDb: "tt0113277"}) {
+	if subject, ok, err := s.ThemeSubject(ctx, job); err != nil || !ok || subject != (ThemeSubject{Kind: domain.ItemMovie, IMDb: "tt0113277"}) {
 		t.Errorf("theme subject = %+v, %v, %v; want Heat by IMDb's id", subject, ok, err)
 	}
 }
