@@ -31,6 +31,7 @@ type catalogue interface {
 	Home(ctx context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	LibraryCounts(ctx context.Context, profile uuid.UUID) (map[uuid.UUID]domain.TitleCounts, error)
+	Upcoming(ctx context.Context, q store.UpcomingQuery) ([]store.Upcoming, int64, error)
 }
 
 type libraryJSON struct {
@@ -240,6 +241,43 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, searchJSON{
 		Items: cardsJSON(cards), People: people, Offset: query.Offset, Total: total, PeopleTotal: peopleTotal,
 	})
+}
+
+// airingJSON is a show and its next episode to air, which may have no file yet.
+type airingJSON struct {
+	Show          cardJSON    `json:"show"`
+	SeasonNumber  int         `json:"season_number"`
+	EpisodeNumber int         `json:"episode_number"`
+	Title         string      `json:"title,omitzero"`
+	AirDate       domain.Date `json:"air_date"`
+}
+
+func (a *API) upcoming(w http.ResponseWriter, r *http.Request) {
+	q := store.UpcomingQuery{Profile: sessionOf(r).Profile.ID}
+	if s := r.URL.Query().Get("library"); s != "" {
+		var err error
+		if q.Library, err = uuid.Parse(s); err != nil {
+			writeProblem(w, a.logger, codeInvalidParameter, "library is not an id")
+			return
+		}
+	}
+	var ok bool
+	if q.Offset, q.Limit, ok = a.paging(w, r, defaultWallLimit); !ok {
+		return
+	}
+	found, total, err := a.svc.Catalogue.Upcoming(r.Context(), q)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	out := make([]airingJSON, len(found))
+	for i, u := range found {
+		out[i] = airingJSON{
+			Show: cardOf(u.Show), SeasonNumber: u.Airing.SeasonNumber, EpisodeNumber: u.Airing.EpisodeNumber,
+			Title: u.Airing.Title, AirDate: domain.Date(u.Airing.Date),
+		}
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[airingJSON]{out, q.Offset, total})
 }
 
 func (a *API) title(w http.ResponseWriter, r *http.Request) {

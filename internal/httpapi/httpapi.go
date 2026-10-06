@@ -742,6 +742,12 @@ func (a *API) routes() []route {
 			status: http.StatusOK, reply: homeJSON{}, handle: a.home,
 		},
 		{
+			pattern: "GET /api/v1/upcoming", access: signedIn,
+			summary: "Page the shows the profile sees with an episode due to air today or later, the soonest first, and that episode",
+			query:   append([]param{{"library", uuid.UUID{}, "Only this library's shows."}}, pageParams...),
+			status:  http.StatusOK, reply: pageJSON[airingJSON]{}, handle: a.upcoming,
+		},
+		{
 			pattern: "GET /api/v1/search", access: signedIn, summary: "Page the titles, episodes among them, and the people a search finds",
 			query: append([]param{
 				{"q", "", "What to search for; required."},

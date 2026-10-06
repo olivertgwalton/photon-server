@@ -87,6 +87,17 @@ func (fakeCatalogue) Search(_ context.Context, q store.SearchQuery) ([]store.Car
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: q.Text + " " + q.Library.String()}}, 1, nil
 }
 
+// Upcoming has The Wire's next episode, in films alone.
+func (fakeCatalogue) Upcoming(_ context.Context, q store.UpcomingQuery) ([]store.Upcoming, int64, error) {
+	if q.Library != (uuid.UUID{}) && q.Library != films {
+		return []store.Upcoming{}, 0, nil
+	}
+	return []store.Upcoming{{
+		Show:   store.Card{ID: films, Kind: domain.ItemShow, Title: "The Wire"},
+		Airing: domain.Airing{SeasonNumber: 2, EpisodeNumber: 1, Title: "Ebb Tide", Date: time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)},
+	}}, 1, nil
+}
+
 func (fakeCatalogue) Home(_ context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error) {
 	if profile != oliver.ID {
 		return nil, nil
@@ -242,5 +253,24 @@ func TestWall(t *testing.T) {
 	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/facets", goodToken, ""); rec.Code != http.StatusOK ||
 		!strings.Contains(rec.Body.String(), `"genres":["Crime"]`) || !strings.Contains(rec.Body.String(), `"marks":["watched","unwatched","in_progress","favourite"]`) {
 		t.Errorf("facets: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestUpcoming(t *testing.T) {
+	rec := serve(t, http.MethodGet, "/api/v1/upcoming", goodToken, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if got, want := strings.TrimSpace(rec.Body.String()), `{"items":[{"show":{"id":"`+films.String()+`","kind":"show","title":"The Wire","added_at":"0001-01-01T00:00:00Z"},"season_number":2,"episode_number":1,"title":"Ebb Tide","air_date":"2026-11-02"}],"offset":0,"total":1}`; got != want {
+		t.Errorf("upcoming = %s\nwant %s", got, want)
+	}
+	for query, want := range map[string]int{
+		"?library=" + films.String(): http.StatusOK,
+		"?library=films":             http.StatusBadRequest,
+		"?limit=0":                   http.StatusBadRequest,
+	} {
+		if rec := serve(t, http.MethodGet, "/api/v1/upcoming"+query, goodToken, ""); rec.Code != want {
+			t.Errorf("%s: status = %d, want %d", query, rec.Code, want)
+		}
 	}
 }
