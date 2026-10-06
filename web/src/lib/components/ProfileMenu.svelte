@@ -23,6 +23,7 @@ const here = $derived(encodeURIComponent(page.url.pathname + page.url.search));
 	>
 		<ProfileAvatar
 			name={profile.name}
+			avatar={profile.avatar}
 			class="size-9 rounded-full after:rounded-full **:data-[slot=avatar-fallback]:rounded-full group-hover:**:data-[slot=avatar-fallback]:bg-ink group-hover:**:data-[slot=avatar-fallback]:text-ground"
 		/>
 	</DropdownMenu.Trigger>

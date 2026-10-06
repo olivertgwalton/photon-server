@@ -5,6 +5,8 @@ import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/admin/Choice.svelte";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
+import AvatarPicker from "#lib/components/AvatarPicker.svelte";
+import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
@@ -101,7 +103,21 @@ function remove() {
 >
 
 <div class="grid max-w-2xl gap-6">
-	<h1 class="title">{data.profile.name}</h1>
+	<header class="flex items-center gap-4">
+		<ProfileAvatar
+			name={data.profile.name}
+			avatar={data.profile.avatar}
+			class="size-16 text-2xl"
+		/>
+		<div class="grid gap-2">
+			<h1 class="title">{data.profile.name}</h1>
+			<AvatarPicker
+				name={data.profile.name}
+				avatar={data.profile.avatar}
+				path="/api/v1/admin/profiles/{data.profile.id}/avatar"
+			/>
+		</div>
+	</header>
 
 	<Card.Root>
 		<Card.Header>

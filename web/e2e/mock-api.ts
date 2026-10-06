@@ -509,6 +509,21 @@ const pixel = Uint8Array.from(
 	(c) => c.charCodeAt(0),
 );
 
+// A picture is kept where it is a PNG, as the server keeps only what its
+// bytes say is a picture; each gets a new id, as the server's do.
+async function avatar(profile: Schemas["Profile"], request: Request) {
+	const bytes = new Uint8Array(await request.arrayBuffer());
+	if (bytes[1] !== 0x50 || bytes[2] !== 0x4e || bytes[3] !== 0x47) {
+		return problem(
+			400,
+			"invalid_body",
+			"not a picture: a JPEG, PNG, GIF or WebP is kept",
+		);
+	}
+	profile.avatar = crypto.randomUUID();
+	return Response.json(profile);
+}
+
 // token → who it is watching as, and whether the profile has a PIN.
 const sessions = new Map<string, Schemas["Profile"]>();
 let kidsPIN = "";
@@ -663,6 +678,11 @@ const server_ = Bun.serve({
 				return fixture("sheet.jpg");
 			case "GET /api/v1/me":
 				return Response.json(me);
+			case "POST /api/v1/me/avatar":
+				return avatar(me, request);
+			case "DELETE /api/v1/me/avatar":
+				delete me.avatar;
+				return new Response(null, { status: 204 });
 			case "POST /api/v1/auth/logout":
 				sessions.delete(token as string);
 				return new Response(null, {

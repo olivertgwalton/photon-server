@@ -1033,6 +1033,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/profiles/{id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give any profile a picture: a JPEG, PNG, GIF or WebP of at most 32 MiB and 50 megapixels
+         * @description Admin only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "image/gif": string;
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Profile"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        /**
+         * Take any profile's picture away
+         * @description Admin only.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/providers": {
         parameters: {
             query?: never;
@@ -2739,6 +2812,69 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give the profile a picture: a JPEG, PNG, GIF or WebP of at most 32 MiB and 50 megapixels */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "image/gif": string;
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Profile"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        /** Take the profile's picture away */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -5142,6 +5278,8 @@ export interface components {
         /** @enum {string} */
         ProblemCode: "not_found" | "method_not_allowed" | "unknown_parameter" | "invalid_parameter" | "not_ready" | "invalid_body" | "unauthenticated" | "invalid_credentials" | "internal" | "pairing_not_found" | "wrong_secret" | "rate_limited" | "no_compatible_stream" | "forbidden" | "conflict" | "transcode_limit" | "provider_unavailable" | "authorization_pending" | "slow_down" | "expired_token";
         Profile: {
+            /** Format: uuid */
+            avatar?: string;
             id: string;
             name: string;
             role: components["schemas"]["Role"];
@@ -5152,6 +5290,8 @@ export interface components {
             role?: components["schemas"]["Role"];
         };
         ProfileListing: {
+            /** Format: uuid */
+            avatar?: string;
             id: string;
             lock: components["schemas"]["ProfileLock"];
             name: string;

@@ -41,7 +41,11 @@ const target = "group grid justify-items-center gap-3 rounded-xl outline-none";
 			class="grid w-full max-w-xs justify-items-center gap-4"
 			onsubmit={choose}
 		>
-			<ProfileAvatar name={data.chosen.name} class="size-24 text-4xl" />
+			<ProfileAvatar
+				name={data.chosen.name}
+				avatar={data.chosen.avatar}
+				class="size-24 text-4xl"
+			/>
 			<h1 class="title">{data.chosen.name}</h1>
 			<input type="hidden" name="profile_id" value={data.chosen.id}>
 			<Field.Group>
@@ -100,6 +104,7 @@ const target = "group grid justify-items-center gap-3 rounded-xl outline-none";
 								>
 									<ProfileAvatar
 										name={profile.name}
+										avatar={profile.avatar}
 										class="{avatar} {current ? currentRing : ""}"
 									/>
 									<span class="text-ink-2 group-hover:text-ink font-semibold">
@@ -112,7 +117,11 @@ const target = "group grid justify-items-center gap-3 rounded-xl outline-none";
 								class={target}
 								href="?profile={profile.id}&to={encodeURIComponent(data.to)}"
 							>
-								<ProfileAvatar name={profile.name} class={avatar} />
+								<ProfileAvatar
+									name={profile.name}
+									avatar={profile.avatar}
+									class={avatar}
+								/>
 								<span
 									class="text-ink-2 group-hover:text-ink flex items-center gap-1.5 font-semibold"
 								>
