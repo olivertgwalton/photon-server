@@ -2,6 +2,7 @@ package playback
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -253,5 +254,23 @@ func TestAPictureFitsWithinTheClientsLimit(t *testing.T) {
 		if w, h := fit(tc.w, tc.h, tc.maxW, tc.maxH); w != tc.wantW || h != tc.wantH {
 			t.Errorf("%dx%d within %dx%d: %dx%d, want %dx%d", tc.w, tc.h, tc.maxW, tc.maxH, w, h, tc.wantW, tc.wantH)
 		}
+	}
+}
+
+// A copy in two files plays as it is only on a client that plays each in turn; another has them
+// joined into one stream, with the video copied.
+func TestACopyInSeveralFilesIsJoinedForAClientThatPlaysOne(t *testing.T) {
+	twoFiles := film
+	twoFiles.Parts = 2
+	everything := appleTV
+	everything.Containers = append(everything.Containers, "matroska")
+	everything.Audio = append(everything.Audio, AudioSupport{Codec: "truehd"})
+	if d, err := Decide(everything, twoFiles, nil, nil); err != nil || d.Method != domain.PlayRemux || d.Video.Encode != nil ||
+		!slices.Equal(d.Reasons, []domain.TranscodeReason{domain.PartsNotSupported}) {
+		t.Errorf("joined: %+v, %v; want a remux, for the parts", d, err)
+	}
+	everything.Parts = domain.PartsEach
+	if d, err := Decide(everything, twoFiles, nil, nil); err != nil || d.Method != domain.PlayDirect {
+		t.Errorf("each in turn: %+v, %v; want the files as they are", d, err)
 	}
 }

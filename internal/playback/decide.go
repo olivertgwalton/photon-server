@@ -24,6 +24,9 @@ type Profile struct {
 	// Subtitles are the subtitle formats it draws itself from a file it plays as it is, by
 	// FFmpeg's names ("subrip", "hdmv_pgs_subtitle").
 	Subtitles []string `json:"subtitles,omitzero"`
+	// Parts is how it plays a copy in several files: joined into one HLS stream by the server, the
+	// default, or each file in turn as it is.
+	Parts domain.PartPlayback `json:"parts,omitzero"`
 }
 
 // VideoSupport is a video codec a client decodes, by FFmpeg's name, and how far. A zero limit is
@@ -58,11 +61,12 @@ var (
 	ErrNoSuchSubtitle = errors.New("playback: the copy has no such subtitle stream")
 )
 
-// Copy is what deciding needs of a copy: its container, its bitrate and its first part's streams,
-// the parts of one copy being cut from one master.
+// Copy is what deciding needs of a copy: its container, its bitrate, how many files it is in, and
+// its first part's streams, the parts of one copy being cut from one master.
 type Copy struct {
 	Container   string
 	BitrateKbps int
+	Parts       int
 	Streams     []media.Stream
 }
 
@@ -127,6 +131,9 @@ func Decide(p Profile, c Copy, audio, subtitle *int) (Decision, error) {
 	}
 	if !p.opens(c.Container) {
 		d.Reasons = append(d.Reasons, domain.ContainerNotSupported)
+	}
+	if c.Parts > 1 && p.Parts != domain.PartsEach {
+		d.Reasons = append(d.Reasons, domain.PartsNotSupported)
 	}
 	d.Reasons = append(d.Reasons, videoReasons...)
 	d.Reasons = append(d.Reasons, audioReasons...)
