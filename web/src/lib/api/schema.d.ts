@@ -2241,7 +2241,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Download a film or episode no larger than a bitrate: its file as it is, else converted to the video the device plays */
+        /** Download a film or episode no larger than a bitrate: its file as it is, else converted to the video the device plays; asked again, the same download */
         post: {
             parameters: {
                 query?: never;
@@ -2257,6 +2257,15 @@ export interface paths {
             responses: {
                 /** @description OK */
                 200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Download"];
+                    };
+                };
+                /** @description Created */
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -3011,7 +3020,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** How the profile plays on every device: Jellyfin's defaults until it changes them */
+        /** How the profile plays on every device: the server's defaults until it changes them */
         get: {
             parameters: {
                 query?: never;
@@ -3351,7 +3360,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/playback/{id}/progress": {
+    "/api/v1/playbacks/{id}/progress": {
         parameters: {
             query?: never;
             header?: never;
@@ -3394,7 +3403,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/playback/{id}/stop": {
+    "/api/v1/playbacks/{id}/stop": {
         parameters: {
             query?: never;
             header?: never;

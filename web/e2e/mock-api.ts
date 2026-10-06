@@ -668,7 +668,7 @@ const server_ = Bun.serve({
 			if (action === "/next") return problem(404, "not_found", "Not Found");
 		}
 		const report = route.match(
-			/^POST \/api\/v1\/playback\/([^/]+)\/(progress|stop)$/,
+			/^POST \/api\/v1\/playbacks\/([^/]+)\/(progress|stop)$/,
 		);
 		if (report?.[1]) {
 			const { position_ms } = (await request.json()) as Schemas["Position"];

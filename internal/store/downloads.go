@@ -31,10 +31,10 @@ type Download struct {
 // AddDownload records a profile's download of a part of a title on a device, converted to a
 // quality unless q is nil. The conversion is shared with every download of the part at that
 // quality and video and queued where it is new or last failed. A download the device asks for again is
-// answered as it stands.
-func (s *Store) AddDownload(ctx context.Context, profile, device, item, part uuid.UUID, q *domain.Quality) (Download, error) {
+// answered as it stands, and created says it was not.
+func (s *Store) AddDownload(ctx context.Context, profile, device, item, part uuid.UUID, q *domain.Quality) (d Download, created bool, err error) {
 	var added uuid.UUID
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var conversion *uuid.UUID
 		if q != nil {
 			var id uuid.UUID
@@ -56,15 +56,17 @@ func (s *Store) AddDownload(ctx context.Context, profile, device, item, part uui
 			}
 			conversion = &id
 		}
+		// xmax is 0 on a row inserted, and the updating transaction's id on one the conflict updated.
 		return tx.QueryRow(ctx, `
 			INSERT INTO downloads (profile_id, session_id, item_id, part_id, conversion_id) VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT (profile_id, session_id, part_id, conversion_id) DO UPDATE SET item_id = excluded.item_id
-			RETURNING id`, profile, device, item, part, conversion).Scan(&added)
+			RETURNING id, xmax = 0`, profile, device, item, part, conversion).Scan(&added, &created)
 	})
 	if err != nil {
-		return Download{}, err
+		return Download{}, false, err
 	}
-	return s.Download(ctx, profile, added)
+	d, err = s.Download(ctx, profile, added)
+	return d, created, err
 }
 
 // downloadRow is a download read with its part and conversion.

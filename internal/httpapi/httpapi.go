@@ -71,6 +71,8 @@ type route struct {
 	// status is what success answers, with reply; 204 and 202 answer nothing.
 	status int
 	reply  any
+	// again is what success answers, with reply, to a request already met.
+	again int
 	// refusals are problems with more to say than their code, by status.
 	refusals map[int]any
 	handle   http.HandlerFunc
@@ -278,7 +280,7 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "GET /api/v1/me/preferences", access: signedIn,
-			summary: "How the profile plays on every device: Jellyfin's defaults until it changes them",
+			summary: "How the profile plays on every device: the server's defaults until it changes them",
 			status:  http.StatusOK, reply: preferencesJSON{}, handle: a.ownPreferences,
 		},
 		{
@@ -496,11 +498,11 @@ func (a *API) routes() []route {
 			refusals: map[int]any{codeNoCompatibleStream.status(): refusalJSON{}}, handle: a.play,
 		},
 		{
-			pattern: "POST /api/v1/playback/{id}/progress", access: signedIn, summary: "Say where a playback has got to, paused too: one unheard from for two minutes is stopped",
+			pattern: "POST /api/v1/playbacks/{id}/progress", access: signedIn, summary: "Say where a playback has got to, paused too: one unheard from for two minutes is stopped",
 			body: playbackProgressJSON{}, status: http.StatusOK, reply: reachedJSON{}, handle: a.playbackProgress,
 		},
 		{
-			pattern: "POST /api/v1/playback/{id}/stop", access: signedIn, summary: "Stop a playback, and say where",
+			pattern: "POST /api/v1/playbacks/{id}/stop", access: signedIn, summary: "Stop a playback, and say where",
 			body: positionJSON{}, status: http.StatusOK, reply: reachedJSON{},
 			handle: a.routeToOwner("id", http.HandlerFunc(a.playbackStop)).ServeHTTP,
 		},
@@ -517,8 +519,8 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "POST /api/v1/downloads", access: signedIn,
-			summary: "Download a film or episode no larger than a bitrate: its file as it is, else converted to the video the device plays",
-			body:    downloadRequestJSON{}, status: http.StatusOK, reply: downloadJSON{}, handle: a.addDownload,
+			summary: "Download a film or episode no larger than a bitrate: its file as it is, else converted to the video the device plays; asked again, the same download",
+			body:    downloadRequestJSON{}, status: http.StatusCreated, reply: downloadJSON{}, again: http.StatusOK, handle: a.addDownload,
 		},
 		{
 			pattern: "GET /api/v1/downloads", access: signedIn,
