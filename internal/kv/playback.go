@@ -34,7 +34,7 @@ func (k *KV) SavePlayback(ctx context.Context, p domain.Playback, ttl time.Durat
 			FieldValue("state", string(p.State)).FieldValue("position_ms", strconv.FormatInt(p.Position.Milliseconds(), 10)).
 			FieldValue("started", strconv.FormatInt(p.Started.Unix(), 10)).
 			FieldValue("updated", strconv.FormatInt(p.Updated.Unix(), 10)).
-			FieldValue("node", p.Node.String()).FieldValue("card", string(card)).Build(),
+			FieldValue("reached", string(p.Reached)).FieldValue("node", p.Node.String()).FieldValue("card", string(card)).Build(),
 		cmds.Expire().Key(key).Seconds(int64(ttl.Seconds())).Build(),
 		k.index(playbackIndex, p.ID, ttl),
 	) {
@@ -56,7 +56,9 @@ func (k *KV) Playback(ctx context.Context, id uuid.UUID) (domain.Playback, bool,
 }
 
 func playbackOf(id uuid.UUID, m map[string]string) (domain.Playback, error) {
-	p := domain.Playback{ID: id, Method: domain.PlayMethod(m["method"]), State: domain.PlayState(m["state"])}
+	p := domain.Playback{
+		ID: id, Method: domain.PlayMethod(m["method"]), State: domain.PlayState(m["state"]), Reached: domain.Reach(m["reached"]),
+	}
 	p.Profile, _ = uuid.Parse(m["profile"])
 	p.Item, _ = uuid.Parse(m["item"])
 	p.Version, _ = uuid.Parse(m["version"])
