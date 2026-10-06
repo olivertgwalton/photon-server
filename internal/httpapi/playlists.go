@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"net/http"
-	"strconv"
 	"time"
 	"uuid"
 
@@ -83,24 +82,13 @@ func (a *API) addPlaylist(w http.ResponseWriter, r *http.Request) {
 // playlistEntries answers a page of a playlist, in its order: each entry's own id and the title it
 // plays.
 func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
-	q := r.URL.Query()
-	offset, limit := 0, maxWallLimit
-	var err error
-	if s := q.Get("offset"); s != "" {
-		if offset, err = strconv.Atoi(s); err != nil || offset < 0 {
-			writeProblem(w, a.logger, codeInvalidParameter, "offset is a number from 0")
-			return
-		}
-	}
-	if s := q.Get("limit"); s != "" {
-		if limit, err = strconv.Atoi(s); err != nil || limit < 1 || limit > maxWallLimit {
-			writeProblem(w, a.logger, codeInvalidParameter, "limit is a number from 1 to "+strconv.Itoa(maxWallLimit))
-			return
-		}
+	offset, limit, ok := a.paging(w, r, maxWallLimit)
+	if !ok {
+		return
 	}
 	entries, total, err := a.svc.Playlists.PlaylistEntries(r.Context(), sessionOf(r).Profile.ID, id, offset, limit)
 	if a.answered(w, r, err) {
@@ -108,7 +96,7 @@ func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]entryJSON, len(entries))
 	for i, e := range entries {
-		out[i] = entryJSON{EntryID: e.ID, cardJSON: cardsJSON([]store.Card{e.Card})[0]}
+		out[i] = entryJSON{EntryID: e.ID, cardJSON: cardOf(e.Card)}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[entryJSON]{out, offset, total})
 }
@@ -116,7 +104,7 @@ func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
 // addToPlaylist puts titles at the end of a playlist: a show or season as its episodes, a
 // collection as its titles.
 func (a *API) addToPlaylist(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -133,7 +121,7 @@ func (a *API) addToPlaylist(w http.ResponseWriter, r *http.Request) {
 
 // setPlaylist renames a playlist.
 func (a *API) setPlaylist(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -153,7 +141,7 @@ func (a *API) setPlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) removePlaylist(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -166,13 +154,12 @@ func (a *API) removePlaylist(w http.ResponseWriter, r *http.Request) {
 
 // moveEntry moves one entry of a playlist to a position, counted from zero.
 func (a *API) moveEntry(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
-	entry, err := uuid.Parse(r.PathValue("entry"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	entry, ok := a.pathID(w, r, "entry")
+	if !ok {
 		return
 	}
 	var req moveJSON
@@ -187,13 +174,12 @@ func (a *API) moveEntry(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) removeEntry(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
-	entry, err := uuid.Parse(r.PathValue("entry"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	entry, ok := a.pathID(w, r, "entry")
+	if !ok {
 		return
 	}
 	if a.answered(w, r, a.svc.Playlists.RemoveFromPlaylist(r.Context(), sessionOf(r).Profile.ID, id, entry)) {

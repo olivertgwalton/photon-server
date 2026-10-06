@@ -185,7 +185,7 @@ type kindSourcesChangeJSON struct {
 // of item's metadata and pictures come from, the kinds of video it keeps providers' links to, what previews it makes,
 // how it finds markers and keyframes, and where it finds theme tunes.
 func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -237,7 +237,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) removeLibrary(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -252,7 +252,7 @@ func (a *API) removeLibrary(w http.ResponseWriter, r *http.Request) {
 // scanLibrary queues a scan of a library now, or with path, of the folder of it a path is in, as
 // Plex's refresh?path= scans one after a download lands.
 func (a *API) scanLibrary(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -281,7 +281,7 @@ func (a *API) scanLibrary(w http.ResponseWriter, r *http.Request) {
 // refreshLibrary asks a library's providers about its films and shows again, behind what a scan
 // has just found.
 func (a *API) refreshLibrary(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -299,8 +299,8 @@ func (a *API) refreshLibrary(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (a *API) pathID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	id, err := uuid.Parse(r.PathValue("id"))
+func (a *API) pathID(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {
+	id, err := uuid.Parse(r.PathValue(name))
 	if err != nil {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return uuid.UUID{}, false

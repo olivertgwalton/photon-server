@@ -31,8 +31,10 @@ type asFile []string
 type asStream map[string]any
 
 var (
-	limitParam = param{"limit", 0, "How many to answer, from 1 to " + strconv.Itoa(maxWallLimit) + "."}
-	pageParams = []param{{"offset", 0, "Where the page starts, from 0."}, limitParam}
+	pageParams = []param{
+		{"offset", 0, "Where the page starts, from 0."},
+		{"limit", 0, "How many to answer, from 1 to " + strconv.Itoa(maxWallLimit) + "."},
+	}
 	// signatureParams are a signed address's: GET it as the server gave it.
 	signatureParams = []param{
 		{"exp", "", "When the address lapses, as the server signed it."},

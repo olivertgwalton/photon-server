@@ -30,9 +30,8 @@ type pictureCache interface {
 // pictures itself. Its id changes whenever the picture does, so a client keeps it for good. It is
 // public, as Jellyfin's are, so a page can show it without a token; ids are random.
 func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
 		return
 	}
 	pic, err := a.svc.Pictures.Picture(r.Context(), id)
@@ -50,18 +49,12 @@ func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	h := w.Header()
-	h.Set("Cache-Control", "public, max-age=31536000, immutable")
-	// A provider's logo may be SVG, which a browser opening it directly would run script in.
-	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
-	h.Set("X-Content-Type-Options", "nosniff")
-	http.ServeContent(w, r, name, info.ModTime(), f)
+	a.serveFile(w, r, f, name, http.Header{
+		"Cache-Control": {"public, max-age=31536000, immutable"},
+		// A provider's logo may be SVG, which a browser opening it directly would run script in.
+		"Content-Security-Policy": {"default-src 'none'; style-src 'unsafe-inline'; sandbox"},
+		"X-Content-Type-Options":  {"nosniff"},
+	})
 }
 
 func (a *API) openPicture(ctx context.Context, id uuid.UUID, pic store.Picture, width int) (*os.File, string, error) {

@@ -3,7 +3,6 @@ package httpapi
 import (
 	"net/http"
 	"time"
-	"uuid"
 )
 
 type deviceListingJSON struct {
@@ -34,9 +33,8 @@ func (a *API) devices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) signOutDevice(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
 		return
 	}
 	if !a.answered(w, r, a.svc.Auth.SignOutDevice(r.Context(), sessionOf(r), id)) {

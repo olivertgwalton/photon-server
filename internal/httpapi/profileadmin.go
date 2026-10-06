@@ -31,7 +31,7 @@ type accessJSON struct {
 // profileAccess answers what a profile may see, as Jellyfin's parental control and library access
 // say it.
 func (a *API) profileAccess(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -45,7 +45,7 @@ func (a *API) profileAccess(w http.ResponseWriter, r *http.Request) {
 // setProfileAccess replaces what a profile may see: titles rated for max_age and younger, unrated
 // ones allowed or blocked, and only the libraries listed, every one where none are.
 func (a *API) setProfileAccess(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -112,7 +112,7 @@ type profileChangeJSON struct {
 
 // setProfile renames a profile, changes its role, and sets its password, or clears it with "".
 func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -144,7 +144,7 @@ func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
 
 // removeProfile forgets a profile, its devices and what it has watched.
 func (a *API) removeProfile(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}

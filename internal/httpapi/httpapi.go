@@ -147,7 +147,7 @@ type Services struct {
 	Conversions conversions
 	Remuxing    remuxing
 	HLS         hlsFiles
-	// Owners say which node serves a playback's HLS, nil on a server of one node.
+	// Owners say which node of the cluster serves a playback's HLS.
 	Owners owners
 	// Signer signs the addresses titles play from.
 	Signer  playback.Signer

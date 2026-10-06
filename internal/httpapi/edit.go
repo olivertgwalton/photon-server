@@ -43,7 +43,7 @@ type editJSON struct {
 
 // editTitle writes what an admin says of a title, field by field; what it locks no source changes.
 func (a *API) editTitle(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -73,7 +73,7 @@ func (a *API) editTitle(w http.ResponseWriter, r *http.Request) {
 
 // resetEdits gives the fields named, or every one, back to the sources.
 func (a *API) resetEdits(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -102,7 +102,7 @@ type candidateJSON struct {
 // candidates lists what a provider has by a name, the title's own unless another is asked for, for
 // an admin choosing its match, as Plex's Fix Match and Jellyfin's Identify do.
 func (a *API) candidates(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -154,7 +154,7 @@ type pinMatchJSON struct {
 
 // pinMatch fixes a film or show to the title a provider has by the id given, and matches it again.
 func (a *API) pinMatch(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -192,7 +192,7 @@ type setEpisodeOrderJSON struct {
 // setEpisodeOrder says the order a show's episode files are numbered in, as Plex's and Jellyfin's
 // per-show episode ordering does, and matches its episodes again in it.
 func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -221,7 +221,7 @@ type refreshJSON struct {
 
 // refresh asks a title's providers about it again now, ahead of the schedule.
 func (a *API) refresh(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -260,7 +260,7 @@ type artworkCandidateJSON struct {
 // artworkCandidates lists the pictures of a kind each provider has for a title, as Jellyfin's Edit
 // Images and Plex's poster chooser do.
 func (a *API) artworkCandidates(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -297,7 +297,7 @@ type chooseArtworkJSON struct {
 // chooseArtwork makes a provider's picture a title's own of its kind, over every source and
 // through every refresh.
 func (a *API) chooseArtwork(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -318,7 +318,7 @@ func (a *API) chooseArtwork(w http.ResponseWriter, r *http.Request) {
 
 // forgetArtwork gives a title's picture of a kind back to its sources.
 func (a *API) forgetArtwork(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -355,7 +355,7 @@ type markersJSON struct {
 // its chapters are, and which of its parts have none of a kind, over whatever its chapters or
 // fingerprints say; saying nothing clears what was said.
 func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r)
+	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
