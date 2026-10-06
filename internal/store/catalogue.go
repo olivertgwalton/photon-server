@@ -468,25 +468,19 @@ func saveFacts(ctx context.Context, tx db, partID uuid.UUID, f *domain.Facts) er
 // and a show left with nothing in them. A folder in scope the walk did not visit is forgotten. It
 // answers the titles whose copies went missing or came back, and those removed.
 func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, present []string) (Changed, error) {
-	// A nil slice would go as NULL, and NOT x = ANY(NULL) matches nothing, so an emptied library
-	// would keep every path it ever had.
-	if folders == nil {
-		folders = []string{}
-	}
-	if present == nil {
-		present = []string{}
-	}
 	var changed Changed
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		changed = Changed{}
 		for _, table := range []string{"part_files", "subtitle_files"} {
-			_, err := tx.Exec(ctx, `DELETE FROM `+table+` WHERE library_id = $1 AND NOT rel_path = ANY($2) AND `+inScope("rel_path", "$3"),
+			_, err := tx.Exec(ctx, `DELETE FROM `+table+` WHERE library_id = $1 AND `+notIn("rel_path", "$2")+` AND `+inScope("rel_path", "$3"),
 				lib, present, scopes)
 			if err != nil {
 				return err
 			}
 		}
-		// Only a version whose part went missing, or came back, is written.
+		// Only a version whose part went missing, or came back, is written. This and the sweeps
+		// below read the whole library whatever the scopes: a save in scope can take a path, a copy,
+		// an episode or an extra from a title outside them, and identifying empties collections.
 		updated, err := queryIDs(ctx, tx, `
 			UPDATE versions v SET missing_since = CASE WHEN v.missing_since IS NULL THEN now() END
 			WHERE v.library_id = $1 AND (v.missing_since IS NULL) = EXISTS (SELECT 1 FROM parts p
@@ -512,11 +506,18 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 			}
 			changed.add(domain.TitleRemoved, removed)
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND NOT path = ANY($2) AND `+inScope("path", "$3"),
+		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND `+notIn("path", "$2")+` AND `+inScope("path", "$3"),
 			lib, folders, scopes)
 		return err
 	})
 	return changed, err
+}
+
+// notIn is the condition that a path column is none of the array parameter param. Written as
+// NOT x = ANY(param), a cached generic plan compares each row with every element in turn; as an
+// anti-join, the planner hashes the array once.
+func notIn(column, param string) string {
+	return `NOT EXISTS (SELECT 1 FROM unnest(` + param + `::text[]) p WHERE p = ` + column + `)`
 }
 
 // inScope is the condition that a path column is one of the folders of the array parameter param,
