@@ -1,8 +1,6 @@
 package httpapi
 
 import (
-	"cmp"
-	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
@@ -42,9 +40,8 @@ type folderListJSON struct {
 // library dialog browses them. Only an admin may: it shows the server's filesystem.
 func (a *API) adminFolders(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	hidden := hiddenFolders(cmp.Or(q.Get("hidden"), string(hideHidden)))
-	if !slices.Contains(hiddenFolderModes(), hidden) {
-		writeProblem(w, a.logger, codeInvalidParameter, fmt.Sprintf("hidden is one of %v", hiddenFolderModes()))
+	hidden, ok := queryEnum(a, w, r, "hidden", hideHidden, hiddenFolderModes())
+	if !ok {
 		return
 	}
 	path := q.Get("path")

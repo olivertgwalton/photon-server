@@ -106,15 +106,13 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	page := store.WallPage{Profile: sessionOf(r).Profile.ID}
+	if page.Sort, ok = queryEnum(a, w, r, "sort", domain.SortTitle, domain.WallSorts()); !ok {
+		return
+	}
+	if page.Order, ok = queryEnum(a, w, r, "order", page.Sort.DefaultOrder(), domain.Orders()); !ok {
+		return
+	}
 	var err error
-	if page.Sort, err = domain.Parse("sort", cmp.Or(q.Get("sort"), string(domain.SortTitle)), domain.WallSorts()); err != nil {
-		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
-		return
-	}
-	if page.Order, err = domain.Parse("order", cmp.Or(q.Get("order"), string(page.Sort.DefaultOrder())), domain.Orders()); err != nil {
-		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
-		return
-	}
 	if page.Filter, err = wallFilter(q); err != nil {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return

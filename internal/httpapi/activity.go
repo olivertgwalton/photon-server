@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"slices"
 	"time"
 	"uuid"
 
@@ -60,9 +59,8 @@ func eventOf(e domain.Event) eventJSON {
 // adminActivity answers a page of the activity log, the newest first, as Jellyfin's dashboard
 // lists it: every kind, or one.
 func (a *API) adminActivity(w http.ResponseWriter, r *http.Request) {
-	kind := domain.EventKind(r.URL.Query().Get("kind"))
-	if kind != "" && !slices.Contains(domain.LoggedEventKinds(), kind) {
-		writeProblem(w, a.logger, codeInvalidParameter, fmt.Sprintf("kind is one of %v", domain.LoggedEventKinds()))
+	kind, ok := queryEnum(a, w, r, "kind", "", domain.LoggedEventKinds())
+	if !ok {
 		return
 	}
 	offset, limit, ok := a.paging(w, r, defaultWallLimit)

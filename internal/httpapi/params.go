@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 func (a *API) pathID(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {
@@ -42,4 +44,18 @@ func (a *API) queryNumber(w http.ResponseWriter, r *http.Request, name string, d
 	}
 	writeProblem(w, a.logger, codeInvalidParameter, detail)
 	return 0, false
+}
+
+// queryEnum reads one of all, or def where the query leaves name out.
+func queryEnum[T ~string](a *API, w http.ResponseWriter, r *http.Request, name string, def T, all []T) (T, bool) {
+	s := r.URL.Query().Get(name)
+	if s == "" {
+		return def, true
+	}
+	v, err := domain.Parse(name, s, all)
+	if err != nil {
+		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
+		return "", false
+	}
+	return v, true
 }
