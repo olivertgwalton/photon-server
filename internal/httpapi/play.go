@@ -596,7 +596,12 @@ func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where fun
 	if t, ok := fileTypes[strings.ToLower(path.Ext(rel))]; ok {
 		w.Header().Set("Content-Type", t)
 	}
-	http.ServeContent(w, r, rel, info.ModTime(), io.NewSectionReader(f, 0, min(info.Size(), limit)))
+	if limit >= info.Size() {
+		// The bare file keeps the copy in the kernel: sendfile takes only an *os.File.
+		http.ServeContent(w, r, rel, info.ModTime(), f)
+		return
+	}
+	http.ServeContent(w, r, rel, info.ModTime(), io.NewSectionReader(f, 0, limit))
 }
 
 // openLibraryFile opens the file of a library that where finds for an id.
