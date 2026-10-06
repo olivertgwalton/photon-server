@@ -64,7 +64,11 @@ func pick(found []domain.Candidate, title string, year int) string {
 	return ""
 }
 
-var unmark = transform.Chain(norm.NFKD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+// unmark is made per call: a chained transformer keeps state, so one shared by two identify jobs
+// panics.
+func unmark() transform.Transformer {
+	return transform.Chain(norm.NFKD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+}
 
 // disambiguated is the year a provider adds to tell two titles of one name apart: TVDB's
 // "Doctor Who (2005)".
@@ -74,7 +78,7 @@ var disambiguated = regexp.MustCompile(`\s*\(\d{4}\)$`)
 // added to tell them apart.
 func normalise(s string) string {
 	s = disambiguated.ReplaceAllString(strings.TrimSpace(s), "")
-	s, _, _ = transform.String(unmark, strings.ToLower(s))
+	s, _, _ = transform.String(unmark(), strings.ToLower(s))
 	s = strings.ReplaceAll(s, "&", " and ")
 	return strings.Join(strings.FieldsFunc(s, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
