@@ -10,7 +10,7 @@ import (
 )
 
 func TestAllowSpendsABurstThenWaits(t *testing.T) {
-	k, err := Open(os.Getenv("TEST_VALKEY_URL"))
+	k, err := Open(os.Getenv("TEST_VALKEY_URL"), uuid.NewV7())
 	if err != nil {
 		t.Fatalf("TEST_VALKEY_URL: %v", err)
 	}

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
@@ -29,7 +30,7 @@ func newService(t *testing.T) (*Service, *store.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	k, err := kv.Open(os.Getenv("TEST_VALKEY_URL"))
+	k, err := kv.Open(os.Getenv("TEST_VALKEY_URL"), uuid.NewV7())
 	if err != nil {
 		t.Fatalf("TEST_VALKEY_URL: %v", err)
 	}

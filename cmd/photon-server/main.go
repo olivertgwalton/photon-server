@@ -148,15 +148,15 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	defer st.Close()
-	cache, err := kv.Open(valkeyURL)
-	if err != nil {
-		return fmt.Errorf("valkey: %w", err)
-	}
-	defer cache.Close()
 	id, err := st.ServerID(ctx)
 	if err != nil {
 		return err
 	}
+	cache, err := kv.Open(valkeyURL, id)
+	if err != nil {
+		return fmt.Errorf("valkey: %w", err)
+	}
+	defer cache.Close()
 	trusted, err := httpapi.ParseTrustedProxies(os.Getenv("PHOTON_TRUSTED_PROXIES"))
 	if err != nil {
 		return err

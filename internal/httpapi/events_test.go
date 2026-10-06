@@ -22,10 +22,15 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
-// node is one server node's hub, on its own connection to Valkey.
+// node is one server node's hub, on its own connection to Valkey: the nodes of one server share
+// its keys, as they share its Postgres.
 func node(t *testing.T, st *store.Store) *events.Hub {
 	t.Helper()
-	k, err := kv.Open(os.Getenv("TEST_VALKEY_URL"))
+	server, err := st.ServerID(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	k, err := kv.Open(os.Getenv("TEST_VALKEY_URL"), server)
 	if err != nil {
 		t.Fatalf("TEST_VALKEY_URL: %v", err)
 	}

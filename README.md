@@ -24,7 +24,7 @@ The web app is in the same image and on the same port: open `http://<server>:864
 
 ## Develop
 
-Needs PostgreSQL 18, Valkey, and FFmpeg 8 or newer (`ffmpeg` and `ffprobe` on the `PATH`, or
+Needs PostgreSQL 18, Valkey 9, and FFmpeg 8 or newer (`ffmpeg` and `ffprobe` on the `PATH`, or
 `PHOTON_FFMPEG` and `PHOTON_FFPROBE`); jellyfin-ffmpeg publishes portable macOS builds that match
 the image's.
 
@@ -328,6 +328,12 @@ that lands on another node is handed to the node making them. A node is known by
 a `node` file in its cache folder, made the first time it starts: its converted downloads and the
 streams it serves are filed under that id, so it keeps them across restarts as long as it keeps the
 folder. Give each node a cache folder of its own; two nodes sharing one would be taken for one.
+
+Every key and channel the server keeps in Valkey is named under its id, so several servers can
+share one Valkey (each with its own Postgres) without seeing each other's playbacks, scans or
+events; the nodes of one server share its id through its Postgres. What is going on (playbacks,
+scans, nodes) lapses with Valkey 9's hash field expiry, so a playback whose player and node both
+went away drops off the dashboard on its own.
 
 The server keeps an activity log of what an admin reads later: sign-ins and refused ones (with the
 device and address), plays started and stopped, libraries and profiles added and removed, scans
