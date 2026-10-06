@@ -107,15 +107,23 @@ address gives it back.
 
 A film or show plays its theme tune under its page, as Jellyfin's theme songs and Plex's TV theme
 music do: `theme.mp3` (or `.flac`, `.m4a`, `.ogg`, `.opus`, `.wav`, `.aac`, `.wma`) in its folder,
-then the sound files in a `theme-music` folder there, read by the scan and never written to. A show
-with none takes Plex's own theme for it, found by its TheTVDB id once it is matched and kept in
-`PHOTON_CACHE_DIR`'s `artwork` folder for good; a show Plex has none for is asked about again a
-month later. A season's and an episode's page plays its show's. A title's page lists them in
-`themes`, each served at `/api/v1/themes/{id}` without a token, like a picture. `photon-server
-library set -name NAME -themes local` (or `"themes": "local"` in `PATCH
-/api/v1/admin/libraries/{id}`) keeps to the files, `-themes off` plays none, and `all`, the default
-as Plex's is, asks Plex too. Whether a page plays them is each profile's `theme_music` preference,
-`off` until it says `play`, as in Jellyfin's web client.
+then the sound files in a `theme-music` folder there, read by the scan and never written to. A
+season's and an episode's page plays its show's. A title's page lists them in `themes`, each served
+at `/api/v1/themes/{id}` without a token, like a picture. Whether a page plays them is each
+profile's `theme_music` preference, `off` until it says `play`, as in Jellyfin's web client.
+
+A library can also fetch themes as Jellyfin's Themerr plugin does, and like that plugin it is off
+until asked for: `photon-server library set -name NAME -themes themerr` (or `"themes": "themerr"`
+in `PATCH /api/v1/admin/libraries/{id}`). A film or show with no theme file of its own then takes
+the YouTube link [ThemerrDB](https://github.com/LizardByte/ThemerrDB) lists for its TMDB id (or a
+film's IMDb id) once it is matched, and checks the link again at every refresh; its sound is
+downloaded from YouTube with [yt-dlp](https://github.com/yt-dlp/yt-dlp) and kept as AAC in
+`PHOTON_CACHE_DIR`'s `artwork` folder, never in the media folders, and a file of the title's own
+always wins. YouTube's terms do not permit downloading this way; whether to turn it on is the
+operator's call. The image carries yt-dlp; elsewhere it is `yt-dlp` on the `PATH` or
+`PHOTON_YTDLP`, and without it `themerr` is refused. A title ThemerrDB does not list is asked about
+again a day later, and a video YouTube will not give (removed, blocked, age-gated) is logged once
+and tried again a week later. `-themes local`, the default, keeps to the files; `off` plays none.
 
 Metadata providers are plugins: `GET /api/v1/admin/providers` lists each with what it can do (describe
 titles, rate them) and what it needs set. TMDB gives its own score; MDBList gives IMDb's and Rotten

@@ -25,7 +25,7 @@ SETTINGS, any of:
   -metadata 'show=nfo,tvdb,tmdb;episode=nfo,tmdb'  -images 'show=tvdb,tmdb'
   -extras trailer,featurette|none  -monitor realtime|off
   -previews off|chapters|all  -markers off|chapters|all  -keyframes index|full|off
-  -themes all|local|off`
+  -themes local|themerr|off`
 
 func library(ctx context.Context, logger *slog.Logger, databaseURL string, out io.Writer, args []string) error {
 	if len(args) == 0 {
@@ -109,7 +109,7 @@ func settingsFlags(fs *flag.FlagSet) librarySettings {
 		previews:  fs.String("previews", "", "off, chapters for an image per chapter, or all for trickplay sheets too"),
 		markers:   fs.String("markers", "", "off, chapters for the markers chapters name, or all to compare seasons' sound too"),
 		keyframes: fs.String("keyframes", "", "index to read keyframes from a file's own index, full to read a file with none whole, or off"),
-		themes:    fs.String("themes", "", "all for theme tunes beside titles and, for a show with none, Plex's theme host; local for the files alone; or off"),
+		themes:    fs.String("themes", "", "local for theme tunes beside titles; themerr for those and, for a film or show with none, the YouTube link ThemerrDB lists, downloaded with yt-dlp; or off"),
 	}
 }
 

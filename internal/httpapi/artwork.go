@@ -21,7 +21,6 @@ type pictures interface {
 
 type pictureCache interface {
 	File(ctx context.Context, id uuid.UUID, url string) (*os.File, error)
-	Sound(ctx context.Context, id uuid.UUID, url string) (*os.File, error)
 	Resized(ctx context.Context, key string, width int, open func(context.Context) (*os.File, error)) (*os.File, error)
 	Keep(id uuid.UUID, r io.Reader) error
 	Kept(id uuid.UUID) (*os.File, error)

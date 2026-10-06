@@ -169,8 +169,9 @@ type libraryChangeJSON struct {
 	// Keyframes is how its files' keyframes are found: index reads the container's own index,
 	// full walks a file that has none, off finds none.
 	Keyframes domain.KeyframeMode `json:"keyframes,omitzero"`
-	// Themes is where its titles' theme tunes are found: all is the files beside them and, for a
-	// show with none, Plex's theme host; local the files alone; off none.
+	// Themes is where its titles' theme tunes are found: local is the files beside them; themerr
+	// those and, for a film or show with none, the YouTube link ThemerrDB lists, downloaded with
+	// yt-dlp, which the server must have; off none.
 	Themes domain.ThemeLookup `json:"themes,omitzero"`
 }
 
@@ -202,6 +203,10 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	if d := req.RefreshDays; d != nil && (*d < 0 || *d > 365) {
 		writeProblem(w, a.logger, codeInvalidBody, "refresh_days is from 0, never, to 365")
+		return
+	}
+	if req.Themes == domain.ThemesThemerr && a.svc.Setup.Tools.YTDLP.Path == "" {
+		writeProblem(w, a.logger, codeConflict, "themerr needs yt-dlp, which this server does not have")
 		return
 	}
 	ranked := func(list []rankedSourceJSON) []domain.RankedSource {

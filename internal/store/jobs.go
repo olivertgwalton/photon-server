@@ -334,7 +334,7 @@ func (s *Store) RetryJob(ctx context.Context, id int64) error {
 }
 
 // Identified records that a title has just been matched on every provider its library takes, and
-// asks for a show's theme from the theme host where the match found its TheTVDB id.
+// asks ThemerrDB for its theme where its library takes those, so a refresh finds one listed since.
 func (s *Store) Identified(ctx context.Context, id uuid.UUID) error {
 	return s.q.Transaction(func(tx *query.Query) error {
 		i := tx.Item

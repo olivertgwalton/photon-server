@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/playback"
@@ -103,7 +102,6 @@ var problems = []struct {
 }{
 	{err: store.ErrNotFound, code: codeNotFound},
 	{err: fs.ErrNotExist, code: codeNotFound},
-	{err: artwork.ErrMissing, code: codeNotFound},
 	{err: store.ErrNoNext, code: codeNotFound, ownWords: true},
 	{err: store.ErrLibraryExists, code: codeConflict, ownWords: true},
 	{err: store.ErrProfileExists, code: codeConflict, ownWords: true},
