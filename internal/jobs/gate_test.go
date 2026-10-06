@@ -36,7 +36,19 @@ func newCluster(kind domain.JobKind, timing domain.Timing) *cluster {
 	return &cluster{events: make(chan domain.Event, 8), window: w}
 }
 
-func (c *cluster) Maintenance(context.Context) (domain.Maintenance, error) { return c.window, nil }
+func (c *cluster) Maintenance(context.Context) (domain.Maintenance, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.window, nil
+}
+
+// change sets the window anew, telling every node.
+func (c *cluster) change(start, end int) {
+	c.mu.Lock()
+	c.window.StartHour, c.window.EndHour = start, end
+	c.mu.Unlock()
+	c.events <- domain.Event{Kind: domain.EventMaintenanceChanged}
+}
 
 func (c *cluster) Playbacks(context.Context) ([]domain.Playback, error) {
 	c.mu.Lock()
@@ -199,6 +211,30 @@ func TestAddedWorkStartsAtOnceAndBackfilledWorkKeepsToTheWindow(t *testing.T) {
 		}
 		if len(q.postponed) != 1 || q.postponed[0] != 8 {
 			t.Errorf("postponed %v; want the backfilled job stopped as the window closed", q.postponed)
+		}
+	})
+}
+
+// An admin moving the window off the present hour stops work held to it on every node at once, not
+// at the next minute.
+func TestAChangedWindowIsKeptToAtOnce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobPreviews, Due: domain.JobDueNow}}}
+		c := newCluster(domain.JobPreviews, domain.TimingWindow)
+		c.window.StartHour = 0
+		started, stopped := make(chan struct{}), make(chan error, 1)
+		stop := runReader(t, q, c, domain.JobPreviews, func(ctx context.Context, _ uuid.UUID) error {
+			close(started)
+			<-ctx.Done()
+			stopped <- context.Cause(ctx)
+			return ctx.Err()
+		})
+		defer stop()
+		<-started
+		changed := time.Now()
+		c.change(2, 5)
+		if err := <-stopped; !errors.Is(err, errWindowClosed) || time.Since(changed) > 0 {
+			t.Errorf("stopped for %v after %s; want stopped as the window changed", err, time.Since(changed))
 		}
 	})
 }

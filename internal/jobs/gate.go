@@ -12,8 +12,8 @@ import (
 
 const (
 	// rereadEvery is how often a gate reads again what plays and the maintenance window, besides as
-	// each playback starts or stops: the window's edges, a window changed on another node and an
-	// event lost with Valkey's connection are each noticed within it.
+	// each playback starts or stops and as the window is changed: the window's edges, and an event
+	// lost with Valkey's connection, are noticed within it.
 	rereadEvery = time.Minute
 	// resubscribeAfter is the wait before a gate follows events again once its stream has ended.
 	resubscribeAfter = time.Second
@@ -64,8 +64,9 @@ type hold struct {
 	stop context.CancelCauseFunc
 }
 
-// NewGate reads what plays across the cluster from p, again as each event subscribe streams tells
-// of a playback starting or stopping on any node, and the maintenance window from settings.
+// NewGate reads what plays across the cluster from p and the maintenance window from settings,
+// again as each event subscribe streams tells of a playback starting or stopping on any node, or
+// of the window changed.
 func NewGate(p playbacks, settings maintenance, subscribe func() (<-chan domain.Event, func()), log *slog.Logger) *Gate {
 	return &Gate{playbacks: p, settings: settings, subscribe: subscribe, log: log, holds: map[*hold]struct{}{}}
 }
@@ -83,8 +84,8 @@ func (g *Gate) Run(ctx context.Context) {
 	}
 }
 
-// follow reads again as events tell of a playback starting or stopping, and at every tick, until ctx
-// ends or events does, as a stream that fell behind is ended.
+// follow reads again as events tell of a playback starting or stopping or the window changed, and
+// at every tick, until ctx ends or events does, as a stream that fell behind is ended.
 func (g *Gate) follow(ctx context.Context, events <-chan domain.Event, tick <-chan time.Time) {
 	for {
 		select {
@@ -100,7 +101,7 @@ func (g *Gate) follow(ctx context.Context, events <-chan domain.Event, tick <-ch
 				}
 				return
 			}
-			if e.Kind == domain.EventPlaybackStarted || e.Kind == domain.EventPlaybackStopped {
+			if e.Kind == domain.EventPlaybackStarted || e.Kind == domain.EventPlaybackStopped || e.Kind == domain.EventMaintenanceChanged {
 				g.reread(ctx)
 			}
 		}

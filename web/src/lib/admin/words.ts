@@ -228,6 +228,8 @@ export function describe(e: Schemas["Event"], names: Names): string {
 			return `${jobName(d.job_kind)}: ${d.left} left`;
 		case "webhook.test":
 			return "A webhook test was sent";
+		case "maintenance.changed":
+			return "The maintenance window was changed";
 	}
 }
 
