@@ -98,6 +98,22 @@ func TestPlanFilms(t *testing.T) {
 			},
 		},
 		{
+			name:   "films of different years named alike are films of their own",
+			folder: folder("Halloween", "Halloween (1978).mkv", "Halloween (2018).mkv"),
+			want: []plannedFilm{
+				{Title: "Halloween", Year: 1978, Versions: []plannedCopy{{Parts: []string{"Halloween (1978).mkv"}}}},
+				{Title: "Halloween", Year: 2018, Versions: []plannedCopy{{Parts: []string{"Halloween (2018).mkv"}}}},
+			},
+		},
+		{
+			name:   "release names of different years are films of their own",
+			folder: folder("Dune", "Dune.1984.1080p.BluRay.x264.mkv", "Dune.2021.2160p.WEB-DL.DDP5.1.Atmos.mkv"),
+			want: []plannedFilm{
+				{Title: "Dune", Year: 1984, Versions: []plannedCopy{{Parts: []string{"Dune.1984.1080p.BluRay.x264.mkv"}}}},
+				{Title: "Dune", Year: 2021, Versions: []plannedCopy{{Parts: []string{"Dune.2021.2160p.WEB-DL.DDP5.1.Atmos.mkv"}}}},
+			},
+		},
+		{
 			name:   "every file at the library root is a film of its own",
 			folder: folder(".", "Heat (1995).mkv"),
 			want:   []plannedFilm{{Title: "Heat", Year: 1995, Versions: []plannedCopy{{Parts: []string{"Heat (1995).mkv"}}}}},
