@@ -2841,6 +2841,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How the profile plays on every device: Jellyfin's defaults until it changes them */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Preferences"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change how the profile plays on every device; what is left out stays */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PreferencesChange"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Preferences"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        trace?: never;
+    };
     "/api/v1/openapi.json": {
         parameters: {
             query?: never;
@@ -4249,6 +4311,8 @@ export interface components {
             codec: string;
             max_channels?: number;
         };
+        /** @enum {string} */
+        AudioTrack: "default" | "language";
         Backend: {
             reachable: boolean;
             version?: string;
@@ -4754,6 +4818,8 @@ export interface components {
         Name: {
             name: string;
         };
+        /** @enum {string} */
+        NextEpisode: "play" | "offer";
         Node: {
             address: string;
             /** Format: uuid */
@@ -4925,9 +4991,13 @@ export interface components {
             name: string;
         };
         PlaybackProgress: {
+            audio_stream?: number | null;
             /** Format: int64 */
             position_ms: number;
             state: components["schemas"]["PlayState"];
+            /** Format: uuid */
+            subtitle_file?: string | null;
+            subtitle_stream?: number | null;
         };
         PlaybackSubtitle: {
             burned?: boolean;
@@ -5006,6 +5076,32 @@ export interface components {
         Position: {
             /** Format: int64 */
             position_ms: number;
+        };
+        Preferences: {
+            audio_language: string;
+            audio_track: components["schemas"]["AudioTrack"];
+            credits_action: components["schemas"]["SegmentAction"];
+            intro_action: components["schemas"]["SegmentAction"];
+            max_bitrate_kbps: number;
+            next_episode: components["schemas"]["NextEpisode"];
+            remember_audio: components["schemas"]["TrackMemory"];
+            remember_subtitles: components["schemas"]["TrackMemory"];
+            /** Format: date-time */
+            saved_at?: string | null;
+            subtitle_language: string;
+            subtitle_mode: components["schemas"]["SubtitleMode"];
+        };
+        PreferencesChange: {
+            audio_language?: string | null;
+            audio_track?: components["schemas"]["AudioTrack"];
+            credits_action?: components["schemas"]["SegmentAction"];
+            intro_action?: components["schemas"]["SegmentAction"];
+            max_bitrate_kbps?: number | null;
+            next_episode?: components["schemas"]["NextEpisode"];
+            remember_audio?: components["schemas"]["TrackMemory"];
+            remember_subtitles?: components["schemas"]["TrackMemory"];
+            subtitle_language?: string | null;
+            subtitle_mode?: components["schemas"]["SubtitleMode"];
         };
         /** @enum {string} */
         PreviewLevel: "off" | "chapters" | "all";
@@ -5124,6 +5220,8 @@ export interface components {
             title: string;
             year?: number;
         };
+        /** @enum {string} */
+        SegmentAction: "none" | "ask" | "skip";
         Server: {
             arch: string;
             chromaprint: boolean;
@@ -5204,11 +5302,15 @@ export interface components {
         };
         /** @enum {string} */
         SubtitleFormat: "original" | "webvtt";
+        /** @enum {string} */
+        SubtitleMode: "default" | "always" | "only_forced" | "none" | "smart";
         SubtitleRef: {
             codec: string;
             default?: boolean;
             forced?: boolean;
             hearing_impaired?: boolean;
+            /** Format: uuid */
+            id: string;
             language?: string;
             title?: string;
         };
@@ -5296,6 +5398,8 @@ export interface components {
             version: string;
         };
         /** @enum {string} */
+        TrackMemory: "remember" | "forget";
+        /** @enum {string} */
         TranscodeReason: "container_not_supported" | "video_codec_not_supported" | "video_profile_not_supported" | "video_level_not_supported" | "video_resolution_not_supported" | "video_bit_depth_not_supported" | "video_range_not_supported" | "audio_codec_not_supported" | "audio_channels_not_supported" | "bitrate_exceeds_limit" | "subtitle_codec_not_supported" | "parts_not_supported";
         Transcodes: {
             active: number;
@@ -5317,6 +5421,10 @@ export interface components {
             bitrate_kbps?: number;
             chapters?: components["schemas"]["ChapterRef"][];
             container: string;
+            default_audio_stream?: number | null;
+            /** Format: uuid */
+            default_subtitle_file?: string | null;
+            default_subtitle_stream?: number | null;
             /** Format: int64 */
             duration_ms: number;
             edition?: string;

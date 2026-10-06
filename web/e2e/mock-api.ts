@@ -332,7 +332,13 @@ const version = (id: string): Schemas["VersionPage"] => ({
 		{ index: 1, kind: "audio", codec: "aac", language: "en", channels: 2 },
 		{ index: 2, kind: "audio", codec: "aac", language: "fr", channels: 2 },
 	],
-	subtitles: [{ codec: "subrip", language: "en" }],
+	subtitles: [
+		{
+			id: "0199b3c0-0000-7000-8000-0000000000d1",
+			codec: "subrip",
+			language: "en",
+		},
+	],
 	chapters: [
 		{ start_ms: 0, end_ms: 3_000, title: "Opening" },
 		{ start_ms: 3_000, end_ms: 6_000, title: "The Rest" },
@@ -494,6 +500,22 @@ const pixel = Uint8Array.from(
 const sessions = new Map<string, Schemas["Profile"]>();
 let kidsPIN = "";
 
+// token → how its reader plays: each sign-in starts from the defaults, so
+// one test's choices are not the next's.
+const defaults: Schemas["Preferences"] = {
+	audio_language: "",
+	audio_track: "default",
+	subtitle_language: "",
+	subtitle_mode: "default",
+	remember_audio: "remember",
+	remember_subtitles: "remember",
+	max_bitrate_kbps: 0,
+	next_episode: "play",
+	intro_action: "ask",
+	credits_action: "ask",
+};
+const preferences = new Map<string, Schemas["Preferences"]>();
+
 const cookie = "photon_session";
 
 // The app's page for every path that is not a file, as the server answers it.
@@ -569,10 +591,24 @@ const server_ = Bun.serve({
 			const [, id, action] = title;
 			if (!action && request.method === "GET") {
 				const at = stopped.get(id);
+				// The server chooses the sound in the reader's language, as it does
+				// where they ask for it over the file's default.
+				const prefs = preferences.get(token as string) ?? defaults;
+				const page = {
+					...titles[id],
+					versions: titles[id].versions?.map((v) => ({
+						...v,
+						default_audio_stream:
+							prefs.audio_track === "language"
+								? v.streams.find(
+										(s) =>
+											s.kind === "audio" && s.language === prefs.audio_language,
+									)?.index
+								: undefined,
+					})),
+				};
 				return Response.json(
-					at === undefined
-						? titles[id]
-						: { ...titles[id], state: { position_ms: at } },
+					at === undefined ? page : { ...page, state: { position_ms: at } },
 				);
 			}
 			if (action === "/play" && request.method === "POST") {
@@ -657,6 +693,20 @@ const server_ = Bun.serve({
 			case "DELETE /api/v1/me/pin":
 				kidsPIN = "";
 				return new Response(null, { status: 204 });
+			case "GET /api/v1/me/preferences":
+				return Response.json(preferences.get(token as string) ?? defaults);
+			case "PATCH /api/v1/me/preferences": {
+				const change = (await request.json()) as Schemas["PreferencesChange"];
+				const kept: Schemas["Preferences"] = {
+					...(preferences.get(token as string) ?? defaults),
+					...Object.fromEntries(
+						Object.entries(change).filter(([, v]) => v !== undefined),
+					),
+					saved_at: new Date().toISOString(),
+				};
+				preferences.set(token as string, kept);
+				return Response.json(kept);
+			}
 			case "GET /api/v1/libraries":
 				return Response.json(libraries);
 			case "GET /api/v1/home":

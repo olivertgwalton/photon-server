@@ -37,6 +37,7 @@ type streams interface {
 
 type progressStore interface {
 	SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration, before domain.Reach) (domain.Reach, error)
+	ChooseTracks(ctx context.Context, profile, item uuid.UUID, t domain.ChosenTracks) error
 	RecordPlay(ctx context.Context, p domain.Playback, stopped time.Time, position time.Duration) error
 }
 
@@ -73,10 +74,14 @@ func (s *Sessions) Start(ctx context.Context, method domain.PlayMethod, card dom
 	return p, nil
 }
 
-// Progress records where a profile's playback has got to, and how far through the title that is.
-func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState) (domain.Reach, error) {
+// Progress records where a profile's playback has got to, and how far through the title that is,
+// and the tracks its player says it plays with, as Jellyfin keeps them to play the title with again.
+func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState, tracks domain.ChosenTracks) (domain.Reach, error) {
 	p, err := s.own(ctx, profile, id)
 	if err != nil {
+		return "", err
+	}
+	if err := s.saved.ChooseTracks(ctx, profile, p.Item, tracks); err != nil {
 		return "", err
 	}
 	reach, err := s.saved.SaveProgress(ctx, profile, p.Item, position, p.Reached)

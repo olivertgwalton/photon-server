@@ -17,6 +17,21 @@ type Profile struct {
 	Unrated      domain.Unrated `gorm:"default:allow"`
 }
 
+type ProfilePreference struct {
+	ProfileID         UUID `gorm:"type:uuid;primaryKey"`
+	AudioLanguage     string
+	AudioTrack        domain.AudioTrack
+	SubtitleLanguage  string
+	SubtitleMode      domain.SubtitleMode
+	RememberAudio     domain.TrackMemory
+	RememberSubtitles domain.TrackMemory
+	MaxBitrateKbps    int32
+	NextEpisode       domain.NextEpisode
+	IntroAction       domain.SegmentAction
+	CreditsAction     domain.SegmentAction
+	SavedAt           time.Time `gorm:"default:now()"`
+}
+
 type ProfileLibrary struct {
 	ProfileID UUID `gorm:"type:uuid;primaryKey"`
 	LibraryID UUID `gorm:"type:uuid;primaryKey"`

@@ -33,7 +33,7 @@ const streamFor = 24 * time.Hour
 
 type playbacks interface {
 	Start(ctx context.Context, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error)
-	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState) (domain.Reach, error)
+	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState, tracks domain.ChosenTracks) (domain.Reach, error)
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
 	End(ctx context.Context, id uuid.UUID) error
 	Abandon(ctx context.Context, id uuid.UUID) error
@@ -185,6 +185,14 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	c, err := a.svc.Playing.Playable(r.Context(), sessionOf(r).Profile.ID, id, version)
 	if a.answered(w, r, err) {
 		return
+	}
+	if req.AudioStream == nil {
+		prefs, last, err := a.playingAs(r.Context(), sessionOf(r).Profile.ID, id)
+		if a.answered(w, r, err) {
+			return
+		}
+		audio, subtitles := copyTracks(c)
+		req.AudioStream = playback.DefaultTracks(audio, subtitles, prefs, last).Audio
 	}
 	d, err := playback.Decide(*req.Profile, playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams}, req.AudioStream, req.SubtitleStream, a.svc.Setup.Encoder.HEVC)
 	if errors.Is(err, playback.ErrNoCompatibleStream) {
@@ -443,6 +451,11 @@ func (a *API) requireSignedPath(next http.Handler) http.Handler {
 type playbackProgressJSON struct {
 	PositionMS int64            `json:"position_ms"`
 	State      domain.PlayState `json:"state"`
+	// AudioStream and SubtitleStream or SubtitleFile are the tracks playing, kept for the title
+	// where the profile remembers them; subtitle_stream -1 is none.
+	AudioStream    *int       `json:"audio_stream,omitzero"`
+	SubtitleStream *int       `json:"subtitle_stream,omitzero"`
+	SubtitleFile   *uuid.UUID `json:"subtitle_file,omitzero"`
 }
 
 // playbackProgress is the player saying where it has got to, every ten seconds or so.
@@ -455,8 +468,14 @@ func (a *API) playbackProgress(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "position_ms is not negative and state is playing or paused")
 		return
 	}
+	if req.AudioStream != nil && *req.AudioStream < 0 || req.SubtitleStream != nil && *req.SubtitleStream < domain.NoSubtitle ||
+		req.SubtitleStream != nil && req.SubtitleFile != nil {
+		writeProblem(w, a.logger, codeInvalidBody, "audio_stream is a stream, and subtitles are subtitle_stream, -1 for none, or subtitle_file")
+		return
+	}
+	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
 	a.reportPlayback(w, r, func(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error) {
-		return a.svc.Playbacks.Progress(ctx, profile, id, time.Duration(req.PositionMS)*time.Millisecond, req.State)
+		return a.svc.Playbacks.Progress(ctx, profile, id, time.Duration(req.PositionMS)*time.Millisecond, req.State, tracks)
 	})
 }
 

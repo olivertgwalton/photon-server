@@ -23,9 +23,9 @@ const version: Schemas["VersionPage"] = {
 		},
 	],
 	subtitles: [
-		{ codec: "subrip", language: "en", hearing_impaired: true },
-		{ codec: "dvd_subtitle", language: "de" },
-		{ codec: "ass", title: "Signs" },
+		{ id: "s1", codec: "subrip", language: "en", hearing_impaired: true },
+		{ id: "s2", codec: "dvd_subtitle", language: "de" },
+		{ id: "s3", codec: "ass", title: "Signs" },
 	],
 };
 

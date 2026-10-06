@@ -34,6 +34,9 @@ func newWatchState(db *gorm.DB, opts ...gen.DOOption) watchState {
 	_watchState.Plays = field.NewInt(tableName, "plays")
 	_watchState.WatchedAt = field.NewTime(tableName, "watched_at")
 	_watchState.LastPlayedAt = field.NewTime(tableName, "last_played_at")
+	_watchState.AudioStream = field.NewInt16(tableName, "audio_stream")
+	_watchState.SubtitleStream = field.NewInt16(tableName, "subtitle_stream")
+	_watchState.SubtitleFile = field.NewField(tableName, "subtitle_file")
 
 	_watchState.fillFieldMap()
 
@@ -43,13 +46,16 @@ func newWatchState(db *gorm.DB, opts ...gen.DOOption) watchState {
 type watchState struct {
 	watchStateDo watchStateDo
 
-	ALL          field.Asterisk
-	ProfileID    field.Field
-	ItemID       field.Field
-	PositionMS   field.Int64
-	Plays        field.Int
-	WatchedAt    field.Time
-	LastPlayedAt field.Time
+	ALL            field.Asterisk
+	ProfileID      field.Field
+	ItemID         field.Field
+	PositionMS     field.Int64
+	Plays          field.Int
+	WatchedAt      field.Time
+	LastPlayedAt   field.Time
+	AudioStream    field.Int16
+	SubtitleStream field.Int16
+	SubtitleFile   field.Field
 
 	fieldMap map[string]field.Expr
 }
@@ -72,6 +78,9 @@ func (w *watchState) updateTableName(table string) *watchState {
 	w.Plays = field.NewInt(table, "plays")
 	w.WatchedAt = field.NewTime(table, "watched_at")
 	w.LastPlayedAt = field.NewTime(table, "last_played_at")
+	w.AudioStream = field.NewInt16(table, "audio_stream")
+	w.SubtitleStream = field.NewInt16(table, "subtitle_stream")
+	w.SubtitleFile = field.NewField(table, "subtitle_file")
 
 	w.fillFieldMap()
 
@@ -98,13 +107,16 @@ func (w *watchState) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (w *watchState) fillFieldMap() {
-	w.fieldMap = make(map[string]field.Expr, 6)
+	w.fieldMap = make(map[string]field.Expr, 9)
 	w.fieldMap["profile_id"] = w.ProfileID
 	w.fieldMap["item_id"] = w.ItemID
 	w.fieldMap["position_ms"] = w.PositionMS
 	w.fieldMap["plays"] = w.Plays
 	w.fieldMap["watched_at"] = w.WatchedAt
 	w.fieldMap["last_played_at"] = w.LastPlayedAt
+	w.fieldMap["audio_stream"] = w.AudioStream
+	w.fieldMap["subtitle_stream"] = w.SubtitleStream
+	w.fieldMap["subtitle_file"] = w.SubtitleFile
 }
 
 func (w watchState) clone(db *gorm.DB) watchState {

@@ -27,13 +27,7 @@ import {
 	type Capabilities,
 	probe,
 } from "#lib/player/profile.js";
-import {
-	loadPreferences,
-	pickAudio,
-	pickSubtitle,
-	savePreferences,
-	skipping,
-} from "#lib/player/preferences.js";
+import { type Preferences, skipping } from "#lib/player/preferences.js";
 import { ProgressReporter, type Report } from "#lib/player/progress.js";
 import { choices, needsReplay, wants, webVTT } from "#lib/player/subtitles.js";
 import {
@@ -55,12 +49,14 @@ type Schemas = components["schemas"];
 // says where it has got to, and asks again when a choice needs another stream.
 let {
 	title,
+	prefs,
 	start,
 	version: askedVersion,
 	audio: askedAudio,
 	subtitle: askedSubtitle,
 }: {
 	title: Schemas["TitlePage"];
+	prefs: Preferences;
 	start: number;
 	version?: string;
 	audio?: number;
@@ -86,40 +82,29 @@ let refusal = $state<{
 	message: string;
 	reasons: Schemas["TranscodeReason"][];
 }>();
-// The choices start as the address asked and are the reader's from then on.
-// What this browser's settings ask for where the address chose nothing.
-const prefs = loadPreferences();
+// The choices start as the address asked, else as the server chose them for
+// this profile, and are the reader's from then on.
 const startVersion = untrack(
 	() =>
 		title.versions?.find((v) => v.id === askedVersion) ?? title.versions?.[0],
 );
 let audio = $state(
-	untrack(() =>
-		askedAudio === undefined && startVersion
-			? pickAudio(startVersion.streams, prefs)
-			: askedAudio,
-	),
+	untrack(() => askedAudio ?? startVersion?.default_audio_stream ?? undefined),
 );
 let subtitleKey = $state(
 	untrack(() => {
-		if (askedSubtitle === "off") return undefined;
+		if (askedSubtitle === "off" || !startVersion) return undefined;
 		if (askedSubtitle !== undefined) return `s${askedSubtitle}`;
-		if (!startVersion) return undefined;
-		const sound = startVersion.streams.find(
-			(t) =>
-				t.kind === "audio" &&
-				(audio === undefined ? t.default : t.index === audio),
+		const file = startVersion.subtitles?.findIndex(
+			(f) => f.id === startVersion.default_subtitle_file,
 		);
-		return pickSubtitle(
-			choices(startVersion),
-			sound?.language,
-			prefs,
-			navigator.language,
-		);
+		if (file !== undefined && file >= 0) return `f${file}`;
+		const stream = startVersion.default_subtitle_stream;
+		return stream == null ? undefined : `s${stream}`;
 	}),
 );
 let lastSubtitle = $state<string>();
-let quality = $state(prefs.quality);
+let quality = $state(untrack(() => prefs.max_bitrate_kbps));
 // The file as it is would not play here after all; the server converts it.
 let convert = $state(false);
 let trackSrc = $state<string>();
@@ -166,7 +151,7 @@ const credits = $derived(version?.markers?.find((m) => m.kind === "credits"));
 // A marker skipped by itself is skipped once: seeking back into it plays it.
 const skippedAt = new Set<number>();
 $effect(() => {
-	if (!marker || skipping(marker.kind, prefs) !== "auto") return;
+	if (!marker || skipping(marker.kind, prefs) !== "skip") return;
 	if (skippedAt.has(marker.start_ms)) return;
 	skippedAt.add(marker.start_ms);
 	untrack(() => skip(marker));
@@ -210,9 +195,25 @@ function send(id: string) {
 					})
 				: api.POST("/api/v1/playback/{id}/progress", {
 						params: { path: { id } },
-						body: { position_ms: r.position_ms, state: r.state },
+						body: { position_ms: r.position_ms, state: r.state, ...tracks() },
 					});
 		return call.catch(() => undefined);
+	};
+}
+
+// The tracks playing, so the server plays the title with them again.
+function tracks(): Pick<
+	Schemas["PlaybackProgress"],
+	"audio_stream" | "subtitle_stream" | "subtitle_file"
+> {
+	const file =
+		subtitle?.file === undefined
+			? undefined
+			: version?.subtitles?.[subtitle.file]?.id;
+	return {
+		audio_stream: playingAudio,
+		subtitle_stream: subtitle ? subtitle.stream : -1,
+		subtitle_file: file,
 	};
 }
 
@@ -412,7 +413,8 @@ function chooseQuality(kbps: number) {
 	menuOpen = false;
 	if (kbps === quality) return;
 	quality = kbps;
-	savePreferences({ quality: kbps });
+	// The quality chosen here is the profile's from now on, as Jellyfin's is.
+	api.PATCH("/api/v1/me/preferences", { body: { max_bitrate_kbps: kbps } });
 	reopen();
 }
 
@@ -590,7 +592,8 @@ onDestroy(() => {
 			if (part < parts.length - 1) {
 				load(part + 1, parts[part + 1].offset_ms / 1000);
 				void video?.play();
-			} else if (next && !upNextHidden && prefs.autoplay) playNext();
+			} else if (next && !upNextHidden && prefs.next_episode === "play")
+				playNext();
 		}}
 		onerror={() => {
 			if (playback?.method === "direct" && !convert) {
@@ -674,13 +677,13 @@ onDestroy(() => {
 					<UpNext
 						card={next}
 						{paused}
-						autoplay={prefs.autoplay}
+						autoplay={prefs.next_episode === "play"}
 						onplay={playNext}
 						ondismiss={() => {
 							upNextHidden = true;
 						}}
 					/>
-				{:else if marker && skipping(marker.kind, prefs) === "button"}
+				{:else if marker && skipping(marker.kind, prefs) === "ask"}
 					<Button
 						variant="outline"
 						class="bg-black/60"

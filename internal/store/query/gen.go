@@ -47,6 +47,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Plugin:             newPlugin(db, opts...),
 		Profile:            newProfile(db, opts...),
 		ProfileLibrary:     newProfileLibrary(db, opts...),
+		ProfilePreference:  newProfilePreference(db, opts...),
 		Provider:           newProvider(db, opts...),
 		Rating:             newRating(db, opts...),
 		RemoteVideo:        newRemoteVideo(db, opts...),
@@ -94,6 +95,7 @@ type Query struct {
 	Plugin             plugin
 	Profile            profile
 	ProfileLibrary     profileLibrary
+	ProfilePreference  profilePreference
 	Provider           provider
 	Rating             rating
 	RemoteVideo        remoteVideo
@@ -144,6 +146,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Plugin:             q.Plugin.clone(db),
 		Profile:            q.Profile.clone(db),
 		ProfileLibrary:     q.ProfileLibrary.clone(db),
+		ProfilePreference:  q.ProfilePreference.clone(db),
 		Provider:           q.Provider.clone(db),
 		Rating:             q.Rating.clone(db),
 		RemoteVideo:        q.RemoteVideo.clone(db),
@@ -199,6 +202,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Plugin:             q.Plugin.replaceDB(db),
 		Profile:            q.Profile.replaceDB(db),
 		ProfileLibrary:     q.ProfileLibrary.replaceDB(db),
+		ProfilePreference:  q.ProfilePreference.replaceDB(db),
 		Provider:           q.Provider.replaceDB(db),
 		Rating:             q.Rating.replaceDB(db),
 		RemoteVideo:        q.RemoteVideo.replaceDB(db),
@@ -244,6 +248,7 @@ type queryCtx struct {
 	Plugin             IPluginDo
 	Profile            IProfileDo
 	ProfileLibrary     IProfileLibraryDo
+	ProfilePreference  IProfilePreferenceDo
 	Provider           IProviderDo
 	Rating             IRatingDo
 	RemoteVideo        IRemoteVideoDo
@@ -289,6 +294,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Plugin:             q.Plugin.WithContext(ctx),
 		Profile:            q.Profile.WithContext(ctx),
 		ProfileLibrary:     q.ProfileLibrary.WithContext(ctx),
+		ProfilePreference:  q.ProfilePreference.WithContext(ctx),
 		Provider:           q.Provider.WithContext(ctx),
 		Rating:             q.Rating.WithContext(ctx),
 		RemoteVideo:        q.RemoteVideo.WithContext(ctx),

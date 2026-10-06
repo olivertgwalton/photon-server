@@ -115,7 +115,7 @@ func (fakePlaybacks) Start(_ context.Context, method domain.PlayMethod, card dom
 	return domain.Playback{ID: playbackID, Profile: card.Profile.ID, Item: card.Title.ID, Version: card.Version.ID, Method: method, Card: card}, nil
 }
 
-func (fakePlaybacks) Progress(_ context.Context, profile, id uuid.UUID, _ time.Duration, _ domain.PlayState) (domain.Reach, error) {
+func (fakePlaybacks) Progress(_ context.Context, profile, id uuid.UUID, _ time.Duration, _ domain.PlayState, _ domain.ChosenTracks) (domain.Reach, error) {
 	if id != playbackID || profile != oliver.ID {
 		return "", playback.ErrNoPlayback
 	}
@@ -123,7 +123,7 @@ func (fakePlaybacks) Progress(_ context.Context, profile, id uuid.UUID, _ time.D
 }
 
 func (f fakePlaybacks) Stop(ctx context.Context, profile, id uuid.UUID, at time.Duration) (domain.Reach, error) {
-	return f.Progress(ctx, profile, id, at, domain.StatePlaying)
+	return f.Progress(ctx, profile, id, at, domain.StatePlaying, domain.ChosenTracks{})
 }
 
 func (fakePlaybacks) End(_ context.Context, id uuid.UUID) error {
@@ -168,7 +168,7 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Auth: fakeAuth{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{}, HLS: fakeHLS{},
+		Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{}, HLS: fakeHLS{},
 		Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
@@ -287,7 +287,7 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 	}
 	h := fakeHLS{dir: dir}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Auth: fakeAuth{}, Playing: fakePlaying{root: dir}, Playbacks: fakePlaybacks{}, Remuxing: h, HLS: h,
+		Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: dir}, Playbacks: fakePlaybacks{}, Remuxing: h, HLS: h,
 		Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
@@ -334,7 +334,7 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 }
 
 func TestAClientIsToldWhyNothingPlays(t *testing.T) {
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Playing: fakePlaying{}, Playbacks: fakePlaybacks{}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: fakePlaybacks{}})
 	for _, tc := range []struct {
 		body        string
 		wantStatus  int
@@ -460,6 +460,10 @@ func (*livePlaybacks) SaveProgress(context.Context, uuid.UUID, uuid.UUID, time.D
 	return domain.ReachResumable, nil
 }
 
+func (*livePlaybacks) ChooseTracks(context.Context, uuid.UUID, uuid.UUID, domain.ChosenTracks) error {
+	return nil
+}
+
 func (*livePlaybacks) RecordPlay(context.Context, domain.Playback, time.Time, time.Duration) error {
 	return nil
 }
@@ -479,7 +483,7 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 	}
 	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Auth: fakeAuth{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7()),
+		Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7()),
 		Remuxing: remuxOpener{remuxer}, HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
@@ -561,7 +565,7 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 	var told []domain.Event
 	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Auth: fakeAuth{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, raise, uuid.NewV7()),
+		Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, raise, uuid.NewV7()),
 		Remuxing: remuxOpener{remuxer}, HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(method, target, body string) *httptest.ResponseRecorder {
@@ -645,7 +649,7 @@ func TestAConnectionIsTimedOnAPartsFirstBytesWithoutPlaying(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "Lawrence", "Lawrence cd1.mkv"), film, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Playing: fakePlaying{root: root}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}})
 	sample := func(token, ranges string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/parts/"+partOne.String()+"/sample", nil)
 		req.Header.Set("Authorization", "Bearer "+token)

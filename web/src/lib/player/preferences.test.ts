@@ -1,57 +1,35 @@
 import { expect, test } from "bun:test";
-import type { components } from "#lib/api/schema.js";
-import { defaults, pickAudio, pickSubtitle, skipping } from "./preferences.ts";
-import type { Choice } from "./subtitles.ts";
+import { keptChange } from "./preferences.ts";
 
-type Stream = components["schemas"]["StreamPage"];
-
-const audio = (index: number, language: string, more: Partial<Stream> = {}) =>
-	({ index, kind: "audio", codec: "aac", language, ...more }) as Stream;
-
-test("the sound in the reader's language is asked for, else the file's own", () => {
-	const streams = [
-		audio(1, "jpn", { default: true }),
-		audio(2, "eng", { commentary: true }),
-		audio(3, "eng"),
-	];
-	// Never the commentary, while there is the film's own sound.
-	expect(pickAudio(streams, { ...defaults, audioLanguage: "en" })).toBe(3);
+test("what this browser kept goes up in the server's words", () => {
 	expect(
-		pickAudio(
-			[
-				audio(1, "jpn"),
-				audio(2, "eng", { commentary: true }),
-				audio(3, "eng", { default: true }),
-			],
-			{ ...defaults, audioLanguage: "en" },
-		),
-	).toBe(3);
-	expect(pickAudio(streams, defaults)).toBeUndefined();
-	expect(
-		pickAudio(streams, { ...defaults, audioLanguage: "fr" }),
-	).toBeUndefined();
-});
-
-const subs: Choice[] = [
-	{ key: "s3", label: "", codec: "subrip", language: "eng", forced: true },
-	{ key: "s4", label: "", codec: "subrip", language: "eng" },
-	{ key: "s5", label: "", codec: "subrip", language: "fre", default: true },
-];
-
-test("subtitles come on as the mode says", () => {
-	const pick = (mode: (typeof defaults)["subtitleMode"], sound: string) =>
-		pickSubtitle(subs, sound, { ...defaults, subtitleMode: mode }, "en-GB");
-	expect(pick("default", "eng")).toBe("s5");
-	expect(pick("off", "jpn")).toBeUndefined();
-	expect(pick("always", "eng")).toBe("s4");
-	expect(pick("forced", "jpn")).toBe("s3");
-	// A film in the reader's own language shows only what is forced.
-	expect(pick("foreign", "eng")).toBe("s3");
-	expect(pick("foreign", "jpn")).toBe("s4");
-});
-
-test("intros and recaps follow one choice, credits and previews the other", () => {
-	const prefs = { ...defaults, skipIntro: "auto", skipCredits: "off" } as const;
-	expect(skipping("recap", prefs)).toBe("auto");
-	expect(skipping("preview", prefs)).toBe("off");
+		keptChange({
+			quality: 8000,
+			audioLanguage: "fr",
+			subtitleMode: "foreign",
+			autoplay: false,
+			skipIntro: "auto",
+			skipCredits: "off",
+		}),
+	).toEqual({
+		max_bitrate_kbps: 8000,
+		audio_language: "fr",
+		audio_track: "language",
+		subtitle_language: undefined,
+		subtitle_mode: "smart",
+		next_episode: "offer",
+		intro_action: "skip",
+		credits_action: "none",
+	});
+	// A choice it never made stays the server's.
+	expect(keptChange({})).toEqual({
+		max_bitrate_kbps: undefined,
+		audio_language: undefined,
+		audio_track: undefined,
+		subtitle_language: undefined,
+		subtitle_mode: undefined,
+		next_episode: undefined,
+		intro_action: undefined,
+		credits_action: undefined,
+	});
 });
