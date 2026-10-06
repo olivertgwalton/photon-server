@@ -131,7 +131,7 @@ func TestDecide(t *testing.T) {
 			want: Decision{
 				Method: domain.PlayTranscode,
 				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
-					Codec: "h264", Width: 1920, Height: 1080, BitrateKbps: 40_000 * 10 / 6, ToneMap: true,
+					Codec: "h264", Width: 1920, Height: 1080, BitrateKbps: 40_000, ToneMap: true,
 				}},
 				Audio:   &domain.AudioPlan{Stream: 2},
 				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported, domain.VideoRangeNotSupported},
@@ -152,7 +152,7 @@ func TestDecide(t *testing.T) {
 			want: Decision{
 				Method: domain.PlayTranscode,
 				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
-					Codec: "h264", Width: 3840, Height: 2160, BitrateKbps: 40_000 * 10 / 6, ToneMap: true, Burn: new(4),
+					Codec: "h264", Width: 3840, Height: 2160, BitrateKbps: 40_000, ToneMap: true, Burn: new(4),
 				}},
 				Audio: &domain.AudioPlan{Stream: 1}, Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported},
 			},
@@ -202,6 +202,29 @@ func TestSurroundIsKeptInLayoutsPlayersKnow(t *testing.T) {
 		got, _ := p.audioEncode(media.Stream{Codec: "dts", Channels: tc.channels})
 		if got.Channels != tc.want {
 			t.Errorf("%d channels to a client of %d: %d, want %d", tc.channels, tc.most, got.Channels, tc.want)
+		}
+	}
+}
+
+func TestH264IsGivenTheRoomItNeedsToMatchTheSource(t *testing.T) {
+	for _, tc := range []struct {
+		codec       string
+		kbps, limit int
+		want        int
+	}{
+		{"hevc", 10_000, 0, 16_667},
+		{"av1", 10_000, 0, 20_000},
+		{"h264", 10_000, 0, 10_000},
+		{"hevc", 1_000, 0, 3_000},
+		{"mpeg2video", 400, 0, 1_600},
+		{"h264", 2_500, 0, 5_000},
+		{"hevc", 50_000, 0, 50_000},
+		{"hevc", 10_000, 8_000, 8_000},
+	} {
+		p := Profile{Video: []VideoSupport{{Codec: "h264"}}, MaxBitrateKbps: tc.limit}
+		got, _ := p.videoEncode(media.Stream{Codec: tc.codec, Width: 1920, Height: 1080}, tc.kbps)
+		if got.BitrateKbps != tc.want {
+			t.Errorf("%s at %d kbps, limit %d: %d kbps, want %d", tc.codec, tc.kbps, tc.limit, got.BitrateKbps, tc.want)
 		}
 	}
 }
