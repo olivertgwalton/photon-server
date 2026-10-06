@@ -13,6 +13,7 @@ import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
 import { goto } from "$app/navigation";
 import { pickPlaylist, setFavourite, setWatched } from "#lib/actions.svelte.js";
+import { fold } from "#lib/credits.js";
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
 import type { components } from "#lib/api/schema.js";
 import CardGrid from "#lib/components/CardGrid.svelte";
@@ -35,7 +36,6 @@ import {
 	timecode,
 } from "#lib/format.js";
 
-type Credit = components["schemas"]["CreditRef"];
 type ExtraKind = components["schemas"]["ExtraKind"];
 
 let { data } = $props();
@@ -93,19 +93,25 @@ const facts = $derived(
 	].filter(Boolean),
 );
 
-const creditKinds: Record<Credit["kind"], string> = {
-	actor: "",
-	guest_star: "Guest star",
-	director: "Director",
-	writer: "Writer",
-	producer: "Producer",
-	composer: "Composer",
-	creator: "Creator",
-};
-const directors = $derived(
-	t.credits?.filter((c) => c.kind === "director" || c.kind === "creator") ?? [],
+// One card per person, whatever they did on it.
+const credits = $derived(
+	fold(
+		t.credits ?? [],
+		(c) => c.person_id,
+		(c) => c.kind,
+		(c) => c.role,
+	).map((f) => ({
+		...(f.all.find((c) => c.photo) ?? f.all[0]),
+		kinds: f.kinds,
+		said: f.said,
+	})),
 );
-const writers = $derived(t.credits?.filter((c) => c.kind === "writer") ?? []);
+const directors = $derived(
+	credits.filter((c) =>
+		c.kinds.some((k) => k === "director" || k === "creator"),
+	),
+);
+const writers = $derived(credits.filter((c) => c.kinds.includes("writer")));
 
 const extraKinds: Record<ExtraKind, string> = {
 	trailer: "Trailer",
@@ -264,7 +270,7 @@ const poster = $derived(art("poster"));
 			{/if}
 			{#if t.ratings?.length}
 				<ul class="flex flex-wrap gap-2" aria-label="Ratings">
-					{#each t.ratings as rating (rating.site)}
+					{#each t.ratings as rating, i (`${rating.site}-${i}`)}
 						<li
 							class="bg-raise/80 rounded-md px-2 py-1 text-sm backdrop-blur"
 							title={rating.votes
@@ -560,19 +566,19 @@ const poster = $derived(art("poster"));
 		</section>
 	{/if}
 
-	{#if t.credits?.length}
+	{#if credits.length}
 		<section aria-labelledby="cast" class="min-w-0">
 			<h2 id="cast" class="heading mb-3">Cast &amp; crew</h2>
 			<ul
 				class="-mx-3 flex gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:gap-4 sm:px-6"
 			>
-				{#each t.credits as credit, i (`${credit.person_id}-${credit.kind}-${i}`)}
+				{#each credits as credit (credit.person_id)}
 					<li class="w-28 shrink-0 sm:w-32">
 						<PersonCard
 							id={credit.person_id}
 							name={credit.name}
 							photo={credit.photo}
-							caption={credit.role || creditKinds[credit.kind]}
+							caption={credit.said}
 						/>
 					</li>
 				{/each}
@@ -607,7 +613,7 @@ const poster = $derived(art("poster"));
 						</a>
 					</li>
 				{/each}
-				{#each videos as video (video.key)}
+				{#each videos as video, i (`${video.site}-${video.key}-${i}`)}
 					<li>
 						<a
 							href={video.url}

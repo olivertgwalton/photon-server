@@ -109,7 +109,7 @@ function under(event: PointerEvent): number | undefined {
 			class="bg-ink absolute inset-y-0 left-0 rounded-full"
 			style="width: {percent(shown)}%"
 		></div>
-		{#each chapters.slice(1) as c (c.start_ms)}
+		{#each chapters.slice(1) as c, i (i)}
 			<div
 				class="bg-ground/80 absolute inset-y-0 w-0.5"
 				style="left: {percent(c.start_ms / 1000)}%"

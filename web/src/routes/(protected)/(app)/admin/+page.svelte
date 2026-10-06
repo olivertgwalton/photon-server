@@ -117,7 +117,7 @@ const jobs = $derived(
 			<Card.Title><h2 class="heading">Running</h2></Card.Title>
 		</Card.Header>
 		<Card.Content class="grid gap-4">
-			{#each live.state.scans as scan (scan.library_id)}
+			{#each live.state.scans as scan, i (`${scan.library_id}-${i}`)}
 				<div class="grid gap-1">
 					<p class="text-ink font-semibold">
 						Scanning {libraries.get(scan.library_id) ?? "a library"}

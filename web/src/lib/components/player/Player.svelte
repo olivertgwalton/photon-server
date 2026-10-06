@@ -848,7 +848,7 @@ onDestroy(() => {
 										portalProps={{ to: root }}
 										class="max-h-80 overflow-y-auto"
 									>
-										{#each version.chapters as c, i (c.start_ms)}
+										{#each version.chapters as c, i (i)}
 											<Menu.Item onSelect={() => seek(c.start_ms / 1000)}>
 												<span class="truncate"
 													>{c.title || `Chapter ${i + 1}`}</span
