@@ -107,17 +107,18 @@ var rowQueries = map[domain.HomeRow]string{
 		WHERE EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))
 		ORDER BY released.released DESC, i.id DESC LIMIT @limit`,
 	// The titles the profile has not begun by their IMDb rating, as the wall sorts by it, leaving
-	// out a rating too few voted for where its site counts votes. The ratings are put in order
-	// first so that only as many titles as the row takes are tried.
+	// out a rating too few voted for where its site counts votes. A title's best rating is the one
+	// no other of its own beats, so the ratings are read down their index and only as many titles
+	// as the row takes are tried.
 	domain.RowTopRatedUnwatched: `
-		SELECT ` + itemColumns + ` FROM (
-			SELECT item_id, max(score) AS score FROM ratings
-			WHERE site = '` + string(domain.SiteIMDb) + `' AND (votes IS NULL OR votes >= ` + strconv.Itoa(leastVotes) + `)
-			GROUP BY item_id ORDER BY score DESC, item_id DESC
-		) rated JOIN items ON items.id = rated.item_id
-		WHERE items.kind IN ('movie', 'show') AND NOT ` + begun + `
+		SELECT ` + itemColumns + ` FROM ratings r JOIN items ON items.id = r.item_id
+		WHERE r.site = '` + string(domain.SiteIMDb) + `' AND (r.votes IS NULL OR r.votes >= ` + strconv.Itoa(leastVotes) + `)
+			AND NOT EXISTS (SELECT 1 FROM ratings o WHERE o.item_id = r.item_id AND o.site = r.site
+				AND (o.votes IS NULL OR o.votes >= ` + strconv.Itoa(leastVotes) + `)
+				AND (o.score > r.score OR o.score = r.score AND o.source < r.source))
+			AND items.kind IN ('movie', 'show') AND NOT ` + begun + `
 			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND first_of_title(v, items))
-		ORDER BY rated.score DESC, rated.item_id DESC LIMIT @limit`,
+		ORDER BY r.score DESC, r.item_id DESC LIMIT @limit`,
 }
 
 // onList is the titles on one of the profile's lists, its watchlist or its favourites, that it
