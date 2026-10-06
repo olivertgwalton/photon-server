@@ -14,11 +14,42 @@ test("a title is taken off Continue Watching from its card", async ({
 	await expect(page.getByText("Removed from Continue Watching.")).toBeVisible();
 	await expect(row.getByRole("link", { name: /Quiet Hours/ })).toHaveCount(0);
 
-	await page.getByRole("link", { name: "Recently Added Films" }).click();
+	// A row shown whole leads nowhere; one with more leads to the rest.
+	await expect(
+		page.getByRole("link", { name: /Continue Watching/ }),
+	).toHaveCount(0);
+	await page
+		.getByRole("link", { name: "Recently Added Films View all" })
+		.click();
 	await expect(page).toHaveURL("/home/recently_added_films");
 	await expect(
 		page.getByRole("heading", { name: "Recently Added Films" }),
 	).toBeVisible();
+});
+
+test("a rail shows twenty, and its heading leads to all of them", async ({
+	page,
+}) => {
+	await logIn(page, "/titles/t-film");
+	const similar = page.getByRole("region", { name: /More like this/ });
+	await expect(similar.getByRole("listitem")).toHaveCount(20);
+	await similar.getByRole("link", { name: "More like this View all" }).click();
+	await expect(page).toHaveURL("/titles/t-film/similar");
+	await expect(
+		page.getByRole("heading", { level: 1, name: "More like this" }),
+	).toBeVisible();
+	await expect(page.getByRole("main").getByRole("listitem")).toHaveCount(25);
+	await expectAccessible(page);
+
+	// A rail that shows everything has no way to more.
+	await page.goto("/titles/t-film");
+	await expect(
+		page.getByRole("link", { name: /Cast & crew View all/ }),
+	).toHaveCount(0);
+	await page.goto("/titles/t-film/cast");
+	await expect(page.getByRole("link", { name: /Ada Lane/ })).toBeVisible();
+	await page.goto("/people/5f0c1d8e-2b1a-4c3d-9e8f-0a1b2c3d4e5f/acting");
+	await expect(page.getByText("2018 · Host, Director")).toBeVisible();
 });
 
 test("a library's wall pages as it scrolls and jumps to a letter", async ({

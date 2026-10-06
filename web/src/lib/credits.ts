@@ -56,3 +56,54 @@ export function fold<T>(
 	const acted = (f: Folded<T>) => (f.kinds.some(performs) ? 0 : 1);
 	return out.sort((a, b) => acted(a) - acted(b));
 }
+
+// A title's cast and crew, one per person, by the copy with a photograph.
+export function castOf(credits: components["schemas"]["CreditRef"][]) {
+	return fold(
+		credits,
+		(c) => c.person_id,
+		(c) => c.kind,
+		(c) => c.role,
+	).map((f) => ({
+		...(f.all.find((c) => c.photo) ?? f.all[0]),
+		id: f.all[0].person_id,
+		kinds: f.kinds,
+		said: f.said,
+	}));
+}
+
+const crafts: [string, Kind[]][] = [
+	["Acting", ["actor", "guest_star"]],
+	["Directing", ["director"]],
+	["Creating", ["creator"]],
+	["Writing", ["writer"]],
+	["Producing", ["producer"]],
+	["Music", ["composer"]],
+];
+
+// A person's work, one card a title whatever they did on it, under the first
+// of these crafts they did, acting first. Each card's caption is its year and
+// what they did.
+export function workOf(credits: components["schemas"]["Credit"][]) {
+	const titles = fold(
+		credits,
+		(c) => c.id,
+		(c) => c.credit,
+		(c) => c.role,
+	);
+	const craftOf = (kinds: Kind[]) =>
+		crafts.find(([, ks]) => kinds.some((k) => ks.includes(k)))?.[0];
+	return crafts
+		.map(([name]) => {
+			const mine = titles.filter((f) => craftOf(f.kinds) === name);
+			return {
+				name,
+				slug: name.toLowerCase(),
+				cards: mine.map((f) => f.all[0]),
+				captions: mine.map((f) =>
+					[f.all[0].year, f.said].filter(Boolean).join(" · "),
+				),
+			};
+		})
+		.filter((g) => g.cards.length);
+}

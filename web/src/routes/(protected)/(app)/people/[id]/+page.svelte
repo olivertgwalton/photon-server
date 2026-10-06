@@ -1,46 +1,14 @@
 <script lang="ts">
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
-import type { components } from "#lib/api/schema.js";
-import CardGrid from "#lib/components/CardGrid.svelte";
-import { fold } from "#lib/credits.js";
+import Rail from "#lib/components/Rail.svelte";
+import { workOf } from "#lib/credits.js";
 import { wallSearch } from "#lib/wall.js";
-
-type Credit = components["schemas"]["Credit"];
 
 let { data } = $props();
 
 const p = $derived(data.person);
 
-// Their work here, one card a title whatever they did on it, under the first
-// of these they did, acting first.
-const groups: [string, Credit["credit"][]][] = [
-	["Acting", ["actor", "guest_star"]],
-	["Directing", ["director"]],
-	["Creating", ["creator"]],
-	["Writing", ["writer"]],
-	["Producing", ["producer"]],
-	["Music", ["composer"]],
-];
-const titles = $derived(
-	fold(
-		p.credits,
-		(c) => c.id,
-		(c) => c.credit,
-		(c) => c.role,
-	),
-);
-const work = $derived(
-	groups
-		.map(([name, kinds]) => ({
-			name,
-			titles: titles.filter(
-				(f) =>
-					groups.find(([, ks]) => f.kinds.some((k) => ks.includes(k)))?.[1] ===
-					kinds,
-			),
-		}))
-		.filter((g) => g.titles.length),
-);
+const work = $derived(workOf(p.credits));
 
 const date = (d: string) =>
 	new Date(d).toLocaleDateString(undefined, {
@@ -94,16 +62,12 @@ const life = $derived(
 		</div>
 	</header>
 
-	{#each work as group (group.name)}
-		<section aria-labelledby="work-{group.name}">
-			<h2 id="work-{group.name}" class="heading mb-3">{group.name}</h2>
-			<CardGrid
-				cards={group.titles.map((f) => f.all[0])}
-				caption={(i: number) => {
-					const f = group.titles[i];
-					return [f.all[0].year, f.said].filter(Boolean).join(" · ");
-				}}
-			/>
-		</section>
+	{#each work as group (group.slug)}
+		<Rail
+			title={group.name}
+			cards={group.cards}
+			caption={(i: number) => group.captions[i]}
+			href="/people/{p.id}/{group.slug}"
+		/>
 	{/each}
 </article>
