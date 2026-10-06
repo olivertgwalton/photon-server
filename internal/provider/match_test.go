@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -33,4 +34,20 @@ func TestPick(t *testing.T) {
 			t.Errorf("pick(%q, %d) = %q, want %q", tc.title, tc.year, got, tc.want)
 		}
 	}
+}
+
+// Identify jobs match titles side by side.
+func TestNormaliseIsSafeAtOnce(t *testing.T) {
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			for range 2000 {
+				if got := normalise("Amélie (2001)"); got != "amelie" {
+					t.Errorf("normalise = %q", got)
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
 }
