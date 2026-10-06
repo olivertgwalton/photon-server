@@ -188,7 +188,7 @@ func saveFilm(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film, chang
 			return err
 		}
 	}
-	return nil
+	return keyTitle(ctx, tx, itemID)
 }
 
 // filmItem is the title a film's copies belong to: the title of a copy already known, else a title

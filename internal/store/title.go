@@ -318,6 +318,13 @@ func (s *Store) Visible(ctx context.Context, profile uuid.UUID, titles []uuid.UU
 		WHERE sees(v, i) ORDER BY t.n`, ids, profile.String())
 }
 
+// SameTitles answers a title and those the same as it in other libraries that a profile may see.
+func (s *Store) SameTitles(ctx context.Context, profile, title uuid.UUID) ([]uuid.UUID, error) {
+	return queryIDs(ctx, s.pool, `
+		SELECT t::text FROM same_title($1) t JOIN items i ON i.id = t, viewer($2) v
+		WHERE sees(v, i) ORDER BY t`, title.String(), profile.String())
+}
+
 // HasLibrary reports whether a library is there and a profile may see its titles at all: as
 // sees() asks, it has every library where none are listed for it.
 func (s *Store) HasLibrary(ctx context.Context, profile, lib uuid.UUID) (bool, error) {

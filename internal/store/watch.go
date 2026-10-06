@@ -9,12 +9,12 @@ import (
 
 	"gorm.io/gen/field"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
+	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 // TitleState is what a profile has made of a title. A show's and a season's are their episodes':
@@ -49,17 +49,19 @@ func (s *Store) SaveProgress(ctx context.Context, profile, item uuid.UUID, posit
 		}
 		return reach, s.played(ctx, profile, row)
 	}
-	state := &model.WatchState{ProfileID: model.UUID(profile), ItemID: row.ID}
-	set := []string{"position_ms"}
 	// A peek at the start is not a play, as Jellyfin's is not: it moves nothing up Next Up.
+	var played *time.Time
 	if reach == domain.ReachResumable {
-		state.PositionMS, state.LastPlayedAt = position.Milliseconds(), new(time.Now())
-		set = append(set, "last_played_at")
+		played = new(time.Now())
+	} else {
+		position = 0
 	}
-	err = s.q.WatchState.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "profile_id"}, {Name: "item_id"}},
-		DoUpdates: clause.AssignmentColumns(set),
-	}).Create(state)
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO watch_state (profile_id, item_id, position_ms, last_played_at)
+		SELECT $1, t, $3, $4 FROM same_title($2) t ORDER BY t
+		ON CONFLICT (profile_id, item_id) DO UPDATE SET position_ms = excluded.position_ms,
+			last_played_at = coalesce(excluded.last_played_at, watch_state.last_played_at)`,
+		profile.String(), uuid.UUID(row.ID).String(), position.Milliseconds(), played)
 	return reach, err
 }
 
@@ -73,14 +75,15 @@ func (s *Store) MarkWatched(ctx context.Context, profile, item uuid.UUID) error 
 }
 
 // watched marks titles watched without counting a play: one marked by hand has been played at
-// least once, and keeps when it was first watched, as Jellyfin's MarkPlayed does.
+// least once, and keeps when it was first watched, as Jellyfin's MarkPlayed does. A profile's state
+// of a title is its state wherever the title is listed, so each of these writes them all.
 func (s *Store) watched(ctx context.Context, profile uuid.UUID, items []*model.Item) error {
 	if len(items) == 0 {
 		return nil
 	}
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO watch_state (profile_id, item_id, plays, watched_at, last_played_at)
-		SELECT $1, id, 1, now(), now() FROM items WHERE id = ANY($2::uuid[])
+		SELECT DISTINCT $1::uuid, t, 1, now(), now() FROM unnest($2::uuid[]) i, same_title(i) t ORDER BY t
 		ON CONFLICT (profile_id, item_id) DO UPDATE SET
 			position_ms = 0, plays = greatest(watch_state.plays, 1),
 			watched_at = coalesce(watch_state.watched_at, now()), last_played_at = now()`,
@@ -93,7 +96,7 @@ func (s *Store) played(ctx context.Context, profile uuid.UUID, item *model.Item)
 	// A play counted adds to the plays before it, which GORM's upsert cannot say.
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO watch_state (profile_id, item_id, plays, watched_at, last_played_at)
-		VALUES ($1, $2, 1, now(), now())
+		SELECT $1, t, 1, now(), now() FROM same_title($2) t ORDER BY t
 		ON CONFLICT (profile_id, item_id) DO UPDATE SET
 			position_ms = 0, plays = watch_state.plays + 1,
 			watched_at = coalesce(watch_state.watched_at, now()), last_played_at = now()`,
@@ -119,8 +122,12 @@ func (s *Store) setLeaves(ctx context.Context, profile, item uuid.UUID, set ...f
 	if err != nil || len(leaves) == 0 {
 		return err
 	}
+	same, err := s.sameTitles(ctx, leaves)
+	if err != nil {
+		return err
+	}
 	w := s.q.WatchState
-	_, err = w.WithContext(ctx).Where(w.ProfileID.Eq(model.UUID(profile)), w.ItemID.In(ids(leaves)...)).UpdateSimple(set...)
+	_, err = w.WithContext(ctx).Where(w.ProfileID.Eq(model.UUID(profile)), w.ItemID.In(same...)).UpdateSimple(set...)
 	return err
 }
 
@@ -128,14 +135,33 @@ func (s *Store) Favourite(ctx context.Context, profile, item uuid.UUID) error {
 	if _, err := s.leaves(ctx, item); err != nil {
 		return err
 	}
-	return s.q.Favourite.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).
-		Create(&model.Favourite{ProfileID: model.UUID(profile), ItemID: model.UUID(item)})
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO favourites (profile_id, item_id) SELECT $1, t FROM same_title($2) t ORDER BY t
+		ON CONFLICT DO NOTHING`, profile.String(), item.String())
+	return err
 }
 
 func (s *Store) Unfavourite(ctx context.Context, profile, item uuid.UUID) error {
-	f := s.q.Favourite
-	_, err := f.WithContext(ctx).Where(f.ProfileID.Eq(model.UUID(profile)), f.ItemID.Eq(model.UUID(item))).Delete()
+	_, err := s.pool.Exec(ctx, `DELETE FROM favourites WHERE profile_id = $1 AND item_id IN (SELECT same_title($2))`,
+		profile.String(), item.String())
 	return err
+}
+
+// keyTitle keys a title, its seasons and episodes by what they are wherever they are listed, and
+// makes each profile's state of them its state of the titles they are the same as.
+func keyTitle(ctx context.Context, tx *query.Query, title model.UUID) error {
+	return tx.Item.WithContext(ctx).UnderlyingDB().Exec(`SELECT key_titles(ARRAY[?::uuid])`, title).Error
+}
+
+// sameTitles answers items and every title the same as one of them in any library, as gen's In
+// takes them.
+func (s *Store) sameTitles(ctx context.Context, items []*model.Item) ([]driver.Valuer, error) {
+	same, err := queryIDs(ctx, s.pool, `SELECT DISTINCT same_title(i)::text FROM unnest($1::uuid[]) i`, texts(items))
+	out := make([]driver.Valuer, len(same))
+	for n, id := range same {
+		out[n] = model.UUID(id)
+	}
+	return out, err
 }
 
 // leaves answers the films or episodes a title is watched by: itself, or a season's or show's

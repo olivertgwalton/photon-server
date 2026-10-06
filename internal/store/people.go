@@ -410,7 +410,7 @@ func (s *Store) PersonCredits(ctx context.Context, profile, person uuid.UUID) ([
 		JOIN items i ON i.id = c.item_id
 		JOIN items t ON t.id = CASE i.kind WHEN 'episode' THEN (SELECT s.parent_id FROM items s WHERE s.id = i.parent_id) ELSE i.id END
 		WHERE c.person_id = $1 AND t.kind IN ('movie', 'show')
-			AND EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, t))
+			AND EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, t) AND first_of_title(v, t))
 		ORDER BY t.id, c.kind, c.position`, person.String(), profile.String())
 	if err != nil {
 		return nil, err
@@ -477,16 +477,26 @@ func (s *Store) Similar(ctx context.Context, profile, id uuid.UUID) ([]Card, err
 			WHERE other.item_id <> @id
 			GROUP BY other.item_id
 		), candidates AS (
-			SELECT i.*, ARRAY(SELECT jsonb_array_elements_text(coalesce(i.genres, '[]'))) AS genre_list FROM items i, src
-			WHERE i.kind = src.kind AND i.id <> src.id
+			SELECT i.id, i.released_desc, i.added_at, ARRAY(SELECT jsonb_array_elements_text(coalesce(i.genres, '[]'))) AS genre_list
+			FROM items i, src
+			WHERE i.kind = src.kind AND i.id NOT IN (SELECT same_title(@id))
 				AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i))
+		), ranked AS (
+			SELECT c.id, c.released_desc, c.added_at,
+				cardinality(ARRAY(SELECT unnest(c.genre_list) INTERSECT SELECT unnest(g.genres))) + coalesce(p.shared, 0) AS score
+			FROM candidates c CROSS JOIN src_genres g
+			LEFT JOIN shared_people p ON p.item_id = c.id
+			WHERE c.genre_list && g.genres OR p.item_id IS NOT NULL
+			ORDER BY score DESC, c.released_desc DESC NULLS LAST, c.added_at, c.id
+			-- Kept whole, so only the titles down the ranking until enough are shown are asked
+			-- whether they are the one of their title shown, not every candidate.
+			OFFSET 0
+		), shown AS (
+			SELECT * FROM ranked WHERE (SELECT first_of_title(v, i) FROM items i, viewer(@profile) v WHERE i.id = ranked.id)
+			LIMIT @limit
 		)
-		SELECT c.* FROM candidates c CROSS JOIN src_genres g
-		LEFT JOIN shared_people p ON p.item_id = c.id
-		WHERE c.genre_list && g.genres OR p.item_id IS NOT NULL
-		ORDER BY cardinality(ARRAY(SELECT unnest(c.genre_list) INTERSECT SELECT unnest(g.genres))) + coalesce(p.shared, 0) DESC,
-			c.released_desc DESC NULLS LAST, c.added_at, c.id
-		LIMIT @limit`,
+		SELECT i.* FROM shown JOIN items i ON i.id = shown.id
+		ORDER BY shown.score DESC, shown.released_desc DESC NULLS LAST, shown.added_at, shown.id`,
 		map[string]any{"id": item.ID, "limit": similarShown, "profile": profile.String()}).Scan(&rows).Error
 	if err != nil {
 		return nil, err

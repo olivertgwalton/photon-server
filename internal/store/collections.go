@@ -63,6 +63,9 @@ func saveGroupings(ctx context.Context, tx *query.Query, item model.UUID, source
 			if err := saveIDs(ctx, tx, id, domain.IDFromMatch, map[domain.Provider]string{by: g.ID}); err != nil {
 				return err
 			}
+			if err := keyTitle(ctx, tx, id); err != nil {
+				return err
+			}
 		}
 		if err := applyMetadata(ctx, tx, id, source, domain.Metadata{Title: g.Title}); err != nil {
 			return err

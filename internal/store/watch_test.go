@@ -4,11 +4,14 @@ package store
 
 import (
 	"errors"
+	"fmt"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
 func TestWhatAProfileHasWatched(t *testing.T) {
@@ -169,5 +172,149 @@ func TestAPlaybackIsOnePlayHoweverOftenItReportsTheEnd(t *testing.T) {
 	}
 	if again := state(); again.Plays != 2 || !again.WatchedAt.Equal(*first.WatchedAt) {
 		t.Errorf("after marking it and watching it again = %+v, want a second play and the first watched time %v", again, first.WatchedAt)
+	}
+}
+
+// Victorious in a Kids library and a Shows library, as symlinks to the same files, is one show:
+// one search result and one card on home, its state the same in both, and each library still
+// listing its own.
+func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	kids, err := s.AddLibrary(ctx, "Kids", domain.LibraryShows, "/srv/kids/shows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sam, err := s.AddProfile(ctx, "Sam", domain.RoleMember, "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAccess(ctx, sam.ID, ProfileAccess{Libraries: []uuid.UUID{shows.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	// add scans and matches the show into a library, answering its episodes by number.
+	add := func(lib uuid.UUID) (uuid.UUID, map[int]uuid.UUID) {
+		t.Helper()
+		var eps []Episode
+		for n := 1; n <= 3; n++ {
+			rel := fmt.Sprintf("Victorious/S01E0%d.mkv", n)
+			eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: fmt.Sprintf("Episode %d", n), Folder: "Victorious", ByNumber: true, Copies: []Copy{{
+				ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
+			}}})
+		}
+		saved, err := s.SaveShowFolder(ctx, lib, "Victorious", []byte("v"), Show{Title: "Victorious", Folder: "Victorious"}, eps, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		i := s.q.Item
+		show, err := i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib)), i.Kind.Eq(string(domain.ItemShow))).Take()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SaveIdentity(ctx, uuid.UUID(show.ID), domain.SourceTMDB, domain.Metadata{Title: "Victorious", IDs: map[domain.Provider]string{domain.ProviderTMDB: "36685"}}, nil); err != nil {
+			t.Fatal(err)
+		}
+		episodes := map[int]uuid.UUID{}
+		for _, id := range saved.Titles[domain.TitleAdded] {
+			row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id)), i.Kind.Eq(string(domain.ItemEpisode))).Take()
+			if err == nil {
+				episodes[*row.EpisodeNumber] = id
+			}
+		}
+		return uuid.UUID(show.ID), episodes
+	}
+	watched := func(profile, id uuid.UUID) bool {
+		t.Helper()
+		i := s.q.Item
+		row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
+		if err != nil {
+			t.Fatal(err)
+		}
+		states, err := s.states(ctx, profile, []*model.Item{row})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return states[row.ID].WatchedAt != nil
+	}
+	cards := func(profile uuid.UUID) (search []uuid.UUID, home map[domain.HomeRow][]uuid.UUID) {
+		t.Helper()
+		found, _, err := s.Search(ctx, SearchQuery{Profile: profile, Text: "victorious", Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range found {
+			search = append(search, c.ID)
+		}
+		rows, err := s.Home(ctx, profile, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		home = map[domain.HomeRow][]uuid.UUID{}
+		for _, r := range rows {
+			for _, c := range r.Cards {
+				home[r.Kind] = append(home[r.Kind], c.ID)
+			}
+		}
+		return search, home
+	}
+
+	// Watched in Shows before Kids held it, it is watched in Kids once Kids has it.
+	inShows, showsEps := add(shows.ID)
+	if err := s.MarkWatched(ctx, oliver.ID, showsEps[1]); err != nil {
+		t.Fatal(err)
+	}
+	inKids, kidsEps := add(kids.ID)
+	if !watched(oliver.ID, kidsEps[1]) {
+		t.Error("an episode watched in one library is unwatched where another library gained it")
+	}
+
+	// Kids was added first, so it is the copy shown to whoever sees both.
+	search, home := cards(oliver.ID)
+	if !slices.Equal(search, []uuid.UUID{inKids}) || !slices.Equal(home[domain.RowRecentShows], []uuid.UUID{inKids}) ||
+		!slices.Equal(home[domain.RowNextUp], []uuid.UUID{kidsEps[2]}) {
+		t.Errorf("search = %v, recently added = %v, next up = %v; want Kids' show once and its second episode",
+			search, home[domain.RowRecentShows], home[domain.RowNextUp])
+	}
+	if same, err := s.SameTitles(ctx, oliver.ID, inShows); err != nil || len(same) != 2 || !slices.Contains(same, inKids) {
+		t.Errorf("Shows' show is the same as %v (%v), want it and Kids'", same, err)
+	}
+	if same, err := s.SameTitles(ctx, sam.ID, inKids); err != nil || !slices.Equal(same, []uuid.UUID{inShows}) {
+		t.Errorf("Kids' show is the same as %v (%v) for a profile seeing only Shows, want Shows'", same, err)
+	}
+	// Sam sees only Shows, so Shows' copy.
+	if search, home := cards(sam.ID); !slices.Equal(search, []uuid.UUID{inShows}) || !slices.Equal(home[domain.RowRecentShows], []uuid.UUID{inShows}) {
+		t.Errorf("a profile seeing only Shows is shown search %v and recently added %v, want Shows' show", search, home[domain.RowRecentShows])
+	}
+
+	// Under way in Kids is under way in Shows, and once on home.
+	if _, err := s.SaveProgress(ctx, oliver.ID, kidsEps[2], 20*time.Minute, domain.ReachStart); err != nil {
+		t.Fatal(err)
+	}
+	if _, home := cards(oliver.ID); !slices.Equal(home[domain.RowContinueWatching], []uuid.UUID{kidsEps[2]}) {
+		t.Errorf("continue watching = %v, want Kids' second episode once", home[domain.RowContinueWatching])
+	}
+	if next, err := s.Next(ctx, oliver.ID, inShows); err != nil || next.ID != showsEps[2] {
+		t.Errorf("Shows' show resumes at %v (%v), want its second episode, under way in Kids", next.ID, err)
+	}
+	// Unwatched in Kids is unwatched in Shows.
+	if err := s.MarkUnwatched(ctx, oliver.ID, kidsEps[1]); err != nil {
+		t.Fatal(err)
+	}
+	if watched(oliver.ID, showsEps[1]) {
+		t.Error("an episode unwatched in one library stays watched in the other")
+	}
+
+	for _, lib := range []uuid.UUID{kids.ID, shows.ID} {
+		if wall, _, err := s.Wall(ctx, lib, WallPage{Profile: oliver.ID, Sort: domain.SortTitle, Limit: 10}); err != nil || len(wall) != 1 {
+			t.Errorf("library %v lists %d shows (%v), want its own", lib, len(wall), err)
+		}
 	}
 }

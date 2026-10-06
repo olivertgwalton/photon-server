@@ -82,6 +82,9 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 			if err := saveSeasonArtwork(ctx, tx, showID, path, show); err != nil {
 				return err
 			}
+			if err := keyTitle(ctx, tx, showID); err != nil {
+				return err
+			}
 			// A season named by tvshow.nfo keeps its episodes in a folder of its own.
 			i := tx.Item
 			for number, said := range show.Seasons {

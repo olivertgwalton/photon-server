@@ -134,7 +134,10 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 				}
 			}
 		}
-		return saveCredits(ctx, tx, source, credits)
+		if err := saveCredits(ctx, tx, source, credits); err != nil {
+			return err
+		}
+		return keyTitle(ctx, tx, item)
 	})
 }
 

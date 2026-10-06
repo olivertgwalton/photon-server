@@ -12,6 +12,7 @@ import (
 type audience interface {
 	HasLibrary(ctx context.Context, profile, lib uuid.UUID) (bool, error)
 	Visible(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]uuid.UUID, error)
+	SameTitles(ctx context.Context, profile, title uuid.UUID) ([]uuid.UUID, error)
 }
 
 type helloJSON struct {
@@ -64,7 +65,19 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (eventJSON, bool, error) {
 	switch e.Kind {
 	case domain.EventUserDataChanged:
-		return eventOf(e), e.Profile == profile, nil
+		if e.Profile != profile {
+			return eventJSON{}, false, nil
+		}
+		// A profile's state of a title is its state wherever the title is listed, so each place
+		// is named.
+		if e.Item != (uuid.UUID{}) {
+			same, err := a.svc.Audience.SameTitles(ctx, profile, e.Item)
+			if err != nil {
+				return eventJSON{}, false, err
+			}
+			e.Details = map[string]any{"title_ids": nonNil(same)}
+		}
+		return eventOf(e), true, nil
 	case domain.EventTitleUpdated:
 		seen, err := a.svc.Audience.Visible(ctx, profile, []uuid.UUID{e.Item})
 		return eventOf(e), len(seen) == 1, err
