@@ -22,6 +22,7 @@ import MediaInfo from "#lib/components/MediaInfo.svelte";
 import ExtraCard from "#lib/components/ExtraCard.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
 import PlayChoices from "#lib/components/PlayChoices.svelte";
+import RatingScore from "#lib/components/RatingScore.svelte";
 import Rail from "#lib/components/Rail.svelte";
 import TitleCard from "#lib/components/TitleCard.svelte";
 import TitleMenu from "#lib/components/TitleMenu.svelte";
@@ -31,9 +32,7 @@ import {
 	count,
 	episodeLabel,
 	playHref,
-	ratingSites,
 	runtime,
-	score,
 	timecode,
 } from "#lib/format.js";
 
@@ -238,16 +237,8 @@ const poster = $derived(art("poster"));
 			{#if t.ratings?.length}
 				<ul class="flex flex-wrap gap-2" aria-label="Ratings">
 					{#each t.ratings as rating, i (`${rating.site}-${i}`)}
-						<li
-							class="bg-raise/80 rounded-md px-2 py-1 text-sm backdrop-blur"
-							title={rating.votes
-								? `${rating.votes.toLocaleString()} votes`
-								: undefined}
-						>
-							<span class="label">{ratingSites[rating.site]}</span>
-							<span class="text-ink ml-1 font-semibold">
-								{score(rating.site, rating.score)}
-							</span>
+						<li class="bg-raise/80 rounded-md px-2 py-1 text-sm backdrop-blur">
+							<RatingScore {rating} />
 						</li>
 					{/each}
 				</ul>

@@ -133,9 +133,9 @@ test("a film's page plays the copy and tracks chosen", async ({ page }) => {
 		page.getByRole("heading", { level: 1, name: "Quiet Hours" }),
 	).toBeVisible();
 	await expect(page.getByText("Nobody is listening.")).toBeVisible();
-	await expect(page.getByRole("list", { name: "Ratings" })).toContainText(
-		/IMDb\s*7\.8/,
-	);
+	const ratings = page.getByRole("list", { name: "Ratings" });
+	await expect(ratings.getByRole("img", { name: "IMDb" })).toBeVisible();
+	await expect(ratings).toContainText("7.8");
 	await expectAccessible(page);
 
 	const play = page.getByRole("link", { name: /^Play$|^Resume/ });
