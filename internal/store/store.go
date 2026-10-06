@@ -70,20 +70,17 @@ func Migrate(ctx context.Context, url string, log *slog.Logger) error {
 	return err
 }
 
-// poolSize is how many connections a node holds unless its database address says otherwise with
-// pool_max_conns: as many as its job slots, conversions and background tasks may want (half its
-// CPUs for analysis, and two dozen more for scans, matches, webhooks, previews, conversions and
-// tasks), and as many again for requests. pgx's own default, one a CPU, let a small machine's long
-// scan or match queue every request behind it.
-func poolSize() int32 { return int32(runtime.NumCPU() + 48) }
-
 func connect(ctx context.Context, url string, log *slog.Logger) (*Store, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, err
 	}
 	if !strings.Contains(url, "pool_max_conns") {
-		cfg.MaxConns = poolSize()
+		// As many connections as a node's job slots, conversions and background tasks may want (half
+		// its CPUs for analysis, and two dozen more for scans, matches, webhooks, previews,
+		// conversions and tasks), and as many again for requests. pgx's own default, one a CPU, let
+		// a small machine's long scan or match queue every request behind it.
+		cfg.MaxConns = int32(runtime.NumCPU() + 48)
 	}
 	cfg.ConnConfig.Tracer = queryLog{log}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
