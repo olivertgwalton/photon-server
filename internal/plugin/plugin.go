@@ -25,8 +25,6 @@ import (
 const (
 	// callTimeout bounds each request to a plugin, the manifest's included.
 	callTimeout = 20 * time.Second
-	// maxResponse bounds what a plugin may answer; a long show described whole is the largest.
-	maxResponse = 8 << 20
 	// maxSaid bounds how much of a plugin's own error is kept in the server's.
 	maxSaid = 200
 )
@@ -209,45 +207,33 @@ func call(ctx context.Context, hc *http.Client, name, method, address string, bo
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Accept", "application/json")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := hc.Do(req)
-	if err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return fmt.Errorf("%s: %w: %w", name, provider.ErrUnavailable, err)
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse+1))
-	if err != nil {
-		return fmt.Errorf("%s: %w: %w", name, provider.ErrUnavailable, err)
-	}
-	if len(data) > maxResponse {
-		return fmt.Errorf("%s: answered more than %d bytes", name, maxResponse)
-	}
+	err = provider.Client{Name: name, HTTP: hc}.Do(req, out)
+	refusal, refused := errors.AsType[*provider.Refusal](err)
 	switch {
-	case resp.StatusCode == http.StatusOK:
-		if err := json.Unmarshal(data, out); err != nil {
-			return fmt.Errorf("%s: %w", name, err)
-		}
+	case err == nil:
 		return nil
-	case resp.StatusCode >= http.StatusInternalServerError:
-		return fmt.Errorf("%s: %w: %s", name, provider.ErrUnavailable, said(resp.Status, data, secrets))
-	default:
-		return fmt.Errorf("%s: %s", name, said(resp.Status, data, secrets))
+	case ctx.Err() != nil:
+		return ctx.Err()
+	case errors.Is(err, provider.ErrUnreached):
+		return fmt.Errorf("%w: %w", provider.ErrUnavailable, err)
+	case refused && refusal.Code >= http.StatusInternalServerError:
+		return fmt.Errorf("%s %s: %w: %s", name, req.URL.Path, provider.ErrUnavailable, said(refusal, secrets))
+	case refused:
+		return fmt.Errorf("%s %s: %s", name, req.URL.Path, said(refusal, secrets))
 	}
+	return err
 }
 
 // said is a plugin's error: its status, and the title and detail of the problem it answered.
-func said(status string, data []byte, secrets []string) string {
+func said(r *provider.Refusal, secrets []string) string {
 	var p pluginv1.Problem
-	if json.Unmarshal(data, &p) != nil || p.Title == "" {
-		return status
+	if json.Unmarshal(r.Body, &p) != nil || p.Title == "" {
+		return r.Status
 	}
-	s := status + ": " + p.Title
+	s := r.Status + ": " + p.Title
 	if p.Detail != "" {
 		s += ": " + p.Detail
 	}

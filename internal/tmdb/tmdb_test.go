@@ -13,6 +13,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
 type unlimited struct{}
@@ -144,7 +145,7 @@ func TestAnotherLanguageStillGetsEnglishPictures(t *testing.T) {
 
 func TestMissingSeason(t *testing.T) {
 	c := serve(t, nil)
-	if _, err := c.Season(t.Context(), 1438, 0); !errors.Is(err, ErrNotFound) {
+	if _, err := c.Season(t.Context(), 1438, 0); !errors.Is(err, provider.ErrNotFound) {
 		t.Errorf("Season of a season TMDB lacks: err = %v, want ErrNotFound", err)
 	}
 }

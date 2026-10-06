@@ -62,7 +62,7 @@ func (c *client) post(ctx context.Context, path string, body func(pluginv1.Setti
 			secrets = append(secrets, v)
 		}
 	}
-	return call(ctx, c.http, "plugin "+c.manifest.ID+" "+path, http.MethodPost, c.base+path, body(sent), out, secrets)
+	return call(ctx, c.http, "plugin "+c.manifest.ID, http.MethodPost, c.base+path, body(sent), out, secrets)
 }
 
 func (c *client) Match(ctx context.Context, kind domain.ItemKind, h provider.Hints) (string, error) {
