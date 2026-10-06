@@ -2,11 +2,13 @@
 import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 import type { Snippet } from "svelte";
 import type { Shape } from "#lib/artwork.js";
+import { railLimit } from "#lib/rows.js";
 import TitleCard, { type CardLike } from "./TitleCard.svelte";
 
-// A named row of titles that scrolls sideways. With `href`, its heading leads
-// to the whole of it. Its `cards` are TitleCards; other `items` are drawn by
-// `card`, told how wide the row draws them.
+// A named row of titles that scrolls sideways. Where it holds more than it
+// shows (or `total` says there are more than it was given), its heading leads
+// to the whole of it at `href`. Its `cards` are TitleCards; other `items` are
+// drawn by `card`, told how wide the row draws them.
 let {
 	title,
 	cards = [],
@@ -14,6 +16,8 @@ let {
 	card,
 	shape = "poster",
 	href,
+	total,
+	caption,
 }: {
 	title: string;
 	cards?: CardLike[];
@@ -21,7 +25,13 @@ let {
 	card?: Snippet<[T, string]>;
 	shape?: Shape;
 	href?: string;
+	total?: number;
+	caption?: (index: number) => string | undefined;
 } = $props();
+
+const more = $derived(
+	(total ?? cards.length + items.length) > railLimit ? href : undefined,
+);
 
 const id = $props.id();
 
@@ -45,9 +55,15 @@ const sizes = $derived(
 	that takes room (Safari's, with scroll bars always shown). -->
 <section aria-labelledby={id} class="min-w-0">
 	<h2 {id} class="heading mb-3">
-		{#if href}
-			<a {href} class="group inline-flex items-center gap-1 hover:underline">
+		{#if more}
+			<a
+				href={more}
+				class="group inline-flex items-center gap-2 hover:underline"
+			>
 				{title}
+				<span class="text-ink-3 group-hover:text-ink text-sm font-medium">
+					View all
+				</span>
 				<ChevronRightIcon
 					class="text-ink-3 group-hover:text-ink size-5"
 					aria-hidden="true"
@@ -60,13 +76,13 @@ const sizes = $derived(
 	<ul
 		class="relative -mx-3 flex snap-x scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 pt-1 pb-4 sm:-mx-6 sm:scroll-px-6 sm:gap-4 sm:px-6"
 	>
-		{#each cards as c (c.id)}
+		{#each cards.slice(0, railLimit) as c, i (c.id)}
 			<li class="shrink-0 snap-start {width}">
-				<TitleCard card={c} {shape} {sizes} />
+				<TitleCard card={c} {shape} {sizes} caption={caption?.(i)} />
 			</li>
 		{/each}
 		{#if card}
-			{#each items as item (item.id)}
+			{#each items.slice(0, railLimit) as item (item.id)}
 				<li class="shrink-0 snap-start {width}">{@render card(item, sizes)}</li>
 			{/each}
 		{/if}

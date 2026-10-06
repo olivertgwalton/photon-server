@@ -1,16 +1,21 @@
-<script lang="ts">
+<script lang="ts" generics="T extends Record<'id', string>">
+import type { Snippet } from "svelte";
 import type { Shape } from "#lib/artwork.js";
-import type { components } from "#lib/api/schema.js";
 import { gridColumns } from "#lib/grid.js";
-import TitleCard from "./TitleCard.svelte";
+import TitleCard, { type CardLike } from "./TitleCard.svelte";
 
 // A short list of titles, all drawn: what a wall is before it needs paging.
+// Its `cards` are TitleCards; other `items` are drawn by `card`.
 let {
-	cards,
+	cards = [],
+	items = [],
+	card,
 	shape = "poster",
 	caption,
 }: {
-	cards: components["schemas"]["Card"][];
+	cards?: CardLike[];
+	items?: T[];
+	card?: Snippet<[T]>;
 	shape?: Shape;
 	caption?: (index: number) => string | undefined;
 } = $props();
@@ -20,14 +25,19 @@ let {
 	class="grid gap-x-4 gap-y-6"
 	style="grid-template-columns: {gridColumns(shape)}"
 >
-	{#each cards as card, i (`${card.id}-${i}`)}
+	{#each cards as c, i (`${c.id}-${i}`)}
 		<li>
 			<TitleCard
-				{card}
+				card={c}
 				{shape}
 				sizes={shape === "poster" ? "12rem" : "20rem"}
 				caption={caption?.(i)}
 			/>
 		</li>
 	{/each}
+	{#if card}
+		{#each items as item, i (`${item.id}-${i}`)}
+			<li>{@render card(item)}</li>
+		{/each}
+	{/if}
 </ul>

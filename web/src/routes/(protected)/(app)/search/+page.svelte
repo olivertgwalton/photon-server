@@ -1,6 +1,6 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
-import CardGrid from "#lib/components/CardGrid.svelte";
+import Rail from "#lib/components/Rail.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
 import * as Select from "#lib/components/ui/select/index.js";
 import { byKind } from "#lib/rows.js";
@@ -8,6 +8,12 @@ import { byKind } from "#lib/rows.js";
 let { data } = $props();
 
 const groups = $derived(byKind(data.results?.items ?? []));
+// What a run's whole is asked with.
+const query = $derived(
+	new URLSearchParams(
+		data.library ? { q: data.q, library: data.library } : { q: data.q },
+	).toString(),
+);
 const nothing = $derived(
 	data.results && !data.results.items.length && !data.results.people.length,
 );
@@ -58,26 +64,27 @@ function scope(library: string) {
 		<p class="text-ink-3" role="status">Nothing here matches “{data.q}”.</p>
 	{/if}
 
-	{#each groups as group (group.name)}
-		<section aria-labelledby="found-{group.name}">
-			<h2 id="found-{group.name}" class="heading mb-3">{group.name}</h2>
-			<CardGrid
-				cards={group.cards}
-				shape={group.kind === "episode" ? "still" : "poster"}
-			/>
-		</section>
+	{#each groups as group (group.kind)}
+		<Rail
+			title={group.name}
+			cards={group.cards}
+			shape={group.kind === "episode" ? "still" : "poster"}
+			href="/search/{group.slug}?{query}"
+		/>
 	{/each}
 
 	{#if data.results?.people.length}
-		<section aria-labelledby="found-people">
-			<h2 id="found-people" class="heading mb-3">People</h2>
-			<ul class="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-4">
-				{#each data.results.people as person (person.id)}
-					<li>
-						<PersonCard {...person} />
-					</li>
-				{/each}
-			</ul>
-		</section>
+		<Rail
+			title="People"
+			items={data.results.people}
+			total={data.results.people_total}
+			href="/search/people?{query}"
+		>
+			{#snippet card(
+				person: (typeof data.results.people)[number],
+			)}
+				<PersonCard {...person} />
+			{/snippet}
+		</Rail>
 	{/if}
 </div>

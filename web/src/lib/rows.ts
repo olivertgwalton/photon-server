@@ -3,6 +3,10 @@ import type { components } from "./api/schema.js";
 
 type Kind = components["schemas"]["HomeRowKind"];
 
+// A rail shows this many; the rest are its heading's to show, as the Photon
+// apps' rows are twenty with the heading as the rest.
+export const railLimit = 20;
+
 export const homeRows: Record<Kind, { title: string; shape: Shape }> = {
 	continue_watching: { title: "Continue Watching", shape: "still" },
 	next_up: { title: "Next Up", shape: "still" },
@@ -30,6 +34,7 @@ export function byKind(cards: components["schemas"]["Card"][]) {
 		.map(([kind, name]) => ({
 			kind,
 			name,
+			slug: name.toLowerCase(),
 			cards: cards.filter((c) => c.kind === kind),
 		}))
 		.filter((g) => g.cards.length);

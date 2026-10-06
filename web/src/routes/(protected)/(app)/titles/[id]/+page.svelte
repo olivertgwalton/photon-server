@@ -13,12 +13,13 @@ import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
 import { goto } from "$app/navigation";
 import { pickPlaylist, setFavourite, setWatched } from "#lib/actions.svelte.js";
-import { fold } from "#lib/credits.js";
+import { castOf } from "#lib/credits.js";
+import { type Extra, extrasOf } from "#lib/extras.js";
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
-import type { components } from "#lib/api/schema.js";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import DownloadDialog from "#lib/components/DownloadDialog.svelte";
 import MediaInfo from "#lib/components/MediaInfo.svelte";
+import ExtraCard from "#lib/components/ExtraCard.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
 import PlayChoices from "#lib/components/PlayChoices.svelte";
 import Rail from "#lib/components/Rail.svelte";
@@ -35,8 +36,6 @@ import {
 	score,
 	timecode,
 } from "#lib/format.js";
-
-type ExtraKind = components["schemas"]["ExtraKind"];
 
 let { data } = $props();
 
@@ -94,18 +93,7 @@ const facts = $derived(
 );
 
 // One card per person, whatever they did on it.
-const credits = $derived(
-	fold(
-		t.credits ?? [],
-		(c) => c.person_id,
-		(c) => c.kind,
-		(c) => c.role,
-	).map((f) => ({
-		...(f.all.find((c) => c.photo) ?? f.all[0]),
-		kinds: f.kinds,
-		said: f.said,
-	})),
-);
+const credits = $derived(castOf(t.credits ?? []));
 const directors = $derived(
 	credits.filter((c) =>
 		c.kinds.some((k) => k === "director" || k === "creator"),
@@ -113,45 +101,11 @@ const directors = $derived(
 );
 const writers = $derived(credits.filter((c) => c.kinds.includes("writer")));
 
-const extraKinds: Record<ExtraKind, string> = {
-	trailer: "Trailer",
-	teaser: "Teaser",
-	featurette: "Featurette",
-	behind_the_scenes: "Behind the scenes",
-	deleted_scene: "Deleted scene",
-	interview: "Interview",
-	scene: "Scene",
-	short: "Short",
-	clip: "Clip",
-	blooper: "Blooper",
-	theme_video: "Theme video",
-	other: "Extra",
-};
 const trailer = $derived(t.extras?.find((e) => e.extra_kind === "trailer"));
-
-function videoURL(site: string, key: string): string | undefined {
-	switch (site.toLowerCase()) {
-		case "youtube":
-			return `https://www.youtube.com/watch?v=${encodeURIComponent(key)}`;
-		case "vimeo":
-			return `https://vimeo.com/${encodeURIComponent(key)}`;
-	}
-}
-const videos = $derived(
-	(t.videos ?? []).flatMap((v) => {
-		const url = videoURL(v.site, v.key);
-		return url ? [{ ...v, url }] : [];
-	}),
+const extras: Extra[] = $derived(extrasOf(t));
+const collections = $derived(
+	(t.collections ?? []).map((c) => ({ ...c, kind: "collection" as const })),
 );
-
-// The extras on the server, then the videos a provider links to elsewhere.
-type Extra =
-	| { id: string; extra: components["schemas"]["ExtraCard"] }
-	| { id: string; video: (typeof videos)[number] };
-const extras: Extra[] = $derived([
-	...(t.extras ?? []).map((extra) => ({ id: extra.id, extra })),
-	...videos.map((video) => ({ id: `${video.site}:${video.key}`, video })),
-]);
 
 const links = $derived.by(() => {
 	const ids = t.ids ?? {};
@@ -189,55 +143,6 @@ const backdrop = $derived(art("backdrop"));
 const logo = $derived(art("logo"));
 const poster = $derived(art("poster"));
 </script>
-
-{#snippet extraCard(
-	item: Extra,
-)}
-	{@const remote = "video" in item}
-	{@const name = remote ? item.video.name : item.extra.title}
-	{@const image = remote ? undefined : item.extra.image}
-	<a
-		href={remote ? item.video.url : playHref(item.extra.id)}
-		target={remote ? "_blank" : undefined}
-		rel={remote ? "noopener noreferrer" : undefined}
-		class="group block outline-none"
-	>
-		<span
-			class="bg-raise group-hover:ring-line-strong group-focus-visible:ring-signal relative grid aspect-video place-items-center overflow-hidden rounded-lg ring-2 ring-transparent transition-shadow"
-		>
-			{#if image}
-				<img
-					src={image}
-					alt=""
-					loading="lazy"
-					decoding="async"
-					class="size-full object-cover"
-				>
-			{:else if remote}
-				<ExternalLinkIcon class="text-ink-3 size-6" aria-hidden="true" />
-			{:else}
-				<PlayIcon class="text-ink-3 size-6" aria-hidden="true" />
-			{/if}
-		</span>
-		<span class="text-ink mt-2 block truncate text-sm font-semibold">
-			{name}
-		</span>
-		<span class="text-ink-3 block truncate text-xs">
-			{#if remote}
-				{extraKinds[item.video.extra_kind]}
-				· {item.video.site}
-				<span class="sr-only">(opens in a new tab)</span>
-			{:else}
-				{[
-					extraKinds[item.extra.extra_kind],
-					item.extra.duration_ms && runtime(item.extra.duration_ms),
-				]
-					.filter(Boolean)
-					.join(" · ")}
-			{/if}
-		</span>
-	</a>
-{/snippet}
 
 <svelte:head>
 	<title>{t.show ? `${t.show.title}: ${t.title}` : t.title} · Photon</title>
@@ -626,39 +531,50 @@ const poster = $derived(art("poster"));
 	{/if}
 
 	{#if credits.length}
-		<section aria-labelledby="cast" class="min-w-0">
-			<h2 id="cast" class="heading mb-3">Cast &amp; crew</h2>
-			<ul
-				class="relative -mx-3 flex gap-3 overflow-x-auto overflow-y-hidden px-3 pt-1 pb-4 sm:-mx-6 sm:gap-4 sm:px-6"
-			>
-				{#each credits as credit (credit.person_id)}
-					<li class="w-28 shrink-0 sm:w-32">
-						<PersonCard
-							id={credit.person_id}
-							name={credit.name}
-							photo={credit.photo}
-							caption={credit.said}
-						/>
-					</li>
-				{/each}
-			</ul>
-		</section>
+		<Rail title="Cast & crew" items={credits} href="/titles/{t.id}/cast">
+			{#snippet card(
+				credit: (typeof credits)[number],
+			)}
+				<PersonCard
+					id={credit.person_id}
+					name={credit.name}
+					photo={credit.photo}
+					caption={credit.said}
+				/>
+			{/snippet}
+		</Rail>
 	{/if}
 
 	{#if extras.length}
-		<Rail title="Extras" shape="still" items={extras} card={extraCard} />
+		<Rail
+			title="Extras"
+			shape="still"
+			items={extras}
+			href="/titles/{t.id}/extras"
+		>
+			{#snippet card(
+				item: Extra,
+			)}
+				<ExtraCard {item} />
+			{/snippet}
+		</Rail>
 	{/if}
 
 	{#if t.collections?.length}
 		<Rail
 			title="Collections"
-			cards={t.collections.map((c) => ({ ...c, kind: "collection" as const }))}
+			cards={collections}
+			href="/titles/{t.id}/collections"
 		/>
 	{/if}
 
 	{#await data.similar then similar}
 		{#if similar?.length}
-			<Rail title="More like this" cards={similar} />
+			<Rail
+				title="More like this"
+				cards={similar}
+				href="/titles/{t.id}/similar"
+			/>
 		{/if}
 	{/await}
 
