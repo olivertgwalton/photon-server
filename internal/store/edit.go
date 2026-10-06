@@ -65,6 +65,9 @@ func (s *Store) PinMatch(ctx context.Context, id uuid.UUID, provider domain.Prov
 		if err := e.WithContext(ctx).Save(&model.ExternalID{ItemID: item.ID, Provider: provider, Value: value, Source: domain.IDFromUser}); err != nil {
 			return err
 		}
+		if err := keyTitle(ctx, tx, item.ID); err != nil {
+			return err
+		}
 		return enqueue(ctx, tx, domain.JobIdentify, item.ID)
 	})
 }

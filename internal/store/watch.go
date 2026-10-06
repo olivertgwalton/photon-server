@@ -15,6 +15,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
+	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 // TitleState is what a profile has made of a title. A show's and a season's are their episodes':
@@ -136,6 +137,12 @@ func (s *Store) Unfavourite(ctx context.Context, profile, item uuid.UUID) error 
 	f := s.q.Favourite
 	_, err := f.WithContext(ctx).Where(f.ProfileID.Eq(model.UUID(profile)), f.ItemID.Eq(model.UUID(item))).Delete()
 	return err
+}
+
+// keyTitle keys a title, its seasons and episodes by what they are wherever they are listed, and
+// makes each profile's state of them its state of the titles they are the same as.
+func keyTitle(ctx context.Context, tx *query.Query, title model.UUID) error {
+	return tx.Item.WithContext(ctx).UnderlyingDB().Exec(`SELECT key_titles(ARRAY[?::uuid])`, title).Error
 }
 
 // leaves answers the films or episodes a title is watched by: itself, or a season's or show's
