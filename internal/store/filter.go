@@ -35,14 +35,18 @@ type WallFilter struct {
 const firstLetter = `CASE WHEN upper(left(unaccent(items.sort_title), 1)) BETWEEN 'A' AND 'Z'
 	THEN upper(left(unaccent(items.sort_title), 1)) ELSE '#' END`
 
-// versionOf is a copy on disk of a film, or of any episode of a show.
-const versionOf = `SELECT 1 FROM versions v JOIN items e ON e.id = v.item_id
-	WHERE v.missing_since IS NULL AND (e.id = items.id OR e.parent_id = items.id
-		OR e.parent_id IN (SELECT s.id FROM items s WHERE s.parent_id = items.id))`
+// versionOf is a copy on disk of a film, or of any episode of a show. Each level is its own arm,
+// as an OR across them is a scan of every item for every title.
+const versionOf = `SELECT 1 FROM (
+		SELECT items.id
+		UNION ALL SELECT c.id FROM items c WHERE c.parent_id = items.id
+		UNION ALL SELECT e.id FROM items s JOIN items e ON e.parent_id = s.id WHERE s.parent_id = items.id
+	) t JOIN versions v ON v.item_id = t.id WHERE v.missing_since IS NULL`
 
-// episodesOf are a show's episodes, and a film itself.
-const episodesOf = `SELECT e.id FROM items e WHERE (items.kind = 'movie' AND e.id = items.id)
-	OR (e.kind = 'episode' AND (e.parent_id = items.id OR e.parent_id IN (SELECT s.id FROM items s WHERE s.parent_id = items.id)))`
+// episodesOf are a show's episodes, two levels down, and a film itself.
+const episodesOf = `SELECT items.id WHERE items.kind = 'movie'
+	UNION ALL SELECT e.id FROM items s JOIN items e ON e.parent_id = s.id
+		WHERE s.parent_id = items.id AND e.kind = 'episode'`
 
 // apply narrows a query over items to what the filter lets through, for a profile.
 func (f WallFilter) apply(q *gorm.DB, profile uuid.UUID) *gorm.DB {
