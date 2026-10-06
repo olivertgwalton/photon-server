@@ -26,6 +26,9 @@ const (
 	// jump is how far beyond the remux's place a request may be before it restarts there rather
 	// than waits, as Jellyfin's does about 24 seconds out.
 	jump = 4
+	// behind is how many segments are kept before the one last asked for, a minute's: a player
+	// seeking back further has them made again, and a long film never fills the disk.
+	behind = 10
 )
 
 // ErrNoRemux is a remux that has ended, or never was.
@@ -71,8 +74,13 @@ type Remuxer struct {
 // takes the slot.
 type conversion struct{ stop context.CancelCauseFunc }
 
-// NewRemuxer runs remuxes on hw, at most limit of them encoding video at once, or Unlimited.
+// NewRemuxer runs remuxes on hw, at most limit of them encoding video at once, or Unlimited. What
+// is in dir is removed: no remux outlives its process, and one that stopped uncleanly left its
+// segments.
 func NewRemuxer(ffmpeg, dir, subtitles string, hw Hardware, limit int, log *slog.Logger) (*Remuxer, error) {
+	if err := os.RemoveAll(dir); err != nil {
+		return nil, err
+	}
 	for _, d := range []string{dir, subtitles} {
 		if err := os.MkdirAll(d, 0o750); err != nil {
 			return nil, err
@@ -401,6 +409,7 @@ func (r *Remuxer) Segment(ctx context.Context, playback uuid.UUID, n int) (*os.F
 	}
 	s.mu.Lock()
 	s.furthest = max(s.furthest, n)
+	s.forget(n - behind)
 	wait := s.waiter(n)
 	select {
 	case <-wait:
@@ -439,6 +448,17 @@ func (s *session) waiter(n int) chan struct{} {
 		s.ready[n] = c
 	}
 	return c
+}
+
+// forget removes the segments made before segment n; the session's lock is held. One asked for
+// again is made again.
+func (s *session) forget(n int) {
+	for m, c := range s.ready {
+		if m < n && closed(c) && s.failed[m] == nil {
+			_ = s.root.Remove(segmentName(m))
+			delete(s.ready, m)
+		}
+	}
 }
 
 // start replaces the session's ffmpeg with one starting at segment n; the session's lock is held.
