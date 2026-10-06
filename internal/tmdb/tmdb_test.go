@@ -194,3 +194,21 @@ func TestARequestTMDBAsksToSlowIsSentAgain(t *testing.T) {
 		t.Errorf("Search = %v, %v after %d requests; want Alien, asked again once", got, err, asked)
 	}
 }
+
+func TestAnEpisodeIsRatedByItsVotesAlone(t *testing.T) {
+	c := serve(t, map[string]string{
+		"/tv/1438/season/1?language=en-GB": `{"name":"Season 1","episodes":[
+			{"episode_number":1,"name":"The Target","vote_average":8.1,"vote_count":120},
+			{"episode_number":2,"name":"The Detail","vote_average":0,"vote_count":0}]}`,
+	})
+	got, err := c.Season(t.Context(), 1438, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff([]domain.Rating{{Site: domain.SiteTMDB, Score: 81, Votes: 120}}, got.Episodes[1].Ratings); diff != "" {
+		t.Errorf("a voted episode's ratings (-want +got):\n%s", diff)
+	}
+	if r := got.Episodes[2].Ratings; r != nil {
+		t.Errorf("an episode nobody voted on is rated %+v, want nothing", r)
+	}
+}
