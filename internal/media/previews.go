@@ -87,13 +87,15 @@ func countFrames(out []byte) (Thumbnails, error) {
 	return th, sc.Err()
 }
 
-// Still writes the picture shown at a time in a video to path as a JPEG, width pixels wide.
+// Still writes the keyframe at or after a time in a video to path as a JPEG, width pixels wide,
+// decoding nothing else, as Jellyfin's image extraction does.
 func (t Tools) Still(ctx context.Context, f *os.File, at time.Duration, width int, toneMap bool, path string) error {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
 	_, err := output(ctx, PartRun, []*os.File{f}, t.FFmpeg.Path,
-		"-hide_banner", "-loglevel", "error", "-nostdin", "-ss", strconv.FormatFloat(at.Seconds(), 'f', 3, 64),
+		"-hide_banner", "-loglevel", "error", "-nostdin", "-skip_frame", "nokey",
+		"-ss", strconv.FormatFloat(at.Seconds(), 'f', 3, 64),
 		"-protocol_whitelist", "fd", "-fd", "3", "-i", "fd:", "-an", "-sn", "-dn", "-frames:v", "1",
 		"-vf", fitted(width, toneMap), "-c:v", "mjpeg", "-q:v", jpegQuality, "-f", "image2", "-update", "1", path)
 	if err != nil {

@@ -21,7 +21,7 @@ func TestAStillPastTheEndIsNoPicture(t *testing.T) {
 	dir := t.TempDir()
 	video := filepath.Join(dir, "limited.mp4")
 	if out, err := exec.CommandContext(t.Context(), path, "-hide_banner", "-loglevel", "error",
-		"-f", "lavfi", "-i", "testsrc2=s=320x180:r=25:d=2", "-pix_fmt", "yuv420p", "-color_range", "tv",
+		"-f", "lavfi", "-i", "testsrc2=s=320x180:r=25:d=2", "-g", "5", "-pix_fmt", "yuv420p", "-color_range", "tv",
 		video).CombinedOutput(); err != nil {
 		t.Fatalf("making the video: %v: %s", err, out)
 	}

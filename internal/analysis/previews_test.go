@@ -419,9 +419,8 @@ func TestAnExtraIsPicturedByAStill(t *testing.T) {
 	_ = still.Close()
 }
 
-// A file too slow to seek in gives up its chapters at the first picture past the limit, rather
-// than holding the previews slot for every chapter in turn.
-func TestAFileTooSlowToSeekInIsLeftWithoutChapters(t *testing.T) {
+// A chapter whose picture takes past the limit is left without it, and the others are still tried.
+func TestAChapterTooSlowToPictureIsLeftWithout(t *testing.T) {
 	limit := stillLimit
 	stillLimit = 200 * time.Millisecond
 	t.Cleanup(func() { stillLimit = limit })
@@ -454,10 +453,10 @@ func TestAFileTooSlowToSeekInIsLeftWithoutChapters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := strings.Count(string(asked), "\n"); n != 1 {
-		t.Errorf("ffmpeg asked %d times, want once", n)
+	if n := strings.Count(string(asked), "\n"); n != len(chapters) {
+		t.Errorf("ffmpeg asked %d times, want once a chapter", n)
 	}
 	if took := time.Since(began); took > 5*time.Second {
-		t.Errorf("took %s, want about the limit", took)
+		t.Errorf("took %s, want about the limit a chapter", took)
 	}
 }

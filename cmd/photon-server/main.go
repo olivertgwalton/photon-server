@@ -286,9 +286,9 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	notifier := jobs.NewWorker(st, logger, node, webhookSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobDeliverWebhook: webhook.Deliver(st),
 	}, hub)
-	// Previews have a slot of their own, so however many are queued, the other analysis keeps
-	// every slot of its.
-	previewer := jobs.NewWorker(st, logger, node, 1, map[domain.JobKind]jobs.Handler{
+	// Previews have slots of their own, so however many are queued, the other analysis keeps every
+	// slot of its; as many as there are processors, as Jellyfin's image extraction runs.
+	previewer := jobs.NewWorker(st, logger, node, runtime.NumCPU(), map[domain.JobKind]jobs.Handler{
 		domain.JobPreviews: analysis.MakePreviews(st, tools, previews, logger),
 	}, hub)
 	// Conversions have slots of their own, so a long one never holds up a scan, and each holds a
