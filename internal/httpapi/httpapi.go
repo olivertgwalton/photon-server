@@ -137,9 +137,11 @@ type Services struct {
 	// NowPlaying is every playback going on, across the cluster.
 	NowPlaying nowPlaying
 	Pictures   pictures
-	Watching   watching
-	Playing    playing
-	Playbacks  playbacks
+	// Themes are titles' theme tunes, those from the theme host kept in Artwork.
+	Themes    themes
+	Watching  watching
+	Playing   playing
+	Playbacks playbacks
 	// Downloads are each profile's, and Conversions make the ones not downloaded as they are.
 	Downloads   downloads
 	Conversions conversions
@@ -747,6 +749,11 @@ func (a *API) routes() []route {
 			summary: "A picture, kept for good: its id changes when it does",
 			query:   []param{{"width", 0, "A copy this many pixels wide."}},
 			status:  http.StatusOK, reply: asFile{"image/*"}, handle: a.artwork,
+		},
+		{
+			pattern: "GET /api/v1/themes/{id}", access: public,
+			summary: "A theme tune, in byte ranges, kept for good: its id changes when it does",
+			status:  http.StatusOK, reply: asFile{"audio/*"}, handle: a.theme,
 		},
 	}
 }

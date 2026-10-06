@@ -105,6 +105,18 @@ lists what the providers had at the last match, each served like any picture at
 makes one the title's own, above the files and through every refresh, until `DELETE` on the same
 address gives it back.
 
+A film or show plays its theme tune under its page, as Jellyfin's theme songs and Plex's TV theme
+music do: `theme.mp3` (or `.flac`, `.m4a`, `.ogg`, `.opus`, `.wav`, `.aac`, `.wma`) in its folder,
+then the sound files in a `theme-music` folder there, read by the scan and never written to. A show
+with none takes Plex's own theme for it, found by its TheTVDB id once it is matched and kept in
+`PHOTON_CACHE_DIR`'s `artwork` folder for good; a show Plex has none for is asked about again a
+month later. A season's and an episode's page plays its show's. A title's page lists them in
+`themes`, each served at `/api/v1/themes/{id}` without a token, like a picture. `photon-server
+library set -name NAME -themes local` (or `"themes": "local"` in `PATCH
+/api/v1/admin/libraries/{id}`) keeps to the files, `-themes off` plays none, and `all`, the default
+as Plex's is, asks Plex too. Whether a page plays them is each profile's `theme_music` preference,
+`off` until it says `play`, as in Jellyfin's web client.
+
 Metadata providers are plugins: `GET /api/v1/admin/providers` lists each with what it can do (describe
 titles, rate them) and what it needs set. TMDB gives its own score; MDBList gives IMDb's and Rotten
 Tomatoes' critics and audience once an admin sets its free
