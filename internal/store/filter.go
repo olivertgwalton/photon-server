@@ -48,6 +48,11 @@ const episodesOf = `SELECT items.id WHERE items.kind = 'movie'
 	UNION ALL SELECT e.id FROM items s JOIN items e ON e.parent_id = s.id
 		WHERE s.parent_id = items.id AND e.kind = 'episode'`
 
+// begun is whether the profile given as @profile has watched or started a film, or an episode of a show.
+const begun = `EXISTS (SELECT 1 FROM (` + episodesOf + `) e
+	JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
+	WHERE w.watched_at IS NOT NULL OR w.position_ms > 0)`
+
 // where is the conditions, each led by AND, that narrow a statement over items to what the filter
 // lets through, for the profile args holds as @profile; it adds the values they take to args.
 func (f WallFilter) where(args pgx.NamedArgs) string {
@@ -117,9 +122,7 @@ func markSQL(m domain.Mark) string {
 	case domain.MarkUnwatched:
 		return unwatched
 	case domain.MarkInProgress:
-		return unwatched + ` AND EXISTS (SELECT 1 FROM (` + episodesOf + `) e
-			JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
-			WHERE w.watched_at IS NOT NULL OR w.position_ms > 0)`
+		return unwatched + ` AND ` + begun
 	case domain.MarkFavourite:
 		return "EXISTS (SELECT 1 FROM favourites f WHERE f.item_id = items.id AND f.profile_id = @profile)"
 	}
