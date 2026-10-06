@@ -5,12 +5,12 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // convertStall is how long a conversion may go without getting further. ffmpeg says how far it has
@@ -32,14 +32,11 @@ func (h Hardware) Convert(ctx context.Context, ffmpeg string, src *os.File, vide
 	a = append(a, "-i", "fd:")
 	a = append(a, streamArgs(h, video, audio)...)
 	a = append(a, "-f", "mp4", "-movflags", "+faststart", "-progress", "pipe:1", "-nostats", "-y", dst)
-	cmd := exec.CommandContext(ctx, ffmpeg, a...)
-	cmd.ExtraFiles = []*os.File{src}
+	cmd := media.NewCommand(ctx, []*os.File{src}, ffmpeg, a...)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
-	stderr := &tail{}
-	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -68,12 +65,5 @@ func (h Hardware) Convert(ctx context.Context, ffmpeg string, src *os.File, vide
 			break
 		}
 	}
-	err = cmd.Wait()
-	if cause := context.Cause(ctx); cause != nil {
-		return cause
-	}
-	if err != nil {
-		return fmt.Errorf("ffmpeg: %w: %s", err, strings.TrimSpace(stderr.String()))
-	}
-	return nil
+	return cmd.Err(cmd.Wait())
 }
