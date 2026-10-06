@@ -11,6 +11,17 @@ export async function logIn(page: Page, to = "/") {
 }
 
 export async function expectAccessible(page: Page) {
+	// Contrast is judged on settled colours: a link still fading to its current
+	// state reads as neither. Endless animations (a pulse) never settle.
+	await page.waitForFunction(() =>
+		document
+			.getAnimations()
+			.every(
+				(a) =>
+					a.playState !== "running" ||
+					a.effect?.getTiming().iterations === Number.POSITIVE_INFINITY,
+			),
+	);
 	const results = await new AxeBuilder({ page })
 		.withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
 		.analyze();
