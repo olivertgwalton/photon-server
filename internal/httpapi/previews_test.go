@@ -62,7 +62,7 @@ func TestPreviewsAreServedToThoseWhoMaySeeTheTitle(t *testing.T) {
 	base := "/api/v1/parts/" + previewedPart.String()
 
 	rec := get(goodToken, base+"/trickplay")
-	var got store.Trickplay
+	var got trickplayJSON
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil || rec.Code != http.StatusOK || got.Sheets != 2 || got.Height != 180 {
 		t.Fatalf("geometry: %d %+v %v", rec.Code, got, err)
 	}

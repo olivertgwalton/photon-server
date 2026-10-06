@@ -561,7 +561,7 @@ func (a *API) routes() []route {
 		{
 			pattern: "GET /api/v1/parts/{id}/trickplay", access: signedIn,
 			summary: "How a part's trickplay sheets are laid out, to find the thumbnail for a time",
-			status:  http.StatusOK, reply: store.Trickplay{}, handle: a.trickplay,
+			status:  http.StatusOK, reply: trickplayJSON{}, handle: a.trickplay,
 		},
 		{
 			pattern: "GET /api/v1/parts/{id}/trickplay/{n}", access: signedIn, summary: "A part's trickplay sheet",
