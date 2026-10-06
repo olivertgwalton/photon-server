@@ -82,6 +82,12 @@ of everything queued; `"all"` asks about every season and episode under it too. 
 provider's pictures are replaced with what it has now, and edits, locks and NFOs stand. Reading
 its files again is the library scan's job.
 
+A whole library is refreshed the same way with `POST /api/v1/admin/libraries/{id}/refresh`:
+`"missing"` takes the films and shows never matched, with no overview or poster, with a season not
+yet described, or whose last match failed every attempt; `"all"` takes every one, with all their
+seasons and episodes. Those matches queue behind the titles a scan has just found, so a large
+library's refresh, which can take hours, never holds up a new film; the dashboard shows them run.
+
 A title's pictures are the files beside it first (`poster.jpg`, `fanart.jpg`…), then each
 provider's best ten of a kind, in the library's order. An admin chooses another, as with Jellyfin's
 Edit Images and Plex's poster chooser: `GET /api/v1/admin/titles/{id}/artwork/candidates?kind=poster`

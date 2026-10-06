@@ -31,6 +31,7 @@ type libraryAdmin interface {
 	SetLibrary(ctx context.Context, id uuid.UUID, change store.LibraryChange) error
 	RemoveLibrary(ctx context.Context, id uuid.UUID) error
 	ScanFolders(ctx context.Context, lib uuid.UUID, folders []string, delay time.Duration) error
+	RefreshLibrary(ctx context.Context, lib uuid.UUID, mode domain.RefreshMode) error
 }
 
 // adminLibraryJSON is a library as an admin sees it: where it is and how it is kept.
@@ -200,6 +201,27 @@ func (a *API) scanLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.svc.Libraries.ScanFolders(r.Context(), id, []string{folder}, 0); err != nil {
 		a.internal(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// refreshLibrary asks a library's providers about its films and shows again, behind what a scan
+// has just found.
+func (a *API) refreshLibrary(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r)
+	if !ok {
+		return
+	}
+	var req refreshJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	if req.Mode == "" {
+		writeProblem(w, a.logger, codeInvalidBody, "mode is missing or all")
+		return
+	}
+	if a.answered(w, r, a.svc.Libraries.RefreshLibrary(r.Context(), id, req.Mode)) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)

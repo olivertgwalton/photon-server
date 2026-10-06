@@ -566,6 +566,11 @@ func (a *API) routes() []route {
 			status:  http.StatusAccepted, handle: a.scanLibrary,
 		},
 		{
+			pattern: "POST /api/v1/admin/libraries/{id}/refresh", access: admin,
+			summary: "Ask the providers about a library's films and shows again: those not yet described, or all",
+			body:    refreshJSON{}, status: http.StatusAccepted, handle: a.refreshLibrary,
+		},
+		{
 			pattern: "GET /api/v1/subtitles/{id}/file", access: signedAddress,
 			summary: "A subtitle file beside a copy, as it is or as WebVTT, at the address play answered",
 			query: append([]param{

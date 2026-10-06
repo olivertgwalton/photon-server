@@ -4,11 +4,13 @@ package store
 
 import (
 	"errors"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
 func TestAnEditStandsUntilItIsReset(t *testing.T) {
@@ -198,5 +200,107 @@ func TestARefreshIsAskedAheadOfTheQueue(t *testing.T) {
 	}
 	if err := s.Refresh(ctx, uuid.NewV7(), domain.RefreshAll); !errors.Is(err, ErrNotFound) {
 		t.Errorf("refreshing nothing: %v, want ErrNotFound", err)
+	}
+}
+
+func TestALibraryRefreshTakesWhatIsMissingAfterNewTitles(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	i, j := s.q.Item, s.q.Job
+	film := func(title string) uuid.UUID {
+		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{{Title: title, Folder: title}}, nil); err != nil {
+			t.Fatal(err)
+		}
+		return uuid.UUID(must(i.WithContext(ctx).Where(i.Title.Eq(title)).Take()).ID)
+	}
+	poster := []domain.Artwork{{Kind: domain.ArtworkPoster, URL: "https://image.example/heat.jpg"}}
+	described := map[string]domain.Metadata{
+		"Heat":  {Title: "Heat", Overview: "A thief and a detective.", Artwork: poster},
+		"Ronin": {Title: "Ronin", Overview: "Mercenaries and a case."},
+		"Alien": {Title: "Alien"},
+	}
+	ids := map[uuid.UUID]string{}
+	for title, m := range described {
+		id := film(title)
+		ids[id] = title
+		if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, m, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Identified(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	queued := func() []string {
+		var subjects []model.UUID
+		if err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobIdentify))).Pluck(j.Subject, &subjects); err != nil {
+			t.Fatal(err)
+		}
+		var titles []string
+		for _, id := range subjects {
+			titles = append(titles, ids[uuid.UUID(id)])
+		}
+		slices.Sort(titles)
+		return titles
+	}
+	// Each was matched when the scan found it.
+	if _, err := j.WithContext(ctx).Where(j.Kind.Eq(string(domain.JobIdentify))).Delete(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.RefreshLibrary(ctx, lib.ID, domain.RefreshMissing); err != nil {
+		t.Fatal(err)
+	}
+	if got := queued(); !slices.Equal(got, []string{"Alien", "Ronin"}) {
+		t.Errorf("refreshing what is missing queued %v; want Alien, with no overview, and Ronin, with no poster", got)
+	}
+	ids[film("Thief")] = "Thief"
+	claimed, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobIdentify}, uuid.NewV7(), time.Minute, 1)
+	if err != nil || len(claimed) != 1 || ids[claimed[0].Subject] != "Thief" {
+		t.Errorf("claimed %+v, %v; want Thief, just found, ahead of the refresh", claimed, err)
+	}
+
+	if err := s.RefreshLibrary(ctx, lib.ID, domain.RefreshAll); err != nil {
+		t.Fatal(err)
+	}
+	if got := queued(); !slices.Equal(got, []string{"Alien", "Heat", "Ronin", "Thief"}) {
+		t.Errorf("refreshing all queued %v; want every film", got)
+	}
+	if err := s.RefreshLibrary(ctx, uuid.NewV7(), domain.RefreshAll); !errors.Is(err, ErrNotFound) {
+		t.Errorf("refreshing no library: %v, want ErrNotFound", err)
+	}
+}
+
+func TestALibraryRefreshOfAllAsksAboutEverySeason(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ep := Episode{
+		Season: 1, Episodes: []int{1}, Title: "Firefly", Folder: "Firefly/Season 1", ByNumber: true,
+		Copies: []Copy{{ContentKey: []byte{1}, Parts: []Part{{RelPath: "Firefly/Season 1/1.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
+	}
+	if _, err := s.SaveShowFolder(ctx, lib.ID, "Firefly/Season 1", []byte("v1"), Show{Title: "Firefly", Folder: "Firefly"}, []Episode{ep}, nil); err != nil {
+		t.Fatal(err)
+	}
+	i := s.q.Item
+	id := uuid.UUID(must(i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()).ID)
+	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Title: "Firefly"},
+		map[int]domain.SeasonMetadata{1: {Metadata: domain.Metadata{Title: "Season 1"}, Episodes: map[int]domain.Metadata{1: {Title: "Serenity"}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if sub, _, _ := s.IdentifySubject(ctx, id); len(sub.Seasons) != 0 {
+		t.Fatalf("seasons %v asked about after the match; want none", sub.Seasons)
+	}
+	if err := s.RefreshLibrary(ctx, lib.ID, domain.RefreshAll); err != nil {
+		t.Fatal(err)
+	}
+	if sub, _, _ := s.IdentifySubject(ctx, id); !slices.Equal(sub.Seasons, []int{1}) {
+		t.Errorf("refreshing the library asks about seasons %v; want season 1 again", sub.Seasons)
 	}
 }

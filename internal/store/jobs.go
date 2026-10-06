@@ -46,6 +46,12 @@ func enqueueAsked(ctx context.Context, tx *query.Query, kind domain.JobKind, sub
 	return insertJob(ctx, tx, kind, subject, 0, askedPriority)
 }
 
+// requeue ends an INSERT of jobs as enqueue answers a job already there, keeping its priority.
+const requeue = `
+	ON CONFLICT (kind, subject) DO UPDATE SET
+		state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
+		attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END`
+
 func insertJob(ctx context.Context, tx *query.Query, kind domain.JobKind, subject model.UUID, delay time.Duration, priority int16) error {
 	// GORM refuses expressions in an upsert's assignments.
 	return tx.Job.WithContext(ctx).UnderlyingDB().Exec(`
@@ -254,10 +260,7 @@ func rekeyframe(ctx context.Context, tx *query.Query, lib model.UUID, mode domai
 		WHERE v.library_id = ?
 			AND EXISTS (SELECT 1 FROM part_files f WHERE f.part_id = p.id)
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'video')
-			AND NOT EXISTS (SELECT 1 FROM keyframes k WHERE k.part_id = p.id)
-		ON CONFLICT (kind, subject) DO UPDATE SET
-			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
-			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END`, indexPriority, lib).Error
+			AND NOT EXISTS (SELECT 1 FROM keyframes k WHERE k.part_id = p.id)`+requeue, indexPriority, lib).Error
 }
 
 // AskKeyframes queues a part's keyframes job ahead of the rest, for a part played before its turn.
@@ -326,9 +329,6 @@ func (s *Store) RefreshStale(ctx context.Context) (int64, error) {
 		INSERT INTO jobs (kind, subject, priority)
 		SELECT 'identify', i.id, $1 FROM items i JOIN libraries l ON l.id = i.library_id
 		WHERE i.kind IN ('movie', 'show') AND l.refresh_days > 0
-			AND coalesce(i.identified_at, '-infinity') < now() - make_interval(days => l.refresh_days)
-		ON CONFLICT (kind, subject) DO UPDATE SET
-			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
-			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END`, refreshPriority)
+			AND coalesce(i.identified_at, '-infinity') < now() - make_interval(days => l.refresh_days)`+requeue, refreshPriority)
 	return tag.RowsAffected(), err
 }
