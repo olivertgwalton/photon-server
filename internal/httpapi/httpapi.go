@@ -277,7 +277,7 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "GET /api/v1/me/preferences", access: signedIn,
-			summary: "How the profile plays on every device: Jellyfin's defaults until it changes them",
+			summary: "How the profile plays on every device: the server's defaults until it changes them",
 			status:  http.StatusOK, reply: preferencesJSON{}, handle: a.ownPreferences,
 		},
 		{

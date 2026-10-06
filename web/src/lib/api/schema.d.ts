@@ -3018,7 +3018,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** How the profile plays on every device: Jellyfin's defaults until it changes them */
+        /** How the profile plays on every device: the server's defaults until it changes them */
         get: {
             parameters: {
                 query?: never;
