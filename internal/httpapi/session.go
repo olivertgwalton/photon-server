@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -112,10 +113,12 @@ type profileJSON struct {
 	ID   string      `json:"id"`
 	Name string      `json:"name"`
 	Role domain.Role `json:"role"`
+	// Avatar is the profile's picture, at /api/v1/artwork/{id}.
+	Avatar uuid.UUID `json:"avatar,omitzero"`
 }
 
 func profileOf(p domain.Profile) profileJSON {
-	return profileJSON{ID: p.ID.String(), Name: p.Name, Role: p.Role}
+	return profileJSON{ID: p.ID.String(), Name: p.Name, Role: p.Role, Avatar: p.Avatar}
 }
 
 type loginRequest struct {

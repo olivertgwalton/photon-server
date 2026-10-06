@@ -121,6 +121,8 @@ type Services struct {
 	ProviderSettings providerSettings
 	// Plugins are the metadata plugins an admin registered.
 	Plugins pluginAdmin
+	// Avatars are the profiles' pictures, kept in Artwork.
+	Avatars avatars
 	// ProfileAdmin adds, changes and removes the household's profiles.
 	ProfileAdmin profileAdmin
 	Tasks        tasks
@@ -268,6 +270,15 @@ func (a *API) routes() []route {
 			pattern: "PATCH /api/v1/me/preferences", access: signedIn,
 			summary: "Change how the profile plays on every device; what is left out stays",
 			body:    preferencesChangeJSON{}, status: http.StatusOK, reply: preferencesJSON{}, handle: a.setOwnPreferences,
+		},
+		{
+			pattern: "POST /api/v1/me/avatar", access: signedIn,
+			summary: "Give the profile a picture: a JPEG, PNG, GIF or WebP of at most 32 MiB and 50 megapixels",
+			body:    avatarTypes, status: http.StatusOK, reply: profileJSON{}, handle: a.setOwnAvatar,
+		},
+		{
+			pattern: "DELETE /api/v1/me/avatar", access: signedIn, summary: "Take the profile's picture away",
+			status: http.StatusNoContent, handle: a.clearOwnAvatar,
 		},
 		{
 			pattern: "GET /api/v1/auth/devices", access: signedIn, summary: "List the devices signed in",
@@ -602,6 +613,15 @@ func (a *API) routes() []route {
 			pattern: "DELETE /api/v1/admin/profiles/{id}", access: admin,
 			summary: "Remove a profile, its devices and what it has watched", status: http.StatusNoContent,
 			handle: a.removeProfile,
+		},
+		{
+			pattern: "POST /api/v1/admin/profiles/{id}/avatar", access: admin,
+			summary: "Give any profile a picture: a JPEG, PNG, GIF or WebP of at most 32 MiB and 50 megapixels",
+			body:    avatarTypes, status: http.StatusOK, reply: profileJSON{}, handle: a.setProfileAvatar,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/profiles/{id}/avatar", access: admin, summary: "Take any profile's picture away",
+			status: http.StatusNoContent, handle: a.clearProfileAvatar,
 		},
 		{
 			pattern: "GET /api/v1/admin/profiles/{id}/access", access: admin, summary: "What a profile may see",

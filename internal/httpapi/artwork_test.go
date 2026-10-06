@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"context"
+	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -45,6 +47,10 @@ func (f fakePictures) Resized(_ context.Context, key string, _ int, _ func(conte
 	}
 	return nil, artwork.ErrNotResizable
 }
+
+func (fakePictures) Keep(uuid.UUID, io.Reader) error { return errors.New("not kept here") }
+
+func (fakePictures) Kept(uuid.UUID) (*os.File, error) { return nil, os.ErrNotExist }
 
 func TestArtwork(t *testing.T) {
 	root := t.TempDir()

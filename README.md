@@ -382,6 +382,14 @@ limited as sign-ins are. A household profile, one with no password, is only ever
 signed-in device and cannot give itself one: an admin does, which lets it sign in by itself. It can
 still set a PIN with `PUT /api/v1/me/pin`.
 
+A profile has a picture, as Jellyfin's users and Plex's Home users do: `POST /api/v1/me/avatar` with
+the image as the body sets the profile's own, and an admin sets anyone's at
+`/api/v1/admin/profiles/{id}/avatar`; `DELETE` on either takes it away. The server keeps a JPEG, PNG,
+GIF or WebP, by what its bytes say it is (never SVG), of at most 32 MiB and 50 megapixels, as it
+bounds providers' pictures, in its picture cache, and serves it at `/api/v1/artwork/{id}` like any
+other; the id changes with the picture, so a client keeps it for good. A picture taken away is swept
+with the rest.
+
 How a profile plays is kept on the server, so every device it plays on follows it, as Jellyfin's
 user settings are: `GET /api/v1/me/preferences` and `PATCH` with what to change. The sound and
 subtitle languages and when subtitles come on are the server's to apply: a title's page names, for
