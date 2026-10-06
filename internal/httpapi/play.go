@@ -389,13 +389,7 @@ func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	http.ServeContent(w, r, name, info.ModTime(), f)
+	a.serveFile(w, r, f, name, nil)
 }
 
 // routeToOwner hands a request about the playback the path names by param that another node of

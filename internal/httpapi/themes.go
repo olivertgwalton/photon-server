@@ -43,17 +43,12 @@ func (a *API) theme(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		a.internal(w, r, err)
-		return
+	h := http.Header{
+		"Cache-Control":          {"public, max-age=31536000, immutable"},
+		"X-Content-Type-Options": {"nosniff"},
 	}
-	h := w.Header()
 	if kind != "" {
 		h.Set("Content-Type", kind)
 	}
-	h.Set("Cache-Control", "public, max-age=31536000, immutable")
-	h.Set("X-Content-Type-Options", "nosniff")
-	http.ServeContent(w, r, "", info.ModTime(), f)
+	a.serveFile(w, r, f, "", h)
 }

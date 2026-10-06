@@ -231,12 +231,5 @@ func (a *API) downloadFile(w http.ResponseWriter, r *http.Request) {
 		a.proxy(w, r, target)
 		return
 	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	w.Header().Set("Content-Type", "video/mp4")
-	http.ServeContent(w, r, "", info.ModTime(), f)
+	a.serveFile(w, r, f, "", http.Header{"Content-Type": {"video/mp4"}})
 }

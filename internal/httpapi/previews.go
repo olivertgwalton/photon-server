@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"os"
 	"strconv"
@@ -94,13 +95,21 @@ func (a *API) servePreview(w http.ResponseWriter, r *http.Request, open func() (
 	if a.answered(w, r, err) {
 		return
 	}
+	a.serveFile(w, r, f, "", http.Header{
+		"Content-Type":  {"image/jpeg"},
+		"Cache-Control": {"private, max-age=31536000, immutable"},
+	})
+}
+
+// serveFile serves f, which it closes, in byte ranges. It sets header only once f has answered, so
+// a failure carries none of it; name gives the type where header does not.
+func (a *API) serveFile(w http.ResponseWriter, r *http.Request, f *os.File, name string, header http.Header) {
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
-	http.ServeContent(w, r, "", info.ModTime(), f)
+	maps.Copy(w.Header(), header)
+	http.ServeContent(w, r, name, info.ModTime(), f)
 }
