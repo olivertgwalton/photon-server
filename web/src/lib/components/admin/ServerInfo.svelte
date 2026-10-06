@@ -26,6 +26,7 @@ const rows = $derived<[string, string][]>([
 	["System", `${s.os} on ${s.arch}`],
 	["FFmpeg", tool(s.ffmpeg)],
 	["FFprobe", tool(s.ffprobe)],
+	["yt-dlp", tool(s.yt_dlp)],
 	[
 		"Chromaprint",
 		s.chromaprint

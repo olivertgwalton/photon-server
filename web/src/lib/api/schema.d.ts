@@ -5506,6 +5506,7 @@ export interface components {
             trusted_proxies: string[];
             valkey: components["schemas"]["Backend"];
             version: string;
+            yt_dlp: components["schemas"]["Tool"];
         };
         SetEpisodeOrder: {
             order: components["schemas"]["EpisodeOrder"];
@@ -5599,7 +5600,7 @@ export interface components {
         /** @enum {string} */
         TaskResult: "succeeded" | "failed" | "cancelled";
         /** @enum {string} */
-        ThemeLookup: "all" | "local" | "off";
+        ThemeLookup: "local" | "themerr" | "off";
         /** @enum {string} */
         ThemeMusic: "play" | "off";
         TitlePage: {
