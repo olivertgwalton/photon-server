@@ -379,3 +379,30 @@ func TestAScanAnswersTheFoldersAskedBeforeItStarted(t *testing.T) {
 		t.Errorf("left %v asked, want Heat for the next scan", asked)
 	}
 }
+
+// A claim leases no more than it asks for whatever plan the database chooses: forced into the
+// nested loop that runs a picking subquery once per row scanned, `id IN (… SKIP LOCKED LIMIT 1)`
+// leased every job, so a worker with one slot held work its leases ran out on.
+func TestAClaimLeasesNoMoreThanItAsks(t *testing.T) {
+	s := migrated(t)
+	enqueueN(t, s, 50)
+	if _, err := s.pool.Exec(t.Context(), `DO $$ BEGIN
+		EXECUTE format('ALTER DATABASE %I SET enable_hashjoin = off', current_database());
+		EXECUTE format('ALTER DATABASE %I SET enable_mergejoin = off', current_database());
+		EXECUTE format('ALTER DATABASE %I SET enable_hashagg = off', current_database());
+		EXECUTE format('ALTER DATABASE %I SET enable_material = off', current_database());
+		EXECUTE format('ALTER DATABASE %I SET enable_indexscan = off', current_database());
+		EXECUTE format('ALTER DATABASE %I SET enable_bitmapscan = off', current_database());
+		EXECUTE format('ALTER DATABASE %I SET enable_sort = off', current_database());
+	END $$`); err != nil {
+		t.Fatal(err)
+	}
+	s.pool.Reset()
+	jobs, err := s.ClaimJobs(t.Context(), []domain.JobKind{domain.JobKeyframes}, uuid.NewV7(), time.Minute, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 1 {
+		t.Errorf("a claim of one leased %d jobs", len(jobs))
+	}
+}
