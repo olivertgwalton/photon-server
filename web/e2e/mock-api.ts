@@ -820,7 +820,7 @@ const server_ = Bun.serve({
 					],
 				});
 			case "GET titles/similar":
-				return Response.json({ items: films.slice(1, 4).map(card) });
+				return Response.json({ items: films.slice(1, 13).map(card) });
 			case "GET titles/next":
 				return Response.json(card(episodes[0]));
 			case "PUT titles/watched":

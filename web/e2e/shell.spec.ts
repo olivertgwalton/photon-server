@@ -33,6 +33,24 @@ test("home draws the rows and the shell lists every library", async ({
 	await expect(nav.getByRole("link", { name: "Dashboard" })).toBeVisible();
 });
 
+test("rows scroll sideways inside the page, which never does", async ({
+	page,
+}) => {
+	await logIn(page);
+	for (const [path, row] of [
+		["/", "Recently Added Films"],
+		["/titles/t-film", "More like this"],
+	]) {
+		await page.goto(path);
+		await expect(page.getByRole("heading", { name: row })).toBeVisible();
+		const { scrolled, viewport } = await page.evaluate(() => ({
+			scrolled: document.documentElement.scrollWidth,
+			viewport: document.documentElement.clientWidth,
+		}));
+		expect(scrolled, path).toBe(viewport);
+	}
+});
+
 test("search takes the reader to the results for what they typed", async ({
 	page,
 }) => {

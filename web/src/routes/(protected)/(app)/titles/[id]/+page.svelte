@@ -413,7 +413,7 @@ const poster = $derived(art("poster"));
 	{/if}
 
 	{#if t.seasons?.length}
-		<section aria-labelledby="seasons">
+		<section aria-labelledby="seasons" class="min-w-0">
 			<h2 id="seasons" class="heading mb-3">Seasons</h2>
 			<ul
 				class="-mx-3 flex gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:gap-4 sm:px-6"
@@ -561,7 +561,7 @@ const poster = $derived(art("poster"));
 	{/if}
 
 	{#if t.credits?.length}
-		<section aria-labelledby="cast">
+		<section aria-labelledby="cast" class="min-w-0">
 			<h2 id="cast" class="heading mb-3">Cast &amp; crew</h2>
 			<ul
 				class="-mx-3 flex gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:gap-4 sm:px-6"
