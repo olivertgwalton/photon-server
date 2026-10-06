@@ -4204,7 +4204,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Record where the profile stopped a film or episode */
+        /** Record where the profile stopped a film or episode, and when: progress from before the title's state last changed is refused as a conflict */
         put: {
             parameters: {
                 query?: never;
@@ -4216,7 +4216,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["Position"];
+                    "application/json": components["schemas"]["Progress"];
                 };
             };
             responses: {
@@ -4307,7 +4307,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Mark a title watched */
+        /** Mark a title watched, and when: each film or episode whose state changed since is left as it is */
         put: {
             parameters: {
                 query?: never;
@@ -4317,7 +4317,11 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["Watched"];
+                };
+            };
             responses: {
                 /** @description No Content */
                 204: {
@@ -5383,6 +5387,12 @@ export interface components {
         };
         /** @enum {string} */
         ProfileLock: "none" | "pin" | "password";
+        Progress: {
+            /** Format: date-time */
+            at?: string | null;
+            /** Format: int64 */
+            position_ms: number;
+        };
         Provider: string | ("tmdb" | "imdb" | "tvdb") | unknown;
         ProviderChange: {
             settings: {
@@ -5749,6 +5759,10 @@ export interface components {
         };
         /** @enum {string} */
         WallSort: "title" | "added" | "released" | "rating" | "runtime" | "played";
+        Watched: {
+            /** Format: date-time */
+            at?: string | null;
+        };
         Webhook: {
             /** Format: date-time */
             created_at: string;

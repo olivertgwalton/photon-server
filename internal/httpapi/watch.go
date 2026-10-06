@@ -10,33 +10,70 @@ import (
 )
 
 type watching interface {
-	SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration, before domain.Reach) (domain.Reach, error)
-	MarkWatched(ctx context.Context, profile, item uuid.UUID) error
+	SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration, before domain.Reach, at *time.Time) (domain.Reach, error)
+	MarkWatched(ctx context.Context, profile, item uuid.UUID, at *time.Time) error
 	MarkUnwatched(ctx context.Context, profile, item uuid.UUID) error
 	ClearProgress(ctx context.Context, profile, item uuid.UUID) error
 	Favourite(ctx context.Context, profile, item uuid.UUID) error
 	Unfavourite(ctx context.Context, profile, item uuid.UUID) error
 }
 
+// clockSkew is how far ahead of the server's a client's clock may run; atRule says it.
+const clockSkew = 5 * time.Minute
+
+const atRule = "at is after 1970 and no more than 5 minutes ahead of the server's clock"
+
+// atValid says whether a client's at could be when a watch happened: 1970 or before is a clock
+// never set.
+func atValid(at *time.Time) bool {
+	return at == nil || at.After(time.Unix(0, 0)) && !at.After(time.Now().Add(clockSkew))
+}
+
+// progressJSON and watchedJSON say when, for a watch sent after the fact: played offline, say.
+// No at is now.
+type progressJSON struct {
+	PositionMS int64      `json:"position_ms"`
+	At         *time.Time `json:"at,omitzero"`
+}
+
+type watchedJSON struct {
+	At *time.Time `json:"at,omitzero"`
+}
+
 // progress records where the profile stopped a film or episode, and answers how far that got.
 func (a *API) progress(w http.ResponseWriter, r *http.Request) {
-	var req positionJSON
+	var req progressJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if req.PositionMS < 0 {
-		writeProblem(w, a.logger, codeInvalidBody, "position_ms is not negative")
+	if req.PositionMS < 0 || !atValid(req.At) {
+		writeProblem(w, a.logger, codeInvalidBody, "position_ms is not negative and "+atRule)
 		return
 	}
 	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
-	reach, err := a.svc.Watching.SaveProgress(r.Context(), sessionOf(r).Profile.ID, id, time.Duration(req.PositionMS)*time.Millisecond, domain.ReachStart)
+	reach, err := a.svc.Watching.SaveProgress(r.Context(), sessionOf(r).Profile.ID, id, time.Duration(req.PositionMS)*time.Millisecond, domain.ReachStart, req.At)
 	if !a.answered(w, r, err) {
 		a.titleStateChanged(r, id)
 		writeJSON(w, a.logger, "application/json", http.StatusOK, reachedJSON{Reach: reach})
 	}
+}
+
+// watched marks a title watched, at the time the body says or now for no body.
+func (a *API) watched(w http.ResponseWriter, r *http.Request) {
+	var req watchedJSON
+	if r.ContentLength != 0 && !a.decode(w, r, &req) {
+		return
+	}
+	if !atValid(req.At) {
+		writeProblem(w, a.logger, codeInvalidBody, atRule)
+		return
+	}
+	a.mark(func(s watching, ctx context.Context, profile, item uuid.UUID) error {
+		return s.MarkWatched(ctx, profile, item, req.At)
+	})(w, r)
 }
 
 // titleStateChanged tells the profile's other devices its own state of a title changed.

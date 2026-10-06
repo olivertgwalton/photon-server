@@ -37,7 +37,7 @@ type streams interface {
 }
 
 type progressStore interface {
-	SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration, before domain.Reach) (domain.Reach, error)
+	SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration, before domain.Reach, at *time.Time) (domain.Reach, error)
 	ChooseTracks(ctx context.Context, profile, item uuid.UUID, t domain.ChosenTracks) error
 	RecordPlay(ctx context.Context, p domain.Playback, stopped time.Time, position time.Duration) error
 }
@@ -85,7 +85,7 @@ func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position
 	if err := s.saved.ChooseTracks(ctx, profile, p.Item, tracks); err != nil {
 		return "", err
 	}
-	reach, err := s.saved.SaveProgress(ctx, profile, p.Item, position, p.Reached)
+	reach, err := s.saved.SaveProgress(ctx, profile, p.Item, position, p.Reached, nil)
 	if err != nil {
 		return "", err
 	}
@@ -143,7 +143,7 @@ func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Du
 	}
 	s.streams.Close(p.ID)
 	p.Position = position
-	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position, p.Reached)
+	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position, p.Reached, nil)
 	if errors.Is(err, store.ErrNotFound) {
 		// A title removed while it played leaves no place to keep, and its playback ends all the
 		// same, rather than kept to be swept again for ever.

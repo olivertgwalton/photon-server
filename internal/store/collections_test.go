@@ -121,7 +121,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.MarkWatched(ctx, viewer.ID, mine); err != nil {
+	if err := s.MarkWatched(ctx, viewer.ID, mine, nil); err != nil {
 		t.Fatal(err)
 	}
 	if watched, _, _ := s.Wall(ctx, lib.ID, WallPage{Profile: viewer.ID, Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{Marks: []domain.Mark{domain.MarkWatched}}}); len(watched) != 2 {

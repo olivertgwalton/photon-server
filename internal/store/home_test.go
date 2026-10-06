@@ -70,21 +70,21 @@ func TestHome(t *testing.T) {
 		t.Errorf("a new profile's home = %v, want only what was added", got)
 	}
 
-	if err := s.MarkWatched(ctx, profile.ID, episode(1, 1)); err != nil {
+	if err := s.MarkWatched(ctx, profile.ID, episode(1, 1), nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.MarkWatched(ctx, profile.ID, episode(0, 1)); err != nil {
+	if err := s.MarkWatched(ctx, profile.ID, episode(0, 1), nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := home()[domain.RowNextUp]; len(got) != 1 || got[0] != "Wire/S1E2.mkv" {
 		t.Errorf("next up = %v, want the episode after the last one watched, specials aside", got)
 	}
 
-	if _, err := s.SaveProgress(ctx, profile.ID, episode(1, 2), 20*time.Minute, domain.ReachStart); err != nil {
+	if _, err := s.SaveProgress(ctx, profile.ID, episode(1, 2), 20*time.Minute, domain.ReachStart, nil); err != nil {
 		t.Fatal(err)
 	}
 	heat := oneItem(t, s, `kind = 'movie'`).ID
-	if _, err := s.SaveProgress(ctx, profile.ID, heat, 30*time.Minute, domain.ReachStart); err != nil {
+	if _, err := s.SaveProgress(ctx, profile.ID, heat, 30*time.Minute, domain.ReachStart, nil); err != nil {
 		t.Fatal(err)
 	}
 	got := home()
@@ -224,13 +224,13 @@ func TestNextEpisode(t *testing.T) {
 		}
 	}
 
-	if err := s.MarkWatched(ctx, profile.ID, title(domain.ItemEpisode, 1, 2)); err != nil {
+	if err := s.MarkWatched(ctx, profile.ID, title(domain.ItemEpisode, 1, 2), nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := next(show); got != "S1E3" {
 		t.Errorf("a show with S1E2 watched starts at %s, want the one after it", got)
 	}
-	if _, err := s.SaveProgress(ctx, profile.ID, title(domain.ItemEpisode, 2, 1), 20*time.Minute, domain.ReachStart); err != nil {
+	if _, err := s.SaveProgress(ctx, profile.ID, title(domain.ItemEpisode, 2, 1), 20*time.Minute, domain.ReachStart, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := next(show); got != "S2E1" {
@@ -239,7 +239,7 @@ func TestNextEpisode(t *testing.T) {
 	if got := next(season1); got != "S1E3" {
 		t.Errorf("season 1 starts at %s, want the one after its last watched", got)
 	}
-	if err := s.MarkWatched(ctx, profile.ID, show); err != nil {
+	if err := s.MarkWatched(ctx, profile.ID, show, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := next(show); got != "S1E1" {
@@ -304,7 +304,7 @@ func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
 
 	// S1E2 skipped, then S1E1 watched again after S1E3.
 	for _, e := range []uuid.UUID{episode(1, 1), episode(1, 3), episode(1, 1)} {
-		if err := s.MarkWatched(ctx, profile.ID, e); err != nil {
+		if err := s.MarkWatched(ctx, profile.ID, e, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -319,7 +319,7 @@ func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveProgress(ctx, profile.ID, episode(1, 3), time.Minute, domain.ReachStart); err != nil {
+	if _, err := s.SaveProgress(ctx, profile.ID, episode(1, 3), time.Minute, domain.ReachStart, nil); err != nil {
 		t.Fatal(err)
 	}
 	after, err := s.Title(ctx, profile.ID, episode(1, 3))
