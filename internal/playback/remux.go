@@ -44,8 +44,8 @@ func NewRemuxes(parts partStore, frames keyframer, h remuxer) *Remuxes {
 	return &Remuxes{parts: parts, frames: frames, hls: h}
 }
 
-// Open starts a playback's HLS of a copy, carrying its video and audio as decided, and its text
-// subtitles, embedded and beside it, as WebVTT.
+// Open starts a playback's HLS of a copy, carrying its video and audio as decided, and, unless a
+// subtitle is drawn into the picture, its text subtitles, embedded and beside it, as WebVTT.
 func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan) error {
 	// The remux opens its files long after this request has been answered.
 	opening := context.WithoutCancel(ctx)
@@ -75,6 +75,11 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 		}
 	}
 	h := hls.Copy{Parts: sources, Variant: variant(c.Streams, video, audio, kbps)}
+	// A subtitle drawn into the picture is the only one offered, as Jellyfin's master playlist
+	// has it: another turned on by a player would be drawn over it.
+	if e := video.Encode; e != nil && e.Burn != nil {
+		return r.hls.Open(playback, h)
+	}
 	// The parts of a copy are cut from one master, so each holds the first's streams.
 	for _, st := range c.Streams {
 		if st.Kind != domain.StreamSubtitle || !hls.TextSubtitle(st.Codec) {

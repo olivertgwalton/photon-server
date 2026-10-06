@@ -79,6 +79,14 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 			want:      hls.Variant{BandwidthKbps: 8_000, Codecs: []string{"avc1.640029", "ac-3"}, Range: "SDR"},
 			subtitles: []string{"English"},
 		},
+		{
+			name: "a picture subtitle drawn into 4K is the only subtitle", copy: film,
+			video: domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+				Codec: "h264", Width: 3840, Height: 2160, BitrateKbps: 20_000, ToneMap: true, Burn: new(4),
+			}},
+			audio: &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 2, BitrateKbps: 256}},
+			want:  hls.Variant{BandwidthKbps: 20_256, Codecs: []string{"avc1.640033", "mp4a.40.2"}, Range: "SDR"},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			hlsOf := opened{}
