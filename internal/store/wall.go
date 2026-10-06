@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"slices"
 	"time"
@@ -161,7 +162,7 @@ func (s *Store) PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.Playbac
 		EpisodeNumber: row.EpisodeNumber, EpisodeEnd: row.EpisodeEnd, Poster: first(pictures[row.ID][domain.ArtworkPoster]),
 		Thumb: first(pictures[row.ID][domain.ArtworkThumb]), Backdrop: first(pictures[row.ID][domain.ArtworkBackdrop]),
 	}
-	if show := shows[row.ID]; show != nil {
+	if show := shows[row.ID].ref; show != nil {
 		t.ShowID, t.Show = show.ID, show.Title
 	}
 	return t, nil
@@ -199,24 +200,32 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 			ID: uuid.UUID(r.ID), Kind: r.Kind, Title: r.Title, AddedAt: r.AddedAt, Year: deref(r.Year),
 			ReleaseDate: deref(r.ReleaseDate), Poster: first(pictures[r.ID][domain.ArtworkPoster]),
 			Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]), State: states[r.ID],
-			DurationMS: lengths[r.ID], Show: shows[r.ID], SeasonNumber: r.SeasonNumber,
+			DurationMS: lengths[r.ID], Show: shows[r.ID].ref, SeasonNumber: r.SeasonNumber,
 			EpisodeNumber: r.EpisodeNumber, EpisodeEnd: r.EpisodeEnd, Thumb: first(pictures[r.ID][domain.ArtworkThumb]),
 			Origin: origins[r.ID], Overview: deref(r.Overview), Logo: first(pictures[r.ID][domain.ArtworkLogo]),
-			Genres: r.Genres, Certificate: deref(r.Certificate), Ratings: ratings[r.ID],
+			Genres: r.Genres, Certificate: cmp.Or(deref(r.Certificate), shows[r.ID].certificate), Ratings: ratings[r.ID],
 		}
 	}
 	return cards, nil
 }
 
 type seasonShow struct {
-	Season model.UUID
-	ID     model.UUID
-	Title  string
+	Season      model.UUID
+	ID          model.UUID
+	Title       string
+	Certificate *string
+}
+
+// episodeShow is the show an episode is of, and the certificate it wears where it has none of its
+// own: its season's, else its show's, as Plex rates an episode by its show.
+type episodeShow struct {
+	ref         *TitleRef
+	certificate string
 }
 
 // showsOf answers the show each episode among rows is of.
-func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[model.UUID]*TitleRef, error) {
-	out := map[model.UUID]*TitleRef{}
+func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[model.UUID]episodeShow, error) {
+	out := map[model.UUID]episodeShow{}
 	var seasons []string
 	for _, r := range rows {
 		if r.Kind == domain.ItemEpisode && r.ParentID != nil {
@@ -228,7 +237,8 @@ func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[model.UUID
 	}
 	// gen cannot alias a table joined to itself, so this one query is SQL.
 	found, err := s.pool.Query(ctx, `
-		SELECT season.id AS season, show.id, show.title FROM items season
+		SELECT season.id AS season, show.id, show.title,
+			coalesce(season.certificate, show.certificate) AS certificate FROM items season
 		JOIN items show ON show.id = season.parent_id WHERE season.id = ANY($1::uuid[])`, seasons)
 	if err != nil {
 		return nil, err
@@ -237,9 +247,9 @@ func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[model.UUID
 	if err != nil {
 		return nil, err
 	}
-	bySeason := map[model.UUID]*TitleRef{}
+	bySeason := map[model.UUID]episodeShow{}
 	for _, p := range pairs {
-		bySeason[p.Season] = &TitleRef{ID: uuid.UUID(p.ID), Title: p.Title}
+		bySeason[p.Season] = episodeShow{&TitleRef{ID: uuid.UUID(p.ID), Title: p.Title}, deref(p.Certificate)}
 	}
 	for _, r := range rows {
 		if r.Kind == domain.ItemEpisode && r.ParentID != nil {
