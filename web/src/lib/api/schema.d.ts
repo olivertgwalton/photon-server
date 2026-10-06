@@ -661,6 +661,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Say when the server reads its media for previews and markers
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Maintenance"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        /**
+         * Replace the maintenance window and when previews and markers wait for it
+         * @description Admin only.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Maintenance"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Maintenance"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/playbacks": {
         parameters: {
             query?: never;
@@ -5152,6 +5220,13 @@ export interface components {
             profile: components["schemas"]["Profile"];
             token?: string;
         };
+        Maintenance: {
+            end_hour: number;
+            markers: components["schemas"]["Timing"];
+            previews: components["schemas"]["Timing"];
+            start_hour: number;
+            time_zone: string;
+        };
         /** @enum {string} */
         Mark: "watched" | "unwatched" | "in_progress" | "favourite" | "watchlist";
         Marker: {
@@ -5763,6 +5838,8 @@ export interface components {
         ThemeLookup: "local" | "themerr" | "off";
         /** @enum {string} */
         ThemeMusic: "play" | "off";
+        /** @enum {string} */
+        Timing: "window" | "window_and_added";
         TitlePage: {
             /** Format: date-time */
             added_at: string;

@@ -93,7 +93,7 @@ func TestWorkerRunsJobsWithinItsSlots(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 3, map[domain.JobKind]Handler{domain.JobKeyframes: handler}, ignore{})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 3, map[domain.JobKind]Handler{domain.JobKeyframes: handler}, ignore{}, nil)
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -116,7 +116,7 @@ func TestWorkerReportsFailures(t *testing.T) {
 		failing := func(context.Context, uuid.UUID) error { return errors.New("no video stream") }
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobKeyframes: failing}, ignore{})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobKeyframes: failing}, ignore{}, nil)
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -136,7 +136,7 @@ func TestAJobWithNoRoomIsPostponedNotFailed(t *testing.T) {
 		busy := func(context.Context, uuid.UUID) error { return ErrNotNow }
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobConvert: busy}, ignore{})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobConvert: busy}, ignore{}, nil)
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -167,7 +167,7 @@ func TestALongJobKeepsItsLease(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobKeyframes: long}, ignore{})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobKeyframes: long}, ignore{}, nil)
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -192,7 +192,7 @@ func TestAJobCutShortByShutdownIsQueuedAgainAtOnce(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobScanLibrary: scanning}, ignore{})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobScanLibrary: scanning}, ignore{}, nil)
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -223,7 +223,7 @@ func TestAJobWhoseLeaseWasLostStopsAndRecordsNothing(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobScanLibrary: scanning}, ignore{})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobScanLibrary: scanning}, ignore{}, nil)
 		go func() {
 			w.Run(ctx)
 			close(done)
@@ -267,7 +267,7 @@ func TestOnlyAJobThatEndsIsDoneInItsBacklog(t *testing.T) {
 		told := &endings{}
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 2, map[domain.JobKind]Handler{domain.JobKeyframes: handler}, told)
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 2, map[domain.JobKind]Handler{domain.JobKeyframes: handler}, told, nil)
 		go func() {
 			w.Run(ctx)
 			close(done)

@@ -46,7 +46,8 @@ type teller interface {
 	JobEnded(ctx context.Context, kind domain.JobKind)
 }
 
-// Worker runs queued jobs of the kinds it has handlers for, at most slots at a time.
+// Worker runs queued jobs of the kinds it has handlers for, at most slots at a time, and, given a
+// gate, only those the gate lets run.
 type Worker struct {
 	queue    queue
 	log      *slog.Logger
@@ -54,11 +55,13 @@ type Worker struct {
 	slots    int
 	handlers map[domain.JobKind]Handler
 	tell     teller
+	gate     *Gate
 }
 
-// NewWorker runs jobs with handlers, telling tell as each starts and ends.
-func NewWorker(q queue, log *slog.Logger, node uuid.UUID, slots int, handlers map[domain.JobKind]Handler, tell teller) *Worker {
-	return &Worker{queue: q, log: log, node: node, slots: slots, handlers: handlers, tell: tell}
+// NewWorker runs jobs with handlers, telling tell as each starts and ends; gate is nil for jobs
+// that never give way.
+func NewWorker(q queue, log *slog.Logger, node uuid.UUID, slots int, handlers map[domain.JobKind]Handler, tell teller, gate *Gate) *Worker {
+	return &Worker{queue: q, log: log, node: node, slots: slots, handlers: handlers, tell: tell, gate: gate}
 }
 
 func (w *Worker) Run(ctx context.Context) {
@@ -72,8 +75,8 @@ func (w *Worker) Run(ctx context.Context) {
 	t := time.NewTicker(poll)
 	defer t.Stop()
 	for ctx.Err() == nil {
-		if n := len(free); n > 0 {
-			claimed, err := w.queue.ClaimJobs(ctx, kinds, w.node, lease, n)
+		if n, open := len(free), w.open(kinds); n > 0 && len(open) > 0 {
+			claimed, err := w.queue.ClaimJobs(ctx, open, w.node, lease, n)
 			if err != nil && ctx.Err() == nil {
 				w.log.WarnContext(ctx, "jobs not claimed", slog.Any("err", err))
 			}
@@ -94,9 +97,18 @@ func (w *Worker) Run(ctx context.Context) {
 
 func (w *Worker) run(ctx context.Context, job domain.Job) {
 	log := w.log.With(slog.String("job", string(job.Kind)), slog.String("subject", job.Subject.String()))
-	done := make(chan struct{})
 	jobCtx, lose := context.WithCancelCause(ctx)
 	defer lose(nil)
+	if w.gate != nil {
+		held, release, ok := w.gate.Hold(jobCtx, job.Kind)
+		if !ok {
+			w.postpone(ctx, log, job)
+			return
+		}
+		defer release()
+		jobCtx = held
+	}
+	done := make(chan struct{})
 	go w.renew(ctx, log, job.ID, lose, done)
 	w.tell.Raise(ctx, event(domain.EventJobStarted, job, nil))
 	runErr := w.handlers[job.Kind](jobCtx, job.Subject)
@@ -115,7 +127,7 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	case runErr != nil && ctx.Err() != nil:
 		// Cut short by shutdown, which is no fault of its subject's: any node takes it now.
 		err = w.queue.PostponeJob(record, job, 0)
-	case errors.Is(runErr, ErrNotNow):
+	case errors.Is(runErr, ErrNotNow), errors.Is(context.Cause(jobCtx), ErrNotNow):
 		err = w.queue.PostponeJob(record, job, notNow)
 	case runErr != nil:
 		log.WarnContext(ctx, "job failed", slog.Int("attempt", job.Attempts), slog.Any("err", runErr))
@@ -136,6 +148,23 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	}
 	if ended {
 		w.tell.JobEnded(record, job.Kind)
+	}
+}
+
+// open answers the kinds of job its gate lets start now: all of them where it has none.
+func (w *Worker) open(kinds []domain.JobKind) []domain.JobKind {
+	if w.gate == nil {
+		return kinds
+	}
+	return slices.DeleteFunc(slices.Clone(kinds), func(k domain.JobKind) bool { return !w.gate.Open(k) })
+}
+
+// postpone queues a job its gate would not let start, its attempt given back.
+func (w *Worker) postpone(ctx context.Context, log *slog.Logger, job domain.Job) {
+	record, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordTimeout)
+	defer cancel()
+	if err := w.queue.PostponeJob(record, job, notNow); err != nil {
+		log.WarnContext(ctx, "job outcome not recorded", slog.Any("err", err))
 	}
 }
 

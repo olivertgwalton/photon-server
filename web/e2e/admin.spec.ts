@@ -228,6 +228,17 @@ test("tasks run, dead jobs are retried, and the logs read", async ({
 		page.getByText("Back up the database is running."),
 	).toBeVisible();
 
+	// The window runs past midnight, kept as the page loads again.
+	await page.getByLabel("Until").click();
+	await page.getByRole("option", { name: "06:00" }).click();
+	await page.getByLabel("From").click();
+	await page.getByRole("option", { name: "23:00" }).click();
+	await page.getByRole("button", { name: "Save" }).click();
+	await expect(page.getByText("Saved.")).toBeVisible();
+	await page.reload();
+	await expect(page.getByLabel("From")).toHaveText("23:00");
+	await expect(page.getByLabel("Until")).toHaveText("06:00");
+
 	await page.goto("/settings/server/jobs");
 	await expect(page.getByText("TMDB said 503")).toBeVisible();
 	await expectAccessible(page);

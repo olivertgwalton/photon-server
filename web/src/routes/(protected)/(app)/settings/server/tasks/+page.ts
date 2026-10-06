@@ -3,6 +3,10 @@ import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ fetch, depends }) => {
 	depends("admin:tasks");
-	const { items } = await need(client(fetch).GET("/api/v1/admin/tasks"));
-	return { tasks: items };
+	const api = client(fetch);
+	const [tasks, maintenance] = await Promise.all([
+		need(api.GET("/api/v1/admin/tasks")),
+		need(api.GET("/api/v1/admin/maintenance")),
+	]);
+	return { tasks: tasks.items, maintenance };
 };
