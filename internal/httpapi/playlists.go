@@ -76,6 +76,7 @@ func (a *API) addPlaylist(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
+	a.playlistChanged(r, id)
 	writeJSON(w, a.logger, "application/json", http.StatusCreated, createdJSON{ID: id})
 }
 
@@ -126,6 +127,7 @@ func (a *API) addToPlaylist(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, a.svc.Playlists.AddToPlaylist(r.Context(), sessionOf(r).Profile.ID, id, req.ItemIDs)) {
 		return
 	}
+	a.playlistChanged(r, id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -146,6 +148,7 @@ func (a *API) setPlaylist(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, a.svc.Playlists.RenamePlaylist(r.Context(), sessionOf(r).Profile.ID, id, req.Name)) {
 		return
 	}
+	a.playlistChanged(r, id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -157,6 +160,7 @@ func (a *API) removePlaylist(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, a.svc.Playlists.RemovePlaylist(r.Context(), sessionOf(r).Profile.ID, id)) {
 		return
 	}
+	a.playlistChanged(r, id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -178,6 +182,7 @@ func (a *API) moveEntry(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, a.svc.Playlists.MovePlaylistEntry(r.Context(), sessionOf(r).Profile.ID, id, entry, req.Position)) {
 		return
 	}
+	a.playlistChanged(r, id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -194,5 +199,6 @@ func (a *API) removeEntry(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, a.svc.Playlists.RemoveFromPlaylist(r.Context(), sessionOf(r).Profile.ID, id, entry)) {
 		return
 	}
+	a.playlistChanged(r, id)
 	w.WriteHeader(http.StatusNoContent)
 }

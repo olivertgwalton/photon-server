@@ -90,7 +90,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if err := s.SaveIdentity(ctx, ids["Alien"], domain.SourceTMDB, domain.Metadata{Title: "Alien"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.FinishScan(ctx, lib.ID, []string{"Alien", "Aliens", "Heat"}, []string{"Alien.mkv", "Aliens.mkv", "Heat.mkv"}); err != nil {
+	if _, err := s.FinishScan(ctx, lib.ID, []string{"Alien", "Aliens", "Heat"}, []string{"Alien.mkv", "Aliens.mkv", "Heat.mkv"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Members(ctx, uuid.UUID{}, set); !errors.Is(err, ErrNotFound) {

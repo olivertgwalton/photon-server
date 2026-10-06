@@ -18,8 +18,8 @@ import (
 // knows: a describer matches the title and records what it says about it and, for a show, its
 // seasons and episodes, and a rater records its ratings; the library's order decides whose values
 // stand. A title with no confident match is left as its files and NFO describe it, and a provider
-// not configured or not reachable is passed over.
-func Handler(st *store.Store, providers *provider.Registry, log *slog.Logger) jobs.Handler {
+// not configured or not reachable is passed over. raise tells the title was described again.
+func Handler(st *store.Store, providers *provider.Registry, raise func(context.Context, domain.Event), log *slog.Logger) jobs.Handler {
 	return func(ctx context.Context, id uuid.UUID) error {
 		sub, ok, err := st.IdentifySubject(ctx, id)
 		if err != nil || !ok {
@@ -44,7 +44,11 @@ func Handler(st *store.Store, providers *provider.Registry, log *slog.Logger) jo
 				rate(ctx, st, r, id, sub, log)
 			}
 		}
-		return st.Identified(ctx, id)
+		if err := st.Identified(ctx, id); err != nil {
+			return err
+		}
+		raise(ctx, domain.Event{Kind: domain.EventTitleUpdated, Item: id})
+		return nil
 	}
 }
 

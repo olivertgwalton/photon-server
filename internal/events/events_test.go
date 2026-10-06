@@ -3,6 +3,7 @@
 package events
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"testing"
@@ -54,5 +55,57 @@ func TestTheLogKeepsWhatAnAdminReadsLater(t *testing.T) {
 	}
 	if since := time.Since(got[1].At); since < 0 || since > time.Minute {
 		t.Errorf("signed in at %v, want now", got[1].At)
+	}
+}
+
+func TestAScansChangesAreToldAFewAtATime(t *testing.T) {
+	hub, _ := newHub(t)
+	running, stop := context.WithCancel(t.Context())
+	defer stop()
+	go hub.Run(running)
+	told, unsubscribe := hub.Subscribe()
+	defer unsubscribe()
+	lib := uuid.NewV7()
+	// Subscribing to Valkey is not instant: a change told before it would be missed.
+	again := time.NewTicker(100 * time.Millisecond)
+	defer again.Stop()
+	for heard := false; !heard; {
+		hub.Raise(t.Context(), domain.Event{Kind: domain.EventScanProgress, Library: lib})
+		select {
+		case e := <-told:
+			heard = e.Library == lib
+		case <-again.C:
+		}
+	}
+	var added []uuid.UUID
+	for range 300 {
+		id := uuid.NewV7()
+		added = append(added, id)
+		hub.Changed(t.Context(), lib, store.Changed{domain.TitleAdded: {id}})
+		hub.Changed(t.Context(), lib, store.Changed{domain.TitleUpdated: {id}})
+	}
+	hub.Changed(t.Context(), lib, store.Changed{domain.TitleRemoved: {added[0]}})
+
+	var events []domain.Event
+	quiet := time.After(2*changeWindow + time.Second)
+	for waiting := true; waiting; {
+		select {
+		case e := <-told:
+			if e.Kind == domain.EventLibraryChanged && e.Library == lib {
+				events = append(events, e)
+			}
+		case <-quiet:
+			waiting = false
+		}
+	}
+	if len(events) != 1 {
+		t.Fatalf("told %d library.changed events, want the 601 changes as one", len(events))
+	}
+	count := func(change domain.TitleChange) int {
+		ids, _ := events[0].Details[string(change)].([]any)
+		return len(ids)
+	}
+	if count(domain.TitleAdded) != 299 || count(domain.TitleUpdated) != 0 || count(domain.TitleRemoved) != 1 {
+		t.Errorf("told %v; want 299 added, the one removed removed, and nothing as only updated", events[0].Details)
 	}
 }

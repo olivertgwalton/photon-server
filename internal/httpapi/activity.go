@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"slices"
 	"time"
@@ -90,13 +91,21 @@ func (a *API) adminEvents(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
+	a.streamEvents(w, r, events, "snapshot", now, func(e domain.Event) (eventJSON, bool, error) {
+		return eventOf(e), true, nil
+	})
+}
+
+// streamEvents sends first, named name, then what tell makes of each event it says to send, named
+// by its kind, with a comment when quiet, until the client goes or the events end.
+func (a *API) streamEvents(w http.ResponseWriter, r *http.Request, events <-chan domain.Event, name string, first any, tell func(domain.Event) (eventJSON, bool, error)) {
 	rc := http.NewResponseController(w)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
 	// nginx buffers a response unless told not to.
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
-	if a.sendEvent(w, rc, "snapshot", now) != nil {
+	if a.sendEvent(w, rc, name, first) != nil {
 		return
 	}
 	heartbeat := time.NewTicker(heartbeatEvery)
@@ -106,7 +115,16 @@ func (a *API) adminEvents(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case e, open := <-events:
-			if !open || a.sendEvent(w, rc, string(e.Kind), eventOf(e)) != nil {
+			if !open {
+				return
+			}
+			told, send, err := tell(e)
+			if err != nil {
+				// The client reconnects and asks again for what it shows.
+				a.logger.WarnContext(r.Context(), "event stream ended", slog.Any("err", err))
+				return
+			}
+			if send && a.sendEvent(w, rc, string(e.Kind), told) != nil {
 				return
 			}
 		case <-heartbeat.C:

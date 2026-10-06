@@ -22,6 +22,14 @@ const (
 	EventLibraryAdded    EventKind = "library.added"
 	EventLibraryRemoved  EventKind = "library.removed"
 	EventLibraryScanned  EventKind = "library.scanned"
+	// EventLibraryChanged is a library's titles added, changed and removed, gathered over a
+	// moment, as Jellyfin's LibraryChanged is: its details hold the ids under each TitleChange.
+	EventLibraryChanged EventKind = "library.changed"
+	// EventTitleUpdated is a title described again: matched, edited, or given another picture.
+	EventTitleUpdated EventKind = "title.updated"
+	// EventUserDataChanged is a profile's own state changed: where it got to in a title, what it
+	// has watched or favoured, or one of its playlists, as Jellyfin's UserDataChanged.
+	EventUserDataChanged EventKind = "userdata.changed"
 	// EventTitlesAdded is the films and episodes a scan found that the library did not have.
 	EventTitlesAdded EventKind = "library.titles_added"
 	// EventScanProgress is how far a scan has got; it says so at most every scanProgressEvery.
@@ -44,8 +52,8 @@ func EventKinds() []EventKind {
 	return []EventKind{
 		EventPlaybackStarted, EventPlaybackPaused, EventPlaybackResumed, EventPlaybackStopped,
 		EventSignedIn, EventSignInRefused, EventProfileAdded, EventProfileRemoved,
-		EventLibraryAdded, EventLibraryRemoved, EventLibraryScanned, EventTitlesAdded, EventScanProgress,
-		EventTaskStarted, EventTaskFinished, EventTaskFailed, EventBackupMade,
+		EventLibraryAdded, EventLibraryRemoved, EventLibraryScanned, EventLibraryChanged, EventTitleUpdated,
+		EventUserDataChanged, EventTitlesAdded, EventScanProgress, EventTaskStarted, EventTaskFinished, EventTaskFailed, EventBackupMade,
 		EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead, EventWebhookTest,
 	}
 }
@@ -58,8 +66,9 @@ func (k EventKind) Logged() bool {
 		EventProfileAdded, EventProfileRemoved, EventLibraryAdded, EventLibraryRemoved,
 		EventLibraryScanned, EventTitlesAdded, EventTaskFailed, EventBackupMade, EventJobDead:
 		return true
-	case EventPlaybackPaused, EventPlaybackResumed, EventScanProgress, EventTaskStarted,
-		EventTaskFinished, EventJobStarted, EventJobFinished, EventJobFailed, EventWebhookTest:
+	case EventPlaybackPaused, EventPlaybackResumed, EventLibraryChanged, EventTitleUpdated,
+		EventUserDataChanged, EventScanProgress, EventTaskStarted, EventTaskFinished, EventJobStarted,
+		EventJobFinished, EventJobFailed, EventWebhookTest:
 		return false
 	}
 	return false
@@ -75,8 +84,9 @@ func (k EventKind) Hookable() bool {
 		EventLibraryAdded, EventLibraryRemoved, EventLibraryScanned, EventTitlesAdded,
 		EventTaskFailed, EventBackupMade:
 		return true
-	case EventScanProgress, EventTaskStarted, EventTaskFinished, EventJobStarted, EventJobFinished,
-		EventJobFailed, EventJobDead, EventWebhookTest:
+	case EventLibraryChanged, EventTitleUpdated, EventUserDataChanged, EventScanProgress,
+		EventTaskStarted, EventTaskFinished, EventJobStarted, EventJobFinished, EventJobFailed,
+		EventJobDead, EventWebhookTest:
 		return false
 	}
 	return false
@@ -102,6 +112,21 @@ type Event struct {
 	Item    uuid.UUID
 	Library uuid.UUID
 	Details map[string]any
+}
+
+// TitleChange is what happened to a library's titles.
+type TitleChange string
+
+const (
+	TitleAdded   TitleChange = "added"
+	TitleUpdated TitleChange = "updated"
+	TitleRemoved TitleChange = "removed"
+)
+
+// TitleChanges are the changes, the one that says most of a title first: one removed is gone,
+// whatever else happened to it, and one added is new, however it changed since.
+func TitleChanges() []TitleChange {
+	return []TitleChange{TitleRemoved, TitleAdded, TitleUpdated}
 }
 
 // ScanPhase is what a library's scan is doing.

@@ -37,7 +37,8 @@ type Sessions struct {
 }
 
 // NewSessions keeps playbacks in live and places in saved, and calls ended as a playback stops,
-// to let go of what it held; raise says as one starts, pauses, resumes and stops. Each playback
+// to let go of what it held; raise says as one starts, pauses, resumes and stops, and as each
+// profile's place moves. Each playback
 // started is node's to serve.
 func NewSessions(live sessionStore, saved progressStore, ended func(uuid.UUID), raise func(context.Context, domain.Event), node uuid.UUID) *Sessions {
 	return &Sessions{live: live, saved: saved, ended: ended, raise: raise, node: node}
@@ -67,6 +68,7 @@ func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position
 	if err != nil {
 		return "", err
 	}
+	s.raise(ctx, domain.Event{Kind: domain.EventUserDataChanged, Profile: profile, Item: p.Item})
 	was := p.State
 	p.Position, p.State, p.Updated = position, state, time.Now()
 	if err := s.live.SavePlayback(ctx, p, sessionLife); err != nil {
@@ -117,6 +119,7 @@ func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Du
 	if err := s.live.EndPlayback(ctx, p.ID); err != nil {
 		return "", err
 	}
+	s.raise(ctx, domain.Event{Kind: domain.EventUserDataChanged, Profile: p.Profile, Item: p.Item})
 	p.Position = position
 	stopped := event(domain.EventPlaybackStopped, p)
 	// How far it got says whether it was watched to the end, as Plex's media.scrobble does.

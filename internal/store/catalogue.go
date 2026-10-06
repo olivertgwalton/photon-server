@@ -84,29 +84,48 @@ func (s *Store) FolderFingerprint(ctx context.Context, lib uuid.UUID, path strin
 	return row.Fingerprint, nil
 }
 
+// Changed is the titles a write added, changed and removed.
+type Changed map[domain.TitleChange][]uuid.UUID
+
+// note records a title written: added if it was made, else changed.
+func (c Changed) note(made bool, id model.UUID) {
+	change := domain.TitleUpdated
+	if made {
+		change = domain.TitleAdded
+	}
+	c[change] = append(c[change], uuid.UUID(id))
+}
+
+// Saved is what a folder's save did: the paths of extras no single title owns, and the titles it
+// added and changed.
+type Saved struct {
+	Unowned []string
+	Titles  Changed
+}
+
 // SaveFolder writes a scanned folder's films and extras and remembers its fingerprint, in one
-// transaction. It answers the paths of extras no single title owns.
-func (s *Store) SaveFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, films []Film, extras []Extra) ([]string, error) {
-	var unowned []string
+// transaction.
+func (s *Store) SaveFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, films []Film, extras []Extra) (Saved, error) {
+	saved := Saved{Titles: Changed{}}
 	err := s.q.Transaction(func(tx *query.Query) error {
 		for _, f := range films {
-			if err := saveFilm(ctx, tx, lib, f); err != nil {
+			if err := saveFilm(ctx, tx, lib, f, saved.Titles); err != nil {
 				return fmt.Errorf("%s: %w", f.Title, err)
 			}
 		}
 		var err error
-		if unowned, err = saveExtras(ctx, tx, lib, extras); err != nil {
+		if saved.Unowned, err = saveExtras(ctx, tx, lib, extras); err != nil {
 			return err
 		}
 		return tx.Folder.WithContext(ctx).Save(&model.Folder{
 			LibraryID: model.UUID(lib), Path: path, Fingerprint: fingerprint,
 		})
 	})
-	return unowned, err
+	return saved, err
 }
 
-func saveFilm(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) error {
-	itemID, err := filmItem(ctx, tx, lib, f)
+func saveFilm(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film, changed Changed) error {
+	itemID, err := filmItem(ctx, tx, lib, f, changed)
 	if err != nil {
 		return err
 	}
@@ -123,7 +142,7 @@ func saveFilm(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) error
 
 // filmItem is the title a film's copies belong to: the title of a copy already known, else a title
 // of the same name in the same folder, else a new one.
-func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) (model.UUID, error) {
+func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film, changed Changed) (model.UUID, error) {
 	item := model.Item{
 		LibraryID: model.UUID(lib), Kind: domain.ItemMovie,
 		ScanTitle: f.Title, Title: f.Title, SortTitle: sortTitle(f.Title), Folder: f.Folder,
@@ -150,6 +169,7 @@ func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) (mode
 			if err := enqueue(ctx, tx, domain.JobIdentify, item.ID); err != nil {
 				return model.UUID{}, err
 			}
+			changed.note(true, item.ID)
 			return item.ID, describe(ctx, tx, item.ID, f.Title, f.Year, f.IDs, f.NFO)
 		}
 	}
@@ -157,6 +177,7 @@ func filmItem(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film) (mode
 	if err != nil {
 		return model.UUID{}, err
 	}
+	changed.note(false, item.ID)
 	return item.ID, describe(ctx, tx, item.ID, f.Title, f.Year, f.IDs, f.NFO)
 }
 
@@ -371,8 +392,9 @@ func saveFacts(ctx context.Context, tx *query.Query, partID model.UUID, f *media
 // place to read its part, or is a subtitle no longer there; a version with a part left nowhere is marked missing (kept, so an unmounted disk does
 // not cost its titles), and one whose every part is somewhere is not. A title left with no
 // version is removed, then a season and a show left with nothing in them. A folder the walk did
-// not visit is forgotten.
-func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present []string) error {
+// not visit is forgotten. It answers the titles whose copies went missing or came back, and those
+// removed.
+func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present []string) (Changed, error) {
 	// pgx sends each list as one text[] parameter; GORM would expand it into a parameter per path.
 	// A nil slice would go as NULL, and NOT x = ANY(NULL) matches nothing, so an emptied library
 	// would keep every path it ever had.
@@ -382,7 +404,9 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present 
 	if present == nil {
 		present = []string{}
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	var changed Changed
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		changed = Changed{}
 		for _, table := range []string{"part_files", "subtitle_files"} {
 			_, err := tx.Exec(ctx, `DELETE FROM `+table+` WHERE library_id = $1 AND NOT rel_path = ANY($2)`,
 				lib.String(), present)
@@ -390,15 +414,16 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present 
 				return err
 			}
 		}
-		_, err := tx.Exec(ctx, `
-			UPDATE versions v SET missing_since = CASE
-				WHEN EXISTS (SELECT 1 FROM parts p WHERE p.version_id = v.id
-					AND NOT EXISTS (SELECT 1 FROM part_files f WHERE f.part_id = p.id)) THEN coalesce(v.missing_since, now())
-				ELSE NULL END
-			WHERE v.library_id = $1`, lib.String())
+		// Only a version whose part went missing, or came back, is written.
+		updated, err := queryIDs(ctx, tx, `
+			UPDATE versions v SET missing_since = CASE WHEN v.missing_since IS NULL THEN now() END
+			WHERE v.library_id = $1 AND (v.missing_since IS NULL) = EXISTS (SELECT 1 FROM parts p
+				WHERE p.version_id = v.id AND NOT EXISTS (SELECT 1 FROM part_files f WHERE f.part_id = p.id))
+			RETURNING v.item_id::text`, lib.String())
 		if err != nil {
 			return err
 		}
+		changed[domain.TitleUpdated] = updated
 		for _, sql := range []string{
 			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode', 'extra')
 				AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.item_id = i.id)`,
@@ -409,13 +434,38 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present 
 			`DELETE FROM items i USING collections c WHERE c.item_id = i.id AND i.library_id = $1
 				AND c.origin <> 'user' AND NOT EXISTS (SELECT 1 FROM collection_members m WHERE m.collection_id = c.item_id)`,
 		} {
-			if _, err := tx.Exec(ctx, sql, lib.String()); err != nil {
+			removed, err := queryIDs(ctx, tx, sql+` RETURNING i.id::text`, lib.String())
+			if err != nil {
 				return err
 			}
+			changed[domain.TitleRemoved] = append(changed[domain.TitleRemoved], removed...)
 		}
 		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND NOT path = ANY($2)`, lib.String(), folders)
 		return err
 	})
+	return changed, err
+}
+
+// queryIDs answers the ids a statement returns, as text.
+func queryIDs(ctx context.Context, q interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}, sql string, args ...any,
+) ([]uuid.UUID, error) {
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	texts, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, err
+	}
+	out := make([]uuid.UUID, len(texts))
+	for i, t := range texts {
+		if out[i], err = uuid.Parse(t); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 func firstVideo(f *media.Facts) *media.Stream {

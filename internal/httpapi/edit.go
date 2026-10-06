@@ -73,6 +73,7 @@ func (a *API) editTitle(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, a.svc.Editing.EditMetadata(r.Context(), id, m)) {
 		return
 	}
+	a.titleUpdated(r, id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -327,6 +328,7 @@ func (a *API) chooseArtwork(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
+	a.titleUpdated(r, id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -343,6 +345,7 @@ func (a *API) forgetArtwork(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, a.svc.Editing.ForgetArtworkChoice(r.Context(), id, kind)) {
 		return
 	}
+	a.titleUpdated(r, id)
 	w.WriteHeader(http.StatusNoContent)
 }
 

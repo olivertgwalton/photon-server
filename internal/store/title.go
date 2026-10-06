@@ -262,6 +262,32 @@ func (s *Store) visible(ctx context.Context, profile, id uuid.UUID) (bool, error
 	return ok, err
 }
 
+// Visible answers those of titles a profile may see, in their order.
+func (s *Store) Visible(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]uuid.UUID, error) {
+	if len(titles) == 0 {
+		return nil, nil
+	}
+	ids := make([]string, len(titles))
+	for i, t := range titles {
+		ids[i] = t.String()
+	}
+	return queryIDs(ctx, s.pool, `
+		SELECT t.id::text FROM unnest($1::text[]::uuid[]) WITH ORDINALITY AS t(id, n)
+		WHERE coalesce(visible(t.id, $2), false) ORDER BY t.n`, ids, profile.String())
+}
+
+// HasLibrary reports whether a library is there and a profile may see its titles at all: as
+// visible() asks, it has every library where none are listed for it.
+func (s *Store) HasLibrary(ctx context.Context, profile, lib uuid.UUID) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM libraries WHERE id = $2)
+			AND (NOT EXISTS (SELECT 1 FROM profile_libraries WHERE profile_id = $1)
+				OR EXISTS (SELECT 1 FROM profile_libraries WHERE profile_id = $1 AND library_id = $2))`,
+		profile.String(), lib.String()).Scan(&ok)
+	return ok, err
+}
+
 func (s *Store) externalIDs(ctx context.Context, item model.UUID) (map[domain.Provider]string, error) {
 	e := s.q.ExternalID
 	rows, err := e.WithContext(ctx).Where(e.ItemID.Eq(item)).Find()

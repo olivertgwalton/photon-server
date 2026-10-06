@@ -35,7 +35,7 @@ func scanLibraries(ctx context.Context, logger *slog.Logger, databaseURL string,
 			continue
 		}
 		matched++
-		r, err := scanner.Scan(ctx, lib, func(domain.ScanProgress) {})
+		r, err := scanner.Scan(ctx, lib, func(domain.ScanProgress) {}, func(store.Changed) {})
 		if err != nil {
 			return fmt.Errorf("%s: %w", lib.Name, err)
 		}

@@ -47,13 +47,13 @@ type Episode struct {
 }
 
 // SaveShowFolder writes a folder of a series' episodes and extras and remembers its fingerprint,
-// in one transaction. It answers the paths of extras no single title owns.
-func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, show Show, episodes []Episode, extras []Extra) ([]string, error) {
-	var unowned []string
+// in one transaction.
+func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, show Show, episodes []Episode, extras []Extra) (Saved, error) {
+	saved := Saved{Titles: Changed{}}
 	err := s.q.Transaction(func(tx *query.Query) error {
 		// A series' own folder, holding its NFO and extras, comes before any of its episodes.
 		if len(episodes) > 0 || ((len(extras) > 0 || show.NFO != nil || len(show.Artwork) > 0) && show.Folder != "") {
-			showID, err := ensureShow(ctx, tx, lib, show)
+			showID, err := ensureShow(ctx, tx, lib, show, saved.Titles)
 			if err != nil {
 				return err
 			}
@@ -65,12 +65,12 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 					if m, ok := show.Seasons[e.Season]; ok {
 						said = &m
 					}
-					if seasonID, err = ensureSeason(ctx, tx, lib, showID, e.Folder, e.Season, said); err != nil {
+					if seasonID, err = ensureSeason(ctx, tx, lib, showID, e.Folder, e.Season, said, saved.Titles); err != nil {
 						return err
 					}
 					seasons[e.Season] = seasonID
 				}
-				if err := saveEpisode(ctx, tx, lib, showID, seasonID, e); err != nil {
+				if err := saveEpisode(ctx, tx, lib, showID, seasonID, e, saved.Titles); err != nil {
 					return fmt.Errorf("%s season %d %v: %w", show.Title, e.Season, e.Episodes, err)
 				}
 			}
@@ -103,17 +103,17 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 			}
 		}
 		var err error
-		if unowned, err = saveExtras(ctx, tx, lib, extras); err != nil {
+		if saved.Unowned, err = saveExtras(ctx, tx, lib, extras); err != nil {
 			return err
 		}
 		return tx.Folder.WithContext(ctx).Save(&model.Folder{
 			LibraryID: model.UUID(lib), Path: path, Fingerprint: fingerprint,
 		})
 	})
-	return unowned, err
+	return saved, err
 }
 
-func ensureShow(ctx context.Context, tx *query.Query, lib uuid.UUID, show Show) (model.UUID, error) {
+func ensureShow(ctx context.Context, tx *query.Query, lib uuid.UUID, show Show, changed Changed) (model.UUID, error) {
 	i := tx.Item
 	row := model.Item{
 		LibraryID: model.UUID(lib), Kind: domain.ItemShow,
@@ -122,11 +122,12 @@ func ensureShow(ctx context.Context, tx *query.Query, lib uuid.UUID, show Show) 
 	known, err := i.WithContext(ctx).Where(
 		i.LibraryID.Eq(model.UUID(lib)), i.Kind.Eq(string(domain.ItemShow)), i.Folder.Eq(show.Folder),
 	).Take()
+	made := errors.Is(err, gorm.ErrRecordNotFound)
 	switch {
 	case err == nil:
 		row.ID = known.ID
 		_, err = i.WithContext(ctx).Where(i.ID.Eq(row.ID)).Select(i.ScanTitle).Updates(&row)
-	case errors.Is(err, gorm.ErrRecordNotFound):
+	case made:
 		if err = i.WithContext(ctx).Create(&row); err == nil {
 			err = enqueue(ctx, tx, domain.JobIdentify, row.ID)
 		}
@@ -134,10 +135,11 @@ func ensureShow(ctx context.Context, tx *query.Query, lib uuid.UUID, show Show) 
 	if err != nil {
 		return model.UUID{}, err
 	}
+	changed.note(made, row.ID)
 	return row.ID, describe(ctx, tx, row.ID, show.Title, show.Year, show.IDs, show.NFO)
 }
 
-func ensureSeason(ctx context.Context, tx *query.Query, lib uuid.UUID, showID model.UUID, folder string, number int, nfo *domain.Metadata) (model.UUID, error) {
+func ensureSeason(ctx context.Context, tx *query.Query, lib uuid.UUID, showID model.UUID, folder string, number int, nfo *domain.Metadata, changed Changed) (model.UUID, error) {
 	title := fmt.Sprintf("Season %d", number)
 	if number == 0 {
 		title = "Specials"
@@ -146,7 +148,8 @@ func ensureSeason(ctx context.Context, tx *query.Query, lib uuid.UUID, showID mo
 	row, err := i.WithContext(ctx).Where(
 		i.ParentID.Eq(showID), i.Kind.Eq(string(domain.ItemSeason)), i.SeasonNumber.Eq(number),
 	).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+	made := errors.Is(err, gorm.ErrRecordNotFound)
+	if made {
 		row = &model.Item{
 			LibraryID: model.UUID(lib), Kind: domain.ItemSeason, ParentID: &showID, SeasonNumber: &number,
 			ScanTitle: title, Title: title, SortTitle: sortTitle(title), Folder: folder,
@@ -156,10 +159,11 @@ func ensureSeason(ctx context.Context, tx *query.Query, lib uuid.UUID, showID mo
 	if err != nil {
 		return model.UUID{}, err
 	}
+	changed.note(made, row.ID)
 	return row.ID, describe(ctx, tx, row.ID, title, 0, nil, nfo)
 }
 
-func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID, seasonID model.UUID, e Episode) error {
+func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID, seasonID model.UUID, e Episode, changed Changed) error {
 	row := model.Item{
 		LibraryID: model.UUID(lib), Kind: domain.ItemEpisode, ParentID: &seasonID, SeasonNumber: &e.Season,
 		ScanTitle: e.Title, Title: e.Title, SortTitle: sortTitle(e.Title), Folder: e.Folder,
@@ -180,7 +184,8 @@ func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID, se
 		return err
 	}
 	i := tx.Item
-	if row.ID == (model.UUID{}) {
+	made := row.ID == (model.UUID{})
+	if made {
 		if err := i.WithContext(ctx).Create(&row); err != nil {
 			return err
 		}
@@ -196,6 +201,7 @@ func saveEpisode(ctx context.Context, tx *query.Query, lib uuid.UUID, showID, se
 			return err
 		}
 	}
+	changed.note(made, row.ID)
 	if err := describe(ctx, tx, row.ID, e.Title, 0, e.IDs, e.NFO); err != nil {
 		return err
 	}
