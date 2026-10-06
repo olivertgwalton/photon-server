@@ -20,6 +20,7 @@ export const idle: Live = {
 	ready: false,
 	tasks: [],
 	jobs: [],
+	backlogs: [],
 	scans: [],
 	playbacks: [],
 	arrived: [],
@@ -115,6 +116,21 @@ export function apply(live: Live, name: string, data: unknown): Live {
 				},
 			];
 			break;
+		case "jobs.progress": {
+			const backlog = {
+				kind: d.job_kind as Schemas["JobKind"],
+				left: d.left as number,
+				done: d.done as number,
+			};
+			const i = next.backlogs.findIndex((b) => b.kind === backlog.kind);
+			if (backlog.left === 0) {
+				next.backlogs = without(next.backlogs, (b) => b.kind === backlog.kind);
+			} else {
+				next.backlogs =
+					i < 0 ? [...next.backlogs, backlog] : next.backlogs.with(i, backlog);
+			}
+			break;
+		}
 		case "job.finished":
 		case "job.failed":
 		case "job.dead":

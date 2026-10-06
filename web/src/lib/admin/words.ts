@@ -223,6 +223,8 @@ export function describe(e: Schemas["Event"], names: Names): string {
 			return `${jobName(d.job_kind)} failed and will be tried again: ${d.error}`;
 		case "job.dead":
 			return `${jobName(d.job_kind)} gave up after ${d.attempt} tries: ${d.error}`;
+		case "jobs.progress":
+			return `${jobName(d.job_kind)}: ${d.left} left`;
 		case "webhook.test":
 			return "A webhook test was sent";
 	}

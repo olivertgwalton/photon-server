@@ -30,13 +30,14 @@ describe("the admin event stream", () => {
 	test("starts from its snapshot, and a reconnect's snapshot replaces it", () => {
 		const first = after([
 			"snapshot",
-			{ tasks: [], jobs: [], scans: [], playbacks: [playing] },
+			{ tasks: [], jobs: [], backlogs: [], scans: [], playbacks: [playing] },
 		]);
 		expect(first.ready).toBe(true);
 		expect(first.playbacks).toEqual([playing]);
 		const again = apply(first, "snapshot", {
 			tasks: [],
 			jobs: [],
+			backlogs: [],
 			scans: [],
 			playbacks: [],
 		});
@@ -160,6 +161,38 @@ describe("the admin event stream", () => {
 		);
 		expect(done.tasks).toEqual([]);
 		expect(done.jobs).toEqual([]);
+	});
+
+	test("counts a backlog down and drops it once none is left", () => {
+		const progress = (left: number, done: number): [string, unknown] => [
+			"jobs.progress",
+			{
+				kind: "jobs.progress",
+				at,
+				details: { job_kind: "previews", left, done },
+			},
+		];
+		const started = after(
+			[
+				"snapshot",
+				{
+					tasks: [],
+					jobs: [],
+					backlogs: [{ kind: "identify", left: 2, done: 0 }],
+					scans: [],
+					playbacks: [],
+				},
+			],
+			progress(8_022, 585),
+			progress(8_021, 586),
+		);
+		expect(started.backlogs).toEqual([
+			{ kind: "identify", left: 2, done: 0 },
+			{ kind: "previews", left: 8_021, done: 586 },
+		]);
+		expect(apply(started, ...progress(0, 8_607)).backlogs).toEqual([
+			{ kind: "identify", left: 2, done: 0 },
+		]);
 	});
 });
 
