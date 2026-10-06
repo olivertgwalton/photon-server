@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"context"
+	"errors"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -10,8 +11,12 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// Keyframes indexes a part's keyframes, which a remux cuts its segments at, as its library asks.
-func Keyframes(st *store.Store, tools media.Tools) jobs.Handler {
+// Keyframes reads a part's keyframes, which a remux cuts its segments at, from its container's own
+// index, as its library asks: a few reads, made as the part is added. A file with no index is known
+// to have none under KeyframesIndex; under KeyframesFull it is queued to be walked through in the
+// maintenance window, as Jellyfin reads a Matroska file's index on demand and walks files only in
+// a scheduled task of its own.
+func Keyframes(st *store.Store) jobs.Handler {
 	return func(ctx context.Context, part uuid.UUID) error {
 		known, err := st.Keyframes(ctx, part)
 		if err != nil || known.Mode == domain.KeyframesOff {
@@ -22,7 +27,36 @@ func Keyframes(st *store.Store, tools media.Tools) jobs.Handler {
 			return err
 		}
 		defer f.Close()
-		pts, err := tools.Keyframes(ctx, f, known.Mode)
+		pts, err := media.IndexedKeyframes(f)
+		switch {
+		case err == nil:
+			return st.SaveKeyframes(ctx, part, pts)
+		case !errors.Is(err, media.ErrNoIndex):
+			return err
+		}
+		switch known.Mode {
+		case domain.KeyframesFull:
+			return st.QueueKeyframeWalk(ctx, part)
+		case domain.KeyframesIndex, domain.KeyframesOff:
+		}
+		return st.SaveKeyframes(ctx, part, nil)
+	}
+}
+
+// WalkKeyframes walks a part with no index through for its keyframes. One whose library no longer
+// finds them in full, or whose keyframes are known since, is passed over.
+func WalkKeyframes(st *store.Store, tools media.Tools) jobs.Handler {
+	return func(ctx context.Context, part uuid.UUID) error {
+		known, err := st.Keyframes(ctx, part)
+		if err != nil || known.Mode != domain.KeyframesFull || known.PtsMS != nil {
+			return err
+		}
+		f, err := openPart(ctx, st, part)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		pts, err := tools.WalkKeyframes(ctx, f)
 		if err != nil {
 			return err
 		}

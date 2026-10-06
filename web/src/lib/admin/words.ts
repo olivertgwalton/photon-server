@@ -47,6 +47,7 @@ export const tasks: Record<Schemas["TaskKey"], { name: string; does: string }> =
 
 export const jobKinds: Record<Schemas["JobKind"], string> = {
 	keyframes: "Read keyframes",
+	keyframe_walk: "Walk files for keyframes",
 	identify: "Identify",
 	scan_library: "Scan a library",
 	markers: "Find intros and credits",

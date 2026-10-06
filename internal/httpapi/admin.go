@@ -167,7 +167,7 @@ type libraryChangeJSON struct {
 	Previews    domain.PreviewLevel    `json:"previews,omitzero"`
 	Markers     domain.MarkerDetection `json:"markers,omitzero"`
 	// Keyframes is how its files' keyframes are found: index reads the container's own index,
-	// full walks a file that has none, off finds none.
+	// full walks a file that has none in the maintenance window, off finds none.
 	Keyframes domain.KeyframeMode `json:"keyframes,omitzero"`
 	// Themes is where its titles' theme tunes are found: local is the files beside them; themerr
 	// those and, for a film or show with none, the YouTube link ThemerrDB lists, downloaded with

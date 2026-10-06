@@ -70,8 +70,9 @@ func (d MarkerDetection) Keeps(source MarkerSource) bool {
 }
 
 // KeyframeMode is how a library finds the keyframes a copied video's segments are cut at: from the
-// container's own index alone, from the index or else by reading the whole file, or not at all. A
-// file with none known is cut every segment length, at the keyframe after each.
+// container's own index alone, from the index or else by reading the whole file in the maintenance
+// window, or not at all. A file with none known is cut every segment length, at the keyframe after
+// each.
 type KeyframeMode string
 
 const (

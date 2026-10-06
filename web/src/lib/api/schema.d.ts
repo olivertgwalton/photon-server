@@ -5158,7 +5158,7 @@ export interface components {
             state: components["schemas"]["JobState"];
         };
         /** @enum {string} */
-        JobKind: "keyframes" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme";
+        JobKind: "keyframes" | "keyframe_walk" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme";
         JobQueue: {
             counts: components["schemas"]["JobCount"][];
             dead: components["schemas"]["DeadJob"][];

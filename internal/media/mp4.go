@@ -35,7 +35,7 @@ func boxAt(r *io.SectionReader, off, limit int64) (box, error) {
 		b.end = off + size
 	}
 	if b.end < b.body || b.end > limit {
-		return box{}, fmt.Errorf("%w: a %q box overruns its parent", errNoIndex, b.typ)
+		return box{}, fmt.Errorf("%w: a %q box overruns its parent", ErrNoIndex, b.typ)
 	}
 	return b, nil
 }
@@ -44,7 +44,7 @@ func boxAt(r *io.SectionReader, off, limit int64) (box, error) {
 func boxes(r *io.SectionReader, off, end int64, f func(box) (bool, error)) error {
 	for n := 0; off < end; n++ {
 		if n == maxHeads {
-			return fmt.Errorf("%w: more than %d boxes", errNoIndex, maxHeads)
+			return fmt.Errorf("%w: more than %d boxes", ErrNoIndex, maxHeads)
 		}
 		b, err := boxAt(r, off, end)
 		if err != nil {
@@ -82,7 +82,7 @@ func fullBox(r *io.SectionReader, b box) (byte, []byte, error) {
 		return 0, nil, err
 	}
 	if len(body) < 4 {
-		return 0, nil, fmt.Errorf("%w: a %q box too short for its fields", errNoIndex, b.typ)
+		return 0, nil, fmt.Errorf("%w: a %q box too short for its fields", ErrNoIndex, b.typ)
 	}
 	return body[0], body[4:], nil
 }
@@ -91,11 +91,11 @@ func fullBox(r *io.SectionReader, b box) (byte, []byte, error) {
 // and answers them.
 func table(body []byte, width int) ([]byte, int, error) {
 	if len(body) < 4 {
-		return nil, 0, fmt.Errorf("%w: a table with no count", errNoIndex)
+		return nil, 0, fmt.Errorf("%w: a table with no count", ErrNoIndex)
 	}
 	n := binary.BigEndian.Uint32(body)
 	if uint64(n)*uint64(width) > uint64(len(body)-4) {
-		return nil, 0, fmt.Errorf("%w: a table of %d entries in %d bytes", errNoIndex, n, len(body))
+		return nil, 0, fmt.Errorf("%w: a table of %d entries in %d bytes", ErrNoIndex, n, len(body))
 	}
 	return body[4:], int(n), nil
 }
@@ -130,7 +130,7 @@ func mp4Keyframes(r *io.SectionReader) ([]int64, error) {
 		return nil, err
 	}
 	if !found {
-		return nil, fmt.Errorf("%w: no moov before the first fragment", errNoIndex)
+		return nil, fmt.Errorf("%w: no moov before the first fragment", ErrNoIndex)
 	}
 	trak, t, err := videoTrack(r, moov)
 	if err != nil {
@@ -182,7 +182,7 @@ func videoTrack(r *io.SectionReader, moov box) (box, track, error) {
 		return box{}, track{}, err
 	}
 	if trak.end == 0 {
-		return box{}, track{}, fmt.Errorf("%w: no video track", errNoIndex)
+		return box{}, track{}, fmt.Errorf("%w: no video track", ErrNoIndex)
 	}
 	if t, err = describe(r, trak, movieScale); err != nil {
 		return box{}, track{}, err
@@ -216,7 +216,7 @@ func describe(r *io.SectionReader, trak box, movieScale uint32) (track, error) {
 		return t, err
 	}
 	if t.scale == 0 || movieScale == 0 {
-		return t, fmt.Errorf("%w: a timescale of zero", errNoIndex)
+		return t, fmt.Errorf("%w: a timescale of zero", ErrNoIndex)
 	}
 	elst, ok, err := within(r, trak, "edts", "elst")
 	if err != nil || !ok {
@@ -299,17 +299,17 @@ func sampleTable(r *io.SectionReader, trak box, t track) ([]int64, error) {
 			sample = uint64(binary.BigEndian.Uint32(stss[s*4:])) - 1
 		}
 		if sample >= samples {
-			return nil, fmt.Errorf("%w: a sync sample past the last sample", errNoIndex)
+			return nil, fmt.Errorf("%w: a sync sample past the last sample", ErrNoIndex)
 		}
 		dts, ok := decode.time(sample)
 		if !ok {
-			return nil, fmt.Errorf("%w: sync samples out of order", errNoIndex)
+			return nil, fmt.Errorf("%w: sync samples out of order", ErrNoIndex)
 		}
 		var cts int64
 		if offsets > 0 {
 			_, ok := composition.time(sample)
 			if !ok {
-				return nil, fmt.Errorf("%w: a ctts shorter than the track", errNoIndex)
+				return nil, fmt.Errorf("%w: a ctts shorter than the track", ErrNoIndex)
 			}
 			cts = int64(int32(composition.value))
 		}
@@ -351,14 +351,14 @@ func (u *runner) time(sample uint64) (int64, bool) {
 func randomAccess(r *io.SectionReader, t track) ([]int64, error) {
 	size := r.Size()
 	if size < 16 {
-		return nil, fmt.Errorf("%w: no mfro", errNoIndex)
+		return nil, fmt.Errorf("%w: no mfro", ErrNoIndex)
 	}
 	mfro, err := boxAt(r, size-16, size)
 	if err != nil {
 		return nil, err
 	}
 	if mfro.typ != "mfro" {
-		return nil, fmt.Errorf("%w: a fragmented file with no mfra", errNoIndex)
+		return nil, fmt.Errorf("%w: a fragmented file with no mfra", ErrNoIndex)
 	}
 	_, body, err := fullBox(r, mfro)
 	if err != nil || len(body) < 4 {
@@ -369,7 +369,7 @@ func randomAccess(r *io.SectionReader, t track) ([]int64, error) {
 		return nil, err
 	}
 	if mfra.typ != "mfra" {
-		return nil, fmt.Errorf("%w: an mfro pointing at no mfra", errNoIndex)
+		return nil, fmt.Errorf("%w: an mfro pointing at no mfra", ErrNoIndex)
 	}
 	var pts []int64
 	err = boxes(r, mfra.body, mfra.end, func(b box) (bool, error) {
@@ -409,15 +409,15 @@ func field32(body []byte, v0, v1 int, version byte) (uint32, error) {
 		at = v1
 	}
 	if at+4 > len(body) {
-		return 0, fmt.Errorf("%w: a box too short for its fields", errNoIndex)
+		return 0, fmt.Errorf("%w: a box too short for its fields", ErrNoIndex)
 	}
 	return binary.BigEndian.Uint32(body[at:]), nil
 }
 
-// cmpErr answers err, or where there is none, errNoIndex saying what was missing.
+// cmpErr answers err, or where there is none, ErrNoIndex saying what was missing.
 func cmpErr(err error, missing string) error {
 	if err != nil {
 		return err
 	}
-	return fmt.Errorf("%w: %s", errNoIndex, missing)
+	return fmt.Errorf("%w: %s", ErrNoIndex, missing)
 }

@@ -8,7 +8,10 @@ import (
 type JobKind string
 
 const (
+	// JobKeyframes reads a part's keyframes from its container's own index.
 	JobKeyframes JobKind = "keyframes"
+	// JobKeyframeWalk walks a part with no index through for its keyframes, under KeyframesFull.
+	JobKeyframeWalk JobKind = "keyframe_walk"
 	// JobIdentify matches a film or show to a metadata provider.
 	JobIdentify JobKind = "identify"
 	// JobScanLibrary reads a library's folders again; one job per library at a time.
@@ -26,7 +29,7 @@ const (
 )
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme}
+	return []JobKind{JobKeyframes, JobKeyframeWalk, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme}
 }
 
 type JobState string
@@ -83,7 +86,7 @@ func (j Job) About() (item, library uuid.UUID) {
 		return j.Subject, uuid.UUID{}
 	case JobScanLibrary:
 		return uuid.UUID{}, j.Subject
-	case JobKeyframes, JobPreviews, JobConvert, JobDeliverWebhook:
+	case JobKeyframes, JobKeyframeWalk, JobPreviews, JobConvert, JobDeliverWebhook:
 	}
 	return uuid.UUID{}, uuid.UUID{}
 }

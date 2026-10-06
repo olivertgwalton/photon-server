@@ -142,9 +142,10 @@ func (g *Gate) reread(ctx context.Context) {
 }
 
 // inTime reports whether work of kind, due as said, may run at now as its timing has it; the caller
-// holds g.mu.
-// Keyframes are what a play is cut at, read from a file's own index as it is added, as Plex
-// analyses a file as it is added, so no window holds them.
+// holds g.mu. Keyframes read from a file's own index are what a play is cut at, read as it is
+// added, as Jellyfin reads a Matroska file's on demand, so no window holds them; a walk through a
+// whole file for them is always the window's, as Jellyfin's keyframe extraction task has no
+// trigger of its own and Plex's deep analysis runs during maintenance.
 func (g *Gate) inTime(kind domain.JobKind, due domain.JobDue, now time.Time) bool {
 	var timing domain.Timing
 	switch kind {
@@ -152,6 +153,8 @@ func (g *Gate) inTime(kind domain.JobKind, due domain.JobDue, now time.Time) boo
 		timing = g.window.Previews
 	case domain.JobMarkers:
 		timing = g.window.Markers
+	case domain.JobKeyframeWalk:
+		return g.window.Holds(now)
 	case domain.JobKeyframes, domain.JobIdentify, domain.JobScanLibrary, domain.JobConvert, domain.JobDeliverWebhook, domain.JobTheme:
 		return true
 	}

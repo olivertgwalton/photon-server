@@ -256,6 +256,12 @@ func rekeyframe(ctx context.Context, tx db, lib uuid.UUID, mode domain.KeyframeM
 	return err
 }
 
+// QueueKeyframeWalk queues a part with no keyframe index to be walked through for them, after the
+// other analysis, as its keyframes job is.
+func (s *Store) QueueKeyframeWalk(ctx context.Context, part uuid.UUID) error {
+	return insertJob(ctx, s.pool, domain.JobKeyframeWalk, part, 0, indexPriority)
+}
+
 // AskKeyframes queues a part's keyframes job ahead of the rest, for a part played before its turn.
 func (s *Store) AskKeyframes(ctx context.Context, part uuid.UUID) error {
 	return enqueueAsked(ctx, s.pool, domain.JobKeyframes, part)

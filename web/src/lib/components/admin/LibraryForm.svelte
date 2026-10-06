@@ -216,7 +216,8 @@ const refreshOptions = $derived(
 			/>
 			<Field.Description>
 				The index is a few small reads, right for a network share; reading
-				through gives exact segments from a local disk.
+				through, in the maintenance window, gives exact segments from a local
+				disk.
 			</Field.Description>
 		</Field.Field>
 		<Field.Field>

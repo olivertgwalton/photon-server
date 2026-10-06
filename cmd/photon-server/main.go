@@ -298,7 +298,8 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return jobs.NewWorker(st, logger, node, mediaSlots, map[domain.JobKind]jobs.Handler{kind: h}, hub, gate)
 	}
 	readers := []*jobs.Worker{
-		reader(domain.JobKeyframes, analysis.Keyframes(st, tools)),
+		reader(domain.JobKeyframes, analysis.Keyframes(st)),
+		reader(domain.JobKeyframeWalk, analysis.WalkKeyframes(st, tools)),
 		reader(domain.JobMarkers, analysis.Markers(st, tools.Fingerprint)),
 		reader(domain.JobPreviews, analysis.MakePreviews(st, tools, previews, logger)),
 	}

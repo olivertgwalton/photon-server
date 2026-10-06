@@ -31,7 +31,7 @@ func newCluster(kind domain.JobKind, timing domain.Timing) *cluster {
 		w.Previews = timing
 	case domain.JobMarkers:
 		w.Markers = timing
-	case domain.JobKeyframes, domain.JobIdentify, domain.JobScanLibrary, domain.JobConvert, domain.JobDeliverWebhook, domain.JobTheme:
+	case domain.JobKeyframes, domain.JobKeyframeWalk, domain.JobIdentify, domain.JobScanLibrary, domain.JobConvert, domain.JobDeliverWebhook, domain.JobTheme:
 	}
 	return &cluster{events: make(chan domain.Event, 8), window: w}
 }
@@ -235,6 +235,25 @@ func TestAChangedWindowIsKeptToAtOnce(t *testing.T) {
 		c.change(2, 5)
 		if err := <-stopped; !errors.Is(err, errWindowClosed) || time.Since(changed) > 0 {
 			t.Errorf("stopped for %v after %s; want stopped as the window changed", err, time.Since(changed))
+		}
+	})
+}
+
+// A walk through a whole file for its keyframes waits for the window, however it was queued.
+func TestKeyframeWalksKeepToTheWindow(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobKeyframeWalk, Due: domain.JobDueNow}}}
+		c := newCluster(domain.JobKeyframeWalk, domain.TimingWindowAndAdded)
+		var startedAt time.Time
+		stop := runReader(t, q, c, domain.JobKeyframeWalk, func(context.Context, uuid.UUID) error {
+			startedAt = time.Now()
+			return nil
+		})
+		defer stop()
+		synctest.Sleep(3 * time.Hour)
+		opens := time.Date(2000, 1, 1, 2, 0, 0, 0, time.UTC)
+		if startedAt.Before(opens) || startedAt.After(opens.Add(2*time.Minute)) {
+			t.Errorf("the walk started at %s, want as the window opens", startedAt)
 		}
 	})
 }
