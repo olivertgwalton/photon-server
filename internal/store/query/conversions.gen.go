@@ -32,6 +32,8 @@ func newConversion(db *gorm.DB, opts ...gen.DOOption) conversion {
 	_conversion.PartID = field.NewField(tableName, "part_id")
 	_conversion.MaxBitrateKbps = field.NewInt(tableName, "max_bitrate_kbps")
 	_conversion.MaxWidth = field.NewInt(tableName, "max_width")
+	_conversion.VideoCodec = field.NewString(tableName, "video_codec")
+	_conversion.VideoRange = field.NewString(tableName, "video_range")
 	_conversion.State = field.NewString(tableName, "state")
 	_conversion.Progress = field.NewFloat64(tableName, "progress")
 	_conversion.SizeBytes = field.NewInt64(tableName, "size_bytes")
@@ -52,6 +54,8 @@ type conversion struct {
 	PartID         field.Field
 	MaxBitrateKbps field.Int
 	MaxWidth       field.Int
+	VideoCodec     field.String
+	VideoRange     field.String
 	State          field.String
 	Progress       field.Float64
 	SizeBytes      field.Int64
@@ -78,6 +82,8 @@ func (c *conversion) updateTableName(table string) *conversion {
 	c.PartID = field.NewField(table, "part_id")
 	c.MaxBitrateKbps = field.NewInt(table, "max_bitrate_kbps")
 	c.MaxWidth = field.NewInt(table, "max_width")
+	c.VideoCodec = field.NewString(table, "video_codec")
+	c.VideoRange = field.NewString(table, "video_range")
 	c.State = field.NewString(table, "state")
 	c.Progress = field.NewFloat64(table, "progress")
 	c.SizeBytes = field.NewInt64(table, "size_bytes")
@@ -110,11 +116,13 @@ func (c *conversion) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (c *conversion) fillFieldMap() {
-	c.fieldMap = make(map[string]field.Expr, 10)
+	c.fieldMap = make(map[string]field.Expr, 12)
 	c.fieldMap["id"] = c.ID
 	c.fieldMap["part_id"] = c.PartID
 	c.fieldMap["max_bitrate_kbps"] = c.MaxBitrateKbps
 	c.fieldMap["max_width"] = c.MaxWidth
+	c.fieldMap["video_codec"] = c.VideoCodec
+	c.fieldMap["video_range"] = c.VideoRange
 	c.fieldMap["state"] = c.State
 	c.fieldMap["progress"] = c.Progress
 	c.fieldMap["size_bytes"] = c.SizeBytes
