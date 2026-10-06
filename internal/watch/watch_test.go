@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -12,16 +13,21 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
+type ask struct {
+	lib     uuid.UUID
+	folders []string
+}
+
 type fakeLibraries struct {
 	libs    []domain.Library
-	scanned chan uuid.UUID
+	scanned chan ask
 }
 
 func (f fakeLibraries) Libraries(context.Context) ([]domain.Library, error) { return f.libs, nil }
 
-func (f fakeLibraries) ScanLibrary(_ context.Context, id uuid.UUID, delay time.Duration) error {
+func (f fakeLibraries) ScanFolders(_ context.Context, id uuid.UUID, folders []string, delay time.Duration) error {
 	if delay == Settle {
-		f.scanned <- id
+		f.scanned <- ask{id, folders}
 	}
 	return nil
 }
@@ -34,7 +40,7 @@ func TestAChangeInAWatchedLibraryQueuesItsScan(t *testing.T) {
 			{ID: watched, Root: films, Monitor: domain.MonitorRealtime},
 			{ID: unwatched, Root: tv, Monitor: domain.MonitorOff},
 		},
-		scanned: make(chan uuid.UUID, 64),
+		scanned: make(chan ask, 64),
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error)
@@ -43,8 +49,9 @@ func TestAChangeInAWatchedLibraryQueuesItsScan(t *testing.T) {
 		cancel()
 		<-done
 	})
-	// touch rewrites path until a scan is queued, as the watcher may not yet watch its folder.
-	touch := func(path string) {
+	// touch rewrites path until a scan of folder is queued, as the watcher may not yet watch its
+	// folder.
+	touch := func(path, folder string) {
 		t.Helper()
 		deadline := time.After(5 * time.Second)
 		for n := 0; ; n++ {
@@ -52,9 +59,9 @@ func TestAChangeInAWatchedLibraryQueuesItsScan(t *testing.T) {
 				t.Fatal(err)
 			}
 			select {
-			case id := <-f.scanned:
-				if id != watched {
-					t.Fatalf("queued a scan of %v, want the watched library", id)
+			case a := <-f.scanned:
+				if a.lib != watched || !slices.Equal(a.folders, []string{folder}) {
+					t.Fatalf("queued a scan of %v in %v, want %s in the watched library", a.folders, a.lib, folder)
 				}
 				return
 			case <-time.After(50 * time.Millisecond):
@@ -63,7 +70,7 @@ func TestAChangeInAWatchedLibraryQueuesItsScan(t *testing.T) {
 			}
 		}
 	}
-	touch(filepath.Join(films, "Alien.mkv"))
+	touch(filepath.Join(films, "Alien.mkv"), ".")
 
 	if err := os.WriteFile(filepath.Join(tv, "Show.mkv"), nil, 0o644); err != nil {
 		t.Fatal(err)
@@ -81,7 +88,12 @@ func TestAChangeInAWatchedLibraryQueuesItsScan(t *testing.T) {
 		}
 		break
 	}
-	touch(filepath.Join(films, "Heat (1995)", "Heat.mkv"))
+	// A film's folder is read alone, its subtitles' folder with it.
+	touch(filepath.Join(films, "Heat (1995)", "Heat.mkv"), "Heat (1995)")
+	if err := os.Mkdir(filepath.Join(films, "Heat (1995)", "Subs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	touch(filepath.Join(films, "Heat (1995)", "Subs", "English.srt"), "Heat (1995)")
 }
 
 // Copying a film in writes to it thousands of times; the scan is asked for a handful of times, not
@@ -91,7 +103,7 @@ func TestAFileBeingWrittenAsksForItsScanSeldom(t *testing.T) {
 	lib := uuid.NewV7()
 	f := fakeLibraries{
 		libs:    []domain.Library{{ID: lib, Root: films, Monitor: domain.MonitorRealtime}},
-		scanned: make(chan uuid.UUID, 4096),
+		scanned: make(chan ask, 4096),
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error)

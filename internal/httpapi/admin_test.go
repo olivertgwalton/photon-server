@@ -6,6 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -20,6 +23,7 @@ import (
 type fakeLibraries struct {
 	libs    []domain.Library
 	scanned []uuid.UUID
+	folders []string
 }
 
 func (f *fakeLibraries) Libraries(context.Context) ([]domain.Library, error) { return f.libs, nil }
@@ -65,8 +69,9 @@ func (f *fakeLibraries) RemoveLibrary(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (f *fakeLibraries) ScanLibrary(_ context.Context, lib uuid.UUID, _ time.Duration) error {
+func (f *fakeLibraries) ScanFolders(_ context.Context, lib uuid.UUID, folders []string, _ time.Duration) error {
 	f.scanned = append(f.scanned, lib)
+	f.folders = append(f.folders, folders...)
 	return nil
 }
 
@@ -120,5 +125,39 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 	}
 	if got, want := told.kinds(), []domain.EventKind{domain.EventLibraryAdded, domain.EventLibraryRemoved}; !slices.Equal(got, want) {
 		t.Errorf("told %v, want %v", got, want)
+	}
+}
+
+// An autoscan tool names the path a download landed at, as it does to Plex's refresh?path=.
+func TestAnAdminScansTheFolderAPathIsIn(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "Heat (1995)", "Subs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lib := domain.Library{ID: uuid.NewV7(), Name: "Films", Kind: domain.LibraryMovies, Root: root}
+	libs := &fakeLibraries{libs: []domain.Library{lib}}
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Libraries: libs})
+	for _, tc := range []struct {
+		path string
+		want int
+	}{
+		{"", http.StatusAccepted},
+		{filepath.Join(root, "Heat (1995)", "Heat (1995).mkv"), http.StatusAccepted},
+		{filepath.Join(root, "Heat (1995)", "Subs", "English.srt"), http.StatusAccepted},
+		{filepath.Join(root, "Alien (1979)", "Alien (1979).mkv"), http.StatusAccepted},
+		{filepath.Join(root, "..", "elsewhere"), http.StatusBadRequest},
+		{"Heat (1995)", http.StatusBadRequest},
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/libraries/"+lib.ID.String()+"/scan?path="+url.QueryEscape(tc.path), nil)
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Errorf("path %q: %d, want %d: %s", tc.path, rec.Code, tc.want, rec.Body)
+		}
+	}
+	// A path that is not there yet, or is gone, is read from the nearest folder above it.
+	if want := []string{".", "Heat (1995)", "Heat (1995)", "."}; !slices.Equal(libs.folders, want) {
+		t.Errorf("scanned %q, want %q", libs.folders, want)
 	}
 }

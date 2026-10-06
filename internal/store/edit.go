@@ -82,7 +82,7 @@ func editable(ctx context.Context, tx *query.Query, id uuid.UUID) (*model.Item, 
 	return item, err
 }
 
-// rematch has a title's folder read again at the next scan, and its film or show matched again.
+// rematch has a title's folder read again, and its film or show matched again.
 func rematch(ctx context.Context, tx *query.Query, item *model.Item) error {
 	fo := tx.Folder
 	if _, err := fo.WithContext(ctx).Where(fo.LibraryID.Eq(item.LibraryID), fo.Path.Eq(item.Folder)).Delete(); err != nil {
@@ -97,7 +97,7 @@ func rematch(ctx context.Context, tx *query.Query, item *model.Item) error {
 			return err
 		}
 	}
-	return enqueueAfter(ctx, tx, domain.JobScanLibrary, item.LibraryID, 0)
+	return askScan(ctx, tx, item.LibraryID, []string{item.Folder}, 0)
 }
 
 // matchedAs answers the film or show an item is matched to providers as: itself, or the show a

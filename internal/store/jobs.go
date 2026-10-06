@@ -81,7 +81,44 @@ func insertJob(ctx context.Context, tx *query.Query, kind domain.JobKind, subjec
 
 // ScanLibrary asks for a library to be scanned once delay has passed with no further asking.
 func (s *Store) ScanLibrary(ctx context.Context, lib uuid.UUID, delay time.Duration) error {
-	return enqueueAfter(ctx, s.q, domain.JobScanLibrary, model.UUID(lib), delay)
+	return s.ScanFolders(ctx, lib, []string{"."}, delay)
+}
+
+// ScanFolders asks for folders of a library, and everything under them, to be scanned once delay
+// has passed with no further asking.
+func (s *Store) ScanFolders(ctx context.Context, lib uuid.UUID, folders []string, delay time.Duration) error {
+	return s.q.Transaction(func(tx *query.Query) error {
+		return askScan(ctx, tx, model.UUID(lib), folders, delay)
+	})
+}
+
+func askScan(ctx context.Context, tx *query.Query, lib model.UUID, folders []string, delay time.Duration) error {
+	for _, f := range folders {
+		err := tx.Job.WithContext(ctx).UnderlyingDB().Exec(`
+			INSERT INTO scan_requests (library_id, path) VALUES (?, ?)
+			ON CONFLICT (library_id, path) DO UPDATE SET asked_at = now()`, lib, f).Error
+		if err != nil {
+			return err
+		}
+	}
+	return enqueueAfter(ctx, tx, domain.JobScanLibrary, lib, delay)
+}
+
+// ScanRequests answers the folders a library's scan has been asked to read, and when they were
+// read, for ScanAnswered.
+func (s *Store) ScanRequests(ctx context.Context, lib uuid.UUID) (folders []string, read time.Time, err error) {
+	err = s.pool.QueryRow(ctx, `
+		SELECT now(), coalesce(array_agg(path ORDER BY path), '{}') FROM scan_requests WHERE library_id = $1`,
+		lib.String()).Scan(&read, &folders)
+	return folders, read, err
+}
+
+// ScanAnswered forgets the requests a scan has answered: those it read, unless asked again since.
+func (s *Store) ScanAnswered(ctx context.Context, lib uuid.UUID, folders []string, read time.Time) error {
+	_, err := s.pool.Exec(ctx, `
+		DELETE FROM scan_requests WHERE library_id = $1 AND path = ANY($2) AND asked_at <= $3`,
+		lib.String(), folders, read)
+	return err
 }
 
 // ClaimJobs leases up to limit queued jobs of the given kinds to node. Workers that ask together

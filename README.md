@@ -124,9 +124,14 @@ folder cannot be read fails its scan and keeps its titles. The server only ever 
 recorded: no request names a path.
 
 Libraries are scanned every 12 hours, and as their files change: each folder is watched (inotify on
-Linux) and a library is scanned a minute after its last change. Network shares send no change
-events, so a library on one is scanned on the schedule; `photon-server library set -name NAME
--monitor off` stops watching a library. A large library may need a higher
+Linux) and, a minute after a library's last change, the folders that changed are scanned, each the
+nearest folder to a change that is still there, as Jellyfin's monitor reads them; a film's or a
+show's folder, not the library. Network shares and FUSE mounts send no change events, so a library
+on one is scanned on the schedule, or by a tool that says what it added, as autoscan says it to
+Plex: `POST /api/v1/admin/libraries/{id}/scan?path=/media/films/Heat (1995)` (an admin's token, the
+path as the server sees it, which must be inside the library) scans that folder of it, or the
+nearest one above a path that is not a folder. `photon-server library set -name NAME -monitor off`
+stops watching a library. A large library may need a higher
 `fs.inotify.max_user_watches`; the server says so when it runs out.
 
 Each node runs its jobs in pools of their own: two library scans at once, sixteen matches (as many

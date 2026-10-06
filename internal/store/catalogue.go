@@ -435,14 +435,15 @@ func saveFacts(ctx context.Context, tx *query.Query, partID model.UUID, f *media
 	return nil
 }
 
-// FinishScan settles a library after every folder has been seen. present holds every video and
-// subtitle path the walk found, skipped folders included. A path no longer present stops being a
-// place to read its part, or is a subtitle no longer there; a version with a part left nowhere is marked missing (kept, so an unmounted disk does
-// not cost its titles), and one whose every part is somewhere is not. A title left with no
-// version is removed, then a season and a show left with nothing in them. A folder the walk did
-// not visit is forgotten. It answers the titles whose copies went missing or came back, and those
-// removed.
-func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present []string) (Changed, error) {
+// FinishScan settles a library after every folder of a scan has been seen, scopes being the
+// folders it read with everything under them ("." for the whole library). present holds every
+// video and subtitle path the walk found, skipped folders included. A path in scope no longer
+// present stops being a place to read its part, or is a subtitle no longer there; a version with a
+// part left nowhere is marked missing (kept, so an unmounted disk does not cost its titles), and
+// one whose every part is somewhere is not. A title left with no version is removed, then a season
+// and a show left with nothing in them. A folder in scope the walk did not visit is forgotten. It
+// answers the titles whose copies went missing or came back, and those removed.
+func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, present []string) (Changed, error) {
 	// pgx sends each list as one text[] parameter; GORM would expand it into a parameter per path.
 	// A nil slice would go as NULL, and NOT x = ANY(NULL) matches nothing, so an emptied library
 	// would keep every path it ever had.
@@ -456,8 +457,8 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present 
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		changed = Changed{}
 		for _, table := range []string{"part_files", "subtitle_files"} {
-			_, err := tx.Exec(ctx, `DELETE FROM `+table+` WHERE library_id = $1 AND NOT rel_path = ANY($2)`,
-				lib.String(), present)
+			_, err := tx.Exec(ctx, `DELETE FROM `+table+` WHERE library_id = $1 AND NOT rel_path = ANY($2)
+				AND `+inScope("rel_path", "$3"), lib.String(), present, scopes)
 			if err != nil {
 				return err
 			}
@@ -488,10 +489,17 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, folders, present 
 			}
 			changed[domain.TitleRemoved] = append(changed[domain.TitleRemoved], removed...)
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND NOT path = ANY($2)`, lib.String(), folders)
+		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND NOT path = ANY($2) AND `+inScope("path", "$3"),
+			lib.String(), folders, scopes)
 		return err
 	})
 	return changed, err
+}
+
+// inScope is the condition that a path column is one of the folders of a text[] parameter, or
+// under one.
+func inScope(column, scopes string) string {
+	return `EXISTS (SELECT 1 FROM unnest(` + scopes + `::text[]) s WHERE s = '.' OR ` + column + ` = s OR starts_with(` + column + `, s || '/'))`
 }
 
 // queryIDs answers the ids a statement returns, as text.

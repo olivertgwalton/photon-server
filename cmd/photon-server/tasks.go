@@ -42,8 +42,8 @@ func scanTask(st *store.Store) task.Task {
 	}
 }
 
-// scanLibrary is the job that scans one library; jobs are one per library, so two scans of a
-// library never run at once.
+// scanLibrary is the job that scans the folders of one library asked for; jobs are one per
+// library, so two scans of a library never run at once.
 func scanLibrary(st *store.Store, scanner *scan.Scanner, hub *events.Hub, logger *slog.Logger) jobs.Handler {
 	return func(ctx context.Context, id uuid.UUID) error {
 		lib, err := st.Library(ctx, id)
@@ -53,11 +53,18 @@ func scanLibrary(st *store.Store, scanner *scan.Scanner, hub *events.Hub, logger
 		if err != nil {
 			return err
 		}
+		asked, read, err := st.ScanRequests(ctx, id)
+		if err != nil {
+			return err
+		}
 		started := time.Now()
-		r, err := scanner.Scan(ctx, lib, hub.Scanning(ctx), func(c store.Changed) { hub.Changed(ctx, lib.ID, c) })
+		r, err := scanner.Scan(ctx, lib, asked, hub.Scanning(ctx), func(c store.Changed) { hub.Changed(ctx, lib.ID, c) })
 		hub.Scanned(ctx, lib.ID)
 		if err != nil {
 			return fmt.Errorf("%s: %w", lib.Name, err)
+		}
+		if err := st.ScanAnswered(ctx, id, asked, read); err != nil {
+			return err
 		}
 		logger.InfoContext(ctx, "library scanned", slog.String("library", lib.Name),
 			slog.Int("folders", r.Folders), slog.Int("unchanged", r.Unchanged),

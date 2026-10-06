@@ -93,37 +93,66 @@ func (r *run) done() {
 	r.progress(r.told)
 }
 
-// Scan reads a library's folders again, telling progress after each, and what each changed of the
-// library's titles. Its top-level folders are walked and read several at once, the folders under
-// each one after another, parents first, so a show's seasons follow the show.
-func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(domain.ScanProgress), changed func(store.Changed)) (Report, error) {
+// wholePast is how many folders asked for at once a scan reads the whole library instead: so many
+// changed together is an import, which reaches most of it anyway.
+const wholePast = 100
+
+// scopes are the folders a scan of those asked for reads: the whole library where it was asked
+// for or past wholePast, else each folder not under another.
+func scopes(asked []string) []string {
+	if len(asked) == 0 || len(asked) > wholePast || slices.Contains(asked, ".") {
+		return []string{"."}
+	}
+	var out []string
+	for _, f := range slices.Sorted(slices.Values(asked)) {
+		if len(out) == 0 || (f != out[len(out)-1] && !strings.HasPrefix(f, out[len(out)-1]+"/")) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// Scan reads folders of a library again with everything under them, "." being the whole
+// library, telling progress after each, and what each changed of the library's titles. Its
+// top-level folders, or the folders asked for, are walked and read several at once, the folders
+// under each one after another, parents first, so a show's seasons follow the show.
+func (s *Scanner) Scan(ctx context.Context, lib domain.Library, asked []string, progress func(domain.ScanProgress), changed func(store.Changed)) (Report, error) {
+	scoped := scopes(asked)
 	r := &run{
 		lib: lib, reads: make(chan struct{}, readsAtOnce), progress: progress, changed: changed,
-		// The root is known before it is read; each folder read makes its subfolders known.
-		told: domain.ScanProgress{Library: lib.ID, Phase: domain.ScanReading, Known: 1},
+		// The folders asked for are known before they are read; each folder read makes its
+		// subfolders known.
+		told: domain.ScanProgress{Library: lib.ID, Phase: domain.ScanReading, Known: len(scoped)},
 	}
 	var err error
 	if r.fingerprints, err = s.store.FolderFingerprints(ctx, lib.ID); err != nil {
 		return r.report, err
 	}
-	var root library.Folder
-	for folder, err := range library.Walk(lib.Root, ".") {
-		// A root that cannot be read is a mount that is down, not a library emptied.
-		if err != nil {
+	dirs := scoped
+	if slices.Equal(scoped, []string{"."}) {
+		var root library.Folder
+		for folder, err := range library.Walk(lib.Root, ".") {
+			// A root that cannot be read is a mount that is down, not a library emptied.
+			if err != nil {
+				return r.report, err
+			}
+			root = folder
+			break
+		}
+		r.told.Known += len(root.Folders)
+		if err := s.folder(ctx, r, root, nil); err != nil {
 			return r.report, err
 		}
-		root = folder
-		break
-	}
-	r.told.Known += len(root.Folders)
-	if err := s.folder(ctx, r, root, nil); err != nil {
-		return r.report, err
+		dirs = root.Folders
 	}
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(readsAtOnce)
-	for _, top := range root.Folders {
+	for _, dir := range dirs {
 		g.Go(func() error {
-			for folder, err := range library.Walk(lib.Root, top) {
+			for folder, err := range library.Walk(lib.Root, dir) {
+				if err != nil && folder.Path == "." {
+					return err
+				}
 				r.mu.Lock()
 				r.told.Known += len(folder.Folders)
 				r.mu.Unlock()
@@ -143,7 +172,7 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(do
 	// A folder an empty .ignore hides was known and never read.
 	r.told.Phase, r.told.Known = domain.ScanRemoving, r.told.Done
 	progress(r.told)
-	titles, err := s.store.FinishScan(ctx, lib.ID, r.folders, r.present)
+	titles, err := s.store.FinishScan(ctx, lib.ID, scoped, r.folders, r.present)
 	if err == nil {
 		changed(titles)
 	}
