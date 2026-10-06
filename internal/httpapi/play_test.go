@@ -601,7 +601,7 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 		Version: domain.PlaybackVersion{ID: films, Container: "matroska,webm", BitrateKbps: 8000, DurationMS: 6_600_000},
 		Reasons: []domain.TranscodeReason{domain.BitrateExceedsLimit},
 		Video: &domain.PlaybackVideo{
-			Codec: "h264", Encode: &domain.PlaybackEncode{Codec: "h264", BitrateKbps: shown.Video.Encode.BitrateKbps},
+			Codec: "h264", Encode: &domain.PlaybackEncode{Codec: "h264", Range: domain.RangeSDR, BitrateKbps: shown.Video.Encode.BitrateKbps},
 		},
 		Audio: &domain.PlaybackAudio{
 			Stream: 1, Codec: "aac", Channels: 2, Encode: &domain.PlaybackEncode{Codec: "aac", Channels: 2, BitrateKbps: 256},

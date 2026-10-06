@@ -37,7 +37,7 @@ func Conversion(c Copy, q domain.Quality) (Decision, error) {
 		Video:          []VideoSupport{{Codec: "h264", MaxWidth: q.MaxWidth}},
 		Audio:          []AudioSupport{{Codec: "aac"}},
 		MaxBitrateKbps: q.MaxBitrateKbps,
-	}, c, nil, nil)
+	}, c, nil, nil, domain.HEVCDeny)
 }
 
 // MaxConversions is how many conversions a node makes at once: Plex's downloads transcode one at

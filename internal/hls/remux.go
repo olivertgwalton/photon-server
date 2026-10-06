@@ -573,8 +573,12 @@ func streamArgs(hw Hardware, video domain.VideoPlan, audio *domain.AudioPlan) []
 		// mapped first, so the subtitle is drawn as it was authored.
 		filter, encoder := hw.videoArgs(*e, video.Codec)
 		size := strconv.Itoa(e.Width) + ":" + strconv.Itoa(e.Height)
+		format := "yuv420p"
+		if e.Range == domain.RangeHDR10 || e.Range == domain.RangeHLG {
+			format = "yuv420p10le"
+		}
 		graph := "[" + in + "]" + filter + "[main];[0:" + strconv.Itoa(*e.Burn) + "]scale=" + size + "[sub];" +
-			"[main][sub]overlay=eof_action=pass:repeatlast=0,format=yuv420p[v]"
+			"[main][sub]overlay=eof_action=pass:repeatlast=0,format=" + format + "[v]"
 		a = append(append(a, "-filter_complex", graph, "-map", "[v]"), encoder...)
 	case e != nil:
 		filter, encoder := hw.videoArgs(*e, video.Codec)

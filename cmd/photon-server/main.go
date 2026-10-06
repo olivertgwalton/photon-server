@@ -395,10 +395,16 @@ func answerDiscovery(ctx context.Context, addr string, info httpapi.Info, logger
 // hardware is the device PHOTON_HWACCEL names to encode on (software when unset), on
 // PHOTON_HWACCEL_DEVICE: a render node for VAAPI and QSV, a CUDA index for NVENC. A device that
 // will not encode is reported and passed over for software, as playing slowly beats not playing.
+// HEVC is encoded unless PHOTON_HEVC_ENCODING is deny, or the device, or software for a subtitle
+// drawn in, will not encode it, which is reported and H.264 encoded alone.
 func hardware(ctx context.Context, ffmpeg string, logger *slog.Logger) (hls.Hardware, error) {
 	accel, ok := domain.ParseAcceleration(cmp.Or(os.Getenv("PHOTON_HWACCEL"), string(domain.AccelSoftware)))
 	if !ok {
 		return hls.Hardware{}, fmt.Errorf("PHOTON_HWACCEL is software, videotoolbox, vaapi, qsv or nvenc, not %q", os.Getenv("PHOTON_HWACCEL"))
+	}
+	hevc, ok := domain.ParseHEVCEncoding(cmp.Or(os.Getenv("PHOTON_HEVC_ENCODING"), string(domain.HEVCAllow)))
+	if !ok {
+		return hls.Hardware{}, fmt.Errorf("PHOTON_HEVC_ENCODING is allow or deny, not %q", os.Getenv("PHOTON_HEVC_ENCODING"))
 	}
 	device := os.Getenv("PHOTON_HWACCEL_DEVICE")
 	switch accel {
@@ -409,15 +415,28 @@ func hardware(ctx context.Context, ffmpeg string, logger *slog.Logger) (hls.Hard
 	case domain.AccelSoftware, domain.AccelVideoToolbox:
 	}
 	hw := hls.Hardware{Accel: accel, Device: device}
-	if err := hw.Check(ctx, ffmpeg); err != nil {
+	if err := hw.Check(ctx, ffmpeg, domain.VideoH264); err != nil {
 		if accel == domain.AccelSoftware {
 			logger.ErrorContext(ctx, "transcoding will fail: ffmpeg would not encode a test picture", slog.Any("err", err))
-			return hw, nil
+		} else {
+			logger.WarnContext(ctx, "encoding in software", slog.Any("err", err))
+			hw = hls.Hardware{Accel: domain.AccelSoftware}
 		}
-		logger.WarnContext(ctx, "encoding in software", slog.Any("err", err))
-		return hls.Hardware{Accel: domain.AccelSoftware}, nil
 	}
-	logger.InfoContext(ctx, "encoding video", slog.String("on", string(accel)), slog.String("device", device))
+	hw.HEVC = hevc
+	switch hevc {
+	case domain.HEVCAllow:
+		err := hw.Check(ctx, ffmpeg, domain.VideoHEVC)
+		if err == nil && hw.Accel != domain.AccelSoftware {
+			err = hls.Hardware{Accel: domain.AccelSoftware}.Check(ctx, ffmpeg, domain.VideoHEVC)
+		}
+		if err != nil {
+			logger.WarnContext(ctx, "encoding H.264 alone", slog.Any("err", err))
+			hw.HEVC = domain.HEVCDeny
+		}
+	case domain.HEVCDeny:
+	}
+	logger.InfoContext(ctx, "encoding video", slog.String("on", string(hw.Accel)), slog.String("device", hw.Device), slog.String("hevc", string(hw.HEVC)))
 	return hw, nil
 }
 

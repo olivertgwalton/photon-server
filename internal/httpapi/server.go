@@ -47,6 +47,8 @@ type toolJSON struct {
 type encoderJSON struct {
 	Acceleration domain.Acceleration `json:"acceleration"`
 	Device       string              `json:"device,omitzero"`
+	// HEVC is whether video is encoded to HEVC: deny where it is set so, or the device would not.
+	HEVC domain.HEVCEncoding `json:"hevc"`
 }
 
 // folderJSON's free_bytes is absent where the server cannot tell.
@@ -103,7 +105,7 @@ func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
 		Info: a.info, NodeID: s.Node, StartedAt: s.Started.UTC(), OS: runtime.GOOS, Arch: runtime.GOARCH,
 		FFmpeg:      toolJSON{s.Tools.FFmpeg.Path, s.Tools.FFmpeg.Version},
 		FFprobe:     toolJSON{s.Tools.FFprobe.Path, s.Tools.FFprobe.Version},
-		Chromaprint: s.Tools.Chromaprint, Encoder: encoderJSON{s.Encoder.Accel, s.Encoder.Device},
+		Chromaprint: s.Tools.Chromaprint, Encoder: encoderJSON{s.Encoder.Accel, s.Encoder.Device, s.Encoder.HEVC},
 		TranscodeLimit: limit, Discovery: s.Discovery, Listen: s.Listen, TrustedProxies: []string{},
 		Folders:          foldersJSON{folder(s.CacheDir), folder(s.BackupDir)},
 		MetadataLanguage: s.MetadataLanguage, Nodes: []nodeJSON{},

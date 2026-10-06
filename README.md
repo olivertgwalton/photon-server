@@ -161,15 +161,30 @@ folder, and one with gitignore patterns (`*.nfo`, `Extras/`, `!keep.mkv`, `**/sa
 what they match in its folder and below, until a deeper `.ignore` takes over.
 
 A title a client cannot play as it is has its video copied into HLS where it can, with its audio
-encoded, or its video encoded to H.264, HDR tone mapped to SDR and an interlaced picture (a DVD, a
-1080i recording) deinterlaced with yadif, as Jellyfin's default; a file probed before the server
-read field order is taken as progressive until it changes. Encoding is in software unless
+encoded, or its video encoded again, an interlaced picture (a DVD, a 1080i recording) deinterlaced
+with yadif, as Jellyfin's default; a file probed before the server read field order is taken as
+progressive until it changes. Encoding is in software unless
 `PHOTON_HWACCEL` names a device: `videotoolbox`, `vaapi` or `qsv` (on `PHOTON_HWACCEL_DEVICE`,
 default `/dev/dri/renderD128`) or `nvenc` (on CUDA device `PHOTON_HWACCEL_DEVICE`, default `0`). The
 server encodes a test picture on it at start, and falls back to software if it will not.
 Segments are written under `PHOTON_CACHE_DIR`'s `hls` folder and kept from a minute behind where
 each player last asked, so a film played through holds about a minute and a half of itself there;
 seeking back further makes them again. The folder is emptied at start.
+
+Video is encoded to HEVC for a client whose play profile lists `hevc`, in preference to H.264 as
+Jellyfin's is when HEVC encoding is allowed, and to H.264 otherwise. HEVC keeps a source's HDR10 or
+HLG where the client lists that range and takes 10 bits: Main 10, BT.2020, its transfer and its
+mastering display and light levels carried over, tagged `hvc1` in the HLS segments, whose master
+playlist says `VIDEO-RANGE=PQ` or `HLG`. HDR10+ is kept as its HDR10, and Dolby Vision 8.1 (or a
+profile 7 Blu-ray) as the HDR10 of its base layer, as Jellyfin transcodes it; no Dolby Vision is
+encoded. Anything a client cannot show, and anything encoded to H.264, is tone mapped to SDR. The
+play answer and the dashboard's playback say the codec and range sent, and whether it was tone
+mapped. `PHOTON_HEVC_ENCODING=deny` (default `allow`) encodes H.264 alone; HEVC is also left off,
+saying so at start, where the device, or software (which draws picture subtitles in), will not
+encode it, as `encoder.hevc` in `GET /api/v1/admin/server` shows. In software HEVC is libx265 at
+the superfast preset with Jellyfin's tuning, constant quality 28: on four threads it encodes 10-bit
+1080p at twice real time, where Jellyfin's veryfast falls short of it, at about a fifth more
+processor than H.264.
 
 A copy in several files (`cd1`, `cd2`, `part1`…) plays whole. A client says how it plays one in
 its play profile: by default as one stream, so its files are joined into one HLS stream with their

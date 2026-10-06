@@ -1,12 +1,14 @@
 package hls
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/binary"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -91,5 +93,72 @@ func TestAConversionIsAPlayableMP4AtTheBitrateAsked(t *testing.T) {
 	}
 	if len(boxes) < 2 || boxes[1] != "moov" {
 		t.Errorf("top-level boxes start %v, want the moov straight after ftyp", boxes)
+	}
+}
+
+// A 10-bit HDR10 film encoded again at a lower bitrate stays HDR10: HEVC Main 10 tagged hvc1, in
+// BT.2020 and PQ, with its mastering display and light levels carried over.
+func TestHDR10KeptInHEVCIsStillHDR10(t *testing.T) {
+	ffmpeg, ffprobe := tool(t, "ffmpeg", "PHOTON_FFMPEG"), tool(t, "ffprobe", "PHOTON_FFPROBE")
+	if encoders, err := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-encoders").Output(); err != nil || !bytes.Contains(encoders, []byte("libx265")) {
+		t.Skipf("needs an ffmpeg with libx265: %v", err)
+	}
+	dir := t.TempDir()
+	src := filepath.Join(dir, "film.mkv")
+	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=24,format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc",
+		"-t", "2", "-c:v", "libx265", "-preset", "ultrafast", "-profile:v", "main10", "-b:v", "20M",
+		"-x265-params", "log-level=error:hdr10=1:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400", src)
+	if out, err := made.CombinedOutput(); err != nil {
+		t.Fatalf("making the film: %v: %s", err, out)
+	}
+	f, err := os.Open(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	dst := filepath.Join(dir, "film.mp4")
+	video := domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+		Codec: domain.VideoHEVC, Width: 1280, Height: 720, BitrateKbps: 2000, Range: domain.RangeHDR10,
+	}}
+	if err := (Hardware{Accel: domain.AccelSoftware}).Convert(t.Context(), ffmpeg, f, video, nil, 2*time.Second, dst,
+		func(float64) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	probe, err := exec.CommandContext(t.Context(), ffprobe, "-v", "error", "-select_streams", "v", "-show_streams",
+		"-show_frames", "-read_intervals", "%+#1", "-of", "json", dst).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Streams []struct {
+			CodecName      string `json:"codec_name"`
+			CodecTag       string `json:"codec_tag_string"`
+			Profile        string `json:"profile"`
+			PixFmt         string `json:"pix_fmt"`
+			Width          int    `json:"width"`
+			ColorTransfer  string `json:"color_transfer"`
+			ColorPrimaries string `json:"color_primaries"`
+		} `json:"streams"`
+		Frames []struct {
+			SideData []struct {
+				Type string `json:"side_data_type"`
+			} `json:"side_data_list"`
+		} `json:"frames"`
+	}
+	if err := json.Unmarshal(probe, &got); err != nil {
+		t.Fatal(err)
+	}
+	var sideData []string
+	for _, fr := range got.Frames {
+		for _, sd := range fr.SideData {
+			sideData = append(sideData, sd.Type)
+		}
+	}
+	if len(got.Streams) != 1 || got.Streams[0].CodecName != "hevc" || got.Streams[0].CodecTag != "hvc1" ||
+		got.Streams[0].Profile != "Main 10" || got.Streams[0].PixFmt != "yuv420p10le" || got.Streams[0].Width != 1280 ||
+		got.Streams[0].ColorTransfer != "smpte2084" || got.Streams[0].ColorPrimaries != "bt2020" ||
+		!slices.Contains(sideData, "Mastering display metadata") || !slices.Contains(sideData, "Content light level metadata") {
+		t.Errorf("ffprobe says %+v with side data %v, want 1280-wide HEVC Main 10 hvc1 in BT.2020 PQ with its mastering display and light levels", got.Streams, sideData)
 	}
 }

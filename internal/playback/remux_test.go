@@ -84,10 +84,28 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 		{
 			name: "a picture subtitle drawn into 4K is the only subtitle", copy: film,
 			video: domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
-				Codec: "h264", Width: 3840, Height: 2160, BitrateKbps: 20_000, ToneMap: true, Burn: new(4),
+				Codec: domain.VideoH264, Width: 3840, Height: 2160, BitrateKbps: 20_000, Range: domain.RangeSDR, ToneMap: true, Burn: new(4),
 			}},
 			audio: &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 2, BitrateKbps: 256}},
 			want:  hls.Variant{BandwidthKbps: 20_256, Codecs: []string{"avc1.640033", "mp4a.40.2"}, Range: "SDR"},
+		},
+		{
+			name: "HDR10 kept in HEVC", copy: film,
+			video: domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+				Codec: domain.VideoHEVC, Width: 1920, Height: 1080, BitrateKbps: 8_000, Range: domain.RangeHDR10,
+			}},
+			audio:     &domain.AudioPlan{Stream: 2},
+			want:      hls.Variant{BandwidthKbps: 8_000, Codecs: []string{"hvc1.2.4.L123.B0", "ac-3"}, Range: "PQ"},
+			subtitles: []string{"", "English"},
+		},
+		{
+			name: "HDR tone mapped into HEVC", copy: film,
+			video: domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+				Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 8_000, Range: domain.RangeSDR, ToneMap: true,
+			}},
+			audio:     &domain.AudioPlan{Stream: 2},
+			want:      hls.Variant{BandwidthKbps: 8_000, Codecs: []string{"hvc1.1.6.L153.B0", "ac-3"}, Range: "SDR"},
+			subtitles: []string{"", "English"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

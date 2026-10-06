@@ -46,12 +46,19 @@ func variant(streams []media.Stream, video domain.VideoPlan, audio *domain.Audio
 
 func videoCodec(s media.Stream, v domain.VideoPlan) string {
 	if e := v.Encode; e != nil {
-		// High profile, at Jellyfin's level 4.1, or 5.1 for a picture larger than 1080p.
+		// At Jellyfin's level 4.1, or 5.1 for a picture larger than 1080p: H.264's High profile,
+		// HEVC's Main, or Main 10 for HDR kept, whose level is thirty times rather than ten.
 		level := 41
 		if e.Width*e.Height > 1920*1088 {
 			level = 51
 		}
-		return fmt.Sprintf("avc1.6400%02X", level)
+		switch {
+		case e.Codec == domain.VideoH264:
+			return fmt.Sprintf("avc1.6400%02X", level)
+		case e.Range == domain.RangeHDR10 || e.Range == domain.RangeHLG:
+			return fmt.Sprintf("hvc1.2.4.L%d.B0", 3*level)
+		}
+		return fmt.Sprintf("hvc1.1.6.L%d.B0", 3*level)
 	}
 	switch {
 	case v.DolbyVision == domain.DolbyVisionKeep && s.DolbyVision != nil:
@@ -88,13 +95,14 @@ func audioCodec(streams []media.Stream, a domain.AudioPlan) string {
 	return ""
 }
 
-// videoRange is the range the video is sent in: SDR once encoded, else the stream's own, Dolby
-// Vision's being its base layer's.
+// videoRange is the range the video is sent in: the one it is encoded in, else the stream's own,
+// Dolby Vision's being its base layer's.
 func videoRange(s media.Stream, v domain.VideoPlan) string {
+	r := s.Range
 	if v.Encode != nil {
-		return "SDR"
+		r = v.Encode.Range
 	}
-	switch s.Range {
+	switch r {
 	case domain.RangeSDR:
 		return "SDR"
 	case domain.RangeHDR10, domain.RangeHDR10Plus:
