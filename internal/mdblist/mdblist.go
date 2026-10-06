@@ -5,7 +5,6 @@ package mdblist
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -115,7 +114,7 @@ func (c *Client) ratings(ctx context.Context, key, path string) ([]domain.Rating
 			Votes  *int     `json:"votes"`
 		} `json:"ratings"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+	if err := provider.Decode(resp.Body, &body); err != nil {
 		return nil, err
 	}
 	var out []domain.Rating

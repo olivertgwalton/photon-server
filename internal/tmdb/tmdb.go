@@ -4,7 +4,6 @@ package tmdb
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
 const (
@@ -87,7 +87,7 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, into an
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusOK:
-		return json.NewDecoder(resp.Body).Decode(into)
+		return provider.Decode(resp.Body, into)
 	case http.StatusNotFound:
 		return ErrNotFound
 	}

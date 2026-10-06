@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -126,5 +127,15 @@ func TestAPersonIsDescribed(t *testing.T) {
 	want := domain.Person{Name: "Sigourney Weaver", Biography: "An actor.", Born: time.Date(1949, 10, 8, 0, 0, 0, 0, time.UTC), Birthplace: "New York City", Photo: imageURL + "/sw.jpg"}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Person (-want +got):\n%s", diff)
+	}
+}
+
+// A provider answering far more than any title takes is refused rather than read into memory.
+func TestAnAnswerTooLargeIsRefused(t *testing.T) {
+	c := serve(t, map[string]string{
+		"/search/movie?include_adult=false&language=en-GB&query=Alien": `{"results":[],"padding":"` + strings.Repeat("x", 9<<20) + `"}`,
+	})
+	if got, err := c.Search(t.Context(), Movie, "Alien", 0); err == nil {
+		t.Errorf("a 9 MiB answer: %v, want it refused", got)
 	}
 }
