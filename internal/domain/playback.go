@@ -206,6 +206,8 @@ type AudioEncode struct {
 	Codec       string
 	Channels    int
 	BitrateKbps int
+	// Boost multiplies its volume, as it is mixed down to stereo; 0 leaves it.
+	Boost float64
 }
 
 // Acceleration is the device the server encodes video on.
