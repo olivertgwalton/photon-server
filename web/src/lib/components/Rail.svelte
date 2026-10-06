@@ -1,19 +1,24 @@
-<script lang="ts">
+<script lang="ts" generics="T extends Record<'id', string>">
 import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
+import type { Snippet } from "svelte";
 import type { Shape } from "#lib/artwork.js";
-import type { components } from "#lib/api/schema.js";
-import TitleCard from "./TitleCard.svelte";
+import TitleCard, { type CardLike } from "./TitleCard.svelte";
 
 // A named row of titles that scrolls sideways. With `href`, its heading leads
-// to the whole of it.
+// to the whole of it. Its `cards` are TitleCards; other `items` are drawn by
+// `card`, told how wide the row draws them.
 let {
 	title,
-	cards,
+	cards = [],
+	items = [],
+	card,
 	shape = "poster",
 	href,
 }: {
 	title: string;
-	cards: components["schemas"]["Card"][];
+	cards?: CardLike[];
+	items?: T[];
+	card?: Snippet<[T, string]>;
 	shape?: Shape;
 	href?: string;
 } = $props();
@@ -33,7 +38,11 @@ const sizes = $derived(
 );
 </script>
 
-<!-- min-w-0: in a grid or flex row, the cards would otherwise widen the page. -->
+<!-- min-w-0: in a grid or flex row, the cards would otherwise widen the page.
+	The list is relative so what a card places absolutely (words for a screen
+	reader) scrolls with it rather than past the page's edge. It scrolls sideways
+	only: its padding holds a card's focus ring above and, below, a scrollbar
+	that takes room (Safari's, with scroll bars always shown). -->
 <section aria-labelledby={id} class="min-w-0">
 	<h2 {id} class="heading mb-3">
 		{#if href}
@@ -49,12 +58,17 @@ const sizes = $derived(
 		{/if}
 	</h2>
 	<ul
-		class="-mx-3 flex snap-x scroll-px-3 gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:scroll-px-6 sm:gap-4 sm:px-6"
+		class="relative -mx-3 flex snap-x scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 pt-1 pb-4 sm:-mx-6 sm:scroll-px-6 sm:gap-4 sm:px-6"
 	>
-		{#each cards as card (card.id)}
+		{#each cards as c (c.id)}
 			<li class="shrink-0 snap-start {width}">
-				<TitleCard {card} {shape} {sizes} />
+				<TitleCard card={c} {shape} {sizes} />
 			</li>
 		{/each}
+		{#if card}
+			{#each items as item (item.id)}
+				<li class="shrink-0 snap-start {width}">{@render card(item, sizes)}</li>
+			{/each}
+		{/if}
 	</ul>
 </section>

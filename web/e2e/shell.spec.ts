@@ -48,6 +48,12 @@ test("rows scroll sideways inside the page, which never does", async ({
 			viewport: document.documentElement.clientWidth,
 		}));
 		expect(scrolled, path).toBe(viewport);
+		// And a row scrolls sideways only: nothing in it reaches below it.
+		const rows = await page
+			.locator("section ul.overflow-x-auto")
+			.evaluateAll((uls) => uls.map((ul) => ul.scrollHeight - ul.clientHeight));
+		expect(rows.length, path).toBeGreaterThan(0);
+		expect(rows, path).toEqual(rows.map(() => 0));
 	}
 });
 

@@ -1,12 +1,17 @@
+<script lang="ts" module>
+import type { components } from "#lib/api/schema.js";
+
+type Card = components["schemas"]["Card"];
+// A card names its title; everything else it shows is what it has.
+export type CardLike = Pick<Card, "id" | "kind" | "title"> & Partial<Card>;
+</script>
+
 <script lang="ts">
 import CheckIcon from "@lucide/svelte/icons/check";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import { artworkSrc, artworkSrcset, type Shape } from "#lib/artwork.js";
-import type { components } from "#lib/api/schema.js";
 import { episodeLabel } from "#lib/format.js";
 import TitleMenu from "./TitleMenu.svelte";
-
-type Card = components["schemas"]["Card"];
 
 // A title on a wall or a rail: a poster, or for an episode or a row about
 // where the reader is, a still. `sizes` is how wide the rail draws it, and
@@ -16,7 +21,12 @@ let {
 	shape = "poster",
 	sizes,
 	caption: given,
-}: { card: Card; shape?: Shape; sizes: string; caption?: string } = $props();
+}: {
+	card: CardLike;
+	shape?: Shape;
+	sizes: string;
+	caption?: string;
+} = $props();
 
 const picture = $derived(
 	shape === "poster"

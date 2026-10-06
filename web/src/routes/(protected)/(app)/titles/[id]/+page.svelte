@@ -138,10 +138,20 @@ function videoURL(site: string, key: string): string | undefined {
 	}
 }
 const videos = $derived(
-	(t.videos ?? [])
-		.map((v) => ({ ...v, url: videoURL(v.site, v.key) }))
-		.filter((v) => v.url),
+	(t.videos ?? []).flatMap((v) => {
+		const url = videoURL(v.site, v.key);
+		return url ? [{ ...v, url }] : [];
+	}),
 );
+
+// The extras on the server, then the videos a provider links to elsewhere.
+type Extra =
+	| { id: string; extra: components["schemas"]["ExtraCard"] }
+	| { id: string; video: (typeof videos)[number] };
+const extras: Extra[] = $derived([
+	...(t.extras ?? []).map((extra) => ({ id: extra.id, extra })),
+	...videos.map((video) => ({ id: `${video.site}:${video.key}`, video })),
+]);
 
 const links = $derived.by(() => {
 	const ids = t.ids ?? {};
@@ -179,6 +189,55 @@ const backdrop = $derived(art("backdrop"));
 const logo = $derived(art("logo"));
 const poster = $derived(art("poster"));
 </script>
+
+{#snippet extraCard(
+	item: Extra,
+)}
+	{@const remote = "video" in item}
+	{@const name = remote ? item.video.name : item.extra.title}
+	{@const image = remote ? undefined : item.extra.image}
+	<a
+		href={remote ? item.video.url : playHref(item.extra.id)}
+		target={remote ? "_blank" : undefined}
+		rel={remote ? "noopener noreferrer" : undefined}
+		class="group block outline-none"
+	>
+		<span
+			class="bg-raise group-hover:ring-line-strong group-focus-visible:ring-signal relative grid aspect-video place-items-center overflow-hidden rounded-lg ring-2 ring-transparent transition-shadow"
+		>
+			{#if image}
+				<img
+					src={image}
+					alt=""
+					loading="lazy"
+					decoding="async"
+					class="size-full object-cover"
+				>
+			{:else if remote}
+				<ExternalLinkIcon class="text-ink-3 size-6" aria-hidden="true" />
+			{:else}
+				<PlayIcon class="text-ink-3 size-6" aria-hidden="true" />
+			{/if}
+		</span>
+		<span class="text-ink mt-2 block truncate text-sm font-semibold">
+			{name}
+		</span>
+		<span class="text-ink-3 block truncate text-xs">
+			{#if remote}
+				{extraKinds[item.video.extra_kind]}
+				· {item.video.site}
+				<span class="sr-only">(opens in a new tab)</span>
+			{:else}
+				{[
+					extraKinds[item.extra.extra_kind],
+					item.extra.duration_ms && runtime(item.extra.duration_ms),
+				]
+					.filter(Boolean)
+					.join(" · ")}
+			{/if}
+		</span>
+	</a>
+{/snippet}
 
 <svelte:head>
 	<title>{t.show ? `${t.show.title}: ${t.title}` : t.title} · Photon</title>
@@ -422,7 +481,7 @@ const poster = $derived(art("poster"));
 		<section aria-labelledby="seasons" class="min-w-0">
 			<h2 id="seasons" class="heading mb-3">Seasons</h2>
 			<ul
-				class="-mx-3 flex gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:gap-4 sm:px-6"
+				class="relative -mx-3 flex gap-3 overflow-x-auto overflow-y-hidden px-3 pt-1 pb-4 sm:-mx-6 sm:gap-4 sm:px-6"
 			>
 				{#each t.seasons as season (season.id)}
 					<li class="w-32 shrink-0 sm:w-36 lg:w-40">
@@ -570,7 +629,7 @@ const poster = $derived(art("poster"));
 		<section aria-labelledby="cast" class="min-w-0">
 			<h2 id="cast" class="heading mb-3">Cast &amp; crew</h2>
 			<ul
-				class="-mx-3 flex gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:gap-4 sm:px-6"
+				class="relative -mx-3 flex gap-3 overflow-x-auto overflow-y-hidden px-3 pt-1 pb-4 sm:-mx-6 sm:gap-4 sm:px-6"
 			>
 				{#each credits as credit (credit.person_id)}
 					<li class="w-28 shrink-0 sm:w-32">
@@ -586,75 +645,15 @@ const poster = $derived(art("poster"));
 		</section>
 	{/if}
 
-	{#if t.extras?.length || videos.length}
-		<section aria-labelledby="extras">
-			<h2 id="extras" class="heading mb-3">Extras</h2>
-			<ul class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-				{#each t.extras ?? [] as extra (extra.id)}
-					<li>
-						<a
-							href={playHref(extra.id)}
-							class="bg-raise hover:bg-accent flex items-center gap-3 rounded-lg px-4 py-3"
-						>
-							<PlayIcon class="text-ink-3 size-4 shrink-0" aria-hidden="true" />
-							<span class="min-w-0">
-								<span class="text-ink block truncate font-semibold">
-									{extra.title}
-								</span>
-								<span class="text-ink-3 block text-xs">
-									{[
-										extraKinds[extra.extra_kind],
-										extra.duration_ms && runtime(extra.duration_ms),
-									]
-										.filter(Boolean)
-										.join(" · ")}
-								</span>
-							</span>
-						</a>
-					</li>
-				{/each}
-				{#each videos as video, i (`${video.site}-${video.key}-${i}`)}
-					<li>
-						<a
-							href={video.url}
-							target="_blank"
-							rel="noopener noreferrer"
-							class="bg-raise hover:bg-accent flex items-center gap-3 rounded-lg px-4 py-3"
-						>
-							<ExternalLinkIcon
-								class="text-ink-3 size-4 shrink-0"
-								aria-hidden="true"
-							/>
-							<span class="min-w-0">
-								<span class="text-ink block truncate font-semibold">
-									{video.name}
-								</span>
-								<span class="text-ink-3 block text-xs">
-									{extraKinds[video.extra_kind]}
-									· {video.site}
-									<span class="sr-only">(opens in a new tab)</span>
-								</span>
-							</span>
-						</a>
-					</li>
-				{/each}
-			</ul>
-		</section>
+	{#if extras.length}
+		<Rail title="Extras" shape="still" items={extras} card={extraCard} />
 	{/if}
 
 	{#if t.collections?.length}
-		<section aria-labelledby="collections">
-			<h2 id="collections" class="heading mb-3">Part of</h2>
-			<ul class="flex flex-wrap gap-2">
-				{#each t.collections as collection (collection.id)}
-					<li>
-						<Button href="/titles/{collection.id}" variant="secondary">
-							{collection.title}
-						</Button>
-					</li>
-				{/each}
-			</ul>
-		</section>
+		<Rail
+			title="Collections"
+			cards={t.collections.map((c) => ({ ...c, kind: "collection" as const }))}
+		/>
 	{/if}
 
 	{#await data.similar then similar}

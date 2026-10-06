@@ -144,7 +144,7 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 				{ site: "imdb", score: 78, votes: 1200 },
 				{ site: "rotten_tomatoes", score: 93 },
 			],
-			collections: [{ id: "c-set", title: "Quiet Collection" }],
+			collections: [{ id: "c-set", title: "Quiet Collection", poster: art }],
 			// As a provider credits one person for several jobs.
 			credits: [
 				{ person_id: person, name: "Ada Lane", kind: "creator" },
@@ -159,7 +159,25 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 					role: "Caller",
 				},
 			],
-			extras: [{ id: "t-trailer", extra_kind: "trailer", title: "Trailer" }],
+			extras: [
+				{
+					id: "t-trailer",
+					extra_kind: "trailer",
+					title: "Trailer",
+					duration_ms: 150_000,
+					image: "/api/v1/parts/p-trailer/chapters/0/image",
+				},
+				{ id: "t-scene", extra_kind: "deleted_scene", title: "The Lost Call" },
+				{ id: "t-blooper", extra_kind: "blooper", title: "Outtakes" },
+			],
+			videos: [
+				{
+					extra_kind: "featurette",
+					site: "YouTube",
+					key: "quiet",
+					name: "Making Quiet Hours",
+				},
+			],
 			versions: [
 				{
 					id: "v-4k",
@@ -514,7 +532,8 @@ const server_ = Bun.serve({
 		}
 		if (
 			request.method === "GET" &&
-			url.pathname.startsWith("/api/v1/artwork/")
+			(url.pathname.startsWith("/api/v1/artwork/") ||
+				url.pathname.endsWith("/image"))
 		) {
 			return new Response(pixel, { headers: { "content-type": "image/png" } });
 		}

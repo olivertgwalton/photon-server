@@ -140,6 +140,24 @@ test("a film's page plays the copy and tracks chosen", async ({ page }) => {
 	await page.getByRole("button", { name: "Download", exact: true }).click();
 	await expect(page.getByText(/Download requested/)).toBeVisible();
 
+	const extras = page.getByRole("region", { name: "Extras" });
+	await expect(extras.getByRole("link", { name: /Trailer/ })).toHaveAttribute(
+		"href",
+		"/play/t-trailer",
+	);
+	await expect(extras.locator("img")).toHaveAttribute(
+		"src",
+		"/api/v1/parts/p-trailer/chapters/0/image",
+	);
+	await expect(
+		extras.getByRole("link", { name: /Making Quiet Hours/ }),
+	).toHaveAttribute("href", "https://www.youtube.com/watch?v=quiet");
+	const collections = page.getByRole("region", { name: "Collections" });
+	await expect(
+		collections.getByRole("link", { name: /Quiet Collection/ }),
+	).toHaveAttribute("href", "/titles/c-set");
+	await expect(collections.locator("img")).toBeVisible();
+
 	// One card for one person, however many jobs they did, and performers first.
 	const cast = page.getByRole("region", { name: "Cast & crew" });
 	await expect(cast.getByRole("listitem")).toHaveCount(2);
