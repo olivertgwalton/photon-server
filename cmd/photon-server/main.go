@@ -70,6 +70,11 @@ const (
 	// webhookSlots is how many deliveries a node makes at once, so one receiver that does not
 	// answer holds up no other.
 	webhookSlots = 2
+	// previewSlots is how many parts a node takes pictures of at once: one, as Jellyfin's chapter
+	// image task and Plex's butler go through files one by one. A still is a seek into the whole
+	// file, and on a network mount ten at once took every byte a stream needed (measured: every
+	// chapter timed out, and 64 MiB could not be read in minutes).
+	previewSlots = 1
 )
 
 func main() {
@@ -286,10 +291,10 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	notifier := jobs.NewWorker(st, logger, node, webhookSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobDeliverWebhook: webhook.Deliver(st),
 	}, hub)
-	// Previews have slots of their own, so however many are queued, the other analysis keeps every
-	// slot of its; as many as there are processors, as Jellyfin's image extraction runs.
-	previewer := jobs.NewWorker(st, logger, node, runtime.NumCPU(), map[domain.JobKind]jobs.Handler{
-		domain.JobPreviews: analysis.MakePreviews(st, tools, previews, logger),
+	// Previews have a slot of their own, so however many are queued, the other analysis keeps every
+	// slot of its.
+	previewer := jobs.NewWorker(st, logger, node, previewSlots, map[domain.JobKind]jobs.Handler{
+		domain.JobPreviews: analysis.MakePreviews(st, tools, previews, cache, logger),
 	}, hub)
 	// Conversions have slots of their own, so a long one never holds up a scan, and each holds a
 	// transcode slot its node's playbacks may take, so they never starve them.

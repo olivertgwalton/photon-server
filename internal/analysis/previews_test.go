@@ -59,8 +59,14 @@ type fixture struct {
 	lib      domain.Library
 	admin    domain.Profile
 	previews *Previews
+	playing  *nowPlaying
 	make     jobs.Handler
 }
+
+// nowPlaying is the cluster's playbacks, none until a test starts one.
+type nowPlaying struct{ playbacks []domain.Playback }
+
+func (n *nowPlaying) Playbacks(context.Context) ([]domain.Playback, error) { return n.playbacks, nil }
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
@@ -94,9 +100,10 @@ func newFixture(t *testing.T) *fixture {
 	}
 	t.Cleanup(func() { _ = previews.Close() })
 	tools := media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}
+	playing := &nowPlaying{}
 	return &fixture{
-		t: t, st: st, db: db, root: root, lib: lib, admin: admin, previews: previews,
-		make: MakePreviews(st, tools, previews, log),
+		t: t, st: st, db: db, root: root, lib: lib, admin: admin, previews: previews, playing: playing,
+		make: MakePreviews(st, tools, previews, playing, log),
 	}
 }
 
@@ -208,6 +215,23 @@ func TestAPartGetsSheetsAndChapterImages(t *testing.T) {
 		t.Fatalf("the second chapter's image: %v", err)
 	}
 	_ = still.Close()
+}
+
+func TestPreviewsWaitWhileAnythingPlays(t *testing.T) {
+	f := newFixture(t)
+	title, part := f.film("heat")
+	f.playing.playbacks = []domain.Playback{{ID: uuid.NewV7()}}
+	if err := f.make(t.Context(), part); !errors.Is(err, jobs.ErrNotNow) {
+		t.Fatalf("previews made during a playback answered %v, want to be put off", err)
+	}
+	if images := f.chapterImages(title); images[0] != "" || images[1] != "" {
+		t.Errorf("chapter images = %q, want none while it plays", images)
+	}
+	f.playing.playbacks = nil
+	f.run(part)
+	if images := f.chapterImages(title); images[0] == "" {
+		t.Error("previews were not made once the playback stopped")
+	}
 }
 
 func TestALibraryWithPreviewsOffGetsNone(t *testing.T) {
@@ -439,7 +463,7 @@ func TestAChapterTooSlowToPictureIsLeftWithout(t *testing.T) {
 	}
 	began := time.Now()
 	made, err := chapterImages(t.Context(), media.Tools{FFmpeg: media.Tool{Path: hang}}, f, chapters, false,
-		filepath.Join(dir, "chapters"), slog.New(slog.DiscardHandler))
+		filepath.Join(dir, "chapters"), func() error { return nil }, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -108,10 +108,24 @@ func (p *Previews) Sweep(ctx context.Context, live func(ctx context.Context, par
 	return len(stale), nil
 }
 
+// playbacks are those going on across the cluster, which previews step aside for.
+type playbacks interface {
+	Playbacks(ctx context.Context) ([]domain.Playback, error)
+}
+
 // MakePreviews makes a part's previews as its library asks, replacing any it had, or removes them
-// where it asks for none.
-func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Logger) jobs.Handler {
+// where it asks for none. It waits while anything plays, before each picture it would take: a
+// still is a seek into the whole file, which on a network mount starves a stream of the bytes it
+// is reading, so previews come second to watching, as Plex's butler leaves them to the night.
+func MakePreviews(st *store.Store, tools media.Tools, p *Previews, playing playbacks, log *slog.Logger) jobs.Handler {
 	return func(ctx context.Context, part uuid.UUID) error {
+		yield := func() error {
+			now, err := playing.Playbacks(ctx)
+			if err == nil && len(now) > 0 {
+				err = jobs.ErrNotNow
+			}
+			return err
+		}
 		src, err := st.PreviewSource(ctx, part)
 		if errors.Is(err, store.ErrNotFound) {
 			return p.root.RemoveAll(part.String())
@@ -125,6 +139,9 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 			}
 			return p.root.RemoveAll(part.String())
 		}
+		if err := yield(); err != nil {
+			return err
+		}
 		f, err := openPart(ctx, st, part)
 		if err != nil {
 			return err
@@ -136,7 +153,7 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 		}
 		defer os.RemoveAll(made)
 		toneMap := src.Range != "" && src.Range != domain.RangeSDR
-		chapters, err := chapterImages(ctx, tools, f, src.Chapters, toneMap, filepath.Join(made, "chapters"), log)
+		chapters, err := chapterImages(ctx, tools, f, src.Chapters, toneMap, filepath.Join(made, "chapters"), yield, log)
 		if err != nil {
 			return err
 		}
@@ -145,6 +162,9 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 		case domain.PreviewsAll:
 			dir := filepath.Join(made, "trickplay")
 			if err := os.Mkdir(dir, 0o750); err != nil {
+				return err
+			}
+			if err := yield(); err != nil {
 				return err
 			}
 			th, err := tools.Trickplay(ctx, f, dir, trickplay, toneMap)
@@ -170,13 +190,16 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 
 // chapterImages pictures each chapter into dir, answering the idx of those pictured. A chapter
 // whose picture cannot be made in time, one starting past the end of the video say, is left
-// without.
-func chapterImages(ctx context.Context, tools media.Tools, f *os.File, chapters []store.ChapterSpan, toneMap bool, dir string, log *slog.Logger) ([]int, error) {
+// without. yield stops it before a picture, with its reason.
+func chapterImages(ctx context.Context, tools media.Tools, f *os.File, chapters []store.ChapterSpan, toneMap bool, dir string, yield func() error, log *slog.Logger) ([]int, error) {
 	if err := os.Mkdir(dir, 0o750); err != nil {
 		return nil, err
 	}
 	var made []int
 	for _, c := range chapters {
+		if err := yield(); err != nil {
+			return nil, err
+		}
 		at := c.Start
 		if at == 0 {
 			at = min(openingChapterAt, c.End/2)
