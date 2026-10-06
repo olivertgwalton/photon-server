@@ -1,19 +1,24 @@
-<script lang="ts">
+<script lang="ts" generics="T extends Record<'id', string>">
 import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
+import type { Snippet } from "svelte";
 import type { Shape } from "#lib/artwork.js";
-import type { components } from "#lib/api/schema.js";
-import TitleCard from "./TitleCard.svelte";
+import TitleCard, { type CardLike } from "./TitleCard.svelte";
 
 // A named row of titles that scrolls sideways. With `href`, its heading leads
-// to the whole of it.
+// to the whole of it. Its `cards` are TitleCards; other `items` are drawn by
+// `card`, told how wide the row draws them.
 let {
 	title,
-	cards,
+	cards = [],
+	items = [],
+	card,
 	shape = "poster",
 	href,
 }: {
 	title: string;
-	cards: components["schemas"]["Card"][];
+	cards?: CardLike[];
+	items?: T[];
+	card?: Snippet<[T, string]>;
 	shape?: Shape;
 	href?: string;
 } = $props();
@@ -51,10 +56,15 @@ const sizes = $derived(
 	<ul
 		class="-mx-3 flex snap-x scroll-px-3 gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:scroll-px-6 sm:gap-4 sm:px-6"
 	>
-		{#each cards as card (card.id)}
+		{#each cards as c (c.id)}
 			<li class="shrink-0 snap-start {width}">
-				<TitleCard {card} {shape} {sizes} />
+				<TitleCard card={c} {shape} {sizes} />
 			</li>
 		{/each}
+		{#if card}
+			{#each items as item (item.id)}
+				<li class="shrink-0 snap-start {width}">{@render card(item, sizes)}</li>
+			{/each}
+		{/if}
 	</ul>
 </section>
