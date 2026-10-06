@@ -114,6 +114,10 @@ function home(arranged: Schemas["HomeSection"][], limit = 20): Schemas["Home"] {
 			items: everything().filter((c) => states.get(c.id)?.position_ms),
 		},
 		{
+			kind: "watchlist",
+			items: everything().filter((c) => states.get(c.id)?.watchlisted_at),
+		},
+		{
 			kind: "favourites",
 			items: everything().filter((c) => states.get(c.id)?.favourite_at),
 		},
@@ -553,6 +557,7 @@ const defaults: Schemas["Preferences"] = {
 	home: [
 		"continue_watching",
 		"next_up",
+		"watchlist",
 		"favourites",
 		"recently_added_films",
 		"recently_added_shows",
@@ -989,6 +994,8 @@ const server_ = Bun.serve({
 			case "DELETE titles/watched":
 			case "PUT titles/favourite":
 			case "DELETE titles/favourite":
+			case "PUT titles/watchlist":
+			case "DELETE titles/watchlist":
 			case "DELETE titles/progress": {
 				const now = request.method === "PUT" ? "2026-10-05T20:00:00Z" : null;
 				const state = { ...states.get(id) };
@@ -996,6 +1003,7 @@ const server_ = Bun.serve({
 					state.watched_at = now;
 					state.position_ms = 0;
 				} else if (sub === "favourite") state.favourite_at = now;
+				else if (sub === "watchlist") state.watchlisted_at = now;
 				else state.position_ms = 0;
 				states.set(id, state);
 				return none();

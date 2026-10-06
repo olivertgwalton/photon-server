@@ -38,6 +38,14 @@ export function setFavourite(id: string, favourite: boolean) {
 	);
 }
 
+export function setWatchlisted(id: string, listed: boolean) {
+	return change(
+		listed
+			? api.PUT("/api/v1/titles/{id}/watchlist", path(id))
+			: api.DELETE("/api/v1/titles/{id}/watchlist", path(id)),
+	);
+}
+
 export function forgetProgress(id: string) {
 	return change(
 		api.DELETE("/api/v1/titles/{id}/progress", path(id)),

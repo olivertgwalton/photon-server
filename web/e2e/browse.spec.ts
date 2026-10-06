@@ -339,6 +339,19 @@ test("a playlist is made, filled, reordered and deleted", async ({ page }) => {
 	await expect(page.getByText("No playlists yet.")).toBeVisible();
 });
 
+test("a title put on the watchlist is on the home's watchlist row", async ({
+	page,
+}) => {
+	await logIn(page, "/titles/t-film");
+	const watchlist = page.getByRole("button", { name: "Watchlist" });
+	await expect(watchlist).toHaveAttribute("aria-pressed", "false");
+	await watchlist.click();
+	await expect(watchlist).toHaveAttribute("aria-pressed", "true");
+	await page.goto("/");
+	const row = page.getByRole("region", { name: "Watchlist" });
+	await expect(row.getByRole("link", { name: /Quiet Hours/ })).toBeVisible();
+});
+
 test("favourites, history and downloads list the reader's own", async ({
 	page,
 }) => {
