@@ -15,6 +15,7 @@ func TestAHomeIsEveryRowInTheProfilesOrder(t *testing.T) {
 		{RowContinueWatching, RowShown},
 		{RowRecentFilms, RowShown},
 		{RowRecentShows, RowShown},
+		{RowCollection, RowShown},
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("ArrangeHome = %v, want %v", got, want)

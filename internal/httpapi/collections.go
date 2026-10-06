@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -14,6 +15,7 @@ type collections interface {
 	Members(ctx context.Context, profile, collection uuid.UUID) ([]store.Card, error)
 	AddCollection(ctx context.Context, lib uuid.UUID, title string) (uuid.UUID, error)
 	SetMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error
+	SetPlacement(ctx context.Context, collection uuid.UUID, placement domain.CollectionPlacement) error
 	RemoveCollection(ctx context.Context, collection uuid.UUID) error
 }
 
@@ -90,6 +92,30 @@ func (a *API) setMembers(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeNotFound, "the collection, or one of its titles, is not in its library")
 	case a.answered(w, r, err):
 	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+type placementJSON struct {
+	Placement domain.CollectionPlacement `json:"placement"`
+}
+
+// setPlacement puts a collection, an admin's or a provider's, on the home page or back in its
+// library only.
+func (a *API) setPlacement(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var req placementJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	if req.Placement == "" {
+		writeProblem(w, a.logger, codeInvalidBody, "placement is set")
+		return
+	}
+	if !a.answered(w, r, a.svc.Collections.SetPlacement(r.Context(), id, req.Placement)) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

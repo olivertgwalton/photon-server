@@ -62,6 +62,19 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if page, err := s.Title(ctx, uuid.UUID{}, set); err != nil || page.Origin != domain.CollectionTMDB {
 		t.Errorf("the set's page says it was made by %q, %v; want tmdb", page.Origin, err)
 	}
+	if page, _ := s.Title(ctx, uuid.UUID{}, set); page.Placement != domain.PlacementLibrary {
+		t.Errorf("a new set is placed %q, want library", page.Placement)
+	}
+	// A provider's set is put on the home page as an admin's is.
+	if err := s.SetPlacement(ctx, set, domain.PlacementHome); err != nil {
+		t.Fatal(err)
+	}
+	if page, _ := s.Title(ctx, uuid.UUID{}, set); page.Placement != domain.PlacementHome {
+		t.Errorf("the promoted set is placed %q, want home", page.Placement)
+	}
+	if err := s.SetPlacement(ctx, uuid.NewV7(), domain.PlacementHome); !errors.Is(err, ErrNotFound) {
+		t.Errorf("placing no collection: %v, want ErrNotFound", err)
+	}
 	if err := s.SetMembers(ctx, set, nil); !errors.Is(err, ErrNotUserCollection) {
 		t.Errorf("changing TMDB's set by hand: %v, want ErrNotUserCollection", err)
 	}
@@ -191,4 +204,83 @@ func TestALibraryCountsTheCollectionsItLists(t *testing.T) {
 		t.Fatal(err)
 	}
 	agree(kid.ID, map[uuid.UUID]int{films.ID: 0, empty.ID: 0})
+}
+
+func TestACollectionOnTheHomePageIsARowOfItsTitles(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.AddLibrary(ctx, "Other", domain.LibraryMovies, "/srv/other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]uuid.UUID{}
+	for _, title := range []string{"Alien", "Heat"} {
+		film := Film{Title: title, Folder: title, Copies: []Copy{{ContentKey: []byte(title), Parts: []Part{{
+			RelPath: title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
+		}}}}}
+		if _, err := s.SaveFolder(ctx, films.ID, title, []byte("v1"), []Film{film}, nil); err != nil {
+			t.Fatal(err)
+		}
+		ids[title] = oneItem(t, s, `kind = 'movie' AND title = $1`, title).ID
+	}
+	set, err := s.AddCollection(ctx, films.ID, "Sunday Films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetMembers(ctx, set, []uuid.UUID{ids["Heat"], ids["Alien"]}); err != nil {
+		t.Fatal(err)
+	}
+	admin, err := s.AddProfile(ctx, "Admin", domain.RoleAdmin, "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{other.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	row := func(profile uuid.UUID) []string {
+		t.Helper()
+		rows, err := s.Home(ctx, profile, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var titles []string
+		for _, r := range rows {
+			if r.Kind != domain.RowCollection {
+				continue
+			}
+			if r.Collection == nil || *r.Collection != (TitleRef{ID: set, Title: "Sunday Films"}) {
+				t.Errorf("a collection row is %+v, want Sunday Films", r.Collection)
+			}
+			for _, c := range r.Cards {
+				titles = append(titles, c.Title)
+			}
+		}
+		return titles
+	}
+	if got := row(admin.ID); len(got) != 0 {
+		t.Errorf("before it is promoted, the home has %v, want no collection row", got)
+	}
+	if err := s.SetPlacement(ctx, set, domain.PlacementHome); err != nil {
+		t.Fatal(err)
+	}
+	if got := row(admin.ID); !reflect.DeepEqual(got, []string{"Heat", "Alien"}) {
+		t.Errorf("the promoted row = %v, want Heat then Alien, as put", got)
+	}
+	if got := row(kid.ID); len(got) != 0 {
+		t.Errorf("a profile without the library sees %v, want no row", got)
+	}
+	if err := s.SetPlacement(ctx, set, domain.PlacementLibrary); err != nil {
+		t.Fatal(err)
+	}
+	if got := row(admin.ID); len(got) != 0 {
+		t.Errorf("once it is back in its library, the home has %v, want no row", got)
+	}
 }

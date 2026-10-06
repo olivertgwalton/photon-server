@@ -179,6 +179,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/collections/{id}/placement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Show a collection on the home page, or in its library only
+         * @description Admin only.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Placement"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/events": {
         parameters: {
             query?: never;
@@ -4606,6 +4650,8 @@ export interface components {
         };
         /** @enum {string} */
         CollectionOrigin: "tmdb" | "user";
+        /** @enum {string} */
+        CollectionPlacement: "library" | "home";
         Counts: {
             collections: number;
             episodes: number;
@@ -4918,11 +4964,12 @@ export interface components {
             rows: components["schemas"]["HomeRow"][];
         };
         HomeRow: {
+            collection?: components["schemas"]["TitleRef"] | null;
             items: components["schemas"]["Card"][];
             kind: components["schemas"]["HomeRowKind"];
         };
         /** @enum {string} */
-        HomeRowKind: "continue_watching" | "next_up" | "favourites" | "recently_added_films" | "recently_added_shows";
+        HomeRowKind: "continue_watching" | "next_up" | "favourites" | "recently_added_films" | "recently_added_shows" | "collection";
         HomeSection: {
             row: components["schemas"]["HomeRowKind"];
             visibility: components["schemas"]["RowVisibility"];
@@ -5180,6 +5227,9 @@ export interface components {
         PinMatch: {
             id: string;
             provider: components["schemas"]["Provider"];
+        };
+        Placement: {
+            placement: components["schemas"]["CollectionPlacement"];
         };
         Play: {
             audio_stream?: number | null;
@@ -5640,6 +5690,7 @@ export interface components {
             origin?: components["schemas"]["CollectionOrigin"];
             original_title?: string;
             overview?: string;
+            placement?: components["schemas"]["CollectionPlacement"];
             ratings?: components["schemas"]["RatingRef"][];
             /** Format: date */
             release_date?: string;

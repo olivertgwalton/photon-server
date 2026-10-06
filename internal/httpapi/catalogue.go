@@ -284,8 +284,10 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 const defaultHomeLimit = 20
 
 type homeRowJSON struct {
-	Kind  domain.HomeRow `json:"kind"`
-	Items []cardJSON     `json:"items"`
+	Kind domain.HomeRow `json:"kind"`
+	// Collection is the collection a row of kind collection is.
+	Collection *store.TitleRef `json:"collection,omitzero"`
+	Items      []cardJSON      `json:"items"`
 }
 
 type homeJSON struct {
@@ -306,7 +308,7 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 	}
 	out := homeJSON{Rows: make([]homeRowJSON, len(rows))}
 	for i, row := range rows {
-		out.Rows[i] = homeRowJSON{Kind: row.Kind, Items: cardsJSON(row.Cards)}
+		out.Rows[i] = homeRowJSON{Kind: row.Kind, Collection: row.Collection, Items: cardsJSON(row.Cards)}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }

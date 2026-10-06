@@ -119,20 +119,20 @@ func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset,
 	return cards, total, err
 }
 
-// Members answers a collection's titles: an admin's in the order they were put, a provider's from
-// the first released. ErrNotFound for no such collection.
+// memberOrder is a collection's titles' order, with its row as c and theirs as m and items: an
+// admin's in the order they were put, a provider's from the first released.
+const memberOrder = `CASE WHEN c.origin = 'user' THEN m.position END, items.released_asc, items.sort_title, items.id`
+
+// Members answers a collection's titles, in memberOrder. ErrNotFound for no such collection.
 func (s *Store) Members(ctx context.Context, profile, collection uuid.UUID) ([]Card, error) {
-	var origin domain.CollectionOrigin
-	if err := s.pool.QueryRow(ctx, `SELECT origin FROM collections WHERE item_id = $1`, collection).Scan(&origin); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT 1 FROM collections WHERE item_id = $1`, collection).Scan(new(int)); err != nil {
 		return nil, found(err)
 	}
-	order := "items.released_asc, items.sort_title, items.id"
-	if origin == domain.CollectionUser {
-		order = "m.position, items.id"
-	}
 	rows, err := queryRows[model.Item](ctx, s.pool, `
-		SELECT `+itemColumns+` FROM items JOIN collection_members m ON m.item_id = items.id AND m.collection_id = $1
-		WHERE EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, items)) ORDER BY `+order, collection, profile)
+		SELECT `+itemColumns+` FROM items
+		JOIN collection_members m ON m.item_id = items.id AND m.collection_id = $1
+		JOIN collections c ON c.item_id = m.collection_id
+		WHERE EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, items)) ORDER BY `+memberOrder, collection, profile)
 	if err != nil {
 		return nil, err
 	}
@@ -233,6 +233,15 @@ func (s *Store) SetMembers(ctx context.Context, collection uuid.UUID, items []uu
 			SELECT $1, id, position - 1 FROM unnest($2::uuid[]) WITH ORDINALITY AS m(id, position)`, collection, items)
 		return err
 	})
+}
+
+// SetPlacement sets where a collection is shown, an admin's or a provider's.
+func (s *Store) SetPlacement(ctx context.Context, collection uuid.UUID, placement domain.CollectionPlacement) error {
+	tag, err := s.pool.Exec(ctx, `UPDATE collections SET placement = $2 WHERE item_id = $1`, collection, placement)
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
 }
 
 // RemoveCollection removes an admin's collection; its titles are left as they are.

@@ -457,6 +457,11 @@ func (a *API) routes() []route {
 			body:    itemIDsJSON{}, status: http.StatusNoContent, handle: a.setMembers,
 		},
 		{
+			pattern: "PUT /api/v1/admin/collections/{id}/placement", access: admin,
+			summary: "Show a collection on the home page, or in its library only",
+			body:    placementJSON{}, status: http.StatusNoContent, handle: a.setPlacement,
+		},
+		{
 			pattern: "DELETE /api/v1/admin/collections/{id}", access: admin,
 			summary: "Remove an admin's collection, leaving its titles", status: http.StatusNoContent,
 			handle: a.removeCollection,
