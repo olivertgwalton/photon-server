@@ -5,7 +5,6 @@ import (
 	"maps"
 	"net/http"
 	"os"
-	"strconv"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -49,16 +48,15 @@ func (a *API) trickplaySheet(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	n, err := strconv.Atoi(r.PathValue("n"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	n, ok := a.pathNumber(w, r, "n")
+	if !ok {
 		return
 	}
 	t, err := a.svc.Previews.Trickplay(r.Context(), sessionOf(r).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return
 	}
-	if n < 0 || n >= t.Sheets {
+	if n >= t.Sheets {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
@@ -72,9 +70,8 @@ func (a *API) chapterImage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	idx, err := strconv.Atoi(r.PathValue("idx"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	idx, ok := a.pathNumber(w, r, "idx")
+	if !ok {
 		return
 	}
 	a.servePreview(w, r, func() (*os.File, error) { return a.svc.PreviewFiles.ChapterImage(part, idx) })

@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"net/http"
-	"strconv"
 	"time"
 	"uuid"
 
@@ -101,12 +100,11 @@ func (a *API) adminJobs(w http.ResponseWriter, r *http.Request) {
 
 // retryJob gives a dead job a fresh set of attempts.
 func (a *API) retryJob(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	id, ok := a.pathNumber(w, r, "id")
+	if !ok {
 		return
 	}
-	if a.answered(w, r, a.svc.Jobs.RetryJob(r.Context(), id)) {
+	if a.answered(w, r, a.svc.Jobs.RetryJob(r.Context(), int64(id))) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
