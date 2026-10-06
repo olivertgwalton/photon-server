@@ -69,11 +69,11 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 		at   time.Duration
 		want domain.Reach
 	}{{2 * time.Minute, domain.ReachStart}, {20 * time.Minute, domain.ReachResumable}} {
-		if reach, err := s.SaveProgress(ctx, oliver.ID, second, p.at, domain.ReachStart); err != nil || reach != p.want {
+		if reach, err := s.SaveProgress(ctx, oliver.ID, second, p.at, domain.ReachStart, nil); err != nil || reach != p.want {
 			t.Errorf("progress at %v: %s, %v; want %s", p.at, reach, err, p.want)
 		}
 	}
-	if reach, err := s.SaveProgress(ctx, oliver.ID, first, 58*time.Minute, domain.ReachStart); err != nil || reach != domain.ReachEnd {
+	if reach, err := s.SaveProgress(ctx, oliver.ID, first, 58*time.Minute, domain.ReachStart, nil); err != nil || reach != domain.ReachEnd {
 		t.Errorf("progress near the end: %s, %v; want it watched", reach, err)
 	}
 	eps := season(oliver.ID).Episodes
@@ -87,7 +87,7 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 		t.Errorf("another profile's show = %+v, want all three left", st)
 	}
 
-	if err := s.MarkWatched(ctx, oliver.ID, show); err != nil {
+	if err := s.MarkWatched(ctx, oliver.ID, show, nil); err != nil {
 		t.Fatal(err)
 	}
 	if st := page(oliver.ID).State; st.Unwatched != 0 || st.WatchedAt == nil {
@@ -113,7 +113,7 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 	if page(oliver.ID).State.FavouriteAt != nil {
 		t.Error("still a favourite after unfavouriting")
 	}
-	if _, err := s.SaveProgress(ctx, oliver.ID, uuid.NewV7(), time.Minute, domain.ReachStart); !errors.Is(err, ErrNotFound) {
+	if _, err := s.SaveProgress(ctx, oliver.ID, uuid.NewV7(), time.Minute, domain.ReachStart, nil); !errors.Is(err, ErrNotFound) {
 		t.Errorf("progress on no title: %v, want ErrNotFound", err)
 	}
 }
@@ -152,7 +152,7 @@ func TestAPlaybackIsOnePlayHoweverOftenItReportsTheEnd(t *testing.T) {
 	// playback has reached the end since the first of those reports.
 	before := domain.ReachResumable
 	for at := 55 * time.Minute; at <= time.Hour; at += 10 * time.Second {
-		reach, err := s.SaveProgress(ctx, oliver.ID, film, at, before)
+		reach, err := s.SaveProgress(ctx, oliver.ID, film, at, before, nil)
 		if err != nil || reach != domain.ReachEnd {
 			t.Fatalf("progress at %v: %s, %v; want the end", at, reach, err)
 		}
@@ -163,14 +163,82 @@ func TestAPlaybackIsOnePlayHoweverOftenItReportsTheEnd(t *testing.T) {
 		t.Fatalf("after one playback = %+v, want one play, watched, no position", first)
 	}
 
-	if err := s.MarkWatched(ctx, oliver.ID, film); err != nil {
+	if err := s.MarkWatched(ctx, oliver.ID, film, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveProgress(ctx, oliver.ID, film, time.Hour, domain.ReachResumable); err != nil {
+	if _, err := s.SaveProgress(ctx, oliver.ID, film, time.Hour, domain.ReachResumable, nil); err != nil {
 		t.Fatal(err)
 	}
 	if again := state(); again.Plays != 2 || !again.WatchedAt.Equal(*first.WatchedAt) {
 		t.Errorf("after marking it and watching it again = %+v, want a second play and the first watched time %v", again, first.WatchedAt)
+	}
+}
+
+// Progress and marks watched offline and sent later land at when they happened, and change nothing
+// that has changed since, whichever of them came after.
+func TestTheNewestWatchWins(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	heat := []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+		RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour},
+	}}}}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Copies: heat}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var film uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE kind = 'movie'`).Scan(&film); err != nil {
+		t.Fatal(err)
+	}
+	state := func() TitleState {
+		t.Helper()
+		p, err := s.Title(ctx, oliver.ID, film)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.State
+	}
+	ago := func(d time.Duration) *time.Time { return new(time.Now().Add(-d).Truncate(time.Second)) }
+	yesterday, twoDays, anHour := ago(24*time.Hour), ago(48*time.Hour), ago(time.Hour)
+
+	if err := s.MarkWatched(ctx, oliver.ID, film, yesterday); err != nil {
+		t.Fatal(err)
+	}
+	if st := state(); st.WatchedAt == nil || !st.WatchedAt.Equal(*yesterday) || !st.LastPlayedAt.Equal(*yesterday) {
+		t.Fatalf("marked watched yesterday = %+v, want watched and last played yesterday", st)
+	}
+	if _, err := s.SaveProgress(ctx, oliver.ID, film, 20*time.Minute, domain.ReachStart, twoDays); !errors.Is(err, ErrSuperseded) {
+		t.Errorf("progress from before it was marked watched: %v, want superseded", err)
+	}
+	if st := state(); st.PositionMS != 0 || st.WatchedAt == nil {
+		t.Errorf("after progress from before it was watched = %+v, want it watched with no position", st)
+	}
+
+	if _, err := s.SaveProgress(ctx, oliver.ID, film, 20*time.Minute, domain.ReachStart, anHour); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveProgress(ctx, oliver.ID, film, 40*time.Minute, domain.ReachStart, ago(2*time.Hour)); !errors.Is(err, ErrSuperseded) {
+		t.Errorf("older progress: %v, want superseded", err)
+	}
+	if st := state(); st.PositionMS != (20*time.Minute).Milliseconds() || !st.LastPlayedAt.Equal(*anHour) {
+		t.Errorf("after older progress = %+v, want 20 minutes in, last played an hour ago", st)
+	}
+
+	if err := s.MarkUnwatched(ctx, oliver.ID, film); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkWatched(ctx, oliver.ID, film, ago(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if st := state(); st.WatchedAt != nil {
+		t.Errorf("marked watched from before it was marked unwatched = %+v, want it unwatched", st)
 	}
 }
 
@@ -265,7 +333,7 @@ func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 
 	// Watched in Shows before Kids held it, it is watched in Kids once Kids has it.
 	inShows, showsEps := add(shows.ID)
-	if err := s.MarkWatched(ctx, oliver.ID, showsEps[1]); err != nil {
+	if err := s.MarkWatched(ctx, oliver.ID, showsEps[1], nil); err != nil {
 		t.Fatal(err)
 	}
 	inKids, kidsEps := add(kids.ID)
@@ -292,7 +360,7 @@ func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 	}
 
 	// Under way in Kids is under way in Shows, and once on home.
-	if _, err := s.SaveProgress(ctx, oliver.ID, kidsEps[2], 20*time.Minute, domain.ReachStart); err != nil {
+	if _, err := s.SaveProgress(ctx, oliver.ID, kidsEps[2], 20*time.Minute, domain.ReachStart, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, home := cards(oliver.ID); !slices.Equal(home[domain.RowContinueWatching], []uuid.UUID{kidsEps[2]}) {
@@ -371,7 +439,7 @@ func TestATitleMatchedByDifferentProvidersIsOneTitle(t *testing.T) {
 			t.Errorf("search for %v = %v of %d (%v), want only %v", profile, found, total, err, want)
 		}
 	}
-	if err := s.MarkWatched(ctx, oliver.ID, showsPilot); err != nil {
+	if err := s.MarkWatched(ctx, oliver.ID, showsPilot, nil); err != nil {
 		t.Fatal(err)
 	}
 	row, err := readItem(ctx, s.pool, kidsPilot)

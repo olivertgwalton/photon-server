@@ -83,17 +83,17 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 	if err != nil || len(episodes) != 2 {
 		t.Fatal(episodes, err)
 	}
-	if err := s.MarkWatched(ctx, oliver.ID, episodes[0].ID); err != nil {
+	if err := s.MarkWatched(ctx, oliver.ID, episodes[0].ID, nil); err != nil {
 		t.Fatal(err)
 	}
 	// Alien watched and a favourite, Brazil part way.
-	if err := s.MarkWatched(ctx, oliver.ID, ids["Alien"]); err != nil {
+	if err := s.MarkWatched(ctx, oliver.ID, ids["Alien"], nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Favourite(ctx, oliver.ID, ids["Alien"]); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveProgress(ctx, oliver.ID, ids["Brazil"], 30*time.Minute, domain.ReachStart); err != nil {
+	if _, err := s.SaveProgress(ctx, oliver.ID, ids["Brazil"], 30*time.Minute, domain.ReachStart, nil); err != nil {
 		t.Fatal(err)
 	}
 

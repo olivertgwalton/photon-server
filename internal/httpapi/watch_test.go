@@ -14,7 +14,7 @@ import (
 // fakeWatching knows one title, films; progress past an hour reaches its end.
 type fakeWatching struct{}
 
-func (fakeWatching) SaveProgress(_ context.Context, profile, item uuid.UUID, position time.Duration, _ domain.Reach) (domain.Reach, error) {
+func (fakeWatching) SaveProgress(_ context.Context, profile, item uuid.UUID, position time.Duration, _ domain.Reach, _ *time.Time) (domain.Reach, error) {
 	switch {
 	case item != films || profile != oliver.ID:
 		return "", store.ErrNotFound
@@ -31,7 +31,7 @@ func (fakeWatching) mark(_ context.Context, _, item uuid.UUID) error {
 	return nil
 }
 
-func (f fakeWatching) MarkWatched(ctx context.Context, p, i uuid.UUID) error {
+func (f fakeWatching) MarkWatched(ctx context.Context, p, i uuid.UUID, _ *time.Time) error {
 	return f.mark(ctx, p, i)
 }
 

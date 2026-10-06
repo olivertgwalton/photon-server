@@ -472,7 +472,9 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "PUT /api/v1/titles/{id}/watched", access: signedIn, summary: "Mark a title watched",
-			status: http.StatusNoContent, handle: a.mark(watching.MarkWatched),
+			status: http.StatusNoContent, handle: a.mark(func(w watching, ctx context.Context, profile, item uuid.UUID) error {
+				return w.MarkWatched(ctx, profile, item, nil)
+			}),
 		},
 		{
 			pattern: "DELETE /api/v1/titles/{id}/watched", access: signedIn, summary: "Mark a title unwatched",
