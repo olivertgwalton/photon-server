@@ -4,9 +4,12 @@ import (
 	"cmp"
 	"encoding"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"reflect"
+	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -75,9 +78,81 @@ var enums = map[reflect.Type][]string{
 
 // open are the enums that take, beside their own values, any matching a pattern: a registered
 // plugin's source and the kind of id it files titles under.
-var open = map[reflect.Type]string{
-	reflect.TypeFor[domain.FieldSource](): domain.PluginPattern,
-	reflect.TypeFor[domain.Provider]():    domain.PluginPattern,
+var open = map[reflect.Type]*regexp.Regexp{
+	reflect.TypeFor[domain.FieldSource](): regexp.MustCompile(domain.PluginPattern),
+	reflect.TypeFor[domain.Provider]():    regexp.MustCompile(domain.PluginPattern),
+}
+
+// badEnum is a value of an enum type that is none of its values, at path in a request body.
+type badEnum struct {
+	path string
+	typ  reflect.Type
+}
+
+func (e *badEnum) Error() string {
+	msg := fmt.Sprintf("%s is one of %s", e.path, strings.Join(enums[e.typ], ", "))
+	if _, ok := open[e.typ]; ok {
+		msg += ", or a plugin's"
+	}
+	return msg
+}
+
+// checkEnums refuses a value of an enum type in v, or anywhere in it, that is none of its values,
+// so a handler never sees one. A field left out is empty and let be; an item of a list is not.
+func checkEnums(v reflect.Value, item bool) error {
+	switch v.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		if !v.IsNil() {
+			return checkEnums(v.Elem(), item)
+		}
+	case reflect.Struct:
+		// A field the body cannot set is empty, so every one is walked and named only if refused.
+		for i := range v.NumField() {
+			err := checkEnums(v.Field(i), false)
+			if err == nil {
+				continue
+			}
+			f := v.Type().Field(i)
+			name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+			if e, ok := errors.AsType[*badEnum](err); ok && (!f.Anonymous || name != "") {
+				e.path = strings.TrimSuffix(cmp.Or(name, f.Name)+"."+e.path, ".")
+			}
+			return err
+		}
+	case reflect.Slice, reflect.Array:
+		if v.Type().Elem().Kind() < reflect.Array {
+			return nil // numbers, as a uuid's bytes
+		}
+		for i := range v.Len() {
+			if err := checkEnums(v.Index(i), true); err != nil {
+				return err
+			}
+		}
+	case reflect.Map:
+		return checkMap(v)
+	case reflect.String:
+		list, ok := enums[v.Type()]
+		s := v.String()
+		if !ok || s == "" && !item || slices.Contains(list, s) || open[v.Type()] != nil && open[v.Type()].MatchString(s) {
+			return nil
+		}
+		return &badEnum{typ: v.Type()}
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
+		reflect.UnsafePointer:
+	}
+	return nil
+}
+
+// checkMap is apart from checkEnums so that only a map's value escapes to the heap.
+func checkMap(m reflect.Value) error {
+	for k, e := range m.Seq2() {
+		if err := cmp.Or(checkEnums(k, true), checkEnums(e, true)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func values[T ~string](list []T) []string {
@@ -144,7 +219,7 @@ func (s *schemas) of(t reflect.Type) map[string]any {
 		}
 		return s.ref(t, func() map[string]any {
 			if pattern, ok := open[t]; ok {
-				return map[string]any{"type": "string", "anyOf": []any{map[string]any{"enum": enum}, map[string]any{"pattern": pattern}}}
+				return map[string]any{"type": "string", "anyOf": []any{map[string]any{"enum": enum}, map[string]any{"pattern": pattern.String()}}}
 			}
 			return map[string]any{"type": "string", "enum": enum}
 		})

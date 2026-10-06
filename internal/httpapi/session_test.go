@@ -348,3 +348,21 @@ func TestTheCookieIsRefusedForAnotherSitesWrites(t *testing.T) {
 		})
 	}
 }
+
+// An enum's value outside its list is refused as the body is read, wherever in the body it sits and
+// whether or not the handler looks at it.
+func TestABodyIsRefusedAValueNoneOfItsEnums(t *testing.T) {
+	tests := []struct {
+		path, body, detail string
+	}{
+		{"/api/v1/auth/login", `{"name":"Oliver","password":"correct horse","device":"d","client":"c","keep":"forever"}`, "keep is one of token, cookie"},
+		{"/api/v1/titles/" + uuid.New().String() + "/play", `{"profile":{"containers":[],"video":[{"codec":"hevc","ranges":["sdr","hdr11"]}],"audio":[],"max_bitrate_kbps":0}}`, "profile.video.ranges is one of sdr, hlg, hdr10, hdr10plus, dv"},
+	}
+	for _, tt := range tests {
+		rec := serve(t, http.MethodPost, tt.path, goodToken, tt.body)
+		var p problem
+		if err := json.NewDecoder(rec.Body).Decode(&p); err != nil || rec.Code != http.StatusBadRequest || p.Code != codeInvalidBody || p.Detail != tt.detail {
+			t.Errorf("%s: status %d, problem %+v (err %v), want invalid_body saying %q", tt.path, rec.Code, p, err, tt.detail)
+		}
+	}
+}

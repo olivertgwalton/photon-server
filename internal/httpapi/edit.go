@@ -64,12 +64,6 @@ func (a *API) editTitle(w http.ResponseWriter, r *http.Request) {
 		}
 		m.ReleaseDate = d
 	}
-	for _, f := range req.Locked {
-		if !slices.Contains(domain.Fields(), f) {
-			writeProblem(w, a.logger, codeInvalidBody, string(f)+" is not a field")
-			return
-		}
-	}
 	if a.answered(w, r, a.svc.Editing.EditMetadata(r.Context(), id, m)) {
 		return
 	}
@@ -173,7 +167,7 @@ func (a *API) pinMatch(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	known := slices.Contains(domain.Providers(), req.Provider)
+	known := req.Provider != ""
 	if _, plugin := domain.FieldSource(req.Provider).Plugin(); plugin {
 		var err error
 		if _, known, err = a.svc.Providers.Get(r.Context(), domain.FieldSource(req.Provider)); err != nil {
@@ -211,7 +205,7 @@ func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if !slices.Contains(domain.EpisodeOrders(), req.Order) {
+	if req.Order == "" {
 		writeProblem(w, a.logger, codeInvalidBody, "order is aired, dvd or absolute")
 		return
 	}
@@ -240,7 +234,7 @@ func (a *API) refresh(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if !slices.Contains(domain.RefreshModes(), req.Mode) {
+	if req.Mode == "" {
 		writeProblem(w, a.logger, codeInvalidBody, "mode is missing or all")
 		return
 	}
@@ -381,7 +375,7 @@ func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
 	}
 	markers := make([]domain.Marker, len(req.Markers))
 	for i, m := range req.Markers {
-		if !slices.Contains(domain.MarkerKinds(), m.Kind) {
+		if m.Kind == "" {
 			writeProblem(w, a.logger, codeInvalidBody, "a marker's kind is intro, credits, recap or preview")
 			return
 		}
@@ -393,7 +387,7 @@ func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
 	}
 	absent := make([]domain.MarkerAbsent, len(req.Absent))
 	for i, m := range req.Absent {
-		if !slices.Contains(domain.MarkerKinds(), m.Kind) {
+		if m.Kind == "" {
 			writeProblem(w, a.logger, codeInvalidBody, "a marker's kind is intro, credits, recap or preview")
 			return
 		}
