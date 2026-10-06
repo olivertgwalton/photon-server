@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"os"
 	"path"
 	"slices"
@@ -50,6 +51,10 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(do
 	var folders, present []string
 	// The root is known before it is read; each folder read makes its subfolders known.
 	told := domain.ScanProgress{Library: lib.ID, Phase: domain.ScanReading, Known: 1}
+	fingerprints, err := s.store.FolderFingerprints(ctx, lib.ID)
+	if err != nil {
+		return report, err
+	}
 	for folder, err := range library.Walk(lib.Root) {
 		told.Done++
 		told.Known += len(folder.Folders)
@@ -72,11 +77,7 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(do
 				present = append(present, path.Join(folder.Path, f.Name))
 			}
 		}
-		known, err := s.store.FolderFingerprint(ctx, lib.ID, folder.Path)
-		if err != nil {
-			return report, err
-		}
-		if bytes.Equal(known, folder.Fingerprint[:]) {
+		if bytes.Equal(fingerprints[folder.Path], folder.Fingerprint[:]) {
 			report.Unchanged++
 			progress(told)
 			continue
@@ -133,11 +134,12 @@ func (s *Scanner) saveFilms(ctx context.Context, r reading, folder library.Folde
 	var films []store.Film
 	plans := planFilms(folder)
 	pics := picturesIn(folder.Path, fileNames(folder))
-	for _, f := range plans {
-		copies, err := s.copies(ctx, r, f.versions)
-		if err != nil {
-			return store.Saved{}, err
-		}
+	read, err := s.readCopies(ctx, r, plansOf(plans, func(f film) []copyPlan { return f.versions }))
+	if err != nil {
+		return store.Saved{}, err
+	}
+	for i, f := range plans {
+		copies := read[i]
 		if len(copies) == 0 {
 			continue
 		}
@@ -185,13 +187,13 @@ func filmNamed(name string, films []store.Film) string {
 
 // extras reads each planned extra's copy, probing it if new, and names its owner.
 func (s *Scanner) extras(ctx context.Context, r reading, folder library.Folder, plans []extraPlan, owner func(extraPlan) store.Owner) ([]store.Extra, error) {
+	read, err := s.readCopies(ctx, r, plansOf(plans, func(e extraPlan) []copyPlan { return []copyPlan{e.copy} }))
+	if err != nil {
+		return nil, err
+	}
 	var extras []store.Extra
-	for _, e := range plans {
-		c, ok, err := s.copy(ctx, r, e.copy)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
+	for i, e := range plans {
+		for _, c := range read[i] {
 			extras = append(extras, store.Extra{Kind: e.kind, Title: e.title, Folder: folder.Path, Owner: owner(e), Copy: c})
 		}
 	}
@@ -245,11 +247,12 @@ func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Fo
 		for _, rel := range unread {
 			s.skip(ctx, report, rel, errNoEpisode)
 		}
-		for _, e := range plans {
-			copies, err := s.copies(ctx, r, e.versions)
-			if err != nil {
-				return store.Saved{}, err
-			}
+		read, err := s.readCopies(ctx, r, plansOf(plans, func(e episodePlan) []copyPlan { return e.versions }))
+		if err != nil {
+			return store.Saved{}, err
+		}
+		for i, e := range plans {
+			copies := read[i]
 			if len(copies) == 0 {
 				continue
 			}
@@ -298,25 +301,59 @@ func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Fo
 
 var errNoEpisode = errors.New("its name says no season or episode")
 
-// copies reads each copy's content key and probes only copies the catalogue does not hold. A copy
-// that cannot be read is left out and logged. A byte-identical copy in a second place is a known
-// copy: it becomes another place to read the same version.
-func (s *Scanner) copies(ctx context.Context, r reading, plans []copyPlan) ([]store.Copy, error) {
-	var copies []store.Copy
-	for _, v := range plans {
-		c, ok, err := s.copy(ctx, r, v)
+func plansOf[T any](titles []T, copies func(T) []copyPlan) [][]copyPlan {
+	out := make([][]copyPlan, len(titles))
+	for i, t := range titles {
+		out[i] = copies(t)
+	}
+	return out
+}
+
+// readCopies reads the content key of every copy of each title of a folder that changed since the
+// last scan, asks the catalogue once which it holds, and probes only those it does not, answering
+// each title's copies that could be read. A copy that cannot be read is left out and logged. A
+// byte-identical copy in a second place is a known copy: it becomes another place to read the
+// same version.
+func (s *Scanner) readCopies(ctx context.Context, r reading, titles [][]copyPlan) ([][]store.Copy, error) {
+	read := make([][]store.Copy, len(titles))
+	var keys [][]byte
+	known := map[string]bool{}
+	for i, plans := range titles {
+		for _, v := range plans {
+			c := describe(r.dir, v)
+			if key, ok := r.unchanged(c.Parts); ok {
+				c.ContentKey = key
+				known[string(key)] = true
+				read[i] = append(read[i], c)
+				continue
+			}
+			key, err := library.ContentKey(r.lib.Root, partPaths(c))
+			if err != nil {
+				s.skip(ctx, r.report, c.Parts[0].RelPath, err)
+				continue
+			}
+			c.ContentKey = key
+			read[i] = append(read[i], c)
+			keys = append(keys, key)
+		}
+	}
+	if len(keys) > 0 {
+		held, err := s.store.KnownCopies(ctx, r.lib.ID, keys)
 		if err != nil {
 			return nil, err
 		}
-		if ok {
-			copies = append(copies, c)
-		}
+		maps.Copy(known, held)
 	}
-	return copies, nil
+	for i := range read {
+		read[i] = slices.DeleteFunc(read[i], func(c store.Copy) bool {
+			return !known[string(c.ContentKey)] && !s.probeParts(ctx, r, c)
+		})
+	}
+	return read, nil
 }
 
-func (s *Scanner) copy(ctx context.Context, r reading, v copyPlan) (store.Copy, bool, error) {
-	lib, dir, report := r.lib, r.dir, r.report
+// describe is a planned copy's parts and subtitles, its bytes not yet read.
+func describe(dir string, v copyPlan) store.Copy {
 	c := store.Copy{Edition: v.edition, Label: v.label}
 	for _, sub := range v.subtitles {
 		c.Subtitles = append(c.Subtitles, store.Subtitle{
@@ -325,38 +362,32 @@ func (s *Scanner) copy(ctx context.Context, r reading, v copyPlan) (store.Copy, 
 			Forced: sub.tags.Forced, Default: sub.tags.Default, HearingImpaired: sub.tags.HearingImpaired,
 		})
 	}
-	paths := make([]string, len(v.parts))
-	for i, p := range v.parts {
-		paths[i] = path.Join(dir, p.Name)
-		c.Parts = append(c.Parts, store.Part{RelPath: paths[i], Size: p.Size, ModTime: p.ModTime})
+	for _, p := range v.parts {
+		c.Parts = append(c.Parts, store.Part{RelPath: path.Join(dir, p.Name), Size: p.Size, ModTime: p.ModTime})
 	}
-	if key, ok := r.unchanged(c.Parts); ok {
-		c.ContentKey = key
-		return c, true, nil
+	return c
+}
+
+func partPaths(c store.Copy) []string {
+	paths := make([]string, len(c.Parts))
+	for i, p := range c.Parts {
+		paths[i] = p.RelPath
 	}
-	key, err := library.ContentKey(lib.Root, paths)
-	if err != nil {
-		s.skip(ctx, report, paths[0], err)
-		return c, false, nil
-	}
-	c.ContentKey = key
-	known, err := s.store.KnownCopy(ctx, lib.ID, key)
-	if err != nil {
-		return c, false, err
-	}
-	if known {
-		return c, true, nil
-	}
-	for i := range c.Parts {
-		facts, err := s.probe(ctx, lib.Root, paths[i])
-		report.Probed++
+	return paths
+}
+
+// probeParts probes each part of a new copy, reporting whether every one could be.
+func (s *Scanner) probeParts(ctx context.Context, r reading, c store.Copy) bool {
+	for i, p := range c.Parts {
+		facts, err := s.probe(ctx, r.lib.Root, p.RelPath)
+		r.report.Probed++
 		if err != nil {
-			s.skip(ctx, report, paths[i], err)
-			return c, false, nil
+			s.skip(ctx, r.report, p.RelPath, err)
+			return false
 		}
 		c.Parts[i].Facts = &facts
 	}
-	return c, true, nil
+	return true
 }
 
 // unchanged answers the content key of a copy whose every part is where the last scan found it,
