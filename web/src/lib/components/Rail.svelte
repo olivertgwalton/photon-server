@@ -33,7 +33,8 @@ const sizes = $derived(
 );
 </script>
 
-<section aria-labelledby={id}>
+<!-- min-w-0: in a grid or flex row, the cards would otherwise widen the page. -->
+<section aria-labelledby={id} class="min-w-0">
 	<h2 {id} class="heading mb-3">
 		{#if href}
 			<a {href} class="group inline-flex items-center gap-1 hover:underline">
