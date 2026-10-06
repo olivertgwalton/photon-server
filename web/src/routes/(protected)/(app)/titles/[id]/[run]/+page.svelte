@@ -4,12 +4,16 @@ import CardGrid from "#lib/components/CardGrid.svelte";
 import ExtraCard from "#lib/components/ExtraCard.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
 import { type Extra, extrasOf } from "#lib/extras.js";
+import { count } from "#lib/format.js";
 
 let { data } = $props();
 
 const t = $derived(data.title);
 const cast = $derived(castOf(t.credits ?? []));
 const extras: Extra[] = $derived(extrasOf(t));
+const seasons = $derived(
+	(t.seasons ?? []).map((s) => ({ ...s, kind: "season" as const })),
+);
 const collections = $derived(
 	(t.collections ?? []).map((c) => ({ ...c, kind: "collection" as const })),
 );
@@ -22,7 +26,12 @@ const collections = $derived(
 		<a href="/titles/{t.id}" class="label hover:underline">{t.title}</a>
 		<h1 class="title">{data.name}</h1>
 	</div>
-	{#if data.run === "cast"}
+	{#if data.run === "seasons"}
+		<CardGrid
+			cards={seasons}
+			caption={(i: number) => count(seasons[i].episodes, "episode")}
+		/>
+	{:else if data.run === "cast"}
 		<CardGrid items={cast}>
 			{#snippet card(
 				credit: (typeof cast)[number],

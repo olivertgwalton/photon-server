@@ -103,6 +103,9 @@ const writers = $derived(credits.filter((c) => c.kinds.includes("writer")));
 
 const trailer = $derived(t.extras?.find((e) => e.extra_kind === "trailer"));
 const extras: Extra[] = $derived(extrasOf(t));
+const seasons = $derived(
+	(t.seasons ?? []).map((s) => ({ ...s, kind: "season" as const })),
+);
 const collections = $derived(
 	(t.collections ?? []).map((c) => ({ ...c, kind: "collection" as const })),
 );
@@ -383,54 +386,12 @@ const poster = $derived(art("poster"));
 	{/if}
 
 	{#if t.seasons?.length}
-		<section aria-labelledby="seasons" class="min-w-0">
-			<h2 id="seasons" class="heading mb-3">Seasons</h2>
-			<ul
-				class="relative -mx-3 flex gap-3 overflow-x-auto overflow-y-hidden px-3 pt-1 pb-4 sm:-mx-6 sm:gap-4 sm:px-6"
-			>
-				{#each t.seasons as season (season.id)}
-					<li class="w-32 shrink-0 sm:w-36 lg:w-40">
-						<a href="/titles/{season.id}" class="group block outline-none">
-							<span
-								class="bg-raise group-hover:ring-line-strong group-focus-visible:ring-signal relative block aspect-[2/3] overflow-hidden rounded-lg ring-2 ring-transparent"
-							>
-								{#if season.poster}
-									<img
-										src={artworkSrc(season.poster, "poster")}
-										srcset={artworkSrcset(season.poster, "poster")}
-										sizes="10rem"
-										alt=""
-										loading="lazy"
-										class="size-full object-cover"
-									>
-								{/if}
-								{#if season.state?.unwatched}
-									<span
-										class="bg-ink text-ground absolute top-2 left-2 grid h-6 min-w-6 place-items-center rounded-full px-1.5 font-mono text-xs font-bold"
-									>
-										{season.state.unwatched}
-										<span class="sr-only">unwatched</span>
-									</span>
-								{:else if season.state?.watched_at}
-									<span
-										class="bg-ink text-ground absolute top-2 left-2 grid size-6 place-items-center rounded-full"
-									>
-										<CheckIcon class="size-3.5" aria-hidden="true" />
-										<span class="sr-only">Watched</span>
-									</span>
-								{/if}
-							</span>
-							<span class="text-ink mt-2 block truncate text-sm font-semibold">
-								{season.title}
-							</span>
-							<span class="text-ink-3 block text-xs">
-								{count(season.episodes, "episode")}
-							</span>
-						</a>
-					</li>
-				{/each}
-			</ul>
-		</section>
+		<Rail
+			title="Seasons"
+			cards={seasons}
+			caption={(i: number) => count(seasons[i].episodes, "episode")}
+			href="/titles/{t.id}/seasons"
+		/>
 	{/if}
 
 	{#if t.episodes?.length}

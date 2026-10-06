@@ -48,13 +48,41 @@ test("rows scroll sideways inside the page, which never does", async ({
 			viewport: document.documentElement.clientWidth,
 		}));
 		expect(scrolled, path).toBe(viewport);
-		// And a row scrolls sideways only: nothing in it reaches below it.
+		// And a row scrolls sideways only, drawing no scroll bar: nothing in it
+		// reaches below it, no bar takes room under it, and it asks for none
+		// (headless Chromium overlays its bars, so the room alone proves little).
 		const rows = await page
 			.locator("section ul.overflow-x-auto")
-			.evaluateAll((uls) => uls.map((ul) => ul.scrollHeight - ul.clientHeight));
+			.evaluateAll((uls) =>
+				uls.map((ul) => [
+					ul.scrollHeight - ul.clientHeight,
+					(ul as HTMLElement).offsetHeight - ul.clientHeight,
+					getComputedStyle(ul).scrollbarWidth,
+				]),
+			);
 		expect(rows.length, path).toBeGreaterThan(0);
-		expect(rows, path).toEqual(rows.map(() => 0));
+		expect(rows, path).toEqual(rows.map(() => [0, 0, "none"]));
 	}
+});
+
+test("a row's arrows page through it, each shown only where there is more", async ({
+	page,
+	isMobile,
+}) => {
+	test.skip(isMobile, "A touch screen swipes; it has no arrows.");
+	await logIn(page);
+	const row = page.getByRole("region", { name: /Recently Added Films/ });
+	const previous = row.getByRole("button", { name: /Previous in/ });
+	const next = row.getByRole("button", { name: /Next in/ });
+	await expect(previous).toHaveCount(0);
+	await row.hover();
+	await expect(next).toBeVisible();
+	await next.click();
+	await expect
+		.poll(() => row.locator("ul").evaluate((ul) => ul.scrollLeft))
+		.toBeGreaterThan(0);
+	await expect(previous).toBeVisible();
+	await expectAccessible(page);
 });
 
 test("search takes the reader to the results for what they typed", async ({
