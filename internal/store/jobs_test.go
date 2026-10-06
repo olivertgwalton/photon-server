@@ -4,6 +4,7 @@ package store
 
 import (
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -348,5 +349,33 @@ func TestATitleAScanFindsIsMatchedBeforeTheRefresh(t *testing.T) {
 	i := s.q.Item
 	if ronin, _ := i.WithContext(ctx).Where(i.Title.Eq("Ronin")).Take(); claimed[0].Subject != uuid.UUID(ronin.ID) {
 		t.Error("the scheduled refresh was matched before the title the scan found")
+	}
+}
+
+func TestAScanAnswersTheFoldersAskedBeforeItStarted(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, folder := range []string{"Heat", "Alien"} {
+		if err := s.ScanFolders(ctx, lib.ID, []string{folder}, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	asked, read, err := s.ScanRequests(ctx, lib.ID)
+	if err != nil || !slices.Equal(asked, []string{"Alien", "Heat"}) {
+		t.Fatalf("asked %v, %v; want Alien and Heat", asked, err)
+	}
+	// Heat changes again while the scan runs, after it read its folder.
+	if err := s.ScanFolders(ctx, lib.ID, []string{"Heat"}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ScanAnswered(ctx, lib.ID, asked, read); err != nil {
+		t.Fatal(err)
+	}
+	if asked, _, _ := s.ScanRequests(ctx, lib.ID); !slices.Equal(asked, []string{"Heat"}) {
+		t.Errorf("left %v asked, want Heat for the next scan", asked)
 	}
 }

@@ -182,7 +182,11 @@ func TestKeyframesJobsWaitBehindWhatAReaderSees(t *testing.T) {
 	if kind := claim(); kind != domain.JobScanLibrary {
 		t.Errorf("claimed %s before the later scan", kind)
 	}
-	if err := f.st.ScanLibrary(t.Context(), uuid.NewV7(), 0); err != nil {
+	other, err := f.st.AddLibrary(t.Context(), "Other", domain.LibraryMovies, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.st.ScanLibrary(t.Context(), other.ID, 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.st.AskKeyframes(t.Context(), part); err != nil {

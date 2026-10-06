@@ -86,7 +86,7 @@ func (f *fixture) put(rel, seed string) {
 
 func (f *fixture) scan() Report {
 	f.t.Helper()
-	r, err := f.scanner.Scan(f.t.Context(), f.lib, func(domain.ScanProgress) {}, func(store.Changed) {})
+	r, err := f.scanner.Scan(f.t.Context(), f.lib, []string{"."}, func(domain.ScanProgress) {}, func(store.Changed) {})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -238,7 +238,7 @@ func TestALibraryOfLinksScansWhatTheyLeadTo(t *testing.T) {
 	}
 
 	f.lib.Root = filepath.Join(f.root, "unmounted")
-	if _, err := f.scanner.Scan(t.Context(), f.lib, func(domain.ScanProgress) {}, func(store.Changed) {}); err == nil {
+	if _, err := f.scanner.Scan(t.Context(), f.lib, []string{"."}, func(domain.ScanProgress) {}, func(store.Changed) {}); err == nil {
 		t.Error("a root that cannot be read scanned")
 	}
 	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NULL`); n != 1 {
@@ -298,7 +298,7 @@ func TestOneFileInTwoLibrariesIsACopyInEach(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.scanner.Scan(t.Context(), lib, func(domain.ScanProgress) {}, func(store.Changed) {}); err != nil {
+	if _, err := f.scanner.Scan(t.Context(), lib, []string{"."}, func(domain.ScanProgress) {}, func(store.Changed) {}); err != nil {
 		t.Fatal(err)
 	}
 	if n := f.count(`SELECT count(DISTINCT i.library_id) FROM versions v JOIN items i ON i.id = v.item_id`); n != 2 {
@@ -656,7 +656,7 @@ func TestAScanTellsHowFarItHasGot(t *testing.T) {
 	f.put("Alien (1979)/Alien (1979).mkv", "alien")
 	f.put("Ignored/.ignore", "")
 	var told []domain.ScanProgress
-	if _, err := f.scanner.Scan(t.Context(), f.lib, func(p domain.ScanProgress) { told = append(told, p) }, func(store.Changed) {}); err != nil {
+	if _, err := f.scanner.Scan(t.Context(), f.lib, []string{"."}, func(p domain.ScanProgress) { told = append(told, p) }, func(store.Changed) {}); err != nil {
 		t.Fatal(err)
 	}
 	want := []domain.ScanProgress{
@@ -677,7 +677,7 @@ func TestAScanTellsWhichTitlesItChanged(t *testing.T) {
 	scan := func() map[domain.TitleChange][]string {
 		t.Helper()
 		got := map[domain.TitleChange][]string{}
-		_, err := f.scanner.Scan(t.Context(), f.lib, func(domain.ScanProgress) {}, func(c store.Changed) {
+		_, err := f.scanner.Scan(t.Context(), f.lib, []string{"."}, func(domain.ScanProgress) {}, func(c store.Changed) {
 			for change, ids := range c {
 				for _, id := range ids {
 					var title string
@@ -776,5 +776,39 @@ func TestAScanReadsSeveralFilesAtOnce(t *testing.T) {
 	}
 	if r := f.scan(); r.Skipped != 0 || r.Probed != readsAtOnce {
 		t.Errorf("%+v, want every film probed, at once", r)
+	}
+}
+
+func TestAScanOfAFolderReadsAndSettlesThatFolderAlone(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	f.put("Heat (1995)/Heat (1995).mkv", "heat")
+	f.put("Alien (1979)/Alien (1979).mkv", "alien")
+	f.scan()
+	f.put("Heat (1995)/Heat (1995) - 1080p.mkv", "heat-hd")
+	if err := os.RemoveAll(filepath.Join(f.root, "Alien (1979)")); err != nil {
+		t.Fatal(err)
+	}
+	scan := func(folders ...string) Report {
+		t.Helper()
+		r, err := f.scanner.Scan(t.Context(), f.lib, folders, func(domain.ScanProgress) {}, func(store.Changed) {})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	if r := scan("Heat (1995)"); r.Folders != 1 || r.Probed != 1 {
+		t.Errorf("scanning Heat's folder: %+v, want it alone read and its new copy probed", r)
+	}
+	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NOT NULL`); n != 0 {
+		t.Error("scanning Heat's folder marked Alien, outside it, missing")
+	}
+	// Alien's folder is gone; scanning it finds its copy nowhere.
+	scan("Alien (1979)")
+	if n := f.count(`SELECT count(*) FROM versions v JOIN items i ON i.id = v.item_id
+		WHERE i.title = 'Alien' AND v.missing_since IS NOT NULL`); n != 1 {
+		t.Error("scanning a removed folder did not mark its copy missing")
+	}
+	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NULL`); n != 2 {
+		t.Errorf("%d copies of Heat present, want 2", n)
 	}
 }
