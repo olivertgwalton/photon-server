@@ -71,6 +71,42 @@ func (s *Store) KnownCopy(ctx context.Context, lib uuid.UUID, key []byte) (bool,
 	return n > 0, err
 }
 
+// KnownFile is a file the last scan recorded as a part of a copy: its size and modification time
+// then, and the copy's content key, its place in the copy and how many parts the copy has.
+type KnownFile struct {
+	Size       int64
+	ModTime    time.Time
+	ContentKey []byte
+	Idx        int
+	Parts      int
+}
+
+// KnownFiles answers the files of paths the library recorded at its last scan, by path.
+func (s *Store) KnownFiles(ctx context.Context, lib uuid.UUID, paths []string) (map[string]KnownFile, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT f.rel_path, f.size_bytes, f.mtime_ns, v.fingerprint, p.idx,
+			(SELECT count(*) FROM parts o WHERE o.version_id = v.id)
+		FROM part_files f JOIN parts p ON p.id = f.part_id JOIN versions v ON v.id = p.version_id
+		WHERE f.library_id = $1 AND f.rel_path = ANY($2)`, lib.String(), paths)
+	if err != nil {
+		return nil, err
+	}
+	known := map[string]KnownFile{}
+	_, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (struct{}, error) {
+		var rel string
+		var f KnownFile
+		var mtime int64
+		err := r.Scan(&rel, &f.Size, &mtime, &f.ContentKey, &f.Idx, &f.Parts)
+		f.ModTime = time.Unix(0, mtime)
+		known[rel] = f
+		return struct{}{}, err
+	})
+	return known, err
+}
+
 // FolderFingerprint is the fingerprint the folder had when it was last scanned.
 func (s *Store) FolderFingerprint(ctx context.Context, lib uuid.UUID, path string) ([]byte, error) {
 	f := s.q.Folder
