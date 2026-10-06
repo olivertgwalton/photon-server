@@ -41,7 +41,9 @@ func fitted(width int, toneMap bool) string {
 	if toneMap {
 		f += "," + ToneMap
 	}
-	return f
+	// JPEG is full range. Stated, an encoder opened with no frame (a time past the last one)
+	// fails as having none instead of with mjpeg's misleading complaint about limited range.
+	return f + ",format=yuvj420p"
 }
 
 // Trickplay writes a video's thumbnail sheets into dir as 0.jpg, 1.jpg… in one run, decoding
