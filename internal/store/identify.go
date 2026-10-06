@@ -56,11 +56,12 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 		sub.IDs[x.Provider] = x.Value
 	}
 	if item.Kind == domain.ItemShow {
-		// Only a season holding something still titled by its file name, as Jellyfin asks a
+		// Only a season holding an episode still titled by its file name, as Jellyfin asks a
 		// provider only about items it has never refreshed: a show's new episode costs one season.
+		// A season's own title is always its number, so it says nothing of what was asked.
 		rows, err := s.pool.Query(ctx, `
 			SELECT DISTINCT s.season_number FROM items s
-			JOIN items e ON e.parent_id = s.id OR e.id = s.id
+			JOIN items e ON e.parent_id = s.id
 			JOIN item_fields f ON f.item_id = e.id AND f.field = 'title' AND f.source = 'file'
 			WHERE s.parent_id = $1 AND s.kind = 'season'
 			ORDER BY s.season_number`, id.String())
@@ -109,7 +110,13 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 			if err != nil {
 				return err
 			}
-			if err := applyMetadata(ctx, tx, row.ID, source, season.Metadata); err != nil {
+			said := season.Metadata
+			// A season is named by its number, as the scan names it, whatever a provider calls it
+			// ("Season Three", "Book One: Water"); an NFO beside it is the reader's own.
+			if source != domain.SourceNFO {
+				said.Title, said.SortTitle = "", ""
+			}
+			if err := applyMetadata(ctx, tx, row.ID, source, said); err != nil {
 				return err
 			}
 			if err := saveProviderArtwork(ctx, tx, row.ID, source, season.Metadata.Artwork); err != nil {
