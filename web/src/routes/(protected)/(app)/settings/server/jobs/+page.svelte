@@ -1,4 +1,5 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
 import type { components } from "#lib/api/schema.js";
 import { jobKinds } from "#lib/admin/words.js";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -44,14 +45,10 @@ function subject(job: Schemas["DeadJob"]) {
 }
 </script>
 
-<svelte:head><title>Jobs · Dashboard · Photon</title></svelte:head>
-
-<h1 class="title">Jobs</h1>
-<p class="max-w-2xl text-sm">
-	The work queued behind scans and plays: identifying titles, finding intros,
-	making previews and conversions, sending webhooks. A job that keeps failing is
-	given up on, and waits here to be tried again.
-</p>
+<PageHeader
+	title="Jobs"
+	description="The work queued behind scans and plays: matching titles, finding intros, making previews and conversions, sending webhooks. A job that keeps failing is given up on, and waits here to be tried again."
+/>
 
 {#if kinds.length}
 	<Table.Root>

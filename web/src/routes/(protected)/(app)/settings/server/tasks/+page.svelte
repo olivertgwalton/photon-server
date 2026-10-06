@@ -1,4 +1,5 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
 import PlayIcon from "@lucide/svelte/icons/play";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
@@ -23,9 +24,10 @@ function took(started?: string, finished?: string) {
 }
 </script>
 
-<svelte:head><title>Tasks · Dashboard · Photon</title></svelte:head>
-
-<h1 class="title">Scheduled tasks</h1>
+<PageHeader
+	title="Scheduled tasks"
+	description="What the server does by itself, and when it next will. Run one now to have it sooner."
+/>
 
 <Table.Root>
 	<Table.Header>

@@ -97,7 +97,7 @@ function remove() {
 </script>
 
 <svelte:head
-	><title>{data.profile.name} · Dashboard · Photon</title></svelte:head
+	><title>{data.profile.name} · Settings · Photon</title></svelte:head
 >
 
 <div class="grid max-w-2xl gap-6">

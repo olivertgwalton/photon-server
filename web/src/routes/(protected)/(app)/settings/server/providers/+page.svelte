@@ -1,4 +1,5 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { act, fields } from "#lib/admin/act.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
@@ -67,13 +68,10 @@ async function register(event: SubmitEvent) {
 }
 </script>
 
-<svelte:head><title>Providers · Dashboard · Photon</title></svelte:head>
-
-<h1 class="title">Providers and plugins</h1>
-<p class="max-w-2xl text-sm">
-	Where titles are matched and described. A library chooses which of these it
-	asks, and in what order, in its own settings.
-</p>
+<PageHeader
+	title="Metadata providers"
+	description="Where titles are matched and described. A library chooses which of these it asks, and in what order, in its own settings."
+/>
 
 <div class="grid items-start gap-4 lg:grid-cols-2">
 	{#each data.providers as provider (provider.id)}

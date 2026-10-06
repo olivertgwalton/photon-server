@@ -40,7 +40,7 @@ async function add(event: SubmitEvent) {
 }
 </script>
 
-<svelte:head><title>Add a library · Dashboard · Photon</title></svelte:head>
+<svelte:head><title>Add a library · Settings · Photon</title></svelte:head>
 
 <form onsubmit={add} class="grid max-w-2xl gap-6">
 	<h1 class="title">Add a library</h1>

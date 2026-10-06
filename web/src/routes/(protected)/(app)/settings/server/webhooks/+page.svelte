@@ -1,4 +1,5 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { toast } from "svelte-sonner";
 import { invalidateAll } from "$app/navigation";
 import { act, fields } from "#lib/admin/act.js";
@@ -44,62 +45,60 @@ async function copy(secret: string) {
 }
 </script>
 
-<svelte:head><title>Webhooks · Dashboard · Photon</title></svelte:head>
-
-<div class="flex flex-wrap items-center justify-between gap-4">
-	<h1 class="title">Webhooks</h1>
-	<Dialog.Root bind:open={adding}>
-		<Dialog.Trigger>
-			{#snippet child({
-				props,
-			})}
-				<Button {...props}>Add a webhook</Button>
-			{/snippet}
-		</Dialog.Trigger>
-		<Dialog.Content class="sm:max-w-lg">
-			<form onsubmit={add} class="grid gap-6">
-				<Dialog.Header>
-					<Dialog.Title>Add a webhook</Dialog.Title>
-					<Dialog.Description>
-						Each event is posted to the address as JSON, signed in the
-						X-Photon-Signature header with a secret shown once, when it is
-						added.
-					</Dialog.Description>
-				</Dialog.Header>
-				<Field.Group>
-					<Field.Field>
-						<Field.Label for="webhook-url">Address</Field.Label>
-						<Input
-							id="webhook-url"
-							name="url"
-							type="url"
-							required
-							placeholder="https://example.com/photon"
-						/>
-					</Field.Field>
-					<Field.Set>
-						<Field.Legend>Send it when</Field.Legend>
-						<div class="grid gap-2 sm:grid-cols-2">
-							{#each Object.entries(hookable) as [kind, label] (kind)}
-								<div class="flex items-center gap-2">
-									<Checkbox id="event-{kind}" name="events" value={kind} />
-									<Label for="event-{kind}">{label}</Label>
-								</div>
-							{/each}
-						</div>
-					</Field.Set>
-				</Field.Group>
-				<Dialog.Footer>
-					<Button type="submit">Add webhook</Button>
-				</Dialog.Footer>
-			</form>
-		</Dialog.Content>
-	</Dialog.Root>
-</div>
-<p class="max-w-2xl text-sm">
-	Tell another service when something happens here: a play, a sign-in, a new
-	title. A delivery that keeps failing shows under Jobs.
-</p>
+<PageHeader
+	title="Webhooks"
+	description="Tell another service when something happens here: a play, a sign-in, a new title. A delivery that keeps failing shows under Jobs."
+>
+	{#snippet actions()}
+		<Dialog.Root bind:open={adding}>
+			<Dialog.Trigger>
+				{#snippet child({
+					props,
+				})}
+					<Button {...props}>Add a webhook</Button>
+				{/snippet}
+			</Dialog.Trigger>
+			<Dialog.Content class="sm:max-w-lg">
+				<form onsubmit={add} class="grid gap-6">
+					<Dialog.Header>
+						<Dialog.Title>Add a webhook</Dialog.Title>
+						<Dialog.Description>
+							Each event is posted to the address as JSON, signed in the
+							X-Photon-Signature header with a secret shown once, when it is
+							added.
+						</Dialog.Description>
+					</Dialog.Header>
+					<Field.Group>
+						<Field.Field>
+							<Field.Label for="webhook-url">Address</Field.Label>
+							<Input
+								id="webhook-url"
+								name="url"
+								type="url"
+								required
+								placeholder="https://example.com/photon"
+							/>
+						</Field.Field>
+						<Field.Set>
+							<Field.Legend>Send it when</Field.Legend>
+							<div class="grid gap-2 sm:grid-cols-2">
+								{#each Object.entries(hookable) as [kind, label] (kind)}
+									<div class="flex items-center gap-2">
+										<Checkbox id="event-{kind}" name="events" value={kind} />
+										<Label for="event-{kind}">{label}</Label>
+									</div>
+								{/each}
+							</div>
+						</Field.Set>
+					</Field.Group>
+					<Dialog.Footer>
+						<Button type="submit">Add webhook</Button>
+					</Dialog.Footer>
+				</form>
+			</Dialog.Content>
+		</Dialog.Root>
+	{/snippet}
+</PageHeader>
 
 {#if data.webhooks.length}
 	<ul class="grid gap-3">

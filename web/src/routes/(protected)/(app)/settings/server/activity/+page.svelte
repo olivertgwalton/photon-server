@@ -1,4 +1,5 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { page } from "$app/state";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { loggedKinds } from "#lib/admin/words.js";
@@ -39,24 +40,26 @@ const libraries = $derived(
 );
 </script>
 
-<svelte:head><title>Activity · Dashboard · Photon</title></svelte:head>
-
-<div class="flex flex-wrap items-end justify-between gap-4">
-	<h1 class="title">Activity</h1>
-	<form method="get" class="flex items-end gap-2">
-		<div class="grid gap-1.5">
-			<Label for="kind">Show</Label>
-			<Choice
-				id="kind"
-				name="kind"
-				value={data.kind ?? "all"}
-				options={kinds}
-				class="w-48"
-			/>
-		</div>
-		<Button type="submit" variant="outline">Filter</Button>
-	</form>
-</div>
+<PageHeader
+	title="Activity"
+	description="What has happened on the server, the latest first: sign-ins, plays, libraries and profiles added or removed."
+>
+	{#snippet actions()}
+		<form method="get" class="flex items-end gap-2">
+			<div class="grid gap-1.5">
+				<Label for="kind">Show</Label>
+				<Choice
+					id="kind"
+					name="kind"
+					value={data.kind ?? "all"}
+					options={kinds}
+					class="w-48"
+				/>
+			</div>
+			<Button type="submit" variant="outline">Filter</Button>
+		</form>
+	{/snippet}
+</PageHeader>
 <p class="text-sm">Kept for 30 days.</p>
 
 <ActivityList {events} {profiles} {libraries} {now} />

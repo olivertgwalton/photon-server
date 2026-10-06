@@ -49,7 +49,7 @@ const name = $derived(
 );
 </script>
 
-<svelte:head><title>Edit {t.title} · Dashboard · Photon</title></svelte:head>
+<svelte:head><title>Edit {t.title} · Settings · Photon</title></svelte:head>
 
 <div class="grid max-w-3xl gap-6">
 	<div>

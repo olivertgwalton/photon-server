@@ -1,4 +1,5 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { page } from "$app/state";
 import { methods, when } from "#lib/admin/words.js";
 import Choice from "#lib/components/admin/Choice.svelte";
@@ -29,24 +30,26 @@ function reached(position: number, duration?: number) {
 }
 </script>
 
-<svelte:head><title>History · Dashboard · Photon</title></svelte:head>
-
-<div class="flex flex-wrap items-end justify-between gap-4">
-	<h1 class="title">History</h1>
-	<form method="get" class="flex items-end gap-2">
-		<div class="grid gap-1.5">
-			<Label for="profile">Who</Label>
-			<Choice
-				id="profile"
-				name="profile"
-				value={data.profile ?? "all"}
-				options={everyone}
-				class="w-48"
-			/>
-		</div>
-		<Button type="submit" variant="outline">Filter</Button>
-	</form>
-</div>
+<PageHeader
+	title="Play history"
+	description="Every play on the server, the latest first, and how it was played."
+>
+	{#snippet actions()}
+		<form method="get" class="flex items-end gap-2">
+			<div class="grid gap-1.5">
+				<Label for="profile">Who</Label>
+				<Choice
+					id="profile"
+					name="profile"
+					value={data.profile ?? "all"}
+					options={everyone}
+					class="w-48"
+				/>
+			</div>
+			<Button type="submit" variant="outline">Filter</Button>
+		</form>
+	{/snippet}
+</PageHeader>
 
 {#if data.page.items.length}
 	<Table.Root>

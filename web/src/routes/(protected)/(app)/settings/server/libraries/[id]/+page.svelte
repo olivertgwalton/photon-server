@@ -27,7 +27,7 @@ function save(event: SubmitEvent) {
 </script>
 
 <svelte:head
-	><title>{data.library.name} · Dashboard · Photon</title></svelte:head
+	><title>{data.library.name} · Settings · Photon</title></svelte:head
 >
 
 <form onsubmit={save} class="grid max-w-2xl gap-6">

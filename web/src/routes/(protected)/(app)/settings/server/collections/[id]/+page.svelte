@@ -71,7 +71,7 @@ function caption(card: Card) {
 </script>
 
 <svelte:head
-	><title>{data.collection.title} · Dashboard · Photon</title></svelte:head
+	><title>{data.collection.title} · Settings · Photon</title></svelte:head
 >
 
 <div class="grid max-w-2xl gap-6">

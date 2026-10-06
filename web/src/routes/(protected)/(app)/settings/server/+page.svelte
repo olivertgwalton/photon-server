@@ -47,7 +47,7 @@ const jobs = $derived(
 );
 </script>
 
-<svelte:head><title>Dashboard · Photon</title></svelte:head>
+<svelte:head><title>Dashboard · Settings · Photon</title></svelte:head>
 
 <div class="flex flex-wrap items-end justify-between gap-4">
 	<div>

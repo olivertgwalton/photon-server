@@ -1,4 +1,5 @@
 <script lang="ts">
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { toast } from "svelte-sonner";
 import Choice from "#lib/components/admin/Choice.svelte";
 import * as Card from "#lib/components/ui/card/index.js";
@@ -73,16 +74,10 @@ const skipModes: { value: SkipMode; label: string }[] = [
 ];
 </script>
 
-<svelte:head><title>Playback · Settings · Photon</title></svelte:head>
-
-<header class="grid max-w-2xl gap-1">
-	<h1 class="title">Playback</h1>
-	<p class="text-ink-2 text-sm">
-		How this browser plays. These are kept in this browser, so another device
-		has its own; choosing a track or quality in the player still wins for that
-		title.
-	</p>
-</header>
+<PageHeader
+	title="Playback"
+	description={`How this browser plays. These are kept in this browser, so another device has its own; choosing a track or quality in the player still wins for that title.`}
+/>
 
 <Card.Root class="max-w-2xl">
 	<Card.Content>
