@@ -478,7 +478,9 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 				return err
 			}
 		}
-		// Only a version whose part went missing, or came back, is written.
+		// Only a version whose part went missing, or came back, is written. This and the sweeps
+		// below read the whole library whatever the scopes: a save in scope can take a path, a copy,
+		// an episode or an extra from a title outside them, and identifying empties collections.
 		updated, err := queryIDs(ctx, tx, `
 			UPDATE versions v SET missing_since = CASE WHEN v.missing_since IS NULL THEN now() END
 			WHERE v.library_id = $1 AND (v.missing_since IS NULL) = EXISTS (SELECT 1 FROM parts p
