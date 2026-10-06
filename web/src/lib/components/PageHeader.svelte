@@ -23,7 +23,7 @@ let {
 	<div class="grid max-w-2xl gap-1">
 		<h1 class="title">{title}</h1>
 		{#if description}
-			<p class="text-ink-2 text-sm">{description}</p>
+			<p class="text-ink-2 text-sm [overflow-wrap:anywhere]">{description}</p>
 		{/if}
 	</div>
 	{#if actions}
