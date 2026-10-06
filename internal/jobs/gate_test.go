@@ -160,17 +160,45 @@ func TestWindowedWorkStartsInTheWindowAndStopsAsItCloses(t *testing.T) {
 	})
 }
 
-// Intros and credits found as parts are added too start whenever they are queued, outside the
-// window as well.
-func TestWorkAlsoDoneAsPartsAreAddedStartsOutsideTheWindow(t *testing.T) {
+// Of intros and credits found as parts are added too, an added part's start whenever they are
+// queued, outside the window as well, and what the window's backfill queued waits for the window
+// and stops as it closes, as Plex's butler stops.
+func TestAddedWorkStartsAtOnceAndBackfilledWorkKeepsToTheWindow(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobMarkers}}}
+		q := &memoryQueue{pending: []domain.Job{
+			{ID: 7, Kind: domain.JobMarkers, Due: domain.JobDueNow},
+			{ID: 8, Kind: domain.JobMarkers, Due: domain.JobDueWindow},
+		}}
 		c := newCluster(domain.JobMarkers, domain.TimingWindowAndAdded)
-		stop := runReader(t, q, c, domain.JobMarkers, func(context.Context, uuid.UUID) error { return nil })
+		var mu sync.Mutex
+		var backfilledAt time.Time
+		stop := runReader(t, q, c, domain.JobMarkers, func(ctx context.Context, _ uuid.UUID) error {
+			mu.Lock()
+			if time.Now().Hour() < 2 {
+				mu.Unlock()
+				return nil
+			}
+			backfilledAt = time.Now()
+			mu.Unlock()
+			<-ctx.Done()
+			return ctx.Err()
+		})
 		defer stop()
 		synctest.Sleep(time.Minute)
-		if len(q.completed) != 1 {
-			t.Errorf("completed %v at midnight; want the job run outside the window", q.completed)
+		q.mu.Lock()
+		if len(q.completed) != 1 || q.completed[0] != 7 {
+			t.Errorf("completed %v at midnight; want the added part's job alone", q.completed)
+		}
+		q.mu.Unlock()
+		synctest.Sleep(6 * time.Hour)
+		mu.Lock()
+		defer mu.Unlock()
+		opens := time.Date(2000, 1, 1, 2, 0, 0, 0, time.UTC)
+		if backfilledAt.Before(opens) || backfilledAt.After(opens.Add(2*time.Minute)) {
+			t.Errorf("the backfilled job started at %s, want as the window opens", backfilledAt)
+		}
+		if len(q.postponed) != 1 || q.postponed[0] != 8 {
+			t.Errorf("postponed %v; want the backfilled job stopped as the window closed", q.postponed)
 		}
 	})
 }

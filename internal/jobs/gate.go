@@ -41,8 +41,9 @@ type maintenance interface {
 // stopped, to be queued again with its attempt given back, as a conversion gives way to a
 // playback's transcode. Jellyfin's and Plex's background work pays playback no such regard.
 //
-// Work its timing holds to the maintenance window starts only inside it and is stopped as it
-// closes, as Plex's butler is.
+// Work held to the maintenance window starts only inside it and is stopped as it closes, as
+// Plex's butler is: all of a kind whose timing is the window, and of one also done as parts are
+// added, what the window's backfill queued.
 type Gate struct {
 	playbacks playbacks
 	settings  maintenance
@@ -59,6 +60,7 @@ type Gate struct {
 
 type hold struct {
 	kind domain.JobKind
+	due  domain.JobDue
 	stop context.CancelCauseFunc
 }
 
@@ -128,7 +130,7 @@ func (g *Gate) reread(ctx context.Context) {
 		switch {
 		case g.playing:
 			cause = errPlayback
-		case !g.inTime(h.kind, now):
+		case !g.inTime(h.kind, h.due, now):
 			cause = errWindowClosed
 		default:
 			continue
@@ -138,10 +140,11 @@ func (g *Gate) reread(ctx context.Context) {
 	}
 }
 
-// inTime reports whether work of kind may run at now as its timing has it; the caller holds g.mu.
+// inTime reports whether work of kind, due as said, may run at now as its timing has it; the caller
+// holds g.mu.
 // Keyframes are what a play is cut at, read from a file's own index as it is added, as Plex
 // analyses a file as it is added, so no window holds them.
-func (g *Gate) inTime(kind domain.JobKind, now time.Time) bool {
+func (g *Gate) inTime(kind domain.JobKind, due domain.JobDue, now time.Time) bool {
 	var timing domain.Timing
 	switch kind {
 	case domain.JobPreviews:
@@ -155,33 +158,38 @@ func (g *Gate) inTime(kind domain.JobKind, now time.Time) bool {
 	case domain.TimingWindow:
 		return g.window.Holds(now)
 	case domain.TimingWindowAndAdded:
+		switch due {
+		case domain.JobDueNow:
+		case domain.JobDueWindow:
+			return g.window.Holds(now)
+		}
 	}
 	return true
 }
 
-// Open reports whether a job of kind may start now.
-func (g *Gate) Open(kind domain.JobKind) bool {
+// Open reports whether a job of kind, due as said, may start now.
+func (g *Gate) Open(kind domain.JobKind, due domain.JobDue) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.open(kind)
+	return g.open(kind, due)
 }
 
 // open is Open; the caller holds g.mu.
-func (g *Gate) open(kind domain.JobKind) bool {
-	return g.read && !g.playing && g.inTime(kind, time.Now())
+func (g *Gate) open(kind domain.JobKind, due domain.JobDue) bool {
+	return g.read && !g.playing && g.inTime(kind, due, time.Now())
 }
 
-// Hold lets a job of kind run for as long as nothing plays and, for work held to the window, the
-// window is open: ok is false where it may not start, and held is cancelled with a cause that is
-// ErrNotNow when it may not go on. release gives the gate back once the job ends.
-func (g *Gate) Hold(ctx context.Context, kind domain.JobKind) (held context.Context, release func(), ok bool) {
+// Hold lets a job of kind, due as said, run for as long as nothing plays and, for work held to the
+// window, the window is open: ok is false where it may not start, and held is cancelled with a
+// cause that is ErrNotNow when it may not go on. release gives the gate back once the job ends.
+func (g *Gate) Hold(ctx context.Context, kind domain.JobKind, due domain.JobDue) (held context.Context, release func(), ok bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if !g.open(kind) {
+	if !g.open(kind, due) {
 		return nil, nil, false
 	}
 	held, stop := context.WithCancelCause(ctx)
-	h := &hold{kind: kind, stop: stop}
+	h := &hold{kind: kind, due: due, stop: stop}
 	g.holds[h] = struct{}{}
 	return held, func() {
 		g.mu.Lock()

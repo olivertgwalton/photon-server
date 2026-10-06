@@ -173,7 +173,7 @@ func TestKeyframesJobsWaitBehindWhatAReaderSees(t *testing.T) {
 	}
 	claim := func() domain.JobKind {
 		t.Helper()
-		jobs, err := f.st.ClaimJobs(t.Context(), []domain.JobKind{domain.JobKeyframes, domain.JobScanLibrary}, uuid.NewV7(), time.Minute, 1)
+		jobs, err := f.st.ClaimJobs(t.Context(), []domain.JobKind{domain.JobKeyframes, domain.JobScanLibrary}, nil, uuid.NewV7(), time.Minute, 1)
 		if err != nil || len(jobs) != 1 {
 			t.Fatalf("claimed %v, %v", jobs, err)
 		}

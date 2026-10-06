@@ -40,7 +40,7 @@ func TestConcurrentClaimsNeverShareAJob(t *testing.T) {
 		wg.Go(func() {
 			node := uuid.NewV7()
 			for {
-				jobs, err := s.ClaimJobs(t.Context(), []domain.JobKind{domain.JobKeyframes}, node, time.Minute, 4)
+				jobs, err := s.ClaimJobs(t.Context(), []domain.JobKind{domain.JobKeyframes}, nil, node, time.Minute, 4)
 				if err != nil {
 					t.Error(err)
 					return
@@ -86,14 +86,14 @@ func TestFailedJobsBackOffThenDie(t *testing.T) {
 	kinds := []domain.JobKind{domain.JobKeyframes}
 	node := uuid.NewV7()
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		jobs, err := s.ClaimJobs(t.Context(), kinds, node, time.Minute, 1)
+		jobs, err := s.ClaimJobs(t.Context(), kinds, nil, node, time.Minute, 1)
 		if err != nil || len(jobs) != 1 {
 			t.Fatalf("attempt %d: claimed %d (err %v)", attempt, len(jobs), err)
 		}
 		if dead, err := s.FailJob(t.Context(), jobs[0], errors.New("unreadable")); err != nil || dead != (attempt == maxAttempts) {
 			t.Fatalf("attempt %d: dead %v, %v; want dead on the last", attempt, dead, err)
 		}
-		if again, _ := s.ClaimJobs(t.Context(), kinds, node, time.Minute, 1); len(again) != 0 {
+		if again, _ := s.ClaimJobs(t.Context(), kinds, nil, node, time.Minute, 1); len(again) != 0 {
 			t.Fatalf("attempt %d: a failed job was claimable before its backoff", attempt)
 		}
 		if _, err := s.pool.Exec(t.Context(), `UPDATE jobs SET run_after = now() - interval '1 second' WHERE id = $1`, jobs[0].ID); err != nil {
@@ -120,7 +120,7 @@ func TestFailedJobsBackOffThenDie(t *testing.T) {
 	if err := s.RetryJob(t.Context(), id); err != nil {
 		t.Fatal(err)
 	}
-	if again, _ := s.ClaimJobs(t.Context(), kinds, node, time.Minute, 1); len(again) != 1 || again[0].Attempts != 1 {
+	if again, _ := s.ClaimJobs(t.Context(), kinds, nil, node, time.Minute, 1); len(again) != 1 || again[0].Attempts != 1 {
 		t.Errorf("after a retry: claimed %+v, want the job on a fresh first attempt", again)
 	}
 	if err := s.RetryJob(t.Context(), id); !errors.Is(err, ErrNotFound) {
@@ -134,14 +134,14 @@ func TestAPostponedJobNeverDies(t *testing.T) {
 	kinds := []domain.JobKind{domain.JobKeyframes}
 	node := uuid.NewV7()
 	for attempt := range maxAttempts + 2 {
-		jobs, err := s.ClaimJobs(t.Context(), kinds, node, time.Minute, 1)
+		jobs, err := s.ClaimJobs(t.Context(), kinds, nil, node, time.Minute, 1)
 		if err != nil || len(jobs) != 1 || jobs[0].Attempts != 1 {
 			t.Fatalf("claim %d: %+v (err %v), want the job on its first attempt", attempt, jobs, err)
 		}
 		if err := s.PostponeJob(t.Context(), jobs[0], time.Hour); err != nil {
 			t.Fatal(err)
 		}
-		if again, _ := s.ClaimJobs(t.Context(), kinds, node, time.Minute, 1); len(again) != 0 {
+		if again, _ := s.ClaimJobs(t.Context(), kinds, nil, node, time.Minute, 1); len(again) != 0 {
 			t.Fatalf("claim %d: a postponed job was claimable before its delay", attempt)
 		}
 		if _, err := s.pool.Exec(t.Context(), `UPDATE jobs SET run_after = now() - interval '1 second' WHERE id = $1`, jobs[0].ID); err != nil {
@@ -154,10 +154,10 @@ func TestSweepRequeuesExpiredLeases(t *testing.T) {
 	s := migrated(t)
 	enqueueN(t, s, 2)
 	kinds := []domain.JobKind{domain.JobKeyframes}
-	if _, err := s.ClaimJobs(t.Context(), kinds, uuid.NewV7(), -time.Second, 1); err != nil {
+	if _, err := s.ClaimJobs(t.Context(), kinds, nil, uuid.NewV7(), -time.Second, 1); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ClaimJobs(t.Context(), kinds, uuid.NewV7(), time.Hour, 1); err != nil {
+	if _, err := s.ClaimJobs(t.Context(), kinds, nil, uuid.NewV7(), time.Hour, 1); err != nil {
 		t.Fatal(err)
 	}
 	n, err := s.SweepJobs(t.Context())
@@ -174,14 +174,14 @@ func TestALeaseIsRenewedOnlyByTheNodeHoldingIt(t *testing.T) {
 	enqueueN(t, s, 1)
 	kinds := []domain.JobKind{domain.JobKeyframes}
 	first, second := uuid.NewV7(), uuid.NewV7()
-	jobs, err := s.ClaimJobs(t.Context(), kinds, first, -time.Second, 1)
+	jobs, err := s.ClaimJobs(t.Context(), kinds, nil, first, -time.Second, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.SweepJobs(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ClaimJobs(t.Context(), kinds, second, time.Hour, 1); err != nil {
+	if _, err := s.ClaimJobs(t.Context(), kinds, nil, second, time.Hour, 1); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.ExtendLease(t.Context(), jobs[0].ID, first, time.Hour); !errors.Is(err, domain.ErrLeaseLost) {
@@ -204,7 +204,7 @@ func TestAJobAskedForWhileRunningRunsAgain(t *testing.T) {
 	}
 	claim := func() []domain.Job {
 		t.Helper()
-		jobs, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobIdentify}, uuid.NewV7(), time.Minute, 5)
+		jobs, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobIdentify}, nil, uuid.NewV7(), time.Minute, 5)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -254,7 +254,7 @@ func TestAScanWaitsForItsLibraryToGoQuiet(t *testing.T) {
 	}
 	due := func() int {
 		t.Helper()
-		jobs, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobScanLibrary}, uuid.NewV7(), time.Minute, 5)
+		jobs, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobScanLibrary}, nil, uuid.NewV7(), time.Minute, 5)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -335,7 +335,7 @@ func TestATitleAScanFindsIsMatchedBeforeTheRefresh(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Ronin", []byte("v1"), []Film{{Title: "Ronin", Folder: "Ronin"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	claimed, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobIdentify}, uuid.NewV4(), time.Minute, 1)
+	claimed, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobIdentify}, nil, uuid.NewV4(), time.Minute, 1)
 	if err != nil || len(claimed) != 1 {
 		t.Fatalf("claimed %v, %v", claimed, err)
 	}
@@ -390,11 +390,29 @@ func TestAClaimLeasesNoMoreThanItAsks(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.pool.Reset()
-	jobs, err := s.ClaimJobs(t.Context(), []domain.JobKind{domain.JobKeyframes}, uuid.NewV7(), time.Minute, 1)
+	jobs, err := s.ClaimJobs(t.Context(), []domain.JobKind{domain.JobKeyframes}, nil, uuid.NewV7(), time.Minute, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(jobs) != 1 {
 		t.Errorf("a claim of one leased %d jobs", len(jobs))
+	}
+}
+
+// Outside the window a node asks only for the work due now, and is given no backfilled job.
+func TestAClaimForWorkDueNowLeavesWhatIsDueInTheWindow(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	window, now := uuid.NewV7(), uuid.NewV7()
+	if _, err := s.pool.Exec(ctx, `INSERT INTO jobs (kind, subject, due) VALUES ('previews', $1, 'window'), ('previews', $2, 'now')`, window, now); err != nil {
+		t.Fatal(err)
+	}
+	kinds := []domain.JobKind{domain.JobPreviews}
+	claimed, err := s.ClaimJobs(ctx, kinds, kinds, uuid.NewV7(), time.Minute, 5)
+	if err != nil || len(claimed) != 1 || claimed[0].Subject != now || claimed[0].Due != domain.JobDueNow {
+		t.Fatalf("claimed %+v, %v; want the job due now alone", claimed, err)
+	}
+	if claimed, err = s.ClaimJobs(ctx, kinds, nil, uuid.NewV7(), time.Minute, 5); err != nil || len(claimed) != 1 || claimed[0].Subject != window {
+		t.Errorf("in the window claimed %+v, %v; want the backfilled job", claimed, err)
 	}
 }

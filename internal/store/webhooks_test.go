@@ -33,7 +33,7 @@ func TestAWebhookBodyIsMadeOnlyWhereOneAskedForIt(t *testing.T) {
 	if err := s.QueueWebhooks(ctx, domain.EventPlaybackStarted, body); err != nil || made != 1 {
 		t.Fatalf("a kind a webhook asked for: made %d bodies, %v; want one", made, err)
 	}
-	jobs, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobDeliverWebhook}, uuid.NewV7(), time.Minute, 10)
+	jobs, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobDeliverWebhook}, nil, uuid.NewV7(), time.Minute, 10)
 	if err != nil || len(jobs) != 1 {
 		t.Errorf("queued %d deliveries, %v; want one", len(jobs), err)
 	}

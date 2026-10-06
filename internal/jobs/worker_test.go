@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -25,12 +26,18 @@ type memoryQueue struct {
 	taken bool
 }
 
-func (q *memoryQueue) ClaimJobs(_ context.Context, _ []domain.JobKind, _ uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error) {
+func (q *memoryQueue) ClaimJobs(_ context.Context, kinds, nowOnly []domain.JobKind, _ uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	n := min(limit, len(q.pending))
-	out := q.pending[:n:n]
-	q.pending = q.pending[n:]
+	var out, left []domain.Job
+	for _, j := range q.pending {
+		if len(out) < limit && slices.Contains(kinds, j.Kind) && (j.Due != domain.JobDueWindow || !slices.Contains(nowOnly, j.Kind)) {
+			out = append(out, j)
+		} else {
+			left = append(left, j)
+		}
+	}
+	q.pending = left
 	q.leaseUntil = time.Now().Add(lease)
 	return out, nil
 }

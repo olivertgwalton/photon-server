@@ -65,7 +65,7 @@ func lost(t *testing.T, markers domain.MarkerDetection, chapters ...domain.Chapt
 func TestASeasonsSharedIntroIsFound(t *testing.T) {
 	st, lib := lost(t, domain.MarkersAll)
 	ctx := t.Context()
-	jobs, err := st.ClaimJobs(ctx, []domain.JobKind{domain.JobMarkers}, uuid.NewV7(), time.Minute, 1)
+	jobs, err := st.ClaimJobs(ctx, []domain.JobKind{domain.JobMarkers}, nil, uuid.NewV7(), time.Minute, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

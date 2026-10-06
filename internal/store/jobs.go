@@ -104,19 +104,21 @@ func (s *Store) ScanAnswered(ctx context.Context, lib uuid.UUID, folders []strin
 	return err
 }
 
-// ClaimJobs leases up to limit queued jobs of the given kinds to node. Workers that ask together
+// ClaimJobs leases up to limit queued jobs of the given kinds to node, of those in nowOnly only the
+// ones due now. Workers that ask together
 // never receive the same job: each row is taken by one transaction and skipped by the others. The
 // rows are picked once, in a materialized CTE: as `id IN (SELECT … SKIP LOCKED LIMIT n)` the
 // planner may run the subquery again for each row it scans, each run skipping what the last
 // locked, and lease far more than n.
-func (s *Store) ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error) {
+func (s *Store) ClaimJobs(ctx context.Context, kinds, nowOnly []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error) {
 	rows, err := s.pool.Query(ctx, `
 		WITH picked AS MATERIALIZED (
 			SELECT id FROM jobs WHERE state = 'queued' AND run_after <= now() AND kind = ANY($1)
+				AND (due = 'now' OR NOT kind = ANY(coalesce($5::text[], '{}')))
 			ORDER BY priority DESC, id FOR UPDATE SKIP LOCKED LIMIT $4)
 		UPDATE jobs SET state = 'running', lease_until = now() + $2, attempts = attempts + 1, node_id = $3
 		FROM picked WHERE jobs.id = picked.id
-		RETURNING jobs.id, jobs.kind, jobs.subject, jobs.attempts, jobs.due`, kinds, lease, node, limit)
+		RETURNING jobs.id, jobs.kind, jobs.subject, jobs.attempts, jobs.due`, kinds, lease, node, limit, nowOnly)
 	if err != nil {
 		return nil, err
 	}
