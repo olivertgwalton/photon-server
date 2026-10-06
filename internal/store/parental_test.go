@@ -23,6 +23,10 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
 	part := func(name string) Copy {
 		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}
 	}
@@ -44,7 +48,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 		}
 	}
 	episode := Episode{Season: 1, Episodes: []int{1}, Title: "Show", Folder: "Show/Season 1", ByNumber: true, Copies: []Copy{part("Show1")}}
-	if _, err := s.SaveShowFolder(ctx, films.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, []Episode{episode}, nil); err != nil {
+	if _, err := s.SaveShowFolder(ctx, tv.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, []Episode{episode}, nil); err != nil {
 		t.Fatal(err)
 	}
 	show, ep := oneItem(t, s, `kind = 'show'`).ID, oneItem(t, s, `kind = 'episode'`).ID
@@ -59,7 +63,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 	walls := func() []string {
 		t.Helper()
 		var out []string
-		for _, lib := range []uuid.UUID{films.ID, other.ID} {
+		for _, lib := range []uuid.UUID{films.ID, other.ID, tv.ID} {
 			cards, total, err := s.Wall(ctx, lib, WallPage{Profile: kid.ID, Sort: domain.SortTitle, Limit: 10})
 			if err != nil || int(total) != len(cards) {
 				t.Fatal(cards, total, err)
@@ -94,13 +98,13 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 	if got := walls(); len(got) != 5 {
 		t.Errorf("with no limits: %q, want everything", got)
 	}
-	counted(map[uuid.UUID]domain.TitleCounts{films.ID: {Movies: 3, Shows: 1, Seasons: 1, Episodes: 1}, other.ID: {Movies: 1}})
+	counted(map[uuid.UUID]domain.TitleCounts{films.ID: {Movies: 3}, other.ID: {Movies: 1}, tv.ID: {Shows: 1, Seasons: 1, Episodes: 1}})
 	twelve := 12
-	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedBlock, Libraries: []uuid.UUID{films.ID}}); err != nil {
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedBlock, Libraries: []uuid.UUID{films.ID, tv.ID}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := walls(); !slices.Equal(got, []string{"Paddington"}) {
-		t.Errorf("12 and under, rated, Films alone: %q, want Paddington", got)
+		t.Errorf("12 and under, rated, Films and TV alone: %q, want Paddington", got)
 	}
 	counted(map[uuid.UUID]domain.TitleCounts{films.ID: {Movies: 1}})
 	for name, id := range map[string]uuid.UUID{"a film rated 15": ids["Heat"], "a TV-14 show's episode": ep, "Up, in a library it lacks": ids["Up"]} {

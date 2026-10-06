@@ -147,16 +147,16 @@ type Facets struct {
 // such library.
 func (s *Store) Facets(ctx context.Context, lib, profile uuid.UUID) (Facets, error) {
 	var f Facets
-	if _, _, err := s.wallQuery(ctx, lib, profile, WallFilter{}); err != nil {
+	_, at, err := s.wallQuery(ctx, lib, profile, WallFilter{})
+	if err != nil {
 		return f, err
 	}
 	titles := `SELECT items.genres, items.studios, items.year, items.certificate FROM items, viewer(@profile) v
-		WHERE library_id = @lib AND kind IN ('movie', 'show') AND sees(v, items)`
+		WHERE library_id = @lib AND kind = @kind AND sees(v, items)`
 	// Copies on disk of the library's films and episodes.
 	copies := `SELECT v.video_range, v.width FROM versions v JOIN items e ON e.id = v.item_id
 		CROSS JOIN viewer(@profile) asking
 		WHERE e.library_id = @lib AND v.missing_since IS NULL AND sees(asking, e)`
-	at := pgx.NamedArgs{"lib": lib, "profile": profile}
 	var widths []int
 	for _, q := range []struct {
 		sql  string
