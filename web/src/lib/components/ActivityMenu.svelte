@@ -1,42 +1,49 @@
 <script lang="ts">
 import ActivityIcon from "@lucide/svelte/icons/activity";
 import type { components } from "#lib/api/schema.js";
-import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
-import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
-import { live } from "#lib/live.svelte.js";
+import { ticking } from "#lib/admin/clock.svelte.js";
+import { liveStream } from "#lib/admin/stream.svelte.js";
+import RunningNow from "#lib/components/admin/RunningNow.svelte";
+import * as Popover from "#lib/components/ui/popover/index.js";
 
-// What the server is doing, beside the profile, as Plex's activity menu is:
-// drawn only while a library is being scanned.
+// What the server is doing, beside the profile, as Plex's activity panel is:
+// drawn only while something runs.
 let { libraries }: { libraries: components["schemas"]["Library"][] } = $props();
 
-const scans = $derived(Object.values(live.scans));
-const name = (id: string) =>
-	libraries.find((l) => l.id === id)?.name ?? "A library";
+// A task over within moments (the stalled-job sweep runs every minute) is not
+// worth the icon appearing for.
+const brief = 2_000;
+
+const live = liveStream();
+const clock = ticking();
+const names = $derived(new Map(libraries.map((l) => [l.id, l.name] as const)));
+const state = $derived({
+	...live.state,
+	tasks: live.state.tasks.filter(
+		(t) => clock.now - Date.parse(t.started_at) >= brief,
+	),
+});
+const running = $derived(
+	state.scans.length + state.tasks.length + state.jobs.length,
+);
 </script>
 
-{#if scans.length}
-	<DropdownMenu.Root>
-		<DropdownMenu.Trigger
+{#if running}
+	<Popover.Root>
+		<Popover.Trigger
 			class="hover:bg-raise text-ink grid size-9 place-items-center rounded-full outline-none"
-			aria-label="Activity: {scans.length === 1
-				? `scanning ${name(scans[0].library_id)}`
-				: `scanning ${scans.length} libraries`}"
+			aria-label="Activity: {running} running"
 		>
 			<ActivityIcon class="size-5 motion-safe:animate-pulse" />
-		</DropdownMenu.Trigger>
-		<DropdownMenu.Content align="end" class="w-80">
-			<DropdownMenu.Label class="text-ink font-semibold"
-				>Activity</DropdownMenu.Label
-			>
-			<DropdownMenu.Separator />
-			{#each scans as scan (scan.library_id)}
-				<div class="grid gap-1 px-2 py-2" role="status">
-					<p class="text-ink text-sm font-semibold">
-						Scanning {name(scan.library_id)}
-					</p>
-					<ScanProgress {scan} name={name(scan.library_id)} />
-				</div>
-			{/each}
-		</DropdownMenu.Content>
-	</DropdownMenu.Root>
+		</Popover.Trigger>
+		<Popover.Content
+			align="end"
+			class="grid w-80 gap-3"
+			role="dialog"
+			aria-label="Activity"
+		>
+			<Popover.Title class="text-ink font-semibold">Activity</Popover.Title>
+			<RunningNow live={state} libraries={names} />
+		</Popover.Content>
+	</Popover.Root>
 {/if}
