@@ -36,6 +36,11 @@ The server listens on `:8640` (`PHOTON_LISTEN`) and names itself after the host 
 Behind a reverse proxy, list the proxy's addresses in `PHOTON_TRUSTED_PROXIES` (for example
 `172.16.0.0/12,127.0.0.1`); `X-Forwarded-For` is ignored from anyone else.
 
+Each node keeps up to twice as many PostgreSQL connections as it has CPUs, plus four, shared by its
+jobs and the requests it answers. Set another number with `pool_max_conns` in
+`PHOTON_DATABASE_URL` (`postgres://db/photon?pool_max_conns=40`); with several nodes, keep their sum
+under PostgreSQL's `max_connections`, 100 unless it is changed.
+
 Clients on the local network find the server without being given its address: it listens on UDP at
 the same port number as HTTP (`8640`, so open both protocols on that port), and answers a datagram
 reading `who is PhotonServer?` (in any case) with its id, name, version and the address to reach it
