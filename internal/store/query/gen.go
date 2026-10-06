@@ -30,6 +30,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		ExternalID:         newExternalID(db, opts...),
 		Favourite:          newFavourite(db, opts...),
 		Folder:             newFolder(db, opts...),
+		HomeSection:        newHomeSection(db, opts...),
 		Item:               newItem(db, opts...),
 		ItemField:          newItemField(db, opts...),
 		Job:                newJob(db, opts...),
@@ -78,6 +79,7 @@ type Query struct {
 	ExternalID         externalID
 	Favourite          favourite
 	Folder             folder
+	HomeSection        homeSection
 	Item               item
 	ItemField          itemField
 	Job                job
@@ -129,6 +131,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		ExternalID:         q.ExternalID.clone(db),
 		Favourite:          q.Favourite.clone(db),
 		Folder:             q.Folder.clone(db),
+		HomeSection:        q.HomeSection.clone(db),
 		Item:               q.Item.clone(db),
 		ItemField:          q.ItemField.clone(db),
 		Job:                q.Job.clone(db),
@@ -185,6 +188,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		ExternalID:         q.ExternalID.replaceDB(db),
 		Favourite:          q.Favourite.replaceDB(db),
 		Folder:             q.Folder.replaceDB(db),
+		HomeSection:        q.HomeSection.replaceDB(db),
 		Item:               q.Item.replaceDB(db),
 		ItemField:          q.ItemField.replaceDB(db),
 		Job:                q.Job.replaceDB(db),
@@ -231,6 +235,7 @@ type queryCtx struct {
 	ExternalID         IExternalIDDo
 	Favourite          IFavouriteDo
 	Folder             IFolderDo
+	HomeSection        IHomeSectionDo
 	Item               IItemDo
 	ItemField          IItemFieldDo
 	Job                IJobDo
@@ -277,6 +282,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		ExternalID:         q.ExternalID.WithContext(ctx),
 		Favourite:          q.Favourite.WithContext(ctx),
 		Folder:             q.Folder.WithContext(ctx),
+		HomeSection:        q.HomeSection.WithContext(ctx),
 		Item:               q.Item.WithContext(ctx),
 		ItemField:          q.ItemField.WithContext(ctx),
 		Job:                q.Job.WithContext(ctx),

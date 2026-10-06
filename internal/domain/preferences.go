@@ -97,6 +97,8 @@ type Preferences struct {
 	// IntroAction is for intros and recaps, CreditsAction for credits and previews.
 	IntroAction   SegmentAction
 	CreditsAction SegmentAction
+	// Home is every home row, in the order shown, hidden or not.
+	Home []HomeSection
 	// SavedAt is when they were last changed; zero for a profile that never has.
 	SavedAt time.Time
 }
@@ -107,6 +109,7 @@ func DefaultPreferences() Preferences {
 		AudioTrack: AudioDefault, SubtitleMode: SubtitlesDefault,
 		RememberAudio: TrackRemember, RememberSubtitles: TrackRemember,
 		NextEpisode: NextEpisodePlay, IntroAction: SegmentAsk, CreditsAction: SegmentAsk,
+		Home: ArrangeHome(nil),
 	}
 }
 

@@ -74,13 +74,22 @@ var rowQueries = map[domain.HomeRow]string{
 		ORDER BY latest.added_at DESC, show.id DESC LIMIT @limit`,
 }
 
-// Home answers a profile's home page: each row with anything in it, up to limit cards each.
+// Home answers a profile's home page: each row it shows with anything in it, in the order it
+// arranged them, up to limit cards each.
 func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeRow, error) {
+	prefs, err := s.Preferences(ctx, profile)
+	if err != nil {
+		return nil, err
+	}
 	var rows []HomeRow
 	var lengths []int
 	var all []*model.Item
 	db := s.q.Item.WithContext(ctx).UnderlyingDB()
-	for _, kind := range domain.HomeRows() {
+	for _, section := range prefs.Home {
+		kind := section.Row
+		if section.Visibility == domain.RowHidden {
+			continue
+		}
 		var items []*model.Item
 		err := db.Raw(rowQueries[kind], map[string]any{"profile": model.UUID(profile), "limit": limit}).Find(&items).Error
 		if err != nil {
