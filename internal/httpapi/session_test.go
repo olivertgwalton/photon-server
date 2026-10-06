@@ -1,9 +1,12 @@
 package httpapi
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -232,5 +235,32 @@ func TestChangingYourOwnPassword(t *testing.T) {
 	}
 	if rec := change(goodToken, `{"current":"correct horse","new":"battery staple"}`); rec.Code != http.StatusTooManyRequests {
 		t.Errorf("guessing past the limit: %d, want 429", rec.Code)
+	}
+}
+
+// A client sending its body a byte at a time, or not at all, is answered rather than waited on for
+// good; signing in needs no token, so anyone could hold requests open so.
+func TestABodyThatNeverArrivesIsRefused(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}}))
+	defer srv.Close()
+	conn, err := net.Dial("tcp", srv.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := io.WriteString(conn, "POST /api/v1/auth/login HTTP/1.1\r\nHost: photon\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{\"name\":"); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.SetReadDeadline(time.Now().Add(3 * bodyWithin)); err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil {
+		t.Fatalf("no answer to a body that never came: %v", err)
+	}
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("a body that never came: %d, want 400", res.StatusCode)
 	}
 }
