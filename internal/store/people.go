@@ -369,7 +369,8 @@ func (s *Store) Person(ctx context.Context, id uuid.UUID) (PersonPage, error) {
 		return PersonPage{}, err
 	}
 	out := PersonPage{
-		ID: id, Name: row.Name, Biography: deref(row.Biography), Born: domain.Date(deref(row.Born)), Died: domain.Date(deref(row.Died)),
+		ID: id, Name: row.Name, Biography: deref(row.Biography),
+		Born: domain.Date(deref(row.Born)), Died: domain.Date(deref(row.Died)),
 		Birthplace: deref(row.Birthplace), DescribedAt: deref(row.DescribedAt),
 	}
 	out.Photo, out.Blurhashes = photo(row.PhotoID, row.PhotoBlurhash)
