@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -129,33 +130,26 @@ func (f librarySettings) change() (store.LibraryChange, bool, error) {
 			return change, false, err
 		}
 	}
-	if *f.monitor != "" {
-		if change.Monitor, err = domain.Parse("monitor", *f.monitor, domain.Monitors()); err != nil {
-			return change, false, err
-		}
-	}
-	if *f.previews != "" {
-		if change.Previews, err = domain.Parse("previews", *f.previews, domain.PreviewLevels()); err != nil {
-			return change, false, err
-		}
-	}
-	if *f.markers != "" {
-		if change.Markers, err = domain.Parse("markers", *f.markers, domain.MarkerDetections()); err != nil {
-			return change, false, err
-		}
-	}
-	if *f.keyframes != "" {
-		if change.Keyframes, err = domain.Parse("keyframes", *f.keyframes, domain.KeyframeModes()); err != nil {
-			return change, false, err
-		}
-	}
-	if *f.themes != "" {
-		if change.Themes, err = domain.Parse("themes", *f.themes, domain.ThemeLookups()); err != nil {
-			return change, false, err
-		}
+	if err := cmp.Or(
+		parseSetting(&change.Monitor, "monitor", *f.monitor, domain.Monitors()),
+		parseSetting(&change.Previews, "previews", *f.previews, domain.PreviewLevels()),
+		parseSetting(&change.Markers, "markers", *f.markers, domain.MarkerDetections()),
+		parseSetting(&change.Keyframes, "keyframes", *f.keyframes, domain.KeyframeModes()),
+		parseSetting(&change.Themes, "themes", *f.themes, domain.ThemeLookups()),
+	); err != nil {
+		return change, false, err
 	}
 	given := *f.metadata != "" || *f.images != "" || *f.extras != "" || *f.monitor != "" || *f.previews != "" || *f.markers != "" || *f.keyframes != "" || *f.themes != ""
 	return change, given, nil
+}
+
+func parseSetting[T ~string](dst *T, what, s string, all []T) error {
+	if s == "" {
+		return nil
+	}
+	v, err := domain.Parse(what, s, all)
+	*dst = v
+	return err
 }
 
 func setLibrary(ctx context.Context, st *store.Store, out io.Writer, args []string) error {
