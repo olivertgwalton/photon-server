@@ -8,6 +8,7 @@ import (
 	"testing"
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
 	"gorm.io/gorm"
 
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -84,5 +85,24 @@ func TestModelsMatchSchema(t *testing.T) {
 				t.Errorf("%s.%s: no column %q in table %s", stmt.Schema.Name, f.Name, f.DBName, stmt.Schema.Table)
 			}
 		}
+	}
+}
+
+// Every foreign key leads an index, or removing what it points at scans the whole table for
+// each row removed.
+func TestEveryForeignKeyIsIndexed(t *testing.T) {
+	s := migrated(t)
+	rows, err := s.pool.Query(t.Context(), `
+		SELECT c.conname FROM pg_constraint c
+		WHERE c.contype = 'f' AND NOT EXISTS (
+			SELECT 1 FROM pg_index i WHERE i.indrelid = c.conrelid
+				AND (i.indkey::int2[])[0:cardinality(c.conkey) - 1] @> c.conkey
+				AND (i.indkey::int2[])[0:cardinality(c.conkey) - 1] <@ c.conkey)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unindexed, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil || len(unindexed) > 0 {
+		t.Errorf("foreign keys with no index: %q, %v", unindexed, err)
 	}
 }

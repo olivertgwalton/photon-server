@@ -31,3 +31,11 @@ for behaviour; no client's or other server's vocabulary shapes the wire.
 - **Tests test behaviour** a client or operator would notice. No test that only restates the code.
 - **Comments only where something is surprising.** No doc comment that repeats the name.
 - Format and lint with `golangci-lint fmt` and `golangci-lint run` (v2.14). Both must be silent.
+- **A migration never holds a large table.** `photon-server migrate` runs beside the old server, and
+  goose wraps each migration in one transaction, so every lock it takes lasts to the end. An index
+  on a table that exists is `CREATE INDEX CONCURRENTLY IF NOT EXISTS` in a migration marked
+  `-- +goose NO TRANSACTION` (its Down `DROP INDEX CONCURRENTLY IF EXISTS`); should a build fail,
+  drop the invalid index it leaves before migrating again. A CHECK or foreign key on one is added
+  `NOT VALID` and then validated by `VALIDATE CONSTRAINT` as a statement of its own in such a
+  migration, which reads the table without stopping its writes. Nothing rewrites one: no stored
+  generated column, no change of a column's type.
