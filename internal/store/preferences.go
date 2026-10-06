@@ -40,7 +40,7 @@ func (s *Store) Preferences(ctx context.Context, profile uuid.UUID) (domain.Pref
 		SubtitleLanguage: subtitles, SubtitleMode: row.SubtitleMode,
 		RememberAudio: row.RememberAudio, RememberSubtitles: row.RememberSubtitles,
 		MaxBitrateKbps: int(row.MaxBitrateKbps), NextEpisode: row.NextEpisode,
-		IntroAction: row.IntroAction, CreditsAction: row.CreditsAction,
+		IntroAction: row.IntroAction, CreditsAction: row.CreditsAction, ThemeMusic: row.ThemeMusic,
 		Home: domain.ArrangeHome(home), SavedAt: row.SavedAt,
 	}, nil
 }
@@ -52,7 +52,7 @@ func (s *Store) SetPreferences(ctx context.Context, profile uuid.UUID, p domain.
 		SubtitleLanguage: languageText(p.SubtitleLanguage), SubtitleMode: p.SubtitleMode,
 		RememberAudio: p.RememberAudio, RememberSubtitles: p.RememberSubtitles,
 		MaxBitrateKbps: int32(p.MaxBitrateKbps), NextEpisode: p.NextEpisode,
-		IntroAction: p.IntroAction, CreditsAction: p.CreditsAction, SavedAt: time.Now(),
+		IntroAction: p.IntroAction, CreditsAction: p.CreditsAction, ThemeMusic: p.ThemeMusic, SavedAt: time.Now(),
 	}
 	err := s.q.Transaction(func(tx *query.Query) error {
 		if err := tx.ProfilePreference.WithContext(ctx).Clauses(clause.OnConflict{UpdateAll: true}).Create(&row); err != nil {

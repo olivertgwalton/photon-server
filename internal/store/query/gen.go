@@ -56,6 +56,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Stream:             newStream(db, opts...),
 		SubtitleFile:       newSubtitleFile(db, opts...),
 		TaskState:          newTaskState(db, opts...),
+		Theme:              newTheme(db, opts...),
 		Version:            newVersion(db, opts...),
 		WatchState:         newWatchState(db, opts...),
 		Webhook:            newWebhook(db, opts...),
@@ -105,6 +106,7 @@ type Query struct {
 	Stream             stream
 	SubtitleFile       subtitleFile
 	TaskState          taskState
+	Theme              theme
 	Version            version
 	WatchState         watchState
 	Webhook            webhook
@@ -157,6 +159,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Stream:             q.Stream.clone(db),
 		SubtitleFile:       q.SubtitleFile.clone(db),
 		TaskState:          q.TaskState.clone(db),
+		Theme:              q.Theme.clone(db),
 		Version:            q.Version.clone(db),
 		WatchState:         q.WatchState.clone(db),
 		Webhook:            q.Webhook.clone(db),
@@ -214,6 +217,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Stream:             q.Stream.replaceDB(db),
 		SubtitleFile:       q.SubtitleFile.replaceDB(db),
 		TaskState:          q.TaskState.replaceDB(db),
+		Theme:              q.Theme.replaceDB(db),
 		Version:            q.Version.replaceDB(db),
 		WatchState:         q.WatchState.replaceDB(db),
 		Webhook:            q.Webhook.replaceDB(db),
@@ -261,6 +265,7 @@ type queryCtx struct {
 	Stream             IStreamDo
 	SubtitleFile       ISubtitleFileDo
 	TaskState          ITaskStateDo
+	Theme              IThemeDo
 	Version            IVersionDo
 	WatchState         IWatchStateDo
 	Webhook            IWebhookDo
@@ -308,6 +313,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Stream:             q.Stream.WithContext(ctx),
 		SubtitleFile:       q.SubtitleFile.WithContext(ctx),
 		TaskState:          q.TaskState.WithContext(ctx),
+		Theme:              q.Theme.WithContext(ctx),
 		Version:            q.Version.WithContext(ctx),
 		WatchState:         q.WatchState.WithContext(ctx),
 		Webhook:            q.Webhook.WithContext(ctx),

@@ -16,5 +16,6 @@ type Library struct {
 	Previews    domain.PreviewLevel    `gorm:"default:all"`
 	Markers     domain.MarkerDetection `gorm:"default:all"`
 	Keyframes   domain.KeyframeMode    `gorm:"default:index"`
+	Themes      domain.ThemeLookup     `gorm:"default:all"`
 	CreatedAt   time.Time
 }

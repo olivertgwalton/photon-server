@@ -333,11 +333,16 @@ func (s *Store) RetryJob(ctx context.Context, id int64) error {
 	return err
 }
 
-// Identified records that a title has just been matched on every provider its library takes.
+// Identified records that a title has just been matched on every provider its library takes, and
+// asks for a show's theme from the theme host where the match found its TheTVDB id.
 func (s *Store) Identified(ctx context.Context, id uuid.UUID) error {
-	i := s.q.Item
-	_, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Update(i.IdentifiedAt, time.Now())
-	return err
+	return s.q.Transaction(func(tx *query.Query) error {
+		i := tx.Item
+		if _, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Update(i.IdentifiedAt, time.Now()); err != nil {
+			return err
+		}
+		return askThemes(ctx, tx, `@id`, map[string]any{"id": model.UUID(id)})
+	})
 }
 
 // RefreshStale queues a match of every film and show its library refreshes and that was last

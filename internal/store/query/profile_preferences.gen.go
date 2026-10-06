@@ -39,6 +39,7 @@ func newProfilePreference(db *gorm.DB, opts ...gen.DOOption) profilePreference {
 	_profilePreference.NextEpisode = field.NewString(tableName, "next_episode")
 	_profilePreference.IntroAction = field.NewString(tableName, "intro_action")
 	_profilePreference.CreditsAction = field.NewString(tableName, "credits_action")
+	_profilePreference.ThemeMusic = field.NewString(tableName, "theme_music")
 	_profilePreference.SavedAt = field.NewTime(tableName, "saved_at")
 
 	_profilePreference.fillFieldMap()
@@ -61,6 +62,7 @@ type profilePreference struct {
 	NextEpisode       field.String
 	IntroAction       field.String
 	CreditsAction     field.String
+	ThemeMusic        field.String
 	SavedAt           field.Time
 
 	fieldMap map[string]field.Expr
@@ -89,6 +91,7 @@ func (p *profilePreference) updateTableName(table string) *profilePreference {
 	p.NextEpisode = field.NewString(table, "next_episode")
 	p.IntroAction = field.NewString(table, "intro_action")
 	p.CreditsAction = field.NewString(table, "credits_action")
+	p.ThemeMusic = field.NewString(table, "theme_music")
 	p.SavedAt = field.NewTime(table, "saved_at")
 
 	p.fillFieldMap()
@@ -118,7 +121,7 @@ func (p *profilePreference) GetFieldByName(fieldName string) (field.OrderExpr, b
 }
 
 func (p *profilePreference) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 12)
+	p.fieldMap = make(map[string]field.Expr, 13)
 	p.fieldMap["profile_id"] = p.ProfileID
 	p.fieldMap["audio_language"] = p.AudioLanguage
 	p.fieldMap["audio_track"] = p.AudioTrack
@@ -130,6 +133,7 @@ func (p *profilePreference) fillFieldMap() {
 	p.fieldMap["next_episode"] = p.NextEpisode
 	p.fieldMap["intro_action"] = p.IntroAction
 	p.fieldMap["credits_action"] = p.CreditsAction
+	p.fieldMap["theme_music"] = p.ThemeMusic
 	p.fieldMap["saved_at"] = p.SavedAt
 }
 
