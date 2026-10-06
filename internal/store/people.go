@@ -33,19 +33,81 @@ type personKey struct {
 // first added. The ids a person lacks are added, and their name and picture follow the last
 // credit; a new picture gets a new id. Someone another match adds at the same moment is theirs.
 func saveCredits(ctx context.Context, tx db, source domain.FieldSource, titles []credited) error {
-	type entry struct {
-		item     uuid.UUID
-		position int
-		credit   domain.Credit
-		keys     []personKey
+	entries, keys, cleared := creditEntries(titles)
+	_, err := tx.Exec(ctx, `DELETE FROM credits WHERE item_id = ANY($1) AND source = $2`, cleared, source)
+	if err != nil || len(entries) == 0 {
+		return err
 	}
-	var entries []entry
-	var keys []personKey
-	var cleared []uuid.UUID
+	owners, err := personOwners(ctx, tx, keys)
+	if err != nil {
+		return err
+	}
+	people := creditedPeople(entries, owners)
+	if err := addPeople(ctx, tx, people, owners); err != nil {
+		return err
+	}
+	added, err := addPersonIDs(ctx, tx, people, owners)
+	if err != nil {
+		return err
+	}
+	if added {
+		if owners, err = personOwners(ctx, tx, keys); err != nil {
+			return err
+		}
+	}
+
+	var credits struct {
+		items, people []uuid.UUID
+		kinds         []domain.CreditKind
+		roles         []string
+		positions     []int
+	}
+	var orphans []uuid.UUID
+	for _, p := range people {
+		keep, orphan, err := settlePerson(ctx, tx, p, owners)
+		if err != nil {
+			return err
+		}
+		if orphan {
+			orphans = append(orphans, p.added.ID)
+		}
+		for _, n := range p.entries {
+			e := entries[n]
+			credits.items = append(credits.items, e.item)
+			credits.people = append(credits.people, keep)
+			credits.kinds = append(credits.kinds, e.credit.Kind)
+			credits.roles = append(credits.roles, e.credit.Role)
+			credits.positions = append(credits.positions, e.position)
+		}
+	}
+	if len(orphans) > 0 {
+		if _, err := tx.Exec(ctx, `DELETE FROM people WHERE id = ANY($1)`, orphans); err != nil {
+			return err
+		}
+	}
+	// A source may credit one person twice for one part: an actor billed as two names of one role.
+	_, err = tx.Exec(ctx, `
+		INSERT INTO credits (item_id, person_id, source, kind, role, position)
+		SELECT i, p, $3, k, r, n FROM unnest($1::uuid[], $2::uuid[], $4::text[], $5::text[], $6::int[]) AS c(i, p, k, r, n)
+		ON CONFLICT DO NOTHING`,
+		credits.items, credits.people, source, credits.kinds, credits.roles, credits.positions)
+	return err
+}
+
+// creditEntry is one credit with an id, at its place in its title's billing.
+type creditEntry struct {
+	item     uuid.UUID
+	position int
+	credit   domain.Credit
+	keys     []personKey
+}
+
+// creditEntries is the titles' credits that have an id, every id among them, and every title.
+func creditEntries(titles []credited) (entries []creditEntry, keys []personKey, cleared []uuid.UUID) {
 	for _, t := range titles {
 		cleared = append(cleared, t.item)
 		for n, cr := range t.credits {
-			e := entry{item: t.item, position: n, credit: cr}
+			e := creditEntry{item: t.item, position: n, credit: cr}
 			for _, provider := range slices.Sorted(maps.Keys(cr.IDs)) {
 				if value := cr.IDs[provider]; value != "" {
 					e.keys = append(e.keys, personKey{provider, value})
@@ -57,16 +119,20 @@ func saveCredits(ctx context.Context, tx db, source domain.FieldSource, titles [
 			}
 		}
 	}
-	_, err := tx.Exec(ctx, `DELETE FROM credits WHERE item_id = ANY($1) AND source = $2`, cleared, source)
-	if err != nil || len(entries) == 0 {
-		return err
-	}
-	owners, err := personOwners(ctx, tx, keys)
-	if err != nil {
-		return err
-	}
+	return entries, keys, cleared
+}
 
-	// Credits are one person where they share an id, or name one person by different ids.
+// creditedPerson is the entries that are one person, named as the last of them names them.
+type creditedPerson struct {
+	entries     []int
+	keys        []personKey
+	name, photo string
+	added       *model.Person
+}
+
+// creditedPeople groups entries into people: entries are one person where they share an id, or
+// name one person by different ids.
+func creditedPeople(entries []creditEntry, owners map[personKey]owner) []*creditedPerson {
 	parent := make([]int, len(entries))
 	find := func(n int) int {
 		for parent[n] != n {
@@ -91,18 +157,12 @@ func saveCredits(ctx context.Context, tx db, source domain.FieldSource, titles [
 			}
 		}
 	}
-	type person struct {
-		entries     []int
-		keys        []personKey
-		name, photo string
-		added       *model.Person
-	}
-	var people []*person
-	byRoot := map[int]*person{}
+	var people []*creditedPerson
+	byRoot := map[int]*creditedPerson{}
 	for n, e := range entries {
 		p := byRoot[find(n)]
 		if p == nil {
-			p = &person{}
+			p = &creditedPerson{}
 			byRoot[find(n)] = p
 			people = append(people, p)
 		}
@@ -111,8 +171,11 @@ func saveCredits(ctx context.Context, tx db, source domain.FieldSource, titles [
 		p.name = e.credit.Name
 		p.photo = cmp.Or(e.credit.Photo, p.photo)
 	}
+	return people
+}
 
-	// Someone none of whose ids is known is added, as the last credit names them.
+// addPeople adds everyone none of whose ids is known, as the last credit names them.
+func addPeople(ctx context.Context, tx db, people []*creditedPerson, owners map[personKey]owner) error {
 	add := &pgx.Batch{}
 	for _, p := range people {
 		if !slices.ContainsFunc(p.keys, func(k personKey) bool { _, ok := owners[k]; return ok }) {
@@ -125,13 +188,16 @@ func saveCredits(ctx context.Context, tx db, source domain.FieldSource, titles [
 			})
 		}
 	}
-	if add.Len() > 0 {
-		if err := tx.SendBatch(ctx, add).Close(); err != nil {
-			return err
-		}
+	if add.Len() == 0 {
+		return nil
 	}
-	// The ids not yet known go in in one order, so two matches adding the same people wait on
-	// each other rather than deadlock; an id another took first is left with them.
+	return tx.SendBatch(ctx, add).Close()
+}
+
+// addPersonIDs adds the ids not yet known, answering whether there were any. They go in in one
+// order, so two matches adding the same people wait on each other rather than deadlock; an id
+// another took first is left with them.
+func addPersonIDs(ctx context.Context, tx db, people []*creditedPerson, owners map[personKey]owner) (bool, error) {
 	var newPeople []uuid.UUID
 	var newIDs [2][]string
 	for _, p := range people {
@@ -153,75 +219,44 @@ func saveCredits(ctx context.Context, tx db, source domain.FieldSource, titles [
 			}
 		}
 	}
-	if len(newPeople) > 0 {
-		_, err := tx.Exec(ctx, `
-			INSERT INTO person_ids (person_id, provider, value)
-			SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[]) ORDER BY 2, 3
-			ON CONFLICT DO NOTHING`, newPeople, newIDs[0], newIDs[1])
-		if err != nil {
-			return err
-		}
-		if owners, err = personOwners(ctx, tx, keys); err != nil {
-			return err
-		}
+	if len(newPeople) == 0 {
+		return false, nil
 	}
+	_, err := tx.Exec(ctx, `
+		INSERT INTO person_ids (person_id, provider, value)
+		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[]) ORDER BY 2, 3
+		ON CONFLICT DO NOTHING`, newPeople, newIDs[0], newIDs[1])
+	return err == nil, err
+}
 
-	var credits struct {
-		items, people []uuid.UUID
-		kinds         []domain.CreditKind
-		roles         []string
-		positions     []int
+// settlePerson merges the people p's ids now name into the first added and gives them p's name
+// and picture, answering who is kept and whether the person p added lost every id to another.
+func settlePerson(ctx context.Context, tx db, p *creditedPerson, owners map[personKey]owner) (uuid.UUID, bool, error) {
+	var found []uuid.UUID
+	for _, k := range p.keys {
+		found = append(found, owners[k].PersonID)
 	}
-	var orphans []uuid.UUID
-	for _, p := range people {
-		var found []uuid.UUID
-		for _, k := range p.keys {
-			found = append(found, owners[k].PersonID)
-		}
-		slices.SortFunc(found, uuid.UUID.Compare)
-		found = slices.Compact(found)
-		keep := found[0]
-		for _, other := range found[1:] {
-			if err := mergePerson(ctx, tx, keep, other); err != nil {
-				return err
-			}
-		}
-		if p.added != nil && !slices.Contains(found, p.added.ID) {
-			orphans = append(orphans, p.added.ID)
-		}
-		if p.added == nil || p.added.ID != keep {
-			o := owners[p.keys[slices.IndexFunc(p.keys, func(k personKey) bool { return owners[k].PersonID == keep })]]
-			if o.Name != p.name || (p.photo != "" && deref(o.PhotoURL) != p.photo) {
-				row := &model.Person{Name: p.name, PhotoURL: o.PhotoURL, PhotoID: o.PhotoID, PhotoBlurhash: o.PhotoBlurhash}
-				setPhoto(row, p.photo)
-				_, err := tx.Exec(ctx, `UPDATE people SET name = $2, photo_url = $3, photo_id = $4, photo_blurhash = $5 WHERE id = $1`,
-					keep, row.Name, row.PhotoURL, row.PhotoID, row.PhotoBlurhash)
-				if err != nil {
-					return err
-				}
-			}
-		}
-		for _, n := range p.entries {
-			e := entries[n]
-			credits.items = append(credits.items, e.item)
-			credits.people = append(credits.people, keep)
-			credits.kinds = append(credits.kinds, e.credit.Kind)
-			credits.roles = append(credits.roles, e.credit.Role)
-			credits.positions = append(credits.positions, e.position)
+	slices.SortFunc(found, uuid.UUID.Compare)
+	found = slices.Compact(found)
+	keep := found[0]
+	for _, other := range found[1:] {
+		if err := mergePerson(ctx, tx, keep, other); err != nil {
+			return keep, false, err
 		}
 	}
-	if len(orphans) > 0 {
-		if _, err := tx.Exec(ctx, `DELETE FROM people WHERE id = ANY($1)`, orphans); err != nil {
-			return err
-		}
+	orphan := p.added != nil && !slices.Contains(found, p.added.ID)
+	if p.added != nil && p.added.ID == keep {
+		return keep, orphan, nil
 	}
-	// A source may credit one person twice for one part: an actor billed as two names of one role.
-	_, err = tx.Exec(ctx, `
-		INSERT INTO credits (item_id, person_id, source, kind, role, position)
-		SELECT i, p, $3, k, r, n FROM unnest($1::uuid[], $2::uuid[], $4::text[], $5::text[], $6::int[]) AS c(i, p, k, r, n)
-		ON CONFLICT DO NOTHING`,
-		credits.items, credits.people, source, credits.kinds, credits.roles, credits.positions)
-	return err
+	o := owners[p.keys[slices.IndexFunc(p.keys, func(k personKey) bool { return owners[k].PersonID == keep })]]
+	if o.Name == p.name && (p.photo == "" || deref(o.PhotoURL) == p.photo) {
+		return keep, orphan, nil
+	}
+	row := &model.Person{Name: p.name, PhotoURL: o.PhotoURL, PhotoID: o.PhotoID, PhotoBlurhash: o.PhotoBlurhash}
+	setPhoto(row, p.photo)
+	_, err := tx.Exec(ctx, `UPDATE people SET name = $2, photo_url = $3, photo_id = $4, photo_blurhash = $5 WHERE id = $1`,
+		keep, row.Name, row.PhotoURL, row.PhotoID, row.PhotoBlurhash)
+	return keep, orphan, err
 }
 
 // owner is the person an id names, as they are now.
