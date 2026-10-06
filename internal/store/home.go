@@ -14,8 +14,10 @@ import (
 
 // HomeRow is one row of a profile's home page.
 type HomeRow struct {
-	Kind  domain.HomeRow
-	Cards []Card
+	Kind domain.HomeRow
+	// Collection is the collection a RowCollection row is.
+	Collection *TitleRef
+	Cards      []Card
 }
 
 // rowQueries are the rows' queries, each taking the profile and a limit, and holding only what the
@@ -75,6 +77,27 @@ var rowQueries = map[domain.HomeRow]string{
 		ORDER BY latest.added_at DESC, show.id DESC LIMIT @limit`,
 }
 
+// collectionRowsQuery is, for each collection placed on the home page that the profile sees, by
+// name, up to the limit of its titles the profile sees, in memberOrder.
+var collectionRowsQuery = `
+	SELECT col.id AS collection_id, col.title AS collection_title, ` + itemColumnsOf("member") + `
+	FROM collections c JOIN items col ON col.id = c.item_id
+	CROSS JOIN LATERAL (
+		SELECT items.*, row_number() OVER (ORDER BY ` + memberOrder + `) AS n
+		FROM collection_members m JOIN items ON items.id = m.item_id
+		WHERE m.collection_id = c.item_id AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
+		ORDER BY n LIMIT @limit
+	) member
+	WHERE c.placement = 'home' AND c.item_id IN (` + shownCollections + `)
+		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, col))
+	ORDER BY col.sort_title, col.id, member.n`
+
+type collectionMember struct {
+	CollectionID    uuid.UUID
+	CollectionTitle string
+	model.Item
+}
+
 // Home answers a profile's home page: each row it shows with anything in it, in the order it
 // arranged them, up to limit cards each.
 func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeRow, error) {
@@ -85,12 +108,28 @@ func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeR
 	var rows []HomeRow
 	var lengths []int
 	var all []*model.Item
+	args := pgx.NamedArgs{"profile": profile, "limit": limit}
 	for _, section := range prefs.Home {
 		kind := section.Row
 		if section.Visibility == domain.RowHidden {
 			continue
 		}
-		items, err := queryRows[model.Item](ctx, s.pool, rowQueries[kind], pgx.NamedArgs{"profile": profile, "limit": limit})
+		if kind == domain.RowCollection {
+			members, err := queryRows[collectionMember](ctx, s.pool, collectionRowsQuery, args)
+			if err != nil {
+				return nil, err
+			}
+			for n, m := range members {
+				if n == 0 || m.CollectionID != members[n-1].CollectionID {
+					rows = append(rows, HomeRow{Kind: kind, Collection: &TitleRef{ID: m.CollectionID, Title: m.CollectionTitle}})
+					lengths = append(lengths, 0)
+				}
+				lengths[len(lengths)-1]++
+				all = append(all, &m.Item)
+			}
+			continue
+		}
+		items, err := queryRows[model.Item](ctx, s.pool, rowQueries[kind], args)
 		if err != nil {
 			return nil, err
 		}

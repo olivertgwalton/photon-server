@@ -10,12 +10,14 @@ let { data } = $props();
 <h1 class="sr-only">Home</h1>
 {#if data.home.rows.length}
 	<div class="grid gap-8">
-		{#each data.home.rows as row (row.kind)}
+		{#each data.home.rows as row (row.collection?.id ?? row.kind)}
 			<Rail
-				title={homeRows[row.kind].title}
+				title={row.collection?.title ?? homeRows[row.kind].title}
 				cards={row.items}
 				shape={homeRows[row.kind].shape}
-				href="/home/{row.kind}"
+				href={row.collection
+					? `/titles/${row.collection.id}`
+					: `/home/${row.kind}`}
 			/>
 		{/each}
 	</div>

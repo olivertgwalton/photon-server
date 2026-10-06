@@ -4946,11 +4946,12 @@ export interface components {
             rows: components["schemas"]["HomeRow"][];
         };
         HomeRow: {
+            collection?: components["schemas"]["TitleRef"] | null;
             items: components["schemas"]["Card"][];
             kind: components["schemas"]["HomeRowKind"];
         };
         /** @enum {string} */
-        HomeRowKind: "continue_watching" | "next_up" | "favourites" | "recently_added_films" | "recently_added_shows";
+        HomeRowKind: "continue_watching" | "next_up" | "favourites" | "recently_added_films" | "recently_added_shows" | "collection";
         HomeSection: {
             row: components["schemas"]["HomeRowKind"];
             visibility: components["schemas"]["RowVisibility"];
