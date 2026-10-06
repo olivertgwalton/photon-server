@@ -73,6 +73,8 @@ var rowQueries = map[domain.HomeRow]string{
 // Home answers a profile's home page: each row with anything in it, up to limit cards each.
 func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeRow, error) {
 	var rows []HomeRow
+	var lengths []int
+	var all []*model.Item
 	db := s.q.Item.WithContext(ctx).UnderlyingDB()
 	for _, kind := range domain.HomeRows() {
 		var items []*model.Item
@@ -80,14 +82,23 @@ func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeR
 		if err != nil {
 			return nil, err
 		}
-		if len(items) == 0 {
-			continue
+		if len(items) > 0 {
+			rows = append(rows, HomeRow{Kind: kind})
+			lengths = append(lengths, len(items))
+			all = append(all, items...)
 		}
-		cards, err := s.cards(ctx, profile, items)
-		if err != nil {
-			return nil, err
-		}
-		rows = append(rows, HomeRow{Kind: kind, Cards: cards})
+	}
+	if len(all) == 0 {
+		return rows, nil
+	}
+	// Every row's cards are made at once, so the page costs the same few queries however many
+	// rows it has.
+	cards, err := s.cards(ctx, profile, all)
+	if err != nil {
+		return nil, err
+	}
+	for n, length := range lengths {
+		rows[n].Cards, cards = cards[:length], cards[length:]
 	}
 	return rows, nil
 }
