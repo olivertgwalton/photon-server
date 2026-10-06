@@ -223,6 +223,14 @@ func found(err error) error {
 	return err
 }
 
+// affected turns a write that touched no row into ErrNotFound.
+func affected(tag pgconn.CommandTag, err error) error {
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
+}
+
 // violation is the SQLSTATE Postgres refuses a write with for breaking a kind of constraint.
 type violation string
 

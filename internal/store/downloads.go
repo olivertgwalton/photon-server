@@ -142,11 +142,7 @@ func (s *Store) Download(ctx context.Context, profile, id uuid.UUID) (Download, 
 // needs it. ErrNotFound for none of that id of the profile's.
 func (s *Store) RemoveDownload(ctx context.Context, profile, id uuid.UUID) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		res, err := tx.Exec(ctx, `DELETE FROM downloads WHERE id = $1 AND profile_id = $2`, id, profile)
-		if err == nil && res.RowsAffected() == 0 {
-			err = ErrNotFound
-		}
-		if err != nil {
+		if err := affected(tx.Exec(ctx, `DELETE FROM downloads WHERE id = $1 AND profile_id = $2`, id, profile)); err != nil {
 			return err
 		}
 		return dropUnwanted(ctx, tx)
@@ -224,12 +220,8 @@ func (s *Store) StartConversion(ctx context.Context, id, node uuid.UUID) (Conver
 // converting updates a conversion a node is still making, setting what set says from $3 on.
 // ErrNotFound where it is no longer wanted, or another node has taken it.
 func (s *Store) converting(ctx context.Context, id, node uuid.UUID, set string, args ...any) error {
-	res, err := s.pool.Exec(ctx, `UPDATE conversions SET `+set+` WHERE id = $1 AND node_id = $2 AND state = 'converting'`,
-		append([]any{id, node}, args...)...)
-	if err == nil && res.RowsAffected() == 0 {
-		err = ErrNotFound
-	}
-	return err
+	return affected(s.pool.Exec(ctx, `UPDATE conversions SET `+set+` WHERE id = $1 AND node_id = $2 AND state = 'converting'`,
+		append([]any{id, node}, args...)...))
 }
 
 // ConversionProgress records how far a conversion has got, from 0 to 1.

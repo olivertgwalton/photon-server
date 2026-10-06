@@ -54,11 +54,7 @@ func (s *Store) Webhooks(ctx context.Context) ([]Webhook, error) {
 
 // RemoveWebhook forgets a webhook and what was waiting to be sent to it.
 func (s *Store) RemoveWebhook(ctx context.Context, id uuid.UUID) error {
-	res, err := s.pool.Exec(ctx, `DELETE FROM webhooks WHERE id = $1`, id)
-	if err == nil && res.RowsAffected() == 0 {
-		err = ErrNotFound
-	}
-	return err
+	return affected(s.pool.Exec(ctx, `DELETE FROM webhooks WHERE id = $1`, id))
 }
 
 // QueueWebhooks queues the body made by body to every webhook that asked for kind, a job each.
@@ -84,16 +80,12 @@ func (s *Store) QueueWebhooks(ctx context.Context, kind domain.EventKind, body f
 // QueueDelivery queues a body to be sent to one webhook, whatever it asked for. ErrNotFound for
 // no such webhook.
 func (s *Store) QueueDelivery(ctx context.Context, webhook uuid.UUID, kind domain.EventKind, body []byte) error {
-	tag, err := s.pool.Exec(ctx, `
+	return affected(s.pool.Exec(ctx, `
 		WITH d AS (
 			INSERT INTO webhook_deliveries (webhook_id, kind, body)
 			SELECT id, $2, $3 FROM webhooks WHERE id = $1
 			RETURNING id)
-		INSERT INTO jobs (kind, subject) SELECT 'deliver_webhook', id FROM d`, webhook, kind, string(body))
-	if err == nil && tag.RowsAffected() == 0 {
-		err = ErrNotFound
-	}
-	return err
+		INSERT INTO jobs (kind, subject) SELECT 'deliver_webhook', id FROM d`, webhook, kind, string(body)))
 }
 
 // Delivery is a body waiting to be sent, where to, and the secret it is signed with.

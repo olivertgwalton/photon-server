@@ -318,18 +318,14 @@ func (s *Store) Access(ctx context.Context, id uuid.UUID) (ProfileAccess, error)
 // SetAccess replaces what a profile may see. ErrNotFound for no profile, or a library there is not.
 func (s *Store) SetAccess(ctx context.Context, id uuid.UUID, a ProfileAccess) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		res, err := tx.Exec(ctx, `UPDATE profiles SET unrated = $2, max_age = $3 WHERE id = $1`,
-			id, cmp.Or(a.Unrated, domain.UnratedAllow), a.MaxAge)
-		if err == nil && res.RowsAffected() == 0 {
-			err = ErrNotFound
-		}
-		if err != nil {
+		if err := affected(tx.Exec(ctx, `UPDATE profiles SET unrated = $2, max_age = $3 WHERE id = $1`,
+			id, cmp.Or(a.Unrated, domain.UnratedAllow), a.MaxAge)); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM profile_libraries WHERE profile_id = $1`, id); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `
+		_, err := tx.Exec(ctx, `
 			INSERT INTO profile_libraries (profile_id, library_id) SELECT $1, unnest($2::uuid[])`, id, a.Libraries)
 		if violates(err, foreignKeyViolation) {
 			return ErrNotFound
@@ -345,11 +341,7 @@ func (s *Store) SetAvatar(ctx context.Context, id, picture uuid.UUID) (domain.Pr
 	if picture != (uuid.UUID{}) {
 		avatar = &picture
 	}
-	res, err := s.pool.Exec(ctx, `UPDATE profiles SET avatar_id = $2 WHERE id = $1`, id, avatar)
-	if err == nil && res.RowsAffected() == 0 {
-		err = ErrNotFound
-	}
-	if err != nil {
+	if err := affected(s.pool.Exec(ctx, `UPDATE profiles SET avatar_id = $2 WHERE id = $1`, id, avatar)); err != nil {
 		return domain.Profile{}, err
 	}
 	return s.ProfileByID(ctx, id)

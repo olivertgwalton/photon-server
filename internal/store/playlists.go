@@ -112,11 +112,7 @@ func (s *Store) RemoveFromPlaylist(ctx context.Context, profile, playlist, entry
 		if err := ownPlaylist(ctx, tx, profile, playlist); err != nil {
 			return err
 		}
-		res, err := tx.Exec(ctx, `DELETE FROM playlist_entries WHERE playlist_id = $1 AND id = $2`, playlist, entry)
-		if err == nil && res.RowsAffected() == 0 {
-			err = ErrNotFound
-		}
-		if err != nil {
+		if err := affected(tx.Exec(ctx, `DELETE FROM playlist_entries WHERE playlist_id = $1 AND id = $2`, playlist, entry)); err != nil {
 			return err
 		}
 		return touch(ctx, tx, playlist)
@@ -157,20 +153,12 @@ func (s *Store) MovePlaylistEntry(ctx context.Context, profile, playlist, entry 
 
 // RenamePlaylist renames a profile's playlist.
 func (s *Store) RenamePlaylist(ctx context.Context, profile, playlist uuid.UUID, name string) error {
-	res, err := s.pool.Exec(ctx, `UPDATE playlists SET name = $3 WHERE id = $1 AND profile_id = $2`, playlist, profile, name)
-	if err == nil && res.RowsAffected() == 0 {
-		err = ErrNotFound
-	}
-	return err
+	return affected(s.pool.Exec(ctx, `UPDATE playlists SET name = $3 WHERE id = $1 AND profile_id = $2`, playlist, profile, name))
 }
 
 // RemovePlaylist removes a profile's playlist.
 func (s *Store) RemovePlaylist(ctx context.Context, profile, playlist uuid.UUID) error {
-	res, err := s.pool.Exec(ctx, `DELETE FROM playlists WHERE id = $1 AND profile_id = $2`, playlist, profile)
-	if err == nil && res.RowsAffected() == 0 {
-		err = ErrNotFound
-	}
-	return err
+	return affected(s.pool.Exec(ctx, `DELETE FROM playlists WHERE id = $1 AND profile_id = $2`, playlist, profile))
 }
 
 func ownPlaylist(ctx context.Context, q db, profile, playlist uuid.UUID) error {

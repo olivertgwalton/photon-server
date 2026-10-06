@@ -301,12 +301,8 @@ func (s *Store) JobQueue(ctx context.Context) ([]JobCount, []DeadJob, error) {
 
 // RetryJob gives a dead job a fresh set of attempts now. ErrNotFound for no dead job of that id.
 func (s *Store) RetryJob(ctx context.Context, id int64) error {
-	res, err := s.pool.Exec(ctx, `
-		UPDATE jobs SET state = 'queued', attempts = 0, run_after = now() WHERE id = $1 AND state = 'dead'`, id)
-	if err == nil && res.RowsAffected() == 0 {
-		err = ErrNotFound
-	}
-	return err
+	return affected(s.pool.Exec(ctx, `
+		UPDATE jobs SET state = 'queued', attempts = 0, run_after = now() WHERE id = $1 AND state = 'dead'`, id))
 }
 
 // Identified records that a title has just been matched on every provider its library takes, and

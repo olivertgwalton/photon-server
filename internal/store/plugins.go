@@ -53,11 +53,7 @@ func (s *Store) AddPlugin(ctx context.Context, plugin Plugin) error {
 
 // SetPluginManifest keeps the manifest a plugin answers now.
 func (s *Store) SetPluginManifest(ctx context.Context, slug string, manifest []byte) error {
-	res, err := s.pool.Exec(ctx, `UPDATE plugins SET manifest = $2 WHERE slug = $1`, slug, manifest)
-	if err == nil && res.RowsAffected() == 0 {
-		err = ErrNotFound
-	}
-	return err
+	return affected(s.pool.Exec(ctx, `UPDATE plugins SET manifest = $2 WHERE slug = $1`, slug, manifest))
 }
 
 // RemovePlugin forgets a plugin, its settings, and its place in each library's sources. What it
@@ -65,18 +61,14 @@ func (s *Store) SetPluginManifest(ctx context.Context, slug string, manifest []b
 // field replaces it.
 func (s *Store) RemovePlugin(ctx context.Context, slug string) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		res, err := tx.Exec(ctx, `DELETE FROM plugins WHERE slug = $1`, slug)
-		if err != nil {
+		if err := affected(tx.Exec(ctx, `DELETE FROM plugins WHERE slug = $1`, slug)); err != nil {
 			return err
-		}
-		if res.RowsAffected() == 0 {
-			return ErrNotFound
 		}
 		source := domain.PluginSource(slug)
 		if _, err := tx.Exec(ctx, `DELETE FROM library_sources WHERE source = $1`, source); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM providers WHERE id = $1`, source)
+		_, err := tx.Exec(ctx, `DELETE FROM providers WHERE id = $1`, source)
 		return err
 	})
 }
