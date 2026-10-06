@@ -26,21 +26,21 @@ func TestATitlesChapterPicturesAreSigned(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	part, err := s.q.Part.WithContext(ctx).Take()
-	if err != nil {
+	var part uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM parts`).Scan(&part); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SavePreviews(ctx, uuid.UUID(part.ID), []int{1}, nil); err != nil {
+	if err := s.SavePreviews(ctx, part, []int{1}, nil); err != nil {
 		t.Fatal(err)
 	}
-	item, err := s.q.Item.WithContext(ctx).Take()
-	if err != nil {
+	var item uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items`).Scan(&item); err != nil {
 		t.Fatal(err)
 	}
-	p := page(t, s, uuid.UUID(item.ID))
+	p := page(t, s, item)
 	p.SignChapterImages(func(path string) string { return path + "?sig=x" })
 	chapters := p.Versions[0].Chapters
-	base := "/api/v1/parts/" + uuid.UUID(part.ID).String()
+	base := "/api/v1/parts/" + part.String()
 	if len(chapters) != 2 || chapters[0].Image != "" || chapters[0].SignedImage != "" ||
 		chapters[1].Image != base+"/chapters/1/image" || chapters[1].SignedImage != base+"/chapter-images/1?sig=x" {
 		t.Errorf("chapters: %+v, want the second's picture at both addresses", chapters)

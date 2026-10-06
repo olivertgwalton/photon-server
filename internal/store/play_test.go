@@ -40,16 +40,16 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "L", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	item, err := s.q.Item.WithContext(ctx).Take()
-	if err != nil {
+	var item uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items`).Scan(&item); err != nil {
 		t.Fatal(err)
 	}
-	longest, err := s.Playable(ctx, uuid.UUID{}, uuid.UUID(item.ID), uuid.UUID{})
+	longest, err := s.Playable(ctx, uuid.UUID{}, item, uuid.UUID{})
 	if err != nil || len(longest.Parts) != 2 || longest.Parts[1].OffsetMS != (2*time.Hour).Milliseconds() {
 		t.Fatalf("Playable = %+v, %v; want the four-hour copy's two parts on one timeline", longest, err)
 	}
 	// The title's page names each file of a copy, so a client can address one before playing it.
-	page, err := s.Title(ctx, uuid.UUID{}, uuid.UUID(item.ID))
+	page, err := s.Title(ctx, uuid.UUID{}, item)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,13 +60,12 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	if files := page.Versions[0].Files; !reflect.DeepEqual(files, want) || page.Versions[0].Parts != 2 {
 		t.Errorf("the restored copy's files: %+v, want %+v", files, want)
 	}
-	v := s.q.Version
-	theatrical, err := v.WithContext(ctx).Where(v.Label.Eq("theatrical")).Take()
-	if err != nil {
+	var theatrical uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM versions WHERE label = 'theatrical'`).Scan(&theatrical); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.Playable(ctx, uuid.UUID{}, uuid.UUID(item.ID), uuid.UUID(theatrical.ID))
-	if err != nil || got.Version != uuid.UUID(theatrical.ID) || len(got.Parts) != 1 || got.Container != "matroska,webm" {
+	got, err := s.Playable(ctx, uuid.UUID{}, item, theatrical)
+	if err != nil || got.Version != theatrical || len(got.Parts) != 1 || got.Container != "matroska,webm" {
 		t.Errorf("asking for the theatrical cut: %+v, %v", got, err)
 	}
 	if len(got.Subtitles) != 1 || got.Subtitles[0].Language != language.English || !got.Subtitles[0].HearingImpaired {
@@ -82,7 +81,7 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	if _, err := s.FinishScan(ctx, lib.ID, []string{"."}, []string{"L"}, []string{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Playable(ctx, uuid.UUID{}, uuid.UUID(item.ID), uuid.UUID{}); !errors.Is(err, ErrNotFound) {
+	if _, err := s.Playable(ctx, uuid.UUID{}, item, uuid.UUID{}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("with every copy's files gone: %v, want ErrNotFound", err)
 	}
 }
@@ -101,11 +100,13 @@ func TestPlaybackTitleSaysWhichShow(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, []Episode{ep}, nil); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
-	row := must(i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode))).Take())
-	show := must(i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take())
-	got, err := s.PlaybackTitle(ctx, uuid.UUID(row.ID))
-	if err != nil || got.Title != "Seamless" || got.Show != "The Wire" || got.ShowID != uuid.UUID(show.ID) ||
+	var episode, show uuid.UUID
+	if err := s.pool.QueryRow(ctx, `
+		SELECT (SELECT id FROM items WHERE kind = 'episode'), (SELECT id FROM items WHERE kind = 'show')`).Scan(&episode, &show); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.PlaybackTitle(ctx, episode)
+	if err != nil || got.Title != "Seamless" || got.Show != "The Wire" || got.ShowID != show ||
 		deref(got.SeasonNumber) != 1 || deref(got.EpisodeNumber) != 2 {
 		t.Errorf("PlaybackTitle = %+v, %v; want The Wire's 1x2, Seamless", got, err)
 	}

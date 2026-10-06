@@ -6,7 +6,6 @@ import (
 	"uuid"
 
 	"golang.org/x/text/language"
-	"gorm.io/gen/field"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -47,37 +46,41 @@ type PlaySubtitle struct {
 // Playable answers the copy of a film or episode to play: the one asked for, else its longest on
 // disk. ErrNotFound for no such title, one the profile may not see, or none of its copies on disk.
 func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) (PlayCopy, error) {
-	v, p, st, sf := s.q.Version, s.q.Part, s.q.Stream, s.q.SubtitleFile
-	q := v.WithContext(ctx).Where(v.ItemID.Eq(model.UUID(item)), v.MissingSince.IsNull(),
-		field.NewUnsafeFieldRaw("EXISTS (SELECT 1 FROM items i, viewer(?) v WHERE i.id = item_id AND sees(v, i))", profile.String()))
+	var asked *uuid.UUID
 	if version != (uuid.UUID{}) {
-		q = q.Where(v.ID.Eq(model.UUID(version)))
+		asked = &version
 	}
-	row, err := q.Order(v.DurationMS.Desc(), v.ID).Take()
-	if err != nil {
-		return PlayCopy{}, found(err)
+	rows, err := queryRows[model.Version](ctx, s.pool, `
+		SELECT `+versionColumns+` FROM versions
+		WHERE item_id = $1 AND missing_since IS NULL AND ($3::uuid IS NULL OR id = $3)
+			AND EXISTS (SELECT 1 FROM items i, viewer($2) v WHERE i.id = item_id AND sees(v, i))
+		ORDER BY duration_ms DESC, id LIMIT 1`, item, profile, asked)
+	if err != nil || len(rows) == 0 {
+		return PlayCopy{}, cmp.Or(err, ErrNotFound)
 	}
-	parts, err := p.WithContext(ctx).Where(p.VersionID.Eq(row.ID)).Order(p.Idx).Find()
+	row := rows[0]
+	parts, err := queryRows[model.Part](ctx, s.pool, `SELECT `+partColumns+` FROM parts WHERE version_id = $1 ORDER BY idx`, row.ID)
 	if err != nil || len(parts) == 0 {
 		return PlayCopy{}, cmp.Or(err, ErrNotFound)
 	}
-	streams, err := st.WithContext(ctx).Where(st.PartID.Eq(parts[0].ID)).Order(st.Idx).Find()
+	streams, err := queryRows[model.Stream](ctx, s.pool, `SELECT `+streamColumns+` FROM streams WHERE part_id = $1 ORDER BY idx`, parts[0].ID)
 	if err != nil {
 		return PlayCopy{}, err
 	}
-	subs, err := sf.WithContext(ctx).Where(sf.VersionID.Eq(row.ID)).Order(sf.RelPath).Find()
+	subs, err := queryRows[model.SubtitleFile](ctx, s.pool, `
+		SELECT `+subtitleFileColumns+` FROM subtitle_files WHERE version_id = $1 ORDER BY rel_path`, row.ID)
 	if err != nil {
 		return PlayCopy{}, err
 	}
 	c := PlayCopy{
-		Version: uuid.UUID(row.ID), Edition: deref(row.Edition), Label: deref(row.Label), DurationMS: row.DurationMS,
+		Version: row.ID, Edition: deref(row.Edition), Label: deref(row.Label), DurationMS: row.DurationMS,
 		Container: row.Container, BitrateKbps: row.BitrateKbps,
 	}
 	for _, f := range subs {
 		c.Subtitles = append(c.Subtitles, playSubtitle(f))
 	}
 	for _, pt := range parts {
-		c.Parts = append(c.Parts, PlayPart{ID: uuid.UUID(pt.ID), OffsetMS: pt.OffsetMS, DurationMS: pt.DurationMS})
+		c.Parts = append(c.Parts, PlayPart{ID: pt.ID, OffsetMS: pt.OffsetMS, DurationMS: pt.DurationMS})
 	}
 	for _, t := range streams {
 		c.Streams = append(c.Streams, mediaStream(t))
@@ -88,7 +91,7 @@ func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) 
 func playSubtitle(f *model.SubtitleFile) PlaySubtitle {
 	lang, _ := language.Parse(deref(f.Language))
 	return PlaySubtitle{
-		ID: uuid.UUID(f.ID), Codec: f.Codec, Language: lang, Title: deref(f.Title), Default: f.IsDefault,
+		ID: f.ID, Codec: f.Codec, Language: lang, Title: deref(f.Title), Default: f.IsDefault,
 		Forced: f.Forced, HearingImpaired: f.HearingImpaired,
 	}
 }
@@ -114,17 +117,10 @@ func mediaStream(t *model.Stream) domain.Stream {
 
 // SubtitleFile answers where a subtitle file is: its library's root, and its path within it.
 func (s *Store) SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error) {
-	f, l := s.q.SubtitleFile, s.q.Library
-	var row struct {
-		Root    string
-		RelPath string
-	}
-	err = f.WithContext(ctx).Select(l.Root, f.RelPath).Join(l, l.ID.EqCol(f.LibraryID)).
-		Where(f.ID.Eq(model.UUID(id))).Limit(1).Scan(&row)
-	if err == nil && row.RelPath == "" {
-		err = ErrNotFound
-	}
-	return row.Root, row.RelPath, err
+	err = s.pool.QueryRow(ctx, `
+		SELECT l.root, f.rel_path FROM subtitle_files f JOIN libraries l ON l.id = f.library_id WHERE f.id = $1`,
+		id).Scan(&root, &rel)
+	return root, rel, found(err)
 }
 
 // VisiblePartFile is where a part's bytes are, as PartFile answers, or ErrNotFound unless the
@@ -135,18 +131,17 @@ func (s *Store) VisiblePartFile(ctx context.Context, profile, part uuid.UUID) (r
 			JOIN parts p ON p.id = f.part_id JOIN versions v ON v.id = p.version_id
 			JOIN items i ON i.id = v.item_id, viewer($2) asking
 		WHERE f.part_id = $1 AND sees(asking, i) ORDER BY f.rel_path LIMIT 1`,
-		part.String(), profile.String()).Scan(&root, &rel)
+		part, profile).Scan(&root, &rel)
 	return root, rel, found(err)
 }
 
 // Subtitle answers what a subtitle file beside a copy is, or ErrNotFound.
 func (s *Store) Subtitle(ctx context.Context, id uuid.UUID) (PlaySubtitle, error) {
-	sf := s.q.SubtitleFile
-	f, err := sf.WithContext(ctx).Where(sf.ID.Eq(model.UUID(id))).Take()
-	if err != nil {
-		return PlaySubtitle{}, found(err)
+	f, err := queryRows[model.SubtitleFile](ctx, s.pool, `SELECT `+subtitleFileColumns+` FROM subtitle_files WHERE id = $1`, id)
+	if err != nil || len(f) == 0 {
+		return PlaySubtitle{}, cmp.Or(err, ErrNotFound)
 	}
-	return playSubtitle(f), nil
+	return playSubtitle(f[0]), nil
 }
 
 // PartKeyframes is how a part's library finds keyframes, and those found: none where the part has
@@ -164,7 +159,7 @@ func (s *Store) Keyframes(ctx context.Context, part uuid.UUID) (PartKeyframes, e
 		SELECT l.keyframes, k.pts_ms
 		FROM parts p JOIN versions v ON v.id = p.version_id JOIN libraries l ON l.id = v.library_id
 		LEFT JOIN keyframes k ON k.part_id = p.id
-		WHERE p.id = $1`, part.String()).Scan(&mode, &k.PtsMS)
+		WHERE p.id = $1`, part).Scan(&mode, &k.PtsMS)
 	k.Mode = domain.KeyframeMode(mode)
 	return k, found(err)
 }

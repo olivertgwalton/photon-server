@@ -45,13 +45,12 @@ func TestATitleSaysWhereItsIntroAndCreditsAre(t *testing.T) {
 	}
 
 	// The season's fingerprints, had it one, give way to the chapters.
-	p := s.q.Part
-	part, err := p.WithContext(ctx).Take()
-	if err != nil {
+	var part uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM parts`).Scan(&part); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveFingerprintMarkers(ctx, []uuid.UUID{uuid.UUID(part.ID)}, map[uuid.UUID][]domain.Marker{
-		uuid.UUID(part.ID): {{Kind: domain.MarkerIntro, StartMS: 61_000, EndMS: 149_000}, {Kind: domain.MarkerRecap, StartMS: 1000, EndMS: 30_000}},
+	if err := s.SaveFingerprintMarkers(ctx, []uuid.UUID{part}, map[uuid.UUID][]domain.Marker{
+		part: {{Kind: domain.MarkerIntro, StartMS: 61_000, EndMS: 149_000}, {Kind: domain.MarkerRecap, StartMS: 1000, EndMS: 30_000}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -89,8 +88,8 @@ func TestATitleSaysWhereItsIntroAndCreditsAre(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v2"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveFingerprintMarkers(ctx, []uuid.UUID{uuid.UUID(part.ID)}, map[uuid.UUID][]domain.Marker{
-		uuid.UUID(part.ID): {{Kind: domain.MarkerIntro, StartMS: 61_000, EndMS: 149_000}, {Kind: domain.MarkerRecap, StartMS: 1000, EndMS: 30_000}},
+	if err := s.SaveFingerprintMarkers(ctx, []uuid.UUID{part}, map[uuid.UUID][]domain.Marker{
+		part: {{Kind: domain.MarkerIntro, StartMS: 61_000, EndMS: 149_000}, {Kind: domain.MarkerRecap, StartMS: 1000, EndMS: 30_000}},
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -5,7 +5,6 @@ package store
 import (
 	"testing"
 	"time"
-	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -24,20 +23,13 @@ func TestAnEpisodeKeepsItsOwnScore(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, shows.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, []Episode{episode}, nil); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
-	show, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
+	show := oneItem(t, s, "kind = 'show'")
 	score := domain.Rating{Site: domain.SiteTMDB, Score: 81, Votes: 120}
 	seasons := map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Title: "The Target", Ratings: []domain.Rating{score}}}}}
-	if err := s.SaveIdentity(ctx, uuid.UUID(show.ID), domain.SourceTMDB, domain.Metadata{Title: "Show"}, seasons); err != nil {
+	if err := s.SaveIdentity(ctx, show.ID, domain.SourceTMDB, domain.Metadata{Title: "Show"}, seasons); err != nil {
 		t.Fatal(err)
 	}
-	ep, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode))).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
+	ep := oneItem(t, s, "kind = 'episode'")
 	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleMember, "")
 	if err != nil {
 		t.Fatal(err)

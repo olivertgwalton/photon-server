@@ -8,16 +8,11 @@ import (
 	"time"
 	"uuid"
 
-	"gorm.io/gen/field"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
-
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 var (
@@ -25,18 +20,15 @@ var (
 	ErrNotFound      = errors.New("not found")
 )
 
-// found answers err with a row that is not there as ErrNotFound, however it was read.
-func found(err error) error {
-	if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-	return err
-}
+// profileColumns are model.Profile's, for a statement that reads whole profiles.
+const profileColumns = `id, name, role, password_hash, pin_hash, created_at, max_age, unrated, avatar_id`
 
 func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, passwordHash string) (domain.Profile, error) {
 	row := model.Profile{Name: name, Role: role, PasswordHash: optional(passwordHash)}
-	if err := adminPassword(s.q.Profile.WithContext(ctx).Create(&row)); err != nil {
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
+	err := s.pool.QueryRow(ctx, `INSERT INTO profiles (name, role, password_hash) VALUES ($1, $2, $3) RETURNING id`,
+		row.Name, row.Role, row.PasswordHash).Scan(&row.ID)
+	if err := adminPassword(err); err != nil {
+		if violates(err, uniqueViolation) {
 			return domain.Profile{}, ErrProfileExists
 		}
 		if errors.Is(err, ErrAdminNeedsPassword) {
@@ -50,35 +42,28 @@ func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, p
 // ProfileByName returns a profile and its password hash, empty for a profile that cannot sign in
 // with a password.
 func (s *Store) ProfileByName(ctx context.Context, name string) (domain.Profile, string, error) {
-	p := s.q.Profile
-	row, err := p.WithContext(ctx).Where(p.Name.Eq(name)).Take()
+	row, err := readRow[model.Profile](ctx, s.pool, `SELECT `+profileColumns+` FROM profiles WHERE name = $1`, name)
 	if err != nil {
-		return domain.Profile{}, "", found(err)
+		return domain.Profile{}, "", err
 	}
-	hash := ""
-	if row.PasswordHash != nil {
-		hash = *row.PasswordHash
-	}
-	return profile(*row), hash, nil
+	return profile(row), deref(row.PasswordHash), nil
 }
 
 // SetPasswordHash replaces a profile's stored hash, to raise its parameters on a successful
 // sign-in.
 func (s *Store) SetPasswordHash(ctx context.Context, profileID uuid.UUID, hash string) error {
-	p := s.q.Profile
-	_, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(profileID))).UpdateSimple(p.PasswordHash.Value(hash))
+	_, err := s.pool.Exec(ctx, `UPDATE profiles SET password_hash = $2 WHERE id = $1`, profileID, hash)
 	return err
 }
 
 // ChangePassword replaces a profile's password and signs out every device on the profile but keep,
 // since a password changed for fear of who knows it must not leave them signed in.
 func (s *Store) ChangePassword(ctx context.Context, profileID uuid.UUID, hash string, keep uuid.UUID) error {
-	return s.q.Transaction(func(tx *query.Query) error {
-		p, d := tx.Profile, tx.DeviceSession
-		if _, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(profileID))).UpdateSimple(p.PasswordHash.Value(hash)); err != nil {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE profiles SET password_hash = $2 WHERE id = $1`, profileID, hash); err != nil {
 			return err
 		}
-		_, err := d.WithContext(ctx).Where(d.ProfileID.Eq(model.UUID(profileID)), d.ID.Neq(model.UUID(keep))).Delete()
+		_, err := tx.Exec(ctx, `DELETE FROM device_sessions WHERE profile_id = $1 AND id <> $2`, profileID, keep)
 		return err
 	})
 }
@@ -92,70 +77,55 @@ type NewSession struct {
 }
 
 func (s *Store) CreateSession(ctx context.Context, n NewSession) (uuid.UUID, error) {
-	row := model.DeviceSession{
-		TokenHash: n.TokenHash, ProfileID: model.UUID(n.ProfileID),
-		DeviceName: n.DeviceName, Client: n.Client, ExpiresAt: n.ExpiresAt,
-	}
-	err := s.q.DeviceSession.WithContext(ctx).Create(&row)
-	return uuid.UUID(row.ID), err
+	var id uuid.UUID
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO device_sessions (token_hash, profile_id, device_name, client, expires_at)
+		VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+		n.TokenHash, n.ProfileID, n.DeviceName, n.Client, n.ExpiresAt).Scan(&id)
+	return id, err
 }
 
 // SessionByToken finds the unexpired session holding a token, with when it was last seen.
 func (s *Store) SessionByToken(ctx context.Context, tokenHash []byte, now time.Time) (domain.Session, time.Time, error) {
-	d, p := s.q.DeviceSession, s.q.Profile
-	var row struct {
-		ID, ProfileID      model.UUID
-		Name               string
-		Role               domain.Role
-		AvatarID           *model.UUID
-		DeviceName, Client string
-		LastSeenAt         time.Time
-	}
-	err := d.WithContext(ctx).Select(d.ID, d.ProfileID, p.Name, p.Role, p.AvatarID, d.DeviceName, d.Client, d.LastSeenAt).
-		Join(p, p.ID.EqCol(d.ProfileID)).
-		Where(d.TokenHash.Eq(tokenHash), d.ExpiresAt.Gt(now)).Scan(&row)
+	var (
+		id         uuid.UUID
+		p          model.Profile
+		device     string
+		client     string
+		lastSeenAt time.Time
+	)
+	err := s.pool.QueryRow(ctx, `
+		SELECT d.id, d.profile_id, p.name, p.role, p.avatar_id, d.device_name, d.client, d.last_seen_at
+		FROM device_sessions d JOIN profiles p ON p.id = d.profile_id
+		WHERE d.token_hash = $1 AND d.expires_at > $2`, tokenHash, now).
+		Scan(&id, &p.ID, &p.Name, &p.Role, &p.AvatarID, &device, &client, &lastSeenAt)
 	if err != nil {
-		return domain.Session{}, time.Time{}, err
+		return domain.Session{}, time.Time{}, found(err)
 	}
-	if row.ID == (model.UUID{}) {
-		return domain.Session{}, time.Time{}, ErrNotFound
-	}
-	return domain.Session{
-		ID:      uuid.UUID(row.ID),
-		Profile: profile(model.Profile{ID: row.ProfileID, Name: row.Name, Role: row.Role, AvatarID: row.AvatarID}),
-		Device:  row.DeviceName, Client: row.Client,
-	}, row.LastSeenAt, nil
+	return domain.Session{ID: id, Profile: profile(p), Device: device, Client: client}, lastSeenAt, nil
 }
 
 // TouchSession records a session's use and slides its expiry.
 func (s *Store) TouchSession(ctx context.Context, id uuid.UUID, now, expires time.Time) error {
-	d := s.q.DeviceSession
-	_, err := d.WithContext(ctx).Where(d.ID.Eq(model.UUID(id))).
-		UpdateSimple(d.LastSeenAt.Value(now), d.ExpiresAt.Value(expires))
+	_, err := s.pool.Exec(ctx, `UPDATE device_sessions SET last_seen_at = $2, expires_at = $3 WHERE id = $1`, id, now, expires)
 	return err
 }
 
 func (s *Store) DeleteSession(ctx context.Context, id uuid.UUID) error {
-	d := s.q.DeviceSession
-	_, err := d.WithContext(ctx).Where(d.ID.Eq(model.UUID(id))).Delete()
+	_, err := s.pool.Exec(ctx, `DELETE FROM device_sessions WHERE id = $1`, id)
 	return err
 }
 
 func profile(r model.Profile) domain.Profile {
-	p := domain.Profile{ID: uuid.UUID(r.ID), Name: r.Name, Role: r.Role}
-	if r.AvatarID != nil {
-		p.Avatar = uuid.UUID(*r.AvatarID)
-	}
-	return p
+	return domain.Profile{ID: r.ID, Name: r.Name, Role: r.Role, Avatar: deref(r.AvatarID)}
 }
 
 func (s *Store) ProfileByID(ctx context.Context, id uuid.UUID) (domain.Profile, error) {
-	p := s.q.Profile
-	row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
+	row, err := readRow[model.Profile](ctx, s.pool, `SELECT `+profileColumns+` FROM profiles WHERE id = $1`, id)
 	if err != nil {
-		return domain.Profile{}, found(err)
+		return domain.Profile{}, err
 	}
-	return profile(*row), nil
+	return profile(row), nil
 }
 
 // Secrets are a profile's stored hashes, empty where unset.
@@ -170,45 +140,33 @@ type ProfileListing struct {
 }
 
 func (s *Store) Profiles(ctx context.Context) ([]ProfileListing, error) {
-	p := s.q.Profile
-	rows, err := p.WithContext(ctx).Order(p.Name).Find()
+	rows, err := s.pool.Query(ctx, `SELECT `+profileColumns+` FROM profiles ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]ProfileListing, len(rows))
-	for i, r := range rows {
-		out[i] = ProfileListing{Profile: profile(*r), Lock: domain.Lock(r.Role, r.PinHash != nil)}
-	}
-	return out, nil
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (ProfileListing, error) {
+		p, err := pgx.RowToStructByName[model.Profile](r)
+		return ProfileListing{Profile: profile(p), Lock: domain.Lock(p.Role, p.PinHash != nil)}, err
+	})
 }
 
 func (s *Store) ProfileSecrets(ctx context.Context, id uuid.UUID) (domain.Profile, Secrets, error) {
-	p := s.q.Profile
-	row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
+	row, err := readRow[model.Profile](ctx, s.pool, `SELECT `+profileColumns+` FROM profiles WHERE id = $1`, id)
 	if err != nil {
-		return domain.Profile{}, Secrets{}, found(err)
+		return domain.Profile{}, Secrets{}, err
 	}
-	var sec Secrets
-	if row.PasswordHash != nil {
-		sec.Password = *row.PasswordHash
-	}
-	if row.PinHash != nil {
-		sec.PIN = *row.PinHash
-	}
-	return profile(*row), sec, nil
+	return profile(row), Secrets{Password: deref(row.PasswordHash), PIN: deref(row.PinHash)}, nil
 }
 
 // SetPINHash sets a profile's PIN, or clears it when hash is empty.
 func (s *Store) SetPINHash(ctx context.Context, id uuid.UUID, hash string) error {
-	p := s.q.Profile
-	_, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).UpdateSimple(nullable(p.PinHash, hash))
+	_, err := s.pool.Exec(ctx, `UPDATE profiles SET pin_hash = $2 WHERE id = $1`, id, optional(hash))
 	return err
 }
 
 // SetSessionProfile moves a device's session to another profile.
 func (s *Store) SetSessionProfile(ctx context.Context, session, profile uuid.UUID) error {
-	d := s.q.DeviceSession
-	_, err := d.WithContext(ctx).Where(d.ID.Eq(model.UUID(session))).UpdateSimple(d.ProfileID.Value(model.UUID(profile)))
+	_, err := s.pool.Exec(ctx, `UPDATE device_sessions SET profile_id = $2 WHERE id = $1`, session, profile)
 	return err
 }
 
@@ -224,41 +182,23 @@ type DeviceListing struct {
 // Devices lists signed-in devices, newest first: every device, or with profile set only those on
 // that profile.
 func (s *Store) Devices(ctx context.Context, profile *uuid.UUID) ([]DeviceListing, error) {
-	d, p := s.q.DeviceSession, s.q.Profile
-	q := d.WithContext(ctx).Select(d.ID, d.DeviceName, d.Client, p.Name.As("profile"), d.CreatedAt, d.LastSeenAt).
-		Join(p, p.ID.EqCol(d.ProfileID)).Where(d.ExpiresAt.Gt(time.Now())).Order(d.LastSeenAt.Desc())
-	if profile != nil {
-		q = q.Where(d.ProfileID.Eq(model.UUID(*profile)))
-	}
-	var rows []struct {
-		ID                    model.UUID
-		DeviceName, Client    string
-		Profile               string
-		CreatedAt, LastSeenAt time.Time
-	}
-	if err := q.Scan(&rows); err != nil {
+	rows, err := s.pool.Query(ctx, `
+		SELECT d.id, d.device_name, d.client, p.name AS profile, d.created_at, d.last_seen_at
+		FROM device_sessions d JOIN profiles p ON p.id = d.profile_id
+		WHERE d.expires_at > now() AND ($1::uuid IS NULL OR d.profile_id = $1)
+		ORDER BY d.last_seen_at DESC`, profile)
+	if err != nil {
 		return nil, err
 	}
-	out := make([]DeviceListing, len(rows))
-	for i, r := range rows {
-		out[i] = DeviceListing{
-			ID: uuid.UUID(r.ID), DeviceName: r.DeviceName, Client: r.Client, Profile: r.Profile,
-			CreatedAt: r.CreatedAt, LastSeenAt: r.LastSeenAt,
-		}
-	}
-	return out, nil
+	return pgx.CollectRows(rows, pgx.RowToStructByName[DeviceListing])
 }
 
 // DeleteDevice signs a device out: any device, or with profile set only one on that profile. It
 // reports whether there was such a device.
 func (s *Store) DeleteDevice(ctx context.Context, id uuid.UUID, profile *uuid.UUID) (bool, error) {
-	d := s.q.DeviceSession
-	q := d.WithContext(ctx).Where(d.ID.Eq(model.UUID(id)))
-	if profile != nil {
-		q = q.Where(d.ProfileID.Eq(model.UUID(*profile)))
-	}
-	info, err := q.Delete()
-	return info.RowsAffected == 1, err
+	info, err := s.pool.Exec(ctx, `
+		DELETE FROM device_sessions WHERE id = $1 AND ($2::uuid IS NULL OR profile_id = $2)`, id, profile)
+	return info.RowsAffected() == 1, err
 }
 
 var (
@@ -288,11 +228,10 @@ type ProfileChange struct {
 // keeps an admin, and every admin a password.
 func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange) (domain.Profile, error) {
 	var out domain.Profile
-	err := s.q.Transaction(func(tx *query.Query) error {
-		p := tx.Profile
-		row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		row, err := readRow[model.Profile](ctx, tx, `SELECT `+profileColumns+` FROM profiles WHERE id = $1`, id)
 		if err != nil {
-			return found(err)
+			return err
 		}
 		if c.Role != "" && c.Role != domain.RoleAdmin && row.Role == domain.RoleAdmin {
 			if err := otherAdmin(ctx, tx, row.ID); err != nil {
@@ -303,18 +242,14 @@ func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange) (
 		if c.PasswordHash != nil {
 			row.PasswordHash = optional(*c.PasswordHash)
 		}
-		password := p.PasswordHash.Null()
-		if row.PasswordHash != nil {
-			password = p.PasswordHash.Value(*row.PasswordHash)
-		}
-		if _, err := p.WithContext(ctx).Where(p.ID.Eq(row.ID)).
-			UpdateSimple(p.Name.Value(row.Name), p.Role.Value(string(row.Role)), password); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE profiles SET name = $2, role = $3, password_hash = $4 WHERE id = $1`,
+			row.ID, row.Name, row.Role, row.PasswordHash); err != nil {
 			return adminPassword(err)
 		}
-		out = profile(*row)
+		out = profile(row)
 		return nil
 	})
-	if errors.Is(err, gorm.ErrDuplicatedKey) {
+	if violates(err, uniqueViolation) {
 		return domain.Profile{}, ErrProfileExists
 	}
 	return out, err
@@ -324,19 +259,17 @@ func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange) (
 // server keeps an admin.
 func (s *Store) RemoveProfile(ctx context.Context, id uuid.UUID) (string, error) {
 	var name string
-	err := s.q.Transaction(func(tx *query.Query) error {
-		p := tx.Profile
-		row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
-		if err != nil {
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var role domain.Role
+		if err := tx.QueryRow(ctx, `SELECT name, role FROM profiles WHERE id = $1`, id).Scan(&name, &role); err != nil {
 			return found(err)
 		}
-		if row.Role == domain.RoleAdmin {
-			if err := otherAdmin(ctx, tx, row.ID); err != nil {
+		if role == domain.RoleAdmin {
+			if err := otherAdmin(ctx, tx, id); err != nil {
 				return err
 			}
 		}
-		name = row.Name
-		_, err = p.WithContext(ctx).Where(p.ID.Eq(row.ID)).Delete()
+		_, err := tx.Exec(ctx, `DELETE FROM profiles WHERE id = $1`, id)
 		return err
 	})
 	return name, err
@@ -344,15 +277,17 @@ func (s *Store) RemoveProfile(ctx context.Context, id uuid.UUID) (string, error)
 
 // otherAdmin answers ErrLastAdmin unless an admin besides id remains, holding every admin's row
 // until the transaction ends so two admins cannot each demote the other at once.
-func otherAdmin(ctx context.Context, tx *query.Query, id model.UUID) error {
-	p := tx.Profile
-	admins, err := p.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where(p.Role.Eq(string(domain.RoleAdmin))).Find()
+func otherAdmin(ctx context.Context, tx db, id uuid.UUID) error {
+	rows, err := tx.Query(ctx, `SELECT id FROM profiles WHERE role = $1 FOR UPDATE`, domain.RoleAdmin)
+	if err != nil {
+		return err
+	}
+	admins, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 	if err != nil {
 		return err
 	}
 	for _, a := range admins {
-		if a.ID != id {
+		if a != id {
 			return nil
 		}
 	}
@@ -369,64 +304,49 @@ type ProfileAccess struct {
 
 // Access answers what a profile may see.
 func (s *Store) Access(ctx context.Context, id uuid.UUID) (ProfileAccess, error) {
-	p, pl := s.q.Profile, s.q.ProfileLibrary
-	row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
-	if err != nil {
-		return ProfileAccess{}, found(err)
+	var out ProfileAccess
+	err := s.pool.QueryRow(ctx, `
+		SELECT p.max_age, p.unrated,
+			array(SELECT l.library_id FROM profile_libraries l WHERE l.profile_id = p.id)
+		FROM profiles p WHERE p.id = $1`, id).Scan(&out.MaxAge, &out.Unrated, &out.Libraries)
+	if out.Libraries == nil {
+		out.Libraries = []uuid.UUID{}
 	}
-	out := ProfileAccess{Unrated: row.Unrated, Libraries: []uuid.UUID{}}
-	if row.MaxAge != nil {
-		age := int(*row.MaxAge)
-		out.MaxAge = &age
-	}
-	libs, err := pl.WithContext(ctx).Where(pl.ProfileID.Eq(row.ID)).Find()
-	for _, l := range libs {
-		out.Libraries = append(out.Libraries, uuid.UUID(l.LibraryID))
-	}
-	return out, err
+	return out, found(err)
 }
 
 // SetAccess replaces what a profile may see. ErrNotFound for no profile, or a library there is not.
 func (s *Store) SetAccess(ctx context.Context, id uuid.UUID, a ProfileAccess) error {
-	return s.q.Transaction(func(tx *query.Query) error {
-		p, pl := tx.Profile, tx.ProfileLibrary
-		set := []field.AssignExpr{p.Unrated.Value(string(cmp.Or(a.Unrated, domain.UnratedAllow))), p.MaxAge.Null()}
-		if a.MaxAge != nil {
-			set[1] = p.MaxAge.Value(int16(*a.MaxAge))
-		}
-		res, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).UpdateSimple(set...)
-		if err == nil && res.RowsAffected == 0 {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		res, err := tx.Exec(ctx, `UPDATE profiles SET unrated = $2, max_age = $3 WHERE id = $1`,
+			id, cmp.Or(a.Unrated, domain.UnratedAllow), a.MaxAge)
+		if err == nil && res.RowsAffected() == 0 {
 			err = ErrNotFound
 		}
 		if err != nil {
 			return err
 		}
-		if _, err := pl.WithContext(ctx).Where(pl.ProfileID.Eq(model.UUID(id))).Delete(); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM profile_libraries WHERE profile_id = $1`, id); err != nil {
 			return err
 		}
-		for _, lib := range a.Libraries {
-			err := pl.WithContext(ctx).Create(&model.ProfileLibrary{ProfileID: model.UUID(id), LibraryID: model.UUID(lib)})
-			if errors.Is(err, gorm.ErrForeignKeyViolated) {
-				return ErrNotFound
-			}
-			if err != nil {
-				return err
-			}
+		_, err = tx.Exec(ctx, `
+			INSERT INTO profile_libraries (profile_id, library_id) SELECT $1, unnest($2::uuid[])`, id, a.Libraries)
+		if violates(err, foreignKeyViolation) {
+			return ErrNotFound
 		}
-		return nil
+		return err
 	})
 }
 
 // SetAvatar makes picture a profile's avatar, or with the zero id takes it away, answering the
 // profile as it is then. The picture it had is forgotten, and its file swept with the rest.
 func (s *Store) SetAvatar(ctx context.Context, id, picture uuid.UUID) (domain.Profile, error) {
-	p := s.q.Profile
-	set := p.AvatarID.Null()
+	var avatar *uuid.UUID
 	if picture != (uuid.UUID{}) {
-		set = p.AvatarID.Value(model.UUID(picture))
+		avatar = &picture
 	}
-	res, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).UpdateSimple(set)
-	if err == nil && res.RowsAffected == 0 {
+	res, err := s.pool.Exec(ctx, `UPDATE profiles SET avatar_id = $2 WHERE id = $1`, id, avatar)
+	if err == nil && res.RowsAffected() == 0 {
 		err = ErrNotFound
 	}
 	if err != nil {

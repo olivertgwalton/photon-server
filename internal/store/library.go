@@ -6,19 +6,34 @@ import (
 	"fmt"
 	"uuid"
 
-	"gorm.io/gorm"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 var ErrLibraryExists = errors.New("a library with that name or root already exists")
 
+// libraryColumns and librarySourceColumns are model.Library's and model.LibrarySource's, for a
+// statement that reads whole rows.
+const (
+	libraryColumns       = `id, name, kind, root, monitor, refresh_days, previews, markers, keyframes, themes, created_at`
+	librarySourceColumns = `library_id, item_kind, fetcher, source, position, enabled`
+)
+
+// hasLibrary answers ErrNotFound for no such library.
+func hasLibrary(ctx context.Context, q db, lib uuid.UUID) error {
+	var one int
+	return found(q.QueryRow(ctx, `SELECT 1 FROM libraries WHERE id = $1`, lib).Scan(&one))
+}
+
 func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.LibraryKind, root string) (domain.Library, error) {
-	row := model.Library{Name: name, Kind: kind, Root: root}
-	err := s.q.Transaction(func(tx *query.Query) error {
-		if err := tx.Library.WithContext(ctx).Create(&row); err != nil {
+	var row model.Library
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		row, err = readRow[model.Library](ctx, tx, `
+			INSERT INTO libraries (name, kind, root) VALUES ($1, $2, $3) RETURNING `+libraryColumns, name, kind, root)
+		if err != nil {
 			return err
 		}
 		if err := saveSources(ctx, tx, row.ID, domain.DefaultSources(kind)); err != nil {
@@ -26,27 +41,26 @@ func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.Library
 		}
 		return saveRemoteExtras(ctx, tx, row.ID, domain.DefaultRemoteExtras())
 	})
-	if errors.Is(err, gorm.ErrDuplicatedKey) {
+	if violates(err, uniqueViolation) {
 		return domain.Library{}, ErrLibraryExists
 	}
 	if err != nil {
 		return domain.Library{}, fmt.Errorf("adding library: %w", err)
 	}
-	row.Monitor, row.RefreshDays, row.Previews, row.Markers, row.Keyframes, row.Themes = domain.MonitorRealtime, 30, domain.PreviewsAll, domain.MarkersAll, domain.KeyframesIndex, domain.ThemesLocal
 	return library(row, domain.DefaultSources(kind), domain.DefaultRemoteExtras()), nil
 }
 
 func (s *Store) Libraries(ctx context.Context) ([]domain.Library, error) {
-	q, ls := s.q.Library, s.q.LibrarySource
-	rows, err := q.WithContext(ctx).Order(q.Name).Find()
+	rows, err := queryRows[model.Library](ctx, s.pool, `SELECT `+libraryColumns+` FROM libraries ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
-	taken, err := ls.WithContext(ctx).Order(ls.Position).Find()
+	taken, err := queryRows[model.LibrarySource](ctx, s.pool, `
+		SELECT `+librarySourceColumns+` FROM library_sources ORDER BY position`)
 	if err != nil {
 		return nil, err
 	}
-	ranked := map[model.UUID]map[domain.ItemKind]map[domain.Fetcher][]domain.RankedSource{}
+	ranked := map[uuid.UUID]map[domain.ItemKind]map[domain.Fetcher][]domain.RankedSource{}
 	for _, t := range taken {
 		if ranked[t.LibraryID] == nil {
 			ranked[t.LibraryID] = map[domain.ItemKind]map[domain.Fetcher][]domain.RankedSource{}
@@ -56,12 +70,12 @@ func (s *Store) Libraries(ctx context.Context) ([]domain.Library, error) {
 		}
 		ranked[t.LibraryID][t.ItemKind][t.Fetcher] = append(ranked[t.LibraryID][t.ItemKind][t.Fetcher], domain.RankedSource{Source: t.Source, Enabled: t.Enabled})
 	}
-	ex := s.q.LibraryRemoteExtra
-	kept, err := ex.WithContext(ctx).Order(ex.Kind).Find()
+	kept, err := queryRows[model.LibraryRemoteExtra](ctx, s.pool, `
+		SELECT library_id, kind FROM library_remote_extras ORDER BY kind`)
 	if err != nil {
 		return nil, err
 	}
-	extras := map[model.UUID][]domain.ExtraKind{}
+	extras := map[uuid.UUID][]domain.ExtraKind{}
 	for _, k := range kept {
 		extras[k.LibraryID] = append(extras[k.LibraryID], k.Kind)
 	}
@@ -120,31 +134,35 @@ type LibraryChange struct {
 // its titles are matched again, and with new sources its folders are read again at the next scan
 // too, so the new order reaches everything already there.
 func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChange) error {
-	err := s.q.Transaction(func(tx *query.Query) error {
-		l := tx.Library
-		row, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(id))).Take()
-		if err != nil {
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var keyframes domain.KeyframeMode
+		var themes domain.ThemeLookup
+		if err := tx.QueryRow(ctx, `SELECT keyframes, themes FROM libraries WHERE id = $1`, id).Scan(&keyframes, &themes); err != nil {
 			return found(err)
 		}
+		set := func(column string, v any) error {
+			_, err := tx.Exec(ctx, `UPDATE libraries SET `+column+` = $2 WHERE id = $1`, id, v)
+			return err
+		}
 		if change.Name != "" {
-			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Name, change.Name); err != nil {
+			if err := set("name", change.Name); err != nil {
 				return err
 			}
 		}
 		if change.Sources != nil {
-			ls := tx.LibrarySource
 			for _, k := range change.Sources {
 				for _, f := range domain.Fetchers() {
 					if k.Of(f) == nil {
 						continue
 					}
-					_, err := ls.WithContext(ctx).Where(ls.LibraryID.Eq(row.ID), ls.ItemKind.Eq(string(k.Kind)), ls.Fetcher.Eq(string(f))).Delete()
+					_, err := tx.Exec(ctx, `DELETE FROM library_sources WHERE library_id = $1 AND item_kind = $2 AND fetcher = $3`,
+						id, k.Kind, f)
 					if err != nil {
 						return err
 					}
 				}
 			}
-			if err := saveSources(ctx, tx, row.ID, change.Sources); err != nil {
+			if err := saveSources(ctx, tx, id, change.Sources); err != nil {
 				return err
 			}
 			// A show's match asks only about seasons not yet described, so those whose own
@@ -156,50 +174,50 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 				}
 			}
 			if len(deeper) > 0 {
-				err := describeAgain(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind IN @kinds`,
-					map[string]any{"lib": row.ID, "kinds": deeper})
+				err := describeAgain(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind = ANY(@kinds)`,
+					pgx.NamedArgs{"lib": id, "kinds": deeper})
 				if err != nil {
 					return err
 				}
 			}
-			if _, err := tx.Folder.WithContext(ctx).Where(tx.Folder.LibraryID.Eq(row.ID)).Delete(); err != nil {
+			if _, err := tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1`, id); err != nil {
 				return err
 			}
 		}
 		if change.RefreshDays != nil {
-			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.RefreshDays, *change.RefreshDays); err != nil {
+			if err := set("refresh_days", *change.RefreshDays); err != nil {
 				return err
 			}
 		}
 		if change.Monitor != "" {
-			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Monitor, change.Monitor); err != nil {
+			if err := set("monitor", change.Monitor); err != nil {
 				return err
 			}
 		}
 		if change.Previews != "" {
-			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Previews, change.Previews); err != nil {
+			if err := set("previews", change.Previews); err != nil {
 				return err
 			}
 		}
 		if change.Markers != "" {
-			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Markers, change.Markers); err != nil {
+			if err := set("markers", change.Markers); err != nil {
 				return err
 			}
 		}
-		if change.Keyframes != "" && change.Keyframes != row.Keyframes {
-			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Keyframes, change.Keyframes); err != nil {
+		if change.Keyframes != "" && change.Keyframes != keyframes {
+			if err := set("keyframes", change.Keyframes); err != nil {
 				return err
 			}
-			if err := rekeyframe(ctx, tx, row.ID, change.Keyframes); err != nil {
+			if err := rekeyframe(ctx, tx, id, change.Keyframes); err != nil {
 				return err
 			}
 		}
-		if change.Themes != "" && change.Themes != row.Themes {
-			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Themes, change.Themes); err != nil {
+		if change.Themes != "" && change.Themes != themes {
+			if err := set("themes", change.Themes); err != nil {
 				return err
 			}
 			if change.Themes == domain.ThemesThemerr {
-				if err := askThemes(ctx, tx, `SELECT id FROM items WHERE library_id = @lib`, map[string]any{"lib": row.ID}); err != nil {
+				if err := askThemes(ctx, tx, `SELECT id FROM items WHERE library_id = @lib`, pgx.NamedArgs{"lib": id}); err != nil {
 					return err
 				}
 			}
@@ -208,29 +226,29 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 			return nil
 		}
 		if change.RemoteExtras != nil {
-			ex := tx.LibraryRemoteExtra
-			if _, err := ex.WithContext(ctx).Where(ex.LibraryID.Eq(row.ID)).Delete(); err != nil {
+			if _, err := tx.Exec(ctx, `DELETE FROM library_remote_extras WHERE library_id = $1`, id); err != nil {
 				return err
 			}
-			if err := saveRemoteExtras(ctx, tx, row.ID, change.RemoteExtras); err != nil {
+			if err := saveRemoteExtras(ctx, tx, id, change.RemoteExtras); err != nil {
 				return err
 			}
 		}
-		i := tx.Item
-		titles, err := i.WithContext(ctx).Where(
-			i.LibraryID.Eq(row.ID), i.Kind.In(string(domain.ItemMovie), string(domain.ItemShow)),
-		).Find()
+		rows, err := tx.Query(ctx, `SELECT id FROM items WHERE library_id = $1 AND kind IN ('movie', 'show')`, id)
+		if err != nil {
+			return err
+		}
+		titles, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 		if err != nil {
 			return err
 		}
 		for _, t := range titles {
-			if err := enqueue(ctx, tx, domain.JobIdentify, t.ID); err != nil {
+			if err := enqueue(ctx, tx, domain.JobIdentify, t); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
-	if errors.Is(err, gorm.ErrDuplicatedKey) {
+	if violates(err, uniqueViolation) {
 		return ErrLibraryExists
 	}
 	return err
@@ -238,26 +256,25 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 
 // RemoveLibrary forgets a library and everything in it; its files are left alone.
 func (s *Store) RemoveLibrary(ctx context.Context, id uuid.UUID) error {
-	l := s.q.Library
-	res, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(id))).Delete()
-	if err == nil && res.RowsAffected == 0 {
+	res, err := s.pool.Exec(ctx, `DELETE FROM libraries WHERE id = $1`, id)
+	if err == nil && res.RowsAffected() == 0 {
 		err = ErrNotFound
 	}
 	return err
 }
 
-func saveRemoteExtras(ctx context.Context, tx *query.Query, lib model.UUID, kinds []domain.ExtraKind) error {
+func saveRemoteExtras(ctx context.Context, tx db, lib uuid.UUID, kinds []domain.ExtraKind) error {
 	if len(kinds) == 0 {
 		return nil
 	}
-	rows := make([]*model.LibraryRemoteExtra, len(kinds))
-	for n, k := range kinds {
-		rows[n] = &model.LibraryRemoteExtra{LibraryID: lib, Kind: k}
+	b := &pgx.Batch{}
+	for _, k := range kinds {
+		b.Queue(`INSERT INTO library_remote_extras (library_id, kind) VALUES ($1, $2)`, lib, k)
 	}
-	return tx.LibraryRemoteExtra.WithContext(ctx).Create(rows...)
+	return tx.SendBatch(ctx, b).Close()
 }
 
-func saveSources(ctx context.Context, tx *query.Query, lib model.UUID, sources []domain.KindSources) error {
+func saveSources(ctx context.Context, tx db, lib uuid.UUID, sources []domain.KindSources) error {
 	var rows []*model.LibrarySource
 	for _, k := range sources {
 		for _, f := range domain.Fetchers() {
@@ -274,12 +291,18 @@ func saveSources(ctx context.Context, tx *query.Query, lib model.UUID, sources [
 	if err := registered(ctx, tx, rows); err != nil {
 		return err
 	}
-	return tx.LibrarySource.WithContext(ctx).Create(rows...)
+	b := &pgx.Batch{}
+	for _, r := range rows {
+		b.Queue(`
+			INSERT INTO library_sources (library_id, item_kind, fetcher, source, position, enabled)
+			VALUES ($1, $2, $3, $4, $5, $6)`, r.LibraryID, r.ItemKind, r.Fetcher, r.Source, r.Position, r.Enabled)
+	}
+	return tx.SendBatch(ctx, b).Close()
 }
 
 func library(r model.Library, sources []domain.KindSources, extras []domain.ExtraKind) domain.Library {
 	return domain.Library{
-		ID: uuid.UUID(r.ID), Name: r.Name, Kind: r.Kind, Root: r.Root, Sources: sources, RemoteExtras: extras,
+		ID: r.ID, Name: r.Name, Kind: r.Kind, Root: r.Root, Sources: sources, RemoteExtras: extras,
 		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews, Markers: r.Markers,
 		Keyframes: r.Keyframes, Themes: r.Themes,
 	}

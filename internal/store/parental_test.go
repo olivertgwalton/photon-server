@@ -10,7 +10,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
 func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
@@ -37,12 +36,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 		if _, err := s.SaveFolder(ctx, f.lib, f.title, []byte("v1"), []Film{{Title: f.title, Folder: f.title, Copies: []Copy{part(f.title)}}}, nil); err != nil {
 			t.Fatal(err)
 		}
-		i := s.q.Item
-		row, err := i.WithContext(ctx).Where(i.Title.Eq(f.title)).Take()
-		if err != nil {
-			t.Fatal(err)
-		}
-		ids[f.title] = uuid.UUID(row.ID)
+		ids[f.title] = oneItem(t, s, "title = $1", f.title).ID
 		if f.cert != "" {
 			if err := s.SaveIdentity(ctx, ids[f.title], domain.SourceTMDB, domain.Metadata{Certificate: f.cert}, nil); err != nil {
 				t.Fatal(err)
@@ -53,10 +47,8 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, films.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, []Episode{episode}, nil); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
-	show, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
-	ep, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode))).Take()
-	if err := s.SaveIdentity(ctx, uuid.UUID(show.ID), domain.SourceTMDB, domain.Metadata{Certificate: "TV-14"}, nil); err != nil {
+	show, ep := oneItem(t, s, `kind = 'show'`).ID, oneItem(t, s, `kind = 'episode'`).ID
+	if err := s.SaveIdentity(ctx, show, domain.SourceTMDB, domain.Metadata{Certificate: "TV-14"}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -80,12 +72,12 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 	}
 	partOf := func(item uuid.UUID) uuid.UUID {
 		t.Helper()
-		v, p := s.q.Version, s.q.Part
-		var part struct{ ID model.UUID }
-		if err := p.WithContext(ctx).Select(p.ID).Join(v, v.ID.EqCol(p.VersionID)).Where(v.ItemID.Eq(model.UUID(item))).Scan(&part); err != nil {
+		var part uuid.UUID
+		if err := s.pool.QueryRow(ctx, `
+			SELECT p.id FROM parts p JOIN versions v ON v.id = p.version_id WHERE v.item_id = $1 LIMIT 1`, item).Scan(&part); err != nil {
 			t.Fatal(err)
 		}
-		return uuid.UUID(part.ID)
+		return part
 	}
 	counted := func(want map[uuid.UUID]domain.TitleCounts) {
 		t.Helper()
@@ -111,7 +103,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 		t.Errorf("12 and under, rated, Films alone: %q, want Paddington", got)
 	}
 	counted(map[uuid.UUID]domain.TitleCounts{films.ID: {Movies: 1}})
-	for name, id := range map[string]uuid.UUID{"a film rated 15": ids["Heat"], "a TV-14 show's episode": uuid.UUID(ep.ID), "Up, in a library it lacks": ids["Up"]} {
+	for name, id := range map[string]uuid.UUID{"a film rated 15": ids["Heat"], "a TV-14 show's episode": ep, "Up, in a library it lacks": ids["Up"]} {
 		if _, err := s.Title(ctx, kid.ID, id); !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s: %v, want ErrNotFound", name, err)
 		}
@@ -171,7 +163,6 @@ func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
 	part := func(name string) Copy {
 		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}
 	}
-	i := s.q.Item
 	rate := func(id uuid.UUID, cert string) {
 		t.Helper()
 		if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Certificate: cert}, nil); err != nil {
@@ -184,11 +175,7 @@ func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
 		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{{Title: title, Folder: title, Copies: []Copy{part(title)}}}, nil); err != nil {
 			t.Fatal(err)
 		}
-		row, err := i.WithContext(ctx).Where(i.Title.Eq(title)).Take()
-		if err != nil {
-			t.Fatal(err)
-		}
-		ids[title] = uuid.UUID(row.ID)
+		ids[title] = oneItem(t, s, "title = $1", title).ID
 		rate(ids[title], cert)
 	}
 	var eps []Episode
@@ -199,18 +186,10 @@ func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, lib.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, eps, nil); err != nil {
 		t.Fatal(err)
 	}
-	show, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ids["the show"] = uuid.UUID(show.ID)
+	ids["the show"] = oneItem(t, s, `kind = 'show'`).ID
 	rate(ids["the show"], "TV-14")
 	for n, name := range []string{"an episode rated as its show", "an episode rated TV-MA"} {
-		row, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode)), i.EpisodeNumber.Eq(n+1)).Take()
-		if err != nil {
-			t.Fatal(err)
-		}
-		ids[name] = uuid.UUID(row.ID)
+		ids[name] = oneItem(t, s, `kind = 'episode' AND episode_number = $1`, n+1).ID
 	}
 	rate(ids["an episode rated TV-MA"], "TV-MA")
 

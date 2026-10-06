@@ -21,16 +21,19 @@ func TestEachPlayIsKeptInTheHistory(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	c, err := s.Playable(ctx, uuid.UUID{}, uuid.UUID(must(s.q.Item.WithContext(ctx).Take()).ID), uuid.UUID{})
+	var item uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items`).Scan(&item); err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.Playable(ctx, uuid.UUID{}, item, uuid.UUID{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	item := must(s.q.Item.WithContext(ctx).Take())
 	oliver, _ := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h")
 	kid, _ := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "")
 	start := time.Now().Add(-time.Hour).Truncate(time.Second)
 	for n, who := range []uuid.UUID{oliver.ID, kid.ID, oliver.ID} {
-		p := domain.Playback{ID: uuid.NewV7(), Profile: who, Item: uuid.UUID(item.ID), Version: c.Version, Method: domain.PlayRemux, Started: start.Add(time.Duration(n) * time.Minute)}
+		p := domain.Playback{ID: uuid.NewV7(), Profile: who, Item: item, Version: c.Version, Method: domain.PlayRemux, Started: start.Add(time.Duration(n) * time.Minute)}
 		if err := s.RecordPlay(ctx, p, p.Started.Add(10*time.Minute), time.Duration(n+1)*time.Minute); err != nil {
 			t.Fatal(err)
 		}
@@ -42,11 +45,4 @@ func TestEachPlayIsKeptInTheHistory(t *testing.T) {
 	if all, total, err := s.History(ctx, uuid.UUID{}, 1, 1); err != nil || total != 3 || len(all) != 1 || all[0].Profile != kid.ID {
 		t.Errorf("everyone's second = %+v of %d, %v; want the kid's", all, total, err)
 	}
-}
-
-func must[T any](v T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return v
 }

@@ -36,15 +36,7 @@ func TestAPlaylistKeepsItsOrder(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Cosmos/Season 1", []byte("v1"), Show{Title: "Cosmos", Folder: "Cosmos"}, episodes, nil); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
-	heat, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemMovie))).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
-	show, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
+	heat, show := oneItem(t, s, `kind = 'movie'`).ID, oneItem(t, s, `kind = 'show'`).ID
 	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +47,7 @@ func TestAPlaylistKeepsItsOrder(t *testing.T) {
 	}
 
 	// Heat, then the show as its three episodes, then Heat again.
-	list, err := s.AddPlaylist(ctx, oliver.ID, "Night in", []uuid.UUID{uuid.UUID(heat.ID), uuid.UUID(show.ID), uuid.UUID(heat.ID)})
+	list, err := s.AddPlaylist(ctx, oliver.ID, "Night in", []uuid.UUID{heat, show, heat})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +88,7 @@ func TestAPlaylistKeepsItsOrder(t *testing.T) {
 	// Another profile's playlist is not there to it.
 	for name, err := range map[string]error{
 		"read":   func() error { _, _, err := s.PlaylistEntries(ctx, kid.ID, list, 0, 50); return err }(),
-		"add":    s.AddToPlaylist(ctx, kid.ID, list, []uuid.UUID{uuid.UUID(heat.ID)}),
+		"add":    s.AddToPlaylist(ctx, kid.ID, list, []uuid.UUID{heat}),
 		"rename": s.RenamePlaylist(ctx, kid.ID, list, "Mine now"),
 		"remove": s.RemovePlaylist(ctx, kid.ID, list),
 	} {

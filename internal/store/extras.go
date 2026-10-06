@@ -5,12 +5,10 @@ import (
 	"errors"
 	"uuid"
 
-	"gorm.io/gen"
-	"gorm.io/gorm"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 // Owner names the title an extra belongs to.
@@ -36,7 +34,7 @@ var errNoOwner = errors.New("no single title owns it")
 
 // saveExtras saves each extra under its owner, answering the paths of those whose owner the
 // catalogue does not hold, or holds twice, so the scanner can say so rather than guess.
-func saveExtras(ctx context.Context, tx *query.Query, lib uuid.UUID, extras []Extra) ([]string, error) {
+func saveExtras(ctx context.Context, tx db, lib uuid.UUID, extras []Extra) ([]string, error) {
 	var unowned []string
 	for _, e := range extras {
 		owner, err := ownerOf(ctx, tx, lib, e.Owner)
@@ -54,75 +52,70 @@ func saveExtras(ctx context.Context, tx *query.Query, lib uuid.UUID, extras []Ex
 	return unowned, nil
 }
 
-func ownerOf(ctx context.Context, tx *query.Query, lib uuid.UUID, o Owner) (model.UUID, error) {
-	i := tx.Item
-	inLibrary := i.LibraryID.Eq(model.UUID(lib))
-	var conds []gen.Condition
+func ownerOf(ctx context.Context, tx db, lib uuid.UUID, o Owner) (uuid.UUID, error) {
 	switch o.Kind {
 	case domain.ItemMovie:
-		conds = []gen.Condition{inLibrary, i.Kind.Eq(string(domain.ItemMovie)), i.Folder.Eq(o.Folder)}
+		sql := `SELECT id FROM items WHERE library_id = $1 AND kind = 'movie' AND folder = $2`
+		args := []any{lib, o.Folder}
 		if o.Title != "" {
-			conds = append(conds, i.Title.Eq(o.Title))
+			sql += ` AND title = $3`
+			args = append(args, o.Title)
 		}
+		return one(ctx, tx, sql, args...)
 	case domain.ItemCollection:
-		return model.UUID{}, ErrNotFound
+		return uuid.UUID{}, ErrNotFound
 	case domain.ItemShow, domain.ItemSeason, domain.ItemEpisode:
-		show, err := one(i.WithContext(ctx).Where(inLibrary, i.Kind.Eq(string(domain.ItemShow)), i.Folder.Eq(o.Folder)))
+		show, err := one(ctx, tx, `SELECT id FROM items WHERE library_id = $1 AND kind = 'show' AND folder = $2`, lib, o.Folder)
 		if err != nil || o.Kind == domain.ItemShow {
 			return show, err
 		}
-		season, err := one(i.WithContext(ctx).Where(i.ParentID.Eq(show), i.Kind.Eq(string(domain.ItemSeason)), i.SeasonNumber.Eq(o.Season)))
+		season, err := one(ctx, tx, `SELECT id FROM items WHERE parent_id = $1 AND kind = 'season' AND season_number = $2`, show, o.Season)
 		if err != nil || o.Kind == domain.ItemSeason {
 			return season, err
 		}
-		conds = []gen.Condition{i.ParentID.Eq(season), i.Kind.Eq(string(domain.ItemEpisode)), i.EpisodeNumber.Eq(o.Episode)}
+		return one(ctx, tx, `SELECT id FROM items WHERE parent_id = $1 AND kind = 'episode' AND episode_number = $2`, season, o.Episode)
 	case domain.ItemExtra:
-		return model.UUID{}, errNoOwner
 	}
-	return one(i.WithContext(ctx).Where(conds...))
+	return uuid.UUID{}, errNoOwner
 }
 
 // one is the single item a query finds; none or several is no owner.
-func one(q query.IItemDo) (model.UUID, error) {
-	rows, err := q.Limit(2).Find()
+func one(ctx context.Context, tx db, sql string, args ...any) (uuid.UUID, error) {
+	rows, err := tx.Query(ctx, sql+` LIMIT 2`, args...)
 	if err != nil {
-		return model.UUID{}, err
+		return uuid.UUID{}, err
 	}
-	if len(rows) != 1 {
-		return model.UUID{}, errNoOwner
+	found, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return uuid.UUID{}, err
 	}
-	return rows[0].ID, nil
+	if len(found) != 1 {
+		return uuid.UUID{}, errNoOwner
+	}
+	return found[0], nil
 }
 
-func saveExtra(ctx context.Context, tx *query.Query, lib uuid.UUID, owner model.UUID, e Extra) error {
+func saveExtra(ctx context.Context, tx db, lib, owner uuid.UUID, e Extra) error {
 	row := model.Item{
-		LibraryID: model.UUID(lib), Kind: domain.ItemExtra, ParentID: &owner, ExtraKind: &e.Kind,
+		LibraryID: lib, Kind: domain.ItemExtra, ParentID: &owner, ExtraKind: &e.Kind,
 		ScanTitle: e.Title, Title: e.Title, SortTitle: sortTitle(e.Title), Folder: e.Folder,
 	}
-	v, i := tx.Version, tx.Item
-	version, err := v.WithContext(ctx).Where(v.LibraryID.Eq(model.UUID(lib)), v.Fingerprint.Eq(e.Copy.ContentKey)).Take()
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
-	}
-	known := err == nil
-	var id model.UUID
-	if known {
-		item, err := i.WithContext(ctx).Where(i.ID.Eq(version.ItemID)).Take()
-		if err != nil {
-			return err
-		}
+	var version uuid.UUID
+	var kind domain.ItemKind
+	err := tx.QueryRow(ctx, `
+		SELECT v.id, i.id, i.kind FROM versions v JOIN items i ON i.id = v.item_id
+		WHERE v.library_id = $1 AND v.fingerprint = $2 LIMIT 1`, lib, e.Copy.ContentKey).Scan(&version, &row.ID, &kind)
+	switch {
+	case err == nil:
 		// The same bytes are already a film's or an episode's copy: this file is another place to
 		// read it, and that title stays what it is.
-		if item.Kind != domain.ItemExtra {
-			return addPlaces(ctx, tx, lib, version.ID, e.Copy)
+		if kind != domain.ItemExtra {
+			return addPlaces(ctx, tx, lib, version, e.Copy)
 		}
-		id = item.ID
-	}
-	if known {
-		row.ID = id
-		_, err = i.WithContext(ctx).Where(i.ID.Eq(id)).Select(i.ParentID, i.ExtraKind, i.ScanTitle, i.Folder).Updates(&row)
-	} else {
-		err = i.WithContext(ctx).Create(&row)
+		_, err = tx.Exec(ctx, `UPDATE items SET parent_id = $2, extra_kind = $3, scan_title = $4, folder = $5 WHERE id = $1`,
+			row.ID, row.ParentID, row.ExtraKind, row.ScanTitle, row.Folder)
+	case errors.Is(err, pgx.ErrNoRows):
+		err = insertItem(ctx, tx, &row)
 	}
 	if err != nil {
 		return err

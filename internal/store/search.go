@@ -6,8 +6,7 @@ import (
 	"unicode"
 	"uuid"
 
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -32,31 +31,28 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error
 	if query == "" {
 		return []Card{}, 0, nil
 	}
-	// gen cannot write a full-text match, so this one query is SQL.
 	matching := `
 		FROM items
 		WHERE kind IN (@movie, @show, @collection, @episode) AND search @@ to_tsquery('simple', search_text(@query))
 			AND (CAST(@library AS uuid) IS NULL OR library_id = CAST(@library AS uuid))
 			AND EXISTS (SELECT 1 FROM viewer(CAST(@profile AS uuid)) v WHERE sees(v, items) AND first_of_title(v, items))`
-	var library *model.UUID
+	var library *uuid.UUID
 	if q.Library != (uuid.UUID{}) {
-		library = new(model.UUID(q.Library))
+		library = &q.Library
 	}
-	args := map[string]any{
+	args := pgx.NamedArgs{
 		"movie": domain.ItemMovie, "show": domain.ItemShow, "collection": domain.ItemCollection, "episode": domain.ItemEpisode,
-		"query": query, "text": q.Text, "library": library, "offset": q.Offset, "limit": q.Limit, "profile": q.Profile.String(),
+		"query": query, "text": q.Text, "library": library, "offset": q.Offset, "limit": q.Limit, "profile": q.Profile,
 	}
-	db := s.q.Item.WithContext(ctx).UnderlyingDB()
 	var total int64
-	if err := db.Raw(`SELECT count(*) `+matching, args).Scan(&total).Error; err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) `+matching, args).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	var rows []*model.Item
-	err := db.Raw(`SELECT * `+matching+`
+	rows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` `+matching+`
 		ORDER BY search_text(title) = search_text(@text) DESC,
 			starts_with(search_text(title), search_text(@text)) DESC, kind = @episode,
 			ts_rank_cd(search, to_tsquery('simple', search_text(@query))) DESC, sort_title, id
-		OFFSET @offset LIMIT @limit`, args).Find(&rows).Error
+		OFFSET @offset LIMIT @limit`, args)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -80,27 +76,27 @@ func (s *Store) SearchPeople(ctx context.Context, text string, offset, limit int
 	if query == "" {
 		return []PersonRef{}, 0, nil
 	}
-	db := s.q.Person.WithContext(ctx).UnderlyingDB().Table("people p").
-		Where("to_tsvector('simple', search_text(p.name)) @@ to_tsquery('simple', search_text(?))", query)
+	matching := `FROM people p WHERE to_tsvector('simple', search_text(p.name)) @@ to_tsquery('simple', search_text(@query))`
+	args := pgx.NamedArgs{"query": query, "text": text, "offset": offset, "limit": limit}
 	var total int64
-	if err := db.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) `+matching, args).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	var rows []struct {
-		ID            model.UUID
-		Name          string
-		PhotoID       *model.UUID
-		PhotoBlurhash *string
+	rows, err := s.pool.Query(ctx, `SELECT p.id, p.name, p.photo_id, p.photo_blurhash `+matching+`
+		ORDER BY starts_with(search_text(p.name), search_text(@text)) DESC,
+			(SELECT count(*) FROM credits c WHERE c.person_id = p.id) DESC, p.name, p.id
+		OFFSET @offset LIMIT @limit`, args)
+	if err != nil {
+		return nil, 0, err
 	}
-	err := db.Select("p.id, p.name, p.photo_id, p.photo_blurhash").
-		Order(clause.Expr{SQL: "starts_with(search_text(p.name), search_text(?)) DESC", Vars: []any{text}}).
-		Order("(SELECT count(*) FROM credits c WHERE c.person_id = p.id) DESC, p.name, p.id").
-		Offset(offset).Limit(limit).Scan(&rows).Error
-	out := make([]PersonRef, len(rows))
-	for n, r := range rows {
-		out[n] = PersonRef{ID: uuid.UUID(r.ID), Name: r.Name}
-		out[n].Photo, out[n].Blurhashes = photo(r.PhotoID, r.PhotoBlurhash)
-	}
+	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (PersonRef, error) {
+		var p PersonRef
+		var photoID *uuid.UUID
+		var hash *string
+		err := r.Scan(&p.ID, &p.Name, &photoID, &hash)
+		p.Photo, p.Blurhashes = photo(photoID, hash)
+		return p, err
+	})
 	return out, total, err
 }
 

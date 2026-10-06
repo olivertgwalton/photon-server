@@ -5,7 +5,6 @@ package store
 import (
 	"testing"
 	"time"
-	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -25,16 +24,9 @@ func TestAnEpisodeWearsItsShowsCertificate(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, shows.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, []Episode{episode}, nil); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
-	show, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ep, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemEpisode))).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SaveIdentity(ctx, uuid.UUID(show.ID), domain.SourceTMDB, domain.Metadata{Certificate: "TV-14"}, nil); err != nil {
+	show := oneItem(t, s, "kind = 'show'")
+	ep := oneItem(t, s, "kind = 'episode'")
+	if err := s.SaveIdentity(ctx, show.ID, domain.SourceTMDB, domain.Metadata{Certificate: "TV-14"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleMember, "")
@@ -49,7 +41,7 @@ func TestAnEpisodeWearsItsShowsCertificate(t *testing.T) {
 	if cards[0].Certificate != "TV-14" {
 		t.Errorf("card certificate = %q, want the show's TV-14", cards[0].Certificate)
 	}
-	page, err := s.Title(ctx, viewer.ID, uuid.UUID(ep.ID))
+	page, err := s.Title(ctx, viewer.ID, ep.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

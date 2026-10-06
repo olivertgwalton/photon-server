@@ -1,7 +1,5 @@
 package store
 
-//go:generate go run ./gen
-
 import (
 	"context"
 	"database/sql"
@@ -16,15 +14,11 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
-
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 const minimumPostgres = 180000
@@ -32,19 +26,18 @@ const minimumPostgres = 180000
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// array is a list as one parameter, where GORM would expand it into a parameter per element: as
-// many as a library has files, past Postgres's limit.
-func array[T any](values []T) pgtype.Array[T] {
-	return pgtype.Array[T]{Elements: values, Dims: []pgtype.ArrayDimension{{Length: int32(len(values)), LowerBound: 1}}, Valid: true}
-}
-
-// Store reaches Postgres two ways: gen for its models, SQL into a model's rows included, and pgx on
-// pool for SQL of its own. A transaction is gen's alone, and SQL inside one goes through it, so it
-// stays in the transaction.
+// Store reaches Postgres through pool; sql is the same pool as goose takes it.
 type Store struct {
 	pool *pgxpool.Pool
 	sql  *sql.DB
-	q    *query.Query
+}
+
+// db is what a statement runs on: the pool, or a transaction begun on it.
+type db interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
 }
 
 // Open connects and refuses a database whose schema is not the one this binary was built for.
@@ -92,6 +85,7 @@ func connect(ctx context.Context, url string, log *slog.Logger) (*Store, error) 
 	if !strings.Contains(url, "pool_max_conns") {
 		cfg.MaxConns = poolSize()
 	}
+	cfg.ConnConfig.Tracer = queryLog{log}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -101,24 +95,63 @@ func connect(ctx context.Context, url string, log *slog.Logger) (*Store, error) 
 		s.Close()
 		return nil, err
 	}
-	db, err := gorm.Open(postgres.New(postgres.Config{Conn: s.sql}), &gorm.Config{
-		SkipDefaultTransaction: true,
-		TranslateError:         true,
-		NowFunc:                func() time.Time { return time.Now().UTC() },
-		Logger: logger.NewSlogLogger(log, logger.Config{
-			SlowThreshold:             200 * time.Millisecond,
-			LogLevel:                  logger.Warn,
-			IgnoreRecordNotFoundError: true,
-			// A slow or failed query is logged without its values, which may be a provider's key.
-			ParameterizedQueries: true,
-		}),
-	})
-	if err != nil {
-		s.Close()
-		return nil, err
-	}
-	s.q = query.Use(db)
 	return s, nil
+}
+
+// slowQuery is how long a statement runs before it is logged.
+const slowQuery = 200 * time.Millisecond
+
+// queryLog logs each statement that fails, and each statement or batch that runs longer than
+// slowQuery, without its values, which may be a provider's key.
+type queryLog struct{ log *slog.Logger }
+
+type queryStarted struct{}
+
+type startedQuery struct {
+	sql string
+	at  time.Time
+}
+
+func (l queryLog) start(ctx context.Context, sql string) context.Context {
+	return context.WithValue(ctx, queryStarted{}, startedQuery{sql, time.Now()})
+}
+
+func (l queryLog) end(ctx context.Context, err error) {
+	q, _ := ctx.Value(queryStarted{}).(startedQuery)
+	took := time.Since(q.at)
+	switch {
+	case err != nil:
+		l.failed(ctx, q.sql, err)
+	case took > slowQuery:
+		l.log.WarnContext(ctx, "slow query", slog.Duration("took", took), slog.String("sql", q.sql))
+	}
+}
+
+func (l queryLog) failed(ctx context.Context, sql string, err error) {
+	l.log.WarnContext(ctx, "query failed", slog.String("sql", sql), slog.Any("err", err))
+}
+
+func (l queryLog) TraceQueryStart(ctx context.Context, _ *pgx.Conn, q pgx.TraceQueryStartData) context.Context {
+	return l.start(ctx, q.SQL)
+}
+
+func (l queryLog) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, q pgx.TraceQueryEndData) {
+	l.end(ctx, q.Err)
+}
+
+func (l queryLog) TraceBatchStart(ctx context.Context, _ *pgx.Conn, b pgx.TraceBatchStartData) context.Context {
+	return l.start(ctx, fmt.Sprintf("batch of %d", b.Batch.Len()))
+}
+
+func (l queryLog) TraceBatchQuery(ctx context.Context, _ *pgx.Conn, q pgx.TraceBatchQueryData) {
+	if q.Err != nil {
+		l.failed(ctx, q.SQL, q.Err)
+	}
+}
+
+// TraceBatchEnd times the batch; TraceBatchQuery has logged the statement in it that failed.
+func (l queryLog) TraceBatchEnd(ctx context.Context, _ *pgx.Conn, _ pgx.TraceBatchEndData) {
+	l.end(ctx, nil)
 }
 
 func (s *Store) Close() {
@@ -162,20 +195,16 @@ func (s *Store) checkSchema(ctx context.Context) error {
 
 // ServerID is this installation's identity, minted once by the first migration.
 func (s *Store) ServerID(ctx context.Context) (uuid.UUID, error) {
-	row, err := s.q.Server.WithContext(ctx).Take()
-	if err != nil {
-		return uuid.UUID{}, err
-	}
-	return uuid.UUID(row.ID), nil
+	var id uuid.UUID
+	err := s.pool.QueryRow(ctx, "SELECT id FROM server").Scan(&id)
+	return id, err
 }
 
 // SigningKey is the key the server signs stream addresses with, made once by its migration.
 func (s *Store) SigningKey(ctx context.Context) ([]byte, error) {
-	row, err := s.q.Server.WithContext(ctx).Take()
-	if err != nil {
-		return nil, err
-	}
-	return row.SigningKey, nil
+	var key []byte
+	err := s.pool.QueryRow(ctx, "SELECT signing_key FROM server").Scan(&key)
+	return key, err
 }
 
 // SetCertificateCountry keeps the country providers fetch certificates in, by its ISO code, so a
@@ -184,6 +213,28 @@ func (s *Store) SigningKey(ctx context.Context) ([]byte, error) {
 func (s *Store) SetCertificateCountry(ctx context.Context, country string) error {
 	_, err := s.pool.Exec(ctx, "UPDATE server SET certificate_country = nullif(upper($1), '')", country)
 	return err
+}
+
+// found turns a read that found no row into ErrNotFound.
+func found(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
+}
+
+// violation is the SQLSTATE Postgres refuses a write with for breaking a kind of constraint.
+type violation string
+
+const (
+	uniqueViolation     violation = "23505"
+	foreignKeyViolation violation = "23503"
+)
+
+// violates reports whether a write was refused for breaking a constraint of the kind.
+func violates(err error, v violation) bool {
+	var pg *pgconn.PgError
+	return errors.As(err, &pg) && violation(pg.Code) == v
 }
 
 func migrationsDir() fs.FS {

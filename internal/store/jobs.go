@@ -8,8 +8,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 // maxAttempts is how often a job is tried before it is dead and waits for its subject to change.
@@ -19,13 +17,13 @@ const maxAttempts = 5
 // cause commit together. A job already queued for the subject stands; one running will run again
 // once it ends, since it may have read the subject before this write; a dead one gets a fresh
 // set of attempts, as its subject has changed.
-func enqueue(ctx context.Context, tx *query.Query, kind domain.JobKind, subject model.UUID) error {
+func enqueue(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID) error {
 	return enqueueAfter(ctx, tx, kind, subject, 0)
 }
 
 // enqueueAfter is enqueue for a job due after a quiet delay: asking again before it is due moves it
 // later, so a burst of causes is answered once, when the burst ends.
-func enqueueAfter(ctx context.Context, tx *query.Query, kind domain.JobKind, subject model.UUID, delay time.Duration) error {
+func enqueueAfter(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID, delay time.Duration) error {
 	return insertJob(ctx, tx, kind, subject, delay, 0)
 }
 
@@ -42,7 +40,7 @@ const indexPriority = -1
 const refreshPriority = -1
 
 // enqueueAsked is enqueue for a job an admin is waiting on.
-func enqueueAsked(ctx context.Context, tx *query.Query, kind domain.JobKind, subject model.UUID) error {
+func enqueueAsked(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID) error {
 	return insertJob(ctx, tx, kind, subject, 0, askedPriority)
 }
 
@@ -52,16 +50,16 @@ const requeue = `
 		state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
 		attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END`
 
-func insertJob(ctx context.Context, tx *query.Query, kind domain.JobKind, subject model.UUID, delay time.Duration, priority int16) error {
-	// GORM refuses expressions in an upsert's assignments.
-	return tx.Job.WithContext(ctx).UnderlyingDB().Exec(`
-		INSERT INTO jobs (kind, subject, run_after, priority) VALUES (?, ?, now() + ?::interval, ?)
+func insertJob(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID, delay time.Duration, priority int16) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO jobs (kind, subject, run_after, priority) VALUES ($1, $2, now() + $3, $4)
 		ON CONFLICT (kind, subject) DO UPDATE SET
 			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
 			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END,
 			run_after = CASE WHEN jobs.state IN ('queued', 'dead') THEN excluded.run_after ELSE jobs.run_after END,
 			priority = greatest(jobs.priority, excluded.priority)`,
-		kind, subject, delay.String(), priority).Error
+		kind, subject, delay, priority)
+	return err
 }
 
 // ScanLibrary asks for a library to be scanned once delay has passed with no further asking.
@@ -72,16 +70,16 @@ func (s *Store) ScanLibrary(ctx context.Context, lib uuid.UUID, delay time.Durat
 // ScanFolders asks for folders of a library, and everything under them, to be scanned once delay
 // has passed with no further asking.
 func (s *Store) ScanFolders(ctx context.Context, lib uuid.UUID, folders []string, delay time.Duration) error {
-	return s.q.Transaction(func(tx *query.Query) error {
-		return askScan(ctx, tx, model.UUID(lib), folders, delay)
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		return askScan(ctx, tx, lib, folders, delay)
 	})
 }
 
-func askScan(ctx context.Context, tx *query.Query, lib model.UUID, folders []string, delay time.Duration) error {
+func askScan(ctx context.Context, tx db, lib uuid.UUID, folders []string, delay time.Duration) error {
 	for _, f := range folders {
-		err := tx.Job.WithContext(ctx).UnderlyingDB().Exec(`
-			INSERT INTO scan_requests (library_id, path) VALUES (?, ?)
-			ON CONFLICT (library_id, path) DO UPDATE SET asked_at = now()`, lib, f).Error
+		_, err := tx.Exec(ctx, `
+			INSERT INTO scan_requests (library_id, path) VALUES ($1, $2)
+			ON CONFLICT (library_id, path) DO UPDATE SET asked_at = now()`, lib, f)
 		if err != nil {
 			return err
 		}
@@ -94,7 +92,7 @@ func askScan(ctx context.Context, tx *query.Query, lib model.UUID, folders []str
 func (s *Store) ScanRequests(ctx context.Context, lib uuid.UUID) (folders []string, read time.Time, err error) {
 	err = s.pool.QueryRow(ctx, `
 		SELECT now(), coalesce(array_agg(path ORDER BY path), '{}') FROM scan_requests WHERE library_id = $1`,
-		lib.String()).Scan(&read, &folders)
+		lib).Scan(&read, &folders)
 	return folders, read, err
 }
 
@@ -102,7 +100,7 @@ func (s *Store) ScanRequests(ctx context.Context, lib uuid.UUID) (folders []stri
 func (s *Store) ScanAnswered(ctx context.Context, lib uuid.UUID, folders []string, read time.Time) error {
 	_, err := s.pool.Exec(ctx, `
 		DELETE FROM scan_requests WHERE library_id = $1 AND path = ANY($2) AND asked_at <= $3`,
-		lib.String(), folders, read)
+		lib, folders, read)
 	return err
 }
 
@@ -112,42 +110,28 @@ func (s *Store) ScanAnswered(ctx context.Context, lib uuid.UUID, folders []strin
 // planner may run the subquery again for each row it scans, each run skipping what the last
 // locked, and lease far more than n.
 func (s *Store) ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error) {
-	names := make([]string, len(kinds))
-	for i, k := range kinds {
-		names[i] = string(k)
-	}
 	rows, err := s.pool.Query(ctx, `
 		WITH picked AS MATERIALIZED (
 			SELECT id FROM jobs WHERE state = 'queued' AND run_after <= now() AND kind = ANY($1)
 			ORDER BY priority DESC, id FOR UPDATE SKIP LOCKED LIMIT $4)
 		UPDATE jobs SET state = 'running', lease_until = now() + $2, attempts = attempts + 1, node_id = $3
 		FROM picked WHERE jobs.id = picked.id
-		RETURNING jobs.id, jobs.kind, jobs.subject::text, jobs.attempts`, names, lease, node.String(), limit)
+		RETURNING jobs.id, jobs.kind, jobs.subject, jobs.attempts`, kinds, lease, node, limit)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (domain.Job, error) {
-		var j domain.Job
-		var kind, subject string
-		if err := r.Scan(&j.ID, &kind, &subject, &j.Attempts); err != nil {
-			return j, err
-		}
-		j.Kind = domain.JobKind(kind)
-		j.Subject, err = uuid.Parse(subject)
-		return j, err
-	})
+	return pgx.CollectRows(rows, pgx.RowToStructByName[domain.Job])
 }
 
 // CompleteJob removes a finished job, as what it produced is the record that it ran, or queues
 // it again if its subject changed while it ran.
 func (s *Store) CompleteJob(ctx context.Context, id int64) error {
-	j := s.q.Job
-	done, err := j.WithContext(ctx).Where(j.ID.Eq(id), j.State.Eq(string(domain.JobRunning))).Delete()
-	if err != nil || done.RowsAffected > 0 {
+	done, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE id = $1 AND state = 'running'`, id)
+	if err != nil || done.RowsAffected() > 0 {
 		return err
 	}
-	_, err = j.WithContext(ctx).Where(j.ID.Eq(id)).UpdateSimple(
-		j.State.Value(string(domain.JobQueued)), j.Attempts.Value(0), j.LeaseUntil.Null(), j.NodeID.Null())
+	_, err = s.pool.Exec(ctx, `
+		UPDATE jobs SET state = 'queued', attempts = 0, lease_until = NULL, node_id = NULL WHERE id = $1`, id)
 	return err
 }
 
@@ -155,69 +139,65 @@ func (s *Store) CompleteJob(ctx context.Context, id int64) error {
 // marks it dead once it has had maxAttempts and its subject has not changed since it was claimed,
 // answering whether it did.
 func (s *Store) FailJob(ctx context.Context, job domain.Job, runErr error) (bool, error) {
-	j := s.q.Job
-	q := j.WithContext(ctx).Where(j.ID.Eq(job.ID))
 	if job.Attempts >= maxAttempts {
-		dead, err := j.WithContext(ctx).Where(j.ID.Eq(job.ID), j.State.Eq(string(domain.JobRunning))).
-			UpdateSimple(j.State.Value(string(domain.JobDead)), j.LeaseUntil.Null(), j.LastError.Value(runErr.Error()))
-		if err != nil || dead.RowsAffected > 0 {
+		dead, err := s.pool.Exec(ctx, `
+			UPDATE jobs SET state = 'dead', lease_until = NULL, last_error = $2 WHERE id = $1 AND state = 'running'`,
+			job.ID, runErr.Error())
+		if err != nil || dead.RowsAffected() > 0 {
 			return err == nil, err
 		}
 	}
 	backoff := min(time.Minute<<job.Attempts, time.Hour)
-	_, err := q.UpdateSimple(
-		j.State.Value(string(domain.JobQueued)), j.LeaseUntil.Null(), j.NodeID.Null(),
-		j.RunAfter.Value(time.Now().Add(backoff)), j.LastError.Value(runErr.Error()),
-	)
+	_, err := s.pool.Exec(ctx, `
+		UPDATE jobs SET state = 'queued', lease_until = NULL, node_id = NULL, run_after = now() + $2, last_error = $3
+		WHERE id = $1`, job.ID, backoff, runErr.Error())
 	return false, err
 }
 
 // PostponeJob queues a job again once a delay has passed, giving back its attempt: it could not
 // start for want of room on its node, which is no fault of its subject's.
 func (s *Store) PostponeJob(ctx context.Context, job domain.Job, delay time.Duration) error {
-	j := s.q.Job
-	_, err := j.WithContext(ctx).Where(j.ID.Eq(job.ID)).UpdateSimple(
-		j.State.Value(string(domain.JobQueued)), j.Attempts.Sub(1), j.LeaseUntil.Null(), j.NodeID.Null(),
-		j.RunAfter.Value(time.Now().Add(delay)))
+	_, err := s.pool.Exec(ctx, `
+		UPDATE jobs SET state = 'queued', attempts = attempts - 1, lease_until = NULL, node_id = NULL,
+			run_after = now() + $2
+		WHERE id = $1`, job.ID, delay)
 	return err
 }
 
 // RunningJobs answers the jobs being run now, on every node, the oldest first.
 func (s *Store) RunningJobs(ctx context.Context) ([]domain.Job, error) {
-	j := s.q.Job
-	rows, err := j.WithContext(ctx).Where(j.State.In(string(domain.JobRunning), string(domain.JobRerun))).Order(j.ID).Find()
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, kind, subject, attempts FROM jobs WHERE state IN ('running', 'rerun') ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]domain.Job, len(rows))
-	for i, r := range rows {
-		out[i] = domain.Job{ID: r.ID, Kind: r.Kind, Subject: uuid.UUID(r.Subject), Attempts: int(r.Attempts)}
-	}
-	return out, nil
+	return pgx.CollectRows(rows, pgx.RowToStructByName[domain.Job])
 }
 
 // JobsLeft answers how many jobs of each kind are left to run, queued or running, leaving out
 // kinds with none.
 func (s *Store) JobsLeft(ctx context.Context) (map[domain.JobKind]int, error) {
-	j := s.q.Job
-	var counts []JobCount
-	err := j.WithContext(ctx).Select(j.Kind, j.ID.Count().As("count")).
-		Where(j.State.In(string(domain.JobQueued), string(domain.JobRunning), string(domain.JobRerun))).
-		Group(j.Kind).Scan(&counts)
-	out := make(map[domain.JobKind]int, len(counts))
-	for _, c := range counts {
-		out[c.Kind] = c.Count
+	rows, err := s.pool.Query(ctx, `
+		SELECT kind, count(*) FROM jobs WHERE state IN ('queued', 'running', 'rerun') GROUP BY kind`)
+	if err != nil {
+		return nil, err
 	}
+	out := map[domain.JobKind]int{}
+	var kind domain.JobKind
+	var count int
+	_, err = pgx.ForEachRow(rows, []any{&kind, &count}, func() error {
+		out[kind] = count
+		return nil
+	})
 	return out, err
 }
 
 // ExtendLease keeps a running job's lease while node is at it.
 func (s *Store) ExtendLease(ctx context.Context, id int64, node uuid.UUID, lease time.Duration) error {
-	j := s.q.Job
-	info, err := j.WithContext(ctx).
-		Where(j.ID.Eq(id), j.State.In(string(domain.JobRunning), string(domain.JobRerun)), j.NodeID.Eq(model.UUID(node))).
-		UpdateSimple(j.LeaseUntil.Value(time.Now().Add(lease)))
-	if err == nil && info.RowsAffected == 0 {
+	info, err := s.pool.Exec(ctx, `
+		UPDATE jobs SET lease_until = now() + $3 WHERE id = $1 AND state IN ('running', 'rerun') AND node_id = $2`,
+		id, node, lease)
+	if err == nil && info.RowsAffected() == 0 {
 		return domain.ErrLeaseLost
 	}
 	return err
@@ -225,27 +205,19 @@ func (s *Store) ExtendLease(ctx context.Context, id int64, node uuid.UUID, lease
 
 // SweepJobs queues again every job whose worker's lease ran out: the worker died or lost touch.
 func (s *Store) SweepJobs(ctx context.Context) (int64, error) {
-	j := s.q.Job
-	info, err := j.WithContext(ctx).
-		Where(j.State.In(string(domain.JobRunning), string(domain.JobRerun)), j.LeaseUntil.Lt(time.Now())).
-		UpdateSimple(j.State.Value(string(domain.JobQueued)), j.LeaseUntil.Null(), j.NodeID.Null())
-	return info.RowsAffected, err
+	info, err := s.pool.Exec(ctx, `
+		UPDATE jobs SET state = 'queued', lease_until = NULL, node_id = NULL
+		WHERE state IN ('running', 'rerun') AND lease_until < now()`)
+	return info.RowsAffected(), err
 }
 
 // PartFile is a place a part's bytes are: its library's root and the path inside it. Of several
 // identical copies, any will do.
 func (s *Store) PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error) {
-	f, l := s.q.PartFile, s.q.Library
-	var row struct {
-		Root    string
-		RelPath string
-	}
-	err = f.WithContext(ctx).Select(l.Root, f.RelPath).Join(l, l.ID.EqCol(f.LibraryID)).
-		Where(f.PartID.Eq(model.UUID(part))).Order(f.RelPath).Limit(1).Scan(&row)
-	if err == nil && row.RelPath == "" {
-		err = ErrNotFound
-	}
-	return row.Root, row.RelPath, err
+	err = s.pool.QueryRow(ctx, `
+		SELECT l.root, f.rel_path FROM part_files f JOIN libraries l ON l.id = f.library_id
+		WHERE f.part_id = $1 ORDER BY f.rel_path LIMIT 1`, part).Scan(&root, &rel)
+	return root, rel, found(err)
 }
 
 // SaveKeyframes records a part's keyframe times, none where it has none known. pgx writes them as
@@ -256,35 +228,35 @@ func (s *Store) SaveKeyframes(ctx context.Context, part uuid.UUID, ptsMS []int64
 	}
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO keyframes (part_id, pts_ms) VALUES ($1, $2)
-		ON CONFLICT (part_id) DO UPDATE SET pts_ms = excluded.pts_ms`, part.String(), ptsMS)
+		ON CONFLICT (part_id) DO UPDATE SET pts_ms = excluded.pts_ms`, part, ptsMS)
 	return err
 }
 
 // rekeyframe queues a library's parts with no keyframes known to be read again under its new mode;
 // those already known stay, since every mode finds the same ones.
-func rekeyframe(ctx context.Context, tx *query.Query, lib model.UUID, mode domain.KeyframeMode) error {
+func rekeyframe(ctx context.Context, tx db, lib uuid.UUID, mode domain.KeyframeMode) error {
 	if mode == domain.KeyframesOff {
 		return nil
 	}
-	db := tx.Job.WithContext(ctx).UnderlyingDB()
-	err := db.Exec(`
+	_, err := tx.Exec(ctx, `
 		DELETE FROM keyframes k USING parts p, versions v
-		WHERE k.part_id = p.id AND v.id = p.version_id AND v.library_id = ? AND cardinality(k.pts_ms) = 0`, lib).Error
+		WHERE k.part_id = p.id AND v.id = p.version_id AND v.library_id = $1 AND cardinality(k.pts_ms) = 0`, lib)
 	if err != nil {
 		return err
 	}
-	return db.Exec(`
+	_, err = tx.Exec(ctx, `
 		INSERT INTO jobs (kind, subject, priority)
-		SELECT 'keyframes', p.id, ? FROM parts p JOIN versions v ON v.id = p.version_id
-		WHERE v.library_id = ?
+		SELECT 'keyframes', p.id, $1 FROM parts p JOIN versions v ON v.id = p.version_id
+		WHERE v.library_id = $2
 			AND EXISTS (SELECT 1 FROM part_files f WHERE f.part_id = p.id)
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'video')
-			AND NOT EXISTS (SELECT 1 FROM keyframes k WHERE k.part_id = p.id)`+requeue, indexPriority, lib).Error
+			AND NOT EXISTS (SELECT 1 FROM keyframes k WHERE k.part_id = p.id)`+requeue, indexPriority, lib)
+	return err
 }
 
 // AskKeyframes queues a part's keyframes job ahead of the rest, for a part played before its turn.
 func (s *Store) AskKeyframes(ctx context.Context, part uuid.UUID) error {
-	return enqueueAsked(ctx, s.q, domain.JobKeyframes, model.UUID(part))
+	return enqueueAsked(ctx, s.pool, domain.JobKeyframes, part)
 }
 
 // JobCount is how many jobs of a kind are in a state.
@@ -305,29 +277,33 @@ const deadShown = 50
 
 // JobQueue answers how many jobs of each kind are in each state, and the jobs that are dead.
 func (s *Store) JobQueue(ctx context.Context) ([]JobCount, []DeadJob, error) {
-	j := s.q.Job
-	var counts []JobCount
-	if err := j.WithContext(ctx).Select(j.Kind, j.State, j.ID.Count().As("count")).
-		Group(j.Kind, j.State).Order(j.Kind, j.State).Scan(&counts); err != nil {
-		return nil, nil, err
-	}
-	rows, err := j.WithContext(ctx).Where(j.State.Eq(string(domain.JobDead))).Order(j.ID.Desc()).Limit(deadShown).Find()
+	rows, err := s.pool.Query(ctx, `SELECT kind, state, count(*) FROM jobs GROUP BY kind, state ORDER BY kind, state`)
 	if err != nil {
 		return nil, nil, err
 	}
-	dead := make([]DeadJob, len(rows))
-	for i, r := range rows {
-		dead[i] = DeadJob{ID: r.ID, Kind: r.Kind, Subject: uuid.UUID(r.Subject), Attempts: int(r.Attempts), Error: deref(r.LastError)}
+	counts, err := pgx.CollectRows(rows, pgx.RowToStructByPos[JobCount])
+	if err != nil {
+		return nil, nil, err
 	}
-	return counts, dead, nil
+	rows, err = s.pool.Query(ctx, `
+		SELECT id, kind, subject, attempts, coalesce(last_error, '') FROM jobs WHERE state = 'dead'
+		ORDER BY id DESC LIMIT $1`, deadShown)
+	if err != nil {
+		return nil, nil, err
+	}
+	dead, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (DeadJob, error) {
+		var d DeadJob
+		err := r.Scan(&d.ID, &d.Kind, &d.Subject, &d.Attempts, &d.Error)
+		return d, err
+	})
+	return counts, dead, err
 }
 
 // RetryJob gives a dead job a fresh set of attempts now. ErrNotFound for no dead job of that id.
 func (s *Store) RetryJob(ctx context.Context, id int64) error {
-	j := s.q.Job
-	res, err := j.WithContext(ctx).Where(j.ID.Eq(id), j.State.Eq(string(domain.JobDead))).
-		UpdateSimple(j.State.Value(string(domain.JobQueued)), j.Attempts.Value(0), j.RunAfter.Value(time.Now()))
-	if err == nil && res.RowsAffected == 0 {
+	res, err := s.pool.Exec(ctx, `
+		UPDATE jobs SET state = 'queued', attempts = 0, run_after = now() WHERE id = $1 AND state = 'dead'`, id)
+	if err == nil && res.RowsAffected() == 0 {
 		err = ErrNotFound
 	}
 	return err
@@ -336,12 +312,11 @@ func (s *Store) RetryJob(ctx context.Context, id int64) error {
 // Identified records that a title has just been matched on every provider its library takes, and
 // asks ThemerrDB for its theme where its library takes those, so a refresh finds one listed since.
 func (s *Store) Identified(ctx context.Context, id uuid.UUID) error {
-	return s.q.Transaction(func(tx *query.Query) error {
-		i := tx.Item
-		if _, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Update(i.IdentifiedAt, time.Now()); err != nil {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE items SET identified_at = now() WHERE id = $1`, id); err != nil {
 			return err
 		}
-		return askThemes(ctx, tx, `@id`, map[string]any{"id": model.UUID(id)})
+		return askThemes(ctx, tx, `@id`, pgx.NamedArgs{"id": id})
 	})
 }
 

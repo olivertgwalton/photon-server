@@ -1,27 +1,22 @@
 package store
 
 import (
-	"bytes"
 	"cmp"
 	"context"
-	"database/sql/driver"
 	"maps"
 	"slices"
 	"time"
 	"uuid"
 
-	"gorm.io/gorm/clause"
-
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 // credited is what a source credits on one title.
 type credited struct {
-	item    model.UUID
+	item    uuid.UUID
 	credits []domain.Credit
 }
 
@@ -31,25 +26,22 @@ type personKey struct {
 	value    string
 }
 
-// creditBatch is how many credits go in one statement.
-const creditBatch = 1000
-
 // saveCredits replaces what a source credits on titles, keeping one row per person whatever titles
 // credit them, in a handful of statements however many credits there are. A person is known by
 // any of their ids; a credit with none is passed over. Credits sharing an id, or whose ids name
 // people already, are one person, and people found by different ids of one are merged into the
 // first added. The ids a person lacks are added, and their name and picture follow the last
 // credit; a new picture gets a new id. Someone another match adds at the same moment is theirs.
-func saveCredits(ctx context.Context, tx *query.Query, source domain.FieldSource, titles []credited) error {
+func saveCredits(ctx context.Context, tx db, source domain.FieldSource, titles []credited) error {
 	type entry struct {
-		item     model.UUID
+		item     uuid.UUID
 		position int
 		credit   domain.Credit
 		keys     []personKey
 	}
 	var entries []entry
 	var keys []personKey
-	var cleared []driver.Valuer
+	var cleared []uuid.UUID
 	for _, t := range titles {
 		cleared = append(cleared, t.item)
 		for n, cr := range t.credits {
@@ -65,8 +57,8 @@ func saveCredits(ctx context.Context, tx *query.Query, source domain.FieldSource
 			}
 		}
 	}
-	c := tx.Credit
-	if _, err := c.WithContext(ctx).Where(c.ItemID.In(cleared...), c.Source.Eq(string(source))).Delete(); err != nil || len(entries) == 0 {
+	_, err := tx.Exec(ctx, `DELETE FROM credits WHERE item_id = ANY($1) AND source = $2`, cleared, source)
+	if err != nil || len(entries) == 0 {
 		return err
 	}
 	owners, err := personOwners(ctx, tx, keys)
@@ -121,45 +113,50 @@ func saveCredits(ctx context.Context, tx *query.Query, source domain.FieldSource
 	}
 
 	// Someone none of whose ids is known is added, as the last credit names them.
-	var added []*model.Person
+	add := &pgx.Batch{}
 	for _, p := range people {
 		if !slices.ContainsFunc(p.keys, func(k personKey) bool { _, ok := owners[k]; return ok }) {
-			p.added = &model.Person{Name: p.name}
-			setPhoto(p.added, p.photo)
-			added = append(added, p.added)
+			added := &model.Person{Name: p.name}
+			setPhoto(added, p.photo)
+			p.added = added
+			add.Queue(`INSERT INTO people (name, photo_url, photo_id, photo_blurhash) VALUES ($1, $2, $3, $4) RETURNING id`,
+				added.Name, added.PhotoURL, added.PhotoID, added.PhotoBlurhash).QueryRow(func(r pgx.Row) error {
+				return r.Scan(&added.ID)
+			})
 		}
 	}
-	if len(added) > 0 {
-		if err := tx.Person.WithContext(ctx).Create(added...); err != nil {
+	if add.Len() > 0 {
+		if err := tx.SendBatch(ctx, add).Close(); err != nil {
 			return err
 		}
 	}
 	// The ids not yet known go in in one order, so two matches adding the same people wait on
 	// each other rather than deadlock; an id another took first is left with them.
-	var newIDs [3][]string
+	var newPeople []uuid.UUID
+	var newIDs [2][]string
 	for _, p := range people {
-		var to model.UUID
+		var to uuid.UUID
 		if p.added != nil {
 			to = p.added.ID
 		}
 		for _, k := range p.keys {
-			if o, ok := owners[k]; ok && (to == (model.UUID{}) || before(o.PersonID, to)) {
+			if o, ok := owners[k]; ok && (to == (uuid.UUID{}) || before(o.PersonID, to)) {
 				to = o.PersonID
 			}
 		}
 		for _, k := range p.keys {
 			if _, ok := owners[k]; !ok {
-				newIDs[0] = append(newIDs[0], uuid.UUID(to).String())
-				newIDs[1] = append(newIDs[1], string(k.provider))
-				newIDs[2] = append(newIDs[2], k.value)
+				newPeople = append(newPeople, to)
+				newIDs[0] = append(newIDs[0], string(k.provider))
+				newIDs[1] = append(newIDs[1], k.value)
 			}
 		}
 	}
-	if len(newIDs[0]) > 0 {
-		err := tx.PersonExternalID.WithContext(ctx).UnderlyingDB().Exec(`
+	if len(newPeople) > 0 {
+		_, err := tx.Exec(ctx, `
 			INSERT INTO person_ids (person_id, provider, value)
-			SELECT * FROM unnest(?::uuid[], ?::text[], ?::text[]) ORDER BY 2, 3
-			ON CONFLICT DO NOTHING`, array(newIDs[0]), array(newIDs[1]), array(newIDs[2])).Error
+			SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[]) ORDER BY 2, 3
+			ON CONFLICT DO NOTHING`, newPeople, newIDs[0], newIDs[1])
 		if err != nil {
 			return err
 		}
@@ -168,15 +165,19 @@ func saveCredits(ctx context.Context, tx *query.Query, source domain.FieldSource
 		}
 	}
 
-	pp := tx.Person
-	var rows []*model.Credit
-	var orphans []driver.Valuer
+	var credits struct {
+		items, people []uuid.UUID
+		kinds         []domain.CreditKind
+		roles         []string
+		positions     []int
+	}
+	var orphans []uuid.UUID
 	for _, p := range people {
-		var found []model.UUID
+		var found []uuid.UUID
 		for _, k := range p.keys {
 			found = append(found, owners[k].PersonID)
 		}
-		slices.SortFunc(found, func(a, b model.UUID) int { return bytes.Compare(a[:], b[:]) })
+		slices.SortFunc(found, uuid.UUID.Compare)
 		found = slices.Compact(found)
 		keep := found[0]
 		for _, other := range found[1:] {
@@ -192,51 +193,64 @@ func saveCredits(ctx context.Context, tx *query.Query, source domain.FieldSource
 			if o.Name != p.name || (p.photo != "" && deref(o.PhotoURL) != p.photo) {
 				row := &model.Person{Name: p.name, PhotoURL: o.PhotoURL, PhotoID: o.PhotoID, PhotoBlurhash: o.PhotoBlurhash}
 				setPhoto(row, p.photo)
-				if _, err := pp.WithContext(ctx).Where(pp.ID.Eq(keep)).Select(pp.Name, pp.PhotoURL, pp.PhotoID, pp.PhotoBlurhash).Updates(row); err != nil {
+				_, err := tx.Exec(ctx, `UPDATE people SET name = $2, photo_url = $3, photo_id = $4, photo_blurhash = $5 WHERE id = $1`,
+					keep, row.Name, row.PhotoURL, row.PhotoID, row.PhotoBlurhash)
+				if err != nil {
 					return err
 				}
 			}
 		}
 		for _, n := range p.entries {
 			e := entries[n]
-			rows = append(rows, &model.Credit{ItemID: e.item, PersonID: keep, Source: source, Kind: e.credit.Kind, Role: e.credit.Role, Position: e.position})
+			credits.items = append(credits.items, e.item)
+			credits.people = append(credits.people, keep)
+			credits.kinds = append(credits.kinds, e.credit.Kind)
+			credits.roles = append(credits.roles, e.credit.Role)
+			credits.positions = append(credits.positions, e.position)
 		}
 	}
 	if len(orphans) > 0 {
-		if _, err := pp.WithContext(ctx).Where(pp.ID.In(orphans...)).Delete(); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM people WHERE id = ANY($1)`, orphans); err != nil {
 			return err
 		}
 	}
 	// A source may credit one person twice for one part: an actor billed as two names of one role.
-	return c.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(rows, creditBatch)
+	_, err = tx.Exec(ctx, `
+		INSERT INTO credits (item_id, person_id, source, kind, role, position)
+		SELECT i, p, $3, k, r, n FROM unnest($1::uuid[], $2::uuid[], $4::text[], $5::text[], $6::int[]) AS c(i, p, k, r, n)
+		ON CONFLICT DO NOTHING`,
+		credits.items, credits.people, source, credits.kinds, credits.roles, credits.positions)
+	return err
 }
 
 // before reports whether a was added before b, as ids are minted in time order.
-func before(a, b model.UUID) bool { return bytes.Compare(a[:], b[:]) < 0 }
+func before(a, b uuid.UUID) bool { return a.Compare(b) < 0 }
 
 // owner is the person an id names, as they are now.
 type owner struct {
-	PersonID      model.UUID
+	PersonID      uuid.UUID
 	Provider      domain.Provider
 	Value         string
 	Name          string
 	PhotoURL      *string
-	PhotoID       *model.UUID
+	PhotoID       *uuid.UUID
 	PhotoBlurhash *string
 }
 
 // personOwners answers who each of keys names, where anyone does.
-func personOwners(ctx context.Context, tx *query.Query, keys []personKey) (map[personKey]owner, error) {
+func personOwners(ctx context.Context, tx db, keys []personKey) (map[personKey]owner, error) {
 	providers, values := make([]string, len(keys)), make([]string, len(keys))
 	for n, k := range keys {
 		providers[n], values[n] = string(k.provider), k.value
 	}
-	var rows []owner
-	err := tx.Person.WithContext(ctx).UnderlyingDB().Raw(`
+	found, err := tx.Query(ctx, `
 		SELECT i.person_id, i.provider, i.value, p.name, p.photo_url, p.photo_id, p.photo_blurhash
 		FROM person_ids i JOIN people p ON p.id = i.person_id
-		WHERE (i.provider, i.value) IN (SELECT * FROM unnest(?::text[], ?::text[]))`,
-		array(providers), array(values)).Scan(&rows).Error
+		WHERE (i.provider, i.value) IN (SELECT * FROM unnest($1::text[], $2::text[]))`, providers, values)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := pgx.CollectRows(found, pgx.RowToStructByName[owner])
 	out := make(map[personKey]owner, len(rows))
 	for _, r := range rows {
 		out[personKey{r.Provider, r.Value}] = r
@@ -245,9 +259,8 @@ func personOwners(ctx context.Context, tx *query.Query, keys []personKey) (map[p
 }
 
 // mergePerson folds other into into: their credits and the ids into has no id of the provider for.
-func mergePerson(ctx context.Context, tx *query.Query, into, other model.UUID) error {
-	db := tx.Person.WithContext(ctx).UnderlyingDB()
-	args := map[string]any{"into": into, "other": other}
+func mergePerson(ctx context.Context, tx db, into, other uuid.UUID) error {
+	args := pgx.NamedArgs{"into": into, "other": other}
 	for _, stmt := range []string{
 		`UPDATE person_ids SET person_id = @into WHERE person_id = @other
 			AND provider NOT IN (SELECT provider FROM person_ids WHERE person_id = @into)`,
@@ -255,7 +268,7 @@ func mergePerson(ctx context.Context, tx *query.Query, into, other model.UUID) e
 			SELECT 1 FROM credits k WHERE k.person_id = @into AND (k.item_id, k.source, k.kind, k.role) = (c.item_id, c.source, c.kind, c.role))`,
 		`DELETE FROM people WHERE id = @other`,
 	} {
-		if err := db.Exec(stmt, args).Error; err != nil {
+		if _, err := tx.Exec(ctx, stmt, args); err != nil {
 			return err
 		}
 	}
@@ -266,7 +279,7 @@ func setPhoto(p *model.Person, url string) {
 	if url == "" || deref(p.PhotoURL) == url {
 		return
 	}
-	id := model.UUID(uuid.NewV7())
+	id := uuid.NewV7()
 	p.PhotoURL, p.PhotoID, p.PhotoBlurhash = &url, &id, nil
 }
 
@@ -283,23 +296,23 @@ type CreditRef struct {
 
 type creditRow struct {
 	Source   domain.FieldSource
-	PersonID model.UUID
+	PersonID uuid.UUID
 	Name     string
 	Kind     domain.CreditKind
 	Role     string
-	PhotoID  *model.UUID
+	PhotoID  *uuid.UUID
 	Blurhash *string
 }
 
 // credits answers a title's cast and crew as the highest-ranked source with any gives them.
-func (s *Store) credits(ctx context.Context, item model.UUID) ([]CreditRef, error) {
-	ranked, err := ranks(ctx, s.q, item)
+func (s *Store) credits(ctx context.Context, item uuid.UUID) ([]CreditRef, error) {
+	ranked, err := ranks(ctx, s.pool, item)
 	if err != nil {
 		return nil, err
 	}
 	found, err := s.pool.Query(ctx, `
 		SELECT c.source, c.person_id, p.name, c.kind, c.role, p.photo_id, p.photo_blurhash AS blurhash FROM credits c
-		JOIN people p ON p.id = c.person_id WHERE c.item_id = $1 ORDER BY c.position`, uuid.UUID(item).String())
+		JOIN people p ON p.id = c.person_id WHERE c.item_id = $1 ORDER BY c.position`, item)
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +331,7 @@ func (s *Store) credits(ctx context.Context, item model.UUID) ([]CreditRef, erro
 		if r.Source != best {
 			continue
 		}
-		ref := CreditRef{PersonID: uuid.UUID(r.PersonID), Name: r.Name, Kind: r.Kind, Role: r.Role}
+		ref := CreditRef{PersonID: r.PersonID, Name: r.Name, Kind: r.Kind, Role: r.Role}
 		ref.Photo, ref.Blurhashes = photo(r.PhotoID, r.Blurhash)
 		out = append(out, ref)
 	}
@@ -348,45 +361,56 @@ type PersonCredit struct {
 	Role string
 }
 
+// personColumns are model.Person's, for a statement that reads whole people.
+const personColumns = `id, name, photo_url, photo_id, photo_blurhash, biography, born, died, birthplace, described_at`
+
 // Person answers someone's page, or ErrNotFound.
 func (s *Store) Person(ctx context.Context, id uuid.UUID) (PersonPage, error) {
-	p := s.q.Person
-	row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
+	row, err := readRow[model.Person](ctx, s.pool, `SELECT `+personColumns+` FROM people WHERE id = $1`, id)
 	if err != nil {
-		return PersonPage{}, found(err)
+		return PersonPage{}, err
 	}
 	out := PersonPage{
 		ID: id, Name: row.Name, Biography: deref(row.Biography), Born: date(row.Born), Died: date(row.Died),
 		Birthplace: deref(row.Birthplace), DescribedAt: deref(row.DescribedAt),
 	}
 	out.Photo, out.Blurhashes = photo(row.PhotoID, row.PhotoBlurhash)
-	pi := s.q.PersonExternalID
-	ids, err := pi.WithContext(ctx).Where(pi.PersonID.Eq(row.ID)).Find()
+	var provider domain.Provider
+	var value string
+	ids, err := s.pool.Query(ctx, `SELECT provider, value FROM person_ids WHERE person_id = $1`, id)
 	if err != nil {
 		return PersonPage{}, err
 	}
-	for _, i := range ids {
+	_, err = pgx.ForEachRow(ids, []any{&provider, &value}, func() error {
 		if out.IDs == nil {
 			out.IDs = map[domain.Provider]string{}
 		}
-		out.IDs[i.Provider] = i.Value
+		out.IDs[provider] = value
+		return nil
+	})
+	if err != nil {
+		return PersonPage{}, err
 	}
 	return out, nil
 }
 
 // DescribePerson records what a provider says of someone.
 func (s *Store) DescribePerson(ctx context.Context, id uuid.UUID, d domain.Person) error {
-	return s.q.Transaction(func(tx *query.Query) error {
-		p := tx.Person
-		row, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).Take()
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		row, err := readRow[model.Person](ctx, tx, `SELECT `+personColumns+` FROM people WHERE id = $1`, id)
 		if err != nil {
 			return err
 		}
 		now := time.Now()
 		row.Biography, row.Birthplace, row.DescribedAt = optional(d.Biography), optional(d.Birthplace), &now
 		row.Born, row.Died = optionalTime(d.Born), optionalTime(d.Died)
-		setPhoto(row, d.Photo)
-		return p.WithContext(ctx).Save(row)
+		setPhoto(&row, d.Photo)
+		_, err = tx.Exec(ctx, `
+			UPDATE people SET photo_url = $2, photo_id = $3, photo_blurhash = $4, biography = $5, born = $6, died = $7,
+				birthplace = $8, described_at = $9
+			WHERE id = $1`,
+			id, row.PhotoURL, row.PhotoID, row.PhotoBlurhash, row.Biography, row.Born, row.Died, row.Birthplace, row.DescribedAt)
+		return err
 	})
 }
 
@@ -398,7 +422,7 @@ func optionalTime(t time.Time) *time.Time {
 }
 
 type creditLink struct {
-	ItemID model.UUID
+	ItemID uuid.UUID
 	Kind   domain.CreditKind
 	Role   string
 }
@@ -412,7 +436,7 @@ func (s *Store) PersonCredits(ctx context.Context, profile, person uuid.UUID) ([
 		JOIN items t ON t.id = CASE i.kind WHEN 'episode' THEN (SELECT s.parent_id FROM items s WHERE s.id = i.parent_id) ELSE i.id END
 		WHERE c.person_id = $1 AND t.kind IN ('movie', 'show')
 			AND EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, t) AND first_of_title(v, t))
-		ORDER BY t.id, c.kind, c.position`, person.String(), profile.String())
+		ORDER BY t.id, c.kind, c.position`, person, profile)
 	if err != nil {
 		return nil, err
 	}
@@ -420,12 +444,11 @@ func (s *Store) PersonCredits(ctx context.Context, profile, person uuid.UUID) ([
 	if err != nil || len(links) == 0 {
 		return nil, err
 	}
-	ids := make([]driver.Valuer, len(links))
+	ids := make([]uuid.UUID, len(links))
 	for n, l := range links {
 		ids[n] = l.ItemID
 	}
-	i := s.q.Item
-	rows, err := i.WithContext(ctx).Where(i.ID.In(ids...)).Order(i.ReleasedDesc.Desc(), i.ID).Find()
+	rows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE id = ANY($1) ORDER BY released_desc DESC, id`, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +459,7 @@ func (s *Store) PersonCredits(ctx context.Context, profile, person uuid.UUID) ([
 	var out []PersonCredit
 	for _, c := range cards {
 		for _, l := range links {
-			if uuid.UUID(l.ItemID) == c.ID {
+			if l.ItemID == c.ID {
 				out = append(out, PersonCredit{Card: c, Kind: l.Kind, Role: l.Role})
 			}
 		}
@@ -451,16 +474,14 @@ const similarShown = 20
 // first three genres, its first director, its first writer and its five top-billed actors they
 // share, all counting alike, the newer first on a tie. A title sharing none is left out.
 func (s *Store) Similar(ctx context.Context, profile, id uuid.UUID) ([]Card, error) {
-	i := s.q.Item
-	item, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
-	if err != nil {
+	var kind domain.ItemKind
+	if err := s.pool.QueryRow(ctx, `SELECT kind FROM items WHERE id = $1`, id).Scan(&kind); err != nil {
 		return nil, found(err)
 	}
-	if item.Kind != domain.ItemMovie && item.Kind != domain.ItemShow {
+	if kind != domain.ItemMovie && kind != domain.ItemShow {
 		return []Card{}, nil
 	}
-	var rows []*model.Item
-	err = i.WithContext(ctx).UnderlyingDB().Raw(`
+	rows, err := queryRows[model.Item](ctx, s.pool, `
 		WITH src AS (
 			SELECT id, kind, ARRAY(SELECT jsonb_array_elements_text(coalesce(genres, '[]'))) AS genres FROM items WHERE id = @id
 		), src_genres AS (
@@ -493,12 +514,13 @@ func (s *Store) Similar(ctx context.Context, profile, id uuid.UUID) ([]Card, err
 			-- whether they are the one of their title shown, not every candidate.
 			OFFSET 0
 		), shown AS (
-			SELECT * FROM ranked WHERE (SELECT first_of_title(v, i) FROM items i, viewer(@profile) v WHERE i.id = ranked.id)
+			SELECT id AS shown_id, score FROM ranked
+			WHERE (SELECT first_of_title(v, i) FROM items i, viewer(@profile) v WHERE i.id = ranked.id)
 			LIMIT @limit
 		)
-		SELECT i.* FROM shown JOIN items i ON i.id = shown.id
-		ORDER BY shown.score DESC, shown.released_desc DESC NULLS LAST, shown.added_at, shown.id`,
-		map[string]any{"id": item.ID, "limit": similarShown, "profile": profile.String()}).Scan(&rows).Error
+		SELECT `+itemColumns+` FROM shown JOIN items ON items.id = shown.shown_id
+		ORDER BY shown.score DESC, items.released_desc DESC NULLS LAST, items.added_at, items.id`,
+		pgx.NamedArgs{"id": id, "limit": similarShown, "profile": profile})
 	if err != nil {
 		return nil, err
 	}

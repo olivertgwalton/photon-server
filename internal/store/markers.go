@@ -3,7 +3,6 @@ package store
 import (
 	"cmp"
 	"context"
-	"database/sql/driver"
 	"errors"
 	"maps"
 	"slices"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
 
 var (
@@ -82,9 +80,8 @@ func chapterMarkers(chapters []*model.Chapter) []*model.Marker {
 // timeline, and parts that have none of a kind. Saying nothing clears them, and the chapters' and
 // fingerprints' stand again.
 func (s *Store) SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker, absent []domain.MarkerAbsent) error {
-	return s.q.Transaction(func(tx *query.Query) error {
-		pt := tx.Part
-		parts, err := pt.WithContext(ctx).Where(pt.VersionID.Eq(model.UUID(version))).Order(pt.Idx).Find()
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		parts, err := queryRows[model.Part](ctx, tx, `SELECT `+partColumns+` FROM parts WHERE version_id = $1 ORDER BY idx`, version)
 		if err != nil {
 			return err
 		}
@@ -120,17 +117,28 @@ func (s *Store) SetMarkers(ctx context.Context, version uuid.UUID, markers []dom
 				return err
 			}
 		}
-		mk := tx.Marker
-		pids := make([]driver.Valuer, len(parts))
+		pids := make([]uuid.UUID, len(parts))
 		for n, p := range parts {
 			pids[n] = p.ID
 		}
-		_, err = mk.WithContext(ctx).Where(mk.PartID.In(pids...), mk.Source.Eq(string(domain.MarkerByUser))).Delete()
-		if err != nil || len(rows) == 0 {
+		_, err = tx.Exec(ctx, `DELETE FROM markers WHERE part_id = ANY($1) AND source = $2`, pids, domain.MarkerByUser)
+		if err != nil {
 			return err
 		}
-		return mk.WithContext(ctx).Create(rows...)
+		return createMarkers(ctx, tx, rows)
 	})
+}
+
+func createMarkers(ctx context.Context, tx db, rows []*model.Marker) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	b := &pgx.Batch{}
+	for _, m := range rows {
+		b.Queue(`INSERT INTO markers (part_id, kind, source, start_ms, end_ms) VALUES ($1, $2, $3, $4, $5)`,
+			m.PartID, m.Kind, m.Source, m.StartMS, m.EndMS)
+	}
+	return tx.SendBatch(ctx, b).Close()
 }
 
 // SeasonPart is a part of an episode in a season, with somewhere to read it and sound to compare.
@@ -148,7 +156,7 @@ type SeasonPart struct {
 }
 
 type seasonPartRow struct {
-	ID, Episode, Version model.UUID
+	ID, Episode, Version uuid.UUID
 	Idx                  int
 	DurationMS           int64
 	Root, RelPath        string
@@ -168,7 +176,7 @@ func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart
 		JOIN libraries l ON l.id = f.library_id AND l.markers = 'all'
 		WHERE e.parent_id = $1 AND e.kind = 'episode'
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'audio')
-		ORDER BY p.id, f.rel_path`, season.String())
+		ORDER BY p.id, f.rel_path`, season)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +187,7 @@ func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart
 	out := make([]SeasonPart, len(rows))
 	for n, r := range rows {
 		out[n] = SeasonPart{
-			ID: uuid.UUID(r.ID), Episode: uuid.UUID(r.Episode), Version: uuid.UUID(r.Version), Idx: r.Idx,
+			ID: r.ID, Episode: r.Episode, Version: r.Version, Idx: r.Idx,
 			Duration: time.Duration(r.DurationMS) * time.Millisecond, Root: r.Root, RelPath: r.RelPath,
 			Fingerprinted: r.FingerprintedAt != nil,
 		}
@@ -194,29 +202,23 @@ func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart
 // SaveFingerprintMarkers replaces the markers fingerprints found on the parts compared, and
 // records that they were.
 func (s *Store) SaveFingerprintMarkers(ctx context.Context, compared []uuid.UUID, found map[uuid.UUID][]domain.Marker) error {
-	return s.q.Transaction(func(tx *query.Query) error {
-		ids := make([]driver.Valuer, len(compared))
-		for n, id := range compared {
-			ids[n] = model.UUID(id)
-		}
-		mk, pt := tx.Marker, tx.Part
-		if _, err := mk.WithContext(ctx).Where(mk.PartID.In(ids...), mk.Source.Eq(string(domain.MarkerByFingerprint))).Delete(); err != nil {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `DELETE FROM markers WHERE part_id = ANY($1) AND source = $2`, compared, domain.MarkerByFingerprint)
+		if err != nil {
 			return err
 		}
 		var rows []*model.Marker
 		for part, markers := range found {
 			for _, m := range markers {
 				rows = append(rows, &model.Marker{
-					PartID: model.UUID(part), Kind: m.Kind, Source: domain.MarkerByFingerprint, StartMS: &m.StartMS, EndMS: &m.EndMS,
+					PartID: part, Kind: m.Kind, Source: domain.MarkerByFingerprint, StartMS: &m.StartMS, EndMS: &m.EndMS,
 				})
 			}
 		}
-		if len(rows) > 0 {
-			if err := mk.WithContext(ctx).Create(rows...); err != nil {
-				return err
-			}
+		if err := createMarkers(ctx, tx, rows); err != nil {
+			return err
 		}
-		_, err := pt.WithContext(ctx).Where(pt.ID.In(ids...)).UpdateSimple(pt.FingerprintedAt.Value(time.Now()))
+		_, err = tx.Exec(ctx, `UPDATE parts SET fingerprinted_at = $2 WHERE id = ANY($1)`, compared, time.Now())
 		return err
 	})
 }

@@ -27,12 +27,8 @@ func downloadable(t *testing.T) (s *Store, film, part uuid.UUID, profiles [2]uui
 	if _, err := s.SaveFolder(ctx, lib.ID, "L", []byte("v1"), []Film{{Title: "Lawrence", Folder: "L", Copies: []Copy{{ContentKey: []byte("k"), Parts: []Part{p}}}}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	item, err := s.q.Item.WithContext(ctx).Take()
-	if err != nil {
-		t.Fatal(err)
-	}
-	row, err := s.q.Part.WithContext(ctx).Take()
-	if err != nil {
+	var item uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT (SELECT id FROM items), (SELECT id FROM parts)`).Scan(&item, &part); err != nil {
 		t.Fatal(err)
 	}
 	for n, name := range []string{"Oliver", "Ada"} {
@@ -42,7 +38,7 @@ func downloadable(t *testing.T) (s *Store, film, part uuid.UUID, profiles [2]uui
 		}
 		profiles[n] = pr.ID
 	}
-	return s, uuid.UUID(item.ID), uuid.UUID(row.ID), profiles
+	return s, item, part, profiles
 }
 
 // signIn signs a device in as a profile.
@@ -59,9 +55,8 @@ func (s *Store) signIn(t *testing.T, profile uuid.UUID) uuid.UUID {
 
 func (s *Store) convertJobs(t *testing.T) int64 {
 	t.Helper()
-	j := s.q.Job
-	n, err := j.WithContext(t.Context()).Where(j.Kind.Eq(string(domain.JobConvert))).Count()
-	if err != nil {
+	var n int64
+	if err := s.pool.QueryRow(t.Context(), `SELECT count(*) FROM jobs WHERE kind = $1`, domain.JobConvert).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n

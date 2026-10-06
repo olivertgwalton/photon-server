@@ -11,20 +11,18 @@ import (
 	"strings"
 	"uuid"
 
-	"gorm.io/gorm"
-
-	"gorm.io/gorm/clause"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
-	"github.com/olivertgwalton/photon-server/internal/store/query"
 )
+
+const artworkColumns = `id, item_id, source, kind, place, position, folder, language, width, height, blurhash`
 
 // saveFolderArtwork replaces a title's pictures that are files in folder with those found there
 // now; pictures it has in other folders stand.
-func saveFolderArtwork(ctx context.Context, tx *query.Query, item model.UUID, folder string, pictures []domain.Artwork) error {
-	a := tx.Artwork
-	_, err := a.WithContext(ctx).Where(a.ItemID.Eq(item), a.Source.Eq(string(domain.SourceFile)), a.Folder.Eq(folder)).Delete()
+func saveFolderArtwork(ctx context.Context, tx db, item uuid.UUID, folder string, pictures []domain.Artwork) error {
+	_, err := tx.Exec(ctx, `DELETE FROM artwork WHERE item_id = $1 AND source = $2 AND folder = $3`, item, domain.SourceFile, folder)
 	if err != nil {
 		return err
 	}
@@ -42,9 +40,8 @@ func saveFolderArtwork(ctx context.Context, tx *query.Query, item model.UUID, fo
 }
 
 // saveProviderArtwork replaces what a provider has for a title with what it has now.
-func saveProviderArtwork(ctx context.Context, tx *query.Query, item model.UUID, source domain.FieldSource, pictures []domain.Artwork) error {
-	a := tx.Artwork
-	if _, err := a.WithContext(ctx).Where(a.ItemID.Eq(item), a.Source.Eq(string(source))).Delete(); err != nil {
+func saveProviderArtwork(ctx context.Context, tx db, item uuid.UUID, source domain.FieldSource, pictures []domain.Artwork) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM artwork WHERE item_id = $1 AND source = $2`, item, source); err != nil {
 		return err
 	}
 	rows := make([]*model.Artwork, len(pictures))
@@ -57,12 +54,19 @@ func saveProviderArtwork(ctx context.Context, tx *query.Query, item model.UUID, 
 	return createArtwork(ctx, tx, rows)
 }
 
-func createArtwork(ctx context.Context, tx *query.Query, rows []*model.Artwork) error {
+func createArtwork(ctx context.Context, tx db, rows []*model.Artwork) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	// A provider may list one picture twice.
-	return tx.Artwork.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(rows...)
+	b := &pgx.Batch{}
+	for _, r := range rows {
+		// A provider may list one picture twice.
+		b.Queue(`
+			INSERT INTO artwork (item_id, source, kind, place, position, folder, language, width, height, blurhash)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING`,
+			r.ItemID, r.Source, r.Kind, r.Place, r.Position, r.Folder, r.Language, r.Width, r.Height, r.Blurhash)
+	}
+	return tx.SendBatch(ctx, b).Close()
 }
 
 // Blurhashes are the BlurHashes of the pictures an answer carries, by picture id, for those that
@@ -84,27 +88,26 @@ func blurhashesOf(hashes map[uuid.UUID]string, ids ...uuid.UUID) Blurhashes {
 }
 
 // photo answers a person's photo, where they have one, and its BlurHash.
-func photo(id *model.UUID, hash *string) (uuid.UUID, Blurhashes) {
+func photo(id *uuid.UUID, hash *string) (uuid.UUID, Blurhashes) {
 	if id == nil {
 		return uuid.UUID{}, nil
 	}
 	if hash == nil {
-		return uuid.UUID(*id), nil
+		return *id, nil
 	}
-	return uuid.UUID(*id), Blurhashes{uuid.UUID(*id): *hash}
+	return *id, Blurhashes{*id: *hash}
 }
 
 // pictureOrder answers each title's pictures by kind, best first, and the BlurHashes of those
 // that have one. A picture listed again under a lower source, as one an admin chose is under its
 // provider, is left out.
-func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[model.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
-	out := map[model.UUID]map[domain.ArtworkKind][]uuid.UUID{}
+func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
+	out := map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID{}
 	hashes := map[uuid.UUID]string{}
 	if len(items) == 0 {
 		return out, hashes, nil
 	}
-	a := s.q.Artwork
-	rows, err := a.WithContext(ctx).Where(a.ItemID.In(ids(items)...)).Find()
+	rows, err := queryRows[model.Artwork](ctx, s.pool, `SELECT `+artworkColumns+` FROM artwork WHERE item_id = ANY($1)`, ids(items))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -112,7 +115,7 @@ func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[mode
 		return nil, nil, err
 	}
 	type place struct {
-		item  model.UUID
+		item  uuid.UUID
 		kind  domain.ArtworkKind
 		place string
 	}
@@ -126,9 +129,9 @@ func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[mode
 		if out[r.ItemID] == nil {
 			out[r.ItemID] = map[domain.ArtworkKind][]uuid.UUID{}
 		}
-		out[r.ItemID][r.Kind] = append(out[r.ItemID][r.Kind], uuid.UUID(r.ID))
+		out[r.ItemID][r.Kind] = append(out[r.ItemID][r.Kind], r.ID)
 		if r.Blurhash != nil {
-			hashes[uuid.UUID(r.ID)] = *r.Blurhash
+			hashes[r.ID] = *r.Blurhash
 		}
 	}
 	return out, hashes, nil
@@ -138,11 +141,11 @@ func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[mode
 // then the providers its library asks for pictures of its kind in the library's order, then each
 // provider's own order.
 func (s *Store) rankPictures(ctx context.Context, rows []*model.Artwork, items []*model.Item) error {
-	taken, err := rankings(ctx, s.q, items, domain.FetcherImages)
+	taken, err := rankings(ctx, s.pool, items, domain.FetcherImages)
 	if err != nil {
 		return err
 	}
-	rank := map[model.UUID]map[domain.FieldSource]int{}
+	rank := map[uuid.UUID]map[domain.FieldSource]int{}
 	for _, it := range items {
 		rank[it.ID] = map[domain.FieldSource]int{domain.SourceUser: -2, domain.SourceFile: -1}
 		for n, src := range taken[it.ID] {
@@ -179,12 +182,11 @@ var ErrNotACandidate = errors.New("not a picture a provider has of that kind for
 // ArtworkCandidates answers the pictures of a kind each provider had for a title when it was last
 // matched, best first. ErrNotFound for no title.
 func (s *Store) ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain.ArtworkKind) ([]ArtworkCandidate, error) {
-	item, err := editable(ctx, s.q, id)
+	item, err := readItem(ctx, s.pool, id)
 	if err != nil {
 		return nil, err
 	}
-	a := s.q.Artwork
-	rows, err := a.WithContext(ctx).Where(a.ItemID.Eq(item.ID), a.Kind.Eq(string(kind))).Find()
+	rows, err := queryRows[model.Artwork](ctx, s.pool, `SELECT `+artworkColumns+` FROM artwork WHERE item_id = $1 AND kind = $2`, item.ID, kind)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +203,7 @@ func (s *Store) ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain
 			continue
 		}
 		out = append(out, ArtworkCandidate{
-			ID: uuid.UUID(r.ID), Source: r.Source, Language: deref(r.Language), Width: deref(r.Width), Height: deref(r.Height),
+			ID: r.ID, Source: r.Source, Language: deref(r.Language), Width: deref(r.Width), Height: deref(r.Height),
 			Chosen: r.Place == chosen,
 		})
 	}
@@ -211,45 +213,38 @@ func (s *Store) ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain
 // ChooseArtwork makes one of a title's candidates its picture of that kind, above every source,
 // as a copy that stands when the provider next says otherwise. ErrNotFound for no title.
 func (s *Store) ChooseArtwork(ctx context.Context, id uuid.UUID, kind domain.ArtworkKind, picture uuid.UUID) error {
-	return s.q.Transaction(func(tx *query.Query) error {
-		item, err := editable(ctx, tx, id)
-		if err != nil {
-			return err
-		}
-		a := tx.Artwork
-		pick, err := a.WithContext(ctx).Where(
-			a.ID.Eq(model.UUID(picture)), a.ItemID.Eq(item.ID), a.Kind.Eq(string(kind)),
-			a.Source.NotIn(string(domain.SourceFile), string(domain.SourceUser)),
-		).Take()
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrNotACandidate
-		}
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		item, err := readItem(ctx, tx, id)
 		if err != nil {
 			return err
 		}
 		if err := forgetChoice(ctx, tx, item.ID, kind); err != nil {
 			return err
 		}
-		return a.WithContext(ctx).Create(&model.Artwork{
-			ItemID: item.ID, Source: domain.SourceUser, Kind: kind, Place: pick.Place,
-			Language: pick.Language, Width: pick.Width, Height: pick.Height, Blurhash: pick.Blurhash,
-		})
+		pick, err := tx.Exec(ctx, `
+			INSERT INTO artwork (item_id, source, kind, place, position, language, width, height, blurhash)
+			SELECT item_id, $4, kind, place, 0, language, width, height, blurhash FROM artwork
+			WHERE id = $1 AND item_id = $2 AND kind = $3 AND source NOT IN ('file', 'user')`,
+			picture, item.ID, kind, domain.SourceUser)
+		if err == nil && pick.RowsAffected() == 0 {
+			err = ErrNotACandidate
+		}
+		return err
 	})
 }
 
 // ForgetArtworkChoice gives a title's picture of a kind back to its sources. ErrNotFound for no
 // title.
 func (s *Store) ForgetArtworkChoice(ctx context.Context, id uuid.UUID, kind domain.ArtworkKind) error {
-	item, err := editable(ctx, s.q, id)
+	item, err := readItem(ctx, s.pool, id)
 	if err != nil {
 		return err
 	}
-	return forgetChoice(ctx, s.q, item.ID, kind)
+	return forgetChoice(ctx, s.pool, item.ID, kind)
 }
 
-func forgetChoice(ctx context.Context, tx *query.Query, item model.UUID, kind domain.ArtworkKind) error {
-	a := tx.Artwork
-	_, err := a.WithContext(ctx).Where(a.ItemID.Eq(item), a.Kind.Eq(string(kind)), a.Source.Eq(string(domain.SourceUser))).Delete()
+func forgetChoice(ctx context.Context, tx db, item uuid.UUID, kind domain.ArtworkKind) error {
+	_, err := tx.Exec(ctx, `DELETE FROM artwork WHERE item_id = $1 AND kind = $2 AND source = $3`, item, kind, domain.SourceUser)
 	return err
 }
 
@@ -264,40 +259,42 @@ type Picture struct {
 
 // Picture answers where a picture is, or ErrNotFound.
 func (s *Store) Picture(ctx context.Context, id uuid.UUID) (Picture, error) {
-	a, i, l := s.q.Artwork, s.q.Item, s.q.Library
-	row, err := a.WithContext(ctx).Where(a.ID.Eq(model.UUID(id))).Take()
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+	var source domain.FieldSource
+	var place, root string
+	err := s.pool.QueryRow(ctx, `
+		SELECT a.source, a.place, l.root FROM artwork a
+		JOIN items i ON i.id = a.item_id JOIN libraries l ON l.id = i.library_id
+		WHERE a.id = $1`, id).Scan(&source, &place, &root)
+	if errors.Is(err, pgx.ErrNoRows) {
 		// Or a person's.
-		p := s.q.Person
-		person, err := p.WithContext(ctx).Where(p.PhotoID.Eq(model.UUID(id))).Take()
+		var photoURL *string
+		err := s.pool.QueryRow(ctx, `SELECT photo_url FROM people WHERE photo_id = $1 LIMIT 1`, id).Scan(&photoURL)
 		if err == nil {
-			return Picture{URL: deref(person.PhotoURL)}, nil
+			return Picture{URL: deref(photoURL)}, nil
 		}
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			return Picture{}, err
 		}
 		// Or a profile's avatar, kept by the server itself.
-		pr := s.q.Profile
-		if n, err := pr.WithContext(ctx).Where(pr.AvatarID.Eq(model.UUID(id))).Count(); err != nil || n > 0 {
+		var kept bool
+		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM profiles WHERE avatar_id = $1)`, id).Scan(&kept); err != nil || kept {
 			return Picture{Kept: true}, err
 		}
 		// Or a video's still.
-		rv := s.q.RemoteVideo
-		video, err := rv.WithContext(ctx).Where(rv.ThumbID.Eq(model.UUID(id))).Take()
+		var site, key string
+		err = s.pool.QueryRow(ctx, `SELECT site, key FROM remote_videos WHERE thumb_id = $1 LIMIT 1`, id).Scan(&site, &key)
 		if err != nil {
 			return Picture{}, found(err)
 		}
-		return Picture{URL: videoStill(video.Site, video.Key)}, nil
+		return Picture{URL: videoStill(site, key)}, nil
 	}
 	if err != nil {
 		return Picture{}, err
 	}
-	if row.Source != domain.SourceFile {
-		return Picture{URL: row.Place}, nil
+	if source != domain.SourceFile {
+		return Picture{URL: place}, nil
 	}
-	var lib struct{ Root string }
-	err = l.WithContext(ctx).Select(l.Root).Join(i, i.LibraryID.EqCol(l.ID)).Where(i.ID.Eq(row.ItemID)).Scan(&lib)
-	return Picture{Root: lib.Root, Path: row.Place}, err
+	return Picture{Root: root, Path: place}, nil
 }
 
 // videoStill is where a video's site publishes a still of it, or "" for a site that publishes none
@@ -312,20 +309,21 @@ func videoStill(site, key string) string {
 // LivePictures answers which of these picture ids are still a title's, a person's, a video's or a
 // profile's, or a theme tune's kept beside them.
 func (s *Store) LivePictures(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]bool, error) {
-	in := make([]string, len(ids))
-	for n, id := range ids {
-		in[n] = id.String()
+	rows, err := s.pool.Query(ctx, `
+		SELECT id FROM artwork WHERE id = ANY($1)
+		UNION SELECT photo_id FROM people WHERE photo_id = ANY($1)
+		UNION SELECT thumb_id FROM remote_videos WHERE thumb_id = ANY($1)
+		UNION SELECT avatar_id FROM profiles WHERE avatar_id = ANY($1)
+		UNION SELECT id FROM themes WHERE id = ANY($1)`, ids)
+	if err != nil {
+		return nil, err
 	}
-	live, err := queryIDs(ctx, s.pool, `
-		SELECT id::text FROM artwork WHERE id = ANY($1::uuid[])
-		UNION SELECT photo_id::text FROM people WHERE photo_id = ANY($1::uuid[])
-		UNION SELECT thumb_id::text FROM remote_videos WHERE thumb_id = ANY($1::uuid[])
-		UNION SELECT avatar_id::text FROM profiles WHERE avatar_id = ANY($1::uuid[])
-		UNION SELECT id::text FROM themes WHERE id = ANY($1::uuid[])`, in)
-	out := make(map[uuid.UUID]bool, len(live))
-	for _, id := range live {
+	out := map[uuid.UUID]bool{}
+	var id uuid.UUID
+	_, err = pgx.ForEachRow(rows, []any{&id}, func() error {
 		out[id] = true
-	}
+		return nil
+	})
 	return out, err
 }
 
@@ -333,7 +331,7 @@ func (s *Store) LivePictures(ctx context.Context, ids []uuid.UUID) (map[uuid.UUI
 func (s *Store) SetBlurhash(ctx context.Context, id uuid.UUID, hash string) error {
 	_, err := s.pool.Exec(ctx, `
 		WITH titles AS (UPDATE artwork SET blurhash = $2 WHERE id = $1)
-		UPDATE people SET photo_blurhash = $2 WHERE photo_id = $1`, id.String(), hash)
+		UPDATE people SET photo_blurhash = $2 WHERE photo_id = $1`, id, hash)
 	return err
 }
 
@@ -348,12 +346,7 @@ type Unhashed struct {
 // Unhashed answers up to limit of the titles' pictures and people's photos with no BlurHash, in
 // id order from after.
 func (s *Store) Unhashed(ctx context.Context, after uuid.UUID, limit int) ([]Unhashed, error) {
-	var rows []struct {
-		ID   model.UUID
-		Root string
-		Path string
-	}
-	err := s.q.Artwork.WithContext(ctx).UnderlyingDB().Raw(`
+	rows, err := s.pool.Query(ctx, `
 		(SELECT a.id, CASE a.source WHEN 'file' THEN l.root ELSE '' END AS root,
 			CASE a.source WHEN 'file' THEN a.place ELSE '' END AS path
 		FROM artwork a JOIN items i ON i.id = a.item_id JOIN libraries l ON l.id = i.library_id
@@ -361,10 +354,9 @@ func (s *Store) Unhashed(ctx context.Context, after uuid.UUID, limit int) ([]Unh
 		UNION ALL
 		(SELECT photo_id, '', '' FROM people WHERE photo_blurhash IS NULL AND photo_id > @after ORDER BY photo_id LIMIT @limit)
 		ORDER BY id LIMIT @limit`,
-		map[string]any{"after": model.UUID(after), "limit": limit}).Scan(&rows).Error
-	out := make([]Unhashed, len(rows))
-	for n, r := range rows {
-		out[n] = Unhashed{ID: uuid.UUID(r.ID), Root: r.Root, Path: r.Path}
+		pgx.NamedArgs{"after": after, "limit": limit})
+	if err != nil {
+		return nil, err
 	}
-	return out, err
+	return pgx.CollectRows(rows, pgx.RowToStructByName[Unhashed])
 }

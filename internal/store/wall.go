@@ -3,13 +3,9 @@ package store
 import (
 	"cmp"
 	"context"
-	"database/sql/driver"
 	"slices"
 	"time"
 	"uuid"
-
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"github.com/jackc/pgx/v5"
 
@@ -66,57 +62,57 @@ type WallPage struct {
 // Wall answers a page of a library's films or shows and how many there are in all. Ties in the
 // sort are broken by id, so a page is the same whenever it is asked for while the library is.
 func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, int64, error) {
-	q, err := s.wallQuery(ctx, lib, p.Profile, p.Filter)
+	titles, args, err := s.wallQuery(ctx, lib, p.Profile, p.Filter)
 	if err != nil {
 		return nil, 0, err
 	}
 	var total int64
-	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) `+titles, args).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	dir := "ASC"
 	if p.Order == domain.Descending {
 		dir = "DESC"
 	}
-	var key clause.Expr
+	var key string
 	switch p.Sort {
 	case domain.SortAdded:
-		key = clause.Expr{SQL: "items.added_at"}
+		key = "items.added_at"
 	case domain.SortReleased:
-		key = clause.Expr{SQL: "items.released_asc"}
+		key = "items.released_asc"
 		if dir == "DESC" {
-			key = clause.Expr{SQL: "items.released_desc"}
+			key = "items.released_desc"
 		}
 	case domain.SortRating:
-		key = clause.Expr{SQL: "(SELECT max(r.score) FROM ratings r WHERE r.item_id = items.id AND r.site = ?)", Vars: []any{p.RatingSite}}
+		key = "(SELECT max(r.score) FROM ratings r WHERE r.item_id = items.id AND r.site = @sort_site)"
+		args["sort_site"] = p.RatingSite
 	case domain.SortRuntime:
-		key = clause.Expr{SQL: "(SELECT max(v.duration_ms) FROM versions v WHERE v.item_id = items.id AND v.missing_since IS NULL)"}
+		key = "(SELECT max(v.duration_ms) FROM versions v WHERE v.item_id = items.id AND v.missing_since IS NULL)"
 	case domain.SortPlayed:
-		key = clause.Expr{SQL: "(SELECT max(w.last_played_at) FROM watch_state w WHERE w.profile_id = ? AND w.item_id IN (" + episodesOf + "))", Vars: []any{p.Profile.String()}}
+		key = "(SELECT max(w.last_played_at) FROM watch_state w WHERE w.profile_id = @profile AND w.item_id IN (" + episodesOf + "))"
 	case domain.SortTitle:
-		key = clause.Expr{SQL: "items.sort_title"}
+		key = "items.sort_title"
 	}
+	args["offset"], args["limit"] = p.Offset, p.Limit
 	// What has no value to sort by comes last whichever way the rest run.
-	key.SQL += " " + dir + " NULLS LAST, items.id " + dir
-	var rows []*model.Item
-	if err := q.Order(clause.OrderBy{Expression: key}).Offset(p.Offset).Limit(p.Limit).Find(&rows).Error; err != nil {
+	rows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` `+titles+`
+		ORDER BY `+key+` `+dir+` NULLS LAST, items.id `+dir+` OFFSET @offset LIMIT @limit`, args)
+	if err != nil {
 		return nil, 0, err
 	}
 	cards, err := s.cards(ctx, p.Profile, rows)
 	return cards, total, err
 }
 
-// wallQuery is a library's films and shows a profile may see, as a filter narrows them; ErrNotFound
-// for no such library.
-func (s *Store) wallQuery(ctx context.Context, lib, profile uuid.UUID, f WallFilter) (*gorm.DB, error) {
-	l := s.q.Library
-	if _, err := l.WithContext(ctx).Where(l.ID.Eq(model.UUID(lib))).Take(); err != nil {
-		return nil, found(err)
+// wallQuery is the FROM and WHERE of a library's films and shows a profile may see, as a filter
+// narrows them, and the values they take; ErrNotFound for no such library.
+func (s *Store) wallQuery(ctx context.Context, lib, profile uuid.UUID, f WallFilter) (string, pgx.NamedArgs, error) {
+	if err := hasLibrary(ctx, s.pool, lib); err != nil {
+		return "", nil, err
 	}
-	i := s.q.Item
-	q := i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib)), i.Kind.In(string(domain.ItemMovie), string(domain.ItemShow))).UnderlyingDB().
-		Where("EXISTS (SELECT 1 FROM viewer(?) v WHERE sees(v, items))", profile.String())
-	return f.apply(q, profile), nil
+	args := pgx.NamedArgs{"lib": lib, "profile": profile}
+	return `FROM items WHERE library_id = @lib AND kind IN ('movie', 'show')
+		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))` + f.where(args), args, nil
 }
 
 // Letter is how many of a library's titles sort under a letter: "#" for those before A.
@@ -129,12 +125,16 @@ type Letter struct {
 // in title order, as Plex's firstCharacter does, so a client can jump to a letter by its offset.
 // Letters are read unaccented, so "Émile" counts under E where the wall sorts it.
 func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, f WallFilter) ([]Letter, error) {
-	q, err := s.wallQuery(ctx, lib, profile, f)
+	titles, args, err := s.wallQuery(ctx, lib, profile, f)
 	if err != nil {
 		return nil, err
 	}
-	var out []Letter
-	err = q.Select(firstLetter + " AS letter, count(*) AS count").Group("letter").Order("letter").Scan(&out).Error
+	rows, err := s.pool.Query(ctx, `SELECT `+firstLetter+` AS letter, count(*) AS count `+titles+`
+		GROUP BY letter ORDER BY letter`, args)
+	if err != nil {
+		return nil, err
+	}
+	out, err := pgx.CollectRows(rows, pgx.RowToStructByName[Letter])
 	// Titles before A sort first in the wall, whatever the collation makes of "#".
 	if n := slices.IndexFunc(out, func(l Letter) bool { return l.Letter == "#" }); n > 0 {
 		out = append([]Letter{out[n]}, slices.Delete(out, n, n+1)...)
@@ -145,10 +145,9 @@ func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, f WallFilte
 // PlaybackTitle answers what a playback's card says of the title played: its name, where it is in
 // its show, and its best pictures. ErrNotFound for no such title.
 func (s *Store) PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.PlaybackTitle, error) {
-	i := s.q.Item
-	row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
+	row, err := readItem(ctx, s.pool, id)
 	if err != nil {
-		return domain.PlaybackTitle{}, found(err)
+		return domain.PlaybackTitle{}, err
 	}
 	rows := []*model.Item{row}
 	pictures, _, err := s.pictureOrder(ctx, rows)
@@ -199,7 +198,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 	cards := make([]Card, len(rows))
 	for n, r := range rows {
 		cards[n] = Card{
-			ID: uuid.UUID(r.ID), Kind: r.Kind, Title: r.Title, AddedAt: r.AddedAt, Year: deref(r.Year),
+			ID: r.ID, Kind: r.Kind, Title: r.Title, AddedAt: r.AddedAt, Year: deref(r.Year),
 			ReleaseDate: deref(r.ReleaseDate), Poster: first(pictures[r.ID][domain.ArtworkPoster]),
 			Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]), State: states[r.ID],
 			DurationMS: lengths[r.ID], Show: shows[r.ID].ref, SeasonNumber: r.SeasonNumber,
@@ -214,8 +213,8 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 }
 
 type seasonShow struct {
-	Season      model.UUID
-	ID          model.UUID
+	Season      uuid.UUID
+	ID          uuid.UUID
 	Title       string
 	Certificate *string
 }
@@ -223,17 +222,16 @@ type seasonShow struct {
 // picturesWorn answers titles' pictures as pictureOrder does, an episode wearing its show's of
 // each kind it has none of (a poster, a backdrop, the lettering), as Plex answers an episode with its
 // show's art: its own still stays its thumb. The shows are read in the same lookup.
-func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[model.UUID]episodeShow) (map[model.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
-	var showIDs []driver.Valuer
+func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[uuid.UUID]episodeShow) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
+	var showIDs []uuid.UUID
 	for _, show := range shows {
 		if show.ref != nil {
-			showIDs = append(showIDs, model.UUID(show.ref.ID))
+			showIDs = append(showIDs, show.ref.ID)
 		}
 	}
 	all := rows
 	if len(showIDs) > 0 {
-		i := s.q.Item
-		showRows, err := i.WithContext(ctx).Where(i.ID.In(showIDs...)).Find()
+		showRows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE id = ANY($1)`, showIDs)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -249,11 +247,11 @@ func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[
 			continue
 		}
 		for _, kind := range []domain.ArtworkKind{domain.ArtworkPoster, domain.ArtworkBackdrop, domain.ArtworkLogo} {
-			if len(pictures[r.ID][kind]) == 0 && len(pictures[model.UUID(show.ID)][kind]) > 0 {
+			if len(pictures[r.ID][kind]) == 0 && len(pictures[show.ID][kind]) > 0 {
 				if pictures[r.ID] == nil {
 					pictures[r.ID] = map[domain.ArtworkKind][]uuid.UUID{}
 				}
-				pictures[r.ID][kind] = pictures[model.UUID(show.ID)][kind]
+				pictures[r.ID][kind] = pictures[show.ID][kind]
 			}
 		}
 	}
@@ -268,22 +266,21 @@ type episodeShow struct {
 }
 
 // showsOf answers the show each episode among rows is of.
-func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[model.UUID]episodeShow, error) {
-	out := map[model.UUID]episodeShow{}
-	var seasons []string
+func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]episodeShow, error) {
+	out := map[uuid.UUID]episodeShow{}
+	var seasons []uuid.UUID
 	for _, r := range rows {
 		if r.Kind == domain.ItemEpisode && r.ParentID != nil {
-			seasons = append(seasons, uuid.UUID(*r.ParentID).String())
+			seasons = append(seasons, *r.ParentID)
 		}
 	}
 	if len(seasons) == 0 {
 		return out, nil
 	}
-	// gen cannot alias a table joined to itself, so this one query is SQL.
 	found, err := s.pool.Query(ctx, `
 		SELECT season.id AS season, show.id, show.title,
 			coalesce(season.certificate, show.certificate) AS certificate FROM items season
-		JOIN items show ON show.id = season.parent_id WHERE season.id = ANY($1::uuid[])`, seasons)
+		JOIN items show ON show.id = season.parent_id WHERE season.id = ANY($1)`, seasons)
 	if err != nil {
 		return nil, err
 	}
@@ -291,9 +288,9 @@ func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[model.UUID
 	if err != nil {
 		return nil, err
 	}
-	bySeason := map[model.UUID]episodeShow{}
+	bySeason := map[uuid.UUID]episodeShow{}
 	for _, p := range pairs {
-		bySeason[p.Season] = episodeShow{&TitleRef{ID: uuid.UUID(p.ID), Title: p.Title}, deref(p.Certificate)}
+		bySeason[p.Season] = episodeShow{&TitleRef{ID: p.ID, Title: p.Title}, deref(p.Certificate)}
 	}
 	for _, r := range rows {
 		if r.Kind == domain.ItemEpisode && r.ParentID != nil {

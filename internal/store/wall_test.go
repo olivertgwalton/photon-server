@@ -37,29 +37,21 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 		{"Memento", 2000, date(2000, 9, 5)},
 		{"Ran", 1985, nil},
 	} {
-		item := &model.Item{
-			LibraryID: model.UUID(lib.ID), Kind: domain.ItemMovie, Title: f.title, ScanTitle: f.title,
+		item := model.Item{
+			LibraryID: lib.ID, Kind: domain.ItemMovie, Title: f.title, ScanTitle: f.title,
 			SortTitle: sortTitle(f.title), Folder: f.title, AddedAt: base.Add(time.Duration(n%5) * time.Hour),
 			ReleaseDate: f.released,
 		}
 		if f.year != 0 {
 			item.Year = &f.year
 		}
-		err := s.q.Item.WithContext(ctx).Create(item)
-		if err != nil {
-			t.Fatal(err)
+		id := addItem(t, s, item)
+		if f.title == "Heat" {
+			addItem(t, s, model.Item{
+				LibraryID: lib.ID, Kind: domain.ItemExtra, ParentID: &id, ExtraKind: new(domain.ExtraTrailer), Title: "Trailer",
+				ScanTitle: "Trailer", SortTitle: "trailer", Folder: "Heat",
+			})
 		}
-	}
-	all, err := s.q.Item.WithContext(ctx).Find()
-	if err != nil {
-		t.Fatal(err)
-	}
-	parent := all[0].ID
-	if err := s.q.Item.WithContext(ctx).Create(&model.Item{
-		LibraryID: model.UUID(lib.ID), Kind: domain.ItemExtra, ParentID: &parent, ExtraKind: new(domain.ExtraTrailer), Title: "Trailer",
-		ScanTitle: "Trailer", SortTitle: "trailer", Folder: "Heat",
-	}); err != nil {
-		t.Fatal(err)
 	}
 
 	for _, sort := range domain.WallSorts() {
@@ -128,13 +120,10 @@ func TestTitlesSortTheirNumbersAsNumbers(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, title := range []string{"1917", "The Age of Adaline", "13 Going on 30", "2 Fast 2 Furious", "Alien", "21 Jump Street"} {
-		err := s.q.Item.WithContext(ctx).Create(&model.Item{
-			LibraryID: model.UUID(lib.ID), Kind: domain.ItemMovie, Title: title, ScanTitle: title,
+		addItem(t, s, model.Item{
+			LibraryID: lib.ID, Kind: domain.ItemMovie, Title: title, ScanTitle: title,
 			SortTitle: sortTitle(title), Folder: title,
 		})
-		if err != nil {
-			t.Fatal(err)
-		}
 	}
 	page, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 10})
 	if err != nil {

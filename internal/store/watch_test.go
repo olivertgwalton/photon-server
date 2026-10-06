@@ -42,13 +42,13 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 	if _, err := s.SaveShowFolder(ctx, lib.ID, "The Wire/Season 1", []byte("v1"), Show{Title: "the wire", Folder: "The Wire"}, episodes, nil); err != nil {
 		t.Fatal(err)
 	}
-	show, err := s.q.Item.WithContext(ctx).Where(s.q.Item.Kind.Eq(string(domain.ItemShow))).Take()
-	if err != nil {
+	var show uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE kind = 'show'`).Scan(&show); err != nil {
 		t.Fatal(err)
 	}
 	page := func(profile uuid.UUID) TitlePage {
 		t.Helper()
-		p, err := s.Title(ctx, profile, uuid.UUID(show.ID))
+		p, err := s.Title(ctx, profile, show)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -87,7 +87,7 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 		t.Errorf("another profile's show = %+v, want all three left", st)
 	}
 
-	if err := s.MarkWatched(ctx, oliver.ID, uuid.UUID(show.ID)); err != nil {
+	if err := s.MarkWatched(ctx, oliver.ID, show); err != nil {
 		t.Fatal(err)
 	}
 	if st := page(oliver.ID).State; st.Unwatched != 0 || st.WatchedAt == nil {
@@ -100,14 +100,14 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 		t.Errorf("after unmarking the season, an episode = %+v, want unwatched from the start, its play still counted", st)
 	}
 
-	if err := s.Favourite(ctx, oliver.ID, uuid.UUID(show.ID)); err != nil {
+	if err := s.Favourite(ctx, oliver.ID, show); err != nil {
 		t.Fatal(err)
 	}
 	cards, _, err := s.Wall(ctx, lib.ID, WallPage{Profile: oliver.ID, Sort: domain.SortTitle, Order: domain.Ascending, Limit: 5})
 	if err != nil || len(cards) != 1 || cards[0].State.FavouriteAt == nil || cards[0].State.Unwatched != 3 {
 		t.Errorf("card = %+v, %v; want a favourite with three left", cards, err)
 	}
-	if err := s.Unfavourite(ctx, oliver.ID, uuid.UUID(show.ID)); err != nil {
+	if err := s.Unfavourite(ctx, oliver.ID, show); err != nil {
 		t.Fatal(err)
 	}
 	if page(oliver.ID).State.FavouriteAt != nil {
@@ -135,11 +135,10 @@ func TestAPlaybackIsOnePlayHoweverOftenItReportsTheEnd(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Copies: heat}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	row, err := s.q.Item.WithContext(ctx).Where(s.q.Item.Kind.Eq(string(domain.ItemMovie))).Take()
-	if err != nil {
+	var film uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE kind = 'movie'`).Scan(&film); err != nil {
 		t.Fatal(err)
 	}
-	film := uuid.UUID(row.ID)
 	state := func() TitleState {
 		t.Helper()
 		p, err := s.Title(ctx, oliver.ID, film)
@@ -214,27 +213,25 @@ func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		i := s.q.Item
-		show, err := i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib)), i.Kind.Eq(string(domain.ItemShow))).Take()
-		if err != nil {
+		var show uuid.UUID
+		if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE library_id = $1 AND kind = 'show'`, lib).Scan(&show); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.SaveIdentity(ctx, uuid.UUID(show.ID), domain.SourceTMDB, domain.Metadata{Title: "Victorious", IDs: map[domain.Provider]string{domain.ProviderTMDB: "36685"}}, nil); err != nil {
+		if err := s.SaveIdentity(ctx, show, domain.SourceTMDB, domain.Metadata{Title: "Victorious", IDs: map[domain.Provider]string{domain.ProviderTMDB: "36685"}}, nil); err != nil {
 			t.Fatal(err)
 		}
 		episodes := map[int]uuid.UUID{}
 		for _, id := range saved.Titles[domain.TitleAdded] {
-			row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id)), i.Kind.Eq(string(domain.ItemEpisode))).Take()
-			if err == nil {
-				episodes[*row.EpisodeNumber] = id
+			var number int
+			if s.pool.QueryRow(ctx, `SELECT episode_number FROM items WHERE id = $1 AND kind = 'episode'`, id).Scan(&number) == nil {
+				episodes[number] = id
 			}
 		}
-		return uuid.UUID(show.ID), episodes
+		return show, episodes
 	}
 	watched := func(profile, id uuid.UUID) bool {
 		t.Helper()
-		i := s.q.Item
-		row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
+		row, err := readItem(ctx, s.pool, id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -347,21 +344,20 @@ func TestATitleMatchedByDifferentProvidersIsOneTitle(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		i := s.q.Item
-		show, err := i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib.ID)), i.Kind.Eq(string(domain.ItemShow))).Take()
-		if err != nil {
+		var show uuid.UUID
+		if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE library_id = $1 AND kind = 'show'`, lib.ID).Scan(&show); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.SaveIdentity(ctx, uuid.UUID(show.ID), source, domain.Metadata{Title: "Victorious", IDs: ids}, nil); err != nil {
+		if err := s.SaveIdentity(ctx, show, source, domain.Metadata{Title: "Victorious", IDs: ids}, nil); err != nil {
 			t.Fatal(err)
 		}
 		var episode uuid.UUID
 		for _, id := range saved.Titles[domain.TitleAdded] {
-			if row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id)), i.Kind.Eq(string(domain.ItemEpisode))).Take(); err == nil {
-				episode = uuid.UUID(row.ID)
+			if s.pool.QueryRow(ctx, `SELECT 1 FROM items WHERE id = $1 AND kind = 'episode'`, id).Scan(new(int)) == nil {
+				episode = id
 			}
 		}
-		return lib.ID, uuid.UUID(show.ID), episode
+		return lib.ID, show, episode
 	}
 	_, inKids, kidsPilot := add("Kids", domain.SourceTMDB, map[domain.Provider]string{domain.ProviderTMDB: "36685", domain.ProviderTVDB: "175901"})
 	shows, inShows, showsPilot := add("Shows", domain.SourceTVDB, map[domain.Provider]string{domain.ProviderTVDB: "175901"})
@@ -378,8 +374,7 @@ func TestATitleMatchedByDifferentProvidersIsOneTitle(t *testing.T) {
 	if err := s.MarkWatched(ctx, oliver.ID, showsPilot); err != nil {
 		t.Fatal(err)
 	}
-	i := s.q.Item
-	row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(kidsPilot))).Take()
+	row, err := readItem(ctx, s.pool, kidsPilot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,12 +404,11 @@ func TestTitlesSharingAnIDThroughAnotherAreOneTitle(t *testing.T) {
 		}}}}, nil); err != nil {
 			t.Fatal(err)
 		}
-		i := s.q.Item
-		film, err := i.WithContext(ctx).Where(i.LibraryID.Eq(model.UUID(lib.ID))).Take()
-		if err != nil {
+		var film uuid.UUID
+		if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE library_id = $1`, lib.ID).Scan(&film); err != nil {
 			t.Fatal(err)
 		}
-		return lib.ID, uuid.UUID(film.ID)
+		return lib.ID, film
 	}
 	_, a := add("A", map[domain.Provider]string{domain.ProviderTMDB: "949", domain.ProviderIMDb: "tt0113277"})
 	_, c := add("C", map[domain.Provider]string{domain.ProviderTVDB: "1234"})
