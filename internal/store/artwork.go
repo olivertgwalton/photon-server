@@ -226,6 +226,8 @@ type Picture struct {
 	Root string
 	Path string
 	URL  string
+	// Kept is a picture given to the server, as an avatar is, held in its picture cache.
+	Kept bool
 }
 
 // Picture answers where a picture is, or ErrNotFound.
@@ -241,6 +243,11 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (Picture, error) {
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return Picture{}, err
+		}
+		// Or a profile's avatar, kept by the server itself.
+		pr := s.q.Profile
+		if n, err := pr.WithContext(ctx).Where(pr.AvatarID.Eq(model.UUID(id))).Count(); err != nil || n > 0 {
+			return Picture{Kept: true}, err
 		}
 		// Or a video's still.
 		rv := s.q.RemoteVideo
@@ -279,7 +286,8 @@ func (s *Store) LivePictures(ctx context.Context, ids []uuid.UUID) (map[uuid.UUI
 	live, err := queryIDs(ctx, s.pool, `
 		SELECT id::text FROM artwork WHERE id = ANY($1::uuid[])
 		UNION SELECT photo_id::text FROM people WHERE photo_id = ANY($1::uuid[])
-		UNION SELECT thumb_id::text FROM remote_videos WHERE thumb_id = ANY($1::uuid[])`, in)
+		UNION SELECT thumb_id::text FROM remote_videos WHERE thumb_id = ANY($1::uuid[])
+		UNION SELECT avatar_id::text FROM profiles WHERE avatar_id = ANY($1::uuid[])`, in)
 	out := make(map[uuid.UUID]bool, len(live))
 	for _, id := range live {
 		out[id] = true

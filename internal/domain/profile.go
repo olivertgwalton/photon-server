@@ -21,6 +21,8 @@ type Profile struct {
 	ID   uuid.UUID
 	Name string
 	Role Role
+	// Avatar is its picture's id, served as any picture is; zero for none.
+	Avatar uuid.UUID
 }
 
 // Session is a signed-in device and the profile it is watching as.
