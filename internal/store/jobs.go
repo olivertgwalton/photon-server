@@ -194,6 +194,15 @@ func (s *Store) JobsLeft(ctx context.Context) (map[domain.JobKind]int, error) {
 	return out, err
 }
 
+// AnyJobsLeft answers whether any job of kind is left to run, queued or running.
+func (s *Store) AnyJobsLeft(ctx context.Context, kind domain.JobKind) (bool, error) {
+	var left bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM jobs WHERE kind = $1 AND state IN ('queued', 'running', 'rerun'))`,
+		kind).Scan(&left)
+	return left, err
+}
+
 // ExtendLease keeps a running job's lease while node is at it.
 func (s *Store) ExtendLease(ctx context.Context, id int64, node uuid.UUID, lease time.Duration) error {
 	info, err := s.pool.Exec(ctx, `
