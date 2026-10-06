@@ -118,3 +118,34 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 		t.Errorf("an unknown library: err = %v, want ErrNotFound", err)
 	}
 }
+
+// Numbers in titles are read as numbers, as Jellyfin sorts them.
+func TestTitlesSortTheirNumbersAsNumbers(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"1917", "The Age of Adaline", "13 Going on 30", "2 Fast 2 Furious", "Alien", "21 Jump Street"} {
+		err := s.q.Item.WithContext(ctx).Create(&model.Item{
+			LibraryID: model.UUID(lib.ID), Kind: domain.ItemMovie, Title: title, ScanTitle: title,
+			SortTitle: sortTitle(title), Folder: title,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var titles []string
+	for _, c := range page {
+		titles = append(titles, c.Title)
+	}
+	want := []string{"2 Fast 2 Furious", "13 Going on 30", "21 Jump Street", "1917", "The Age of Adaline", "Alien"}
+	if !slices.Equal(titles, want) {
+		t.Errorf("by title = %q, want %q", titles, want)
+	}
+}
