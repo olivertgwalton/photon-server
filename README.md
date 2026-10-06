@@ -201,7 +201,8 @@ chapter pictures, and `-previews off` none. Each night at two the server queues 
 as its library asks and takes away what a library no longer wants. A file replaced by new bytes
 loses its old previews at the scan that finds it; a file that is simply gone keeps them for 30 days,
 so a share that is unmounted for a while does not come back to hours of remaking, and loses them
-after that.
+after that. A title's page gives each chapter's picture at a signed-in address (`image`) and at one
+signed for a day or two (`signed_image`), the same all day, for a player that sends no token.
 
 A title whose video is copied is cut into HLS segments at its keyframes, which each library finds as
 its `keyframes` setting says. `index`, the default, reads them from the file's own index, as

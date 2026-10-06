@@ -9,8 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -37,7 +39,10 @@ func (f fakePreviews) Sheet(_ uuid.UUID, n int) (*os.File, error) {
 	return os.Open(filepath.Join(f.dir, "sheet"+string(rune('0'+n))+".jpg"))
 }
 
-func (f fakePreviews) ChapterImage(uuid.UUID, int) (*os.File, error) {
+func (f fakePreviews) ChapterImage(_ uuid.UUID, idx int) (*os.File, error) {
+	if idx != 0 {
+		return nil, os.ErrNotExist
+	}
 	return os.Open(filepath.Join(f.dir, "chapter.jpg"))
 }
 
@@ -49,7 +54,8 @@ func TestPreviewsAreServedToThoseWhoMaySeeTheTitle(t *testing.T) {
 		}
 	}
 	p := fakePreviews{dir: dir}
-	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Previews: p, PreviewFiles: p})
+	signer := playback.NewSigner([]byte("key"))
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Previews: p, PreviewFiles: p, Signer: signer})
 	get := func(token, target string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, target, nil)
 		if token != "" {
@@ -74,10 +80,16 @@ func TestPreviewsAreServedToThoseWhoMaySeeTheTitle(t *testing.T) {
 	if rec := get(goodToken, base+"/chapters/0/image"); rec.Code != http.StatusOK || rec.Body.String() != "\xff\xd8chapter.jpg" {
 		t.Errorf("the first chapter's image: %d %q", rec.Code, rec.Body)
 	}
+	signed := signer.Sign(base+"/chapter-images/0", time.Now().Add(time.Hour))
+	if rec := get("", signed); rec.Code != http.StatusOK || rec.Body.String() != "\xff\xd8chapter.jpg" {
+		t.Errorf("the first chapter's image at its signed address, with no token: %d %q", rec.Code, rec.Body)
+	}
 	for _, tc := range []struct {
 		token, target string
 		want          int
 	}{
+		{"", base + "/chapter-images/0", http.StatusUnauthorized},
+		{"", signer.Sign(base+"/chapter-images/1", time.Now().Add(time.Hour)), http.StatusNotFound},
 		{goodToken, base + "/trickplay/2", http.StatusNotFound},
 		{goodToken, base + "/trickplay/-1", http.StatusNotFound},
 		{goodToken, base + "/chapters/1/image", http.StatusNotFound},

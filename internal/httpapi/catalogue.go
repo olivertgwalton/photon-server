@@ -229,6 +229,10 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		a.internal(w, r, err)
 	default:
+		// Signed until the end of the day after next, so an address stands all day and a client's
+		// cache keeps finding the picture under it.
+		until := time.Now().Truncate(24 * time.Hour).Add(48 * time.Hour)
+		page.SignChapterImages(func(path string) string { return a.svc.Signer.Sign(path, until) })
 		writeJSON(w, a.logger, "application/json", http.StatusOK, page)
 	}
 }

@@ -134,12 +134,27 @@ type RatingRef struct {
 }
 
 // ChapterRef is a chapter on the copy's whole timeline, across its parts. Image is the address of
-// its picture, for those that have one.
+// its picture, for those that have one, and SignedImage the same picture at an address a player
+// that sends no token loads.
 type ChapterRef struct {
-	StartMS int64  `json:"start_ms"`
-	EndMS   int64  `json:"end_ms"`
-	Title   string `json:"title,omitzero"`
-	Image   string `json:"image,omitzero"`
+	StartMS     int64  `json:"start_ms"`
+	EndMS       int64  `json:"end_ms"`
+	Title       string `json:"title,omitzero"`
+	Image       string `json:"image,omitzero"`
+	SignedImage string `json:"signed_image,omitzero"`
+	// unsigned is the address SignedImage signs.
+	unsigned string
+}
+
+// SignChapterImages gives each chapter's picture its signed address, as sign signs a path.
+func (p *TitlePage) SignChapterImages(sign func(path string) string) {
+	for _, v := range p.Versions {
+		for c := range v.Chapters {
+			if ref := &v.Chapters[c]; ref.unsigned != "" {
+				ref.SignedImage = sign(ref.unsigned)
+			}
+		}
+	}
 }
 
 type SeasonCard struct {
@@ -509,6 +524,7 @@ func (s *Store) versions(ctx context.Context, item model.UUID) ([]VersionPage, e
 					ref := ChapterRef{StartMS: p.OffsetMS + c.StartMS, EndMS: p.OffsetMS + c.EndMS, Title: deref(c.Title)}
 					if slices.Contains(pictured[p.ID], c.Idx) {
 						ref.Image = fmt.Sprintf("/api/v1/parts/%s/chapters/%d/image", uuid.UUID(p.ID), c.Idx)
+						ref.unsigned = fmt.Sprintf("/api/v1/parts/%s/chapter-images/%d", uuid.UUID(p.ID), c.Idx)
 					}
 					vp.Chapters = append(vp.Chapters, ref)
 				}
