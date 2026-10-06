@@ -1,6 +1,7 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { act, fields } from "#lib/admin/act.js";
+import { act } from "#lib/admin/act.js";
+import { fields } from "#lib/form.js";
 import { relative, roles } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import Choice from "#lib/components/admin/Choice.svelte";

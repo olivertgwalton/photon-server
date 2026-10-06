@@ -1,5 +1,6 @@
 <script lang="ts">
-import { act, fields } from "#lib/admin/act.js";
+import { act } from "#lib/admin/act.js";
+import { fields } from "#lib/form.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import ArtworkPicker from "#lib/components/admin/ArtworkPicker.svelte";
