@@ -141,24 +141,38 @@ func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, f WallFilte
 	return out, err
 }
 
-// cards answers titles as cards for a profile, with their best pictures.
-// Card answers a title as a wall shows it to a profile. ErrNotFound for no such title.
-func (s *Store) Card(ctx context.Context, profile, id uuid.UUID) (Card, error) {
+// PlaybackTitle answers what a playback's card says of the title played: its name, where it is in
+// its show, and its best pictures. ErrNotFound for no such title.
+func (s *Store) PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.PlaybackTitle, error) {
 	i := s.q.Item
 	row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(id))).Take()
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return Card{}, ErrNotFound
+		return domain.PlaybackTitle{}, ErrNotFound
 	}
 	if err != nil {
-		return Card{}, err
+		return domain.PlaybackTitle{}, err
 	}
-	cards, err := s.cards(ctx, profile, []*model.Item{row})
+	rows := []*model.Item{row}
+	pictures, err := s.pictureOrder(ctx, rows)
 	if err != nil {
-		return Card{}, err
+		return domain.PlaybackTitle{}, err
 	}
-	return cards[0], nil
+	shows, err := s.showsOf(ctx, rows)
+	if err != nil {
+		return domain.PlaybackTitle{}, err
+	}
+	t := domain.PlaybackTitle{
+		ID: id, Kind: row.Kind, Title: row.Title, Year: deref(row.Year), SeasonNumber: row.SeasonNumber,
+		EpisodeNumber: row.EpisodeNumber, EpisodeEnd: row.EpisodeEnd, Poster: first(pictures[row.ID][domain.ArtworkPoster]),
+		Thumb: first(pictures[row.ID][domain.ArtworkThumb]), Backdrop: first(pictures[row.ID][domain.ArtworkBackdrop]),
+	}
+	if show := shows[row.ID]; show != nil {
+		t.ShowID, t.Show = show.ID, show.Title
+	}
+	return t, nil
 }
 
+// cards answers titles as cards for a profile, with their best pictures.
 func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item) ([]Card, error) {
 	pictures, err := s.pictureOrder(ctx, rows)
 	if err != nil {

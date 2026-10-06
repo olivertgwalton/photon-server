@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/text/language"
+	"gorm.io/gen/field"
 	"gorm.io/gorm"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -50,11 +51,9 @@ type PlaySubtitle struct {
 // Playable answers the copy of a film or episode to play: the one asked for, else its longest on
 // disk. ErrNotFound for no such title, one the profile may not see, or none of its copies on disk.
 func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) (PlayCopy, error) {
-	if ok, err := s.visible(ctx, profile, item); err != nil || !ok {
-		return PlayCopy{}, cmp.Or(err, ErrNotFound)
-	}
 	v, p, st, sf := s.q.Version, s.q.Part, s.q.Stream, s.q.SubtitleFile
-	q := v.WithContext(ctx).Where(v.ItemID.Eq(model.UUID(item)), v.MissingSince.IsNull())
+	q := v.WithContext(ctx).Where(v.ItemID.Eq(model.UUID(item)), v.MissingSince.IsNull(),
+		field.NewUnsafeFieldRaw("EXISTS (SELECT 1 FROM items i, viewer(?) v WHERE i.id = item_id AND sees(v, i))", profile.String()))
 	if version != (uuid.UUID{}) {
 		q = q.Where(v.ID.Eq(model.UUID(version)))
 	}
