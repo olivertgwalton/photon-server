@@ -48,6 +48,8 @@ A profile's age limit reads each certificate as Jellyfin's rating tables do: in 
 system (India's `A` is for adults), else the US's, else any country's; `US:R` in the US's; and a
 list such as `SE:15 / SE:15+` by its first entry that reads. An episode's own certificate counts as
 well as its show's.
+Posters and logos are lettered in that language where TMDB has one, else in English, else not at
+all, as Jellyfin chooses them; backdrops are unlettered where one is.
 The server ships its own TMDB token and TheTVDB key; set `PHOTON_TMDB_TOKEN`, or
 `PHOTON_TVDB_KEY` (with `PHOTON_TVDB_PIN` for a subscriber key), to use yours. Each library takes
 metadata from `nfo` and `tmdb` by default, most trusted first; change that with

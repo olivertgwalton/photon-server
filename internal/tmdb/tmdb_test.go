@@ -21,8 +21,13 @@ func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error)
 
 func serve(t *testing.T, routes map[string]string) *Client {
 	t.Helper()
+	return serveIn(t, "en-GB", routes)
+}
+
+func serveIn(t *testing.T, language string, routes map[string]string) *Client {
+	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer token" || r.URL.Query().Get("language") != "en-GB" {
+		if r.Header.Get("Authorization") != "Bearer token" || r.URL.Query().Get("language") != language {
 			http.Error(w, "unauthorised", http.StatusUnauthorized)
 			return
 		}
@@ -34,7 +39,7 @@ func serve(t *testing.T, routes map[string]string) *Client {
 		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(srv.Close)
-	c := New("token", "en-GB", unlimited{})
+	c := New("token", language, unlimited{})
 	c.base = srv.URL
 	return c
 }
@@ -106,6 +111,34 @@ func TestDetailsTakeTheCountrysCertificate(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Details (-want +got):\n%s", diff)
+	}
+}
+
+func TestAnotherLanguageStillGetsEnglishPictures(t *testing.T) {
+	c := serveIn(t, "de-DE", map[string]string{
+		"/movie/348?append_to_response=release_dates%2Cexternal_ids%2Cvideos%2Cimages%2Ccredits&include_image_language=de%2Cnull%2Cen&include_video_language=de%2Cnull&language=de-DE": `{
+			"id":348,"title":"Alien",
+			"images":{
+				"posters":[
+					{"file_path":"/plain.jpg","vote_average":9},
+					{"file_path":"/english-few.jpg","iso_639_1":"en","vote_average":6,"vote_count":2},
+					{"file_path":"/english-many.jpg","iso_639_1":"en","vote_average":6,"vote_count":40},
+					{"file_path":"/german.jpg","iso_639_1":"de","vote_average":3}],
+				"logos":[{"file_path":"/english.png","iso_639_1":"en","vote_average":5}]}}`,
+	})
+	got, err := c.Details(t.Context(), Movie, 348)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []domain.Artwork{
+		{Kind: domain.ArtworkPoster, URL: imageURL + "/german.jpg", Language: "de"},
+		{Kind: domain.ArtworkPoster, URL: imageURL + "/english-many.jpg", Language: "en"},
+		{Kind: domain.ArtworkPoster, URL: imageURL + "/english-few.jpg", Language: "en"},
+		{Kind: domain.ArtworkPoster, URL: imageURL + "/plain.jpg"},
+		{Kind: domain.ArtworkLogo, URL: imageURL + "/english.png", Language: "en"},
+	}
+	if diff := cmp.Diff(want, got.Artwork); diff != "" {
+		t.Errorf("artwork (-want +got):\n%s", diff)
 	}
 }
 
