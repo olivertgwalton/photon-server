@@ -70,6 +70,11 @@ const (
 	// webhookSlots is how many deliveries a node makes at once, so one receiver that does not
 	// answer holds up no other.
 	webhookSlots = 2
+	// mediaSlots is how many jobs of each kind that reads media a node runs at once: one, as
+	// Jellyfin's chapter images and trickplay go through files one by one and Plex's butler file by
+	// file. A still is a seek into the whole file, and on a network mount ten at once took every
+	// byte a stream needed (measured: every chapter timed out, and 64 MiB took minutes to read).
+	mediaSlots = 1
 )
 
 func main() {
@@ -270,7 +275,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	// matching and a scan never waits behind either.
 	scanner := jobs.NewWorker(st, logger, node, scanSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobScanLibrary: scanLibrary(st, scan.New(st, tools, logger), hub, logger),
-	}, hub)
+	}, hub, nil)
 	matching := map[domain.JobKind]jobs.Handler{
 		domain.JobIdentify: identify.Handler(st, providers, hub.Raise, logger),
 	}
@@ -278,24 +283,28 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if tools.YTDLP.Path != "" {
 		matching[domain.JobTheme] = themerr.Fetch(st, pictureCache, cache, themerr.DB, tools.YTDLP.Path, tools.FFmpeg.Path, logger)
 	}
-	matcher := jobs.NewWorker(st, logger, node, identifySlots, matching, hub)
-	analyser := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), map[domain.JobKind]jobs.Handler{
-		domain.JobKeyframes: analysis.Keyframes(st, tools),
-		domain.JobMarkers:   analysis.Markers(st, tools.Fingerprint),
-	}, hub)
+	matcher := jobs.NewWorker(st, logger, node, identifySlots, matching, hub, nil)
 	notifier := jobs.NewWorker(st, logger, node, webhookSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobDeliverWebhook: webhook.Deliver(st),
-	}, hub)
-	// Previews have slots of their own, so however many are queued, the other analysis keeps every
-	// slot of its; as many as there are processors, as Jellyfin's image extraction runs.
-	previewer := jobs.NewWorker(st, logger, node, runtime.NumCPU(), map[domain.JobKind]jobs.Handler{
-		domain.JobPreviews: analysis.MakePreviews(st, tools, previews, logger),
-	}, hub)
+	}, hub, nil)
+	// Each kind of job that reads media has a worker of its own, so however many of one are queued,
+	// the others keep their slot, and each gives way to playback.
+	gate := jobs.NewGate(cache, hub.Subscribe, logger)
+	reader := func(kind domain.JobKind, h jobs.Handler) *jobs.Worker {
+		return jobs.NewWorker(st, logger, node, mediaSlots, map[domain.JobKind]jobs.Handler{kind: h}, hub, gate)
+	}
+	readers := []*jobs.Worker{
+		reader(domain.JobKeyframes, analysis.Keyframes(st, tools)),
+		reader(domain.JobMarkers, analysis.Markers(st, tools.Fingerprint)),
+		reader(domain.JobPreviews, analysis.MakePreviews(st, tools, previews, logger)),
+	}
 	// Conversions have slots of their own, so a long one never holds up a scan, and each holds a
-	// transcode slot its node's playbacks may take, so they never starve them.
+	// transcode slot its node's playbacks may take, so they never starve them. A conversion is asked
+	// for by someone waiting on it, as a playback is, so it takes no gate: on a server played every
+	// evening, one held back by each playback would not be ready for days.
 	converter := jobs.NewWorker(st, logger, node, playback.MaxConversions, map[domain.JobKind]jobs.Handler{
 		domain.JobConvert: conversions.Convert,
-	}, hub)
+	}, hub, nil)
 	watcher := watch.New(st, logger)
 	background, stopBackground := context.WithCancel(ctx)
 	var wg sync.WaitGroup
@@ -304,9 +313,11 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	wg.Go(func() { scheduler.Run(background) })
 	wg.Go(func() { scanner.Run(background) })
 	wg.Go(func() { matcher.Run(background) })
-	wg.Go(func() { analyser.Run(background) })
 	wg.Go(func() { notifier.Run(background) })
-	wg.Go(func() { previewer.Run(background) })
+	wg.Go(func() { gate.Run(background) })
+	for _, r := range readers {
+		wg.Go(func() { r.Run(background) })
+	}
 	wg.Go(func() { converter.Run(background) })
 	wg.Go(func() { sweepPlaybacks(background, sessions, remuxer, logger) })
 	wg.Go(func() { pruneConversions(background, conversions, logger) })
