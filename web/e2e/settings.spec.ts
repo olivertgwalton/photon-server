@@ -160,3 +160,38 @@ test("the home's rows are put in order and hidden, by pointer or keyboard", asyn
 		page.getByRole("heading", { name: "Continue Watching" }),
 	).toHaveCount(0);
 });
+
+test("a profile is given a picture, shown wherever it is", async ({ page }) => {
+	await logIn(page, "/settings");
+	const menu = page.getByRole("button", { name: "Ada's profile" });
+	await expect(menu.getByText("A", { exact: true })).toBeVisible();
+	await expectAccessible(page);
+
+	await page.getByLabel("Picture for Ada").setInputFiles({
+		name: "notes.txt",
+		mimeType: "text/plain",
+		buffer: Buffer.from("not a picture"),
+	});
+	await expect(
+		page.getByText(/a JPEG, PNG, GIF or WebP is kept/),
+	).toBeVisible();
+
+	await page.getByLabel("Picture for Ada").setInputFiles({
+		name: "ada.png",
+		mimeType: "image/png",
+		buffer: Buffer.from(
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkqGcAAAIEAQDeEycgAAAAAElFTkSuQmCC",
+			"base64",
+		),
+	});
+	await expect(page.getByText("Ada's picture was saved.")).toBeVisible();
+	await expect(menu.locator("img")).toHaveAttribute(
+		"src",
+		/\/api\/v1\/artwork\//,
+	);
+
+	await page.getByRole("button", { name: "Remove picture" }).click();
+	await expect(page.getByText("Ada's picture was removed.")).toBeVisible();
+	// Its initial shows again.
+	await expect(menu.getByText("A", { exact: true })).toBeVisible();
+});

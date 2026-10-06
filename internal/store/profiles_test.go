@@ -5,6 +5,7 @@ package store
 import (
 	"errors"
 	"testing"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
@@ -66,5 +67,38 @@ func TestTheServerKeepsAnAdminWithAPassword(t *testing.T) {
 	}
 	if _, err := s.ProfileByID(ctx, oliver.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("after removing: %v, want ErrNotFound", err)
+	}
+}
+
+func TestAProfileKeepsItsPicture(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleMember, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	picture := uuid.NewV7()
+	got, err := s.SetAvatar(ctx, kid.ID, picture)
+	if err != nil || got.Avatar != picture {
+		t.Fatalf("SetAvatar = %+v, %v", got, err)
+	}
+	if pic, err := s.Picture(ctx, picture); err != nil || !pic.Kept {
+		t.Errorf("Picture = %+v, %v; want it kept by the server", pic, err)
+	}
+	if live, err := s.LivePictures(ctx, []uuid.UUID{picture}); err != nil || !live[picture] {
+		t.Errorf("the avatar is swept: %v, %v", live, err)
+	}
+	listed, err := s.Profiles(ctx)
+	if err != nil || len(listed) != 1 || listed[0].Profile.Avatar != picture {
+		t.Errorf("Profiles = %+v, %v; want the avatar listed", listed, err)
+	}
+	if got, err := s.SetAvatar(ctx, kid.ID, uuid.UUID{}); err != nil || got.Avatar != (uuid.UUID{}) {
+		t.Errorf("taking it away = %+v, %v", got, err)
+	}
+	if live, _ := s.LivePictures(ctx, []uuid.UUID{picture}); live[picture] {
+		t.Error("a picture taken away is kept from the sweep")
+	}
+	if _, err := s.SetAvatar(ctx, uuid.NewV7(), picture); !errors.Is(err, ErrNotFound) {
+		t.Errorf("no such profile: %v", err)
 	}
 }

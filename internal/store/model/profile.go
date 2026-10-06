@@ -15,6 +15,7 @@ type Profile struct {
 	CreatedAt    time.Time `gorm:"default:now()"`
 	MaxAge       *int16
 	Unrated      domain.Unrated `gorm:"default:allow"`
+	AvatarID     *UUID          `gorm:"type:uuid"`
 }
 
 type ProfilePreference struct {

@@ -119,7 +119,11 @@ async function add(event: SubmitEvent) {
 						href="/settings/server/profiles/{profile.id}"
 						class="text-ink flex items-center gap-3 font-semibold hover:underline"
 					>
-						<ProfileAvatar name={profile.name} class="size-8 text-sm" />
+						<ProfileAvatar
+							name={profile.name}
+							avatar={profile.avatar}
+							class="size-8 text-sm"
+						/>
 						{profile.name}
 					</a>
 				</Table.Cell>

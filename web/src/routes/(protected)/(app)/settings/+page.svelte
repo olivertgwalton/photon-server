@@ -2,6 +2,7 @@
 import { toast } from "svelte-sonner";
 import { invalidateAll } from "$app/navigation";
 import { client, problemMessage } from "#lib/api/client.js";
+import AvatarPicker from "#lib/components/AvatarPicker.svelte";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
@@ -75,8 +76,12 @@ const roles = { admin: "Admin", member: "Member", restricted: "Restricted" };
 
 <div class="grid max-w-2xl gap-6">
 	<header class="flex items-center gap-4">
-		<ProfileAvatar name={data.me.name} class="size-16 text-2xl" />
-		<div>
+		<ProfileAvatar
+			name={data.me.name}
+			avatar={data.me.avatar}
+			class="size-16 text-2xl"
+		/>
+		<div class="grid gap-2">
 			<h1 class="title">{data.me.name}</h1>
 			<p class="text-ink-2 text-sm">
 				{roles[data.me.role]}.
@@ -89,6 +94,11 @@ const roles = { admin: "Admin", member: "Member", restricted: "Restricted" };
 					An admin changes this profile's name and what it may see.
 				{/if}
 			</p>
+			<AvatarPicker
+				name={data.me.name}
+				avatar={data.me.avatar}
+				path="/api/v1/me/avatar"
+			/>
 		</div>
 	</header>
 

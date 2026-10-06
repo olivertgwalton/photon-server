@@ -24,7 +24,7 @@ type param struct {
 	doc  string
 }
 
-// asFile is a reply that is a file, by the types it may be.
+// asFile is a body or reply that is a file, by the types it may be.
 type asFile []string
 
 // asStream is a reply of Server-Sent Events, by each event's name and the JSON its data carries.
@@ -138,7 +138,15 @@ func operation(s *schemas, r route, path string) (map[string]any, error) {
 	if params != nil {
 		op["parameters"] = params
 	}
-	if r.body != nil {
+	switch body := r.body.(type) {
+	case nil:
+	case asFile:
+		content := map[string]any{}
+		for _, t := range body {
+			content[t] = map[string]any{"schema": map[string]any{"type": "string", "contentMediaType": t}}
+		}
+		op["requestBody"] = map[string]any{"required": true, "content": content}
+	default:
 		op["requestBody"] = map[string]any{
 			"required": true,
 			"content":  map[string]any{"application/json": map[string]any{"schema": s.of(reflect.TypeOf(r.body))}},

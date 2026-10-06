@@ -2,9 +2,11 @@
 package artwork
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"io/fs"
 	"net/http"
@@ -141,4 +143,43 @@ func (c *Cache) Sweep(ctx context.Context, live func(ctx context.Context, ids []
 		removed++
 	}
 	return removed, nil
+}
+
+// ErrNotPicture is something given to keep that is not a picture decoded here, or too large.
+var ErrNotPicture = errors.New("not a picture")
+
+// kept are the formats a picture given to keep may be, by the type its bytes say they are: the
+// raster formats decoded here, never SVG, which could carry script.
+var kept = map[string]string{"image/jpeg": "jpeg", "image/png": "png", "image/gif": "gif", "image/webp": "webp"}
+
+// Keep keeps a picture given to the server, as an avatar is, under id: at most maxPicture bytes,
+// of a format its own bytes say it is, of at most maxPixels.
+func (c *Cache) Keep(id uuid.UUID, r io.Reader) error {
+	data, err := io.ReadAll(io.LimitReader(r, maxPicture+1))
+	if err != nil {
+		return err
+	}
+	if len(data) > maxPicture {
+		return fmt.Errorf("%w: over %d MiB", ErrNotPicture, maxPicture>>20)
+	}
+	format, ok := kept[http.DetectContentType(data)]
+	if !ok {
+		return fmt.Errorf("%w: a JPEG, PNG, GIF or WebP is kept", ErrNotPicture)
+	}
+	cfg, decoded, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || decoded != format {
+		return fmt.Errorf("%w: it does not read as the %s it says it is", ErrNotPicture, strings.ToUpper(format))
+	}
+	if cfg.Width*cfg.Height > maxPixels {
+		return fmt.Errorf("%w: %d×%d is over %d megapixels", ErrNotPicture, cfg.Width, cfg.Height, maxPixels/1_000_000)
+	}
+	return c.write(id.String(), func(w io.Writer) error {
+		_, err := w.Write(data)
+		return err
+	})
+}
+
+// Kept answers a picture kept by Keep.
+func (c *Cache) Kept(id uuid.UUID) (*os.File, error) {
+	return c.root.Open(id.String())
 }

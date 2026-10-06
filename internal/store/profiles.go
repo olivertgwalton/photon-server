@@ -107,10 +107,11 @@ func (s *Store) SessionByToken(ctx context.Context, tokenHash []byte, now time.T
 		ID, ProfileID      model.UUID
 		Name               string
 		Role               domain.Role
+		AvatarID           *model.UUID
 		DeviceName, Client string
 		LastSeenAt         time.Time
 	}
-	err := d.WithContext(ctx).Select(d.ID, d.ProfileID, p.Name, p.Role, d.DeviceName, d.Client, d.LastSeenAt).
+	err := d.WithContext(ctx).Select(d.ID, d.ProfileID, p.Name, p.Role, p.AvatarID, d.DeviceName, d.Client, d.LastSeenAt).
 		Join(p, p.ID.EqCol(d.ProfileID)).
 		Where(d.TokenHash.Eq(tokenHash), d.ExpiresAt.Gt(now)).Scan(&row)
 	if err != nil {
@@ -121,7 +122,7 @@ func (s *Store) SessionByToken(ctx context.Context, tokenHash []byte, now time.T
 	}
 	return domain.Session{
 		ID:      uuid.UUID(row.ID),
-		Profile: domain.Profile{ID: uuid.UUID(row.ProfileID), Name: row.Name, Role: row.Role},
+		Profile: profile(model.Profile{ID: row.ProfileID, Name: row.Name, Role: row.Role, AvatarID: row.AvatarID}),
 		Device:  row.DeviceName, Client: row.Client,
 	}, row.LastSeenAt, nil
 }
@@ -141,7 +142,11 @@ func (s *Store) DeleteSession(ctx context.Context, id uuid.UUID) error {
 }
 
 func profile(r model.Profile) domain.Profile {
-	return domain.Profile{ID: uuid.UUID(r.ID), Name: r.Name, Role: r.Role}
+	p := domain.Profile{ID: uuid.UUID(r.ID), Name: r.Name, Role: r.Role}
+	if r.AvatarID != nil {
+		p.Avatar = uuid.UUID(*r.AvatarID)
+	}
+	return p
 }
 
 func (s *Store) ProfileByID(ctx context.Context, id uuid.UUID) (domain.Profile, error) {
@@ -410,4 +415,22 @@ func (s *Store) SetAccess(ctx context.Context, id uuid.UUID, a ProfileAccess) er
 		}
 		return nil
 	})
+}
+
+// SetAvatar makes picture a profile's avatar, or with the zero id takes it away, answering the
+// profile as it is then. The picture it had is forgotten, and its file swept with the rest.
+func (s *Store) SetAvatar(ctx context.Context, id, picture uuid.UUID) (domain.Profile, error) {
+	p := s.q.Profile
+	set := p.AvatarID.Null()
+	if picture != (uuid.UUID{}) {
+		set = p.AvatarID.Value(model.UUID(picture))
+	}
+	res, err := p.WithContext(ctx).Where(p.ID.Eq(model.UUID(id))).UpdateSimple(set)
+	if err == nil && res.RowsAffected == 0 {
+		err = ErrNotFound
+	}
+	if err != nil {
+		return domain.Profile{}, err
+	}
+	return s.ProfileByID(ctx, id)
 }
