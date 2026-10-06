@@ -39,7 +39,7 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error
 		FROM items
 		WHERE kind IN (@movie, @show, @collection) AND search @@ to_tsquery('simple', search_text(@query))
 			AND (CAST(@library AS uuid) IS NULL OR library_id = CAST(@library AS uuid))
-			AND visible(id, CAST(@profile AS uuid))`
+			AND EXISTS (SELECT 1 FROM viewer(CAST(@profile AS uuid)) v WHERE sees(v, items))`
 	var library *model.UUID
 	if q.Library != (uuid.UUID{}) {
 		library = new(model.UUID(q.Library))

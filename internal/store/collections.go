@@ -98,7 +98,7 @@ func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset,
 	}
 	q := s.q.Item.WithContext(ctx).UnderlyingDB().
 		Where("items.library_id = ? AND items.kind = 'collection' AND items.id IN ("+shownCollections+")", lib.String(), minShown).
-		Where("visible(items.id, ?)", profile.String())
+		Where("EXISTS (SELECT 1 FROM viewer(?) v WHERE sees(v, items))", profile.String())
 	var total int64
 	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -129,7 +129,7 @@ func (s *Store) Members(ctx context.Context, profile, collection uuid.UUID) ([]C
 	var rows []*model.Item
 	err = s.q.Item.WithContext(ctx).UnderlyingDB().
 		Joins("JOIN collection_members m ON m.item_id = items.id AND m.collection_id = ?", collection.String()).
-		Where("visible(items.id, ?)", profile.String()).
+		Where("EXISTS (SELECT 1 FROM viewer(?) v WHERE sees(v, items))", profile.String()).
 		Order(order).Find(&rows).Error
 	if err != nil {
 		return nil, err

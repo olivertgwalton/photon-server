@@ -65,7 +65,7 @@ func (s *Store) PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID
 	e := s.q.PlaylistEntry
 	// An entry the profile may no longer see, as a library taken from it, is passed over.
 	q := e.WithContext(ctx).Where(e.PlaylistID.Eq(model.UUID(playlist))).
-		Where(field.NewUnsafeFieldRaw("visible(item_id, ?)", profile.String()))
+		Where(field.NewUnsafeFieldRaw("EXISTS (SELECT 1 FROM items i, viewer(?) v WHERE i.id = item_id AND sees(v, i))", profile.String()))
 	total, err := q.Count()
 	if err != nil {
 		return nil, 0, err
