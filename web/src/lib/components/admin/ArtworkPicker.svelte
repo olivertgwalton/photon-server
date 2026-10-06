@@ -1,6 +1,5 @@
 <script lang="ts">
-import { toast } from "svelte-sonner";
-import { invalidateAll } from "$app/navigation";
+import { change } from "#lib/actions.svelte.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
@@ -48,30 +47,24 @@ $effect(() => {
 });
 
 async function choose(id: string) {
-	const { error } = await api.PUT("/api/v1/admin/titles/{id}/artwork/{kind}", {
-		params: { path: { id: title.id, kind } },
-		body: { id },
-	});
-	if (error) {
-		toast.error(problemMessage(error));
-		// A refresh in between lists the pictures afresh; show what is there now.
-		return load(kind);
-	}
-	toast.success("Chosen.");
-	await invalidateAll();
+	const chosen = await change(
+		api.PUT("/api/v1/admin/titles/{id}/artwork/{kind}", {
+			params: { path: { id: title.id, kind } },
+			body: { id },
+		}),
+		"Chosen.",
+	);
+	// A refresh in between lists the pictures afresh; show what is there now.
+	if (!chosen) return load(kind);
 }
 
-async function giveBack() {
-	const { error } = await api.DELETE(
-		"/api/v1/admin/titles/{id}/artwork/{kind}",
-		{
+const giveBack = () =>
+	change(
+		api.DELETE("/api/v1/admin/titles/{id}/artwork/{kind}", {
 			params: { path: { id: title.id, kind } },
-		},
+		}),
+		"Given back to the sources.",
 	);
-	if (error) return toast.error(problemMessage(error));
-	toast.success("Given back to the sources.");
-	await invalidateAll();
-}
 
 const current = $derived(kinds.find((k) => k.kind === kind) ?? kinds[0]);
 </script>
