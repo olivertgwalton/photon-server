@@ -132,7 +132,8 @@ func TestAPluginDescribesTheTitlesOfALibraryThatTakesIt(t *testing.T) {
 
 	rec := do(http.MethodGet, "/api/v1/admin/providers", "")
 	if !strings.Contains(rec.Body.String(), `{"id":"plugin:films","name":"Films","kinds":["movie"],"capabilities":["describe","rate"],`+
-		`"settings":[{"key":"api_key","name":"API key","secret":true,"required":true,"set":false}],"ready":false}`) {
+		`"settings":[{"key":"api_key","name":"API key","secret":true,"required":true,"set":false}],"ready":false,`+
+		`"metadata_kinds":["movie"],"image_kinds":["movie"]}`) {
 		t.Errorf("providers: %s", rec.Body)
 	}
 	rec = do(http.MethodPatch, "/api/v1/admin/providers/plugin:films", `{"settings": {"api_key": "s3cret"}}`)
@@ -151,10 +152,11 @@ func TestAPluginDescribesTheTitlesOfALibraryThatTakesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := "/api/v1/admin/libraries/" + lib.ID.String()
-	if rec := do(http.MethodPatch, target, `{"sources": ["nfo", "plugin:absent"]}`); rec.Code != http.StatusBadRequest {
+	if rec := do(http.MethodPatch, target, `{"sources": [{"kind": "movie", "metadata": [{"source": "nfo", "enabled": true}, {"source": "plugin:absent", "enabled": true}]}]}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("a plugin not registered as a source: %d, want 400", rec.Code)
 	}
-	if rec := do(http.MethodPatch, target, `{"sources": ["nfo", "plugin:down", "plugin:films"]}`); rec.Code != http.StatusOK {
+	if rec := do(http.MethodPatch, target, `{"sources": [{"kind": "movie", "metadata": [{"source": "nfo", "enabled": true}, {"source": "plugin:down", "enabled": true}, {"source": "plugin:films", "enabled": true}],`+
+		`"images": [{"source": "plugin:films", "enabled": true}]}]}`); rec.Code != http.StatusOK {
 		t.Fatalf("taking the plugins: %d %s", rec.Code, rec.Body)
 	}
 	if _, err := st.SaveFolder(ctx, lib.ID, "jaws", []byte("v1"), []store.Film{{Title: "jaws", Folder: "jaws"}}, nil); err != nil {

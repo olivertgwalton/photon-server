@@ -36,8 +36,8 @@ func TestLibraries(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []domain.Library{
-		{Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films", Sources: domain.DefaultSources(), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex},
-		{Name: "Television", Kind: domain.LibraryShows, Root: "/srv/tv", Sources: domain.DefaultSources(), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex},
+		{Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films", Sources: domain.DefaultSources(domain.LibraryMovies), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex},
+		{Name: "Television", Kind: domain.LibraryShows, Root: "/srv/tv", Sources: domain.DefaultSources(domain.LibraryShows), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex},
 	}
 	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(domain.Library{}, "ID")); diff != "" {
 		t.Errorf("libraries (-want +got):\n%s", diff)
@@ -72,4 +72,18 @@ func TestALibraryIsRenamedAndRemoved(t *testing.T) {
 	if err := s.RemoveLibrary(ctx, films.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("removing it again: %v, want %v", err, ErrNotFound)
 	}
+}
+
+// metadataFrom asks sources, most trusted first, for the metadata of every kind a library of lib
+// holds.
+func metadataFrom(lib domain.LibraryKind, sources ...domain.FieldSource) []domain.KindSources {
+	var out []domain.KindSources
+	for _, kind := range lib.ItemKinds() {
+		k := domain.KindSources{Kind: kind, Metadata: []domain.RankedSource{}}
+		for _, src := range sources {
+			k.Metadata = append(k.Metadata, domain.RankedSource{Source: src, Enabled: true})
+		}
+		out = append(out, k)
+	}
+	return out
 }

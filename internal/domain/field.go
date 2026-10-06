@@ -1,10 +1,7 @@
 package domain
 
 import (
-	"fmt"
 	"regexp"
-	"slices"
-	"strings"
 	"time"
 )
 
@@ -91,9 +88,8 @@ func FieldSources() []FieldSource {
 	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceMDBList, SourceOMDb}
 }
 
-// MetadataSources are the built-in sources a library may take metadata from, in an order it
-// chooses: what files say always ranks lowest, and a reader's own edit highest. A registered
-// plugin is one too.
+// MetadataSources are the built-in sources a library may rank, in an order it chooses: what files
+// say always ranks lowest, and a reader's own edit highest. A registered plugin is one too.
 func MetadataSources() []FieldSource {
 	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList, SourceOMDb}
 }
@@ -134,30 +130,4 @@ const (
 
 func Capabilities() []Capability {
 	return []Capability{CapabilityDescribe, CapabilitySearch, CapabilityRate, CapabilityPerson}
-}
-
-// DefaultSources trust an NFO beside the file over a provider, as Jellyfin's default order does.
-func DefaultSources() []FieldSource {
-	return []FieldSource{SourceNFO, SourceTMDB}
-}
-
-func ParseMetadataSources(list string) ([]FieldSource, error) {
-	var out []FieldSource
-	for name := range strings.SplitSeq(list, ",") {
-		out = append(out, FieldSource(strings.TrimSpace(name)))
-	}
-	return out, CheckMetadataSources(out)
-}
-
-// CheckMetadataSources refuses a source a library cannot take metadata from, or one listed twice.
-func CheckMetadataSources(list []FieldSource) error {
-	for i, src := range list {
-		if _, plugin := src.Plugin(); !plugin && !slices.Contains(MetadataSources(), src) {
-			return fmt.Errorf("source %q is not one of %v or a plugin's", src, MetadataSources())
-		}
-		if slices.Contains(list[:i], src) {
-			return fmt.Errorf("source %q is listed twice", src)
-		}
-	}
-	return nil
 }

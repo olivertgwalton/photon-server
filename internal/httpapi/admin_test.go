@@ -50,7 +50,7 @@ func (f *fakeLibraries) AddLibrary(_ context.Context, name string, kind domain.L
 	if slices.ContainsFunc(f.libs, func(l domain.Library) bool { return l.Name == name || l.Root == root }) {
 		return domain.Library{}, store.ErrLibraryExists
 	}
-	l := domain.Library{ID: uuid.NewV7(), Name: name, Kind: kind, Root: root, Sources: domain.DefaultSources(), Monitor: domain.MonitorRealtime}
+	l := domain.Library{ID: uuid.NewV7(), Name: name, Kind: kind, Root: root, Sources: domain.DefaultSources(kind), Monitor: domain.MonitorRealtime}
 	f.libs = append(f.libs, l)
 	return l, nil
 }
@@ -122,8 +122,11 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Gone", "kind": "movies", "root": "` + root + `/missing"}`, http.StatusBadRequest},
 		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Relative", "kind": "movies", "root": "films"}`, http.StatusBadRequest},
 		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Music", "kind": "music", "root": "/"}`, http.StatusBadRequest},
-		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"sources": ["tmdb", "tmdb"]}`, http.StatusBadRequest},
-		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"name": "Movies", "sources": ["tmdb", "nfo"]}`, http.StatusOK},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"sources": [{"kind": "movie", "metadata": [{"source": "tmdb", "enabled": true}, {"source": "tmdb", "enabled": false}]}]}`, http.StatusBadRequest},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"sources": [{"kind": "episode", "metadata": []}]}`, http.StatusBadRequest},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"sources": [{"kind": "movie", "metadata": [{"source": "tvdb", "enabled": true}]}]}`, http.StatusBadRequest},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"sources": [{"kind": "movie", "images": [{"source": "nfo", "enabled": true}]}]}`, http.StatusBadRequest},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"name": "Movies", "sources": [{"kind": "movie", "metadata": [{"source": "tmdb", "enabled": true}, {"source": "nfo", "enabled": false}, {"source": "mdblist", "enabled": true}]}]}`, http.StatusOK},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"previews": "sometimes"}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"previews": "chapters"}`, http.StatusOK},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"markers": "fingerprints"}`, http.StatusBadRequest},

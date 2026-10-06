@@ -89,8 +89,8 @@ type Library struct {
 	Name string
 	Kind LibraryKind
 	Root string
-	// Sources are where its metadata may come from, most trusted first.
-	Sources []FieldSource
+	// Sources rank where each kind of item it holds takes its metadata and pictures from.
+	Sources []KindSources
 	// RemoteExtras are the kinds of video it keeps links to from its providers.
 	RemoteExtras []ExtraKind
 	Monitor      Monitor

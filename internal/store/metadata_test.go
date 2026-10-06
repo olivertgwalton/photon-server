@@ -182,7 +182,7 @@ func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
 		t.Errorf("by default, title = %q, want the NFO's over TMDB's", got)
 	}
 
-	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: []domain.FieldSource{domain.SourceTMDB, domain.SourceNFO}}); err != nil {
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: metadataFrom(domain.LibraryMovies, domain.SourceTMDB, domain.SourceNFO)}); err != nil {
 		t.Fatal(err)
 	}
 	if n, _ := s.q.Folder.WithContext(ctx).Count(); n != 0 {
@@ -198,7 +198,7 @@ func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
 		t.Errorf("trusting TMDB first, title = %q, want TMDB's", got)
 	}
 
-	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: []domain.FieldSource{domain.SourceNFO}}); err != nil {
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: metadataFrom(domain.LibraryMovies, domain.SourceNFO)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SaveIdentity(ctx, uuid.UUID(item.ID), domain.SourceTMDB, domain.Metadata{Overview: "From TMDB."}, nil); err != nil {
@@ -208,7 +208,88 @@ func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
 		t.Errorf("a library that takes no TMDB took its overview %q", *it.Overview)
 	}
 	libs, err := s.Libraries(ctx)
-	if err != nil || len(libs) != 1 || !slices.Equal(libs[0].Sources, []domain.FieldSource{domain.SourceNFO}) {
+	if err != nil || len(libs) != 1 || !libs[0].Takes(domain.SourceNFO) || libs[0].Takes(domain.SourceTMDB) {
 		t.Errorf("libraries = %+v, %v; want Films taking only NFOs", libs, err)
+	}
+}
+
+func TestEachKindOfItemTakesItsOwnSources(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	on := func(src domain.FieldSource) domain.RankedSource {
+		return domain.RankedSource{Source: src, Enabled: true}
+	}
+	off := func(src domain.FieldSource) domain.RankedSource { return domain.RankedSource{Source: src} }
+	// TMDB describes the show and TheTVDB its episodes, as Jellyfin's per-type downloaders can; the
+	// show's pictures are TheTVDB's alone, with TMDB kept in its place but unticked.
+	show := domain.KindSources{
+		Kind:     domain.ItemShow,
+		Metadata: []domain.RankedSource{on(domain.SourceTMDB), on(domain.SourceTVDB)},
+		Images:   []domain.RankedSource{on(domain.SourceTVDB), off(domain.SourceTMDB)},
+	}
+	episode := domain.KindSources{
+		Kind:     domain.ItemEpisode,
+		Metadata: []domain.RankedSource{on(domain.SourceTVDB), on(domain.SourceTMDB)},
+		Images:   []domain.RankedSource{on(domain.SourceTMDB)},
+	}
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: []domain.KindSources{show, episode}}); err != nil {
+		t.Fatal(err)
+	}
+	ep := Episode{
+		Season: 1, Episodes: []int{1}, Title: "Firefly", Folder: "Firefly/Season 1", ByNumber: true,
+		Copies: []Copy{{ContentKey: []byte("f1"), Parts: []Part{{RelPath: "Firefly/Season 1/S01E01.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
+	}
+	if _, err := s.SaveShowFolder(ctx, lib.ID, "Firefly/Season 1", []byte("v1"), Show{Title: "Firefly", Folder: "Firefly"}, []Episode{ep}, nil); err != nil {
+		t.Fatal(err)
+	}
+	i := s.q.Item
+	row, _ := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow))).Take()
+	for _, src := range []domain.FieldSource{domain.SourceTMDB, domain.SourceTVDB} {
+		said := func(what string) string { return what + " (" + string(src) + ")" }
+		picture := func(kind domain.ArtworkKind) []domain.Artwork {
+			return []domain.Artwork{{Kind: kind, URL: "https://images.test/" + string(src) + ".jpg"}}
+		}
+		if err := s.SaveIdentity(ctx, uuid.UUID(row.ID), src, domain.Metadata{Title: said("Firefly"), Artwork: picture(domain.ArtworkPoster)},
+			map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Title: said("The Train Job"), Artwork: picture(domain.ArtworkThumb)}}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	title := func(kind domain.ItemKind) (string, []domain.FieldSource) {
+		t.Helper()
+		it, err := i.WithContext(ctx).Where(i.Kind.Eq(string(kind))).Take()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var pictures []domain.FieldSource
+		a := s.q.Artwork
+		if err := a.WithContext(ctx).Where(a.ItemID.Eq(it.ID)).Order(a.Source).Pluck(a.Source, &pictures); err != nil {
+			t.Fatal(err)
+		}
+		return it.Title, pictures
+	}
+	if got, pictures := title(domain.ItemShow); got != "Firefly (tmdb)" || !slices.Equal(pictures, []domain.FieldSource{domain.SourceTVDB}) {
+		t.Errorf("show = %q with pictures from %v; want TMDB's title and TheTVDB's pictures alone", got, pictures)
+	}
+	if got, pictures := title(domain.ItemEpisode); got != "The Train Job (tvdb)" || !slices.Equal(pictures, []domain.FieldSource{domain.SourceTMDB}) {
+		t.Errorf("episode = %q with pictures from %v; want TheTVDB's title and TMDB's pictures alone", got, pictures)
+	}
+	libs, err := s.Libraries(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := libs[0].Sources; len(got) != 3 || !slices.Equal(got[0].Images, show.Images) || !slices.Equal(got[1].Metadata, domain.DefaultSources(domain.LibraryShows)[1].Metadata) {
+		t.Errorf("sources = %+v; want the show's unticked TMDB kept in its place and the seasons' left as they were", got)
+	}
+	// The episodes' own sources changing has the show's next match ask about them again.
+	episode.Images = []domain.RankedSource{on(domain.SourceTVDB)}
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: []domain.KindSources{episode}}); err != nil {
+		t.Fatal(err)
+	}
+	if sub, _, err := s.IdentifySubject(ctx, uuid.UUID(row.ID)); err != nil || !slices.Equal(sub.Seasons, []int{1}) {
+		t.Errorf("seasons asked about = %v, %v; want the first again", sub.Seasons, err)
 	}
 }

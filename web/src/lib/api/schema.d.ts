@@ -4439,7 +4439,7 @@ export interface components {
             refresh_days: number;
             remote_extras: components["schemas"]["ExtraKind"][];
             root: string;
-            sources: components["schemas"]["FieldSource"][];
+            sources: components["schemas"]["KindSources"][];
         };
         AdminLibraryListing: {
             counts: components["schemas"]["Counts"];
@@ -4454,7 +4454,7 @@ export interface components {
             refresh_days: number;
             remote_extras: components["schemas"]["ExtraKind"][];
             root: string;
-            sources: components["schemas"]["FieldSource"][];
+            sources: components["schemas"]["KindSources"][];
         };
         AdminLibraryListingList: {
             items: components["schemas"]["AdminLibraryListing"][];
@@ -4915,6 +4915,16 @@ export interface components {
         Keep: "token" | "cookie";
         /** @enum {string} */
         KeyframeMode: "index" | "full" | "off";
+        KindSources: {
+            images: components["schemas"]["RankedSource"][];
+            kind: components["schemas"]["ItemKind"];
+            metadata: components["schemas"]["RankedSource"][];
+        };
+        KindSourcesChange: {
+            images?: components["schemas"]["RankedSource"][];
+            kind: components["schemas"]["ItemKind"];
+            metadata?: components["schemas"]["RankedSource"][];
+        };
         Letter: {
             count: number;
             letter: string;
@@ -4937,7 +4947,7 @@ export interface components {
             previews?: components["schemas"]["PreviewLevel"];
             refresh_days?: number | null;
             remote_extras?: components["schemas"]["ExtraKind"][];
-            sources?: components["schemas"]["FieldSource"][];
+            sources?: components["schemas"]["KindSourcesChange"][];
         };
         /** @enum {string} */
         LibraryKind: "movies" | "shows";
@@ -4989,7 +4999,9 @@ export interface components {
         MetadataProvider: {
             capabilities: components["schemas"]["Capability"][];
             id: components["schemas"]["FieldSource"];
+            image_kinds: components["schemas"]["ItemKind"][];
             kinds: components["schemas"]["ItemKind"][];
+            metadata_kinds: components["schemas"]["ItemKind"][];
             name: string;
             ready: boolean;
             settings: components["schemas"]["Setting"][];
@@ -5335,6 +5347,10 @@ export interface components {
         };
         /** @enum {string} */
         Range: "sdr" | "hlg" | "hdr10" | "hdr10plus" | "dv";
+        RankedSource: {
+            enabled: boolean;
+            source: components["schemas"]["FieldSource"];
+        };
         RatingRef: {
             score: number;
             site: components["schemas"]["RatingSite"];

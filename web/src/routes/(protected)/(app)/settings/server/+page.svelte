@@ -57,7 +57,13 @@ const attention = $derived(
 			.filter((p) => !p.ready)
 			.map((p) => ({
 				p,
-				asking: data.libraries.filter((l) => l.sources.includes(p.id)),
+				asking: data.libraries.filter((l) =>
+					l.sources.some((k) =>
+						[...k.metadata, ...k.images].some(
+							(r) => r.enabled && r.source === p.id,
+						),
+					),
+				),
 			}))
 			.filter(({ asking }) => asking.length)
 			.map(({ p, asking }) => ({

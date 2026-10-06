@@ -57,7 +57,8 @@ func TestAnAdminSetsAProvidersKeyAndNeverSeesItAgain(t *testing.T) {
 		t.Errorf("a member: %d, want 403", rec.Code)
 	}
 	if rec := do(goodToken, http.MethodGet, "/api/v1/admin/providers", ""); !strings.Contains(rec.Body.String(),
-		`"capabilities":["rate"],"settings":[{"key":"api_key","name":"API key","secret":true,"required":true,"set":false}],"ready":false`) {
+		`"capabilities":["rate"],"settings":[{"key":"api_key","name":"API key","secret":true,"required":true,"set":false}],"ready":false,`+
+			`"metadata_kinds":["movie","show"],"image_kinds":[]`) {
 		t.Errorf("before a key: %s", rec.Body)
 	}
 	if rec := do(goodToken, http.MethodPatch, "/api/v1/admin/providers/mdblist", `{"settings": {"colour": "red"}}`); rec.Code != http.StatusBadRequest {

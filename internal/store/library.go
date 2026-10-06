@@ -21,7 +21,7 @@ func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.Library
 		if err := tx.Library.WithContext(ctx).Create(&row); err != nil {
 			return err
 		}
-		if err := saveSources(ctx, tx, row.ID, domain.DefaultSources()); err != nil {
+		if err := saveSources(ctx, tx, row.ID, domain.DefaultSources(kind)); err != nil {
 			return err
 		}
 		return saveRemoteExtras(ctx, tx, row.ID, domain.DefaultRemoteExtras())
@@ -33,7 +33,7 @@ func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.Library
 		return domain.Library{}, fmt.Errorf("adding library: %w", err)
 	}
 	row.Monitor, row.RefreshDays, row.Previews, row.Markers, row.Keyframes = domain.MonitorRealtime, 30, domain.PreviewsAll, domain.MarkersAll, domain.KeyframesIndex
-	return library(row, domain.DefaultSources(), domain.DefaultRemoteExtras()), nil
+	return library(row, domain.DefaultSources(kind), domain.DefaultRemoteExtras()), nil
 }
 
 func (s *Store) Libraries(ctx context.Context) ([]domain.Library, error) {
@@ -46,9 +46,15 @@ func (s *Store) Libraries(ctx context.Context) ([]domain.Library, error) {
 	if err != nil {
 		return nil, err
 	}
-	sources := map[model.UUID][]domain.FieldSource{}
+	ranked := map[model.UUID]map[domain.ItemKind]map[domain.Fetcher][]domain.RankedSource{}
 	for _, t := range taken {
-		sources[t.LibraryID] = append(sources[t.LibraryID], t.Source)
+		if ranked[t.LibraryID] == nil {
+			ranked[t.LibraryID] = map[domain.ItemKind]map[domain.Fetcher][]domain.RankedSource{}
+		}
+		if ranked[t.LibraryID][t.ItemKind] == nil {
+			ranked[t.LibraryID][t.ItemKind] = map[domain.Fetcher][]domain.RankedSource{}
+		}
+		ranked[t.LibraryID][t.ItemKind][t.Fetcher] = append(ranked[t.LibraryID][t.ItemKind][t.Fetcher], domain.RankedSource{Source: t.Source, Enabled: t.Enabled})
 	}
 	ex := s.q.LibraryRemoteExtra
 	kept, err := ex.WithContext(ctx).Order(ex.Kind).Find()
@@ -61,7 +67,12 @@ func (s *Store) Libraries(ctx context.Context) ([]domain.Library, error) {
 	}
 	libs := make([]domain.Library, len(rows))
 	for i, r := range rows {
-		libs[i] = library(*r, sources[r.ID], extras[r.ID])
+		var sources []domain.KindSources
+		for _, kind := range r.Kind.ItemKinds() {
+			by := ranked[r.ID][kind]
+			sources = append(sources, domain.KindSources{Kind: kind, Metadata: by[domain.FetcherMetadata], Images: by[domain.FetcherImages]})
+		}
+		libs[i] = library(*r, sources, extras[r.ID])
 	}
 	return libs, nil
 }
@@ -83,8 +94,10 @@ func (s *Store) Library(ctx context.Context, id uuid.UUID) (domain.Library, erro
 // LibraryChange is what to change about a library; an empty name, monitor, previews, markers or
 // keyframes, or a nil list, is left as it is.
 type LibraryChange struct {
-	Name         string
-	Sources      []domain.FieldSource
+	Name string
+	// Sources replace the rankings they give, of a kind and for metadata or pictures; a nil one is
+	// left as it is.
+	Sources      []domain.KindSources
 	RemoteExtras []domain.ExtraKind
 	Monitor      domain.Monitor
 	// RefreshDays, where set, is how often its titles are matched again; zero never.
@@ -100,8 +113,8 @@ type LibraryChange struct {
 	Keyframes domain.KeyframeMode
 }
 
-// SetLibrary renames a library, changes whether it is watched, where its metadata comes from and
-// in what order, and which kinds of video it keeps providers' links to. With new sources or kinds
+// SetLibrary renames a library, changes whether it is watched, where each kind's metadata and
+// pictures come from and in what order, and which kinds of video it keeps providers' links to. With new sources or kinds
 // its titles are matched again, and with new sources its folders are read again at the next scan
 // too, so the new order reaches everything already there.
 func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChange) error {
@@ -118,11 +131,34 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 		}
 		if change.Sources != nil {
 			ls := tx.LibrarySource
-			if _, err := ls.WithContext(ctx).Where(ls.LibraryID.Eq(row.ID)).Delete(); err != nil {
-				return err
+			for _, k := range change.Sources {
+				for _, f := range domain.Fetchers() {
+					if k.Of(f) == nil {
+						continue
+					}
+					_, err := ls.WithContext(ctx).Where(ls.LibraryID.Eq(row.ID), ls.ItemKind.Eq(string(k.Kind)), ls.Fetcher.Eq(string(f))).Delete()
+					if err != nil {
+						return err
+					}
+				}
 			}
 			if err := saveSources(ctx, tx, row.ID, change.Sources); err != nil {
 				return err
+			}
+			// A show's match asks only about seasons not yet described, so those whose own
+			// sources changed are described again.
+			var deeper []string
+			for _, k := range change.Sources {
+				if k.Kind == domain.ItemSeason || k.Kind == domain.ItemEpisode {
+					deeper = append(deeper, string(k.Kind))
+				}
+			}
+			if len(deeper) > 0 {
+				err := describeAgain(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind IN @kinds`,
+					map[string]any{"lib": row.ID, "kinds": deeper})
+				if err != nil {
+					return err
+				}
 			}
 			if _, err := tx.Folder.WithContext(ctx).Where(tx.Folder.LibraryID.Eq(row.ID)).Delete(); err != nil {
 				return err
@@ -209,21 +245,27 @@ func saveRemoteExtras(ctx context.Context, tx *query.Query, lib model.UUID, kind
 	return tx.LibraryRemoteExtra.WithContext(ctx).Create(rows...)
 }
 
-func saveSources(ctx context.Context, tx *query.Query, lib model.UUID, sources []domain.FieldSource) error {
-	if len(sources) == 0 {
+func saveSources(ctx context.Context, tx *query.Query, lib model.UUID, sources []domain.KindSources) error {
+	var rows []*model.LibrarySource
+	for _, k := range sources {
+		for _, f := range domain.Fetchers() {
+			for n, r := range k.Of(f) {
+				rows = append(rows, &model.LibrarySource{
+					LibraryID: lib, ItemKind: k.Kind, Fetcher: f, Source: r.Source, Position: n, Enabled: r.Enabled,
+				})
+			}
+		}
+	}
+	if len(rows) == 0 {
 		return nil
 	}
-	if err := registered(ctx, tx, sources); err != nil {
+	if err := registered(ctx, tx, rows); err != nil {
 		return err
-	}
-	rows := make([]*model.LibrarySource, len(sources))
-	for n, src := range sources {
-		rows[n] = &model.LibrarySource{LibraryID: lib, Source: src, Position: n}
 	}
 	return tx.LibrarySource.WithContext(ctx).Create(rows...)
 }
 
-func library(r model.Library, sources []domain.FieldSource, extras []domain.ExtraKind) domain.Library {
+func library(r model.Library, sources []domain.KindSources, extras []domain.ExtraKind) domain.Library {
 	return domain.Library{
 		ID: uuid.UUID(r.ID), Name: r.Name, Kind: r.Kind, Root: r.Root, Sources: sources, RemoteExtras: extras,
 		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews, Markers: r.Markers,

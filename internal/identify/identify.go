@@ -14,10 +14,10 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// Handler asks each provider a film's or show's library takes, in the registry's order, what it
-// knows: a describer matches the title and records what it says about it and, for a show, its
-// seasons and episodes, and a rater records its ratings; the library's order decides whose values
-// stand. A title with no confident match is left as its files and NFO describe it, and a provider
+// Handler asks each provider a film's or show's library asks for anything, in the registry's
+// order, what it knows: a describer matches the title and records what it says about it and, for a
+// show, its seasons and episodes, and a rater records its ratings; the library's ranking for each
+// kind of item decides whose values and pictures stand. A title with no confident match is left as its files and NFO describe it, and a provider
 // not configured or not reachable is passed over. raise tells the title was described again.
 func Handler(st *store.Store, providers *provider.Registry, raise func(context.Context, domain.Event), log *slog.Logger) jobs.Handler {
 	return func(ctx context.Context, id uuid.UUID) error {

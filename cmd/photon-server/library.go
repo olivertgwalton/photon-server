@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -21,7 +22,8 @@ const libraryUsage = `usage:
   photon-server library set -name NAME SETTINGS
   photon-server library list
 SETTINGS, any of:
-  -sources nfo,tmdb,tvdb  -extras trailer,featurette|none  -monitor realtime|off
+  -metadata 'show=nfo,tvdb,tmdb;episode=nfo,tmdb'  -images 'show=tvdb,tmdb'
+  -extras trailer,featurette|none  -monitor realtime|off
   -previews off|chapters|all  -markers off|chapters|all  -keyframes index|full|off`
 
 func library(ctx context.Context, logger *slog.Logger, databaseURL string, out io.Writer, args []string) error {
@@ -63,6 +65,9 @@ func addLibrary(ctx context.Context, st *store.Store, out io.Writer, args []stri
 	if err != nil {
 		return err
 	}
+	if err := domain.CheckSources(k, change.Sources); err != nil {
+		return err
+	}
 	root, err := filepath.Abs(fs.Arg(0))
 	if err != nil {
 		return err
@@ -91,12 +96,13 @@ func addLibrary(ctx context.Context, st *store.Store, out io.Writer, args []stri
 
 // librarySettings are the flags that set how a library is read, and the change they ask for.
 type librarySettings struct {
-	sources, extras, monitor, previews, markers, keyframes *string
+	metadata, images, extras, monitor, previews, markers, keyframes *string
 }
 
 func settingsFlags(fs *flag.FlagSet) librarySettings {
 	return librarySettings{
-		sources:   fs.String("sources", "", "where its metadata comes from, most trusted first"),
+		metadata:  fs.String("metadata", "", "where each kind of item's metadata comes from, most trusted first, as kind=source,source;kind=…"),
+		images:    fs.String("images", "", "where each kind of item's pictures come from, most trusted first, as kind=source,source;kind=…"),
 		extras:    fs.String("extras", "", "the kinds of video it keeps providers' links to, or none"),
 		monitor:   fs.String("monitor", "", "realtime to scan it as its files change, off for the schedule alone"),
 		previews:  fs.String("previews", "", "off, chapters for an image per chapter, or all for trickplay sheets too"),
@@ -109,9 +115,11 @@ func settingsFlags(fs *flag.FlagSet) librarySettings {
 func (f librarySettings) change() (store.LibraryChange, bool, error) {
 	var change store.LibraryChange
 	var err error
-	if *f.sources != "" {
-		if change.Sources, err = domain.ParseMetadataSources(*f.sources); err != nil {
-			return change, false, err
+	for fetcher, list := range map[domain.Fetcher]string{domain.FetcherMetadata: *f.metadata, domain.FetcherImages: *f.images} {
+		if list != "" {
+			if change.Sources, err = parseSources(change.Sources, fetcher, list); err != nil {
+				return change, false, err
+			}
 		}
 	}
 	if *f.extras != "" {
@@ -139,7 +147,7 @@ func (f librarySettings) change() (store.LibraryChange, bool, error) {
 			return change, false, err
 		}
 	}
-	given := *f.sources != "" || *f.extras != "" || *f.monitor != "" || *f.previews != "" || *f.markers != "" || *f.keyframes != ""
+	given := *f.metadata != "" || *f.images != "" || *f.extras != "" || *f.monitor != "" || *f.previews != "" || *f.markers != "" || *f.keyframes != ""
 	return change, given, nil
 }
 
@@ -165,6 +173,9 @@ func setLibrary(ctx context.Context, st *store.Store, out io.Writer, args []stri
 	if i < 0 {
 		return fmt.Errorf("no library is called %q", *name)
 	}
+	if err := domain.CheckSources(libs[i].Kind, change.Sources); err != nil {
+		return err
+	}
 	if err := st.SetLibrary(ctx, libs[i].ID, change); err != nil {
 		return err
 	}
@@ -178,9 +189,57 @@ func listLibraries(ctx context.Context, st *store.Store, out io.Writer) error {
 		return err
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "NAME\tKIND\tSOURCES\tEXTRAS\tMONITOR\tPREVIEWS\tMARKERS\tKEYFRAMES\tROOT\tID")
+	_, _ = fmt.Fprintln(w, "NAME\tKIND\tMETADATA\tIMAGES\tEXTRAS\tMONITOR\tPREVIEWS\tMARKERS\tKEYFRAMES\tROOT\tID")
 	for _, l := range libs {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%v\t%v\t%s\t%s\t%s\t%s\t%s\t%s\n", l.Name, l.Kind, l.Sources, l.RemoteExtras, l.Monitor, l.Previews, l.Markers, l.Keyframes, l.Root, l.ID)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%v\t%s\t%s\t%s\t%s\t%s\t%s\n", l.Name, l.Kind,
+			formatSources(l.Sources, domain.FetcherMetadata), formatSources(l.Sources, domain.FetcherImages),
+			l.RemoteExtras, l.Monitor, l.Previews, l.Markers, l.Keyframes, l.Root, l.ID)
 	}
 	return w.Flush()
+}
+
+// parseSources adds to sources the rankings for f a flag gives, as kind=source,source;kind=…, each
+// source listed enabled; a kind with none listed asks nothing.
+func parseSources(sources []domain.KindSources, f domain.Fetcher, list string) ([]domain.KindSources, error) {
+	for given := range strings.SplitSeq(list, ";") {
+		kind, names, ok := strings.Cut(strings.TrimSpace(given), "=")
+		if !ok {
+			return nil, fmt.Errorf("%q is not kind=source,source", given)
+		}
+		k, err := domain.Parse("item kind", kind, domain.ItemKinds())
+		if err != nil {
+			return nil, err
+		}
+		ranked := []domain.RankedSource{}
+		for name := range strings.SplitSeq(names, ",") {
+			if name = strings.TrimSpace(name); name != "" {
+				ranked = append(ranked, domain.RankedSource{Source: domain.FieldSource(name), Enabled: true})
+			}
+		}
+		i := slices.IndexFunc(sources, func(s domain.KindSources) bool { return s.Kind == k })
+		if i < 0 {
+			sources, i = append(sources, domain.KindSources{Kind: k}), len(sources)
+		}
+		if f == domain.FetcherMetadata {
+			sources[i].Metadata = ranked
+		} else {
+			sources[i].Images = ranked
+		}
+	}
+	return sources, nil
+}
+
+// formatSources writes the sources a library asks for f, as the flags take them.
+func formatSources(sources []domain.KindSources, f domain.Fetcher) string {
+	var kinds []string
+	for _, k := range sources {
+		var names []string
+		for _, r := range k.Of(f) {
+			if r.Enabled {
+				names = append(names, string(r.Source))
+			}
+		}
+		kinds = append(kinds, string(k.Kind)+"="+strings.Join(names, ","))
+	}
+	return strings.Join(kinds, ";")
 }

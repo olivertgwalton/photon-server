@@ -25,7 +25,7 @@ type Subject struct {
 	Seasons []int
 	// Order is the order a show's episode files are numbered in.
 	Order domain.EpisodeOrder
-	// Sources are what its library takes metadata from.
+	// Sources are what its library asks for metadata or pictures of any kind it holds.
 	Sources []domain.FieldSource
 }
 
@@ -44,7 +44,7 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 		sub.Year = *item.Year
 	}
 	ls := s.q.LibrarySource
-	if err := ls.WithContext(ctx).Where(ls.LibraryID.Eq(item.LibraryID)).Order(ls.Position).
+	if err := ls.WithContext(ctx).Distinct(ls.Source).Where(ls.LibraryID.Eq(item.LibraryID), ls.Enabled.Is(true)).
 		Pluck(ls.Source, &sub.Sources); err != nil {
 		return Subject{}, false, err
 	}
@@ -76,10 +76,15 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 }
 
 // SaveIdentity writes what a provider says about a title, and about the seasons and episodes of a
-// show, under every source that ranks above it.
+// show, under every source that ranks above it, of what its library asks the provider for of each.
 func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.FieldSource, m domain.Metadata, seasons map[int]domain.SeasonMetadata) error {
 	return s.q.Transaction(func(tx *query.Query) error {
 		item := model.UUID(id)
+		asks, err := askedOf(ctx, tx, item, source)
+		if err != nil {
+			return err
+		}
+		m = asks.of(asks.title, m)
 		if err := applyMetadata(ctx, tx, item, source, m); err != nil {
 			return err
 		}
@@ -110,7 +115,7 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 			if err != nil {
 				return err
 			}
-			said := season.Metadata
+			said := asks.of(domain.ItemSeason, season.Metadata)
 			// A season is named by its number, as the scan names it, whatever a provider calls it
 			// ("Season Three", "Book One: Water"); an NFO beside it is the reader's own.
 			if source != domain.SourceNFO {
@@ -119,7 +124,7 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 			if err := applyMetadata(ctx, tx, row.ID, source, said); err != nil {
 				return err
 			}
-			if err := saveProviderArtwork(ctx, tx, row.ID, source, season.Metadata.Artwork); err != nil {
+			if err := saveProviderArtwork(ctx, tx, row.ID, source, said.Artwork); err != nil {
 				return err
 			}
 			episodes, err := i.WithContext(ctx).Where(i.ParentID.Eq(row.ID), i.Kind.Eq(string(domain.ItemEpisode))).Find()
@@ -131,6 +136,7 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 					continue
 				}
 				if said, ok := season.Episodes[*e.EpisodeNumber]; ok {
+					said = asks.of(domain.ItemEpisode, said)
 					if err := applyMetadata(ctx, tx, e.ID, source, said); err != nil {
 						return err
 					}

@@ -21,6 +21,9 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: metadataFrom(domain.LibraryMovies, domain.SourceTMDB, domain.SourceMDBList)}); err != nil {
+		t.Fatal(err)
+	}
 	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
 	if err != nil {
 		t.Fatal(err)
