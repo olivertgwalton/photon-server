@@ -10,7 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 
@@ -40,6 +42,49 @@ func Decode(r io.Reader, v any) error {
 		return fmt.Errorf("answered more than %d bytes", maxAnswer)
 	}
 	return json.Unmarshal(data, v)
+}
+
+// maxRetryAfter is the longest a provider's asking to be given time is waited out within one
+// request; one asking longer fails it, and its job is tried again later.
+const maxRetryAfter = 30 * time.Second
+
+// Send sends req, and sends it again once a provider answering 429 Too Many Requests says it may,
+// so a burst of identifying waits a moment rather than failing titles into their backoff.
+func Send(hc *http.Client, req *http.Request) (*http.Response, error) {
+	var waited time.Duration
+	for {
+		resp, err := hc.Do(req) //nolint:gosec // a built-in provider's own address
+		if err != nil || resp.StatusCode != http.StatusTooManyRequests {
+			return resp, err
+		}
+		wait := retryAfter(resp.Header.Get("Retry-After"))
+		if waited += wait; waited > maxRetryAfter {
+			return resp, nil
+		}
+		_ = resp.Body.Close()
+		if req.GetBody != nil {
+			if req.Body, err = req.GetBody(); err != nil {
+				return nil, err
+			}
+		}
+		select {
+		case <-req.Context().Done():
+			return nil, req.Context().Err()
+		case <-time.After(wait):
+		}
+	}
+}
+
+// retryAfter reads a Retry-After header, seconds or a date; a provider that says nothing is given
+// a second.
+func retryAfter(v string) time.Duration {
+	if s, err := strconv.Atoi(v); err == nil && s >= 0 {
+		return time.Duration(s) * time.Second
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		return max(time.Until(t), 0)
+	}
+	return time.Second
 }
 
 // Info is what a provider is and what an admin may set of it.

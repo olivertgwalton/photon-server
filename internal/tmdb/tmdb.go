@@ -80,7 +80,7 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, into an
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Accept", "application/json")
-	resp, err := c.http.Do(req)
+	resp, err := provider.Send(c.http, req)
 	if err != nil {
 		return err
 	}

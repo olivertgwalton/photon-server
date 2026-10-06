@@ -172,3 +172,24 @@ func TestAnAnswerTooLargeIsRefused(t *testing.T) {
 		t.Errorf("a 9 MiB answer: %v, want it refused", got)
 	}
 }
+
+// TMDB asking for a moment, as it does past its rate limit, is given it: the title is still
+// identified, not failed into its backoff.
+func TestARequestTMDBAsksToSlowIsSentAgain(t *testing.T) {
+	asked := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if asked++; asked == 1 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"results":[{"id":348,"title":"Alien","release_date":"1979-05-25"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := New("token", "en-GB", unlimited{})
+	c.base = srv.URL
+	got, err := c.Search(t.Context(), Movie, "Alien", 0)
+	if err != nil || len(got) != 1 || asked != 2 {
+		t.Errorf("Search = %v, %v after %d requests; want Alien, asked again once", got, err, asked)
+	}
+}

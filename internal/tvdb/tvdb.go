@@ -125,7 +125,7 @@ func (c *Client) get(ctx context.Context, path string, into any) error {
 
 func (c *Client) do(req *http.Request, into any) error {
 	req.Header.Set("Accept", "application/json")
-	resp, err := c.http.Do(req)
+	resp, err := provider.Send(c.http, req)
 	if err != nil {
 		return err
 	}

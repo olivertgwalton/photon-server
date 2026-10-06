@@ -90,7 +90,7 @@ func (c *Client) ratings(ctx context.Context, key, path string) ([]domain.Rating
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := c.http.Do(req)
+	resp, err := provider.Send(c.http, req)
 	if ue, ok := errors.AsType[*url.Error](err); ok {
 		// Its address carries the key.
 		return nil, fmt.Errorf("mdblist %s: %w", path, ue.Err)
