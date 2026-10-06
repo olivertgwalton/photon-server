@@ -139,8 +139,9 @@ func saveCredits(ctx context.Context, tx db, source domain.FieldSource, titles [
 		if p.added != nil {
 			to = p.added.ID
 		}
+		// Of the people its keys name, the one added first wins, as ids are minted in time order.
 		for _, k := range p.keys {
-			if o, ok := owners[k]; ok && (to == (uuid.UUID{}) || before(o.PersonID, to)) {
+			if o, ok := owners[k]; ok && (to == (uuid.UUID{}) || o.PersonID.Compare(to) < 0) {
 				to = o.PersonID
 			}
 		}
@@ -222,9 +223,6 @@ func saveCredits(ctx context.Context, tx db, source domain.FieldSource, titles [
 		credits.items, credits.people, source, credits.kinds, credits.roles, credits.positions)
 	return err
 }
-
-// before reports whether a was added before b, as ids are minted in time order.
-func before(a, b uuid.UUID) bool { return a.Compare(b) < 0 }
 
 // owner is the person an id names, as they are now.
 type owner struct {
