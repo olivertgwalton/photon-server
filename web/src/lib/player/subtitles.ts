@@ -14,6 +14,9 @@ export type Choice = {
 	// Its place among an HLS playlist's subtitles: every text track inside
 	// the copy, then every text file beside it. A picture has none.
 	rendition?: number;
+	language?: string;
+	forced?: boolean;
+	default?: boolean;
 };
 
 // FFmpeg's text subtitle codecs, which HLS carries as WebVTT; the server's
@@ -58,6 +61,9 @@ export function choices(version: Schemas["VersionPage"]): Choice[] {
 			codec: s.codec,
 			stream: s.index,
 			rendition: text.has(s.codec) ? rendition++ : undefined,
+			language: s.language,
+			forced: s.forced,
+			default: s.default,
 		});
 	}
 	// A picture beside the copy is never drawn: only a track inside it is.
@@ -69,6 +75,9 @@ export function choices(version: Schemas["VersionPage"]): Choice[] {
 			codec: f.codec,
 			file: i,
 			rendition: rendition++,
+			language: f.language,
+			forced: f.forced,
+			default: f.default,
 		});
 	});
 	return out;

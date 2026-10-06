@@ -27,6 +27,13 @@ import {
 	type Capabilities,
 	probe,
 } from "#lib/player/profile.js";
+import {
+	loadPreferences,
+	pickAudio,
+	pickSubtitle,
+	savePreferences,
+	skipping,
+} from "#lib/player/preferences.js";
 import { ProgressReporter, type Report } from "#lib/player/progress.js";
 import { choices, needsReplay, wants, webVTT } from "#lib/player/subtitles.js";
 import {
@@ -57,11 +64,10 @@ let {
 	start: number;
 	version?: string;
 	audio?: number;
-	subtitle?: number;
+	subtitle?: number | "off";
 } = $props();
 
 const api = client();
-const qualityKey = "photon.player.quality";
 const step = 10;
 const nudge = 5;
 const restAfter = 3000;
@@ -81,14 +87,39 @@ let refusal = $state<{
 	reasons: Schemas["TranscodeReason"][];
 }>();
 // The choices start as the address asked and are the reader's from then on.
-let audio = $state(untrack(() => askedAudio));
-let subtitleKey = $state(
+// What this browser's settings ask for where the address chose nothing.
+const prefs = loadPreferences();
+const startVersion = untrack(
+	() =>
+		title.versions?.find((v) => v.id === askedVersion) ?? title.versions?.[0],
+);
+let audio = $state(
 	untrack(() =>
-		askedSubtitle === undefined ? undefined : `s${askedSubtitle}`,
+		askedAudio === undefined && startVersion
+			? pickAudio(startVersion.streams, prefs)
+			: askedAudio,
 	),
 );
+let subtitleKey = $state(
+	untrack(() => {
+		if (askedSubtitle === "off") return undefined;
+		if (askedSubtitle !== undefined) return `s${askedSubtitle}`;
+		if (!startVersion) return undefined;
+		const sound = startVersion.streams.find(
+			(t) =>
+				t.kind === "audio" &&
+				(audio === undefined ? t.default : t.index === audio),
+		);
+		return pickSubtitle(
+			choices(startVersion),
+			sound?.language,
+			prefs,
+			navigator.language,
+		);
+	}),
+);
 let lastSubtitle = $state<string>();
-let quality = $state(remembered());
+let quality = $state(prefs.quality);
 // The file as it is would not play here after all; the server converts it.
 let convert = $state(false);
 let trackSrc = $state<string>();
@@ -132,6 +163,14 @@ const marker = $derived(
 	),
 );
 const credits = $derived(version?.markers?.find((m) => m.kind === "credits"));
+// A marker skipped by itself is skipped once: seeking back into it plays it.
+const skippedAt = new Set<number>();
+$effect(() => {
+	if (!marker || skipping(marker.kind, prefs) !== "auto") return;
+	if (skippedAt.has(marker.start_ms)) return;
+	skippedAt.add(marker.start_ms);
+	untrack(() => skip(marker));
+});
 const upNext = $derived(
 	next &&
 		!upNextHidden &&
@@ -154,14 +193,6 @@ const heading = $derived(
 				.join(" · ")
 		: title.title,
 );
-
-function remembered(): number {
-	try {
-		return Number(localStorage.getItem(qualityKey)) || 0;
-	} catch {
-		return 0;
-	}
-}
 
 function send(id: string) {
 	return (r: Report) => {
@@ -381,9 +412,7 @@ function chooseQuality(kbps: number) {
 	menuOpen = false;
 	if (kbps === quality) return;
 	quality = kbps;
-	try {
-		localStorage.setItem(qualityKey, String(kbps));
-	} catch {}
+	savePreferences({ quality: kbps });
 	reopen();
 }
 
@@ -561,7 +590,7 @@ onDestroy(() => {
 			if (part < parts.length - 1) {
 				load(part + 1, parts[part + 1].offset_ms / 1000);
 				void video?.play();
-			} else if (next && !upNextHidden) playNext();
+			} else if (next && !upNextHidden && prefs.autoplay) playNext();
 		}}
 		onerror={() => {
 			if (playback?.method === "direct" && !convert) {
@@ -645,12 +674,13 @@ onDestroy(() => {
 					<UpNext
 						card={next}
 						{paused}
+						autoplay={prefs.autoplay}
 						onplay={playNext}
 						ondismiss={() => {
 							upNextHidden = true;
 						}}
 					/>
-				{:else if marker}
+				{:else if marker && skipping(marker.kind, prefs) === "button"}
 					<Button
 						variant="outline"
 						class="bg-black/60"

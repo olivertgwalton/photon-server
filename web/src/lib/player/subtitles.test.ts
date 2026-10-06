@@ -39,13 +39,21 @@ const remux: Schemas["Playback"] = { ...direct, method: "remux" };
 
 test("each subtitle is named and placed where HLS publishes it", () => {
 	expect(choices(version)).toEqual([
-		{ key: "s2", label: "English", codec: "hdmv_pgs_subtitle", stream: 2 },
+		{
+			key: "s2",
+			label: "English",
+			codec: "hdmv_pgs_subtitle",
+			stream: 2,
+			language: "en",
+		},
 		{
 			key: "s3",
 			label: "French (Forced)",
 			codec: "subrip",
 			stream: 3,
 			rendition: 0,
+			language: "fr",
+			forced: true,
 		},
 		{
 			key: "f0",
@@ -53,6 +61,7 @@ test("each subtitle is named and placed where HLS publishes it", () => {
 			codec: "subrip",
 			file: 0,
 			rendition: 1,
+			language: "en",
 		},
 		{ key: "f2", label: "Signs", codec: "ass", file: 2, rendition: 2 },
 	]);

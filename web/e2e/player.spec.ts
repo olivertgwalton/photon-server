@@ -147,3 +147,23 @@ test("scrubbing shows the chapter and the thumbnail under the pointer", async ({
 	await expect(page.getByText("The Rest")).toBeVisible();
 	expect((await sheet).ok()).toBe(true);
 });
+
+test("the player follows this browser's playback settings", async ({
+	page,
+}) => {
+	await page.addInitScript(() => {
+		localStorage.setItem(
+			"photon.playback",
+			JSON.stringify({ audioLanguage: "fr", skipIntro: "auto" }),
+		);
+	});
+	const asked = page.waitForRequest("**/api/v1/titles/p-film/play");
+	await logIn(page, "/play/p-film?t=0");
+	expect((await asked).postDataJSON().audio_stream).toBe(2);
+	// The intro, 0.5 to 3 s, goes by itself, sooner than playing through it
+	// would take, and offers no button.
+	await expect
+		.poll(() => time(page), { timeout: 2_000 })
+		.toBeGreaterThanOrEqual(3);
+	await expect(page.getByRole("button", { name: "Skip Intro" })).toHaveCount(0);
+});

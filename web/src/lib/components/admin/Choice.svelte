@@ -7,19 +7,26 @@ let {
 	name,
 	options,
 	value = $bindable(),
+	onchange,
 	class: className,
 }: {
 	id: string;
 	name: string;
 	options: readonly { value: T; label: string }[];
 	value?: T;
+	onchange?: (value: T) => void;
 	class?: string;
 } = $props();
 
 const label = $derived(options.find((o) => o.value === value)?.label);
 </script>
 
-<Select.Root type="single" {name} bind:value={value as string}>
+<Select.Root
+	type="single"
+	{name}
+	bind:value={value as string}
+	onValueChange={(v) => onchange?.(v as T)}
+>
 	<Select.Trigger {id} class={className}>{label ?? "Choose"}</Select.Trigger>
 	<Select.Content>
 		{#each options as option (option.value)}
