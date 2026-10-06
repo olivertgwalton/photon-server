@@ -98,6 +98,7 @@ const films: Schemas["AdminLibrary"] = {
 	previews: "all",
 	markers: "all",
 	keyframes: "index",
+	themes: "all",
 };
 
 const providers: Schemas["MetadataProvider"][] = [

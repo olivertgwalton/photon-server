@@ -262,6 +262,7 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 		});
 	}
 	if (id === "t-show") {
+		out.themes = ["th-small-show"];
 		out.seasons = [
 			{
 				id: "t-s1",
@@ -541,6 +542,7 @@ const defaults: Schemas["Preferences"] = {
 	next_episode: "play",
 	intro_action: "ask",
 	credits_action: "ask",
+	theme_music: "off",
 	home: [
 		"continue_watching",
 		"next_up",

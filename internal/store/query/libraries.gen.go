@@ -37,6 +37,7 @@ func newLibrary(db *gorm.DB, opts ...gen.DOOption) library {
 	_library.Previews = field.NewString(tableName, "previews")
 	_library.Markers = field.NewString(tableName, "markers")
 	_library.Keyframes = field.NewString(tableName, "keyframes")
+	_library.Themes = field.NewString(tableName, "themes")
 	_library.CreatedAt = field.NewTime(tableName, "created_at")
 
 	_library.fillFieldMap()
@@ -57,6 +58,7 @@ type library struct {
 	Previews    field.String
 	Markers     field.String
 	Keyframes   field.String
+	Themes      field.String
 	CreatedAt   field.Time
 
 	fieldMap map[string]field.Expr
@@ -83,6 +85,7 @@ func (l *library) updateTableName(table string) *library {
 	l.Previews = field.NewString(table, "previews")
 	l.Markers = field.NewString(table, "markers")
 	l.Keyframes = field.NewString(table, "keyframes")
+	l.Themes = field.NewString(table, "themes")
 	l.CreatedAt = field.NewTime(table, "created_at")
 
 	l.fillFieldMap()
@@ -108,7 +111,7 @@ func (l *library) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (l *library) fillFieldMap() {
-	l.fieldMap = make(map[string]field.Expr, 10)
+	l.fieldMap = make(map[string]field.Expr, 11)
 	l.fieldMap["id"] = l.ID
 	l.fieldMap["name"] = l.Name
 	l.fieldMap["kind"] = l.Kind
@@ -118,6 +121,7 @@ func (l *library) fillFieldMap() {
 	l.fieldMap["previews"] = l.Previews
 	l.fieldMap["markers"] = l.Markers
 	l.fieldMap["keyframes"] = l.Keyframes
+	l.fieldMap["themes"] = l.Themes
 	l.fieldMap["created_at"] = l.CreatedAt
 }
 

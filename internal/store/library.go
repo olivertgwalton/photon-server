@@ -32,7 +32,7 @@ func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.Library
 	if err != nil {
 		return domain.Library{}, fmt.Errorf("adding library: %w", err)
 	}
-	row.Monitor, row.RefreshDays, row.Previews, row.Markers, row.Keyframes = domain.MonitorRealtime, 30, domain.PreviewsAll, domain.MarkersAll, domain.KeyframesIndex
+	row.Monitor, row.RefreshDays, row.Previews, row.Markers, row.Keyframes, row.Themes = domain.MonitorRealtime, 30, domain.PreviewsAll, domain.MarkersAll, domain.KeyframesIndex, domain.ThemesAll
 	return library(row, domain.DefaultSources(kind), domain.DefaultRemoteExtras()), nil
 }
 
@@ -91,8 +91,8 @@ func (s *Store) Library(ctx context.Context, id uuid.UUID) (domain.Library, erro
 	return domain.Library{}, ErrNotFound
 }
 
-// LibraryChange is what to change about a library; an empty name, monitor, previews, markers or
-// keyframes, or a nil list, is left as it is.
+// LibraryChange is what to change about a library; an empty name, monitor, previews, markers,
+// keyframes or themes, or a nil list, is left as it is.
 type LibraryChange struct {
 	Name string
 	// Sources replace the rankings they give, of a kind and for metadata or pictures; a nil one is
@@ -111,6 +111,8 @@ type LibraryChange struct {
 	// Keyframes is how its files' keyframes are found; the parts with none known are queued to be
 	// read again as it says.
 	Keyframes domain.KeyframeMode
+	// Themes is where it finds theme tunes; taking the theme host asks it of every show with none.
+	Themes domain.ThemeLookup
 }
 
 // SetLibrary renames a library, changes whether it is watched, where each kind's metadata and
@@ -192,6 +194,16 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 				return err
 			}
 		}
+		if change.Themes != "" && change.Themes != row.Themes {
+			if _, err := l.WithContext(ctx).Where(l.ID.Eq(row.ID)).Update(l.Themes, change.Themes); err != nil {
+				return err
+			}
+			if change.Themes == domain.ThemesAll {
+				if err := askThemes(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind = 'show'`, map[string]any{"lib": row.ID}); err != nil {
+					return err
+				}
+			}
+		}
 		if change.Sources == nil && change.RemoteExtras == nil {
 			return nil
 		}
@@ -269,6 +281,6 @@ func library(r model.Library, sources []domain.KindSources, extras []domain.Extr
 	return domain.Library{
 		ID: uuid.UUID(r.ID), Name: r.Name, Kind: r.Kind, Root: r.Root, Sources: sources, RemoteExtras: extras,
 		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews, Markers: r.Markers,
-		Keyframes: r.Keyframes,
+		Keyframes: r.Keyframes, Themes: r.Themes,
 	}
 }

@@ -259,13 +259,16 @@ func (s *Scanner) saveFilms(ctx context.Context, r reading, folder library.Folde
 		for _, v := range f.versions {
 			art = append(art, pics.of(stem(v.parts[0].Name), domain.ArtworkPoster)...)
 		}
-		// A folder's own pictures are its film's when it holds one, as Jellyfin reads them.
+		// A folder's own pictures and tunes are its film's when it holds one, as Jellyfin reads
+		// them.
+		var themes []string
 		if len(plans) == 1 && folder.Path != "." {
 			art = append(art, pics.own...)
+			themes = themesIn(folder)
 		}
 		films = append(films, store.Film{
 			Title: f.name.Title, Year: f.name.Year, Folder: folder.Path, IDs: ids(f.name.IDs),
-			NFO: metadata(s.readNFO(ctx, lib, folder.Path, f.nfos...)), Artwork: art, Copies: copies,
+			NFO: metadata(s.readNFO(ctx, lib, folder.Path, f.nfos...)), Artwork: art, Themes: themes, Copies: copies,
 		})
 	}
 	extraPlans, inExtrasFolder := extrasIn(folder)
@@ -350,6 +353,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Fo
 	case series != "" && folder.Path == series:
 		show.Artwork = append([]domain.Artwork{}, pics.own...)
 		show.SeasonArtwork = pics.seasons
+		show.Themes = themesIn(folder)
 	case series != "" && season != nil:
 		show.SeasonArtwork = map[int][]domain.Artwork{
 			*season: append(pics.own, seasonPictures(lib.Root, series, *season)...),
@@ -603,6 +607,21 @@ func (s *Scanner) readNFO(ctx context.Context, lib domain.Library, dir string, n
 		return nil
 	}
 	return nil
+}
+
+// themesIn answers a title's folder's theme tunes: theme.mp3 and its like, then its theme-music
+// folder's, as the walk lists them.
+func themesIn(f library.Folder) []string {
+	var themes []string
+	for _, file := range f.Files {
+		if naming.Theme(file.Name) {
+			themes = append(themes, path.Join(f.Path, file.Name))
+		}
+	}
+	slices.SortStableFunc(themes, func(a, b string) int {
+		return strings.Count(a, "/") - strings.Count(b, "/")
+	})
+	return themes
 }
 
 func fileNames(f library.Folder) []string {

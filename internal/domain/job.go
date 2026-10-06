@@ -21,10 +21,12 @@ const (
 	JobConvert JobKind = "convert"
 	// JobDeliverWebhook sends one event to one webhook.
 	JobDeliverWebhook JobKind = "deliver_webhook"
+	// JobTheme fetches a show's theme tune from Plex's theme host.
+	JobTheme JobKind = "theme"
 )
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook}
+	return []JobKind{JobKeyframes, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme}
 }
 
 type JobState string
@@ -62,7 +64,7 @@ type Job struct {
 // keyframes or previews, a download's conversion and a webhook's delivery are neither.
 func (j Job) About() (item, library uuid.UUID) {
 	switch j.Kind {
-	case JobIdentify, JobMarkers:
+	case JobIdentify, JobMarkers, JobTheme:
 		return j.Subject, uuid.UUID{}
 	case JobScanLibrary:
 		return uuid.UUID{}, j.Subject

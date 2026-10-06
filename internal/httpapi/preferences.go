@@ -34,6 +34,8 @@ type preferencesJSON struct {
 	NextEpisode       domain.NextEpisode   `json:"next_episode"`
 	IntroAction       domain.SegmentAction `json:"intro_action"`
 	CreditsAction     domain.SegmentAction `json:"credits_action"`
+	// ThemeMusic is whether a title's page plays its theme tune.
+	ThemeMusic domain.ThemeMusic `json:"theme_music"`
 	// Home is every row of the profile's home, in the order /api/v1/home answers them.
 	Home []homeSectionJSON `json:"home"`
 	// SavedAt is when they were last changed: absent while every one is its default.
@@ -52,6 +54,7 @@ type preferencesChangeJSON struct {
 	NextEpisode       domain.NextEpisode   `json:"next_episode,omitzero"`
 	IntroAction       domain.SegmentAction `json:"intro_action,omitzero"`
 	CreditsAction     domain.SegmentAction `json:"credits_action,omitzero"`
+	ThemeMusic        domain.ThemeMusic    `json:"theme_music,omitzero"`
 	// Home is the rows in the order wanted, each once; any left out follow, shown.
 	Home []homeSectionJSON `json:"home,omitzero"`
 }
@@ -67,7 +70,7 @@ func preferencesOf(p domain.Preferences) preferencesJSON {
 		SubtitleLanguage: tagOf(p.SubtitleLanguage), SubtitleMode: p.SubtitleMode,
 		RememberAudio: p.RememberAudio, RememberSubtitles: p.RememberSubtitles,
 		MaxBitrateKbps: p.MaxBitrateKbps, NextEpisode: p.NextEpisode,
-		IntroAction: p.IntroAction, CreditsAction: p.CreditsAction,
+		IntroAction: p.IntroAction, CreditsAction: p.CreditsAction, ThemeMusic: p.ThemeMusic,
 		Home: make([]homeSectionJSON, len(p.Home)),
 	}
 	for i, h := range p.Home {
@@ -122,6 +125,7 @@ func (a *API) setOwnPreferences(w http.ResponseWriter, r *http.Request) {
 	p.RememberSubtitles = cmp.Or(req.RememberSubtitles, p.RememberSubtitles)
 	p.NextEpisode = cmp.Or(req.NextEpisode, p.NextEpisode)
 	p.IntroAction, p.CreditsAction = cmp.Or(req.IntroAction, p.IntroAction), cmp.Or(req.CreditsAction, p.CreditsAction)
+	p.ThemeMusic = cmp.Or(req.ThemeMusic, p.ThemeMusic)
 	if req.Home != nil {
 		seen := map[domain.HomeRow]bool{}
 		p.Home = make([]domain.HomeSection, len(req.Home))

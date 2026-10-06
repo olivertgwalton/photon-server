@@ -54,6 +54,7 @@ type adminLibraryJSON struct {
 	Previews     domain.PreviewLevel    `json:"previews"`
 	Markers      domain.MarkerDetection `json:"markers"`
 	Keyframes    domain.KeyframeMode    `json:"keyframes"`
+	Themes       domain.ThemeLookup     `json:"themes"`
 }
 
 // kindSourcesJSON ranks where a kind of item a library holds takes its metadata and its pictures
@@ -74,7 +75,7 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 	j := adminLibraryJSON{
 		ID: l.ID, Name: l.Name, Kind: l.Kind, Root: l.Root, Sources: []kindSourcesJSON{},
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
-		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes,
+		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes,
 	}
 	ranked := func(list []domain.RankedSource) []rankedSourceJSON {
 		out := make([]rankedSourceJSON, len(list))
@@ -168,6 +169,9 @@ type libraryChangeJSON struct {
 	// Keyframes is how its files' keyframes are found: index reads the container's own index,
 	// full walks a file that has none, off finds none.
 	Keyframes domain.KeyframeMode `json:"keyframes,omitzero"`
+	// Themes is where its titles' theme tunes are found: all is the files beside them and, for a
+	// show with none, Plex's theme host; local the files alone; off none.
+	Themes domain.ThemeLookup `json:"themes,omitzero"`
 }
 
 type kindSourcesChangeJSON struct {
@@ -177,8 +181,8 @@ type kindSourcesChangeJSON struct {
 }
 
 // setLibrary changes what is sent of a library: its name, whether it is watched, where each kind
-// of item's metadata and pictures come from, the kinds of video it keeps providers' links to, what previews it makes and
-// how it finds markers and keyframes.
+// of item's metadata and pictures come from, the kinds of video it keeps providers' links to, what previews it makes,
+// how it finds markers and keyframes, and where it finds theme tunes.
 func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r)
 	if !ok {
@@ -194,7 +198,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	change := store.LibraryChange{
 		Name: req.Name, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays,
-		Previews: req.Previews, Markers: req.Markers, Keyframes: req.Keyframes,
+		Previews: req.Previews, Markers: req.Markers, Keyframes: req.Keyframes, Themes: req.Themes,
 	}
 	if d := req.RefreshDays; d != nil && (*d < 0 || *d > 365) {
 		writeProblem(w, a.logger, codeInvalidBody, "refresh_days is from 0, never, to 365")

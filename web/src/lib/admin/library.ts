@@ -78,6 +78,7 @@ export function libraryChange(
 		previews: String(form.get("previews")) as Schemas["PreviewLevel"],
 		markers: String(form.get("markers")) as Schemas["MarkerDetection"],
 		keyframes: String(form.get("keyframes")) as Schemas["KeyframeMode"],
+		themes: String(form.get("themes")) as Schemas["ThemeLookup"],
 		refresh_days: Number(form.get("refresh_days")),
 	};
 	const sources: Schemas["KindSourcesChange"][] = [];

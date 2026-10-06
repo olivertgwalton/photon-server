@@ -24,7 +24,8 @@ const libraryUsage = `usage:
 SETTINGS, any of:
   -metadata 'show=nfo,tvdb,tmdb;episode=nfo,tmdb'  -images 'show=tvdb,tmdb'
   -extras trailer,featurette|none  -monitor realtime|off
-  -previews off|chapters|all  -markers off|chapters|all  -keyframes index|full|off`
+  -previews off|chapters|all  -markers off|chapters|all  -keyframes index|full|off
+  -themes all|local|off`
 
 func library(ctx context.Context, logger *slog.Logger, databaseURL string, out io.Writer, args []string) error {
 	if len(args) == 0 {
@@ -96,7 +97,7 @@ func addLibrary(ctx context.Context, st *store.Store, out io.Writer, args []stri
 
 // librarySettings are the flags that set how a library is read, and the change they ask for.
 type librarySettings struct {
-	metadata, images, extras, monitor, previews, markers, keyframes *string
+	metadata, images, extras, monitor, previews, markers, keyframes, themes *string
 }
 
 func settingsFlags(fs *flag.FlagSet) librarySettings {
@@ -108,6 +109,7 @@ func settingsFlags(fs *flag.FlagSet) librarySettings {
 		previews:  fs.String("previews", "", "off, chapters for an image per chapter, or all for trickplay sheets too"),
 		markers:   fs.String("markers", "", "off, chapters for the markers chapters name, or all to compare seasons' sound too"),
 		keyframes: fs.String("keyframes", "", "index to read keyframes from a file's own index, full to read a file with none whole, or off"),
+		themes:    fs.String("themes", "", "all for theme tunes beside titles and, for a show with none, Plex's theme host; local for the files alone; or off"),
 	}
 }
 
@@ -147,7 +149,12 @@ func (f librarySettings) change() (store.LibraryChange, bool, error) {
 			return change, false, err
 		}
 	}
-	given := *f.metadata != "" || *f.images != "" || *f.extras != "" || *f.monitor != "" || *f.previews != "" || *f.markers != "" || *f.keyframes != ""
+	if *f.themes != "" {
+		if change.Themes, err = domain.Parse("themes", *f.themes, domain.ThemeLookups()); err != nil {
+			return change, false, err
+		}
+	}
+	given := *f.metadata != "" || *f.images != "" || *f.extras != "" || *f.monitor != "" || *f.previews != "" || *f.markers != "" || *f.keyframes != "" || *f.themes != ""
 	return change, given, nil
 }
 
@@ -189,11 +196,11 @@ func listLibraries(ctx context.Context, st *store.Store, out io.Writer) error {
 		return err
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "NAME\tKIND\tMETADATA\tIMAGES\tEXTRAS\tMONITOR\tPREVIEWS\tMARKERS\tKEYFRAMES\tROOT\tID")
+	_, _ = fmt.Fprintln(w, "NAME\tKIND\tMETADATA\tIMAGES\tEXTRAS\tMONITOR\tPREVIEWS\tMARKERS\tKEYFRAMES\tTHEMES\tROOT\tID")
 	for _, l := range libs {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%v\t%s\t%s\t%s\t%s\t%s\t%s\n", l.Name, l.Kind,
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%v\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", l.Name, l.Kind,
 			formatSources(l.Sources, domain.FetcherMetadata), formatSources(l.Sources, domain.FetcherImages),
-			l.RemoteExtras, l.Monitor, l.Previews, l.Markers, l.Keyframes, l.Root, l.ID)
+			l.RemoteExtras, l.Monitor, l.Previews, l.Markers, l.Keyframes, l.Themes, l.Root, l.ID)
 	}
 	return w.Flush()
 }

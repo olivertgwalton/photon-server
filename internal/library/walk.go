@@ -18,7 +18,8 @@ import (
 )
 
 type File struct {
-	// Name is relative to the folder: a subtitle in its Subs folder is "Subs/English.srt".
+	// Name is relative to the folder: a subtitle in its Subs folder is "Subs/English.srt", a tune
+	// in its theme-music folder "theme-music/Main Title.mp3".
 	Name    string
 	Size    int64
 	ModTime time.Time
@@ -50,8 +51,9 @@ var (
 // Walk yields dir and every folder under it, dir being a path inside the library at root ("." for
 // all of it), parents before children. Housekeeping names are skipped, and so is what a .ignore
 // file hides, as Jellyfin's: an empty one its whole folder, else what its gitignore patterns match
-// below it, until a deeper .ignore takes over. A Subs or Subtitles folder is not a folder of its
-// own: its subtitles are listed as its parent's, so adding one changes the parent's fingerprint.
+// below it, until a deeper .ignore takes over. A Subs or Subtitles folder, and a theme-music folder,
+// is not a folder of its own: its subtitles or sound files are listed as its parent's, so adding
+// one changes the parent's fingerprint.
 // Links are followed wherever they lead, to files and folders, as Jellyfin and Plex follow them:
 // a library of links into a remote mount is a library like any other. A root that cannot be read
 // is yielded as "." with its error.
@@ -118,18 +120,19 @@ func walk(root, dir string, above []fs.FileInfo, ign ignoreFile, yield func(Fold
 		if ign.ignores(rel, err == nil && info.IsDir()) {
 			continue
 		}
+		holds, foldedDir := naming.FoldedFolder(name)
 		switch {
 		case err != nil:
 			folder.Skipped = append(folder.Skipped, Skip{name, err})
-		case info.IsDir() && naming.SubtitleFolder(name):
-			subs, err := os.ReadDir(filepath.Join(full, name))
+		case info.IsDir() && foldedDir:
+			inside, err := os.ReadDir(filepath.Join(full, name))
 			if err != nil {
 				folder.Skipped = append(folder.Skipped, Skip{name, err})
 				continue
 			}
-			for _, sub := range subs {
-				if naming.IsSubtitle(sub.Name()) && !ign.ignores(path.Join(rel, sub.Name()), false) {
-					folder.add(full, h, path.Join(name, sub.Name()))
+			for _, f := range inside {
+				if holds(f.Name()) && !ign.ignores(path.Join(rel, f.Name()), false) {
+					folder.add(full, h, path.Join(name, f.Name()))
 				}
 			}
 		case info.IsDir() && slices.ContainsFunc(above, func(a fs.FileInfo) bool { return os.SameFile(a, info) }):

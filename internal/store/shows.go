@@ -23,8 +23,10 @@ type Show struct {
 	NFO    *domain.Metadata
 	// Seasons is what NFOs say about the show's seasons, by number.
 	Seasons map[int]domain.Metadata
-	// Artwork is the pictures of the show in its folder, read when that folder is.
+	// Artwork is the pictures of the show in its folder, read when that folder is, and Themes its
+	// theme tunes there.
 	Artwork []domain.Artwork
+	Themes  []string
 	// SeasonArtwork is the pictures of each season found by the scan of a folder: its own
 	// season's from a season folder (and those kept for it in the series' folder), every season's
 	// from the series' folder.
@@ -52,7 +54,7 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 	saved := Saved{Titles: Changed{}}
 	err := s.q.Transaction(func(tx *query.Query) error {
 		// A series' own folder, holding its NFO and extras, comes before any of its episodes.
-		if len(episodes) > 0 || ((len(extras) > 0 || show.NFO != nil || len(show.Artwork) > 0) && show.Folder != "") {
+		if len(episodes) > 0 || ((len(extras) > 0 || show.NFO != nil || len(show.Artwork) > 0 || len(show.Themes) > 0) && show.Folder != "") {
 			showID, err := ensureShow(ctx, tx, lib, show, saved.Titles)
 			if err != nil {
 				return err
@@ -76,6 +78,9 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 			}
 			if path == show.Folder {
 				if err := saveFolderArtwork(ctx, tx, showID, path, show.Artwork); err != nil {
+					return err
+				}
+				if err := saveFolderThemes(ctx, tx, showID, path, show.Themes); err != nil {
 					return err
 				}
 			}

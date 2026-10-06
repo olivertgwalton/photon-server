@@ -274,7 +274,8 @@ func videoStill(site, key string) string {
 	return ""
 }
 
-// LivePictures answers which of these picture ids are still a title's, a person's or a video's.
+// LivePictures answers which of these picture ids are still a title's, a person's, a video's or a
+// profile's, or a theme tune's kept beside them.
 func (s *Store) LivePictures(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]bool, error) {
 	in := make([]string, len(ids))
 	for n, id := range ids {
@@ -284,7 +285,8 @@ func (s *Store) LivePictures(ctx context.Context, ids []uuid.UUID) (map[uuid.UUI
 		SELECT id::text FROM artwork WHERE id = ANY($1::uuid[])
 		UNION SELECT photo_id::text FROM people WHERE photo_id = ANY($1::uuid[])
 		UNION SELECT thumb_id::text FROM remote_videos WHERE thumb_id = ANY($1::uuid[])
-		UNION SELECT avatar_id::text FROM profiles WHERE avatar_id = ANY($1::uuid[])`, in)
+		UNION SELECT avatar_id::text FROM profiles WHERE avatar_id = ANY($1::uuid[])
+		UNION SELECT id::text FROM themes WHERE id = ANY($1::uuid[])`, in)
 	out := make(map[uuid.UUID]bool, len(live))
 	for _, id := range live {
 		out[id] = true

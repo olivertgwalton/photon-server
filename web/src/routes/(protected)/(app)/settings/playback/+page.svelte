@@ -235,6 +235,21 @@ const skipActions: { value: Schemas["SegmentAction"]; label: string }[] = [
 					end of an episode goes on to the next.
 				</Field.Description>
 			</Field.Field>
+			<Field.Separator />
+			<Field.Field orientation="horizontal">
+				<Switch
+					id="theme-music"
+					checked={prefs.theme_music === "play"}
+					onCheckedChange={(v) => set({ theme_music: v ? "play" : "off" })}
+				/>
+				<Field.Content>
+					<Field.Label for="theme-music">Play theme music</Field.Label>
+					<Field.Description>
+						A film's or show's theme plays quietly, once, while you look at its
+						page.
+					</Field.Description>
+				</Field.Content>
+			</Field.Field>
 		</Field.Group>
 	</Card.Content>
 </Card.Root>

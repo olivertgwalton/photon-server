@@ -48,6 +48,11 @@ func (f fakePictures) Resized(_ context.Context, key string, _ int, _ func(conte
 	return nil, artwork.ErrNotResizable
 }
 
+// Sound answers the theme host's tune, kept as "tune".
+func (f fakePictures) Sound(context.Context, uuid.UUID, string) (*os.File, error) {
+	return os.Open(filepath.Join(f.root, "tune"))
+}
+
 func (fakePictures) Keep(uuid.UUID, io.Reader) error { return errors.New("not kept here") }
 
 func (fakePictures) Kept(uuid.UUID) (*os.File, error) { return nil, os.ErrNotExist }

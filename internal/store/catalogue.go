@@ -26,8 +26,9 @@ type Film struct {
 	Folder string
 	IDs    map[domain.Provider]string
 	NFO    *domain.Metadata
-	// Artwork is the pictures of it in its folder.
+	// Artwork is the pictures of it in its folder, and Themes its theme tunes there.
 	Artwork []domain.Artwork
+	Themes  []string
 	Copies  []Copy
 }
 
@@ -181,6 +182,9 @@ func saveFilm(ctx context.Context, tx *query.Query, lib uuid.UUID, f Film, chang
 		return err
 	}
 	if err := saveFolderArtwork(ctx, tx, itemID, f.Folder, f.Artwork); err != nil {
+		return err
+	}
+	if err := saveFolderThemes(ctx, tx, itemID, f.Folder, f.Themes); err != nil {
 		return err
 	}
 	for _, c := range f.Copies {

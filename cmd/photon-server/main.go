@@ -44,6 +44,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/task"
 	"github.com/olivertgwalton/photon-server/internal/tmdb"
 	"github.com/olivertgwalton/photon-server/internal/tvdb"
+	"github.com/olivertgwalton/photon-server/internal/tvthemes"
 	"github.com/olivertgwalton/photon-server/internal/watch"
 	"github.com/olivertgwalton/photon-server/internal/webhook"
 )
@@ -257,7 +258,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	srv := &http.Server{
 		Addr: listen,
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Watching: st, Playing: st, Playbacks: sessions, Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Setup: setup, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: st, Playbacks: sessions, Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Setup: setup, Postgres: st, Valkey: cache, Web: web,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -271,6 +272,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}, hub)
 	matcher := jobs.NewWorker(st, logger, node, identifySlots, map[domain.JobKind]jobs.Handler{
 		domain.JobIdentify: identify.Handler(st, providers, hub.Raise, logger),
+		domain.JobTheme:    tvthemes.Fetch(st, pictureCache, cache, tvthemes.Host),
 	}, hub)
 	analyser := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), map[domain.JobKind]jobs.Handler{
 		domain.JobKeyframes: analysis.Keyframes(st, tools),

@@ -53,6 +53,9 @@ type TitlePage struct {
 	State TitleState `json:"state,omitzero"`
 	// Artwork is the title's pictures by kind, best first, by id: /api/v1/artwork/{id}.
 	Artwork map[domain.ArtworkKind][]uuid.UUID `json:"artwork,omitzero"`
+	// Themes are the tunes to play under its page, in order, by id: /api/v1/themes/{id}. A season's
+	// and an episode's are its show's.
+	Themes []uuid.UUID `json:"themes,omitzero"`
 }
 
 type TitleRef struct {
@@ -295,6 +298,17 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		return TitlePage{}, err
 	}
 	p.Artwork = pictures[item.ID]
+	owner := id
+	if p.Show != nil {
+		owner = p.Show.ID
+	}
+	themes, err := s.themes(ctx, owner)
+	if err != nil {
+		return TitlePage{}, err
+	}
+	if len(themes) > 0 {
+		p.Themes = themes
+	}
 	states, err := s.states(ctx, profile, []*model.Item{item})
 	p.State = states[item.ID]
 	return p, err

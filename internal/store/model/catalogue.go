@@ -100,6 +100,15 @@ type Artwork struct {
 
 func (Artwork) TableName() string { return "artwork" }
 
+type Theme struct {
+	ID       UUID               `gorm:"type:uuid;default:uuidv7()"`
+	ItemID   UUID               `gorm:"type:uuid;primaryKey"`
+	Source   domain.ThemeSource `gorm:"primaryKey"`
+	Place    string             `gorm:"primaryKey"`
+	Position int16
+	Folder   *string
+}
+
 // WatchState is what a profile has made of a film or episode.
 type WatchState struct {
 	ProfileID    UUID  `gorm:"type:uuid;primaryKey"`

@@ -30,6 +30,7 @@ type ProfilePreference struct {
 	NextEpisode       domain.NextEpisode
 	IntroAction       domain.SegmentAction
 	CreditsAction     domain.SegmentAction
+	ThemeMusic        domain.ThemeMusic
 	SavedAt           time.Time `gorm:"default:now()"`
 }
 
