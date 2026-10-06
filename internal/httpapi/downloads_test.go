@@ -24,15 +24,21 @@ var downloadID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1")
 // queued.
 type fakeDownloads struct{}
 
-func (fakeDownloads) AddDownload(_ context.Context, _, item, part uuid.UUID, q *domain.Quality) (store.Download, error) {
-	d := store.Download{ID: downloadID, Item: item, Part: part, Quality: q, State: domain.DownloadReady}
+func (fakeDownloads) AddDownload(_ context.Context, _, device, item, part uuid.UUID, q *domain.Quality) (store.Download, error) {
+	d := store.Download{ID: downloadID, Device: device, Item: item, Part: part, Quality: q, State: domain.DownloadReady}
 	if q != nil {
 		d.State = domain.DownloadQueued
 	}
 	return d, nil
 }
 
-func (fakeDownloads) Downloads(context.Context, uuid.UUID) ([]store.Download, error) { return nil, nil }
+// Downloads holds one download on the device asking and one on another.
+func (fakeDownloads) Downloads(_ context.Context, _ uuid.UUID, device *uuid.UUID) ([]store.Download, error) {
+	if device != nil {
+		return []store.Download{{ID: downloadID, Device: *device}}, nil
+	}
+	return []store.Download{{ID: downloadID}, {ID: uuid.NewV7(), Device: uuid.NewV7()}}, nil
+}
 
 func (fakeDownloads) Download(context.Context, uuid.UUID, uuid.UUID) (store.Download, error) {
 	return store.Download{}, store.ErrNotFound
@@ -102,6 +108,30 @@ func TestADownloadIsTheFileOrAConversionServedInRanges(t *testing.T) {
 		api.ServeHTTP(rec, req)
 		if rec.Code != tc.want || (tc.body != "" && rec.Body.String() != tc.body) {
 			t.Errorf("%s: %d %q, want %d %q", tc.target, rec.Code, rec.Body, tc.want, tc.body)
+		}
+	}
+}
+
+func TestADeviceListsItsOwnDownloadsUnlessItAsksForTheProfiles(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Downloads: fakeDownloads{}})
+	for _, tc := range []struct {
+		target string
+		code   int
+		want   int
+	}{
+		{"/api/v1/downloads", http.StatusOK, 1},
+		{"/api/v1/downloads?scope=device", http.StatusOK, 1},
+		{"/api/v1/downloads?scope=profile", http.StatusOK, 2},
+		{"/api/v1/downloads?scope=server", http.StatusBadRequest, 0},
+	} {
+		req := httptest.NewRequest(http.MethodGet, tc.target, nil)
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		var got listJSON[downloadJSON]
+		_ = json.Unmarshal(rec.Body.Bytes(), &got)
+		if rec.Code != tc.code || len(got.Items) != tc.want {
+			t.Errorf("%s: %d with %d downloads, want %d with %d", tc.target, rec.Code, len(got.Items), tc.code, tc.want)
 		}
 	}
 }

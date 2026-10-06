@@ -46,6 +46,18 @@ func downloadable(t *testing.T) (s *Store, film, part uuid.UUID, profiles [2]uui
 	return s, uuid.UUID(item.ID), uuid.UUID(row.ID), profiles
 }
 
+// signIn signs a device in as a profile.
+func (s *Store) signIn(t *testing.T, profile uuid.UUID) uuid.UUID {
+	t.Helper()
+	id, err := s.CreateSession(t.Context(), NewSession{
+		ProfileID: profile, TokenHash: []byte(uuid.NewV7().String()), DeviceName: "TV", Client: "Photon", ExpiresAt: time.Now().Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
 func (s *Store) convertJobs(t *testing.T) int64 {
 	t.Helper()
 	j := s.q.Job
@@ -61,7 +73,8 @@ func (s *Store) convertJobs(t *testing.T) int64 {
 func TestAConversionIsSharedUntilNoDownloadNeedsIt(t *testing.T) {
 	s, film, part, profiles := downloadable(t)
 	ctx := t.Context()
-	original, err := s.AddDownload(ctx, profiles[0], film, part, nil)
+	devices := [2]uuid.UUID{s.signIn(t, profiles[0]), s.signIn(t, profiles[1])}
+	original, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, nil)
 	if err != nil || original.State != domain.DownloadReady || original.Quality != nil || original.SizeBytes != 6_000_000_000 {
 		t.Fatalf("the original: %+v, %v; want it ready at the part's size", original, err)
 	}
@@ -69,15 +82,15 @@ func TestAConversionIsSharedUntilNoDownloadNeedsIt(t *testing.T) {
 		t.Errorf("%d conversions queued for the original, want none", n)
 	}
 	q := domain.Quality{MaxBitrateKbps: 2000, MaxWidth: 1280}
-	mine, err := s.AddDownload(ctx, profiles[0], film, part, &q)
+	mine, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, &q)
 	if err != nil {
 		t.Fatal(err)
 	}
-	theirs, err := s.AddDownload(ctx, profiles[1], film, part, &q)
+	theirs, err := s.AddDownload(ctx, profiles[1], devices[1], film, part, &q)
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := s.AddDownload(ctx, profiles[0], film, part, &q)
+	again, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, &q)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,8 +139,9 @@ func TestAConversionIsSharedUntilNoDownloadNeedsIt(t *testing.T) {
 func TestFailedConversionsAreTriedAgainAndFinishedOnesExpire(t *testing.T) {
 	s, film, part, profiles := downloadable(t)
 	ctx := t.Context()
+	devices := [2]uuid.UUID{s.signIn(t, profiles[0]), s.signIn(t, profiles[1])}
 	q := domain.Quality{MaxBitrateKbps: 1000}
-	d, err := s.AddDownload(ctx, profiles[0], film, part, &q)
+	d, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, &q)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,11 +158,11 @@ func TestFailedConversionsAreTriedAgainAndFinishedOnesExpire(t *testing.T) {
 	if _, err := s.StartConversion(ctx, d.Conversion, node); !errors.Is(err, ErrNotFound) {
 		t.Errorf("starting a failed conversion: %v, want ErrNotFound", err)
 	}
-	retried, err := s.AddDownload(ctx, profiles[1], film, part, &q)
+	retried, err := s.AddDownload(ctx, profiles[1], devices[1], film, part, &q)
 	if err != nil || retried.Conversion != d.Conversion || retried.State != domain.DownloadQueued || retried.Error != "" {
 		t.Fatalf("asked for again: %+v, %v; want the conversion queued afresh", retried, err)
 	}
-	if _, err := s.AddDownload(ctx, profiles[0], film, part, nil); err != nil {
+	if _, err := s.AddDownload(ctx, profiles[0], devices[0], film, part, nil); err != nil {
 		t.Fatal(err)
 	}
 	n, err := s.ExpireDownloads(ctx, time.Now().Add(time.Hour))
@@ -169,5 +183,38 @@ func TestFailedConversionsAreTriedAgainAndFinishedOnesExpire(t *testing.T) {
 	}
 	if held, err := s.ConversionsOn(ctx, node); err != nil || len(held) != 0 {
 		t.Errorf("the node holds %v, %v; want the conversion forgotten", held, err)
+	}
+}
+
+// A download is the device's that asked for it: another device of the profile asks for its own,
+// lists only its own unless it asks for the profile's, and signing a device out forgets its
+// downloads.
+func TestADownloadIsItsDevices(t *testing.T) {
+	s, film, part, profiles := downloadable(t)
+	ctx := t.Context()
+	tv, phone := s.signIn(t, profiles[0]), s.signIn(t, profiles[0])
+	q := domain.Quality{MaxBitrateKbps: 2000}
+	onTV, err := s.AddDownload(ctx, profiles[0], tv, film, part, &q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	onPhone, err := s.AddDownload(ctx, profiles[0], phone, film, part, &q)
+	if err != nil || onPhone.ID == onTV.ID || onPhone.Conversion != onTV.Conversion || onPhone.Device != phone {
+		t.Fatalf("the phone's: %+v, %v; want a download of its own, of the TV's conversion", onPhone, err)
+	}
+	if got, err := s.Downloads(ctx, profiles[0], &tv); err != nil || len(got) != 1 || got[0].ID != onTV.ID {
+		t.Errorf("the TV's list: %+v, %v; want its download alone", got, err)
+	}
+	if got, err := s.Downloads(ctx, profiles[0], nil); err != nil || len(got) != 2 {
+		t.Errorf("the profile's list: %+v, %v; want both devices'", got, err)
+	}
+	if err := s.DeleteSession(ctx, phone); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Download(ctx, profiles[0], onPhone.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("the phone's download once it is signed out: %v, want ErrNotFound", err)
+	}
+	if got, err := s.Downloads(ctx, profiles[0], nil); err != nil || len(got) != 1 || got[0].ID != onTV.ID {
+		t.Errorf("the profile's list once the phone is signed out: %+v, %v; want the TV's", got, err)
 	}
 }

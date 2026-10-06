@@ -494,8 +494,10 @@ func (a *API) routes() []route {
 			body:    downloadRequestJSON{}, status: http.StatusOK, reply: downloadJSON{}, handle: a.addDownload,
 		},
 		{
-			pattern: "GET /api/v1/downloads", access: signedIn, summary: "List the profile's downloads, the newest first",
-			status: http.StatusOK, reply: listJSON[downloadJSON]{}, handle: a.ownDownloads,
+			pattern: "GET /api/v1/downloads", access: signedIn,
+			summary: "List this device's downloads, or the profile's on every device, the newest first",
+			query:   []param{{"scope", scopeDevice, "device, the default, is this device's; profile is the profile's on every device."}},
+			status:  http.StatusOK, reply: listJSON[downloadJSON]{}, handle: a.ownDownloads,
 		},
 		{
 			pattern: "GET /api/v1/downloads/{id}", access: signedIn, summary: "A download, as far as its conversion has got",
