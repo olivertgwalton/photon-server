@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
-	"maps"
 	"os"
 	"path"
 	"slices"
 	"strings"
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
@@ -44,79 +46,160 @@ type Report struct {
 	Skipped   int
 }
 
-// Scan reads a library's folders again, telling progress after each, and what each changed of the
-// library's titles.
-func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(domain.ScanProgress), changed func(store.Changed)) (Report, error) {
-	var report Report
-	var folders, present []string
-	// The root is known before it is read; each folder read makes its subfolders known.
-	told := domain.ScanProgress{Library: lib.ID, Phase: domain.ScanReading, Known: 1}
-	fingerprints, err := s.store.FolderFingerprints(ctx, lib.ID)
-	if err != nil {
-		return report, err
+// readsAtOnce is how many files a scan reads at once, and how many of the library's top-level
+// folders it is in at once. Reading a file is a few requests in turn, each waiting on the disk or,
+// on a network or debrid mount, on the network; four at once keep such a mount busy without asking
+// more of it than it answers at once.
+const readsAtOnce = 4
+
+// run is one scan of a library, shared by the folders it reads at once.
+type run struct {
+	lib          domain.Library
+	fingerprints map[string][]byte
+	reads        chan struct{}
+	progress     func(domain.ScanProgress)
+	changed      func(store.Changed)
+	// saving writes one folder at a time: two folders holding the same bytes, or the same show,
+	// would otherwise each add them.
+	saving sync.Mutex
+	mu     sync.Mutex
+	report Report
+	told   domain.ScanProgress
+	// folders and present are every folder read and every video and subtitle file in them.
+	folders, present []string
+}
+
+// read takes one of the run's slots for reading files, to hand back with the function it answers.
+func (r *run) read(ctx context.Context) (func(), error) {
+	select {
+	case r.reads <- struct{}{}:
+		return func() { <-r.reads }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
+}
+
+func (r *run) count(f func(*Report)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	f(&r.report)
+}
+
+// done tells that one more folder has been read.
+func (r *run) done() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.told.Done++
+	r.progress(r.told)
+}
+
+// Scan reads a library's folders again, telling progress after each, and what each changed of the
+// library's titles. Its top-level folders are walked and read several at once, the folders under
+// each one after another, parents first, so a show's seasons follow the show.
+func (s *Scanner) Scan(ctx context.Context, lib domain.Library, progress func(domain.ScanProgress), changed func(store.Changed)) (Report, error) {
+	r := &run{
+		lib: lib, reads: make(chan struct{}, readsAtOnce), progress: progress, changed: changed,
+		// The root is known before it is read; each folder read makes its subfolders known.
+		told: domain.ScanProgress{Library: lib.ID, Phase: domain.ScanReading, Known: 1},
+	}
+	var err error
+	if r.fingerprints, err = s.store.FolderFingerprints(ctx, lib.ID); err != nil {
+		return r.report, err
+	}
+	var root library.Folder
 	for folder, err := range library.Walk(lib.Root, ".") {
-		told.Done++
-		told.Known += len(folder.Folders)
 		// A root that cannot be read is a mount that is down, not a library emptied.
-		if err != nil && folder.Path == "." {
-			return report, err
-		}
 		if err != nil {
-			s.log.WarnContext(ctx, "folder not read", slog.String("folder", folder.Path), slog.Any("err", err))
-			progress(told)
-			continue
+			return r.report, err
 		}
-		report.Folders++
-		folders = append(folders, folder.Path)
-		for _, sk := range folder.Skipped {
-			s.skip(ctx, &report, path.Join(folder.Path, sk.Name), sk.Err)
-		}
-		for _, f := range folder.Files {
-			if naming.IsVideo(f.Name) || naming.IsSubtitle(f.Name) {
-				present = append(present, path.Join(folder.Path, f.Name))
+		root = folder
+		break
+	}
+	r.told.Known += len(root.Folders)
+	if err := s.folder(ctx, r, root, nil); err != nil {
+		return r.report, err
+	}
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(readsAtOnce)
+	for _, top := range root.Folders {
+		g.Go(func() error {
+			for folder, err := range library.Walk(lib.Root, top) {
+				r.mu.Lock()
+				r.told.Known += len(folder.Folders)
+				r.mu.Unlock()
+				if err := s.folder(gctx, r, folder, err); err != nil {
+					return err
+				}
 			}
-		}
-		if bytes.Equal(fingerprints[folder.Path], folder.Fingerprint[:]) {
-			report.Unchanged++
-			progress(told)
-			continue
-		}
-		r := reading{lib: lib, dir: folder.Path, report: &report}
-		if r.known, err = s.store.KnownFiles(ctx, lib.ID, videosIn(folder)); err != nil {
-			return report, err
-		}
-		var saved store.Saved
-		switch lib.Kind {
-		case domain.LibraryMovies:
-			saved, err = s.saveFilms(ctx, r, folder)
-		case domain.LibraryShows:
-			saved, err = s.saveEpisodes(ctx, r, folder)
-		}
-		if err != nil {
-			return report, fmt.Errorf("%s: %w", folder.Path, err)
-		}
-		s.unowned(ctx, &report, saved.Unowned)
-		changed(saved.Titles)
-		progress(told)
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return r.report, err
+	}
+	if err := ctx.Err(); err != nil {
+		return r.report, err
 	}
 	// A folder an empty .ignore hides was known and never read.
-	told.Phase, told.Known = domain.ScanRemoving, told.Done
-	progress(told)
-	titles, err := s.store.FinishScan(ctx, lib.ID, folders, present)
+	r.told.Phase, r.told.Known = domain.ScanRemoving, r.told.Done
+	progress(r.told)
+	titles, err := s.store.FinishScan(ctx, lib.ID, r.folders, r.present)
 	if err == nil {
 		changed(titles)
 	}
-	return report, err
+	return r.report, err
 }
 
-// reading is one changed folder of a library being read: the files the last scan recorded in it,
-// and the scan's report.
+// folder reads one folder the walk found, or could not read.
+func (s *Scanner) folder(ctx context.Context, r *run, folder library.Folder, err error) error {
+	defer r.done()
+	if err != nil {
+		s.log.WarnContext(ctx, "folder not read", slog.String("folder", folder.Path), slog.Any("err", err))
+		return nil
+	}
+	r.mu.Lock()
+	r.report.Folders++
+	r.folders = append(r.folders, folder.Path)
+	for _, f := range folder.Files {
+		if naming.IsVideo(f.Name) || naming.IsSubtitle(f.Name) {
+			r.present = append(r.present, path.Join(folder.Path, f.Name))
+		}
+	}
+	r.mu.Unlock()
+	for _, sk := range folder.Skipped {
+		s.skip(ctx, r, path.Join(folder.Path, sk.Name), sk.Err)
+	}
+	if bytes.Equal(r.fingerprints[folder.Path], folder.Fingerprint[:]) {
+		r.count(func(rep *Report) { rep.Unchanged++ })
+		return nil
+	}
+	rd := reading{run: r, dir: folder.Path}
+	if rd.known, err = s.store.KnownFiles(ctx, r.lib.ID, videosIn(folder)); err != nil {
+		return err
+	}
+	var saved store.Saved
+	switch r.lib.Kind {
+	case domain.LibraryMovies:
+		saved, err = s.saveFilms(ctx, rd, folder)
+	case domain.LibraryShows:
+		saved, err = s.saveEpisodes(ctx, rd, folder)
+	}
+	if err != nil {
+		return fmt.Errorf("%s: %w", folder.Path, err)
+	}
+	s.unowned(ctx, r, saved.Unowned)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.changed(saved.Titles)
+	return nil
+}
+
+// reading is one changed folder of a library being read, and the files the last scan recorded in
+// it.
 type reading struct {
-	lib    domain.Library
-	dir    string
-	known  map[string]store.KnownFile
-	report *Report
+	run   *run
+	dir   string
+	known map[string]store.KnownFile
 }
 
 func videosIn(f library.Folder) []string {
@@ -130,7 +213,7 @@ func videosIn(f library.Folder) []string {
 }
 
 func (s *Scanner) saveFilms(ctx context.Context, r reading, folder library.Folder) (store.Saved, error) {
-	lib := r.lib
+	lib := r.run.lib
 	var films []store.Film
 	plans := planFilms(folder)
 	pics := picturesIn(folder.Path, fileNames(folder))
@@ -166,6 +249,8 @@ func (s *Scanner) saveFilms(ctx context.Context, r reading, folder library.Folde
 	if err != nil {
 		return store.Saved{}, err
 	}
+	r.run.saving.Lock()
+	defer r.run.saving.Unlock()
 	return s.store.SaveFolder(ctx, lib.ID, folder.Path, folder.Fingerprint[:], films, extras)
 }
 
@@ -202,14 +287,14 @@ func (s *Scanner) extras(ctx context.Context, r reading, folder library.Folder, 
 
 var errNoOwner = errors.New("no single title it could belong to")
 
-func (s *Scanner) unowned(ctx context.Context, report *Report, paths []string) {
+func (s *Scanner) unowned(ctx context.Context, r *run, paths []string) {
 	for _, p := range paths {
-		s.skip(ctx, report, p, errNoOwner)
+		s.skip(ctx, r, p, errNoOwner)
 	}
 }
 
 func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Folder) (store.Saved, error) {
-	lib, report := r.lib, r.report
+	lib := r.run.lib
 	series, season := seriesOf(folder.Path)
 	var show store.Show
 	if series != "" {
@@ -245,7 +330,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Fo
 	if holdsEpisodes(folder.Path) {
 		plans, unread := planEpisodes(folder, season, show.Title)
 		for _, rel := range unread {
-			s.skip(ctx, report, rel, errNoEpisode)
+			s.skip(ctx, r.run, rel, errNoEpisode)
 		}
 		read, err := s.readCopies(ctx, r, plansOf(plans, func(e episodePlan) []copyPlan { return e.versions }))
 		if err != nil {
@@ -296,6 +381,8 @@ func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Fo
 	if err != nil {
 		return store.Saved{}, err
 	}
+	r.run.saving.Lock()
+	defer r.run.saving.Unlock()
 	return s.store.SaveShowFolder(ctx, lib.ID, folder.Path, folder.Fingerprint[:], show, episodes, extras)
 }
 
@@ -311,45 +398,87 @@ func plansOf[T any](titles []T, copies func(T) []copyPlan) [][]copyPlan {
 
 // readCopies reads the content key of every copy of each title of a folder that changed since the
 // last scan, asks the catalogue once which it holds, and probes only those it does not, answering
-// each title's copies that could be read. A copy that cannot be read is left out and logged. A
-// byte-identical copy in a second place is a known copy: it becomes another place to read the
-// same version.
+// each title's copies that could be read. Files are read at once, as the run has room. A copy that
+// cannot be read is left out and logged. A byte-identical copy in a second place is a known copy:
+// it becomes another place to read the same version.
 func (s *Scanner) readCopies(ctx context.Context, r reading, titles [][]copyPlan) ([][]store.Copy, error) {
-	read := make([][]store.Copy, len(titles))
-	var keys [][]byte
-	known := map[string]bool{}
+	// fresh is a copy whose key was read now, so the catalogue is asked whether it holds it.
+	type read struct {
+		c         store.Copy
+		ok, fresh bool
+	}
+	reads := make([][]read, len(titles))
+	g, gctx := errgroup.WithContext(ctx)
 	for i, plans := range titles {
-		for _, v := range plans {
+		reads[i] = make([]read, len(plans))
+		for j, v := range plans {
 			c := describe(r.dir, v)
 			if key, ok := r.unchanged(c.Parts); ok {
 				c.ContentKey = key
-				known[string(key)] = true
-				read[i] = append(read[i], c)
+				reads[i][j] = read{c: c, ok: true}
 				continue
 			}
-			key, err := library.ContentKey(r.lib.Root, partPaths(c))
-			if err != nil {
-				s.skip(ctx, r.report, c.Parts[0].RelPath, err)
-				continue
-			}
-			c.ContentKey = key
-			read[i] = append(read[i], c)
-			keys = append(keys, key)
+			g.Go(func() error {
+				done, err := r.run.read(gctx)
+				if err != nil {
+					return err
+				}
+				defer done()
+				key, err := library.ContentKey(r.run.lib.Root, partPaths(c))
+				if err != nil {
+					s.skip(gctx, r.run, c.Parts[0].RelPath, err)
+					return nil
+				}
+				c.ContentKey = key
+				reads[i][j] = read{c: c, ok: true, fresh: true}
+				return nil
+			})
 		}
 	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	var keys [][]byte
+	for i := range reads {
+		for j := range reads[i] {
+			if reads[i][j].fresh {
+				keys = append(keys, reads[i][j].c.ContentKey)
+			}
+		}
+	}
+	known := map[string]bool{}
 	if len(keys) > 0 {
-		held, err := s.store.KnownCopies(ctx, r.lib.ID, keys)
-		if err != nil {
+		var err error
+		if known, err = s.store.KnownCopies(ctx, r.run.lib.ID, keys); err != nil {
 			return nil, err
 		}
-		maps.Copy(known, held)
 	}
-	for i := range read {
-		read[i] = slices.DeleteFunc(read[i], func(c store.Copy) bool {
-			return !known[string(c.ContentKey)] && !s.probeParts(ctx, r, c)
-		})
+	g, gctx = errgroup.WithContext(ctx)
+	for i := range reads {
+		for j := range reads[i] {
+			rd := &reads[i][j]
+			if !rd.fresh || known[string(rd.c.ContentKey)] {
+				continue
+			}
+			g.Go(func() error {
+				ok, err := s.probeParts(gctx, r, rd.c)
+				rd.ok = ok
+				return err
+			})
+		}
 	}
-	return read, nil
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	out := make([][]store.Copy, len(titles))
+	for i := range reads {
+		for _, rd := range reads[i] {
+			if rd.ok {
+				out[i] = append(out[i], rd.c)
+			}
+		}
+	}
+	return out, nil
 }
 
 // describe is a planned copy's parts and subtitles, its bytes not yet read.
@@ -376,18 +505,24 @@ func partPaths(c store.Copy) []string {
 	return paths
 }
 
-// probeParts probes each part of a new copy, reporting whether every one could be.
-func (s *Scanner) probeParts(ctx context.Context, r reading, c store.Copy) bool {
+// probeParts probes each part of a new copy, as the run has room, reporting whether every one
+// could be.
+func (s *Scanner) probeParts(ctx context.Context, r reading, c store.Copy) (bool, error) {
 	for i, p := range c.Parts {
-		facts, err := s.probe(ctx, r.lib.Root, p.RelPath)
-		r.report.Probed++
+		done, err := r.run.read(ctx)
 		if err != nil {
-			s.skip(ctx, r.report, p.RelPath, err)
-			return false
+			return false, err
+		}
+		facts, err := s.probe(ctx, r.run.lib.Root, p.RelPath)
+		done()
+		r.run.count(func(rep *Report) { rep.Probed++ })
+		if err != nil {
+			s.skip(ctx, r.run, p.RelPath, err)
+			return false, nil
 		}
 		c.Parts[i].Facts = &facts
 	}
-	return true
+	return true, nil
 }
 
 // unchanged answers the content key of a copy whose every part is where the last scan found it,
@@ -456,8 +591,8 @@ func metadata(f *nfo.File) *domain.Metadata {
 	return &f.Metadata
 }
 
-func (s *Scanner) skip(ctx context.Context, report *Report, rel string, err error) {
-	report.Skipped++
+func (s *Scanner) skip(ctx context.Context, r *run, rel string, err error) {
+	r.count(func(rep *Report) { rep.Skipped++ })
 	s.log.WarnContext(ctx, "file left out", slog.String("file", rel), slog.Any("err", err))
 }
 
