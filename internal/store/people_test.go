@@ -83,11 +83,11 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 		t.Errorf("no one: %v, want ErrNotFound", err)
 	}
 	for _, q := range []string{"weav", "SIGOURNEY w", "Sigourney Weaver"} {
-		if found, err := s.SearchPeople(ctx, q, 10); err != nil || len(found) != 1 || found[0].ID != her || found[0].Photo == (uuid.UUID{}) {
+		if found, _, err := s.SearchPeople(ctx, q, 0, 10); err != nil || len(found) != 1 || found[0].ID != her || found[0].Photo == (uuid.UUID{}) {
 			t.Errorf("search %q: %+v, %v; want her", q, found, err)
 		}
 	}
-	if found, _ := s.SearchPeople(ctx, "gourney", 10); len(found) != 0 {
+	if found, total, _ := s.SearchPeople(ctx, "gourney", 0, 10); len(found) != 0 || total != 0 {
 		t.Errorf("search inside a word: %+v, want no one", found)
 	}
 	cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{People: []uuid.UUID{her}}})
@@ -159,7 +159,7 @@ func TestAPersonIsKnownByAnyProvidersID(t *testing.T) {
 		if err != nil || !maps.Equal(p.IDs, want[c.Name]) {
 			t.Errorf("%s = %+v, %v; want one person with ids %v", c.Name, p, err, want[c.Name])
 		}
-		if found, _ := s.SearchPeople(ctx, c.Name, 10); len(found) != 1 {
+		if found, _, _ := s.SearchPeople(ctx, c.Name, 0, 10); len(found) != 1 {
 			t.Errorf("search %q: %+v, want one person", c.Name, found)
 		}
 	}

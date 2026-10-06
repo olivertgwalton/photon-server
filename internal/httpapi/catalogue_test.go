@@ -75,8 +75,12 @@ func (fakeCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage,
 }
 
 // Search answers one card titled after what it was asked.
-func (fakeCatalogue) Search(_ context.Context, q store.SearchQuery) ([]store.Card, error) {
-	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: q.Text + " " + q.Library.String()}}, nil
+// Search finds one title, on the first page alone.
+func (fakeCatalogue) Search(_ context.Context, q store.SearchQuery) ([]store.Card, int64, error) {
+	if q.Offset > 0 {
+		return []store.Card{}, 1, nil
+	}
+	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: q.Text + " " + q.Library.String()}}, 1, nil
 }
 
 func (fakeCatalogue) Home(_ context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error) {
@@ -125,6 +129,8 @@ func TestSearch(t *testing.T) {
 		{"?q=heat&library=" + films.String(), http.StatusOK, "heat " + films.String()},
 		{"", http.StatusBadRequest, ""},
 		{"?q=heat&library=films", http.StatusBadRequest, ""},
+		{"?q=heat&offset=-1", http.StatusBadRequest, ""},
+		{"?q=heat&limit=0", http.StatusBadRequest, ""},
 	} {
 		rec := serve(t, http.MethodGet, "/api/v1/search"+tc.query, goodToken, "")
 		if rec.Code != tc.wantStatus {
@@ -151,6 +157,13 @@ func TestSearch(t *testing.T) {
 		if wantPeople := strings.Contains(tc.query, "sigourney"); wantPeople != (len(got.People) == 1) {
 			t.Errorf("%q: people = %+v", tc.query, got.People)
 		}
+	}
+	var next searchJSON
+	if err := json.NewDecoder(serve(t, http.MethodGet, "/api/v1/search?q=sigourney&offset=1&limit=1", goodToken, "").Body).Decode(&next); err != nil {
+		t.Fatal(err)
+	}
+	if next.Offset != 1 || next.Total != 1 || next.PeopleTotal != 1 || len(next.Items) != 0 {
+		t.Errorf("the second page = %+v, want it empty, counting the one title and one person", next)
 	}
 }
 

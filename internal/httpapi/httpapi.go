@@ -689,12 +689,11 @@ func (a *API) routes() []route {
 			status: http.StatusOK, reply: homeJSON{}, handle: a.home,
 		},
 		{
-			pattern: "GET /api/v1/search", access: signedIn, summary: "Search titles and people",
-			query: []param{
+			pattern: "GET /api/v1/search", access: signedIn, summary: "Page the titles and the people a search finds",
+			query: append([]param{
 				{"q", "", "What to search for; required."},
 				{"library", uuid.UUID{}, "Only this library's titles."},
-				limitParam,
-			},
+			}, pageParams...),
 			status: http.StatusOK, reply: searchJSON{}, handle: a.search,
 		},
 		{

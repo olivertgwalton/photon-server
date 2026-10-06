@@ -3438,7 +3438,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search titles and people */
+        /** Page the titles and the people a search finds */
         get: {
             parameters: {
                 query?: {
@@ -3446,6 +3446,8 @@ export interface paths {
                     q?: string;
                     /** @description Only this library's titles. */
                     library?: string;
+                    /** @description Where the page starts, from 0. */
+                    offset?: number;
                     /** @description How many to answer, from 1 to 200. */
                     limit?: number;
                 };
@@ -4935,7 +4937,12 @@ export interface components {
         ScanPhase: "reading" | "removing";
         Search: {
             items: components["schemas"]["Card"][];
+            offset: number;
             people: components["schemas"]["PersonRef"][];
+            /** Format: int64 */
+            people_total: number;
+            /** Format: int64 */
+            total: number;
         };
         SeasonCard: {
             episodes: number;

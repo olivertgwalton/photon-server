@@ -41,9 +41,9 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 	add(tv.ID, domain.ItemShow, "The Heat", "")
 	search := func(text string, lib uuid.UUID) []string {
 		t.Helper()
-		cards, err := s.Search(ctx, SearchQuery{Text: text, Library: lib, Limit: 20})
-		if err != nil {
-			t.Fatal(err)
+		cards, total, err := s.Search(ctx, SearchQuery{Text: text, Library: lib, Limit: 20})
+		if err != nil || int(total) != len(cards) {
+			t.Fatal(cards, total, err)
 		}
 		var titles []string
 		for _, c := range cards {
@@ -66,5 +66,10 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 		if got := search(tc.text, tc.lib); !slices.Equal(got, tc.want) {
 			t.Errorf("search %q: %q, want %q", tc.text, got, tc.want)
 		}
+	}
+	// A page past the first goes on where it left off and counts every match.
+	cards, total, err := s.Search(ctx, SearchQuery{Text: "heat", Offset: 1, Limit: 1})
+	if err != nil || total != 3 || len(cards) != 1 || cards[0].Title != "Heat Wave" {
+		t.Errorf("the second of three: %+v of %d, %v; want Heat Wave", cards, total, err)
 	}
 }

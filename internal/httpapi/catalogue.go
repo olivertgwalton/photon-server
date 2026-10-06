@@ -27,7 +27,7 @@ type catalogue interface {
 	Facets(ctx context.Context, lib, profile uuid.UUID) (store.Facets, error)
 	Similar(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
-	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, error)
+	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Home(ctx context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 }
@@ -169,14 +169,19 @@ type personRefJSON struct {
 	Photo uuid.UUID `json:"photo,omitzero"`
 }
 
+// searchJSON is a page of the titles and of the people found, both from offset, and how many of
+// each there are in all.
 type searchJSON struct {
-	Items  []cardJSON      `json:"items"`
-	People []personRefJSON `json:"people"`
+	Items       []cardJSON      `json:"items"`
+	People      []personRefJSON `json:"people"`
+	Offset      int             `json:"offset"`
+	Total       int64           `json:"total"`
+	PeopleTotal int64           `json:"people_total"`
 }
 
 func (a *API) search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	query := store.SearchQuery{Profile: sessionOf(r).Profile.ID, Text: q.Get("q"), Limit: defaultWallLimit}
+	query := store.SearchQuery{Profile: sessionOf(r).Profile.ID, Text: q.Get("q")}
 	if query.Text == "" {
 		writeProblem(w, a.logger, codeInvalidParameter, "q is what to search for")
 		return
@@ -188,18 +193,16 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if s := q.Get("limit"); s != "" {
-		if query.Limit, err = strconv.Atoi(s); err != nil || query.Limit < 1 || query.Limit > maxWallLimit {
-			writeProblem(w, a.logger, codeInvalidParameter, "limit is a number from 1 to "+strconv.Itoa(maxWallLimit))
-			return
-		}
+	var ok bool
+	if query.Offset, query.Limit, ok = a.paging(w, r); !ok {
+		return
 	}
-	cards, err := a.svc.Catalogue.Search(r.Context(), query)
+	cards, total, err := a.svc.Catalogue.Search(r.Context(), query)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	found, err := a.svc.People.SearchPeople(r.Context(), query.Text, query.Limit)
+	found, peopleTotal, err := a.svc.People.SearchPeople(r.Context(), query.Text, query.Offset, query.Limit)
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -208,7 +211,9 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 	for i, p := range found {
 		people[i] = personRefJSON(p)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, searchJSON{Items: cardsJSON(cards), People: people})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, searchJSON{
+		Items: cardsJSON(cards), People: people, Offset: query.Offset, Total: total, PeopleTotal: peopleTotal,
+	})
 }
 
 func (a *API) title(w http.ResponseWriter, r *http.Request) {

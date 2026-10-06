@@ -6,6 +6,7 @@ import (
 	"unicode"
 	"uuid"
 
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -13,47 +14,56 @@ import (
 )
 
 // SearchQuery asks for the films and shows whose title has words starting with each word typed,
-// ignoring case and accents: "amel" finds Amélie. Library narrows it to one library.
+// ignoring case and accents: "amel" finds Amélie. Library narrows it to one library. Limit of them
+// are answered from Offset.
 type SearchQuery struct {
 	Profile uuid.UUID
 	Text    string
 	Library uuid.UUID
+	Offset  int
 	Limit   int
 }
 
-// Search answers the matching titles: one named exactly what was typed, then those starting with
-// it, then the closest matches.
-func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, error) {
+// Search answers a page of the matching titles, and how many match in all: one named exactly what
+// was typed, then those starting with it, then the closest matches.
+func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error) {
 	words := strings.FieldsFunc(q.Text, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 	if len(words) == 0 {
-		return []Card{}, nil
+		return []Card{}, 0, nil
 	}
 	for i, w := range words {
 		words[i] = w + ":*"
 	}
 	// gen cannot write a full-text match, so this one query is SQL.
-	sql := `
-		SELECT * FROM items
+	matching := `
+		FROM items
 		WHERE kind IN (@movie, @show, @collection) AND search @@ to_tsquery('simple', search_text(@query))
 			AND (CAST(@library AS uuid) IS NULL OR library_id = CAST(@library AS uuid))
-			AND visible(id, CAST(@profile AS uuid))
-		ORDER BY search_text(title) = search_text(@text) DESC,
-			starts_with(search_text(title), search_text(@text)) DESC,
-			ts_rank_cd(search, to_tsquery('simple', search_text(@query))) DESC, sort_title, id
-		LIMIT @limit`
+			AND visible(id, CAST(@profile AS uuid))`
 	var library *model.UUID
 	if q.Library != (uuid.UUID{}) {
 		library = new(model.UUID(q.Library))
 	}
-	var rows []*model.Item
-	err := s.q.Item.WithContext(ctx).UnderlyingDB().Raw(sql, map[string]any{
+	args := map[string]any{
 		"movie": domain.ItemMovie, "show": domain.ItemShow, "collection": domain.ItemCollection, "query": strings.Join(words, " & "),
-		"text": q.Text, "library": library, "limit": q.Limit, "profile": q.Profile.String(),
-	}).Find(&rows).Error
-	if err != nil {
-		return nil, err
+		"text": q.Text, "library": library, "offset": q.Offset, "limit": q.Limit, "profile": q.Profile.String(),
 	}
-	return s.cards(ctx, q.Profile, rows)
+	db := s.q.Item.WithContext(ctx).UnderlyingDB()
+	var total int64
+	if err := db.Raw(`SELECT count(*) `+matching, args).Scan(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var rows []*model.Item
+	err := db.Raw(`SELECT * `+matching+`
+		ORDER BY search_text(title) = search_text(@text) DESC,
+			starts_with(search_text(title), search_text(@text)) DESC,
+			ts_rank_cd(search, to_tsquery('simple', search_text(@query))) DESC, sort_title, id
+		OFFSET @offset LIMIT @limit`, args).Find(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	cards, err := s.cards(ctx, q.Profile, rows)
+	return cards, total, err
 }
 
 // PersonRef is someone a search finds, with their picture's id.
@@ -63,16 +73,21 @@ type PersonRef struct {
 	Photo uuid.UUID
 }
 
-// SearchPeople answers the people whose names have a word starting with each word asked for, as
-// titles are matched, those whose names start with it first, then the most credited.
-func (s *Store) SearchPeople(ctx context.Context, text string, limit int) ([]PersonRef, error) {
+// SearchPeople answers limit of the people from offset whose names have a word starting with each
+// word asked for, as titles are matched, those whose names start with it first, then the most
+// credited; and how many match in all.
+func (s *Store) SearchPeople(ctx context.Context, text string, offset, limit int) ([]PersonRef, int64, error) {
 	words := strings.FieldsFunc(text, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 	if len(words) == 0 {
-		return []PersonRef{}, nil
+		return []PersonRef{}, 0, nil
 	}
 	db := s.q.Person.WithContext(ctx).UnderlyingDB().Table("people p")
 	for _, w := range words {
 		db = db.Where("(' ' || search_text(p.name)) LIKE '% ' || search_text(?) || '%'", w)
+	}
+	var total int64
+	if err := db.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, err
 	}
 	var rows []struct {
 		ID      model.UUID
@@ -82,7 +97,7 @@ func (s *Store) SearchPeople(ctx context.Context, text string, limit int) ([]Per
 	err := db.Select("p.id, p.name, p.photo_id").
 		Order(clause.Expr{SQL: "starts_with(search_text(p.name), search_text(?)) DESC", Vars: []any{text}}).
 		Order("(SELECT count(*) FROM credits c WHERE c.person_id = p.id) DESC, p.name, p.id").
-		Limit(limit).Scan(&rows).Error
+		Offset(offset).Limit(limit).Scan(&rows).Error
 	out := make([]PersonRef, len(rows))
 	for n, r := range rows {
 		out[n] = PersonRef{ID: uuid.UUID(r.ID), Name: r.Name}
@@ -90,5 +105,5 @@ func (s *Store) SearchPeople(ctx context.Context, text string, limit int) ([]Per
 			out[n].Photo = uuid.UUID(*r.PhotoID)
 		}
 	}
-	return out, err
+	return out, total, err
 }
