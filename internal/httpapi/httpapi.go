@@ -519,6 +519,11 @@ func (a *API) routes() []route {
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, handle: a.partStream,
 		},
 		{
+			pattern: "GET /api/v1/parts/{id}/sample", access: signedIn,
+			summary: "The first " + strconv.Itoa(sampleBytes>>20) + " MiB of a part's file, in byte ranges, to time the connection; no playback",
+			status:  http.StatusOK, reply: asFile{"video/*"}, handle: a.partSample,
+		},
+		{
 			pattern: "GET /api/v1/parts/{id}/trickplay", access: signedIn,
 			summary: "How a part's trickplay sheets are laid out, to find the thumbnail for a time",
 			status:  http.StatusOK, reply: store.Trickplay{}, handle: a.trickplay,

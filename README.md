@@ -176,6 +176,12 @@ reports, paused or playing, every ten seconds or so: its remux runs however long
 its player's stop ends the remux and frees its transcode slot at once, on whichever node runs it.
 A player that goes quiet for two minutes is stopped where it last said it was, as Jellyfin's
 session timeout does: the play is kept in the history and `playback.stopped` is raised.
+
+A client times its connection to the server on a title's own bytes, as Jellyfin's bitrate test
+does on made-up ones: `GET /api/v1/parts/{id}/sample` answers the first 16 MiB of a file the
+profile may see, in byte ranges, and nothing past them. It is not a playback, so it is in no
+history, activity log or dashboard.
+
 Each copy says where its intro, credits, recap and preview are, so a player can offer to skip them.
 A chapter named for one (Intro, Opening, End Credits, Previously…) marks it. Otherwise the server
 compares the sound of a season's episodes, as Plex and Jellyfin's Intro Skipper do: the stretch two

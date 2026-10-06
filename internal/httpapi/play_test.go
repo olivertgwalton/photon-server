@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -82,6 +83,14 @@ func (f fakePlaying) PartFile(_ context.Context, part uuid.UUID) (string, string
 		return "", "", store.ErrNotFound
 	}
 	return f.root, "Lawrence/Lawrence cd1.mkv", nil
+}
+
+// VisiblePartFile hides the first part from everyone but Oliver.
+func (f fakePlaying) VisiblePartFile(ctx context.Context, profile, part uuid.UUID) (string, string, error) {
+	if profile != oliver.ID {
+		return "", "", store.ErrNotFound
+	}
+	return f.PartFile(ctx, part)
 }
 
 var playbackID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000c1")
@@ -587,5 +596,43 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 	}
 	if rec := do(http.MethodDelete, target, ""); rec.Code != http.StatusNotFound {
 		t.Errorf("stopping it again: %d, want 404", rec.Code)
+	}
+}
+
+func TestAConnectionIsTimedOnAPartsFirstBytesWithoutPlaying(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "Lawrence"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	film := make([]byte, sampleBytes+1)
+	film[sampleBytes-1] = 'x'
+	if err := os.WriteFile(filepath.Join(root, "Lawrence", "Lawrence cd1.mkv"), film, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	api := New(slog.New(slog.DiscardHandler), Info{}, Services{Auth: fakeAuth{}, Playing: fakePlaying{root: root}})
+	sample := func(token, ranges string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/parts/"+partOne.String()+"/sample", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		if ranges != "" {
+			req.Header.Set("Range", ranges)
+		}
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec
+	}
+	if rec := sample(goodToken, "bytes=0-4194303"); rec.Code != http.StatusPartialContent || rec.Body.Len() != 4<<20 {
+		t.Errorf("4 MiB from the start: %d, %d bytes", rec.Code, rec.Body.Len())
+	}
+	if rec := sample(goodToken, ""); rec.Code != http.StatusOK || rec.Body.Len() != sampleBytes || rec.Body.Bytes()[sampleBytes-1] != 'x' {
+		t.Errorf("the whole sample: %d, %d bytes, want the file's first %d", rec.Code, rec.Body.Len(), sampleBytes)
+	}
+	if rec := sample(goodToken, "bytes="+strconv.Itoa(sampleBytes)+"-"); rec.Code != http.StatusRequestedRangeNotSatisfiable {
+		t.Errorf("past the sample: %d, want 416", rec.Code)
+	}
+	if rec := sample(memberToken, ""); rec.Code != http.StatusNotFound {
+		t.Errorf("a profile that may not see the title: %d, want 404", rec.Code)
+	}
+	if rec := sample("", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("signed out: %d, want 401", rec.Code)
 	}
 }
