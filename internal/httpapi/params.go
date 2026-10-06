@@ -19,6 +19,20 @@ func (a *API) pathID(w http.ResponseWriter, r *http.Request, name string) (uuid.
 	return id, true
 }
 
+// queryID reads an id, or the zero id where the query leaves name out.
+func (a *API) queryID(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {
+	s := r.URL.Query().Get(name)
+	if s == "" {
+		return uuid.UUID{}, true
+	}
+	id, err := uuid.Parse(s)
+	if err != nil {
+		writeProblem(w, a.logger, codeInvalidParameter, name+" is not an id")
+		return uuid.UUID{}, false
+	}
+	return id, true
+}
+
 // pathNumber reads a count or id from 0 that a path names; any other is a path to nothing.
 func (a *API) pathNumber(w http.ResponseWriter, r *http.Request, name string) (int, bool) {
 	n, err := strconv.Atoi(r.PathValue(name))

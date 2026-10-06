@@ -33,6 +33,7 @@ func TestHistoryIsAProfilesOwnAndAnAdminsWhole(t *testing.T) {
 		{goodToken, "/api/v1/admin/history?profile=" + oliver.ID.String(), http.StatusOK},
 		{memberToken, "/api/v1/admin/history", http.StatusForbidden},
 		{goodToken, "/api/v1/history?limit=0", http.StatusBadRequest},
+		{goodToken, "/api/v1/admin/history?profile=oliver", http.StatusBadRequest},
 	} {
 		req := httptest.NewRequest(http.MethodGet, tc.target, nil)
 		req.Header.Set("Authorization", "Bearer "+tc.token)

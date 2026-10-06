@@ -32,13 +32,9 @@ func (a *API) ownHistory(w http.ResponseWriter, r *http.Request) {
 // adminHistory answers everyone's plays, or one profile's, the latest first, as Plex's dashboard
 // lists them.
 func (a *API) adminHistory(w http.ResponseWriter, r *http.Request) {
-	var profile uuid.UUID
-	if s := r.URL.Query().Get("profile"); s != "" {
-		var err error
-		if profile, err = uuid.Parse(s); err != nil {
-			writeProblem(w, a.logger, codeInvalidParameter, "profile is a profile's id")
-			return
-		}
+	profile, ok := a.queryID(w, r, "profile")
+	if !ok {
+		return
 	}
 	a.history(w, r, profile)
 }
