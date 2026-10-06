@@ -40,10 +40,10 @@ The server listens on `:8640` (`PHOTON_LISTEN`) and names itself after the host 
 Behind a reverse proxy, list the proxy's addresses in `PHOTON_TRUSTED_PROXIES` (for example
 `172.16.0.0/12,127.0.0.1`); `X-Forwarded-For` is ignored from anyone else.
 
-Each node keeps up to twice as many PostgreSQL connections as it has CPUs, plus four, shared by its
-jobs and the requests it answers. Set another number with `pool_max_conns` in
-`PHOTON_DATABASE_URL` (`postgres://db/photon?pool_max_conns=40`); with several nodes, keep their sum
-under PostgreSQL's `max_connections`, 100 unless it is changed.
+Each node keeps up to as many PostgreSQL connections as it has CPUs, plus 48, shared by its jobs and
+the requests it answers. Set another number with `pool_max_conns` in `PHOTON_DATABASE_URL`
+(`postgres://db/photon?pool_max_conns=40`); with several nodes, keep their sum under PostgreSQL's
+`max_connections`, 100 unless it is changed.
 
 A device that signs in by a code it shows (a television) is told where to enter it, as RFC 8628's
 `verification_uri`: the web app's `/link` page, and `verification_uri_complete` with the code filled
@@ -128,6 +128,12 @@ Linux) and a library is scanned a minute after its last change. Network shares s
 events, so a library on one is scanned on the schedule; `photon-server library set -name NAME
 -monitor off` stops watching a library. A large library may need a higher
 `fs.inotify.max_user_watches`; the server says so when it runs out.
+
+Each node runs its jobs in pools of their own: two library scans at once, sixteen matches (as many
+as reach TMDB's rate limit, which every node shares), half its CPUs reading files for keyframes and
+intros, one preview, one conversion and two webhook deliveries. A large import's reading so never
+holds up its matching, nor matching a scan, and a title a scan has just found is matched before the
+nightly refresh of those matched already.
 
 A network mount that stops answering blocks a read forever, so every FFmpeg run over a library
 file has a limit: five minutes for one that reads part of a file (a probe, a chapter picture, an

@@ -55,6 +55,21 @@ const (
 	shutdownGrace = 10 * time.Second
 )
 
+const (
+	// scanSlots is how many libraries a node scans at once, each scan being one library's: a
+	// films library and a shows library together, which are usually on the same disk or mount,
+	// so a third would only share its reads.
+	scanSlots = 2
+	// identifySlots is how many titles a node matches at once. A match spends its time waiting
+	// on providers, a request at a time, about two seconds of it a title (measured against TMDB),
+	// so sixteen at once reach TMDB's rate limit, which every node shares; past it a match waits
+	// on the limit, not the network.
+	identifySlots = 16
+	// webhookSlots is how many deliveries a node makes at once, so one receiver that does not
+	// answer holds up no other.
+	webhookSlots = 2
+)
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	if err := run(logger, os.Args[1:]); err != nil {
@@ -245,15 +260,23 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
 	}
 
-	worker := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), map[domain.JobKind]jobs.Handler{
-		domain.JobKeyframes:      analysis.Keyframes(st, tools),
-		domain.JobIdentify:       identify.Handler(st, providers, hub.Raise, logger),
-		domain.JobScanLibrary:    scanLibrary(st, scan.New(st, tools, logger), hub, logger),
-		domain.JobMarkers:        analysis.Markers(st, tools.Fingerprint),
+	// Each kind of job has slots of its own, so a big import's file reading never holds up its
+	// matching and a scan never waits behind either.
+	scanner := jobs.NewWorker(st, logger, node, scanSlots, map[domain.JobKind]jobs.Handler{
+		domain.JobScanLibrary: scanLibrary(st, scan.New(st, tools, logger), hub, logger),
+	}, hub.Raise)
+	matcher := jobs.NewWorker(st, logger, node, identifySlots, map[domain.JobKind]jobs.Handler{
+		domain.JobIdentify: identify.Handler(st, providers, hub.Raise, logger),
+	}, hub.Raise)
+	analyser := jobs.NewWorker(st, logger, node, max(runtime.NumCPU()/2, 1), map[domain.JobKind]jobs.Handler{
+		domain.JobKeyframes: analysis.Keyframes(st, tools),
+		domain.JobMarkers:   analysis.Markers(st, tools.Fingerprint),
+	}, hub.Raise)
+	notifier := jobs.NewWorker(st, logger, node, webhookSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobDeliverWebhook: webhook.Deliver(st),
 	}, hub.Raise)
-	// Previews have a worker and a slot of their own, so however many are queued, the other jobs
-	// keep every slot of theirs.
+	// Previews have a slot of their own, so however many are queued, the other analysis keeps
+	// every slot of its.
 	previewer := jobs.NewWorker(st, logger, node, 1, map[domain.JobKind]jobs.Handler{
 		domain.JobPreviews: analysis.MakePreviews(st, tools, previews, logger),
 	}, hub.Raise)
@@ -268,7 +291,10 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	// On the signal's context, not background's, so its streams end before Shutdown waits on them.
 	wg.Go(func() { hub.Run(ctx) })
 	wg.Go(func() { scheduler.Run(background) })
-	wg.Go(func() { worker.Run(background) })
+	wg.Go(func() { scanner.Run(background) })
+	wg.Go(func() { matcher.Run(background) })
+	wg.Go(func() { analyser.Run(background) })
+	wg.Go(func() { notifier.Run(background) })
 	wg.Go(func() { previewer.Run(background) })
 	wg.Go(func() { converter.Run(background) })
 	wg.Go(func() { sweepPlaybacks(background, sessions, remuxer, logger) })

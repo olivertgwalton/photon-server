@@ -54,9 +54,13 @@ func enqueueAfter(ctx context.Context, tx *query.Query, kind domain.JobKind, sub
 // or a scan queued.
 const askedPriority = 1
 
-// indexPriority is a part's keyframes job: claimed after every scan and identify, so an import's
-// thousands of them do not hold back what a reader sees first.
+// indexPriority is a part's keyframes job: an import queues thousands, so they are claimed after
+// the other analysis queued with them.
 const indexPriority = -1
+
+// refreshPriority is a title's scheduled match: claimed after the titles a scan has just found,
+// which have no match at all yet.
+const refreshPriority = -1
 
 // enqueueAsked is enqueue for a job an admin is waiting on.
 func enqueueAsked(ctx context.Context, tx *query.Query, kind domain.JobKind, subject model.UUID) error {
@@ -307,12 +311,12 @@ func (s *Store) Identified(ctx context.Context, id uuid.UUID) error {
 // answers how many.
 func (s *Store) RefreshStale(ctx context.Context) (int64, error) {
 	res := s.q.Item.WithContext(ctx).UnderlyingDB().Exec(`
-		INSERT INTO jobs (kind, subject)
-		SELECT 'identify', i.id FROM items i JOIN libraries l ON l.id = i.library_id
+		INSERT INTO jobs (kind, subject, priority)
+		SELECT 'identify', i.id, ? FROM items i JOIN libraries l ON l.id = i.library_id
 		WHERE i.kind IN ('movie', 'show') AND l.refresh_days > 0
 			AND coalesce(i.identified_at, '-infinity') < now() - make_interval(days => l.refresh_days)
 		ON CONFLICT (kind, subject) DO UPDATE SET
 			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
-			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END`)
+			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END`, refreshPriority)
 	return res.RowsAffected, res.Error
 }
