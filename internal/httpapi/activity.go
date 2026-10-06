@@ -193,6 +193,8 @@ type scanJSON struct {
 	Phase     domain.ScanPhase `json:"phase"`
 	Done      int              `json:"done"`
 	Known     int              `json:"known"`
+	// Folder is the folder read last, under the library's root; absent for the root itself.
+	Folder string `json:"folder,omitempty"`
 }
 
 // snapshot is what is going on across the cluster now: tasks and jobs running, libraries being
@@ -221,7 +223,7 @@ func (a *API) snapshot(ctx context.Context) (snapshotJSON, error) {
 		return out, err
 	}
 	for _, s := range scans {
-		out.Scans = append(out.Scans, scanJSON{LibraryID: s.Library, Phase: s.Phase, Done: s.Done, Known: s.Known})
+		out.Scans = append(out.Scans, scanJSON{LibraryID: s.Library, Phase: s.Phase, Done: s.Done, Known: s.Known, Folder: s.Folder})
 	}
 	playbacks, err := a.svc.NowPlaying.Playbacks(ctx)
 	if err != nil {

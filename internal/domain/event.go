@@ -144,10 +144,11 @@ func ScanPhases() []ScanPhase {
 }
 
 // ScanProgress is how far a scan has got: folders done of those found so far, which grows as it
-// reads.
+// reads, and the folder it read last, under the library's root ("" for the root itself).
 type ScanProgress struct {
 	Library uuid.UUID
 	Phase   ScanPhase
 	Done    int
 	Known   int
+	Folder  string
 }

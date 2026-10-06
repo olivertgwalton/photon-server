@@ -38,7 +38,8 @@ func (k *KV) SaveScan(ctx context.Context, p domain.ScanProgress, ttl time.Durat
 	cmds := k.client.B()
 	for _, r := range k.client.DoMulti(ctx,
 		cmds.Hset().Key(key).FieldValue().FieldValue("phase", string(p.Phase)).
-			FieldValue("done", strconv.Itoa(p.Done)).FieldValue("known", strconv.Itoa(p.Known)).Build(),
+			FieldValue("done", strconv.Itoa(p.Done)).FieldValue("known", strconv.Itoa(p.Known)).
+			FieldValue("folder", p.Folder).Build(),
 		cmds.Expire().Key(key).Seconds(int64(ttl.Seconds())).Build(),
 		k.index(scanIndex, p.Library, ttl),
 	) {
@@ -62,7 +63,7 @@ func (k *KV) Scans(ctx context.Context) ([]domain.ScanProgress, error) {
 	}
 	out := make([]domain.ScanProgress, len(listed))
 	for i, l := range listed {
-		out[i] = domain.ScanProgress{Library: l.id, Phase: domain.ScanPhase(l.fields["phase"])}
+		out[i] = domain.ScanProgress{Library: l.id, Phase: domain.ScanPhase(l.fields["phase"]), Folder: l.fields["folder"]}
 		out[i].Done, _ = strconv.Atoi(l.fields["done"])
 		out[i].Known, _ = strconv.Atoi(l.fields["known"])
 	}

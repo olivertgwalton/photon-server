@@ -1,6 +1,7 @@
 <script lang="ts">
 import SearchIcon from "@lucide/svelte/icons/search";
 import { page } from "$app/state";
+import ActivityMenu from "#lib/components/ActivityMenu.svelte";
 import AppSidebar from "#lib/components/AppSidebar.svelte";
 import PlaylistPicker from "#lib/components/PlaylistPicker.svelte";
 import ProfileMenu from "#lib/components/ProfileMenu.svelte";
@@ -44,6 +45,9 @@ $effect(() => live.connect());
 					>
 				</form>
 			</search>
+			{#if data.me.role === "admin"}
+				<ActivityMenu libraries={data.libraries} />
+			{/if}
 			<ProfileMenu profile={data.me} />
 		</header>
 		<main id="main" tabindex="-1" class="min-w-0 flex-1 px-3 py-6 sm:px-6">

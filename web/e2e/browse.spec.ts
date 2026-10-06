@@ -94,7 +94,7 @@ test("a wall is sorted, filtered and drawn as the reader asks", async ({
 	await page.getByRole("radio", { name: "Posters" }).click();
 });
 
-test("a wall follows the server: a scan's progress, then what it found", async ({
+test("a wall follows the server: a scan's progress in the bar, then what it found", async ({
 	page,
 }) => {
 	await logIn(page, "/libraries/l-films");
@@ -108,11 +108,15 @@ test("a wall follows the server: a scan's progress, then what it found", async (
 	await emit("scan.progress", {
 		kind: "scan.progress",
 		library_id: "l-films",
-		details: { phase: "reading", done: 40, known: 100 },
+		details: { phase: "reading", done: 40, known: 100, folder: "Heat (1995)" },
 	});
-	await expect(page.getByRole("status")).toHaveText(
-		/Being scanned: 40 of 100 files/,
-	);
+	const activity = page.getByRole("button", { name: /^Activity/ });
+	await activity.click();
+	const scan = page.getByRole("menu").getByRole("status");
+	await expect(scan).toContainText("Scanning Films");
+	await expect(scan).toContainText("Reading folders: 40 of 100");
+	await expect(scan).toContainText("Heat (1995)");
+	await page.keyboard.press("Escape");
 	await emit(
 		"library.changed",
 		{ kind: "library.changed", library_id: "l-films" },
@@ -124,7 +128,7 @@ test("a wall follows the server: a scan's progress, then what it found", async (
 		kind: "library.scanned",
 		library_id: "l-films",
 	});
-	await expect(page.getByText(/Being scanned/)).toHaveCount(0);
+	await expect(activity).toHaveCount(0);
 });
 
 test("a film's page plays the copy and tracks chosen", async ({ page }) => {

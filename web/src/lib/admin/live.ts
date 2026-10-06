@@ -80,6 +80,7 @@ export function apply(live: Live, name: string, data: unknown): Live {
 				phase: d.phase as Schemas["ScanPhase"],
 				done: d.done as number,
 				known: d.known as number,
+				folder: d.folder as string | undefined,
 			};
 			next.scans = [
 				...without(next.scans, (s) => s.library_id === scan.library_id),
