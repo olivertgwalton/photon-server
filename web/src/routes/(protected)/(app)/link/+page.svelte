@@ -1,4 +1,5 @@
 <script lang="ts">
+import { page } from "$app/state";
 import type { components } from "#lib/api/schema.js";
 import { client, problemMessage } from "#lib/api/client.js";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -46,6 +47,7 @@ async function link(event: SubmitEvent) {
 						spellcheck="false"
 						placeholder="XXXX-XXXX"
 						class="font-mono text-lg tracking-[0.2em] uppercase"
+						value={page.url.searchParams.get("code") ?? ""}
 					/>
 					<Field.Description>
 						It may take the device a few seconds to notice.
