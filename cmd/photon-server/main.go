@@ -35,6 +35,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/mdblist"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/omdb"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
 	"github.com/olivertgwalton/photon-server/internal/provider"
@@ -236,12 +237,15 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	plugins := plugin.New(st)
-	// TMDB runs before TheTVDB, as its match may give TheTVDB an id to find a show by.
+	// TMDB runs before TheTVDB and OMDb, as its match may give them an id to find a title by.
 	providers := provider.NewRegistry(plugins.Load,
 		tmdb.New(cmp.Or(os.Getenv("PHOTON_TMDB_TOKEN"), tmdb.DefaultToken), lang, cache),
 		tvdb.New(cmp.Or(os.Getenv("PHOTON_TVDB_KEY"), tvdb.DefaultKey), os.Getenv("PHOTON_TVDB_PIN"), lang, cache),
 		mdblist.New(func(ctx context.Context) (map[string]string, error) {
 			return st.ProviderSettings(ctx, domain.SourceMDBList)
+		}, cache),
+		omdb.New(func(ctx context.Context) (map[string]string, error) {
+			return st.ProviderSettings(ctx, domain.SourceOMDb)
 		}, cache),
 	)
 	sessions := playback.NewSessions(cache, st, remuxer, hub.Raise, node)

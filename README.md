@@ -102,6 +102,15 @@ Tomatoes' critics and audience once an admin sets its free
 key (`PATCH /api/v1/admin/providers/mdblist` with `{"settings": {"api_key": "…"}}`) and a library
 takes it (`-sources nfo,tmdb,mdblist`). Ratings are scored out of 100.
 
+The Open Movie Database fills in what the sources above it leave out, as Jellyfin's OMDb provider
+does: a title's name, plot, certificate, release date, genres and a 300-pixel poster, each episode's
+name, plot and air date, and IMDb's score and the Tomatometer. It knows titles only by their IMDb
+ids, which an NFO, TMDB or TheTVDB finds first, so a library takes it beside them, ranked last
+(`-sources nfo,tmdb,omdb`), once an admin sets its key (`PATCH /api/v1/admin/providers/omdb` with
+`{"settings": {"api_key": "…"}}`). It is asked once for a film, and once for each season and each
+episode of a show, so a free key's thousand requests a day go quickly on a large library; a refused
+or spent key passes OMDb over until it works again.
+
 Collections are TMDB's box sets, shown once a library holds two of a set's titles, and an admin's
 own (`POST /api/v1/admin/collections`). Each says which in its `origin` (`tmdb` or `user`). Only an
 admin's has its titles set or is removed by hand; a TMDB set's titles follow TMDB, and it goes when
