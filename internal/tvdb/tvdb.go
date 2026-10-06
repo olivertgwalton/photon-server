@@ -210,9 +210,9 @@ func (c *Client) Details(ctx context.Context, id int) (domain.Metadata, error) {
 		return domain.Metadata{}, err
 	}
 	d := out.Data
-	aired := date(d.FirstAired)
+	aired := provider.Date(d.FirstAired)
 	m := domain.Metadata{
-		ReleaseDate: aired, Year: year(aired),
+		ReleaseDate: aired, Year: provider.Year(aired),
 		IDs:     map[domain.Provider]string{domain.ProviderTVDB: strconv.Itoa(id)},
 		Artwork: picture(domain.ArtworkPoster, d.Image),
 	}
@@ -283,9 +283,9 @@ func (c *Client) Seasons(ctx context.Context, id int, seasons []int, order domai
 		}
 		for _, e := range page.Data.Episodes {
 			if s, ok := out[e.Season]; ok {
-				aired := date(e.Aired)
+				aired := provider.Date(e.Aired)
 				s.Episodes[e.Number] = domain.Metadata{
-					Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: year(aired),
+					Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: provider.Year(aired),
 					Artwork: picture(domain.ArtworkThumb, e.Image),
 				}
 			}
@@ -305,16 +305,4 @@ func picture(kind domain.ArtworkKind, address string) []domain.Artwork {
 		address = "https://artworks.thetvdb.com" + address
 	}
 	return []domain.Artwork{{Kind: kind, URL: address}}
-}
-
-func date(s string) time.Time {
-	t, _ := time.Parse(time.DateOnly, s)
-	return t
-}
-
-func year(t time.Time) int {
-	if t.IsZero() {
-		return 0
-	}
-	return t.Year()
 }

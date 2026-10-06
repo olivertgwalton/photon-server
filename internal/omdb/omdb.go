@@ -119,7 +119,7 @@ func (c *Client) Describe(ctx context.Context, kind domain.ItemKind, id string, 
 				continue
 			}
 			aired, _ := time.Parse(time.DateOnly, e.Released)
-			episode := domain.Metadata{Title: value(e.Title), ReleaseDate: aired, Year: year(aired)}
+			episode := domain.Metadata{Title: value(e.Title), ReleaseDate: aired, Year: provider.Year(aired)}
 			// A season lists no plots: each episode is asked for its own, as Jellyfin asks.
 			if value(e.IMDbID) != "" {
 				var full title
@@ -211,11 +211,4 @@ func value(s string) string {
 		return ""
 	}
 	return s
-}
-
-func year(t time.Time) int {
-	if t.IsZero() {
-		return 0
-	}
-	return t.Year()
 }
