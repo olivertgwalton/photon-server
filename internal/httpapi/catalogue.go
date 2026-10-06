@@ -56,7 +56,13 @@ type cardJSON struct {
 	EpisodeEnd    *int            `json:"episode_end,omitzero"`
 	Thumb         uuid.UUID       `json:"thumb,omitzero"`
 	// Origin is who made a collection: only an admin's is changed through the admin routes.
-	Origin domain.CollectionOrigin `json:"origin,omitzero"`
+	Origin      domain.CollectionOrigin `json:"origin,omitzero"`
+	Overview    string                  `json:"overview,omitzero"`
+	Logo        uuid.UUID               `json:"logo,omitzero"`
+	Genres      []string                `json:"genres,omitzero"`
+	Certificate string                  `json:"certificate,omitzero"`
+	// Ratings are each site's score out of 100, as the title's page gives them.
+	Ratings []store.RatingRef `json:"ratings,omitzero"`
 }
 
 func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +154,10 @@ func cardsJSON(cards []store.Card) []cardJSON {
 			ID: c.ID, Kind: c.Kind, Title: c.Title, Year: c.Year, ReleaseDate: domain.Date(c.ReleaseDate), AddedAt: c.AddedAt,
 			Poster: c.Poster, Backdrop: c.Backdrop, State: c.State, DurationMS: c.DurationMS, Show: c.Show,
 			SeasonNumber: c.SeasonNumber, EpisodeNumber: c.EpisodeNumber, EpisodeEnd: c.EpisodeEnd, Thumb: c.Thumb,
-			Origin: c.Origin,
+			Origin: c.Origin, Overview: c.Overview, Logo: c.Logo, Genres: c.Genres, Certificate: c.Certificate,
+		}
+		for _, r := range c.Ratings {
+			out[i].Ratings = append(out[i].Ratings, store.RatingRef(r))
 		}
 	}
 	return out
