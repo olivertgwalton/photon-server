@@ -457,3 +457,31 @@ func TestAChapterTooSlowToPictureIsLeftWithout(t *testing.T) {
 		t.Errorf("took %s, want about the limit a chapter", took)
 	}
 }
+
+// A part a scan finds is due its previews at once; one the window's backfill finds is due in the
+// window, as Plex makes new items' as they are added and existing items' during maintenance.
+func TestAnAddedPartIsDueNowAndABackfilledOneInTheWindow(t *testing.T) {
+	f := newFixture(t)
+	_, part := f.film("heat")
+	due := func() domain.JobDue {
+		var d domain.JobDue
+		if err := f.db.QueryRow(t.Context(), `SELECT due FROM jobs WHERE kind = 'previews' AND subject = $1`, part.String()).Scan(&d); err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	if d := due(); d != domain.JobDueNow {
+		t.Errorf("a part just added is due %q, want now", d)
+	}
+	f.run(part)
+	if _, err := f.db.Exec(t.Context(), `DELETE FROM jobs`); err != nil {
+		t.Fatal(err)
+	}
+	f.setPreviews(domain.PreviewsChapters)
+	if n, err := f.st.QueuePreviews(t.Context()); err != nil || n != 1 {
+		t.Fatalf("the backfill queued %d parts (%v), want one", n, err)
+	}
+	if d := due(); d != domain.JobDueWindow {
+		t.Errorf("a part the backfill queued is due %q, want window", d)
+	}
+}

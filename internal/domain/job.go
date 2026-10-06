@@ -47,6 +47,20 @@ func JobStates() []JobState {
 
 // Backlog is how far the jobs of a kind have got: left to run, queued or running, and done since
 // the kind last had none left, so its total grows as more are queued, as Plex's activity does.
+// JobDue is when a job is meant to run: as soon as there is room, as one a scan queues for a part
+// it found is; or in the maintenance window, as the work the window's backfill queues is, Plex's
+// "existing items during the maintenance period".
+type JobDue string
+
+const (
+	JobDueNow    JobDue = "now"
+	JobDueWindow JobDue = "window"
+)
+
+func JobDues() []JobDue {
+	return []JobDue{JobDueNow, JobDueWindow}
+}
+
 type Backlog struct {
 	Kind JobKind
 	Left int
@@ -58,6 +72,7 @@ type Job struct {
 	Kind     JobKind
 	Subject  uuid.UUID
 	Attempts int
+	Due      JobDue
 }
 
 // About is the title, season or library a job is about, where its subject is one; a part's

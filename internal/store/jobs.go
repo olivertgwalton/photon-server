@@ -14,9 +14,9 @@ import (
 const maxAttempts = 5
 
 // enqueue adds a job inside the transaction whose write made it necessary, so the job and its
-// cause commit together. A job already queued for the subject stands; one running will run again
-// once it ends, since it may have read the subject before this write; a dead one gets a fresh
-// set of attempts, as its subject has changed.
+// cause commit together. A job already queued for the subject stands, due now if it was due in
+// the window; one running will run again once it ends, since it may have read the subject before
+// this write; a dead one gets a fresh set of attempts, as its subject has changed.
 func enqueue(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID) error {
 	return enqueueAfter(ctx, tx, kind, subject, 0)
 }
@@ -57,7 +57,7 @@ func insertJob(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUI
 			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
 			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END,
 			run_after = CASE WHEN jobs.state IN ('queued', 'dead') THEN excluded.run_after ELSE jobs.run_after END,
-			priority = greatest(jobs.priority, excluded.priority)`,
+			priority = greatest(jobs.priority, excluded.priority), due = 'now'`,
 		kind, subject, delay, priority)
 	return err
 }
@@ -116,7 +116,7 @@ func (s *Store) ClaimJobs(ctx context.Context, kinds []domain.JobKind, node uuid
 			ORDER BY priority DESC, id FOR UPDATE SKIP LOCKED LIMIT $4)
 		UPDATE jobs SET state = 'running', lease_until = now() + $2, attempts = attempts + 1, node_id = $3
 		FROM picked WHERE jobs.id = picked.id
-		RETURNING jobs.id, jobs.kind, jobs.subject, jobs.attempts`, kinds, lease, node, limit)
+		RETURNING jobs.id, jobs.kind, jobs.subject, jobs.attempts, jobs.due`, kinds, lease, node, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func (s *Store) PostponeJob(ctx context.Context, job domain.Job, delay time.Dura
 // RunningJobs answers the jobs being run now, on every node, the oldest first.
 func (s *Store) RunningJobs(ctx context.Context) ([]domain.Job, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, kind, subject, attempts FROM jobs WHERE state IN ('running', 'rerun') ORDER BY id`)
+		SELECT id, kind, subject, attempts, due FROM jobs WHERE state IN ('running', 'rerun') ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
