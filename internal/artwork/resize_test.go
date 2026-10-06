@@ -1,13 +1,17 @@
 package artwork
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
 	"image/png"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -72,5 +76,38 @@ func TestResized(t *testing.T) {
 	_ = f.Close()
 	if err != nil || format != "png" {
 		t.Errorf("a transparent logo came back as %q, %v; want PNG, keeping its transparency", format, err)
+	}
+}
+
+// A picture of a few bytes can claim to be 20000×20000; resizing it must not decode that.
+func TestAVastPictureIsAnsweredAsItIs(t *testing.T) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewGray(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatal(err)
+	}
+	b := buf.Bytes()
+	// The header chunk's width and height, then its checksum over type and data.
+	binary.BigEndian.PutUint32(b[16:], 20000)
+	binary.BigEndian.PutUint32(b[20:], 20000)
+	binary.BigEndian.PutUint32(b[29:], crc32.ChecksumIEEE(b[12:29]))
+	path := filepath.Join(t.TempDir(), "vast.png")
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	_, err = c.Resized(t.Context(), "vast", 320, func() (*os.File, error) { return os.Open(path) })
+	runtime.ReadMemStats(&after)
+	if !errors.Is(err, ErrNotResizable) {
+		t.Errorf("resizing a vast picture: %v, want it answered as it is", err)
+	}
+	if grew := after.TotalAlloc - before.TotalAlloc; grew > 64<<20 {
+		t.Errorf("resizing a %d-byte picture allocated %d MiB", len(b), grew>>20)
 	}
 }
