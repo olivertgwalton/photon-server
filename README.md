@@ -380,7 +380,10 @@ A profile with a password changes it itself with `PUT /api/v1/me/password` (`cur
 least 8 characters), which signs out every other device watching as that profile; wrong guesses are
 limited as sign-ins are. A household profile, one with no password, is only ever chosen on a
 signed-in device and cannot give itself one: an admin does, which lets it sign in by itself. It can
-still set a PIN with `PUT /api/v1/me/pin`.
+still set a PIN with `PUT /api/v1/me/pin`. Any profile renames itself with `PATCH /api/v1/me`
+(`{"name": "…"}`), as a Jellyfin user may, and an admin renames any; a name is unique, up to 64
+characters with no control characters, and trimmed. Every device shows the new name on its next
+request.
 
 A profile has a picture, as Jellyfin's users and Plex's Home users do: `POST /api/v1/me/avatar` with
 the image as the body sets the profile's own, and an admin sets anyone's at

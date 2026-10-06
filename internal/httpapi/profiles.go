@@ -5,6 +5,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 type profileListingJSON struct {
@@ -95,5 +96,22 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if !a.answered(w, r, a.svc.Auth.ChangePassword(r.Context(), session, req.Current, req.New)) {
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// renameSelf is a profile changing its own name, as a Jellyfin user may. Names are unique.
+func (a *API) renameSelf(w http.ResponseWriter, r *http.Request) {
+	var req nameJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	name, ok := domain.ProfileName(req.Name)
+	if !ok {
+		writeProblem(w, a.logger, codeInvalidBody, badName)
+		return
+	}
+	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), sessionOf(r).Profile.ID, store.ProfileChange{Name: name})
+	if !a.answered(w, r, err) {
+		writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(p))
 	}
 }

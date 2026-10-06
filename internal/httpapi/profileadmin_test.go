@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"log/slog"
 	"net/http"
@@ -38,7 +39,12 @@ func (f *fakeProfiles) SetProfile(_ context.Context, id uuid.UUID, c store.Profi
 	if c.Role != "" && c.Role != domain.RoleAdmin {
 		return domain.Profile{}, store.ErrLastAdmin
 	}
-	return oliver, nil
+	if c.Name == "Kid" {
+		return domain.Profile{}, store.ErrProfileExists
+	}
+	renamed := oliver
+	renamed.Name = cmp.Or(c.Name, oliver.Name)
+	return renamed, nil
 }
 
 func (f *fakeProfiles) RemoveProfile(_ context.Context, id uuid.UUID) (string, error) {
@@ -104,5 +110,31 @@ func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 	}
 	if got, want := told.kinds(), []domain.EventKind{domain.EventProfileAdded, domain.EventProfileAdded}; !slices.Equal(got, want) {
 		t.Errorf("told %v, want the two added", got)
+	}
+}
+
+// A profile renames itself, as a Jellyfin user may, to a name no other has; an admin renames any.
+func TestAProfileIsRenamed(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, ProfileAdmin: &fakeProfiles{hashes: map[string]string{}}})
+	for _, tc := range []struct {
+		method, target, body string
+		want                 int
+		said                 string
+	}{
+		{http.MethodPatch, "/api/v1/me", `{"name": "  Olly  "}`, http.StatusOK, `"name":"Olly"`},
+		{http.MethodPatch, "/api/v1/me", `{"name": "Kid"}`, http.StatusConflict, ""},
+		{http.MethodPatch, "/api/v1/me", `{"name": "   "}`, http.StatusBadRequest, "64 characters"},
+		{http.MethodPatch, "/api/v1/me", `{"name": "` + strings.Repeat("o", 65) + `"}`, http.StatusBadRequest, ""},
+		{http.MethodPatch, "/api/v1/me", `{"name": "Ol\u0007ly"}`, http.StatusBadRequest, ""},
+		{http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"name": " "}`, http.StatusBadRequest, ""},
+		{http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"name": "Oliver W"}`, http.StatusOK, `"name":"Oliver W"`},
+	} {
+		req := httptest.NewRequest(tc.method, tc.target, strings.NewReader(tc.body))
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.said) {
+			t.Errorf("%s %s %s = %d %s, want %d %s", tc.method, tc.target, tc.body, rec.Code, rec.Body, tc.want, tc.said)
+		}
 	}
 }
