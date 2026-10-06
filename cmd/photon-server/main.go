@@ -146,13 +146,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	logger.InfoContext(ctx, "media tools",
-		slog.String("ffmpeg", tools.FFmpeg.Path), slog.String("ffmpeg_version", tools.FFmpeg.Version),
-		slog.String("ffprobe", tools.FFprobe.Path), slog.String("ffprobe_version", tools.FFprobe.Version),
-		slog.String("yt_dlp", tools.YTDLP.Path), slog.String("yt_dlp_version", tools.YTDLP.Version))
-	if !tools.Chromaprint {
-		logger.WarnContext(ctx, "intros and credits are found from chapters only: ffmpeg has no chromaprint muxer")
-	}
+	logTools(ctx, logger, tools)
 	st, err := store.Open(ctx, databaseURL, logger)
 	if err != nil {
 		return err
@@ -249,17 +243,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	plugins := plugin.New(st)
-	// TMDB runs before TheTVDB and OMDb, as its match may give them an id to find a title by.
-	providers := provider.NewRegistry(plugins.Load,
-		tmdb.New(cmp.Or(os.Getenv("PHOTON_TMDB_TOKEN"), tmdb.DefaultToken), lang, cache),
-		tvdb.New(cmp.Or(os.Getenv("PHOTON_TVDB_KEY"), tvdb.DefaultKey), os.Getenv("PHOTON_TVDB_PIN"), lang, cache),
-		mdblist.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceMDBList)
-		}, cache),
-		omdb.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceOMDb)
-		}, cache),
-	)
+	providers := metadataProviders(st, plugins, lang, cache)
 	sessions := playback.NewSessions(cache, st, remuxer, hub.Raise, node)
 	listen := cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen)
 	setup := httpapi.Setup{
@@ -297,7 +281,8 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	reader := func(kind domain.JobKind, h jobs.Handler) *jobs.Worker {
 		return jobs.NewWorker(st, logger, node, mediaSlots, map[domain.JobKind]jobs.Handler{kind: h}, hub, gate)
 	}
-	readers := []*jobs.Worker{
+	workers := []*jobs.Worker{
+		scanner, matcher, notifier,
 		reader(domain.JobKeyframes, analysis.Keyframes(st)),
 		reader(domain.JobKeyframeWalk, analysis.WalkKeyframes(st, tools)),
 		reader(domain.JobMarkers, analysis.Markers(st, tools.Fingerprint)),
@@ -307,23 +292,19 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	// transcode slot its node's playbacks may take, so they never starve them. A conversion is asked
 	// for by someone waiting on it, as a playback is, so it takes no gate: on a server played every
 	// evening, one held back by each playback would not be ready for days.
-	converter := jobs.NewWorker(st, logger, node, playback.MaxConversions, map[domain.JobKind]jobs.Handler{
+	workers = append(workers, jobs.NewWorker(st, logger, node, playback.MaxConversions, map[domain.JobKind]jobs.Handler{
 		domain.JobConvert: conversions.Convert,
-	}, hub, nil)
+	}, hub, nil))
 	watcher := watch.New(st, logger)
 	background, stopBackground := context.WithCancel(ctx)
 	var wg sync.WaitGroup
 	// On the signal's context, not background's, so its streams end before Shutdown waits on them.
 	wg.Go(func() { hub.Run(ctx) })
 	wg.Go(func() { scheduler.Run(background) })
-	wg.Go(func() { scanner.Run(background) })
-	wg.Go(func() { matcher.Run(background) })
-	wg.Go(func() { notifier.Run(background) })
 	wg.Go(func() { gate.Run(background) })
-	for _, r := range readers {
-		wg.Go(func() { r.Run(background) })
+	for _, w := range workers {
+		wg.Go(func() { w.Run(background) })
 	}
-	wg.Go(func() { converter.Run(background) })
 	wg.Go(func() { sweepPlaybacks(background, sessions, remuxer, logger) })
 	wg.Go(func() { pruneConversions(background, conversions, logger) })
 	if address := os.Getenv("PHOTON_NODE_ADDRESS"); address != "" {
@@ -344,10 +325,14 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		wg.Wait()
 	}()
 
+	logger.InfoContext(ctx, "serving", slog.String("addr", srv.Addr), slog.String("version", info.Version))
+	return listenUntilDone(ctx, srv)
+}
+
+// listenUntilDone serves until ctx ends, then gives open requests shutdownGrace to finish.
+func listenUntilDone(ctx context.Context, srv *http.Server) error {
 	served := make(chan error, 1)
 	go func() { served <- srv.ListenAndServe() }()
-	logger.InfoContext(ctx, "serving", slog.String("addr", srv.Addr), slog.String("version", info.Version))
-
 	select {
 	case err := <-served:
 		return err
@@ -362,6 +347,31 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	return nil
+}
+
+func logTools(ctx context.Context, logger *slog.Logger, tools media.Tools) {
+	logger.InfoContext(ctx, "media tools",
+		slog.String("ffmpeg", tools.FFmpeg.Path), slog.String("ffmpeg_version", tools.FFmpeg.Version),
+		slog.String("ffprobe", tools.FFprobe.Path), slog.String("ffprobe_version", tools.FFprobe.Version),
+		slog.String("yt_dlp", tools.YTDLP.Path), slog.String("yt_dlp_version", tools.YTDLP.Version))
+	if !tools.Chromaprint {
+		logger.WarnContext(ctx, "intros and credits are found from chapters only: ffmpeg has no chromaprint muxer")
+	}
+}
+
+// metadataProviders runs TMDB before TheTVDB and OMDb, as its match may give them an id to find a
+// title by.
+func metadataProviders(st *store.Store, plugins *plugin.Plugins, lang string, cache *kv.KV) *provider.Registry {
+	return provider.NewRegistry(plugins.Load,
+		tmdb.New(cmp.Or(os.Getenv("PHOTON_TMDB_TOKEN"), tmdb.DefaultToken), lang, cache),
+		tvdb.New(cmp.Or(os.Getenv("PHOTON_TVDB_KEY"), tvdb.DefaultKey), os.Getenv("PHOTON_TVDB_PIN"), lang, cache),
+		mdblist.New(func(ctx context.Context) (map[string]string, error) {
+			return st.ProviderSettings(ctx, domain.SourceMDBList)
+		}, cache),
+		omdb.New(func(ctx context.Context) (map[string]string, error) {
+			return st.ProviderSettings(ctx, domain.SourceOMDb)
+		}, cache),
+	)
 }
 
 // defaultWebDir is where the image puts the web app's build.
