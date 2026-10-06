@@ -23,7 +23,7 @@ type sessionStore interface {
 }
 
 type progressStore interface {
-	SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration) (domain.Reach, error)
+	SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration, before domain.Reach) (domain.Reach, error)
 	RecordPlay(ctx context.Context, p domain.Playback, stopped time.Time, position time.Duration) error
 }
 
@@ -64,11 +64,14 @@ func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position
 	if err != nil {
 		return "", err
 	}
-	reach, err := s.saved.SaveProgress(ctx, profile, p.Item, position)
+	reach, err := s.saved.SaveProgress(ctx, profile, p.Item, position, p.Reached)
 	if err != nil {
 		return "", err
 	}
 	s.raise(ctx, domain.Event{Kind: domain.EventUserDataChanged, Profile: profile, Item: p.Item})
+	if reach == domain.ReachEnd {
+		p.Reached = reach
+	}
 	was := p.State
 	p.Position, p.State, p.Updated = position, state, time.Now()
 	if err := s.live.SavePlayback(ctx, p, sessionLife); err != nil {
@@ -108,7 +111,7 @@ func (s *Sessions) End(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Duration) (domain.Reach, error) {
-	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position)
+	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position, p.Reached)
 	if err != nil {
 		return "", err
 	}

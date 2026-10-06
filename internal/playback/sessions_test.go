@@ -30,7 +30,7 @@ func (m memory) EndPlayback(_ context.Context, id uuid.UUID) error {
 
 type positions map[uuid.UUID]time.Duration
 
-func (p positions) SaveProgress(_ context.Context, _, item uuid.UUID, at time.Duration) (domain.Reach, error) {
+func (p positions) SaveProgress(_ context.Context, _, item uuid.UUID, at time.Duration, _ domain.Reach) (domain.Reach, error) {
 	p[item] = at
 	return domain.ReachResumable, nil
 }
@@ -120,5 +120,38 @@ func TestAnAdminEndsAnyonesPlaybackWhereItGotTo(t *testing.T) {
 	last := told[len(told)-1]
 	if shown, _ := last.Details["playback"].(NowPlaying); last.Kind != domain.EventPlaybackStopped || shown.PositionMS != (40*time.Minute).Milliseconds() || shown.Title.ID != film {
 		t.Errorf("told %v %+v, want it stopped at 40 minutes", last.Kind, last.Details)
+	}
+}
+
+// ends answers the end for every report, and keeps how far each report said the viewing had got.
+type ends struct{ before []domain.Reach }
+
+func (e *ends) SaveProgress(_ context.Context, _, _ uuid.UUID, _ time.Duration, before domain.Reach) (domain.Reach, error) {
+	e.before = append(e.before, before)
+	return domain.ReachEnd, nil
+}
+
+func (*ends) RecordPlay(context.Context, domain.Playback, time.Time, time.Duration) error { return nil }
+
+func TestAPlaybackTellsTheStoreItHasReachedTheEnd(t *testing.T) {
+	saved := &ends{}
+	s := NewSessions(memory{}, saved, func(uuid.UUID) {}, func(context.Context, domain.Event) {}, uuid.NewV7())
+	ctx := t.Context()
+	oliver := uuid.NewV7()
+	p, err := s.Start(ctx, domain.PlayDirect, card(oliver, uuid.NewV7()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if _, err := s.Progress(ctx, oliver, p.ID, time.Hour, domain.StatePlaying); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.Stop(ctx, oliver, p.ID, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	want := []domain.Reach{"", domain.ReachEnd, domain.ReachEnd, domain.ReachEnd}
+	if !slices.Equal(saved.before, want) {
+		t.Errorf("reports said the viewing had got %v, want %v: only the first may count a play", saved.before, want)
 	}
 }

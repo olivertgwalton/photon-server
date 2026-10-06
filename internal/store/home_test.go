@@ -85,14 +85,14 @@ func TestHome(t *testing.T) {
 		t.Errorf("next up = %v, want the episode after the last one watched, specials aside", got)
 	}
 
-	if _, err := s.SaveProgress(ctx, profile.ID, episode(1, 2), 20*time.Minute); err != nil {
+	if _, err := s.SaveProgress(ctx, profile.ID, episode(1, 2), 20*time.Minute, domain.ReachStart); err != nil {
 		t.Fatal(err)
 	}
 	heat, err := s.q.Item.WithContext(ctx).Where(s.q.Item.Kind.Eq(string(domain.ItemMovie))).Take()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveProgress(ctx, profile.ID, uuid.UUID(heat.ID), 30*time.Minute); err != nil {
+	if _, err := s.SaveProgress(ctx, profile.ID, uuid.UUID(heat.ID), 30*time.Minute, domain.ReachStart); err != nil {
 		t.Fatal(err)
 	}
 	got := home()
@@ -228,7 +228,7 @@ func TestNextEpisode(t *testing.T) {
 	if got := next(show); got != "S1E3" {
 		t.Errorf("a show with S1E2 watched starts at %s, want the one after it", got)
 	}
-	if _, err := s.SaveProgress(ctx, profile.ID, title(domain.ItemEpisode, 2, 1), 20*time.Minute); err != nil {
+	if _, err := s.SaveProgress(ctx, profile.ID, title(domain.ItemEpisode, 2, 1), 20*time.Minute, domain.ReachStart); err != nil {
 		t.Fatal(err)
 	}
 	if got := next(show); got != "S2E1" {
@@ -325,7 +325,7 @@ func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveProgress(ctx, profile.ID, episode(1, 3), time.Minute); err != nil {
+	if _, err := s.SaveProgress(ctx, profile.ID, episode(1, 3), time.Minute, domain.ReachStart); err != nil {
 		t.Fatal(err)
 	}
 	after, err := s.Title(ctx, profile.ID, episode(1, 3))

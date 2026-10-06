@@ -28,7 +28,9 @@ type TitleState struct {
 
 // SaveProgress records that a profile stopped a film or episode at position, and answers how far
 // that got: too near the start to keep, somewhere to resume, or far enough to count as watched.
-func (s *Store) SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration) (domain.Reach, error) {
+// before is how far the viewing had already got: the play is counted as it first reaches the end,
+// once however often a player reports from there, as Jellyfin counts a play and Plex scrobbles.
+func (s *Store) SaveProgress(ctx context.Context, profile, item uuid.UUID, position time.Duration, before domain.Reach) (domain.Reach, error) {
 	i := s.q.Item
 	row, err := i.WithContext(ctx).Where(i.ID.Eq(model.UUID(item))).Take()
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -43,7 +45,10 @@ func (s *Store) SaveProgress(ctx context.Context, profile, item uuid.UUID, posit
 	}
 	reach := domain.ReachOf(position, time.Duration(lengths[row.ID])*time.Millisecond)
 	if reach == domain.ReachEnd {
-		return reach, s.watched(ctx, profile, []*model.Item{row})
+		if before == domain.ReachEnd {
+			return reach, s.watched(ctx, profile, []*model.Item{row})
+		}
+		return reach, s.played(ctx, profile, row)
 	}
 	state := &model.WatchState{ProfileID: model.UUID(profile), ItemID: row.ID}
 	set := []string{"position_ms"}
@@ -68,17 +73,31 @@ func (s *Store) MarkWatched(ctx context.Context, profile, item uuid.UUID) error 
 	return s.watched(ctx, profile, leaves)
 }
 
+// watched marks titles watched without counting a play: one marked by hand has been played at
+// least once, and keeps when it was first watched, as Jellyfin's MarkPlayed does.
 func (s *Store) watched(ctx context.Context, profile uuid.UUID, items []*model.Item) error {
 	if len(items) == 0 {
 		return nil
 	}
-	// A play counted adds to the plays before it, which GORM's upsert cannot say.
 	return s.q.WatchState.WithContext(ctx).UnderlyingDB().Exec(`
 		INSERT INTO watch_state (profile_id, item_id, plays, watched_at, last_played_at)
 		SELECT ?, id, 1, now(), now() FROM items WHERE id IN ?
 		ON CONFLICT (profile_id, item_id) DO UPDATE SET
-			position_ms = 0, plays = watch_state.plays + 1, watched_at = now(), last_played_at = now()`,
+			position_ms = 0, plays = greatest(watch_state.plays, 1),
+			watched_at = coalesce(watch_state.watched_at, now()), last_played_at = now()`,
 		model.UUID(profile), ids(items)).Error
+}
+
+// played counts a viewing that reached the end.
+func (s *Store) played(ctx context.Context, profile uuid.UUID, item *model.Item) error {
+	// A play counted adds to the plays before it, which GORM's upsert cannot say.
+	return s.q.WatchState.WithContext(ctx).UnderlyingDB().Exec(`
+		INSERT INTO watch_state (profile_id, item_id, plays, watched_at, last_played_at)
+		VALUES (?, ?, 1, now(), now())
+		ON CONFLICT (profile_id, item_id) DO UPDATE SET
+			position_ms = 0, plays = watch_state.plays + 1,
+			watched_at = coalesce(watch_state.watched_at, now()), last_played_at = now()`,
+		model.UUID(profile), item.ID).Error
 }
 
 // MarkUnwatched forgets that a film or episode, or every episode of a season or show, was

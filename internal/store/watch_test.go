@@ -67,11 +67,11 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 		at   time.Duration
 		want domain.Reach
 	}{{2 * time.Minute, domain.ReachStart}, {20 * time.Minute, domain.ReachResumable}} {
-		if reach, err := s.SaveProgress(ctx, oliver.ID, second, p.at); err != nil || reach != p.want {
+		if reach, err := s.SaveProgress(ctx, oliver.ID, second, p.at, domain.ReachStart); err != nil || reach != p.want {
 			t.Errorf("progress at %v: %s, %v; want %s", p.at, reach, err, p.want)
 		}
 	}
-	if reach, err := s.SaveProgress(ctx, oliver.ID, first, 58*time.Minute); err != nil || reach != domain.ReachEnd {
+	if reach, err := s.SaveProgress(ctx, oliver.ID, first, 58*time.Minute, domain.ReachStart); err != nil || reach != domain.ReachEnd {
 		t.Errorf("progress near the end: %s, %v; want it watched", reach, err)
 	}
 	eps := season(oliver.ID).Episodes
@@ -111,7 +111,64 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 	if page(oliver.ID).State.FavouriteAt != nil {
 		t.Error("still a favourite after unfavouriting")
 	}
-	if _, err := s.SaveProgress(ctx, oliver.ID, uuid.NewV7(), time.Minute); !errors.Is(err, ErrNotFound) {
+	if _, err := s.SaveProgress(ctx, oliver.ID, uuid.NewV7(), time.Minute, domain.ReachStart); !errors.Is(err, ErrNotFound) {
 		t.Errorf("progress on no title: %v, want ErrNotFound", err)
+	}
+}
+
+func TestAPlaybackIsOnePlayHoweverOftenItReportsTheEnd(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	heat := []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+		RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{Duration: time.Hour},
+	}}}}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Copies: heat}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	row, err := s.q.Item.WithContext(ctx).Where(s.q.Item.Kind.Eq(string(domain.ItemMovie))).Take()
+	if err != nil {
+		t.Fatal(err)
+	}
+	film := uuid.UUID(row.ID)
+	state := func() TitleState {
+		t.Helper()
+		p, err := s.Title(ctx, oliver.ID, film)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.State
+	}
+
+	// A player reports every ten seconds through the last tenth, then stops at the end: its
+	// playback has reached the end since the first of those reports.
+	before := domain.ReachResumable
+	for at := 55 * time.Minute; at <= time.Hour; at += 10 * time.Second {
+		reach, err := s.SaveProgress(ctx, oliver.ID, film, at, before)
+		if err != nil || reach != domain.ReachEnd {
+			t.Fatalf("progress at %v: %s, %v; want the end", at, reach, err)
+		}
+		before = reach
+	}
+	first := state()
+	if first.Plays != 1 || first.WatchedAt == nil || first.PositionMS != 0 {
+		t.Fatalf("after one playback = %+v, want one play, watched, no position", first)
+	}
+
+	if err := s.MarkWatched(ctx, oliver.ID, film); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveProgress(ctx, oliver.ID, film, time.Hour, domain.ReachResumable); err != nil {
+		t.Fatal(err)
+	}
+	if again := state(); again.Plays != 2 || !again.WatchedAt.Equal(*first.WatchedAt) {
+		t.Errorf("after marking it and watching it again = %+v, want a second play and the first watched time %v", again, first.WatchedAt)
 	}
 }
