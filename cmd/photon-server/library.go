@@ -17,12 +17,12 @@ import (
 )
 
 const libraryUsage = `usage:
-  photon-server library add -name NAME -kind movies|shows ROOT
-  photon-server library set -name NAME [-sources nfo,tmdb,tvdb] [-extras trailer,featurette|none]
-                                       [-monitor realtime|off] [-previews off|chapters|all]
-                                       [-markers off|chapters|all]
-                                       [-keyframes index|full|off]
-  photon-server library list`
+  photon-server library add -name NAME -kind movies|shows [SETTINGS] ROOT
+  photon-server library set -name NAME SETTINGS
+  photon-server library list
+SETTINGS, any of:
+  -sources nfo,tmdb,tvdb  -extras trailer,featurette|none  -monitor realtime|off
+  -previews off|chapters|all  -markers off|chapters|all  -keyframes index|full|off`
 
 func library(ctx context.Context, logger *slog.Logger, databaseURL string, out io.Writer, args []string) error {
 	if len(args) == 0 {
@@ -48,7 +48,12 @@ func addLibrary(ctx context.Context, st *store.Store, out io.Writer, args []stri
 	fs := flag.NewFlagSet("library add", flag.ContinueOnError)
 	name := fs.String("name", "", "the library's name")
 	kind := fs.String("kind", "", "movies or shows")
+	settings := settingsFlags(fs)
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	change, given, err := settings.change()
+	if err != nil {
 		return err
 	}
 	if *name == "" || fs.NArg() != 1 {
@@ -71,56 +76,86 @@ func addLibrary(ctx context.Context, st *store.Store, out io.Writer, args []stri
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(out, "added %s (%s) at %s\n", lib.Name, lib.Kind, lib.Root)
+	// Set before the first scan is queued, so it reads the library as asked.
+	if given {
+		if err := st.SetLibrary(ctx, lib.ID, change); err != nil {
+			return err
+		}
+	}
+	if err := st.ScanLibrary(ctx, lib.ID, 0); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(out, "added %s (%s) at %s; its scan is queued\n", lib.Name, lib.Kind, lib.Root)
 	return err
+}
+
+// librarySettings are the flags that set how a library is read, and the change they ask for.
+type librarySettings struct {
+	sources, extras, monitor, previews, markers, keyframes *string
+}
+
+func settingsFlags(fs *flag.FlagSet) librarySettings {
+	return librarySettings{
+		sources:   fs.String("sources", "", "where its metadata comes from, most trusted first"),
+		extras:    fs.String("extras", "", "the kinds of video it keeps providers' links to, or none"),
+		monitor:   fs.String("monitor", "", "realtime to scan it as its files change, off for the schedule alone"),
+		previews:  fs.String("previews", "", "off, chapters for an image per chapter, or all for trickplay sheets too"),
+		markers:   fs.String("markers", "", "off, chapters for the markers chapters name, or all to compare seasons' sound too"),
+		keyframes: fs.String("keyframes", "", "index to read keyframes from a file's own index, full to read a file with none whole, or off"),
+	}
+}
+
+// change answers what the flags ask for, and false where none was given.
+func (f librarySettings) change() (store.LibraryChange, bool, error) {
+	var change store.LibraryChange
+	var err error
+	if *f.sources != "" {
+		if change.Sources, err = domain.ParseMetadataSources(*f.sources); err != nil {
+			return change, false, err
+		}
+	}
+	if *f.extras != "" {
+		if change.RemoteExtras, err = domain.ParseExtraKinds(*f.extras); err != nil {
+			return change, false, err
+		}
+	}
+	if *f.monitor != "" {
+		if change.Monitor, err = domain.ParseMonitor(*f.monitor); err != nil {
+			return change, false, err
+		}
+	}
+	if *f.previews != "" {
+		if change.Previews, err = domain.ParsePreviewLevel(*f.previews); err != nil {
+			return change, false, err
+		}
+	}
+	if *f.markers != "" {
+		if change.Markers, err = domain.ParseMarkerDetection(*f.markers); err != nil {
+			return change, false, err
+		}
+	}
+	if *f.keyframes != "" {
+		if change.Keyframes, err = domain.ParseKeyframeMode(*f.keyframes); err != nil {
+			return change, false, err
+		}
+	}
+	given := *f.sources != "" || *f.extras != "" || *f.monitor != "" || *f.previews != "" || *f.markers != "" || *f.keyframes != ""
+	return change, given, nil
 }
 
 func setLibrary(ctx context.Context, st *store.Store, out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("library set", flag.ContinueOnError)
 	name := fs.String("name", "", "the library's name")
-	sources := fs.String("sources", "", "where its metadata comes from, most trusted first")
-	extras := fs.String("extras", "", "the kinds of video it keeps providers' links to, or none")
-	monitor := fs.String("monitor", "", "realtime to scan it as its files change, off for the schedule alone")
-	previews := fs.String("previews", "", "off, chapters for an image per chapter, or all for trickplay sheets too")
-	markers := fs.String("markers", "", "off, chapters for the markers chapters name, or all to compare seasons' sound too")
-	keyframes := fs.String("keyframes", "", "index to read keyframes from a file's own index, full to read a file with none whole, or off")
+	settings := settingsFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *name == "" || (*sources == "" && *extras == "" && *monitor == "" && *previews == "" && *markers == "" && *keyframes == "") || fs.NArg() != 0 {
+	change, given, err := settings.change()
+	if err != nil {
+		return err
+	}
+	if *name == "" || !given || fs.NArg() != 0 {
 		return errors.New(libraryUsage)
-	}
-	var change store.LibraryChange
-	var err error
-	if *sources != "" {
-		if change.Sources, err = domain.ParseMetadataSources(*sources); err != nil {
-			return err
-		}
-	}
-	if *extras != "" {
-		if change.RemoteExtras, err = domain.ParseExtraKinds(*extras); err != nil {
-			return err
-		}
-	}
-	if *monitor != "" {
-		if change.Monitor, err = domain.ParseMonitor(*monitor); err != nil {
-			return err
-		}
-	}
-	if *previews != "" {
-		if change.Previews, err = domain.ParsePreviewLevel(*previews); err != nil {
-			return err
-		}
-	}
-	if *markers != "" {
-		if change.Markers, err = domain.ParseMarkerDetection(*markers); err != nil {
-			return err
-		}
-	}
-	if *keyframes != "" {
-		if change.Keyframes, err = domain.ParseKeyframeMode(*keyframes); err != nil {
-			return err
-		}
 	}
 	libs, err := st.Libraries(ctx)
 	if err != nil {
