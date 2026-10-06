@@ -499,15 +499,15 @@ func (s *Store) Similar(ctx context.Context, profile, id uuid.UUID) ([]Card, err
 			GROUP BY other.item_id
 		), candidates AS (
 			SELECT i.id, i.released_desc, i.added_at, ARRAY(SELECT jsonb_array_elements_text(coalesce(i.genres, '[]'))) AS genre_list
-			FROM items i, src
-			WHERE i.kind = src.kind AND i.id NOT IN (SELECT same_title(@id))
+			FROM items i, src, src_genres g
+			WHERE i.kind = src.kind AND (i.genres ?| g.genres OR i.id IN (SELECT item_id FROM shared_people))
+				AND i.id NOT IN (SELECT same_title(@id))
 				AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i))
 		), ranked AS (
 			SELECT c.id, c.released_desc, c.added_at,
 				cardinality(ARRAY(SELECT unnest(c.genre_list) INTERSECT SELECT unnest(g.genres))) + coalesce(p.shared, 0) AS score
 			FROM candidates c CROSS JOIN src_genres g
 			LEFT JOIN shared_people p ON p.item_id = c.id
-			WHERE c.genre_list && g.genres OR p.item_id IS NOT NULL
 			ORDER BY score DESC, c.released_desc DESC NULLS LAST, c.added_at, c.id
 			-- Kept whole, so only the titles down the ranking until enough are shown are asked
 			-- whether they are the one of their title shown, not every candidate.
