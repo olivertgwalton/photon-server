@@ -4,6 +4,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"testing"
@@ -214,5 +215,73 @@ func TestSimilarTitlesShareSomething(t *testing.T) {
 	}
 	if got, _ = s.Similar(ctx, uuid.UUID{}, ids["Heat"]); slices.ContainsFunc(got, func(c Card) bool { return c.Title == "Amélie" }) {
 		t.Errorf("a fourth genre counted: %+v", got)
+	}
+}
+
+func TestTwoMatchesCreditingSomeoneNewAtOnceShareThem(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shows []uuid.UUID
+	for _, name := range []string{"Andor", "Ahsoka"} {
+		episode := Episode{
+			Season: 1, Episodes: []int{1}, Title: name, Folder: name + "/Season 1", ByNumber: true,
+			Copies: []Copy{{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &media.Facts{}}}}},
+		}
+		if _, err := s.SaveShowFolder(ctx, lib.ID, name+"/Season 1", []byte("v1"), Show{Title: name, Folder: name}, []Episode{episode}, nil); err != nil {
+			t.Fatal(err)
+		}
+		i := s.q.Item
+		show, err := i.WithContext(ctx).Where(i.Kind.Eq(string(domain.ItemShow)), i.Title.Eq(name)).Take()
+		if err != nil {
+			t.Fatal(err)
+		}
+		shows = append(shows, uuid.UUID(show.ID))
+	}
+	for round := range 3 {
+		// The same thirty people, new to the server, cast in both shows and guests in their episodes.
+		var cast []domain.Credit
+		for n := range 30 {
+			cast = append(cast, domain.Credit{
+				Name: fmt.Sprint("Actor ", n), Kind: domain.CreditActor, Role: "Rebel",
+				IDs: map[domain.Provider]string{domain.ProviderTMDB: fmt.Sprint(round, "-", n)},
+			})
+		}
+		start := make(chan struct{})
+		errs := make(chan error, len(shows))
+		for _, show := range shows {
+			go func() {
+				<-start
+				errs <- s.SaveIdentity(ctx, show, domain.SourceTMDB, domain.Metadata{Credits: cast},
+					map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Credits: cast[:5]}}}})
+			}()
+		}
+		close(start)
+		for range shows {
+			if err := <-errs; err != nil {
+				t.Fatalf("round %d: %v", round, err)
+			}
+		}
+		var credited [][]uuid.UUID
+		for _, show := range shows {
+			page, err := s.Title(ctx, uuid.UUID{}, show)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var people []uuid.UUID
+			for _, c := range page.Credits {
+				people = append(people, c.PersonID)
+			}
+			credited = append(credited, people)
+		}
+		if len(credited[0]) != len(cast) || !slices.Equal(credited[0], credited[1]) {
+			t.Errorf("round %d: credited %v and %v, want the same %d people on both", round, credited[0], credited[1], len(cast))
+		}
+		if found, _, _ := s.SearchPeople(ctx, "Actor 7", 0, 10); len(found) != round+1 {
+			t.Errorf("round %d: %d people named Actor 7, want one a round", round, len(found))
+		}
 	}
 }
