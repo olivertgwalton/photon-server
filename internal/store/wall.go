@@ -74,7 +74,9 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, in
 	if p.Order == domain.Descending {
 		dir = "DESC"
 	}
-	var key string
+	// What has no value to sort by comes last whichever way the rest run. The columns are never
+	// null, and saying so of them would stop their indexes reading a page in descending order.
+	var key, nulls string
 	switch p.Sort {
 	case domain.SortAdded:
 		key = "items.added_at"
@@ -84,19 +86,18 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, in
 			key = "items.released_desc"
 		}
 	case domain.SortRating:
-		key = "(SELECT max(r.score) FROM ratings r WHERE r.item_id = items.id AND r.site = @sort_site)"
+		key, nulls = "(SELECT max(r.score) FROM ratings r WHERE r.item_id = items.id AND r.site = @sort_site)", " NULLS LAST"
 		args["sort_site"] = p.RatingSite
 	case domain.SortRuntime:
-		key = "(SELECT max(v.duration_ms) FROM versions v WHERE v.item_id = items.id AND v.missing_since IS NULL)"
+		key, nulls = "(SELECT max(v.duration_ms) FROM versions v WHERE v.item_id = items.id AND v.missing_since IS NULL)", " NULLS LAST"
 	case domain.SortPlayed:
-		key = "(SELECT max(w.last_played_at) FROM watch_state w WHERE w.profile_id = @profile AND w.item_id IN (" + episodesOf + "))"
+		key, nulls = "(SELECT max(w.last_played_at) FROM watch_state w WHERE w.profile_id = @profile AND w.item_id IN ("+episodesOf+"))", " NULLS LAST"
 	case domain.SortTitle:
 		key = "items.sort_title"
 	}
 	args["offset"], args["limit"] = p.Offset, p.Limit
-	// What has no value to sort by comes last whichever way the rest run.
 	rows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` `+titles+`
-		ORDER BY `+key+` `+dir+` NULLS LAST, items.id `+dir+` OFFSET @offset LIMIT @limit`, args)
+		ORDER BY `+key+` `+dir+nulls+`, items.id `+dir+` OFFSET @offset LIMIT @limit`, args)
 	if err != nil {
 		return nil, 0, err
 	}
