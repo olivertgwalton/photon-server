@@ -27,12 +27,9 @@ type SearchQuery struct {
 // Search answers a page of the matching titles, and how many match in all: one named exactly what
 // was typed, then those starting with it, then the closest matches.
 func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error) {
-	words := strings.FieldsFunc(q.Text, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
-	if len(words) == 0 {
+	query := prefixes(q.Text)
+	if query == "" {
 		return []Card{}, 0, nil
-	}
-	for i, w := range words {
-		words[i] = w + ":*"
 	}
 	// gen cannot write a full-text match, so this one query is SQL.
 	matching := `
@@ -45,7 +42,7 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error
 		library = new(model.UUID(q.Library))
 	}
 	args := map[string]any{
-		"movie": domain.ItemMovie, "show": domain.ItemShow, "collection": domain.ItemCollection, "query": strings.Join(words, " & "),
+		"movie": domain.ItemMovie, "show": domain.ItemShow, "collection": domain.ItemCollection, "query": query,
 		"text": q.Text, "library": library, "offset": q.Offset, "limit": q.Limit, "profile": q.Profile.String(),
 	}
 	db := s.q.Item.WithContext(ctx).UnderlyingDB()
@@ -77,14 +74,12 @@ type PersonRef struct {
 // word asked for, as titles are matched, those whose names start with it first, then the most
 // credited; and how many match in all.
 func (s *Store) SearchPeople(ctx context.Context, text string, offset, limit int) ([]PersonRef, int64, error) {
-	words := strings.FieldsFunc(text, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
-	if len(words) == 0 {
+	query := prefixes(text)
+	if query == "" {
 		return []PersonRef{}, 0, nil
 	}
-	db := s.q.Person.WithContext(ctx).UnderlyingDB().Table("people p")
-	for _, w := range words {
-		db = db.Where("(' ' || search_text(p.name)) LIKE '% ' || search_text(?) || '%'", w)
-	}
+	db := s.q.Person.WithContext(ctx).UnderlyingDB().Table("people p").
+		Where("to_tsvector('simple', search_text(p.name)) @@ to_tsquery('simple', search_text(?))", query)
 	var total int64
 	if err := db.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -106,4 +101,13 @@ func (s *Store) SearchPeople(ctx context.Context, text string, offset, limit int
 		}
 	}
 	return out, total, err
+}
+
+// prefixes is a full-text query for every word typed as the start of a word, "" for no words.
+func prefixes(text string) string {
+	words := strings.FieldsFunc(text, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	for i, w := range words {
+		words[i] = w + ":*"
+	}
+	return strings.Join(words, " & ")
 }
