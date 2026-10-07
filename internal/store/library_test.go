@@ -211,11 +211,11 @@ func TestAProfileKeepsItsLibrariesInItsOwnOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ada, err := s.AddProfile(ctx, "Ada", domain.RoleMember, "")
+	ada, err := s.AddProfile(ctx, "Ada", domain.RoleMember, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
-	kids, err := s.AddProfile(ctx, "Kids", domain.RoleMember, "")
+	kids, err := s.AddProfile(ctx, "Kids", domain.RoleMember, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}

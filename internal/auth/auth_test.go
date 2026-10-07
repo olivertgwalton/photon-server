@@ -60,12 +60,9 @@ var tv = Device{Name: "Living room", Client: "Photon tvOS"}
 func TestSignInAndOut(t *testing.T) {
 	svc, st := newService(t)
 	oliver := addOliver(t, st)
-	if _, err := st.AddProfile(t.Context(), "Guest", domain.RoleMember, ""); err != nil {
-		t.Fatal(err)
-	}
 
 	for _, c := range []struct{ name, password string }{
-		{"Oliver", "wrong"}, {"Nobody", "correct horse"}, {"Guest", ""},
+		{"Oliver", "wrong"}, {"Nobody", "correct horse"},
 	} {
 		if _, _, err := svc.SignIn(t.Context(), c.name, c.password, tv); !errors.Is(err, ErrInvalidCredentials) {
 			t.Errorf("SignIn(%q, %q): err = %v, want %v", c.name, c.password, err, ErrInvalidCredentials)
@@ -207,11 +204,15 @@ func TestPairingPollsAreRateLimited(t *testing.T) {
 func TestSwitchingProfiles(t *testing.T) {
 	svc, st := newService(t)
 	admin := addOliver(t, st)
-	sam, err := st.AddProfile(t.Context(), "Sam", domain.RoleMember, "")
+	hash, err := HashPassword(t.Context(), "kid's password")
 	if err != nil {
 		t.Fatal(err)
 	}
-	kid, err := st.AddProfile(t.Context(), "Kid", domain.RoleRestricted, "")
+	sam, err := st.AddProfile(t.Context(), "Sam", domain.RoleMember, hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kid, err := st.AddProfile(t.Context(), "Kid", domain.RoleRestricted, hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +232,7 @@ func TestSwitchingProfiles(t *testing.T) {
 	for _, p := range list {
 		locks = append(locks, p.Profile.Name+":"+string(p.Lock))
 	}
-	if got := strings.Join(locks, " "); got != "Kid:none Oliver:password Sam:pin" {
+	if got := strings.Join(locks, " "); got != "Kid:password Oliver:password Sam:pin" {
 		t.Errorf("the switcher would show %s", got)
 	}
 
@@ -255,7 +256,9 @@ func TestSwitchingProfiles(t *testing.T) {
 		wantErr error
 		landsOn domain.Profile
 	}{
-		{"to a profile with no lock", kid, "", nil, kid},
+		{"to a profile with no PIN and no secret", kid, "", ErrWrongSecret, admin},
+		{"to a profile with no PIN with its password", kid, "kid's password", nil, kid},
+		{"to a PIN profile with its password", sam, "kid's password", ErrWrongSecret, kid},
 		{"to a PIN profile with the wrong PIN", sam, "0000", ErrWrongSecret, kid},
 		{"to a PIN profile with its PIN", sam, "4821", nil, sam},
 		{"to the admin with a PIN-like guess", admin, "4821", ErrWrongSecret, sam},
@@ -330,7 +333,11 @@ func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
 func TestChangingAPasswordSignsOutTheProfilesOtherDevices(t *testing.T) {
 	svc, st := newService(t)
 	addOliver(t, st)
-	guest, err := st.AddProfile(t.Context(), "Guest", domain.RoleMember, "")
+	hash, err := HashPassword(t.Context(), "guest's password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guest, err := st.AddProfile(t.Context(), "Guest", domain.RoleMember, hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,11 +356,7 @@ func TestChangingAPasswordSignsOutTheProfilesOtherDevices(t *testing.T) {
 	phoneToken, phone := signIn("Phone")
 	tvToken, _ := signIn("TV")
 	guestToken, guestTV := signIn("Guest's TV")
-	if _, err := svc.SwitchProfile(t.Context(), guestTV, guest.ID, ""); err != nil {
-		t.Fatal(err)
-	}
-	guestTV, err = svc.Authenticate(t.Context(), guestToken)
-	if err != nil {
+	if _, err := svc.SwitchProfile(t.Context(), guestTV, guest.ID, "guest's password"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -362,9 +365,6 @@ func TestChangingAPasswordSignsOutTheProfilesOtherDevices(t *testing.T) {
 	}
 	if err := svc.ChangePassword(t.Context(), phone, "correct horse", "short"); !errors.Is(err, ErrPasswordTooShort) {
 		t.Errorf("to a short password: err = %v, want %v", err, ErrPasswordTooShort)
-	}
-	if err := svc.ChangePassword(t.Context(), guestTV, "", "battery staple"); !errors.Is(err, ErrNoPassword) {
-		t.Errorf("a household profile gave itself a password: err = %v, want %v", err, ErrNoPassword)
 	}
 	if _, err := svc.Authenticate(t.Context(), tvToken); err != nil {
 		t.Fatalf("a refused change signed the TV out: %v", err)

@@ -10,18 +10,17 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-func TestTheServerKeepsAnAdminWithAPassword(t *testing.T) {
+func TestTheServerKeepsAnAdmin(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
 	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
-	empty := ""
 	for _, tc := range []struct {
 		name   string
 		change func() error
@@ -32,18 +31,6 @@ func TestTheServerKeepsAnAdminWithAPassword(t *testing.T) {
 			return err
 		}, ErrLastAdmin},
 		{"removing the last admin", func() error { _, err := s.RemoveProfile(ctx, oliver.ID); return err }, ErrLastAdmin},
-		{"clearing an admin's password", func() error {
-			_, err := s.SetProfile(ctx, oliver.ID, ProfileChange{PasswordHash: &empty})
-			return err
-		}, ErrAdminNeedsPassword},
-		{"making an admin of a profile with no password", func() error {
-			_, err := s.SetProfile(ctx, kid.ID, ProfileChange{Role: domain.RoleAdmin})
-			return err
-		}, ErrAdminNeedsPassword},
-		{"adding an admin with no password", func() error {
-			_, err := s.AddProfile(ctx, "Guest", domain.RoleAdmin, "")
-			return err
-		}, ErrAdminNeedsPassword},
 		{"renaming onto another's name", func() error {
 			_, err := s.SetProfile(ctx, kid.ID, ProfileChange{Name: "Oliver"})
 			return err
@@ -53,10 +40,9 @@ func TestTheServerKeepsAnAdminWithAPassword(t *testing.T) {
 			t.Errorf("%s: %v, want %v", tc.name, err, tc.want)
 		}
 	}
-	password := "kidhash"
-	promoted, err := s.SetProfile(ctx, kid.ID, ProfileChange{Name: "Teen", Role: domain.RoleAdmin, PasswordHash: &password})
+	promoted, err := s.SetProfile(ctx, kid.ID, ProfileChange{Name: "Teen", Role: domain.RoleAdmin})
 	if err != nil || promoted.Name != "Teen" || promoted.Role != domain.RoleAdmin {
-		t.Fatalf("promoting with a password: %+v, %v", promoted, err)
+		t.Fatalf("promoting: %+v, %v", promoted, err)
 	}
 	// With two admins, either may go.
 	if _, err := s.SetProfile(ctx, oliver.ID, ProfileChange{Role: domain.RoleMember}); err != nil {
@@ -70,10 +56,31 @@ func TestTheServerKeepsAnAdminWithAPassword(t *testing.T) {
 	}
 }
 
+// A profile keeps its password through a change that leaves it out, and never goes without one.
+func TestEveryProfileHasAPassword(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []ProfileChange{{Name: "Teen"}, {PasswordHash: "new hash"}, {}} {
+		if _, err := s.SetProfile(ctx, kid.ID, c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, secrets, err := s.ProfileSecrets(ctx, kid.ID); err != nil || secrets.Password != "new hash" {
+		t.Errorf("password hash %q, %v; want the one set last", secrets.Password, err)
+	}
+	if _, err := s.pool.Exec(ctx, `INSERT INTO profiles (name, role) VALUES ('Guest', 'member')`); err == nil {
+		t.Error("a profile was stored with no password")
+	}
+}
+
 func TestAProfileKeepsItsPicture(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleMember, "")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleMember, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}

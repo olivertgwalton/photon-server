@@ -32,7 +32,7 @@ func downloadable(t *testing.T) (s *Store, film, part uuid.UUID, profiles [2]uui
 		t.Fatal(err)
 	}
 	for n, name := range []string{"Oliver", "Ada"} {
-		pr, err := s.AddProfile(ctx, name, domain.RoleMember, "")
+		pr, err := s.AddProfile(ctx, name, domain.RoleMember, "hash")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -252,7 +252,7 @@ func TestADownloadSaysWhichOfItsCopysFilesItIs(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, `SELECT (SELECT id FROM items), (SELECT id FROM parts WHERE idx = 1)`).Scan(&item, &second); err != nil {
 		t.Fatal(err)
 	}
-	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleMember, "")
+	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleMember, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}

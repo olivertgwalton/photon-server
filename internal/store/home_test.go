@@ -247,7 +247,7 @@ func TestNextEpisode(t *testing.T) {
 		t.Errorf("a finished show starts at %s, want its first episode", got)
 	}
 
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -381,7 +381,7 @@ func homeLibraries(t *testing.T, s *Store, films, shows []string) (admin, kid uu
 	if err != nil {
 		t.Fatal(err)
 	}
-	k, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "")
+	k, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}

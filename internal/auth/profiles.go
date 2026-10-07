@@ -12,9 +12,6 @@ import (
 var (
 	ErrWrongSecret  = errors.New("the PIN or password is wrong")
 	ErrPINNotDigits = errors.New("a PIN is 4 to 6 digits")
-	// ErrNoPassword is a household profile, chosen on a signed-in device: only an admin gives it
-	// a password, which would let it sign in by itself.
-	ErrNoPassword = errors.New("this profile has no password to change; an admin gives it one")
 )
 
 // SwitchProfile moves a signed-in device to another profile of the household, if secret is what
@@ -27,23 +24,17 @@ func (s *Service) SwitchProfile(ctx context.Context, session domain.Session, tar
 	if target != session.Profile.ID {
 		var hash string
 		switch lock := domain.Lock(profile.Role, secrets.PIN != ""); lock {
-		case domain.LockNone:
 		case domain.LockPIN:
 			hash = secrets.PIN
 		case domain.LockPassword:
-			// A lock with nothing to check against refuses rather than opens.
-			if hash = secrets.Password; hash == "" {
-				return domain.Profile{}, ErrWrongSecret
-			}
+			hash = secrets.Password
 		}
-		if hash != "" {
-			match, _, err := s.hasher.Verify(ctx, hash, secret)
-			if err != nil {
-				return domain.Profile{}, err
-			}
-			if !match {
-				return domain.Profile{}, ErrWrongSecret
-			}
+		match, _, err := s.hasher.Verify(ctx, hash, secret)
+		if err != nil {
+			return domain.Profile{}, err
+		}
+		if !match {
+			return domain.Profile{}, ErrWrongSecret
 		}
 	}
 	return profile, s.store.SetSessionProfile(ctx, session.ID, target)
@@ -70,9 +61,6 @@ func (s *Service) ChangePassword(ctx context.Context, session domain.Session, cu
 	_, secrets, err := s.store.ProfileSecrets(ctx, session.Profile.ID)
 	if err != nil {
 		return err
-	}
-	if secrets.Password == "" {
-		return ErrNoPassword
 	}
 	match, _, err := s.hasher.Verify(ctx, secrets.Password, current)
 	if err != nil {

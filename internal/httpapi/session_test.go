@@ -72,11 +72,9 @@ func (fakeAuth) SetPIN(_ context.Context, _ uuid.UUID, pin string) error {
 	return nil
 }
 
-// ChangePassword knows Oliver's password; the member is a household profile with none.
-func (fakeAuth) ChangePassword(_ context.Context, s domain.Session, current, password string) error {
+// ChangePassword knows Oliver's password.
+func (fakeAuth) ChangePassword(_ context.Context, _ domain.Session, current, password string) error {
 	switch {
-	case s.Profile.ID != oliver.ID:
-		return auth.ErrNoPassword
 	case current != "correct horse":
 		return auth.ErrWrongSecret
 	case len(password) < 8:
@@ -228,7 +226,6 @@ func TestChangingYourOwnPassword(t *testing.T) {
 	}{
 		{"the wrong current password", goodToken, `{"current":"guess","new":"battery staple"}`, http.StatusForbidden, codeWrongSecret},
 		{"a new one too short", goodToken, `{"current":"correct horse","new":"short"}`, http.StatusBadRequest, codeInvalidBody},
-		{"a household profile", memberToken, `{"current":"","new":"battery staple"}`, http.StatusConflict, codeConflict},
 		{"the right one", goodToken, `{"current":"correct horse","new":"battery staple"}`, http.StatusNoContent, ""},
 	} {
 		rec := change(tc.token, tc.body)

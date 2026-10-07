@@ -25,9 +25,6 @@ func (f *fakeProfiles) AddProfile(_ context.Context, name string, role domain.Ro
 	if name == oliver.Name {
 		return domain.Profile{}, store.ErrProfileExists
 	}
-	if role == domain.RoleAdmin && hash == "" {
-		return domain.Profile{}, store.ErrAdminNeedsPassword
-	}
 	f.hashes[name] = hash
 	return domain.Profile{ID: uuid.NewV7(), Name: name, Role: role}, nil
 }
@@ -77,14 +74,14 @@ func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 		token, method, target, body string
 		want                        int
 	}{
-		{memberToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "restricted"}`, http.StatusForbidden},
-		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "restricted"}`, http.StatusCreated},
+		{memberToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "restricted", "password": "correct horse"}`, http.StatusForbidden},
+		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "restricted"}`, http.StatusBadRequest},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Partner", "role": "member", "password": "correct horse"}`, http.StatusCreated},
-		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Boss", "role": "admin"}`, http.StatusConflict},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Short", "role": "member", "password": "hunter2"}`, http.StatusBadRequest},
-		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Oliver", "role": "member"}`, http.StatusConflict},
+		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Oliver", "role": "member", "password": "correct horse"}`, http.StatusConflict},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Cat", "role": "pet"}`, http.StatusBadRequest},
 		{goodToken, http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"role": "member"}`, http.StatusConflict},
+		{goodToken, http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"password": ""}`, http.StatusBadRequest},
 		{goodToken, http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"name": "Ollie"}`, http.StatusOK},
 		{goodToken, http.MethodPatch, "/api/v1/admin/profiles/" + uuid.NewV7().String(), `{"name": "Nobody"}`, http.StatusNotFound},
 		{goodToken, http.MethodDelete, "/api/v1/admin/profiles/" + oliver.ID.String(), "", http.StatusConflict},
@@ -105,11 +102,11 @@ func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 	if profiles.access.MaxAge == nil || *profiles.access.MaxAge != 12 || profiles.access.Unrated != domain.UnratedBlock {
 		t.Errorf("access kept: %+v", profiles.access)
 	}
-	if profiles.hashes["Kid"] != "" || !strings.HasPrefix(profiles.hashes["Partner"], "$argon2id$") {
-		t.Errorf("hashes kept: %v, want none for Kid and an argon2id hash for Partner", profiles.hashes)
+	if _, ok := profiles.hashes["Kid"]; ok || !strings.HasPrefix(profiles.hashes["Partner"], "$argon2id$") {
+		t.Errorf("hashes kept: %v, want only an argon2id hash for Partner", profiles.hashes)
 	}
-	if got, want := told.kinds(), []domain.EventKind{domain.EventProfileAdded, domain.EventProfileAdded}; !slices.Equal(got, want) {
-		t.Errorf("told %v, want the two added", got)
+	if got, want := told.kinds(), []domain.EventKind{domain.EventProfileAdded}; !slices.Equal(got, want) {
+		t.Errorf("told %v, want the one added", got)
 	}
 }
 

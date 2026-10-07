@@ -30,7 +30,7 @@ func TestAnEpisodeKeepsItsOwnScore(t *testing.T) {
 		t.Fatal(err)
 	}
 	ep := oneItem(t, s, "kind = 'episode'")
-	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleMember, "")
+	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleMember, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
