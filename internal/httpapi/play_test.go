@@ -111,7 +111,7 @@ var playbackID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000c1")
 // fakePlaybacks knows one playback, Oliver's.
 type fakePlaybacks struct{}
 
-func (fakePlaybacks) Start(_ context.Context, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
+func (fakePlaybacks) Start(_ context.Context, _ uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
 	return domain.Playback{ID: playbackID, Profile: card.Profile.ID, Item: card.Title.ID, Version: card.Version.ID, Method: method, Card: card}, nil
 }
 

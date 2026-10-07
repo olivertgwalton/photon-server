@@ -28,7 +28,7 @@ import (
 const streamFor = 24 * time.Hour
 
 type playbacks interface {
-	Start(ctx context.Context, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error)
+	Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error)
 	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState, tracks domain.ChosenTracks) (domain.Reach, error)
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
 	End(ctx context.Context, id uuid.UUID) error
@@ -214,7 +214,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	session, err := a.svc.Playbacks.Start(r.Context(), d.Method, a.playbackCard(r, title, c, d, req.SubtitleStream))
+	session, err := a.svc.Playbacks.Start(r.Context(), uuid.NewV7(), d.Method, a.playbackCard(r, title, c, d, req.SubtitleStream))
 	if err != nil {
 		a.internal(w, r, err)
 		return

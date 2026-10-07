@@ -29,7 +29,7 @@ type playing interface {
 }
 
 type playbacks interface {
-	Start(ctx context.Context, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error)
+	Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error)
 	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState, tracks domain.ChosenTracks) (domain.Reach, error)
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
 }
@@ -118,7 +118,7 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			a.internal(w, r, err)
 			return
 		}
-		p, err := a.svc.Playbacks.Start(r.Context(), domain.PlayDirect, playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, direct(c, req.AudioStreamIndex), embedded(c, req.SubtitleStreamIndex)))
+		p, err := a.svc.Playbacks.Start(r.Context(), uuid.NewV7(), domain.PlayDirect, playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, direct(c, req.AudioStreamIndex), embedded(c, req.SubtitleStreamIndex)))
 		if err != nil {
 			a.internal(w, r, err)
 			return

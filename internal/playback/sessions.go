@@ -70,15 +70,15 @@ func NewSessions(live sessionStore, saved progressStore, st streams, raise func(
 	return &Sessions{live: live, saved: saved, streams: st, raise: raise, node: node, direct: map[uuid.UUID]map[*func()]bool{}}
 }
 
-// Start opens a playback of the copy of a title its card names, by its card's profile.
-func (s *Sessions) Start(ctx context.Context, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
+// Start opens playback id, of the copy of a title its card names, by its card's profile.
+func (s *Sessions) Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
 	length, err := s.saved.Length(ctx, card.Title.ID)
 	if err != nil {
 		return domain.Playback{}, err
 	}
 	now := time.Now()
 	p := domain.Playback{
-		ID: uuid.NewV7(), Profile: card.Profile.ID, Item: card.Title.ID, Version: card.Version.ID, Method: method,
+		ID: id, Profile: card.Profile.ID, Item: card.Title.ID, Version: card.Version.ID, Method: method,
 		State: domain.StatePlaying, Started: now, Updated: now, Length: length, Node: s.node, Card: card,
 	}
 	if err := s.live.SavePlayback(ctx, p, keptFor); err != nil {

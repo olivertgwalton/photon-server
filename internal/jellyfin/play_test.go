@@ -31,7 +31,7 @@ type fakePlaybacks struct {
 	stoppedA time.Duration
 }
 
-func (f *fakePlaybacks) Start(_ context.Context, _ domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
+func (f *fakePlaybacks) Start(_ context.Context, _ uuid.UUID, _ domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
 	f.started = append(f.started, card)
 	return domain.Playback{ID: f.id}, nil
 }
