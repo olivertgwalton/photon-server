@@ -13,6 +13,7 @@ import (
 	"testing"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -37,27 +38,38 @@ func (f fakePictures) Picture(_ context.Context, id uuid.UUID) (domain.Picture, 
 
 // Open answers a copy only of the provider's picture, unnamed as a copy is, and the local one as
 // it is.
-func (f fakePictures) Open(_ context.Context, id uuid.UUID, p domain.Picture, width, height int) (*os.File, string, error) {
+func (f fakePictures) Open(_ context.Context, id uuid.UUID, p domain.Picture, width, height int) (blob.Object, string, error) {
 	switch {
 	case id == providerPoster && (width > 0 || height > 0):
-		file, err := os.Open(filepath.Join(f.root, "small"))
-		return file, "", err
+		o, err := openObject(filepath.Join(f.root, "small"))
+		return o, "", err
 	case p.URL != "":
-		file, err := os.Open(filepath.Join(f.root, "cached"))
-		return file, "heat.jpg", err
+		o, err := openObject(filepath.Join(f.root, "cached"))
+		return o, "heat.jpg", err
 	}
-	file, err := os.Open(filepath.Join(p.Root, p.Path))
-	return file, "poster.jpg", err
+	o, err := openObject(filepath.Join(p.Root, p.Path))
+	return o, "poster.jpg", err
 }
 
-func (fakePictures) Keep(uuid.UUID, io.Reader) error { return errors.New("not kept here") }
+func (fakePictures) Keep(context.Context, uuid.UUID, io.Reader) error {
+	return errors.New("not kept here")
+}
 
 // Kept answers a theme tune fetched from ThemerrDB's link, kept as "tune".
-func (f fakePictures) Kept(id uuid.UUID) (*os.File, error) {
+func (f fakePictures) Kept(_ context.Context, id uuid.UUID) (blob.Object, error) {
 	if id == fetchedTheme {
-		return os.Open(filepath.Join(f.root, "tune"))
+		return openObject(filepath.Join(f.root, "tune"))
 	}
-	return nil, os.ErrNotExist
+	return blob.Object{}, os.ErrNotExist
+}
+
+// openObject opens the file at path as an object.
+func openObject(path string) (blob.Object, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return blob.Object{}, err
+	}
+	return blob.OfFile(f)
 }
 
 func TestArtwork(t *testing.T) {

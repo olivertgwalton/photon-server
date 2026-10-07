@@ -15,6 +15,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/artwork"
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -110,11 +111,12 @@ func TestAListedThemeIsKeptAndFetchedAgainOnlyWhenItsLinkChanges(t *testing.T) {
 	}
 	db, _ := fakeDB(t, links)
 	ytdlp, runs := fakeYTDLP(t)
-	cache, err := artwork.Open(t.TempDir(), nil)
+	blobs, err := blob.OpenDir(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cache.Close()
+	defer blobs.Close()
+	cache := artwork.New(blobs, nil)
 	fetch := func(st *fakeStore) {
 		t.Helper()
 		if err := Fetch(st, cache, fakeMisses{}, db, ytdlp, "ffmpeg", slog.New(slog.DiscardHandler))(t.Context(), uuid.NewV7()); err != nil {
@@ -123,7 +125,7 @@ func TestAListedThemeIsKeptAndFetchedAgainOnlyWhenItsLinkChanges(t *testing.T) {
 	}
 	kept := func(st *fakeStore) string {
 		t.Helper()
-		f, err := cache.Kept(st.subject.Theme)
+		f, err := cache.Kept(t.Context(), st.subject.Theme)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -162,11 +164,12 @@ func TestNoThemeIsAnAnswerAndAFailedFetchIsNot(t *testing.T) {
 		"/tv_shows/themoviedb/2.json": "https://www.youtube.com/watch?v=flaky",
 	})
 	ytdlp, runs := fakeYTDLP(t)
-	cache, err := artwork.Open(t.TempDir(), nil)
+	blobs, err := blob.OpenDir(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cache.Close()
+	defer blobs.Close()
+	cache := artwork.New(blobs, nil)
 	misses := fakeMisses{}
 	show := func(tmdb string) *fakeStore {
 		return &fakeStore{subject: store.ThemeSubject{Kind: domain.ItemShow, TMDB: tmdb, IMDb: "tt0903747"}, saved: map[uuid.UUID]string{}}

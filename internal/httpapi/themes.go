@@ -7,6 +7,7 @@ import (
 	"path"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/naming"
@@ -28,15 +29,18 @@ func (a *API) theme(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	var f *os.File
+	var o blob.Object
 	// The standard library knows no sound file's type by its name.
 	var kind string
 	switch t.Source {
 	case domain.ThemeFromFile:
-		f, err = library.Open(t.Root, t.Path)
+		var f *os.File
+		if f, err = library.Open(t.Root, t.Path); err == nil {
+			o, err = blob.OfFile(f)
+		}
 		kind, _ = naming.AudioType(path.Base(t.Path))
 	case domain.ThemeFromThemerr:
-		f, err = a.svc.Artwork.Kept(id)
+		o, err = a.svc.Artwork.Kept(r.Context(), id)
 		kind = "audio/mp4"
 	}
 	if a.answered(w, r, err) {
@@ -49,5 +53,5 @@ func (a *API) theme(w http.ResponseWriter, r *http.Request) {
 	if kind != "" {
 		h.Set("Content-Type", kind)
 	}
-	a.serveFile(w, r, f, "", h)
+	a.serveObject(w, r, o, "", h)
 }

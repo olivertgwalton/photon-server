@@ -7,6 +7,7 @@ import (
 	"os"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -93,12 +94,18 @@ func (a *API) servePreview(w http.ResponseWriter, r *http.Request, open func() (
 // serveFile serves f, which it closes, in byte ranges. It sets header only once f has answered, so
 // a failure carries none of it; name gives the type where header does not.
 func (a *API) serveFile(w http.ResponseWriter, r *http.Request, f *os.File, name string, header http.Header) {
-	defer f.Close()
-	info, err := f.Stat()
+	o, err := blob.OfFile(f)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
+	a.serveObject(w, r, o, name, header)
+}
+
+// serveObject is serveFile for an object.
+func (a *API) serveObject(w http.ResponseWriter, r *http.Request, o blob.Object, name string, header http.Header) {
+	defer o.Close()
 	maps.Copy(w.Header(), header)
-	http.ServeContent(w, r, name, info.ModTime(), f)
+	// The reader itself, not o: a file is sent by sendfile only as an *os.File.
+	http.ServeContent(w, r, name, o.ModTime, o.ReadSeekCloser)
 }

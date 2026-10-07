@@ -1,5 +1,5 @@
 // Package artwork keeps providers' pictures, and titles' theme tunes fetched from ThemerrDB's
-// links, on disk once they have been fetched.
+// links, once they have been fetched.
 package artwork
 
 import (
@@ -13,7 +13,6 @@ import (
 	"io/fs"
 	"maps"
 	"net/http"
-	"os"
 	"runtime"
 	"slices"
 	"strings"
@@ -23,6 +22,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
+
+	"github.com/olivertgwalton/photon-server/internal/blob"
 )
 
 const (
@@ -31,10 +32,10 @@ const (
 	fetchFor   = 30 * time.Second
 )
 
-// Cache fetches each picture once, under its id. A picture replaced gets a new id, so a file
+// Cache fetches each picture once, under its id. A picture replaced gets a new id, so an object
 // here never goes stale; one replaced is swept away (see Sweep).
 type Cache struct {
-	root  *os.Root
+	blobs *blob.Dir
 	http  *http.Client
 	group singleflight.Group
 	// resizing holds a place for each picture being resized or hashed, one per processor.
@@ -43,41 +44,32 @@ type Cache struct {
 	hashed func(ctx context.Context, id uuid.UUID, blurhash string) error
 }
 
-func Open(dir string, hashed func(ctx context.Context, id uuid.UUID, blurhash string) error) (*Cache, error) {
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return nil, err
-	}
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return nil, err
-	}
+func New(blobs *blob.Dir, hashed func(ctx context.Context, id uuid.UUID, blurhash string) error) *Cache {
 	return &Cache{
-		root: root, http: &http.Client{Timeout: fetchFor}, resizing: make(chan struct{}, runtime.NumCPU()),
+		blobs: blobs, http: &http.Client{Timeout: fetchFor}, resizing: make(chan struct{}, runtime.NumCPU()),
 		hashed: hashed,
-	}, nil
+	}
 }
-
-func (c *Cache) Close() error { return c.root.Close() }
 
 // File answers the picture with id, fetching it from url the first time it is asked for. Callers
 // asking together share one fetch, which carries on if the first of them goes away.
-func (c *Cache) File(ctx context.Context, id uuid.UUID, url string) (*os.File, error) {
+func (c *Cache) File(ctx context.Context, id uuid.UUID, url string) (blob.Object, error) {
 	name := id.String()
-	if f, err := c.root.Open(name); !errors.Is(err, fs.ErrNotExist) {
-		return f, err
+	if o, err := c.blobs.Open(ctx, name); !errors.Is(err, fs.ErrNotExist) {
+		return o, err
 	}
 	fetched := c.group.DoChan(name, func() (any, error) {
 		return nil, c.fetch(context.WithoutCancel(ctx), id, url)
 	})
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return blob.Object{}, ctx.Err()
 	case r := <-fetched:
 		if r.Err != nil {
-			return nil, r.Err
+			return blob.Object{}, r.Err
 		}
 	}
-	return c.root.Open(name)
+	return c.blobs.Open(ctx, name)
 }
 
 // fetchTogether is how many pictures Fetch asks for at once; providers limit how fast they are asked.
@@ -146,14 +138,8 @@ func (c *Cache) fetch(ctx context.Context, id uuid.UUID, url string) error {
 	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "image/") {
 		return fmt.Errorf("picture %s: %s is not an image", url, resp.Header.Get("Content-Type"))
 	}
-	err = c.write(id.String(), func(w io.Writer) error {
-		n, err := io.Copy(w, io.LimitReader(resp.Body, maxPicture+1))
-		if err == nil && n > maxPicture {
-			err = fmt.Errorf("picture %s is over %d bytes", url, maxPicture)
-		}
-		return err
-	})
-	if err != nil {
+	body := &atMost{r: resp.Body, left: maxPicture, err: fmt.Errorf("picture %s is over %d bytes", url, maxPicture)}
+	if err := c.blobs.Put(ctx, id.String(), body); err != nil {
 		return err
 	}
 	hash, err := c.Blurhash(ctx, id)
@@ -173,34 +159,42 @@ func (c *Cache) Blurhash(ctx context.Context, id uuid.UUID) (string, error) {
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
-	f, err := c.root.Open(id.String())
+	o, err := c.blobs.Open(ctx, id.String())
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
-	return Blurhash(f)
+	defer o.Close()
+	return Blurhash(o)
 }
 
-// partLife is how long a picture half written may be, before it is taken for one abandoned.
-const partLife = time.Hour
+// atMost reads r until more than left bytes have been read, then fails with err.
+type atMost struct {
+	r    io.Reader
+	left int64
+	err  error
+}
 
-// Sweep removes the files of every picture live says is gone, original and resized copies alike,
-// and pictures half written long ago. It answers how many files it removed.
-func (c *Cache) Sweep(ctx context.Context, live func(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]bool, error)) (int, error) {
-	entries, err := fs.ReadDir(c.root.FS(), ".")
-	if err != nil {
-		return 0, err
+func (a *atMost) Read(p []byte) (int, error) {
+	if a.left < 0 {
+		return 0, a.err
 	}
+	n, err := a.r.Read(p[:min(int64(len(p)), a.left+1)])
+	a.left -= int64(n)
+	if a.left < 0 {
+		return n, a.err
+	}
+	return n, err
+}
+
+// Sweep removes the objects of every picture live says is gone, original and resized copies
+// alike. It answers how many it removed.
+func (c *Cache) Sweep(ctx context.Context, live func(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]bool, error)) (int, error) {
 	byID := map[uuid.UUID][]string{}
-	var stale []string
-	for _, e := range entries {
-		name := e.Name()
-		if strings.HasSuffix(name, ".part") {
-			if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > partLife {
-				stale = append(stale, name)
-			}
-			continue
+	for e, err := range c.blobs.List(ctx, "") {
+		if err != nil {
+			return 0, err
 		}
+		name := e.Key
 		id, err := uuid.Parse(name[:min(len(name), 36)])
 		if err != nil {
 			continue
@@ -211,17 +205,17 @@ func (c *Cache) Sweep(ctx context.Context, live func(ctx context.Context, ids []
 	if err != nil {
 		return 0, err
 	}
-	for id, names := range byID {
-		if !alive[id] {
-			stale = append(stale, names...)
-		}
-	}
 	removed := 0
-	for _, name := range stale {
-		if err := c.root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return removed, err
+	for id, names := range byID {
+		if alive[id] {
+			continue
 		}
-		removed++
+		for _, name := range names {
+			if err := c.blobs.Delete(ctx, name); err != nil {
+				return removed, err
+			}
+			removed++
+		}
 	}
 	return removed, nil
 }
@@ -235,7 +229,7 @@ var kept = map[string]string{"image/jpeg": "jpeg", "image/png": "png", "image/gi
 
 // Keep keeps a picture given to the server, as an avatar is, under id: at most maxPicture bytes,
 // of a format its own bytes say it is, of at most maxPixels.
-func (c *Cache) Keep(id uuid.UUID, r io.Reader) error {
+func (c *Cache) Keep(ctx context.Context, id uuid.UUID, r io.Reader) error {
 	data, err := io.ReadAll(io.LimitReader(r, maxPicture+1))
 	if err != nil {
 		return err
@@ -254,21 +248,15 @@ func (c *Cache) Keep(id uuid.UUID, r io.Reader) error {
 	if cfg.Width*cfg.Height > maxPixels {
 		return fmt.Errorf("%w: %d×%d is over %d megapixels", ErrNotPicture, cfg.Width, cfg.Height, maxPixels/1_000_000)
 	}
-	return c.write(id.String(), func(w io.Writer) error {
-		_, err := w.Write(data)
-		return err
-	})
+	return c.blobs.Put(ctx, id.String(), bytes.NewReader(data))
 }
 
 // KeepSound keeps a theme tune the server fetched under id, as it is.
-func (c *Cache) KeepSound(id uuid.UUID, r io.Reader) error {
-	return c.write(id.String(), func(w io.Writer) error {
-		_, err := io.Copy(w, r)
-		return err
-	})
+func (c *Cache) KeepSound(ctx context.Context, id uuid.UUID, r io.Reader) error {
+	return c.blobs.Put(ctx, id.String(), r)
 }
 
 // Kept answers a picture kept by Keep, or a tune kept by KeepSound.
-func (c *Cache) Kept(id uuid.UUID) (*os.File, error) {
-	return c.root.Open(id.String())
+func (c *Cache) Kept(ctx context.Context, id uuid.UUID) (blob.Object, error) {
+	return c.blobs.Open(ctx, id.String())
 }

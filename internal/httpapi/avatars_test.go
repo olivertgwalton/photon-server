@@ -17,6 +17,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/artwork"
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -64,11 +65,12 @@ func claiming(w, h uint32) []byte {
 }
 
 func TestAProfileIsGivenAPicture(t *testing.T) {
-	cache, err := artwork.Open(t.TempDir(), nil)
+	blobs, err := blob.OpenDir(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = cache.Close() })
+	t.Cleanup(func() { _ = blobs.Close() })
+	cache := artwork.New(blobs, nil)
 	avatars := &fakeAvatars{has: map[uuid.UUID]uuid.UUID{}}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Avatars: avatars, Pictures: avatars, Artwork: cache})
 	do := func(token, method, target string, body []byte) *httptest.ResponseRecorder {

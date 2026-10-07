@@ -1,6 +1,8 @@
 package artwork
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -9,13 +11,13 @@ import (
 	"image/png"
 	"io"
 	"io/fs"
-	"os"
 	"path"
 	"slices"
 	"uuid"
 
 	"golang.org/x/image/draw"
 
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 
@@ -39,16 +41,20 @@ var ErrNotResizable = errors.New("picture cannot be resized")
 
 // Open opens picture id, or with width or height a copy that fits inside them where it can be
 // made, and answers the name its format is known by: "" for a copy, whose content says.
-func (c *Cache) Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (*os.File, string, error) {
+func (c *Cache) Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (blob.Object, string, error) {
 	name := path.Base(p.Path + p.URL)
-	original := func(ctx context.Context) (*os.File, error) {
+	original := func(ctx context.Context) (blob.Object, error) {
 		switch {
 		case p.Kept:
-			return c.Kept(id)
+			return c.Kept(ctx, id)
 		case p.URL != "":
 			return c.File(ctx, id, p.URL)
 		}
-		return library.Open(p.Root, p.Path)
+		f, err := library.Open(p.Root, p.Path)
+		if err != nil {
+			return blob.Object{}, err
+		}
+		return blob.OfFile(f)
 	}
 	if width > 0 || height > 0 {
 		f, err := c.Resized(ctx, id.String(), width, height, original)
@@ -64,7 +70,7 @@ func (c *Cache) Open(ctx context.Context, id uuid.UUID, p domain.Picture, width,
 // a bound of 0 is none; or, where it fits already, as it is (ErrNotResizable). open reads the
 // picture's own file, on a context that outlives the callers, as everyone asking for the size at
 // once shares it. Each size is made once and kept.
-func (c *Cache) Resized(ctx context.Context, key string, width, height int, open func(context.Context) (*os.File, error)) (*os.File, error) {
+func (c *Cache) Resized(ctx context.Context, key string, width, height int, open func(context.Context) (blob.Object, error)) (blob.Object, error) {
 	name := key
 	if width > 0 {
 		width = roundUp(width)
@@ -74,24 +80,24 @@ func (c *Cache) Resized(ctx context.Context, key string, width, height int, open
 		height = roundUp(height)
 		name += fmt.Sprintf("-h%d", height)
 	}
-	if f, err := c.root.Open(name); !errors.Is(err, fs.ErrNotExist) {
-		return f, err
+	if o, err := c.blobs.Open(ctx, name); !errors.Is(err, fs.ErrNotExist) {
+		return o, err
 	}
-	if _, err := c.root.Stat(name + ".as-is"); err == nil {
-		return nil, ErrNotResizable
+	if asIs, err := c.blobs.Exists(ctx, name+".as-is"); asIs || err != nil {
+		return blob.Object{}, cmp.Or(err, ErrNotResizable)
 	}
 	made := c.group.DoChan(name, func() (any, error) {
 		return nil, c.resize(context.WithoutCancel(ctx), name, width, height, open)
 	})
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return blob.Object{}, ctx.Err()
 	case r := <-made:
 		if r.Err != nil {
-			return nil, r.Err
+			return blob.Object{}, r.Err
 		}
 	}
-	return c.root.Open(name)
+	return c.blobs.Open(ctx, name)
 }
 
 func roundUp(n int) int {
@@ -99,7 +105,7 @@ func roundUp(n int) int {
 	return sizes[min(i, len(sizes)-1)]
 }
 
-func (c *Cache) resize(ctx context.Context, name string, width, height int, open func(context.Context) (*os.File, error)) error {
+func (c *Cache) resize(ctx context.Context, name string, width, height int, open func(context.Context) (blob.Object, error)) error {
 	select {
 	case c.resizing <- struct{}{}:
 		defer func() { <-c.resizing }()
@@ -121,19 +127,23 @@ func (c *Cache) resize(ctx context.Context, name string, width, height int, open
 	// A picture that cannot be made smaller (a format not decoded here, a damaged or vast file, or
 	// one that fits already) is marked, so the next ask does not decode it again.
 	if err != nil || w == b.Dx() && h == b.Dy() {
-		if err := c.write(name+".as-is", func(io.Writer) error { return nil }); err != nil {
+		if err := c.blobs.Put(ctx, name+".as-is", bytes.NewReader(nil)); err != nil {
 			return err
 		}
 		return ErrNotResizable
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 	draw.CatmullRom.Scale(dst, dst.Bounds(), src, b, draw.Src, nil)
-	return c.write(name, func(w io.Writer) error {
-		if dst.Opaque() {
-			return jpeg.Encode(w, dst, &jpeg.Options{Quality: 85})
-		}
-		return png.Encode(w, dst)
-	})
+	var out bytes.Buffer
+	if dst.Opaque() {
+		err = jpeg.Encode(&out, dst, &jpeg.Options{Quality: 85})
+	} else {
+		err = png.Encode(&out, dst)
+	}
+	if err != nil {
+		return err
+	}
+	return c.blobs.Put(ctx, name, &out)
 }
 
 // fit answers the size a dx×dy picture shrinks to inside width×height, where a bound of 0 is none.
@@ -162,22 +172,4 @@ func decode(f io.ReadSeeker) (image.Image, error) {
 	}
 	src, _, err := image.Decode(f)
 	return src, err
-}
-
-// write makes file name whole before it can be read.
-func (c *Cache) write(name string, encode func(io.Writer) error) error {
-	part := name + ".part"
-	f, err := c.root.Create(part)
-	if err != nil {
-		return err
-	}
-	err = encode(f)
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		_ = c.root.Remove(part)
-		return err
-	}
-	return c.root.Rename(part, name)
 }
