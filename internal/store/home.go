@@ -9,6 +9,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -182,6 +183,12 @@ type libraryRow struct {
 	Kind domain.LibraryKind
 }
 
+// rowItems are a home row and its titles, before their cards are made.
+type rowItems struct {
+	row   HomeRow
+	items []*model.Item
+}
+
 type collectionMember struct {
 	CollectionID    uuid.UUID
 	CollectionTitle string
@@ -207,56 +214,68 @@ func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeR
 	if err != nil {
 		return nil, err
 	}
-	var rows []HomeRow
-	var lengths []int
-	var all []*model.Item
-	args := pgx.NamedArgs{"profile": profile, "limit": limit, "offset": 0}
+	// Each row is asked for at once, on a connection of its own, and kept in the profile's order.
+	var asks []func(context.Context) ([]rowItems, error)
+	args := func(lib uuid.UUID) pgx.NamedArgs {
+		return pgx.NamedArgs{"profile": profile, "limit": limit, "offset": 0, "lib": lib}
+	}
+	of := func(row HomeRow, args pgx.NamedArgs) func(context.Context) ([]rowItems, error) {
+		return func(ctx context.Context) ([]rowItems, error) {
+			items, err := queryRows[model.Item](ctx, s.pool, rowQueries[row.Kind], args)
+			if err != nil || len(items) == 0 {
+				return nil, err
+			}
+			return []rowItems{{row, items}}, nil
+		}
+	}
 	for _, section := range prefs.Home {
 		kind := section.Row
 		if section.Visibility == domain.RowHidden {
 			continue
 		}
 		if kind == domain.RowCollection {
-			members, err := queryRows[collectionMember](ctx, s.pool, collectionRowsQuery, args)
-			if err != nil {
-				return nil, err
-			}
-			for n, m := range members {
-				if n == 0 || m.CollectionID != members[n-1].CollectionID {
-					rows = append(rows, HomeRow{Kind: kind, Collection: &TitleRef{ID: m.CollectionID, Title: m.CollectionTitle}})
-					lengths = append(lengths, 0)
+			asks = append(asks, func(ctx context.Context) ([]rowItems, error) {
+				members, err := queryRows[collectionMember](ctx, s.pool, collectionRowsQuery, args(uuid.UUID{}))
+				var out []rowItems
+				for n, m := range members {
+					if n == 0 || m.CollectionID != members[n-1].CollectionID {
+						out = append(out, rowItems{row: HomeRow{Kind: kind, Collection: &TitleRef{ID: m.CollectionID, Title: m.CollectionTitle}}})
+					}
+					out[len(out)-1].items = append(out[len(out)-1].items, &m.Item)
 				}
-				lengths[len(lengths)-1]++
-				all = append(all, &m.Item)
-			}
+				return out, err
+			})
 			continue
 		}
 		if kinds, ok := libraryRows[kind]; ok {
 			for _, lib := range libs {
-				if !slices.Contains(kinds, lib.Kind) {
-					continue
-				}
-				args["lib"] = lib.ID
-				items, err := queryRows[model.Item](ctx, s.pool, rowQueries[kind], args)
-				if err != nil {
-					return nil, err
-				}
-				if len(items) > 0 {
-					rows = append(rows, HomeRow{Kind: kind, Library: &LibraryRef{ID: lib.ID, Name: lib.Name}})
-					lengths = append(lengths, len(items))
-					all = append(all, items...)
+				if slices.Contains(kinds, lib.Kind) {
+					asks = append(asks, of(HomeRow{Kind: kind, Library: &LibraryRef{ID: lib.ID, Name: lib.Name}}, args(lib.ID)))
 				}
 			}
 			continue
 		}
-		items, err := queryRows[model.Item](ctx, s.pool, rowQueries[kind], args)
-		if err != nil {
-			return nil, err
-		}
-		if len(items) > 0 {
-			rows = append(rows, HomeRow{Kind: kind})
-			lengths = append(lengths, len(items))
-			all = append(all, items...)
+		asks = append(asks, of(HomeRow{Kind: kind}, args(uuid.UUID{})))
+	}
+	found := make([][]rowItems, len(asks))
+	g, gctx := errgroup.WithContext(ctx)
+	for n, ask := range asks {
+		g.Go(func() (err error) {
+			found[n], err = ask(gctx)
+			return err
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	var rows []HomeRow
+	var lengths []int
+	var all []*model.Item
+	for _, f := range found {
+		for _, r := range f {
+			rows = append(rows, r.row)
+			lengths = append(lengths, len(r.items))
+			all = append(all, r.items...)
 		}
 	}
 	if len(all) == 0 {
