@@ -666,3 +666,43 @@ func TestRowPage(t *testing.T) {
 		}
 	}
 }
+
+// A library's row is read for that library alone, newest first, and only of what the profile sees.
+func TestLibraryRow(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	admin, kid := homeLibraries(t, s, []string{"Heat", "Alien", "Ran"}, []string{"Alpha"})
+	for title, daysAgo := range map[string]int{"Heat": 3, "Alien": 2, "Ran": 1} {
+		if _, err := s.pool.Exec(ctx, `UPDATE items SET added_at = now() - make_interval(days => $2) WHERE title = $1`, title, daysAgo); err != nil {
+			t.Fatal(err)
+		}
+	}
+	libs, err := s.Libraries(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	of := func(kind domain.LibraryKind) uuid.UUID {
+		return libs[slices.IndexFunc(libs, func(l domain.Library) bool { return l.Kind == kind })].ID
+	}
+	titles := func(profile uuid.UUID, row domain.HomeRow, lib uuid.UUID) []string {
+		cards, err := s.LibraryRow(ctx, profile, row, lib, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, c := range cards {
+			out = append(out, c.Title)
+		}
+		return out
+	}
+	if got := titles(admin, domain.RowRecentFilms, of(domain.LibraryMovies)); !slices.Equal(got, []string{"Ran", "Alien"}) {
+		t.Errorf("recently added films = %v, want the newest two, Ran and Alien", got)
+	}
+	// The kid sees the films alone.
+	if got := titles(kid, domain.RowRecentShows, of(domain.LibraryShows)); len(got) != 0 {
+		t.Errorf("a library the profile may not see: %v, want nothing", got)
+	}
+	if _, err := s.LibraryRow(ctx, admin, domain.RowContinueWatching, of(domain.LibraryMovies), 2); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a row of the profile's own: %v, want %v", err, ErrNotFound)
+	}
+}

@@ -318,6 +318,19 @@ func (s *Store) RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeR
 	return cards, total, err
 }
 
+// LibraryRow answers the first cards, up to limit, of a row made for each library, of library:
+// ErrNotFound for any other row.
+func (s *Store) LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library uuid.UUID, limit int) ([]Card, error) {
+	if _, ok := libraryRows[row]; !ok {
+		return nil, ErrNotFound
+	}
+	items, err := queryRows[model.Item](ctx, s.pool, rowQueries[row], pgx.NamedArgs{"profile": profile, "limit": limit, "offset": 0, "lib": library})
+	if err != nil {
+		return nil, err
+	}
+	return s.cards(ctx, profile, items)
+}
+
 // ErrNoNext is a title with no episode to play next: a film, a show with no episodes the profile
 // has, or the last episode.
 var ErrNoNext = errors.New("no episode follows")

@@ -381,21 +381,52 @@ func (s *Store) HasLibrary(ctx context.Context, profile, lib uuid.UUID) (bool, e
 }
 
 func (s *Store) externalIDs(ctx context.Context, item uuid.UUID) (map[domain.Provider]string, error) {
-	rows, err := s.pool.Query(ctx, `SELECT provider, value FROM external_ids WHERE item_id = $1`, item)
+	ids, err := s.ExternalIDs(ctx, []uuid.UUID{item})
+	return ids[item], err
+}
+
+// ExternalIDs answers each title's ids at the providers that have it; a title with none is left out.
+func (s *Store) ExternalIDs(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]map[domain.Provider]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT item_id, provider, value FROM external_ids WHERE item_id = ANY($1)`, items)
 	if err != nil {
 		return nil, err
 	}
-	var ids map[domain.Provider]string
+	out := map[uuid.UUID]map[domain.Provider]string{}
+	var item uuid.UUID
 	var provider domain.Provider
 	var value string
-	_, err = pgx.ForEachRow(rows, []any{&provider, &value}, func() error {
-		if ids == nil {
-			ids = map[domain.Provider]string{}
+	_, err = pgx.ForEachRow(rows, []any{&item, &provider, &value}, func() error {
+		if out[item] == nil {
+			out[item] = map[domain.Provider]string{}
 		}
-		ids[provider] = value
+		out[item][provider] = value
 		return nil
 	})
-	return ids, err
+	return out, err
+}
+
+// Seasons answers a show's seasons, ErrNotFound for a show the profile may not see.
+func (s *Store) Seasons(ctx context.Context, profile, show uuid.UUID) ([]SeasonCard, error) {
+	if ok, err := s.visible(ctx, profile, show); err != nil || !ok {
+		return nil, cmp.Or(err, ErrNotFound)
+	}
+	return s.seasons(ctx, profile, show)
+}
+
+// Episodes answers the episodes of a show, every season's, or of one season, in order, as cards;
+// ErrNotFound for one the profile may not see.
+func (s *Store) Episodes(ctx context.Context, profile, of uuid.UUID) ([]Card, error) {
+	if ok, err := s.visible(ctx, profile, of); err != nil || !ok {
+		return nil, cmp.Or(err, ErrNotFound)
+	}
+	rows, err := queryRows[model.Item](ctx, s.pool, `
+		SELECT `+itemColumnsOf("e")+` FROM items e JOIN items season ON season.id = e.parent_id
+		WHERE e.kind = 'episode' AND (season.id = $1 OR season.parent_id = $1)
+		ORDER BY e.season_number, e.episode_number, e.air_date, e.sort_title`, of)
+	if err != nil {
+		return nil, err
+	}
+	return s.cards(ctx, profile, rows)
 }
 
 // parents names the show a season belongs to, and the season and show an episode does.
