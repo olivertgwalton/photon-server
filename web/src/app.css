@@ -224,11 +224,6 @@
 	.glass-disc {
 		@apply text-ink grid size-6 place-items-center rounded-full bg-black/35 ring-1 ring-white/10 backdrop-blur-md;
 	}
-
-	/* What a title's best copy is, beside its caption: "4K", "DV". */
-	.quality-chip {
-		@apply text-ink-2 rounded-sm px-1 font-mono text-[0.625rem] leading-4 font-semibold ring-1 ring-white/25;
-	}
 }
 
 /*

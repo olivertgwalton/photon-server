@@ -177,10 +177,12 @@ func (s *Store) Facets(ctx context.Context, lib, profile uuid.UUID) (Facets, err
 			return Facets{}, err
 		}
 	}
-	for _, w := range widths {
-		f.Resolutions = append(f.Resolutions, domain.ResolutionOf(w))
+	for _, r := range domain.Resolutions() {
+		from, to := r.Widths()
+		if slices.ContainsFunc(widths, func(w int) bool { return w >= from && (to == 0 || w < to) }) {
+			f.Resolutions = append(f.Resolutions, r)
+		}
 	}
-	f.Resolutions = order(f.Resolutions, domain.Resolutions())
 	f.Ranges = order(f.Ranges, domain.Ranges())
 	f.RatingSites = order(f.RatingSites, domain.RatingSites())
 	return f, nil
