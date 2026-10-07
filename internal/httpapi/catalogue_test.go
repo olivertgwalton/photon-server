@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -22,16 +24,12 @@ var (
 
 type fakeCatalogue struct{}
 
-func (fakeCatalogue) Libraries(context.Context) ([]domain.Library, error) {
-	return []domain.Library{
-		{ID: films, Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films"},
-		{ID: shows, Name: "Shows", Kind: domain.LibraryShows, Root: "/srv/shows"},
+// LibrariesSeen answers that the profile put Shows first.
+func (fakeCatalogue) LibrariesSeen(context.Context, uuid.UUID) ([]*store.SeenLibrary, error) {
+	return []*store.SeenLibrary{
+		{ID: shows, Name: "Shows", Kind: domain.LibraryShows},
+		{ID: films, Name: "Films", Kind: domain.LibraryMovies},
 	}, nil
-}
-
-// LibraryOrder answers that the profile put Shows first.
-func (fakeCatalogue) LibraryOrder(context.Context, uuid.UUID) ([]uuid.UUID, error) {
-	return []uuid.UUID{shows}, nil
 }
 
 func (fakeCatalogue) SetLibraryOrder(_ context.Context, _ uuid.UUID, libs []uuid.UUID) error {
@@ -44,8 +42,8 @@ func (fakeCatalogue) SetLibraryOrder(_ context.Context, _ uuid.UUID, libs []uuid
 }
 
 // Wall answers one card titled after the page it was asked for, of 120 in all.
-func (fakeCatalogue) Wall(_ context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, int64, error) {
-	if lib != films {
+func (fakeCatalogue) Wall(_ context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error) {
+	if len(libs) != 1 || libs[0] != films {
 		return nil, 0, store.ErrNotFound
 	}
 	title := string(p.Sort) + " " + string(p.Order) + " " + strconv.Itoa(p.Offset) + "+" + strconv.Itoa(p.Limit)
@@ -120,6 +118,17 @@ func (fakeCatalogue) Home(_ context.Context, profile uuid.UUID, limit int) ([]st
 	}, nil
 }
 
+// The watchlist holds the one film, from offset 0.
+func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow, offset, _ int) ([]store.Card, int64, error) {
+	if row != domain.RowWatchlist {
+		return nil, 0, store.ErrNotFound
+	}
+	if offset > 0 {
+		return []store.Card{}, 1, nil
+	}
+	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat"}}, 1, nil
+}
+
 func TestHome(t *testing.T) {
 	rec := serve(t, http.MethodGet, "/api/v1/home?limit=2", goodToken, "")
 	var got struct {
@@ -145,6 +154,24 @@ func TestHome(t *testing.T) {
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/home?limit=0", goodToken, ""); rec.Code != http.StatusBadRequest {
 		t.Errorf("limit=0: %d, want 400", rec.Code)
+	}
+}
+
+func TestHomeRow(t *testing.T) {
+	for _, tc := range []struct {
+		target   string
+		want     int
+		wantBody string
+	}{
+		{"/api/v1/home/watchlist", http.StatusOK, `"offset":0,"total":1}`},
+		{"/api/v1/home/watchlist?offset=1", http.StatusOK, `{"items":[],"offset":1,"total":1}`},
+		{"/api/v1/home/recently_added_films", http.StatusNotFound, ""},
+		{"/api/v1/home/watchlist?limit=0", http.StatusBadRequest, ""},
+	} {
+		rec := serve(t, http.MethodGet, tc.target, goodToken, "")
+		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.wantBody) {
+			t.Errorf("%s: %d %s, want %d %s", tc.target, rec.Code, rec.Body, tc.want, tc.wantBody)
+		}
 	}
 }
 
@@ -284,5 +311,28 @@ func TestWall(t *testing.T) {
 	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/facets", goodToken, ""); rec.Code != http.StatusOK ||
 		!strings.Contains(rec.Body.String(), `"genres":["Crime"]`) || !strings.Contains(rec.Body.String(), `"marks":["watched","unwatched","in_progress","favourite","watchlist"]`) {
 		t.Errorf("facets: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// matroskaCatalogue has films as one copy in Matroska.
+type matroskaCatalogue struct{ fakeCatalogue }
+
+func (matroskaCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage, error) {
+	return store.TitlePage{
+		ID: id, Kind: domain.ItemMovie, Title: "Heat",
+		Versions: []store.VersionPage{{ID: id, Container: "matroska,webm"}},
+	}, nil
+}
+
+func TestACopysContainerIsNamedAsClientsNameIt(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Catalogue: matroskaCatalogue{}, Preferences: &fakePreferences{},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/titles/"+films.String(), nil)
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"container":"mkv"`) {
+		t.Errorf("a Matroska copy: %d %s, want its container named mkv", rec.Code, rec.Body)
 	}
 }

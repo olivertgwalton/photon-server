@@ -41,10 +41,10 @@ func NewRemuxes(parts partStore, h remuxer) *Remuxes {
 	return &Remuxes{parts: parts, hls: h}
 }
 
-// Open starts a playback's HLS of a copy at start, carrying its video and audio as decided, and,
-// unless a subtitle is drawn into the picture, its plain text subtitles, embedded and beside it,
-// as WebVTT.
-func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, start time.Duration) error {
+// Open starts a playback's HLS of a copy at start, in segments of the format asked for, carrying
+// its video and audio as decided, and, unless a subtitle is drawn into the picture, its plain text
+// subtitles, embedded and beside it, as WebVTT.
+func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error {
 	// The remux opens its files long after this request has been answered.
 	opening := context.WithoutCancel(ctx)
 	sources := make([]hls.Source, len(c.Parts))
@@ -83,7 +83,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 			kbps += audio.Encode.BitrateKbps
 		}
 	}
-	h := hls.Copy{Parts: sources, Variant: variant(c.Streams, video, audio, kbps), Start: start}
+	h := hls.Copy{Parts: sources, Variant: variant(c.Streams, video, audio, kbps), Start: start, Segments: segments}
 	// A subtitle drawn into the picture is the only one offered, as Jellyfin's master playlist
 	// has it: another turned on by a player would be drawn over it.
 	if e := video.Encode; e != nil && (e.Burn != nil || e.BurnFile != nil) {

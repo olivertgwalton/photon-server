@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -90,8 +91,8 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	session := sessionOf(r)
-	if !a.allowed(w, r, signInsPerAddress, a.addrKey(r, "password")) ||
-		!a.allowed(w, r, signInsPerName, "password:profile:"+session.Profile.ID.String()) {
+	if !a.allowed(w, r, auth.SignInsPerAddress, a.addrKey(r, "password")) ||
+		!a.allowed(w, r, auth.SignInsPerName, "password:profile:"+session.Profile.ID.String()) {
 		return
 	}
 	if !a.answered(w, r, a.svc.Auth.ChangePassword(r.Context(), session, req.Current, req.New)) {

@@ -9,9 +9,11 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"uuid"
@@ -114,12 +116,14 @@ func NewRemuxer(tools media.Tools, dir, subtitles string, hw Hardware, limit int
 }
 
 // Copy is what a playback's HLS is made of: its parts in order, its text subtitles, how the
-// master playlist describes its video, and where on its timeline the player starts.
+// master playlist describes its video, where on its timeline the player starts, and the
+// container of its segments, fragmented MP4 where it is not said.
 type Copy struct {
 	Parts     []Source
 	Subtitles []Subtitle
 	Variant   Variant
 	Start     time.Duration
+	Segments  domain.SegmentFormat
 }
 
 // Variant is the video's one variant as the master playlist describes it: the bitrate it is sent
@@ -137,6 +141,7 @@ type Variant struct {
 type session struct {
 	dir       string
 	root      *os.Root
+	format    domain.SegmentFormat
 	sources   []Source
 	offsets   []time.Duration
 	plan      []Segment
@@ -181,16 +186,24 @@ func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 		at += s.Part.Duration
 	}
 	s := &session{
-		dir: filepath.Join(r.dir, playback.String()), sources: c.Parts, offsets: offsets, plan: Plan(parts),
+		dir: filepath.Join(r.dir, playback.String()), format: cmp.Or(c.Segments, domain.SegmentsFMP4),
+		sources: c.Parts, offsets: offsets, plan: Plan(parts),
 		ready: map[int]chan struct{}{}, failed: map[int]error{}, inits: map[int]chan struct{}{},
 	}
+	// MPEG-TS has no initialisation, and needs no later version than 3, which older players read.
+	version, init := 7, initName
+	switch s.format {
+	case domain.SegmentsMPEGTS:
+		version, init = 3, nil
+	case domain.SegmentsFMP4:
+	}
 	s.playlists = map[string]string{
-		MasterName: Master(c.Subtitles, c.Variant, videoName, subtitleName),
-		videoName:  Playlist(s.plan, initName, segmentName),
+		MasterName: Master(c.Subtitles, c.Variant, version, videoName, subtitleName),
+		videoName:  Playlist(s.plan, version, init, func(n int) string { return segmentName(s.format, n) }),
 	}
 	for n, sub := range c.Subtitles {
 		s.subtitles = append(s.subtitles, &subtitle{Subtitle: sub})
-		s.playlists[subtitleName(n)] = Playlist(s.plan, nil, func(k int) string { return subtitleSegmentName(n, k) })
+		s.playlists[subtitleName(n)] = Playlist(s.plan, version, nil, func(k int) string { return subtitleSegmentName(n, k) })
 	}
 	if err := os.MkdirAll(s.dir, 0o750); err != nil {
 		return err
@@ -373,13 +386,14 @@ func (r *Remuxer) session(playback uuid.UUID) (*session, error) {
 }
 
 // Init opens a part's initialisation, waiting for it to be made: a run of the part writes it
-// before any segment, so one is started at the part's first segment where none runs.
+// before any segment, so one is started at the part's first segment where none runs. Only
+// fragmented MP4 has one.
 func (r *Remuxer) Init(ctx context.Context, playback uuid.UUID, part int) (*os.File, error) {
 	s, err := r.session(playback)
 	if err != nil {
 		return nil, err
 	}
-	if part < 0 || part >= len(s.sources) {
+	if part < 0 || part >= len(s.sources) || s.format != domain.SegmentsFMP4 {
 		return nil, ErrNoRemux
 	}
 	s.mu.Lock()
@@ -400,11 +414,68 @@ func (r *Remuxer) Init(ctx context.Context, playback uuid.UUID, part int) (*os.F
 // MasterName is the playlist a player is given.
 const MasterName = "main.m3u8"
 
+// segmentTypes are the media types of HLS segments, by their extensions.
+var segmentTypes = map[string]string{".m4s": "video/iso.segment", ".ts": "video/mp2t"}
+
+// Resource is one of a playback's HLS files: a playlist or a WebVTT segment as Text, or a media
+// file to serve as it is, and its type.
+type Resource struct {
+	Text string
+	File *os.File
+	Type string
+}
+
+// Resource answers a playback's HLS file by the name its playlists give it, ErrNoRemux for one it
+// has not.
+func (r *Remuxer) Resource(ctx context.Context, playback uuid.UUID, name string) (Resource, error) {
+	switch {
+	case strings.HasSuffix(name, ".m3u8"):
+		text, err := r.Playlist(playback, name)
+		return Resource{Text: text, Type: "application/vnd.apple.mpegurl"}, err
+	case strings.HasPrefix(name, "sub") && strings.HasSuffix(name, ".vtt"):
+		track, n, ok := strings.Cut(strings.TrimSuffix(strings.TrimPrefix(name, "sub"), ".vtt"), "-")
+		t, terr := strconv.Atoi(track)
+		k, kerr := strconv.Atoi(n)
+		if !ok || terr != nil || kerr != nil {
+			return Resource{}, ErrNoRemux
+		}
+		text, err := r.SubtitleSegment(ctx, playback, t, k)
+		return Resource{Text: text, Type: "text/vtt; charset=utf-8"}, err
+	case strings.HasPrefix(name, "init") && strings.HasSuffix(name, ".mp4"):
+		part, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(name, "init"), ".mp4"))
+		if err != nil {
+			return Resource{}, ErrNoRemux
+		}
+		f, err := r.Init(ctx, playback, part)
+		return Resource{File: f, Type: "video/mp4"}, err
+	case segmentTypes[path.Ext(name)] != "":
+		// A segment is asked for by the name its session's format gives it: an MPEG-TS remux has
+		// no .m4s, nor a fragmented-MP4 one a .ts.
+		n, err := strconv.Atoi(strings.TrimSuffix(name, path.Ext(name)))
+		s, serr := r.session(playback)
+		if err != nil || serr != nil || name != segmentName(s.format, n) {
+			return Resource{}, ErrNoRemux
+		}
+		f, err := r.Segment(ctx, playback, n)
+		return Resource{File: f, Type: segmentTypes[path.Ext(name)]}, err
+	}
+	return Resource{}, ErrNoRemux
+}
+
 const videoName = "video.m3u8"
 
 func initName(part int) string      { return "init" + strconv.Itoa(part) + ".mp4" }
-func segmentName(n int) string      { return strconv.Itoa(n) + ".m4s" }
 func subtitleName(track int) string { return "sub" + strconv.Itoa(track) + ".m3u8" }
+
+func segmentName(f domain.SegmentFormat, n int) string {
+	switch f {
+	case domain.SegmentsMPEGTS:
+		return strconv.Itoa(n) + ".ts"
+	case domain.SegmentsFMP4:
+	}
+	return strconv.Itoa(n) + ".m4s"
+}
+
 func subtitleSegmentName(track, n int) string {
 	return "sub" + strconv.Itoa(track) + "-" + strconv.Itoa(n) + ".vtt"
 }
@@ -449,7 +520,7 @@ func (r *Remuxer) Segment(ctx context.Context, playback uuid.UUID, n int) (*os.F
 		delete(s.ready, n)
 		return nil, err
 	}
-	return s.root.Open(segmentName(n))
+	return s.root.Open(segmentName(s.format, n))
 }
 
 // waiter answers the channel closed when segment n is made; the session's lock is held.
@@ -478,7 +549,7 @@ func (s *session) initWaiter(part int) chan struct{} {
 func (s *session) forget(n int) {
 	for m, c := range s.ready {
 		if m < n && closed(c) && s.failed[m] == nil {
-			_ = s.root.Remove(segmentName(m))
+			_ = s.root.Remove(segmentName(s.format, m))
 			delete(s.ready, m)
 		}
 	}
@@ -556,7 +627,7 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 			return err
 		}
 	}
-	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.tools.FFmpeg.Path, args(r.hw, start, src.Video, src.Audio, layer)...)
+	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.tools.FFmpeg.Path, args(r.hw, start, src.Video, src.Audio, layer, s.format)...)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -579,11 +650,11 @@ func fdInput() []string {
 	return []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3"}
 }
 
-// args copies or encodes a file's video and its audio into fragmented MP4 on stdout, from start,
-// on the file's own clock (see clockOffset). Copied video starts at the keyframe at start; encoded
-// video makes one there and every SegmentLength after, on hw, with styled text drawn in where
-// there is a layer of it.
-func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer) []string {
+// args copies or encodes a file's video and its audio into fragmented MP4 or MPEG-TS on stdout,
+// from start, on the file's own clock (see clockOffset). Copied video starts at the keyframe at
+// start; encoded video makes one there and every SegmentLength after, on hw, with styled text
+// drawn in where there is a layer of it.
+func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer, f domain.SegmentFormat) []string {
 	a := fdInput()
 	hw = hw.encoding(video)
 	if video.Encode != nil {
@@ -591,11 +662,20 @@ func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domai
 	}
 	a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts", "-i", "fd:")
 	a = append(a, streamArgs(hw, video, audio, layer)...)
-	// Dolby Vision's configuration, TrueHD and DTS are experimental in FFmpeg's MP4 muxer.
+	switch f {
+	case domain.SegmentsMPEGTS:
+		// Without mpegts_copyts the muxer moves every timestamp on by its delay.
+		a = append(a, "-f", "mpegts", "-mpegts_copyts", "1")
+	case domain.SegmentsFMP4:
+		// Dolby Vision's configuration, TrueHD and DTS are experimental in FFmpeg's MP4 muxer.
+		a = append(a,
+			"-strict", "experimental",
+			"-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+default_base_moof+delay_moov+frag_discont+skip_trailer",
+			"-use_editlist", "0",
+		)
+	}
 	return append(a,
-		"-strict", "experimental",
-		"-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+default_base_moof+delay_moov+frag_discont+skip_trailer",
-		"-use_editlist", "0", "-avoid_negative_ts", "disabled",
+		"-avoid_negative_ts", "disabled",
 		"-output_ts_offset", strconv.FormatFloat(clockOffset.Seconds(), 'f', 0, 64),
 		"-fflags", "+bitexact", "-",
 	)
@@ -651,23 +731,36 @@ func streamArgs(hw Hardware, video domain.VideoPlan, audio *domain.AudioPlan, la
 	return a
 }
 
+// fragments is ffmpeg's output read as fragments that each begin on a video keyframe.
+type fragments interface {
+	next() (fragment, error)
+	write(w io.Writer, f fragment) error
+}
+
 // cut reads ffmpeg's output and keeps the plan's segments of the run's part from run.at onwards.
 // ffmpeg's seek lands on the keyframe at or before the one asked for, so fragments before the
 // segment's start are dropped; every fragment starts on a keyframe, and so does every segment.
 func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) error {
-	st, init, err := readInit(out)
-	if err != nil {
-		return err
-	}
-	s.mu.Lock()
-	if c := s.initWaiter(run.part); !closed(c) {
-		if err = keep(s.root, initName(run.part), init); err == nil {
-			close(c)
+	var st fragments
+	switch s.format {
+	case domain.SegmentsMPEGTS:
+		st = readTS(out, s.plan[run.at].Start)
+	case domain.SegmentsFMP4:
+		fmp4, init, err := readInit(out)
+		if err != nil {
+			return err
 		}
-	}
-	s.mu.Unlock()
-	if err != nil {
-		return err
+		s.mu.Lock()
+		if c := s.initWaiter(run.part); !closed(c) {
+			if err = keep(s.root, initName(run.part), init); err == nil {
+				close(c)
+			}
+		}
+		s.mu.Unlock()
+		if err != nil {
+			return err
+		}
+		st = fmp4
 	}
 	// A frame sits a few milliseconds off the keyframe index: both are rounded.
 	const slack = 5 * time.Millisecond
@@ -678,14 +771,14 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 	defer func() {
 		if segment != nil {
 			_ = segment.Close()
-			_ = s.root.Remove(segmentName(n) + ".part")
+			_ = s.root.Remove(segmentName(s.format, n) + ".part")
 		}
 	}()
 	finish := func() error {
 		err := segment.Close()
 		segment = nil
 		if err == nil {
-			err = s.root.Rename(segmentName(n)+".part", segmentName(n))
+			err = s.root.Rename(segmentName(s.format, n)+".part", segmentName(s.format, n))
 		}
 		if err != nil {
 			return err
@@ -728,7 +821,7 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 			return nil
 		}
 		if segment == nil {
-			if segment, err = s.root.Create(segmentName(n) + ".part"); err != nil {
+			if segment, err = s.root.Create(segmentName(s.format, n) + ".part"); err != nil {
 				return err
 			}
 		}

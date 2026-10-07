@@ -7,7 +7,6 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,16 +23,16 @@ const (
 )
 
 type catalogue interface {
-	Libraries(ctx context.Context) ([]domain.Library, error)
-	Wall(ctx context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
+	LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*store.SeenLibrary, error)
+	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
 	Letters(ctx context.Context, lib, profile uuid.UUID, f store.WallFilter) ([]store.Letter, error)
 	Facets(ctx context.Context, lib, profile uuid.UUID) (store.Facets, error)
 	Similar(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Home(ctx context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error)
+	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
-	LibraryOrder(ctx context.Context, profile uuid.UUID) ([]uuid.UUID, error)
 	SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error
 }
 
@@ -75,25 +74,11 @@ type cardJSON struct {
 }
 
 func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
-	libs, err := a.svc.Catalogue.Libraries(r.Context())
+	libs, err := a.svc.Catalogue.LibrariesSeen(r.Context(), sessionOf(r).Profile.ID)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	profile := sessionOf(r).Profile.ID
-	order, err := a.svc.Catalogue.LibraryOrder(r.Context(), profile)
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	// In the profile's order, those it has not placed after, by name.
-	rank := func(id uuid.UUID) int {
-		if n := slices.Index(order, id); n >= 0 {
-			return n
-		}
-		return len(order)
-	}
-	slices.SortStableFunc(libs, func(x, y domain.Library) int { return cmp.Compare(rank(x.ID), rank(y.ID)) })
 	out := make([]libraryJSON, len(libs))
 	for i, l := range libs {
 		out[i] = libraryJSON{ID: l.ID, Name: l.Name, Kind: l.Kind}
@@ -143,7 +128,7 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 	if page.Offset, page.Limit, ok = a.paging(w, r, defaultWallLimit); !ok {
 		return
 	}
-	cards, total, err := a.svc.Catalogue.Wall(r.Context(), lib, page)
+	cards, total, err := a.svc.Catalogue.Wall(r.Context(), []uuid.UUID{lib}, page)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -333,6 +318,20 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 		out.Rows[i] = homeRowJSON{Kind: row.Kind, Collection: (*titleRefJSON)(row.Collection), Library: (*libraryRefJSON)(row.Library), Items: cardsJSON(row.Cards)}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+}
+
+// homeRow answers a page of one of the profile's own home rows, in the row's order.
+func (a *API) homeRow(w http.ResponseWriter, r *http.Request) {
+	offset, limit, ok := a.paging(w, r, defaultWallLimit)
+	if !ok {
+		return
+	}
+	row := domain.HomeRow(r.PathValue("row"))
+	cards, total, err := a.svc.Catalogue.RowPage(r.Context(), sessionOf(r).Profile.ID, row, offset, limit)
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[cardJSON]{cardsJSON(cards), offset, total})
 }
 
 // wallFilterParameters are what a wall, and its letters, are narrowed by: each list repeated or

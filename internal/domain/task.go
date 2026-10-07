@@ -11,7 +11,8 @@ const (
 	TaskBackupDatabase TaskKey = "backup_database"
 	// TaskRefreshMetadata matches again the titles whose libraries say it is time.
 	TaskRefreshMetadata TaskKey = "refresh_metadata"
-	// TaskSweepArtwork clears replaced pictures from the cache.
+	// TaskSweepArtwork clears replaced pictures from the cache and fetches into it those titles
+	// show first that it lacks.
 	TaskSweepArtwork TaskKey = "sweep_artwork"
 	// TaskDetectMarkers queues the seasons with episodes whose sound has not been compared.
 	TaskDetectMarkers TaskKey = "detect_markers"

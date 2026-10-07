@@ -10,6 +10,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // Profile is what a client says it plays, sent with every play as Jellyfin's PlaybackInfo carries
@@ -27,6 +28,9 @@ type Profile struct {
 	// Parts is how it plays a copy in several files: joined into one HLS stream by the server, the
 	// default, or each file in turn as it is.
 	Parts domain.PartPlayback `json:"parts,omitzero"`
+	// Segments is the container of the HLS segments it plays: fragmented MP4, the default, or
+	// MPEG-TS.
+	Segments domain.SegmentFormat `json:"segments,omitzero"`
 }
 
 // VideoSupport is a video codec a client decodes, by FFmpeg's name, and how far. A zero limit is
@@ -82,6 +86,15 @@ type Copy struct {
 	Files       []SubtitleFile
 }
 
+// CopyOf is what deciding needs of a copy to play.
+func CopyOf(c store.PlayCopy) Copy {
+	files := make([]SubtitleFile, len(c.Subtitles))
+	for i, f := range c.Subtitles {
+		files[i] = SubtitleFile{ID: f.ID, Codec: f.Codec}
+	}
+	return Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams, Files: files}
+}
+
 // SubtitleFile is a subtitle file beside a copy.
 type SubtitleFile struct {
 	ID    uuid.UUID
@@ -116,11 +129,16 @@ func (p Profile) Draws(codec string, d domain.SubtitleDelivery) bool {
 	return slices.Contains(p.Subtitles, SubtitleSupport{Codec: codec, Delivery: d})
 }
 
-// fragmentable are the codecs fragmented MP4 carries, which HLS segments are.
-var (
-	fragmentableVideo = []string{"h264", "hevc", "av1", "vp9"}
-	fragmentableAudio = []string{"aac", "ac3", "eac3", "flac", "opus", "alac", "mp3", "dts", "truehd"}
-)
+// Carried are the codecs HLS segments of a format carry: fragmented MP4 nearly any, MPEG-TS those
+// players take from it, which is no Dolby Vision either.
+func Carried(f domain.SegmentFormat) (video, audio []string) {
+	switch f {
+	case domain.SegmentsMPEGTS:
+		return []string{"h264", "hevc"}, []string{"aac", "ac3", "eac3", "mp3"}
+	case domain.SegmentsFMP4:
+	}
+	return []string{"h264", "hevc", "av1", "vp9"}, []string{"aac", "ac3", "eac3", "flac", "opus", "alac", "mp3", "dts", "truehd"}
+}
 
 // Decide chooses how a copy plays on a client, with its audio stream as asked, else its default
 // one, else its first. It plays as it is where the client opens the container and plays every
@@ -187,7 +205,17 @@ func Decide(p Profile, c Copy, tracks domain.ChosenTracks, enc Encoding) (Decisi
 		return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
 	}
 	d.Method = domain.PlayRemux
-	if len(videoReasons) > 0 || tooMuch || burn || !slices.Contains(fragmentableVideo, video.Codec) {
+	carriedVideo, carriedAudio := Carried(p.Segments)
+	// MPEG-TS has no Dolby Vision: the client is sent the base layer where it shows that alone.
+	lostDV := false
+	if p.Segments == domain.SegmentsMPEGTS && d.Video.DolbyVision == domain.DolbyVisionKeep {
+		if v, _ := p.video(video.Codec); v.showsBase(video.DolbyVision) {
+			d.Video.DolbyVision = domain.DolbyVisionStrip
+		} else {
+			lostDV = true
+		}
+	}
+	if len(videoReasons) > 0 || tooMuch || burn || lostDV || !slices.Contains(carriedVideo, video.Codec) {
 		// Styled text is drawn by libass, which an FFmpeg without it cannot.
 		if burn && hls.StyledSubtitle(sub.codec) && !enc.Libass {
 			return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
@@ -209,7 +237,7 @@ func Decide(p Profile, c Copy, tracks domain.ChosenTracks, enc Encoding) (Decisi
 			budget = p.audioBudget()
 		}
 		// Under a limit, audio of a bitrate nobody knows may be lossless, and is not risked.
-		copied := len(audioReasons) == 0 && slices.Contains(fragmentableAudio, sound.Codec) &&
+		copied := len(audioReasons) == 0 && slices.Contains(carriedAudio, sound.Codec) &&
 			(budget == 0 || (sound.BitrateKbps > 0 && sound.BitrateKbps <= budget))
 		if !copied {
 			enc, ok := p.audioEncode(*sound)

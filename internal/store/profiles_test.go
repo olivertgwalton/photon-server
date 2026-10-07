@@ -35,6 +35,14 @@ func TestTheServerKeepsAnAdmin(t *testing.T) {
 			_, err := s.SetProfile(ctx, kid.ID, ProfileChange{Name: "Oliver"})
 			return err
 		}, ErrProfileExists},
+		{"adding another's name in another case", func() error {
+			_, err := s.AddProfile(ctx, "kid", domain.RoleMember, "hash")
+			return err
+		}, ErrProfileExists},
+		{"renaming onto another's name in another case", func() error {
+			_, err := s.SetProfile(ctx, kid.ID, ProfileChange{Name: "OLIVER"})
+			return err
+		}, ErrProfileExists},
 	} {
 		if err := tc.change(); !errors.Is(err, tc.want) {
 			t.Errorf("%s: %v, want %v", tc.name, err, tc.want)

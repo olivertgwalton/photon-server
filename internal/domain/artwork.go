@@ -22,6 +22,15 @@ func ArtworkSources() []FieldSource {
 	return []FieldSource{SourceUser, SourceFile, SourceTMDB, SourceTVDB, SourceOMDb}
 }
 
+// Picture is where one picture is: a file under Root, or a provider's URL.
+type Picture struct {
+	Root string
+	Path string
+	URL  string
+	// Kept is a picture given to the server, as an avatar is, held in its picture cache.
+	Kept bool
+}
+
 // Artwork is one picture of a title: a file in the library (Path, relative to its root) or a
 // provider's (URL).
 type Artwork struct {

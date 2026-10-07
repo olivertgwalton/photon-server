@@ -13,6 +13,7 @@ import (
 	"testing"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/identify"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
@@ -102,6 +103,11 @@ func TestAPluginDescribesTheTitlesOfALibraryThatTakesIt(t *testing.T) {
 	ctx := t.Context()
 	plugins := plugin.New(st)
 	providers := provider.NewRegistry(plugins.Load)
+	pictures, err := artwork.Open(t.TempDir(), st.SetBlurhash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pictures.Close()
 	api := New(log, domain.Info{}, Services{Auth: fakeAuth{}, Libraries: st, Providers: providers, ProviderSettings: st, Plugins: plugins})
 	do := func(method, target, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, strings.NewReader(body))
@@ -162,14 +168,14 @@ func TestAPluginDescribesTheTitlesOfALibraryThatTakesIt(t *testing.T) {
 	if _, err := st.SaveFolder(ctx, lib.ID, "jaws", []byte("v1"), []store.Film{{Title: "jaws", Folder: "jaws"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	cards, _, err := st.Wall(ctx, lib.ID, store.WallPage{Sort: domain.SortTitle, Limit: 1})
+	cards, _, err := st.Wall(ctx, []uuid.UUID{lib.ID}, store.WallPage{Sort: domain.SortTitle, Limit: 1})
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
 	id := cards[0].ID
 
 	// The plugin that is down is passed over for the next.
-	if err := identify.Handler(st, providers, domain.LocaleOf("en-GB"), func(context.Context, domain.Event) {}, log)(ctx, id); err != nil {
+	if err := identify.Handler(st, providers, pictures, domain.LocaleOf("en-GB"), func(context.Context, domain.Event) {}, log)(ctx, id); err != nil {
 		t.Fatalf("identifying: %v", err)
 	}
 	page, err := st.Title(ctx, uuid.UUID{}, id)

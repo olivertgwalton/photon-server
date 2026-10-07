@@ -56,13 +56,13 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 
 	for _, sort := range domain.WallSorts() {
 		for _, order := range []domain.Order{domain.Ascending, domain.Descending} {
-			full, total, err := s.Wall(ctx, lib.ID, WallPage{Sort: sort, Order: order, Limit: 100})
+			full, total, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: sort, Order: order, Limit: 100})
 			if err != nil || total != 7 || len(full) != 7 {
 				t.Fatalf("%s %s in one page: %d titles of %d, err %v; want the 7 films", sort, order, len(full), total, err)
 			}
 			var paged []Card
 			for offset := 0; offset < int(total); offset += 3 {
-				page, n, err := s.Wall(ctx, lib.ID, WallPage{Sort: sort, Order: order, Offset: offset, Limit: 3})
+				page, n, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: sort, Order: order, Offset: offset, Limit: 3})
 				if err != nil || n != total {
 					t.Fatalf("from %d: %d of %d, %v", offset, len(page), n, err)
 				}
@@ -94,7 +94,7 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 		}
 	}
 
-	if past, total, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Offset: 7, Limit: 3}); err != nil || len(past) != 0 || total != 7 {
+	if past, total, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Offset: 7, Limit: 3}); err != nil || len(past) != 0 || total != 7 {
 		t.Errorf("past the end: %d of %d, %v; want none of 7", len(past), total, err)
 	}
 	// Alien, Brazil, Heat and heat, Memento, Ran, Zodiac.
@@ -106,7 +106,7 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 	if _, err := s.Letters(ctx, uuid.NewV7(), uuid.UUID{}, WallFilter{}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("letters of an unknown library: %v, want ErrNotFound", err)
 	}
-	if _, _, err := s.Wall(ctx, uuid.NewV7(), WallPage{Sort: domain.SortTitle, Limit: 3}); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.Wall(ctx, []uuid.UUID{uuid.NewV7()}, WallPage{Sort: domain.SortTitle, Limit: 3}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("an unknown library: err = %v, want ErrNotFound", err)
 	}
 }
@@ -125,7 +125,7 @@ func TestTitlesSortTheirNumbersAsNumbers(t *testing.T) {
 			SortTitle: sortTitle(title), Folder: title,
 		})
 	}
-	page, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 10})
+	page, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,5 +136,36 @@ func TestTitlesSortTheirNumbersAsNumbers(t *testing.T) {
 	want := []string{"2 Fast 2 Furious", "13 Going on 30", "21 Jump Street", "1917", "The Age of Adaline", "Alien"}
 	if !slices.Equal(titles, want) {
 		t.Errorf("by title = %q, want %q", titles, want)
+	}
+}
+
+// Libraries are read as one wall, their titles sorted and paged together, as an app asks for
+// every library's films and shows at once.
+func TestOneWallOfSeveralLibraries(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	admin, _ := homeLibraries(t, s, []string{"Alien", "Heat"}, []string{"Fargo"})
+	libs, err := s.LibrariesSeen(ctx, admin)
+	if err != nil || len(libs) != 2 {
+		t.Fatalf("libraries %v, %v", libs, err)
+	}
+	ids := []uuid.UUID{libs[0].ID, libs[1].ID}
+	titles := func(offset, limit int) ([]string, int64) {
+		t.Helper()
+		cards, total, err := s.Wall(ctx, ids, WallPage{Profile: admin, Sort: domain.SortTitle, Offset: offset, Limit: limit})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, c := range cards {
+			out = append(out, c.Title)
+		}
+		return out, total
+	}
+	if got, total := titles(0, 10); !slices.Equal(got, []string{"Alien", "Fargo", "Heat"}) || total != 3 {
+		t.Errorf("both libraries: %v of %d", got, total)
+	}
+	if got, _ := titles(1, 1); !slices.Equal(got, []string{"Fargo"}) {
+		t.Errorf("the second title of both: %v", got)
 	}
 }

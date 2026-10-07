@@ -35,9 +35,9 @@ func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, p
 	return profile(row), nil
 }
 
-// ProfileByName returns a profile and its password hash.
+// ProfileByName returns a profile and its password hash, its name matched in any case.
 func (s *Store) ProfileByName(ctx context.Context, name string) (domain.Profile, string, error) {
-	row, err := readRow[model.Profile](ctx, s.pool, `SELECT `+profileColumns+` FROM profiles WHERE name = $1`, name)
+	row, err := readRow[model.Profile](ctx, s.pool, `SELECT `+profileColumns+` FROM profiles WHERE lower(name) = lower($1)`, name)
 	if err != nil {
 		return domain.Profile{}, "", err
 	}

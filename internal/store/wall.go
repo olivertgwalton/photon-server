@@ -4,10 +4,13 @@ import (
 	"cmp"
 	"context"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -62,10 +65,11 @@ type WallPage struct {
 	Limit      int
 }
 
-// Wall answers a page of a library's films or shows and how many there are in all. Ties in the
-// sort are broken by id, so a page is the same whenever it is asked for while the library is.
-func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, int64, error) {
-	titles, args, err := s.wallQuery(ctx, lib, p.Profile, p.Filter)
+// Wall answers a page of the films and shows of libraries, sorted together, and how many there are
+// in all. Ties in the sort are broken by id, so a page is the same whenever it is asked for while
+// the libraries are.
+func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card, int64, error) {
+	titles, args, err := s.wallQuery(ctx, libs, p.Profile, p.Filter)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -112,28 +116,43 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, in
 // collections as the library shows them, as a filter narrows them, and the values they take;
 // ErrNotFound for no such library. A library holds one kind of title, and naming it lets the wall's
 // sort indexes read a page in order.
-func (s *Store) wallQuery(ctx context.Context, lib, profile uuid.UUID, f WallFilter) (string, pgx.NamedArgs, error) {
+func (s *Store) wallQuery(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, f WallFilter) (string, pgx.NamedArgs, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id, kind, collection_mode FROM libraries WHERE id = ANY($1) ORDER BY id`, libs)
+	if err != nil {
+		return "", nil, err
+	}
+	args := pgx.NamedArgs{"libs": libs, "profile": profile}
+	filter := f.where(args)
+	// Each library's titles are what its kind and collection mode make them.
+	var arms []string
+	var id uuid.UUID
 	var kind domain.LibraryKind
 	var mode domain.CollectionMode
-	if err := s.pool.QueryRow(ctx, `SELECT kind, collection_mode FROM libraries WHERE id = $1`, lib).Scan(&kind, &mode); err != nil {
-		return "", nil, found(err)
-	}
-	args := pgx.NamedArgs{"lib": lib, "profile": profile, "kind": kind.ItemKinds()[0]}
-	filter := f.where(args)
-	titles := `items.kind = @kind`
-	// A filtered wall answers titles alone, as Plex's does: a collection has no genre or year.
-	if filter == "" {
-		switch mode {
-		case domain.CollectionsGrouped:
-			titles = `(items.kind = @kind AND NOT EXISTS (SELECT 1 FROM collection_members cm JOIN items ci ON ci.id = cm.collection_id
-				WHERE cm.item_id = items.id AND ci.id IN (` + shownCollections + `) AND sees(v, ci)) OR ` + listedCollection + `)`
-		case domain.CollectionsShown:
-			titles = `(items.kind = @kind OR ` + listedCollection + `)`
-		case domain.CollectionsHidden:
+	if _, err := pgx.ForEachRow(rows, []any{&id, &kind, &mode}, func() error {
+		n := strconv.Itoa(len(arms))
+		args["lib"+n], args["kind"+n] = id, kind.ItemKinds()[0]
+		titles := `items.kind = @kind` + n
+		// A filtered wall answers titles alone, as Plex's does: a collection has no genre or year.
+		if filter == "" {
+			switch mode {
+			case domain.CollectionsGrouped:
+				titles = `(items.kind = @kind` + n + ` AND NOT EXISTS (SELECT 1 FROM collection_members cm JOIN items ci ON ci.id = cm.collection_id
+					WHERE cm.item_id = items.id AND ci.id IN (` + shownCollections + `) AND sees(v, ci)) OR ` + listedCollection + `)`
+			case domain.CollectionsShown:
+				titles = `(items.kind = @kind` + n + ` OR ` + listedCollection + `)`
+			case domain.CollectionsHidden:
+			}
 		}
+		arms = append(arms, `(items.library_id = @lib`+n+` AND `+titles+`)`)
+		return nil
+	}); err != nil {
+		return "", nil, err
 	}
-	return `FROM items WHERE library_id = @lib
-		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND ` + titles + `)` + filter, args, nil
+	if len(arms) != len(libs) {
+		return "", nil, ErrNotFound
+	}
+	return `FROM items WHERE library_id = ANY(@libs)
+		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND (` + strings.Join(arms, " OR ") + `))` + filter, args, nil
 }
 
 // Letter is how many of a library's titles sort under a letter: "#" for those before A.
@@ -146,7 +165,7 @@ type Letter struct {
 // in title order, as Plex's firstCharacter does, so a client can jump to a letter by its offset.
 // Letters are read unaccented, so "Émile" counts under E where the wall sorts it.
 func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, f WallFilter) ([]Letter, error) {
-	titles, args, err := s.wallQuery(ctx, lib, profile, f)
+	titles, args, err := s.wallQuery(ctx, []uuid.UUID{lib}, profile, f)
 	if err != nil {
 		return nil, err
 	}
@@ -192,28 +211,42 @@ func (s *Store) PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.Playbac
 
 // cards answers titles as cards for a profile, with their best pictures.
 func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item) ([]Card, error) {
-	shows, err := s.showsOf(ctx, rows)
-	if err != nil {
-		return nil, err
-	}
-	pictures, hashes, err := s.picturesWorn(ctx, rows, shows)
-	if err != nil {
-		return nil, err
-	}
-	states, err := s.states(ctx, profile, rows)
-	if err != nil {
-		return nil, err
-	}
-	lengths, err := s.durations(ctx, ids(rows))
-	if err != nil {
-		return nil, err
-	}
-	origins, err := s.origins(ctx, rows)
-	if err != nil {
-		return nil, err
-	}
-	ratings, err := s.ratings(ctx, rows)
-	if err != nil {
+	// Each lookup is asked for at once, on a connection of its own; the pictures wait on the shows
+	// an episode wears its pictures from.
+	var (
+		shows    map[uuid.UUID]episodeShow
+		pictures map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID
+		hashes   map[uuid.UUID]string
+		states   map[uuid.UUID]TitleState
+		lengths  map[uuid.UUID]onDisk
+		origins  map[uuid.UUID]domain.CollectionOrigin
+		ratings  map[uuid.UUID][]domain.Rating
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		if shows, err = s.showsOf(gctx, rows); err != nil {
+			return err
+		}
+		pictures, hashes, err = s.picturesWorn(gctx, rows, shows)
+		return err
+	})
+	g.Go(func() (err error) {
+		states, err = s.states(gctx, profile, rows)
+		return err
+	})
+	g.Go(func() (err error) {
+		lengths, err = s.durations(gctx, ids(rows))
+		return err
+	})
+	g.Go(func() (err error) {
+		origins, err = s.origins(gctx, rows)
+		return err
+	})
+	g.Go(func() (err error) {
+		ratings, err = s.ratings(gctx, rows)
+		return err
+	})
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 	cards := make([]Card, len(rows))
@@ -245,19 +278,14 @@ type seasonShow struct {
 // each kind it has none of (a poster, a backdrop, the lettering), as Plex answers an episode with its
 // show's art: its own still stays its thumb. The shows are read in the same lookup.
 func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[uuid.UUID]episodeShow) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
-	var showIDs []uuid.UUID
-	for _, show := range shows {
-		if show.ref != nil {
-			showIDs = append(showIDs, show.ref.ID)
+	// A show is ranked as a show of its episode's library; nothing more of it is read.
+	all := slices.Clone(rows)
+	seen := map[uuid.UUID]bool{}
+	for _, r := range rows {
+		if show := shows[r.ID].ref; show != nil && !seen[show.ID] {
+			seen[show.ID] = true
+			all = append(all, &model.Item{ID: show.ID, LibraryID: r.LibraryID, Kind: domain.ItemShow})
 		}
-	}
-	all := rows
-	if len(showIDs) > 0 {
-		showRows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE id = ANY($1)`, showIDs)
-		if err != nil {
-			return nil, nil, err
-		}
-		all = append(slices.Clone(rows), showRows...)
 	}
 	pictures, hashes, err := s.pictureOrder(ctx, all)
 	if err != nil {

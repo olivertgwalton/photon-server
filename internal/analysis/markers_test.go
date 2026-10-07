@@ -193,7 +193,7 @@ func TestALibraryOnChaptersReadsNoSound(t *testing.T) {
 
 func seasonOf(t *testing.T, st *store.Store, lib uuid.UUID) uuid.UUID {
 	t.Helper()
-	cards, _, err := st.Wall(t.Context(), lib, store.WallPage{Sort: domain.SortTitle, Limit: 1})
+	cards, _, err := st.Wall(t.Context(), []uuid.UUID{lib}, store.WallPage{Sort: domain.SortTitle, Limit: 1})
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}

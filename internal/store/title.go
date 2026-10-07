@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"path"
 	"slices"
 	"time"
 	"uuid"
@@ -100,7 +101,9 @@ type VersionPage struct {
 
 // PartRef is one file of a copy.
 type PartRef struct {
-	ID         uuid.UUID
+	ID uuid.UUID
+	// File is the name of the part's file, without the folders it is in.
+	File       string
 	Index      int
 	SizeBytes  int64
 	DurationMS int64
@@ -287,7 +290,9 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	case domain.ItemSeason:
 		p.Episodes, err = s.episodes(ctx, profile, item.ID)
 	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
-		p.Versions, err = s.versions(ctx, item.ID)
+		var versions map[uuid.UUID][]VersionPage
+		versions, err = s.Versions(ctx, []uuid.UUID{item.ID})
+		p.Versions = versions[item.ID]
 	case domain.ItemCollection:
 		err = s.pool.QueryRow(ctx, `SELECT origin, placement FROM collections WHERE item_id = $1`, item.ID).Scan(&p.Origin, &p.Placement)
 	}
@@ -379,21 +384,52 @@ func (s *Store) HasLibrary(ctx context.Context, profile, lib uuid.UUID) (bool, e
 }
 
 func (s *Store) externalIDs(ctx context.Context, item uuid.UUID) (map[domain.Provider]string, error) {
-	rows, err := s.pool.Query(ctx, `SELECT provider, value FROM external_ids WHERE item_id = $1`, item)
+	ids, err := s.ExternalIDs(ctx, []uuid.UUID{item})
+	return ids[item], err
+}
+
+// ExternalIDs answers each title's ids at the providers that have it; a title with none is left out.
+func (s *Store) ExternalIDs(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]map[domain.Provider]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT item_id, provider, value FROM external_ids WHERE item_id = ANY($1)`, items)
 	if err != nil {
 		return nil, err
 	}
-	var ids map[domain.Provider]string
+	out := map[uuid.UUID]map[domain.Provider]string{}
+	var item uuid.UUID
 	var provider domain.Provider
 	var value string
-	_, err = pgx.ForEachRow(rows, []any{&provider, &value}, func() error {
-		if ids == nil {
-			ids = map[domain.Provider]string{}
+	_, err = pgx.ForEachRow(rows, []any{&item, &provider, &value}, func() error {
+		if out[item] == nil {
+			out[item] = map[domain.Provider]string{}
 		}
-		ids[provider] = value
+		out[item][provider] = value
 		return nil
 	})
-	return ids, err
+	return out, err
+}
+
+// Seasons answers a show's seasons, ErrNotFound for a show the profile may not see.
+func (s *Store) Seasons(ctx context.Context, profile, show uuid.UUID) ([]SeasonCard, error) {
+	if ok, err := s.visible(ctx, profile, show); err != nil || !ok {
+		return nil, cmp.Or(err, ErrNotFound)
+	}
+	return s.seasons(ctx, profile, show)
+}
+
+// Episodes answers the episodes of a show, every season's, or of one season, in order, as cards;
+// ErrNotFound for one the profile may not see.
+func (s *Store) Episodes(ctx context.Context, profile, of uuid.UUID) ([]Card, error) {
+	if ok, err := s.visible(ctx, profile, of); err != nil || !ok {
+		return nil, cmp.Or(err, ErrNotFound)
+	}
+	rows, err := queryRows[model.Item](ctx, s.pool, `
+		SELECT `+itemColumnsOf("e")+` FROM items e JOIN items season ON season.id = e.parent_id
+		WHERE e.kind = 'episode' AND (season.id = $1 OR season.parent_id = $1)
+		ORDER BY e.season_number, e.episode_number, e.air_date, e.sort_title`, of)
+	if err != nil {
+		return nil, err
+	}
+	return s.cards(ctx, profile, rows)
 }
 
 // parents names the show a season belongs to, and the season and show an episode does.
@@ -590,8 +626,10 @@ func (s *Store) videos(ctx context.Context, item uuid.UUID) ([]VideoLink, error)
 }
 
 // versions answers a film's or episode's copies, those on disk first, the longest first.
-func (s *Store) versions(ctx context.Context, item uuid.UUID) ([]VersionPage, error) {
-	rows, err := queryRows[model.Version](ctx, s.pool, `SELECT `+versionColumns+` FROM versions WHERE item_id = $1`, item)
+// Versions answers the copies of each of items, those on disk first, the longest first among them;
+// a title with none is left out. However many titles, it is the same few queries.
+func (s *Store) Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID][]VersionPage, error) {
+	rows, err := queryRows[model.Version](ctx, s.pool, `SELECT `+versionColumns+` FROM versions WHERE item_id = ANY($1)`, items)
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}
@@ -635,6 +673,20 @@ func (s *Store) versions(ctx context.Context, item uuid.UUID) ([]VersionPage, er
 	if err != nil {
 		return nil, err
 	}
+	files := map[uuid.UUID]string{}
+	named, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (part_id) part_id, rel_path FROM part_files WHERE part_id = ANY($1) ORDER BY part_id, rel_path`, pids)
+	if err != nil {
+		return nil, err
+	}
+	var part uuid.UUID
+	var rel string
+	if _, err := pgx.ForEachRow(named, []any{&part, &rel}, func() error {
+		files[part] = path.Base(rel)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
 	pictured, sheets, err := s.partPreviews(ctx, parts)
 	if err != nil {
 		return nil, err
@@ -643,8 +695,8 @@ func (s *Store) versions(ctx context.Context, item uuid.UUID) ([]VersionPage, er
 	if err != nil {
 		return nil, err
 	}
-	out := make([]VersionPage, len(rows))
-	for n, r := range rows {
+	out := make(map[uuid.UUID][]VersionPage, len(items))
+	for _, r := range rows {
 		vp := VersionPage{
 			ID: r.ID, Edition: deref(r.Edition), Label: deref(r.Label), Container: r.Container,
 			DurationMS: r.DurationMS, SizeBytes: r.SizeBytes, BitrateKbps: r.BitrateKbps,
@@ -652,7 +704,7 @@ func (s *Store) versions(ctx context.Context, item uuid.UUID) ([]VersionPage, er
 		}
 		for k, p := range byVersion[r.ID] {
 			vp.Files = append(vp.Files, PartRef{
-				ID: p.ID, Index: int(p.Idx), SizeBytes: p.SizeBytes, DurationMS: p.DurationMS, OffsetMS: p.OffsetMS,
+				ID: p.ID, File: files[p.ID], Index: int(p.Idx), SizeBytes: p.SizeBytes, DurationMS: p.DurationMS, OffsetMS: p.OffsetMS,
 			})
 			var own []*model.Chapter
 			for _, c := range chapters {
@@ -696,7 +748,7 @@ func (s *Store) versions(ctx context.Context, item uuid.UUID) ([]VersionPage, er
 				})
 			}
 		}
-		out[n] = vp
+		out[r.ItemID] = append(out[r.ItemID], vp)
 	}
 	return out, nil
 }

@@ -40,15 +40,15 @@ var libraryRows = map[domain.HomeRow][]domain.LibraryKind{
 	domain.RowTopRatedUnwatched: {domain.LibraryMovies, domain.LibraryShows},
 }
 
-// rowQueries are the rows' queries, each taking the profile and a limit, and a library of the
-// libraryRows, and holding only what the profile may see; the profile's own rows hold a title in
-// several libraries once.
+// rowQueries are the rows' queries, each taking the profile and a limit, a library of the
+// libraryRows and an offset of the rest, and holding only what the profile may see; the profile's
+// own rows hold a title in several libraries once.
 var rowQueries = map[domain.HomeRow]string{
 	domain.RowContinueWatching: `
 		SELECT ` + itemColumnsOf("i") + ` FROM watch_state w JOIN items i ON i.id = w.item_id
 		WHERE w.profile_id = @profile AND w.position_ms > 0 AND i.kind IN ('movie', 'episode')
 			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))
-		ORDER BY w.last_played_at DESC LIMIT @limit`,
+		ORDER BY w.last_played_at DESC, i.id DESC OFFSET @offset LIMIT @limit`,
 	// As Jellyfin's: the episode after the furthest one watched of each show, in the show's order
 	// and specials aside, unless it is under way already and so in Continue Watching; the shows
 	// in the order that episode was last played.
@@ -77,7 +77,7 @@ var rowQueries = map[domain.HomeRow]string{
 		LEFT JOIN watch_state started ON started.item_id = next.id AND started.profile_id = @profile
 		WHERE coalesce(started.position_ms, 0) = 0
 			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE first_of_title(v, last.show))
-		ORDER BY last.last_played_at DESC LIMIT @limit`,
+		ORDER BY last.last_played_at DESC, last.show_id DESC OFFSET @offset LIMIT @limit`,
 	domain.RowWatchlist:  listRow("watchlist"),
 	domain.RowFavourites: listRow("favourites"),
 	domain.RowRecentFilms: `
@@ -148,8 +148,7 @@ func onList(table string) string {
 		WHERE l.profile_id = @profile AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))`
 }
 
-// listRow is a page of one of the profile's lists, the latest added first: its home row is the
-// first.
+// listRow is one of the profile's lists, the latest added first.
 func listRow(table string) string {
 	return `SELECT ` + itemColumnsOf("i") + onList(table) + ` ORDER BY l.added_at DESC, i.id DESC OFFSET @offset LIMIT @limit`
 }
@@ -177,10 +176,15 @@ const librariesSeen = `
 	WHERE v.libraries IS NULL OR l.id = ANY (v.libraries)
 	ORDER BY o.position NULLS LAST, l.name, l.id`
 
-type libraryRow struct {
+type SeenLibrary struct {
 	ID   uuid.UUID
 	Name string
 	Kind domain.LibraryKind
+}
+
+// LibrariesSeen answers the libraries a profile sees, in the order it put them.
+func (s *Store) LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*SeenLibrary, error) {
+	return queryRows[SeenLibrary](ctx, s.pool, librariesSeen, pgx.NamedArgs{"profile": profile})
 }
 
 // rowItems are a home row and its titles, before their cards are made.
@@ -210,7 +214,7 @@ func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeR
 	if err != nil {
 		return nil, err
 	}
-	libs, err := queryRows[libraryRow](ctx, s.pool, librariesSeen, pgx.NamedArgs{"profile": profile})
+	libs, err := s.LibrariesSeen(ctx, profile)
 	if err != nil {
 		return nil, err
 	}
@@ -291,6 +295,40 @@ func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeR
 		rows[n].Cards, cards = cards[:length], cards[length:]
 	}
 	return rows, nil
+}
+
+// RowPage answers a page of one of the profile's own home rows, in the row's order, and how many
+// titles it holds: ErrNotFound for a library's or a collection's row, which lead to its own page.
+func (s *Store) RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]Card, int64, error) {
+	q, ok := rowQueries[row]
+	if _, ofLibrary := libraryRows[row]; !ok || ofLibrary {
+		return nil, 0, ErrNotFound
+	}
+	var total int64
+	// LIMIT NULL is no limit.
+	all := pgx.NamedArgs{"profile": profile, "offset": 0, "limit": nil}
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM (`+q+`) page`, all).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	items, err := queryRows[model.Item](ctx, s.pool, q, pgx.NamedArgs{"profile": profile, "offset": offset, "limit": limit})
+	if err != nil {
+		return nil, 0, err
+	}
+	cards, err := s.cards(ctx, profile, items)
+	return cards, total, err
+}
+
+// LibraryRow answers the first cards, up to limit, of a row made for each library, of library:
+// ErrNotFound for any other row.
+func (s *Store) LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library uuid.UUID, limit int) ([]Card, error) {
+	if _, ok := libraryRows[row]; !ok {
+		return nil, ErrNotFound
+	}
+	items, err := queryRows[model.Item](ctx, s.pool, rowQueries[row], pgx.NamedArgs{"profile": profile, "limit": limit, "offset": 0, "lib": library})
+	if err != nil {
+		return nil, err
+	}
+	return s.cards(ctx, profile, items)
 }
 
 // ErrNoNext is a title with no episode to play next: a film, a show with no episodes the profile

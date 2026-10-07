@@ -885,7 +885,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Whether the server's port answers HTTPS, and the certificate it serves
+         * Whether the server's port answers HTTPS, the certificate it serves, and whether Jellyfin's apps reach it
          * @description Admin only.
          */
         get: {
@@ -903,14 +903,14 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Network"];
+                        "application/json": components["schemas"]["NetworkStatus"];
                     };
                 };
                 default: components["responses"]["Problem"];
             };
         };
         /**
-         * Replace whether the port answers HTTPS, and its certificate; every node serves it at once
+         * Replace whether the port answers HTTPS, its certificate, and Jellyfin's; every node serves it at once
          * @description Admin only.
          */
         put: {
@@ -3094,6 +3094,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/home/{row}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page one of the profile's own home rows: continue watching, next up, its watchlist or its favourites */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Where the page starts, from 0. */
+                    offset?: number;
+                    /** @description How many to answer, from 1 to 200. */
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    /** @description The row; a library's or a collection's is paged on its own page. */
+                    row: components["schemas"]["HomeRowKind"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CardPage"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries": {
         parameters: {
             query?: never;
@@ -5184,48 +5229,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/watchlist": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Page the profile's watchlist, the latest added first */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Where the page starts, from 0. */
-                    offset?: number;
-                    /** @description How many to answer, from 1 to 200. */
-                    limit?: number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CardPage"];
-                    };
-                };
-                default: components["responses"]["Problem"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/readyz": {
         parameters: {
             query?: never;
@@ -5473,6 +5476,7 @@ export interface components {
             containers: string[];
             max_bitrate_kbps: number;
             parts?: components["schemas"]["PartPlayback"];
+            segments?: components["schemas"]["SegmentFormat"];
             subtitles?: components["schemas"]["SubtitleSupport"][];
             video: components["schemas"]["VideoSupport"][];
         };
@@ -5843,6 +5847,8 @@ export interface components {
         };
         /** @enum {string} */
         ItemKind: "movie" | "show" | "season" | "episode" | "extra" | "collection";
+        /** @enum {string} */
+        JellyfinMode: "on" | "off";
         JobCount: {
             count: number;
             kind: components["schemas"]["JobKind"];
@@ -6004,6 +6010,16 @@ export interface components {
         };
         Network: {
             certificate?: string;
+            jellyfin: components["schemas"]["JellyfinMode"];
+            jellyfin_port: number;
+            key?: string;
+            secure_connections: components["schemas"]["SecureConnections"];
+        };
+        NetworkStatus: {
+            certificate?: string;
+            jellyfin: components["schemas"]["JellyfinMode"];
+            jellyfin_error?: string;
+            jellyfin_port: number;
             key?: string;
             secure_connections: components["schemas"]["SecureConnections"];
         };
@@ -6456,6 +6472,8 @@ export interface components {
         SecureConnections: "required" | "preferred" | "disabled";
         /** @enum {string} */
         SegmentAction: "none" | "ask" | "skip";
+        /** @enum {string} */
+        SegmentFormat: "fmp4" | "mpegts";
         Server: {
             arch: string;
             chromaprint: boolean;

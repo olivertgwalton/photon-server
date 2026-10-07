@@ -1,6 +1,7 @@
 package secure
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -9,6 +10,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"io"
+	"log"
 	"log/slog"
 	"math/big"
 	"net"
@@ -76,8 +78,8 @@ func (s *setting) set(n domain.Network) {
 	s.n = n
 }
 
-// One port answers HTTPS and plain HTTP while secure connections are preferred, and none of
-// HTTPS once they are disabled, without a restart.
+// One port answers HTTPS and plain HTTP while secure connections are preferred, and once they are
+// disabled, without a restart, closes HTTPS at once without logging it and still answers HTTP.
 func TestOnePortServesWhatIsSet(t *testing.T) {
 	cert, key, pool := selfSigned(t)
 	st := &setting{n: domain.Network{Secure: domain.SecurePreferred, Certificate: cert, Key: key}}
@@ -88,14 +90,15 @@ func TestOnePortServesWhatIsSet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := &http.Server{TLSConfig: s.TLSConfig(), ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var logged lockedBuffer
+	srv := &http.Server{ErrorLog: log.New(&logged, "", 0), TLSConfig: s.TLSConfig(), ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, r.Proto)
 	})}
 	go func() { _ = srv.Serve(s.Listen(l)) }()
 	t.Cleanup(func() { srv.Close() })
 	_, port, _ := net.SplitHostPort(l.Addr().String())
 	https := "https://localhost:" + port
-	secure := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool}, ForceAttemptHTTP2: true}}
+	secure := &http.Client{Timeout: time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool}, ForceAttemptHTTP2: true}}
 	get := func(c *http.Client, url string) (string, error) {
 		resp, err := c.Get(url)
 		if err != nil {
@@ -119,6 +122,29 @@ func TestOnePortServesWhatIsSet(t *testing.T) {
 	if _, err := get(secure, https); err == nil {
 		t.Error("HTTPS is still answered once disabled")
 	}
+	if proto, err := get(http.DefaultClient, "http://localhost:"+port); err != nil || proto != "HTTP/1.1" {
+		t.Errorf("over plain HTTP once disabled: %q, %v; want HTTP/1.1", proto, err)
+	}
+	if got := logged.String(); got != "" {
+		t.Errorf("logged %q, want nothing", got)
+	}
+}
+
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
 }
 
 // Every node takes up an admin's change as it is told of it, and a certificate it cannot read

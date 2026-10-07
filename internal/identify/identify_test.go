@@ -3,20 +3,28 @@
 package identify
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"image"
+	"image/png"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
-// films knows Jaws, by any title, and gives its IMDb id.
-type films struct{}
+// films knows Jaws, by any title, and gives its IMDb id and poster.
+type films struct{ poster string }
 
 func (films) Info() provider.Info {
 	return provider.Info{ID: domain.SourceTMDB, Name: "Films", Kinds: []domain.ItemKind{domain.ItemMovie}}
@@ -26,8 +34,11 @@ func (films) Match(_ context.Context, _ domain.Locale, _ domain.ItemKind, h prov
 	return "578", nil
 }
 
-func (films) Describe(context.Context, domain.Locale, domain.ItemKind, string, domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
-	return domain.Metadata{Title: "Jaws", Overview: "A shark.", IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0073195"}}, nil, nil
+func (f films) Describe(context.Context, domain.Locale, domain.ItemKind, string, domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
+	return domain.Metadata{
+		Title: "Jaws", Overview: "A shark.", IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0073195"},
+		Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, URL: f.poster}},
+	}, nil, nil
 }
 
 // critics rates a title found by the IMDb id an earlier provider gave, or fails as one past its
@@ -73,19 +84,45 @@ func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {
 	if _, err := st.SaveFolder(ctx, lib.ID, "jaws", []byte("v1"), []store.Film{{Title: "jaws", Folder: "jaws"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	cards, _, err := st.Wall(ctx, lib.ID, store.WallPage{Sort: domain.SortTitle, Limit: 1})
+	cards, _, err := st.Wall(ctx, []uuid.UUID{lib.ID}, store.WallPage{Sort: domain.SortTitle, Limit: 1})
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
 	id := cards[0].ID
 
+	var poster bytes.Buffer
+	if err := png.Encode(&poster, image.NewGray(image.Rect(0, 0, 4, 6))); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(poster.Bytes())
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	cache, err := artwork.Open(dir, st.SetBlurhash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cache.Close()
+	jaws := films{poster: srv.URL + "/jaws.png"}
+
 	var told []domain.Event
-	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
+	raise := func(_ context.Context, e domain.Event) {
+		told = append(told, e)
+		page, err := st.Title(ctx, uuid.UUID{}, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, page.Artwork[domain.ArtworkPoster][0].String())); err != nil {
+			t.Errorf("told the title changed before its poster was fetched: %v", err)
+		}
+	}
 	// A failing rater does not fail the job: the match stands.
-	if err := Handler(st, provider.NewRegistry(nil, films{}, critics{fail: true}), domain.LocaleOf("en-GB"), raise, log)(ctx, id); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, jaws, critics{fail: true}), cache, domain.LocaleOf("en-GB"), raise, log)(ctx, id); err != nil {
 		t.Fatalf("with the rater failing: %v", err)
 	}
-	if err := Handler(st, provider.NewRegistry(nil, films{}, critics{}), domain.LocaleOf("en-GB"), raise, log)(ctx, id); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, jaws, critics{}), cache, domain.LocaleOf("en-GB"), raise, log)(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	if len(told) != 2 || told[1].Kind != domain.EventTitleUpdated || told[1].Item != id {
@@ -98,6 +135,16 @@ func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {
 	if page.Title != "Jaws" || page.Overview != "A shark." || len(page.Ratings) != 1 || page.Ratings[0].Score != 81 {
 		t.Errorf("page = %q %q %v; want TMDB's description and the rating found by the IMDb id it gave", page.Title, page.Overview, page.Ratings)
 	}
+}
+
+// pictures is a picture cache of the test's own.
+func pictures(t *testing.T) *artwork.Cache {
+	c, err := artwork.Open(t.TempDir(), func(context.Context, uuid.UUID, string) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	return c
 }
 
 // localFilms describes Jaws in whatever it is asked in, with India's adult certificate.
@@ -139,12 +186,12 @@ func TestATitleIsDescribedInItsLibrarysLocale(t *testing.T) {
 	if _, err := st.SaveFolder(ctx, lib.ID, "jaws", []byte("v1"), []store.Film{{Title: "jaws", Folder: "jaws"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	cards, _, err := st.Wall(ctx, lib.ID, store.WallPage{Sort: domain.SortTitle, Limit: 1})
+	cards, _, err := st.Wall(ctx, []uuid.UUID{lib.ID}, store.WallPage{Sort: domain.SortTitle, Limit: 1})
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
 	var asked domain.Locale
-	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), domain.LocaleOf("en-GB"), func(context.Context, domain.Event) {}, log)(ctx, cards[0].ID); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), pictures(t), domain.LocaleOf("en-GB"), func(context.Context, domain.Event) {}, log)(ctx, cards[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	if asked != (domain.Locale{Language: "de-DE", Country: "IN", Artwork: domain.ArtworkLocalized}) {
@@ -183,12 +230,12 @@ func TestALibraryGivingOriginalTitlesNamesATitleAsItWasFirstNamed(t *testing.T) 
 	if _, err := st.SaveFolder(ctx, lib.ID, "jaws", []byte("v1"), []store.Film{{Title: "jaws", Folder: "jaws"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	cards, _, err := st.Wall(ctx, lib.ID, store.WallPage{Sort: domain.SortTitle, Limit: 1})
+	cards, _, err := st.Wall(ctx, []uuid.UUID{lib.ID}, store.WallPage{Sort: domain.SortTitle, Limit: 1})
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
 	var asked domain.Locale
-	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), domain.LocaleOf("en-GB"), func(context.Context, domain.Event) {}, log)(ctx, cards[0].ID); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), pictures(t), domain.LocaleOf("en-GB"), func(context.Context, domain.Event) {}, log)(ctx, cards[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	page, err := st.Title(ctx, uuid.UUID{}, cards[0].ID)

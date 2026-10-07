@@ -78,6 +78,9 @@ func TestDecide(t *testing.T) {
 	stereo.Audio = []AudioSupport{{Codec: "aac", MaxChannels: 2}, {Codec: "ac3", MaxChannels: 2}}
 	silent := appleTV
 	silent.Audio = nil
+	takesTS := everything
+	takesTS.Containers = appleTV.Containers
+	takesTS.Segments = domain.SegmentsMPEGTS
 
 	hevc := func(dv domain.DolbyVisionHandling) *domain.VideoPlan {
 		return &domain.VideoPlan{Stream: 0, Codec: "hevc", DolbyVision: dv}
@@ -194,6 +197,22 @@ func TestDecide(t *testing.T) {
 				}},
 				Audio:   &domain.AudioPlan{Stream: 2},
 				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported, domain.VideoRangeNotSupported},
+			},
+		},
+		{
+			name:    "MPEG-TS is sent Dolby Vision's base layer, and TrueHD it cannot carry encoded",
+			profile: takesTS,
+			want: Decision{
+				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionStrip),
+				Audio:   &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 8, BitrateKbps: 640}},
+				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported},
+			},
+		},
+		{
+			name: "MPEG-TS copies AC-3", profile: takesTS, audio: new(2),
+			want: Decision{
+				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionStrip), Audio: &domain.AudioPlan{Stream: 2},
+				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported},
 			},
 		},
 		{
@@ -444,5 +463,58 @@ func TestACopyInSeveralFilesIsJoinedForAClientThatPlaysOne(t *testing.T) {
 	signs := domain.ChosenTracks{Subtitle: new(5)}
 	if d, err := Decide(everything, twoFiles, signs, Encoding{HEVC: domain.HEVCAllow, Libass: true}); err != nil || d.Video.Encode == nil || d.Video.Encode.Burn == nil {
 		t.Errorf("styled text in each file: %+v, %v; want it drawn in", d, err)
+	}
+}
+
+// MPEG-TS carries H.264 and HEVC without Dolby Vision, and the audio players take from it:
+// anything else a client plays from fragmented MP4 is encoded for one that asks for MPEG-TS.
+func TestMPEGTSSegmentsCarryWhatPlayersTakeFromThem(t *testing.T) {
+	plays := Profile{
+		Containers: []string{"mp4"},
+		Video: []VideoSupport{
+			{Codec: "h264"},
+			{Codec: "av1"},
+			{Codec: "hevc", Ranges: []domain.Range{domain.RangeSDR, domain.RangeHDR10, domain.RangeDV}},
+		},
+		Audio: []AudioSupport{{Codec: "aac"}, {Codec: "opus"}, {Codec: "flac"}},
+	}
+	in := func(video domain.Stream, audio string) Copy {
+		video.Kind = domain.StreamVideo
+		return Copy{Container: "matroska,webm", BitrateKbps: 10_000, Streams: []domain.Stream{
+			video, {Index: 1, Kind: domain.StreamAudio, Codec: audio, Channels: 2},
+		}}
+	}
+	dv5 := domain.Stream{Codec: "hevc", Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 5}}
+	for _, tc := range []struct {
+		name         string
+		copy         Copy
+		videoEncoded bool
+		audioEncoded bool
+	}{
+		{"H.264 and AAC", in(domain.Stream{Codec: "h264"}, "aac"), false, false},
+		{"AV1 and Opus", in(domain.Stream{Codec: "av1"}, "opus"), true, true},
+		{"HEVC and FLAC", in(domain.Stream{Codec: "hevc"}, "flac"), false, true},
+		{"Dolby Vision 5, which has no base layer to send", in(dv5, "aac"), true, false},
+	} {
+		fmp4, err := Decide(plays, tc.copy, domain.ChosenTracks{}, Encoding{HEVC: domain.HEVCAllow})
+		if err != nil {
+			t.Fatalf("%s in fragmented MP4: %v", tc.name, err)
+		}
+		if fmp4.Video.Encode != nil || fmp4.Audio.Encode != nil {
+			t.Errorf("%s in fragmented MP4: video %+v, audio %+v; want both copied", tc.name, fmp4.Video, fmp4.Audio)
+		}
+		ts := plays
+		ts.Segments = domain.SegmentsMPEGTS
+		got, err := Decide(ts, tc.copy, domain.ChosenTracks{}, Encoding{HEVC: domain.HEVCAllow})
+		if err != nil {
+			t.Fatalf("%s in MPEG-TS: %v", tc.name, err)
+		}
+		if (got.Video.Encode != nil) != tc.videoEncoded || got.Video.DolbyVision != domain.DolbyVisionNone || (got.Audio.Encode != nil) != tc.audioEncoded {
+			t.Errorf("%s in MPEG-TS: video %+v, audio %+v; want video encoded %t with no Dolby Vision, audio encoded %t",
+				tc.name, got.Video, got.Audio, tc.videoEncoded, tc.audioEncoded)
+		}
+		if e := got.Audio.Encode; e != nil && e.Codec != "aac" {
+			t.Errorf("%s in MPEG-TS: audio encoded to %s, want the client's AAC", tc.name, e.Codec)
+		}
 	}
 }

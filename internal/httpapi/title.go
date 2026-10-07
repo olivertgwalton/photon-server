@@ -263,13 +263,15 @@ func titlePageOf(p store.TitlePage) titlePageJSON {
 
 func versionPageOf(v store.VersionPage) versionPageJSON {
 	return versionPageJSON{
-		ID: v.ID, Edition: v.Edition, Label: v.Label, Container: v.Container, DurationMS: v.DurationMS,
+		ID: v.ID, Edition: v.Edition, Label: v.Label, Container: domain.ContainerName(v.Container), DurationMS: v.DurationMS,
 		SizeBytes: v.SizeBytes, BitrateKbps: v.BitrateKbps, Parts: v.Parts, MissingSince: v.MissingSince,
 		Streams:   each(v.Streams, func(s store.StreamPage) streamPageJSON { return streamPageJSON(s) }),
 		Subtitles: each(v.Subtitles, func(s store.SubtitleRef) subtitleRefJSON { return subtitleRefJSON(s) }),
 		Chapters:  each(v.Chapters, func(c store.ChapterRef) chapterRefJSON { return chapterRefJSON(c) }),
 		Markers:   each(v.Markers, func(m store.MarkerRef) markerRefJSON { return markerRefJSON(m) }),
-		Files:     each(v.Files, func(f store.PartRef) partRefJSON { return partRefJSON(f) }),
+		Files: each(v.Files, func(f store.PartRef) partRefJSON {
+			return partRefJSON{ID: f.ID, Index: f.Index, SizeBytes: f.SizeBytes, DurationMS: f.DurationMS, OffsetMS: f.OffsetMS}
+		}),
 		Trickplay: each(v.Trickplay, func(t store.PartTrickplay) partTrickplayJSON {
 			return partTrickplayJSON{PartID: t.PartID, OffsetMS: t.OffsetMS, trickplayJSON: trickplayJSON(t.Trickplay)}
 		}),

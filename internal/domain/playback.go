@@ -306,3 +306,14 @@ const (
 func SubtitleDeliveries() []SubtitleDelivery {
 	return []SubtitleDelivery{SubtitleEmbedded, SubtitleSidecar}
 }
+
+// SegmentFormat is the container of a playback's HLS segments: fragmented MP4, or MPEG-TS for a
+// player that takes nothing else, as many of Jellyfin's clients' transcoding profiles do.
+type SegmentFormat string
+
+const (
+	SegmentsFMP4   SegmentFormat = "fmp4"
+	SegmentsMPEGTS SegmentFormat = "mpegts"
+)
+
+func SegmentFormats() []SegmentFormat { return []SegmentFormat{SegmentsFMP4, SegmentsMPEGTS} }

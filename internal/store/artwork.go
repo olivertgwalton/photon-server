@@ -12,6 +12,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -98,14 +99,8 @@ func photo(id *uuid.UUID, hash *string) (uuid.UUID, Blurhashes) {
 func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
 	out := map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID{}
 	hashes := map[uuid.UUID]string{}
-	if len(items) == 0 {
-		return out, hashes, nil
-	}
-	rows, err := queryRows[model.Artwork](ctx, s.pool, `SELECT `+artworkColumns+` FROM artwork WHERE item_id = ANY($1)`, ids(items))
+	rows, err := s.rankedPictures(ctx, items)
 	if err != nil {
-		return nil, nil, err
-	}
-	if err := s.rankPictures(ctx, rows, items); err != nil {
 		return nil, nil, err
 	}
 	type place struct {
@@ -131,14 +126,102 @@ func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[uuid
 	return out, hashes, nil
 }
 
-// rankPictures puts the pictures of items best first: an admin's choice, files beside the title,
-// then the providers its library asks for pictures of its kind in the library's order, then each
-// provider's own order.
-func (s *Store) rankPictures(ctx context.Context, rows []*model.Artwork, items []*model.Item) error {
-	taken, err := rankings(ctx, s.pool, items, domain.FetcherImages)
-	if err != nil {
-		return err
+// rankedPictures answers the pictures of items, best first, as rankPictures puts them.
+func (s *Store) rankedPictures(ctx context.Context, items []*model.Item) ([]*model.Artwork, error) {
+	if len(items) == 0 {
+		return nil, nil
 	}
+	// The pictures and how their libraries rank them are read at once.
+	var rows []*model.Artwork
+	var taken map[uuid.UUID][]domain.FieldSource
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		rows, err = queryRows[model.Artwork](gctx, s.pool, `SELECT `+artworkColumns+` FROM artwork WHERE item_id = ANY($1)`, ids(items))
+		return err
+	})
+	g.Go(func() (err error) {
+		taken, err = rankings(gctx, s.pool, items, domain.FetcherImages)
+		return err
+	})
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	rankPictures(rows, items, taken)
+	return rows, nil
+}
+
+// Unfetched are pictures titles show first that are a provider's, and photos of the people they
+// credit (by any source, not only the one shown), that have no BlurHash yet, so have not been
+// fetched into the picture cache: their URLs by picture id.
+type Unfetched map[uuid.UUID]string
+
+// TitleUnfetched answers the pictures a title, its seasons and their episodes show first, and the
+// photos of the people they credit, that have not been fetched.
+func (s *Store) TitleUnfetched(ctx context.Context, id uuid.UUID) (Unfetched, error) {
+	items, err := queryRows[model.Item](ctx, s.pool, `
+		SELECT `+itemColumns+` FROM items
+		WHERE id = $1 OR parent_id = $1 OR parent_id IN (SELECT id FROM items WHERE parent_id = $1)`, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.unfetched(ctx, items)
+}
+
+// Unfetched answers the pictures that up to limit titles, in id order from after, show first, and
+// the photos of the people they credit, that have not been fetched, and the last title read, or
+// the zero id past the last.
+func (s *Store) Unfetched(ctx context.Context, after uuid.UUID, limit int) (Unfetched, uuid.UUID, error) {
+	items, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE id > $1 ORDER BY id LIMIT $2`, after, limit)
+	if err != nil {
+		return nil, uuid.UUID{}, err
+	}
+	out, err := s.unfetched(ctx, items)
+	var last uuid.UUID
+	if len(items) == limit {
+		last = items[len(items)-1].ID
+	}
+	return out, last, err
+}
+
+func (s *Store) unfetched(ctx context.Context, items []*model.Item) (Unfetched, error) {
+	rows, err := s.rankedPictures(ctx, items)
+	if err != nil {
+		return nil, err
+	}
+	type shown struct {
+		item uuid.UUID
+		kind domain.ArtworkKind
+	}
+	first := map[shown]bool{}
+	out := Unfetched{}
+	for _, r := range rows {
+		if first[shown{r.ItemID, r.Kind}] {
+			continue
+		}
+		first[shown{r.ItemID, r.Kind}] = true
+		if r.Source != domain.SourceFile && r.Blurhash == nil {
+			out[r.ID] = r.Place
+		}
+	}
+	found, err := s.pool.Query(ctx, `
+		SELECT DISTINCT p.photo_id, p.photo_url FROM credits c JOIN people p ON p.id = c.person_id
+		WHERE c.item_id = ANY($1) AND p.photo_url IS NOT NULL AND p.photo_blurhash IS NULL`, ids(items))
+	if err != nil {
+		return nil, err
+	}
+	var id uuid.UUID
+	var url string
+	_, err = pgx.ForEachRow(found, []any{&id, &url}, func() error {
+		out[id] = url
+		return nil
+	})
+	return out, err
+}
+
+// rankPictures puts the pictures of items best first: an admin's choice, files beside the title,
+// then the providers its library asks for pictures of its kind in the library's order (taken, as
+// rankings answers), then each provider's own order.
+func rankPictures(rows []*model.Artwork, items []*model.Item, taken map[uuid.UUID][]domain.FieldSource) {
 	rank := map[uuid.UUID]map[domain.FieldSource]int{}
 	for _, it := range items {
 		rank[it.ID] = map[domain.FieldSource]int{domain.SourceUser: -2, domain.SourceFile: -1}
@@ -156,7 +239,6 @@ func (s *Store) rankPictures(ctx context.Context, rows []*model.Artwork, items [
 	slices.SortStableFunc(rows, func(x, y *model.Artwork) int {
 		return cmp.Or(cmp.Compare(order(x), order(y)), cmp.Compare(x.Position, y.Position))
 	})
-	return nil
 }
 
 // ArtworkCandidate is a picture of a kind a provider has for a title, for an admin to choose.
@@ -184,9 +266,11 @@ func (s *Store) ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain
 	if err != nil {
 		return nil, err
 	}
-	if err := s.rankPictures(ctx, rows, []*model.Item{item}); err != nil {
+	taken, err := rankings(ctx, s.pool, []*model.Item{item}, domain.FetcherImages)
+	if err != nil {
 		return nil, err
 	}
+	rankPictures(rows, []*model.Item{item}, taken)
 	var chosen string
 	if len(rows) > 0 && rows[0].Source == domain.SourceUser {
 		chosen = rows[0].Place
@@ -242,17 +326,8 @@ func forgetChoice(ctx context.Context, tx db, item uuid.UUID, kind domain.Artwor
 	return err
 }
 
-// Picture is where one picture is: a file under Root, or a provider's URL.
-type Picture struct {
-	Root string
-	Path string
-	URL  string
-	// Kept is a picture given to the server, as an avatar is, held in its picture cache.
-	Kept bool
-}
-
 // Picture answers where a picture is, or ErrNotFound.
-func (s *Store) Picture(ctx context.Context, id uuid.UUID) (Picture, error) {
+func (s *Store) Picture(ctx context.Context, id uuid.UUID) (domain.Picture, error) {
 	var source domain.FieldSource
 	var place, root string
 	err := s.pool.QueryRow(ctx, `
@@ -264,31 +339,31 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (Picture, error) {
 		var photoURL *string
 		err := s.pool.QueryRow(ctx, `SELECT photo_url FROM people WHERE photo_id = $1 LIMIT 1`, id).Scan(&photoURL)
 		if err == nil {
-			return Picture{URL: deref(photoURL)}, nil
+			return domain.Picture{URL: deref(photoURL)}, nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
-			return Picture{}, err
+			return domain.Picture{}, err
 		}
 		// Or a profile's avatar, kept by the server itself.
 		var kept bool
 		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM profiles WHERE avatar_id = $1)`, id).Scan(&kept); err != nil || kept {
-			return Picture{Kept: true}, err
+			return domain.Picture{Kept: true}, err
 		}
 		// Or a video's still.
 		var site, key string
 		err = s.pool.QueryRow(ctx, `SELECT site, key FROM remote_videos WHERE thumb_id = $1 LIMIT 1`, id).Scan(&site, &key)
 		if err != nil {
-			return Picture{}, found(err)
+			return domain.Picture{}, found(err)
 		}
-		return Picture{URL: videoStill(site, key)}, nil
+		return domain.Picture{URL: videoStill(site, key)}, nil
 	}
 	if err != nil {
-		return Picture{}, err
+		return domain.Picture{}, err
 	}
 	if source != domain.SourceFile {
-		return Picture{URL: place}, nil
+		return domain.Picture{URL: place}, nil
 	}
-	return Picture{Root: root, Path: place}, nil
+	return domain.Picture{Root: root, Path: place}, nil
 }
 
 // videoStill is where a video's site publishes a still of it, or "" for a site that publishes none

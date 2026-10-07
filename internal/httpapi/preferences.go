@@ -66,8 +66,8 @@ type homeSectionJSON struct {
 
 func preferencesOf(p domain.Preferences) preferencesJSON {
 	out := preferencesJSON{
-		AudioLanguage: tagOf(p.AudioLanguage), AudioTrack: p.AudioTrack,
-		SubtitleLanguage: tagOf(p.SubtitleLanguage), SubtitleMode: p.SubtitleMode,
+		AudioLanguage: domain.TagOf(p.AudioLanguage), AudioTrack: p.AudioTrack,
+		SubtitleLanguage: domain.TagOf(p.SubtitleLanguage), SubtitleMode: p.SubtitleMode,
 		RememberAudio: p.RememberAudio, RememberSubtitles: p.RememberSubtitles,
 		MaxBitrateKbps: p.MaxBitrateKbps, NextEpisode: p.NextEpisode,
 		IntroAction: p.IntroAction, CreditsAction: p.CreditsAction, ThemeMusic: p.ThemeMusic,

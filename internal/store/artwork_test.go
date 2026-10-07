@@ -4,6 +4,8 @@ package store
 
 import (
 	"errors"
+	"maps"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -53,7 +55,7 @@ func TestPicturesBesideATitleComeBeforeAProvidersAndItsCardShowsTheBest(t *testi
 	if provider, _ := s.Picture(ctx, posters[1]); provider.URL != "https://image.tmdb.org/t/p/original/heat.jpg" {
 		t.Errorf("second poster = %+v, want TMDB's", provider)
 	}
-	cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10})
+	cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10})
 	if err != nil || len(cards) != 1 || cards[0].Poster != posters[0] || cards[0].Backdrop != page.Artwork[domain.ArtworkBackdrop][0] {
 		t.Errorf("card = %+v, %v; want the best poster and backdrop", cards, err)
 	}
@@ -170,5 +172,120 @@ func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
 	}
 	if _, err := s.ArtworkCandidates(ctx, uuid.NewV7(), domain.ArtworkPoster); !errors.Is(err, ErrNotFound) {
 		t.Errorf("candidates of no title: %v, want ErrNotFound", err)
+	}
+}
+
+// A title's best picture is the one from the provider its library ranks first for pictures of its
+// kind; one it has turned off comes after every one it asks.
+func TestALibrarysPictureRankingChoosesItsTitlesBest(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rank := func(images ...domain.RankedSource) {
+		t.Helper()
+		change := LibraryChange{Name: "Films", Sources: []domain.KindSources{{Kind: domain.ItemMovie, Metadata: []domain.RankedSource{{Source: domain.SourceTMDB, Enabled: true}}, Images: images}}}
+		if err := s.SetLibrary(ctx, lib.ID, change); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tmdb, omdb := domain.RankedSource{Source: domain.SourceTMDB, Enabled: true}, domain.RankedSource{Source: domain.SourceOMDb, Enabled: true}
+	rank(tmdb, omdb)
+	film := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+		RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
+	}}}}}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	item := oneItem(t, s, `kind = 'movie'`).ID
+	for source, url := range map[domain.FieldSource]string{domain.SourceTMDB: "https://tmdb.example/heat.jpg", domain.SourceOMDb: "https://omdb.example/heat.jpg"} {
+		if err := s.SaveIdentity(ctx, item, source, domain.Metadata{Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, URL: url}}}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	best := func() string {
+		t.Helper()
+		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
+		if err != nil || len(cards) != 1 {
+			t.Fatalf("wall = %+v, %v", cards, err)
+		}
+		p, err := s.Picture(ctx, cards[0].Poster)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.URL
+	}
+
+	if got := best(); got != "https://tmdb.example/heat.jpg" {
+		t.Errorf("ranking TMDB first, the poster is %q, want TMDB's", got)
+	}
+	rank(omdb, tmdb)
+	if got := best(); got != "https://omdb.example/heat.jpg" {
+		t.Errorf("ranking OMDb first, the poster is %q, want OMDb's", got)
+	}
+	omdb.Enabled = false
+	rank(omdb, tmdb)
+	if got := best(); got != "https://tmdb.example/heat.jpg" {
+		t.Errorf("with OMDb turned off, the poster is %q, want TMDB's", got)
+	}
+}
+
+func TestTheProviderPicturesATitleShowsFirstAreFetchedUntilHashed(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	film := Film{
+		Title: "heat", Folder: "Heat", Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, Path: "Heat/poster.jpg"}},
+		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
+		}}}},
+	}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var item uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items`).Scan(&item); err != nil {
+		t.Fatal(err)
+	}
+	const tmdb = "https://image.tmdb.org/t/p/original/"
+	err = s.SaveIdentity(ctx, item, domain.SourceTMDB, domain.Metadata{Artwork: []domain.Artwork{
+		{Kind: domain.ArtworkPoster, URL: tmdb + "heat.jpg"},
+		{Kind: domain.ArtworkBackdrop, URL: tmdb + "heat-wide.jpg"},
+		{Kind: domain.ArtworkBackdrop, URL: tmdb + "heat-wide-2.jpg"},
+		{Kind: domain.ArtworkLogo, URL: tmdb + "heat-logo.png"},
+	}, Credits: []domain.Credit{
+		{Name: "Al Pacino", IDs: map[domain.Provider]string{domain.ProviderTMDB: "1158"}, Photo: tmdb + "pacino.jpg", Kind: domain.CreditActor},
+	}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	urls := func(u Unfetched) []string { return slices.Sorted(maps.Values(u)) }
+
+	got, err := s.TitleUnfetched(ctx, item)
+	if want := []string{tmdb + "heat-logo.png", tmdb + "heat-wide.jpg", tmdb + "pacino.jpg"}; err != nil || !slices.Equal(urls(got), want) {
+		t.Errorf("unfetched = %v, %v; want the first backdrop, the logo and the actor's photo, not the poster beside the film", urls(got), err)
+	}
+	page, _, err := s.Unfetched(ctx, uuid.UUID{}, 1)
+	if err != nil || !maps.Equal(page, got) {
+		t.Errorf("first page = %v, %v; want the film's %v", page, err, got)
+	}
+
+	for id, url := range got {
+		if url != tmdb+"heat-logo.png" {
+			if err := s.SetBlurhash(ctx, id, "L6PZfSi_.AyE_3t7t7R**0o#DgR4"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if got, err := s.TitleUnfetched(ctx, item); err != nil || !slices.Equal(urls(got), []string{tmdb + "heat-logo.png"}) {
+		t.Errorf("unfetched once the backdrop and photo are hashed = %v, %v; want the logo alone", urls(got), err)
+	}
+	if page, last, err := s.Unfetched(ctx, item, 1); err != nil || len(page) != 0 || last != (uuid.UUID{}) {
+		t.Errorf("page past the film = %v, %s, %v; want none and the end", page, last, err)
 	}
 }
