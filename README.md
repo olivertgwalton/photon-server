@@ -28,10 +28,11 @@ Then open `http://<server>:8640` and log in.
 
 Each server keeps artwork (with avatars and theme tunes) and previews in its own cache folder
 until an admin chooses an S3 bucket they all share (`PUT /api/v1/admin/storage`). The bucket is
-checked before it is chosen, and every server keeps things there at once. Without an access key,
-a server signs with its own AWS credentials: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, the
-shared credentials file, or the instance's role. Choose the bucket before the first scan: moving
-away from where anything is kept is refused, so nothing is left behind.
+checked before it is chosen. Without an access key, a server signs with its own AWS credentials:
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, the shared credentials file, or the instance's
+role. What is kept is moved there: every server writes to both places, copies what it keeps, and
+keeps everything in the new place once every copy is done. A server that is down during a move
+keeps what is on its own disk there.
 
 What is kept in a bucket goes to clients through the server, or, when an admin asks, clients are
 sent to read pictures, sounds and previews from the bucket itself, at the address they reach it at.

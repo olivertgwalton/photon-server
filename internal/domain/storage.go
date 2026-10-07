@@ -1,5 +1,10 @@
 package domain
 
+import (
+	"time"
+	"uuid"
+)
+
 // StorageKind is where artwork, avatars, theme tunes and previews are kept.
 type StorageKind string
 
@@ -63,4 +68,29 @@ func (s Storage) SamePlace(o Storage) bool {
 		return s.Bucket.Endpoint == o.Bucket.Endpoint && s.Bucket.Name == o.Bucket.Name && s.Bucket.Folder == o.Bucket.Folder
 	}
 	return false
+}
+
+// StorageMove is artwork and previews being moved to another place. Every node writes to both
+// until each place they are copied from is done, and then keeps them in To.
+type StorageMove struct {
+	To      Storage
+	Started time.Time
+	Sources []MoveSource
+}
+
+// MoveSource is what one copy is from: a node's own disk, or with no Node the bucket all share.
+type MoveSource struct {
+	Node uuid.UUID
+	// Copied of Total are what is copied so far, of what there was when it was listed; Total is
+	// zero until then.
+	Copied, Total int
+	Done          bool
+	// Seen is when it last said how far it had got.
+	Seen time.Time
+}
+
+// Shared reports whether the moving of from to to is one copy, from a bucket every node shares to
+// another, rather than one copy per node of its own disk.
+func Shared(from, to Storage) bool {
+	return from.Kind == StorageBucket && to.Kind == StorageBucket
 }
