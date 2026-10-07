@@ -273,7 +273,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		domain.JobScanLibrary: scanLibrary(st, scan.New(st, tools, logger), hub, logger),
 	}, hub, nil)
 	matching := map[domain.JobKind]jobs.Handler{
-		domain.JobIdentify: identify.Handler(st, providers, domain.LocaleOf(lang), hub.Raise, logger),
+		domain.JobIdentify: identify.Handler(st, providers, pictureCache, domain.LocaleOf(lang), hub.Raise, logger),
 	}
 	// A node without yt-dlp leaves themes to one with it.
 	if tools.YTDLP.Path != "" {

@@ -4,6 +4,8 @@ package store
 
 import (
 	"errors"
+	"maps"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -227,5 +229,63 @@ func TestALibrarysPictureRankingChoosesItsTitlesBest(t *testing.T) {
 	rank(omdb, tmdb)
 	if got := best(); got != "https://tmdb.example/heat.jpg" {
 		t.Errorf("with OMDb turned off, the poster is %q, want TMDB's", got)
+	}
+}
+
+func TestTheProviderPicturesATitleShowsFirstAreFetchedUntilHashed(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	film := Film{
+		Title: "heat", Folder: "Heat", Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, Path: "Heat/poster.jpg"}},
+		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
+		}}}},
+	}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var item uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items`).Scan(&item); err != nil {
+		t.Fatal(err)
+	}
+	const tmdb = "https://image.tmdb.org/t/p/original/"
+	err = s.SaveIdentity(ctx, item, domain.SourceTMDB, domain.Metadata{Artwork: []domain.Artwork{
+		{Kind: domain.ArtworkPoster, URL: tmdb + "heat.jpg"},
+		{Kind: domain.ArtworkBackdrop, URL: tmdb + "heat-wide.jpg"},
+		{Kind: domain.ArtworkBackdrop, URL: tmdb + "heat-wide-2.jpg"},
+		{Kind: domain.ArtworkLogo, URL: tmdb + "heat-logo.png"},
+	}, Credits: []domain.Credit{
+		{Name: "Al Pacino", IDs: map[domain.Provider]string{domain.ProviderTMDB: "1158"}, Photo: tmdb + "pacino.jpg", Kind: domain.CreditActor},
+	}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	urls := func(u Unfetched) []string { return slices.Sorted(maps.Values(u)) }
+
+	got, err := s.TitleUnfetched(ctx, item)
+	if want := []string{tmdb + "heat-logo.png", tmdb + "heat-wide.jpg", tmdb + "pacino.jpg"}; err != nil || !slices.Equal(urls(got), want) {
+		t.Errorf("unfetched = %v, %v; want the first backdrop, the logo and the actor's photo, not the poster beside the film", urls(got), err)
+	}
+	page, _, err := s.Unfetched(ctx, uuid.UUID{}, 1)
+	if err != nil || !maps.Equal(page, got) {
+		t.Errorf("first page = %v, %v; want the film's %v", page, err, got)
+	}
+
+	for id, url := range got {
+		if url != tmdb+"heat-logo.png" {
+			if err := s.SetBlurhash(ctx, id, "L6PZfSi_.AyE_3t7t7R**0o#DgR4"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if got, err := s.TitleUnfetched(ctx, item); err != nil || !slices.Equal(urls(got), []string{tmdb + "heat-logo.png"}) {
+		t.Errorf("unfetched once the backdrop and photo are hashed = %v, %v; want the logo alone", urls(got), err)
+	}
+	if page, last, err := s.Unfetched(ctx, item, 1); err != nil || len(page) != 0 || last != (uuid.UUID{}) {
+		t.Errorf("page past the film = %v, %s, %v; want none and the end", page, last, err)
 	}
 }
