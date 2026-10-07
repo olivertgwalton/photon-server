@@ -13,6 +13,15 @@ import { Input } from "#lib/components/ui/input/index.js";
 
 let { data } = $props();
 
+// Where a collection's titles come from: put in by hand, or a list kept on a
+// provider, as Kometa's list builders read one.
+const sources = [
+	{ value: "hand", label: "By hand" },
+	{ value: "tmdb", label: "A TMDB list" },
+	{ value: "mdblist", label: "An MDBList list" },
+] as const;
+let source = $state<(typeof sources)[number]["value"]>("hand");
+
 async function add(event: SubmitEvent) {
 	const form = fields(event);
 	const { data: made, error } = await client().POST(
@@ -21,6 +30,10 @@ async function add(event: SubmitEvent) {
 			body: {
 				library_id: String(form.get("library") ?? ""),
 				title: String(form.get("title") ?? ""),
+				list:
+					source === "hand"
+						? undefined
+						: { source, id: String(form.get("list") ?? "").trim() },
 			},
 		},
 	);
@@ -28,7 +41,12 @@ async function add(event: SubmitEvent) {
 	await goto(`/settings/server/collections/${made.id}`);
 }
 
-const origins = { user: "Made here", smart: "Smart", tmdb: "From TMDB" };
+const origins = {
+	user: "Made here",
+	smart: "Smart",
+	list: "From a list",
+	tmdb: "From TMDB",
+};
 
 const libraries = $derived(
 	data.shelves.map((s) => ({ value: s.library.id, label: s.library.name })),
@@ -37,7 +55,7 @@ const libraries = $derived(
 
 <PageHeader
 	title="Collections"
-	description="Box sets of a library's titles. The providers make some as they match films; those follow the provider and are only read here. Ones made here are yours to fill and order. A smart one is saved from a library's filters, and holds what they find."
+	description="Box sets of a library's titles. The providers make some as they match films; those follow the provider and are only read here. Ones made here are yours to fill and order. A smart one is saved from a library's filters, and holds what they find. One made from a TMDB or MDBList list holds the titles of it the library has, read again daily."
 />
 
 {#if libraries.length}
@@ -64,6 +82,30 @@ const libraries = $derived(
 					/>
 				</Field.Field>
 				<Button type="submit">Make it</Button>
+			</div>
+			<div class="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-end">
+				<Field.Field>
+					<Field.Label for="collection-source">Titles</Field.Label>
+					<Choice
+						id="collection-source"
+						name="source"
+						bind:value={source}
+						options={sources}
+						class="w-44"
+					/>
+				</Field.Field>
+				{#if source !== "hand"}
+					<Field.Field>
+						<Field.Label for="collection-list">List</Field.Label>
+						<Input
+							id="collection-list"
+							name="list"
+							required
+							placeholder={source === "tmdb" ? "8136" : "user/list, or its id"}
+							class="font-mono"
+						/>
+					</Field.Field>
+				{/if}
 			</div>
 		</Field.Group>
 	</form>

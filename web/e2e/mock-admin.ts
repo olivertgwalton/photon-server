@@ -572,11 +572,14 @@ export async function admin(
 				kind: "collection",
 				title: asked.title,
 				added_at: film.added_at,
-				origin: "smart",
+				origin: asked.list ? "list" : "smart",
 				rule: asked.rule ?? undefined,
+				list: asked.list ? { ...asked.list, missing: 2 } : undefined,
 			};
 			return json({ id: "t-smart" } satisfies Schemas["Created"], 201);
 		}
+		case "POST /api/v1/admin/collections/t-smart/sync":
+			return done();
 		case "PUT /api/v1/admin/collections/t-smart/rule":
 			if (smart) smart.rule = (await request.json()) as Schemas["SmartRule"];
 			return done();

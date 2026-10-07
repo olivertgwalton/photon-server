@@ -7,6 +7,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -16,6 +17,9 @@ type collections interface {
 	AddCollection(ctx context.Context, lib uuid.UUID, title string) (uuid.UUID, error)
 	AddSmartCollection(ctx context.Context, lib uuid.UUID, title string, rule store.SmartRule) (uuid.UUID, error)
 	SetRule(ctx context.Context, collection uuid.UUID, rule store.SmartRule) error
+	AddListCollection(ctx context.Context, lib uuid.UUID, title string, list store.ListRef, listed []domain.Listed) (uuid.UUID, error)
+	SetListMembers(ctx context.Context, collection uuid.UUID, listed []domain.Listed) error
+	CollectionList(ctx context.Context, collection uuid.UUID) (store.ListRef, error)
 	SetMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error
 	SetPlacement(ctx context.Context, collection uuid.UUID, placement domain.CollectionPlacement) error
 	RemoveCollection(ctx context.Context, collection uuid.UUID) error
@@ -51,12 +55,14 @@ func (a *API) members(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
 }
 
-// addCollectionJSON is an admin's collection: titles put in it by hand, or, given a rule, a smart
-// collection of the titles the rule finds, as Plex's.
+// addCollectionJSON is an admin's collection: titles put in it by hand; given a rule, a smart
+// collection of the titles the rule finds, as Plex's; or given a list kept on a provider, the
+// titles of it the library has, as Kometa's list builders.
 type addCollectionJSON struct {
 	LibraryID uuid.UUID        `json:"library_id"`
 	Title     string           `json:"title"`
 	Rule      *store.SmartRule `json:"rule,omitzero"`
+	List      *store.ListRef   `json:"list,omitzero"`
 }
 
 // addCollection makes an admin's collection in a library.
@@ -69,15 +75,26 @@ func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "title is set")
 		return
 	}
+	if req.Rule != nil && req.List != nil {
+		writeProblem(w, a.logger, codeInvalidBody, "a collection is made by a rule or a list, not both")
+		return
+	}
 	if req.Rule != nil && !a.checkedRule(w, *req.Rule) {
 		return
 	}
 	var id uuid.UUID
 	var err error
-	if req.Rule == nil {
-		id, err = a.svc.Collections.AddCollection(r.Context(), req.LibraryID, req.Title)
-	} else {
+	switch {
+	case req.Rule != nil:
 		id, err = a.svc.Collections.AddSmartCollection(r.Context(), req.LibraryID, req.Title, *req.Rule)
+	case req.List != nil:
+		listed, ok := a.readList(w, r, *req.List)
+		if !ok {
+			return
+		}
+		id, err = a.svc.Collections.AddListCollection(r.Context(), req.LibraryID, req.Title, *req.List, listed)
+	default:
+		id, err = a.svc.Collections.AddCollection(r.Context(), req.LibraryID, req.Title)
 	}
 	if errors.Is(err, store.ErrNotFound) {
 		writeProblem(w, a.logger, codeInvalidBody, "library_id is not a library")
@@ -165,6 +182,44 @@ func (a *API) setRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !a.answered(w, r, a.svc.Collections.SetRule(r.Context(), id, req)) {
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// readList reads a list kept on a provider, saying why it cannot be: a list named as none is, a
+// provider that keeps none or is not set up, or one that did not answer.
+func (a *API) readList(w http.ResponseWriter, r *http.Request, list store.ListRef) ([]domain.Listed, bool) {
+	if err := list.Check(); err != nil {
+		writeProblem(w, a.logger, codeInvalidBody, err.Error())
+		return nil, false
+	}
+	listed, err := a.svc.Providers.List(r.Context(), list.Source, list.ID)
+	switch {
+	case errors.Is(err, provider.ErrNoLister), errors.Is(err, provider.ErrNotConfigured), errors.Is(err, provider.ErrNotFound):
+		writeProblem(w, a.logger, codeInvalidBody, "the list cannot be read: "+err.Error())
+		return nil, false
+	case err != nil:
+		writeProblem(w, a.logger, codeProviderUnavailable, err.Error())
+		return nil, false
+	}
+	return listed, true
+}
+
+// syncList reads a list collection's list again now, and keeps what it holds.
+func (a *API) syncList(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	list, err := a.svc.Collections.CollectionList(r.Context(), id)
+	if a.answered(w, r, err) {
+		return
+	}
+	listed, ok := a.readList(w, r, list)
+	if !ok {
+		return
+	}
+	if !a.answered(w, r, a.svc.Collections.SetListMembers(r.Context(), id, listed)) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

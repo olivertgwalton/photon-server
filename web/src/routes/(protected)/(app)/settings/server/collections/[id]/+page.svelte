@@ -39,6 +39,18 @@ function remove() {
 
 const editable = $derived(data.collection.origin === "user");
 const smart = $derived(data.collection.rule);
+const list = $derived(data.collection.list);
+const listSources: Record<string, string> = {
+	tmdb: "TMDB",
+	mdblist: "MDBList",
+};
+
+function sync() {
+	return act(
+		api.POST("/api/v1/admin/collections/{id}/sync", path),
+		"Read again.",
+	);
+}
 // Its library's wall, filtered by its rule, where the rule is changed.
 const changeRule = $derived.by(() => {
 	if (!smart || !data.library) return undefined;
@@ -91,6 +103,16 @@ function caption(card: Card) {
 				<a href="/settings/server/titles/{data.collection.id}" class="underline"
 					>Rename it, or choose its artwork</a
 				>.
+			{:else if list}
+				Holds the titles of
+				{listSources[String(list.source)] ?? list.source}
+				list
+				<span class="font-mono">{list.id}</span>
+				the library has, read again daily.
+				{#if list.missing}
+					{list.missing}
+					of it {list.missing === 1 ? "is" : "are"} not in the library.
+				{/if}
 			{:else if smart}
 				A smart collection: it holds what its filters find
 				{smart.limit ? `, the first ${smart.limit}` : ""}, found again as the
@@ -191,7 +213,12 @@ function caption(card: Card) {
 			{/if}
 		</section>
 	{/if}
-	{#if editable || smart}
+	{#if list}
+		<div>
+			<Button variant="outline" onclick={sync}>Sync now</Button>
+		</div>
+	{/if}
+	{#if editable || smart || list}
 		<div>
 			<ConfirmButton
 				onconfirm={remove}

@@ -267,6 +267,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/collections/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read a list collection's list again now, and keep the titles of it the library has
+         * @description Admin only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/events": {
         parameters: {
             query?: never;
@@ -5322,6 +5362,7 @@ export interface components {
         AddCollection: {
             /** Format: uuid */
             library_id: string;
+            list?: components["schemas"]["ListRef"] | null;
             rule?: components["schemas"]["SmartRule"] | null;
             title: string;
         };
@@ -5538,7 +5579,7 @@ export interface components {
         /** @enum {string} */
         CollectionMode: "grouped" | "shown" | "hidden";
         /** @enum {string} */
-        CollectionOrigin: "tmdb" | "user" | "smart";
+        CollectionOrigin: "tmdb" | "user" | "smart" | "list";
         /** @enum {string} */
         CollectionPlacement: "library" | "home";
         Counts: {
@@ -5976,6 +6017,11 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+        };
+        ListRef: {
+            id: string;
+            missing?: number;
+            source: components["schemas"]["FieldSource"];
         };
         Locales: {
             countries: string[];
@@ -6650,7 +6696,7 @@ export interface components {
             started_at?: string;
         };
         /** @enum {string} */
-        TaskKey: "scan_libraries" | "sweep_jobs" | "backup_database" | "refresh_metadata" | "sweep_artwork" | "detect_markers" | "backfill_previews" | "sweep_downloads" | "prune_activity" | "refresh_collections";
+        TaskKey: "scan_libraries" | "sweep_jobs" | "backup_database" | "refresh_metadata" | "sweep_artwork" | "detect_markers" | "backfill_previews" | "sweep_downloads" | "prune_activity" | "refresh_collections" | "sync_lists";
         TaskList: {
             items: components["schemas"]["Task"][];
         };
@@ -6693,6 +6739,7 @@ export interface components {
                 [key: string]: string;
             };
             kind: components["schemas"]["ItemKind"];
+            list?: components["schemas"]["ListRef"] | null;
             metadata_language?: string;
             origin?: components["schemas"]["CollectionOrigin"];
             original_title?: string;
