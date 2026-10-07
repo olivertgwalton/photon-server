@@ -20,6 +20,7 @@ type editing interface {
 	PinMatch(ctx context.Context, id uuid.UUID, p domain.Provider, value string) error
 	SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder) error
 	Refresh(ctx context.Context, id uuid.UUID, mode domain.RefreshMode) error
+	AnalyseTitle(ctx context.Context, id uuid.UUID) error
 	SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker, absent []domain.MarkerAbsent) error
 	IdentifySubject(ctx context.Context, id uuid.UUID) (store.Subject, bool, error)
 	ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain.ArtworkKind) ([]store.ArtworkCandidate, error)
@@ -217,6 +218,19 @@ type refreshJSON struct {
 }
 
 // refresh asks a title's providers about it again now, ahead of the schedule.
+// analyse asks for a title's files to be read again, as Plex's Analyze does, with what is made
+// from them after: its keyframes, previews and markers.
+func (a *API) analyse(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	if a.answered(w, r, a.svc.Editing.AnalyseTitle(r.Context(), id)) {
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
 func (a *API) refresh(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r, "id")
 	if !ok {
