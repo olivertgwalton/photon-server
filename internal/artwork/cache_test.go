@@ -83,6 +83,44 @@ func TestAPictureIsFetchedOnceAndHashed(t *testing.T) {
 	}
 }
 
+func TestPicturesFetchedAheadAreCachedAndOnesMissingPassedOver(t *testing.T) {
+	var poster bytes.Buffer
+	if err := png.Encode(&poster, gradient(20, 30)); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/gone.png" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(poster.Bytes())
+	}))
+	t.Cleanup(srv.Close)
+	dir := t.TempDir()
+	c, err := Open(dir, func(context.Context, uuid.UUID, string) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+
+	poster1, poster2, gone := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
+	n, err := c.Fetch(t.Context(), map[uuid.UUID]string{
+		poster1: srv.URL + "/a.png", poster2: srv.URL + "/b.png", gone: srv.URL + "/gone.png",
+	})
+	if err != nil || n != 2 {
+		t.Errorf("fetched %d, %v; want the two posters there", n, err)
+	}
+	for _, id := range []uuid.UUID{poster1, poster2} {
+		if b, err := os.ReadFile(filepath.Join(dir, id.String())); err != nil || !bytes.Equal(b, poster.Bytes()) {
+			t.Errorf("poster %s cached = %d bytes, %v; want the poster", id, len(b), err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, gone.String())); err == nil {
+		t.Error("a picture the provider no longer has was cached")
+	}
+}
+
 func TestASweepClearsReplacedPictures(t *testing.T) {
 	dir := t.TempDir()
 	c, err := Open(dir, nil)

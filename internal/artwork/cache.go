@@ -4,6 +4,7 @@ package artwork
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -16,9 +17,11 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 	"uuid"
 
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -75,6 +78,31 @@ func (c *Cache) File(ctx context.Context, id uuid.UUID, url string) (*os.File, e
 		}
 	}
 	return c.root.Open(name)
+}
+
+// fetchTogether is how many pictures Fetch asks for at once; providers limit how fast they are asked.
+const fetchTogether = 4
+
+// Fetch puts pictures, URLs by id, in the cache ahead of their being asked for, and answers how
+// many are there now. One that cannot be fetched is passed over.
+func (c *Cache) Fetch(ctx context.Context, pictures map[uuid.UUID]string) (int, error) {
+	var fetched atomic.Int64
+	var g errgroup.Group
+	g.SetLimit(fetchTogether)
+	for id, url := range pictures {
+		if ctx.Err() != nil {
+			break
+		}
+		g.Go(func() error {
+			if f, err := c.File(ctx, id, url); err == nil {
+				fetched.Add(1)
+				return f.Close()
+			}
+			return nil
+		})
+	}
+	err := g.Wait()
+	return int(fetched.Load()), cmp.Or(ctx.Err(), err)
 }
 
 // fetch keeps the picture at url under id and tells hashed its BlurHash, where it is a picture
