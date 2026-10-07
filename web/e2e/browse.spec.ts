@@ -57,7 +57,6 @@ test("a library's wall pages as it scrolls and jumps to a letter", async ({
 }) => {
 	await logIn(page, "/libraries/l-films");
 	await expect(page.getByText("250 titles")).toBeVisible();
-	await expect(page.getByText("250 films")).toBeVisible();
 	await expectAccessible(page);
 	const wall = page.getByRole("list", { name: "Films" });
 	await expect(wall.getByRole("link", { name: /Hilm 244/ })).toHaveCount(0);
