@@ -39,6 +39,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/mdblist"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/omdb"
+	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
 	"github.com/olivertgwalton/photon-server/internal/provider"
@@ -162,7 +163,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return fmt.Errorf("valkey: %w", err)
 	}
 	defer cache.Close()
-	trusted, err := httpapi.ParseTrustedProxies(os.Getenv("PHOTON_TRUSTED_PROXIES"))
+	trusted, err := peer.Parse(os.Getenv("PHOTON_TRUSTED_PROXIES"))
 	if err != nil {
 		return err
 	}

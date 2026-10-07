@@ -19,6 +19,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -305,7 +306,7 @@ func TestABrowserKeepsItsSessionInACookie(t *testing.T) {
 
 func TestTheCookieIsSecureBehindAnHTTPSProxy(t *testing.T) {
 	a := newAPI(nil)
-	a.svc.TrustedProxies, _ = ParseTrustedProxies("192.0.2.1")
+	a.svc.TrustedProxies, _ = peer.Parse("192.0.2.1")
 	for peer, want := range map[string]bool{"192.0.2.1:4000": true, "198.51.100.7:4000": false} {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(
 			`{"name":"Oliver","password":"correct horse","device":"d","client":"c","keep":"cookie"}`))

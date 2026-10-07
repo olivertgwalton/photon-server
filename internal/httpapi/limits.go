@@ -39,7 +39,7 @@ func (a *API) allowed(w http.ResponseWriter, r *http.Request, limit kv.Limit, ke
 }
 
 func (a *API) addrKey(r *http.Request, what string) string {
-	return what + ":addr:" + clientAddr(r, a.svc.TrustedProxies).String()
+	return what + ":addr:" + a.svc.TrustedProxies.Client(r).String()
 }
 
 func nameKey(what, name string) string {

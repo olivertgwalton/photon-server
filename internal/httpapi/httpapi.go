@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -166,7 +166,7 @@ type Services struct {
 	// Web is the web app, served for every path the API does not own; nil serves the API alone.
 	Web *Web
 	// TrustedProxies are the peers whose X-Forwarded-For names the client. None by default.
-	TrustedProxies []netip.Prefix
+	TrustedProxies peer.Proxies
 	// Network is how the server is reached, and Secure how this node serves it now; nil Secure
 	// never sends a plain request to HTTPS.
 	Network networkSettings

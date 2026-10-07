@@ -283,7 +283,7 @@ func (a *API) cardOf(r *http.Request, t domain.PlaybackTitle, c store.PlayCopy, 
 	card := domain.PlaybackCard{
 		Profile: domain.PlaybackProfile{ID: s.Profile.ID, Name: s.Profile.Name},
 		Device: domain.PlaybackDevice{
-			ID: s.ID, Name: s.Device, Client: s.Client, Address: clientAddr(r, a.svc.TrustedProxies).String(),
+			ID: s.ID, Name: s.Device, Client: s.Client, Address: a.svc.TrustedProxies.Client(r).String(),
 		},
 		Title: t,
 		Version: domain.PlaybackVersion{

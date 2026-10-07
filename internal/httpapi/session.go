@@ -150,7 +150,7 @@ func (a *API) keepSession(w http.ResponseWriter, r *http.Request, token string) 
 	}
 	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure wherever the browser has HTTPS, as said above
 		Name: sessionCookie, Value: token, Path: "/", MaxAge: maxAge,
-		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: overHTTPS(r, a.svc.TrustedProxies),
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: a.svc.TrustedProxies.HTTPS(r),
 	})
 }
 
@@ -172,7 +172,7 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	// Who tried, from where and on what, as Jellyfin logs a sign-in; never the password.
 	details := map[string]any{
 		"name": req.Name, "device": req.Device, "client": req.Client,
-		"address": clientAddr(r, a.svc.TrustedProxies).String(),
+		"address": a.svc.TrustedProxies.Client(r).String(),
 	}
 	switch {
 	case errors.Is(err, auth.ErrInvalidCredentials):
