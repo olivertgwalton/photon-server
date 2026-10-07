@@ -36,6 +36,7 @@ type playbacks interface {
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
 	End(ctx context.Context, id uuid.UUID) error
 	Abandon(ctx context.Context, id uuid.UUID) error
+	Serve(ctx context.Context, id uuid.UUID, cut func()) (done func(), err error)
 }
 
 type remuxing interface {
@@ -259,7 +260,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	} else {
 		for _, p := range c.Parts {
 			answer.Parts = append(answer.Parts, partJSON{
-				ID: p.ID, URL: a.svc.Signer.Sign("/api/v1/parts/"+p.ID.String()+"/stream", until),
+				ID: p.ID, URL: a.svc.Signer.Sign("/api/v1/playbacks/"+session.ID.String()+"/parts/"+p.ID.String()+"/stream", until),
 				OffsetMS: p.OffsetMS, DurationMS: p.DurationMS,
 			})
 		}
@@ -516,6 +517,22 @@ var fileTypes = map[string]string{
 
 // partStream serves one file of a copy as it is, in byte ranges.
 func (a *API) partStream(w http.ResponseWriter, r *http.Request) {
+	a.serveLibraryFile(w, r, a.svc.Playing.PartFile, math.MaxInt64)
+}
+
+// playbackPartStream serves a copy's file as it is to its playback, for as long as the playback
+// lasts: its stop cuts off what is still being sent.
+func (a *API) playbackPartStream(w http.ResponseWriter, r *http.Request) {
+	playback, ok := a.pathID(w, r, "playback")
+	if !ok {
+		return
+	}
+	rc := http.NewResponseController(w)
+	done, err := a.svc.Playbacks.Serve(r.Context(), playback, func() { _ = rc.SetWriteDeadline(time.Now()) })
+	if a.answered(w, r, err) {
+		return
+	}
+	defer done()
 	a.serveLibraryFile(w, r, a.svc.Playing.PartFile, math.MaxInt64)
 }
 

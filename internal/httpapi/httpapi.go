@@ -586,8 +586,13 @@ func (a *API) routes() []route {
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/mp4"}, handle: a.downloadFile,
 		},
 		{
+			pattern: "GET /api/v1/playbacks/{playback}/parts/{id}/stream", access: signedAddress,
+			summary: "A copy's file as it is, in byte ranges, at the address play answered, for as long as the playback lasts",
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, handle: a.playbackPartStream,
+		},
+		{
 			pattern: "GET /api/v1/parts/{id}/stream", access: signedAddress,
-			summary: "A copy's file as it is, in byte ranges, at the address play answered",
+			summary: "A copy's file as it is, in byte ranges, at the address a download answered",
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, handle: a.partStream,
 		},
 		{
