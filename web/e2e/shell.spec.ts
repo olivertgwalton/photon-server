@@ -40,7 +40,7 @@ test("rows scroll sideways inside the page, which never does", async ({
 }) => {
 	await logIn(page);
 	for (const [path, row] of [
-		["/", "Recently Added Films"],
+		["/", "Recently Added in Films"],
 		["/titles/t-film", "More like this"],
 	]) {
 		await page.goto(path);
@@ -73,7 +73,7 @@ test("a row's arrows page through it, each shown only where there is more", asyn
 }) => {
 	test.skip(isMobile, "A touch screen swipes; it has no arrows.");
 	await logIn(page);
-	const row = page.getByRole("region", { name: /Recently Added Films/ });
+	const row = page.getByRole("region", { name: /Recently Added in Films/ });
 	const previous = row.getByRole("button", { name: /Previous in/ });
 	const next = row.getByRole("button", { name: /Next in/ });
 	await expect(previous).toHaveCount(0);

@@ -171,7 +171,7 @@ test("the home's rows are put in order and hidden, by pointer or keyboard", asyn
 
 	await page.getByRole("link", { name: "Home", exact: true }).first().click();
 	await expect(
-		page.getByRole("heading", { name: "Recently Added Films" }),
+		page.getByRole("heading", { name: "Recently Added in Films" }),
 	).toBeVisible();
 	await expect(
 		page.getByRole("heading", { name: "Continue Watching" }),

@@ -1,27 +1,78 @@
 import type { Shape } from "./artwork.js";
 import type { components } from "./api/schema.js";
+import { type WallQuery, wallSearch } from "./wall.js";
 
 type Kind = components["schemas"]["HomeRowKind"];
+type Row = components["schemas"]["HomeRow"];
 
 // A rail shows this many; the rest are its heading's to show, as the Photon
 // apps' rows are twenty with the heading as the rest.
 export const railLimit = 20;
 
-export const homeRows: Record<Kind, { title: string; shape: Shape }> = {
+// A row of a library's titles is one for each library, as Plex's library hubs:
+// "Recently Added in Films", leading to that library's wall in the row's order.
+export const homeRows: Record<
+	Kind,
+	{ title: string; shape: Shape; library?: { title: string; wall: WallQuery } }
+> = {
 	continue_watching: { title: "Continue Watching", shape: "still" },
 	next_up: { title: "Next Up", shape: "still" },
 	watchlist: { title: "Watchlist", shape: "poster" },
 	favourites: { title: "Favourites", shape: "poster" },
-	recently_added_films: { title: "Recently Added Films", shape: "poster" },
-	recently_added_shows: { title: "Recently Added Shows", shape: "poster" },
-	recently_released: { title: "Recently Released", shape: "poster" },
-	top_rated_unwatched: { title: "Top Rated", shape: "poster" },
+	recently_added_films: {
+		title: "Recently Added Films",
+		shape: "poster",
+		library: { title: "Recently Added", wall: { sort: "added" } },
+	},
+	recently_added_shows: {
+		title: "Recently Added Shows",
+		shape: "poster",
+		library: { title: "Recently Added", wall: { sort: "added" } },
+	},
+	recently_released: {
+		title: "Recently Released",
+		shape: "poster",
+		library: { title: "Recently Released", wall: { sort: "released" } },
+	},
+	top_rated_unwatched: {
+		title: "Top Rated",
+		shape: "poster",
+		library: {
+			title: "Top Rated",
+			wall: { sort: "rating", mark: ["unwatched"] },
+		},
+	},
 	// A row each, under the collection's own name, leading to its page.
 	collection: { title: "Collections", shape: "poster" },
 };
 
 export function isHomeRow(kind: string): kind is Kind {
 	return kind in homeRows;
+}
+
+// What a home row is drawn as: its key among the rows, its heading, and where
+// its heading leads.
+export function rail(row: Row): { key: string; title: string; href: string } {
+	const kind = homeRows[row.kind];
+	if (row.collection) {
+		return {
+			key: row.collection.id,
+			title: row.collection.title,
+			href: `/titles/${row.collection.id}`,
+		};
+	}
+	if (row.library && kind.library) {
+		return {
+			key: `${row.kind}/${row.library.id}`,
+			title: `${kind.library.title} in ${row.library.name}`,
+			href: `/libraries/${row.library.id}${wallSearch(kind.library.wall)}`,
+		};
+	}
+	return {
+		key: row.kind,
+		title: kind.title,
+		href: row.kind === "watchlist" ? "/watchlist" : `/home/${row.kind}`,
+	};
 }
 
 const kinds: [components["schemas"]["ItemKind"], string][] = [

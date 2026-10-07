@@ -464,7 +464,7 @@ test("a member's card offers no editing", async ({ page }) => {
 	await asKids(page);
 	await page.goto("/");
 	await page
-		.getByRole("region", { name: "Recently Added Films" })
+		.getByRole("region", { name: "Recently Added in Films" })
 		.getByRole("button", { name: /^More for / })
 		.first()
 		.click();
@@ -474,7 +474,7 @@ test("a member's card offers no editing", async ({ page }) => {
 test("a title is analysed from its card", async ({ page }) => {
 	await logIn(page);
 	await page
-		.getByRole("region", { name: "Recently Added Films" })
+		.getByRole("region", { name: "Recently Added in Films" })
 		.getByRole("button", { name: "More for Quiet Hours" })
 		.click();
 	await page.getByRole("menuitem", { name: "Analyse" }).click();
@@ -486,7 +486,7 @@ test("a title is analysed from its card", async ({ page }) => {
 test("a title is unmatched from its card", async ({ page }) => {
 	await logIn(page);
 	await page
-		.getByRole("region", { name: "Recently Added Films" })
+		.getByRole("region", { name: "Recently Added in Films" })
 		.getByRole("button", { name: "More for Quiet Hours" })
 		.click();
 	await page.getByRole("menuitem", { name: "Unmatch" }).click();
@@ -500,7 +500,7 @@ test("a film of two copies is split apart from its card, once asked", async ({
 }) => {
 	await logIn(page);
 	await page
-		.getByRole("region", { name: "Recently Added Films" })
+		.getByRole("region", { name: "Recently Added in Films" })
 		.getByRole("button", { name: "More for Quiet Hours" })
 		.click();
 	await page.getByRole("menuitem", { name: "Split apart…" }).click();
@@ -517,7 +517,7 @@ test("deleting from a card asks first, and says why its library refuses", async 
 }) => {
 	await logIn(page);
 	await page
-		.getByRole("region", { name: "Recently Added Films" })
+		.getByRole("region", { name: "Recently Added in Films" })
 		.getByRole("button", { name: "More for Quiet Hours" })
 		.click();
 	await page.getByRole("menuitem", { name: "Delete…" }).click();

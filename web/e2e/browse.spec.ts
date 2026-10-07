@@ -19,11 +19,11 @@ test("a title is taken off Continue Watching from its card", async ({
 		page.getByRole("link", { name: /Continue Watching/ }),
 	).toHaveCount(0);
 	await page
-		.getByRole("link", { name: "Recently Added Films View all" })
+		.getByRole("link", { name: "Recently Added in Films View all" })
 		.click();
-	await expect(page).toHaveURL("/home/recently_added_films");
+	await expect(page).toHaveURL("/libraries/l-films?sort=added");
 	await expect(
-		page.getByRole("heading", { name: "Recently Added Films" }),
+		page.getByRole("heading", { level: 1, name: "Films" }),
 	).toBeVisible();
 });
 
@@ -423,7 +423,7 @@ test("a title's link is copied to share, or shown where it cannot be", async ({
 	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 	await logIn(page);
 	// A row no other test changes.
-	const row = page.getByRole("region", { name: "Recently Added Films" });
+	const row = page.getByRole("region", { name: "Recently Added in Films" });
 	await row.getByRole("button", { name: "More for Quiet Hours" }).click();
 	await page.getByRole("menuitem", { name: "Share…" }).click();
 	await expect(
@@ -466,7 +466,7 @@ test("a version is chosen from a card to play or to download", async ({
 	page,
 }) => {
 	await logIn(page);
-	const row = page.getByRole("region", { name: "Recently Added Films" });
+	const row = page.getByRole("region", { name: "Recently Added in Films" });
 	await row.getByRole("button", { name: "More for Quiet Hours" }).click();
 	await page.getByRole("menuitem", { name: "Play version…" }).click();
 	await page
