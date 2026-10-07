@@ -23,6 +23,7 @@ import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Menu from "#lib/components/ui/dropdown-menu/index.js";
+import { fullTitle } from "#lib/format.js";
 import {
 	browserProfile,
 	type Capabilities,
@@ -176,19 +177,7 @@ const upNext = $derived(
 const chromeHidden = $derived(
 	resting && !paused && !menuOpen && !infoOpen && !refusal,
 );
-const heading = $derived(
-	title.show
-		? [
-				title.show.title,
-				title.season_number != null && title.episode_number != null
-					? `S${title.season_number} E${title.episode_number}`
-					: "",
-				title.title,
-			]
-				.filter(Boolean)
-				.join(" · ")
-		: title.title,
-);
+const heading = $derived(fullTitle(title, title.show?.title));
 
 function send(id: string) {
 	return (r: Report) => {

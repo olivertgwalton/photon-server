@@ -1,4 +1,5 @@
 <script lang="ts">
+import { episodeLabel } from "#lib/format.js";
 import { onDestroy } from "svelte";
 import { artworkSrc } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
@@ -36,11 +37,7 @@ const timer = setInterval(() => {
 onDestroy(() => clearInterval(timer));
 
 const picture = $derived(card.thumb ?? card.backdrop);
-const where = $derived(
-	card.season_number != null && card.episode_number != null
-		? `S${card.season_number} E${card.episode_number}`
-		: "",
-);
+const where = $derived(episodeLabel(card.season_number, card.episode_number));
 </script>
 
 <section

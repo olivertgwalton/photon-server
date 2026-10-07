@@ -51,6 +51,22 @@ export function episodeLabel(
 	return season == null ? span : `S${season} ${span}`;
 }
 
+// "Small Show S1 E2 · Second": an episode as one line, by its show and place
+// in it; anything else by its own title.
+export function fullTitle(
+	t: {
+		title: string;
+		season_number?: number | null;
+		episode_number?: number | null;
+		episode_end?: number | null;
+	},
+	show: string | undefined,
+): string {
+	if (!show) return t.title;
+	const at = episodeLabel(t.season_number, t.episode_number, t.episode_end);
+	return `${[show, at].filter(Boolean).join(" ")} · ${t.title}`;
+}
+
 export const ratingSites: Record<Schemas["RatingSite"], string> = {
 	imdb: "IMDb",
 	tmdb: "TMDB",

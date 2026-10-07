@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
 	holding,
 	episodeLabel,
+	fullTitle,
 	playHref,
 	ratingMark,
 	runtime,
@@ -24,6 +25,13 @@ test("an episode is placed by season and number, a double by both ends", () => {
 	expect(episodeLabel(1, 2)).toBe("S1 E2");
 	expect(episodeLabel(1, 2, 3)).toBe("S1 E2–E3");
 	expect(episodeLabel(null, 5)).toBe("E5");
+});
+
+test("an episode is named with its show and place, anything else alone", () => {
+	expect(
+		fullTitle({ title: "Second", season_number: 1, episode_number: 2 }, "Show"),
+	).toBe("Show S1 E2 · Second");
+	expect(fullTitle({ title: "Heat" }, undefined)).toBe("Heat");
 });
 
 test("each site's score is printed on that site's own scale", () => {

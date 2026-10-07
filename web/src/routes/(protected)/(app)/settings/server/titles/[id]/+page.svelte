@@ -1,4 +1,5 @@
 <script lang="ts">
+import { fullTitle } from "#lib/format.js";
 import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
 import { client } from "#lib/api/client.js";
@@ -45,9 +46,7 @@ const versions = $derived(
 	t.kind === "movie" || t.kind === "episode" ? (t.versions ?? []) : [],
 );
 const name = $derived(
-	t.kind === "episode" && t.show
-		? `${t.show.title} S${t.season_number} E${t.episode_number} · ${t.title}`
-		: t.title,
+	fullTitle(t, t.kind === "episode" ? t.show?.title : undefined),
 );
 </script>
 

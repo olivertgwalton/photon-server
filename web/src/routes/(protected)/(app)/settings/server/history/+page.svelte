@@ -1,4 +1,5 @@
 <script lang="ts">
+import { fullTitle } from "#lib/format.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { methods, when } from "#lib/admin/words.js";
 import Choice from "#lib/components/admin/Choice.svelte";
@@ -18,8 +19,10 @@ const everyone = $derived([
 ]);
 
 function name(card: (typeof data.page.items)[number]["title"]) {
-	if (card.kind !== "episode" || !card.show) return card.title;
-	return `${card.show.title} S${card.season_number} E${card.episode_number} · ${card.title}`;
+	return fullTitle(
+		card,
+		card.kind === "episode" ? card.show?.title : undefined,
+	);
 }
 
 function reached(position: number, duration?: number) {
