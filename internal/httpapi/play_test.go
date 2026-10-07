@@ -369,8 +369,6 @@ func (fakeHLS) Open(context.Context, uuid.UUID, store.PlayCopy, domain.VideoPlan
 
 func (fakeHLS) Transcodes() (active, conversions, limit int) { return 1, 0, 4 }
 
-func (fakeHLS) Encoder(domain.VideoPlan) domain.Acceleration { return domain.AccelSoftware }
-
 func (fakeHLS) Has(playback uuid.UUID) bool { return playback == playbackID }
 
 func (fakeHLS) Playlist(playback uuid.UUID, name string) (string, error) {

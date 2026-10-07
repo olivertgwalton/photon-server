@@ -434,11 +434,6 @@ func (r *Remuxer) cuesOf(ctx context.Context, s *session, n int) error {
 	return nil
 }
 
-// Encoder answers the device video planned so is encoded on, or nothing where it is copied.
-func (r *Remuxer) Encoder(video domain.VideoPlan) domain.Acceleration {
-	return EncodedOn(r.hw.Accel, video)
-}
-
 // EncodedOn is what a node encoding on accel encodes video with, or nothing where it is copied.
 func EncodedOn(accel domain.Acceleration, video domain.VideoPlan) domain.Acceleration {
 	if video.Encode == nil {

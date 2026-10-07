@@ -55,7 +55,6 @@ type hlsFiles interface {
 	Has(playback uuid.UUID) bool
 	Resource(ctx context.Context, playback uuid.UUID, name string) (hls.Resource, error)
 	Transcodes() (active, conversions, limit int)
-	Encoder(video domain.VideoPlan) domain.Acceleration
 	WebVTT(ctx context.Context, open func() (*os.File, error), language string) (string, error)
 	Extracted(ctx context.Context, src hls.SubtitleSource, want string) (string, error)
 }
