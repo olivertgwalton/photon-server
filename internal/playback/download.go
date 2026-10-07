@@ -22,7 +22,7 @@ import (
 // most, one nobody knows taken as a transcode takes it, and its picture no wider. Its codecs do
 // not matter.
 func Fits(c Copy, q domain.Quality) bool {
-	video, _ := pick(c.Streams, nil)
+	video, _ := Pick(c.Streams, nil)
 	return cmp.Or(c.BitrateKbps, sourceKbps) <= q.MaxBitrateKbps &&
 		(q.MaxWidth == 0 || video == nil || video.Width <= q.MaxWidth)
 }

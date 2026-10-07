@@ -137,19 +137,19 @@ type playbackRequest struct {
 func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID, c store.PlayCopy, req playbackRequest, remote int) {
 	p := *req.DeviceProfile
 	limit := int64(playback.Capped(int(cmp.Or(req.MaxStreamingBitrate, p.MaxStreamingBitrate)/1000), remote)) * 1000
-	tracks := direct(c, req.AudioStreamIndex)
+	video, sound := direct(c, req.AudioStreamIndex)
 	sub, picked := subtitleOf(c, req.SubtitleStreamIndex)
-	if p.playsDirectly(c, streamAt(c, tracks.Video), streamAt(c, tracks.Audio), picked, limit) {
+	if p.playsDirectly(c, video, sound, picked, limit) {
 		return
 	}
 	src.SupportsDirectPlay, src.SupportsDirectStream = false, false
-	t, segments, ok := p.hls(streamAt(c, tracks.Audio))
+	t, segments, ok := p.hls(sound)
 	if !ok {
 		return
 	}
 	var audio *int
-	if tracks.Audio != nil {
-		audio = &tracks.Audio.Stream
+	if sound != nil {
+		audio = &sound.Index
 	}
 	chosen := domain.ChosenTracks{Audio: audio, Subtitle: sub}
 	if picked != nil && picked.external {
@@ -171,59 +171,12 @@ var transcodingContainers = map[domain.SegmentFormat]string{domain.SegmentsFMP4:
 
 // direct is a copy's tracks played as they are: its first video, and the audio an app chose, else
 // its default, else its first.
-func direct(c store.PlayCopy, audio *int) playback.Decision {
-	d := playback.Decision{Method: domain.PlayDirect}
-	var first, marked *domain.Stream
-	for i, s := range c.Streams {
-		switch s.Kind {
-		case domain.StreamVideo:
-			if d.Video == nil {
-				d.Video = &domain.VideoPlan{Stream: s.Index, Codec: s.Codec}
-			}
-		case domain.StreamAudio:
-			if audio != nil && *audio == s.Index {
-				d.Audio = &domain.AudioPlan{Stream: s.Index}
-			}
-			if first == nil {
-				first = &c.Streams[i]
-			}
-			if s.Default && marked == nil {
-				marked = &c.Streams[i]
-			}
-		case domain.StreamSubtitle:
-		}
+func direct(c store.PlayCopy, audio *int) (video, sound *domain.Stream) {
+	video, sound = playback.Pick(c.Streams, audio)
+	if sound == nil {
+		_, sound = playback.Pick(c.Streams, nil)
 	}
-	if d.Audio == nil {
-		if chosen := cmp.Or(marked, first); chosen != nil {
-			d.Audio = &domain.AudioPlan{Stream: chosen.Index}
-		}
-	}
-	return d
-}
-
-// streamAt is the copy's track a plan names, nil for none.
-func streamAt[P interface {
-	*domain.VideoPlan | *domain.AudioPlan
-}](c store.PlayCopy, plan P) *domain.Stream {
-	var index int
-	switch p := any(plan).(type) {
-	case *domain.VideoPlan:
-		if p == nil {
-			return nil
-		}
-		index = p.Stream
-	case *domain.AudioPlan:
-		if p == nil {
-			return nil
-		}
-		index = p.Stream
-	}
-	for i := range c.Streams {
-		if c.Streams[i].Index == index {
-			return &c.Streams[i]
-		}
-	}
-	return nil
+	return video, sound
 }
 
 // subtitleOf is the subtitle an app chose by its index: one of the copy's own tracks, whose index
@@ -434,7 +387,15 @@ func (a *API) startDirect(r *http.Request, id uuid.UUID, rep report) error {
 		return err
 	}
 	sub, _ := subtitleOf(c, rep.SubtitleStreamIndex)
-	_, err = a.svc.Playbacks.Start(r.Context(), id, domain.PlayDirect, playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, direct(c, rep.AudioStreamIndex), domain.ChosenTracks{Subtitle: sub}), a.svc.Placer.Self().ID)
+	d := playback.Decision{Method: domain.PlayDirect}
+	video, sound := direct(c, rep.AudioStreamIndex)
+	if video != nil {
+		d.Video = &domain.VideoPlan{Stream: video.Index, Codec: video.Codec}
+	}
+	if sound != nil {
+		d.Audio = &domain.AudioPlan{Stream: sound.Index}
+	}
+	_, err = a.svc.Playbacks.Start(r.Context(), id, domain.PlayDirect, playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: sub}), a.svc.Placer.Self().ID)
 	return err
 }
 
