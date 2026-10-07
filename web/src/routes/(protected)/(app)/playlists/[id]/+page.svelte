@@ -7,9 +7,9 @@ import ShuffleIcon from "@lucide/svelte/icons/shuffle";
 import TrashIcon from "@lucide/svelte/icons/trash";
 import XIcon from "@lucide/svelte/icons/x";
 import { act } from "#lib/act.js";
+import { confirmFirst } from "#lib/actions.svelte.js";
 import { client } from "#lib/api/client.js";
 import TitleRow from "#lib/components/TitleRow.svelte";
-import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
@@ -32,8 +32,18 @@ async function rename(event: SubmitEvent) {
 }
 
 function remove() {
-	const asked = api.DELETE("/api/v1/playlists/{id}", { params: { path } });
-	act(asked, `${data.playlist.name} was deleted.`, "/playlists");
+	const title = data.playlist.name;
+	confirmFirst(
+		`Delete ${title}?`,
+		"The playlist goes; its titles stay in the library.",
+		"Delete",
+		() =>
+			act(
+				api.DELETE("/api/v1/playlists/{id}", { params: { path } }),
+				`${title} was deleted.`,
+				"/playlists",
+			),
+	);
 }
 
 function move(entry: string, position: number) {
@@ -103,27 +113,7 @@ const name = (e: (typeof data.entries)[number]) =>
 		>
 			<PencilIcon />Rename
 		</Button>
-		<AlertDialog.Root>
-			<AlertDialog.Trigger>
-				{#snippet child({
-					props,
-				})}
-					<Button variant="outline" {...props}> <TrashIcon />Delete </Button>
-				{/snippet}
-			</AlertDialog.Trigger>
-			<AlertDialog.Content>
-				<AlertDialog.Header>
-					<AlertDialog.Title>Delete {data.playlist.name}?</AlertDialog.Title>
-					<AlertDialog.Description>
-						The playlist goes; its titles stay in the library.
-					</AlertDialog.Description>
-				</AlertDialog.Header>
-				<AlertDialog.Footer>
-					<AlertDialog.Cancel>Keep it</AlertDialog.Cancel>
-					<Button variant="destructive" onclick={remove}>Delete</Button>
-				</AlertDialog.Footer>
-			</AlertDialog.Content>
-		</AlertDialog.Root>
+		<Button variant="outline" onclick={remove}> <TrashIcon />Delete </Button>
 	</div>
 
 	{#if data.entries.length}
