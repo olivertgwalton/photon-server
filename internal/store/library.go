@@ -377,15 +377,6 @@ func (s *Store) CertificateCountries(ctx context.Context) ([]string, error) {
 	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
-// LibraryOrder answers the libraries a profile has put in an order, in it.
-func (s *Store) LibraryOrder(ctx context.Context, profile uuid.UUID) ([]uuid.UUID, error) {
-	rows, err := s.pool.Query(ctx, `SELECT library_id FROM library_order WHERE profile_id = $1 ORDER BY position`, profile)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-}
-
 // SetLibraryOrder puts a profile's libraries in this order. ErrNotFound for one named twice or no
 // library.
 func (s *Store) SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error {

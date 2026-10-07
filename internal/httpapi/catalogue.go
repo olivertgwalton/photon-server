@@ -7,7 +7,6 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,7 +23,7 @@ const (
 )
 
 type catalogue interface {
-	Libraries(ctx context.Context) ([]domain.Library, error)
+	LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*store.SeenLibrary, error)
 	Wall(ctx context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
 	Letters(ctx context.Context, lib, profile uuid.UUID, f store.WallFilter) ([]store.Letter, error)
 	Facets(ctx context.Context, lib, profile uuid.UUID) (store.Facets, error)
@@ -33,7 +32,6 @@ type catalogue interface {
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Home(ctx context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
-	LibraryOrder(ctx context.Context, profile uuid.UUID) ([]uuid.UUID, error)
 	SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error
 }
 
@@ -75,25 +73,11 @@ type cardJSON struct {
 }
 
 func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
-	libs, err := a.svc.Catalogue.Libraries(r.Context())
+	libs, err := a.svc.Catalogue.LibrariesSeen(r.Context(), sessionOf(r).Profile.ID)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	profile := sessionOf(r).Profile.ID
-	order, err := a.svc.Catalogue.LibraryOrder(r.Context(), profile)
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	// In the profile's order, those it has not placed after, by name.
-	rank := func(id uuid.UUID) int {
-		if n := slices.Index(order, id); n >= 0 {
-			return n
-		}
-		return len(order)
-	}
-	slices.SortStableFunc(libs, func(x, y domain.Library) int { return cmp.Compare(rank(x.ID), rank(y.ID)) })
 	out := make([]libraryJSON, len(libs))
 	for i, l := range libs {
 		out[i] = libraryJSON{ID: l.ID, Name: l.Name, Kind: l.Kind}
