@@ -373,6 +373,23 @@ test("an API key is shown once, to copy, and revoked", async ({ page }) => {
 	await expect(page.getByText("No API keys yet.")).toBeVisible();
 });
 
+test("secure connections are set with a certificate", async ({ page }) => {
+	await logIn(page, "/settings/server/network");
+	await expectAccessible(page);
+	await page.getByLabel("Secure connections").click();
+	await page.getByRole("option", { name: "Preferred" }).click();
+	await page.getByLabel("Certificate").fill("/certs/fullchain.pem");
+	await page.getByLabel("Key").fill("/certs/privkey.pem");
+	await page.getByRole("button", { name: "Save" }).click();
+	await expect(page.getByText(/^Saved/)).toBeVisible();
+
+	await page.reload();
+	await expect(page.getByLabel("Secure connections")).toHaveText("Preferred");
+	await expect(page.getByLabel("Certificate")).toHaveValue(
+		"/certs/fullchain.pem",
+	);
+});
+
 test("a collection made here is filled from its library", async ({ page }) => {
 	await logIn(page, "/settings/server/collections");
 	await expect(page.getByText("Made here", { exact: true })).toBeVisible();

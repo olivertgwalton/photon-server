@@ -10,6 +10,7 @@ import LayersIcon from "@lucide/svelte/icons/layers";
 import LibraryIcon from "@lucide/svelte/icons/library";
 import ListChecksIcon from "@lucide/svelte/icons/list-checks";
 import MonitorSmartphoneIcon from "@lucide/svelte/icons/monitor-smartphone";
+import NetworkIcon from "@lucide/svelte/icons/network";
 import SlidersHorizontalIcon from "@lucide/svelte/icons/sliders-horizontal";
 import TvIcon from "@lucide/svelte/icons/tv";
 import UserIcon from "@lucide/svelte/icons/user";
@@ -34,6 +35,7 @@ const server: [string, string, Component][] = [
 	["/settings/server/libraries", "Libraries", LibraryIcon],
 	["/settings/server/profiles", "Profiles", UsersIcon],
 	["/settings/server/providers", "Metadata", DatabaseIcon],
+	["/settings/server/network", "Network", NetworkIcon],
 	["/settings/server/collections", "Collections", LayersIcon],
 	["/settings/server/tasks", "Scheduled tasks", CalendarClockIcon],
 	["/settings/server/jobs", "Jobs", ListChecksIcon],
