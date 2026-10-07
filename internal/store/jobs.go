@@ -53,6 +53,21 @@ func promoteFor(ctx context.Context, tx db, kind domain.JobKind, due domain.JobD
 	return err
 }
 
+// queueBacklog runs an INSERT of jobs of kind, due as its $1, after promoteFor, answering how many
+// it queued.
+func (s *Store) queueBacklog(ctx context.Context, kind domain.JobKind, due domain.JobDue, insert string) (int64, error) {
+	var n int64
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := promoteFor(ctx, tx, kind, due); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, insert, due)
+		n = tag.RowsAffected()
+		return err
+	})
+	return n, err
+}
+
 // askedPriority is a job an admin asked for by hand: it is claimed before everything a schedule
 // or a scan queued.
 const askedPriority = 1

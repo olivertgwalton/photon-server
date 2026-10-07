@@ -261,12 +261,7 @@ func (s *Store) SaveFoundMarkers(ctx context.Context, source domain.MarkerSource
 // queued is due now too. A season whose comparison failed every attempt waits for its episodes to
 // change.
 func (s *Store) QueueSeasonMarkers(ctx context.Context, due domain.JobDue) (int64, error) {
-	var n int64
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := promoteFor(ctx, tx, domain.JobMarkers, due); err != nil {
-			return err
-		}
-		tag, err := tx.Exec(ctx, `
+	return s.queueBacklog(ctx, domain.JobMarkers, due, `
 		INSERT INTO jobs (kind, subject, due)
 		SELECT DISTINCT 'markers', e.parent_id, $1 FROM items e
 		JOIN versions v ON v.item_id = e.id AND v.missing_since IS NULL
@@ -274,22 +269,13 @@ func (s *Store) QueueSeasonMarkers(ctx context.Context, due domain.JobDue) (int6
 		JOIN parts p ON p.version_id = v.id
 		WHERE e.kind = 'episode' AND p.fingerprinted_at IS NULL
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'audio')
-		ON CONFLICT (kind, subject) DO NOTHING`, due)
-		n = tag.RowsAffected()
-		return err
-	})
-	return n, err
+		ON CONFLICT (kind, subject) DO NOTHING`)
 }
 
 // QueueFilmMarkers queues a reading of the end of every film whose last part has not been read, in
 // a library that reads its files for markers, due as said, as QueueSeasonMarkers queues seasons.
 func (s *Store) QueueFilmMarkers(ctx context.Context, due domain.JobDue) (int64, error) {
-	var n int64
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := promoteFor(ctx, tx, domain.JobMarkers, due); err != nil {
-			return err
-		}
-		tag, err := tx.Exec(ctx, `
+	return s.queueBacklog(ctx, domain.JobMarkers, due, `
 		INSERT INTO jobs (kind, subject, due)
 		SELECT DISTINCT 'markers', i.id, $1 FROM items i
 		JOIN versions v ON v.item_id = i.id AND v.missing_since IS NULL
@@ -297,9 +283,5 @@ func (s *Store) QueueFilmMarkers(ctx context.Context, due domain.JobDue) (int64,
 		JOIN parts p ON p.version_id = v.id AND p.idx = (SELECT max(idx) FROM parts WHERE version_id = v.id)
 		WHERE i.kind = 'movie' AND p.fingerprinted_at IS NULL
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'video')
-		ON CONFLICT (kind, subject) DO NOTHING`, due)
-		n = tag.RowsAffected()
-		return err
-	})
-	return n, err
+		ON CONFLICT (kind, subject) DO NOTHING`)
 }
