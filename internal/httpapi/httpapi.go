@@ -429,6 +429,11 @@ func (a *API) routes() []route {
 			status:  http.StatusNoContent, handle: a.split,
 		},
 		{
+			pattern: "DELETE /api/v1/admin/titles/{id}", access: admin,
+			summary: "Delete a title's files from the disk, then the title, where its library allows it",
+			status:  http.StatusNoContent, handle: a.deleteTitle,
+		},
+		{
 			pattern: "PUT /api/v1/admin/titles/{id}/episode-order", access: admin,
 			summary: "Say the order a show's episode files are numbered in",
 			body:    setEpisodeOrderJSON{}, status: http.StatusAccepted, handle: a.setEpisodeOrder,

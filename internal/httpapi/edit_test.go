@@ -2,9 +2,13 @@ package httpapi
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"uuid"
@@ -27,9 +31,12 @@ type fakeEditing struct {
 	analysed  uuid.UUID
 	unmatched uuid.UUID
 	split     uuid.UUID
-	marked    []domain.Marker
-	absent    []domain.MarkerAbsent
-	chosen    map[domain.ArtworkKind]uuid.UUID
+	// files are films' own; forgot is the title forgotten once they were deleted.
+	files  []store.LibraryFile
+	forgot uuid.UUID
+	marked []domain.Marker
+	absent []domain.MarkerAbsent
+	chosen map[domain.ArtworkKind]uuid.UUID
 }
 
 func (f *fakeEditing) EditMetadata(_ context.Context, id uuid.UUID, m domain.Metadata) error {
@@ -66,6 +73,21 @@ func (f *fakeEditing) Refresh(_ context.Context, id uuid.UUID, mode domain.Refre
 		return store.ErrNotFound
 	}
 	f.mode = mode
+	return nil
+}
+
+func (f *fakeEditing) TitleFiles(_ context.Context, id uuid.UUID) ([]store.LibraryFile, error) {
+	switch id {
+	case films:
+		return f.files, nil
+	case bare:
+		return nil, store.ErrDeletionOff
+	}
+	return nil, store.ErrNotFound
+}
+
+func (f *fakeEditing) ForgetTitle(_ context.Context, id uuid.UUID) error {
+	f.forgot = id
 	return nil
 }
 
@@ -229,5 +251,60 @@ func TestAnAdminFixesATitle(t *testing.T) {
 	// The edit and the two pictures; a match is told by the job that makes it.
 	if got := told.kinds(); len(got) != 3 || got[0] != domain.EventTitleUpdated {
 		t.Errorf("told %v, want title.updated thrice", got)
+	}
+}
+
+func TestAnAdminDeletesATitleFilesFirst(t *testing.T) {
+	root := t.TempDir()
+	film := filepath.Join(root, "Heat (1995)")
+	if err := os.MkdirAll(film, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"Heat.mkv", "Heat.en.srt"} {
+		if err := os.WriteFile(filepath.Join(film, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e := &fakeEditing{files: []store.LibraryFile{
+		{Root: root, Rel: "Heat (1995)/Heat.en.srt"},
+		{Root: root, Rel: "Heat (1995)/Heat.mkv"},
+		// Gone already, as a file deleted by hand is: no reason to stop.
+		{Root: root, Rel: "Heat (1995)/Heat.cd2.mkv"},
+	}}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Editing: e})
+	del := func(token string, id uuid.UUID) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/titles/"+id.String(), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec
+	}
+	if rec := del(memberToken, films); rec.Code != http.StatusForbidden {
+		t.Errorf("a member: %d, want 403", rec.Code)
+	}
+	if rec := del(goodToken, bare); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "does not allow") {
+		t.Errorf("where its library does not allow it: %d %s, want 409 saying so", rec.Code, rec.Body)
+	}
+	if rec := del(goodToken, uuid.NewV7()); rec.Code != http.StatusNotFound {
+		t.Errorf("no title: %d, want 404", rec.Code)
+	}
+
+	// A file that will not go stops the delete, and the title is kept.
+	if err := os.Chmod(film, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	rec := del(goodToken, films)
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "0 of its 3 files were deleted") || e.forgot != (uuid.UUID{}) {
+		t.Errorf("a file that would not go: %d %s, forgot %v; want 409 saying so and the title kept", rec.Code, rec.Body, e.forgot)
+	}
+	if err := os.Chmod(film, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if rec := del(goodToken, films); rec.Code != http.StatusNoContent || e.forgot != films {
+		t.Fatalf("deleting: %d %s, forgot %v; want 204 and the title forgotten", rec.Code, rec.Body, e.forgot)
+	}
+	if _, err := os.Stat(film); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the film's folder, emptied: %v, want it gone", err)
 	}
 }
