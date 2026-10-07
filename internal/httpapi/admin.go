@@ -44,6 +44,17 @@ type adminLibraryListingJSON struct {
 	Counts countsJSON `json:"counts"`
 }
 
+// countsJSON is how many of each kind of title a library holds.
+type countsJSON struct {
+	Movies   int `json:"movies"`
+	Shows    int `json:"shows"`
+	Seasons  int `json:"seasons"`
+	Episodes int `json:"episodes"`
+	// Collections are how many its collections listing holds, so a client knows whether to offer
+	// one without asking it.
+	Collections int `json:"collections"`
+}
+
 // adminLibraryJSON is a library as an admin sees it: where it is and how it is kept.
 type adminLibraryJSON struct {
 	ID           uuid.UUID              `json:"id"`
