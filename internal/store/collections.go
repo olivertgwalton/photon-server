@@ -161,7 +161,6 @@ func (s *Store) Members(ctx context.Context, profile, collection uuid.UUID) ([]C
 
 // origins answers who made each collection among rows.
 func (s *Store) origins(ctx context.Context, rows []*model.Item) (map[uuid.UUID]domain.CollectionOrigin, error) {
-	out := map[uuid.UUID]domain.CollectionOrigin{}
 	var in []uuid.UUID
 	for _, r := range rows {
 		if r.Kind == domain.ItemCollection {
@@ -169,19 +168,10 @@ func (s *Store) origins(ctx context.Context, rows []*model.Item) (map[uuid.UUID]
 		}
 	}
 	if len(in) == 0 {
-		return out, nil
+		return nil, nil
 	}
-	var id uuid.UUID
-	var origin domain.CollectionOrigin
-	found, err := s.pool.Query(ctx, `SELECT item_id, origin FROM collections WHERE item_id = ANY($1)`, in)
-	if err != nil {
-		return out, err
-	}
-	_, err = pgx.ForEachRow(found, []any{&id, &origin}, func() error {
-		out[id] = origin
-		return nil
-	})
-	return out, err
+	return queryMap[uuid.UUID, domain.CollectionOrigin](ctx, s.pool,
+		`SELECT item_id, origin FROM collections WHERE item_id = ANY($1)`, in)
 }
 
 // collectionsOf answers the shown collections a title is in, by title.
@@ -257,11 +247,7 @@ func (s *Store) SetMembers(ctx context.Context, collection uuid.UUID, items []uu
 
 // SetPlacement sets where a collection is shown, an admin's or a provider's.
 func (s *Store) SetPlacement(ctx context.Context, collection uuid.UUID, placement domain.CollectionPlacement) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE collections SET placement = $2 WHERE item_id = $1`, collection, placement)
-	if err == nil && tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return err
+	return affected(s.pool.Exec(ctx, `UPDATE collections SET placement = $2 WHERE item_id = $1`, collection, placement))
 }
 
 // RemoveCollection removes an admin's collection, made by hand, by a rule or by a list; its titles

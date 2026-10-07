@@ -38,17 +38,13 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error
 		WHERE kind = ANY(@kinds) AND search @@ to_tsquery('simple', search_text(@query))
 			AND (CAST(@library AS uuid) IS NULL OR library_id = CAST(@library AS uuid))
 			AND EXISTS (SELECT 1 FROM viewer(CAST(@profile AS uuid)) v WHERE sees(v, items) AND first_of_title(v, items))`
-	var library *uuid.UUID
-	if q.Library != (uuid.UUID{}) {
-		library = &q.Library
-	}
 	kinds := q.Kinds
 	if len(kinds) == 0 {
 		kinds = []domain.ItemKind{domain.ItemMovie, domain.ItemShow, domain.ItemCollection, domain.ItemEpisode}
 	}
 	args := pgx.NamedArgs{
 		"kinds": kinds, "episode": domain.ItemEpisode,
-		"query": query, "text": q.Text, "library": library, "offset": q.Offset, "limit": q.Limit, "profile": q.Profile,
+		"query": query, "text": q.Text, "library": optional(q.Library), "offset": q.Offset, "limit": q.Limit, "profile": q.Profile,
 	}
 	var total int64
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) `+matching, args).Scan(&total); err != nil {

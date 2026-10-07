@@ -175,12 +175,8 @@ func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, f WallFilte
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.pool.Query(ctx, `SELECT `+firstLetter+` AS letter, count(*) AS count `+titles+`
+	out, err := queryStructs[Letter](ctx, s.pool, `SELECT `+firstLetter+` AS letter, count(*) AS count `+titles+`
 		GROUP BY letter ORDER BY letter`, args)
-	if err != nil {
-		return nil, err
-	}
-	out, err := pgx.CollectRows(rows, pgx.RowToStructByName[Letter])
 	// Titles before A sort first in the wall, whatever the collation makes of "#".
 	if n := slices.IndexFunc(out, func(l Letter) bool { return l.Letter == "#" }); n > 0 {
 		out = append([]Letter{out[n]}, slices.Delete(out, n, n+1)...)
@@ -333,14 +329,10 @@ func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]
 	if len(seasons) == 0 {
 		return out, nil
 	}
-	found, err := s.pool.Query(ctx, `
+	pairs, err := queryStructs[seasonShow](ctx, s.pool, `
 		SELECT season.id AS season, season.title AS season_title, show.id, show.title,
 			coalesce(season.certificate, show.certificate) AS certificate FROM items season
 		JOIN items show ON show.id = season.parent_id WHERE season.id = ANY($1)`, seasons)
-	if err != nil {
-		return nil, err
-	}
-	pairs, err := pgx.CollectRows(found, pgx.RowToStructByName[seasonShow])
 	if err != nil {
 		return nil, err
 	}

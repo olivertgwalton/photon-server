@@ -53,6 +53,21 @@ func promoteFor(ctx context.Context, tx db, kind domain.JobKind, due domain.JobD
 	return err
 }
 
+// queueBacklog runs an INSERT of jobs of kind, due as its $1, after promoteFor, answering how many
+// it queued.
+func (s *Store) queueBacklog(ctx context.Context, kind domain.JobKind, due domain.JobDue, insert string) (int64, error) {
+	var n int64
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := promoteFor(ctx, tx, kind, due); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, insert, due)
+		n = tag.RowsAffected()
+		return err
+	})
+	return n, err
+}
+
 // askedPriority is a job an admin asked for by hand: it is claimed before everything a schedule
 // or a scan queued.
 const askedPriority = 1
@@ -70,7 +85,8 @@ func enqueueAsked(ctx context.Context, tx db, kind domain.JobKind, subject uuid.
 	return insertJob(ctx, tx, kind, subject, 0, askedPriority, domain.JobDueNow)
 }
 
-// requeue ends an INSERT of jobs as enqueue answers a job already there, keeping its priority.
+// requeue answers an INSERT of jobs that finds a job already there: a running one runs again, a
+// dead one afresh. Its priority is kept unless the statement sets more after it.
 const requeue = `
 	ON CONFLICT (kind, subject) DO UPDATE SET
 		state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
@@ -80,10 +96,7 @@ const requeue = `
 // now, never put one due now back to the window; a dead one takes what it is asked for afresh.
 func insertJob(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID, delay time.Duration, priority int16, due domain.JobDue) error {
 	_, err := tx.Exec(ctx, `
-		INSERT INTO jobs (kind, subject, run_after, priority, due) VALUES ($1, $2, now() + $3, $4, $5)
-		ON CONFLICT (kind, subject) DO UPDATE SET
-			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
-			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END,
+		INSERT INTO jobs (kind, subject, run_after, priority, due) VALUES ($1, $2, now() + $3, $4, $5)`+requeue+`,
 			run_after = CASE WHEN jobs.state IN ('queued', 'dead') THEN excluded.run_after ELSE jobs.run_after END,
 			priority = greatest(jobs.priority, excluded.priority),
 			due = CASE WHEN jobs.state = 'dead' OR excluded.due = 'now' THEN excluded.due ELSE jobs.due END`,
@@ -140,7 +153,7 @@ func (s *Store) ScanAnswered(ctx context.Context, lib uuid.UUID, folders []strin
 // planner may run the subquery again for each row it scans, each run skipping what the last
 // locked, and lease far more than n.
 func (s *Store) ClaimJobs(ctx context.Context, kinds, nowOnly []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error) {
-	rows, err := s.pool.Query(ctx, `
+	return queryStructs[domain.Job](ctx, s.pool, `
 		WITH picked AS MATERIALIZED (
 			SELECT id FROM jobs WHERE state = 'queued' AND run_after <= now() AND kind = ANY($1)
 				AND (due = 'now' OR NOT kind = ANY(coalesce($5::text[], '{}')))
@@ -148,10 +161,6 @@ func (s *Store) ClaimJobs(ctx context.Context, kinds, nowOnly []domain.JobKind, 
 		UPDATE jobs SET state = 'running', lease_until = now() + $2, attempts = attempts + 1, node_id = $3
 		FROM picked WHERE jobs.id = picked.id
 		RETURNING jobs.id, jobs.kind, jobs.subject, jobs.attempts, jobs.due`, kinds, lease, node, limit, nowOnly)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[domain.Job])
 }
 
 // CompleteJob removes a finished job, as what it produced is the record that it ran, or queues
@@ -197,30 +206,15 @@ func (s *Store) PostponeJob(ctx context.Context, job domain.Job, delay time.Dura
 
 // RunningJobs answers the jobs being run now, on every node, the oldest first.
 func (s *Store) RunningJobs(ctx context.Context) ([]domain.Job, error) {
-	rows, err := s.pool.Query(ctx, `
+	return queryStructs[domain.Job](ctx, s.pool, `
 		SELECT id, kind, subject, attempts, due FROM jobs WHERE state IN ('running', 'rerun') ORDER BY id`)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[domain.Job])
 }
 
 // JobsLeft answers how many jobs of each kind are left to run, queued or running, leaving out
 // kinds with none.
 func (s *Store) JobsLeft(ctx context.Context) (map[domain.JobKind]int, error) {
-	rows, err := s.pool.Query(ctx, `
+	return queryMap[domain.JobKind, int](ctx, s.pool, `
 		SELECT kind, count(*) FROM jobs WHERE state IN ('queued', 'running', 'rerun') GROUP BY kind`)
-	if err != nil {
-		return nil, err
-	}
-	out := map[domain.JobKind]int{}
-	var kind domain.JobKind
-	var count int
-	_, err = pgx.ForEachRow(rows, []any{&kind, &count}, func() error {
-		out[kind] = count
-		return nil
-	})
-	return out, err
 }
 
 // AnyJobsLeft answers whether any job of kind is left to run, queued or running.

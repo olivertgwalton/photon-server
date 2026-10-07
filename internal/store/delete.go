@@ -41,7 +41,7 @@ func (s *Store) TitleFiles(ctx context.Context, id uuid.UUID) ([]LibraryFile, er
 	case domain.DeletionOff:
 		return nil, ErrDeletionOff
 	}
-	rows, err := s.pool.Query(ctx, `
+	return queryStructs[LibraryFile](ctx, s.pool, `
 		WITH RECURSIVE under AS (
 			SELECT id FROM items WHERE id = $1
 			UNION ALL
@@ -56,10 +56,6 @@ func (s *Store) TitleFiles(ctx context.Context, id uuid.UUID) ([]LibraryFile, er
 		SELECT l.root, f.rel_path FROM subtitle_files f JOIN libraries l ON l.id = f.library_id
 		WHERE f.version_id IN (SELECT id FROM copies) AND f.body IS NULL
 		ORDER BY rel`, id)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[LibraryFile])
 }
 
 // ForgetTitle takes a title out of its library, its seasons, episodes and extras with it, once

@@ -8,7 +8,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
 // Download is a profile's download of a part: the part's own file where Quality is nil, ready as
@@ -106,11 +105,7 @@ func (s *Store) downloads(ctx context.Context, profile uuid.UUID, device, id *uu
 		FROM downloads d JOIN parts p ON p.id = d.part_id LEFT JOIN conversions c ON c.id = d.conversion_id
 		WHERE d.profile_id = $1 AND ($2::uuid IS NULL OR d.session_id = $2) AND ($3::uuid IS NULL OR d.id = $3)
 		ORDER BY d.created_at DESC, d.id`
-	found, err := s.pool.Query(ctx, sql, profile, device, id)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := pgx.CollectRows(found, pgx.RowToStructByName[downloadRow])
+	rows, err := queryStructs[downloadRow](ctx, s.pool, sql, profile, device, id)
 	if err != nil {
 		return nil, err
 	}
@@ -215,12 +210,9 @@ func (s *Store) StartConversion(ctx context.Context, id, node uuid.UUID) (Conver
 		return Conversion{}, found(err)
 	}
 	out.Duration = time.Duration(durationMS) * time.Millisecond
-	streams, err := queryRows[model.Stream](ctx, s.pool, `SELECT `+streamColumns+` FROM streams WHERE part_id = $1 ORDER BY idx`, out.Part)
+	out.Streams, err = s.partStreams(ctx, out.Part)
 	if err != nil {
 		return Conversion{}, err
-	}
-	for _, t := range streams {
-		out.Streams = append(out.Streams, mediaStream(t))
 	}
 	return out, nil
 }
@@ -255,12 +247,8 @@ func (s *Store) RequeueConversion(ctx context.Context, id, node uuid.UUID) error
 
 // ConversionsOn answers the conversions whose files a node is making or holds.
 func (s *Store) ConversionsOn(ctx context.Context, node uuid.UUID) ([]uuid.UUID, error) {
-	rows, err := s.pool.Query(ctx, `
+	return queryColumn[uuid.UUID](ctx, s.pool, `
 		SELECT id FROM conversions WHERE node_id = $1 AND state IN ('converting', 'ready')`, node)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 }
 
 // ConvertedFile answers a download's conversion and the node holding its file. ErrNotFound for no

@@ -117,15 +117,11 @@ func (s *Store) Theme(ctx context.Context, id uuid.UUID) (ThemeFile, error) {
 // themes answers the theme tunes played under a film's or show's page, as its library offers
 // them: its files, else ThemerrDB's.
 func (s *Store) themes(ctx context.Context, item uuid.UUID) ([]uuid.UUID, error) {
-	rows, err := s.pool.Query(ctx, `
+	return queryColumn[uuid.UUID](ctx, s.pool, `
 		SELECT t.id FROM themes t
 		JOIN items i ON i.id = t.item_id JOIN libraries l ON l.id = i.library_id
 		WHERE t.item_id = $1
 			AND (l.themes = 'themerr' OR (l.themes = 'local' AND t.source = 'file'))
 			AND (t.source = 'file' OR NOT EXISTS (SELECT 1 FROM themes f WHERE f.item_id = t.item_id AND f.source = 'file'))
 		ORDER BY t.position`, item)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 }

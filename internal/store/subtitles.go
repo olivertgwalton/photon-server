@@ -89,11 +89,7 @@ func (s *Store) SubtitleBody(ctx context.Context, id uuid.UUID) ([]byte, error) 
 // RemoveFetchedSubtitle forgets a fetched subtitle; one in a library is the library's, and
 // ErrNotFound.
 func (s *Store) RemoveFetchedSubtitle(ctx context.Context, id uuid.UUID) error {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM subtitle_files WHERE id = $1 AND body IS NOT NULL`, id)
-	if err == nil && tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return err
+	return affected(s.pool.Exec(ctx, `DELETE FROM subtitle_files WHERE id = $1 AND body IS NOT NULL`, id))
 }
 
 // WantedSubtitle is a copy that lacks a subtitle in a language its library fetches them in, and

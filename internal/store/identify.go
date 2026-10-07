@@ -46,7 +46,7 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	if err != nil {
 		return Subject{}, false, err
 	}
-	sub := Subject{Kind: item.Kind, Title: item.Title, IDs: map[domain.Provider]string{}, Order: item.EpisodeOrder, Unmatched: unmatched}
+	sub := Subject{Kind: item.Kind, Title: item.Title, Order: item.EpisodeOrder, Unmatched: unmatched}
 	if item.Year != nil {
 		sub.Year = *item.Year
 	}
@@ -61,22 +61,12 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 		return Subject{}, false, err
 	}
 	sub.Locale = own.Or(lib)
-	rows, err := s.pool.Query(ctx, `SELECT DISTINCT source FROM library_sources WHERE library_id = $1 AND enabled`, item.LibraryID)
-	if err == nil {
-		sub.Sources, err = pgx.CollectRows(rows, pgx.RowTo[domain.FieldSource])
-	}
+	sub.Sources, err = queryColumn[domain.FieldSource](ctx, s.pool,
+		`SELECT DISTINCT source FROM library_sources WHERE library_id = $1 AND enabled`, item.LibraryID)
 	if err != nil {
 		return Subject{}, false, err
 	}
-	var provider domain.Provider
-	var value string
-	rows, err = s.pool.Query(ctx, `SELECT provider, value FROM external_ids WHERE item_id = $1`, id)
-	if err == nil {
-		_, err = pgx.ForEachRow(rows, []any{&provider, &value}, func() error {
-			sub.IDs[provider] = value
-			return nil
-		})
-	}
+	sub.IDs, err = queryMap[domain.Provider, string](ctx, s.pool, `SELECT provider, value FROM external_ids WHERE item_id = $1`, id)
 	if err != nil {
 		return Subject{}, false, err
 	}
@@ -84,15 +74,12 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 		// Only a season holding an episode still titled by its file name, as Jellyfin asks a
 		// provider only about items it has never refreshed: a show's new episode costs one season.
 		// A season's own title is always its number, so it says nothing of what was asked.
-		rows, err := s.pool.Query(ctx, `
+		sub.Seasons, err = queryColumn[int](ctx, s.pool, `
 			SELECT DISTINCT s.season_number FROM items s
 			JOIN items e ON e.parent_id = s.id
 			JOIN item_fields f ON f.item_id = e.id AND f.field = 'title' AND f.source = 'file'
 			WHERE s.parent_id = $1 AND s.kind = 'season'
 			ORDER BY s.season_number`, id)
-		if err == nil {
-			sub.Seasons, err = pgx.CollectRows(rows, pgx.RowTo[int])
-		}
 		if err != nil {
 			return Subject{}, false, err
 		}
@@ -130,9 +117,7 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 		}
 		credits := []credited{{item, m.Credits}}
 		for number, season := range seasons {
-			var seasonID uuid.UUID
-			err := tx.QueryRow(ctx, `SELECT id FROM items WHERE parent_id = $1 AND kind = 'season' AND season_number = $2 LIMIT 1`,
-				item, number).Scan(&seasonID)
+			seasonID, err := seasonOf(ctx, tx, item, number)
 			if errors.Is(err, pgx.ErrNoRows) {
 				continue
 			}
@@ -151,16 +136,12 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 			if err := saveProviderArtwork(ctx, tx, seasonID, source, said.Artwork); err != nil {
 				return err
 			}
-			rows, err := tx.Query(ctx, `
-				SELECT id, episode_number FROM items WHERE parent_id = $1 AND kind = 'episode' AND episode_number IS NOT NULL`, seasonID)
-			if err != nil {
-				return err
-			}
 			type episode struct {
 				ID            uuid.UUID
 				EpisodeNumber int
 			}
-			episodes, err := pgx.CollectRows(rows, pgx.RowToStructByName[episode])
+			episodes, err := queryStructs[episode](ctx, tx, `
+				SELECT id, episode_number FROM items WHERE parent_id = $1 AND kind = 'episode' AND episode_number IS NOT NULL`, seasonID)
 			if err != nil {
 				return err
 			}
@@ -208,12 +189,8 @@ func saveRemoteVideos(ctx context.Context, tx db, item uuid.UUID, source domain.
 	if _, err := tx.Exec(ctx, `DELETE FROM remote_videos WHERE item_id = $1 AND source = $2`, item, source); err != nil {
 		return err
 	}
-	rows, err = tx.Query(ctx, `
+	kept, err := queryColumn[domain.ExtraKind](ctx, tx, `
 		SELECT e.kind FROM library_remote_extras e JOIN items i ON i.library_id = e.library_id WHERE i.id = $1`, item)
-	if err != nil {
-		return err
-	}
-	kept, err := pgx.CollectRows(rows, pgx.RowTo[domain.ExtraKind])
 	if err != nil {
 		return err
 	}

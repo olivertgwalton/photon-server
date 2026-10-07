@@ -81,11 +81,7 @@ func ownerOf(ctx context.Context, tx db, lib uuid.UUID, o Owner) (uuid.UUID, err
 
 // one is the single item a query finds; none or several is no owner.
 func one(ctx context.Context, tx db, sql string, args ...any) (uuid.UUID, error) {
-	rows, err := tx.Query(ctx, sql+` LIMIT 2`, args...)
-	if err != nil {
-		return uuid.UUID{}, err
-	}
-	found, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	found, err := queryColumn[uuid.UUID](ctx, tx, sql+` LIMIT 2`, args...)
 	if err != nil {
 		return uuid.UUID{}, err
 	}

@@ -21,7 +21,7 @@ func (s *Store) AnalyseTitle(ctx context.Context, id uuid.UUID) error {
 		if _, err := readItem(ctx, tx, id); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `
+		parts, err := queryColumn[uuid.UUID](ctx, tx, `
 			WITH RECURSIVE under AS (
 				SELECT id FROM items WHERE id = $1
 				UNION ALL
@@ -29,10 +29,6 @@ func (s *Store) AnalyseTitle(ctx context.Context, id uuid.UUID) error {
 			)
 			SELECT p.id FROM parts p JOIN versions v ON v.id = p.version_id
 			WHERE v.item_id IN (SELECT id FROM under) AND v.missing_since IS NULL`, id)
-		if err != nil {
-			return err
-		}
-		parts, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 		if err != nil {
 			return err
 		}

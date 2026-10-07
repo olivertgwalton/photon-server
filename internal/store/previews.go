@@ -138,12 +138,7 @@ func sheetsOf(width, height, intervalMS, columns, rows, thumbnails int) Trickpla
 // made yet, made before its library asked for more or less, or left by a job that died, due as
 // said; due now, every previews job already queued is due now too. It answers how many.
 func (s *Store) QueuePreviews(ctx context.Context, due domain.JobDue) (int64, error) {
-	var n int64
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := promoteFor(ctx, tx, domain.JobPreviews, due); err != nil {
-			return err
-		}
-		tag, err := tx.Exec(ctx, `
+	return s.queueBacklog(ctx, domain.JobPreviews, due, `
 		INSERT INTO jobs (kind, subject, due)
 		SELECT 'previews', p.id, $1 FROM parts p JOIN versions v ON v.id = p.version_id JOIN libraries l ON l.id = v.library_id
 		WHERE EXISTS (SELECT 1 FROM part_files f WHERE f.part_id = p.id)
@@ -151,28 +146,11 @@ func (s *Store) QueuePreviews(ctx context.Context, due domain.JobDue) (int64, er
 			AND l.previews <> CASE
 				WHEN EXISTS (SELECT 1 FROM trickplay t WHERE t.part_id = p.id) THEN 'all'
 				WHEN EXISTS (SELECT 1 FROM previews pv WHERE pv.part_id = p.id) THEN 'chapters'
-				ELSE 'off' END
-		ON CONFLICT (kind, subject) DO UPDATE SET
-			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
-			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END,
-			due = CASE jobs.state WHEN 'dead' THEN excluded.due ELSE jobs.due END`, due)
-		n = tag.RowsAffected()
-		return err
-	})
-	return n, err
+				ELSE 'off' END`+requeue+`,
+			due = CASE jobs.state WHEN 'dead' THEN excluded.due ELSE jobs.due END`)
 }
 
 // LivePreviews answers which of these parts have previews recorded.
 func (s *Store) LivePreviews(ctx context.Context, parts []uuid.UUID) (map[uuid.UUID]bool, error) {
-	rows, err := s.pool.Query(ctx, `SELECT part_id FROM previews WHERE part_id = ANY($1)`, parts)
-	if err != nil {
-		return nil, err
-	}
-	out := map[uuid.UUID]bool{}
-	var id uuid.UUID
-	_, err = pgx.ForEachRow(rows, []any{&id}, func() error {
-		out[id] = true
-		return nil
-	})
-	return out, err
+	return querySet[uuid.UUID](ctx, s.pool, `SELECT part_id FROM previews WHERE part_id = ANY($1)`, parts)
 }

@@ -181,15 +181,11 @@ type DeviceListing struct {
 // Devices lists signed-in devices, newest first: every device, or with profile set only those on
 // that profile.
 func (s *Store) Devices(ctx context.Context, profile *uuid.UUID) ([]DeviceListing, error) {
-	rows, err := s.pool.Query(ctx, `
+	return queryStructs[DeviceListing](ctx, s.pool, `
 		SELECT d.id, d.device_name, d.client, p.name AS profile, d.created_at, d.last_seen_at
 		FROM device_sessions d JOIN profiles p ON p.id = d.profile_id
 		WHERE d.kind = 'device' AND d.expires_at > now() AND ($1::uuid IS NULL OR d.profile_id = $1)
 		ORDER BY d.last_seen_at DESC`, profile)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[DeviceListing])
 }
 
 // DeleteDevice signs a device out: any device, or with profile set only one on that profile. It
@@ -211,15 +207,11 @@ type KeyListing struct {
 
 // Keys lists the API keys, newest first.
 func (s *Store) Keys(ctx context.Context) ([]KeyListing, error) {
-	rows, err := s.pool.Query(ctx, `
+	return queryStructs[KeyListing](ctx, s.pool, `
 		SELECT d.id, d.device_name AS name, p.name AS profile, d.created_at, d.last_seen_at
 		FROM device_sessions d JOIN profiles p ON p.id = d.profile_id
 		WHERE d.kind = 'key'
 		ORDER BY d.created_at DESC`)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[KeyListing])
 }
 
 // DeleteKey revokes an API key, reporting whether there was one.
@@ -290,11 +282,7 @@ func (s *Store) RemoveProfile(ctx context.Context, id uuid.UUID) (string, error)
 // otherAdmin answers ErrLastAdmin unless an admin besides id remains, holding every admin's row
 // until the transaction ends so two admins cannot each demote the other at once.
 func otherAdmin(ctx context.Context, tx db, id uuid.UUID) error {
-	rows, err := tx.Query(ctx, `SELECT id FROM profiles WHERE role = $1 FOR UPDATE`, domain.RoleAdmin)
-	if err != nil {
-		return err
-	}
-	admins, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	admins, err := queryColumn[uuid.UUID](ctx, tx, `SELECT id FROM profiles WHERE role = $1 FOR UPDATE`, domain.RoleAdmin)
 	if err != nil {
 		return err
 	}
@@ -349,11 +337,7 @@ func (s *Store) SetAccess(ctx context.Context, id uuid.UUID, a ProfileAccess) er
 // SetAvatar makes picture a profile's avatar, or with the zero id takes it away, answering the
 // profile as it is then. The picture it had is forgotten, and its file swept with the rest.
 func (s *Store) SetAvatar(ctx context.Context, id, picture uuid.UUID) (domain.Profile, error) {
-	var avatar *uuid.UUID
-	if picture != (uuid.UUID{}) {
-		avatar = &picture
-	}
-	if err := affected(s.pool.Exec(ctx, `UPDATE profiles SET avatar_id = $2 WHERE id = $1`, id, avatar)); err != nil {
+	if err := affected(s.pool.Exec(ctx, `UPDATE profiles SET avatar_id = $2 WHERE id = $1`, id, optional(picture))); err != nil {
 		return domain.Profile{}, err
 	}
 	return s.ProfileByID(ctx, id)

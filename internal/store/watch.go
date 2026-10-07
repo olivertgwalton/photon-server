@@ -302,7 +302,7 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 		}
 	}
 	if len(groups) > 0 {
-		found, err := s.pool.Query(ctx, `
+		counts, err := queryStructs[episodeCount](ctx, s.pool, `
 			SELECT g.id, count(e.id) AS episodes, count(ws.watched_at) AS watched,
 				max(ws.last_played_at) AS last_played, max(ws.watched_at) AS watched_at
 			FROM items g
@@ -314,10 +314,6 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 			LEFT JOIN watch_state ws ON ws.item_id = e.id AND ws.profile_id = $1
 			WHERE g.id = ANY($2::uuid[])
 			GROUP BY g.id`, profile, ids(groups))
-		if err != nil {
-			return nil, err
-		}
-		counts, err := pgx.CollectRows(found, pgx.RowToStructByName[episodeCount])
 		if err != nil {
 			return nil, err
 		}
@@ -352,14 +348,10 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 
 // RecordPlay keeps a playback in the history as it stops.
 func (s *Store) RecordPlay(ctx context.Context, p domain.Playback, stopped time.Time, position time.Duration) error {
-	var version *uuid.UUID
-	if p.Version != (uuid.UUID{}) {
-		version = &p.Version
-	}
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO plays (profile_id, item_id, version_id, method, started_at, stopped_at, position_ms)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		p.Profile, p.Item, version, p.Method, p.Started, stopped, position.Milliseconds())
+		p.Profile, p.Item, optional(p.Version), p.Method, p.Started, stopped, position.Milliseconds())
 	// A title removed while it played leaves nothing to keep.
 	if violates(err, foreignKeyViolation) {
 		return nil
@@ -381,10 +373,7 @@ type Play struct {
 // History answers a page of plays, the latest first, and how many there are: a profile's, or
 // everyone's for none.
 func (s *Store) History(ctx context.Context, profile uuid.UUID, offset, limit int) ([]Play, int64, error) {
-	var who *uuid.UUID
-	if profile != (uuid.UUID{}) {
-		who = &profile
-	}
+	who := optional(profile)
 	const whose = ` FROM plays WHERE $1::uuid IS NULL OR profile_id = $1`
 	var total int64
 	if err := s.pool.QueryRow(ctx, `SELECT count(*)`+whose, who).Scan(&total); err != nil {

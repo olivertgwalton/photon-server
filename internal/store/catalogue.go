@@ -62,12 +62,8 @@ type Part struct {
 // KnownCopies answers which of the content keys are of copies already in the library, by key as
 // a string. The same file in two libraries is a copy in each.
 func (s *Store) KnownCopies(ctx context.Context, lib uuid.UUID, keys [][]byte) (map[string]bool, error) {
-	rows, err := s.pool.Query(ctx, `SELECT fingerprint FROM versions WHERE library_id = $1 AND fingerprint = ANY($2)`,
+	found, err := queryColumn[[]byte](ctx, s.pool, `SELECT fingerprint FROM versions WHERE library_id = $1 AND fingerprint = ANY($2)`,
 		lib, keys)
-	if err != nil {
-		return nil, err
-	}
-	found, err := pgx.CollectRows(rows, pgx.RowTo[[]byte])
 	known := map[string]bool{}
 	for _, k := range found {
 		known[string(k)] = true
@@ -114,18 +110,7 @@ func (s *Store) KnownFiles(ctx context.Context, lib uuid.UUID, paths []string) (
 // FolderFingerprints answers the fingerprint each of a library's folders had when it was last
 // scanned, by path.
 func (s *Store) FolderFingerprints(ctx context.Context, lib uuid.UUID) (map[string][]byte, error) {
-	rows, err := s.pool.Query(ctx, `SELECT path, fingerprint FROM folders WHERE library_id = $1`, lib)
-	if err != nil {
-		return nil, err
-	}
-	known := map[string][]byte{}
-	var path string
-	var fingerprint []byte
-	_, err = pgx.ForEachRow(rows, []any{&path, &fingerprint}, func() error {
-		known[path] = fingerprint
-		return nil
-	})
-	return known, err
+	return queryMap[string, []byte](ctx, s.pool, `SELECT path, fingerprint FROM folders WHERE library_id = $1`, lib)
 }
 
 // Changed is the titles a write added, changed and removed.
@@ -445,15 +430,15 @@ func saveFacts(ctx context.Context, tx db, partID uuid.UUID, f *domain.Facts) er
 			PartID: partID, Idx: st.Index, Kind: st.Kind, Codec: st.Codec,
 			Profile: optional(st.Profile), Title: optional(st.Title),
 			IsDefault: st.Default, Forced: st.Forced, HearingImpaired: st.HearingImpaired, Commentary: st.Commentary,
-			BitrateKbps: optionalInt(st.BitrateKbps),
+			BitrateKbps: optional(st.BitrateKbps),
 		}
 		if st.Language != language.Und {
 			row.Language = optional(st.Language.String())
 		}
 		switch st.Kind {
 		case domain.StreamVideo:
-			row.Width, row.Height, row.FrameRate = optionalInt(st.Width), optionalInt(st.Height), &st.FrameRate
-			row.VideoRange, row.Level, row.Interlaced = &st.Range, optionalInt(st.Level), st.Interlaced
+			row.Width, row.Height, row.FrameRate = optional(st.Width), optional(st.Height), &st.FrameRate
+			row.VideoRange, row.Level, row.Interlaced = &st.Range, optional(st.Level), st.Interlaced
 			if st.BitDepth > 0 {
 				depth := int16(st.BitDepth)
 				row.BitDepth = &depth
@@ -463,8 +448,8 @@ func saveFacts(ctx context.Context, tx db, partID uuid.UUID, f *domain.Facts) er
 				row.DVProfile, row.DVLevel, row.DVCompatibility = &profile, &level, &compat
 			}
 		case domain.StreamAudio:
-			row.Channels, row.ChannelLayout = optionalInt(st.Channels), optional(st.ChannelLayout)
-			row.SampleRate = optionalInt(st.SampleRate)
+			row.Channels, row.ChannelLayout = optional(st.Channels), optional(st.ChannelLayout)
+			row.SampleRate = optional(st.SampleRate)
 		case domain.StreamSubtitle:
 		}
 		b.Queue(`INSERT INTO streams (`+streamColumns+`) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
@@ -507,7 +492,7 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 		// Only a version whose part went missing, or came back, is written. This and the sweeps
 		// below read the whole library whatever the scopes: a save in scope can take a path, a copy,
 		// an episode or an extra from a title outside them, and identifying empties collections.
-		updated, err := queryIDs(ctx, tx, `
+		updated, err := queryColumn[uuid.UUID](ctx, tx, `
 			UPDATE versions v SET missing_since = CASE WHEN v.missing_since IS NULL THEN now() END
 			WHERE v.library_id = $1 AND (v.missing_since IS NULL) = EXISTS (SELECT 1 FROM parts p
 				WHERE p.version_id = v.id AND NOT EXISTS (SELECT 1 FROM part_files f WHERE f.part_id = p.id))
@@ -526,7 +511,7 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 			`DELETE FROM items i USING collections c WHERE c.item_id = i.id AND i.library_id = $1
 				AND c.origin NOT IN ` + madeHere + ` AND NOT EXISTS (SELECT 1 FROM collection_members m WHERE m.collection_id = c.item_id)`,
 		} {
-			removed, err := queryIDs(ctx, tx, sql+` RETURNING i.id`, lib)
+			removed, err := queryColumn[uuid.UUID](ctx, tx, sql+` RETURNING i.id`, lib)
 			if err != nil {
 				return err
 			}
@@ -552,15 +537,6 @@ func inScope(column, param string) string {
 	return `EXISTS (SELECT 1 FROM unnest(` + param + `::text[]) s WHERE s = '.' OR ` + column + ` = s OR starts_with(` + column + `, s || '/'))`
 }
 
-// queryIDs answers the ids a statement returns.
-func queryIDs(ctx context.Context, q db, sql string, args ...any) ([]uuid.UUID, error) {
-	rows, err := q.Query(ctx, sql, args...)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-}
-
 func firstVideo(f *domain.Facts) *domain.Stream {
 	for i := range f.Streams {
 		if f.Streams[i].Kind == domain.StreamVideo {
@@ -570,18 +546,12 @@ func firstVideo(f *domain.Facts) *domain.Stream {
 	return nil
 }
 
-func optional(s string) *string {
-	if s == "" {
+// optional is v, or NULL for its zero.
+func optional[T comparable](v T) *T {
+	if v == *new(T) {
 		return nil
 	}
-	return &s
-}
-
-func optionalInt(n int) *int {
-	if n == 0 {
-		return nil
-	}
-	return &n
+	return &v
 }
 
 // sortTitle orders "The Thing" under T and ignores case.

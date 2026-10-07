@@ -367,7 +367,7 @@ func (s *Store) Visible(ctx context.Context, profile uuid.UUID, titles []uuid.UU
 	if len(titles) == 0 {
 		return nil, nil
 	}
-	return queryIDs(ctx, s.pool, `
+	return queryColumn[uuid.UUID](ctx, s.pool, `
 		SELECT t.id FROM unnest($1::uuid[]) WITH ORDINALITY AS t(id, n)
 		JOIN items i ON i.id = t.id, viewer($2) v
 		WHERE sees(v, i) ORDER BY t.n`, titles, profile)
@@ -375,7 +375,7 @@ func (s *Store) Visible(ctx context.Context, profile uuid.UUID, titles []uuid.UU
 
 // SameTitles answers a title and those the same as it in other libraries that a profile may see.
 func (s *Store) SameTitles(ctx context.Context, profile, title uuid.UUID) ([]uuid.UUID, error) {
-	return queryIDs(ctx, s.pool, `
+	return queryColumn[uuid.UUID](ctx, s.pool, `
 		SELECT t FROM same_title($1) t JOIN items i ON i.id = t, viewer($2) v
 		WHERE sees(v, i) ORDER BY t`, title, profile)
 }
@@ -470,19 +470,10 @@ func (s *Store) seasons(ctx context.Context, profile, show uuid.UUID) ([]SeasonC
 	if err != nil {
 		return nil, err
 	}
-	counted, err := s.pool.Query(ctx, `
+	episodes, err := queryMap[uuid.UUID, int](ctx, s.pool, `
 		SELECT parent_id, count(*) FROM items WHERE parent_id = ANY($1) AND kind = 'episode' GROUP BY parent_id`,
 		ids(rows))
 	if err != nil {
-		return nil, err
-	}
-	episodes := map[uuid.UUID]int{}
-	var season uuid.UUID
-	var n int
-	if _, err := pgx.ForEachRow(counted, []any{&season, &n}, func() error {
-		episodes[season] = n
-		return nil
-	}); err != nil {
 		return nil, err
 	}
 	pictures, hashes, err := s.pictureOrder(ctx, rows)
@@ -768,18 +759,8 @@ func (s *Store) markerDetection(ctx context.Context, versions []*model.Version) 
 	for n, v := range versions {
 		libs[n] = v.LibraryID
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id, markers FROM libraries WHERE id = ANY($1)`, libs)
-	if err != nil {
-		return nil, err
-	}
-	out := map[uuid.UUID]domain.MarkerDetection{}
-	var lib uuid.UUID
-	var detection domain.MarkerDetection
-	_, err = pgx.ForEachRow(rows, []any{&lib, &detection}, func() error {
-		out[lib] = detection
-		return nil
-	})
-	return out, err
+	return queryMap[uuid.UUID, domain.MarkerDetection](ctx, s.pool,
+		`SELECT id, markers FROM libraries WHERE id = ANY($1)`, libs)
 }
 
 // partPreviews answers the idx of each part's chapters that have an image, and each part's
