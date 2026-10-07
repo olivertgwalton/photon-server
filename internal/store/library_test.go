@@ -4,6 +4,7 @@ package store
 
 import (
 	"errors"
+	"slices"
 	"testing"
 	"uuid"
 
@@ -180,5 +181,21 @@ func TestAFilmAsksInALocaleOfItsOwnOverItsLibrarys(t *testing.T) {
 	}
 	if sub, _, _ := s.IdentifySubject(ctx, film); sub.Locale.Language != "de-DE" {
 		t.Errorf("given back, it asks in %+v, want its library's German", sub.Locale)
+	}
+}
+
+func TestTheCountriesCertificatesAreReadForAreCountries(t *testing.T) {
+	s := migrated(t)
+	countries, err := s.CertificateCountries(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(countries, "GB") || !slices.Contains(countries, "IN") {
+		t.Errorf("countries %v, want Britain and India among them", countries)
+	}
+	for _, c := range countries {
+		if len(c) != 2 {
+			t.Errorf("%q is listed, which is no country's ISO 3166-1 code", c)
+		}
 	}
 }

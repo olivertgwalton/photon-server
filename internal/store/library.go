@@ -360,9 +360,10 @@ func library(r model.Library, sources []domain.KindSources, extras []domain.Extr
 }
 
 // CertificateCountries answers the countries whose certificates the server can read, by ISO 3166-1
-// alpha-2 code.
+// alpha-2 code. The table also keeps ratings no country gives (Jellyfin's 0-PREFER), which are
+// none.
 func (s *Store) CertificateCountries(ctx context.Context) ([]string, error) {
-	rows, err := s.pool.Query(ctx, `SELECT DISTINCT country FROM certificates ORDER BY country`)
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT country FROM certificates WHERE country ~ '^[A-Z]{2}$' ORDER BY country`)
 	if err != nil {
 		return nil, err
 	}
