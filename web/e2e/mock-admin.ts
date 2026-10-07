@@ -459,7 +459,9 @@ export async function admin(
 		case "DELETE /api/v1/admin/webhooks/w-1":
 			webhooks = [];
 			return done();
+		// Quiet Hours is t-quiet on its admin page and t-film on the home rows.
 		case "PATCH /api/v1/admin/titles/t-quiet":
+		case "PATCH /api/v1/admin/titles/t-film":
 		case "PUT /api/v1/admin/versions/v-quiet/markers":
 		case "PUT /api/v1/admin/titles/t-quiet/artwork/poster":
 			if (route.endsWith("poster")) {
@@ -478,10 +480,12 @@ export async function admin(
 				})),
 			} satisfies Schemas["ArtworkCandidateList"]);
 		case "GET /api/v1/admin/titles/t-quiet/candidates":
+		case "GET /api/v1/admin/titles/t-film/candidates":
 			return json({
 				items: [{ id: "101", title: "Quiet Hours", year: 2018 }],
 			} satisfies Schemas["CandidateList"]);
 		case "PUT /api/v1/admin/titles/t-quiet/match":
+		case "PUT /api/v1/admin/titles/t-film/match":
 		case "POST /api/v1/admin/titles/t-quiet/refresh":
 			return done(202);
 		case "PUT /api/v1/admin/collections/t-box/members":
