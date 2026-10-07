@@ -180,6 +180,46 @@ test("a library's metadata is refreshed, what is missing or all of it", async ({
 	await expect(dialog).toBeHidden();
 });
 
+test("a library is scanned, refreshed and opened from its menu in the sidebar", async ({
+	page,
+}) => {
+	await logIn(page);
+	const nav = page.getByRole("navigation", { name: "Main" });
+	const menu = nav.getByRole("button", { name: "More for Films" });
+
+	const scanned = page.waitForRequest("**/api/v1/admin/libraries/l-films/scan");
+	await menu.click();
+	await page.getByRole("menuitem", { name: "Scan library files" }).click();
+	await scanned;
+	await expect(page.getByText("Films is being scanned.")).toBeVisible();
+
+	const asked = page.waitForRequest(
+		"**/api/v1/admin/libraries/l-films/refresh",
+	);
+	await menu.click();
+	await page.getByRole("menuitem", { name: "Refresh all metadata" }).click();
+	expect((await asked).postDataJSON()).toEqual({ mode: "all" });
+
+	// Removing asks first.
+	await menu.click();
+	await page.getByRole("menuitem", { name: "Remove…" }).click();
+	await page
+		.getByRole("alertdialog")
+		.getByRole("button", { name: "Cancel" })
+		.click();
+
+	await menu.click();
+	await page.getByRole("menuitem", { name: "Edit…" }).click();
+	await expect(page).toHaveURL("/settings/server/libraries/l-films");
+});
+
+test("a member's sidebar offers no library menu", async ({ page }) => {
+	await asKids(page);
+	await expect(
+		page.getByRole("button", { name: "More for Films" }),
+	).toHaveCount(0);
+});
+
 test("a profile is added, and what another may see is set", async ({
 	page,
 }) => {
@@ -248,7 +288,7 @@ test("tasks run, dead jobs are retried, and the logs read", async ({
 
 	await page.goto("/settings/server/activity");
 	// The choice applies as it is made.
-	await page.getByLabel("Show").click();
+	await page.getByLabel("Show", { exact: true }).click();
 	await page.getByRole("option", { name: "Libraries added" }).click();
 	await expect(page).toHaveURL("/settings/server/activity?kind=library.added");
 	await expect(page.getByText("Library Films was added")).toBeVisible();

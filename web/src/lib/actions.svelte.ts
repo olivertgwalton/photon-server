@@ -1,7 +1,12 @@
 import { toast } from "svelte-sonner";
 import { refreshAll } from "$app/navigation";
+import { page } from "$app/state";
+import { act } from "./admin/act.js";
 import { client } from "./api/client.js";
 import { problemMessage } from "./api/problem.js";
+import type { components } from "./api/schema.js";
+
+type RefreshMode = components["schemas"]["RefreshMode"];
 
 type Answer = Promise<{ error?: unknown }>;
 
@@ -197,6 +202,42 @@ export function deleteTitle(id: string, name: string) {
 			change(
 				api.DELETE("/api/v1/admin/titles/{id}", path(id)),
 				`${name} was deleted.`,
+			),
+	);
+}
+
+// What an admin can do to a library from the sidebar, as Plex's library menu
+// offers: read its folders again, ask its providers again, or remove it.
+export function scanLibrary(id: string, name: string) {
+	return change(
+		api.POST("/api/v1/admin/libraries/{id}/scan", path(id)),
+		`${name} is being scanned.`,
+	);
+}
+
+export function refreshLibrary(id: string, name: string, mode: RefreshMode) {
+	return change(
+		api.POST("/api/v1/admin/libraries/{id}/refresh", {
+			...path(id),
+			body: { mode },
+		}),
+		mode === "all"
+			? `${name} is being described again from its providers.`
+			: `${name} is being filled in where it's missing.`,
+	);
+}
+
+export function removeLibrary(id: string, name: string) {
+	confirmFirst(
+		`Remove ${name}?`,
+		"Its titles, and what everyone has watched of them, are forgotten. The files on disk are not touched.",
+		"Remove library",
+		// The library's own pages are gone with it.
+		() =>
+			act(
+				api.DELETE("/api/v1/admin/libraries/{id}", path(id)),
+				`${name} was removed.`,
+				page.url.pathname.includes(`/libraries/${id}`) ? "/" : undefined,
 			),
 	);
 }
