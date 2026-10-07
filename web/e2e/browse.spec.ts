@@ -369,6 +369,15 @@ test("a title put on the watchlist is on its home row and its page", async ({
 	await expectAccessible(page);
 });
 
+test("a home row's own page lists the row", async ({ page }) => {
+	await logIn(page, "/home/continue_watching");
+	await expect(
+		page.getByRole("heading", { level: 1, name: "Continue Watching" }),
+	).toBeVisible();
+	await expect(page.getByRole("link", { name: /Pilot/ })).toBeVisible();
+	await expectAccessible(page);
+});
+
 test("favourites, history and downloads list the reader's own", async ({
 	page,
 }) => {
