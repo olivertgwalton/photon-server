@@ -202,17 +202,9 @@ func saveIDs(ctx context.Context, tx db, item uuid.UUID, source domain.IDSource,
 	if len(ids) == 0 {
 		return nil
 	}
-	known := map[domain.Provider]domain.IDSource{}
-	var provider domain.Provider
-	var from domain.IDSource
-	rows, err := tx.Query(ctx, `SELECT provider, source FROM external_ids WHERE item_id = $1`, item)
+	known, err := queryMap[domain.Provider, domain.IDSource](ctx, tx,
+		`SELECT provider, source FROM external_ids WHERE item_id = $1`, item)
 	if err != nil {
-		return err
-	}
-	if _, err := pgx.ForEachRow(rows, []any{&provider, &from}, func() error {
-		known[provider] = from
-		return nil
-	}); err != nil {
 		return err
 	}
 	for provider, value := range ids {

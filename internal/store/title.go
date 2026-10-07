@@ -470,19 +470,10 @@ func (s *Store) seasons(ctx context.Context, profile, show uuid.UUID) ([]SeasonC
 	if err != nil {
 		return nil, err
 	}
-	counted, err := s.pool.Query(ctx, `
+	episodes, err := queryMap[uuid.UUID, int](ctx, s.pool, `
 		SELECT parent_id, count(*) FROM items WHERE parent_id = ANY($1) AND kind = 'episode' GROUP BY parent_id`,
 		ids(rows))
 	if err != nil {
-		return nil, err
-	}
-	episodes := map[uuid.UUID]int{}
-	var season uuid.UUID
-	var n int
-	if _, err := pgx.ForEachRow(counted, []any{&season, &n}, func() error {
-		episodes[season] = n
-		return nil
-	}); err != nil {
 		return nil, err
 	}
 	pictures, hashes, err := s.pictureOrder(ctx, rows)
@@ -768,18 +759,8 @@ func (s *Store) markerDetection(ctx context.Context, versions []*model.Version) 
 	for n, v := range versions {
 		libs[n] = v.LibraryID
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id, markers FROM libraries WHERE id = ANY($1)`, libs)
-	if err != nil {
-		return nil, err
-	}
-	out := map[uuid.UUID]domain.MarkerDetection{}
-	var lib uuid.UUID
-	var detection domain.MarkerDetection
-	_, err = pgx.ForEachRow(rows, []any{&lib, &detection}, func() error {
-		out[lib] = detection
-		return nil
-	})
-	return out, err
+	return queryMap[uuid.UUID, domain.MarkerDetection](ctx, s.pool,
+		`SELECT id, markers FROM libraries WHERE id = ANY($1)`, libs)
 }
 
 // partPreviews answers the idx of each part's chapters that have an image, and each part's

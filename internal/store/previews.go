@@ -164,15 +164,5 @@ func (s *Store) QueuePreviews(ctx context.Context, due domain.JobDue) (int64, er
 
 // LivePreviews answers which of these parts have previews recorded.
 func (s *Store) LivePreviews(ctx context.Context, parts []uuid.UUID) (map[uuid.UUID]bool, error) {
-	rows, err := s.pool.Query(ctx, `SELECT part_id FROM previews WHERE part_id = ANY($1)`, parts)
-	if err != nil {
-		return nil, err
-	}
-	out := map[uuid.UUID]bool{}
-	var id uuid.UUID
-	_, err = pgx.ForEachRow(rows, []any{&id}, func() error {
-		out[id] = true
-		return nil
-	})
-	return out, err
+	return querySet[uuid.UUID](ctx, s.pool, `SELECT part_id FROM previews WHERE part_id = ANY($1)`, parts)
 }

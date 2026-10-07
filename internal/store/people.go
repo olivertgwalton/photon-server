@@ -469,19 +469,7 @@ func (s *Store) Person(ctx context.Context, id uuid.UUID) (PersonPage, error) {
 		Birthplace: deref(row.Birthplace), DescribedAt: deref(row.DescribedAt),
 	}
 	out.Photo, out.Blurhashes = photo(row.PhotoID, row.PhotoBlurhash)
-	var provider domain.Provider
-	var value string
-	ids, err := s.pool.Query(ctx, `SELECT provider, value FROM person_ids WHERE person_id = $1`, id)
-	if err != nil {
-		return PersonPage{}, err
-	}
-	_, err = pgx.ForEachRow(ids, []any{&provider, &value}, func() error {
-		if out.IDs == nil {
-			out.IDs = map[domain.Provider]string{}
-		}
-		out.IDs[provider] = value
-		return nil
-	})
+	out.IDs, err = queryMap[domain.Provider, string](ctx, s.pool, `SELECT provider, value FROM person_ids WHERE person_id = $1`, id)
 	if err != nil {
 		return PersonPage{}, err
 	}

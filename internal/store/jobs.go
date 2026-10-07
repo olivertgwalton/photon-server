@@ -200,19 +200,8 @@ func (s *Store) RunningJobs(ctx context.Context) ([]domain.Job, error) {
 // JobsLeft answers how many jobs of each kind are left to run, queued or running, leaving out
 // kinds with none.
 func (s *Store) JobsLeft(ctx context.Context) (map[domain.JobKind]int, error) {
-	rows, err := s.pool.Query(ctx, `
+	return queryMap[domain.JobKind, int](ctx, s.pool, `
 		SELECT kind, count(*) FROM jobs WHERE state IN ('queued', 'running', 'rerun') GROUP BY kind`)
-	if err != nil {
-		return nil, err
-	}
-	out := map[domain.JobKind]int{}
-	var kind domain.JobKind
-	var count int
-	_, err = pgx.ForEachRow(rows, []any{&kind, &count}, func() error {
-		out[kind] = count
-		return nil
-	})
-	return out, err
 }
 
 // AnyJobsLeft answers whether any job of kind is left to run, queued or running.

@@ -110,18 +110,7 @@ func (s *Store) KnownFiles(ctx context.Context, lib uuid.UUID, paths []string) (
 // FolderFingerprints answers the fingerprint each of a library's folders had when it was last
 // scanned, by path.
 func (s *Store) FolderFingerprints(ctx context.Context, lib uuid.UUID) (map[string][]byte, error) {
-	rows, err := s.pool.Query(ctx, `SELECT path, fingerprint FROM folders WHERE library_id = $1`, lib)
-	if err != nil {
-		return nil, err
-	}
-	known := map[string][]byte{}
-	var path string
-	var fingerprint []byte
-	_, err = pgx.ForEachRow(rows, []any{&path, &fingerprint}, func() error {
-		known[path] = fingerprint
-		return nil
-	})
-	return known, err
+	return queryMap[string, []byte](ctx, s.pool, `SELECT path, fingerprint FROM folders WHERE library_id = $1`, lib)
 }
 
 // Changed is the titles a write added, changed and removed.

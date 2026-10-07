@@ -161,7 +161,6 @@ func (s *Store) Members(ctx context.Context, profile, collection uuid.UUID) ([]C
 
 // origins answers who made each collection among rows.
 func (s *Store) origins(ctx context.Context, rows []*model.Item) (map[uuid.UUID]domain.CollectionOrigin, error) {
-	out := map[uuid.UUID]domain.CollectionOrigin{}
 	var in []uuid.UUID
 	for _, r := range rows {
 		if r.Kind == domain.ItemCollection {
@@ -169,19 +168,10 @@ func (s *Store) origins(ctx context.Context, rows []*model.Item) (map[uuid.UUID]
 		}
 	}
 	if len(in) == 0 {
-		return out, nil
+		return nil, nil
 	}
-	var id uuid.UUID
-	var origin domain.CollectionOrigin
-	found, err := s.pool.Query(ctx, `SELECT item_id, origin FROM collections WHERE item_id = ANY($1)`, in)
-	if err != nil {
-		return out, err
-	}
-	_, err = pgx.ForEachRow(found, []any{&id, &origin}, func() error {
-		out[id] = origin
-		return nil
-	})
-	return out, err
+	return queryMap[uuid.UUID, domain.CollectionOrigin](ctx, s.pool,
+		`SELECT item_id, origin FROM collections WHERE item_id = ANY($1)`, in)
 }
 
 // collectionsOf answers the shown collections a title is in, by title.

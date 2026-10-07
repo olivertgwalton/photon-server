@@ -75,6 +75,37 @@ func queryColumn[T any](ctx context.Context, q db, sql string, args ...any) ([]T
 	return pgx.CollectRows(rows, pgx.RowTo[T])
 }
 
+// queryMap answers a statement's rows of two columns, a key and its value.
+func queryMap[K comparable, V any](ctx context.Context, q db, sql string, args ...any) (map[K]V, error) {
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	out := map[K]V{}
+	var k K
+	var v V
+	_, err = pgx.ForEachRow(rows, []any{&k, &v}, func() error {
+		out[k] = v
+		return nil
+	})
+	return out, err
+}
+
+// querySet answers the one column of the rows a statement finds, as a set.
+func querySet[K comparable](ctx context.Context, q db, sql string, args ...any) (map[K]bool, error) {
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	out := map[K]bool{}
+	var k K
+	_, err = pgx.ForEachRow(rows, []any{&k}, func() error {
+		out[k] = true
+		return nil
+	})
+	return out, err
+}
+
 // ids is the items' ids, for an array parameter.
 func ids(rows []*model.Item) []uuid.UUID {
 	out := make([]uuid.UUID, len(rows))

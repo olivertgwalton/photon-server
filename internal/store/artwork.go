@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"maps"
 	"math"
 	"net/url"
 	"path"
@@ -203,19 +204,14 @@ func (s *Store) unfetched(ctx context.Context, items []*model.Item) (Unfetched, 
 			out[r.ID] = r.Place
 		}
 	}
-	found, err := s.pool.Query(ctx, `
+	photos, err := queryMap[uuid.UUID, string](ctx, s.pool, `
 		SELECT DISTINCT p.photo_id, p.photo_url FROM credits c JOIN people p ON p.id = c.person_id
 		WHERE c.item_id = ANY($1) AND p.photo_url IS NOT NULL AND p.photo_blurhash IS NULL`, ids(items))
 	if err != nil {
 		return nil, err
 	}
-	var id uuid.UUID
-	var url string
-	_, err = pgx.ForEachRow(found, []any{&id, &url}, func() error {
-		out[id] = url
-		return nil
-	})
-	return out, err
+	maps.Copy(out, photos)
+	return out, nil
 }
 
 // rankPictures puts the pictures of items best first: an admin's choice, files beside the title,
@@ -378,22 +374,12 @@ func videoStill(site, key string) string {
 // LivePictures answers which of these picture ids are still a title's, a person's, a video's or a
 // profile's, or a theme tune's kept beside them.
 func (s *Store) LivePictures(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]bool, error) {
-	rows, err := s.pool.Query(ctx, `
+	return querySet[uuid.UUID](ctx, s.pool, `
 		SELECT id FROM artwork WHERE id = ANY($1)
 		UNION SELECT photo_id FROM people WHERE photo_id = ANY($1)
 		UNION SELECT thumb_id FROM remote_videos WHERE thumb_id = ANY($1)
 		UNION SELECT avatar_id FROM profiles WHERE avatar_id = ANY($1)
 		UNION SELECT id FROM themes WHERE id = ANY($1)`, ids)
-	if err != nil {
-		return nil, err
-	}
-	out := map[uuid.UUID]bool{}
-	var id uuid.UUID
-	_, err = pgx.ForEachRow(rows, []any{&id}, func() error {
-		out[id] = true
-		return nil
-	})
-	return out, err
 }
 
 // SetBlurhash keeps the BlurHash of the picture with id, a title's or a person's.
