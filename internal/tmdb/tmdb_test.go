@@ -48,13 +48,13 @@ func serveIn(t *testing.T, language string, routes map[string]string) *Client {
 func TestSearchAsksForTheYearByKind(t *testing.T) {
 	c := serve(t, map[string]string{
 		"/search/tv?first_air_date_year=2002&include_adult=false&language=en-GB&query=The+Wire": `{"results":[
-			{"id":1438,"name":"The Wire","original_name":"The Wire","first_air_date":"2002-06-02"}]}`,
+			{"id":1438,"name":"The Wire","original_name":"The Wire","first_air_date":"2002-06-02","overview":"Baltimore."}]}`,
 	})
 	got, err := c.Search(t.Context(), Show, "The Wire", 2002)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff([]domain.Candidate{{ID: "1438", Title: "The Wire", OriginalTitle: "The Wire", Year: 2002}}, got); diff != "" {
+	if diff := cmp.Diff([]domain.Candidate{{ID: "1438", Title: "The Wire", OriginalTitle: "The Wire", Year: 2002, Overview: "Baltimore."}}, got); diff != "" {
 		t.Errorf("Search (-want +got):\n%s", diff)
 	}
 }

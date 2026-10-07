@@ -37,7 +37,9 @@ type Candidate struct {
 	Title         string
 	OriginalTitle string
 	Year          int
-	Poster        string
+	// Overview is what the provider says it is about, to tell like-named titles apart by.
+	Overview string
+	Poster   string
 }
 
 // SeasonMetadata is what a source says about a season and its episodes, by episode number.

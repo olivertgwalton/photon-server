@@ -149,3 +149,26 @@ func TestAnEpisodeCreditsItsGuestsAndCrew(t *testing.T) {
 		t.Errorf("the second episode = %+v, want its title and no credits", got[1].Episodes[2])
 	}
 }
+
+func TestSearchSaysWhatEachShowIsAboutInTheClientsLanguage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/login" {
+			_, _ = w.Write([]byte(`{"data":{"token":"t"}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{"tvdb_id":"79126","name":"The Wire","year":"2002","overview":"Baltimore, as TVDB has it.",
+				"overviews":{"fra":"Baltimore, en français.","eng":"Baltimore."}},
+			{"tvdb_id":"1","name":"Wired","overview":"Only in its own words."}]}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := New("key", "", "en-GB", unlimited{})
+	c.base = srv.URL
+	got, err := c.Search(t.Context(), "The Wire", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Overview != "Baltimore." || got[1].Overview != "Only in its own words." {
+		t.Errorf("overviews: %+v, want each in English, else as TVDB has it", got)
+	}
+}

@@ -99,7 +99,7 @@ func (c *client) Candidates(ctx context.Context, kind domain.ItemKind, title str
 	found := make([]domain.Candidate, 0, len(out.Results))
 	for _, r := range out.Results {
 		if r.ID != "" {
-			found = append(found, domain.Candidate{ID: r.ID, Title: r.Title, OriginalTitle: r.OriginalTitle, Year: r.Year, Poster: web(r.Poster)})
+			found = append(found, domain.Candidate{ID: r.ID, Title: r.Title, OriginalTitle: r.OriginalTitle, Year: r.Year, Overview: r.Overview, Poster: web(r.Poster)})
 		}
 	}
 	return found, err

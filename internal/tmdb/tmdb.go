@@ -21,6 +21,8 @@ const (
 	baseURL = "https://api.themoviedb.org/3"
 	// imageURL serves a picture at the size it was uploaded; the server sizes it for clients.
 	imageURL = "https://image.tmdb.org/t/p/original"
+	// candidateURL serves a match candidate's poster at a size to tell it by, not to keep.
+	candidateURL = "https://image.tmdb.org/t/p/w342"
 	// keepPictures is how many of each kind are kept, best first.
 	keepPictures = 10
 )
@@ -79,16 +81,17 @@ type result struct {
 	OriginalName  string `json:"original_name"`
 	ReleaseDate   string `json:"release_date"`
 	FirstAirDate  string `json:"first_air_date"`
+	Overview      string `json:"overview"`
 	Poster        string `json:"poster_path"`
 }
 
 func (r result) match() domain.Candidate {
 	c := domain.Candidate{
 		ID: strconv.Itoa(r.ID), Title: cmp.Or(r.Title, r.Name), OriginalTitle: cmp.Or(r.OriginalTitle, r.OriginalName),
-		Year: provider.Year(provider.Date(cmp.Or(r.ReleaseDate, r.FirstAirDate))),
+		Year: provider.Year(provider.Date(cmp.Or(r.ReleaseDate, r.FirstAirDate))), Overview: r.Overview,
 	}
 	if r.Poster != "" {
-		c.Poster = imageURL + r.Poster
+		c.Poster = candidateURL + r.Poster
 	}
 	return c
 }

@@ -98,15 +98,44 @@ async function search(event: SubmitEvent) {
 	{#if candidates}
 		<ul class="divide-line divide-y">
 			{#each candidates as candidate (candidate.id)}
-				<li class="flex items-center justify-between gap-4 py-2.5">
-					<div class="min-w-0">
-						<p class="text-ink truncate font-semibold">
-							{candidate.title}{candidate.year ? ` (${candidate.year})` : ""}
+				<!-- As Plex's Fix Match lists each: its poster, name and year, and
+					what it is about, to tell like-named titles apart. -->
+				<li class="flex items-start gap-4 py-3">
+					<div
+						class="bg-raise aspect-[2/3] w-16 shrink-0 overflow-hidden rounded-md"
+					>
+						{#if candidate.poster}
+							<img
+								src={candidate.poster}
+								alt=""
+								loading="lazy"
+								decoding="async"
+								class="size-full object-cover"
+							>
+						{/if}
+					</div>
+					<div class="grid min-w-0 flex-1 gap-1">
+						<p
+							class="text-ink flex items-baseline justify-between gap-3 font-semibold"
+						>
+							<span class="truncate">{candidate.title}</span>
+							{#if candidate.year}
+								<span
+									class="text-ink-3 shrink-0 text-sm font-normal tabular-nums"
+								>
+									{candidate.year}
+								</span>
+							{/if}
 						</p>
 						{#if candidate.original_title &&
 							candidate.original_title !== candidate.title}
 							<p class="text-ink-3 truncate text-xs">
 								{candidate.original_title}
+							</p>
+						{/if}
+						{#if candidate.overview}
+							<p class="text-ink-2 line-clamp-3 text-sm">
+								{candidate.overview}
 							</p>
 						{/if}
 					</div>
