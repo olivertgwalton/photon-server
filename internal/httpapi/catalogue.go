@@ -54,16 +54,17 @@ type countsJSON struct {
 }
 
 type cardJSON struct {
-	ID          uuid.UUID       `json:"id"`
-	Kind        domain.ItemKind `json:"kind"`
-	Title       string          `json:"title"`
-	Year        int             `json:"year,omitzero"`
-	ReleaseDate domain.Date     `json:"release_date,omitzero"`
-	AddedAt     time.Time       `json:"added_at"`
-	Poster      uuid.UUID       `json:"poster,omitzero"`
-	Backdrop    uuid.UUID       `json:"backdrop,omitzero"`
-	State       titleStateJSON  `json:"state,omitzero"`
-	DurationMS  int64           `json:"duration_ms,omitzero"`
+	ID           uuid.UUID       `json:"id"`
+	Kind         domain.ItemKind `json:"kind"`
+	Title        string          `json:"title"`
+	Year         int             `json:"year,omitzero"`
+	ReleaseDate  domain.Date     `json:"release_date,omitzero"`
+	AddedAt      time.Time       `json:"added_at"`
+	Poster       uuid.UUID       `json:"poster,omitzero"`
+	Backdrop     uuid.UUID       `json:"backdrop,omitzero"`
+	State        titleStateJSON  `json:"state,omitzero"`
+	DurationMS   int64           `json:"duration_ms,omitzero"`
+	VersionCount int             `json:"version_count,omitzero"`
 	// An episode's card names its show and where in it it is, and carries its still.
 	Show          *titleRefJSON `json:"show,omitzero"`
 	Season        *titleRefJSON `json:"season,omitzero"`
@@ -169,7 +170,7 @@ func cardsJSON(cards []store.Card) []cardJSON {
 func cardOf(c store.Card) cardJSON {
 	out := cardJSON{
 		ID: c.ID, Kind: c.Kind, Title: c.Title, Year: c.Year, ReleaseDate: domain.Date(c.ReleaseDate), AddedAt: c.AddedAt,
-		Poster: c.Poster, Backdrop: c.Backdrop, State: titleStateJSON(c.State), DurationMS: c.DurationMS, Show: (*titleRefJSON)(c.Show), Season: (*titleRefJSON)(c.Season),
+		Poster: c.Poster, Backdrop: c.Backdrop, State: titleStateJSON(c.State), DurationMS: c.DurationMS, VersionCount: c.VersionCount, Show: (*titleRefJSON)(c.Show), Season: (*titleRefJSON)(c.Season),
 		SeasonNumber: c.SeasonNumber, EpisodeNumber: c.EpisodeNumber, EpisodeEnd: c.EpisodeEnd, Thumb: c.Thumb,
 		Origin: c.Origin, Overview: c.Overview, Logo: c.Logo, Genres: c.Genres, Certificate: c.Certificate,
 		Blurhashes: c.Blurhashes,

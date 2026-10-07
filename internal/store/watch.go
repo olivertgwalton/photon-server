@@ -40,7 +40,7 @@ const newest = ` WHERE watch_state.changed_at IS NULL OR watch_state.changed_at 
 // Length is how long a film or episode runs, as its progress is measured: its longest copy's.
 func (s *Store) Length(ctx context.Context, item uuid.UUID) (time.Duration, error) {
 	lengths, err := s.durations(ctx, []uuid.UUID{item})
-	return time.Duration(lengths[item]) * time.Millisecond, err
+	return time.Duration(lengths[item].ms) * time.Millisecond, err
 }
 
 // SaveProgress records that a profile stopped a film or episode, running length, at position, at a

@@ -154,6 +154,19 @@ export function videoName(stream: Schemas["StreamPage"] | undefined): string {
 	return [lines, stream.codec.toUpperCase(), range].filter(Boolean).join(" ");
 }
 
+// A copy as a choice names it: its label or edition and its picture, and
+// whether its files are gone.
+export function versionName(v: Schemas["VersionPage"]): string {
+	const picture = videoName(v.streams.find((s) => s.kind === "video"));
+	const name = v.label ?? v.edition ?? "";
+	// A label is often the picture's own name ("4K"), which says it once.
+	const said =
+		!name || picture.startsWith(name)
+			? picture
+			: [name, picture].filter(Boolean).join(" · ");
+	return `${said || "Version"}${v.missing_since ? " (missing)" : ""}`;
+}
+
 // A frame named by its width, so a scope master is not "1600p".
 function resolutionOf(width: number, height: number): string {
 	if (width >= 3200 || height >= 1800) return "4K";

@@ -424,3 +424,32 @@ test("an episode's card leads to its season", async ({ page }) => {
 	// The server is the other tests' too: the episode is as it was.
 	await page.request.delete("/api/v1/titles/t-ep/favourite");
 });
+
+test("a version is chosen from a card to play or to download", async ({
+	page,
+}) => {
+	await logIn(page);
+	const row = page.getByRole("region", { name: "Recently Added Films" });
+	await row.getByRole("button", { name: "More for Quiet Hours" }).click();
+	await page.getByRole("menuitem", { name: "Play version…" }).click();
+	await page
+		.getByRole("dialog", { name: "Play version" })
+		.getByRole("button", { name: /1080p/ })
+		.click();
+	await expect(page).toHaveURL(/\/play\/t-film\?.*version=v-hd/);
+
+	await page.goto("/");
+	await row.getByRole("button", { name: "More for Quiet Hours" }).click();
+	await page.getByRole("menuitem", { name: "Download…" }).click();
+	await page
+		.getByRole("dialog", { name: "Download version" })
+		.getByRole("button", { name: /4K/ })
+		.click();
+	await page
+		.getByRole("dialog", { name: "Download" })
+		.getByRole("button", { name: "Download" })
+		.click();
+	await expect(
+		page.getByText("Download requested. It's in Downloads."),
+	).toBeVisible();
+});
