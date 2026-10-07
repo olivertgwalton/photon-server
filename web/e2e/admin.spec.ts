@@ -442,3 +442,25 @@ test("deleting from a card asks first, and says why its library refuses", async 
 		),
 	).toBeVisible();
 });
+
+test("a library is set to ask in a language of its own", async ({ page }) => {
+	let sent: Record<string, unknown> = {};
+	page.on("request", (r) => {
+		if (
+			r.method() === "PATCH" &&
+			r.url().endsWith("/admin/libraries/l-films")
+		) {
+			sent = r.postDataJSON();
+		}
+	});
+	await logIn(page, "/settings/server/libraries/l-films");
+	await expect(page.getByLabel("Metadata language")).toContainText(
+		"Server default (British English)",
+	);
+	await page.getByLabel("Metadata language").click();
+	await page.getByRole("option", { name: "German (Germany)" }).click();
+	await expectAccessible(page);
+	await page.getByRole("button", { name: "Save", exact: true }).click();
+	await expect.poll(() => sent.metadata_language).toBe("de-DE");
+	expect(sent.certification_country).toBe("");
+});

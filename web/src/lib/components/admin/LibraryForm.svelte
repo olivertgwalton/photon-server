@@ -4,6 +4,7 @@ import {
 	defaultSources,
 	itemKinds,
 	offeredSources,
+	serverLocale,
 } from "#lib/admin/library.js";
 import { extraKinds } from "#lib/admin/words.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
@@ -21,10 +22,39 @@ type Schemas = components["schemas"];
 let {
 	library,
 	providers,
+	locales,
+	serverLanguage,
 }: {
 	library?: Schemas["AdminLibrary"];
 	providers: Schemas["MetadataProvider"][];
+	locales: Schemas["Locales"];
+	// The server's own metadata language, which a library asks in by default.
+	serverLanguage: string;
 } = $props();
+
+// Languages and countries by name in the reader's own language, as Plex's and
+// Jellyfin's library settings list them.
+const languageNames = new Intl.DisplayNames(undefined, { type: "language" });
+const countryNames = new Intl.DisplayNames(undefined, { type: "region" });
+const named = (codes: string[], names: Intl.DisplayNames) =>
+	codes
+		.map((value) => ({ value, label: names.of(value) ?? value }))
+		.toSorted((a, b) => a.label.localeCompare(b.label));
+const serverCountry = $derived(new Intl.Locale(serverLanguage).region);
+const languages = $derived([
+	{
+		value: serverLocale,
+		label: `Server default (${languageNames.of(serverLanguage) ?? serverLanguage})`,
+	},
+	...named(locales.languages, languageNames),
+]);
+const countries = $derived([
+	{
+		value: serverLocale,
+		label: `Automatic${serverCountry ? ` (${countryNames.of(serverCountry)})` : ""}`,
+	},
+	...named(locales.countries, countryNames),
+]);
 
 const defaults = {
 	remote_extras: ["trailer", "featurette", "behind_the_scenes"],
@@ -237,6 +267,32 @@ const refreshOptions = $derived(
 				A theme.mp3 or a theme-music folder beside a title. With ThemerrDB's, a
 				film or show with neither downloads the theme audio from the YouTube
 				link ThemerrDB lists for it, which needs yt-dlp on the server.
+			</Field.Description>
+		</Field.Field>
+		<Field.Field>
+			<Field.Label for="library-language">Metadata language</Field.Label>
+			<Choice
+				id="library-language"
+				name="metadata_language"
+				value={library?.metadata_language ?? serverLocale}
+				options={languages}
+			/>
+			<Field.Description>
+				What its titles' names, write-ups and pictures are asked for in.
+				Changing it describes them all again.
+			</Field.Description>
+		</Field.Field>
+		<Field.Field>
+			<Field.Label for="library-country">Certification country</Field.Label>
+			<Choice
+				id="library-country"
+				name="certification_country"
+				value={library?.certification_country ?? serverLocale}
+				options={countries}
+			/>
+			<Field.Description>
+				Whose certificates its titles carry, and parental controls read them by.
+				Automatic is its language's country, else the server's.
 			</Field.Description>
 		</Field.Field>
 		<Field.Field>

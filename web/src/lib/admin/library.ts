@@ -80,6 +80,8 @@ export function libraryChange(
 		keyframes: String(form.get("keyframes")) as Schemas["KeyframeMode"],
 		themes: String(form.get("themes")) as Schemas["ThemeLookup"],
 		deletion: String(form.get("deletion")) as Schemas["MediaDeletion"],
+		metadata_language: localeChoice(form.get("metadata_language")),
+		certification_country: localeChoice(form.get("certification_country")),
 		refresh_days: Number(form.get("refresh_days")),
 	};
 	const sources: Schemas["KindSourcesChange"][] = [];
@@ -98,4 +100,13 @@ export function libraryChange(
 		change.remote_extras = extras;
 	}
 	return change;
+}
+
+// A library's language or country as its form sends it: "server" for the
+// server's own, which the API names "".
+export const serverLocale = "server";
+
+function localeChoice(value: FormDataEntryValue | null): string {
+	const chosen = String(value ?? serverLocale);
+	return chosen === serverLocale ? "" : chosen;
 }

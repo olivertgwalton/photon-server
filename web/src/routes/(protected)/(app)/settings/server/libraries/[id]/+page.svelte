@@ -71,7 +71,12 @@ function save(event: SubmitEvent) {
 		<ScanProgress {scan} name={data.library.name} />
 	{/if}
 	{#key data.library}
-		<LibraryForm library={data.library} providers={data.providers} />
+		<LibraryForm
+			library={data.library}
+			providers={data.providers}
+			locales={data.locales}
+			serverLanguage={data.serverLanguage}
+		/>
 	{/key}
 	<div class="flex gap-2">
 		<Button type="submit">Save</Button>

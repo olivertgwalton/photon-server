@@ -47,7 +47,11 @@ async function add(event: SubmitEvent) {
 />
 
 <form onsubmit={add} class="grid max-w-2xl gap-6">
-	<LibraryForm providers={data.providers} />
+	<LibraryForm
+		providers={data.providers}
+		locales={data.locales}
+		serverLanguage={data.serverLanguage}
+	/>
 	<div class="flex gap-2">
 		<Button type="submit" disabled={adding}>Add and scan</Button>
 		<Button href="/settings/server/libraries" variant="outline">Cancel</Button>
