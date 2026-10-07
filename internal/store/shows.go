@@ -132,11 +132,12 @@ func ensureShow(ctx context.Context, tx db, lib uuid.UUID, show Show, changed Ch
 	}
 	err := tx.QueryRow(ctx, `SELECT id FROM items WHERE library_id = $1 AND kind = 'show' AND folder = $2 LIMIT 1`,
 		lib, show.Folder).Scan(&row.ID)
-	made := errors.Is(err, pgx.ErrNoRows)
+	change := domain.TitleUpdated
 	switch {
 	case err == nil:
 		_, err = tx.Exec(ctx, `UPDATE items SET scan_title = $2 WHERE id = $1`, row.ID, row.ScanTitle)
-	case made:
+	case errors.Is(err, pgx.ErrNoRows):
+		change = domain.TitleAdded
 		if err = insertItem(ctx, tx, &row); err == nil {
 			err = enqueue(ctx, tx, domain.JobIdentify, row.ID)
 		}
@@ -144,7 +145,7 @@ func ensureShow(ctx context.Context, tx db, lib uuid.UUID, show Show, changed Ch
 	if err != nil {
 		return uuid.UUID{}, err
 	}
-	changed.note(made, row.ID)
+	changed.add(change, row.ID)
 	return row.ID, describe(ctx, tx, row.ID, show.Title, show.Year, show.IDs, show.NFO)
 }
 
@@ -154,8 +155,9 @@ func ensureSeason(ctx context.Context, tx db, lib, showID uuid.UUID, folder stri
 		title = "Specials"
 	}
 	id, err := seasonOf(ctx, tx, showID, number)
-	made := errors.Is(err, pgx.ErrNoRows)
-	if made {
+	change := domain.TitleUpdated
+	if errors.Is(err, pgx.ErrNoRows) {
+		change = domain.TitleAdded
 		row := model.Item{
 			LibraryID: lib, Kind: domain.ItemSeason, ParentID: &showID, SeasonNumber: &number,
 			ScanTitle: title, Title: title, SortTitle: sortTitle(title), Folder: folder,
@@ -166,7 +168,7 @@ func ensureSeason(ctx context.Context, tx db, lib, showID uuid.UUID, folder stri
 	if err != nil {
 		return uuid.UUID{}, err
 	}
-	changed.note(made, id)
+	changed.add(change, id)
 	return id, describe(ctx, tx, id, title, 0, nil, nfo)
 }
 
@@ -198,8 +200,9 @@ func saveEpisode(ctx context.Context, tx db, lib uuid.UUID, settings analysis, s
 	if err != nil {
 		return err
 	}
-	made := row.ID == (uuid.UUID{})
-	if made {
+	change := domain.TitleUpdated
+	if row.ID == (uuid.UUID{}) {
+		change = domain.TitleAdded
 		if err := insertItem(ctx, tx, &row); err != nil {
 			return err
 		}
@@ -217,7 +220,7 @@ func saveEpisode(ctx context.Context, tx db, lib uuid.UUID, settings analysis, s
 			return err
 		}
 	}
-	changed.note(made, row.ID)
+	changed.add(change, row.ID)
 	if err := describe(ctx, tx, row.ID, e.Title, 0, e.IDs, e.NFO); err != nil {
 		return err
 	}

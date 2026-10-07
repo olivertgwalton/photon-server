@@ -116,17 +116,8 @@ func (s *Store) FolderFingerprints(ctx context.Context, lib uuid.UUID) (map[stri
 // Changed is the titles a write added, changed and removed.
 type Changed map[domain.TitleChange][]uuid.UUID
 
-func (c Changed) add(change domain.TitleChange, ids []uuid.UUID) {
+func (c Changed) add(change domain.TitleChange, ids ...uuid.UUID) {
 	c[change] = append(c[change], ids...)
-}
-
-// note records a title written: added if it was made, else changed.
-func (c Changed) note(made bool, id uuid.UUID) {
-	change := domain.TitleUpdated
-	if made {
-		change = domain.TitleAdded
-	}
-	c[change] = append(c[change], id)
 }
 
 // Saved is what a folder's save did: the paths of extras no single title owns, and the titles it
@@ -243,14 +234,14 @@ func filmItem(ctx context.Context, tx db, lib uuid.UUID, f Film, changed Changed
 			if err := enqueue(ctx, tx, domain.JobIdentify, item.ID); err != nil {
 				return uuid.UUID{}, err
 			}
-			changed.note(true, item.ID)
+			changed.add(domain.TitleAdded, item.ID)
 			return item.ID, describe(ctx, tx, item.ID, f.Title, f.Year, f.IDs, f.NFO)
 		}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE items SET scan_title = $2, folder = $3 WHERE id = $1`, id, f.Title, f.Folder); err != nil {
 		return uuid.UUID{}, err
 	}
-	changed.note(false, id)
+	changed.add(domain.TitleUpdated, id)
 	return id, describe(ctx, tx, id, f.Title, f.Year, f.IDs, f.NFO)
 }
 
@@ -500,7 +491,7 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 		if err != nil {
 			return err
 		}
-		changed.add(domain.TitleUpdated, updated)
+		changed.add(domain.TitleUpdated, updated...)
 		for _, sql := range []string{
 			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode', 'extra')
 				AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.item_id = i.id)`,
@@ -515,7 +506,7 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 			if err != nil {
 				return err
 			}
-			changed.add(domain.TitleRemoved, removed)
+			changed.add(domain.TitleRemoved, removed...)
 		}
 		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND `+notIn("path", "$2")+` AND `+inScope("path", "$3"),
 			lib, folders, scopes)

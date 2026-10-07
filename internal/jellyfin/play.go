@@ -152,7 +152,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 		audio = &sound.Index
 	}
 	chosen := domain.ChosenTracks{Audio: audio, Subtitle: sub}
-	if picked != nil && picked.external {
+	if picked != nil && picked.delivery == domain.SubtitleSidecar {
 		chosen.SubtitleFile = &picked.file
 	}
 	d, err := playback.Decide(p.hlsProfile(t, segments, c, limit), playback.CopyOf(c), chosen, a.svc.Encoding)
@@ -188,12 +188,12 @@ func subtitleOf(c store.PlayCopy, index *int) (*int, *subtitleChoice) {
 	base := 0
 	for _, s := range c.Streams {
 		if s.Kind == domain.StreamSubtitle && s.Index == *index {
-			return index, &subtitleChoice{codec: s.Codec}
+			return index, &subtitleChoice{codec: s.Codec, delivery: domain.SubtitleEmbedded}
 		}
 		base = max(base, s.Index+1)
 	}
 	if n := *index - base; n >= 0 && n < len(c.Subtitles) {
-		return nil, &subtitleChoice{codec: c.Subtitles[n].Codec, external: true, file: c.Subtitles[n].ID}
+		return nil, &subtitleChoice{codec: c.Subtitles[n].Codec, delivery: domain.SubtitleSidecar, file: c.Subtitles[n].ID}
 	}
 	return nil, nil
 }
@@ -318,11 +318,19 @@ func playID(session string) uuid.UUID {
 	return id
 }
 
+// reportKind is which of its playback reports an app sends: where it has got to, or that it stopped.
+type reportKind string
+
+const (
+	reportProgress reportKind = "progress"
+	reportStopped  reportKind = "stopped"
+)
+
 // reported records where an app says its playback is. A playback the app plays as it is is
 // started by its first report, as the dashboard shows it from then; one in HLS was started when
 // its playlist was fetched. A stop of one never started keeps where the profile got to in the
 // title.
-func (a *API) reported(stopped bool) http.HandlerFunc {
+func (a *API) reported(kind reportKind) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var rep report
 		if !readJSON(w, r, &rep) {
@@ -344,13 +352,13 @@ func (a *API) reported(stopped bool) http.HandlerFunc {
 			return err
 		}
 		var err error
-		switch {
-		case stopped:
+		switch kind {
+		case reportStopped:
 			_, err = a.svc.Playbacks.Stop(r.Context(), profile, id, position)
 			if errors.Is(err, playback.ErrNoPlayback) {
 				err = a.saveProgress(r.Context(), profile, rep.ItemID, position)
 			}
-		default:
+		case reportProgress:
 			err = progress(r.Context())
 			if errors.Is(err, playback.ErrNoPlayback) {
 				// A report told to another node at once may have started it first.
