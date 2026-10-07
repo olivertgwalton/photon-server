@@ -231,6 +231,7 @@ func (c *Client) Details(ctx context.Context, loc domain.Locale, id int) (domain
 			Image            string      `json:"image"`
 			FirstAired       string      `json:"firstAired"`
 			Characters       []character `json:"characters"`
+			Artworks         []artwork   `json:"artworks"`
 			Genres           []named     `json:"genres"`
 			OriginalNetwork  *named      `json:"originalNetwork"`
 			LatestNetwork    *named      `json:"latestNetwork"`
@@ -262,10 +263,14 @@ func (c *Client) Details(ctx context.Context, loc domain.Locale, id int) (domain
 	}
 	d := out.Data
 	aired := provider.Date(d.FirstAired)
+	// A show listing no artworks has its own poster still.
+	if len(d.Artworks) == 0 {
+		d.Artworks = []artwork{{Type: 2, Image: d.Image}}
+	}
 	m := domain.Metadata{
 		ReleaseDate: aired, Year: provider.Year(aired),
 		IDs:     map[domain.Provider]string{domain.ProviderTVDB: strconv.Itoa(id)},
-		Artwork: picture(domain.ArtworkPoster, d.Image),
+		Artwork: artworks(d.Artworks, lang),
 		Credits: credits(d.Characters),
 	}
 	if d.OriginalLanguage == lang {
@@ -370,6 +375,52 @@ func (c *Client) episodeCredits(ctx context.Context, id int) ([]domain.Credit, e
 		return nil, err
 	}
 	return credits(out.Data.Characters), nil
+}
+
+// artwork is one of a show's pictures, by TVDB's type: its language ISO 639-2, none for one with
+// no words on it.
+type artwork struct {
+	Type     int     `json:"type"`
+	Image    string  `json:"image"`
+	Language string  `json:"language"`
+	Score    float64 `json:"score"`
+	Width    int     `json:"width"`
+	Height   int     `json:"height"`
+}
+
+// artworkKinds are TVDB's types of a show's pictures, as its /artwork/types lists them.
+var artworkKinds = map[int]domain.ArtworkKind{
+	1: domain.ArtworkBanner, 2: domain.ArtworkPoster, 3: domain.ArtworkBackdrop, 23: domain.ArtworkLogo,
+}
+
+// artworks are a show's pictures of each kind, ranked as TMDB's are: a poster, logo or banner in
+// lang, else English, else wordless; a backdrop wordless first, as Jellyfin ranks them.
+func artworks(all []artwork, lang string) []domain.Artwork {
+	var out []domain.Artwork
+	for _, kind := range []domain.ArtworkKind{domain.ArtworkPoster, domain.ArtworkBackdrop, domain.ArtworkLogo, domain.ArtworkBanner} {
+		of := slices.DeleteFunc(slices.Clone(all), func(a artwork) bool { return artworkKinds[a.Type] != kind || a.Image == "" })
+		preferred := []string{lang, "eng", ""}
+		if kind == domain.ArtworkBackdrop {
+			preferred = []string{"", lang, "eng"}
+		}
+		ranked := provider.Preferred(of, func(a artwork) string { return a.Language }, func(a, b artwork) int {
+			return cmp.Compare(b.Score, a.Score)
+		}, preferred...)
+		for _, a := range ranked {
+			pics := picture(kind, a.Image)
+			if pics == nil {
+				continue
+			}
+			pic := pics[0]
+			pic.Width, pic.Height = a.Width, a.Height
+			// Kept as TMDB names a language, ISO 639-1.
+			if base, err := language.ParseBase(a.Language); err == nil {
+				pic.Language = base.String()
+			}
+			out = append(out, pic)
+		}
+	}
+	return out
 }
 
 // picture is TVDB's picture at address, which it answers as its bare /banners/ folder for a

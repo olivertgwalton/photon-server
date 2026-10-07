@@ -359,3 +359,20 @@ func written(r Rated, country string) string {
 	}
 	return r.Country + ":" + r.Certificate
 }
+
+// KeepPictures is how many pictures of each kind a provider's are kept, best first.
+const KeepPictures = 10
+
+// Preferred is the best KeepPictures of pictures as Jellyfin ranks them: those in the preferred
+// languages, in that order, before the rest, and among each the better first.
+func Preferred[T any](pictures []T, language func(T) string, better func(a, b T) int, preferred ...string) []T {
+	rank := func(p T) int {
+		if i := slices.Index(preferred, language(p)); i >= 0 {
+			return i
+		}
+		return len(preferred)
+	}
+	pictures = slices.Clone(pictures)
+	slices.SortStableFunc(pictures, func(a, b T) int { return cmp.Or(cmp.Compare(rank(a), rank(b)), better(a, b)) })
+	return pictures[:min(len(pictures), KeepPictures)]
+}
