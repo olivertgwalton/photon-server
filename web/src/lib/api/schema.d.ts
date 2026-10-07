@@ -885,7 +885,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Whether the server's port answers HTTPS, and the certificate it serves
+         * Whether the server's port answers HTTPS, the certificate it serves, and whether Jellyfin's apps reach it
          * @description Admin only.
          */
         get: {
@@ -903,14 +903,14 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Network"];
+                        "application/json": components["schemas"]["NetworkStatus"];
                     };
                 };
                 default: components["responses"]["Problem"];
             };
         };
         /**
-         * Replace whether the port answers HTTPS, and its certificate; every node serves it at once
+         * Replace whether the port answers HTTPS, its certificate, and Jellyfin's; every node serves it at once
          * @description Admin only.
          */
         put: {
@@ -5706,6 +5706,8 @@ export interface components {
         };
         /** @enum {string} */
         ItemKind: "movie" | "show" | "season" | "episode" | "extra" | "collection";
+        /** @enum {string} */
+        JellyfinMode: "on" | "off";
         JobCount: {
             count: number;
             kind: components["schemas"]["JobKind"];
@@ -5867,6 +5869,16 @@ export interface components {
         };
         Network: {
             certificate?: string;
+            jellyfin: components["schemas"]["JellyfinMode"];
+            jellyfin_port: number;
+            key?: string;
+            secure_connections: components["schemas"]["SecureConnections"];
+        };
+        NetworkStatus: {
+            certificate?: string;
+            jellyfin: components["schemas"]["JellyfinMode"];
+            jellyfin_error?: string;
+            jellyfin_port: number;
             key?: string;
             secure_connections: components["schemas"]["SecureConnections"];
         };
