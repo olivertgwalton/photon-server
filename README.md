@@ -26,6 +26,9 @@ Then open `http://<server>:8640` and log in.
 
 ### Several servers
 
+Several servers can serve one household together, sharing its PostgreSQL and Valkey; see
+[docs/cluster.md](docs/cluster.md).
+
 Each server keeps artwork (with avatars and theme tunes) and previews in its own cache folder
 until an admin chooses an S3 bucket they all share (`PUT /api/v1/admin/storage`). The bucket is
 checked before it is chosen. Without an access key, a server signs with its own AWS credentials:

@@ -99,6 +99,17 @@ export const accelerations: Record<Schemas["Acceleration"], string> = {
 	nvenc: "NVENC",
 };
 
+// Where a node's limit on transcodes at once comes from.
+export const limitSources: Record<Schemas["LimitSource"], string> = {
+	automatic: "worked out from the encoder",
+	environment: "set by PHOTON_MAX_TRANSCODES",
+};
+
+// Videos being transcoded of the most at once, as words: "3 of 8", or "3, no limit".
+export function transcodeLoad(active: number, limit?: number): string {
+	return limit ? `${active} of ${limit}` : `${active}, no limit`;
+}
+
 export const roles: Record<Schemas["Role"], string> = {
 	admin: "Admin",
 	member: "Member",

@@ -808,3 +808,46 @@ func TestMPEGTSSegmentsEachPlayAlone(t *testing.T) {
 		t.Errorf("the segments one after another: %q, want twenty seconds of H.264 and AAC", got)
 	}
 }
+
+// A node tells the others as soon as a transcode slot is taken or given back, by a playback or a
+// download, and never for a playback that copies its video.
+func TestTakingOrGivingBackASlotIsTold(t *testing.T) {
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 2, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	told := func(what string, want bool) {
+		t.Helper()
+		select {
+		case <-r.Changes():
+			if !want {
+				t.Errorf("told of %s", what)
+			}
+		default:
+			if want {
+				t.Errorf("not told of %s", what)
+			}
+		}
+	}
+	play := uuid.NewV7()
+	if err := r.Open(t.Context(), play, transcode); err != nil {
+		t.Fatal(err)
+	}
+	told("a playback taking a slot", true)
+	_, release, ok := r.HoldConversion(t.Context())
+	if !ok {
+		t.Fatal("a conversion beside one playback of two slots had none")
+	}
+	told("a conversion taking a slot", true)
+	r.Close(play)
+	told("a playback giving its slot back", true)
+	release()
+	told("a conversion giving its slot back", true)
+	copied := uuid.NewV7()
+	video := domain.VideoPlan{Codec: "h264"}
+	whole := Copy{Parts: []Source{{Open: unplayed, Part: Part{Duration: time.Minute, Keyframes: Forced(time.Minute)}, Video: video}}}
+	if err := r.Open(t.Context(), copied, whole); err != nil {
+		t.Fatal(err)
+	}
+	told("a playback copying its video", false)
+}

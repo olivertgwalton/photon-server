@@ -14,14 +14,13 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // fakeBackend answers its version, or fails as one that cannot be reached.
 type fakeBackend struct {
 	version string
-	nodes   []kv.Node
+	nodes   []domain.Node
 }
 
 func (f fakeBackend) Version(context.Context) (string, error) {
@@ -31,7 +30,7 @@ func (f fakeBackend) Version(context.Context) (string, error) {
 	return f.version, nil
 }
 
-func (f fakeBackend) Nodes(context.Context) ([]kv.Node, error) { return f.nodes, nil }
+func (f fakeBackend) Nodes(context.Context) ([]domain.Node, error) { return f.nodes, nil }
 
 func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 	node, peer := uuid.NewV7(), uuid.NewV7()
@@ -40,12 +39,15 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 		Auth: fakeAuth{}, HLS: fakeHLS{}, TrustedProxies: []netip.Prefix{netip.MustParsePrefix("172.16.0.0/12")},
 		Setup: Setup{
 			Started: seen.Add(-time.Hour), Node: node, Listen: ":8640",
-			Tools:     media.Tools{FFmpeg: media.Tool{Path: "/usr/bin/ffmpeg", Version: "8.0"}, Chromaprint: true},
-			Encoder:   hls.Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128"},
+			Tools:   media.Tools{FFmpeg: media.Tool{Path: "/usr/bin/ffmpeg", Version: "8.0"}, Chromaprint: true},
+			Encoder: hls.Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128"}, LimitSource: domain.LimitEnvironment,
 			Discovery: domain.DiscoveryOff, MetadataLanguage: "en-GB", CacheDir: t.TempDir(), BackupDir: t.TempDir() + "/missing",
 		},
 		Postgres: fakeBackend{version: "18.1"},
-		Valkey:   fakeBackend{version: "9.0.0", nodes: []kv.Node{{ID: peer, Address: "http://10.0.0.5:8640", Seen: seen}}},
+		Valkey: fakeBackend{version: "9.0.0", nodes: []domain.Node{{
+			ID: peer, Address: "http://10.0.0.5:8640", Seen: seen, Name: "gpu-1", Transcodes: 3, Conversions: 1, Limit: 8,
+			LimitSource: domain.LimitAutomatic, Encoder: domain.Encoder{Acceleration: domain.AccelNVENC, HEVC: domain.HEVCAllow, Libass: true},
+		}}},
 	}
 	get := func(svc Services, token string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/server", nil)
@@ -61,7 +63,8 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 	if rec := get(svc, goodToken); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&got) != nil {
 		t.Fatalf("an admin: %d %s", rec.Code, rec.Body)
 	}
-	if got.Name != "den" || got.NodeID != node || got.Encoder.Acceleration != domain.AccelVAAPI || got.TranscodeLimit != 4 ||
+	if got.Name != "den" || got.NodeID != node || got.Encoder.Acceleration != domain.AccelVAAPI || got.Transcodes != 1 || got.TranscodeLimit != 4 ||
+		got.LimitSource != domain.LimitEnvironment ||
 		got.Discovery != domain.DiscoveryOff || !got.Chromaprint || got.MetadataLanguage != "en-GB" {
 		t.Errorf("setup = %+v", got)
 	}
@@ -74,8 +77,13 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 	if got.Postgres != (backendJSON{true, "18.1"}) || got.Valkey != (backendJSON{true, "9.0.0"}) {
 		t.Errorf("backends = %+v, %+v", got.Postgres, got.Valkey)
 	}
-	if len(got.Nodes) != 1 || got.Nodes[0] != (nodeJSON{peer, "http://10.0.0.5:8640", seen}) {
-		t.Errorf("nodes = %+v", got.Nodes)
+	// Each node says what it encodes with and how busy it is, so an admin sees the cluster's load.
+	want := nodeJSON{
+		ID: peer, Name: "gpu-1", Address: "http://10.0.0.5:8640", LastSeen: seen, Transcodes: 3, Conversions: 1, Limit: 8,
+		LimitSource: domain.LimitAutomatic, Encoder: nodeEncoderJSON{domain.AccelNVENC, domain.HEVCAllow, true},
+	}
+	if len(got.Nodes) != 1 || got.Nodes[0] != want {
+		t.Errorf("nodes = %+v, want %+v", got.Nodes, want)
 	}
 
 	svc.Valkey = fakeBackend{}

@@ -58,6 +58,21 @@ test("the overview follows the server live: who is playing, and a scan as it gro
 	await expect(page.getByText("Kids's play was stopped.")).toBeVisible();
 });
 
+test("an admin sees what each node transcodes with, and how busy it is", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/server");
+	const nodes = page.getByRole("table", { name: "Nodes" });
+	const gpu = nodes.getByRole("row", { name: /gpu-1/ });
+	await expect(gpu).toContainText("NVENC · H.264, HEVC");
+	await expect(gpu).toContainText("3 of 8");
+	await expect(gpu).toContainText("1 for downloads");
+	await expect(
+		nodes.getByRole("row", { name: /den \(this node\)/ }),
+	).toContainText("VA-API · H.264, HEVC · subtitles");
+	await expectAccessible(page);
+});
+
 test("a member is told the dashboard is not theirs", async ({ page }) => {
 	await asKids(page);
 	await page.goto("/settings/server");

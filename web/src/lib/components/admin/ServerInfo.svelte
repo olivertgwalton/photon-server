@@ -1,6 +1,14 @@
 <script lang="ts">
 import type { components } from "#lib/api/schema.js";
-import { accelerations, bytes, relative, when } from "#lib/admin/words.js";
+import {
+	accelerations,
+	bytes,
+	limitSources,
+	relative,
+	transcodeLoad,
+	when,
+} from "#lib/admin/words.js";
+import * as Table from "#lib/components/ui/table/index.js";
 
 // How the server is set up, read-only: it is configured by its environment.
 let {
@@ -10,6 +18,17 @@ let {
 
 function tool(t: components["schemas"]["Tool"]) {
 	return t.version ? `${t.version} (${t.path})` : "Not found";
+}
+
+// What a node encodes with, in a few words.
+function encodes(e: components["schemas"]["Node"]["encoder"]) {
+	return [
+		accelerations[e.acceleration],
+		e.hevc === "allow" ? "H.264, HEVC" : "H.264",
+		e.libass ? "subtitles" : "",
+	]
+		.filter(Boolean)
+		.join(" · ");
 }
 
 function backend(b: components["schemas"]["Backend"]) {
@@ -51,7 +70,7 @@ const rows = $derived<[string, string][]>([
 	],
 	[
 		"Transcodes",
-		s.transcode_limit ? `At most ${s.transcode_limit} at once` : "No limit",
+		`${transcodeLoad(s.transcodes, s.transcode_limit)} at once · ${limitSources[s.transcode_limit_source]}`,
 	],
 	[
 		"Discovery",
@@ -90,15 +109,48 @@ const folders = $derived<[string, components["schemas"]["Folder"]][]>([
 </dl>
 
 {#if s.nodes.length}
-	<h3 class="label mt-6 mb-2">Nodes</h3>
-	<ul class="divide-line divide-y text-sm">
-		{#each s.nodes as node (node.id)}
-			<li class="flex flex-wrap justify-between gap-x-4 py-2">
-				<span class="text-ink font-mono">
-					{node.address}{node.id === s.node_id ? " (this node)" : ""}
-				</span>
-				<span class="text-ink-3">seen {relative(node.last_seen, now)}</span>
-			</li>
-		{/each}
-	</ul>
+	<Table.Root class="mt-6 text-sm">
+		<caption class="label mb-2 text-left">
+			Nodes
+		</caption>
+		<Table.Header>
+			<Table.Row>
+				<Table.Head class="whitespace-normal">Node</Table.Head>
+				<Table.Head class="whitespace-normal">Transcodes with</Table.Head>
+				<Table.Head class="whitespace-normal">Transcoding</Table.Head>
+			</Table.Row>
+		</Table.Header>
+		<Table.Body>
+			{#each s.nodes as node (node.id)}
+				<Table.Row>
+					<Table.Cell class="whitespace-normal">
+						<span class="text-ink">
+							{node.name || node.address}{node.id === s.node_id
+								? " (this node)"
+								: ""}
+						</span>
+						<span class="text-ink-3 block text-xs break-all">
+							{#if node.name}
+								{node.address}
+								·
+							{/if}
+							seen {relative(node.last_seen, now)}
+						</span>
+					</Table.Cell>
+					<Table.Cell class="whitespace-normal"
+						>{encodes(node.encoder)}</Table.Cell
+					>
+					<Table.Cell class="whitespace-normal">
+						{transcodeLoad(node.transcodes, node.transcode_limit)}
+						{#if node.conversions}
+							<span class="text-ink-3 block text-xs"
+								>{node.conversions}
+								for downloads</span
+							>
+						{/if}
+					</Table.Cell>
+				</Table.Row>
+			{/each}
+		</Table.Body>
+	</Table.Root>
 {/if}
