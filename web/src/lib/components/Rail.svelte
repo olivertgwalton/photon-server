@@ -61,12 +61,7 @@ $effect(() => {
 // A page at a time, as Plex Web's and Jellyfin's rows go: a little less than
 // the row's width, so the card cut at the edge is the first one shown.
 function page(direction: 1 | -1) {
-	if (!list) return;
-	const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-	list.scrollBy({
-		left: direction * list.clientWidth * 0.9,
-		behavior: still ? "auto" : "smooth",
-	});
+	list?.scrollBy({ left: direction * list.clientWidth * 0.9 });
 }
 
 // Cards fade in one after another, the first screenful only. Only their
@@ -112,7 +107,7 @@ const sizes = $derived(
 		<ul
 			bind:this={list}
 			onscroll={measure}
-			class="relative -mx-3 flex snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
+			class="relative -mx-3 flex scroll-smooth snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
 		>
 			{#each cards.slice(0, railLimit) as c, i (c.id)}
 				<li class="{arrive} {width}" style={stagger(i)}>
