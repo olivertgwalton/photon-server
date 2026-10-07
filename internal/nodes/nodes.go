@@ -41,6 +41,8 @@ type Self struct {
 
 	mu  sync.Mutex
 	set domain.NodeSettings
+	// changed is told, once for any number of changes, as what is set of it changes.
+	changed chan struct{}
 }
 
 // Join keeps this node among the server's nodes, as name, reached by the others at address, and
@@ -52,7 +54,7 @@ func Join(ctx context.Context, s settings, id uuid.UUID, name, address string, e
 	}
 	self := &Self{
 		id: id, name: name, address: address, encoder: encoder, automatic: automatic,
-		settings: s, transcodes: t, log: log,
+		settings: s, transcodes: t, log: log, changed: make(chan struct{}, 1),
 	}
 	self.apply(n.NodeSettings)
 	return self, nil
@@ -77,8 +79,15 @@ func (s *Self) reread(ctx context.Context) {
 
 func (s *Self) apply(set domain.NodeSettings) {
 	s.mu.Lock()
+	was := s.set
 	s.set = set
 	s.mu.Unlock()
+	if set != was {
+		select {
+		case s.changed <- struct{}{}:
+		default:
+		}
+	}
 	limit := s.automatic
 	switch set.LimitSource {
 	case domain.LimitSet:
@@ -94,15 +103,20 @@ func (s *Self) Node() domain.Node {
 	set := s.set
 	s.mu.Unlock()
 	n := domain.Node{
-		ID: s.id, Address: s.address, Name: s.name, Role: set.Role, Encoder: s.encoder, LimitSource: set.LimitSource,
+		ID: s.id, Address: s.address, Name: s.name, Role: set.Role, Availability: set.Availability,
+		Encoder: s.encoder, LimitSource: set.LimitSource,
 	}
 	n.Transcodes, n.Conversions, n.Limit = s.transcodes.Transcodes()
 	return n
 }
 
-// Encodes reports whether this node encodes video now, as its role says.
-func (s *Self) Encodes() bool {
+// TakesTranscodes reports whether this node takes new video to encode now: its role encodes, and
+// it is not drained.
+func (s *Self) TakesTranscodes() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.set.Role.Encodes()
+	return s.set.Role.Encodes() && s.set.Availability.Takes()
 }
+
+// Changes is told as what is set of this node changes, once for any number since it was read.
+func (s *Self) Changes() <-chan struct{} { return s.changed }

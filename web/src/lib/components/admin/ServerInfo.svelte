@@ -4,13 +4,13 @@ import {
 	accelerations,
 	bytes,
 	limitSources,
+	nodeAvailability,
 	nodeRoles,
 	relative,
 	transcodeLoad,
 	when,
 } from "#lib/admin/words.js";
-import NodeSettings from "#lib/components/admin/NodeSettings.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
+import NodeActions from "#lib/components/admin/NodeActions.svelte";
 import * as Table from "#lib/components/ui/table/index.js";
 
 // How the server is set up, read-only but for what each node does, and its nodes.
@@ -24,13 +24,6 @@ let {
 	now: number;
 } = $props();
 
-// The node whose settings are open.
-let editing = $state<components["schemas"]["KnownNode"]>();
-let open = $state(false);
-function settle(node?: components["schemas"]["KnownNode"]) {
-	editing = node;
-	open = Boolean(node);
-}
 const self = $derived(nodes.find((n) => n.id === s.node_id));
 
 function tool(t: components["schemas"]["Tool"]) {
@@ -158,6 +151,14 @@ const folders = $derived<[string, components["schemas"]["Folder"]][]>([
 								>{encodes(up.encoder)}</span
 							>
 						{/if}
+						{#if node.availability !== "active"}
+							<span class="text-ink block text-xs font-medium"
+								>{nodeAvailability(node)}</span
+							>
+							{#if node.note}
+								<span class="text-ink-3 block text-xs">“{node.note}”</span>
+							{/if}
+						{/if}
 					</Table.Cell>
 					<Table.Cell class="whitespace-normal">
 						{#if up && node.role !== "serve"}
@@ -173,20 +174,20 @@ const folders = $derived<[string, components["schemas"]["Folder"]][]>([
 						{/if}
 					</Table.Cell>
 					<Table.Cell class="text-right">
-						<Button variant="outline" size="sm" onclick={() => settle(node)}>
-							Settings<span class="sr-only"> for {node.name}</span>
-						</Button>
+						<NodeActions {node} {nodes} />
 					</Table.Cell>
 				</Table.Row>
 			{/each}
 		</Table.Body>
 	</Table.Root>
 {:else if self}
-	<Button variant="outline" size="sm" class="mt-4" onclick={() => settle(self)}>
-		Change role and transcodes
-	</Button>
-{/if}
-
-{#if editing}
-	<NodeSettings node={editing} bind:open />
+	<div class="mt-4 flex items-center justify-between gap-4 text-sm">
+		<span class="text-ink-2">
+			{nodeAvailability(self)}
+			{#if self.note}
+				<span class="text-ink-3">· “{self.note}”</span>
+			{/if}
+		</span>
+		<NodeActions node={self} {nodes} />
+	</div>
 {/if}

@@ -6391,11 +6391,13 @@ export interface components {
             metadata?: components["schemas"]["RankedSource"][];
         };
         KnownNode: {
+            availability: components["schemas"]["NodeAvailability"];
             /** Format: date-time */
             first_seen: string;
             /** Format: uuid */
             id: string;
             name: string;
+            note?: string;
             online?: components["schemas"]["Node"] | null;
             role: components["schemas"]["NodeRole"];
             transcode_limit: number;
@@ -6567,6 +6569,7 @@ export interface components {
         NextEpisode: "play" | "offer";
         Node: {
             address: string;
+            availability: components["schemas"]["NodeAvailability"];
             conversions: number;
             encoder: components["schemas"]["NodeEncoder"];
             /** Format: uuid */
@@ -6578,7 +6581,11 @@ export interface components {
             transcode_limit_source: components["schemas"]["LimitSource"];
             transcodes: number;
         };
+        /** @enum {string} */
+        NodeAvailability: "active" | "draining";
         NodeChange: {
+            availability?: components["schemas"]["NodeAvailability"];
+            note?: string;
             role?: components["schemas"]["NodeRole"];
             transcode_limit?: number | null;
             transcode_limit_source?: components["schemas"]["LimitSource"];

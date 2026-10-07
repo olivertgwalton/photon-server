@@ -57,7 +57,12 @@ taken up at once, as it runs:
 - **Transcodes at once.** Worked out from the node's encoder, or set: at most a number, or no
   limit. Lowering it stops none playing; none is begun until there is room under it.
 
-A new node starts as all, its limit worked out. A node set to serve only, asked to transcode by
+- **Drain.** A node drained takes no new stream to transcode and no download's conversion; its
+  streams play to their end, and the others take new ones. Settings › Server says "Draining · 3
+  streams left", then "Drained · safe to stop", with any note an admin left for the others.
+  Resume gives it work again.
+
+A new node starts as all, its limit worked out, taking work. A node set to serve only, asked to transcode by
 another told of it before the change, refuses, and the next is asked.
 
 Worked out, a node encoding in software takes one transcode per four logical CPUs, and one
