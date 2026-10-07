@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,7 +19,8 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
-// Subtitle is a text subtitle published beside the video as WebVTT, read from one or more files.
+// Subtitle is a text subtitle published beside the video as WebVTT: a stream every part of the copy
+// carries, read by the runs that remux them, or a file beside the copy, timed on its timeline.
 type Subtitle struct {
 	Name     string
 	Language string
@@ -26,11 +28,12 @@ type Subtitle struct {
 	Forced   bool
 	// HearingImpaired is published as Apple's characteristic for it.
 	HearingImpaired bool
-	Sources         []SubtitleSource
+	Stream          *int
+	File            *SubtitleSource
 }
 
-// SubtitleSource is a file holding some of a subtitle's cues: an external file, or a stream of one
-// of a copy's parts, and where its time zero sits on the copy's timeline.
+// SubtitleSource is a file holding a subtitle: an external file, or a stream of one of a copy's
+// parts.
 type SubtitleSource struct {
 	Open func() (*os.File, error)
 	// Stream is the file's stream to read, by its index; nil for a subtitle file.
@@ -39,7 +42,6 @@ type SubtitleSource struct {
 	// read out together and kept under its id.
 	Part    uuid.UUID
 	Streams []domain.Stream
-	Offset  time.Duration
 	// Language is a subtitle file's, which says what it was written in where it is not UTF-8.
 	Language string
 }
@@ -91,29 +93,15 @@ type extraction struct {
 	at   time.Time
 }
 
-// cues reads a subtitle source's cues onto the copy's timeline.
-func (r *Remuxer) cues(ctx context.Context, src SubtitleSource) ([]Cue, error) {
-	var cues []Cue
-	var err error
-	if src.Stream == nil {
-		cues, err = r.convert(ctx, src)
-	} else {
-		cues, err = r.embedded(ctx, src)
-	}
-	for i := range cues {
-		cues[i].Start += src.Offset
-		cues[i].End += src.Offset
-	}
-	return cues, err
-}
-
 // convert reads a subtitle file's cues.
 func (r *Remuxer) convert(ctx context.Context, src SubtitleSource) ([]Cue, error) {
 	vtt, err := r.WebVTT(ctx, src.Open, src.Language)
 	if err != nil {
 		return nil, err
 	}
-	return readVTT(strings.NewReader(vtt))
+	var cues []Cue
+	err = readVTT(strings.NewReader(vtt), func(c Cue) { cues = append(cues, c) })
+	return cues, err
 }
 
 // WebVTT reads a text subtitle file as WebVTT, in what its byte order mark says it is written in,
@@ -139,20 +127,6 @@ func (r *Remuxer) WebVTT(ctx context.Context, open func() (*os.File, error), lan
 	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.tools.FFmpeg.Path, a...)
 	out, err := cmd.Output()
 	return string(out), cmd.Err(err)
-}
-
-// embedded reads a plain text stream of a part as WebVTT.
-func (r *Remuxer) embedded(ctx context.Context, src SubtitleSource) ([]Cue, error) {
-	dir, err := r.Extracted(ctx, src, strconv.Itoa(*src.Stream)+".vtt")
-	if err != nil {
-		return nil, err
-	}
-	f, err := os.Open(filepath.Join(dir, strconv.Itoa(*src.Stream)+".vtt"))
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	return readVTT(f)
 }
 
 // Extracted answers the folder a part's subtitle streams are read out into, with want in it,
@@ -341,9 +315,9 @@ func (r *Remuxer) SweepSubtitles() {
 	}
 }
 
-// readVTT reads the cues of a WebVTT file, dropping its header, notes, styles and cue names.
-func readVTT(r io.Reader) ([]Cue, error) {
-	var cues []Cue
+// readVTT reads the cues of a WebVTT or SubRip file as each is whole, dropping a header, notes,
+// styles and cue names or numbers.
+func readVTT(r io.Reader, each func(Cue)) error {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(nil, 1<<20)
 	var cue *Cue
@@ -351,7 +325,7 @@ func readVTT(r io.Reader) ([]Cue, error) {
 	flush := func() {
 		if cue != nil {
 			cue.Text = strings.Join(text, "\n")
-			cues = append(cues, *cue)
+			each(*cue)
 		}
 		cue, text = nil, nil
 	}
@@ -370,7 +344,7 @@ func readVTT(r io.Reader) ([]Cue, error) {
 		}
 	}
 	flush()
-	return cues, sc.Err()
+	return sc.Err()
 }
 
 // timing reads a cue's timing line: "00:01:02.500 --> 00:01:04.000 align:start".
@@ -383,10 +357,14 @@ func timing(line string) (Cue, bool) {
 	return Cue{Start: start, End: end, Settings: strings.TrimSpace(settings)}, ok1 && ok2
 }
 
-// vttTime reads "hh:mm:ss.ttt" or "mm:ss.ttt".
+// vttTime reads "hh:mm:ss.ttt" or "mm:ss.ttt", or SubRip's "hh:mm:ss,ttt".
 func vttTime(s string) (time.Duration, bool) {
-	clock, frac, ok := strings.Cut(s, ".")
-	if !ok || len(frac) != 3 {
+	i := strings.LastIndexAny(s, ".,")
+	if i < 0 {
+		return 0, false
+	}
+	clock, frac := s[:i], s[i+1:]
+	if len(frac) != 3 {
 		return 0, false
 	}
 	ms, err := strconv.Atoi(frac)
@@ -409,6 +387,13 @@ func vttTime(s string) (time.Duration, bool) {
 	}
 	return t, true
 }
+
+// subRipMarkup is what FFmpeg's SubRip encoder writes that its WebVTT encoder leaves out: colours
+// and ASS overrides such as placing. Bold, italic and underline are written alike by both.
+var subRipMarkup = regexp.MustCompile(`(?i)</?font[^>]*>|\{\\[^}]*\}`)
+
+// fromSubRip is SubRip text as FFmpeg's WebVTT encoder would have written it.
+func fromSubRip(text string) string { return subRipMarkup.ReplaceAllString(text, "") }
 
 // writeVTT writes the cues shown during [from, to) of a part whose time zero is at offset on the
 // copy's timeline, timed on the part's own clock and mapped to the video's (see clockOffset).

@@ -12,11 +12,14 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"uuid"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -154,22 +157,41 @@ type session struct {
 	inits    map[int]chan struct{}
 	run      *run
 	furthest int
+	// cued and cueFailed are as ready and failed, for every embedded subtitle's cues of a segment.
+	// They are kept with the cues, never forgotten as segments are.
+	cued      map[int]chan struct{}
+	cueFailed map[int]error
 }
 
 // run is one ffmpeg producing the segments of one part from first onwards.
 type run struct {
 	cancel context.CancelFunc
 	part   int
+	first  int
 	at     int // the next segment it will finish
 	more   chan struct{}
 }
 
-// subtitle is a subtitle of a session, its cues read once, when first asked for.
+// subtitle is a subtitle of a session: a file's cues read once, when first asked for, or a
+// stream's as the runs read them, in order of when each is shown.
 type subtitle struct {
 	Subtitle
 	mu   sync.Mutex
 	cues []Cue
 	read bool
+}
+
+// add keeps a cue a run read, once however many runs read it.
+func (s *subtitle) add(c Cue) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := sort.Search(len(s.cues), func(i int) bool { return s.cues[i].Start > c.Start })
+	for j := i - 1; j >= 0 && s.cues[j].Start == c.Start; j-- {
+		if s.cues[j] == c {
+			return
+		}
+	}
+	s.cues = slices.Insert(s.cues, i, c)
 }
 
 // Open starts the remux of a playback's copy at the segment holding c.Start, so it is under way
@@ -189,6 +211,7 @@ func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 		dir: filepath.Join(r.dir, playback.String()), format: cmp.Or(c.Segments, domain.SegmentsFMP4),
 		sources: c.Parts, offsets: offsets, plan: Plan(parts),
 		ready: map[int]chan struct{}{}, failed: map[int]error{}, inits: map[int]chan struct{}{},
+		cued: map[int]chan struct{}{}, cueFailed: map[int]error{},
 	}
 	// MPEG-TS has no initialisation, and needs no later version than 3, which older players read.
 	version, init := 7, initName
@@ -312,8 +335,9 @@ func (r *Remuxer) Playlist(playback uuid.UUID, name string) (string, error) {
 	return p, nil
 }
 
-// SubtitleSegment answers segment n of subtitle track as WebVTT, reading the track's cues the
-// first time it is asked for. A request given up while they are read leaves them being read.
+// SubtitleSegment answers segment n of subtitle track as WebVTT. A file's cues are read the first
+// time it is asked for; a stream's come with the run that remuxes the segment, which is started
+// there if no run will reach it.
 func (r *Remuxer) SubtitleSegment(ctx context.Context, playback uuid.UUID, track, n int) (string, error) {
 	s, err := r.session(playback)
 	if err != nil {
@@ -323,23 +347,58 @@ func (r *Remuxer) SubtitleSegment(ctx context.Context, playback uuid.UUID, track
 		return "", ErrNoRemux
 	}
 	sub := s.subtitles[track]
-	sub.mu.Lock()
-	cues, read := sub.cues, sub.read
-	sub.mu.Unlock()
-	if !read {
-		for _, src := range sub.Sources {
-			c, err := r.cues(ctx, src)
+	if sub.File != nil {
+		sub.mu.Lock()
+		read := sub.read
+		sub.mu.Unlock()
+		if !read {
+			cues, err := r.convert(ctx, *sub.File)
 			if err != nil {
 				return "", err
 			}
-			cues = append(cues, c...)
+			sub.mu.Lock()
+			sub.cues, sub.read = cues, true
+			sub.mu.Unlock()
 		}
-		sub.mu.Lock()
-		sub.cues, sub.read = cues, true
-		sub.mu.Unlock()
+	} else if err := r.cuesOf(ctx, s, n); err != nil {
+		return "", err
 	}
 	seg := s.plan[n]
-	return writeVTT(cues, s.offsets[seg.Part], seg.Start, seg.End), nil
+	sub.mu.Lock()
+	defer sub.mu.Unlock()
+	return writeVTT(sub.cues, s.offsets[seg.Part], seg.Start, seg.End), nil
+}
+
+// cuesOf waits until the embedded subtitles' cues of segment n are read. A run reads them from
+// where it starts; one that started after n, or stopped before it, will not reach them.
+func (r *Remuxer) cuesOf(ctx context.Context, s *session, n int) error {
+	s.mu.Lock()
+	wait := s.cueWaiter(n)
+	if !closed(wait) {
+		if s.run == nil || s.run.part != s.plan[n].Part || n < s.run.first || n > s.run.at+jump {
+			r.start(ctx, s, n)
+		}
+		// They are whole once the segment after is made (see cut).
+		s.furthest = max(s.furthest, n+1)
+		select {
+		case s.run.more <- struct{}{}:
+		default:
+		}
+	}
+	s.mu.Unlock()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-wait:
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.cueFailed[n]; err != nil {
+		delete(s.cueFailed, n)
+		delete(s.cued, n)
+		return err
+	}
+	return nil
 }
 
 // Encoder answers the device video planned so is encoded on, or nothing where it is copied.
@@ -544,6 +603,16 @@ func (s *session) initWaiter(part int) chan struct{} {
 	return c
 }
 
+// cueWaiter answers the channel closed when segment n's cues are read; the session's lock is held.
+func (s *session) cueWaiter(n int) chan struct{} {
+	c, ok := s.cued[n]
+	if !ok {
+		c = make(chan struct{})
+		s.cued[n] = c
+	}
+	return c
+}
+
 // forget removes the segments made before segment n; the session's lock is held. One asked for
 // again is made again.
 func (s *session) forget(n int) {
@@ -565,7 +634,7 @@ func (r *Remuxer) start(ctx context.Context, s *session, n int) {
 	// run waits ahead of that, not ahead of the furthest it ever asked for.
 	s.furthest = n
 	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	run := &run{cancel: cancel, part: s.plan[n].Part, at: n, more: make(chan struct{}, 1)}
+	run := &run{cancel: cancel, part: s.plan[n].Part, first: n, at: n, more: make(chan struct{}, 1)}
 	s.run = run
 	go func() {
 		err := r.produce(ctx, s, run)
@@ -576,6 +645,12 @@ func (r *Remuxer) start(ctx context.Context, s *session, n int) {
 		}
 		if errors.Is(err, errIdle) {
 			return
+		}
+		// The file was read to its end, and the readers with it.
+		if err == nil && run.at > run.first {
+			if c := s.cueWaiter(run.at - 1); !closed(c) {
+				close(c)
+			}
 		}
 		// A file shorter than it says ends before the part's last segments.
 		if err == nil && run.at < len(s.plan) && s.plan[run.at].Part == run.part {
@@ -593,6 +668,12 @@ func (r *Remuxer) start(ctx context.Context, s *session, n int) {
 			for m := run.at; m < len(s.plan) && s.plan[m].Part == run.part; m++ {
 				if c, ok := s.ready[m]; ok && !closed(c) {
 					s.failed[m] = err
+					close(c)
+				}
+			}
+			for m := max(run.first, run.at-1); m < len(s.plan) && s.plan[m].Part == run.part; m++ {
+				if c, ok := s.cued[m]; ok && !closed(c) {
+					s.cueFailed[m] = err
 					close(c)
 				}
 			}
@@ -627,13 +708,58 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 			return err
 		}
 	}
-	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.tools.FFmpeg.Path, args(r.hw, start, src.Video, src.Audio, layer, s.format)...)
+	// Each embedded subtitle is written to a pipe of its own, read as ffmpeg reaches its cues.
+	var streams []int
+	files := []*os.File{f}
+	var reads []*os.File
+	defer func() {
+		for _, p := range reads {
+			_ = p.Close()
+		}
+	}()
+	for _, sub := range s.subtitles {
+		if sub.Stream == nil {
+			continue
+		}
+		read, write, err := os.Pipe()
+		if err != nil {
+			return err
+		}
+		reads = append(reads, read)
+		files = append(files, write)
+		streams = append(streams, *sub.Stream)
+	}
+	cmd := media.NewCommand(ctx, media.Foreground, files, r.tools.FFmpeg.Path, args(r.hw, start, src.Video, src.Audio, layer, s.format, streams)...)
 	out, err := cmd.StdoutPipe()
+	if err == nil {
+		err = cmd.Start()
+	}
+	// ffmpeg holds the pipes' ends it writes to, and a reader learns they are closed once it ends.
+	for _, w := range files[1:] {
+		_ = w.Close()
+	}
 	if err != nil {
 		return err
 	}
-	if err := cmd.Start(); err != nil {
-		return err
+	var readers errgroup.Group
+	k := 0
+	for _, sub := range s.subtitles {
+		if sub.Stream == nil {
+			continue
+		}
+		read, offset := reads[k], s.offsets[run.part]
+		k++
+		readers.Go(func() error {
+			err := readVTT(read, func(c Cue) {
+				c.Start += offset
+				c.End += offset
+				c.Settings, c.Text = "", fromSubRip(c.Text)
+				sub.add(c)
+			})
+			// What ffmpeg writes on is not read now, so it fails at once rather than blocking.
+			_ = read.Close()
+			return err
+		})
 	}
 	err = r.cut(ctx, s, run, out)
 	if err != nil {
@@ -642,7 +768,8 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	// Nothing reads what ffmpeg writes now, so a write it is blocked on fails at once rather than
 	// holding it past the grace a stop gives it.
 	_ = out.Close()
-	return cmp.Or(err, cmd.Err(cmd.Wait()))
+	err = cmp.Or(err, cmd.Err(cmd.Wait()))
+	return cmp.Or(err, readers.Wait())
 }
 
 // fdInput starts an ffmpeg run that reads the file media.NewCommand passes it as descriptor 3.
@@ -653,8 +780,10 @@ func fdInput() []string {
 // args copies or encodes a file's video and its audio into fragmented MP4 or MPEG-TS on stdout,
 // from start, on the file's own clock (see clockOffset). Copied video starts at the keyframe at
 // start; encoded video makes one there and every SegmentLength after, on hw, with styled text
-// drawn in where there is a layer of it.
-func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer, f domain.SegmentFormat) []string {
+// drawn in where there is a layer of it. Each of the subtitle streams is written to descriptors 4
+// onwards, a cue at a time, on the file's clock: as SubRip, whose muxer ends a cue as it writes
+// it, where WebVTT's ends one only as it begins the next.
+func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer, f domain.SegmentFormat, subtitles []int) []string {
 	a := fdInput()
 	hw = hw.encoding(video)
 	if video.Encode != nil {
@@ -674,11 +803,15 @@ func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domai
 			"-use_editlist", "0",
 		)
 	}
-	return append(a,
+	a = append(a,
 		"-avoid_negative_ts", "disabled",
 		"-output_ts_offset", strconv.FormatFloat(clockOffset.Seconds(), 'f', 0, 64),
 		"-fflags", "+bitexact", "-",
 	)
+	for i, n := range subtitles {
+		a = append(a, "-map", "0:"+strconv.Itoa(n), "-c:s", "subrip", "-f", "srt", "-flush_packets", "1", "pipe:"+strconv.Itoa(4+i))
+	}
+	return a
 }
 
 // streamArgs maps the input's video and audio, each copied or encoded as planned, video on hw.
@@ -786,6 +919,15 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 		s.mu.Lock()
 		if c := s.waiter(n); !closed(c) {
 			close(c)
+		}
+		// ffmpeg wrote the fragment that finished this segment once it had read past it, and a
+		// subtitle's cues sit in the file where they are shown, so every cue shown before the
+		// segment ends has been read. The previous segment's are taken as whole, not this one's,
+		// leaving a segment's time for the threads ffmpeg writes each output on to keep up.
+		if n > run.first {
+			if c := s.cueWaiter(n - 1); !closed(c) {
+				close(c)
+			}
 		}
 		n++
 		run.at = n
