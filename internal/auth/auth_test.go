@@ -110,7 +110,7 @@ func TestExpiredSessionsAreRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	past := time.Now().Add(-time.Minute)
-	if err := st.TouchSession(t.Context(), session.ID, past, past); err != nil {
+	if err := st.TouchSession(t.Context(), session.ID, past, &past); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.Authenticate(t.Context(), token); !errors.Is(err, ErrUnauthenticated) {

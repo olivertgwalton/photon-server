@@ -45,7 +45,8 @@ func downloadable(t *testing.T) (s *Store, film, part uuid.UUID, profiles [2]uui
 func (s *Store) signIn(t *testing.T, profile uuid.UUID) uuid.UUID {
 	t.Helper()
 	id, err := s.CreateSession(t.Context(), NewSession{
-		ProfileID: profile, TokenHash: []byte(uuid.NewV7().String()), DeviceName: "TV", Client: "Photon", ExpiresAt: time.Now().Add(time.Hour),
+		Kind: domain.SessionDevice, ProfileID: profile, TokenHash: []byte(uuid.NewV7().String()),
+		DeviceName: "TV", Client: "Photon", ExpiresAt: new(time.Now().Add(time.Hour)),
 	})
 	if err != nil {
 		t.Fatal(err)

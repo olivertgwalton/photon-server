@@ -57,31 +57,34 @@ func (s *Store) SetPasswordHash(ctx context.Context, profileID uuid.UUID, hash s
 }
 
 // ChangePassword replaces a profile's password and signs out every device on the profile but keep,
-// since a password changed for fear of who knows it must not leave them signed in.
+// since a password changed for fear of who knows it must not leave them signed in. Its API keys
+// stay, as Jellyfin's do: they are not the password, and revoking one is its own act.
 func (s *Store) ChangePassword(ctx context.Context, profileID uuid.UUID, hash string, keep uuid.UUID) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `UPDATE profiles SET password_hash = $2 WHERE id = $1`, profileID, hash); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `DELETE FROM device_sessions WHERE profile_id = $1 AND id <> $2`, profileID, keep)
+		_, err := tx.Exec(ctx, `DELETE FROM device_sessions WHERE profile_id = $1 AND id <> $2 AND kind = 'device'`, profileID, keep)
 		return err
 	})
 }
 
 type NewSession struct {
+	Kind       domain.SessionKind
 	ProfileID  uuid.UUID
 	TokenHash  []byte
 	DeviceName string
 	Client     string
-	ExpiresAt  time.Time
+	// ExpiresAt is nil for a key.
+	ExpiresAt *time.Time
 }
 
 func (s *Store) CreateSession(ctx context.Context, n NewSession) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO device_sessions (token_hash, profile_id, device_name, client, expires_at)
-		VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		n.TokenHash, n.ProfileID, n.DeviceName, n.Client, n.ExpiresAt).Scan(&id)
+		INSERT INTO device_sessions (kind, token_hash, profile_id, device_name, client, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		n.Kind, n.TokenHash, n.ProfileID, n.DeviceName, n.Client, n.ExpiresAt).Scan(&id)
 	return id, err
 }
 
@@ -89,24 +92,25 @@ func (s *Store) CreateSession(ctx context.Context, n NewSession) (uuid.UUID, err
 func (s *Store) SessionByToken(ctx context.Context, tokenHash []byte, now time.Time) (domain.Session, time.Time, error) {
 	var (
 		id         uuid.UUID
+		kind       domain.SessionKind
 		p          model.Profile
 		device     string
 		client     string
 		lastSeenAt time.Time
 	)
 	err := s.pool.QueryRow(ctx, `
-		SELECT d.id, d.profile_id, p.name, p.role, p.avatar_id, d.device_name, d.client, d.last_seen_at
+		SELECT d.id, d.kind, d.profile_id, p.name, p.role, p.avatar_id, d.device_name, d.client, d.last_seen_at
 		FROM device_sessions d JOIN profiles p ON p.id = d.profile_id
-		WHERE d.token_hash = $1 AND d.expires_at > $2`, tokenHash, now).
-		Scan(&id, &p.ID, &p.Name, &p.Role, &p.AvatarID, &device, &client, &lastSeenAt)
+		WHERE d.token_hash = $1 AND (d.expires_at IS NULL OR d.expires_at > $2)`, tokenHash, now).
+		Scan(&id, &kind, &p.ID, &p.Name, &p.Role, &p.AvatarID, &device, &client, &lastSeenAt)
 	if err != nil {
 		return domain.Session{}, time.Time{}, found(err)
 	}
-	return domain.Session{ID: id, Profile: profile(p), Device: device, Client: client}, lastSeenAt, nil
+	return domain.Session{ID: id, Kind: kind, Profile: profile(p), Device: device, Client: client}, lastSeenAt, nil
 }
 
-// TouchSession records a session's use and slides its expiry.
-func (s *Store) TouchSession(ctx context.Context, id uuid.UUID, now, expires time.Time) error {
+// TouchSession records a session's use and slides its expiry, which a key has none of.
+func (s *Store) TouchSession(ctx context.Context, id uuid.UUID, now time.Time, expires *time.Time) error {
 	_, err := s.pool.Exec(ctx, `UPDATE device_sessions SET last_seen_at = $2, expires_at = $3 WHERE id = $1`, id, now, expires)
 	return err
 }
@@ -185,7 +189,7 @@ func (s *Store) Devices(ctx context.Context, profile *uuid.UUID) ([]DeviceListin
 	rows, err := s.pool.Query(ctx, `
 		SELECT d.id, d.device_name, d.client, p.name AS profile, d.created_at, d.last_seen_at
 		FROM device_sessions d JOIN profiles p ON p.id = d.profile_id
-		WHERE d.expires_at > now() AND ($1::uuid IS NULL OR d.profile_id = $1)
+		WHERE d.kind = 'device' AND d.expires_at > now() AND ($1::uuid IS NULL OR d.profile_id = $1)
 		ORDER BY d.last_seen_at DESC`, profile)
 	if err != nil {
 		return nil, err
@@ -197,7 +201,7 @@ func (s *Store) Devices(ctx context.Context, profile *uuid.UUID) ([]DeviceListin
 // reports whether there was such a device.
 func (s *Store) DeleteDevice(ctx context.Context, id uuid.UUID, profile *uuid.UUID) (bool, error) {
 	info, err := s.pool.Exec(ctx, `
-		DELETE FROM device_sessions WHERE id = $1 AND ($2::uuid IS NULL OR profile_id = $2)`, id, profile)
+		DELETE FROM device_sessions WHERE id = $1 AND kind = 'device' AND ($2::uuid IS NULL OR profile_id = $2)`, id, profile)
 	return info.RowsAffected() == 1, err
 }
 

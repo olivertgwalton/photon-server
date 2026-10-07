@@ -28,9 +28,23 @@ type Profile struct {
 	Avatar uuid.UUID
 }
 
-// Session is a signed-in device and the profile it is watching as.
+// SessionKind is how a session began: a device signing in, or an admin making an API key.
+type SessionKind string
+
+const (
+	SessionDevice SessionKind = "device"
+	// SessionKey is an API key: it acts as the admin who made it and never lapses.
+	SessionKey SessionKind = "key"
+)
+
+func SessionKinds() []SessionKind {
+	return []SessionKind{SessionDevice, SessionKey}
+}
+
+// Session is a signed-in device, or an API key, and the profile it is watching as.
 type Session struct {
 	ID      uuid.UUID
+	Kind    SessionKind
 	Profile Profile
 	// Device and Client are what the device called itself and its app when it signed in.
 	Device string

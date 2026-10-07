@@ -89,8 +89,8 @@ func (s *Service) SignIn(ctx context.Context, name, password string, device Devi
 func (s *Service) startSession(ctx context.Context, profile domain.Profile, device Device) (string, error) {
 	token, tokenHash := newToken()
 	_, err := s.store.CreateSession(ctx, store.NewSession{
-		ProfileID: profile.ID, TokenHash: tokenHash,
-		DeviceName: device.Name, Client: device.Client, ExpiresAt: time.Now().Add(idleExpiry),
+		Kind: domain.SessionDevice, ProfileID: profile.ID, TokenHash: tokenHash,
+		DeviceName: device.Name, Client: device.Client, ExpiresAt: new(time.Now().Add(idleExpiry)),
 	})
 	if err != nil {
 		return "", err
@@ -98,7 +98,7 @@ func (s *Service) startSession(ctx context.Context, profile domain.Profile, devi
 	return token, nil
 }
 
-// Authenticate finds the session a device token belongs to.
+// Authenticate finds the session a device token or API key belongs to.
 func (s *Service) Authenticate(ctx context.Context, token string) (domain.Session, error) {
 	if !strings.HasPrefix(token, tokenPrefix) {
 		return domain.Session{}, ErrUnauthenticated
@@ -112,7 +112,13 @@ func (s *Service) Authenticate(ctx context.Context, token string) (domain.Sessio
 		return domain.Session{}, err
 	}
 	if now.Sub(lastSeen) > touchEvery {
-		if err := s.store.TouchSession(ctx, session.ID, now, now.Add(idleExpiry)); err != nil {
+		var expires *time.Time
+		switch session.Kind {
+		case domain.SessionDevice:
+			expires = new(now.Add(idleExpiry))
+		case domain.SessionKey:
+		}
+		if err := s.store.TouchSession(ctx, session.ID, now, expires); err != nil {
 			return domain.Session{}, err
 		}
 	}
