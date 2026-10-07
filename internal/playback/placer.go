@@ -78,7 +78,7 @@ func (p *Placer) Candidates(ctx context.Context, need Need) ([]domain.Node, erro
 	nodes = slices.DeleteFunc(nodes, func(n domain.Node) bool { return n.ID == self.ID || n.Address == "" })
 	nodes = append(nodes, self)
 	nodes = slices.DeleteFunc(nodes, func(n domain.Node) bool {
-		return !n.Role.Encodes() || need.HEVC && n.Encoder.HEVC != domain.HEVCAllow || need.Libass && !n.Encoder.Libass
+		return !n.Role.Encodes() || !n.Availability.Takes() || need.HEVC && n.Encoder.HEVC != domain.HEVCAllow || need.Libass && !n.Encoder.Libass
 	})
 	rand.Shuffle(len(nodes), func(i, j int) { nodes[i], nodes[j] = nodes[j], nodes[i] }) //nolint:gosec // breaks ties between nodes equally free; nothing secret
 	slices.SortStableFunc(nodes, func(a, b domain.Node) int {

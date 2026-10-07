@@ -63,7 +63,7 @@ type peerNode struct {
 
 func (n *peerNode) self() domain.Node {
 	d := domain.Node{
-		ID: n.id, Address: n.srv.URL, Name: n.srv.URL, Role: n.role.Load().(domain.NodeRole),
+		ID: n.id, Address: n.srv.URL, Name: n.srv.URL, Role: n.role.Load().(domain.NodeRole), Availability: domain.NodeActive,
 		Encoder: domain.Encoder{Acceleration: domain.AccelSoftware, HEVC: domain.HEVCDeny},
 	}
 	d.Transcodes, d.Conversions, d.Limit = n.remuxer.Transcodes()

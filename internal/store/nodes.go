@@ -9,12 +9,12 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-const nodeColumns = `id, name, first_seen, role, transcode_limit`
+const nodeColumns = `id, name, first_seen, role, transcode_limit, availability, note`
 
 func scanNode(row pgx.Row) (domain.NodeRecord, error) {
 	var n domain.NodeRecord
 	var limit *int
-	err := row.Scan(&n.ID, &n.Name, &n.FirstSeen, &n.Role, &limit)
+	err := row.Scan(&n.ID, &n.Name, &n.FirstSeen, &n.Role, &limit, &n.Availability, &n.Note)
 	n.LimitSource = domain.LimitAutomatic
 	if limit != nil {
 		n.LimitSource, n.Limit = domain.LimitSet, *limit
@@ -54,5 +54,7 @@ func (s *Store) SetNodeSettings(ctx context.Context, id uuid.UUID, n domain.Node
 		limit = &n.Limit
 	case domain.LimitAutomatic:
 	}
-	return affected(s.pool.Exec(ctx, `UPDATE node SET role = $2, transcode_limit = $3 WHERE id = $1`, id, n.Role, limit))
+	return affected(s.pool.Exec(ctx, `
+		UPDATE node SET role = $2, transcode_limit = $3, availability = $4, note = $5 WHERE id = $1`,
+		id, n.Role, limit, n.Availability, n.Note))
 }

@@ -17,17 +17,17 @@ func TestANodeKeepsWhatAnAdminSetsAcrossRestarts(t *testing.T) {
 	ctx := t.Context()
 	id := uuid.NewV7()
 	n, err := s.JoinNode(ctx, id, "mini")
-	if err != nil || n.Role != domain.NodeAll || n.LimitSource != domain.LimitAutomatic || n.Name != "mini" {
-		t.Fatalf("a new node: %+v, %v; want all, its limit worked out", n, err)
+	if err != nil || n.Role != domain.NodeAll || n.LimitSource != domain.LimitAutomatic || n.Name != "mini" || n.Availability != domain.NodeActive {
+		t.Fatalf("a new node: %+v, %v; want all, its limit worked out, taking work", n, err)
 	}
-	set := domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitSet, Limit: 12}
+	set := domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitSet, Limit: 12, Availability: domain.NodeDraining, Note: "driver update"}
 	if err := s.SetNodeSettings(ctx, id, set); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := s.JoinNode(ctx, id, "mini-2"); err != nil || n.NodeSettings != set || n.Name != "mini-2" {
 		t.Errorf("starting again: %+v, %v; want %+v kept, under its new name", n, err, set)
 	}
-	none := domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitSet}
+	none := domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitSet, Availability: domain.NodeActive}
 	if err := s.SetNodeSettings(ctx, id, none); err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestANodeKeepsWhatAnAdminSetsAcrossRestarts(t *testing.T) {
 	if err := s.SetNodeSettings(ctx, uuid.NewV7(), set); !errors.Is(err, ErrNotFound) {
 		t.Errorf("setting a node there has never been: %v, want ErrNotFound", err)
 	}
-	if err := s.SetNodeSettings(ctx, id, domain.NodeSettings{Role: "gpu", LimitSource: domain.LimitAutomatic}); err == nil {
+	if err := s.SetNodeSettings(ctx, id, domain.NodeSettings{Role: "gpu", LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}); err == nil {
 		t.Error("a role there is not was kept")
 	}
 	other, _ := s.JoinNode(ctx, uuid.NewV7(), "gpu-1")

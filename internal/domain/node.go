@@ -12,9 +12,10 @@ type Node struct {
 	Address string
 	Seen    time.Time
 	// Name is its host's, to tell nodes apart by.
-	Name    string
-	Role    NodeRole
-	Encoder Encoder
+	Name         string
+	Role         NodeRole
+	Availability NodeAvailability
+	Encoder      Encoder
 	// Transcodes are the videos it encodes now, Conversions of them for downloads, of at most
 	// Limit at once; a Limit of zero is none.
 	Transcodes, Conversions, Limit int
@@ -36,6 +37,29 @@ const (
 
 func NodeRoles() []NodeRole {
 	return []NodeRole{NodeAll, NodeServe, NodeTranscode}
+}
+
+// NodeAvailability is whether a node takes new work: an admin drains one before stopping it, or
+// while its GPU's driver is updated, and its streams play to their end meanwhile.
+type NodeAvailability string
+
+const (
+	NodeActive   NodeAvailability = "active"
+	NodeDraining NodeAvailability = "draining"
+)
+
+func NodeAvailabilities() []NodeAvailability {
+	return []NodeAvailability{NodeActive, NodeDraining}
+}
+
+// Takes reports whether a node of the availability takes new work.
+func (a NodeAvailability) Takes() bool {
+	switch a {
+	case NodeActive:
+		return true
+	case NodeDraining:
+	}
+	return false
 }
 
 // Encodes reports whether a node of the role encodes video: for playbacks, and downloads.
@@ -70,12 +94,15 @@ func LimitSources() []LimitSource {
 	return []LimitSource{LimitAutomatic, LimitSet}
 }
 
-// NodeSettings are what an admin sets of a node: its role, and with LimitSet its limit on
-// transcodes at once, zero for none.
+// NodeSettings are what an admin sets of a node: its role, with LimitSet its limit on transcodes at
+// once, zero for none, and whether it takes new work.
 type NodeSettings struct {
 	Role        NodeRole
 	LimitSource LimitSource
 	Limit       int
+	// Availability is whether it takes new work, and Note why, for other admins, where it does not.
+	Availability NodeAvailability
+	Note         string
 }
 
 // NodeRecord is a node as the server keeps it, whether it is up or not.

@@ -322,7 +322,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	// leaves them to one that does.
 	workers = append(workers, jobs.NewWorker(st, logger, node, playback.MaxConversions, map[domain.JobKind]jobs.Handler{
 		domain.JobConvert: conversions.Convert,
-	}, hub, jobs.When(self.Encodes)))
+	}, hub, jobs.When(self.TakesTranscodes)))
 	watcher := watch.New(st, logger)
 	background, stopBackground := context.WithCancel(ctx)
 	var wg sync.WaitGroup
@@ -337,7 +337,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	wg.Go(func() { pruneConversions(background, conversions, logger) })
 	wg.Go(func() { self.Run(background, hub.Subscribe) })
 	if address != "" {
-		wg.Go(func() { advertise(background, cache, self.Node, remuxer.Changes(), logger) })
+		wg.Go(func() { advertise(background, cache, self.Node, remuxer.Changes(), self.Changes(), logger) })
 	}
 	wg.Go(func() {
 		if err := watcher.Run(background); err != nil {
@@ -554,7 +554,7 @@ const advertiseEvery = 15 * time.Second
 // advertise tells the others where this node's peers reach it, PHOTON_NODE_ADDRESS, so a request
 // for HLS one of its playbacks makes is handed to it whichever node it lands on, and how many
 // videos it encodes, said again as soon as that changes.
-func advertise(ctx context.Context, cache *kv.KV, self func() domain.Node, changes <-chan struct{}, logger *slog.Logger) {
+func advertise(ctx context.Context, cache *kv.KV, self func() domain.Node, slots, settings <-chan struct{}, logger *slog.Logger) {
 	t := time.NewTicker(advertiseEvery)
 	defer t.Stop()
 	for {
@@ -565,7 +565,8 @@ func advertise(ctx context.Context, cache *kv.KV, self func() domain.Node, chang
 		case <-ctx.Done():
 			return
 		case <-t.C:
-		case <-changes:
+		case <-slots:
+		case <-settings:
 		}
 	}
 }

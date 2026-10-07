@@ -18,15 +18,16 @@ type nodeSettings interface {
 // nodeJSON is a node as it tells the others of itself: what it encodes with, and transcodes, of
 // which conversions are downloads', of at most transcode_limit at once, absent when unlimited.
 type nodeJSON struct {
-	ID          uuid.UUID          `json:"id"`
-	Name        string             `json:"name,omitzero"`
-	Address     string             `json:"address"`
-	LastSeen    time.Time          `json:"last_seen"`
-	Encoder     nodeEncoderJSON    `json:"encoder"`
-	Transcodes  int                `json:"transcodes"`
-	Conversions int                `json:"conversions"`
-	Limit       int                `json:"transcode_limit,omitzero"`
-	LimitSource domain.LimitSource `json:"transcode_limit_source"`
+	ID           uuid.UUID               `json:"id"`
+	Name         string                  `json:"name,omitzero"`
+	Availability domain.NodeAvailability `json:"availability"`
+	Address      string                  `json:"address"`
+	LastSeen     time.Time               `json:"last_seen"`
+	Encoder      nodeEncoderJSON         `json:"encoder"`
+	Transcodes   int                     `json:"transcodes"`
+	Conversions  int                     `json:"conversions"`
+	Limit        int                     `json:"transcode_limit,omitzero"`
+	LimitSource  domain.LimitSource      `json:"transcode_limit_source"`
 }
 
 // nodeEncoderJSON is what a node encodes video with, and whether it draws styled subtitles in.
@@ -38,7 +39,7 @@ type nodeEncoderJSON struct {
 
 func showNode(n domain.Node) nodeJSON {
 	return nodeJSON{
-		ID: n.ID, Name: n.Name, Address: n.Address, LastSeen: n.Seen.UTC(),
+		ID: n.ID, Name: n.Name, Availability: n.Availability, Address: n.Address, LastSeen: n.Seen.UTC(),
 		Encoder:    nodeEncoderJSON{n.Encoder.Acceleration, n.Encoder.HEVC, n.Encoder.Libass},
 		Transcodes: n.Transcodes, Conversions: n.Conversions, Limit: n.Limit, LimitSource: n.LimitSource,
 	}
@@ -47,29 +48,36 @@ func showNode(n domain.Node) nodeJSON {
 // knownNodeJSON is a node there is or has been, as an admin sets it: role all serves clients and
 // encodes video, serve never encodes, transcode encodes before any of all; transcode_limit, with
 // transcode_limit_source set, is how many videos it encodes at once, 0 for no limit, and is worked
-// out from its encoder where automatic. online is it as it tells the others of itself now, absent
-// while it says nothing.
+// out from its encoder where automatic. availability is whether it takes new work: one draining
+// plays its streams to their end and is given nothing new, note saying why. online is it as it
+// tells the others of itself now, absent while it says nothing.
 type knownNodeJSON struct {
-	ID          uuid.UUID          `json:"id"`
-	Name        string             `json:"name"`
-	FirstSeen   time.Time          `json:"first_seen"`
-	Role        domain.NodeRole    `json:"role"`
-	LimitSource domain.LimitSource `json:"transcode_limit_source"`
-	Limit       int                `json:"transcode_limit"`
-	Online      *nodeJSON          `json:"online,omitempty"`
+	ID           uuid.UUID               `json:"id"`
+	Name         string                  `json:"name"`
+	FirstSeen    time.Time               `json:"first_seen"`
+	Role         domain.NodeRole         `json:"role"`
+	LimitSource  domain.LimitSource      `json:"transcode_limit_source"`
+	Limit        int                     `json:"transcode_limit"`
+	Availability domain.NodeAvailability `json:"availability"`
+	Note         string                  `json:"note,omitzero"`
+	Online       *nodeJSON               `json:"online,omitempty"`
 }
 
-// nodeChangeJSON is what to change of a node: its role, its limit on transcodes at once, or both;
-// transcode_limit is given with transcode_limit_source set, 0 for no limit.
+// nodeChangeJSON is what to change of a node: its role, its limit on transcodes at once, whether it
+// takes new work, or any of them; transcode_limit is given with transcode_limit_source set, 0 for
+// no limit; note, with availability, is why, for other admins, and is cleared on resuming.
 type nodeChangeJSON struct {
-	Role        domain.NodeRole    `json:"role,omitzero"`
-	LimitSource domain.LimitSource `json:"transcode_limit_source,omitzero"`
-	Limit       *int               `json:"transcode_limit,omitzero"`
+	Role         domain.NodeRole         `json:"role,omitzero"`
+	LimitSource  domain.LimitSource      `json:"transcode_limit_source,omitzero"`
+	Limit        *int                    `json:"transcode_limit,omitzero"`
+	Availability domain.NodeAvailability `json:"availability,omitzero"`
+	Note         string                  `json:"note,omitzero"`
 }
 
 func showKnownNode(n domain.NodeRecord, online map[uuid.UUID]domain.Node) knownNodeJSON {
 	out := knownNodeJSON{
 		ID: n.ID, Name: n.Name, FirstSeen: n.FirstSeen.UTC(), Role: n.Role, LimitSource: n.LimitSource, Limit: n.Limit,
+		Availability: n.Availability, Note: n.Note,
 	}
 	if advert, ok := online[n.ID]; ok {
 		shown := showNode(advert)
@@ -141,6 +149,12 @@ func (a *API) setNode(w http.ResponseWriter, r *http.Request) {
 		set.LimitSource, set.Limit = domain.LimitSet, *req.Limit
 	case domain.LimitAutomatic:
 		set.LimitSource, set.Limit = domain.LimitAutomatic, 0
+	}
+	switch req.Availability {
+	case domain.NodeDraining:
+		set.Availability, set.Note = domain.NodeDraining, req.Note
+	case domain.NodeActive:
+		set.Availability, set.Note = domain.NodeActive, ""
 	}
 	if err := a.svc.Nodes.SetNodeSettings(r.Context(), id, set); a.answered(w, r, err) {
 		return

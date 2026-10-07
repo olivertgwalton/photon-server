@@ -20,18 +20,19 @@ func (t told) Nodes(context.Context) ([]domain.Node, error) { return t, nil }
 func TestTheNodeWithTheMostSlotsFreeIsAskedFirst(t *testing.T) {
 	both := domain.Encoder{Acceleration: domain.AccelNVENC, HEVC: domain.HEVCAllow, Libass: true}
 	h264 := domain.Encoder{Acceleration: domain.AccelSoftware, HEVC: domain.HEVCDeny}
-	self := domain.Node{Role: domain.NodeAll, ID: uuid.NewV7(), Name: "self", Encoder: h264, Transcodes: 1, Limit: 4}
+	self := domain.Node{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "self", Encoder: h264, Transcodes: 1, Limit: 4}
 	nodes := told{
-		{Role: domain.NodeAll, ID: uuid.NewV7(), Name: "half", Address: "http://half", Encoder: both, Transcodes: 4, Limit: 8},
-		{Role: domain.NodeAll, ID: uuid.NewV7(), Name: "idle", Address: "http://idle", Encoder: both, Transcodes: 0, Limit: 2},
-		{Role: domain.NodeAll, ID: uuid.NewV7(), Name: "unlimited", Address: "http://unlimited", Encoder: h264, Transcodes: 9, Limit: hls.Unlimited},
-		{Role: domain.NodeAll, ID: uuid.NewV7(), Name: "full", Address: "http://full", Encoder: both, Transcodes: 2, Limit: 2},
-		{Role: domain.NodeAll, ID: uuid.NewV7(), Name: "unreachable", Encoder: both, Limit: 8},
-		{Role: domain.NodeTranscode, ID: uuid.NewV7(), Name: "gpu", Address: "http://gpu", Encoder: both, Transcodes: 6, Limit: 8},
-		{Role: domain.NodeTranscode, ID: uuid.NewV7(), Name: "gpu, full", Address: "http://gpu-full", Encoder: both, Transcodes: 8, Limit: 8},
-		{Role: domain.NodeServe, ID: uuid.NewV7(), Name: "serves only", Address: "http://serve", Encoder: both, Limit: 8},
+		{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "half", Address: "http://half", Encoder: both, Transcodes: 4, Limit: 8},
+		{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "idle", Address: "http://idle", Encoder: both, Transcodes: 0, Limit: 2},
+		{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "unlimited", Address: "http://unlimited", Encoder: h264, Transcodes: 9, Limit: hls.Unlimited},
+		{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "full", Address: "http://full", Encoder: both, Transcodes: 2, Limit: 2},
+		{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "unreachable", Encoder: both, Limit: 8},
+		{Role: domain.NodeTranscode, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "gpu", Address: "http://gpu", Encoder: both, Transcodes: 6, Limit: 8},
+		{Role: domain.NodeTranscode, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "gpu, full", Address: "http://gpu-full", Encoder: both, Transcodes: 8, Limit: 8},
+		{Role: domain.NodeAll, Availability: domain.NodeDraining, ID: uuid.NewV7(), Name: "drained", Address: "http://drained", Encoder: both, Limit: 8},
+		{Role: domain.NodeServe, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "serves only", Address: "http://serve", Encoder: both, Limit: 8},
 		// This node's own advert, older than what it knows of itself now.
-		{Role: domain.NodeAll, ID: self.ID, Name: "self, as it said", Address: "http://self", Encoder: h264, Limit: 4},
+		{Role: domain.NodeAll, Availability: domain.NodeActive, ID: self.ID, Name: "self, as it said", Address: "http://self", Encoder: h264, Limit: 4},
 	}
 	p := NewPlacer(nodes, func() domain.Node { return self }, nil, nodecall.Key{})
 	names := func(need Need) []string {
@@ -48,7 +49,7 @@ func TestTheNodeWithTheMostSlotsFreeIsAskedFirst(t *testing.T) {
 	}
 	want := []string{"gpu", "unlimited", "idle", "self", "half", "gpu, full", "full"}
 	if got := names(Need{}); !slices.Equal(got, want) {
-		t.Errorf("for H.264: %v, want %v: those with a slot free first, of them one set to transcode, then one with no limit, then by the share free; none that never encodes, none unreachable", got, want)
+		t.Errorf("for H.264: %v, want %v: those with a slot free first, of them one set to transcode, then one with no limit, then by the share free; none that never encodes or is drained, none unreachable", got, want)
 	}
 	want = []string{"gpu", "idle", "half", "gpu, full", "full"}
 	if got := names(Need{HEVC: true}); !slices.Equal(got, want) {

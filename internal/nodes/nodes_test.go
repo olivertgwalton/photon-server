@@ -50,17 +50,17 @@ func (s *slots) SetLimit(limit int) {
 }
 
 // A node takes up what an admin sets of it as it is told: its role, which says whether it
-// encodes, and its limit, its encoder's own where none is set.
+// encodes, its limit, its encoder's own where none is set, and whether it is drained.
 func TestANodeTakesUpWhatIsSetOfItAsItIsTold(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		settings := &kept{set: domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitAutomatic}}
+		settings := &kept{set: domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}}
 		t8 := &slots{}
 		self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", "http://gpu-1", domain.Encoder{}, 8, t8, slog.New(slog.DiscardHandler))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if n := self.Node(); !self.Encodes() || n.Limit != 8 || n.LimitSource != domain.LimitAutomatic || n.Role != domain.NodeAll {
-			t.Fatalf("joined as %+v, encodes %v; want all, its encoder's 8", n, self.Encodes())
+		if n := self.Node(); !self.TakesTranscodes() || n.Limit != 8 || n.LimitSource != domain.LimitAutomatic || n.Role != domain.NodeAll {
+			t.Fatalf("joined as %+v, encodes %v; want all, its encoder's 8", n, self.TakesTranscodes())
 		}
 		events := make(chan domain.Event)
 		ctx, stop := context.WithCancel(t.Context())
@@ -69,11 +69,24 @@ func TestANodeTakesUpWhatIsSetOfItAsItIsTold(t *testing.T) {
 			defer close(done)
 			self.Run(ctx, func() (<-chan domain.Event, func()) { return events, func() {} })
 		}()
-		settings.change(domain.NodeSettings{Role: domain.NodeServe, LimitSource: domain.LimitSet, Limit: 3})
+		settings.change(domain.NodeSettings{Role: domain.NodeServe, LimitSource: domain.LimitSet, Limit: 3, Availability: domain.NodeActive})
 		events <- domain.Event{Kind: domain.EventNodesChanged}
 		synctest.Wait()
-		if n := self.Node(); self.Encodes() || n.Limit != 3 || n.Role != domain.NodeServe || n.LimitSource != domain.LimitSet {
-			t.Errorf("after the change: %+v, encodes %v; want serve, set to 3, encoding nothing", n, self.Encodes())
+		if n := self.Node(); self.TakesTranscodes() || n.Limit != 3 || n.Role != domain.NodeServe || n.LimitSource != domain.LimitSet {
+			t.Errorf("after the change: %+v, encodes %v; want serve, set to 3, encoding nothing", n, self.TakesTranscodes())
+		}
+		<-self.Changes()
+		// Drained, it takes nothing new, and tells the others so at once.
+		settings.change(domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitSet, Limit: 3, Availability: domain.NodeDraining})
+		events <- domain.Event{Kind: domain.EventNodesChanged}
+		synctest.Wait()
+		if n := self.Node(); self.TakesTranscodes() || n.Availability != domain.NodeDraining {
+			t.Errorf("drained: %+v, takes %v; want it taking nothing new", n, self.TakesTranscodes())
+		}
+		select {
+		case <-self.Changes():
+		default:
+			t.Error("draining was not told, for the others to be told at once")
 		}
 		stop()
 		<-done

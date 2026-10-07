@@ -373,8 +373,8 @@ func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// A node set to serve only, since another placed this on it, encodes nothing.
-	if !a.svc.Placer.Self().Role.Encodes() {
+	// A node set to serve only, or drained, since another placed this on it, takes nothing new.
+	if self := a.svc.Placer.Self(); !self.Role.Encodes() || !self.Availability.Takes() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}

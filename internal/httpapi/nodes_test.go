@@ -49,7 +49,7 @@ func (f fakeNodes) SetNodeSettings(_ context.Context, id uuid.UUID, s domain.Nod
 func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 	self, gpu, gone := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
 	seen := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
-	automatic := domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitAutomatic}
+	automatic := domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}
 	nodes := fakeNodes{
 		self: {ID: self, Name: "mini", FirstSeen: seen, NodeSettings: automatic},
 		gpu:  {ID: gpu, Name: "gpu-1", FirstSeen: seen.Add(time.Hour), NodeSettings: automatic},
@@ -59,11 +59,11 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Auth: fakeAuth{}, Events: events, Nodes: nodes,
 		Valkey: fakeBackend{version: "9.0.0", nodes: []domain.Node{{
-			ID: gpu, Address: "http://10.0.0.5:8640", Seen: seen, Name: "gpu-1", Role: domain.NodeAll, Transcodes: 3, Limit: 8,
+			ID: gpu, Address: "http://10.0.0.5:8640", Seen: seen, Name: "gpu-1", Role: domain.NodeAll, Availability: domain.NodeActive, Transcodes: 3, Limit: 8,
 			LimitSource: domain.LimitAutomatic, Encoder: domain.Encoder{Acceleration: domain.AccelNVENC, HEVC: domain.HEVCAllow},
 		}}},
 		Placer: playback.NewPlacer(fakeBackend{}, func() domain.Node {
-			return domain.Node{ID: self, Name: "mini", Role: domain.NodeAll, Limit: 2, LimitSource: domain.LimitAutomatic}
+			return domain.Node{ID: self, Name: "mini", Role: domain.NodeAll, Availability: domain.NodeActive, Limit: 2, LimitSource: domain.LimitAutomatic}
 		}, nil, nodecall.Key{}),
 	})
 	var listed listJSON[knownNodeJSON]
@@ -79,7 +79,7 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 	}
 
 	rec := ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"role":"transcode","transcode_limit_source":"set","transcode_limit":12}`)
-	want := domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitSet, Limit: 12}
+	want := domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitSet, Limit: 12, Availability: domain.NodeActive}
 	if rec.Code != http.StatusOK || nodes[gpu].NodeSettings != want {
 		t.Fatalf("setting gpu-1: %d %s, kept %+v; want %+v", rec.Code, rec.Body, nodes[gpu].NodeSettings, want)
 	}
@@ -103,6 +103,18 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 	}
 	if got := nodes[gpu].NodeSettings; got.LimitSource != domain.LimitAutomatic {
 		t.Errorf("after setting it automatic: %+v", got)
+	}
+	// Drained with a note for other admins, then resumed, which clears it.
+	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"availability":"draining","note":"driver update"}`)
+	if got := nodes[gpu].NodeSettings; got.Availability != domain.NodeDraining || got.Note != "driver update" || got.Role != domain.NodeServe {
+		t.Errorf("drained: %+v, want draining with its note, its role kept", got)
+	}
+	if rec := ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"availability":"resting"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("an availability there is not: %d, want 400", rec.Code)
+	}
+	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"availability":"active"}`)
+	if got := nodes[gpu].NodeSettings; got.Availability != domain.NodeActive || got.Note != "" {
+		t.Errorf("resumed: %+v, want active, its note gone", got)
 	}
 	if rec := ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+uuid.NewV7().String(), `{"role":"serve"}`); rec.Code != http.StatusNotFound {
 		t.Errorf("a node there has never been: %d, want 404", rec.Code)
