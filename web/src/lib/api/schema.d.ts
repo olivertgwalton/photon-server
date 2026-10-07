@@ -1645,6 +1645,116 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where artwork, avatars, theme tunes and previews are kept: each server's disk, or a bucket all share
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StorageStatus"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        /**
+         * Keep artwork and previews elsewhere, once a bucket is checked and while nothing is kept where they are now; every node keeps them there at once
+         * @description Admin only.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Storage"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StorageStatus"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/storage/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a bucket can keep artwork and previews: that it answers, and keeps, lists and removes what is put there
+         * @description Admin only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Storage"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/subtitles/{id}": {
         parameters: {
             query?: never;
@@ -5618,6 +5728,22 @@ export interface components {
             name: string;
             path: string;
         };
+        Bucket: {
+            access_key?: string;
+            endpoint?: string;
+            folder?: string;
+            name: string;
+            region?: string;
+            secret_key?: string;
+        };
+        BucketStatus: {
+            access_key?: string;
+            endpoint?: string;
+            folder?: string;
+            name: string;
+            region?: string;
+            secret_key_set: boolean;
+        };
         Candidate: {
             id: string;
             original_title?: string;
@@ -5959,7 +6085,7 @@ export interface components {
             title_id?: string;
         };
         /** @enum {string} */
-        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed";
+        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed";
         EventPage: {
             items: components["schemas"]["Event"][];
             offset: number;
@@ -6779,6 +6905,16 @@ export interface components {
             playbacks: components["schemas"]["NowPlaying"][];
             scans: components["schemas"]["Scan"][];
             tasks: components["schemas"]["RunningTask"][];
+        };
+        Storage: {
+            bucket?: components["schemas"]["Bucket"];
+            kind: components["schemas"]["StorageKind"];
+        };
+        /** @enum {string} */
+        StorageKind: "disk" | "bucket";
+        StorageStatus: {
+            bucket?: components["schemas"]["BucketStatus"] | null;
+            kind: components["schemas"]["StorageKind"];
         };
         /** @enum {string} */
         StreamKind: "video" | "audio" | "subtitle";

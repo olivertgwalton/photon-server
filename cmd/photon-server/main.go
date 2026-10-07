@@ -28,7 +28,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/backup"
-	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/discovery"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/events"
@@ -48,6 +47,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/secure"
+	"github.com/olivertgwalton/photon-server/internal/storage"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/subtitles"
 	"github.com/olivertgwalton/photon-server/internal/task"
@@ -180,18 +180,13 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	cacheRoot := cmp.Or(os.Getenv("PHOTON_CACHE_DIR"), filepath.Join(cacheDir, "photon-server"))
-	artworkBlobs, err := blob.OpenDir(filepath.Join(cacheRoot, "artwork"))
+	stores, err := storage.Open(ctx, st, cacheRoot, logger)
 	if err != nil {
 		return err
 	}
-	defer artworkBlobs.Close()
-	pictureCache := artwork.New(artworkBlobs, st.SetBlurhash)
-	previewBlobs, err := blob.OpenDir(filepath.Join(cacheRoot, "previews"))
-	if err != nil {
-		return err
-	}
-	defer previewBlobs.Close()
-	previews := analysis.NewPreviews(previewBlobs)
+	defer stores.Close()
+	pictureCache := artwork.New(&stores.Artwork, st.SetBlurhash)
+	previews := analysis.NewPreviews(&stores.Previews)
 	signingKey, err := st.SigningKey(ctx)
 	if err != nil {
 		return err
@@ -274,7 +269,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	srv := &http.Server{
 		Addr: listen, TLSConfig: secured.TLSConfig(),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: files, Subtitles: fetcher, Playbacks: sessions, Owners: owners, Remuxing: remuxes, HLS: remuxer, Signer: signer, Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Network: st, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: files, Subtitles: fetcher, Playbacks: sessions, Owners: owners, Remuxing: remuxes, HLS: remuxer, Signer: signer, Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Network: st, Storage: st, Stores: stores, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -348,6 +343,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}()
 
 	wg.Go(func() { secured.Run(background) })
+	wg.Go(func() { stores.Run(background, hub.Subscribe) })
 	wg.Go(func() { jellyfinAPI.Run(background) })
 	logger.InfoContext(ctx, "serving", slog.String("addr", srv.Addr), slog.String("version", info.Version))
 	return listenUntilDone(ctx, srv, secured.Listen)

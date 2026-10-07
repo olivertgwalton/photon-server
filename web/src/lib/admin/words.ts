@@ -246,6 +246,8 @@ export function describe(e: Schemas["Event"], names: Names): string {
 			return "The maintenance window was changed";
 		case "network.changed":
 			return "Secure connections were changed";
+		case "storage.changed":
+			return "Where artwork and previews are kept was changed";
 	}
 }
 
