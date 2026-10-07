@@ -11,6 +11,7 @@ import (
 	"image"
 	"io"
 	"io/fs"
+	"iter"
 	"maps"
 	"net/http"
 	"runtime"
@@ -32,10 +33,19 @@ const (
 	fetchFor   = 30 * time.Second
 )
 
+// objects keeps objects by key, on disk or in a bucket.
+type objects interface {
+	Open(ctx context.Context, key string) (blob.Object, error)
+	Exists(ctx context.Context, key string) (bool, error)
+	Put(ctx context.Context, key string, r io.Reader) error
+	Delete(ctx context.Context, key string) error
+	List(ctx context.Context, prefix string) iter.Seq2[blob.Entry, error]
+}
+
 // Cache fetches each picture once, under its id. A picture replaced gets a new id, so an object
 // here never goes stale; one replaced is swept away (see Sweep).
 type Cache struct {
-	blobs *blob.Dir
+	blobs objects
 	http  *http.Client
 	group singleflight.Group
 	// resizing holds a place for each picture being resized or hashed, one per processor.
@@ -44,7 +54,7 @@ type Cache struct {
 	hashed func(ctx context.Context, id uuid.UUID, blurhash string) error
 }
 
-func New(blobs *blob.Dir, hashed func(ctx context.Context, id uuid.UUID, blurhash string) error) *Cache {
+func New(blobs objects, hashed func(ctx context.Context, id uuid.UUID, blurhash string) error) *Cache {
 	return &Cache{
 		blobs: blobs, http: &http.Client{Timeout: fetchFor}, resizing: make(chan struct{}, runtime.NumCPU()),
 		hashed: hashed,

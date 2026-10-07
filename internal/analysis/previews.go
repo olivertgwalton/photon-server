@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"iter"
 	"log/slog"
 	"maps"
 	"os"
@@ -42,12 +44,20 @@ const (
 // and twice that for a picture tone mapped from HDR. A variable for the test to shorten.
 var stillLimit = 10 * time.Second
 
-// Previews keeps parts' previews: under each part's id, trickplay/{n}.jpg and chapters/{idx}.jpg.
-type Previews struct {
-	blobs *blob.Dir
+// objects keeps objects by key, on disk or in a bucket.
+type objects interface {
+	Open(ctx context.Context, key string) (blob.Object, error)
+	Put(ctx context.Context, key string, r io.Reader) error
+	Delete(ctx context.Context, key string) error
+	List(ctx context.Context, prefix string) iter.Seq2[blob.Entry, error]
 }
 
-func NewPreviews(blobs *blob.Dir) *Previews { return &Previews{blobs: blobs} }
+// Previews keeps parts' previews: under each part's id, trickplay/{n}.jpg and chapters/{idx}.jpg.
+type Previews struct {
+	blobs objects
+}
+
+func NewPreviews(blobs objects) *Previews { return &Previews{blobs: blobs} }
 
 func (p *Previews) Sheet(ctx context.Context, part uuid.UUID, n int) (blob.Object, error) {
 	return p.blobs.Open(ctx, path.Join(part.String(), "trickplay", strconv.Itoa(n)+".jpg"))

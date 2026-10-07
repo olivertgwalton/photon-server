@@ -55,6 +55,9 @@ const (
 	// EventNetworkChanged is whether the port answers HTTPS, or its certificate, changed by an
 	// admin; every node serves it from then.
 	EventNetworkChanged EventKind = "network.changed"
+	// EventStorageChanged is where artwork and previews are kept, changed by an admin; every node
+	// keeps them there from then.
+	EventStorageChanged EventKind = "storage.changed"
 )
 
 func EventKinds() []EventKind {
@@ -64,7 +67,7 @@ func EventKinds() []EventKind {
 		EventLibraryAdded, EventLibraryRemoved, EventLibraryScanned, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventTitlesAdded, EventScanProgress, EventTaskStarted, EventTaskFinished, EventTaskFailed, EventBackupMade,
 		EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead, EventJobsProgress, EventWebhookTest,
-		EventMaintenanceChanged, EventNetworkChanged,
+		EventMaintenanceChanged, EventNetworkChanged, EventStorageChanged,
 	}
 }
 
@@ -79,7 +82,7 @@ func (k EventKind) Logged() bool {
 	case EventPlaybackPaused, EventPlaybackResumed, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventScanProgress, EventTaskStarted, EventTaskFinished, EventJobStarted,
 		EventJobFinished, EventJobFailed, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged,
-		EventNetworkChanged:
+		EventNetworkChanged, EventStorageChanged:
 		return false
 	}
 	return false
@@ -97,7 +100,8 @@ func (k EventKind) Hookable() bool {
 		return true
 	case EventLibraryChanged, EventTitleUpdated, EventUserDataChanged, EventScanProgress,
 		EventTaskStarted, EventTaskFinished, EventJobStarted, EventJobFinished, EventJobFailed,
-		EventJobDead, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged, EventNetworkChanged:
+		EventJobDead, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged, EventNetworkChanged,
+		EventStorageChanged:
 		return false
 	}
 	return false
