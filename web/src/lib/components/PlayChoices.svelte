@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { components } from "#lib/api/schema.js";
 import * as Select from "#lib/components/ui/select/index.js";
-import { trackName, videoName } from "#lib/format.js";
+import { trackName, versionName } from "#lib/format.js";
 
 type Version = components["schemas"]["VersionPage"];
 
@@ -32,17 +32,6 @@ const audios = $derived(
 const subtitles = $derived(
 	chosen?.streams.filter((s) => s.kind === "subtitle") ?? [],
 );
-
-function versionName(v: Version): string {
-	const picture = videoName(v.streams.find((s) => s.kind === "video"));
-	const name = v.label ?? v.edition ?? "";
-	// A label is often the picture's own name ("4K"), which says it once.
-	const said =
-		!name || picture.startsWith(name)
-			? picture
-			: [name, picture].filter(Boolean).join(" · ");
-	return `${said || "Version"}${v.missing_since ? " (missing)" : ""}`;
-}
 
 // What plays when the reader chooses nothing: the copy's default track, and
 // its default or forced subtitles. Left unchosen, nothing is sent and the
