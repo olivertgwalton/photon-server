@@ -32,10 +32,12 @@ type authenticator interface {
 }
 
 type Services struct {
-	Auth    authenticator
-	Limits  kv.Limiter
-	Raise   func(ctx context.Context, e domain.Event)
-	Proxies peer.Proxies
+	Auth      authenticator
+	Limits    kv.Limiter
+	Raise     func(ctx context.Context, e domain.Event)
+	Proxies   peer.Proxies
+	Catalogue catalogue
+	Pictures  pictureFiles
 }
 
 type API struct {
@@ -72,6 +74,28 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle("GET /Users/{userId}", a.signedIn(a.user))
 	a.handle("POST /Sessions/Logout", a.signedIn(a.logout))
 	a.handle("GET /DisplayPreferences/{id}", a.signedIn(a.displayPreferences))
+	// Browsing, under the routes Jellyfin 12.2 answers, and the /Users/{userId} forms apps still use.
+	a.handle("GET /UserViews", a.signedIn(a.views))
+	a.handle("GET /Users/{userId}/Views", a.signedIn(a.views))
+	a.handle("GET /UserViews/GroupingOptions", a.signedIn(a.groupingOptions))
+	a.handle("GET /Library/VirtualFolders", a.signedIn(a.virtualFolders))
+	a.handle("GET /Items", a.signedIn(a.items))
+	a.handle("GET /Users/{userId}/Items", a.signedIn(a.items))
+	a.handle("GET /Items/{itemId}", a.signedIn(a.item))
+	a.handle("GET /Users/{userId}/Items/{itemId}", a.signedIn(a.item))
+	a.handle("GET /Shows/{seriesId}/Seasons", a.signedIn(a.seasons))
+	a.handle("GET /Shows/{seriesId}/Episodes", a.signedIn(a.episodes))
+	a.handle("GET /UserItems/Resume", a.signedIn(a.row(domain.RowContinueWatching)))
+	a.handle("GET /Users/{userId}/Items/Resume", a.signedIn(a.row(domain.RowContinueWatching)))
+	a.handle("GET /Shows/NextUp", a.signedIn(a.nextUp))
+	a.handle("GET /Items/Latest", a.signedIn(a.latest))
+	a.handle("GET /Users/{userId}/Items/Latest", a.signedIn(a.latest))
+	a.handle("GET /Items/{itemId}/LocalTrailers", a.signedIn(none))
+	a.handle("GET /Users/{userId}/Items/{itemId}/LocalTrailers", a.signedIn(none))
+	a.handle("GET /Items/{itemId}/SpecialFeatures", a.signedIn(none))
+	a.handle("GET /Users/{userId}/Items/{itemId}/SpecialFeatures", a.signedIn(none))
+	a.handle("GET /Items/{itemId}/Images/{imageType}", a.image)
+	a.handle("GET /Items/{itemId}/Images/{imageType}/{imageIndex}", a.image)
 	return a
 }
 

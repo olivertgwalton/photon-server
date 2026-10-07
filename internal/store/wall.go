@@ -4,6 +4,8 @@ import (
 	"cmp"
 	"context"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 	"uuid"
 
@@ -67,10 +69,11 @@ type WallPage struct {
 	Limit      int
 }
 
-// Wall answers a page of a library's films or shows and how many there are in all. Ties in the
-// sort are broken by id, so a page is the same whenever it is asked for while the library is.
-func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, int64, error) {
-	titles, args, err := s.wallQuery(ctx, lib, p.Profile, p.Filter)
+// Wall answers a page of the films and shows of libraries, sorted together, and how many there are
+// in all. Ties in the sort are broken by id, so a page is the same whenever it is asked for while
+// the libraries are.
+func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card, int64, error) {
+	titles, args, err := s.wallQuery(ctx, libs, p.Profile, p.Filter)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -117,28 +120,43 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, in
 // collections as the library shows them, as a filter narrows them, and the values they take;
 // ErrNotFound for no such library. A library holds one kind of title, and naming it lets the wall's
 // sort indexes read a page in order.
-func (s *Store) wallQuery(ctx context.Context, lib, profile uuid.UUID, f WallFilter) (string, pgx.NamedArgs, error) {
+func (s *Store) wallQuery(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, f WallFilter) (string, pgx.NamedArgs, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id, kind, collection_mode FROM libraries WHERE id = ANY($1) ORDER BY id`, libs)
+	if err != nil {
+		return "", nil, err
+	}
+	args := pgx.NamedArgs{"libs": libs, "profile": profile}
+	filter := f.where(args)
+	// Each library's titles are what its kind and collection mode make them.
+	var arms []string
+	var id uuid.UUID
 	var kind domain.LibraryKind
 	var mode domain.CollectionMode
-	if err := s.pool.QueryRow(ctx, `SELECT kind, collection_mode FROM libraries WHERE id = $1`, lib).Scan(&kind, &mode); err != nil {
-		return "", nil, found(err)
-	}
-	args := pgx.NamedArgs{"lib": lib, "profile": profile, "kind": kind.ItemKinds()[0]}
-	filter := f.where(args)
-	titles := `items.kind = @kind`
-	// A filtered wall answers titles alone, as Plex's does: a collection has no genre or year.
-	if filter == "" {
-		switch mode {
-		case domain.CollectionsGrouped:
-			titles = `(items.kind = @kind AND NOT EXISTS (SELECT 1 FROM collection_members cm JOIN items ci ON ci.id = cm.collection_id
-				WHERE cm.item_id = items.id AND ci.id IN (` + shownCollections + `) AND sees(v, ci)) OR ` + listedCollection + `)`
-		case domain.CollectionsShown:
-			titles = `(items.kind = @kind OR ` + listedCollection + `)`
-		case domain.CollectionsHidden:
+	if _, err := pgx.ForEachRow(rows, []any{&id, &kind, &mode}, func() error {
+		n := strconv.Itoa(len(arms))
+		args["lib"+n], args["kind"+n] = id, kind.ItemKinds()[0]
+		titles := `items.kind = @kind` + n
+		// A filtered wall answers titles alone, as Plex's does: a collection has no genre or year.
+		if filter == "" {
+			switch mode {
+			case domain.CollectionsGrouped:
+				titles = `(items.kind = @kind` + n + ` AND NOT EXISTS (SELECT 1 FROM collection_members cm JOIN items ci ON ci.id = cm.collection_id
+					WHERE cm.item_id = items.id AND ci.id IN (` + shownCollections + `) AND sees(v, ci)) OR ` + listedCollection + `)`
+			case domain.CollectionsShown:
+				titles = `(items.kind = @kind` + n + ` OR ` + listedCollection + `)`
+			case domain.CollectionsHidden:
+			}
 		}
+		arms = append(arms, `(items.library_id = @lib`+n+` AND `+titles+`)`)
+		return nil
+	}); err != nil {
+		return "", nil, err
 	}
-	return `FROM items WHERE library_id = @lib
-		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND ` + titles + `)` + filter, args, nil
+	if len(arms) != len(libs) {
+		return "", nil, ErrNotFound
+	}
+	return `FROM items WHERE library_id = ANY(@libs)
+		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND (` + strings.Join(arms, " OR ") + `))` + filter, args, nil
 }
 
 // Letter is how many of a library's titles sort under a letter: "#" for those before A.
@@ -151,7 +169,7 @@ type Letter struct {
 // in title order, as Plex's firstCharacter does, so a client can jump to a letter by its offset.
 // Letters are read unaccented, so "Émile" counts under E where the wall sorts it.
 func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, f WallFilter) ([]Letter, error) {
-	titles, args, err := s.wallQuery(ctx, lib, profile, f)
+	titles, args, err := s.wallQuery(ctx, []uuid.UUID{lib}, profile, f)
 	if err != nil {
 		return nil, err
 	}

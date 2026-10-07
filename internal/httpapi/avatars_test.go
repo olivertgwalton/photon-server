@@ -34,15 +34,15 @@ func (f *fakeAvatars) SetAvatar(_ context.Context, profile, picture uuid.UUID) (
 	return domain.Profile{ID: profile, Avatar: picture}, nil
 }
 
-func (f *fakeAvatars) Picture(_ context.Context, id uuid.UUID) (store.Picture, error) {
+func (f *fakeAvatars) Picture(_ context.Context, id uuid.UUID) (domain.Picture, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, p := range f.has {
 		if p == id && id != (uuid.UUID{}) {
-			return store.Picture{Kept: true}, nil
+			return domain.Picture{Kept: true}, nil
 		}
 	}
-	return store.Picture{}, store.ErrNotFound
+	return domain.Picture{}, store.ErrNotFound
 }
 
 func pngOf(w, h int) []byte {

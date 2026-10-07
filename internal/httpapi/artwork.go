@@ -2,26 +2,21 @@ package httpapi
 
 import (
 	"context"
-	"errors"
 	"io"
 	"math"
 	"net/http"
 	"os"
-	"path"
 	"uuid"
 
-	"github.com/olivertgwalton/photon-server/internal/artwork"
-	"github.com/olivertgwalton/photon-server/internal/library"
-	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 type pictures interface {
-	Picture(ctx context.Context, id uuid.UUID) (store.Picture, error)
+	Picture(ctx context.Context, id uuid.UUID) (domain.Picture, error)
 }
 
 type pictureCache interface {
-	File(ctx context.Context, id uuid.UUID, url string) (*os.File, error)
-	Resized(ctx context.Context, key string, width, height int, open func(context.Context) (*os.File, error)) (*os.File, error)
+	Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (*os.File, string, error)
 	Keep(id uuid.UUID, r io.Reader) error
 	Kept(id uuid.UUID) (*os.File, error)
 }
@@ -46,7 +41,7 @@ func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	f, name, err := a.openPicture(r.Context(), id, pic, width, height)
+	f, name, err := a.svc.Artwork.Open(r.Context(), id, pic, width, height)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -56,26 +51,4 @@ func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 		"Content-Security-Policy": {"default-src 'none'; style-src 'unsafe-inline'; sandbox"},
 		"X-Content-Type-Options":  {"nosniff"},
 	})
-}
-
-func (a *API) openPicture(ctx context.Context, id uuid.UUID, pic store.Picture, width, height int) (*os.File, string, error) {
-	name := path.Base(pic.Path + pic.URL)
-	original := func(ctx context.Context) (*os.File, error) {
-		switch {
-		case pic.Kept:
-			return a.svc.Artwork.Kept(id)
-		case pic.URL != "":
-			return a.svc.Artwork.File(ctx, id, pic.URL)
-		}
-		return library.Open(pic.Root, pic.Path)
-	}
-	if width > 0 || height > 0 {
-		f, err := a.svc.Artwork.Resized(ctx, id.String(), width, height, original)
-		// A resized copy is named for no format; its content says which.
-		if !errors.Is(err, artwork.ErrNotResizable) {
-			return f, "", err
-		}
-	}
-	f, err := original(ctx)
-	return f, name, err
 }

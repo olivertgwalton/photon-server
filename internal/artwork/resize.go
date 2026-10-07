@@ -10,9 +10,14 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"slices"
+	"uuid"
 
 	"golang.org/x/image/draw"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/library"
 
 	// Decoders for the pictures providers and libraries hold.
 	_ "image/gif"
@@ -31,6 +36,29 @@ const maxPixels = 50_000_000
 // ErrNotResizable is a picture answered as it is: one that fits what was asked for already, or not
 // decoded here, such as SVG.
 var ErrNotResizable = errors.New("picture cannot be resized")
+
+// Open opens picture id, or with width or height a copy that fits inside them where it can be
+// made, and answers the name its format is known by: "" for a copy, whose content says.
+func (c *Cache) Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (*os.File, string, error) {
+	name := path.Base(p.Path + p.URL)
+	original := func(ctx context.Context) (*os.File, error) {
+		switch {
+		case p.Kept:
+			return c.Kept(id)
+		case p.URL != "":
+			return c.File(ctx, id, p.URL)
+		}
+		return library.Open(p.Root, p.Path)
+	}
+	if width > 0 || height > 0 {
+		f, err := c.Resized(ctx, id.String(), width, height, original)
+		if !errors.Is(err, ErrNotResizable) {
+			return f, "", err
+		}
+	}
+	f, err := original(ctx)
+	return f, name, err
+}
 
 // Resized answers the picture with key shrunk to fit inside width×height, keeping its shape, where
 // a bound of 0 is none; or, where it fits already, as it is (ErrNotResizable). open reads the

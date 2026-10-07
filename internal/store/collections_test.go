@@ -30,7 +30,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 		if _, err := s.SaveFolder(ctx, lib.ID, f.title, []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)
 		}
-		cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -137,7 +137,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if err := s.MarkWatched(ctx, viewer.ID, mine, nil); err != nil {
 		t.Fatal(err)
 	}
-	if watched, _, _ := s.Wall(ctx, lib.ID, WallPage{Profile: viewer.ID, Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{Marks: []domain.Mark{domain.MarkWatched}}}); len(watched) != 2 {
+	if watched, _, _ := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: viewer.ID, Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{Marks: []domain.Mark{domain.MarkWatched}}}); len(watched) != 2 {
 		t.Errorf("after marking the set watched, %d titles are, want both", len(watched))
 	}
 	if err := s.RemoveCollection(ctx, mine); err != nil {
@@ -163,7 +163,7 @@ func TestALibrarysWallShowsItsCollectionsAsItSays(t *testing.T) {
 		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)
 		}
-		cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -177,7 +177,7 @@ func TestALibrarysWallShowsItsCollectionsAsItSays(t *testing.T) {
 		t.Fatal(err)
 	}
 	wall := func(f WallFilter) []string {
-		cards, total, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 10, Filter: f})
+		cards, total, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 10, Filter: f})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -243,7 +243,7 @@ func TestALibraryCountsTheCollectionsItLists(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, films.ID, "Alien", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	cards, _, err := s.Wall(ctx, films.ID, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+	cards, _, err := s.Wall(ctx, []uuid.UUID{films.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}

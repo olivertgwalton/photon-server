@@ -326,17 +326,8 @@ func forgetChoice(ctx context.Context, tx db, item uuid.UUID, kind domain.Artwor
 	return err
 }
 
-// Picture is where one picture is: a file under Root, or a provider's URL.
-type Picture struct {
-	Root string
-	Path string
-	URL  string
-	// Kept is a picture given to the server, as an avatar is, held in its picture cache.
-	Kept bool
-}
-
 // Picture answers where a picture is, or ErrNotFound.
-func (s *Store) Picture(ctx context.Context, id uuid.UUID) (Picture, error) {
+func (s *Store) Picture(ctx context.Context, id uuid.UUID) (domain.Picture, error) {
 	var source domain.FieldSource
 	var place, root string
 	err := s.pool.QueryRow(ctx, `
@@ -348,31 +339,31 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (Picture, error) {
 		var photoURL *string
 		err := s.pool.QueryRow(ctx, `SELECT photo_url FROM people WHERE photo_id = $1 LIMIT 1`, id).Scan(&photoURL)
 		if err == nil {
-			return Picture{URL: deref(photoURL)}, nil
+			return domain.Picture{URL: deref(photoURL)}, nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
-			return Picture{}, err
+			return domain.Picture{}, err
 		}
 		// Or a profile's avatar, kept by the server itself.
 		var kept bool
 		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM profiles WHERE avatar_id = $1)`, id).Scan(&kept); err != nil || kept {
-			return Picture{Kept: true}, err
+			return domain.Picture{Kept: true}, err
 		}
 		// Or a video's still.
 		var site, key string
 		err = s.pool.QueryRow(ctx, `SELECT site, key FROM remote_videos WHERE thumb_id = $1 LIMIT 1`, id).Scan(&site, &key)
 		if err != nil {
-			return Picture{}, found(err)
+			return domain.Picture{}, found(err)
 		}
-		return Picture{URL: videoStill(site, key)}, nil
+		return domain.Picture{URL: videoStill(site, key)}, nil
 	}
 	if err != nil {
-		return Picture{}, err
+		return domain.Picture{}, err
 	}
 	if source != domain.SourceFile {
-		return Picture{URL: place}, nil
+		return domain.Picture{URL: place}, nil
 	}
-	return Picture{Root: root, Path: place}, nil
+	return domain.Picture{Root: root, Path: place}, nil
 }
 
 // videoStill is where a video's site publishes a still of it, or "" for a site that publishes none

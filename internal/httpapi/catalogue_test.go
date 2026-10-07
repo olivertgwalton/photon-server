@@ -42,8 +42,8 @@ func (fakeCatalogue) SetLibraryOrder(_ context.Context, _ uuid.UUID, libs []uuid
 }
 
 // Wall answers one card titled after the page it was asked for, of 120 in all.
-func (fakeCatalogue) Wall(_ context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, int64, error) {
-	if lib != films {
+func (fakeCatalogue) Wall(_ context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error) {
+	if len(libs) != 1 || libs[0] != films {
 		return nil, 0, store.ErrNotFound
 	}
 	title := string(p.Sort) + " " + string(p.Order) + " " + strconv.Itoa(p.Offset) + "+" + strconv.Itoa(p.Limit)

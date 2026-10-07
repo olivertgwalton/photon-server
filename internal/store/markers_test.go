@@ -30,7 +30,7 @@ func TestATitleSaysWhereItsIntroAndCreditsAre(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 1})
+	cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
