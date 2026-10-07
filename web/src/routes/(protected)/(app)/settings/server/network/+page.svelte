@@ -41,6 +41,9 @@ function save(event: SubmitEvent) {
 				key: path("key"),
 				jellyfin,
 				jellyfin_port: Number(form.get("jellyfin_port")),
+				remote_max_bitrate_kbps: Math.round(
+					Number(form.get("remote_max_mbps")) * 1000,
+				),
 			},
 		}),
 		"Saved. Every server serves it now.",
@@ -140,6 +143,29 @@ function save(event: SubmitEvent) {
 				<Field.Error errors={[{ message: data.network.jellyfin_error }]} />
 			</Field.Field>
 		</Field.Group>
+	</Field.Set>
+	<Field.Set>
+		<Field.Legend>Remote streams</Field.Legend>
+		<Field.Description>
+			The most a stream to someone outside the server's own networks is sent at,
+			as Jellyfin's Internet streaming bitrate limit, so playing away from home
+			leaves the upload room. Above it, the video is encoded to fit; its picture
+			keeps the size the app asks for.
+		</Field.Description>
+		<Field.Field>
+			<Field.Label for="remote-max">Limit (Mbps)</Field.Label>
+			<Input
+				id="remote-max"
+				name="remote_max_mbps"
+				type="number"
+				min={0}
+				step={0.5}
+				required
+				value={data.network.remote_max_bitrate_kbps / 1000}
+				class="w-32 font-mono"
+			/>
+			<Field.Description>0 is no limit.</Field.Description>
+		</Field.Field>
 	</Field.Set>
 	<div><Button type="submit">Save</Button></div>
 </form>

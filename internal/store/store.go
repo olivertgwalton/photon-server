@@ -240,21 +240,23 @@ func (s *Store) SetMaintenance(ctx context.Context, m domain.Maintenance) error 
 	return err
 }
 
-// Network answers whether the server's port answers HTTPS, the certificate it serves, and whether
-// it answers Jellyfin's API, on which port.
+// Network answers whether the server's port answers HTTPS, the certificate it serves, whether it
+// answers Jellyfin's API, on which port, and its limit on a remote stream's bitrate.
 func (s *Store) Network(ctx context.Context) (domain.Network, error) {
 	var n domain.Network
 	var cert, key *string
-	err := s.pool.QueryRow(ctx, `SELECT secure_connections, tls_certificate, tls_key, jellyfin, jellyfin_port FROM server`).
-		Scan(&n.Secure, &cert, &key, &n.Jellyfin, &n.JellyfinPort)
+	err := s.pool.QueryRow(ctx, `
+		SELECT secure_connections, tls_certificate, tls_key, jellyfin, jellyfin_port, remote_max_bitrate_kbps FROM server`).
+		Scan(&n.Secure, &cert, &key, &n.Jellyfin, &n.JellyfinPort, &n.RemoteMaxBitrateKbps)
 	n.Certificate, n.Key = deref(cert), deref(key)
 	return n, err
 }
 
 func (s *Store) SetNetwork(ctx context.Context, n domain.Network) error {
 	_, err := s.pool.Exec(ctx, `
-		UPDATE server SET secure_connections = $1, tls_certificate = $2, tls_key = $3, jellyfin = $4, jellyfin_port = $5`,
-		n.Secure, optional(n.Certificate), optional(n.Key), n.Jellyfin, n.JellyfinPort)
+		UPDATE server SET secure_connections = $1, tls_certificate = $2, tls_key = $3, jellyfin = $4, jellyfin_port = $5,
+			remote_max_bitrate_kbps = $6`,
+		n.Secure, optional(n.Certificate), optional(n.Key), n.Jellyfin, n.JellyfinPort, n.RemoteMaxBitrateKbps)
 	return err
 }
 

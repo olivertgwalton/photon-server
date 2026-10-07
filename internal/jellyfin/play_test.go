@@ -98,7 +98,8 @@ func aFilm(t *testing.T) (*store.Store, domain.Profile, uuid.UUID, uuid.UUID) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	part := store.Part{RelPath: "Heat/Heat.mkv", Size: 10, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+	// Its size is an hour at 8 Mbps, as the scan read it; its bytes here are fewer.
+	part := store.Part{RelPath: "Heat/Heat.mkv", Size: 3_600_000_000, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
 		Duration: time.Hour, Container: "matroska,webm",
 		Streams: []domain.Stream{
 			{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Width: 1920, Height: 1080, Range: domain.RangeSDR},
@@ -141,7 +142,8 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	plays := newFakePlaybacks()
 	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
-		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st,
+		Network: st,
+		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st,
 	})
 	const infuse = `MediaBrowser Client="Infuse-Direct", Device="Apple TV", DeviceId="E0BE", Version="8.5.6", Token="pst_ada"`
 	call := func(method, target, body string, want int) []byte {
@@ -292,7 +294,8 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	st, ada, heat, copyID := aFilm(t)
 	plays, remuxes := newFakePlaybacks(), newFakeRemuxes()
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
-		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st,
+		Network: st,
+		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st,
 		HLS: remuxes, Remuxing: remuxes, Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
 	})
 	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
@@ -353,12 +356,58 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	}
 }
 
+// An app outside the server's networks is kept within the server's limit on a remote stream, the
+// video encoded to fit it; on them, it is copied.
+func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
+	st, ada, heat, _ := aFilm(t)
+	n, err := st.Network(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	n.RemoteMaxBitrateKbps = 2000
+	if err := st.SetNetwork(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	remuxes := newFakeRemuxes()
+	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+		Network: st,
+		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st,
+		HLS: remuxes, Remuxing: remuxes, Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
+	})
+	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
+	for _, tc := range []struct {
+		from    string
+		encoded bool
+	}{{"192.168.1.20:5000", false}, {"203.0.113.9:5000", true}} {
+		r := httptest.NewRequest(http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", strings.NewReader(`{"MaxStreamingBitrate":120000000,"DeviceProfile":`+swiftfin+`}`))
+		r.Header.Set("Authorization", swiftfinHeader)
+		r.RemoteAddr = tc.from
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, r)
+		var info struct {
+			MediaSources  []map[string]any
+			PlaySessionID string `json:"PlaySessionId"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
+			t.Fatalf("%d %s", w.Code, w.Body)
+		}
+		transcoding, _ := info.MediaSources[0]["TranscodingUrl"].(string)
+		api.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, transcoding, nil))
+		session, _ := uuid.Parse(info.PlaySessionID)
+		e := remuxes.opened[session].Encode
+		if tc.encoded != (e != nil) || e != nil && e.BitrateKbps > 2000 {
+			t.Errorf("from %s: encode %+v, want encoded %t within 2000 kbps", tc.from, e, tc.encoded)
+		}
+	}
+}
+
 // Infuse takes HLS only in MPEG-TS, as its profile says, and is given it.
 func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
 	remuxes := newFakeRemuxes()
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
-		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st,
+		Network: st,
+		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st,
 		HLS: remuxes, Remuxing: remuxes, Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
 	})
 	const infuse = `MediaBrowser Client="Infuse-Direct", Device="Apple TV", DeviceId="E0BE", Version="8.5.6", Token="pst_ada"`

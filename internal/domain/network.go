@@ -31,14 +31,16 @@ func JellyfinModes() []JellyfinMode {
 }
 
 // Network is how the server is reached, as Plex's Network settings: whether over HTTPS, and the
-// certificate it serves, a PEM chain and its key at paths each node reads; and whether Jellyfin's
-// apps reach it too, and on which port.
+// certificate it serves, a PEM chain and its key at paths each node reads; whether Jellyfin's apps
+// reach it too, and on which port; and the most a stream to a client outside the server's own
+// networks is sent at, 0 for no limit.
 type Network struct {
-	Secure       SecureConnections
-	Certificate  string
-	Key          string
-	Jellyfin     JellyfinMode
-	JellyfinPort int
+	Secure               SecureConnections
+	Certificate          string
+	Key                  string
+	Jellyfin             JellyfinMode
+	JellyfinPort         int
+	RemoteMaxBitrateKbps int
 }
 
 var ErrNoCertificate = errors.New("secure connections need a certificate and its key")

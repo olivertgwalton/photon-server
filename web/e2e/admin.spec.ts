@@ -405,6 +405,21 @@ test("Jellyfin's apps are let in on a port of their own", async ({ page }) => {
 	await expectAccessible(page);
 });
 
+test("remote streams are kept within a limit, in Mbps", async ({ page }) => {
+	await logIn(page, "/settings/server/network");
+	await page.getByLabel("Limit (Mbps)").fill("8");
+	const saved = page.waitForRequest(
+		(r) => r.method() === "PUT" && r.url().endsWith("/api/v1/admin/network"),
+	);
+	await page.getByRole("button", { name: "Save" }).click();
+	expect((await saved).postDataJSON().remote_max_bitrate_kbps).toBe(8000);
+	await expect(page.getByText(/^Saved/)).toBeVisible();
+
+	await page.reload();
+	await expect(page.getByLabel("Limit (Mbps)")).toHaveValue("8");
+	await expectAccessible(page);
+});
+
 test("a collection made here is filled from its library", async ({ page }) => {
 	await logIn(page, "/settings/server/collections");
 	await expect(page.getByText("Made here", { exact: true })).toBeVisible();

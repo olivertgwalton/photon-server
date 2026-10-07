@@ -52,6 +52,8 @@ type Services struct {
 	// Encoding is what video is made with for an app: HEVC where it plays it, and styled
 	// subtitles drawn in.
 	Encoding playback.Encoding
+	// Network is how the server is reached, of which its limit on a remote stream's bitrate.
+	Network settings
 }
 
 type API struct {
