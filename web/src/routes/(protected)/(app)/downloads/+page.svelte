@@ -43,7 +43,13 @@ $effect(() => {
 	{#if data.downloads.length}
 		<ul class="divide-line divide-y">
 			{#each data.downloads as d (d.id)}
-				{@const name = d.name ?? "A title no longer here"}
+				<!-- A copy in several files is downloaded a file at a time: each says which. -->
+				{@const name = [
+					d.name ?? "A title no longer here",
+					d.parts > 1 && `part ${d.part_index + 1} of ${d.parts}`,
+				]
+					.filter(Boolean)
+					.join(", ")}
 				<li class="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
 					<div class="grid min-w-0 flex-1 gap-1">
 						{#if d.name}

@@ -1,13 +1,17 @@
 <script lang="ts">
 import { change } from "#lib/actions.svelte.js";
 import { client } from "#lib/api/client.js";
+import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
+import { runtime } from "#lib/format.js";
 
 // Asks the server for a copy to keep, as Plex's Download asks: the file as it
 // is, or converted down to a size for a phone or a slow connection. A copy
-// already within the choice comes back as itself.
+// already within the choice comes back as itself. A copy in several files is
+// kept a file at a time, all of them unless one is chosen: Plex's Save File and
+// Jellyfin's Download give its first file alone.
 let {
 	open = $bindable(false),
 	id,
@@ -25,18 +29,61 @@ const qualities = [
 ];
 let chosen = $state(0);
 
+// The copy asked for, or the one the server plays when none is: the first on
+// disk, as a title's page lists them.
+let copy = $state<components["schemas"]["VersionPage"]>();
+// Which of its files: "all", or one's id.
+let file = $state("all");
+
+$effect(() => {
+	if (!open) return;
+	file = "all";
+	client()
+		.GET("/api/v1/titles/{id}", { params: { path: { id } } })
+		.then(({ data }) => {
+			const versions = data?.versions ?? [];
+			copy =
+				versions.find((v) => v.id === version) ??
+				versions.find((v) => !v.missing_since);
+		});
+});
+
+const files = $derived(copy?.files ?? []);
+const fileChoices = $derived([
+	{ id: "all", label: `All ${files.length} files` },
+	...files.map((f) => ({
+		id: f.id,
+		label: `Part ${f.index + 1} · ${runtime(f.duration_ms)}`,
+	})),
+]);
+
 async function request(event: SubmitEvent) {
 	event.preventDefault();
 	const { kbps, width } = qualities[chosen];
-	const asked = client().POST("/api/v1/downloads", {
-		body: {
-			title_id: id,
-			version_id: version,
-			max_bitrate_kbps: kbps,
-			max_width: width,
-		},
-	});
-	if (await change(asked, "Download requested. It's in Downloads.")) {
+	const parts =
+		files.length > 1
+			? files.filter((f) => file === "all" || f.id === file)
+			: [undefined];
+	const asked = await Promise.all(
+		parts.map((part) =>
+			client().POST("/api/v1/downloads", {
+				body: {
+					title_id: id,
+					version_id: copy?.id ?? version,
+					part_id: part?.id,
+					max_bitrate_kbps: kbps,
+					max_width: width,
+				},
+			}),
+		),
+	);
+	const said =
+		parts.length > 1
+			? `${parts.length} downloads requested, one a file. They're in Downloads.`
+			: "Download requested. It's in Downloads.";
+	if (
+		await change(Promise.resolve(asked.find((a) => a.error) ?? asked[0]), said)
+	) {
 		open = false;
 	}
 }
@@ -48,7 +95,28 @@ async function request(event: SubmitEvent) {
 			<Dialog.Title>Download</Dialog.Title>
 			<Dialog.Description>{title}</Dialog.Description>
 		</Dialog.Header>
-		<form onsubmit={request}>
+		<form onsubmit={request} class="grid gap-4">
+			{#if files.length > 1}
+				<Field.Set>
+					<Field.Legend>Files</Field.Legend>
+					<div class="grid gap-1">
+						{#each fileChoices as option (option.id)}
+							<label
+								class="hover:bg-accent has-checked:bg-accent flex items-center gap-3 rounded-md px-3 py-2"
+							>
+								<input
+									type="radio"
+									name="file"
+									value={option.id}
+									bind:group={file}
+									class="accent-ink"
+								>
+								<span class="text-ink font-semibold">{option.label}</span>
+							</label>
+						{/each}
+					</div>
+				</Field.Set>
+			{/if}
 			<Field.Set>
 				<Field.Legend>Quality</Field.Legend>
 				<div class="grid gap-1">
@@ -69,7 +137,7 @@ async function request(event: SubmitEvent) {
 					{/each}
 				</div>
 			</Field.Set>
-			<Dialog.Footer class="mt-4">
+			<Dialog.Footer>
 				<Button type="submit">Download</Button>
 			</Dialog.Footer>
 		</form>

@@ -16,9 +16,12 @@ import (
 type Download struct {
 	ID uuid.UUID
 	// Device is the session of the device that asked for it.
-	Device     uuid.UUID
-	Item       uuid.UUID
-	Part       uuid.UUID
+	Device uuid.UUID
+	Item   uuid.UUID
+	Part   uuid.UUID
+	// PartIndex is which of its copy's Parts files it is, for a copy in several.
+	PartIndex  int
+	Parts      int
 	Quality    *domain.Quality
 	Conversion uuid.UUID
 	State      domain.DownloadState
@@ -75,6 +78,8 @@ type downloadRow struct {
 	SessionID      uuid.UUID
 	ItemID         uuid.UUID
 	PartID         uuid.UUID
+	PartIndex      int16
+	Parts          int
 	CreatedAt      time.Time
 	ConversionID   *uuid.UUID
 	MaxBitrateKbps int
@@ -91,7 +96,8 @@ type downloadRow struct {
 // the one with an id where id is.
 func (s *Store) downloads(ctx context.Context, profile uuid.UUID, device, id *uuid.UUID) ([]Download, error) {
 	sql := `
-		SELECT d.id, d.session_id, d.item_id, d.part_id, d.created_at, d.conversion_id,
+		SELECT d.id, d.session_id, d.item_id, d.part_id, p.idx AS part_index,
+			(SELECT count(*) FROM parts q WHERE q.version_id = p.version_id) AS parts, d.created_at, d.conversion_id,
 			coalesce(c.max_bitrate_kbps, 0) AS max_bitrate_kbps, coalesce(c.max_width, 0) AS max_width,
 			coalesce(c.video_codec, '') AS video_codec, coalesce(c.video_range, '') AS video_range,
 			coalesce(c.state, 'ready') AS state, coalesce(c.progress, 1) AS progress,
@@ -111,7 +117,7 @@ func (s *Store) downloads(ctx context.Context, profile uuid.UUID, device, id *uu
 	out := make([]Download, len(rows))
 	for n, r := range rows {
 		out[n] = Download{
-			ID: r.ID, Device: r.SessionID, Item: r.ItemID, Part: r.PartID, State: r.State,
+			ID: r.ID, Device: r.SessionID, Item: r.ItemID, Part: r.PartID, PartIndex: int(r.PartIndex), Parts: r.Parts, State: r.State,
 			Progress: r.Progress, SizeBytes: r.SizeBytes, Error: r.Error, Created: r.CreatedAt,
 		}
 		if r.ConversionID != nil {

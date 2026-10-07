@@ -192,7 +192,8 @@ test("a film's page plays the copy and tracks chosen", async ({ page }) => {
 	await page.getByRole("menuitem", { name: "Download…" }).click();
 	await page.getByRole("radio", { name: /720p/ }).check();
 	await page.getByRole("button", { name: "Download", exact: true }).click();
-	await expect(page.getByText(/Download requested/)).toBeVisible();
+	// The 1080p copy is in two files: each is a download of its own.
+	await expect(page.getByText(/2 downloads requested/)).toBeVisible();
 
 	const extras = page.getByRole("region", { name: "Extras" });
 	await expect(extras.getByRole("link", { name: /Trailer/ })).toHaveAttribute(
@@ -375,7 +376,40 @@ test("favourites, history and downloads list the reader's own", async ({
 	await expect(page.getByText(/stopped at 10:00/)).toBeVisible();
 	await expectAccessible(page);
 	await page.goto("/downloads");
-	await expect(page.getByRole("link", { name: /Save/ })).toBeVisible();
+	await expect(
+		page.getByRole("link", { name: "Save Quiet Hours, part 2 of 2" }).first(),
+	).toBeVisible();
+	await expectAccessible(page);
+});
+
+test("a copy in two files is downloaded a file at a time", async ({ page }) => {
+	const asked: (string | undefined)[] = [];
+	page.on("request", (r) => {
+		if (r.method() === "POST" && r.url().endsWith("/api/v1/downloads")) {
+			asked.push(r.postDataJSON().part_id);
+		}
+	});
+	await logIn(page, "/titles/t-film");
+	await page.getByLabel("Version").click();
+	await page.getByRole("option", { name: /1080p/ }).click();
+	await page.getByRole("button", { name: "More", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Download…" }).click();
+	const dialog = page.getByRole("dialog", { name: "Download" });
+	await expect(
+		dialog.getByRole("radio", { name: "All 2 files" }),
+	).toBeChecked();
+	await dialog.getByRole("button", { name: "Download", exact: true }).click();
+	await expect(
+		page.getByText("2 downloads requested, one a file."),
+	).toBeVisible();
+	expect(asked.toSorted()).toEqual(["p-hd", "p-hd2"]);
+
+	await page.getByRole("button", { name: "More", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Download…" }).click();
+	await dialog.getByRole("radio", { name: /Part 2/ }).check();
+	await dialog.getByRole("button", { name: "Download", exact: true }).click();
+	await expect(page.getByText("Download requested.")).toBeVisible();
+	expect(asked.at(-1)).toBe("p-hd2");
 	await expectAccessible(page);
 });
 
