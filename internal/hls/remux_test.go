@@ -292,6 +292,7 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 			[]string{"-vf scale=1280:720,format=yuv420p,setpts=PTS+2700.000000/TB,subtitles=f=/hls/p/styled.ass:charenc=CP1251,setpts=PTS-2700.000000/TB"},
 		},
 		{"audio asked for is copied", domain.VideoPlan{Stream: 0, Codec: "h264"}, &domain.AudioPlan{Stream: 2}, nil, []string{"-map 0:0 -c:v copy -map 0:2 -c:a copy"}},
+		{"chapters are no track of their own, which Safari refuses", domain.VideoPlan{Codec: "h264"}, nil, nil, []string{"-map_chapters -1"}},
 		{
 			"audio encoded",
 			domain.VideoPlan{Codec: "h264"},
