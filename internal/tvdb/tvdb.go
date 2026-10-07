@@ -272,9 +272,9 @@ func (c *Client) Details(ctx context.Context, loc domain.Locale, id int) (domain
 		IDs:     map[domain.Provider]string{domain.ProviderTVDB: strconv.Itoa(id)},
 		Artwork: artworks(d.Artworks, loc),
 		Credits: credits(d.Characters),
+		// A show's own name is in its original language.
+		OriginalTitle: d.Name,
 	}
-	// A show's own name is in its original language.
-	m.OriginalTitle = d.Name
 	for _, t := range d.Translations.Names {
 		if t.Language == lang && !t.IsAlias {
 			m.Title = cmp.Or(m.Title, t.Name)
