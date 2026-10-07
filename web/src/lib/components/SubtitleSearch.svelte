@@ -6,7 +6,7 @@ import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Select from "#lib/components/ui/select/index.js";
-import { language } from "#lib/player/words.js";
+import { language, subtitleLanguages } from "#lib/player/words.js";
 
 type Found = components["schemas"]["FoundSubtitles"];
 
@@ -14,35 +14,6 @@ type Found = components["schemas"]["FoundSubtitles"];
 // in a language, and keeps the one chosen beside its copy for everyone, as
 // Plex's and Jellyfin's subtitle search do. One made for the very file, found
 // by its hash, is starred and comes first.
-const common = [
-	"en",
-	"es",
-	"fr",
-	"de",
-	"it",
-	"pt",
-	"pt-BR",
-	"nl",
-	"sv",
-	"da",
-	"no",
-	"fi",
-	"pl",
-	"cs",
-	"hu",
-	"ro",
-	"el",
-	"tr",
-	"ru",
-	"uk",
-	"ar",
-	"he",
-	"hi",
-	"ja",
-	"ko",
-	"zh-CN",
-	"zh-TW",
-];
 
 let lang = $state("");
 let found = $state<Found>();
@@ -50,7 +21,7 @@ let problem = $state("");
 let searching = $state(false);
 
 const languages = $derived(
-	[...new Set([lang, ...common])]
+	[...new Set([lang, ...subtitleLanguages])]
 		.filter(Boolean)
 		.map((tag) => ({ value: tag, label: language(tag) }))
 		.sort((a, b) => a.label.localeCompare(b.label)),

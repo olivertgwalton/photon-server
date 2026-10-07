@@ -28,10 +28,12 @@ const (
 	TaskRefreshCollections TaskKey = "refresh_collections"
 	// TaskSyncLists reads every list collection's list again, as Kometa's daily run.
 	TaskSyncLists TaskKey = "sync_lists"
+	// TaskFetchSubtitles fetches the subtitles copies lack in the languages their libraries name.
+	TaskFetchSubtitles TaskKey = "fetch_subtitles"
 )
 
 func TaskKeys() []TaskKey {
-	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists}
+	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists, TaskFetchSubtitles}
 }
 
 // Jobs are the kinds of job the task queues: the work it starts that outlasts its run, and that
@@ -46,7 +48,7 @@ func (k TaskKey) Jobs() []JobKind {
 		return []JobKind{JobMarkers}
 	case TaskBackfillPreviews:
 		return []JobKind{JobPreviews}
-	case TaskSweepJobs, TaskBackupDatabase, TaskSweepArtwork, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists:
+	case TaskSweepJobs, TaskBackupDatabase, TaskSweepArtwork, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists, TaskFetchSubtitles:
 	}
 	return nil
 }

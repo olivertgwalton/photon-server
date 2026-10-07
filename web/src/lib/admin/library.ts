@@ -92,6 +92,10 @@ export function libraryChange(
 			form.get("collection_mode"),
 		) as Schemas["CollectionMode"],
 		refresh_days: Number(form.get("refresh_days")),
+		subtitle_languages: form.getAll("subtitle_languages").map(String),
+		subtitle_match: String(
+			form.get("subtitle_match"),
+		) as Schemas["SubtitleMatch"],
 	};
 	const sources: Schemas["KindSourcesChange"][] = [];
 	for (const has of current.sources) {

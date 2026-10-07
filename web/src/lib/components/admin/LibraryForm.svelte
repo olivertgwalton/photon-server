@@ -7,6 +7,7 @@ import {
 	serverLocale,
 } from "#lib/admin/library.js";
 import { extraKinds } from "#lib/admin/words.js";
+import { language, subtitleLanguages } from "#lib/player/words.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
@@ -68,6 +69,7 @@ const defaults = {
 	artwork_language: "localized",
 	title_language: "localized",
 	collection_mode: "grouped",
+	subtitle_match: "release",
 } as const;
 
 // A new library's kind changes the sources offered; a library's own is fixed.
@@ -91,6 +93,14 @@ const chosen = (item: Schemas["ItemKind"]) =>
 	library?.sources.find((s) => s.kind === item) ?? defaultSources(item);
 
 const extras = $derived(library?.remote_extras ?? defaults.remote_extras);
+
+// The languages offered: the common ones, and any the library already has.
+const fetching = $derived(library?.subtitle_languages ?? []);
+const offeredLanguages = $derived(
+	[...new Set([...subtitleLanguages, ...fetching])]
+		.map((tag) => ({ tag, name: language(tag) }))
+		.sort((a, b) => a.name.localeCompare(b.name)),
+);
 
 const refreshing = [
 	{ value: "0", label: "Never" },
@@ -183,6 +193,43 @@ const refreshOptions = $derived(
 				</div>
 			{/each}
 		</div>
+	</Field.Set>
+
+	<Field.Set>
+		<Field.Legend>Subtitles to download</Field.Legend>
+		<Field.Description>
+			Copies with no subtitle in a language ticked have one fetched from the
+			subtitle providers when they are added, and daily after.
+		</Field.Description>
+		<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+			{#each offeredLanguages as { tag, name } (tag)}
+				<div class="flex items-center gap-2">
+					<Checkbox
+						id="subtitle-{tag}"
+						name="subtitle_languages"
+						value={tag}
+						checked={fetching.includes(tag)}
+					/>
+					<Label for="subtitle-{tag}">{name}</Label>
+				</div>
+			{/each}
+		</div>
+		<Field.Field>
+			<Field.Label for="library-subtitle-match">Download</Field.Label>
+			<Choice
+				id="library-subtitle-match"
+				name="subtitle_match"
+				value={library?.subtitle_match ?? defaults.subtitle_match}
+				options={[
+					{ value: "release", label: "Only those made for the file" },
+					{ value: "any", label: "The best found" },
+				]}
+			/>
+			<Field.Description>
+				One made for another release of the title may be out of time with this
+				one.
+			</Field.Description>
+		</Field.Field>
 	</Field.Set>
 
 	<div class="grid gap-4 sm:grid-cols-2">

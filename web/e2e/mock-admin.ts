@@ -105,6 +105,8 @@ const films: Schemas["AdminLibrary"] = {
 	artwork_language: "localized",
 	title_language: "localized",
 	collection_mode: "grouped",
+	subtitle_languages: ["fr"],
+	subtitle_match: "release",
 };
 
 const providers: Schemas["MetadataProvider"][] = [

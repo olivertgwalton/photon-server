@@ -15,8 +15,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
-// heat is a store with a films library holding Heat, one file of 128 KiB: the store, and its id.
-func heat(t *testing.T) (*store.Store, uuid.UUID) {
+// heat is a store with a films library holding Heat, one file of 128 KiB: the store, the
+// library, and Heat's id.
+func heat(t *testing.T) (*store.Store, domain.Library, uuid.UUID) {
 	t.Helper()
 	url, log := storetest.FreshDatabase(t), slog.New(slog.DiscardHandler)
 	if err := store.Migrate(t.Context(), url, log); err != nil {
@@ -48,11 +49,11 @@ func heat(t *testing.T) (*store.Store, uuid.UUID) {
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
-	return st, cards[0].ID
+	return st, lib, cards[0].ID
 }
 
 func TestANodeServesAFetchedSubtitleFromItsCache(t *testing.T) {
-	st, item := heat(t)
+	st, _, item := heat(t)
 	ctx := t.Context()
 	c, err := st.Playable(ctx, uuid.UUID{}, item, uuid.UUID{})
 	if err != nil {

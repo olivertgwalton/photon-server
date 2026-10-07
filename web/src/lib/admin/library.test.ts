@@ -34,6 +34,8 @@ const tv: Schemas["AdminLibrary"] = {
 	artwork_language: "localized",
 	title_language: "localized",
 	collection_mode: "grouped",
+	subtitle_languages: [],
+	subtitle_match: "release",
 };
 
 const fields: [string, string][] = [
@@ -51,6 +53,9 @@ const fields: [string, string][] = [
 	["artwork_language", "any"],
 	["title_language", "original"],
 	["collection_mode", "shown"],
+	["subtitle_languages", "fr"],
+	["subtitle_languages", "pt-BR"],
+	["subtitle_match", "any"],
 	["remote_extras", "featurette"],
 	["remote_extras", "trailer"],
 ];
@@ -85,6 +90,8 @@ test("a kind's sources are sent only where what they ask changed", () => {
 		artwork_language: "any",
 		title_language: "original",
 		collection_mode: "shown",
+		subtitle_languages: ["fr", "pt-BR"],
+		subtitle_match: "any",
 	});
 
 	const changed = libraryChange(
