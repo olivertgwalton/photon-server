@@ -126,3 +126,18 @@ export async function shareTitle(id: string, title: string) {
 	}
 	Object.assign(sharing, { open: true, url, title });
 }
+
+export type VersionUse = "play" | "download";
+
+// The one choice of version, drawn by the shell and opened from any title's
+// menu, as Plex's Play Version and Save File ask which copy.
+export const versions = $state({
+	open: false,
+	id: "",
+	title: "",
+	use: "play" as VersionUse,
+});
+
+export function chooseVersion(id: string, title: string, use: VersionUse) {
+	Object.assign(versions, { open: true, id, title, use });
+}

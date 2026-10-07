@@ -64,6 +64,7 @@ const films: Schemas["Card"][] = [
 	base("t-film", "movie", "Quiet Hours", {
 		year: 2018,
 		duration_ms: 6_720_000,
+		version_count: 2,
 		poster: art,
 		backdrop: art,
 		blurhashes: { [art]: "LEHV6nWB2yk8pyo0adR*.7kCMdnj" },

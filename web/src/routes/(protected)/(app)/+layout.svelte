@@ -5,6 +5,7 @@ import ActivityMenu from "#lib/components/ActivityMenu.svelte";
 import AppSidebar from "#lib/components/AppSidebar.svelte";
 import PlaylistPicker from "#lib/components/PlaylistPicker.svelte";
 import ShareDialog from "#lib/components/ShareDialog.svelte";
+import VersionPicker from "#lib/components/VersionPicker.svelte";
 import TitleEditor from "#lib/components/admin/TitleEditor.svelte";
 import ProfileMenu from "#lib/components/ProfileMenu.svelte";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
@@ -109,6 +110,7 @@ onMount(() => {
 
 <PlaylistPicker />
 <ShareDialog />
+<VersionPicker />
 {#if data.me.role === "admin"}
 	<TitleEditor />
 {/if}

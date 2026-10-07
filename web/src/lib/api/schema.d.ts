@@ -4776,6 +4776,7 @@ export interface components {
             /** Format: uuid */
             thumb?: string;
             title: string;
+            version_count?: number;
             year?: number;
         };
         CardList: {
@@ -4867,6 +4868,7 @@ export interface components {
             /** Format: uuid */
             thumb?: string;
             title: string;
+            version_count?: number;
             year?: number;
         };
         /** @enum {string} */
@@ -5013,6 +5015,7 @@ export interface components {
             /** Format: uuid */
             thumb?: string;
             title: string;
+            version_count?: number;
             year?: number;
         };
         EntryPage: {

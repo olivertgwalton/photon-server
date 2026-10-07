@@ -2,7 +2,9 @@
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 import BookmarkXIcon from "@lucide/svelte/icons/bookmark-x";
 import CheckIcon from "@lucide/svelte/icons/check";
+import DownloadIcon from "@lucide/svelte/icons/download";
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
+import LayersIcon from "@lucide/svelte/icons/layers";
 import EyeOffIcon from "@lucide/svelte/icons/eye-off";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import HeartOffIcon from "@lucide/svelte/icons/heart-off";
@@ -20,6 +22,7 @@ import UndoIcon from "@lucide/svelte/icons/undo-2";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 import {
+	chooseVersion,
 	editTitle,
 	forgetProgress,
 	pickPlaylist,
@@ -41,7 +44,10 @@ let {
 	card,
 	class: className,
 }: {
-	card: Pick<Card, "id" | "kind" | "title" | "state" | "show" | "season">;
+	card: Pick<
+		Card,
+		"id" | "kind" | "title" | "state" | "show" | "season" | "version_count"
+	>;
 	class?: string;
 } = $props();
 
@@ -84,6 +90,11 @@ const name = $derived(
 				<RotateCcwIcon />Play from the beginning
 			</DropdownMenu.Item>
 		{/if}
+		{#if playable && (card.version_count ?? 0) > 1}
+			<DropdownMenu.Item onSelect={() => chooseVersion(card.id, name, "play")}>
+				<LayersIcon />Play version…
+			</DropdownMenu.Item>
+		{/if}
 		{#if card.kind !== "collection"}
 			<DropdownMenu.Item onSelect={() => setWatched(card.id, !watched)}>
 				{#if watched}
@@ -112,6 +123,13 @@ const name = $derived(
 		{#if card.kind !== "extra"}
 			<DropdownMenu.Item onSelect={() => pickPlaylist([card.id], name)}>
 				<ListPlusIcon />Add to playlist…
+			</DropdownMenu.Item>
+		{/if}
+		{#if playable && card.version_count}
+			<DropdownMenu.Item
+				onSelect={() => chooseVersion(card.id, name, "download")}
+			>
+				<DownloadIcon />Download…
 			</DropdownMenu.Item>
 		{/if}
 		<DropdownMenu.Item onSelect={() => shareTitle(card.id, name)}>
