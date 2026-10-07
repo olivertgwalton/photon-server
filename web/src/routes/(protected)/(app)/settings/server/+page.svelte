@@ -119,52 +119,72 @@ const attention = $derived(
 	</section>
 {/if}
 
-<section aria-labelledby="playing" class="grid gap-4">
-	<div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-		<h2 id="playing" class="heading">Now playing</h2>
-		<div class="flex min-w-56 items-center gap-3 text-sm">
-			<span class="text-ink-2 whitespace-nowrap">
-				{transcodes.active}
-				{transcodes.limit ? `of ${transcodes.limit}` : ""}
-				transcoding
-				{#if transcodes.conversions}
-					· {transcodes.conversions} for downloads
-				{/if}
-			</span>
-			{#if transcodes.limit}
-				<Progress
-					value={transcodes.active}
-					max={transcodes.limit}
-					aria-label="Transcode slots in use"
-					class="w-24"
-				/>
+<!-- Activity is a column of its own beside the rest: two cards side by side
+	leave a hole under whichever is shorter. -->
+<div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
+	<div class="grid min-w-0 gap-6">
+		<section aria-labelledby="playing" class="grid gap-4">
+			<div
+				class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2"
+			>
+				<h2 id="playing" class="heading">Now playing</h2>
+				<div class="flex min-w-56 items-center gap-3 text-sm">
+					<span class="text-ink-2 whitespace-nowrap">
+						{transcodes.active}
+						{transcodes.limit ? `of ${transcodes.limit}` : ""}
+						transcoding
+						{#if transcodes.conversions}
+							· {transcodes.conversions} for downloads
+						{/if}
+					</span>
+					{#if transcodes.limit}
+						<Progress
+							value={transcodes.active}
+							max={transcodes.limit}
+							aria-label="Transcode slots in use"
+							class="w-24"
+						/>
+					{/if}
+				</div>
+			</div>
+			{#if playbacks.length}
+				<div class="grid gap-4 sm:grid-cols-2">
+					{#each playbacks as playback (playback.id)}
+						<NowPlayingCard
+							{playback}
+							now={clock.now}
+							nodes={data.server.nodes.length}
+						/>
+					{/each}
+				</div>
+			{:else}
+				<p class="text-ink-3 text-sm">Nobody is watching anything.</p>
 			{/if}
-		</div>
-	</div>
-	{#if playbacks.length}
-		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-			{#each playbacks as playback (playback.id)}
-				<NowPlayingCard
-					{playback}
-					now={clock.now}
-					nodes={data.server.nodes.length}
-				/>
-			{/each}
-		</div>
-	{:else}
-		<p class="text-ink-3 text-sm">Nobody is watching anything.</p>
-	{/if}
-</section>
+		</section>
 
-<div class="grid items-start gap-6 lg:grid-cols-2">
-	<Card.Root>
-		<Card.Header>
-			<Card.Title><h2 class="heading">Running</h2></Card.Title>
-		</Card.Header>
-		<Card.Content class="grid gap-4">
-			<RunningNow live={live.state} {libraries} />
-		</Card.Content>
-	</Card.Root>
+		<Card.Root>
+			<Card.Header>
+				<Card.Title><h2 class="heading">Running</h2></Card.Title>
+			</Card.Header>
+			<Card.Content class="grid gap-4">
+				<RunningNow live={live.state} {libraries} />
+			</Card.Content>
+		</Card.Root>
+
+		<Card.Root>
+			<Card.Header>
+				<Card.Title><h2 class="heading">Server</h2></Card.Title>
+				<Card.Description>
+					Set by the server's environment; see the README to change it. The
+					<a href="/api/v1/openapi.json" class="underline">API</a>
+					is described in full.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content>
+				<ServerInfo server={data.server} now={clock.now} />
+			</Card.Content>
+		</Card.Root>
+	</div>
 
 	<Card.Root>
 		<Card.Header>
@@ -180,17 +200,3 @@ const attention = $derived(
 		</Card.Content>
 	</Card.Root>
 </div>
-
-<Card.Root>
-	<Card.Header>
-		<Card.Title><h2 class="heading">Server</h2></Card.Title>
-		<Card.Description>
-			Set by the server's environment; see the README to change it. The
-			<a href="/api/v1/openapi.json" class="underline">API</a>
-			is described in full.
-		</Card.Description>
-	</Card.Header>
-	<Card.Content>
-		<ServerInfo server={data.server} now={clock.now} />
-	</Card.Content>
-</Card.Root>
