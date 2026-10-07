@@ -194,6 +194,37 @@ describe("the admin event stream", () => {
 			{ kind: "identify", left: 2, done: 0 },
 		]);
 	});
+
+	test("forgets a kind's running jobs once its backlog is stopped", () => {
+		const job = (id: number, kind: string) => ({
+			id,
+			kind,
+			subject: `s-${id}`,
+			attempt: 1,
+		});
+		const stopped = after(
+			[
+				"snapshot",
+				{
+					tasks: [],
+					jobs: [job(1, "previews"), job(2, "identify")],
+					backlogs: [{ kind: "previews", left: 1_478, done: 2 }],
+					scans: [],
+					playbacks: [],
+				},
+			],
+			[
+				"jobs.progress",
+				{
+					kind: "jobs.progress",
+					at,
+					details: { job_kind: "previews", left: 0, done: 0 },
+				},
+			],
+		);
+		expect(stopped.backlogs).toEqual([]);
+		expect(stopped.jobs.map((j) => j.kind)).toEqual(["identify"]);
+	});
 });
 
 describe("a playing title's position", () => {
