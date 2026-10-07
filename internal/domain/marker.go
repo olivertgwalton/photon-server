@@ -29,10 +29,12 @@ const (
 	// the frame, where a fingerprint only finds it to a fraction of a second either side.
 	MarkerByChapter     MarkerSource = "chapter"
 	MarkerByFingerprint MarkerSource = "fingerprint"
+	// MarkerByBlackFrames is a film's credits found where its picture goes dark and stays so.
+	MarkerByBlackFrames MarkerSource = "blackframes"
 )
 
 func MarkerSources() []MarkerSource {
-	return []MarkerSource{MarkerByUser, MarkerByChapter, MarkerByFingerprint}
+	return []MarkerSource{MarkerByUser, MarkerByChapter, MarkerByFingerprint, MarkerByBlackFrames}
 }
 
 // Marker is a stretch of one part, in milliseconds from the part's start.

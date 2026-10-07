@@ -50,17 +50,18 @@ func (s *Store) AnalyseTitle(ctx context.Context, id uuid.UUID) error {
 
 // SaveProbe replaces what a part's file was read to hold, and its copy's facts with it, then asks
 // again for what is made from its streams, as its library makes them: its keyframes, its previews
-// and, for an episode, its season's markers. An admin asked, so none waits for the window.
+// and its markers, an episode's with its season's. An admin asked, so none waits for the window.
 func (s *Store) SaveProbe(ctx context.Context, part uuid.UUID, f domain.Facts) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var version, lib uuid.UUID
 		var idx int16
 		var kind domain.ItemKind
+		var item uuid.UUID
 		var season *uuid.UUID
 		err := tx.QueryRow(ctx, `
-			SELECT p.version_id, v.library_id, p.idx, i.kind, i.parent_id
+			SELECT p.version_id, v.library_id, p.idx, i.kind, i.id, i.parent_id
 			FROM parts p JOIN versions v ON v.id = p.version_id JOIN items i ON i.id = v.item_id WHERE p.id = $1`,
-			part).Scan(&version, &lib, &idx, &kind, &season)
+			part).Scan(&version, &lib, &idx, &kind, &item, &season)
 		if err != nil {
 			return found(err)
 		}
@@ -114,12 +115,18 @@ func (s *Store) SaveProbe(ctx context.Context, part uuid.UUID, f domain.Facts) e
 		if err != nil {
 			return err
 		}
-		return queueAnalysis(ctx, tx, part, kind, season, video != nil, settings)
+		// An episode's markers are its season's, found together; a film's are its own.
+		markers := season
+		if kind == domain.ItemMovie {
+			markers = &item
+		}
+		return queueAnalysis(ctx, tx, part, kind, markers, video != nil, settings)
 	})
 }
 
-// queueAnalysis forgets what was made from a part's streams and asks for it again.
-func queueAnalysis(ctx context.Context, tx db, part uuid.UUID, kind domain.ItemKind, season *uuid.UUID, video bool, settings analysis) error {
+// queueAnalysis forgets what was made from a part's streams and asks for it again: of markers, those
+// of the title whose markers are found together, an episode's season or a film.
+func queueAnalysis(ctx context.Context, tx db, part uuid.UUID, kind domain.ItemKind, markers *uuid.UUID, video bool, settings analysis) error {
 	if video && settings.Keyframes != domain.KeyframesOff {
 		if _, err := tx.Exec(ctx, `DELETE FROM keyframes WHERE part_id = $1`, part); err != nil {
 			return err
@@ -136,11 +143,11 @@ func queueAnalysis(ctx context.Context, tx db, part uuid.UUID, kind domain.ItemK
 			return err
 		}
 	}
-	if kind == domain.ItemEpisode && season != nil && settings.Markers == domain.MarkersAll {
+	if (kind == domain.ItemEpisode || kind == domain.ItemMovie) && markers != nil && settings.Markers == domain.MarkersAll {
 		if _, err := tx.Exec(ctx, `UPDATE parts SET fingerprinted_at = NULL WHERE id = $1`, part); err != nil {
 			return err
 		}
-		return insertJob(ctx, tx, domain.JobMarkers, *season, 0, askedPriority, domain.JobDueNow)
+		return insertJob(ctx, tx, domain.JobMarkers, *markers, 0, askedPriority, domain.JobDueNow)
 	}
 	return nil
 }

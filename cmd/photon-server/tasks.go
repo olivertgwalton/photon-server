@@ -244,20 +244,24 @@ func backfillBlurhashes(ctx context.Context, st *store.Store, cache *artwork.Cac
 }
 
 // markersTask queues the comparison of every season with an episode whose sound has not been
-// compared: those from before the server could, and those whose comparison was cut short. It runs
-// as the maintenance window opens, window, and what it queues then is due in the window; what an
-// admin asks for is due now.
+// compared, where the server can compare sound, and the reading of every film's end not read:
+// those from before the server could, and those cut short. It runs as the maintenance window
+// opens, window, and what it queues then is due in the window; what an admin asks for is due now.
 func markersTask(st *store.Store, tools media.Tools, window task.Trigger, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:     domain.TaskDetectMarkers,
 		Trigger: window,
 		Run: func(ctx context.Context, start task.Start) error {
-			if !tools.Chromaprint {
-				return nil
+			films, err := st.QueueFilmMarkers(ctx, due(start))
+			if films > 0 {
+				logger.InfoContext(ctx, "films queued to have their credits found", slog.Int64("films", films))
 			}
-			n, err := st.QueueMarkers(ctx, due(start))
-			if n > 0 {
-				logger.InfoContext(ctx, "seasons queued to have their intros and credits found", slog.Int64("seasons", n))
+			if err != nil || !tools.Chromaprint {
+				return err
+			}
+			seasons, err := st.QueueSeasonMarkers(ctx, due(start))
+			if seasons > 0 {
+				logger.InfoContext(ctx, "seasons queued to have their intros and credits found", slog.Int64("seasons", seasons))
 			}
 			return err
 		},

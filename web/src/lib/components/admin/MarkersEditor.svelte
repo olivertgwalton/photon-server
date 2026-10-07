@@ -18,7 +18,7 @@ import Choice from "./Choice.svelte";
 type Schemas = components["schemas"];
 
 // Where a copy's intro, credits, recap and preview are, over what its
-// chapters or its sound say, and which of its parts have none of a kind.
+// chapters, sound or picture say, and which of its parts have none of a kind.
 // Saving with nothing listed gives the copy back to what was found.
 let { version }: { version: Schemas["VersionPage"] } = $props();
 
@@ -41,6 +41,7 @@ const sources = {
 	user: "set here",
 	chapter: "from a chapter",
 	fingerprint: "found by sound",
+	blackframes: "found by picture",
 };
 const kindOptions = Object.entries(markerKinds).map(([value, label]) => ({
 	value: value as Schemas["MarkerKind"],
@@ -145,8 +146,8 @@ const parts = $derived(Array.from({ length: version.parts }, (_, i) => i));
 	<Field.Set>
 		<Field.Legend>Has none</Field.Legend>
 		<Field.Description>
-			Say a part has no intro or credits, so nothing found by sound is used for
-			it.
+			Say a part has no intro or credits, so nothing found by sound or picture
+			is used for it.
 		</Field.Description>
 		{#each parts as part (part)}
 			<div class="flex flex-wrap gap-x-5 gap-y-2">

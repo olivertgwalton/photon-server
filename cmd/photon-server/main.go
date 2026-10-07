@@ -295,7 +295,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		scanner, matcher, notifier,
 		reader(domain.JobKeyframes, analysis.Keyframes(st)),
 		reader(domain.JobKeyframeWalk, analysis.WalkKeyframes(st, tools)),
-		reader(domain.JobMarkers, analysis.Markers(st, tools.Fingerprint)),
+		reader(domain.JobMarkers, analysis.Markers(st, tools.Fingerprint, tools.Shades)),
 		reader(domain.JobPreviews, analysis.MakePreviews(st, tools, previews, logger)),
 		reader(domain.JobProbe, analysis.Probe(st, tools)),
 	}

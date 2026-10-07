@@ -42,8 +42,9 @@ func PreviewLevels() []PreviewLevel {
 }
 
 // MarkerDetection is how a library finds the intros and credits a player may offer to skip:
-// not at all, only from chapters that name them, or from chapters and by comparing each season's
-// sound too, which reads the start and end of every episode.
+// not at all, only from chapters that name them, or from chapters and by reading the files too:
+// each season's sound compared, from the start and end of every episode, and each film's picture
+// near its end.
 type MarkerDetection string
 
 const (
@@ -62,7 +63,7 @@ func (d MarkerDetection) Keeps(source MarkerSource) bool {
 	case MarkersOff:
 		return source == MarkerByUser
 	case MarkersChapters:
-		return source != MarkerByFingerprint
+		return source == MarkerByUser || source == MarkerByChapter
 	case MarkersAll:
 		return true
 	}

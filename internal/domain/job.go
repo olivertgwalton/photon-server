@@ -16,7 +16,8 @@ const (
 	JobIdentify JobKind = "identify"
 	// JobScanLibrary reads a library's folders again; one job per library at a time.
 	JobScanLibrary JobKind = "scan_library"
-	// JobMarkers finds the intro and credits a season's episodes share by their sound.
+	// JobMarkers finds the intro and credits a season's episodes share by their sound, or a film's
+	// credits by its picture.
 	JobMarkers JobKind = "markers"
 	// JobPreviews makes a part's chapter images and trickplay sheets, as its library asks.
 	JobPreviews JobKind = "previews"

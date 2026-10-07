@@ -227,13 +227,14 @@ const refreshOptions = $derived(
 				name="markers"
 				value={library?.markers ?? defaults.markers}
 				options={[
-					{ value: "all", label: "From chapters and by sound" },
+					{ value: "all", label: "From chapters, sound and picture" },
 					{ value: "chapters", label: "From chapters only" },
 					{ value: "off", label: "Not looked for" },
 				]}
 			/>
 			<Field.Description>
-				Comparing sound reads the start and end of every episode.
+				Comparing sound reads the start and end of every episode; a film's
+				credits are found where its picture goes dark near its end.
 			</Field.Description>
 		</Field.Field>
 		<Field.Field>

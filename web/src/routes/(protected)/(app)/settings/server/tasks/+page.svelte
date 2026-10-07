@@ -94,9 +94,8 @@ function took(started?: string, finished?: string) {
 	<Field.Set>
 		<Field.Legend>Maintenance window</Field.Legend>
 		<Field.Description>
-			When previews are made and intros and credits are found by sound. Nothing
-			that reads the libraries' files in the background starts while anything
-			plays.
+			When previews are made and intros and credits are found. Nothing that
+			reads the libraries' files in the background starts while anything plays.
 		</Field.Description>
 		<div class="grid gap-4 sm:grid-cols-3">
 			<Field.Field>
