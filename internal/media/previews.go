@@ -93,17 +93,32 @@ func countFrames(out []byte) (Thumbnails, error) {
 	return th, sc.Err()
 }
 
-// Still writes the keyframe at or after a time in a video to path as a JPEG, width pixels wide,
-// decoding nothing else, as Jellyfin's image extraction does.
-func (t Tools) Still(ctx context.Context, f *os.File, at time.Duration, width int, toneMap bool, path string) error {
+// Decode is which of a video's frames a still is taken from.
+type Decode string
+
+const (
+	// DecodeKeyframes takes the keyframe at or after the time, decoding nothing else.
+	DecodeKeyframes Decode = "keyframes"
+	// DecodeEvery takes the frame at the time, decoding every frame from the keyframe before it.
+	DecodeEvery Decode = "every"
+)
+
+// Still writes the frame at a time in a video, taken as decode says, to path as a JPEG, width
+// pixels wide.
+func (t Tools) Still(ctx context.Context, f *os.File, decode Decode, at time.Duration, width int, toneMap bool, path string) error {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	_, err := output(ctx, Background, PartRun, []*os.File{f}, t.FFmpeg.Path,
-		"-hide_banner", "-loglevel", "error", "-nostdin", "-skip_frame", "nokey",
+	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin"}
+	switch decode {
+	case DecodeKeyframes:
+		args = append(args, "-skip_frame", "nokey")
+	case DecodeEvery:
+	}
+	_, err := output(ctx, Background, PartRun, []*os.File{f}, t.FFmpeg.Path, append(args,
 		"-ss", strconv.FormatFloat(at.Seconds(), 'f', 3, 64),
 		"-protocol_whitelist", "fd", "-fd", "3", "-i", "fd:", "-an", "-sn", "-dn", "-frames:v", "1",
-		"-vf", fitted(width, toneMap), "-c:v", "mjpeg", "-q:v", jpegQuality, "-f", "image2", "-update", "1", path)
+		"-vf", fitted(width, toneMap), "-c:v", "mjpeg", "-q:v", jpegQuality, "-f", "image2", "-update", "1", path)...)
 	if err != nil {
 		return fmt.Errorf("ffmpeg: %w", err)
 	}

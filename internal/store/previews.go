@@ -30,10 +30,11 @@ type ChapterSpan struct {
 }
 
 // PreviewSource is what making a part's previews needs: what its library asks for, its picture's
-// range and its chapters, or one spanning the part where it has none.
+// range, its length and its chapters, or one spanning the part where it has none.
 type PreviewSource struct {
 	Level    domain.PreviewLevel
 	Range    domain.Range
+	Length   time.Duration
 	Chapters []ChapterSpan
 }
 
@@ -50,7 +51,7 @@ func (s *Store) PreviewSource(ctx context.Context, part uuid.UUID) (PreviewSourc
 	if err != nil {
 		return src, found(err)
 	}
-	src.Level, src.Range = domain.PreviewLevel(level), domain.Range(deref(vr))
+	src.Level, src.Range, src.Length = domain.PreviewLevel(level), domain.Range(deref(vr)), time.Duration(length)*time.Millisecond
 	rows, err := s.pool.Query(ctx, `SELECT idx, start_ms, end_ms FROM chapters WHERE part_id = $1 ORDER BY idx`, part)
 	if err != nil {
 		return src, err
@@ -65,7 +66,7 @@ func (s *Store) PreviewSource(ctx context.Context, part uuid.UUID) (PreviewSourc
 	// A part with no chapters is pictured as one, as Jellyfin gives a video with none its own, so
 	// an extra's card has a still.
 	if err == nil && len(src.Chapters) == 0 {
-		src.Chapters = []ChapterSpan{{End: time.Duration(length) * time.Millisecond}}
+		src.Chapters = []ChapterSpan{{End: src.Length}}
 	}
 	return src, err
 }
