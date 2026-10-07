@@ -158,8 +158,8 @@ func refreshTask(st *store.Store, logger *slog.Logger) task.Task {
 // sweepArtworkEvery is how often replaced pictures are cleared from the cache.
 const sweepArtworkEvery = 7 * 24 * time.Hour
 
-// sweepArtworkTask clears the cache of pictures no title or person has any more, and takes the
-// BlurHash of every picture kept without one.
+// sweepArtworkTask clears the cache of pictures no title or person has any more, takes the
+// BlurHash of every picture kept without one, and fetches the pictures titles show first.
 func sweepArtworkTask(st *store.Store, cache *artwork.Cache, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:     domain.TaskSweepArtwork,
@@ -176,8 +176,37 @@ func sweepArtworkTask(st *store.Store, cache *artwork.Cache, logger *slog.Logger
 			if n > 0 {
 				logger.InfoContext(ctx, "pictures given a blurhash", slog.Int("pictures", n))
 			}
+			if err != nil {
+				return err
+			}
+			n, err = backfillPictures(ctx, st, cache)
+			if n > 0 {
+				logger.InfoContext(ctx, "pictures fetched ahead", slog.Int("pictures", n))
+			}
 			return err
 		},
+	}
+}
+
+// picturesBatch is how many titles' pictures are fetched at once.
+const picturesBatch = 100
+
+// backfillPictures fetches the pictures every title shows first that are not yet fetched: those
+// of titles described before the server fetched them as it did, and those it could not then.
+func backfillPictures(ctx context.Context, st *store.Store, cache *artwork.Cache) (int, error) {
+	fetched := 0
+	var after uuid.UUID
+	for {
+		pictures, last, err := st.Unfetched(ctx, after, picturesBatch)
+		if err != nil {
+			return fetched, err
+		}
+		n, err := cache.Fetch(ctx, pictures)
+		fetched += n
+		if err != nil || last == (uuid.UUID{}) {
+			return fetched, err
+		}
+		after = last
 	}
 }
 
