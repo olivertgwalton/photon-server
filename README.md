@@ -24,6 +24,15 @@ docker compose exec server photon-server library add -name Films -kind movies /m
 
 Then open `http://<server>:8640` and log in.
 
+### Several servers
+
+Each server keeps artwork (with avatars and theme tunes) and previews in its own cache folder
+until an admin chooses an S3 bucket they all share (`PUT /api/v1/admin/storage`). The bucket is
+checked before it is chosen, and every server keeps things there at once. Without an access key,
+a server signs with its own AWS credentials: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, the
+shared credentials file, or the instance's role. Choose the bucket before the first scan: moving
+away from where anything is kept is refused, so nothing is left behind.
+
 The server gzips its own JSON answers for a client that takes gzip, and serves the web app
 precompressed; media, artwork and event streams go out as they are. A reverse proxy in front of it
 need not compress again.

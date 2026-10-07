@@ -172,6 +172,9 @@ type Services struct {
 	// Network is how the server is reached, and Secure how this node serves it now; nil Secure
 	// never sends a plain request to HTTPS.
 	Network networkSettings
+	// Storage is where artwork and previews are kept, and Stores this node's, kept there now.
+	Storage storageSettings
+	Stores  stores
 	Secure  secureConnections
 	// Jellyfin is this node's serving of Jellyfin's API; nil where it is not run.
 	Jellyfin jellyfinListener
@@ -782,6 +785,21 @@ func (a *API) routes() []route {
 			pattern: "PUT /api/v1/admin/network", access: admin,
 			summary: "Replace whether the port answers HTTPS, its certificate, and Jellyfin's; every node serves it at once",
 			body:    networkJSON{}, status: http.StatusOK, reply: networkJSON{}, handle: a.setNetwork,
+		},
+		{
+			pattern: "GET /api/v1/admin/storage", access: admin,
+			summary: "Where artwork, avatars, theme tunes and previews are kept: each server's disk, or a bucket all share",
+			status:  http.StatusOK, reply: storageStatusJSON{}, handle: a.adminStorage,
+		},
+		{
+			pattern: "PUT /api/v1/admin/storage", access: admin,
+			summary: "Keep artwork and previews elsewhere, once a bucket is checked and while nothing is kept where they are now; every node keeps them there at once",
+			body:    storageJSON{}, status: http.StatusOK, reply: storageStatusJSON{}, handle: a.setStorage,
+		},
+		{
+			pattern: "POST /api/v1/admin/storage/check", access: admin,
+			summary: "Check a bucket can keep artwork and previews: that it answers, and keeps, lists and removes what is put there",
+			body:    storageJSON{}, status: http.StatusNoContent, handle: a.checkStorage,
 		},
 		{
 			pattern: "GET /api/v1/admin/keys", access: admin, summary: "List the API keys",
