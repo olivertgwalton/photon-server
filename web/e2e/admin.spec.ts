@@ -335,3 +335,43 @@ test("a title is edited, matched, given a poster and marked", async ({
 	await page.getByRole("button", { name: "Save markers" }).click();
 	await expect(page.getByText("Markers saved.")).toBeVisible();
 });
+
+test("a title is edited and its match fixed from its card", async ({
+	page,
+}) => {
+	await logIn(page);
+	const row = page.getByRole("region", { name: "Continue Watching" });
+	await row.getByRole("button", { name: "More for Quiet Hours" }).click();
+	await page.getByRole("menuitem", { name: "Edit…" }).click();
+	const dialog = page.getByRole("dialog", { name: "Edit Quiet Hours" });
+	await dialog
+		.getByRole("textbox", { name: "Tagline" })
+		.fill("Keep the light on.");
+	await dialog.getByRole("button", { name: "Save", exact: true }).click();
+	await expect(page.getByText("Saved.")).toBeVisible();
+	await expectAccessible(page);
+	await page.keyboard.press("Escape");
+
+	await row.getByRole("button", { name: "More for Quiet Hours" }).click();
+	await page.getByRole("menuitem", { name: "Fix match…" }).click();
+	await expect(dialog.getByRole("tab", { name: "Match" })).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
+	await dialog.getByRole("button", { name: "Search" }).click();
+	await dialog.getByRole("button", { name: "This one : Quiet Hours" }).click();
+	await expect(
+		page.getByText("Matched. Its details follow in a moment."),
+	).toBeVisible();
+});
+
+test("a member's card offers no editing", async ({ page }) => {
+	await asKids(page);
+	await page.goto("/");
+	await page
+		.getByRole("region", { name: "Recently Added Films" })
+		.getByRole("button", { name: /^More for / })
+		.first()
+		.click();
+	await expect(page.getByRole("menuitem", { name: "Edit…" })).toHaveCount(0);
+});

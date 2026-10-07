@@ -77,3 +77,27 @@ export const picker = $state({ open: false, ids: [] as string[], title: "" });
 export function pickPlaylist(ids: string[], title: string) {
 	Object.assign(picker, { open: true, ids, title });
 }
+
+export type EditorTab = "details" | "match" | "artwork";
+
+// The one "Edit" dialog, drawn by the shell for an admin and opened from any
+// title's menu at the part asked for, as Plex's Edit and Fix Match are.
+export const editor = $state({
+	open: false,
+	id: "",
+	tab: "details" as EditorTab,
+});
+
+export function editTitle(id: string, tab: EditorTab) {
+	Object.assign(editor, { open: true, id, tab });
+}
+
+export function refreshTitle(id: string, name: string) {
+	return change(
+		api.POST("/api/v1/admin/titles/{id}/refresh", {
+			...path(id),
+			body: { mode: "all" },
+		}),
+		`Asking the providers about ${name} again.`,
+	);
+}
