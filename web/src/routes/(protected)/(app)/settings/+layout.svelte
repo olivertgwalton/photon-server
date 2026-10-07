@@ -5,6 +5,7 @@ import DatabaseIcon from "@lucide/svelte/icons/database";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
 import HistoryIcon from "@lucide/svelte/icons/history";
 import HouseIcon from "@lucide/svelte/icons/house";
+import KeyRoundIcon from "@lucide/svelte/icons/key-round";
 import LayersIcon from "@lucide/svelte/icons/layers";
 import LibraryIcon from "@lucide/svelte/icons/library";
 import ListChecksIcon from "@lucide/svelte/icons/list-checks";
@@ -39,6 +40,7 @@ const server: [string, string, Component][] = [
 	["/settings/server/activity", "Activity", ActivityIcon],
 	["/settings/server/history", "Play history", HistoryIcon],
 	["/settings/server/webhooks", "Webhooks", WebhookIcon],
+	["/settings/server/keys", "API keys", KeyRoundIcon],
 ];
 const groups = $derived(
 	data.me.role === "admin"

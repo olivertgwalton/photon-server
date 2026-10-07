@@ -356,6 +356,23 @@ test("a webhook's secret is shown once, to copy", async ({ page }) => {
 	await expect(page.getByText("No webhooks yet.")).toBeVisible();
 });
 
+test("an API key is shown once, to copy, and revoked", async ({ page }) => {
+	await logIn(page, "/settings/server/keys");
+	await page.getByRole("button", { name: "Make a key" }).click();
+	await page.getByLabel("What it is for").fill("Sonarr");
+	await expectAccessible(page);
+	await page.getByRole("button", { name: "Make key" }).click();
+	const made = page.getByRole("dialog", { name: "The new API key" });
+	await expect(made.getByLabel("Key")).toHaveValue("pst_ONCE");
+	await expectAccessible(page);
+	await made.getByRole("button", { name: "Close" }).click();
+
+	await expect(page.getByText("Made by Oliver")).toBeVisible();
+	await page.getByRole("button", { name: /^Revoke/ }).click();
+	await page.getByRole("button", { name: "Revoke key" }).click();
+	await expect(page.getByText("No API keys yet.")).toBeVisible();
+});
+
 test("a collection made here is filled from its library", async ({ page }) => {
 	await logIn(page, "/settings/server/collections");
 	await expect(page.getByText("Made here", { exact: true })).toBeVisible();

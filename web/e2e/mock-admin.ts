@@ -210,6 +210,7 @@ const collection: Schemas["TitlePage"] = {
 };
 
 let webhooks: Schemas["Webhook"][] = [];
+let keys: Schemas["KeyListing"][] = [];
 let chosenPoster = "a-1";
 let maintenance: Schemas["Maintenance"] = {
 	start_hour: 2,
@@ -467,6 +468,28 @@ export async function admin(
 			return done(202);
 		case "DELETE /api/v1/admin/webhooks/w-1":
 			webhooks = [];
+			return done();
+		case "GET /api/v1/admin/keys":
+			return json({ items: keys });
+		case "POST /api/v1/admin/keys": {
+			const { name } = (await request.json()) as Schemas["NewKey"];
+			const at = "2026-10-07T20:00:00Z";
+			keys = [
+				{
+					id: "k-1",
+					name,
+					profile: "Oliver",
+					created_at: at,
+					last_seen_at: at,
+				},
+			];
+			return json(
+				{ id: "k-1", token: "pst_ONCE" } satisfies Schemas["CreatedKey"],
+				201,
+			);
+		}
+		case "DELETE /api/v1/admin/keys/k-1":
+			keys = [];
 			return done();
 		// Quiet Hours is t-quiet on its admin page and t-film on the home rows.
 		case "PATCH /api/v1/admin/titles/t-quiet":
