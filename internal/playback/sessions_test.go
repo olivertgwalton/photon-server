@@ -153,6 +153,45 @@ func TestAnAdminEndsAnyonesPlaybackWhereItGotTo(t *testing.T) {
 	}
 }
 
+// A file streamed to a playback played as it is is cut off as the playback stops, here or on
+// another node, and is refused after.
+func TestAStopCutsOffAFilePlayedAsItIs(t *testing.T) {
+	live := memory{}
+	s := NewSessions(live, positions{}, served{}, func(context.Context, domain.Event) {}, uuid.NewV7())
+	ctx := t.Context()
+	guest := uuid.NewV7()
+	here, err := s.Start(ctx, domain.PlayDirect, card(guest, uuid.NewV7()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	elsewhere, err := s.Start(ctx, domain.PlayDirect, card(guest, uuid.NewV7()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cut := map[uuid.UUID]int{}
+	for _, id := range []uuid.UUID{here.ID, elsewhere.ID} {
+		if _, err := s.Serve(ctx, id, func() { cut[id]++ }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.End(ctx, here.ID); err != nil {
+		t.Fatal(err)
+	}
+	if cut[here.ID] != 1 || cut[elsewhere.ID] != 0 {
+		t.Errorf("cut %v after ending one, want only it cut", cut)
+	}
+	delete(live, elsewhere.ID)
+	if err := s.Sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if cut[elsewhere.ID] != 1 {
+		t.Errorf("one stopped on another node cut %d times after a sweep, want once", cut[elsewhere.ID])
+	}
+	if _, err := s.Serve(ctx, here.ID, func() {}); !errors.Is(err, ErrNoPlayback) {
+		t.Errorf("streaming a stopped playback: %v, want ErrNoPlayback", err)
+	}
+}
+
 // A playback of a title removed while it played is swept like any other, once: it is not kept to
 // be swept, and fail, again.
 func TestAPlaybackOfARemovedTitleIsSweptOnce(t *testing.T) {

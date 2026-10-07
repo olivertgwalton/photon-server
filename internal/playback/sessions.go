@@ -3,6 +3,9 @@ package playback
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
+	"sync"
 	"time"
 	"uuid"
 
@@ -53,13 +56,18 @@ type Sessions struct {
 	streams streams
 	raise   func(context.Context, domain.Event)
 	node    uuid.UUID
+
+	mu sync.Mutex
+	// direct are the files this node streams of playbacks played as they are, each with what cuts
+	// it off: a player holds one request open for the whole file, so refusing the next is not enough.
+	direct map[uuid.UUID]map[*func()]bool
 }
 
 // NewSessions keeps playbacks in live and places in saved, and closes this node's streams of
 // those that end; raise says as one starts, pauses, resumes and stops, and as each profile's place
 // moves. Each playback started is node's to serve.
 func NewSessions(live sessionStore, saved progressStore, st streams, raise func(context.Context, domain.Event), node uuid.UUID) *Sessions {
-	return &Sessions{live: live, saved: saved, streams: st, raise: raise, node: node}
+	return &Sessions{live: live, saved: saved, streams: st, raise: raise, node: node, direct: map[uuid.UUID]map[*func()]bool{}}
 }
 
 // Start opens a playback of the copy of a title its card names, by its card's profile.
@@ -154,7 +162,7 @@ func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Du
 	if !ended {
 		return "", ErrNoPlayback
 	}
-	s.streams.Close(p.ID)
+	s.close(p.ID)
 	p.Position = position
 	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position, p.Length, p.Reached, nil)
 	if errors.Is(err, store.ErrNotFound) {
@@ -213,7 +221,7 @@ func (s *Sessions) Abandon(ctx context.Context, id uuid.UUID) error {
 // that have ended on any node. Every node sweeps; each playback is ended once.
 func (s *Sessions) Sweep(ctx context.Context) error {
 	// Read first: a stream opened after the playbacks are read is of a playback already among them.
-	served := s.streams.Playbacks()
+	served := append(s.streams.Playbacks(), s.directPlaybacks()...)
 	all, err := s.live.Playbacks(ctx)
 	if err != nil {
 		return err
@@ -231,10 +239,57 @@ func (s *Sessions) Sweep(ctx context.Context) error {
 	}
 	for _, id := range served {
 		if !going[id] {
-			s.streams.Close(id)
+			s.close(id)
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// Serve holds a file this node streams of a playback played as it is, until done; cut cuts it off
+// as the playback ends. A playback that has ended is refused.
+func (s *Sessions) Serve(ctx context.Context, id uuid.UUID, cut func()) (done func(), err error) {
+	c := &cut
+	s.mu.Lock()
+	if s.direct[id] == nil {
+		s.direct[id] = map[*func()]bool{}
+	}
+	s.direct[id][c] = true
+	s.mu.Unlock()
+	done = func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		delete(s.direct[id], c)
+		if len(s.direct[id]) == 0 {
+			delete(s.direct, id)
+		}
+	}
+	// Held before it is looked for, so a stop between the two still finds it to cut.
+	_, ok, err := s.live.Playback(ctx, id)
+	if err == nil && !ok {
+		err = ErrNoPlayback
+	}
+	if err != nil {
+		done()
+		return nil, err
+	}
+	return done, nil
+}
+
+// close ends this node's streams of a playback: its remux, and the files it streams as they are.
+func (s *Sessions) close(id uuid.UUID) {
+	s.streams.Close(id)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for cut := range s.direct[id] {
+		(*cut)()
+	}
+	delete(s.direct, id)
+}
+
+func (s *Sessions) directPlaybacks() []uuid.UUID {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Collect(maps.Keys(s.direct))
 }
 
 func (s *Sessions) own(ctx context.Context, profile, id uuid.UUID) (domain.Playback, error) {
