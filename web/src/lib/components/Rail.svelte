@@ -69,6 +69,12 @@ function page(direction: 1 | -1) {
 	});
 }
 
+// Cards fade in one after another, the first screenful only. Only their
+// opacity moves: their places are already kept.
+const arrive =
+	"animate-in fade-in fill-mode-both shrink-0 snap-start duration-500 ease-out-expo";
+const stagger = (i: number) => `animation-delay: ${Math.min(i, 8) * 35}ms`;
+
 const sizes = $derived(
 	shape === "poster"
 		? "(min-width: 1536px) 12rem, (min-width: 1024px) 10rem, 9rem"
@@ -82,21 +88,21 @@ const sizes = $derived(
 	only and draws no scrollbar, even where scroll bars are always shown: a
 	trackpad, a swipe, Tab from card to card and the arrows move it, and its
 	padding holds a card's focus ring. -->
-<section aria-labelledby={id} class="min-w-0">
-	<h2 {id} class="heading mb-3">
+<section
+	aria-labelledby={id}
+	class="min-w-0 [contain-intrinsic-size:auto_20rem] [content-visibility:auto]"
+>
+	<!-- A row's name is quieter than its cards', as the app has it: the cards
+		are what is read. -->
+	<h2 {id} class="text-ink-2 mb-3 font-sans text-[0.9375rem] font-semibold">
 		{#if more}
 			<a
 				href={more}
-				class="group inline-flex items-center gap-2 hover:underline"
+				class="hover:text-ink inline-flex items-center gap-1 rounded-full bg-white/6 py-1 pr-2 pl-3 transition-colors duration-200 hover:bg-white/12"
 			>
 				{title}
-				<span class="text-ink-3 group-hover:text-ink text-sm font-medium">
-					View all
-				</span>
-				<ChevronRightIcon
-					class="text-ink-3 group-hover:text-ink size-5"
-					aria-hidden="true"
-				/>
+				<ChevronRightIcon class="size-4" aria-hidden="true" />
+				<span class="sr-only">View all</span>
 			</a>
 		{:else}
 			{title}
@@ -106,16 +112,16 @@ const sizes = $derived(
 		<ul
 			bind:this={list}
 			onscroll={measure}
-			class="relative -mx-3 flex snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-1 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:gap-4 sm:px-6 [&::-webkit-scrollbar]:hidden"
+			class="relative -mx-3 flex snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
 		>
 			{#each cards.slice(0, railLimit) as c, i (c.id)}
-				<li class="shrink-0 snap-start {width}">
+				<li class="{arrive} {width}" style={stagger(i)}>
 					<TitleCard card={c} {shape} {sizes} caption={caption?.(i)} />
 				</li>
 			{/each}
 			{#if card}
-				{#each items.slice(0, railLimit) as item (item.id)}
-					<li class="shrink-0 snap-start {width}">
+				{#each items.slice(0, railLimit) as item, i (item.id)}
+					<li class="{arrive} {width}" style={stagger(i)}>
 						{@render card(item, sizes)}
 					</li>
 				{/each}
@@ -129,7 +135,7 @@ const sizes = $derived(
 				type="button"
 				onclick={() => page(direction)}
 				class={[
-					"bg-ground/85 text-ink ring-line-strong hover:bg-raise focus-visible:outline-signal absolute top-[calc(50%-1.25rem)] z-10 hidden size-10 -translate-y-1/2 place-items-center rounded-full opacity-0 shadow-lg ring-1 backdrop-blur transition-opacity group-hover/rail:opacity-100 focus-visible:opacity-100 pointer-fine:grid",
+					"bg-ground/85 text-ink ring-line-strong hover:bg-raise focus-visible:outline-signal absolute top-1/2 z-10 hidden size-10 -translate-y-1/2 place-items-center rounded-full opacity-0 shadow-lg ring-1 backdrop-blur transition-opacity group-hover/rail:opacity-100 focus-visible:opacity-100 pointer-fine:grid",
 					direction < 0 ? "-left-1 sm:-left-3" : "-right-1 sm:-right-3",
 				]}
 			>

@@ -261,7 +261,8 @@ test("a picture stands in as its blur until it arrives", async ({ page }) => {
 	});
 	await logIn(page, "/titles/t-film");
 	const backdrop = page.locator('img[fetchpriority="high"]');
-	await expect(backdrop).toHaveCSS(
+	// The blur is the frame's, so the picture can fade in over it.
+	await expect(backdrop.locator("..")).toHaveCSS(
 		"background-image",
 		/^url\("data:image\/png/,
 	);

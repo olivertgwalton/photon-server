@@ -70,7 +70,7 @@ onMount(() => {
 	<AppSidebar libraries={data.libraries} />
 	<Sidebar.Inset>
 		<header
-			class="border-line bg-ground/85 sticky top-0 z-20 flex h-14 items-center gap-3 border-b px-3 backdrop-blur-xl sm:px-4"
+			class="border-line bg-ground/85 sticky top-0 z-20 flex h-14 items-center gap-3 border-b px-3 backdrop-blur-xl [view-transition-name:header] sm:px-4"
 		>
 			<Sidebar.Trigger />
 			<search class="mx-auto w-full max-w-md">
@@ -95,7 +95,11 @@ onMount(() => {
 			{/if}
 			<ProfileMenu profile={data.me} />
 		</header>
-		<main id="main" tabindex="-1" class="min-w-0 flex-1 px-3 py-6 sm:px-6">
+		<main
+			id="main"
+			tabindex="-1"
+			class="min-w-0 flex-1 px-3 py-6 [view-transition-name:page] sm:px-6"
+		>
 			{@render children()}
 		</main>
 	</Sidebar.Inset>

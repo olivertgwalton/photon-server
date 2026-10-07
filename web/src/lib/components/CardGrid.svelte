@@ -22,7 +22,7 @@ let {
 </script>
 
 <ul
-	class="grid gap-x-4 gap-y-6"
+	class="grid gap-x-3 gap-y-4.5"
 	style="grid-template-columns: {gridColumns(shape)}"
 >
 	{#each cards as c, i (`${c.id}-${i}`)}

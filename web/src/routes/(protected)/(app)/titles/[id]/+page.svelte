@@ -23,7 +23,9 @@ import { castOf } from "#lib/credits.js";
 import { type Extra, extrasOf } from "#lib/extras.js";
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
+import { fadeIn } from "#lib/fade.js";
 import CardGrid from "#lib/components/CardGrid.svelte";
+import Prose from "#lib/components/Prose.svelte";
 import DownloadDialog from "#lib/components/DownloadDialog.svelte";
 import MediaInfo from "#lib/components/MediaInfo.svelte";
 import ExtraCard from "#lib/components/ExtraCard.svelte";
@@ -150,6 +152,11 @@ const adminTools = $derived(
 	].filter((tool) => !!tool),
 );
 
+// What sits beside Play: panes of glass over the backdrop, Play the one
+// filled control on the page.
+const glass =
+	"rounded-full border-white/10 bg-white/8 backdrop-blur-xl hover:bg-white/14";
+
 const backdrop = $derived(art("backdrop"));
 const logo = $derived(art("logo"));
 const poster = $derived(art("poster"));
@@ -162,16 +169,23 @@ const poster = $derived(art("poster"));
 <article class="grid gap-10">
 	<header class="relative -mx-3 -mt-6 sm:-mx-6">
 		{#if backdrop}
-			<div class="absolute inset-x-0 top-0 h-[70svh] overflow-hidden">
-				<img
-					src={artworkSrc(backdrop, "backdrop")}
-					srcset={artworkSrcset(backdrop, "backdrop")}
-					sizes="100vw"
-					alt=""
-					fetchpriority="high"
-					class="size-full object-cover object-top"
-					style={blurStyle(t.blurhashes?.[backdrop])}
-				>
+			<div
+				class="absolute inset-x-0 top-0 h-[70svh] overflow-hidden"
+				style={blurStyle(t.blurhashes?.[backdrop])}
+			>
+				<!-- A new element for each title, so the old picture goes at once and the
+					new one fades in over its blur. -->
+				{#key backdrop}
+					<img
+						{@attach fadeIn}
+						src={artworkSrc(backdrop, "backdrop")}
+						srcset={artworkSrcset(backdrop, "backdrop")}
+						sizes="100vw"
+						alt=""
+						fetchpriority="high"
+						class="size-full object-cover object-top transition-opacity duration-700 data-loading:opacity-0"
+					>
+				{/key}
 				<div
 					class="from-ground via-ground/70 absolute inset-0 bg-gradient-to-t to-transparent"
 				></div>
@@ -220,13 +234,16 @@ const poster = $derived(art("poster"));
 				{/if}
 				<h1 class="max-w-3xl">
 					{#if logo}
-						<img
-							src={artworkSrc(logo, "still")}
-							srcset={artworkSrcset(logo, "still")}
-							sizes="24rem"
-							alt={t.title}
-							class="max-h-36 w-auto max-w-[min(24rem,80vw)] object-contain object-left"
-						>
+						{#key logo}
+							<img
+								{@attach fadeIn}
+								src={artworkSrc(logo, "still")}
+								srcset={artworkSrcset(logo, "still")}
+								sizes="24rem"
+								alt={t.title}
+								class="max-h-36 w-auto max-w-[min(24rem,80vw)] object-contain object-left transition-opacity duration-500 data-loading:opacity-0"
+							>
+						{/key}
 					{:else}
 						<span class="title block text-3xl md:text-5xl">{t.title}</span>
 					{/if}
@@ -248,7 +265,9 @@ const poster = $derived(art("poster"));
 			{#if t.ratings?.length}
 				<ul class="flex flex-wrap gap-2" aria-label="Ratings">
 					{#each t.ratings as rating, i (`${rating.site}-${i}`)}
-						<li class="bg-raise/80 rounded-md px-2 py-1 text-sm backdrop-blur">
+						<li
+							class="rounded-full bg-white/8 px-3 py-1 text-sm backdrop-blur-xl"
+						>
 							<RatingScore {rating} />
 						</li>
 					{/each}
@@ -258,19 +277,29 @@ const poster = $derived(art("poster"));
 				<p class="text-ink font-heading text-lg italic">{t.tagline}</p>
 			{/if}
 			{#if t.overview}
-				<p class="text-ink-2 max-w-3xl leading-relaxed">{t.overview}</p>
+				<Prose
+					text={t.overview}
+					lines={3}
+					title={t.show ? `${t.show.title}: ${t.title}` : t.title}
+					class="text-ink-2 max-w-2xl"
+				/>
 			{/if}
 
 			<div class="flex flex-wrap items-center gap-2">
 				{#if playable && chosen}
-					<Button href={playHref(t.id, choice)} size="lg">
+					<Button
+						href={playHref(t.id, choice)}
+						size="lg"
+						class="rounded-full px-5"
+					>
 						<PlayIcon class="fill-current" />
 						{position ? `Resume from ${timecode(position)}` : "Play"}
 					</Button>
 					{#if position}
 						<Button
 							href={playHref(t.id, { ...choice, t: 0 })}
-							variant="outline"
+							variant="ghost"
+							class={glass}
 							size="lg"
 						>
 							<RotateCcwIcon />From the beginning
@@ -278,7 +307,7 @@ const poster = $derived(art("poster"));
 					{/if}
 				{:else if data.next}
 					{@const next = data.next}
-					<Button href={playHref(next.id)} size="lg">
+					<Button href={playHref(next.id)} size="lg" class="rounded-full px-5">
 						<PlayIcon class="fill-current" />
 						{next.state?.position_ms ? "Resume" : "Play"}
 						{episodeLabel(
@@ -289,13 +318,19 @@ const poster = $derived(art("poster"));
 					</Button>
 				{/if}
 				{#if trailer}
-					<Button href={playHref(trailer.id)} variant="outline" size="lg">
+					<Button
+						href={playHref(trailer.id)}
+						variant="ghost"
+						class={glass}
+						size="lg"
+					>
 						<FilmIcon />Trailer
 					</Button>
 				{/if}
 				{#if t.kind !== "collection"}
 					<Button
-						variant="outline"
+						variant="ghost"
+						class={glass}
 						size="icon-lg"
 						aria-pressed={watched}
 						aria-label="Watched"
@@ -306,7 +341,8 @@ const poster = $derived(art("poster"));
 					</Button>
 				{/if}
 				<Button
-					variant="outline"
+					variant="ghost"
+					class={glass}
 					size="icon-lg"
 					aria-pressed={favourite}
 					aria-label="Favourite"
@@ -317,7 +353,8 @@ const poster = $derived(art("poster"));
 				</Button>
 				{#if t.kind !== "collection"}
 					<Button
-						variant="outline"
+						variant="ghost"
+						class={glass}
 						size="icon-lg"
 						aria-pressed={watchlisted}
 						aria-label="Watchlist"
@@ -333,7 +370,8 @@ const poster = $derived(art("poster"));
 							props,
 						})}
 							<Button
-								variant="outline"
+								variant="ghost"
+								class={glass}
 								size="icon-lg"
 								aria-label="More"
 								{...props}
@@ -430,17 +468,20 @@ const poster = $derived(art("poster"));
 							class="group flex min-w-0 flex-1 flex-col gap-3 outline-none sm:flex-row"
 						>
 							<span
-								class="bg-raise group-hover:ring-line-strong group-focus-visible:ring-signal relative block aspect-video w-full shrink-0 overflow-hidden rounded-lg ring-2 ring-transparent sm:w-56"
+								class="card-frame block aspect-video w-full shrink-0 self-start sm:w-56"
+								style={episode.thumb
+									? blurStyle(episode.blurhashes?.[episode.thumb])
+									: undefined}
 							>
 								{#if episode.thumb}
 									<img
+										{@attach fadeIn}
 										src={artworkSrc(episode.thumb, "still")}
 										srcset={artworkSrcset(episode.thumb, "still")}
 										sizes="(min-width: 640px) 14rem, 100vw"
 										alt=""
 										loading="lazy"
-										class="size-full object-cover"
-										style={blurStyle(episode.blurhashes?.[episode.thumb])}
+										class="card-picture"
 									>
 								{/if}
 								{#if progress}

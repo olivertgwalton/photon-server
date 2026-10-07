@@ -4,7 +4,7 @@ import type { Shape } from "./artwork.js";
 // many columns as these allow, as `auto-fill` does, so the page drawn by the
 // server and the wall drawn by the browser line up.
 const minWidth: Record<Shape, number> = { poster: 150, still: 260 };
-export const columnGap = 16;
+export const columnGap = 12;
 
 export function gridColumns(shape: Shape): string {
 	return `repeat(auto-fill, minmax(${minWidth[shape]}px, 1fr))`;

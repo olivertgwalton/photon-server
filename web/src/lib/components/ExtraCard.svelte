@@ -4,6 +4,7 @@ import PlayIcon from "@lucide/svelte/icons/play";
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
 import { type Extra, extraKinds } from "#lib/extras.js";
 import { playHref, runtime } from "#lib/format.js";
+import { fadeIn } from "#lib/fade.js";
 
 // An extra by a still of its video, played here; or a video a provider links
 // to elsewhere, by its site's still served from this server, opened there.
@@ -20,26 +21,26 @@ const thumb = $derived("video" in item ? item.video.thumb : undefined);
 	rel={remote ? "noopener noreferrer" : undefined}
 	class="group block outline-none"
 >
-	<span
-		class="bg-raise group-hover:ring-line-strong group-focus-visible:ring-signal relative grid aspect-video place-items-center overflow-hidden rounded-lg ring-2 ring-transparent transition-shadow"
-	>
+	<span class="card-frame grid aspect-video place-items-center">
 		{#if thumb}
 			<img
+				{@attach fadeIn}
 				src={artworkSrc(thumb, "still")}
 				srcset={artworkSrcset(thumb, "still")}
 				{sizes}
 				alt=""
 				loading="lazy"
 				decoding="async"
-				class="size-full object-cover"
+				class="card-picture"
 			>
 		{:else if image}
 			<img
+				{@attach fadeIn}
 				src={image}
 				alt=""
 				loading="lazy"
 				decoding="async"
-				class="size-full object-cover"
+				class="card-picture"
 			>
 		{:else if remote}
 			<ExternalLinkIcon class="text-ink-3 size-6" aria-hidden="true" />
