@@ -291,6 +291,11 @@ func (a *API) routes() []route {
 			body:    preferencesChangeJSON{}, status: http.StatusOK, reply: preferencesJSON{}, handle: a.setOwnPreferences,
 		},
 		{
+			pattern: "PUT /api/v1/me/library-order", access: signedIn,
+			summary: "Put the profile's libraries in an order; those left out follow, by name",
+			body:    libraryOrderJSON{}, status: http.StatusNoContent, handle: a.setLibraryOrder,
+		},
+		{
 			pattern: "POST /api/v1/me/avatar", access: signedIn,
 			summary: "Give the profile a picture: a JPEG, PNG, GIF or WebP of at most 32 MiB and 50 megapixels",
 			body:    avatarTypes, status: http.StatusOK, reply: profileJSON{}, handle: a.setOwnAvatar,

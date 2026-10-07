@@ -376,3 +376,36 @@ func (s *Store) CertificateCountries(ctx context.Context) ([]string, error) {
 	}
 	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
+
+// LibraryOrder answers the libraries a profile has put in an order, in it.
+func (s *Store) LibraryOrder(ctx context.Context, profile uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := s.pool.Query(ctx, `SELECT library_id FROM library_order WHERE profile_id = $1 ORDER BY position`, profile)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+}
+
+// SetLibraryOrder puts a profile's libraries in this order. ErrNotFound for one named twice or no
+// library.
+func (s *Store) SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error {
+	if hasRepeats(libs) {
+		return ErrNotFound
+	}
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `DELETE FROM library_order WHERE profile_id = $1`, profile); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `
+			INSERT INTO library_order (profile_id, library_id, position)
+			SELECT $1, l.id, o.position - 1 FROM unnest($2::uuid[]) WITH ORDINALITY AS o(id, position)
+			JOIN libraries l ON l.id = o.id`, profile, libs)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != int64(len(libs)) {
+			return ErrNotFound
+		}
+		return nil
+	})
+}

@@ -579,6 +579,8 @@ const defaults: Schemas["Preferences"] = {
 	})),
 };
 const preferences = new Map<string, Schemas["Preferences"]>();
+// Each profile's library order, as the server keeps it.
+const libraryOrders = new Map<string, string[]>();
 
 const cookie = "photon_session";
 
@@ -788,8 +790,19 @@ const server_ = Bun.serve({
 				preferences.set(token as string, kept);
 				return Response.json(kept);
 			}
-			case "GET /api/v1/libraries":
-				return Response.json(libraries);
+			case "GET /api/v1/libraries": {
+				const order = libraryOrders.get(token as string) ?? [];
+				const rank = (id: string) =>
+					order.includes(id) ? order.indexOf(id) : order.length;
+				return Response.json({
+					items: libraries.items.toSorted((a, b) => rank(a.id) - rank(b.id)),
+				});
+			}
+			case "PUT /api/v1/me/library-order": {
+				const body = (await request.json()) as Schemas["LibraryOrder"];
+				libraryOrders.set(token as string, body.library_ids);
+				return new Response(null, { status: 204 });
+			}
 			case "GET /api/v1/home":
 				return Response.json(
 					home(

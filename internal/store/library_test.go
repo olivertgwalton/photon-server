@@ -199,3 +199,45 @@ func TestTheCountriesCertificatesAreReadForAreCountries(t *testing.T) {
 		}
 	}
 }
+
+func TestAProfileKeepsItsLibrariesInItsOwnOrder(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tv, err := s.AddLibrary(ctx, "Television", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ada, err := s.AddProfile(ctx, "Ada", domain.RoleMember, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kids, err := s.AddProfile(ctx, "Kids", domain.RoleMember, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLibraryOrder(ctx, ada.ID, []uuid.UUID{tv.ID, films.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.LibraryOrder(ctx, ada.ID); err != nil || !slices.Equal(got, []uuid.UUID{tv.ID, films.ID}) {
+		t.Errorf("Ada's order = %v, %v; want Television then Films", got, err)
+	}
+	if got, _ := s.LibraryOrder(ctx, kids.ID); len(got) != 0 {
+		t.Errorf("Kids's order = %v, want none: Ada's is her own", got)
+	}
+	// An order naming a library twice or none is refused, and the last one kept.
+	for _, bad := range [][]uuid.UUID{{films.ID, films.ID}, {uuid.NewV7()}} {
+		if err := s.SetLibraryOrder(ctx, ada.ID, bad); !errors.Is(err, ErrNotFound) {
+			t.Errorf("ordering %v: %v, want ErrNotFound", bad, err)
+		}
+	}
+	if err := s.RemoveLibrary(ctx, tv.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.LibraryOrder(ctx, ada.ID); !slices.Equal(got, []uuid.UUID{films.ID}) {
+		t.Errorf("after removing Television, Ada's order = %v, want Films alone", got)
+	}
+}

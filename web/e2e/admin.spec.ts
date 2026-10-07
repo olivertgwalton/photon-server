@@ -213,11 +213,46 @@ test("a library is scanned, refreshed and opened from its menu in the sidebar", 
 	await expect(page).toHaveURL("/settings/server/libraries/l-films");
 });
 
-test("a member's sidebar offers no library menu", async ({ page }) => {
+test("a member puts the libraries in their own order, and may do no more", async ({
+	page,
+}) => {
 	await asKids(page);
-	await expect(
-		page.getByRole("button", { name: "More for Films" }),
-	).toHaveCount(0);
+	const nav = page.getByRole("navigation", { name: "Main" });
+	await nav.getByRole("button", { name: "More for Films" }).click();
+	await expect(page.getByRole("menuitem", { name: "Edit…" })).toHaveCount(0);
+	await page.getByRole("menuitem", { name: "Reorder" }).click();
+
+	// Films is dragged by its grip below Shows.
+	const names = nav.getByRole("link", { name: /^(Films|Shows)$/ });
+	const grip = nav.getByRole("button", { name: "Drag Films into place" });
+	const shows = await nav.getByRole("link", { name: "Shows" }).boundingBox();
+	if (!shows) throw new Error("Shows is not drawn");
+	const asked = page.waitForRequest("**/api/v1/me/library-order");
+	await grip.hover();
+	await page.mouse.down();
+	await page.mouse.move(shows.x + 10, shows.y + shows.height, { steps: 5 });
+	await page.mouse.up();
+	expect((await asked).postDataJSON()).toEqual({
+		library_ids: ["l-shows", "l-films"],
+	});
+	await expect(names).toHaveText(["Shows", "Films"]);
+
+	// And moved back up, and down again, by the keyboard.
+	const back = page.waitForRequest("**/api/v1/me/library-order");
+	await grip.focus();
+	await page.keyboard.press("ArrowUp");
+	expect((await back).postDataJSON()).toEqual({
+		library_ids: ["l-films", "l-shows"],
+	});
+	await expect(names).toHaveText(["Films", "Shows"]);
+	await page.keyboard.press("ArrowDown");
+	await expect(names).toHaveText(["Shows", "Films"]);
+
+	await nav.getByRole("button", { name: "Done" }).click();
+	await expect(grip).toHaveCount(0);
+	// The order is the profile's, kept by the server.
+	await page.reload();
+	await expect(names).toHaveText(["Shows", "Films"]);
 });
 
 test("a profile is added, and what another may see is set", async ({

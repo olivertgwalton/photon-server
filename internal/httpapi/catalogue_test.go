@@ -15,12 +15,32 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-var films = uuid.MustParse("0199b3c0-0000-7000-8000-000000000001")
+var (
+	films = uuid.MustParse("0199b3c0-0000-7000-8000-000000000001")
+	shows = uuid.MustParse("0199b3c0-0000-7000-8000-000000000002")
+)
 
 type fakeCatalogue struct{}
 
 func (fakeCatalogue) Libraries(context.Context) ([]domain.Library, error) {
-	return []domain.Library{{ID: films, Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films"}}, nil
+	return []domain.Library{
+		{ID: films, Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films"},
+		{ID: shows, Name: "Shows", Kind: domain.LibraryShows, Root: "/srv/shows"},
+	}, nil
+}
+
+// LibraryOrder answers that the profile put Shows first.
+func (fakeCatalogue) LibraryOrder(context.Context, uuid.UUID) ([]uuid.UUID, error) {
+	return []uuid.UUID{shows}, nil
+}
+
+func (fakeCatalogue) SetLibraryOrder(_ context.Context, _ uuid.UUID, libs []uuid.UUID) error {
+	for _, l := range libs {
+		if l != films && l != shows {
+			return store.ErrNotFound
+		}
+	}
+	return nil
 }
 
 func (fakeCatalogue) LibraryCounts(context.Context, uuid.UUID) (map[uuid.UUID]domain.TitleCounts, error) {
@@ -225,6 +245,20 @@ func TestWall(t *testing.T) {
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/libraries", goodToken, ""); !strings.Contains(rec.Body.String(), `"counts":{"movies":120,"shows":0,"seasons":0,"episodes":0,"collections":0}`) {
 		t.Errorf("libraries = %s, want each with its counts", rec.Body)
+	}
+	var listed struct{ Items []struct{ Name string } }
+	if err := json.Unmarshal(serve(t, http.MethodGet, "/api/v1/libraries", goodToken, "").Body.Bytes(), &listed); err != nil ||
+		len(listed.Items) != 2 || listed.Items[0].Name != "Shows" {
+		t.Errorf("libraries = %+v, %v; want Shows first, as the profile put it", listed.Items, err)
+	}
+	for body, want := range map[string]int{
+		`{"library_ids":["` + films.String() + `","` + shows.String() + `"]}`: http.StatusNoContent,
+		`{"library_ids":["` + uuid.NewV7().String() + `"]}`:                   http.StatusNotFound,
+		`{"library_ids":"films"}`:                                             http.StatusBadRequest,
+	} {
+		if rec := serve(t, http.MethodPut, "/api/v1/me/library-order", goodToken, body); rec.Code != want {
+			t.Errorf("ordering %s: status = %d, want %d", body, rec.Code, want)
+		}
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+uuid.NewV7().String()+"/titles", goodToken, ""); rec.Code != http.StatusNotFound {
 		t.Errorf("an unknown library: status = %d, want 404", rec.Code)
