@@ -46,6 +46,12 @@ type teller interface {
 	JobEnded(ctx context.Context, kind domain.JobKind)
 }
 
+// gate says which jobs may start now, and holds one while it may go on.
+type gate interface {
+	Open(due domain.JobDue) bool
+	Hold(ctx context.Context, due domain.JobDue) (held context.Context, release func(), ok bool)
+}
+
 // Worker runs queued jobs of the kinds it has handlers for, at most slots at a time, and, given a
 // gate, only those the gate lets run.
 type Worker struct {
@@ -55,13 +61,13 @@ type Worker struct {
 	slots    int
 	handlers map[domain.JobKind]Handler
 	tell     teller
-	gate     *Gate
+	gate     gate
 }
 
 // NewWorker runs jobs with handlers, telling tell as each starts and ends; gate is nil for jobs
 // that never give way.
-func NewWorker(q queue, log *slog.Logger, node uuid.UUID, slots int, handlers map[domain.JobKind]Handler, tell teller, gate *Gate) *Worker {
-	return &Worker{queue: q, log: log, node: node, slots: slots, handlers: handlers, tell: tell, gate: gate}
+func NewWorker(q queue, log *slog.Logger, node uuid.UUID, slots int, handlers map[domain.JobKind]Handler, tell teller, g gate) *Worker {
+	return &Worker{queue: q, log: log, node: node, slots: slots, handlers: handlers, tell: tell, gate: g}
 }
 
 func (w *Worker) Run(ctx context.Context) {
