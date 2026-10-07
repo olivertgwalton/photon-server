@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -73,5 +74,23 @@ func TestJellyfinIsGivenAPortOfItsOwn(t *testing.T) {
 	}
 	if set.Jellyfin != domain.JellyfinOn || set.JellyfinPort != 8096 {
 		t.Errorf("stored %+v, want Jellyfin on 8096", set)
+	}
+}
+
+type heldPort struct{}
+
+func (heldPort) Err() error { return errors.New("port 8096: address already in use") }
+
+// An admin is told when the node they ask cannot have Jellyfin's port.
+func TestAnAdminSeesWhyJellyfinsAppsCannotReachTheServer(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Network: fakeNetwork{}, Jellyfin: heldPort{},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/network", nil)
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), `"jellyfin_error":"port 8096: address already in use"`) {
+		t.Errorf("%d %s", rec.Code, rec.Body)
 	}
 }

@@ -19,6 +19,10 @@ type secureConnections interface {
 	Mode() domain.SecureConnections
 }
 
+type jellyfinListener interface {
+	Err() error
+}
+
 // networkJSON is whether the server's port answers HTTPS, as Plex's Secure connections: required,
 // plain HTTP sent to HTTPS but from the server's own machine; preferred, both; disabled, HTTP
 // alone, as behind a proxy with the certificate. The certificate is a PEM chain and its key, at
@@ -39,13 +43,26 @@ func showNetwork(n domain.Network) networkJSON {
 	}
 }
 
+// networkStatusJSON is the network as set, and why the node answering is not serving Jellyfin's
+// API on its port, where it is not: another program holds it, say.
+type networkStatusJSON struct {
+	networkJSON
+	JellyfinError string `json:"jellyfin_error,omitzero"`
+}
+
 func (a *API) adminNetwork(w http.ResponseWriter, r *http.Request) {
 	n, err := a.svc.Network.Network(r.Context())
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, showNetwork(n))
+	out := networkStatusJSON{networkJSON: showNetwork(n)}
+	if a.svc.Jellyfin != nil {
+		if err := a.svc.Jellyfin.Err(); err != nil {
+			out.JellyfinError = err.Error()
+		}
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
 
 // setNetwork replaces how the server is reached, once this node reads the certificate, and tells

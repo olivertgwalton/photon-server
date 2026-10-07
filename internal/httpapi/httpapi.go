@@ -171,6 +171,8 @@ type Services struct {
 	// never sends a plain request to HTTPS.
 	Network networkSettings
 	Secure  secureConnections
+	// Jellyfin is this node's serving of Jellyfin's API; nil where it is not run.
+	Jellyfin jellyfinListener
 	// Setup is how this node was started, and Postgres and Valkey what it reaches.
 	Setup    Setup
 	Postgres versioned
@@ -725,12 +727,12 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "GET /api/v1/admin/network", access: admin,
-			summary: "Whether the server's port answers HTTPS, and the certificate it serves",
-			status:  http.StatusOK, reply: networkJSON{}, handle: a.adminNetwork,
+			summary: "Whether the server's port answers HTTPS, the certificate it serves, and whether Jellyfin's apps reach it",
+			status:  http.StatusOK, reply: networkStatusJSON{}, handle: a.adminNetwork,
 		},
 		{
 			pattern: "PUT /api/v1/admin/network", access: admin,
-			summary: "Replace whether the port answers HTTPS, and its certificate; every node serves it at once",
+			summary: "Replace whether the port answers HTTPS, its certificate, and Jellyfin's; every node serves it at once",
 			body:    networkJSON{}, status: http.StatusOK, reply: networkJSON{}, handle: a.setNetwork,
 		},
 		{
