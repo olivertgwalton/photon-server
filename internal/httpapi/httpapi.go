@@ -90,6 +90,9 @@ type authenticator interface {
 	ChangePassword(ctx context.Context, session domain.Session, current, password string) error
 	Devices(ctx context.Context, session domain.Session) ([]store.DeviceListing, error)
 	SignOutDevice(ctx context.Context, session domain.Session, device uuid.UUID) error
+	CreateKey(ctx context.Context, creator domain.Session, name string) (uuid.UUID, string, error)
+	Keys(ctx context.Context) ([]store.KeyListing, error)
+	RevokeKey(ctx context.Context, id uuid.UUID) error
 }
 
 type profileLister interface {
@@ -709,6 +712,19 @@ func (a *API) routes() []route {
 			pattern: "PATCH /api/v1/admin/providers/{id}", access: admin, summary: "Change a provider's settings",
 			path: []param{{"id", domain.FieldSource(""), "The provider."}},
 			body: providerChangeJSON{}, status: http.StatusOK, reply: metadataProviderJSON{}, handle: a.setProvider,
+		},
+		{
+			pattern: "GET /api/v1/admin/keys", access: admin, summary: "List the API keys",
+			status: http.StatusOK, reply: listJSON[keyListingJSON]{}, handle: a.keys,
+		},
+		{
+			pattern: "POST /api/v1/admin/keys", access: admin,
+			summary: "Make an API key acting as this admin; its token is shown only now",
+			body:    newKeyJSON{}, status: http.StatusCreated, reply: createdKeyJSON{}, handle: a.createKey,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/keys/{id}", access: admin, summary: "Revoke an API key",
+			status: http.StatusNoContent, handle: a.revokeKey,
 		},
 		{
 			pattern: "GET /api/v1/admin/plugins", access: admin, summary: "List the registered metadata plugins",

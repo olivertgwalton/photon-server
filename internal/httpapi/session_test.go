@@ -93,6 +93,14 @@ func (fakeAuth) SignOutDevice(context.Context, domain.Session, uuid.UUID) error 
 	return auth.ErrDeviceNotFound
 }
 
+func (fakeAuth) CreateKey(context.Context, domain.Session, string) (uuid.UUID, string, error) {
+	return uuid.NewV7(), "pst_key", nil
+}
+
+func (fakeAuth) Keys(context.Context) ([]store.KeyListing, error) { return nil, nil }
+
+func (fakeAuth) RevokeKey(context.Context, uuid.UUID) error { return auth.ErrKeyNotFound }
+
 func (fakeAuth) PollPairing(_ context.Context, deviceCode string) (kv.PairingState, string, domain.Profile, error) {
 	if deviceCode == "BCDFGHJK.secret" {
 		return kv.PairingPending, "", domain.Profile{}, nil
@@ -363,6 +371,18 @@ func TestABodyIsRefusedAValueNoneOfItsEnums(t *testing.T) {
 		var p problem
 		if err := json.NewDecoder(rec.Body).Decode(&p); err != nil || rec.Code != http.StatusBadRequest || p.Code != codeInvalidBody || p.Detail != tt.detail {
 			t.Errorf("%s: status %d, problem %+v (err %v), want invalid_body saying %q", tt.path, rec.Code, p, err, tt.detail)
+		}
+	}
+}
+
+func TestAnAPIKeyNeedsAName(t *testing.T) {
+	for body, want := range map[string]int{
+		`{"name":"Sonarr"}`: http.StatusCreated,
+		`{"name":"  "}`:     http.StatusBadRequest,
+		`{"name":"` + strings.Repeat("k", 65) + `"}`: http.StatusBadRequest,
+	} {
+		if rec := serve(t, http.MethodPost, "/api/v1/admin/keys", goodToken, body); rec.Code != want {
+			t.Errorf("%s: status %d, want %d", body, rec.Code, want)
 		}
 	}
 }

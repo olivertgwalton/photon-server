@@ -120,6 +120,7 @@ var problems = []struct {
 	{err: store.ErrMarkerRepeated, code: codeInvalidBody, ownWords: true},
 	{err: store.ErrMarkerNoPart, code: codeInvalidBody, ownWords: true},
 	{err: auth.ErrDeviceNotFound, code: codeNotFound},
+	{err: auth.ErrKeyNotFound, code: codeNotFound},
 	{err: auth.ErrPairingNotFound, code: codePairingNotFound},
 	{err: auth.ErrWrongSecret, code: codeWrongSecret},
 	{err: auth.ErrPINNotDigits, code: codeInvalidBody, ownWords: true},

@@ -436,6 +436,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the API keys
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KeyListingList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        /**
+         * Make an API key acting as this admin; its token is shown only now
+         * @description Admin only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["NewKey"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CreatedKey"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/keys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an API key
+         * @description Admin only.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/libraries": {
         parameters: {
             query?: never;
@@ -5187,6 +5295,11 @@ export interface components {
             /** Format: uuid */
             id: string;
         };
+        CreatedKey: {
+            /** Format: uuid */
+            id: string;
+            token: string;
+        };
         Credit: {
             /** Format: date-time */
             added_at: string;
@@ -5529,6 +5642,19 @@ export interface components {
         JobState: "queued" | "running" | "rerun" | "dead";
         /** @enum {string} */
         Keep: "token" | "cookie";
+        KeyListing: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            name: string;
+            profile: string;
+        };
+        KeyListingList: {
+            items: components["schemas"]["KeyListing"][];
+        };
         /** @enum {string} */
         KeyframeMode: "index" | "full" | "off";
         KindSources: {
@@ -5654,6 +5780,9 @@ export interface components {
             position: number;
         };
         Name: {
+            name: string;
+        };
+        NewKey: {
             name: string;
         };
         /** @enum {string} */
