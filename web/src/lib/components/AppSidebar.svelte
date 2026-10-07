@@ -12,6 +12,7 @@ import type { Component } from "svelte";
 import { page } from "$app/state";
 import type { components } from "#lib/api/schema.js";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
+import LibraryMenu from "./LibraryMenu.svelte";
 import Mark from "./Mark.svelte";
 
 type Library = components["schemas"]["Library"];
@@ -24,6 +25,7 @@ const kindIcons: Record<Library["kind"], Component> = {
 };
 
 const sidebar = Sidebar.useSidebar();
+const admin = $derived(page.data.me?.role === "admin");
 
 // The page's own item is marked by a bar at its edge that grows in.
 const menuButton =
@@ -41,8 +43,9 @@ function current(href: string) {
 	href: string,
 	label: string,
 	Icon: Component,
+	library?: Library,
 )}
-	<Sidebar.MenuItem>
+	<Sidebar.MenuItem class="group/library">
 		<Sidebar.MenuButton
 			isActive={current(href)}
 			tooltipContent={label}
@@ -62,6 +65,9 @@ function current(href: string) {
 				</a>
 			{/snippet}
 		</Sidebar.MenuButton>
+		{#if library && admin}
+			<LibraryMenu {library} />
+		{/if}
 	</Sidebar.MenuItem>
 {/snippet}
 
@@ -94,6 +100,7 @@ function current(href: string) {
 								`/libraries/${library.id}`,
 								library.name,
 								kindIcons[library.kind],
+								library,
 							)}
 						{/each}
 					</Sidebar.Menu>
