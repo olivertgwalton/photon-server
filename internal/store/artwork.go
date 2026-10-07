@@ -12,6 +12,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -101,13 +102,22 @@ func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[uuid
 	if len(items) == 0 {
 		return out, hashes, nil
 	}
-	rows, err := queryRows[model.Artwork](ctx, s.pool, `SELECT `+artworkColumns+` FROM artwork WHERE item_id = ANY($1)`, ids(items))
-	if err != nil {
+	// The pictures and how their libraries rank them are read at once.
+	var rows []*model.Artwork
+	var taken map[uuid.UUID][]domain.FieldSource
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		rows, err = queryRows[model.Artwork](gctx, s.pool, `SELECT `+artworkColumns+` FROM artwork WHERE item_id = ANY($1)`, ids(items))
+		return err
+	})
+	g.Go(func() (err error) {
+		taken, err = rankings(gctx, s.pool, items, domain.FetcherImages)
+		return err
+	})
+	if err := g.Wait(); err != nil {
 		return nil, nil, err
 	}
-	if err := s.rankPictures(ctx, rows, items); err != nil {
-		return nil, nil, err
-	}
+	rankPictures(rows, items, taken)
 	type place struct {
 		item  uuid.UUID
 		kind  domain.ArtworkKind
@@ -132,13 +142,9 @@ func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[uuid
 }
 
 // rankPictures puts the pictures of items best first: an admin's choice, files beside the title,
-// then the providers its library asks for pictures of its kind in the library's order, then each
-// provider's own order.
-func (s *Store) rankPictures(ctx context.Context, rows []*model.Artwork, items []*model.Item) error {
-	taken, err := rankings(ctx, s.pool, items, domain.FetcherImages)
-	if err != nil {
-		return err
-	}
+// then the providers its library asks for pictures of its kind in the library's order (taken, as
+// rankings answers), then each provider's own order.
+func rankPictures(rows []*model.Artwork, items []*model.Item, taken map[uuid.UUID][]domain.FieldSource) {
 	rank := map[uuid.UUID]map[domain.FieldSource]int{}
 	for _, it := range items {
 		rank[it.ID] = map[domain.FieldSource]int{domain.SourceUser: -2, domain.SourceFile: -1}
@@ -156,7 +162,6 @@ func (s *Store) rankPictures(ctx context.Context, rows []*model.Artwork, items [
 	slices.SortStableFunc(rows, func(x, y *model.Artwork) int {
 		return cmp.Or(cmp.Compare(order(x), order(y)), cmp.Compare(x.Position, y.Position))
 	})
-	return nil
 }
 
 // ArtworkCandidate is a picture of a kind a provider has for a title, for an admin to choose.
@@ -184,9 +189,11 @@ func (s *Store) ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain
 	if err != nil {
 		return nil, err
 	}
-	if err := s.rankPictures(ctx, rows, []*model.Item{item}); err != nil {
+	taken, err := rankings(ctx, s.pool, []*model.Item{item}, domain.FetcherImages)
+	if err != nil {
 		return nil, err
 	}
+	rankPictures(rows, []*model.Item{item}, taken)
 	var chosen string
 	if len(rows) > 0 && rows[0].Source == domain.SourceUser {
 		chosen = rows[0].Place

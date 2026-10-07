@@ -172,3 +172,60 @@ func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
 		t.Errorf("candidates of no title: %v, want ErrNotFound", err)
 	}
 }
+
+// A title's best picture is the one from the provider its library ranks first for pictures of its
+// kind; one it has turned off comes after every one it asks.
+func TestALibrarysPictureRankingChoosesItsTitlesBest(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rank := func(images ...domain.RankedSource) {
+		t.Helper()
+		change := LibraryChange{Name: "Films", Sources: []domain.KindSources{{Kind: domain.ItemMovie, Metadata: []domain.RankedSource{{Source: domain.SourceTMDB, Enabled: true}}, Images: images}}}
+		if err := s.SetLibrary(ctx, lib.ID, change); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tmdb, omdb := domain.RankedSource{Source: domain.SourceTMDB, Enabled: true}, domain.RankedSource{Source: domain.SourceOMDb, Enabled: true}
+	rank(tmdb, omdb)
+	film := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+		RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
+	}}}}}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	item := oneItem(t, s, `kind = 'movie'`).ID
+	for source, url := range map[domain.FieldSource]string{domain.SourceTMDB: "https://tmdb.example/heat.jpg", domain.SourceOMDb: "https://omdb.example/heat.jpg"} {
+		if err := s.SaveIdentity(ctx, item, source, domain.Metadata{Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, URL: url}}}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	best := func() string {
+		t.Helper()
+		cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
+		if err != nil || len(cards) != 1 {
+			t.Fatalf("wall = %+v, %v", cards, err)
+		}
+		p, err := s.Picture(ctx, cards[0].Poster)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.URL
+	}
+
+	if got := best(); got != "https://tmdb.example/heat.jpg" {
+		t.Errorf("ranking TMDB first, the poster is %q, want TMDB's", got)
+	}
+	rank(omdb, tmdb)
+	if got := best(); got != "https://omdb.example/heat.jpg" {
+		t.Errorf("ranking OMDb first, the poster is %q, want OMDb's", got)
+	}
+	omdb.Enabled = false
+	rank(omdb, tmdb)
+	if got := best(); got != "https://tmdb.example/heat.jpg" {
+		t.Errorf("with OMDb turned off, the poster is %q, want TMDB's", got)
+	}
+}
