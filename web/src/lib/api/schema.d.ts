@@ -5541,6 +5541,8 @@ export interface components {
             remote_extras: components["schemas"]["ExtraKind"][];
             root: string;
             sources: components["schemas"]["KindSources"][];
+            subtitle_languages: string[];
+            subtitle_match: components["schemas"]["SubtitleMatch"];
             themes: components["schemas"]["ThemeLookup"];
             title_language: components["schemas"]["TitleLanguage"];
         };
@@ -5563,6 +5565,8 @@ export interface components {
             remote_extras: components["schemas"]["ExtraKind"][];
             root: string;
             sources: components["schemas"]["KindSources"][];
+            subtitle_languages: string[];
+            subtitle_match: components["schemas"]["SubtitleMatch"];
             themes: components["schemas"]["ThemeLookup"];
             title_language: components["schemas"]["TitleLanguage"];
         };
@@ -6156,6 +6160,8 @@ export interface components {
             refresh_days?: number | null;
             remote_extras?: components["schemas"]["ExtraKind"][];
             sources?: components["schemas"]["KindSourcesChange"][];
+            subtitle_languages?: string[];
+            subtitle_match?: components["schemas"]["SubtitleMatch"];
             themes?: components["schemas"]["ThemeLookup"];
             title_language?: components["schemas"]["TitleLanguage"];
         };
@@ -6817,6 +6823,8 @@ export interface components {
         /** @enum {string} */
         SubtitleFormat: "original" | "webvtt";
         /** @enum {string} */
+        SubtitleMatch: "release" | "any";
+        /** @enum {string} */
         SubtitleMode: "default" | "always" | "only_forced" | "none" | "smart";
         SubtitleRef: {
             codec: string;
@@ -6850,7 +6858,7 @@ export interface components {
             started_at?: string;
         };
         /** @enum {string} */
-        TaskKey: "scan_libraries" | "sweep_jobs" | "backup_database" | "refresh_metadata" | "sweep_artwork" | "detect_markers" | "backfill_previews" | "sweep_downloads" | "prune_activity" | "refresh_collections" | "sync_lists";
+        TaskKey: "scan_libraries" | "sweep_jobs" | "backup_database" | "refresh_metadata" | "sweep_artwork" | "detect_markers" | "backfill_previews" | "sweep_downloads" | "prune_activity" | "refresh_collections" | "sync_lists" | "fetch_subtitles";
         TaskList: {
             items: components["schemas"]["Task"][];
         };

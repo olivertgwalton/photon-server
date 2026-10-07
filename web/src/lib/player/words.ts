@@ -57,6 +57,38 @@ export function bitrate(kbps: number): string {
 
 const languages = new Intl.DisplayNames(["en"], { type: "language" });
 
+// The languages subtitles are most often wanted in, offered wherever they are
+// chosen, by BCP 47 tag.
+export const subtitleLanguages = [
+	"en",
+	"es",
+	"fr",
+	"de",
+	"it",
+	"pt",
+	"pt-BR",
+	"nl",
+	"sv",
+	"da",
+	"no",
+	"fi",
+	"pl",
+	"cs",
+	"hu",
+	"ro",
+	"el",
+	"tr",
+	"ru",
+	"uk",
+	"ar",
+	"he",
+	"hi",
+	"ja",
+	"ko",
+	"zh-CN",
+	"zh-TW",
+];
+
 export function language(tag: string | undefined): string {
 	if (!tag) return "";
 	try {

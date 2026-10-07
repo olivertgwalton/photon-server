@@ -55,6 +55,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.ArtworkLanguage]():     values(domain.ArtworkLanguages()),
 	reflect.TypeFor[domain.TitleLanguage]():       values(domain.TitleLanguages()),
 	reflect.TypeFor[domain.CollectionMode]():      values(domain.CollectionModes()),
+	reflect.TypeFor[domain.SubtitleMatch]():       values(domain.SubtitleMatches()),
 	reflect.TypeFor[domain.LibraryKind]():         values(domain.LibraryKinds()),
 	reflect.TypeFor[domain.MarkerDetection]():     values(domain.MarkerDetections()),
 	reflect.TypeFor[domain.MarkerKind]():          values(domain.MarkerKinds()),

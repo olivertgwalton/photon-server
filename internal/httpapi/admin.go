@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 	"uuid"
 
@@ -83,6 +84,11 @@ type adminLibraryJSON struct {
 	// CollectionMode is how its wall shows its collections: grouped, in place of the titles they
 	// hold; shown, beside them; or hidden.
 	CollectionMode domain.CollectionMode `json:"collection_mode"`
+	// SubtitleLanguages are the languages it fetches subtitles in for copies with none in them,
+	// as BCP 47 tags; none is no fetching. SubtitleMatch is which it takes: release, one made for
+	// the copy's very file; or any, the best found.
+	SubtitleLanguages []string             `json:"subtitle_languages"`
+	SubtitleMatch     domain.SubtitleMatch `json:"subtitle_match"`
 }
 
 // kindSourcesJSON ranks where a kind of item a library holds takes its metadata and its pictures
@@ -105,7 +111,11 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
 		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes, Deletion: l.Deletion,
 		MetadataLanguage: l.Locale.Language, CertificationCountry: l.Locale.Country, ArtworkLanguage: l.Locale.Artwork,
-		TitleLanguage: l.Titles, CollectionMode: l.Collections,
+		TitleLanguage: l.Titles, CollectionMode: l.Collections, SubtitleLanguages: make([]string, len(l.SubtitleLanguages)),
+		SubtitleMatch: l.SubtitleMatch,
+	}
+	for i, t := range l.SubtitleLanguages {
+		j.SubtitleLanguages[i] = t.String()
 	}
 	ranked := func(list []domain.RankedSource) []rankedSourceJSON {
 		out := make([]rankedSourceJSON, len(list))
@@ -217,6 +227,9 @@ type libraryChangeJSON struct {
 	TitleLanguage domain.TitleLanguage `json:"title_language,omitzero"`
 	// CollectionMode is how its wall shows its collections.
 	CollectionMode domain.CollectionMode `json:"collection_mode,omitzero"`
+	// SubtitleLanguages replace the languages it fetches subtitles in; [] is none.
+	SubtitleLanguages []string             `json:"subtitle_languages,omitzero"`
+	SubtitleMatch     domain.SubtitleMatch `json:"subtitle_match,omitzero"`
 }
 
 type kindSourcesChangeJSON struct {
@@ -244,7 +257,20 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	change := store.LibraryChange{
 		Name: req.Name, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays,
 		Previews: req.Previews, Markers: req.Markers, Keyframes: req.Keyframes, Themes: req.Themes,
-		Deletion: req.Deletion, Collections: req.CollectionMode,
+		Deletion: req.Deletion, Collections: req.CollectionMode, SubtitleMatch: req.SubtitleMatch,
+	}
+	if req.SubtitleLanguages != nil {
+		change.SubtitleLanguages = make([]language.Tag, 0, len(req.SubtitleLanguages))
+		for _, s := range req.SubtitleLanguages {
+			t, err := language.Parse(s)
+			if err != nil || t == language.Und {
+				writeProblem(w, a.logger, codeInvalidBody, "subtitle_languages are BCP 47 tags, such as fr or pt-BR")
+				return
+			}
+			if !slices.Contains(change.SubtitleLanguages, t) {
+				change.SubtitleLanguages = append(change.SubtitleLanguages, t)
+			}
+		}
 	}
 	if d := req.RefreshDays; d != nil && (*d < 0 || *d > 365) {
 		writeProblem(w, a.logger, codeInvalidBody, "refresh_days is from 0, never, to 365")

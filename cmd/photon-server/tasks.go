@@ -18,6 +18,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/subtitles"
 	"github.com/olivertgwalton/photon-server/internal/task"
 )
 
@@ -82,6 +83,13 @@ func scanLibrary(st *store.Store, scanner *scan.Scanner, hub *events.Hub, logger
 		}
 		if added > 0 {
 			hub.Raise(ctx, domain.Event{Kind: domain.EventTitlesAdded, Library: lib.ID, Details: map[string]any{"titles": added}})
+		}
+		// New titles have their subtitles fetched now, as Jellyfin fetches a new item's, not at the
+		// next daily run.
+		if added > 0 && len(lib.SubtitleLanguages) > 0 {
+			if err := st.RequestTask(ctx, domain.TaskFetchSubtitles); err != nil {
+				logger.WarnContext(ctx, "missing subtitles not asked for", slog.Any("err", err))
+			}
 		}
 		return nil
 	}
@@ -326,6 +334,24 @@ func sweepDownloadsTask(st *store.Store, logger *slog.Logger) task.Task {
 			n, err := st.ExpireDownloads(ctx, time.Now().Add(-downloadsKept))
 			if n > 0 {
 				logger.InfoContext(ctx, "downloads expired", slog.Int64("downloads", n))
+			}
+			return err
+		},
+	}
+}
+
+// fetchSubtitlesEvery is how often Jellyfin downloads missing subtitles.
+const fetchSubtitlesEvery = 24 * time.Hour
+
+// fetchSubtitlesTask fetches the subtitles copies lack in the languages their libraries name.
+func fetchSubtitlesTask(f subtitles.Fetcher, logger *slog.Logger) task.Task {
+	return task.Task{
+		Key:     domain.TaskFetchSubtitles,
+		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: fetchSubtitlesEvery},
+		Run: func(ctx context.Context, _ task.Start) error {
+			n, err := f.FetchMissing(ctx)
+			if n > 0 {
+				logger.InfoContext(ctx, "missing subtitles fetched", slog.Int("subtitles", n))
 			}
 			return err
 		},

@@ -5,6 +5,8 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
+
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -91,5 +93,57 @@ func (s *Store) RemoveFetchedSubtitle(ctx context.Context, id uuid.UUID) error {
 	if err == nil && tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
+	return err
+}
+
+// WantedSubtitle is a copy that lacks a subtitle in a language its library fetches them in, and
+// which its library takes.
+type WantedSubtitle struct {
+	Item, Version uuid.UUID
+	Language      language.Tag
+	Match         domain.SubtitleMatch
+}
+
+// WantedSubtitles answers, newest copy first and after the one given (none for the first), up to
+// limit films' and episodes' copies on disk that have no subtitle in a language their library
+// names, inside or beside them, nor one forced alone, and that were not searched for one in it
+// since. A language is had in any of its regions, as a track is chosen.
+func (s *Store) WantedSubtitles(ctx context.Context, searchedSince time.Time, after *WantedSubtitle, limit int) ([]WantedSubtitle, error) {
+	var afterVersion *uuid.UUID
+	var afterLanguage string
+	if after != nil {
+		afterVersion, afterLanguage = &after.Version, after.Language.String()
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT v.item_id, v.id, w.language, l.subtitle_match
+		FROM libraries l CROSS JOIN LATERAL unnest(l.subtitle_languages) w(language)
+		JOIN versions v ON v.library_id = l.id JOIN items i ON i.id = v.item_id
+		WHERE i.kind IN ('movie', 'episode') AND v.missing_since IS NULL
+			AND ($2::uuid IS NULL OR (v.id, w.language) < ($2, $3))
+			AND NOT EXISTS (SELECT 1 FROM subtitle_files f WHERE f.version_id = v.id AND NOT f.forced
+				AND split_part(f.language, '-', 1) = split_part(w.language, '-', 1))
+			AND NOT EXISTS (SELECT 1 FROM parts p JOIN streams t ON t.part_id = p.id
+				WHERE p.version_id = v.id AND t.kind = 'subtitle' AND NOT t.forced
+					AND split_part(t.language, '-', 1) = split_part(w.language, '-', 1))
+			AND NOT EXISTS (SELECT 1 FROM subtitle_searches s
+				WHERE s.version_id = v.id AND s.language = w.language AND s.searched_at > $1)
+		ORDER BY v.id DESC, w.language DESC LIMIT $4`, searchedSince, afterVersion, afterLanguage, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (WantedSubtitle, error) {
+		var w WantedSubtitle
+		var lang string
+		err := row.Scan(&w.Item, &w.Version, &lang, &w.Match)
+		w.Language, _ = language.Parse(lang)
+		return w, err
+	})
+}
+
+// SubtitleSearched records that a copy was searched for a subtitle in a language.
+func (s *Store) SubtitleSearched(ctx context.Context, version uuid.UUID, lang language.Tag) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO subtitle_searches (version_id, language, searched_at) SELECT id, $2, now() FROM versions WHERE id = $1
+		ON CONFLICT (version_id, language) DO UPDATE SET searched_at = excluded.searched_at`, version, lang.String())
 	return err
 }

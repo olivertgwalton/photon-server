@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"uuid"
 
+	"golang.org/x/text/language"
+
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -18,7 +20,7 @@ var ErrLibraryExists = errors.New("a library with that name or root already exis
 // statement that reads whole rows.
 const (
 	libraryColumns = `id, name, kind, root, monitor, refresh_days, previews, markers, keyframes, themes, deletion,
-		metadata_language, certification_country, artwork_language, title_language, collection_mode`
+		metadata_language, certification_country, artwork_language, title_language, collection_mode, subtitle_languages, subtitle_match`
 	librarySourceColumns = `library_id, item_kind, fetcher, source, position, enabled`
 )
 
@@ -141,6 +143,9 @@ type LibraryChange struct {
 	ArtworkLanguage domain.ArtworkLanguage
 	// TitleLanguage is which title it gives its films and shows; changing it describes them again.
 	TitleLanguage domain.TitleLanguage
+	// SubtitleLanguages, where not nil, are those it fetches subtitles in; empty is none.
+	SubtitleLanguages []language.Tag
+	SubtitleMatch     domain.SubtitleMatch
 }
 
 // SetLibrary renames a library, changes whether it is watched, where each kind's metadata and
@@ -225,6 +230,20 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 		}
 		if change.Collections != "" {
 			if err := set("collection_mode", change.Collections); err != nil {
+				return err
+			}
+		}
+		if change.SubtitleLanguages != nil {
+			tags := make([]string, len(change.SubtitleLanguages))
+			for i, t := range change.SubtitleLanguages {
+				tags[i] = t.String()
+			}
+			if err := set("subtitle_languages", tags); err != nil {
+				return err
+			}
+		}
+		if change.SubtitleMatch != "" {
+			if err := set("subtitle_match", change.SubtitleMatch); err != nil {
 				return err
 			}
 		}
@@ -362,8 +381,19 @@ func library(r model.Library, sources []domain.KindSources, extras []domain.Extr
 		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews, Markers: r.Markers,
 		Keyframes: r.Keyframes, Themes: r.Themes, Deletion: r.Deletion,
 		Locale: domain.Locale{Language: deref(r.MetadataLanguage), Country: deref(r.CertificationCountry), Artwork: r.ArtworkLanguage},
-		Titles: r.TitleLanguage, Collections: r.CollectionMode,
+		Titles: r.TitleLanguage, Collections: r.CollectionMode, SubtitleLanguages: tags(r.SubtitleLanguages), SubtitleMatch: r.SubtitleMatch,
 	}
+}
+
+// tags are languages kept as their tags.
+func tags(kept []string) []language.Tag {
+	out := make([]language.Tag, 0, len(kept))
+	for _, s := range kept {
+		if t, err := language.Parse(s); err == nil {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // CertificateCountries answers the countries whose certificates the server can read, by ISO 3166-1

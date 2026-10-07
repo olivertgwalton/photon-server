@@ -2,6 +2,8 @@ package domain
 
 import (
 	"uuid"
+
+	"golang.org/x/text/language"
 )
 
 type LibraryKind string
@@ -147,6 +149,24 @@ type Library struct {
 	Locale      Locale
 	Titles      TitleLanguage
 	Collections CollectionMode
+	// SubtitleLanguages are those it fetches subtitles in for copies that have none in them; none
+	// is no fetching.
+	SubtitleLanguages []language.Tag
+	SubtitleMatch     SubtitleMatch
+}
+
+// SubtitleMatch is which subtitle a library fetches for a copy itself, as Jellyfin's "Only
+// download subtitles that are a perfect match": one made for its very file, found by its hash, or
+// the best of any, which may be timed for another release.
+type SubtitleMatch string
+
+const (
+	SubtitleMatchRelease SubtitleMatch = "release"
+	SubtitleMatchAny     SubtitleMatch = "any"
+)
+
+func SubtitleMatches() []SubtitleMatch {
+	return []SubtitleMatch{SubtitleMatchRelease, SubtitleMatchAny}
 }
 
 // TitleCounts are how many of each kind of title a library holds, as a profile may see them, as

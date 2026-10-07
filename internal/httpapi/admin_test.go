@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -72,6 +73,10 @@ func (f *fakeLibraries) SetLibrary(_ context.Context, id uuid.UUID, c store.Libr
 	if c.CertificationCountry != nil {
 		f.libs[i].Locale.Country = *c.CertificationCountry
 	}
+	if c.SubtitleLanguages != nil {
+		f.libs[i].SubtitleLanguages = c.SubtitleLanguages
+	}
+	f.libs[i].SubtitleMatch = cmp.Or(c.SubtitleMatch, f.libs[i].SubtitleMatch)
 	return nil
 }
 
@@ -124,6 +129,11 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 	if !slices.Equal(libs.scanned, []uuid.UUID{added.ID}) {
 		t.Errorf("scanned %v, want the new library at once", libs.scanned)
 	}
+	// Subtitle languages are kept as their standard writes them, once each.
+	rec = do(goodToken, http.MethodPatch, "/api/v1/admin/libraries/"+added.ID.String(), `{"subtitle_languages": ["fr", "pt-br", "fr"], "subtitle_match": "any"}`)
+	if !strings.Contains(rec.Body.String(), `"subtitle_languages":["fr","pt-BR"],"subtitle_match":"any"`) {
+		t.Errorf("setting subtitle languages: %d %s", rec.Code, rec.Body)
+	}
 	for _, tc := range []struct {
 		method, target, body string
 		want                 int
@@ -146,6 +156,8 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"themes": "all"}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"themes": "themerr"}`, http.StatusConflict},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"themes": "off"}`, http.StatusOK},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"subtitle_languages": ["fr", "Klingon!"]}`, http.StatusBadRequest},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"subtitle_match": "perfect"}`, http.StatusBadRequest},
 		{http.MethodPost, "/api/v1/admin/libraries/" + added.ID.String() + "/scan", "", http.StatusAccepted},
 		{http.MethodPost, "/api/v1/admin/libraries/" + uuid.NewV7().String() + "/scan", "", http.StatusNotFound},
 		{http.MethodPost, "/api/v1/admin/libraries/" + added.ID.String() + "/refresh", `{"mode": "missing"}`, http.StatusAccepted},

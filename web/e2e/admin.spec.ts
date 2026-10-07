@@ -135,13 +135,16 @@ test("a library is added from a folder found by browsing the server", async ({
 	await metadata.getByRole("checkbox", { name: "Nfo" }).click();
 	await metadata.getByRole("checkbox", { name: "MDBList" }).click();
 	await metadata.getByRole("button", { name: "Trust MDBList more" }).click();
+	await page.getByRole("checkbox", { name: "German", exact: true }).click();
 	const saved = page.waitForRequest(
 		(r) =>
 			r.method() === "PATCH" &&
 			r.url().endsWith("/api/v1/admin/libraries/l-films"),
 	);
 	await page.getByRole("button", { name: "Save" }).click();
-	expect((await saved).postDataJSON().sources).toEqual([
+	const body = (await saved).postDataJSON();
+	expect(body.subtitle_languages).toEqual(["fr", "de"]);
+	expect(body.sources).toEqual([
 		{
 			kind: "movie",
 			metadata: [

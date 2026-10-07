@@ -51,6 +51,10 @@ export const tasks: Record<Schemas["TaskKey"], { name: string; does: string }> =
 			name: "Refresh smart collections",
 			does: "Finds what each smart collection's filters hold again, catching what was matched or edited since.",
 		},
+		fetch_subtitles: {
+			name: "Download missing subtitles",
+			does: "Fetches subtitles in the languages libraries name for copies with none in them.",
+		},
 	};
 
 export const jobKinds: Record<Schemas["JobKind"], string> = {
