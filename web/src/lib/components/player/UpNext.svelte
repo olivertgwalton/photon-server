@@ -47,7 +47,9 @@ const where = $derived(
 	aria-labelledby="up-next"
 	class="bg-raise/95 ring-line-strong flex w-80 max-w-[calc(100vw-2rem)] gap-3 rounded-xl p-3 shadow-2xl ring-1 backdrop-blur"
 >
-	<div class="bg-ground aspect-video w-28 shrink-0 overflow-hidden rounded-md">
+	<div
+		class="bg-ground aspect-video w-28 shrink-0 self-start overflow-hidden rounded-md"
+	>
 		{#if picture}
 			<img
 				src={artworkSrc(picture, "still")}

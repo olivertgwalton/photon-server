@@ -9,8 +9,10 @@ export type CardLike = Pick<Card, "id" | "kind" | "title"> & Partial<Card>;
 <script lang="ts">
 import CheckIcon from "@lucide/svelte/icons/check";
 import HeartIcon from "@lucide/svelte/icons/heart";
+import PlayIcon from "@lucide/svelte/icons/play";
 import { artworkSrc, artworkSrcset, type Shape } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
+import { fadeIn } from "#lib/fade.js";
 import { episodeLabel } from "#lib/format.js";
 import TitleMenu from "./TitleMenu.svelte";
 
@@ -59,72 +61,76 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 </script>
 
 <div class="group/card relative">
+	<!-- The words sit over the picture, as the app's cards have them, so a row
+		is the height of its pictures. The blur is the frame's, under a picture
+		that fades in over it. -->
 	<a href="/titles/{card.id}" class="group block outline-none">
 		<div
 			class={[
-				"bg-raise group-hover:ring-line-strong group-focus-visible:ring-signal relative overflow-hidden rounded-lg ring-2 ring-transparent transition-shadow",
+				"card-frame",
 				shape === "poster" ? "aspect-[2/3]" : "aspect-video",
 			]}
+			style={picture ? blurStyle(card.blurhashes?.[picture]) : undefined}
 		>
 			{#if picture}
 				<img
+					{@attach fadeIn}
 					src={artworkSrc(picture, shape)}
 					srcset={artworkSrcset(picture, shape)}
 					{sizes}
 					alt=""
 					loading="lazy"
 					decoding="async"
-					class="size-full object-cover"
-					style={blurStyle(card.blurhashes?.[picture])}
+					class="card-picture"
 				>
-			{:else}
-				<span
-					class="font-heading text-ink-3 grid size-full place-items-center p-3 text-center text-sm font-bold"
-					aria-hidden="true"
-				>
-					{name}
-				</span>
 			{/if}
 			<div class="absolute top-2 left-2 flex gap-1">
 				{#if watched}
-					<span
-						class="bg-ink text-ground grid size-6 place-items-center rounded-full"
-						title="Watched"
-					>
+					<span class="glass-disc" title="Watched">
 						<CheckIcon class="size-3.5" aria-hidden="true" />
 						<span class="sr-only">Watched</span>
 					</span>
 				{:else if unwatched}
 					<span
-						class="bg-ink text-ground grid h-6 min-w-6 place-items-center rounded-full px-1.5 font-mono text-xs font-bold"
+						class="glass-disc w-auto min-w-6 px-1.5 font-mono text-xs font-bold"
 					>
 						{unwatched}
 						<span class="sr-only">unwatched</span>
 					</span>
 				{/if}
 				{#if card.state?.favourite_at}
-					<span
-						class="bg-ground/80 text-ink grid size-6 place-items-center rounded-full"
-						title="Favourite"
-					>
+					<span class="glass-disc" title="Favourite">
 						<HeartIcon class="size-3.5 fill-current" aria-hidden="true" />
 						<span class="sr-only">Favourite</span>
 					</span>
 				{/if}
 			</div>
-			{#if progress > 0}
-				<div class="absolute inset-x-2 bottom-2 h-1 rounded-full bg-black/60">
-					<div
-						class="bg-ink h-full rounded-full"
-						style="width: {progress * 100}%"
-					></div>
-				</div>
-			{/if}
+			<div class="card-shade grid gap-0.5">
+				<p
+					class="text-ink line-clamp-2 text-[0.8125rem] leading-tight font-semibold"
+				>
+					{name}
+				</p>
+				{#if progress > 0 || caption}
+					<p class="text-ink-2 flex items-center gap-1.5 text-xs">
+						{#if progress > 0}
+							<PlayIcon
+								class="size-2.5 shrink-0 fill-current"
+								aria-hidden="true"
+							/>
+							<!-- Never empty: a play just begun still shows it has. -->
+							<span class="h-1.25 w-7 shrink-0 rounded-full bg-white/35">
+								<span
+									class="bg-ink block h-full rounded-full"
+									style="width: calc(5px + 23px * {progress})"
+								></span>
+							</span>
+						{/if}
+						<span class="truncate">{caption}</span>
+					</p>
+				{/if}
+			</div>
 		</div>
-		<p class="text-ink mt-2 truncate text-sm font-semibold">{name}</p>
-		{#if caption}
-			<p class="text-ink-3 truncate text-xs">{caption}</p>
-		{/if}
 	</a>
 	<!-- Beside the link, not in it: a control inside a link is two at once. -->
 	<TitleMenu

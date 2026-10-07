@@ -12,6 +12,7 @@ import type { Component } from "svelte";
 import { page } from "$app/state";
 import type { components } from "#lib/api/schema.js";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
+import Mark from "./Mark.svelte";
 
 type Library = components["schemas"]["Library"];
 
@@ -23,6 +24,10 @@ const kindIcons: Record<Library["kind"], Component> = {
 };
 
 const sidebar = Sidebar.useSidebar();
+
+// The page's own item is marked by a bar at its edge that grows in.
+const menuButton =
+	"relative h-9 gap-3 rounded-lg transition-[width,height,padding,color,background-color] duration-200 before:absolute before:inset-y-2 before:left-0 before:w-0.75 before:scale-y-0 before:rounded-full before:bg-sidebar-primary before:transition-transform before:duration-300 data-active:font-semibold data-active:before:scale-y-100";
 
 function current(href: string) {
 	const path = page.url.pathname;
@@ -38,7 +43,11 @@ function current(href: string) {
 	Icon: Component,
 )}
 	<Sidebar.MenuItem>
-		<Sidebar.MenuButton isActive={current(href)} tooltipContent={label}>
+		<Sidebar.MenuButton
+			isActive={current(href)}
+			tooltipContent={label}
+			class={menuButton}
+		>
 			{#snippet child({
 				props,
 			})}
@@ -60,13 +69,19 @@ function current(href: string) {
 	<Sidebar.Header>
 		<a
 			href="/"
-			class="font-heading text-ink px-2 py-1.5 text-xl font-bold tracking-tight group-data-[collapsible=icon]:hidden"
+			aria-label="photon"
+			class="text-ink hover:text-ink-2 flex items-center gap-2.5 px-2 py-1.5 transition-colors duration-200 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
 		>
-			photon
+			<Mark size={24} class="shrink-0" />
+			<span
+				class="font-heading text-xl font-black tracking-tighter group-data-[collapsible=icon]:hidden"
+			>
+				photon.
+			</span>
 		</a>
 	</Sidebar.Header>
 	<Sidebar.Content>
-		<nav aria-label="Main">
+		<nav aria-label="Main" class="flex flex-1 flex-col">
 			<Sidebar.Group>
 				<Sidebar.Menu>{@render item("/", "Home", HouseIcon)}</Sidebar.Menu>
 			</Sidebar.Group>
@@ -93,7 +108,7 @@ function current(href: string) {
 					{@render item("/downloads", "Downloads", DownloadIcon)}
 				</Sidebar.Menu>
 			</Sidebar.Group>
-			<Sidebar.Group>
+			<Sidebar.Group class="mt-auto">
 				<Sidebar.Menu>
 					{@render item("/settings", "Settings", SettingsIcon)}
 				</Sidebar.Menu>

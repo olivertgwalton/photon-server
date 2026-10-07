@@ -66,6 +66,10 @@
 	--sidebar-ring: var(--signal);
 }
 
+@theme {
+	--ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 @theme inline {
 	--font-heading:
 		"Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
@@ -190,5 +194,63 @@
 	   than something to be read as prose. */
 	.label {
 		@apply text-ink-3 font-mono text-[0.6875rem] font-bold tracking-[0.16em] uppercase;
+	}
+
+	/* A card's picture, in the link (a `group`) it leads to: it lifts under the
+	   pointer, its picture easing closer, and gives a little when pressed. The
+	   picture fades in as `fadeIn` lets it. */
+	.card-frame {
+		@apply bg-raise group-hover:ring-line-strong group-focus-visible:ring-signal relative overflow-hidden rounded-xl ring-2 ring-transparent transition-[translate,box-shadow] duration-300 ease-out-expo group-hover:-translate-y-1 group-hover:shadow-[0_1rem_2rem_-0.75rem_oklch(0_0_0/80%)] group-active:translate-y-0 group-active:scale-[0.98];
+	}
+
+	.card-picture {
+		@apply size-full object-cover transition-[opacity,scale] duration-500 ease-out-expo group-hover:scale-105 data-loading:opacity-0;
+	}
+
+	/* What a card's words sit on over its picture: a shade that gathers toward
+	   the foot, eased rather than straight, so it has no edge to see. */
+	.card-shade {
+		@apply absolute inset-x-0 bottom-0 px-2.5 pt-7 pb-2.5;
+		background: linear-gradient(
+			to bottom,
+			transparent,
+			oklch(0 0 0 / 28%) 32%,
+			oklch(0 0 0 / 70%) 66%,
+			oklch(0 0 0 / 88%)
+		);
+	}
+
+	/* A mark over a picture, on a tinted pane of glass. */
+	.glass-disc {
+		@apply text-ink grid size-6 place-items-center rounded-full bg-black/35 ring-1 ring-white/10 backdrop-blur-md;
+	}
+}
+
+/*
+ * Motion. A page arrives by the browser's own View Transitions, started in the
+ * root layout. The shell's main is the `page`, so it alone fades in while the
+ * sidebar and header, unchanged, hold still.
+ */
+::view-transition-group(page) {
+	animation-duration: 0s;
+}
+
+::view-transition-old(page) {
+	animation: 120ms ease-in both page-out;
+}
+
+::view-transition-new(page) {
+	animation: 320ms var(--ease-out-expo) 60ms both page-in;
+}
+
+@keyframes page-out {
+	to {
+		opacity: 0;
+	}
+}
+
+@keyframes page-in {
+	from {
+		opacity: 0;
 	}
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
+import Prose from "#lib/components/Prose.svelte";
 import Rail from "#lib/components/Rail.svelte";
 import { workOf } from "#lib/credits.js";
 import { wallSearch } from "#lib/wall.js";
@@ -28,14 +29,14 @@ const life = $derived(
 <svelte:head><title>{p.name} · Photon</title></svelte:head>
 
 <article class="grid gap-10">
-	<header class="flex flex-col gap-6 sm:flex-row">
+	<header class="flex flex-col gap-6 sm:flex-row sm:gap-8">
 		{#if p.photo}
 			<img
 				src={artworkSrc(p.photo, "poster")}
 				srcset={artworkSrcset(p.photo, "poster")}
-				sizes="12rem"
+				sizes="200px"
 				alt=""
-				class="aspect-[2/3] w-40 shrink-0 rounded-lg object-cover sm:w-48"
+				class="aspect-[2/3] w-40 shrink-0 self-start rounded-xl object-cover shadow-2xl sm:w-50"
 				style={blurStyle(p.blurhashes?.[p.photo])}
 			>
 		{/if}
@@ -45,9 +46,12 @@ const life = $derived(
 				<p class="text-ink-2 text-sm">{line}</p>
 			{/each}
 			{#if p.biography}
-				<p class="text-ink-2 max-w-3xl leading-relaxed whitespace-pre-line">
-					{p.biography}
-				</p>
+				<Prose
+					text={p.biography}
+					lines={4}
+					title={p.name}
+					class="text-ink-2 max-w-2xl"
+				/>
 			{/if}
 			{#if data.libraries.length}
 				<p class="flex flex-wrap gap-x-4 gap-y-1 text-sm">

@@ -30,9 +30,7 @@ let {
 
 // A screen above and below what shows, so a card is there before it is reached.
 const overscan = 1;
-const rowGap = 24;
-// The name and caption under a card's picture.
-const captionHeight = 44;
+const rowGap = 18;
 const listRowHeight = 80;
 
 let pages = $state<Record<number, Card[]>>({});
@@ -90,7 +88,7 @@ const cardWidth = $derived((width - columnGap * (columns - 1)) / columns);
 const rowHeight = $derived(
 	view === "list"
 		? listRowHeight
-		: cardWidth * (shape === "poster" ? 1.5 : 9 / 16) + captionHeight + rowGap,
+		: cardWidth * (shape === "poster" ? 1.5 : 9 / 16) + rowGap,
 );
 const rows = $derived(Math.ceil(total / columns));
 
@@ -158,7 +156,7 @@ const sizes = $derived(`${Math.ceil(cardWidth) || 200}px`);
 <ul
 	bind:this={list}
 	aria-label={label}
-	class={width ? "relative" : "grid gap-x-4 gap-y-6"}
+	class={width ? "relative" : "grid gap-x-3 gap-y-4.5"}
 	style={width
 		? `height: ${Math.max(0, rows * rowHeight - (view === "list" ? 0 : rowGap))}px`
 		: view === "list"
@@ -184,7 +182,10 @@ const sizes = $derived(`${Math.ceil(cardWidth) || 200}px`);
 					<Skeleton class="h-18 w-full" />
 				{:else}
 					<Skeleton
-						class={shape === "poster" ? "aspect-[2/3]" : "aspect-video"}
+						class={[
+							"rounded-xl",
+							shape === "poster" ? "aspect-[2/3]" : "aspect-video",
+						]}
 					/>
 				{/if}
 			</li>
