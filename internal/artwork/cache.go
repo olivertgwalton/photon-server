@@ -83,26 +83,46 @@ func (c *Cache) File(ctx context.Context, id uuid.UUID, url string) (*os.File, e
 // fetchTogether is how many pictures Fetch asks for at once; providers limit how fast they are asked.
 const fetchTogether = 4
 
+// ErrRefused is a provider refusing to send pictures, or unable to: asking it for more now only
+// adds to its load.
+var ErrRefused = errors.New("the provider refused the picture")
+
 // Fetch puts pictures, URLs by id, in the cache ahead of their being asked for, and answers how
-// many are there now. One that cannot be fetched is passed over.
+// many are there now. One that cannot be fetched is passed over, but a provider that refuses one
+// stops the run with ErrRefused.
 func (c *Cache) Fetch(ctx context.Context, pictures map[uuid.UUID]string) (int, error) {
 	var fetched atomic.Int64
-	var g errgroup.Group
+	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(fetchTogether)
 	for id, url := range pictures {
-		if ctx.Err() != nil {
+		if gctx.Err() != nil {
 			break
 		}
 		g.Go(func() error {
-			if f, err := c.File(ctx, id, url); err == nil {
+			// File would start a fetch that outlives its asker even once the run has stopped.
+			select {
+			case <-gctx.Done():
+				return nil
+			default:
+			}
+			f, err := c.File(gctx, id, url)
+			if err == nil {
 				fetched.Add(1)
 				return f.Close()
 			}
-			return nil
+			return refused(err)
 		})
 	}
 	err := g.Wait()
-	return int(fetched.Load()), cmp.Or(ctx.Err(), err)
+	return int(fetched.Load()), cmp.Or(err, ctx.Err())
+}
+
+// refused is err where it is a provider refusing, so the fetch stops, and nil for any other.
+func refused(err error) error {
+	if errors.Is(err, ErrRefused) {
+		return err
+	}
+	return nil
 }
 
 // fetch keeps the picture at url under id and tells hashed its BlurHash, where it is a picture
@@ -117,6 +137,9 @@ func (c *Cache) fetch(ctx context.Context, id uuid.UUID, url string) error {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError {
+		return fmt.Errorf("%w: %s %s", ErrRefused, url, resp.Status)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("picture %s: %s", url, resp.Status)
 	}

@@ -3,12 +3,14 @@ package artwork
 import (
 	"bytes"
 	"context"
+	"errors"
 	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -83,14 +85,18 @@ func TestAPictureIsFetchedOnceAndHashed(t *testing.T) {
 	}
 }
 
-func TestPicturesFetchedAheadAreCachedAndOnesMissingPassedOver(t *testing.T) {
+func TestPicturesFetchedAheadAreCachedAndOnesMissingOrForbiddenPassedOver(t *testing.T) {
 	var poster bytes.Buffer
 	if err := png.Encode(&poster, gradient(20, 30)); err != nil {
 		t.Fatal(err)
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/gone.png" {
+		switch r.URL.Path {
+		case "/gone.png":
 			http.NotFound(w, r)
+			return
+		case "/private.png":
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 		w.Header().Set("Content-Type", "image/png")
@@ -104,9 +110,9 @@ func TestPicturesFetchedAheadAreCachedAndOnesMissingPassedOver(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = c.Close() })
 
-	poster1, poster2, gone := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
+	poster1, poster2, gone, private := uuid.NewV7(), uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
 	n, err := c.Fetch(t.Context(), map[uuid.UUID]string{
-		poster1: srv.URL + "/a.png", poster2: srv.URL + "/b.png", gone: srv.URL + "/gone.png",
+		poster1: srv.URL + "/a.png", poster2: srv.URL + "/b.png", gone: srv.URL + "/gone.png", private: srv.URL + "/private.png",
 	})
 	if err != nil || n != 2 {
 		t.Errorf("fetched %d, %v; want the two posters there", n, err)
@@ -116,8 +122,37 @@ func TestPicturesFetchedAheadAreCachedAndOnesMissingPassedOver(t *testing.T) {
 			t.Errorf("poster %s cached = %d bytes, %v; want the poster", id, len(b), err)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(dir, gone.String())); err == nil {
-		t.Error("a picture the provider no longer has was cached")
+	for _, id := range []uuid.UUID{gone, private} {
+		if _, err := os.Stat(filepath.Join(dir, id.String())); err == nil {
+			t.Errorf("picture %s the provider would not send was cached", id)
+		}
+	}
+}
+
+func TestAProviderRefusingPicturesStopsTheFetch(t *testing.T) {
+	for _, status := range []int{http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+		var asked atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			asked.Add(1)
+			w.WriteHeader(status)
+		}))
+		c, err := Open(t.TempDir(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pictures := map[uuid.UUID]string{}
+		for n := range 20 {
+			pictures[uuid.NewV7()] = srv.URL + "/" + strconv.Itoa(n) + ".png"
+		}
+		n, err := c.Fetch(t.Context(), pictures)
+		if !errors.Is(err, ErrRefused) || n != 0 {
+			t.Errorf("answered %d: fetched %d, %v; want none and the refusal", status, n, err)
+		}
+		if a := asked.Load(); a > fetchTogether {
+			t.Errorf("answered %d: asked %d times, want no more than the %d asked together", status, a, fetchTogether)
+		}
+		_ = c.Close()
+		srv.Close()
 	}
 }
 
