@@ -416,3 +416,26 @@ test("a film of two copies is split apart from its card, once asked", async ({
 	await asked.getByRole("button", { name: "Split apart" }).click();
 	await expect(page.getByText("Quiet Hours was split apart.")).toBeVisible();
 });
+
+test("deleting from a card asks first, and says why its library refuses", async ({
+	page,
+}) => {
+	await logIn(page);
+	await page
+		.getByRole("region", { name: "Recently Added Films" })
+		.getByRole("button", { name: "More for Quiet Hours" })
+		.click();
+	await page.getByRole("menuitem", { name: "Delete…" }).click();
+	await page
+		.getByRole("alertdialog", { name: "Delete Quiet Hours?" })
+		.getByRole("button", { name: "Delete" })
+		.click();
+	await expect(
+		page.getByText(
+			"its library does not allow its titles' files to be deleted",
+			{
+				exact: false,
+			},
+		),
+	).toBeVisible();
+});

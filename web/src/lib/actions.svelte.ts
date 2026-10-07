@@ -187,3 +187,16 @@ export function splitTitle(id: string, name: string) {
 			),
 	);
 }
+
+export function deleteTitle(id: string, name: string) {
+	confirmFirst(
+		`Delete ${name}?`,
+		"Its files are deleted from the disk, a show's or season's episodes with it, and it leaves the library. They cannot be brought back.",
+		"Delete",
+		() =>
+			change(
+				api.DELETE("/api/v1/admin/titles/{id}", path(id)),
+				`${name} was deleted.`,
+			),
+	);
+}
