@@ -10,28 +10,11 @@ const api = client();
 
 const path = (id: string) => ({ params: { path: { id } } });
 
-export function setWatched(id: string, watched: boolean) {
-	return act(
-		watched
-			? api.PUT("/api/v1/titles/{id}/watched", path(id))
-			: api.DELETE("/api/v1/titles/{id}/watched", path(id)),
-	);
-}
+type Mark = "watched" | "favourite" | "watchlist";
 
-export function setFavourite(id: string, favourite: boolean) {
-	return act(
-		favourite
-			? api.PUT("/api/v1/titles/{id}/favourite", path(id))
-			: api.DELETE("/api/v1/titles/{id}/favourite", path(id)),
-	);
-}
-
-export function setWatchlisted(id: string, listed: boolean) {
-	return act(
-		listed
-			? api.PUT("/api/v1/titles/{id}/watchlist", path(id))
-			: api.DELETE("/api/v1/titles/{id}/watchlist", path(id)),
-	);
+export function setMark(id: string, mark: Mark, on: boolean) {
+	const at = `/api/v1/titles/{id}/${mark}` as const;
+	return act(on ? api.PUT(at, path(id)) : api.DELETE(at, path(id)));
 }
 
 export function forgetProgress(id: string) {
