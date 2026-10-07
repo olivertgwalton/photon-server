@@ -1,7 +1,7 @@
 <script lang="ts">
-import { fullTitle } from "#lib/format.js";
+import { fullTitle, playMethods } from "#lib/format.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { methods, when } from "#lib/admin/words.js";
+import { when } from "#lib/admin/words.js";
 import Choice from "#lib/components/admin/Choice.svelte";
 import Pager from "#lib/components/admin/Pager.svelte";
 import { narrow } from "#lib/admin/narrow.js";
@@ -77,7 +77,7 @@ function reached(position: number, duration?: number) {
 					<Table.Cell
 						>{names.get(entry.profile_id) ?? "A removed profile"}</Table.Cell
 					>
-					<Table.Cell>{methods[entry.method]}</Table.Cell>
+					<Table.Cell>{playMethods[entry.method]}</Table.Cell>
 					<Table.Cell>{when.format(new Date(entry.started_at))}</Table.Cell>
 					<Table.Cell class="text-right font-mono">
 						{reached(entry.position_ms, entry.title.duration_ms)}

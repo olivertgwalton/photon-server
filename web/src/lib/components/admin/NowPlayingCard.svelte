@@ -4,14 +4,9 @@ import { confirmFirst } from "#lib/actions.svelte.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
-import { bitrate, timecode } from "#lib/format.js";
+import { bitrate, playMethods, timecode } from "#lib/format.js";
 import { positionAt } from "#lib/admin/live.js";
-import {
-	accelerations,
-	methods,
-	playedTitle,
-	reasons,
-} from "#lib/admin/words.js";
+import { accelerations, playedTitle, reasons } from "#lib/admin/words.js";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
 
@@ -113,7 +108,7 @@ function stop() {
 		</div>
 		<div class="flex flex-wrap gap-1.5">
 			<Badge variant={p.method === "transcode" ? "default" : "secondary"}>
-				{methods[p.method]}
+				{playMethods[p.method]}
 			</Badge>
 			{#if p.acceleration}
 				<Badge variant="outline">

@@ -1,4 +1,5 @@
 import type { components } from "#lib/api/schema.js";
+import { fullTitle } from "#lib/format.js";
 
 type Schemas = components["schemas"];
 
@@ -68,12 +69,6 @@ export const jobKinds: Record<Schemas["JobKind"], string> = {
 	deliver_webhook: "Send a webhook",
 	theme: "Fetch a theme tune",
 	probe: "Read media info",
-};
-
-export const methods: Record<Schemas["PlayMethod"], string> = {
-	direct: "Direct play",
-	remux: "Direct stream",
-	transcode: "Transcode",
 };
 
 export const reasons: Record<Schemas["TranscodeReason"], string> = {
@@ -204,12 +199,7 @@ export const loggedKinds: Partial<Record<Schemas["EventKind"], string>> = {
 
 // A played title as one line: a show's episode by its show and place in it.
 export function playedTitle(t: Schemas["PlaybackTitle"]): string {
-	if (t.kind !== "episode" || !t.show) return t.title;
-	const at =
-		t.season_number != null && t.episode_number != null
-			? ` S${t.season_number} E${t.episode_number}`
-			: "";
-	return `${t.show}${at} · ${t.title}`;
+	return fullTitle(t, t.kind === "episode" ? t.show : undefined);
 }
 
 type Names = {
