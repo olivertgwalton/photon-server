@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -284,5 +286,28 @@ func TestWall(t *testing.T) {
 	if rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/facets", goodToken, ""); rec.Code != http.StatusOK ||
 		!strings.Contains(rec.Body.String(), `"genres":["Crime"]`) || !strings.Contains(rec.Body.String(), `"marks":["watched","unwatched","in_progress","favourite","watchlist"]`) {
 		t.Errorf("facets: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// matroskaCatalogue has films as one copy in Matroska.
+type matroskaCatalogue struct{ fakeCatalogue }
+
+func (matroskaCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage, error) {
+	return store.TitlePage{
+		ID: id, Kind: domain.ItemMovie, Title: "Heat",
+		Versions: []store.VersionPage{{ID: id, Container: "matroska,webm"}},
+	}, nil
+}
+
+func TestACopysContainerIsNamedAsClientsNameIt(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Catalogue: matroskaCatalogue{}, Preferences: &fakePreferences{},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/titles/"+films.String(), nil)
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"container":"mkv"`) {
+		t.Errorf("a Matroska copy: %d %s, want its container named mkv", rec.Code, rec.Body)
 	}
 }

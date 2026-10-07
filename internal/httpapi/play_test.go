@@ -609,7 +609,7 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 		Profile: domain.PlaybackProfile{ID: oliver.ID, Name: "Oliver"},
 		Device:  domain.PlaybackDevice{ID: shown.Device.ID, Name: "Living room", Client: "Photon Web 1.0", Address: "192.0.2.7"},
 		Title:   domain.PlaybackTitle{ID: films, Kind: domain.ItemMovie, Title: "Lawrence of Arabia", Year: 1962, Poster: posterID},
-		Version: domain.PlaybackVersion{ID: films, Container: "matroska,webm", BitrateKbps: 8000, DurationMS: 6_600_000},
+		Version: domain.PlaybackVersion{ID: films, Container: "mkv", BitrateKbps: 8000, DurationMS: 6_600_000},
 		Reasons: []domain.TranscodeReason{domain.BitrateExceedsLimit},
 		Video: &domain.PlaybackVideo{
 			Codec: "h264", Encode: &domain.PlaybackEncode{Codec: "h264", Range: domain.RangeSDR, BitrateKbps: shown.Video.Encode.BitrateKbps},
