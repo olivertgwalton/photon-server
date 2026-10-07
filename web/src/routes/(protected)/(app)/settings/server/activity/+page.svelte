@@ -4,7 +4,7 @@ import { liveStream } from "#lib/admin/stream.svelte.js";
 import { loggedKinds } from "#lib/admin/words.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
 import Choice from "#lib/components/admin/Choice.svelte";
-import Pager from "#lib/components/admin/Pager.svelte";
+import Pager from "#lib/components/Pager.svelte";
 import { narrow } from "#lib/admin/narrow.js";
 import { Label } from "#lib/components/ui/label/index.js";
 

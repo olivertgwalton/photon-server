@@ -3,7 +3,7 @@ import { fullTitle, playMethods } from "#lib/format.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { when } from "#lib/admin/words.js";
 import Choice from "#lib/components/admin/Choice.svelte";
-import Pager from "#lib/components/admin/Pager.svelte";
+import Pager from "#lib/components/Pager.svelte";
 import { narrow } from "#lib/admin/narrow.js";
 import { Label } from "#lib/components/ui/label/index.js";
 import * as Table from "#lib/components/ui/table/index.js";

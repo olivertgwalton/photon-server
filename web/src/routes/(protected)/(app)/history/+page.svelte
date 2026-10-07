@@ -1,6 +1,6 @@
 <script lang="ts">
+import Pager from "#lib/components/Pager.svelte";
 import TitleRow from "#lib/components/TitleRow.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
 import { playMethods, timecode } from "#lib/format.js";
 
 let { data } = $props();
@@ -46,21 +46,5 @@ const { offset, total } = $derived(data.history);
 	{:else}
 		<p class="text-ink-3">Nothing played yet.</p>
 	{/each}
-	{#if offset > 0 || offset + data.history.items.length < total}
-		<nav aria-label="Pages" class="flex gap-2">
-			{#if offset > 0}
-				<Button
-					href="?offset={Math.max(0, offset - data.pageSize)}"
-					variant="outline"
-				>
-					Newer
-				</Button>
-			{/if}
-			{#if offset + data.history.items.length < total}
-				<Button href="?offset={offset + data.pageSize}" variant="outline">
-					Older
-				</Button>
-			{/if}
-		</nav>
-	{/if}
+	<Pager {offset} limit={data.pageSize} {total} />
 </div>
