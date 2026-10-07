@@ -148,6 +148,80 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	}
 }
 
+func TestALibrarysWallShowsItsCollectionsAsItSays(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]uuid.UUID{}
+	for _, title := range []string{"Alien", "Aliens", "Heat"} {
+		film := Film{Title: title, Folder: title, Copies: []Copy{{ContentKey: []byte(title), Parts: []Part{{
+			RelPath: title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
+		}}}}}
+		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{film}, nil); err != nil {
+			t.Fatal(err)
+		}
+		cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[title] = cards[0].ID
+	}
+	set, err := s.AddCollection(ctx, lib.ID, "Alien Anthology")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetMembers(ctx, set, []uuid.UUID{ids["Alien"], ids["Aliens"]}); err != nil {
+		t.Fatal(err)
+	}
+	wall := func(f WallFilter) []string {
+		cards, total, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 10, Filter: f})
+		if err != nil {
+			t.Fatal(err)
+		}
+		letters, err := s.Letters(ctx, lib.ID, uuid.UUID{}, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		counted := 0
+		for _, l := range letters {
+			counted += l.Count
+		}
+		if int(total) != len(cards) || counted != len(cards) {
+			t.Errorf("%d cards, %d in all, %d by letter; want them to agree", len(cards), total, counted)
+		}
+		var titles []string
+		for _, c := range cards {
+			titles = append(titles, c.Title)
+		}
+		return titles
+	}
+	for _, tc := range []struct {
+		mode domain.CollectionMode
+		want []string
+	}{
+		{domain.CollectionsGrouped, []string{"Alien Anthology", "Heat"}},
+		{domain.CollectionsShown, []string{"Alien", "Alien Anthology", "Aliens", "Heat"}},
+		{domain.CollectionsHidden, []string{"Alien", "Aliens", "Heat"}},
+	} {
+		if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Collections: tc.mode}); err != nil {
+			t.Fatal(err)
+		}
+		if got := wall(WallFilter{}); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: the wall shows %q, want %q", tc.mode, got, tc.want)
+		}
+	}
+	// A filtered wall answers titles alone, those in a set among them.
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Collections: domain.CollectionsGrouped}); err != nil {
+		t.Fatal(err)
+	}
+	if got := wall(WallFilter{StartsWith: "A"}); !reflect.DeepEqual(got, []string{"Alien", "Aliens"}) {
+		t.Errorf("filtered to A: the wall shows %q, want the films alone", got)
+	}
+}
+
 func TestALibraryCountsTheCollectionsItLists(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()

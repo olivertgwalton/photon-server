@@ -34,6 +34,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"media_deletion":           names(domain.MediaDeletions()),
 		"artwork_language":         names(domain.ArtworkLanguages()),
 		"title_language":           names(domain.TitleLanguages()),
+		"collection_mode":          names(domain.CollectionModes()),
 		"theme_lookup":             names(domain.ThemeLookups()),
 		"theme_source":             names(domain.ThemeSources()),
 		"theme_music":              names(domain.ThemeMusics()),
