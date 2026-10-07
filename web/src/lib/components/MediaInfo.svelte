@@ -66,7 +66,7 @@ function facts(s: Stream): [string, string | number | undefined][] {
 			([, v]) => v !== undefined && v !== "",
 		) as [name, value] (name)}
 			<dt class="text-ink-3">{name}</dt>
-			<dd class="text-ink min-w-0 break-words">{value}</dd>
+			<dd class="text-ink min-w-0 wrap-break-word">{value}</dd>
 		{/each}
 	</dl>
 {/snippet}

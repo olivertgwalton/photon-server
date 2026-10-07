@@ -189,10 +189,10 @@ const poster = $derived(art("poster"));
 					>
 				{/key}
 				<div
-					class="from-ground via-ground/70 absolute inset-0 bg-gradient-to-t to-transparent"
+					class="from-ground via-ground/70 absolute inset-0 bg-linear-to-t to-transparent"
 				></div>
 				<div
-					class="from-ground/90 absolute inset-0 bg-gradient-to-r via-transparent to-transparent"
+					class="from-ground/90 absolute inset-0 bg-linear-to-r via-transparent to-transparent"
 				></div>
 			</div>
 		{/if}
