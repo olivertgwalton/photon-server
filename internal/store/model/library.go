@@ -18,4 +18,7 @@ type Library struct {
 	Keyframes   domain.KeyframeMode
 	Deletion    domain.MediaDeletion
 	Themes      domain.ThemeLookup
+	// MetadataLanguage and CertificationCountry are nil for the server's own.
+	MetadataLanguage     *string
+	CertificationCountry *string
 }

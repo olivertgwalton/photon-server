@@ -115,6 +115,8 @@ type Library struct {
 	Keyframes   KeyframeMode
 	Themes      ThemeLookup
 	Deletion    MediaDeletion
+	// Locale is what its metadata is asked for in; what it leaves unsaid is the server's.
+	Locale Locale
 }
 
 // TitleCounts are how many of each kind of title a library holds, as a profile may see them, as

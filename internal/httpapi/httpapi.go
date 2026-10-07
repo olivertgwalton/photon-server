@@ -611,6 +611,11 @@ func (a *API) routes() []route {
 			status: http.StatusOK, reply: listJSON[adminLibraryListingJSON]{}, handle: a.adminLibraries,
 		},
 		{
+			pattern: "GET /api/v1/admin/locales", access: admin,
+			summary: "List the languages a library may ask its metadata in, and the countries it may take certificates from",
+			status:  http.StatusOK, reply: localesJSON{}, handle: a.locales,
+		},
+		{
 			pattern: "POST /api/v1/admin/libraries", access: admin, summary: "Add a library of a folder and scan it",
 			body: addLibraryJSON{}, status: http.StatusCreated, reply: adminLibraryJSON{}, handle: a.addLibrary,
 		},

@@ -661,6 +661,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/locales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the languages a library may ask its metadata in, and the countries it may take certificates from
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Locales"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/maintenance": {
         parameters: {
             query?: never;
@@ -4824,12 +4864,14 @@ export interface components {
             url: string;
         };
         AdminLibrary: {
+            certification_country?: string;
             deletion: components["schemas"]["MediaDeletion"];
             /** Format: uuid */
             id: string;
             keyframes: components["schemas"]["KeyframeMode"];
             kind: components["schemas"]["LibraryKind"];
             markers: components["schemas"]["MarkerDetection"];
+            metadata_language?: string;
             monitor: components["schemas"]["Monitor"];
             name: string;
             previews: components["schemas"]["PreviewLevel"];
@@ -4840,6 +4882,7 @@ export interface components {
             themes: components["schemas"]["ThemeLookup"];
         };
         AdminLibraryListing: {
+            certification_country?: string;
             counts: components["schemas"]["Counts"];
             deletion: components["schemas"]["MediaDeletion"];
             /** Format: uuid */
@@ -4847,6 +4890,7 @@ export interface components {
             keyframes: components["schemas"]["KeyframeMode"];
             kind: components["schemas"]["LibraryKind"];
             markers: components["schemas"]["MarkerDetection"];
+            metadata_language?: string;
             monitor: components["schemas"]["Monitor"];
             name: string;
             previews: components["schemas"]["PreviewLevel"];
@@ -5374,9 +5418,11 @@ export interface components {
             name: string;
         };
         LibraryChange: {
+            certification_country?: string | null;
             deletion?: components["schemas"]["MediaDeletion"];
             keyframes?: components["schemas"]["KeyframeMode"];
             markers?: components["schemas"]["MarkerDetection"];
+            metadata_language?: string | null;
             monitor?: components["schemas"]["Monitor"];
             name?: string;
             previews?: components["schemas"]["PreviewLevel"];
@@ -5389,6 +5435,10 @@ export interface components {
         LibraryKind: "movies" | "shows";
         LibraryList: {
             items: components["schemas"]["Library"][];
+        };
+        Locales: {
+            countries: string[];
+            languages: string[];
         };
         LoginRequest: {
             client: string;

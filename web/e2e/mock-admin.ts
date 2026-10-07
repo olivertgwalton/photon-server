@@ -306,6 +306,11 @@ export async function admin(
 		);
 	}
 	switch (route) {
+		case "GET /api/v1/admin/locales":
+			return json({
+				languages: ["de-DE", "en-GB", "en-US", "fr-FR"],
+				countries: ["DE", "GB", "IN", "US"],
+			} satisfies Schemas["Locales"]);
 		case "GET /api/v1/admin/server":
 			return json(server);
 		case "GET /api/v1/admin/events":

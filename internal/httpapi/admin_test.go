@@ -66,7 +66,17 @@ func (f *fakeLibraries) SetLibrary(_ context.Context, id uuid.UUID, c store.Libr
 	if c.Sources != nil {
 		f.libs[i].Sources = c.Sources
 	}
+	if c.MetadataLanguage != nil {
+		f.libs[i].Locale.Language = *c.MetadataLanguage
+	}
+	if c.CertificationCountry != nil {
+		f.libs[i].Locale.Country = *c.CertificationCountry
+	}
 	return nil
+}
+
+func (f *fakeLibraries) CertificateCountries(context.Context) ([]string, error) {
+	return []string{"GB", "IN", "US"}, nil
 }
 
 func (f *fakeLibraries) RemoveLibrary(_ context.Context, id uuid.UUID) error {
@@ -185,5 +195,39 @@ func TestAnAdminScansTheFolderAPathIsIn(t *testing.T) {
 	// A path that is not there yet, or is gone, is read from the nearest folder above it.
 	if want := []string{".", "Heat (1995)", "Heat (1995)", "."}; !slices.Equal(libs.folders, want) {
 		t.Errorf("scanned %q, want %q", libs.folders, want)
+	}
+}
+
+func TestALibraryAsksInALanguageAndCountryOfItsOwn(t *testing.T) {
+	lib := domain.Library{ID: uuid.NewV7(), Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films"}
+	libs := &fakeLibraries{libs: []domain.Library{lib}}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Libraries: libs})
+	do := func(method, target, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, target, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec
+	}
+	target := "/api/v1/admin/libraries/" + lib.ID.String()
+	for _, tc := range []struct {
+		body string
+		want int
+	}{
+		{`{"metadata_language": "Klingon!"}`, http.StatusBadRequest},
+		// A region of the world is not a country with certificates of its own.
+		{`{"certification_country": "EU"}`, http.StatusBadRequest},
+		{`{"metadata_language": "de-de", "certification_country": "in"}`, http.StatusOK},
+	} {
+		if rec := do(http.MethodPatch, target, tc.body); rec.Code != tc.want {
+			t.Errorf("%s: %d, want %d: %s", tc.body, rec.Code, tc.want, rec.Body)
+		}
+	}
+	if got := libs.libs[0].Locale; got != (domain.Locale{Language: "de-DE", Country: "IN"}) {
+		t.Errorf("the library asks in %+v, want de-DE and India's certificates, written as their standards write them", got)
+	}
+	rec := do(http.MethodGet, "/api/v1/admin/locales", "")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"en-GB"`) || !strings.Contains(rec.Body.String(), `"countries":["GB","IN","US"]`) {
+		t.Errorf("locales: %d %s, want TMDB's languages and the countries whose certificates are read", rec.Code, rec.Body)
 	}
 }

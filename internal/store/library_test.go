@@ -87,3 +87,49 @@ func metadataFrom(lib domain.LibraryKind, sources ...domain.FieldSource) []domai
 	}
 	return out
 }
+
+func TestALibrarysLocaleDescribesItsTitlesAgain(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Jaws", []byte("v1"), []Film{{Title: "Jaws", Folder: "Jaws"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, `DELETE FROM jobs`); err != nil {
+		t.Fatal(err)
+	}
+	queued := func() int {
+		var n int
+		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM jobs WHERE kind = 'identify'`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	french, gb := "fr-FR", "GB"
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{MetadataLanguage: &french, CertificationCountry: &gb}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Library(ctx, lib.ID); err != nil || got.Locale != (domain.Locale{Language: "fr-FR", Country: "GB"}) {
+		t.Errorf("the library: %+v, %v; want it asking in French for Britain's certificates", got.Locale, err)
+	}
+	if n := queued(); n != 1 {
+		t.Errorf("%d titles queued to be described, want the film described again in French", n)
+	}
+	if _, err := s.pool.Exec(ctx, `DELETE FROM jobs`); err != nil {
+		t.Fatal(err)
+	}
+	// The same again is no change, and asks nothing.
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{MetadataLanguage: &french}); err != nil || queued() != 0 {
+		t.Errorf("setting it as it was: %v, %d queued; want nothing asked again", err, queued())
+	}
+	none := ""
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{MetadataLanguage: &none, CertificationCountry: &none}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Library(ctx, lib.ID); got.Locale != (domain.Locale{}) {
+		t.Errorf("given back: %+v, want the server's own", got.Locale)
+	}
+}

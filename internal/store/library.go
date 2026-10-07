@@ -17,7 +17,8 @@ var ErrLibraryExists = errors.New("a library with that name or root already exis
 // libraryColumns and librarySourceColumns are model.Library's and model.LibrarySource's, for a
 // statement that reads whole rows.
 const (
-	libraryColumns       = `id, name, kind, root, monitor, refresh_days, previews, markers, keyframes, themes, deletion`
+	libraryColumns = `id, name, kind, root, monitor, refresh_days, previews, markers, keyframes, themes, deletion,
+		metadata_language, certification_country`
 	librarySourceColumns = `library_id, item_kind, fetcher, source, position, enabled`
 )
 
@@ -129,6 +130,10 @@ type LibraryChange struct {
 	Themes domain.ThemeLookup
 	// Deletion is whether an admin may delete its titles with their files.
 	Deletion domain.MediaDeletion
+	// MetadataLanguage and CertificationCountry, where set, replace its locale's: "" is the
+	// server's own. With either changed its titles are described again in it.
+	MetadataLanguage     *string
+	CertificationCountry *string
 }
 
 // SetLibrary renames a library, changes whether it is watched, where each kind's metadata and
@@ -229,7 +234,25 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 				}
 			}
 		}
-		if change.Sources == nil && change.RemoteExtras == nil {
+		relocated := false
+		for column, v := range map[string]*string{"metadata_language": change.MetadataLanguage, "certification_country": change.CertificationCountry} {
+			if v == nil {
+				continue
+			}
+			tag, err := tx.Exec(ctx, `UPDATE libraries SET `+column+` = nullif($2, '') WHERE id = $1 AND `+column+` IS DISTINCT FROM nullif($2, '')`, id, *v)
+			if err != nil {
+				return err
+			}
+			relocated = relocated || tag.RowsAffected() > 0
+		}
+		if relocated {
+			// Its seasons and episodes too, which are asked for only while they are named by their files.
+			err := describeAgain(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind IN ('season', 'episode')`, pgx.NamedArgs{"lib": id})
+			if err != nil {
+				return err
+			}
+		}
+		if change.Sources == nil && change.RemoteExtras == nil && !relocated {
 			return nil
 		}
 		if change.RemoteExtras != nil {
@@ -308,5 +331,16 @@ func library(r model.Library, sources []domain.KindSources, extras []domain.Extr
 		ID: r.ID, Name: r.Name, Kind: r.Kind, Root: r.Root, Sources: sources, RemoteExtras: extras,
 		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews, Markers: r.Markers,
 		Keyframes: r.Keyframes, Themes: r.Themes, Deletion: r.Deletion,
+		Locale: domain.Locale{Language: deref(r.MetadataLanguage), Country: deref(r.CertificationCountry)},
 	}
+}
+
+// CertificateCountries answers the countries whose certificates the server can read, by ISO 3166-1
+// alpha-2 code.
+func (s *Store) CertificateCountries(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT country FROM certificates ORDER BY country`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
 }

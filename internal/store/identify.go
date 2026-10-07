@@ -27,6 +27,8 @@ type Subject struct {
 	// Unmatched is an admin's unmatching it: no provider is asked about it until it is released,
 	// though an admin may search them to fix its match.
 	Unmatched bool
+	// Locale is what its library asks in; what it leaves unsaid is the server's.
+	Locale domain.Locale
 }
 
 // IdentifySubject answers what is known of a title to match it by, or false for one that has gone.
@@ -46,6 +48,13 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	if item.Year != nil {
 		sub.Year = *item.Year
 	}
+	var language, country *string
+	err = s.pool.QueryRow(ctx, `SELECT metadata_language, certification_country FROM libraries WHERE id = $1`, item.LibraryID).
+		Scan(&language, &country)
+	if err != nil {
+		return Subject{}, false, err
+	}
+	sub.Locale = domain.Locale{Language: deref(language), Country: deref(country)}
 	rows, err := s.pool.Query(ctx, `SELECT DISTINCT source FROM library_sources WHERE library_id = $1 AND enabled`, item.LibraryID)
 	if err == nil {
 		sub.Sources, err = pgx.CollectRows(rows, pgx.RowTo[domain.FieldSource])

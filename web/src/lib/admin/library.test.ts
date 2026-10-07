@@ -42,6 +42,9 @@ const fields: [string, string][] = [
 	["keyframes", "full"],
 	["themes", "themerr"],
 	["deletion", "files"],
+	["metadata_language", "de-DE"],
+	// The server's own is sent as nothing.
+	["certification_country", "server"],
 	["remote_extras", "featurette"],
 	["remote_extras", "trailer"],
 ];
@@ -71,6 +74,8 @@ test("a kind's sources are sent only where what they ask changed", () => {
 		keyframes: "full",
 		themes: "themerr",
 		deletion: "files",
+		metadata_language: "de-DE",
+		certification_country: "",
 	});
 
 	const changed = libraryChange(
