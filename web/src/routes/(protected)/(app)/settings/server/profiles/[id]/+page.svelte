@@ -51,9 +51,8 @@ $effect.pre(() => {
 });
 
 const locks = {
-	none: "No lock: anyone signed in to this household can switch to it.",
-	pin: "Locked with a PIN its owner set.",
-	password: "Locked with a password.",
+	pin: "Switched to with a PIN its owner set.",
+	password: "Switched to with its password.",
 } as const;
 
 async function saveProfile(event: SubmitEvent) {
@@ -145,14 +144,13 @@ function remove() {
 						</Field.Description>
 					</Field.Field>
 					<Field.Field>
-						<Field.Label for="password">
-							{data.profile.lock === "password" ? "New password" : "Password"}
-						</Field.Label>
+						<Field.Label for="password"> New password </Field.Label>
 						<Input
 							id="password"
 							name="password"
 							type="password"
 							autocomplete="new-password"
+							minlength={8}
 						/>
 						<Field.Description>
 							Leave it empty to keep the password as it is. A PIN is set by the
@@ -161,22 +159,6 @@ function remove() {
 					</Field.Field>
 					<Field.Field orientation="horizontal">
 						<Button type="submit">Save</Button>
-						{#if data.profile.lock === "password" &&
-							data.profile.role !== "admin"}
-							<Button
-								variant="outline"
-								onclick={() =>
-									act(
-										api.PATCH("/api/v1/admin/profiles/{id}", {
-											...path,
-											body: { password: "" },
-										}),
-										"The password was removed.",
-									)}
-							>
-								Remove password
-							</Button>
-						{/if}
 					</Field.Field>
 				</Field.Group>
 			</form>

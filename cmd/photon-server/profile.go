@@ -19,7 +19,7 @@ import (
 )
 
 const profileUsage = `usage:
-  photon-server profile add -name NAME -role admin|member|restricted [-no-password]
+  photon-server profile add -name NAME -role admin|member|restricted
 (the password is read from the terminal, or from the first line of standard input)`
 
 // profileCommand is how the first admin comes to exist: from the server's own command line, never
@@ -31,7 +31,6 @@ func profileCommand(ctx context.Context, logger *slog.Logger, databaseURL string
 	fs := flag.NewFlagSet("profile add", flag.ContinueOnError)
 	name := fs.String("name", "", "the profile's name")
 	role := fs.String("role", "", "admin, member or restricted")
-	noPassword := fs.Bool("no-password", false, "a profile chosen on a signed-in device, never signed in with directly")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -47,15 +46,13 @@ func profileCommand(ctx context.Context, logger *slog.Logger, databaseURL string
 		return err
 	}
 	defer st.Close()
-	hash := ""
-	if !*noPassword {
-		password, err := readPassword(out)
-		if err != nil {
-			return err
-		}
-		if hash, err = auth.HashPassword(ctx, password); err != nil {
-			return err
-		}
+	password, err := readPassword(out)
+	if err != nil {
+		return err
+	}
+	hash, err := auth.HashPassword(ctx, password)
+	if err != nil {
+		return err
 	}
 	p, err := st.AddProfile(ctx, *name, r, hash)
 	if err != nil {

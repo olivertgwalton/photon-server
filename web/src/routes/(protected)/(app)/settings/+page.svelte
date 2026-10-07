@@ -142,76 +142,74 @@ const roles = { admin: "Admin", member: "Member", restricted: "Restricted" };
 		</Card.Content>
 	</Card.Root>
 
-	{#if data.lock === "password"}
-		<Card.Root>
-			<Card.Header>
-				<Card.Title><h2 class="heading">Password</h2></Card.Title>
-				<Card.Description>
-					Changing it signs out every other device signed in as you.
-				</Card.Description>
-			</Card.Header>
-			<Card.Content>
-				<form onsubmit={setPassword}>
-					<Field.Group>
-						<Field.Field>
-							<Field.Label for="current">Current password</Field.Label>
-							<Input
-								id="current"
-								name="current"
-								type="password"
-								autocomplete="current-password"
-								class="max-w-sm"
-								required
-							/>
-						</Field.Field>
-						<Field.Field>
-							<Field.Label for="new">New password</Field.Label>
-							<Input
-								id="new"
-								name="new"
-								type="password"
-								autocomplete="new-password"
-								class="max-w-sm"
-								required
-							/>
-						</Field.Field>
-						<Field.Field>
-							<Field.Label for="again">Repeat the new password</Field.Label>
-							<Input
-								id="again"
-								name="again"
-								type="password"
-								autocomplete="new-password"
-								class="max-w-sm"
-								required
-							/>
-						</Field.Field>
-						<Field.Error errors={[{ message: refused.password }]} />
-						<Field.Field orientation="horizontal">
-							<Button type="submit">Change password</Button>
-						</Field.Field>
-					</Field.Group>
-				</form>
-			</Card.Content>
-		</Card.Root>
-	{/if}
+	<Card.Root>
+		<Card.Header>
+			<Card.Title><h2 class="heading">Password</h2></Card.Title>
+			<Card.Description>
+				Changing it signs out every other device signed in as you.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content>
+			<form onsubmit={setPassword}>
+				<Field.Group>
+					<Field.Field>
+						<Field.Label for="current">Current password</Field.Label>
+						<Input
+							id="current"
+							name="current"
+							type="password"
+							autocomplete="current-password"
+							class="max-w-sm"
+							required
+						/>
+					</Field.Field>
+					<Field.Field>
+						<Field.Label for="new">New password</Field.Label>
+						<Input
+							id="new"
+							name="new"
+							type="password"
+							autocomplete="new-password"
+							class="max-w-sm"
+							required
+						/>
+					</Field.Field>
+					<Field.Field>
+						<Field.Label for="again">Repeat the new password</Field.Label>
+						<Input
+							id="again"
+							name="again"
+							type="password"
+							autocomplete="new-password"
+							class="max-w-sm"
+							required
+						/>
+					</Field.Field>
+					<Field.Error errors={[{ message: refused.password }]} />
+					<Field.Field orientation="horizontal">
+						<Button type="submit">Change password</Button>
+					</Field.Field>
+				</Field.Group>
+			</form>
+		</Card.Content>
+	</Card.Root>
 
 	<Card.Root>
 		<Card.Header>
 			<Card.Title><h2 class="heading">PIN</h2></Card.Title>
 			<Card.Description>
-				{#if data.lock === "password"}
+				{#if data.me.role === "admin"}
 					An admin's profile is always opened with its password, so it has no
 					PIN.
 				{:else if data.lock === "pin"}
 					Switching to this profile asks for its PIN.
 				{:else}
-					Anyone signed in to this household can switch to this profile. Set a
-					PIN of 4 to 6 digits to lock it.
+					Switching to this profile asks for its password. Set a PIN of 4 to 6
+					digits to ask for that instead.
 				{/if}
 			</Card.Description>
 		</Card.Header>
-		{#if data.lock !== "password"}
+		{#if data.me.role !== "admin"}
 			<Card.Content>
 				<form onsubmit={setPIN}>
 					<Field.Group>

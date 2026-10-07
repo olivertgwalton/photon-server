@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectAccessible, logIn } from "./helpers";
+import { expectAccessible, logIn, switchToKids } from "./helpers";
 
 test("an admin's settings are one place: their account, then the server", async ({
 	page,
@@ -54,7 +54,7 @@ test("a member sets a PIN and takes it off again, and sees no server", async ({
 }) => {
 	await logIn(page);
 	await page.goto("/profiles?to=%2Fsettings");
-	await page.getByRole("button", { name: "Kids" }).click();
+	await switchToKids(page);
 	await expect(page).toHaveURL("/settings");
 	await expect(
 		page.getByRole("navigation", { name: "Settings" }).getByRole("link", {

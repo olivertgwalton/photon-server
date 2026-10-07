@@ -11,8 +11,8 @@ import { fields } from "#lib/form.js";
 let { data } = $props();
 let message = $state<string>();
 
-// Watches as the profile, with its PIN or password if it is locked, then goes
-// back to where the reader was.
+// Watches as the profile, with its PIN or password unless it is the one watched
+// as now, then goes back to where the reader was.
 async function choose(event: SubmitEvent) {
 	const form = fields(event);
 	const profileID = String(form.get("profile_id"));
@@ -94,7 +94,7 @@ const target = "group grid justify-items-center gap-3 rounded-xl outline-none";
 				{#each data.profiles as profile (profile.id)}
 					{@const current = profile.id === data.current}
 					<li>
-						{#if profile.lock === "none" || current}
+						{#if current}
 							<form onsubmit={choose}>
 								<input type="hidden" name="profile_id" value={profile.id}>
 								<button

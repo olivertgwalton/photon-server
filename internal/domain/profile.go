@@ -55,25 +55,21 @@ type Session struct {
 type ProfileLock string
 
 const (
-	LockNone     ProfileLock = "none"
 	LockPIN      ProfileLock = "pin"
 	LockPassword ProfileLock = "password"
 )
 
 func ProfileLocks() []ProfileLock {
-	return []ProfileLock{LockNone, LockPIN, LockPassword}
+	return []ProfileLock{LockPIN, LockPassword}
 }
 
-// Lock is what a profile asks for: an admin its password always, so a household profile cannot
-// become an admin by switching; anyone else their PIN, if they set one.
+// Lock is what a profile asks for: its PIN if it set one, else its password. An admin asks for its
+// password always, so a household profile cannot become an admin by guessing a few digits.
 func Lock(role Role, hasPIN bool) ProfileLock {
-	switch {
-	case role == RoleAdmin:
-		return LockPassword
-	case hasPIN:
+	if hasPIN && role != RoleAdmin {
 		return LockPIN
 	}
-	return LockNone
+	return LockPassword
 }
 
 // Unrated is whether a profile with an age limit sees titles no certificate rates.

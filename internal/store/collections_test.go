@@ -130,7 +130,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if err != nil || len(members) != 2 || members[0].Title != "Heat" {
 		t.Errorf("an admin's set = %+v, %v; want Heat first, as put", members, err)
 	}
-	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleMember, "")
+	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleMember, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestALibraryCountsTheCollectionsItLists(t *testing.T) {
 	if err := s.SaveIdentity(ctx, cards[0].ID, domain.SourceTMDB, m, nil); err != nil {
 		t.Fatal(err)
 	}
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,7 +312,7 @@ func TestACollectionOnTheHomePageIsARowOfItsTitles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}

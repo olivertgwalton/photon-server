@@ -73,11 +73,10 @@ func (a *API) setProfileAccess(w http.ResponseWriter, r *http.Request) {
 type addProfileJSON struct {
 	Name     string      `json:"name"`
 	Role     domain.Role `json:"role"`
-	Password string      `json:"password,omitzero"`
+	Password string      `json:"password"`
 }
 
-// addProfile adds a profile of the household, as Jellyfin's dashboard adds a user. One with no
-// password is chosen on a signed-in device and never signs in itself; an admin has one.
+// addProfile adds a profile of the household, as Jellyfin's dashboard adds a user.
 func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	var req addProfileJSON
 	if !a.decode(w, r, &req) {
@@ -89,8 +88,8 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Name = name
-	hash, ok := a.hash(w, r, req.Password)
-	if !ok {
+	hash, err := auth.HashPassword(r.Context(), req.Password)
+	if a.answered(w, r, err) {
 		return
 	}
 	p, err := a.svc.ProfileAdmin.AddProfile(r.Context(), req.Name, req.Role, hash)
@@ -110,7 +109,7 @@ type profileChangeJSON struct {
 	Password *string     `json:"password,omitzero"`
 }
 
-// setProfile renames a profile, changes its role, and sets its password, or clears it with "".
+// setProfile renames a profile, changes its role, and sets its password.
 func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r, "id")
 	if !ok {
@@ -129,11 +128,10 @@ func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.Password != nil {
-		hash, ok := a.hash(w, r, *req.Password)
-		if !ok {
+		var err error
+		if change.PasswordHash, err = auth.HashPassword(r.Context(), *req.Password); a.answered(w, r, err) {
 			return
 		}
-		change.PasswordHash = &hash
 	}
 	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), id, change)
 	if a.answered(w, r, err) {
@@ -154,13 +152,4 @@ func (a *API) removeProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileRemoved, Details: map[string]any{"name": name}})
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// hash hashes a password, "" for none.
-func (a *API) hash(w http.ResponseWriter, r *http.Request, password string) (string, bool) {
-	if password == "" {
-		return "", true
-	}
-	hash, err := auth.HashPassword(r.Context(), password)
-	return hash, !a.answered(w, r, err)
 }

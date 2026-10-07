@@ -7,5 +7,5 @@ export const load: PageLoad = async ({ fetch, parent }) => {
 		parent(),
 	]);
 	const mine = profiles.items.find((p) => p.id === me.id);
-	return { lock: mine?.lock ?? "none" };
+	return { lock: mine?.lock ?? "password" };
 };

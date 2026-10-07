@@ -11,7 +11,7 @@ type Profile struct {
 	ID           uuid.UUID
 	Name         string
 	Role         domain.Role
-	PasswordHash *string
+	PasswordHash string
 	PinHash      *string
 	AvatarID     *uuid.UUID
 }

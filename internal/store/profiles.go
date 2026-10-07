@@ -9,7 +9,6 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -24,29 +23,25 @@ var (
 const profileColumns = `id, name, role, password_hash, pin_hash, avatar_id`
 
 func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, passwordHash string) (domain.Profile, error) {
-	row := model.Profile{Name: name, Role: role, PasswordHash: optional(passwordHash)}
+	row := model.Profile{Name: name, Role: role, PasswordHash: passwordHash}
 	err := s.pool.QueryRow(ctx, `INSERT INTO profiles (name, role, password_hash) VALUES ($1, $2, $3) RETURNING id`,
 		row.Name, row.Role, row.PasswordHash).Scan(&row.ID)
-	if err := adminPassword(err); err != nil {
-		if violates(err, uniqueViolation) {
-			return domain.Profile{}, ErrProfileExists
-		}
-		if errors.Is(err, ErrAdminNeedsPassword) {
-			return domain.Profile{}, err
-		}
+	if violates(err, uniqueViolation) {
+		return domain.Profile{}, ErrProfileExists
+	}
+	if err != nil {
 		return domain.Profile{}, fmt.Errorf("adding profile: %w", err)
 	}
 	return profile(row), nil
 }
 
-// ProfileByName returns a profile and its password hash, empty for a profile that cannot sign in
-// with a password.
+// ProfileByName returns a profile and its password hash.
 func (s *Store) ProfileByName(ctx context.Context, name string) (domain.Profile, string, error) {
 	row, err := readRow[model.Profile](ctx, s.pool, `SELECT `+profileColumns+` FROM profiles WHERE name = $1`, name)
 	if err != nil {
 		return domain.Profile{}, "", err
 	}
-	return profile(row), deref(row.PasswordHash), nil
+	return profile(row), row.PasswordHash, nil
 }
 
 // SetPasswordHash replaces a profile's stored hash, to raise its parameters on a successful
@@ -132,7 +127,7 @@ func (s *Store) ProfileByID(ctx context.Context, id uuid.UUID) (domain.Profile, 
 	return profile(row), nil
 }
 
-// Secrets are a profile's stored hashes, empty where unset.
+// Secrets are a profile's stored hashes, the PIN's empty where unset.
 type Secrets struct {
 	Password string
 	PIN      string
@@ -159,7 +154,7 @@ func (s *Store) ProfileSecrets(ctx context.Context, id uuid.UUID) (domain.Profil
 	if err != nil {
 		return domain.Profile{}, Secrets{}, err
 	}
-	return profile(row), Secrets{Password: deref(row.PasswordHash), PIN: deref(row.PinHash)}, nil
+	return profile(row), Secrets{Password: row.PasswordHash, PIN: deref(row.PinHash)}, nil
 }
 
 // SetPINHash sets a profile's PIN, or clears it when hash is empty.
@@ -233,31 +228,18 @@ func (s *Store) DeleteKey(ctx context.Context, id uuid.UUID) (bool, error) {
 	return info.RowsAffected() == 1, err
 }
 
-var (
-	// ErrLastAdmin is a change that would leave the server with no admin.
-	ErrLastAdmin = errors.New("the server's last admin cannot stop being one")
-	// ErrAdminNeedsPassword is an admin left with no password to sign in with, which the
-	// admin_password constraint refuses.
-	ErrAdminNeedsPassword = errors.New("an admin profile needs a password")
-)
+// ErrLastAdmin is a change that would leave the server with no admin.
+var ErrLastAdmin = errors.New("the server's last admin cannot stop being one")
 
-func adminPassword(err error) error {
-	if pg, ok := errors.AsType[*pgconn.PgError](err); ok && pg.ConstraintName == "admin_password" {
-		return ErrAdminNeedsPassword
-	}
-	return err
-}
-
-// ProfileChange is what to change about a profile; an empty name or role, or a nil hash, is left
-// as it is, and an empty hash clears the password.
+// ProfileChange is what to change about a profile; an empty field is left as it is.
 type ProfileChange struct {
 	Name         string
 	Role         domain.Role
-	PasswordHash *string
+	PasswordHash string
 }
 
-// SetProfile renames a profile, changes its role, and sets or clears its password. The server
-// keeps an admin, and every admin a password.
+// SetProfile renames a profile, changes its role, and sets its password. The server keeps an
+// admin.
 func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange) (domain.Profile, error) {
 	var out domain.Profile
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -271,12 +253,10 @@ func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange) (
 			}
 		}
 		row.Name, row.Role = cmp.Or(c.Name, row.Name), cmp.Or(c.Role, row.Role)
-		if c.PasswordHash != nil {
-			row.PasswordHash = optional(*c.PasswordHash)
-		}
+		row.PasswordHash = cmp.Or(c.PasswordHash, row.PasswordHash)
 		if _, err := tx.Exec(ctx, `UPDATE profiles SET name = $2, role = $3, password_hash = $4 WHERE id = $1`,
 			row.ID, row.Name, row.Role, row.PasswordHash); err != nil {
-			return adminPassword(err)
+			return err
 		}
 		out = profile(row)
 		return nil

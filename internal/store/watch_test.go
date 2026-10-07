@@ -35,7 +35,7 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	guest, err := s.AddProfile(ctx, "Guest", domain.RoleMember, "")
+	guest, err := s.AddProfile(ctx, "Guest", domain.RoleMember, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}

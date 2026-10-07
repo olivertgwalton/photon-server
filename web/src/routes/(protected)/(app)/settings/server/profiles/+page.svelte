@@ -14,7 +14,7 @@ import * as Table from "#lib/components/ui/table/index.js";
 
 let { data } = $props();
 
-const locks = { none: "None", pin: "PIN", password: "Password" } as const;
+const locks = { pin: "PIN", password: "Password" } as const;
 const roleOptions = Object.entries(roles).map(([value, label]) => ({
 	value: value as keyof typeof roles,
 	label,
@@ -30,7 +30,7 @@ async function add(event: SubmitEvent) {
 	const password = String(form.get("password") ?? "");
 	const added = await act(
 		client().POST("/api/v1/admin/profiles", {
-			body: { name, role, ...(password ? { password } : {}) },
+			body: { name, role, password },
 		}),
 		`${name} was added.`,
 	);
@@ -56,9 +56,8 @@ async function add(event: SubmitEvent) {
 					<Dialog.Header>
 						<Dialog.Title>Add a profile</Dialog.Title>
 						<Dialog.Description>
-							A profile with no password is chosen on a device someone has
-							already signed in to, as a household's are. An admin always has
-							one.
+							It signs in with its password, and is switched to with it until it
+							sets a PIN.
 						</Dialog.Description>
 					</Dialog.Header>
 					<Field.Group>
@@ -90,7 +89,8 @@ async function add(event: SubmitEvent) {
 								name="password"
 								type="password"
 								autocomplete="new-password"
-								required={role === "admin"}
+								minlength={8}
+								required
 							/>
 						</Field.Field>
 					</Field.Group>
