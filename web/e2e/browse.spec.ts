@@ -6,7 +6,11 @@ test("a title is taken off Continue Watching from its card", async ({
 }) => {
 	await logIn(page);
 	const row = page.getByRole("region", { name: "Continue Watching" });
-	await expect(row.getByRole("link", { name: /Quiet Hours/ })).toBeVisible();
+	const card = row.getByRole("link", { name: /Quiet Hours/ });
+	await expect(card).toBeVisible();
+	// Its best copy is badged, and read out in full.
+	await expect(card.getByText("DV", { exact: true })).toBeVisible();
+	await expect(card).toHaveAccessibleName(/4K Dolby Vision/);
 	await row.getByRole("button", { name: "More for Quiet Hours" }).click();
 	await page
 		.getByRole("menuitem", { name: "Remove from Continue Watching" })
