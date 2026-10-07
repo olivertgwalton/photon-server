@@ -4,7 +4,7 @@ import FilmIcon from "@lucide/svelte/icons/film";
 import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import HeartIcon from "@lucide/svelte/icons/heart";
-import HistoryIcon from "@lucide/svelte/icons/history";
+import RotateCcwClockIcon from "@lucide/svelte/icons/rotate-ccw-clock";
 import HouseIcon from "@lucide/svelte/icons/house";
 import ListVideoIcon from "@lucide/svelte/icons/list-video";
 import SettingsIcon from "@lucide/svelte/icons/settings";
@@ -203,7 +203,7 @@ function current(href: string) {
 					{@render item("/watchlist", "Watchlist", BookmarkIcon)}
 					{@render item("/favourites", "Favourites", HeartIcon)}
 					{@render item("/playlists", "Playlists", ListVideoIcon)}
-					{@render item("/history", "History", HistoryIcon)}
+					{@render item("/history", "History", RotateCcwClockIcon)}
 					{@render item("/downloads", "Downloads", DownloadIcon)}
 				</Sidebar.Menu>
 			</Sidebar.Group>

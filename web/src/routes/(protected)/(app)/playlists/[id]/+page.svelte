@@ -4,7 +4,7 @@ import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
 import PencilIcon from "@lucide/svelte/icons/pencil";
 import PlayIcon from "@lucide/svelte/icons/play";
 import ShuffleIcon from "@lucide/svelte/icons/shuffle";
-import Trash2Icon from "@lucide/svelte/icons/trash-2";
+import TrashIcon from "@lucide/svelte/icons/trash";
 import XIcon from "@lucide/svelte/icons/x";
 import { goto } from "$app/navigation";
 import { change } from "#lib/actions.svelte.js";
@@ -109,7 +109,7 @@ const name = (e: (typeof data.entries)[number]) =>
 				{#snippet child({
 					props,
 				})}
-					<Button variant="outline" {...props}> <Trash2Icon />Delete </Button>
+					<Button variant="outline" {...props}> <TrashIcon />Delete </Button>
 				{/snippet}
 			</AlertDialog.Trigger>
 			<AlertDialog.Content>
