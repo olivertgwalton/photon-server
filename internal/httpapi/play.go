@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"math"
 	"net/http"
@@ -12,6 +13,9 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"uuid"
@@ -50,6 +54,7 @@ type hlsFiles interface {
 	Transcodes() (active, conversions, limit int)
 	Encoder(video domain.VideoPlan) domain.Acceleration
 	WebVTT(ctx context.Context, open func() (*os.File, error), language string) (string, error)
+	Extracted(ctx context.Context, src hls.SubtitleSource, want string) (string, error)
 }
 
 type playing interface {
@@ -59,6 +64,7 @@ type playing interface {
 	VisiblePartFile(ctx context.Context, profile, part uuid.UUID) (root, rel string, err error)
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
 	Subtitle(ctx context.Context, id uuid.UUID) (store.PlaySubtitle, error)
+	PartStreams(ctx context.Context, part uuid.UUID) ([]domain.Stream, error)
 }
 
 type partJSON struct {
@@ -68,9 +74,12 @@ type partJSON struct {
 	DurationMS int64     `json:"duration_ms"`
 }
 
-// subtitleJSON is a subtitle file beside a copy played as it is, timed on the copy's timeline.
+// subtitleJSON is a subtitle the client draws beside the video, timed on the copy's timeline: a
+// file beside the copy, by its id, or a styled stream of it read out as it is, by its index, with
+// the address of the fonts the file carries for it.
 type subtitleJSON struct {
-	ID              uuid.UUID `json:"id"`
+	ID              uuid.UUID `json:"id,omitzero"`
+	Stream          *int      `json:"stream,omitzero"`
 	Codec           string    `json:"codec"`
 	Language        string    `json:"language,omitzero"`
 	Title           string    `json:"title,omitzero"`
@@ -78,6 +87,7 @@ type subtitleJSON struct {
 	Forced          bool      `json:"forced,omitzero"`
 	HearingImpaired bool      `json:"hearing_impaired,omitzero"`
 	URL             string    `json:"url"`
+	Fonts           string    `json:"fonts,omitzero"`
 }
 
 type videoJSON struct {
@@ -92,8 +102,10 @@ type videoJSON struct {
 	// mapped to SDR to reach it.
 	Range      domain.Range `json:"range,omitzero"`
 	ToneMapped bool         `json:"tone_mapped,omitzero"`
-	// BurnedSubtitle is the subtitle stream drawn into the picture.
-	BurnedSubtitle *int `json:"burned_subtitle,omitzero"`
+	// BurnedSubtitle is the subtitle stream drawn into the picture, BurnedSubtitleFile the
+	// subtitle file beside the copy drawn so.
+	BurnedSubtitle     *int       `json:"burned_subtitle,omitzero"`
+	BurnedSubtitleFile *uuid.UUID `json:"burned_subtitle_file,omitzero"`
 }
 
 type audioJSON struct {
@@ -119,17 +131,19 @@ func decisions() []decision {
 type playJSON struct {
 	VersionID   string `json:"version_id,omitzero"`
 	AudioStream *int   `json:"audio_stream,omitzero"`
-	// SubtitleStream is a subtitle the client will show; one that is a picture is drawn into the
-	// video where the client cannot draw it.
+	// SubtitleStream or SubtitleFile is a subtitle the client will show, a stream of the copy or a
+	// text file beside it; one that is a picture or styled is drawn into the video where the
+	// client cannot draw it.
 	SubtitleStream *int              `json:"subtitle_stream,omitzero"`
+	SubtitleFile   *uuid.UUID        `json:"subtitle_file,omitzero"`
 	Profile        *playback.Profile `json:"profile"`
 	// StartMS is where on the copy's timeline the player starts, so an HLS playlist is made from
 	// there before the player asks for it.
 	StartMS int64 `json:"start_ms,omitzero"`
 }
 
-// playbackJSON is a playback opened: its parts and subtitles played as they are, or its playlist,
-// at addresses relative to the server.
+// playbackJSON is a playback opened: its parts played as they are, or its playlist, and the
+// subtitles the client draws beside them, at addresses relative to the server.
 type playbackJSON struct {
 	PlaybackID uuid.UUID                `json:"playback_id"`
 	Method     domain.PlayMethod        `json:"method"`
@@ -167,6 +181,10 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "start_ms is not negative")
 		return
 	}
+	if req.SubtitleStream != nil && req.SubtitleFile != nil {
+		writeProblem(w, a.logger, codeInvalidBody, "a subtitle is subtitle_stream or subtitle_file, not both")
+		return
+	}
 	if req.Profile.Parts == "" {
 		req.Profile.Parts = domain.PartsJoined
 	}
@@ -197,7 +215,9 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		audio, subtitles := copyTracks(c)
 		req.AudioStream = playback.DefaultTracks(audio, subtitles, prefs, last).Audio
 	}
-	d, err := playback.Decide(*req.Profile, playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams}, req.AudioStream, req.SubtitleStream, a.svc.Setup.Encoder.HEVC)
+	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
+	d, err := playback.Decide(*req.Profile, playback.CopyOf(c), tracks,
+		playback.Encoding{HEVC: a.svc.Setup.Encoder.HEVC, Libass: a.svc.Setup.Tools.Libass})
 	if errors.Is(err, playback.ErrNoCompatibleStream) {
 		status := codeNoCompatibleStream.status()
 		writeJSON(w, a.logger, "application/problem+json", status, refusalJSON{problem{Title: http.StatusText(status), Status: status, Code: codeNoCompatibleStream}, d.Reasons})
@@ -210,7 +230,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	session, err := a.svc.Playbacks.Start(r.Context(), uuid.NewV7(), d.Method, a.playbackCard(r, title, c, d, req.SubtitleStream))
+	session, err := a.svc.Playbacks.Start(r.Context(), uuid.NewV7(), d.Method, a.playbackCard(r, title, c, d, tracks))
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -226,6 +246,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 			answer.Video = &videoJSON{
 				Stream: v.Stream, Decision: decisionTranscode, Codec: e.Codec, Width: e.Width, Height: e.Height,
 				BitrateKbps: e.BitrateKbps, Range: e.Range, ToneMapped: e.ToneMap, BurnedSubtitle: e.Burn,
+				BurnedSubtitleFile: e.BurnFile,
 			}
 		}
 	}
@@ -260,19 +281,47 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 				OffsetMS: p.OffsetMS, DurationMS: p.DurationMS,
 			})
 		}
-		for _, f := range c.Subtitles {
-			answer.Subtitles = append(answer.Subtitles, subtitleJSON{
-				ID: f.ID, Codec: f.Codec, Language: domain.TagOf(f.Language), Title: f.Title, Default: f.Default, Forced: f.Forced,
-				HearingImpaired: f.HearingImpaired, URL: a.svc.Signer.Sign("/api/v1/subtitles/"+f.ID.String()+"/file", until),
-			})
-		}
+	}
+	if v := d.Video; v == nil || v.Encode == nil || v.Encode.Burn == nil && v.Encode.BurnFile == nil {
+		answer.Subtitles = a.sidecars(*req.Profile, c, d.Method, until)
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, answer)
 }
 
+// sidecars are the subtitles a playback hands the client to draw beside its video, but none
+// beside one drawn in: the files beside the copy it draws so, but plain ones HLS carries itself,
+// and the styled streams of a copy in one file, read out as they are, but those it draws from the
+// file it plays.
+func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayMethod, until time.Time) []subtitleJSON {
+	var out []subtitleJSON
+	for _, s := range c.Streams {
+		if s.Kind != domain.StreamSubtitle || !p.Sidecar(s.Codec, false, len(c.Parts)) ||
+			method == domain.PlayDirect && p.Draws(s.Codec, domain.SubtitleEmbedded) {
+			continue
+		}
+		part := "/api/v1/parts/" + c.Parts[0].ID.String()
+		out = append(out, subtitleJSON{
+			Stream: &s.Index, Codec: s.Codec, Language: domain.TagOf(s.Language), Title: s.Title, Default: s.Default,
+			Forced: s.Forced, HearingImpaired: s.HearingImpaired,
+			URL:   a.svc.Signer.Sign(part+"/subtitles/"+strconv.Itoa(s.Index), until),
+			Fonts: a.svc.Signer.Sign(part+"/fonts", until),
+		})
+	}
+	for _, f := range c.Subtitles {
+		if !p.Sidecar(f.Codec, true, len(c.Parts)) || method != domain.PlayDirect && hls.TextSubtitle(f.Codec) {
+			continue
+		}
+		out = append(out, subtitleJSON{
+			ID: f.ID, Codec: f.Codec, Language: domain.TagOf(f.Language), Title: f.Title, Default: f.Default, Forced: f.Forced,
+			HearingImpaired: f.HearingImpaired, URL: a.svc.Signer.Sign("/api/v1/subtitles/"+f.ID.String()+"/file", until),
+		})
+	}
+	return out
+}
+
 // playbackCard is what the dashboard shows of a playback the request starts.
-func (a *API) playbackCard(r *http.Request, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, subtitle *int) domain.PlaybackCard {
-	card := playback.Card(sessionOf(r), a.svc.TrustedProxies.Client(r).String(), t, c, d, subtitle)
+func (a *API) playbackCard(r *http.Request, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, tracks domain.ChosenTracks) domain.PlaybackCard {
+	card := playback.Card(sessionOf(r), a.svc.TrustedProxies.Client(r).String(), t, c, d, tracks)
 	if v := d.Video; v != nil && v.Encode != nil {
 		card.Acceleration = a.svc.HLS.Encoder(*v)
 	}
@@ -486,7 +535,7 @@ func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !hls.TextSubtitle(sub.Codec) {
-		writeProblem(w, a.logger, codeInvalidParameter, "format webvtt is for text subtitles, and this one is pictures")
+		writeProblem(w, a.logger, codeInvalidParameter, "format webvtt is for plain text subtitles: WebVTT carries no pictures, and would lose a styled one's look")
 		return
 	}
 	ctx := r.Context()
@@ -550,4 +599,135 @@ func (a *API) requireSignature(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// fontTypes are the types of the fonts a file carries for its styled subtitles.
+var fontTypes = map[string]string{
+	".ttf": "font/ttf", ".otf": "font/otf", ".ttc": "font/collection", ".woff": "font/woff", ".woff2": "font/woff2",
+}
+
+type fontsJSON struct {
+	Fonts []fontJSON `json:"fonts"`
+}
+
+// fontJSON is a font a file carries, at an address signed as long as the list's own.
+type fontJSON struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+// partSubtitles is a part's file, opened as the scanner recorded it, and its streams, for reading
+// its subtitles out. The read outlives the request that starts it.
+func (a *API) partSubtitles(ctx context.Context, part uuid.UUID) (hls.SubtitleSource, error) {
+	streams, err := a.svc.Playing.PartStreams(ctx, part)
+	if err != nil {
+		return hls.SubtitleSource{}, err
+	}
+	opening := context.WithoutCancel(ctx)
+	open := func() (*os.File, error) {
+		f, _, err := openLibraryFile(opening, a.svc.Playing.PartFile, part)
+		return f, err
+	}
+	return hls.SubtitleSource{Open: open, Part: part, Streams: streams}, nil
+}
+
+// styledStream serves a styled subtitle stream of a part, read out as it is.
+func (a *API) styledStream(w http.ResponseWriter, r *http.Request) {
+	part, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	n, err := strconv.Atoi(r.PathValue("stream"))
+	if err != nil {
+		writeProblem(w, a.logger, codeNotFound, "")
+		return
+	}
+	src, err := a.partSubtitles(r.Context(), part)
+	if a.answered(w, r, err) {
+		return
+	}
+	if !slices.ContainsFunc(src.Streams, func(s domain.Stream) bool {
+		return s.Index == n && s.Kind == domain.StreamSubtitle && hls.StyledSubtitle(s.Codec)
+	}) {
+		writeProblem(w, a.logger, codeNotFound, "")
+		return
+	}
+	dir, err := a.svc.HLS.Extracted(r.Context(), src, hls.StyledName(n))
+	if a.answered(w, r, err) {
+		return
+	}
+	f, err := os.Open(filepath.Join(dir, hls.StyledName(n)))
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	a.serveFile(w, r, f, hls.StyledName(n), http.Header{"Content-Type": {"text/x-ssa; charset=utf-8"}})
+}
+
+// partFonts lists the fonts a part's file carries for its styled subtitles, each at an address
+// signed until the list's own lapses.
+func (a *API) partFonts(w http.ResponseWriter, r *http.Request) {
+	part, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	src, err := a.partSubtitles(r.Context(), part)
+	if a.answered(w, r, err) {
+		return
+	}
+	dir, err := a.svc.HLS.Extracted(r.Context(), src, hls.FontsDir)
+	if a.answered(w, r, err) {
+		return
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, hls.FontsDir))
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	// requireSignature has read exp already.
+	exp, _ := strconv.ParseInt(r.URL.Query().Get("exp"), 10, 64)
+	answer := fontsJSON{Fonts: []fontJSON{}}
+	for _, e := range entries {
+		if _, ok := fontTypes[strings.ToLower(filepath.Ext(e.Name()))]; !ok || !e.Type().IsRegular() {
+			continue
+		}
+		at := r.URL.Path + "/" + e.Name()
+		expires, sig := a.svc.Signer.Token(at, time.Unix(exp, 0))
+		u := url.URL{Path: at, RawQuery: url.Values{"exp": {expires}, "sig": {sig}}.Encode()}
+		answer.Fonts = append(answer.Fonts, fontJSON{Name: e.Name(), URL: u.String()})
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, answer)
+}
+
+// partFont serves a font a part's file carries, as partFonts listed it.
+func (a *API) partFont(w http.ResponseWriter, r *http.Request) {
+	part, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	name := r.PathValue("name")
+	t, ok := fontTypes[strings.ToLower(filepath.Ext(name))]
+	if !ok {
+		writeProblem(w, a.logger, codeNotFound, "")
+		return
+	}
+	src, err := a.partSubtitles(r.Context(), part)
+	if a.answered(w, r, err) {
+		return
+	}
+	dir, err := a.svc.HLS.Extracted(r.Context(), src, hls.FontsDir)
+	if a.answered(w, r, err) {
+		return
+	}
+	f, err := os.OpenInRoot(filepath.Join(dir, hls.FontsDir), name)
+	if errors.Is(err, fs.ErrNotExist) {
+		writeProblem(w, a.logger, codeNotFound, "")
+		return
+	}
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	// A font's bytes never change under its address: the part's file is read out once.
+	a.serveFile(w, r, f, name, http.Header{"Content-Type": {t}, "Cache-Control": {"private, max-age=86400"}})
 }

@@ -3783,6 +3783,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/parts/{id}/fonts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the fonts a part's file carries for its styled subtitles, at the address play answered */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description When the address lapses, as the server signed it. */
+                    exp?: string;
+                    /** @description The server's signature of the path and exp. */
+                    sig?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Fonts"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parts/{id}/fonts/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A font a part's file carries, at the address its list answered */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description When the address lapses, as the server signed it. */
+                    exp?: string;
+                    /** @description The server's signature of the path and exp. */
+                    sig?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                    /** @description The font's name, as its list answered it. */
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "font/collection": unknown;
+                        "font/otf": unknown;
+                        "font/ttf": unknown;
+                        "font/woff": unknown;
+                        "font/woff2": unknown;
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/parts/{id}/sample": {
         parameters: {
             query?: never;
@@ -3853,6 +3947,52 @@ export interface paths {
                     };
                     content: {
                         "video/*": unknown;
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parts/{id}/subtitles/{stream}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A styled subtitle stream of a part, read out as it is, at the address play answered */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description When the address lapses, as the server signed it. */
+                    exp?: string;
+                    /** @description The server's signature of the path and exp. */
+                    sig?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                    /** @description The stream's index in the part's file. */
+                    stream: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/x-ssa": unknown;
                     };
                 };
                 default: components["responses"]["Problem"];
@@ -5337,7 +5477,7 @@ export interface components {
             max_bitrate_kbps: number;
             parts?: components["schemas"]["PartPlayback"];
             segments?: components["schemas"]["SegmentFormat"];
-            subtitles?: string[];
+            subtitles?: components["schemas"]["SubtitleSupport"][];
             video: components["schemas"]["VideoSupport"][];
         };
         CollectionCard: {
@@ -5647,6 +5787,13 @@ export interface components {
         Folders: {
             backups: components["schemas"]["Folder"];
             cache: components["schemas"]["Folder"];
+        };
+        Font: {
+            name: string;
+            url: string;
+        };
+        Fonts: {
+            fonts: components["schemas"]["Font"][];
         };
         /** @enum {string} */
         HEVCEncoding: "allow" | "deny";
@@ -6011,6 +6158,8 @@ export interface components {
             profile: components["schemas"]["ClientProfile"] | null;
             /** Format: int64 */
             start_ms?: number;
+            /** Format: uuid */
+            subtitle_file?: string | null;
             subtitle_stream?: number | null;
             version_id?: string;
         };
@@ -6074,8 +6223,10 @@ export interface components {
         PlaybackSubtitle: {
             burned?: boolean;
             codec: string;
+            /** Format: uuid */
+            file?: string | null;
             language?: string;
-            stream: number;
+            stream?: number | null;
         };
         PlaybackTitle: {
             /** Format: uuid */
@@ -6332,6 +6483,7 @@ export interface components {
             ffprobe: components["schemas"]["Tool"];
             folders: components["schemas"]["Folders"];
             id: string;
+            libass: boolean;
             listen: string;
             metadata_language: string;
             name: string;
@@ -6395,14 +6547,18 @@ export interface components {
         Subtitle: {
             codec: string;
             default?: boolean;
+            fonts?: string;
             forced?: boolean;
             hearing_impaired?: boolean;
             /** Format: uuid */
-            id: string;
+            id?: string;
             language?: string;
+            stream?: number | null;
             title?: string;
             url: string;
         };
+        /** @enum {string} */
+        SubtitleDelivery: "embedded" | "sidecar";
         /** @enum {string} */
         SubtitleFormat: "original" | "webvtt";
         /** @enum {string} */
@@ -6416,6 +6572,10 @@ export interface components {
             id: string;
             language?: string;
             title?: string;
+        };
+        SubtitleSupport: {
+            codec: string;
+            delivery: components["schemas"]["SubtitleDelivery"];
         };
         Switch: {
             profile_id: string;
@@ -6570,6 +6730,8 @@ export interface components {
         Video: {
             bitrate_kbps?: number;
             burned_subtitle?: number | null;
+            /** Format: uuid */
+            burned_subtitle_file?: string | null;
             codec?: components["schemas"]["VideoCodec"];
             decision: components["schemas"]["Decision"];
             dolby_vision?: components["schemas"]["DolbyVisionHandling"];

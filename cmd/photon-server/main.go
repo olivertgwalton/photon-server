@@ -203,7 +203,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	remuxer, err := hls.NewRemuxer(tools.FFmpeg.Path, filepath.Join(cacheRoot, "hls"), filepath.Join(cacheRoot, "subtitles"), hw, transcodes, logger)
+	remuxer, err := hls.NewRemuxer(tools, filepath.Join(cacheRoot, "hls"), filepath.Join(cacheRoot, "subtitles"), hw, transcodes, logger)
 	if err != nil {
 		return err
 	}
@@ -258,7 +258,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	jellyfinAPI := jellyfin.NewListener(st, hub.Subscribe, jellyfin.New(logger, info, jellyfin.Services{
 		Auth: authService, Limits: cache, Raise: hub.Raise, Proxies: trusted, Catalogue: st, Pictures: pictureCache,
 		Playing: st, Playbacks: sessions, Watching: st, HLS: remuxer, Remuxing: remuxes, Owners: owners,
-		Signer: signer, HEVC: hw.HEVC,
+		Signer: signer, Encoding: playback.Encoding{HEVC: hw.HEVC, Libass: tools.Libass},
 	}), listen, secured.Listen, secured.TLSConfig(), logger)
 	srv := &http.Server{
 		Addr: listen, TLSConfig: secured.TLSConfig(),
@@ -376,6 +376,9 @@ func logTools(ctx context.Context, logger *slog.Logger, tools media.Tools) {
 		slog.String("yt_dlp", tools.YTDLP.Path), slog.String("yt_dlp_version", tools.YTDLP.Version))
 	if !tools.Chromaprint {
 		logger.WarnContext(ctx, "intros and credits are found from chapters only: ffmpeg has no chromaprint muxer")
+	}
+	if !tools.Libass {
+		logger.WarnContext(ctx, "styled subtitles play only on clients that draw them: ffmpeg has no libass")
 	}
 }
 

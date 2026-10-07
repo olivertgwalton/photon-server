@@ -171,7 +171,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 		return true
 	}
 	d := playback.Decision{Method: t.Method, Video: &t.Video, Audio: t.Audio, Reasons: t.Reasons}
-	card := playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, d, t.Subtitle)
+	card := playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: t.Subtitle})
 	if t.Video.Encode != nil {
 		card.Acceleration = a.svc.HLS.Encoder(t.Video)
 	}

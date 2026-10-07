@@ -49,8 +49,9 @@ type Services struct {
 	Remuxing remuxing
 	Owners   owners
 	Signer   playback.Signer
-	// HEVC is whether video is encoded to HEVC for an app that plays it.
-	HEVC domain.HEVCEncoding
+	// Encoding is what video is made with for an app: HEVC where it plays it, and styled
+	// subtitles drawn in.
+	Encoding playback.Encoding
 }
 
 type API struct {

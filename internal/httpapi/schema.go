@@ -26,6 +26,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.NextEpisode]():         values(domain.NextEpisodes()),
 	reflect.TypeFor[domain.SegmentAction]():       values(domain.SegmentActions()),
 	reflect.TypeFor[domain.SubtitleMode]():        values(domain.SubtitleModes()),
+	reflect.TypeFor[domain.SubtitleDelivery]():    values(domain.SubtitleDeliveries()),
 	reflect.TypeFor[domain.TrackMemory]():         values(domain.TrackMemories()),
 	reflect.TypeFor[domain.Acceleration]():        values(domain.Accelerations()),
 	reflect.TypeFor[domain.ArtworkKind]():         values(domain.ArtworkKinds()),

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"os"
+	"slices"
 	"time"
 	"uuid"
 
@@ -41,7 +42,7 @@ func NewRemuxes(parts partStore, h remuxer) *Remuxes {
 }
 
 // Open starts a playback's HLS of a copy at start, in segments of the format asked for, carrying
-// its video and audio as decided, and, unless a subtitle is drawn into the picture, its text
+// its video and audio as decided, and, unless a subtitle is drawn into the picture, its plain text
 // subtitles, embedded and beside it, as WebVTT.
 func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error {
 	// The remux opens its files long after this request has been answered.
@@ -66,6 +67,14 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 			Open: open, Video: video, Audio: audio,
 			Part: hls.Part{Duration: duration, Keyframes: keyframes},
 		}
+		if e := video.Encode; e != nil {
+			switch {
+			case e.BurnFile != nil:
+				sources[i].Styled = r.file(opening, c, *e.BurnFile)
+			case e.Burn != nil && hls.StyledSubtitle(codecOf(c.Streams, *e.Burn)):
+				sources[i].Styled = &hls.SubtitleSource{Open: open, Stream: e.Burn, Part: p.ID, Streams: c.Streams}
+			}
+		}
 	}
 	kbps := c.BitrateKbps
 	if e := video.Encode; e != nil {
@@ -77,7 +86,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 	h := hls.Copy{Parts: sources, Variant: variant(c.Streams, video, audio, kbps), Start: start, Segments: segments}
 	// A subtitle drawn into the picture is the only one offered, as Jellyfin's master playlist
 	// has it: another turned on by a player would be drawn over it.
-	if e := video.Encode; e != nil && e.Burn != nil {
+	if e := video.Encode; e != nil && (e.Burn != nil || e.BurnFile != nil) {
 		return r.hls.Open(ctx, playback, h)
 	}
 	// The parts of a copy are cut from one master, so each holds the first's streams.
@@ -88,7 +97,8 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 		sub := subtitle(st.Title, st.Language, st.Default, st.Forced, st.HearingImpaired)
 		for i, p := range c.Parts {
 			sub.Sources = append(sub.Sources, hls.SubtitleSource{
-				Open: opens[i], Stream: &st.Index, Part: p.ID, Offset: time.Duration(p.OffsetMS) * time.Millisecond,
+				Open: opens[i], Stream: &st.Index, Part: p.ID, Streams: c.Streams,
+				Offset: time.Duration(p.OffsetMS) * time.Millisecond,
 			})
 		}
 		h.Subtitles = append(h.Subtitles, sub)
@@ -98,10 +108,27 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 			continue
 		}
 		sub := subtitle(f.Title, f.Language, f.Default, f.Forced, f.HearingImpaired)
-		sub.Sources = []hls.SubtitleSource{{Open: func() (*os.File, error) { return openFile(opening, r.parts.SubtitleFile, f.ID) }, Language: sub.Language}}
+		sub.Sources = []hls.SubtitleSource{*r.file(opening, c, f.ID)}
 		h.Subtitles = append(h.Subtitles, sub)
 	}
 	return r.hls.Open(ctx, playback, h)
+}
+
+// file is a subtitle file beside a copy, in its language.
+func (r *Remuxes) file(ctx context.Context, c store.PlayCopy, id uuid.UUID) *hls.SubtitleSource {
+	src := &hls.SubtitleSource{Open: func() (*os.File, error) { return openFile(ctx, r.parts.SubtitleFile, id) }}
+	if i := slices.IndexFunc(c.Subtitles, func(f store.PlaySubtitle) bool { return f.ID == id }); i >= 0 && c.Subtitles[i].Language != language.Und {
+		src.Language = c.Subtitles[i].Language.String()
+	}
+	return src
+}
+
+// codecOf is the codec of a copy's stream.
+func codecOf(streams []domain.Stream, index int) string {
+	if i := slices.IndexFunc(streams, func(s domain.Stream) bool { return s.Index == index }); i >= 0 {
+		return streams[i].Codec
+	}
+	return ""
 }
 
 // subtitle names a subtitle by its title, else its language in English.

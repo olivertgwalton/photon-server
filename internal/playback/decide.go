@@ -6,8 +6,11 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // Profile is what a client says it plays, sent with every play as Jellyfin's PlaybackInfo carries
@@ -20,9 +23,8 @@ type Profile struct {
 	Audio      []AudioSupport `json:"audio"`
 	// MaxBitrateKbps is the most it will be sent, zero for no limit.
 	MaxBitrateKbps int `json:"max_bitrate_kbps"`
-	// Subtitles are the subtitle formats it draws itself from a file it plays as it is, by
-	// FFmpeg's names ("subrip", "hdmv_pgs_subtitle").
-	Subtitles []string `json:"subtitles,omitzero"`
+	// Subtitles are the subtitle formats it draws itself, and from where.
+	Subtitles []SubtitleSupport `json:"subtitles,omitzero"`
 	// Parts is how it plays a copy in several files: joined into one HLS stream by the server, the
 	// default, or each file in turn as it is.
 	Parts domain.PartPlayback `json:"parts,omitzero"`
@@ -48,6 +50,14 @@ type VideoSupport struct {
 	DolbyVisionProfiles []int `json:"dolby_vision_profiles,omitzero"`
 }
 
+// SubtitleSupport is a subtitle format a client draws itself, by FFmpeg's name ("subrip", "ass",
+// "hdmv_pgs_subtitle"): from inside a file it plays as it is, or from a file of its own beside
+// the video, a file beside the copy or a styled stream read out of it.
+type SubtitleSupport struct {
+	Codec    string                  `json:"codec"`
+	Delivery domain.SubtitleDelivery `json:"delivery"`
+}
+
 // AudioSupport is an audio codec a client decodes, by FFmpeg's name.
 type AudioSupport struct {
 	Codec       string `json:"codec"`
@@ -61,15 +71,41 @@ var (
 	ErrNoSuchAudio = errors.New("playback: the copy has no such audio stream")
 	// ErrNoSuchSubtitle is a subtitle stream asked for that the copy does not have.
 	ErrNoSuchSubtitle = errors.New("playback: the copy has no such subtitle stream")
+	// ErrNoSuchSubtitleFile is a subtitle file asked for that is not a text file beside the copy.
+	ErrNoSuchSubtitleFile = errors.New("playback: the copy has no such text subtitle file")
 )
 
-// Copy is what deciding needs of a copy: its container, its bitrate, how many files it is in, and
-// its first part's streams, the parts of one copy being cut from one master.
+// Copy is what deciding needs of a copy: its container, its bitrate, how many files it is in, its
+// first part's streams, the parts of one copy being cut from one master, and the subtitle files
+// beside it.
 type Copy struct {
 	Container   string
 	BitrateKbps int
 	Parts       int
 	Streams     []domain.Stream
+	Files       []SubtitleFile
+}
+
+// CopyOf is what deciding needs of a copy to play.
+func CopyOf(c store.PlayCopy) Copy {
+	files := make([]SubtitleFile, len(c.Subtitles))
+	for i, f := range c.Subtitles {
+		files[i] = SubtitleFile{ID: f.ID, Codec: f.Codec}
+	}
+	return Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams, Files: files}
+}
+
+// SubtitleFile is a subtitle file beside a copy.
+type SubtitleFile struct {
+	ID    uuid.UUID
+	Codec string
+}
+
+// Encoding is what the server can make video with: HEVC where it allows it, and styled subtitles
+// drawn in where its FFmpeg has libass.
+type Encoding struct {
+	HEVC   domain.HEVCEncoding
+	Libass bool
 }
 
 // Decision is how a copy reaches a client: its file as it is, its video copied into HLS, or its
@@ -81,9 +117,17 @@ type Decision struct {
 	Reasons []domain.TranscodeReason
 }
 
-// pictureSubtitles are subtitle codecs that are pictures, which only a client drawing them from the
-// file shows, or which are drawn into the video.
-var pictureSubtitles = []string{"hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle", "xsub"}
+// Sidecar reports whether a client draws a subtitle from a file of its own beside the video: a
+// file beside the copy in a format it draws so, or a styled stream of a copy in one file, read out
+// as it is. A stream of a copy in several files is in each of them, timed on each one's clock, and
+// is never read out into one file.
+func (p Profile) Sidecar(codec string, file bool, parts int) bool {
+	return p.Draws(codec, domain.SubtitleSidecar) && (file || hls.StyledSubtitle(codec) && parts == 1)
+}
+
+func (p Profile) Draws(codec string, d domain.SubtitleDelivery) bool {
+	return slices.Contains(p.Subtitles, SubtitleSupport{Codec: codec, Delivery: d})
+}
 
 // Carried are the codecs HLS segments of a format carry: fragmented MP4 nearly any, MPEG-TS those
 // players take from it, which is no Dolby Vision either.
@@ -99,27 +143,22 @@ func Carried(f domain.SegmentFormat) (video, audio []string) {
 // Decide chooses how a copy plays on a client, with its audio stream as asked, else its default
 // one, else its first. It plays as it is where the client opens the container and plays every
 // stream; else in HLS with its video copied where the client plays that, encoding the audio where
-// it does not; else in HLS with its video encoded, to HEVC where the client plays it and hevc
-// allows it, else to H.264. ErrNoCompatibleStream, with the reasons it could not play as it is,
-// where the client takes none of these.
+// it does not; else in HLS with its video encoded, to HEVC where the client plays it and the
+// server allows it, else to H.264. ErrNoCompatibleStream, with the reasons it could not play as it
+// is, where the client takes none of these.
 //
-// A picture subtitle asked for (PGS, DVD) is drawn into the video where the client cannot draw it
-// from the file itself, as HLS carries no pictures: as Jellyfin's subtitle Encode method does.
-func Decide(p Profile, c Copy, audio, subtitle *int, hevc domain.HEVCEncoding) (Decision, error) {
-	video, sound := pick(c.Streams, audio)
-	if audio != nil && sound == nil {
+// A subtitle asked for, a stream of the file or a text file beside it, reaches the client as it
+// draws it: from the file played as it is, or from a file of its own beside the video. Where it
+// cannot, plain text is carried in HLS as WebVTT, and a picture (PGS, DVD) or styled text (ASS) is
+// drawn into the video, as Jellyfin's subtitle Encode method draws them: WebVTT carries neither.
+func Decide(p Profile, c Copy, tracks domain.ChosenTracks, enc Encoding) (Decision, error) {
+	video, sound := pick(c.Streams, tracks.Audio)
+	if tracks.Audio != nil && sound == nil {
 		return Decision{}, ErrNoSuchAudio
 	}
-	var burn *int
-	var burnCodec string
-	if subtitle != nil {
-		i := slices.IndexFunc(c.Streams, func(s domain.Stream) bool { return s.Kind == domain.StreamSubtitle && s.Index == *subtitle })
-		if i < 0 {
-			return Decision{}, ErrNoSuchSubtitle
-		}
-		if slices.Contains(pictureSubtitles, c.Streams[i].Codec) {
-			burn, burnCodec = subtitle, c.Streams[i].Codec
-		}
+	sub, err := c.subtitle(tracks)
+	if err != nil {
+		return Decision{}, err
 	}
 	var d Decision
 	var videoReasons, audioReasons []domain.TranscodeReason
@@ -149,8 +188,14 @@ func Decide(p Profile, c Copy, audio, subtitle *int, hevc domain.HEVCEncoding) (
 	if tooMuch {
 		d.Reasons = append(d.Reasons, domain.BitrateExceedsLimit)
 	}
-	if burn != nil && !slices.Contains(p.Subtitles, burnCodec) {
-		d.Reasons = append(d.Reasons, domain.SubtitleCodecNotSupported)
+	// Drawn in, a subtitle needs the video encoded, as HLS carries neither pictures nor styles.
+	burn := false
+	if sub != nil {
+		sidecar := p.Sidecar(sub.codec, sub.file != nil, c.Parts)
+		if !sidecar && (sub.file != nil || !p.Draws(sub.codec, domain.SubtitleEmbedded)) {
+			d.Reasons = append(d.Reasons, domain.SubtitleCodecNotSupported)
+		}
+		burn = !sidecar && !hls.TextSubtitle(sub.codec)
 	}
 	if len(d.Reasons) == 0 {
 		d.Method = domain.PlayDirect
@@ -170,14 +215,19 @@ func Decide(p Profile, c Copy, audio, subtitle *int, hevc domain.HEVCEncoding) (
 			lostDV = true
 		}
 	}
-	// Out of a file played as it is, a picture subtitle reaches the client only drawn in.
-	if len(videoReasons) > 0 || tooMuch || burn != nil || lostDV || !slices.Contains(carriedVideo, video.Codec) {
-		enc, ok := p.videoEncode(*video, c.BitrateKbps, hevc)
+	if len(videoReasons) > 0 || tooMuch || burn || lostDV || !slices.Contains(carriedVideo, video.Codec) {
+		// Styled text is drawn by libass, which an FFmpeg without it cannot.
+		if burn && hls.StyledSubtitle(sub.codec) && !enc.Libass {
+			return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
+		}
+		e, ok := p.videoEncode(*video, c.BitrateKbps, enc.HEVC)
 		if !ok {
 			return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
 		}
-		enc.Burn = burn
-		d.Method, d.Video.Encode, d.Video.DolbyVision = domain.PlayTranscode, &enc, domain.DolbyVisionNone
+		if burn {
+			e.Burn, e.BurnFile = sub.stream, sub.file
+		}
+		d.Method, d.Video.Encode, d.Video.DolbyVision = domain.PlayTranscode, &e, domain.DolbyVisionNone
 	}
 	if sound != nil {
 		// Encoded video shares the client's limit with the audio, and audio has a share of it; a
@@ -204,6 +254,35 @@ func Decide(p Profile, c Copy, audio, subtitle *int, hevc domain.HEVCEncoding) (
 		e.BitrateKbps = max(min(e.BitrateKbps, p.MaxBitrateKbps-d.audioKbps(sound)), 64)
 	}
 	return d, nil
+}
+
+// chosenSubtitle is the subtitle a play asks for: a stream of the file, or a file beside it.
+type chosenSubtitle struct {
+	codec  string
+	stream *int
+	file   *uuid.UUID
+}
+
+// subtitle finds the subtitle tracks ask for, nil for none. A picture beside the copy is not one: a
+// player draws only a picture inside the file.
+func (c Copy) subtitle(tracks domain.ChosenTracks) (*chosenSubtitle, error) {
+	switch {
+	case tracks.Subtitle != nil:
+		i := slices.IndexFunc(c.Streams, func(s domain.Stream) bool {
+			return s.Kind == domain.StreamSubtitle && s.Index == *tracks.Subtitle
+		})
+		if i < 0 {
+			return nil, ErrNoSuchSubtitle
+		}
+		return &chosenSubtitle{codec: c.Streams[i].Codec, stream: tracks.Subtitle}, nil
+	case tracks.SubtitleFile != nil:
+		i := slices.IndexFunc(c.Files, func(f SubtitleFile) bool { return f.ID == *tracks.SubtitleFile })
+		if i < 0 || !hls.TextSubtitle(c.Files[i].Codec) && !hls.StyledSubtitle(c.Files[i].Codec) {
+			return nil, ErrNoSuchSubtitleFile
+		}
+		return &chosenSubtitle{codec: c.Files[i].Codec, file: tracks.SubtitleFile}, nil
+	}
+	return nil, nil
 }
 
 // audioKbps is what the decided audio spends of the client's bitrate.

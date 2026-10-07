@@ -13,6 +13,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // fakeConverter is an ffmpeg that converts any subtitle to the same WebVTT.
@@ -46,7 +47,7 @@ After the interval.
 `
 
 func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
-	r, err := NewRemuxer(fakeConverter(t, film), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeConverter(t, film)}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,8 +120,16 @@ func TestRepeatedNamesAreNumbered(t *testing.T) {
 	}
 }
 
-// A part's embedded text streams are read out together, in one read of the file, which a player
-// giving up does not stop and a later playback of the part does not repeat.
+// styledFilm is an ASS file a film carries as a styled stream: placed, coloured, in its own font.
+const styledFilm = "[Script Info]\nScriptType: v4.00+\nPlayResX: 320\nPlayResY: 240\n\n[V4+ Styles]\n" +
+	"Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n" +
+	"Style: Sign,Film Sans,24,&H0000FFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,8,10,10,10,1\n\n[Events]\n" +
+	"Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
+	"Dialogue: 0,0:00:01.00,0:00:03.00,Sign,,0,0,0,,{\\pos(160,40)}Bakery\n"
+
+// A part's embedded subtitle streams are read out together, in one read of the file, which a
+// player giving up does not stop and a later playback of the part does not repeat: plain text as
+// WebVTT, styled text as it is, with the fonts the file carries for it.
 func TestEmbeddedSubtitlesAreReadOnce(t *testing.T) {
 	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
 	dir := t.TempDir()
@@ -129,10 +138,16 @@ func TestEmbeddedSubtitlesAreReadOnce(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	for name, text := range map[string]string{"signs.ass": styledFilm, "Film Sans.ttf": "a font"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	film := filepath.Join(dir, "film.mkv")
 	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
 		"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-i", filepath.Join(dir, "en.srt"), "-i", filepath.Join(dir, "fr.srt"),
-		"-t", "10", "-map", "0", "-map", "1", "-map", "2", "-c:v", "libx264", "-c:s", "srt", film)
+		"-i", filepath.Join(dir, "signs.ass"), "-attach", filepath.Join(dir, "Film Sans.ttf"), "-metadata:s:t:0", "mimetype=font/ttf",
+		"-t", "10", "-map", "0", "-map", "1", "-map", "2", "-map", "3", "-c:v", "libx264", "-c:s:0", "srt", "-c:s:1", "srt", "-c:s:2", "copy", film)
 	if out, err := made.CombinedOutput(); err != nil {
 		t.Fatalf("making the film: %v: %s", err, out)
 	}
@@ -141,18 +156,24 @@ func TestEmbeddedSubtitlesAreReadOnce(t *testing.T) {
 	if err := os.WriteFile(counting, []byte("#!/bin/sh\necho >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	r, err := NewRemuxer(counting, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: counting}, FFprobe: media.Tool{Path: tool(t, "ffprobe", "PHOTON_FFPROBE")}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
 	open := func() (*os.File, error) { return os.Open(film) }
 	part := uuid.NewV7()
-	english, french := 1, 2
+	english, french, signs := 1, 2, 3
+	streams := []domain.Stream{
+		{Index: 0, Kind: domain.StreamVideo, Codec: "h264"},
+		{Index: english, Kind: domain.StreamSubtitle, Codec: "subrip"},
+		{Index: french, Kind: domain.StreamSubtitle, Codec: "subrip"},
+		{Index: signs, Kind: domain.StreamSubtitle, Codec: "ass"},
+	}
 	c := Copy{
 		Parts: []Source{{Open: unplayed, Part: Part{Duration: 10 * time.Second, Keyframes: Forced(10 * time.Second)}}},
 		Subtitles: []Subtitle{
-			{Name: "English", Sources: []SubtitleSource{{Open: open, Stream: &english, Part: part}}},
-			{Name: "French", Sources: []SubtitleSource{{Open: open, Stream: &french, Part: part}}},
+			{Name: "English", Sources: []SubtitleSource{{Open: open, Stream: &english, Part: part, Streams: streams}}},
+			{Name: "French", Sources: []SubtitleSource{{Open: open, Stream: &french, Part: part, Streams: streams}}},
 		},
 	}
 	first, second := uuid.NewV7(), uuid.NewV7()
@@ -178,6 +199,17 @@ func TestEmbeddedSubtitlesAreReadOnce(t *testing.T) {
 			t.Errorf("track %d =\n%s\nwant %q", tc.track, got, tc.want)
 		}
 	}
+	out, err := r.Extracted(t.Context(), SubtitleSource{Open: open, Stream: &signs, Part: part, Streams: streams}, StyledName(signs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(filepath.Join(out, StyledName(signs))); err != nil || !strings.Contains(string(got), `Style: Sign,Film Sans,24`) || !strings.Contains(string(got), `{\pos(160,40)}Bakery`) {
+		t.Errorf("the styled stream = %q, %v; want it as it was, its style and placing kept", got, err)
+	}
+	// The font is the film's fifth stream, after the video and three subtitles.
+	if got, err := os.ReadFile(filepath.Join(out, FontsDir, "4.ttf")); err != nil || string(got) != "a font" {
+		t.Errorf("the film's font = %q, %v; want it beside the styled stream", got, err)
+	}
 	read, err := os.ReadFile(runs)
 	if err != nil {
 		t.Fatal(err)
@@ -187,18 +219,80 @@ func TestEmbeddedSubtitlesAreReadOnce(t *testing.T) {
 	}
 }
 
-// A SubRip file written in Windows' Western European codepage and an ASS file come out as UTF-8
-// WebVTT, their italics kept as WebVTT's.
+// A subtitle read out before styled ones were read out as they are is read out again, and its
+// fonts with it.
+func TestAPartReadOutWithoutAStreamIsReadAgain(t *testing.T) {
+	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "signs.ass"), []byte(styledFilm), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	film := filepath.Join(dir, "film.mkv")
+	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-i", filepath.Join(dir, "signs.ass"),
+		"-t", "4", "-map", "0", "-map", "1", "-c:v", "libx264", "-c:s", "copy", film)
+	if out, err := made.CombinedOutput(); err != nil {
+		t.Fatalf("making the film: %v: %s", err, out)
+	}
+	cache := t.TempDir()
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}, FFprobe: media.Tool{Path: tool(t, "ffprobe", "PHOTON_FFPROBE")}}, t.TempDir(), cache, Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	part, signs := uuid.NewV7(), 1
+	if err := os.MkdirAll(filepath.Join(cache, part.String()), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cache, part.String(), "1.vtt"), []byte("WEBVTT\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	src := SubtitleSource{
+		Open: func() (*os.File, error) { return os.Open(film) }, Stream: &signs, Part: part,
+		Streams: []domain.Stream{{Index: signs, Kind: domain.StreamSubtitle, Codec: "ass"}},
+	}
+	out, err := r.Extracted(t.Context(), src, StyledName(signs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(filepath.Join(out, StyledName(signs))); err != nil || !strings.Contains(string(got), "Bakery") {
+		t.Errorf("the styled stream = %q, %v; want it read out", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(out, FontsDir)); err != nil {
+		t.Errorf("fonts: %v, want their folder", err)
+	}
+}
+
+// A path holding what a filtergraph reads as syntax (colons, quotes, commas, brackets) reaches the
+// filter whole.
+func TestAFilterTakesAnyPath(t *testing.T) {
+	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
+	dir := filepath.Join(t.TempDir(), `it's [a]:b,c;d\e`)
+	if err := os.Mkdir(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	film := filepath.Join(dir, "film.mkv")
+	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24", "-t", "1", "-c:v", "libx264", film)
+	if out, err := made.CombinedOutput(); err != nil {
+		t.Fatalf("making the film: %v: %s", err, out)
+	}
+	read := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "movie=filename="+filterValue(film)+",scale=32:24", "-frames:v", "1", "-f", "null", "-")
+	if out, err := read.CombinedOutput(); err != nil {
+		t.Errorf("the filter read %q: %v: %s", film, err, out)
+	}
+}
+
+// A SubRip file written in Windows' Western European codepage comes out as UTF-8 WebVTT, its
+// italics kept as WebVTT's.
 func TestASubtitleFileReadsAsWebVTT(t *testing.T) {
-	r, err := NewRemuxer(tool(t, "ffmpeg", "PHOTON_FFMPEG"), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: tool(t, "ffmpeg", "PHOTON_FFMPEG")}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, file, lang, want string }{
 		{"a.srt", "1\r\n00:00:01,000 --> 00:00:03,500\r\nCaf\xe9 <i>au lait</i>\r\n", "fr", "00:01.000 --> 00:03.500\nCafé <i>au lait</i>"},
-		{"a.ass", "[Script Info]\nScriptType: v4.00+\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
-			"Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,{\\i1}Bonjour{\\i0} le monde\n", "fr", "<i>Bonjour</i> le monde"},
 	} {
 		path := filepath.Join(dir, tc.name)
 		if err := os.WriteFile(path, []byte(tc.file), 0o644); err != nil {

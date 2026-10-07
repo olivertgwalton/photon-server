@@ -129,6 +129,7 @@ var problems = []struct {
 	{err: hls.ErrNoRemux, code: codeNotFound, detail: "the playback has stopped, or lapsed"},
 	{err: playback.ErrNoSuchAudio, code: codeInvalidBody, detail: "audio_stream is not one of the copy's audio streams"},
 	{err: playback.ErrNoSuchSubtitle, code: codeInvalidBody, detail: "subtitle_stream is not one of the copy's subtitle streams"},
+	{err: playback.ErrNoSuchSubtitleFile, code: codeInvalidBody, detail: "subtitle_file is not one of the text subtitle files beside the copy"},
 	{err: plugin.ErrRefused, code: codeInvalidBody, ownWords: true},
 	{err: provider.ErrUnavailable, code: codeProviderUnavailable, ownWords: true},
 }

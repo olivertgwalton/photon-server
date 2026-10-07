@@ -113,6 +113,9 @@ test("the quality chosen is the most the server sends", () => {
 	expect(browserProfile(chrome, 0).max_bitrate_kbps).toBe(0);
 });
 
-test("a picture subtitle is drawn into the video for a browser", () => {
-	expect(browserProfile(safari, 0).subtitles).toEqual([]);
+test("a browser draws only plain text files it is given", () => {
+	expect(browserProfile(safari, 0).subtitles).toEqual([
+		{ codec: "subrip", delivery: "sidecar" },
+		{ codec: "webvtt", delivery: "sidecar" },
+	]);
 });

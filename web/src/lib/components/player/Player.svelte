@@ -239,6 +239,7 @@ async function open(at: number) {
 			version_id: playback?.version_id ?? askedVersion,
 			audio_stream: audio,
 			subtitle_stream: asked.subtitle_stream,
+			subtitle_file: asked.subtitle_file,
 			profile,
 			start_ms: Math.round(at * 1000),
 		},
@@ -356,9 +357,9 @@ async function showSubtitle() {
 	if (!playback || !video) return;
 	if (playback.method === "direct") {
 		const file =
-			subtitle?.file === undefined
+			subtitle?.id === undefined
 				? undefined
-				: playback.subtitles?.[subtitle.file];
+				: playback.subtitles?.find((f) => f.id === subtitle?.id);
 		if (file?.id === trackFile) return;
 		if (trackSrc?.startsWith("blob:")) URL.revokeObjectURL(trackSrc);
 		trackSrc = undefined;
@@ -374,8 +375,10 @@ async function showSubtitle() {
 		);
 		return;
 	}
-	const n =
-		playback.video?.burned_subtitle == null ? (subtitle?.rendition ?? -1) : -1;
+	const burned =
+		playback.video?.burned_subtitle != null ||
+		playback.video?.burned_subtitle_file != null;
+	const n = burned ? -1 : (subtitle?.rendition ?? -1);
 	if (hls) {
 		hls.subtitleTrack = n;
 		hls.subtitleDisplay = n >= 0;

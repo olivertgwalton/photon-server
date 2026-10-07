@@ -494,7 +494,7 @@ function play(id: string, body: Schemas["Play"]): Response {
 		];
 		playback.subtitles = [
 			{
-				id: "sub-1",
+				id: "0199b3c0-0000-7000-8000-0000000000d1",
 				codec: "subrip",
 				language: "en",
 				url: "/api/v1/subtitles/sub-1/file?exp=1&sig=s",

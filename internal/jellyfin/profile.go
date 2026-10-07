@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/playback"
@@ -301,10 +302,12 @@ func (d deviceProfile) containerAllows(video domain.Stream, containers []string)
 	return true
 }
 
-// subtitleChoice is the subtitle an app chose: its codec, and whether it is a file beside the copy.
+// subtitleChoice is the subtitle an app chose: its codec, and the file beside the copy it is, if
+// it is one.
 type subtitleChoice struct {
 	codec    string
 	external bool
+	file     uuid.UUID
 }
 
 // subtitleTaken is whether the app draws a subtitle of a codec itself: from inside the file it

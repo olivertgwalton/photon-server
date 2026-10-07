@@ -616,6 +616,24 @@ func (a *API) routes() []route {
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, handle: a.partStream,
 		},
 		{
+			pattern: "GET /api/v1/parts/{id}/subtitles/{stream}", access: signedAddress,
+			summary: "A styled subtitle stream of a part, read out as it is, at the address play answered",
+			path:    []param{{"stream", "", "The stream's index in the part's file."}},
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"text/x-ssa"}, handle: a.styledStream,
+		},
+		{
+			pattern: "GET /api/v1/parts/{id}/fonts", access: signedAddress,
+			summary: "List the fonts a part's file carries for its styled subtitles, at the address play answered",
+			query:   signatureParams, status: http.StatusOK, reply: fontsJSON{}, handle: a.partFonts,
+		},
+		{
+			pattern: "GET /api/v1/parts/{id}/fonts/{name}", access: signedAddress,
+			summary: "A font a part's file carries, at the address its list answered",
+			path:    []param{{"name", "", "The font's name, as its list answered it."}},
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"font/ttf", "font/otf", "font/collection", "font/woff", "font/woff2"},
+			handle: a.partFont,
+		},
+		{
 			pattern: "GET /api/v1/parts/{id}/sample", access: signedIn,
 			summary: "The first " + strconv.Itoa(sampleBytes>>20) + " MiB of a part's file, in byte ranges, to time the connection; no playback",
 			status:  http.StatusOK, reply: asFile{"video/*"}, handle: a.partSample,

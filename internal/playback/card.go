@@ -8,8 +8,8 @@ import (
 )
 
 // Card is what the dashboard shows of a playback a session starts from address, of a copy, as
-// decided; its acceleration, where it is transcoded, is the encoder's to say.
-func Card(s domain.Session, address string, t domain.PlaybackTitle, c store.PlayCopy, d Decision, subtitle *int) domain.PlaybackCard {
+// decided, with the tracks asked for; its acceleration, where it is transcoded, is the encoder's to say.
+func Card(s domain.Session, address string, t domain.PlaybackTitle, c store.PlayCopy, d Decision, tracks domain.ChosenTracks) domain.PlaybackCard {
 	card := domain.PlaybackCard{
 		Profile: domain.PlaybackProfile{ID: s.Profile.ID, Name: s.Profile.Name},
 		Device: domain.PlaybackDevice{
@@ -51,11 +51,18 @@ func Card(s domain.Session, address string, t domain.PlaybackTitle, c store.Play
 			card.Audio.Encode = &domain.PlaybackEncode{Codec: e.Codec, Channels: e.Channels, BitrateKbps: e.BitrateKbps}
 		}
 	}
-	if subtitle != nil {
-		src := stream(*subtitle)
+	burned := d.Video != nil && d.Video.Encode != nil && (d.Video.Encode.Burn != nil || d.Video.Encode.BurnFile != nil)
+	switch {
+	case tracks.Subtitle != nil:
+		src := stream(*tracks.Subtitle)
 		card.Subtitle = &domain.PlaybackSubtitle{
-			Stream: *subtitle, Codec: src.Codec, Language: domain.TagOf(src.Language),
-			Burned: d.Video != nil && d.Video.Encode != nil && d.Video.Encode.Burn != nil,
+			Stream: tracks.Subtitle, Codec: src.Codec, Language: domain.TagOf(src.Language), Burned: burned,
+		}
+	case tracks.SubtitleFile != nil:
+		if i := slices.IndexFunc(c.Subtitles, func(f store.PlaySubtitle) bool { return f.ID == *tracks.SubtitleFile }); i >= 0 {
+			card.Subtitle = &domain.PlaybackSubtitle{
+				File: tracks.SubtitleFile, Codec: c.Subtitles[i].Codec, Language: domain.TagOf(c.Subtitles[i].Language), Burned: burned,
+			}
 		}
 	}
 	return card

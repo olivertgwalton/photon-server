@@ -34,6 +34,12 @@ const rows = $derived<[string, string][]>([
 			: "Not available",
 	],
 	[
+		"libass",
+		s.libass
+			? "Available: styled subtitles are drawn into video for clients that cannot draw them"
+			: "Not available",
+	],
+	[
 		"Encoder",
 		[
 			accelerations[s.encoder.acceleration],

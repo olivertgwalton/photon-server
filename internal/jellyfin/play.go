@@ -145,9 +145,11 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	if tracks.Audio != nil {
 		audio = &tracks.Audio.Stream
 	}
-	d, err := playback.Decide(p.hlsProfile(t, segments, c, limit), playback.Copy{
-		Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams,
-	}, audio, sub, a.svc.HEVC)
+	chosen := domain.ChosenTracks{Audio: audio, Subtitle: sub}
+	if picked != nil && picked.external {
+		chosen.SubtitleFile = &picked.file
+	}
+	d, err := playback.Decide(p.hlsProfile(t, segments, c, limit), playback.CopyOf(c), chosen, a.svc.Encoding)
 	if err != nil || d.Video == nil {
 		return
 	}
@@ -232,7 +234,7 @@ func subtitleOf(c store.PlayCopy, index *int) (*int, *subtitleChoice) {
 		base = max(base, s.Index+1)
 	}
 	if n := *index - base; n >= 0 && n < len(c.Subtitles) {
-		return nil, &subtitleChoice{codec: c.Subtitles[n].Codec, external: true}
+		return nil, &subtitleChoice{codec: c.Subtitles[n].Codec, external: true, file: c.Subtitles[n].ID}
 	}
 	return nil, nil
 }
@@ -425,7 +427,7 @@ func (a *API) startDirect(r *http.Request, id uuid.UUID, rep report) error {
 		return err
 	}
 	sub, _ := subtitleOf(c, rep.SubtitleStreamIndex)
-	_, err = a.svc.Playbacks.Start(r.Context(), id, domain.PlayDirect, playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, direct(c, rep.AudioStreamIndex), sub))
+	_, err = a.svc.Playbacks.Start(r.Context(), id, domain.PlayDirect, playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, direct(c, rep.AudioStreamIndex), domain.ChosenTracks{Subtitle: sub}))
 	return err
 }
 

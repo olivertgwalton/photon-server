@@ -2,6 +2,7 @@ package hls
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
@@ -33,9 +35,11 @@ type SubtitleSource struct {
 	Open func() (*os.File, error)
 	// Stream is the file's stream to read, by its index; nil for a subtitle file.
 	Stream *int
-	// Part is the part a stream is read from, whose text streams are kept together under its id.
-	Part   uuid.UUID
-	Offset time.Duration
+	// Part is the part a stream is read from, and Streams every stream it has: its subtitles are
+	// read out together and kept under its id.
+	Part    uuid.UUID
+	Streams []domain.Stream
+	Offset  time.Duration
 	// Language is a subtitle file's, which says what it was written in where it is not UTF-8.
 	Language string
 }
@@ -47,17 +51,30 @@ type Cue struct {
 	Text       string
 }
 
-// TextSubtitle reports whether FFmpeg converts a subtitle codec to WebVTT: text, not pictures.
+// TextSubtitle reports whether a subtitle codec is plain text, which WebVTT carries: not pictures,
+// and not styled.
 func TextSubtitle(codec string) bool {
 	switch codec {
-	case "subrip", "ass", "ssa", "webvtt", "mov_text", "text", "sami", "microdvd", "subviewer", "realtext":
+	case "subrip", "webvtt", "mov_text", "text", "sami", "microdvd", "subviewer", "realtext":
 		return true
 	}
 	return false
 }
 
+// StyledSubtitle reports whether a subtitle codec is text whose look is its own (fonts, placing,
+// motion), which WebVTT would lose: drawn by the player, or by libass into the video.
+func StyledSubtitle(codec string) bool { return codec == "ass" || codec == "ssa" }
+
+// StyledName is the name a styled stream of a part is read out as, as it is, in the folder
+// Extracted answers.
+func StyledName(stream int) string { return strconv.Itoa(stream) + ".ass" }
+
+// FontsDir is the folder of the fonts a part carries for its styled streams, in the folder
+// Extracted answers.
+const FontsDir = "fonts"
+
 const (
-	// subtitlesKept is how long a part's extracted text streams are kept unread: a month, as the
+	// subtitlesKept is how long a part's extracted subtitles are kept unread: a month, as the
 	// previews of a missing file are.
 	subtitlesKept = 30 * 24 * time.Hour
 	// extractRetry is how long an extraction that failed is answered with its failure before a file
@@ -67,22 +84,21 @@ const (
 	extracting = ".making-"
 )
 
-// extraction is a part's text streams being read out, which every request for any of them waits on.
+// extraction is a part's subtitles being read out, which every request for any of them waits on.
 type extraction struct {
 	done chan struct{}
 	err  error
 	at   time.Time
 }
 
-// cues reads a subtitle source's cues onto the copy's timeline. streams are the text streams of
-// the source's part that the playback carries.
-func (r *Remuxer) cues(ctx context.Context, src SubtitleSource, streams []int) ([]Cue, error) {
+// cues reads a subtitle source's cues onto the copy's timeline.
+func (r *Remuxer) cues(ctx context.Context, src SubtitleSource) ([]Cue, error) {
 	var cues []Cue
 	var err error
 	if src.Stream == nil {
 		cues, err = r.convert(ctx, src)
 	} else {
-		cues, err = r.embedded(ctx, src, streams)
+		cues, err = r.embedded(ctx, src)
 	}
 	for i := range cues {
 		cues[i].Start += src.Offset
@@ -120,18 +136,15 @@ func (r *Remuxer) WebVTT(ctx context.Context, open func() (*os.File, error), lan
 		a = append(a, "-sub_charenc", charset)
 	}
 	a = append(a, "-i", "fd:", "-map", "0:s:0", "-c:s", "webvtt", "-f", "webvtt", "-")
-	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.ffmpeg, a...)
+	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.tools.FFmpeg.Path, a...)
 	out, err := cmd.Output()
 	return string(out), cmd.Err(err)
 }
 
-// embedded reads a stream of a part as WebVTT. Reading one means reading the whole file, so every
-// text stream of the part is read out in the same pass and kept, for this playback and the next.
-// The pass outlives the request that started it: a player that gives up waiting finds it further
-// on when it asks again.
-func (r *Remuxer) embedded(ctx context.Context, src SubtitleSource, streams []int) ([]Cue, error) {
-	dir := filepath.Join(r.subtitles, src.Part.String())
-	if err := r.extracted(ctx, src, streams, dir); err != nil {
+// embedded reads a plain text stream of a part as WebVTT.
+func (r *Remuxer) embedded(ctx context.Context, src SubtitleSource) ([]Cue, error) {
+	dir, err := r.Extracted(ctx, src, strconv.Itoa(*src.Stream)+".vtt")
+	if err != nil {
 		return nil, err
 	}
 	f, err := os.Open(filepath.Join(dir, strconv.Itoa(*src.Stream)+".vtt"))
@@ -142,23 +155,30 @@ func (r *Remuxer) embedded(ctx context.Context, src SubtitleSource, streams []in
 	return readVTT(f)
 }
 
-// extracted waits for a part's text streams to be in dir, reading them out if no one is.
-func (r *Remuxer) extracted(ctx context.Context, src SubtitleSource, streams []int, dir string) error {
+// Extracted answers the folder a part's subtitle streams are read out into, with want in it,
+// reading them out if no one is. Reading one means reading the whole file, so every subtitle
+// stream of the part is read out in the same pass and kept, for this playback and the next: a
+// plain one as {index}.vtt, a styled one as it is (see StyledName), with the fonts the file
+// carries for it (see FontsDir). A folder lacking want, kept from before a stream was read out so,
+// is read again. The pass outlives the request that started it: a player that gives up waiting
+// finds it further on when it asks again.
+func (r *Remuxer) Extracted(ctx context.Context, src SubtitleSource, want string) (string, error) {
+	dir := filepath.Join(r.subtitles, src.Part.String())
 	r.mu.Lock()
 	x, ok := r.extractions[src.Part]
 	if ok && closed(x.done) && time.Since(x.at) > extractRetry {
 		ok = false
 	}
 	if !ok {
-		if _, err := os.Stat(dir); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, want)); err == nil {
 			r.mu.Unlock()
 			now := time.Now()
-			return os.Chtimes(dir, now, now)
+			return dir, os.Chtimes(dir, now, now)
 		}
 		x = &extraction{done: make(chan struct{})}
 		r.extractions[src.Part] = x
 		go func() {
-			x.err = r.extract(context.WithoutCancel(ctx), src, streams, dir)
+			x.err = r.extract(context.WithoutCancel(ctx), src, dir)
 			r.mu.Lock()
 			if x.err == nil {
 				delete(r.extractions, src.Part)
@@ -171,39 +191,143 @@ func (r *Remuxer) extracted(ctx context.Context, src SubtitleSource, streams []i
 	r.mu.Unlock()
 	select {
 	case <-x.done:
-		return x.err
+		return dir, x.err
 	case <-ctx.Done():
-		return context.Cause(ctx)
+		return "", context.Cause(ctx)
 	}
 }
 
-// extract writes each of a part's text streams into dir as {index}.vtt, in one read of the file.
-// A container's text is UTF-8 by its specification.
-func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, streams []int, dir string) error {
+// extract writes each of a part's subtitle streams into dir in one read of the file, with the
+// fonts its header lists where it has styled ones, each named by its stream: FFmpeg refuses to
+// write one under the name the file gives it unless that is plain ASCII with no spaces. A
+// container's text is UTF-8 by its specification.
+func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) error {
 	f, err := src.Open()
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	ctx, cancel := media.Within(ctx, r.ffmpeg, media.WholeRun(f))
+	ctx, cancel := media.Within(ctx, r.tools.FFmpeg.Path, media.WholeRun(f))
 	defer cancel()
 	made, err := os.MkdirTemp(r.subtitles, extracting)
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(made)
-	a := append(fdInput(), "-i", "fd:")
-	for _, n := range streams {
-		a = append(a, "-map", "0:"+strconv.Itoa(n), "-c:s", "webvtt", "-f", "webvtt", filepath.Join(made, strconv.Itoa(n)+".vtt"))
+	fonts := filepath.Join(made, FontsDir)
+	if err := os.Mkdir(fonts, 0o750); err != nil {
+		return err
 	}
-	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.ffmpeg, a...)
+	a := append(fdInput(), "-y")
+	if slices.ContainsFunc(src.Streams, func(s domain.Stream) bool { return StyledSubtitle(s.Codec) }) {
+		carried, err := r.tools.Fonts(ctx, f)
+		if err != nil {
+			return err
+		}
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		for _, font := range carried {
+			n := strconv.Itoa(font.Index)
+			a = append(a, "-dump_attachment:"+n, filepath.Join(fonts, n+font.Ext))
+		}
+	}
+	a = append(a, "-i", "fd:")
+	for _, s := range src.Streams {
+		n := strconv.Itoa(s.Index)
+		switch {
+		case s.Kind != domain.StreamSubtitle:
+		case TextSubtitle(s.Codec):
+			a = append(a, "-map", "0:"+n, "-c:s", "webvtt", "-f", "webvtt", filepath.Join(made, n+".vtt"))
+		case StyledSubtitle(s.Codec):
+			a = append(a, "-map", "0:"+n, "-c:s", "copy", "-f", "ass", filepath.Join(made, StyledName(s.Index)))
+		}
+	}
+	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.tools.FFmpeg.Path, a...)
 	if err := cmd.Run(); err != nil {
 		return cmd.Err(err)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return err
 	}
 	return os.Rename(made, dir)
 }
 
-// SweepSubtitles removes the text streams of parts no one has read for subtitlesKept.
+// styledLayer is styled text libass draws into a part's video: its file, the fonts the part
+// carries for it, the charset of a file beside the copy that is not UTF-8, and where on the copy's
+// timeline, which such a file is timed on, the part starts.
+type styledLayer struct {
+	file, fonts, charset string
+	offset               time.Duration
+}
+
+// styledName is what a styled file beside the copy is copied to in a playback's folder.
+const styledName = "styled.ass"
+
+// styled readies styled text for drawing into the video of a part starting at offset: a stream of
+// it, read out with its fonts, or a file beside the copy, copied into the playback's folder, where
+// FFmpeg opens it by name.
+func (r *Remuxer) styled(ctx context.Context, s *session, src SubtitleSource, offset time.Duration) (*styledLayer, error) {
+	if src.Stream != nil {
+		dir, err := r.Extracted(ctx, src, StyledName(*src.Stream))
+		if err != nil {
+			return nil, err
+		}
+		return &styledLayer{file: filepath.Join(dir, StyledName(*src.Stream)), fonts: filepath.Join(dir, FontsDir)}, nil
+	}
+	f, err := src.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, 16<<20))
+	if err != nil {
+		return nil, err
+	}
+	charset, err := subtitleCharset(bytes.NewReader(b), src.Language)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.root.WriteFile(styledName, b, 0o640); err != nil {
+		return nil, err
+	}
+	return &styledLayer{file: filepath.Join(s.dir, styledName), charset: charset, offset: offset}, nil
+}
+
+// filter is the layer drawn in by FFmpeg's subtitles filter. A file beside the copy is drawn with
+// the part's frames moved onto the copy's timeline and back.
+func (l styledLayer) filter() string {
+	f := "subtitles=f=" + filterValue(l.file)
+	if l.fonts != "" {
+		f += ":fontsdir=" + filterValue(l.fonts)
+	}
+	if l.charset != "" {
+		f += ":charenc=" + filterValue(l.charset)
+	}
+	if l.offset == 0 {
+		return f
+	}
+	at := strconv.FormatFloat(l.offset.Seconds(), 'f', 6, 64)
+	return "setpts=PTS+" + at + "/TB," + f + ",setpts=PTS-" + at + "/TB"
+}
+
+// filterValue escapes a filter's option value twice over, as FFmpeg reads a filtergraph: once
+// for the option's own reading, once for the graph's.
+func filterValue(v string) string {
+	escape := func(s, special string) string {
+		var b strings.Builder
+		for _, c := range s {
+			if strings.ContainsRune(special, c) {
+				b.WriteByte('\\')
+			}
+			b.WriteRune(c)
+		}
+		return b.String()
+	}
+	return escape(escape(v, `\':`), `\'[],;`)
+}
+
+// SweepSubtitles removes the subtitles of parts no one has read for subtitlesKept.
 func (r *Remuxer) SweepSubtitles() {
 	entries, err := os.ReadDir(r.subtitles)
 	if err != nil {
