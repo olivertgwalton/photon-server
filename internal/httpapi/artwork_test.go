@@ -13,7 +13,6 @@ import (
 	"testing"
 	"uuid"
 
-	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -26,26 +25,29 @@ var (
 // fakePictures keeps a local poster under its root, and a provider's poster already cached there.
 type fakePictures struct{ root string }
 
-func (f fakePictures) Picture(_ context.Context, id uuid.UUID) (store.Picture, error) {
+func (f fakePictures) Picture(_ context.Context, id uuid.UUID) (domain.Picture, error) {
 	switch id {
 	case localPoster:
-		return store.Picture{Root: f.root, Path: "Heat (1995)/poster.jpg"}, nil
+		return domain.Picture{Root: f.root, Path: "Heat (1995)/poster.jpg"}, nil
 	case providerPoster:
-		return store.Picture{URL: "https://image.tmdb.org/t/p/original/heat.jpg"}, nil
+		return domain.Picture{URL: "https://image.tmdb.org/t/p/original/heat.jpg"}, nil
 	}
-	return store.Picture{}, store.ErrNotFound
+	return domain.Picture{}, store.ErrNotFound
 }
 
-func (f fakePictures) File(context.Context, uuid.UUID, string) (*os.File, error) {
-	return os.Open(filepath.Join(f.root, "cached"))
-}
-
-// Resized answers a copy only of the provider's picture, and the local one as it is.
-func (f fakePictures) Resized(_ context.Context, key string, _, _ int, _ func(context.Context) (*os.File, error)) (*os.File, error) {
-	if key == providerPoster.String() {
-		return os.Open(filepath.Join(f.root, "small"))
+// Open answers a copy only of the provider's picture, unnamed as a copy is, and the local one as
+// it is.
+func (f fakePictures) Open(_ context.Context, id uuid.UUID, p domain.Picture, width, height int) (*os.File, string, error) {
+	switch {
+	case id == providerPoster && (width > 0 || height > 0):
+		file, err := os.Open(filepath.Join(f.root, "small"))
+		return file, "", err
+	case p.URL != "":
+		file, err := os.Open(filepath.Join(f.root, "cached"))
+		return file, "heat.jpg", err
 	}
-	return nil, artwork.ErrNotResizable
+	file, err := os.Open(filepath.Join(p.Root, p.Path))
+	return file, "poster.jpg", err
 }
 
 func (fakePictures) Keep(uuid.UUID, io.Reader) error { return errors.New("not kept here") }

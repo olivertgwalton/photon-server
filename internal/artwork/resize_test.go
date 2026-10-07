@@ -10,11 +10,15 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 	"testing/synctest"
+	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // picture writes a w×h image, opaque or with a transparent corner, and answers how to open it.
@@ -189,4 +193,46 @@ func TestAResizeOutlivesTheFirstToAsk(t *testing.T) {
 			t.Errorf("the client still waiting got %v once the first went away, want the picture", err)
 		}
 	})
+}
+
+// A picture is opened from where it is, or as a copy of the size asked for, whose content says its
+// format; one that cannot be made smaller is opened as it is, by its own name.
+func TestAPictureIsOpenedAsItIsOrToSize(t *testing.T) {
+	c, err := Open(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	root := t.TempDir()
+	open, _ := picture(t, 1000, 1500, true)
+	src, err := open(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(src)
+	_ = src.Close()
+	if err := os.WriteFile(filepath.Join(root, "poster.png"), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "logo.svg"), []byte("<svg/>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		path          string
+		width, height int
+		name          string
+	}{
+		{"poster.png", 0, 0, "poster.png"},
+		{"poster.png", 300, 0, ""},
+		{"logo.svg", 300, 0, "logo.svg"},
+	} {
+		f, name, err := c.Open(t.Context(), uuid.NewV7(), domain.Picture{Root: root, Path: tc.path}, tc.width, tc.height)
+		if err != nil {
+			t.Fatalf("%s at %d: %v", tc.path, tc.width, err)
+		}
+		_ = f.Close()
+		if name != tc.name {
+			t.Errorf("%s at %d: named %q, want %q", tc.path, tc.width, name, tc.name)
+		}
+	}
 }
