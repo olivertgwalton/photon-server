@@ -88,6 +88,7 @@ const episode = (id: string, n: number, title: string) =>
 	base(id, "episode", title, {
 		duration_ms: 1_800_000,
 		show: { id: "t-show", title: "Small Show" },
+		season: { id: "t-s1", title: "Season 1" },
 		season_number: 1,
 		episode_number: n,
 	});
