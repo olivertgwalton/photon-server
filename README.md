@@ -33,6 +33,11 @@ a server signs with its own AWS credentials: `AWS_ACCESS_KEY_ID` and `AWS_SECRET
 shared credentials file, or the instance's role. Choose the bucket before the first scan: moving
 away from where anything is kept is refused, so nothing is left behind.
 
+What is kept in a bucket goes to clients through the server, or, when an admin asks, clients are
+sent to read pictures, sounds and previews from the bucket itself, at the address they reach it at.
+A link lasts an hour. Anything that could run script, such as an SVG logo, still goes through the
+server.
+
 The server gzips its own JSON answers for a client that takes gzip, and serves the web app
 precompressed; media, artwork and event streams go out as they are. A reverse proxy in front of it
 need not compress again.

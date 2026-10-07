@@ -267,8 +267,10 @@ func (s *Store) Storage(ctx context.Context) (domain.Storage, error) {
 	var st domain.Storage
 	b := &st.Bucket
 	err := s.pool.QueryRow(ctx, `
-		SELECT storage, bucket_endpoint, bucket_name, bucket_folder, bucket_region, bucket_access_key, bucket_secret_key
-		FROM server`).Scan(&st.Kind, &b.Endpoint, &b.Name, &b.Folder, &b.Region, &b.AccessKey, &b.SecretKey)
+		SELECT storage, bucket_endpoint, bucket_name, bucket_folder, bucket_region, bucket_access_key, bucket_secret_key,
+			bucket_delivery, bucket_public_endpoint
+		FROM server`).Scan(&st.Kind, &b.Endpoint, &b.Name, &b.Folder, &b.Region, &b.AccessKey, &b.SecretKey,
+		&b.Delivery, &b.PublicEndpoint)
 	return st, err
 }
 
@@ -276,8 +278,10 @@ func (s *Store) SetStorage(ctx context.Context, st domain.Storage) error {
 	b := st.Bucket
 	_, err := s.pool.Exec(ctx, `
 		UPDATE server SET storage = $1, bucket_endpoint = $2, bucket_name = $3, bucket_folder = $4,
-			bucket_region = $5, bucket_access_key = $6, bucket_secret_key = $7`,
-		st.Kind, b.Endpoint, b.Name, b.Folder, b.Region, b.AccessKey, b.SecretKey)
+			bucket_region = $5, bucket_access_key = $6, bucket_secret_key = $7, bucket_delivery = $8,
+			bucket_public_endpoint = $9`,
+		st.Kind, b.Endpoint, b.Name, b.Folder, b.Region, b.AccessKey, b.SecretKey, b.Delivery,
+		b.PublicEndpoint)
 	return err
 }
 

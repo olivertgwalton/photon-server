@@ -4,6 +4,7 @@ package storage
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -78,6 +79,10 @@ type Stores struct {
 	// applied is what the stores were opened from, and closing the folders they hold.
 	applied domain.Storage
 	closing func() error
+	// root is the bucket things are kept in, nil on disk; origin is where clients are sent to read
+	// them, or "" where they are sent nowhere.
+	root   *blob.Bucket
+	origin string
 }
 
 // Open opens the stores where the settings say, refusing to start a node that cannot reach them.
@@ -123,9 +128,15 @@ func (s *Stores) apply(ctx context.Context, st domain.Storage) error {
 	if s.closing != nil && st == s.applied {
 		return nil
 	}
-	artwork, previews, closing, err := open(ctx, st, s.cache)
+	artwork, previews, root, closing, err := open(ctx, st, s.cache)
 	if err != nil {
 		return err
+	}
+	origin := ""
+	if root != nil {
+		if origin, err = root.Origin(ctx); err != nil {
+			return errors.Join(err, closing())
+		}
 	}
 	s.Artwork.at.Store(&held{artwork})
 	s.Previews.at.Store(&held{previews})
@@ -135,8 +146,39 @@ func (s *Stores) apply(ctx context.Context, st domain.Storage) error {
 			s.log.WarnContext(ctx, "artwork and previews' old folders not closed", slog.Any("err", err))
 		}
 	}
-	s.applied, s.closing = st, closing
+	s.applied, s.closing, s.root, s.origin = st, closing, root, origin
 	return nil
+}
+
+// Origin is where clients are sent to read artwork and previews, or "" where they are sent nowhere.
+func (s *Stores) Origin() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.origin
+}
+
+// probeKey is a picture a browser is sent to, to find whether it reaches the bucket.
+const probeKey = ".photon-probe.png"
+
+// probePNG is one transparent pixel.
+var probePNG = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89" +
+	"\x00\x00\x00\rIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82")
+
+// Probe answers a link to a picture in the bucket clients are sent to, for a browser to find
+// whether it can read from there, or "" where clients are sent nowhere.
+func (s *Stores) Probe(ctx context.Context) (string, error) {
+	s.mu.Lock()
+	root := s.root
+	s.mu.Unlock()
+	if root == nil {
+		return "", nil
+	}
+	if ok, err := root.Exists(ctx, probeKey); err != nil || !ok {
+		if err := root.Put(ctx, probeKey, bytes.NewReader(probePNG)); err != nil {
+			return "", err
+		}
+	}
+	return root.Link(ctx, probeKey)
 }
 
 // Empty reports whether this node keeps no artwork and no previews where it keeps them now: on
@@ -151,33 +193,50 @@ func (s *Stores) Empty(ctx context.Context) (bool, error) {
 }
 
 // open opens the artwork and previews st says, and answers closing what they hold open.
-func open(ctx context.Context, st domain.Storage, cache string) (artwork, previews objects, closing func() error, err error) {
+// open opens the artwork and previews st says, and answers the bucket they are kept in, if one,
+// and closing what they hold open.
+func open(ctx context.Context, st domain.Storage, cache string) (artwork, previews objects, root *blob.Bucket, closing func() error, err error) {
 	switch st.Kind {
 	case domain.StorageDisk:
 		a, err := blob.OpenDir(filepath.Join(cache, "artwork"))
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		p, err := blob.OpenDir(filepath.Join(cache, "previews"))
 		if err != nil {
-			return nil, nil, nil, errors.Join(err, a.Close())
+			return nil, nil, nil, nil, errors.Join(err, a.Close())
 		}
-		return a, p, func() error { return errors.Join(a.Close(), p.Close()) }, nil
+		return a, p, nil, func() error { return errors.Join(a.Close(), p.Close()) }, nil
 	case domain.StorageBucket:
-		b, err := blob.OpenBucket(ctx, config(st.Bucket))
+		c, err := config(st.Bucket)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
-		return b.Within("artwork"), b.Within("previews"), func() error { return nil }, nil
+		b, err := blob.OpenBucket(ctx, c)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		return b.Within("artwork"), b.Within("previews"), b, func() error { return nil }, nil
 	}
-	return nil, nil, nil, fmt.Errorf("storage %q is neither disk nor bucket", st.Kind)
+	return nil, nil, nil, nil, fmt.Errorf("storage %q is neither disk nor bucket", st.Kind)
 }
 
-func config(b domain.Bucket) blob.Config {
-	return blob.Config{
+// awsEndpoint is Amazon S3's, where a bucket is that names no store.
+const awsEndpoint = "https://s3.amazonaws.com"
+
+func config(b domain.Bucket) (blob.Config, error) {
+	c := blob.Config{
 		Endpoint: b.Endpoint, Bucket: b.Name, Folder: b.Folder, Region: b.Region,
 		AccessKey: b.AccessKey, SecretKey: b.SecretKey,
 	}
+	switch b.Delivery {
+	case domain.DeliverProxy:
+	case domain.DeliverRedirect:
+		c.LinkEndpoint = cmp.Or(b.PublicEndpoint, b.Endpoint, awsEndpoint)
+	default:
+		return blob.Config{}, fmt.Errorf("delivery %q is neither %q nor %q", b.Delivery, domain.DeliverProxy, domain.DeliverRedirect)
+	}
+	return c, nil
 }
 
 // checkKey is the object Check writes, outside the folders artwork and previews are kept in.
@@ -186,7 +245,11 @@ const checkKey = ".photon-check"
 // Check reports why b cannot keep artwork and previews: it cannot be reached, or what is put there
 // cannot be read back, listed and removed.
 func (*Stores) Check(ctx context.Context, b domain.Bucket) error {
-	bucket, err := blob.OpenBucket(ctx, config(b))
+	c, err := config(b)
+	if err != nil {
+		return err
+	}
+	bucket, err := blob.OpenBucket(ctx, c)
 	if err != nil {
 		return err
 	}

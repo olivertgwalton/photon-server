@@ -18,12 +18,18 @@ const startScript = `kit.start(app, element);`
 
 func webAPI(t *testing.T) *API {
 	t.Helper()
+	return webAPIFrom(t, func() string { return "" })
+}
+
+// webAPIFrom serves a build whose pages may draw from where objectOrigin says as each is served.
+func webAPIFrom(t *testing.T, objectOrigin func() string) *API {
+	t.Helper()
 	web, err := NewWeb(fstest.MapFS{
 		"index.html":                     {Data: []byte(`<!doctype html><script>` + startScript + `</script>`)},
 		"favicon.svg":                    {Data: []byte(`<svg/>`)},
 		"_app/immutable/entry/app.js":    {Data: []byte(`export {}`)},
 		"_app/immutable/entry/app.js.br": {Data: []byte(`brotli`)},
-	})
+	}, objectOrigin)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,6 +73,22 @@ func TestThePageMayRunOnlyItsOwnScript(t *testing.T) {
 	// providers' own hosts, and from nowhere else.
 	if !strings.Contains(csp, "img-src 'self' data: https://image.tmdb.org https://artworks.thetvdb.com;") {
 		t.Errorf("Content-Security-Policy %q, want images from the server and the providers' hosts alone", csp)
+	}
+}
+
+// Artwork and previews sent to their bucket are drawn, and theme tunes played, from its origin,
+// whichever it is as the page is served.
+func TestThePageMayDrawFromTheBucketClientsAreSentTo(t *testing.T) {
+	origin := "https://media.example.com"
+	api := webAPIFrom(t, func() string { return origin })
+	csp := get(api, "/").Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "img-src 'self' data: https://image.tmdb.org https://artworks.thetvdb.com https://media.example.com;") ||
+		!strings.Contains(csp, "media-src 'self' blob: https://media.example.com;") {
+		t.Errorf("Content-Security-Policy %q, want pictures and sounds from the bucket's origin", csp)
+	}
+	origin = ""
+	if csp := get(api, "/").Header().Get("Content-Security-Policy"); strings.Contains(csp, "media.example.com") {
+		t.Errorf("Content-Security-Policy %q once clients are sent nowhere, want the bucket gone from it", csp)
 	}
 }
 
@@ -123,7 +145,7 @@ func TestTheAppIsOnlyRead(t *testing.T) {
 }
 
 func TestNoBuildNoWebApp(t *testing.T) {
-	if _, err := NewWeb(fstest.MapFS{}); err == nil {
+	if _, err := NewWeb(fstest.MapFS{}, func() string { return "" }); err == nil {
 		t.Error("a build with no index.html was taken")
 	}
 }

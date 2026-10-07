@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"net/http"
 
@@ -16,6 +17,7 @@ type storageSettings interface {
 type stores interface {
 	Empty(ctx context.Context) (bool, error)
 	Check(ctx context.Context, b domain.Bucket) error
+	Probe(ctx context.Context) (string, error)
 }
 
 // storageJSON is where artwork, avatars, theme tunes and previews are kept: disk, each server's
@@ -29,14 +31,19 @@ type storageJSON struct {
 // Amazon S3; folder is where in the bucket things are kept, or none for its root; region is asked
 // of the store when none is given. Without an access key, the server's own AWS credentials sign:
 // its environment, shared credentials file or instance role. The secret key is written and never
-// read back: one left out keeps the one kept for the same access key.
+// read back: one left out keeps the one kept for the same access key. Delivery is how clients are
+// given what is kept: proxy, through this server, as when it is left out; redirect, sent to read
+// pictures, sounds and previews from the bucket, at public_endpoint where they reach the store at
+// another address than endpoint.
 type bucketJSON struct {
-	Endpoint  string `json:"endpoint,omitzero"`
-	Name      string `json:"name"`
-	Folder    string `json:"folder,omitzero"`
-	Region    string `json:"region,omitzero"`
-	AccessKey string `json:"access_key,omitzero"`
-	SecretKey string `json:"secret_key,omitzero"`
+	Endpoint       string          `json:"endpoint,omitzero"`
+	Name           string          `json:"name"`
+	Folder         string          `json:"folder,omitzero"`
+	Region         string          `json:"region,omitzero"`
+	AccessKey      string          `json:"access_key,omitzero"`
+	SecretKey      string          `json:"secret_key,omitzero"`
+	Delivery       domain.Delivery `json:"delivery,omitzero"`
+	PublicEndpoint string          `json:"public_endpoint,omitzero"`
 }
 
 // storageStatusJSON is where things are kept, saying whether a secret key is kept and never what.
@@ -45,13 +52,19 @@ type storageStatusJSON struct {
 	Bucket *bucketStatusJSON  `json:"bucket,omitempty"`
 }
 
+// bucketStatusJSON is the bucket things are kept in. Probe, where clients are sent to the bucket,
+// is a link to a picture there, for a browser to find whether it reaches the bucket: once the page
+// may draw from it.
 type bucketStatusJSON struct {
-	Endpoint     string `json:"endpoint,omitzero"`
-	Name         string `json:"name"`
-	Folder       string `json:"folder,omitzero"`
-	Region       string `json:"region,omitzero"`
-	AccessKey    string `json:"access_key,omitzero"`
-	SecretKeySet bool   `json:"secret_key_set"`
+	Endpoint       string          `json:"endpoint,omitzero"`
+	Name           string          `json:"name"`
+	Folder         string          `json:"folder,omitzero"`
+	Region         string          `json:"region,omitzero"`
+	AccessKey      string          `json:"access_key,omitzero"`
+	SecretKeySet   bool            `json:"secret_key_set"`
+	Delivery       domain.Delivery `json:"delivery"`
+	PublicEndpoint string          `json:"public_endpoint,omitzero"`
+	Probe          string          `json:"probe,omitzero"`
 }
 
 func showStorage(s domain.Storage) storageStatusJSON {
@@ -61,7 +74,8 @@ func showStorage(s domain.Storage) storageStatusJSON {
 		b := s.Bucket
 		out.Bucket = &bucketStatusJSON{
 			Endpoint: b.Endpoint, Name: b.Name, Folder: b.Folder, Region: b.Region,
-			AccessKey: b.AccessKey, SecretKeySet: b.SecretKey != "",
+			AccessKey: b.AccessKey, SecretKeySet: b.SecretKey != "", Delivery: b.Delivery,
+			PublicEndpoint: b.PublicEndpoint,
 		}
 	case domain.StorageDisk:
 	}
@@ -70,9 +84,18 @@ func showStorage(s domain.Storage) storageStatusJSON {
 
 func (a *API) adminStorage(w http.ResponseWriter, r *http.Request) {
 	s, err := a.svc.Storage.Storage(r.Context())
-	if !a.answered(w, r, err) {
-		writeJSON(w, a.logger, "application/json", http.StatusOK, showStorage(s))
+	if a.answered(w, r, err) {
+		return
 	}
+	out := showStorage(s)
+	if out.Bucket != nil {
+		// This node's store is the one an admin chose, but for the minute a change takes to reach it.
+		if out.Bucket.Probe, err = a.svc.Stores.Probe(r.Context()); err != nil {
+			a.internal(w, r, err)
+			return
+		}
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
 
 // storageOf is where req says things be kept, keeping the secret key kept now for its access key
@@ -86,6 +109,7 @@ func (a *API) storageOf(w http.ResponseWriter, req storageJSON, now domain.Stora
 	b := domain.Bucket{
 		Endpoint: req.Bucket.Endpoint, Name: req.Bucket.Name, Folder: req.Bucket.Folder, Region: req.Bucket.Region,
 		AccessKey: req.Bucket.AccessKey, SecretKey: req.Bucket.SecretKey,
+		Delivery: cmp.Or(req.Bucket.Delivery, domain.DeliverProxy), PublicEndpoint: req.Bucket.PublicEndpoint,
 	}
 	if b.SecretKey == "" && b.AccessKey != "" && b.AccessKey == now.Bucket.AccessKey {
 		b.SecretKey = now.Bucket.SecretKey

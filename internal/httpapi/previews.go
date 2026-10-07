@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"maps"
 	"net/http"
 	"os"
 	"uuid"
@@ -104,8 +103,7 @@ func (a *API) serveFile(w http.ResponseWriter, r *http.Request, f *os.File, name
 
 // serveObject is serveFile for an object.
 func (a *API) serveObject(w http.ResponseWriter, r *http.Request, o blob.Object, name string, header http.Header) {
-	defer o.Close()
-	maps.Copy(w.Header(), header)
-	// The reader itself, not o: a file is sent by sendfile only as an *os.File.
-	http.ServeContent(w, r, name, o.ModTime, o.ReadSeekCloser)
+	if err := blob.Serve(w, r, o, name, header); err != nil {
+		a.internal(w, r, err)
+	}
 }

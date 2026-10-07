@@ -84,6 +84,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.SecureConnections]():   values(domain.SecureConnectionModes()),
 	reflect.TypeFor[domain.JellyfinMode]():        values(domain.JellyfinModes()),
 	reflect.TypeFor[domain.StorageKind]():         values(domain.StorageKinds()),
+	reflect.TypeFor[domain.Delivery]():            values(domain.Deliveries()),
 	reflect.TypeFor[domain.ThemeLookup]():         values(domain.ThemeLookups()),
 	reflect.TypeFor[domain.ThemeMusic]():          values(domain.ThemeMusics()),
 	reflect.TypeFor[domain.Unrated]():             values(domain.UnratedPolicies()),

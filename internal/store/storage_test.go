@@ -12,14 +12,15 @@ import (
 func TestArtworkIsKeptOnDiskUntilAnAdminNamesABucket(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	if st, err := s.Storage(ctx); err != nil || st != (domain.Storage{Kind: domain.StorageDisk}) {
+	if st, err := s.Storage(ctx); err != nil || st.Kind != domain.StorageDisk {
 		t.Fatalf("a new server: %+v, %v; want disk", st, err)
 	}
-	if err := s.SetStorage(ctx, domain.Storage{Kind: domain.StorageBucket}); err == nil {
+	if err := s.SetStorage(ctx, domain.Storage{Kind: domain.StorageBucket, Bucket: domain.Bucket{Delivery: domain.DeliverProxy}}); err == nil {
 		t.Error("a bucket with no name was kept")
 	}
 	st := domain.Storage{Kind: domain.StorageBucket, Bucket: domain.Bucket{
 		Endpoint: "https://s3.example.com", Name: "photon", Folder: "media", AccessKey: "key", SecretKey: "secret",
+		Delivery: domain.DeliverRedirect, PublicEndpoint: "https://media.example.com",
 	}}
 	if err := s.SetStorage(ctx, st); err != nil {
 		t.Fatal(err)
