@@ -263,7 +263,7 @@ func titlePageOf(p store.TitlePage) titlePageJSON {
 
 func versionPageOf(v store.VersionPage) versionPageJSON {
 	return versionPageJSON{
-		ID: v.ID, Edition: v.Edition, Label: v.Label, Container: v.Container, DurationMS: v.DurationMS,
+		ID: v.ID, Edition: v.Edition, Label: v.Label, Container: domain.ContainerName(v.Container), DurationMS: v.DurationMS,
 		SizeBytes: v.SizeBytes, BitrateKbps: v.BitrateKbps, Parts: v.Parts, MissingSince: v.MissingSince,
 		Streams:   each(v.Streams, func(s store.StreamPage) streamPageJSON { return streamPageJSON(s) }),
 		Subtitles: each(v.Subtitles, func(s store.SubtitleRef) subtitleRefJSON { return subtitleRefJSON(s) }),

@@ -284,7 +284,7 @@ func (a *API) cardOf(r *http.Request, t domain.PlaybackTitle, c store.PlayCopy, 
 		},
 		Title: t,
 		Version: domain.PlaybackVersion{
-			ID: c.Version, Edition: c.Edition, Label: c.Label, Container: c.Container, BitrateKbps: c.BitrateKbps,
+			ID: c.Version, Edition: c.Edition, Label: c.Label, Container: domain.ContainerName(c.Container), BitrateKbps: c.BitrateKbps,
 			DurationMS: c.DurationMS,
 		},
 		Reasons: d.Reasons,

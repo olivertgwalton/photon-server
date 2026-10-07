@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"time"
 
 	"golang.org/x/text/language"
@@ -31,6 +32,21 @@ const (
 
 func Ranges() []Range {
 	return []Range{RangeSDR, RangeHLG, RangeHDR10, RangeHDR10Plus, RangeDV}
+}
+
+// ContainerName names a container as clients do, from ffprobe's format name, which lists every
+// demuxer that reads it. Matroska and WebM share one, and nothing stored tells them apart.
+func ContainerName(format string) string {
+	name, _, _ := strings.Cut(format, ",")
+	switch name {
+	case "matroska":
+		return "mkv"
+	case "mov":
+		return "mp4"
+	case "mpegts":
+		return "ts"
+	}
+	return name
 }
 
 // Facts are what ffprobe says of a file.
