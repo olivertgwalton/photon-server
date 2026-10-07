@@ -50,13 +50,17 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	if item.Year != nil {
 		sub.Year = *item.Year
 	}
-	var language, country *string
-	err = s.pool.QueryRow(ctx, `SELECT metadata_language, certification_country, artwork_language, title_language FROM libraries
-		WHERE id = $1`, item.LibraryID).Scan(&language, &country, &sub.Locale.Artwork, &sub.Titles)
+	// Its own language and country over its library's, as Jellyfin's item settings are.
+	var own, lib domain.Locale
+	err = s.pool.QueryRow(ctx, `
+		SELECT coalesce(i.metadata_language, ''), coalesce(i.certification_country, ''),
+			coalesce(l.metadata_language, ''), coalesce(l.certification_country, ''), l.artwork_language, l.title_language
+		FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.id = $1`, id).
+		Scan(&own.Language, &own.Country, &lib.Language, &lib.Country, &lib.Artwork, &sub.Titles)
 	if err != nil {
 		return Subject{}, false, err
 	}
-	sub.Locale.Language, sub.Locale.Country = deref(language), deref(country)
+	sub.Locale = own.Or(lib)
 	rows, err := s.pool.Query(ctx, `SELECT DISTINCT source FROM library_sources WHERE library_id = $1 AND enabled`, item.LibraryID)
 	if err == nil {
 		sub.Sources, err = pgx.CollectRows(rows, pgx.RowTo[domain.FieldSource])

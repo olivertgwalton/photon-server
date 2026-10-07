@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -25,6 +26,7 @@ type editing interface {
 	Refresh(ctx context.Context, id uuid.UUID, mode domain.RefreshMode) error
 	AnalyseTitle(ctx context.Context, id uuid.UUID) error
 	Unmatch(ctx context.Context, id uuid.UUID) error
+	SetTitleLocale(ctx context.Context, id uuid.UUID, loc domain.Locale) error
 	SplitTitle(ctx context.Context, id uuid.UUID) error
 	TitleFiles(ctx context.Context, id uuid.UUID) ([]store.LibraryFile, error)
 	ForgetTitle(ctx context.Context, id uuid.UUID) error
@@ -272,6 +274,42 @@ func (a *API) split(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type titleLocaleJSON struct {
+	// MetadataLanguage is the language a film's or show's metadata is asked in, an IETF tag such
+	// as en-GB, and CertificationCountry the country whose certificates, an ISO 3166-1 alpha-2 code
+	// such as GB; "" is its library's.
+	MetadataLanguage     string `json:"metadata_language"`
+	CertificationCountry string `json:"certification_country"`
+}
+
+// setTitleLocale gives a film or show a locale of its own over its library's, as Jellyfin's item
+// settings do, and describes it again in it.
+func (a *API) setTitleLocale(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var req titleLocaleJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	lang, refusal := metadataLanguage(req.MetadataLanguage)
+	country, countryRefusal := certificationCountry(req.CertificationCountry)
+	if refusal = cmp.Or(refusal, countryRefusal); refusal != "" {
+		writeProblem(w, a.logger, codeInvalidBody, refusal)
+		return
+	}
+	err := a.svc.Editing.SetTitleLocale(r.Context(), id, domain.Locale{Language: lang, Country: country})
+	if errors.Is(err, store.ErrNotFound) {
+		writeProblem(w, a.logger, codeNotFound, "no film or show has that id")
+		return
+	}
+	if a.answered(w, r, err) {
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
 }
 
 // unmatch takes a film or show off its providers and holds it so, until its match is fixed or it

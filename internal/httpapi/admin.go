@@ -234,21 +234,19 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "refresh_days is from 0, never, to 365")
 		return
 	}
-	if l := req.MetadataLanguage; l != nil && *l != "" {
-		tag, err := language.Parse(*l)
-		if err != nil {
-			writeProblem(w, a.logger, codeInvalidBody, "metadata_language is an IETF language tag, such as en-GB")
+	for _, field := range []struct {
+		value *string
+		check func(string) (string, string)
+	}{{req.MetadataLanguage, metadataLanguage}, {req.CertificationCountry, certificationCountry}} {
+		if field.value == nil {
+			continue
+		}
+		canonical, refusal := field.check(*field.value)
+		if refusal != "" {
+			writeProblem(w, a.logger, codeInvalidBody, refusal)
 			return
 		}
-		*l = tag.String()
-	}
-	if c := req.CertificationCountry; c != nil && *c != "" {
-		region, err := language.ParseRegion(*c)
-		if err != nil || !region.IsCountry() {
-			writeProblem(w, a.logger, codeInvalidBody, "certification_country is an ISO 3166-1 alpha-2 country, such as GB")
-			return
-		}
-		*c = region.String()
+		*field.value = canonical
 	}
 	change.MetadataLanguage, change.CertificationCountry = req.MetadataLanguage, req.CertificationCountry
 	change.ArtworkLanguage, change.TitleLanguage = req.ArtworkLanguage, req.TitleLanguage
@@ -363,4 +361,30 @@ func (a *API) locales(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, localesJSON{Languages: domain.MetadataLanguages(), Countries: countries})
+}
+
+// metadataLanguage is a metadata language as sent, written as its standard writes it, or why it is
+// refused; "" stays "", the one above's.
+func metadataLanguage(s string) (canonical, refusal string) {
+	if s == "" {
+		return "", ""
+	}
+	tag, err := language.Parse(s)
+	if err != nil {
+		return "", "metadata_language is an IETF language tag, such as en-GB"
+	}
+	return tag.String(), ""
+}
+
+// certificationCountry is a certification country as sent, written as its standard writes it, or
+// why it is refused; "" stays "", the one above's.
+func certificationCountry(s string) (canonical, refusal string) {
+	if s == "" {
+		return "", ""
+	}
+	region, err := language.ParseRegion(s)
+	if err != nil || !region.IsCountry() {
+		return "", "certification_country is an ISO 3166-1 alpha-2 country, such as GB"
+	}
+	return region.String(), ""
 }

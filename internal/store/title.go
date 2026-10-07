@@ -38,7 +38,10 @@ type TitlePage struct {
 	Origin    domain.CollectionOrigin
 	Placement domain.CollectionPlacement
 	// EpisodeOrder is the order a show's episode files are numbered in.
-	EpisodeOrder  domain.EpisodeOrder
+	EpisodeOrder domain.EpisodeOrder
+	// Locale is a film's or show's own metadata language and certification country, over its
+	// library's; empty where it takes its library's.
+	Locale        domain.Locale
 	AddedAt       time.Time
 	SeasonNumber  *int
 	EpisodeNumber *int
@@ -268,6 +271,14 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 			return TitlePage{}, err
 		}
 		p.Credits = billed(show, p.Credits)
+	}
+	if item.Kind == domain.ItemMovie || item.Kind == domain.ItemShow {
+		err := s.pool.QueryRow(ctx, `
+			SELECT coalesce(metadata_language, ''), coalesce(certification_country, '') FROM items WHERE id = $1`, id).
+			Scan(&p.Locale.Language, &p.Locale.Country)
+		if err != nil {
+			return TitlePage{}, err
+		}
 	}
 	switch item.Kind {
 	case domain.ItemShow:

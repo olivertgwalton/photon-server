@@ -1868,6 +1868,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/titles/{id}/locale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Give a film or show a metadata language and certification country of its own, and describe it again in them
+         * @description Admin only.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TitleLocale"];
+                };
+            };
+            responses: {
+                /** @description Accepted */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/titles/{id}/match": {
         parameters: {
             query?: never;
@@ -6086,6 +6130,10 @@ export interface components {
         Timing: "window" | "window_and_added";
         /** @enum {string} */
         TitleLanguage: "localized" | "original";
+        TitleLocale: {
+            certification_country: string;
+            metadata_language: string;
+        };
         TitlePage: {
             /** Format: date-time */
             added_at: string;
@@ -6096,6 +6144,7 @@ export interface components {
                 [key: string]: string;
             };
             certificate?: string;
+            certification_country?: string;
             collections?: components["schemas"]["CollectionCard"][];
             credits?: components["schemas"]["CreditRef"][];
             episode_end?: number | null;
@@ -6110,6 +6159,7 @@ export interface components {
                 [key: string]: string;
             };
             kind: components["schemas"]["ItemKind"];
+            metadata_language?: string;
             origin?: components["schemas"]["CollectionOrigin"];
             original_title?: string;
             overview?: string;

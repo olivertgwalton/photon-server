@@ -8,6 +8,7 @@ import Choice from "#lib/components/admin/Choice.svelte";
 import IdentifyPanel from "#lib/components/admin/IdentifyPanel.svelte";
 import MarkersEditor from "#lib/components/admin/MarkersEditor.svelte";
 import MetadataForm from "#lib/components/admin/MetadataForm.svelte";
+import TitleLocale from "#lib/components/admin/TitleLocale.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -99,6 +100,23 @@ const name = $derived(
 			</Card.Header>
 			<Card.Content class="grid gap-4">
 				<IdentifyPanel title={t} providers={data.providers} />
+			</Card.Content>
+		</Card.Root>
+	{/if}
+
+	{#if matched}
+		<Card.Root>
+			<Card.Header>
+				<Card.Title><h2 class="heading">Language</h2></Card.Title>
+				<Card.Description>
+					What its metadata is asked in, over its library's, its seasons and
+					episodes with it.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content>
+				{#key t}
+					<TitleLocale title={t} />
+				{/key}
 			</Card.Content>
 		</Card.Root>
 	{/if}

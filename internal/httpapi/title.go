@@ -27,18 +27,22 @@ type titlePageJSON struct {
 	Origin        domain.CollectionOrigin    `json:"origin,omitzero"`
 	Placement     domain.CollectionPlacement `json:"placement,omitzero"`
 	EpisodeOrder  domain.EpisodeOrder        `json:"episode_order,omitzero"`
-	AddedAt       time.Time                  `json:"added_at"`
-	SeasonNumber  *int                       `json:"season_number,omitzero"`
-	EpisodeNumber *int                       `json:"episode_number,omitzero"`
-	EpisodeEnd    *int                       `json:"episode_end,omitzero"`
-	Show          *titleRefJSON              `json:"show,omitzero"`
-	Season        *titleRefJSON              `json:"season,omitzero"`
-	Versions      []versionPageJSON          `json:"versions,omitzero"`
-	Seasons       []seasonCardJSON           `json:"seasons,omitzero"`
-	Episodes      []episodeCardJSON          `json:"episodes,omitzero"`
-	Extras        []extraCardJSON            `json:"extras,omitzero"`
-	Videos        []videoLinkJSON            `json:"videos,omitzero"`
-	State         titleStateJSON             `json:"state,omitzero"`
+	// MetadataLanguage and CertificationCountry are a film's or show's own, over its library's;
+	// absent where it takes its library's.
+	MetadataLanguage     string            `json:"metadata_language,omitzero"`
+	CertificationCountry string            `json:"certification_country,omitzero"`
+	AddedAt              time.Time         `json:"added_at"`
+	SeasonNumber         *int              `json:"season_number,omitzero"`
+	EpisodeNumber        *int              `json:"episode_number,omitzero"`
+	EpisodeEnd           *int              `json:"episode_end,omitzero"`
+	Show                 *titleRefJSON     `json:"show,omitzero"`
+	Season               *titleRefJSON     `json:"season,omitzero"`
+	Versions             []versionPageJSON `json:"versions,omitzero"`
+	Seasons              []seasonCardJSON  `json:"seasons,omitzero"`
+	Episodes             []episodeCardJSON `json:"episodes,omitzero"`
+	Extras               []extraCardJSON   `json:"extras,omitzero"`
+	Videos               []videoLinkJSON   `json:"videos,omitzero"`
+	State                titleStateJSON    `json:"state,omitzero"`
 	// Artwork is the title's pictures by kind, best first, by id: /api/v1/artwork/{id}.
 	Artwork    map[domain.ArtworkKind][]uuid.UUID `json:"artwork,omitzero"`
 	Blurhashes store.Blurhashes                   `json:"blurhashes,omitzero"`
@@ -231,7 +235,8 @@ func titlePageOf(p store.TitlePage) titlePageJSON {
 		Ratings:     each(p.Ratings, func(r domain.Rating) ratingRefJSON { return ratingRefJSON(r) }),
 		Collections: each(p.Collections, func(c store.CollectionCard) collectionCardJSON { return collectionCardJSON(c) }),
 		Credits:     each(p.Credits, func(c store.CreditRef) creditRefJSON { return creditRefJSON(c) }),
-		Origin:      p.Origin, Placement: p.Placement, EpisodeOrder: p.EpisodeOrder, AddedAt: p.AddedAt, SeasonNumber: p.SeasonNumber,
+		Origin:      p.Origin, Placement: p.Placement, EpisodeOrder: p.EpisodeOrder,
+		MetadataLanguage: p.Locale.Language, CertificationCountry: p.Locale.Country, AddedAt: p.AddedAt, SeasonNumber: p.SeasonNumber,
 		EpisodeNumber: p.EpisodeNumber, EpisodeEnd: p.EpisodeEnd,
 		Show: (*titleRefJSON)(p.Show), Season: (*titleRefJSON)(p.Season),
 		Versions: each(p.Versions, versionPageOf),

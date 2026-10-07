@@ -70,6 +70,27 @@ func (s *Store) PinMatch(ctx context.Context, id uuid.UUID, provider domain.Prov
 	})
 }
 
+// SetTitleLocale gives a film or show a metadata language and certification country of its own,
+// "" for its library's, and describes it again in them, its seasons and episodes with it.
+func (s *Store) SetTitleLocale(ctx context.Context, id uuid.UUID, loc domain.Locale) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		err := affected(tx.Exec(ctx, `
+			UPDATE items SET metadata_language = nullif($2, ''), certification_country = nullif($3, '')
+			WHERE id = $1 AND kind IN ('movie', 'show')`, id, loc.Language, loc.Country))
+		if err != nil {
+			return err
+		}
+		err = describeAgain(ctx, tx, `
+			SELECT s.id FROM items s WHERE s.parent_id = @show AND s.kind = 'season'
+			UNION SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id WHERE s.parent_id = @show AND e.kind = 'episode'`,
+			pgx.NamedArgs{"show": id})
+		if err != nil {
+			return err
+		}
+		return enqueueAsked(ctx, tx, domain.JobIdentify, id)
+	})
+}
+
 // rematch has a title's folder read again, and its film or show matched again.
 func rematch(ctx context.Context, tx db, item *model.Item) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND path = $2`, item.LibraryID, item.Folder); err != nil {

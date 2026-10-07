@@ -6,6 +6,7 @@ import type { components } from "#lib/api/schema.js";
 import ArtworkPicker from "#lib/components/admin/ArtworkPicker.svelte";
 import IdentifyPanel from "#lib/components/admin/IdentifyPanel.svelte";
 import MetadataForm from "#lib/components/admin/MetadataForm.svelte";
+import TitleLocale from "#lib/components/admin/TitleLocale.svelte";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Tabs from "#lib/components/ui/tabs/index.js";
 
@@ -67,8 +68,11 @@ const matched = $derived(title?.kind === "movie" || title?.kind === "show");
 						<Tabs.Trigger value="artwork">Artwork</Tabs.Trigger>
 					{/if}
 				</Tabs.List>
-				<Tabs.Content value="details" class={part}>
+				<Tabs.Content value="details" class="{part} grid content-start gap-8">
 					<MetadataForm {title} />
+					{#if matched}
+						<TitleLocale {title} />
+					{/if}
 				</Tabs.Content>
 				{#if matched}
 					<Tabs.Content value="match" class="{part} grid content-start gap-4">
