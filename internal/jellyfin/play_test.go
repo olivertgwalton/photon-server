@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -398,6 +399,30 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 		if tc.encoded != (e != nil) || e != nil && e.BitrateKbps > 2000 {
 			t.Errorf("from %s: encode %+v, want encoded %t within 2000 kbps", tc.from, e, tc.encoded)
 		}
+	}
+
+	// Its network counted as local, the same app has the video copied.
+	n.LocalNetworks = []netip.Prefix{netip.MustParsePrefix("203.0.113.0/24")}
+	if err := st.SetNetwork(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", strings.NewReader(`{"MaxStreamingBitrate":120000000,"DeviceProfile":`+swiftfin+`}`))
+	r.Header.Set("Authorization", swiftfinHeader)
+	r.RemoteAddr = "203.0.113.9:5000"
+	w := httptest.NewRecorder()
+	api.ServeHTTP(w, r)
+	var info struct {
+		MediaSources  []map[string]any
+		PlaySessionID string `json:"PlaySessionId"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil {
+		t.Fatal(err)
+	}
+	transcoding, _ := info.MediaSources[0]["TranscodingUrl"].(string)
+	api.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, transcoding, nil))
+	session, _ := uuid.Parse(info.PlaySessionID)
+	if e := remuxes.opened[session].Encode; e != nil {
+		t.Errorf("on a network set as local: encode %+v, want the video copied", e)
 	}
 }
 

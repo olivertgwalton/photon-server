@@ -13,13 +13,13 @@ type networkSettings interface {
 }
 
 // RemoteLimit is the most a stream to a client at addr is sent at, in kbps: the server's limit on
-// a remote stream where addr is not local, else none, 0.
+// a remote stream where addr is not on its local networks, else none, 0.
 func RemoteLimit(ctx context.Context, settings networkSettings, addr netip.Addr) (int, error) {
-	if peer.Local(addr) {
-		return 0, nil
-	}
 	n, err := settings.Network(ctx)
-	return n.RemoteMaxBitrateKbps, err
+	if err != nil || peer.LocalIn(n.LocalNetworks, addr) {
+		return 0, err
+	}
+	return n.RemoteMaxBitrateKbps, nil
 }
 
 // Capped is a client's most bitrate within a limit, either 0 for none.

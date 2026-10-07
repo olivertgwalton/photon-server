@@ -1,6 +1,9 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+	"net/netip"
+)
 
 // SecureConnections is whether the server's port answers HTTPS, as Plex's setting of that name:
 // required, plain HTTP is sent to HTTPS but from this machine; preferred, both are answered;
@@ -32,14 +35,15 @@ func JellyfinModes() []JellyfinMode {
 
 // Network is how the server is reached, as Plex's Network settings: whether over HTTPS, and the
 // certificate it serves, a PEM chain and its key at paths each node reads; whether Jellyfin's apps
-// reach it too, and on which port; and the most a stream to a client outside the server's own
-// networks is sent at, 0 for no limit.
+// reach it too, and on which port; the networks whose clients are local, none for the private
+// ones; and the most a stream to a client outside them is sent at, 0 for no limit.
 type Network struct {
 	Secure               SecureConnections
 	Certificate          string
 	Key                  string
 	Jellyfin             JellyfinMode
 	JellyfinPort         int
+	LocalNetworks        []netip.Prefix
 	RemoteMaxBitrateKbps int
 }
 

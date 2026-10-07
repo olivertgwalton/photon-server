@@ -80,3 +80,19 @@ func TestLocal(t *testing.T) {
 		}
 	}
 }
+
+// Networks set are local in place of the private ones; this machine always is.
+func TestLocalIn(t *testing.T) {
+	tailnet := []netip.Prefix{netip.MustParsePrefix("100.64.0.0/10")}
+	for addr, want := range map[string]bool{
+		"100.101.102.103": true,
+		"192.168.1.20":    false,
+		"127.0.0.1":       true,
+		"::1":             true,
+		"203.0.113.9":     false,
+	} {
+		if got := LocalIn(tailnet, netip.MustParseAddr(addr)); got != want {
+			t.Errorf("LocalIn(tailnet, %s) = %t, want %t", addr, got, want)
+		}
+	}
+}

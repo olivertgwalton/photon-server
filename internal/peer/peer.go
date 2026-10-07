@@ -13,10 +13,20 @@ import (
 // Proxies are the peers whose X-Forwarded-For names the client. None by default.
 type Proxies []netip.Prefix
 
-// Parse reads a comma-separated list of addresses and prefixes: "10.0.0.0/8,127.0.0.1".
+// Parse reads PHOTON_TRUSTED_PROXIES, a comma-separated list of addresses and prefixes:
+// "10.0.0.0/8,127.0.0.1".
 func Parse(list string) (Proxies, error) {
-	var out Proxies
-	for item := range strings.SplitSeq(list, ",") {
+	out, err := Prefixes(strings.Split(list, ","))
+	if err != nil {
+		return nil, fmt.Errorf("PHOTON_TRUSTED_PROXIES: %w", err)
+	}
+	return out, nil
+}
+
+// Prefixes reads networks, each a prefix or a single address, passing over blanks.
+func Prefixes(items []string) ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for _, item := range items {
 		item = strings.TrimSpace(item)
 		if item == "" {
 			continue
@@ -27,7 +37,7 @@ func Parse(list string) (Proxies, error) {
 		}
 		a, err := netip.ParseAddr(item)
 		if err != nil {
-			return nil, fmt.Errorf("PHOTON_TRUSTED_PROXIES: %q is not an address or prefix", item)
+			return nil, fmt.Errorf("%q is not an address or prefix", item)
 		}
 		out = append(out, netip.PrefixFrom(a, a.BitLen()))
 	}
@@ -67,8 +77,17 @@ func (p Proxies) HTTPS(r *http.Request) bool {
 // Local is whether an address is on this machine or one of its private networks, as Jellyfin's
 // default LAN: anywhere else is remote.
 func Local(a netip.Addr) bool {
+	return LocalIn(nil, a)
+}
+
+// LocalIn is whether an address is on this machine or one of networks, as Jellyfin's LAN networks
+// and Plex's: none is the private networks, as Local.
+func LocalIn(networks []netip.Prefix, a netip.Addr) bool {
 	a = a.Unmap()
-	return a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast()
+	if len(networks) == 0 {
+		return a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast()
+	}
+	return a.IsLoopback() || slices.ContainsFunc(networks, func(p netip.Prefix) bool { return p.Contains(a) })
 }
 
 // Direct is the address of the connection's other end, a proxy or the client itself.

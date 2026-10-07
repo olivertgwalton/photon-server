@@ -41,6 +41,9 @@ function save(event: SubmitEvent) {
 				key: path("key"),
 				jellyfin,
 				jellyfin_port: Number(form.get("jellyfin_port")),
+				local_networks: path("local_networks")
+					.split(/[\s,]+/)
+					.filter(Boolean),
 				remote_max_bitrate_kbps: Math.round(
 					Number(form.get("remote_max_mbps")) * 1000,
 				),
@@ -152,6 +155,20 @@ function save(event: SubmitEvent) {
 			leaves the upload room. Above it, the video is encoded to fit; its picture
 			keeps the size the app asks for.
 		</Field.Description>
+		<Field.Field>
+			<Field.Label for="local-networks">Local networks</Field.Label>
+			<Input
+				id="local-networks"
+				name="local_networks"
+				value={data.network.local_networks.join(", ")}
+				placeholder="192.168.1.0/24, 100.64.0.0/10"
+				class="font-mono"
+			/>
+			<Field.Description>
+				Networks whose devices are at home, as prefixes or addresses, such as a
+				tailnet. Left empty, every private network is.
+			</Field.Description>
+		</Field.Field>
 		<Field.Field>
 			<Field.Label for="remote-max">Limit (Mbps)</Field.Label>
 			<Input
