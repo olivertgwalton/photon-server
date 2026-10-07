@@ -23,12 +23,6 @@ export const reasons: Record<Schemas["TranscodeReason"], string> = {
 	parts_not_supported: "The title is in several files, played as one.",
 };
 
-export const methods: Record<Schemas["PlayMethod"], string> = {
-	direct: "Direct play",
-	remux: "Remux",
-	transcode: "Transcode",
-};
-
 export const skips: Record<Schemas["MarkerKind"], string> = {
 	intro: "Skip Intro",
 	recap: "Skip Recap",

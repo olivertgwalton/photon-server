@@ -1,13 +1,12 @@
 <script lang="ts">
 import TitleRow from "#lib/components/TitleRow.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
-import { timecode } from "#lib/format.js";
+import { playMethods, timecode } from "#lib/format.js";
 
 let { data } = $props();
 
 const day = new Intl.DateTimeFormat(undefined, { dateStyle: "full" });
 const time = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
-const methods = { direct: "Direct", remux: "Remuxed", transcode: "Converted" };
 
 // Plays by the day they started on, the newest first.
 const days = $derived.by(() => {
@@ -36,7 +35,7 @@ const { offset, total } = $derived(data.history);
 							card={play.title}
 							detail="{time.format(
 								new Date(play.started_at),
-							)} · stopped at {timecode(play.position_ms)} · {methods[
+							)} · stopped at {timecode(play.position_ms)} · {playMethods[
 								play.method
 							]}"
 						/>

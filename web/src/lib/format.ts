@@ -67,6 +67,12 @@ export function fullTitle(
 	return `${[show, at].filter(Boolean).join(" ")} · ${t.title}`;
 }
 
+export const playMethods: Record<Schemas["PlayMethod"], string> = {
+	direct: "Direct play",
+	remux: "Direct stream",
+	transcode: "Transcode",
+};
+
 export const ratingSites: Record<Schemas["RatingSite"], string> = {
 	imdb: "IMDb",
 	tmdb: "TMDB",
