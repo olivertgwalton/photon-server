@@ -371,6 +371,26 @@ func (s *Store) credits(ctx context.Context, item uuid.UUID) ([]CreditRef, error
 	return out, nil
 }
 
+// billed is a season's or an episode's credits under its show's, as Plex and Jellyfin bill one:
+// the show's cast first, since a provider credits an episode with its guests alone, then the
+// episode's own, less anyone the show's cast already names.
+func billed(show, own []CreditRef) []CreditRef {
+	cast := map[uuid.UUID]bool{}
+	var out []CreditRef
+	for _, c := range show {
+		if c.Kind == domain.CreditActor {
+			cast[c.PersonID] = true
+			out = append(out, c)
+		}
+	}
+	for _, c := range own {
+		if !c.Kind.Acting() || !cast[c.PersonID] {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // PersonPage is someone as their page shows them: what is known of them and their work here.
 type PersonPage struct {
 	ID         uuid.UUID
