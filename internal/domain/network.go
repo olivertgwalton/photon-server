@@ -17,12 +17,28 @@ func SecureConnectionModes() []SecureConnections {
 	return []SecureConnections{SecureRequired, SecurePreferred, SecureDisabled}
 }
 
+// JellyfinMode is whether the server also answers Jellyfin's API, on a port of its own, for the
+// apps made for Jellyfin.
+type JellyfinMode string
+
+const (
+	JellyfinOn  JellyfinMode = "on"
+	JellyfinOff JellyfinMode = "off"
+)
+
+func JellyfinModes() []JellyfinMode {
+	return []JellyfinMode{JellyfinOn, JellyfinOff}
+}
+
 // Network is how the server is reached, as Plex's Network settings: whether over HTTPS, and the
-// certificate it serves, a PEM chain and its key at paths each node reads.
+// certificate it serves, a PEM chain and its key at paths each node reads; and whether Jellyfin's
+// apps reach it too, and on which port.
 type Network struct {
-	Secure      SecureConnections
-	Certificate string
-	Key         string
+	Secure       SecureConnections
+	Certificate  string
+	Key          string
+	Jellyfin     JellyfinMode
+	JellyfinPort int
 }
 
 var ErrNoCertificate = errors.New("secure connections need a certificate and its key")

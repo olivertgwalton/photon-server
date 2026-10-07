@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"strconv"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/secure"
@@ -20,15 +22,21 @@ type secureConnections interface {
 // networkJSON is whether the server's port answers HTTPS, as Plex's Secure connections: required,
 // plain HTTP sent to HTTPS but from the server's own machine; preferred, both; disabled, HTTP
 // alone, as behind a proxy with the certificate. The certificate is a PEM chain and its key, at
-// paths on the server, which required and preferred need.
+// paths on the server, which required and preferred need. Jellyfin is whether the apps made for
+// Jellyfin reach the server too, on a port of its own.
 type networkJSON struct {
 	SecureConnections domain.SecureConnections `json:"secure_connections"`
 	Certificate       string                   `json:"certificate,omitzero"`
 	Key               string                   `json:"key,omitzero"`
+	Jellyfin          domain.JellyfinMode      `json:"jellyfin"`
+	JellyfinPort      int                      `json:"jellyfin_port"`
 }
 
 func showNetwork(n domain.Network) networkJSON {
-	return networkJSON{SecureConnections: n.Secure, Certificate: n.Certificate, Key: n.Key}
+	return networkJSON{
+		SecureConnections: n.Secure, Certificate: n.Certificate, Key: n.Key,
+		Jellyfin: n.Jellyfin, JellyfinPort: n.JellyfinPort,
+	}
 }
 
 func (a *API) adminNetwork(w http.ResponseWriter, r *http.Request) {
@@ -47,9 +55,16 @@ func (a *API) setNetwork(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	n := domain.Network{Secure: req.SecureConnections, Certificate: req.Certificate, Key: req.Key}
+	n := domain.Network{
+		Secure: req.SecureConnections, Certificate: req.Certificate, Key: req.Key,
+		Jellyfin: req.Jellyfin, JellyfinPort: req.JellyfinPort,
+	}
 	if _, err := secure.Load(n); err != nil {
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())
+		return
+	}
+	if _, own, _ := net.SplitHostPort(a.svc.Setup.Listen); n.JellyfinPort < 1 || n.JellyfinPort > 65535 || own == strconv.Itoa(n.JellyfinPort) {
+		writeProblem(w, a.logger, codeInvalidBody, "the Jellyfin port is 1 to 65535, and not the one photon's own API is served on")
 		return
 	}
 	if err := a.svc.Network.SetNetwork(r.Context(), n); err != nil {
