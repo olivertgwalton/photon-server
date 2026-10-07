@@ -9,15 +9,11 @@ const day = new Intl.DateTimeFormat(undefined, { dateStyle: "full" });
 const time = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
 
 // Plays by the day they started on, the newest first.
-const days = $derived.by(() => {
-	const out: { day: string; plays: typeof data.history.items }[] = [];
-	for (const play of data.history.items) {
-		const name = day.format(new Date(play.started_at));
-		if (out.at(-1)?.day !== name) out.push({ day: name, plays: [] });
-		out.at(-1)?.plays.push(play);
-	}
-	return out;
-});
+const days = $derived(
+	Map.groupBy(data.history.items, (play) =>
+		day.format(new Date(play.started_at)),
+	),
+);
 const { offset, total } = $derived(data.history);
 </script>
 
@@ -25,11 +21,11 @@ const { offset, total } = $derived(data.history);
 
 <div class="grid max-w-4xl gap-8">
 	<h1 class="title">History</h1>
-	{#each days as group (group.day)}
-		<section aria-labelledby="day-{group.day}">
-			<h2 id="day-{group.day}" class="label mb-2">{group.day}</h2>
+	{#each days as [name, plays] (name)}
+		<section aria-labelledby="day-{name}">
+			<h2 id="day-{name}" class="label mb-2">{name}</h2>
 			<ul class="divide-line divide-y">
-				{#each group.plays as play (play.id)}
+				{#each plays as play (play.id)}
 					<li class="py-2">
 						<TitleRow
 							card={play.title}

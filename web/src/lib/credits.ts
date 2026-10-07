@@ -32,26 +32,19 @@ export function fold<T>(
 	kind: (c: T) => Kind,
 	role: (c: T) => string | undefined,
 ): Folded<T>[] {
-	const byKey = new Map<
-		string,
-		Folded<T> & { parts: string[]; jobs: string[] }
-	>();
-	for (const c of credits) {
-		let f = byKey.get(key(c));
-		if (!f) {
-			f = { all: [], kinds: [], said: "", parts: [], jobs: [] };
-			byKey.set(key(c), f);
-		}
-		f.all.push(c);
-		if (!f.kinds.includes(kind(c))) f.kinds.push(kind(c));
-		const words = role(c) || jobs[kind(c)];
-		const into = performs(kind(c)) ? f.parts : f.jobs;
-		if (words && !into.includes(words)) into.push(words);
-	}
-	const out = [...byKey.values()].map(({ parts, jobs, ...f }) => ({
-		...f,
-		said: [...parts, ...jobs].join(", "),
-	}));
+	const out = [...Map.groupBy(credits, key).values()].map((all) => {
+		const said = (performed: boolean) =>
+			all
+				.filter((c) => performs(kind(c)) === performed)
+				.map((c) => role(c) || jobs[kind(c)]);
+		return {
+			all,
+			kinds: [...new Set(all.map(kind))],
+			said: [...new Set([...said(true), ...said(false)])]
+				.filter(Boolean)
+				.join(", "),
+		};
+	});
 	const acted = (f: Folded<T>) => (f.kinds.some(performs) ? 0 : 1);
 	return out.sort((a, b) => acted(a) - acted(b));
 }
