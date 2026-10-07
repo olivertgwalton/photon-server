@@ -55,6 +55,7 @@ export const jobKinds: Record<Schemas["JobKind"], string> = {
 	convert: "Convert for download",
 	deliver_webhook: "Send a webhook",
 	theme: "Fetch a theme tune",
+	probe: "Read media info",
 };
 
 export const methods: Record<Schemas["PlayMethod"], string> = {

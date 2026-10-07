@@ -26,10 +26,12 @@ const (
 	JobDeliverWebhook JobKind = "deliver_webhook"
 	// JobTheme fetches a film's or show's theme tune from the YouTube link ThemerrDB lists.
 	JobTheme JobKind = "theme"
+	// JobProbe reads a part's streams and chapters again, as an admin's Analyse asks.
+	JobProbe JobKind = "probe"
 )
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes, JobKeyframeWalk, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme}
+	return []JobKind{JobKeyframes, JobKeyframeWalk, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme, JobProbe}
 }
 
 type JobState string
@@ -87,7 +89,7 @@ func (j Job) About() (item, library uuid.UUID) {
 		return j.Subject, uuid.UUID{}
 	case JobScanLibrary:
 		return uuid.UUID{}, j.Subject
-	case JobKeyframes, JobKeyframeWalk, JobPreviews, JobConvert, JobDeliverWebhook:
+	case JobKeyframes, JobKeyframeWalk, JobPreviews, JobProbe, JobConvert, JobDeliverWebhook:
 	}
 	return uuid.UUID{}, uuid.UUID{}
 }
