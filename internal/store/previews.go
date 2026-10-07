@@ -146,10 +146,7 @@ func (s *Store) QueuePreviews(ctx context.Context, due domain.JobDue) (int64, er
 			AND l.previews <> CASE
 				WHEN EXISTS (SELECT 1 FROM trickplay t WHERE t.part_id = p.id) THEN 'all'
 				WHEN EXISTS (SELECT 1 FROM previews pv WHERE pv.part_id = p.id) THEN 'chapters'
-				ELSE 'off' END
-		ON CONFLICT (kind, subject) DO UPDATE SET
-			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
-			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END,
+				ELSE 'off' END`+requeue+`,
 			due = CASE jobs.state WHEN 'dead' THEN excluded.due ELSE jobs.due END`)
 }
 

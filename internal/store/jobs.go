@@ -85,7 +85,8 @@ func enqueueAsked(ctx context.Context, tx db, kind domain.JobKind, subject uuid.
 	return insertJob(ctx, tx, kind, subject, 0, askedPriority, domain.JobDueNow)
 }
 
-// requeue ends an INSERT of jobs as enqueue answers a job already there, keeping its priority.
+// requeue answers an INSERT of jobs that finds a job already there: a running one runs again, a
+// dead one afresh. Its priority is kept unless the statement sets more after it.
 const requeue = `
 	ON CONFLICT (kind, subject) DO UPDATE SET
 		state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
@@ -95,10 +96,7 @@ const requeue = `
 // now, never put one due now back to the window; a dead one takes what it is asked for afresh.
 func insertJob(ctx context.Context, tx db, kind domain.JobKind, subject uuid.UUID, delay time.Duration, priority int16, due domain.JobDue) error {
 	_, err := tx.Exec(ctx, `
-		INSERT INTO jobs (kind, subject, run_after, priority, due) VALUES ($1, $2, now() + $3, $4, $5)
-		ON CONFLICT (kind, subject) DO UPDATE SET
-			state = CASE jobs.state WHEN 'running' THEN 'rerun' WHEN 'dead' THEN 'queued' ELSE jobs.state END,
-			attempts = CASE jobs.state WHEN 'dead' THEN 0 ELSE jobs.attempts END,
+		INSERT INTO jobs (kind, subject, run_after, priority, due) VALUES ($1, $2, now() + $3, $4, $5)`+requeue+`,
 			run_after = CASE WHEN jobs.state IN ('queued', 'dead') THEN excluded.run_after ELSE jobs.run_after END,
 			priority = greatest(jobs.priority, excluded.priority),
 			due = CASE WHEN jobs.state = 'dead' OR excluded.due = 'now' THEN excluded.due ELSE jobs.due END`,
