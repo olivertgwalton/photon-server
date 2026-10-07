@@ -9,9 +9,11 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"uuid"
@@ -422,6 +424,54 @@ func (r *Remuxer) Init(ctx context.Context, playback uuid.UUID, part int) (*os.F
 
 // MasterName is the playlist a player is given.
 const MasterName = "main.m3u8"
+
+// segmentTypes are the media types of HLS segments, by their extensions.
+var segmentTypes = map[string]string{".m4s": "video/iso.segment", ".ts": "video/mp2t"}
+
+// Resource is one of a playback's HLS files: a playlist or a WebVTT segment as Text, or a media
+// file to serve as it is, and its type.
+type Resource struct {
+	Text string
+	File *os.File
+	Type string
+}
+
+// Resource answers a playback's HLS file by the name its playlists give it, ErrNoRemux for one it
+// has not.
+func (r *Remuxer) Resource(ctx context.Context, playback uuid.UUID, name string) (Resource, error) {
+	switch {
+	case strings.HasSuffix(name, ".m3u8"):
+		text, err := r.Playlist(playback, name)
+		return Resource{Text: text, Type: "application/vnd.apple.mpegurl"}, err
+	case strings.HasPrefix(name, "sub") && strings.HasSuffix(name, ".vtt"):
+		track, n, ok := strings.Cut(strings.TrimSuffix(strings.TrimPrefix(name, "sub"), ".vtt"), "-")
+		t, terr := strconv.Atoi(track)
+		k, kerr := strconv.Atoi(n)
+		if !ok || terr != nil || kerr != nil {
+			return Resource{}, ErrNoRemux
+		}
+		text, err := r.SubtitleSegment(ctx, playback, t, k)
+		return Resource{Text: text, Type: "text/vtt; charset=utf-8"}, err
+	case strings.HasPrefix(name, "init") && strings.HasSuffix(name, ".mp4"):
+		part, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(name, "init"), ".mp4"))
+		if err != nil {
+			return Resource{}, ErrNoRemux
+		}
+		f, err := r.Init(ctx, playback, part)
+		return Resource{File: f, Type: "video/mp4"}, err
+	case segmentTypes[path.Ext(name)] != "":
+		// A segment is asked for by the name its session's format gives it: an MPEG-TS remux has
+		// no .m4s, nor a fragmented-MP4 one a .ts.
+		n, err := strconv.Atoi(strings.TrimSuffix(name, path.Ext(name)))
+		s, serr := r.session(playback)
+		if err != nil || serr != nil || name != segmentName(s.format, n) {
+			return Resource{}, ErrNoRemux
+		}
+		f, err := r.Segment(ctx, playback, n)
+		return Resource{File: f, Type: segmentTypes[path.Ext(name)]}, err
+	}
+	return Resource{}, ErrNoRemux
+}
 
 const videoName = "video.m3u8"
 

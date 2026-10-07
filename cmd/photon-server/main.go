@@ -253,14 +253,17 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		Started: started, Node: node, Listen: listen, Tools: tools, Encoder: hw, Discovery: discoveryMode,
 		MetadataLanguage: lang, CacheDir: cacheRoot, BackupDir: dumper.Dir, PublicURL: public,
 	}
+	owners, remuxes, signer := playback.NewRouter(cache, node), playback.NewRemuxes(st, remuxer), playback.NewSigner(signingKey)
 	secured := secure.New(st, hub.Subscribe, logger)
 	jellyfinAPI := jellyfin.NewListener(st, hub.Subscribe, jellyfin.New(logger, info, jellyfin.Services{
 		Auth: authService, Limits: cache, Raise: hub.Raise, Proxies: trusted, Catalogue: st, Pictures: pictureCache,
+		Playing: st, Playbacks: sessions, Watching: st, HLS: remuxer, Remuxing: remuxes, Owners: owners,
+		Signer: signer, HEVC: hw.HEVC,
 	}), listen, secured.Listen, secured.TLSConfig(), logger)
 	srv := &http.Server{
 		Addr: listen, TLSConfig: secured.TLSConfig(),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: st, Playbacks: sessions, Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Network: st, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: st, Playbacks: sessions, Owners: owners, Remuxing: remuxes, HLS: remuxer, Signer: signer, Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Network: st, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,

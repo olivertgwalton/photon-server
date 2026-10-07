@@ -111,7 +111,7 @@ var playbackID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000c1")
 // fakePlaybacks knows one playback, Oliver's.
 type fakePlaybacks struct{}
 
-func (fakePlaybacks) Start(_ context.Context, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
+func (fakePlaybacks) Start(_ context.Context, _ uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
 	return domain.Playback{ID: playbackID, Profile: card.Profile.ID, Item: card.Title.ID, Version: card.Version.ID, Method: method, Card: card}, nil
 }
 
@@ -270,6 +270,29 @@ func (fakeHLS) WebVTT(_ context.Context, open func() (*os.File, error), language
 	defer f.Close()
 	b, err := io.ReadAll(f)
 	return "WEBVTT " + language + "\n\n" + string(b), err
+}
+
+// Resource answers the files the playlists name: the master, subtitle segment 2 of track 0, and
+// segment 0, in either format, with its initialisation.
+func (f fakeHLS) Resource(ctx context.Context, playback uuid.UUID, name string) (hls.Resource, error) {
+	switch name {
+	case "main.m3u8":
+		text, err := f.Playlist(playback, name)
+		return hls.Resource{Text: text, Type: "application/vnd.apple.mpegurl"}, err
+	case "sub0-2.vtt":
+		text, err := f.SubtitleSegment(ctx, playback, 0, 2)
+		return hls.Resource{Text: text, Type: "text/vtt; charset=utf-8"}, err
+	case "init0.mp4":
+		file, err := f.Init(ctx, playback, 0)
+		return hls.Resource{File: file, Type: "video/mp4"}, err
+	case "0.m4s":
+		file, err := f.Segment(ctx, playback, 0)
+		return hls.Resource{File: file, Type: "video/iso.segment"}, err
+	case "0.ts":
+		file, err := f.Segment(ctx, playback, 0)
+		return hls.Resource{File: file, Type: "video/mp2t"}, err
+	}
+	return hls.Resource{}, hls.ErrNoRemux
 }
 
 func (f fakeHLS) Init(context.Context, uuid.UUID, int) (*os.File, error) {

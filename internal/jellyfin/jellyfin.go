@@ -10,12 +10,14 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/peer"
+	"github.com/olivertgwalton/photon-server/internal/playback"
 )
 
 // version is the Jellyfin the server answers as. Apps compare it as three numbers, and the
@@ -38,6 +40,17 @@ type Services struct {
 	Proxies   peer.Proxies
 	Catalogue catalogue
 	Pictures  pictureFiles
+	Playing   playing
+	Playbacks playbacks
+	Watching  watching
+	// HLS is this node's remuxes, which Remuxing opens and Owners find on whichever node runs
+	// them; Signer signs a TranscodingUrl's plan and the addresses of another node's HLS.
+	HLS      hlsFiles
+	Remuxing remuxing
+	Owners   owners
+	Signer   playback.Signer
+	// HEVC is whether video is encoded to HEVC for an app that plays it.
+	HEVC domain.HEVCEncoding
 }
 
 type API struct {
@@ -51,6 +64,9 @@ type API struct {
 	// segments are the literal segments of the routes, by their lower case, for Jellyfin's routes
 	// are matched whatever their case and ServeMux's are not.
 	segments map[string]string
+	// opening is held while a play session's HLS is started, so two fetches of its playlist start
+	// it once.
+	opening sync.Mutex
 }
 
 func New(logger *slog.Logger, info domain.Info, svc Services) *API {
@@ -96,6 +112,35 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle("GET /Users/{userId}/Items/{itemId}/SpecialFeatures", a.signedIn(none))
 	a.handle("GET /Items/{itemId}/Images/{imageType}", a.image)
 	a.handle("GET /Items/{itemId}/Images/{imageType}/{imageIndex}", a.image)
+	// Playing: a title's copies, its file as it is, and where the app has got to.
+	a.handle("GET /Items/{itemId}/PlaybackInfo", a.signedIn(a.playbackInfo))
+	a.handle("POST /Items/{itemId}/PlaybackInfo", a.signedIn(a.playbackInfo))
+	a.handle("GET /Videos/{itemId}/stream", a.signedIn(a.stream))
+	a.handle("GET /Videos/{itemId}/{file}", a.signedIn(a.video))
+	a.handle("DELETE /Videos/ActiveEncodings", a.signedIn(a.endEncoding))
+	a.handle("GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{file}", a.signedIn(a.subtitle))
+	a.handle("GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{start}/{file}", a.signedIn(a.subtitle))
+	a.handle("GET /MediaSegments/{itemId}", a.signedIn(a.mediaSegments))
+	a.handle("POST /Sessions/Playing", a.signedIn(a.reported(false)))
+	a.handle("POST /Sessions/Playing/Progress", a.signedIn(a.reported(false)))
+	a.handle("POST /Sessions/Playing/Stopped", a.signedIn(a.reported(true)))
+	a.handle("POST /Sessions/Playing/Ping", a.signedIn(noContent))
+	for _, prefix := range []string{"/UserPlayedItems/", "/Users/{userId}/PlayedItems/"} {
+		a.handle("POST "+prefix+"{itemId}", a.signedIn(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
+			return a.svc.Watching.MarkWatched(ctx, profile, item, nil)
+		})))
+		a.handle("DELETE "+prefix+"{itemId}", a.signedIn(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
+			return a.svc.Watching.MarkUnwatched(ctx, profile, item)
+		})))
+	}
+	for _, prefix := range []string{"/UserFavoriteItems/", "/Users/{userId}/FavoriteItems/"} {
+		a.handle("POST "+prefix+"{itemId}", a.signedIn(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
+			return a.svc.Watching.Favourite(ctx, profile, item)
+		})))
+		a.handle("DELETE "+prefix+"{itemId}", a.signedIn(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
+			return a.svc.Watching.Unfavourite(ctx, profile, item)
+		})))
+	}
 	return a
 }
 

@@ -95,30 +95,35 @@ func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
 	}}}); err != nil {
 		t.Fatal(err)
 	}
-	playlist, err := r.Playlist(playback, "video.m3u8")
-	if err != nil {
-		t.Fatal(err)
+	playlist, err := r.Resource(t.Context(), playback, "video.m3u8")
+	if err != nil || playlist.Type != "application/vnd.apple.mpegurl" {
+		t.Fatal(playlist, err)
 	}
-	if strings.Count(playlist, "#EXTINF:6.000000,") != 5 {
-		t.Fatalf("playlist =\n%s\nwant five six-second segments", playlist)
+	if strings.Count(playlist.Text, "#EXTINF:6.000000,") != 5 {
+		t.Fatalf("playlist =\n%s\nwant five six-second segments", playlist.Text)
+	}
+	for _, name := range []string{"x.m4s", "sub-1.vtt", "initx.mp4", "0.ts"} {
+		if _, err := r.Resource(t.Context(), playback, name); !errors.Is(err, ErrNoRemux) {
+			t.Errorf("%s: %v, want ErrNoRemux", name, err)
+		}
 	}
 
 	// Two players at once, one from the start and one jumping to the fourth segment.
 	var wg sync.WaitGroup
 	for _, n := range []int{0, 3} {
 		wg.Go(func() {
-			seg, err := r.Segment(t.Context(), playback, n)
+			seg, err := r.Resource(t.Context(), playback, strconv.Itoa(n)+".m4s")
 			if err != nil {
 				t.Error(err)
 				return
 			}
-			init, err := r.Init(t.Context(), playback, 0)
+			init, err := r.Resource(t.Context(), playback, "init0.mp4")
 			if err != nil {
 				t.Error(err)
 				return
 			}
 			want := []time.Duration{time.Duration(6*n) * time.Second, time.Duration(6*n+2) * time.Second, time.Duration(6*n+4) * time.Second}
-			if got := shownIn(t, init, seg); len(got) != 3 || got[0] != want[0] || got[2] != want[2] {
+			if got := shownIn(t, init.File, seg.File); len(got) != 3 || got[0] != want[0] || got[2] != want[2] {
 				t.Errorf("segment %d holds fragments shown at %v, want %v", n, got, want)
 			}
 		})
