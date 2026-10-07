@@ -68,13 +68,15 @@ function current(href: string) {
 	<Sidebar.Header>
 		<a
 			href="/"
-			class="font-heading text-ink flex items-center gap-2.5 px-2 py-1.5 text-xl font-bold tracking-tight"
+			aria-label="photon"
+			class="font-heading text-ink px-2 py-1.5 text-xl font-bold tracking-tight group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:text-center"
 		>
-			<span
-				class="bg-ink size-3 shrink-0 rounded-full shadow-[0_0_1rem_0.25rem_oklch(1_0_0/35%)] group-data-[collapsible=icon]:mx-auto"
-				aria-hidden="true"
-			></span>
 			<span class="group-data-[collapsible=icon]:hidden">photon</span>
+			<span
+				class="hidden group-data-[collapsible=icon]:inline"
+				aria-hidden="true"
+				>p</span
+			>
 		</a>
 	</Sidebar.Header>
 	<Sidebar.Content>
