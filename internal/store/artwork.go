@@ -150,12 +150,13 @@ func (s *Store) rankedPictures(ctx context.Context, items []*model.Item) ([]*mod
 	return rows, nil
 }
 
-// Unfetched are pictures titles show first that are a provider's and have no BlurHash yet, so
-// have not been fetched into the picture cache: their URLs by picture id.
+// Unfetched are pictures titles show first that are a provider's, and photos of the people they
+// credit (by any source, not only the one shown), that have no BlurHash yet, so have not been
+// fetched into the picture cache: their URLs by picture id.
 type Unfetched map[uuid.UUID]string
 
-// TitleUnfetched answers the pictures a title, its seasons and their episodes show first that have
-// not been fetched.
+// TitleUnfetched answers the pictures a title, its seasons and their episodes show first, and the
+// photos of the people they credit, that have not been fetched.
 func (s *Store) TitleUnfetched(ctx context.Context, id uuid.UUID) (Unfetched, error) {
 	items, err := queryRows[model.Item](ctx, s.pool, `
 		SELECT `+itemColumns+` FROM items
@@ -166,8 +167,9 @@ func (s *Store) TitleUnfetched(ctx context.Context, id uuid.UUID) (Unfetched, er
 	return s.unfetched(ctx, items)
 }
 
-// Unfetched answers the pictures that up to limit titles, in id order from after, show first and
-// that have not been fetched, and the last title read, or the zero id past the last.
+// Unfetched answers the pictures that up to limit titles, in id order from after, show first, and
+// the photos of the people they credit, that have not been fetched, and the last title read, or
+// the zero id past the last.
 func (s *Store) Unfetched(ctx context.Context, after uuid.UUID, limit int) (Unfetched, uuid.UUID, error) {
 	items, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE id > $1 ORDER BY id LIMIT $2`, after, limit)
 	if err != nil {
@@ -201,7 +203,19 @@ func (s *Store) unfetched(ctx context.Context, items []*model.Item) (Unfetched, 
 			out[r.ID] = r.Place
 		}
 	}
-	return out, nil
+	found, err := s.pool.Query(ctx, `
+		SELECT DISTINCT p.photo_id, p.photo_url FROM credits c JOIN people p ON p.id = c.person_id
+		WHERE c.item_id = ANY($1) AND p.photo_url IS NOT NULL AND p.photo_blurhash IS NULL`, ids(items))
+	if err != nil {
+		return nil, err
+	}
+	var id uuid.UUID
+	var url string
+	_, err = pgx.ForEachRow(found, []any{&id, &url}, func() error {
+		out[id] = url
+		return nil
+	})
+	return out, err
 }
 
 // rankPictures puts the pictures of items best first: an admin's choice, files beside the title,

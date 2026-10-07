@@ -258,6 +258,8 @@ func TestTheProviderPicturesATitleShowsFirstAreFetchedUntilHashed(t *testing.T) 
 		{Kind: domain.ArtworkBackdrop, URL: tmdb + "heat-wide.jpg"},
 		{Kind: domain.ArtworkBackdrop, URL: tmdb + "heat-wide-2.jpg"},
 		{Kind: domain.ArtworkLogo, URL: tmdb + "heat-logo.png"},
+	}, Credits: []domain.Credit{
+		{Name: "Al Pacino", IDs: map[domain.Provider]string{domain.ProviderTMDB: "1158"}, Photo: tmdb + "pacino.jpg", Kind: domain.CreditActor},
 	}}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -265,8 +267,8 @@ func TestTheProviderPicturesATitleShowsFirstAreFetchedUntilHashed(t *testing.T) 
 	urls := func(u Unfetched) []string { return slices.Sorted(maps.Values(u)) }
 
 	got, err := s.TitleUnfetched(ctx, item)
-	if want := []string{tmdb + "heat-logo.png", tmdb + "heat-wide.jpg"}; err != nil || !slices.Equal(urls(got), want) {
-		t.Errorf("unfetched = %v, %v; want the first backdrop and the logo, not the poster beside the film", urls(got), err)
+	if want := []string{tmdb + "heat-logo.png", tmdb + "heat-wide.jpg", tmdb + "pacino.jpg"}; err != nil || !slices.Equal(urls(got), want) {
+		t.Errorf("unfetched = %v, %v; want the first backdrop, the logo and the actor's photo, not the poster beside the film", urls(got), err)
 	}
 	page, _, err := s.Unfetched(ctx, uuid.UUID{}, 1)
 	if err != nil || !maps.Equal(page, got) {
@@ -274,14 +276,14 @@ func TestTheProviderPicturesATitleShowsFirstAreFetchedUntilHashed(t *testing.T) 
 	}
 
 	for id, url := range got {
-		if url == tmdb+"heat-wide.jpg" {
+		if url != tmdb+"heat-logo.png" {
 			if err := s.SetBlurhash(ctx, id, "L6PZfSi_.AyE_3t7t7R**0o#DgR4"); err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
 	if got, err := s.TitleUnfetched(ctx, item); err != nil || !slices.Equal(urls(got), []string{tmdb + "heat-logo.png"}) {
-		t.Errorf("unfetched once the backdrop is hashed = %v, %v; want the logo alone", urls(got), err)
+		t.Errorf("unfetched once the backdrop and photo are hashed = %v, %v; want the logo alone", urls(got), err)
 	}
 	if page, last, err := s.Unfetched(ctx, item, 1); err != nil || len(page) != 0 || last != (uuid.UUID{}) {
 		t.Errorf("page past the film = %v, %s, %v; want none and the end", page, last, err)
