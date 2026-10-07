@@ -66,6 +66,7 @@ const defaults = {
 	themes: "local",
 	deletion: "off",
 	artwork_language: "localized",
+	title_language: "localized",
 } as const;
 
 // A new library's kind changes the sources offered; a library's own is fixed.
@@ -281,6 +282,22 @@ const refreshOptions = $derived(
 			<Field.Description>
 				What its titles' names, write-ups and pictures are asked for in.
 				Changing it describes them all again.
+			</Field.Description>
+		</Field.Field>
+		<Field.Field>
+			<Field.Label for="library-titles">Titles</Field.Label>
+			<Choice
+				id="library-titles"
+				name="title_language"
+				value={library?.title_language ?? defaults.title_language}
+				options={[
+					{ value: "localized", label: "In its language" },
+					{ value: "original", label: "As first named" },
+				]}
+			/>
+			<Field.Description>
+				As first named keeps a film's or show's original title, its write-up
+				still in its language.
 			</Field.Description>
 		</Field.Field>
 		<Field.Field>

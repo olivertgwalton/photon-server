@@ -85,6 +85,9 @@ export function libraryChange(
 		artwork_language: String(
 			form.get("artwork_language"),
 		) as Schemas["ArtworkLanguage"],
+		title_language: String(
+			form.get("title_language"),
+		) as Schemas["TitleLanguage"],
 		refresh_days: Number(form.get("refresh_days")),
 	};
 	const sources: Schemas["KindSourcesChange"][] = [];
