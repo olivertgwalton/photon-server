@@ -23,4 +23,5 @@ type Library struct {
 	CertificationCountry *string
 	ArtworkLanguage      domain.ArtworkLanguage
 	TitleLanguage        domain.TitleLanguage
+	CollectionMode       domain.CollectionMode
 }

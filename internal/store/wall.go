@@ -108,17 +108,32 @@ func (s *Store) Wall(ctx context.Context, lib uuid.UUID, p WallPage) ([]Card, in
 	return cards, total, err
 }
 
-// wallQuery is the FROM and WHERE of a library's films or shows a profile may see, as a filter
-// narrows them, and the values they take; ErrNotFound for no such library. A library holds one kind
-// of title, and naming it lets the wall's sort indexes read a page in order.
+// wallQuery is the FROM and WHERE of a library's films or shows a profile may see, and its
+// collections as the library shows them, as a filter narrows them, and the values they take;
+// ErrNotFound for no such library. A library holds one kind of title, and naming it lets the wall's
+// sort indexes read a page in order.
 func (s *Store) wallQuery(ctx context.Context, lib, profile uuid.UUID, f WallFilter) (string, pgx.NamedArgs, error) {
 	var kind domain.LibraryKind
-	if err := s.pool.QueryRow(ctx, `SELECT kind FROM libraries WHERE id = $1`, lib).Scan(&kind); err != nil {
+	var mode domain.CollectionMode
+	if err := s.pool.QueryRow(ctx, `SELECT kind, collection_mode FROM libraries WHERE id = $1`, lib).Scan(&kind, &mode); err != nil {
 		return "", nil, found(err)
 	}
 	args := pgx.NamedArgs{"lib": lib, "profile": profile, "kind": kind.ItemKinds()[0]}
-	return `FROM items WHERE library_id = @lib AND kind = @kind
-		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))` + f.where(args), args, nil
+	filter := f.where(args)
+	titles := `items.kind = @kind`
+	// A filtered wall answers titles alone, as Plex's does: a collection has no genre or year.
+	if filter == "" {
+		switch mode {
+		case domain.CollectionsGrouped:
+			titles = `(items.kind = @kind AND NOT EXISTS (SELECT 1 FROM collection_members cm JOIN items ci ON ci.id = cm.collection_id
+				WHERE cm.item_id = items.id AND ci.id IN (` + shownCollections + `) AND sees(v, ci)) OR ` + listedCollection + `)`
+		case domain.CollectionsShown:
+			titles = `(items.kind = @kind OR ` + listedCollection + `)`
+		case domain.CollectionsHidden:
+		}
+	}
+	return `FROM items WHERE library_id = @lib
+		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND ` + titles + `)` + filter, args, nil
 }
 
 // Letter is how many of a library's titles sort under a letter: "#" for those before A.

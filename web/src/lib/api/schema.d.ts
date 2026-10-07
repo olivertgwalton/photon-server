@@ -4910,6 +4910,7 @@ export interface components {
         AdminLibrary: {
             artwork_language: components["schemas"]["ArtworkLanguage"];
             certification_country?: string;
+            collection_mode: components["schemas"]["CollectionMode"];
             deletion: components["schemas"]["MediaDeletion"];
             /** Format: uuid */
             id: string;
@@ -4930,6 +4931,7 @@ export interface components {
         AdminLibraryListing: {
             artwork_language: components["schemas"]["ArtworkLanguage"];
             certification_country?: string;
+            collection_mode: components["schemas"]["CollectionMode"];
             counts: components["schemas"]["Counts"];
             deletion: components["schemas"]["MediaDeletion"];
             /** Format: uuid */
@@ -5084,6 +5086,8 @@ export interface components {
             poster?: string;
             title: string;
         };
+        /** @enum {string} */
+        CollectionMode: "grouped" | "shown" | "hidden";
         /** @enum {string} */
         CollectionOrigin: "tmdb" | "user";
         /** @enum {string} */
@@ -5470,6 +5474,7 @@ export interface components {
         LibraryChange: {
             artwork_language?: components["schemas"]["ArtworkLanguage"];
             certification_country?: string | null;
+            collection_mode?: components["schemas"]["CollectionMode"];
             deletion?: components["schemas"]["MediaDeletion"];
             keyframes?: components["schemas"]["KeyframeMode"];
             markers?: components["schemas"]["MarkerDetection"];

@@ -98,6 +98,20 @@ func TitleLanguages() []TitleLanguage {
 	return []TitleLanguage{TitlesLocalized, TitlesOriginal}
 }
 
+// CollectionMode is how a library's wall shows its collections, as Plex's "Collections" setting:
+// in place of the titles they hold, beside them, or not at all.
+type CollectionMode string
+
+const (
+	CollectionsGrouped CollectionMode = "grouped"
+	CollectionsShown   CollectionMode = "shown"
+	CollectionsHidden  CollectionMode = "hidden"
+)
+
+func CollectionModes() []CollectionMode {
+	return []CollectionMode{CollectionsGrouped, CollectionsShown, CollectionsHidden}
+}
+
 // MediaDeletion is whether an admin may delete a library's titles with their files from the
 // disk: off by default, as Plex's "Allow media deletion" is.
 type MediaDeletion string
@@ -129,8 +143,9 @@ type Library struct {
 	Themes      ThemeLookup
 	Deletion    MediaDeletion
 	// Locale is what its metadata is asked for in; what it leaves unsaid is the server's.
-	Locale Locale
-	Titles TitleLanguage
+	Locale      Locale
+	Titles      TitleLanguage
+	Collections CollectionMode
 }
 
 // TitleCounts are how many of each kind of title a library holds, as a profile may see them, as
