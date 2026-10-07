@@ -8,11 +8,11 @@ import (
 	"errors"
 	"log/slog"
 	"net"
-	"net/netip"
 	"strconv"
 	"strings"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/peer"
 )
 
 // Question is what a client broadcasts. It is matched ignoring case and surrounding white space.
@@ -44,20 +44,15 @@ func Serve(ctx context.Context, conn net.PacketConn, info domain.Info, scheme fu
 			return err
 		}
 		asker, ok := from.(*net.UDPAddr)
-		if !ok || !nearby(asker.AddrPort().Addr()) || !strings.EqualFold(strings.TrimSpace(string(buf[:n])), Question) {
+		// A reply is several times the question, so answering anyone not local would lend the
+		// server to an amplification attack.
+		if !ok || !peer.Local(asker.AddrPort().Addr()) || !strings.EqualFold(strings.TrimSpace(string(buf[:n])), Question) {
 			continue
 		}
 		if err := reply(conn, asker, info, scheme(), port); err != nil {
 			logger.WarnContext(ctx, "discovery not answered", slog.String("asker", asker.String()), slog.Any("err", err))
 		}
 	}
-}
-
-// nearby is whether an asker is on this machine or a private network. A reply is several times
-// the question, so answering anyone else would lend the server to an amplification attack.
-func nearby(a netip.Addr) bool {
-	a = a.Unmap()
-	return a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast()
 }
 
 func reply(conn net.PacketConn, asker *net.UDPAddr, info domain.Info, scheme, port string) error {

@@ -57,3 +57,26 @@ func TestParse(t *testing.T) {
 		t.Error("a host name was accepted as a proxy")
 	}
 }
+
+// This machine and its private networks are local; anywhere else, and CGNAT, is remote.
+func TestLocal(t *testing.T) {
+	for addr, want := range map[string]bool{
+		"127.0.0.1":        true,
+		"::1":              true,
+		"10.1.2.3":         true,
+		"172.20.0.5":       true,
+		"192.168.1.20":     true,
+		"169.254.10.1":     true,
+		"fd12:3456::1":     true,
+		"fe80::1%en0":      true,
+		"::ffff:192.0.2.1": false,
+		"::ffff:10.0.0.9":  true,
+		"8.8.8.8":          false,
+		"100.64.0.1":       false,
+		"2001:4860::8888":  false,
+	} {
+		if got := Local(netip.MustParseAddr(addr)); got != want {
+			t.Errorf("Local(%s) = %t, want %t", addr, got, want)
+		}
+	}
+}

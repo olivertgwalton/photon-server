@@ -64,6 +64,13 @@ func (p Proxies) HTTPS(r *http.Request) bool {
 	return p.trusts(Direct(r)) && r.Header.Get("X-Forwarded-Proto") == "https"
 }
 
+// Local is whether an address is on this machine or one of its private networks, as Jellyfin's
+// default LAN: anywhere else is remote.
+func Local(a netip.Addr) bool {
+	a = a.Unmap()
+	return a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast()
+}
+
 // Direct is the address of the connection's other end, a proxy or the client itself.
 func Direct(r *http.Request) netip.Addr {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
