@@ -22,8 +22,6 @@ const (
 	imageURL = "https://image.tmdb.org/t/p/original"
 	// candidateURL serves a match candidate's poster at a size to tell it by, not to keep.
 	candidateURL = "https://image.tmdb.org/t/p/w342"
-	// keepPictures is how many of each kind are kept, best first.
-	keepPictures = 10
 )
 
 // DefaultToken is the project's own API read access token, shipped in the source as Jellyfin
@@ -279,21 +277,12 @@ func imageLanguages(loc domain.Locale) string {
 // reader's language, then English, then none; a backdrop with none), then by TMDB's rating and
 // how many voted, as Jellyfin does, and keeps the best.
 func pictures(kind domain.ArtworkKind, images []image, preferred ...string) []domain.Artwork {
-	rank := func(im image) int {
-		if i := slices.Index(preferred, im.Language); i >= 0 {
-			return i
-		}
-		return len(preferred)
-	}
-	images = slices.Clone(images)
-	slices.SortStableFunc(images, func(a, b image) int {
-		return cmp.Or(cmp.Compare(rank(a), rank(b)), cmp.Compare(b.Votes, a.Votes), cmp.Compare(b.Count, a.Count))
-	})
-	out := make([]domain.Artwork, 0, min(len(images), keepPictures))
-	for _, im := range images[:min(len(images), keepPictures)] {
-		out = append(out, domain.Artwork{
-			Kind: kind, URL: imageURL + im.Path, Language: im.Language, Width: im.Width, Height: im.Height,
-		})
+	images = provider.Preferred(images, func(im image) string { return im.Language }, func(a, b image) int {
+		return cmp.Or(cmp.Compare(b.Votes, a.Votes), cmp.Compare(b.Count, a.Count))
+	}, preferred...)
+	out := make([]domain.Artwork, len(images))
+	for i, im := range images {
+		out[i] = domain.Artwork{Kind: kind, URL: imageURL + im.Path, Language: im.Language, Width: im.Width, Height: im.Height}
 	}
 	return out
 }
