@@ -101,3 +101,28 @@ export function refreshTitle(id: string, name: string) {
 		`Asking the providers about ${name} again.`,
 	);
 }
+
+// A title's address to pass on, as Plex's Share is: to the browser's own share
+// sheet, else copied. Both want a secure page, which a server on the LAN by its
+// address is not; there the link is shown, chosen, to copy by hand.
+export const sharing = $state({ open: false, url: "", title: "" });
+
+export async function shareTitle(id: string, title: string) {
+	const url = new URL(`/titles/${id}`, location.origin).href;
+	if (navigator.share) {
+		try {
+			await navigator.share({ title, url });
+		} catch (err) {
+			if ((err as DOMException).name !== "AbortError") {
+				Object.assign(sharing, { open: true, url, title });
+			}
+		}
+		return;
+	}
+	if (navigator.clipboard) {
+		await navigator.clipboard.writeText(url);
+		toast.success(`The link to ${title} was copied.`);
+		return;
+	}
+	Object.assign(sharing, { open: true, url, title });
+}

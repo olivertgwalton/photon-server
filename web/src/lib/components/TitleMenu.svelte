@@ -14,6 +14,7 @@ import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import SearchCheckIcon from "@lucide/svelte/icons/search-check";
 import SettingsIcon from "@lucide/svelte/icons/settings";
+import Share2Icon from "@lucide/svelte/icons/share-2";
 import TvIcon from "@lucide/svelte/icons/tv";
 import UndoIcon from "@lucide/svelte/icons/undo-2";
 import { goto } from "$app/navigation";
@@ -26,6 +27,7 @@ import {
 	setFavourite,
 	setWatched,
 	setWatchlisted,
+	shareTitle,
 } from "#lib/actions.svelte.js";
 import type { components } from "#lib/api/schema.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
@@ -112,6 +114,9 @@ const name = $derived(
 				<ListPlusIcon />Add to playlist…
 			</DropdownMenu.Item>
 		{/if}
+		<DropdownMenu.Item onSelect={() => shareTitle(card.id, name)}>
+			<Share2Icon />Share…
+		</DropdownMenu.Item>
 		{#if started && playable}
 			<DropdownMenu.Item onSelect={() => forgetProgress(card.id)}>
 				<EyeOffIcon />Remove from Continue Watching
