@@ -392,6 +392,47 @@ test("an API key is shown once, to copy, and revoked", async ({ page }) => {
 	await expect(page.getByText("No API keys yet.")).toBeVisible();
 });
 
+test("artwork is moved to a bucket that is checked first, and the move may be cancelled", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/server/storage");
+	await expect(page.getByLabel("Kept on")).toHaveText("Each server's own disk");
+	await page.getByLabel("Kept on").click();
+	await page.getByRole("option", { name: "An S3-compatible bucket" }).click();
+	await page
+		.getByLabel("Address", { exact: true })
+		.fill("https://s3.example.com");
+	await page.getByLabel("Name").fill("missing");
+	await page.getByRole("button", { name: "Check" }).click();
+	await expect(page.getByText('there is no bucket "missing"')).toBeVisible();
+	await page.getByLabel("Name").fill("photon");
+	await page.getByLabel("Access key").fill("AKIA");
+	await page.getByLabel("Secret key").fill("secret");
+	await page.getByRole("button", { name: "Check" }).click();
+	await expect(page.getByText(/^The bucket answers/)).toBeVisible();
+	await expectAccessible(page);
+
+	await page.getByRole("button", { name: "Save" }).click();
+	await expect(page.getByText(/^Moving what is kept/)).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "Moving to the bucket photon" }),
+	).toBeVisible();
+	await expect(page.getByText("120 of 400")).toBeVisible();
+	await expect(
+		page.getByRole("progressbar", { name: "Copying This server's disk" }),
+	).toBeVisible();
+	await expect(page.getByText("Listing what to copy")).toBeVisible();
+	await expectAccessible(page);
+
+	await page.getByRole("button", { name: "Cancel move" }).click();
+	await page
+		.getByRole("alertdialog")
+		.getByRole("button", { name: "Cancel move" })
+		.click();
+	await expect(page.getByText(/^Cancelled/)).toBeVisible();
+	await expect(page.getByLabel("Kept on")).toHaveText("Each server's own disk");
+});
+
 test("secure connections are set with a certificate", async ({ page }) => {
 	await logIn(page, "/settings/server/network");
 	await expectAccessible(page);
