@@ -378,3 +378,35 @@ test("favourites, history and downloads list the reader's own", async ({
 	await expect(page.getByRole("link", { name: /Save/ })).toBeVisible();
 	await expectAccessible(page);
 });
+
+test("a title's link is copied to share, or shown where it cannot be", async ({
+	page,
+	context,
+}) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await logIn(page);
+	// A row no other test changes.
+	const row = page.getByRole("region", { name: "Recently Added Films" });
+	await row.getByRole("button", { name: "More for Quiet Hours" }).click();
+	await page.getByRole("menuitem", { name: "Share…" }).click();
+	await expect(
+		page.getByText("The link to Quiet Hours was copied."),
+	).toBeVisible();
+	expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(
+		/\/titles\/t-film$/,
+	);
+
+	// A server reached by its address on the LAN is no secure page: there is
+	// neither a share sheet nor a clipboard to write to.
+	await page.evaluate(() => {
+		Object.defineProperty(navigator, "clipboard", { value: undefined });
+		Object.defineProperty(navigator, "share", { value: undefined });
+	});
+	await row.getByRole("button", { name: "More for Quiet Hours" }).click();
+	await page.getByRole("menuitem", { name: "Share…" }).click();
+	const dialog = page.getByRole("dialog", { name: "Share Quiet Hours" });
+	await expect(dialog.getByRole("textbox", { name: "Link" })).toHaveValue(
+		/\/titles\/t-film$/,
+	);
+	await expectAccessible(page);
+});
