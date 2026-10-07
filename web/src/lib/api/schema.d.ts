@@ -2758,7 +2758,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Stream what changes of the libraries, titles and state the profile sees, as Server-Sent Events */
+        /** Stream what changes of the libraries, titles and state the profile sees, and its playbacks stopping, as Server-Sent Events */
         get: {
             parameters: {
                 query?: never;

@@ -784,7 +784,7 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "GET /api/v1/events", access: signedIn,
-			summary: "Stream what changes of the libraries, titles and state the profile sees, as Server-Sent Events",
+			summary: "Stream what changes of the libraries, titles and state the profile sees, and its playbacks stopping, as Server-Sent Events",
 			status:  http.StatusOK, reply: feedStream(), handle: a.events,
 		},
 		{
