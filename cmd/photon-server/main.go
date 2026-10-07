@@ -368,6 +368,9 @@ func logTools(ctx context.Context, logger *slog.Logger, tools media.Tools) {
 	if !tools.Chromaprint {
 		logger.WarnContext(ctx, "intros and credits are found from chapters only: ffmpeg has no chromaprint muxer")
 	}
+	if !tools.Libass {
+		logger.WarnContext(ctx, "styled subtitles play only on clients that draw them: ffmpeg has no libass")
+	}
 }
 
 // metadataProviders runs TMDB before TheTVDB and OMDb, as its match may give them an id to find a

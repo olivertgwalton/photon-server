@@ -6314,6 +6314,7 @@ export interface components {
             ffprobe: components["schemas"]["Tool"];
             folders: components["schemas"]["Folders"];
             id: string;
+            libass: boolean;
             listen: string;
             metadata_language: string;
             name: string;

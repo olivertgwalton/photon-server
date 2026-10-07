@@ -25,6 +25,8 @@ type Tools struct {
 	FFprobe Tool
 	// Chromaprint is whether FFmpeg can fingerprint sound, which finding a season's intros needs.
 	Chromaprint bool
+	// Libass is whether FFmpeg draws styled subtitles, which burning one into video needs.
+	Libass bool
 	// YTDLP fetches theme tunes from ThemerrDB's YouTube links; its Path is empty where there is
 	// none, and no theme is fetched.
 	YTDLP Tool
@@ -48,7 +50,13 @@ func FindTools(ctx context.Context) (Tools, error) {
 	if err != nil {
 		return Tools{}, err
 	}
-	return Tools{FFmpeg: ffmpeg, FFprobe: ffprobe, Chromaprint: hasChromaprint(ctx, ffmpeg.Path), YTDLP: ytdlp}, nil
+	return Tools{FFmpeg: ffmpeg, FFprobe: ffprobe, Chromaprint: hasChromaprint(ctx, ffmpeg.Path), Libass: hasLibass(ctx, ffmpeg.Path), YTDLP: ytdlp}, nil
+}
+
+// hasLibass reports whether FFmpeg has the subtitles filter, which only a build with libass has.
+func hasLibass(ctx context.Context, ffmpeg string) bool {
+	out, err := output(ctx, Foreground, PartRun, nil, ffmpeg, "-hide_banner", "-h", "filter=subtitles")
+	return err == nil && bytes.Contains(out, []byte("Filter subtitles"))
 }
 
 // findYTDLP answers yt-dlp where it is installed, and nothing where it is not; one that will not

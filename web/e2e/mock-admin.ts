@@ -59,6 +59,7 @@ const server: Schemas["Server"] = {
 	ffprobe: { path: "/usr/bin/ffprobe", version: "9.0" },
 	yt_dlp: { path: "", version: "" },
 	chromaprint: true,
+	libass: true,
 	encoder: {
 		acceleration: "vaapi",
 		device: "/dev/dri/renderD128",

@@ -31,7 +31,8 @@ need not compress again.
 ## Develop
 
 Needs PostgreSQL 18, Valkey 9 and FFmpeg 8 or newer (`ffmpeg` and `ffprobe` on the `PATH`, or
-`PHOTON_FFMPEG` and `PHOTON_FFPROBE`).
+`PHOTON_FFMPEG` and `PHOTON_FFPROBE`). Without libass in its FFmpeg, as Homebrew's lacks, a server
+draws no styled subtitles (ASS) into video, and plays them only on clients that draw them.
 
 ```sh
 export PHOTON_DATABASE_URL=postgres://localhost/photon_dev

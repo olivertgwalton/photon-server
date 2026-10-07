@@ -83,6 +83,7 @@ type serverJSON struct {
 	FFmpeg      toolJSON  `json:"ffmpeg"`
 	FFprobe     toolJSON  `json:"ffprobe"`
 	Chromaprint bool      `json:"chromaprint"`
+	Libass      bool      `json:"libass"`
 	// YTDLP fetches theme tunes from ThemerrDB's links; its path and version are empty without it.
 	YTDLP            toolJSON         `json:"yt_dlp"`
 	Encoder          encoderJSON      `json:"encoder"`
@@ -108,7 +109,7 @@ func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
 		FFmpeg:      toolJSON{s.Tools.FFmpeg.Path, s.Tools.FFmpeg.Version},
 		FFprobe:     toolJSON{s.Tools.FFprobe.Path, s.Tools.FFprobe.Version},
 		YTDLP:       toolJSON{s.Tools.YTDLP.Path, s.Tools.YTDLP.Version},
-		Chromaprint: s.Tools.Chromaprint, Encoder: encoderJSON{s.Encoder.Accel, s.Encoder.Device, s.Encoder.HEVC},
+		Chromaprint: s.Tools.Chromaprint, Libass: s.Tools.Libass, Encoder: encoderJSON{s.Encoder.Accel, s.Encoder.Device, s.Encoder.HEVC},
 		TranscodeLimit: limit, Discovery: s.Discovery, Listen: s.Listen, TrustedProxies: []string{},
 		Folders:          foldersJSON{folder(s.CacheDir), folder(s.BackupDir)},
 		MetadataLanguage: s.MetadataLanguage, Nodes: []nodeJSON{},
