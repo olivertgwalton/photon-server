@@ -15,6 +15,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -65,6 +66,10 @@ func (p *Place) List(ctx context.Context, prefix string) iter.Seq2[blob.Entry, e
 
 type settings interface {
 	Storage(ctx context.Context) (domain.Storage, error)
+	StorageMove(ctx context.Context) (domain.StorageMove, bool, error)
+	ClaimMoveSource(ctx context.Context, source uuid.UUID, stale time.Time) (bool, error)
+	ReportMoveSource(ctx context.Context, source uuid.UUID, copied, total int, done bool) error
+	FinishStorageMove(ctx context.Context, sources []uuid.UUID) (bool, error)
 }
 
 // Stores are this node's artwork and previews, kept where the settings say.
@@ -76,13 +81,22 @@ type Stores struct {
 	log   *slog.Logger
 
 	mu sync.Mutex
-	// applied is what the stores were opened from, and closing the folders they hold.
-	applied domain.Storage
-	closing func() error
-	// root is the bucket things are kept in, nil on disk; origin is where clients are sent to read
+	// at is where things are kept, and to where they are being moved to, if anywhere.
+	at, to *opened
+	// copying stops the copy this node is making, if it is making one.
+	copying context.CancelFunc
+	copies  sync.WaitGroup
+}
+
+// opened is one place's artwork and previews, open.
+type opened struct {
+	st                domain.Storage
+	artwork, previews objects
+	// root is the bucket they are kept in, nil on disk; origin is where clients are sent to read
 	// them, or "" where they are sent nowhere.
-	root   *blob.Bucket
-	origin string
+	root    *blob.Bucket
+	origin  string
+	closing func() error
 }
 
 // Open opens the stores where the settings say, refusing to start a node that cannot reach them.
@@ -92,7 +106,7 @@ func Open(ctx context.Context, s settings, cache string, log *slog.Logger) (*Sto
 		return nil, err
 	}
 	stores := &Stores{settings: s, cache: cache, log: log}
-	if err := stores.apply(ctx, st); err != nil {
+	if err := stores.apply(ctx, st, nil); err != nil {
 		return nil, fmt.Errorf("artwork and previews: %w", err)
 	}
 	return stores, nil
@@ -101,60 +115,104 @@ func Open(ctx context.Context, s settings, cache string, log *slog.Logger) (*Sto
 func (s *Stores) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.closing()
+	err := s.at.closing()
+	if s.to != nil {
+		err = errors.Join(err, s.to.closing())
+	}
+	return err
 }
 
-// Run keeps the stores where the settings say until ctx ends, reading them again as an admin
-// changes them and every rereadEvery.
-func (s *Stores) Run(ctx context.Context, subscribe func() (<-chan domain.Event, func())) {
-	follow.Events(ctx, subscribe, rereadEvery, s.reread, domain.EventStorageChanged)
+// Run keeps the stores where the settings say, and moves what is kept as an admin asks, until ctx
+// ends, reading the settings again as they change and every rereadEvery.
+func (s *Stores) Run(ctx context.Context, c Cluster) {
+	follow.Events(ctx, c.Subscribe, rereadEvery, func(ctx context.Context) { s.reread(ctx, c) }, domain.EventStorageChanged)
+	s.copies.Wait()
 }
 
-// reread moves the stores where the settings now say. What cannot be reached leaves them where
-// they are, to be tried again.
-func (s *Stores) reread(ctx context.Context) {
+// reread keeps the stores where the settings now say, writing to both places of a move under way
+// and taking this node's part in it. What cannot be reached leaves them as they are, to be tried
+// again.
+func (s *Stores) reread(ctx context.Context, c Cluster) {
 	st, err := s.settings.Storage(ctx)
+	var m domain.StorageMove
+	moving := false
 	if err == nil {
-		err = s.apply(ctx, st)
+		m, moving, err = s.settings.StorageMove(ctx)
+	}
+	var to *domain.Storage
+	if moving {
+		to = &m.To
+	}
+	if err == nil {
+		err = s.apply(ctx, st, to)
+	}
+	if err == nil && moving {
+		err = s.move(ctx, c, st, m)
 	}
 	if err != nil && ctx.Err() == nil {
 		s.log.WarnContext(ctx, "artwork and previews not moved", slog.Any("err", err))
 	}
 }
 
-func (s *Stores) apply(ctx context.Context, st domain.Storage) error {
+// apply keeps the stores at st, and, where to is a place they are being moved to, writes to it
+// too. A place unchanged is kept open.
+func (s *Stores) apply(ctx context.Context, st domain.Storage, to *domain.Storage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closing != nil && st == s.applied {
-		return nil
-	}
-	artwork, previews, root, closing, err := open(ctx, st, s.cache)
+	at, err := s.reopen(ctx, s.at, &st)
 	if err != nil {
 		return err
 	}
-	origin := ""
-	if root != nil {
-		if origin, err = root.Origin(ctx); err != nil {
-			return errors.Join(err, closing())
+	next, err := s.reopen(ctx, s.to, to)
+	if err != nil {
+		if at != s.at {
+			err = errors.Join(err, at.closing())
 		}
+		return err
+	}
+	artwork, previews := at.artwork, at.previews
+	if next != nil {
+		artwork, previews = both{from: at.artwork, to: next.artwork}, both{from: at.previews, to: next.previews}
+	} else if s.copying != nil {
+		// The move is over, finished or cancelled.
+		s.copying()
+		s.copying = nil
 	}
 	s.Artwork.at.Store(&held{artwork})
 	s.Previews.at.Store(&held{previews})
-	if s.closing != nil {
-		// What is being read from the folders left stays open until it is closed.
-		if err := s.closing(); err != nil {
-			s.log.WarnContext(ctx, "artwork and previews' old folders not closed", slog.Any("err", err))
+	// What is being read from places left stays open until it is closed.
+	for _, left := range []*opened{s.at, s.to} {
+		if left != nil && left != at && left != next {
+			if err := left.closing(); err != nil {
+				s.log.WarnContext(ctx, "artwork and previews' old folders not closed", slog.Any("err", err))
+			}
 		}
 	}
-	s.applied, s.closing, s.root, s.origin = st, closing, root, origin
+	s.at, s.to = at, next
 	return nil
+}
+
+// reopen answers was where st is the place it is open at, or st opened; nil for no st.
+func (s *Stores) reopen(ctx context.Context, was *opened, st *domain.Storage) (*opened, error) {
+	switch {
+	case st == nil:
+		return nil, nil
+	case was != nil && was.st == *st:
+		return was, nil
+	case s.at != nil && s.at.st == *st:
+		// The place moved to is kept at now: the move is finished.
+		return s.at, nil
+	case s.to != nil && s.to.st == *st:
+		return s.to, nil
+	}
+	return open(ctx, *st, s.cache)
 }
 
 // Origin is where clients are sent to read artwork and previews, or "" where they are sent nowhere.
 func (s *Stores) Origin() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.origin
+	return s.at.origin
 }
 
 // probeKey is a picture a browser is sent to, to find whether it reaches the bucket.
@@ -168,7 +226,7 @@ var probePNG = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x
 // whether it can read from there, or "" where clients are sent nowhere.
 func (s *Stores) Probe(ctx context.Context) (string, error) {
 	s.mu.Lock()
-	root := s.root
+	root := s.at.root
 	s.mu.Unlock()
 	if root == nil {
 		return "", nil
@@ -181,44 +239,38 @@ func (s *Stores) Probe(ctx context.Context) (string, error) {
 	return root.Link(ctx, probeKey)
 }
 
-// Empty reports whether this node keeps no artwork and no previews where it keeps them now: on
-// disk, its own; in a bucket, every node's.
-func (s *Stores) Empty(ctx context.Context) (bool, error) {
-	for _, p := range []*Place{&s.Artwork, &s.Previews} {
-		for _, err := range p.List(ctx, "") {
-			return false, err
-		}
-	}
-	return true, nil
-}
-
-// open opens the artwork and previews st says, and answers closing what they hold open.
-// open opens the artwork and previews st says, and answers the bucket they are kept in, if one,
-// and closing what they hold open.
-func open(ctx context.Context, st domain.Storage, cache string) (artwork, previews objects, root *blob.Bucket, closing func() error, err error) {
+// open opens the artwork and previews st says.
+func open(ctx context.Context, st domain.Storage, cache string) (*opened, error) {
 	switch st.Kind {
 	case domain.StorageDisk:
 		a, err := blob.OpenDir(filepath.Join(cache, "artwork"))
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, err
 		}
 		p, err := blob.OpenDir(filepath.Join(cache, "previews"))
 		if err != nil {
-			return nil, nil, nil, nil, errors.Join(err, a.Close())
+			return nil, errors.Join(err, a.Close())
 		}
-		return a, p, nil, func() error { return errors.Join(a.Close(), p.Close()) }, nil
+		return &opened{st: st, artwork: a, previews: p, closing: func() error { return errors.Join(a.Close(), p.Close()) }}, nil
 	case domain.StorageBucket:
 		c, err := config(st.Bucket)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, err
 		}
 		b, err := blob.OpenBucket(ctx, c)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, err
 		}
-		return b.Within("artwork"), b.Within("previews"), b, func() error { return nil }, nil
+		origin, err := b.Origin(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &opened{
+			st: st, artwork: b.Within("artwork"), previews: b.Within("previews"), root: b, origin: origin,
+			closing: func() error { return nil },
+		}, nil
 	}
-	return nil, nil, nil, nil, fmt.Errorf("storage %q is neither disk nor bucket", st.Kind)
+	return nil, fmt.Errorf("storage %q is neither disk nor bucket", st.Kind)
 }
 
 // awsEndpoint is Amazon S3's, where a bucket is that names no store.

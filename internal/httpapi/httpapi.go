@@ -793,8 +793,13 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "PUT /api/v1/admin/storage", access: admin,
-			summary: "Keep artwork and previews elsewhere, once a bucket is checked and while nothing is kept where they are now; every node keeps them there at once",
+			summary: "Keep artwork and previews elsewhere, once a bucket is checked: the same place signed for differently at once, another moved to as every node copies what it keeps",
 			body:    storageJSON{}, status: http.StatusOK, reply: storageStatusJSON{}, handle: a.setStorage,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/storage/move", access: admin,
+			summary: "Cancel moving what is kept; every node keeps it where it was",
+			status:  http.StatusNoContent, handle: a.cancelStorageMove,
 		},
 		{
 			pattern: "POST /api/v1/admin/storage/check", access: admin,

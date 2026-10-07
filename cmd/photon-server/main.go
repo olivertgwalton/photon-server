@@ -343,7 +343,9 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}()
 
 	wg.Go(func() { secured.Run(background) })
-	wg.Go(func() { stores.Run(background, hub.Subscribe) })
+	wg.Go(func() {
+		stores.Run(background, storage.Cluster{Node: node, Subscribe: hub.Subscribe, Raise: hub.Raise, Nodes: nodeIDs(cache)})
+	})
 	wg.Go(func() { jellyfinAPI.Run(background) })
 	logger.InfoContext(ctx, "serving", slog.String("addr", srv.Addr), slog.String("version", info.Version))
 	return listenUntilDone(ctx, srv, secured.Listen)
@@ -581,6 +583,18 @@ func sweepPlaybacks(ctx context.Context, s *playback.Sessions, r *hls.Remuxer, l
 		if err := s.Sweep(ctx); err != nil && ctx.Err() == nil {
 			logger.WarnContext(ctx, "playbacks not swept", slog.Any("err", err))
 		}
+	}
+}
+
+// nodeIDs answers the ids of the nodes that say where their peers reach them.
+func nodeIDs(cache *kv.KV) func(ctx context.Context) ([]uuid.UUID, error) {
+	return func(ctx context.Context) ([]uuid.UUID, error) {
+		nodes, err := cache.Nodes(ctx)
+		ids := make([]uuid.UUID, len(nodes))
+		for i, n := range nodes {
+			ids[i] = n.ID
+		}
+		return ids, err
 	}
 }
 

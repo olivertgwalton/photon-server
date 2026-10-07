@@ -1678,7 +1678,7 @@ export interface paths {
             };
         };
         /**
-         * Keep artwork and previews elsewhere, once a bucket is checked and while nothing is kept where they are now; every node keeps them there at once
+         * Keep artwork and previews elsewhere, once a bucket is checked: the same place signed for differently at once, another moved to as every node copies what it keeps
          * @description Admin only.
          */
         put: {
@@ -1750,6 +1750,44 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/storage/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel moving what is kept; every node keeps it where it was
+         * @description Admin only.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -6389,6 +6427,15 @@ export interface components {
         Move: {
             position: number;
         };
+        MoveCopy: {
+            copied: number;
+            done: boolean;
+            /** Format: uuid */
+            node?: string;
+            /** Format: date-time */
+            seen: string;
+            total: number;
+        };
         Name: {
             name: string;
         };
@@ -6919,9 +6966,16 @@ export interface components {
         };
         /** @enum {string} */
         StorageKind: "disk" | "bucket";
+        StorageMove: {
+            copies: components["schemas"]["MoveCopy"][];
+            /** Format: date-time */
+            started: string;
+            to: components["schemas"]["StorageStatus"];
+        };
         StorageStatus: {
             bucket?: components["schemas"]["BucketStatus"] | null;
             kind: components["schemas"]["StorageKind"];
+            move?: components["schemas"]["StorageMove"] | null;
         };
         /** @enum {string} */
         StreamKind: "video" | "audio" | "subtitle";
