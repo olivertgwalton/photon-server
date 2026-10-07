@@ -424,6 +424,11 @@ func (a *API) routes() []route {
 			status:  http.StatusNoContent, handle: a.unmatch,
 		},
 		{
+			pattern: "PUT /api/v1/admin/titles/{id}/locale", access: admin,
+			summary: "Give a film or show a metadata language and certification country of its own, and describe it again in them",
+			body:    titleLocaleJSON{}, status: http.StatusAccepted, handle: a.setTitleLocale,
+		},
+		{
 			pattern: "POST /api/v1/admin/titles/{id}/split", access: admin,
 			summary: "Split a film's copies apart: each but the one that plays first becomes a film of its own, and stays so",
 			status:  http.StatusNoContent, handle: a.split,

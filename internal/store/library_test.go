@@ -142,3 +142,43 @@ func TestALibrarysLocaleDescribesItsTitlesAgain(t *testing.T) {
 		t.Errorf("given back: %+v, want the server's own", got.Locale)
 	}
 }
+
+func TestAFilmAsksInALocaleOfItsOwnOverItsLibrarys(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Filme", domain.LibraryMovies, "/srv/filme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	german := "de-DE"
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{MetadataLanguage: &german}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Amelie", []byte("v1"), []Film{{Title: "Amelie", Folder: "Amelie"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	film := oneItem(t, s, "kind = 'movie'").ID
+	if _, err := s.pool.Exec(ctx, `DELETE FROM jobs`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetTitleLocale(ctx, film, domain.Locale{Language: "fr-FR"}); err != nil {
+		t.Fatal(err)
+	}
+	sub, _, err := s.IdentifySubject(ctx, film)
+	if err != nil || sub.Locale.Language != "fr-FR" || sub.Locale.Country != "FR" {
+		t.Errorf("the film asks in %+v, %v; want its own French, and France's certificates by it", sub.Locale, err)
+	}
+	var queued int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM jobs WHERE kind = 'identify' AND subject = $1`, film).Scan(&queued); err != nil || queued != 1 {
+		t.Errorf("%d identify jobs, %v; want the film described again", queued, err)
+	}
+	if page, err := s.Title(ctx, uuid.UUID{}, film); err != nil || page.Locale.Language != "fr-FR" {
+		t.Errorf("its page says %+v, %v; want its own language", page.Locale, err)
+	}
+	if err := s.SetTitleLocale(ctx, film, domain.Locale{}); err != nil {
+		t.Fatal(err)
+	}
+	if sub, _, _ := s.IdentifySubject(ctx, film); sub.Locale.Language != "de-DE" {
+		t.Errorf("given back, it asks in %+v, want its library's German", sub.Locale)
+	}
+}
