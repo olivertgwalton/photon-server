@@ -11,6 +11,8 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
@@ -152,6 +154,81 @@ func TestAnEpisodeIsBilledWithItsShowsCast(t *testing.T) {
 	}
 	if got, want := names(season.Credits), []string{"Tom Ellis", "Lauren German"}; !slices.Equal(got, want) {
 		t.Errorf("season's credits = %v, want the show's cast", got)
+	}
+}
+
+func TestTwoSourcesCreditingOneShowNameOneCast(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// TVDB first, as a library that prefers it has it.
+	if err := s.SetLibrary(ctx, shows.ID, LibraryChange{Sources: metadataFrom(domain.LibraryShows, domain.SourceTVDB, domain.SourceTMDB)}); err != nil {
+		t.Fatal(err)
+	}
+	copies := []Copy{{ContentKey: []byte("e1"), Parts: []Part{{RelPath: "e1.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}}
+	episode := Episode{Season: 1, Episodes: []int{1}, Title: "Lucifer", Folder: "Lucifer/Season 1", ByNumber: true, Copies: copies}
+	if _, err := s.SaveShowFolder(ctx, shows.ID, "Lucifer/Season 1", []byte("v1"), Show{Title: "Lucifer", Folder: "Lucifer"}, []Episode{episode}, nil); err != nil {
+		t.Fatal(err)
+	}
+	show := oneItem(t, s, "kind = 'show'")
+	by := func(p domain.Provider) func(name, id string, kind domain.CreditKind) domain.Credit {
+		return func(name, id string, kind domain.CreditKind) domain.Credit {
+			return domain.Credit{Name: name, IDs: map[domain.Provider]string{p: id}, Kind: kind}
+		}
+	}
+	tmdb, tvdb := by(domain.ProviderTMDB), by(domain.ProviderTVDB)
+	if err := s.SaveIdentity(ctx, show.ID, domain.SourceTMDB, domain.Metadata{Title: "Lucifer", Credits: []domain.Credit{
+		tmdb("Tom Ellis", "1", domain.CreditActor),
+		// Two people of one name on one show: TVDB's is neither, as far as can be told.
+		tmdb("John Smith", "10", domain.CreditActor),
+		tmdb("John Smith", "11", domain.CreditActor),
+	}}, map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Credits: []domain.Credit{
+		tmdb("Russell Wong", "3", domain.CreditGuestStar),
+	}}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveIdentity(ctx, show.ID, domain.SourceTVDB, domain.Metadata{Title: "Lucifer", Credits: []domain.Credit{
+		tvdb("tom ellis", "400436", domain.CreditActor),
+		tvdb("John Smith", "900", domain.CreditActor),
+		tvdb("Lauren German", "371248", domain.CreditActor),
+	}}, map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Credits: []domain.Credit{
+		tvdb("Russell Wong", "503", domain.CreditGuestStar),
+	}}}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	people := func(name string) map[uuid.UUID][]string {
+		rows, err := s.pool.Query(ctx, `
+			SELECT p.id, i.provider || ':' || i.value FROM people p JOIN person_ids i ON i.person_id = p.id
+			WHERE lower(p.name) = lower($1) ORDER BY 2`, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[uuid.UUID][]string{}
+		var id uuid.UUID
+		var key string
+		if _, err := pgx.ForEachRow(rows, []any{&id, &key}, func() error {
+			out[id] = append(out[id], key)
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	for name, want := range map[string][]string{
+		"Tom Ellis":    {"tmdb:1", "tvdb:400436"},
+		"Russell Wong": {"tmdb:3", "tvdb:503"},
+	} {
+		got := people(name)
+		if len(got) != 1 || !slices.Equal(slices.Collect(maps.Values(got))[0], want) {
+			t.Errorf("%s = %v, want one person known by %v", name, got, want)
+		}
+	}
+	if got := people("John Smith"); len(got) != 3 {
+		t.Errorf("John Smith = %v, want three people: TVDB's is not taken for either of TMDB's", got)
 	}
 }
 
