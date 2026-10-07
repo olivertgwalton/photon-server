@@ -4,17 +4,34 @@ import {
 	accelerations,
 	bytes,
 	limitSources,
+	nodeRoles,
 	relative,
 	transcodeLoad,
 	when,
 } from "#lib/admin/words.js";
+import NodeSettings from "#lib/components/admin/NodeSettings.svelte";
+import { Button } from "#lib/components/ui/button/index.js";
 import * as Table from "#lib/components/ui/table/index.js";
 
-// How the server is set up, read-only: it is configured by its environment.
+// How the server is set up, read-only but for what each node does, and its nodes.
 let {
 	server: s,
+	nodes,
 	now,
-}: { server: components["schemas"]["Server"]; now: number } = $props();
+}: {
+	server: components["schemas"]["Server"];
+	nodes: components["schemas"]["KnownNode"][];
+	now: number;
+} = $props();
+
+// The node whose settings are open.
+let editing = $state<components["schemas"]["KnownNode"]>();
+let open = $state(false);
+function settle(node?: components["schemas"]["KnownNode"]) {
+	editing = node;
+	open = Boolean(node);
+}
+const self = $derived(nodes.find((n) => n.id === s.node_id));
 
 function tool(t: components["schemas"]["Tool"]) {
 	return t.version ? `${t.version} (${t.path})` : "Not found";
@@ -68,6 +85,7 @@ const rows = $derived<[string, string][]>([
 			.filter(Boolean)
 			.join(", "),
 	],
+	["Role", nodeRoles[s.role].name],
 	[
 		"Transcodes",
 		`${transcodeLoad(s.transcodes, s.transcode_limit)} at once · ${limitSources[s.transcode_limit_source]}`,
@@ -108,49 +126,67 @@ const folders = $derived<[string, components["schemas"]["Folder"]][]>([
 	{/each}
 </dl>
 
-{#if s.nodes.length}
+{#if nodes.length > 1}
 	<Table.Root class="mt-6 text-sm">
-		<caption class="label mb-2 text-left">
+		<caption class="label mb-2 caption-top text-left">
 			Nodes
 		</caption>
 		<Table.Header>
 			<Table.Row>
 				<Table.Head class="whitespace-normal">Node</Table.Head>
-				<Table.Head class="whitespace-normal">Transcodes with</Table.Head>
+				<Table.Head class="whitespace-normal">Does</Table.Head>
 				<Table.Head class="whitespace-normal">Transcoding</Table.Head>
+				<Table.Head><span class="sr-only">Settings</span></Table.Head>
 			</Table.Row>
 		</Table.Header>
 		<Table.Body>
-			{#each s.nodes as node (node.id)}
+			{#each nodes as node (node.id)}
+				{@const up = node.online}
 				<Table.Row>
 					<Table.Cell class="whitespace-normal">
 						<span class="text-ink">
-							{node.name || node.address}{node.id === s.node_id
-								? " (this node)"
-								: ""}
+							{node.name}{node.id === s.node_id ? " (this node)" : ""}
 						</span>
-						<span class="text-ink-3 block text-xs break-all">
-							{#if node.name}
-								{node.address}
-								·
-							{/if}
-							seen {relative(node.last_seen, now)}
+						<span class="text-ink-3 block text-xs">
+							{up ? `seen ${relative(up.last_seen, now)}` : "Not running"}
 						</span>
 					</Table.Cell>
-					<Table.Cell class="whitespace-normal"
-						>{encodes(node.encoder)}</Table.Cell
-					>
 					<Table.Cell class="whitespace-normal">
-						{transcodeLoad(node.transcodes, node.transcode_limit)}
-						{#if node.conversions}
+						{nodeRoles[node.role].name}
+						{#if up && node.role !== "serve"}
 							<span class="text-ink-3 block text-xs"
-								>{node.conversions}
-								for downloads</span
+								>{encodes(up.encoder)}</span
 							>
 						{/if}
+					</Table.Cell>
+					<Table.Cell class="whitespace-normal">
+						{#if up && node.role !== "serve"}
+							{transcodeLoad(up.transcodes, up.transcode_limit)}
+							{#if up.conversions}
+								<span class="text-ink-3 block text-xs"
+									>{up.conversions}
+									for downloads</span
+								>
+							{/if}
+						{:else}
+							<span class="text-ink-3">None</span>
+						{/if}
+					</Table.Cell>
+					<Table.Cell class="text-right">
+						<Button variant="outline" size="sm" onclick={() => settle(node)}>
+							Settings<span class="sr-only"> for {node.name}</span>
+						</Button>
 					</Table.Cell>
 				</Table.Row>
 			{/each}
 		</Table.Body>
 	</Table.Root>
+{:else if self}
+	<Button variant="outline" size="sm" class="mt-4" onclick={() => settle(self)}>
+		Change role and transcodes
+	</Button>
+{/if}
+
+{#if editing}
+	<NodeSettings node={editing} bind:open />
 {/if}

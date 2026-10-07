@@ -4,32 +4,17 @@ import (
 	"testing"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/hls"
 )
 
-func TestAnOperatorSetsHowManyVideosAreEncodedAtOnce(t *testing.T) {
-	for _, tc := range []struct {
-		env     string
-		accel   domain.Acceleration
-		want    int
-		invalid bool
-	}{
-		{env: "3", accel: domain.AccelNVENC, want: 3},
-		{env: "unlimited", accel: domain.AccelSoftware, want: hls.Unlimited},
-		{env: "", accel: domain.AccelNVENC, want: hardwareTranscodes},
-		{env: "0", invalid: true},
-		{env: "-2", invalid: true},
-		{env: "lots", invalid: true},
-	} {
-		t.Setenv("PHOTON_MAX_TRANSCODES", tc.env)
-		got, _, err := maxTranscodes(tc.accel)
-		if tc.invalid != (err != nil) || got != tc.want {
-			t.Errorf("PHOTON_MAX_TRANSCODES=%q on %s: %d, %v; want %d, invalid %t", tc.env, tc.accel, got, err, tc.want, tc.invalid)
-		}
+// Where an admin sets no limit, a node encodes as many videos at once as its encoder keeps up
+// with: on hardware, as many as a GeForce driver before 591.44 allows; in software, one per four
+// processors, and at least one.
+func TestANodeEncodesWhatItsEncoderKeepsUpWith(t *testing.T) {
+	if got := automaticTranscodes(domain.AccelNVENC); got != hardwareTranscodes {
+		t.Errorf("on NVENC: %d, want %d", got, hardwareTranscodes)
 	}
-	t.Setenv("PHOTON_MAX_TRANSCODES", "")
-	if got, source, _ := maxTranscodes(domain.AccelSoftware); got < 1 || source != domain.LimitAutomatic {
-		t.Errorf("software by default: %d, %s; want at least one, worked out", got, source)
+	if got := automaticTranscodes(domain.AccelSoftware); got < 1 {
+		t.Errorf("in software: %d, want at least one", got)
 	}
 }
 

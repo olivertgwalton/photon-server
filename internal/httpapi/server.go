@@ -16,13 +16,11 @@ import (
 
 // Setup is how this node was started, read once from its environment.
 type Setup struct {
-	Started time.Time
-	Node    uuid.UUID
-	Listen  string
-	Tools   media.Tools
-	Encoder hls.Hardware
-	// LimitSource is where the limit on transcodes at once comes from.
-	LimitSource      domain.LimitSource
+	Started          time.Time
+	Node             uuid.UUID
+	Listen           string
+	Tools            media.Tools
+	Encoder          hls.Hardware
 	Discovery        domain.Discovery
 	MetadataLanguage string
 	CacheDir         string
@@ -68,37 +66,9 @@ type backendJSON struct {
 	Version   string `json:"version,omitzero"`
 }
 
-// nodeJSON is a node as it tells the others of itself: what it encodes with, and transcodes, of
-// which conversions are downloads', of at most transcode_limit at once, absent when unlimited.
-type nodeJSON struct {
-	ID          uuid.UUID          `json:"id"`
-	Name        string             `json:"name,omitzero"`
-	Address     string             `json:"address"`
-	LastSeen    time.Time          `json:"last_seen"`
-	Encoder     nodeEncoderJSON    `json:"encoder"`
-	Transcodes  int                `json:"transcodes"`
-	Conversions int                `json:"conversions"`
-	Limit       int                `json:"transcode_limit,omitzero"`
-	LimitSource domain.LimitSource `json:"transcode_limit_source"`
-}
-
-// nodeEncoderJSON is what a node encodes video with, and whether it draws styled subtitles in.
-type nodeEncoderJSON struct {
-	Acceleration domain.Acceleration `json:"acceleration"`
-	HEVC         domain.HEVCEncoding `json:"hevc"`
-	Libass       bool                `json:"libass"`
-}
-
-func showNode(n domain.Node) nodeJSON {
-	return nodeJSON{
-		ID: n.ID, Name: n.Name, Address: n.Address, LastSeen: n.Seen.UTC(),
-		Encoder:    nodeEncoderJSON{n.Encoder.Acceleration, n.Encoder.HEVC, n.Encoder.Libass},
-		Transcodes: n.Transcodes, Conversions: n.Conversions, Limit: n.Limit, LimitSource: n.LimitSource,
-	}
-}
-
-// serverJSON is the server as its dashboard shows it: transcodes, the videos this node encodes now,
-// of at most transcode_limit at once, absent when unlimited, set as transcode_limit_source says.
+// serverJSON is the node answering as its dashboard shows it: its role, and transcodes, the videos it
+// encodes now, of at most transcode_limit at once, absent when unlimited, as transcode_limit_source
+// says. The cluster's nodes are /api/v1/admin/nodes.
 type serverJSON struct {
 	domain.Info
 	NodeID      uuid.UUID `json:"node_id"`
@@ -113,6 +83,7 @@ type serverJSON struct {
 	YTDLP            toolJSON           `json:"yt_dlp"`
 	Encoder          encoderJSON        `json:"encoder"`
 	Transcodes       int                `json:"transcodes"`
+	Role             domain.NodeRole    `json:"role"`
 	TranscodeLimit   int                `json:"transcode_limit,omitzero"`
 	LimitSource      domain.LimitSource `json:"transcode_limit_source"`
 	Discovery        domain.Discovery   `json:"discovery"`
@@ -123,7 +94,6 @@ type serverJSON struct {
 	MetadataLanguage string             `json:"metadata_language"`
 	Postgres         backendJSON        `json:"postgres"`
 	Valkey           backendJSON        `json:"valkey"`
-	Nodes            []nodeJSON         `json:"nodes"`
 }
 
 // adminServer answers how the node answering was set up and what it reaches, as Jellyfin's
@@ -137,10 +107,12 @@ func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
 		FFprobe:     toolJSON{s.Tools.FFprobe.Path, s.Tools.FFprobe.Version},
 		YTDLP:       toolJSON{s.Tools.YTDLP.Path, s.Tools.YTDLP.Version},
 		Chromaprint: s.Tools.Chromaprint, Libass: s.Tools.Libass, Encoder: encoderJSON{s.Encoder.Accel, s.Encoder.Device, s.Encoder.HEVC},
-		Transcodes: active, TranscodeLimit: limit, LimitSource: s.LimitSource, Discovery: s.Discovery, Listen: s.Listen, TrustedProxies: []string{},
+		Transcodes: active, TranscodeLimit: limit, Discovery: s.Discovery, Listen: s.Listen, TrustedProxies: []string{},
 		Folders:          foldersJSON{folder(s.CacheDir), folder(s.BackupDir)},
-		MetadataLanguage: s.MetadataLanguage, Nodes: []nodeJSON{},
+		MetadataLanguage: s.MetadataLanguage,
 	}
+	self := a.svc.Placer.Self()
+	out.Role, out.LimitSource = self.Role, self.LimitSource
 	if s.PublicURL != nil {
 		out.PublicURL = s.PublicURL.String()
 	}
@@ -148,16 +120,7 @@ func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
 		out.TrustedProxies = append(out.TrustedProxies, p.String())
 	}
 	out.Postgres = a.backend(r, "postgres", a.svc.Postgres)
-	if out.Valkey = a.backend(r, "valkey", a.svc.Valkey); out.Valkey.Reachable {
-		nodes, err := a.svc.Valkey.Nodes(r.Context())
-		if err != nil {
-			a.internal(w, r, err)
-			return
-		}
-		for _, n := range nodes {
-			out.Nodes = append(out.Nodes, showNode(n))
-		}
-	}
+	out.Valkey = a.backend(r, "valkey", a.svc.Valkey)
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
 

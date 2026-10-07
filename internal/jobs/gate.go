@@ -158,3 +158,13 @@ func (g *Gate) Opens() (at time.Duration, zone *time.Location, ok bool) {
 	defer g.mu.Unlock()
 	return time.Duration(g.window.StartHour) * time.Hour, g.window.Zone, g.read
 }
+
+// When is a gate open while on says, which lets a job it held go on: as a node's role, which
+// says whether it encodes video, opens it to downloads' conversions.
+type When func() bool
+
+func (w When) Open(domain.JobDue) bool { return w() }
+
+func (w When) Hold(ctx context.Context, _ domain.JobDue) (context.Context, func(), bool) {
+	return ctx, func() {}, w()
+}

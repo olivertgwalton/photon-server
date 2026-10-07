@@ -12,7 +12,6 @@ must be reachable by the others.
 | `PHOTON_NODE_ADDRESS` | where the other nodes reach this one, such as `http://10.0.0.5:8640`. A node without one is never handed another node's requests and is not listed. |
 | `PHOTON_HWACCEL` | what it encodes video with: `software`, `nvenc`, `qsv`, `vaapi` or `videotoolbox` |
 | `PHOTON_HWACCEL_DEVICE` | the device to encode on, such as `/dev/dri/renderD128` |
-| `PHOTON_MAX_TRANSCODES` | how many videos it encodes at once, a number or `unlimited`; without it, worked out from the encoder |
 
 Every node mounts the media at the same path, as a library is kept by its path. Node addresses
 belong on a private network: the nodes trust what they hand each other.
@@ -24,8 +23,8 @@ Valkey, where it is reached, what it encodes with (its encoder, whether it encod
 it can draw styled subtitles into video), and how many videos it encodes now of at most how
 many. A node that says nothing for 45 seconds is no longer listed.
 
-Settings › Server lists the nodes, what each transcodes with, and how busy it is: "3 of 8", with
-those transcoding for downloads said beneath.
+Settings › Server lists the nodes, what each transcodes with, and how busy each that is up is:
+"3 of 8", with those transcoding for downloads said beneath.
 
 ## Where a transcode is made
 
@@ -43,14 +42,27 @@ Nodes ask each other at `POST /api/v1/internal/playbacks/{id}/remux`, signed wit
 from the cluster's own, which no client is ever given: a request no node signed, or changed on
 its way, is refused. The route is no client's, and in no description of the API.
 
-## How many transcodes at once
+## What each node does
 
-Without `PHOTON_MAX_TRANSCODES`, a node encoding in software takes one transcode per four logical
-CPUs, and one encoding on hardware takes 8. That is the NVENC sessions a GeForce card's driver
-allowed at once before 591.44 (December 2025); 591.44 and later allow 12, per machine rather than
-per card, which `PHOTON_MAX_TRANSCODES=12` takes up. NVIDIA's professional cards, and the other
-encoders, have no such count: they are bound by how fast they encode, which at 1080p reaches 8
-or more. A download's conversion takes a transcode slot only while no playback wants it.
+Settings › Server lists every node there is or has been. Each one's settings say what it does,
+taken up at once, as it runs:
+
+- **Role.** *All* serves clients and transcodes, as every node of a server of one does. *Serve
+  only* serves clients and transcodes nothing, for its playbacks or for downloads: a node without
+  a GPU beside one with. *Transcode first* is asked for a transcode before any node of all, where
+  it has a slot free, and serves clients too: the GPU node.
+- **Transcodes at once.** Worked out from the node's encoder, or set: at most a number, or no
+  limit. Lowering it stops none playing; none is begun until there is room under it.
+
+A new node starts as all, its limit worked out. A node set to serve only, asked to transcode by
+another told of it before the change, refuses, and the next is asked.
+
+Worked out, a node encoding in software takes one transcode per four logical CPUs, and one
+encoding on hardware takes 8. That is the NVENC sessions a GeForce card's driver allowed at once
+before 591.44 (December 2025); 591.44 and later allow 12, per machine rather than per card,
+which a limit set to 12 takes up. NVIDIA's professional cards, and the other encoders, have no
+such count: they are bound by how fast they encode, which at 1080p reaches 8 or more. A
+download's conversion takes a transcode slot only while no playback wants it.
 
 ## When a node is missing
 

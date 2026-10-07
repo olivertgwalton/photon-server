@@ -692,7 +692,7 @@ func alone(local interface {
 }, libass bool,
 ) *playback.Placer {
 	self := func() domain.Node {
-		n := domain.Node{ID: uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1"), Encoder: domain.Encoder{
+		n := domain.Node{ID: uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1"), Role: domain.NodeAll, Encoder: domain.Encoder{
 			Acceleration: domain.AccelSoftware, HEVC: domain.HEVCDeny, Libass: libass,
 		}}
 		if h, ok := local.(interface{ Transcodes() (int, int, int) }); ok {

@@ -102,7 +102,28 @@ export const accelerations: Record<Schemas["Acceleration"], string> = {
 // Where a node's limit on transcodes at once comes from.
 export const limitSources: Record<Schemas["LimitSource"], string> = {
 	automatic: "worked out from the encoder",
-	environment: "set by PHOTON_MAX_TRANSCODES",
+	set: "set here",
+};
+
+// What a node does for the server, in a few words and in a sentence.
+export const nodeRoles: Record<
+	Schemas["NodeRole"],
+	{ name: string; description: string }
+> = {
+	all: {
+		name: "Serves and transcodes",
+		description: "As every server on its own does.",
+	},
+	transcode: {
+		name: "Transcodes first",
+		description:
+			"Asked to transcode before any other, while it has room: the server with the GPU. It serves people too.",
+	},
+	serve: {
+		name: "Serves only",
+		description:
+			"Transcodes nothing, for playback or downloads, leaving that to the others.",
+	},
 };
 
 // Videos being transcoded of the most at once, as words: "3 of 8", or "3, no limit".
@@ -259,6 +280,8 @@ export function describe(e: Schemas["Event"], names: Names): string {
 			return "Secure connections were changed";
 		case "storage.changed":
 			return "Where artwork and previews are kept was changed";
+		case "nodes.changed":
+			return "What a server node does was changed";
 	}
 }
 

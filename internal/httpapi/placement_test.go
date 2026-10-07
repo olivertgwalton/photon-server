@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"uuid"
 
@@ -55,13 +56,14 @@ func (c *sharedValkey) NodeAddress(_ context.Context, id uuid.UUID) (string, boo
 // peerNode is a server node of a sharedValkey, served over HTTP, encoding in software.
 type peerNode struct {
 	id      uuid.UUID
+	role    atomic.Value
 	remuxer *hls.Remuxer
 	srv     *httptest.Server
 }
 
 func (n *peerNode) self() domain.Node {
 	d := domain.Node{
-		ID: n.id, Address: n.srv.URL, Name: n.srv.URL,
+		ID: n.id, Address: n.srv.URL, Name: n.srv.URL, Role: n.role.Load().(domain.NodeRole),
 		Encoder: domain.Encoder{Acceleration: domain.AccelSoftware, HEVC: domain.HEVCDeny},
 	}
 	d.Transcodes, d.Conversions, d.Limit = n.remuxer.Transcodes()
@@ -78,6 +80,7 @@ func join(t *testing.T, c *sharedValkey, limit int) *peerNode {
 		t.Fatal(err)
 	}
 	n := &peerNode{id: uuid.NewV7(), remuxer: remuxer}
+	n.role.Store(domain.NodeAll)
 	n.srv = httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{},
 		Playbacks: playback.NewSessions(c.livePlaybacks, c.livePlaybacks, remuxer, func(context.Context, domain.Event) {}, n.id),
@@ -162,5 +165,32 @@ func TestANodeFullByTheTimeItIsAskedPassesThePlayOn(t *testing.T) {
 	}
 	if plays, _ := c.Playbacks(t.Context()); len(plays) != 1 {
 		t.Errorf("%d playbacks kept, want only the one made, not the one refused", len(plays))
+	}
+}
+
+// A node set to serve only takes no transcode: not when placed, and not when another, told of it
+// before the change, asks it anyway.
+func TestANodeThatServesOnlyTranscodesNothing(t *testing.T) {
+	c := newSharedValkey()
+	front, gpu := join(t, c, 1), join(t, c, 2)
+	front.encode(t)
+	gpu.role.Store(domain.NodeServe)
+	// The others were last told it transcodes, and that it has room.
+	stale := gpu.self()
+	stale.Role = domain.NodeAll
+	c.tell(stale)
+	body := `{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000, "parts": "each"}}`
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, front.srv.URL+"/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("a transcode with the only node with room serving only: %s, want 503", resp.Status)
+	}
+	if active, _, _ := gpu.remuxer.Transcodes(); active != 0 {
+		t.Errorf("the node serving only transcodes %d, want none", active)
 	}
 }

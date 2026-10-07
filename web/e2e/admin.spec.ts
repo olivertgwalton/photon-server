@@ -58,19 +58,41 @@ test("the overview follows the server live: who is playing, and a scan as it gro
 	await expect(page.getByText("Kids's play was stopped.")).toBeVisible();
 });
 
-test("an admin sees what each node transcodes with, and how busy it is", async ({
+test("an admin sees what each node does and how busy it is, and sets what one does", async ({
 	page,
 }) => {
 	await logIn(page, "/settings/server");
 	const nodes = page.getByRole("table", { name: "Nodes" });
 	const gpu = nodes.getByRole("row", { name: /gpu-1/ });
+	await expect(gpu).toContainText("Serves and transcodes");
 	await expect(gpu).toContainText("NVENC · H.264, HEVC");
 	await expect(gpu).toContainText("3 of 8");
 	await expect(gpu).toContainText("1 for downloads");
 	await expect(
 		nodes.getByRole("row", { name: /den \(this node\)/ }),
 	).toContainText("VA-API · H.264, HEVC · subtitles");
+	const old = nodes.getByRole("row", { name: /old-mini/ });
+	await expect(old).toContainText("Not running");
+	await expect(old).toContainText("Serves only");
 	await expectAccessible(page);
+
+	await gpu.getByRole("button", { name: "Settings for gpu-1" }).click();
+	const dialog = page.getByRole("dialog", { name: "gpu-1" });
+	await dialog.getByLabel("Role").click();
+	await page.getByRole("option", { name: "Transcodes first" }).click();
+	await expect(dialog).toContainText("the server with the GPU");
+	await expect(dialog.getByLabel("Transcodes at once")).toHaveText(
+		"Worked out from its encoder (8)",
+	);
+	await dialog.getByLabel("Transcodes at once").click();
+	await page.getByRole("option", { name: "At most" }).click();
+	await dialog.getByLabel("Most transcodes at once").fill("12");
+	await expectAccessible(page);
+	await dialog.getByRole("button", { name: "Save" }).click();
+	await expect(
+		page.getByText("Saved. gpu-1 takes it up at once."),
+	).toBeVisible();
+	await expect(gpu).toContainText("Transcodes first");
 });
 
 test("a member is told the dashboard is not theirs", async ({ page }) => {

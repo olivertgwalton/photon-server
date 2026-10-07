@@ -121,7 +121,7 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (ev
 		domain.EventTaskStarted, domain.EventTaskFinished, domain.EventTaskFailed, domain.EventBackupMade,
 		domain.EventJobStarted, domain.EventJobFinished, domain.EventJobFailed, domain.EventJobDead,
 		domain.EventJobsProgress, domain.EventWebhookTest, domain.EventMaintenanceChanged,
-		domain.EventNetworkChanged, domain.EventStorageChanged:
+		domain.EventNetworkChanged, domain.EventStorageChanged, domain.EventNodesChanged:
 	}
 	return eventJSON{}, false, nil
 }

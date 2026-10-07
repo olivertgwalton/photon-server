@@ -14,7 +14,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -40,6 +39,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/mdblist"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
+	"github.com/olivertgwalton/photon-server/internal/nodes"
 	"github.com/olivertgwalton/photon-server/internal/omdb"
 	"github.com/olivertgwalton/photon-server/internal/opensubtitles"
 	"github.com/olivertgwalton/photon-server/internal/peer"
@@ -200,11 +200,8 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	transcodes, limitSource, err := maxTranscodes(hw.Accel)
-	if err != nil {
-		return err
-	}
-	remuxer, err := hls.NewRemuxer(tools, filepath.Join(cacheRoot, "hls"), filepath.Join(cacheRoot, "subtitles"), hw, transcodes, logger)
+	automatic := automaticTranscodes(hw.Accel)
+	remuxer, err := hls.NewRemuxer(tools, filepath.Join(cacheRoot, "hls"), filepath.Join(cacheRoot, "subtitles"), hw, automatic, logger)
 	if err != nil {
 		return err
 	}
@@ -217,6 +214,13 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	node, err := nodeID(cacheRoot)
+	if err != nil {
+		return err
+	}
+	address := os.Getenv("PHOTON_NODE_ADDRESS")
+	// self is this node, doing what an admin sets of it: its role, and how many videos it encodes.
+	self, err := nodes.Join(ctx, st, node, hostname, address,
+		domain.Encoder{Acceleration: hw.Accel, HEVC: hw.HEVC, Libass: tools.Libass}, automatic, remuxer, logger)
 	if err != nil {
 		return err
 	}
@@ -252,7 +256,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	sessions := playback.NewSessions(cache, st, remuxer, hub.Raise, node)
 	listen := cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen)
 	setup := httpapi.Setup{
-		Started: started, Node: node, Listen: listen, Tools: tools, Encoder: hw, LimitSource: limitSource, Discovery: discoveryMode,
+		Started: started, Node: node, Listen: listen, Tools: tools, Encoder: hw, Discovery: discoveryMode,
 		MetadataLanguage: lang, CacheDir: cacheRoot, BackupDir: dumper.Dir, PublicURL: public,
 	}
 	// Fetched subtitles are written from Postgres into each node's cache as it opens them.
@@ -265,17 +269,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	address := os.Getenv("PHOTON_NODE_ADDRESS")
-	// self is this node as it tells the others of itself, and as it places playbacks on itself.
-	self := func() domain.Node {
-		n := domain.Node{
-			ID: node, Address: address, Name: hostname, LimitSource: limitSource,
-			Encoder: domain.Encoder{Acceleration: hw.Accel, HEVC: hw.HEVC, Libass: tools.Libass},
-		}
-		n.Transcodes, n.Conversions, n.Limit = remuxer.Transcodes()
-		return n
-	}
-	placer := playback.NewPlacer(cache, self, remuxes, nodeKey)
+	placer := playback.NewPlacer(cache, self.Node, remuxes, nodeKey)
 	secured := secure.New(st, hub.Subscribe, logger)
 	jellyfinAPI := jellyfin.NewListener(st, hub.Subscribe, jellyfin.New(logger, info, jellyfin.Services{
 		Auth: authService, Limits: cache, Raise: hub.Raise, Proxies: trusted, Catalogue: st, Pictures: pictureCache,
@@ -285,7 +279,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	srv := &http.Server{
 		Addr: listen, TLSConfig: secured.TLSConfig(),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: files, Subtitles: fetcher, Playbacks: sessions, Owners: owners, Placer: placer, NodeKey: nodeKey, HLS: remuxer, Signer: signer, Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Network: st, Storage: st, Stores: stores, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: files, Subtitles: fetcher, Playbacks: sessions, Owners: owners, Placer: placer, NodeKey: nodeKey, HLS: remuxer, Signer: signer, Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Network: st, Storage: st, Stores: stores, Nodes: st, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -323,11 +317,12 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	// Conversions have slots of their own, so a long one never holds up a scan, and each holds a
 	// transcode slot its node's playbacks may take, so they never starve them. A conversion is asked
-	// for by someone waiting on it, as a playback is, so it takes no gate: on a server played every
-	// evening, one held back by each playback would not be ready for days.
+	// for by someone waiting on it, as a playback is, so it waits for no playback: on a server played
+	// every evening, one held back by each would not be ready for days. A node that never encodes
+	// leaves them to one that does.
 	workers = append(workers, jobs.NewWorker(st, logger, node, playback.MaxConversions, map[domain.JobKind]jobs.Handler{
 		domain.JobConvert: conversions.Convert,
-	}, hub, nil))
+	}, hub, jobs.When(self.Encodes)))
 	watcher := watch.New(st, logger)
 	background, stopBackground := context.WithCancel(ctx)
 	var wg sync.WaitGroup
@@ -340,8 +335,9 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	wg.Go(func() { sweepPlaybacks(background, sessions, remuxer, logger) })
 	wg.Go(func() { pruneConversions(background, conversions, logger) })
+	wg.Go(func() { self.Run(background, hub.Subscribe) })
 	if address != "" {
-		wg.Go(func() { advertise(background, cache, self, remuxer.Changes(), logger) })
+		wg.Go(func() { advertise(background, cache, self.Node, remuxer.Changes(), logger) })
 	}
 	wg.Go(func() {
 		if err := watcher.Run(background); err != nil {
@@ -540,26 +536,15 @@ const (
 	hardwareTranscodes = 8
 )
 
-// maxTranscodes is how many videos the node encodes at once, and where that comes from:
-// PHOTON_MAX_TRANSCODES, a number or unlimited, else what the device it encodes on keeps up with.
-func maxTranscodes(accel domain.Acceleration) (int, domain.LimitSource, error) {
-	switch v := os.Getenv("PHOTON_MAX_TRANSCODES"); v {
-	case "":
-	case "unlimited":
-		return hls.Unlimited, domain.LimitEnvironment, nil
-	default:
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 {
-			return 0, "", fmt.Errorf("PHOTON_MAX_TRANSCODES is a positive number or unlimited, not %q", v)
-		}
-		return n, domain.LimitEnvironment, nil
-	}
+// automaticTranscodes is how many videos a node encodes at once where an admin sets no limit: what
+// the device it encodes on keeps up with.
+func automaticTranscodes(accel domain.Acceleration) int {
 	switch accel {
 	case domain.AccelSoftware:
-		return max(runtime.NumCPU()/cpusPerTranscode, 1), domain.LimitAutomatic, nil
+		return max(runtime.NumCPU()/cpusPerTranscode, 1)
 	case domain.AccelVideoToolbox, domain.AccelVAAPI, domain.AccelQSV, domain.AccelNVENC:
 	}
-	return hardwareTranscodes, domain.LimitAutomatic, nil
+	return hardwareTranscodes
 }
 
 // advertiseEvery is how often a node says where its peers reach it; it is forgotten after three
@@ -608,9 +593,9 @@ func sweepPlaybacks(ctx context.Context, s *playback.Sessions, r *hls.Remuxer, l
 // nodeIDs answers the ids of the nodes that say where their peers reach them.
 func nodeIDs(cache *kv.KV) func(ctx context.Context) ([]uuid.UUID, error) {
 	return func(ctx context.Context) ([]uuid.UUID, error) {
-		nodes, err := cache.Nodes(ctx)
-		ids := make([]uuid.UUID, len(nodes))
-		for i, n := range nodes {
+		adverts, err := cache.Nodes(ctx)
+		ids := make([]uuid.UUID, len(adverts))
+		for i, n := range adverts {
 			ids[i] = n.ID
 		}
 		return ids, err

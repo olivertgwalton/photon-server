@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -284,6 +285,38 @@ func TestOnlyAJobThatEndsIsDoneInItsBacklog(t *testing.T) {
 		<-done
 		if told.ended != 1 {
 			t.Errorf("%d jobs done in the backlog; want the one finished, not the one to be tried again", told.ended)
+		}
+	})
+}
+
+// A worker behind a gate that is shut claims nothing, and leaves its jobs to another node, until
+// the gate opens: as a node set to serve only takes no download's conversion until it may encode.
+func TestAWorkerClaimsNothingWhileItsGateIsShut(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := &memoryQueue{pending: []domain.Job{{ID: 1, Kind: domain.JobConvert, Subject: uuid.NewV7()}}}
+		var encodes atomic.Bool
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{
+			domain.JobConvert: func(context.Context, uuid.UUID) error { return nil },
+		}, ignore{}, When(encodes.Load))
+		go func() {
+			w.Run(ctx)
+			close(done)
+		}()
+		synctest.Sleep(time.Minute)
+		q.mu.Lock()
+		left := len(q.pending)
+		q.mu.Unlock()
+		if left != 1 {
+			t.Errorf("a shut worker claimed %d jobs", 1-left)
+		}
+		encodes.Store(true)
+		synctest.Sleep(time.Minute)
+		cancel()
+		<-done
+		if len(q.completed) != 1 {
+			t.Errorf("%d jobs completed once the gate opened, want the one", len(q.completed))
 		}
 	})
 }

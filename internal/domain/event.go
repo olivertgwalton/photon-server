@@ -58,6 +58,8 @@ const (
 	// EventStorageChanged is where artwork and previews are kept, changed by an admin; every node
 	// keeps them there from then.
 	EventStorageChanged EventKind = "storage.changed"
+	// EventNodesChanged is what an admin sets of a node, changed; the node takes it up from then.
+	EventNodesChanged EventKind = "nodes.changed"
 )
 
 func EventKinds() []EventKind {
@@ -67,7 +69,7 @@ func EventKinds() []EventKind {
 		EventLibraryAdded, EventLibraryRemoved, EventLibraryScanned, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventTitlesAdded, EventScanProgress, EventTaskStarted, EventTaskFinished, EventTaskFailed, EventBackupMade,
 		EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead, EventJobsProgress, EventWebhookTest,
-		EventMaintenanceChanged, EventNetworkChanged, EventStorageChanged,
+		EventMaintenanceChanged, EventNetworkChanged, EventStorageChanged, EventNodesChanged,
 	}
 }
 
@@ -82,7 +84,7 @@ func (k EventKind) Logged() bool {
 	case EventPlaybackPaused, EventPlaybackResumed, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventScanProgress, EventTaskStarted, EventTaskFinished, EventJobStarted,
 		EventJobFinished, EventJobFailed, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged,
-		EventNetworkChanged, EventStorageChanged:
+		EventNetworkChanged, EventStorageChanged, EventNodesChanged:
 		return false
 	}
 	return false
@@ -101,7 +103,7 @@ func (k EventKind) Hookable() bool {
 	case EventLibraryChanged, EventTitleUpdated, EventUserDataChanged, EventScanProgress,
 		EventTaskStarted, EventTaskFinished, EventJobStarted, EventJobFinished, EventJobFailed,
 		EventJobDead, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged, EventNetworkChanged,
-		EventStorageChanged:
+		EventStorageChanged, EventNodesChanged:
 		return false
 	}
 	return false
