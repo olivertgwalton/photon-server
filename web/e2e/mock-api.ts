@@ -49,6 +49,8 @@ const films: Schemas["Card"][] = [
 		year: 2018,
 		duration_ms: 6_720_000,
 		version_count: 2,
+		resolution: "4k",
+		range: "dv",
 		poster: art,
 		backdrop: art,
 		blurhashes: { [art]: "LEHV6nWB2yk8pyo0adR*.7kCMdnj" },
@@ -60,6 +62,7 @@ const films: Schemas["Card"][] = [
 			`${"BCDEFGH"[i % 7]}ilm ${String(i).padStart(3, "0")}`,
 			{
 				year: 1990 + (i % 30),
+				resolution: i % 2 ? "720p" : "1080p",
 			},
 		),
 	),
@@ -72,6 +75,8 @@ const shows = [base("t-show", "show", "Small Show", { year: 2020 })];
 const episode = (id: string, n: number, title: string) =>
 	base(id, "episode", title, {
 		duration_ms: 1_800_000,
+		resolution: "1080p",
+		range: "hdr10",
 		show: { id: "t-show", title: "Small Show" },
 		season: { id: "t-s1", title: "Season 1" },
 		season_number: 1,

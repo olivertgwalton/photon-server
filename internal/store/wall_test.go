@@ -3,11 +3,17 @@
 package store
 
 import (
+	"context"
 	"errors"
+	"maps"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 	"uuid"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -136,5 +142,82 @@ func TestTitlesSortTheirNumbersAsNumbers(t *testing.T) {
 	want := []string{"2 Fast 2 Furious", "13 Going on 30", "21 Jump Street", "1917", "The Age of Adaline", "Alien"}
 	if !slices.Equal(titles, want) {
 		t.Errorf("by title = %q, want %q", titles, want)
+	}
+}
+
+// queryCount counts the statements a pool runs.
+type queryCount struct{ n atomic.Int64 }
+
+func (c *queryCount) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData) context.Context {
+	c.n.Add(1)
+	return ctx
+}
+
+func (c *queryCount) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
+
+func TestACardSaysWhatItsBestCopyIs(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	copyOf := func(name string, width int, rng domain.Range) Copy {
+		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+			Duration: time.Hour, Streams: []domain.Stream{{Kind: domain.StreamVideo, Codec: "hevc", Width: width, Height: width * 9 / 16, Range: rng}},
+		}}}}
+	}
+	films := map[string][]Copy{
+		"Dune": {copyOf("Dune 1080p", 1920, domain.RangeSDR), copyOf("Dune 2160p", 3840, domain.RangeDV)},
+		"Heat": {copyOf("Heat", 1920, domain.RangeSDR)},
+		// The widest copy is the best, so a 1080p Dolby Vision copy beside it lends it nothing.
+		"Ran": {copyOf("Ran 2160p", 3840, domain.RangeSDR), copyOf("Ran 1080p", 1920, domain.RangeDV)},
+		"Up":  {copyOf("Up", 1280, domain.RangeHDR10)},
+	}
+	for title, copies := range films {
+		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{{Title: title, Folder: title, Copies: copies}}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cfg := s.pool.Config()
+	var count queryCount
+	cfg.ConnConfig.Tracer = &count
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	counted := &Store{pool: pool}
+	page := func(limit int) ([]Card, int64) {
+		before := count.n.Load()
+		cards, _, err := counted.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: limit})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cards, count.n.Load() - before
+	}
+	_, one := page(1)
+	cards, all := page(len(films))
+	if one != all {
+		t.Errorf("a page of 1 card took %d queries and of %d cards %d; want as many", one, len(cards), all)
+	}
+
+	type quality struct {
+		Resolution domain.Resolution
+		Range      domain.Range
+	}
+	got := map[string]quality{}
+	for _, c := range cards {
+		got[c.Title] = quality{c.Resolution, c.Range}
+	}
+	want := map[string]quality{
+		"Dune": {domain.ResolutionUHD, domain.RangeDV},
+		"Heat": {domain.ResolutionFHD, ""},
+		"Ran":  {domain.ResolutionUHD, ""},
+		"Up":   {domain.ResolutionHD, domain.RangeHDR10},
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("cards say %v, want %v", got, want)
 	}
 }

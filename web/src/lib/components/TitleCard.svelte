@@ -13,7 +13,7 @@ import PlayIcon from "@lucide/svelte/icons/play";
 import { artworkSrc, artworkSrcset, type Shape } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
 import { fadeIn } from "#lib/fade.js";
-import { episodeLabel } from "#lib/format.js";
+import { episodeLabel, rangeName, resolutionNames } from "#lib/format.js";
 import TitleMenu from "./TitleMenu.svelte";
 
 // A title on a wall or a rail: a poster, or for an episode or a row about
@@ -55,6 +55,11 @@ const progress = $derived(
 		? Math.min(card.state.position_ms / card.duration_ms, 1)
 		: 0,
 );
+const resolution = $derived(
+	card.resolution ? resolutionNames[card.resolution] : "",
+);
+const range = $derived(card.range ? rangeName(card.range) : "");
+
 const unwatched = $derived(card.state?.unwatched ?? 0);
 // Watched again part way, it is the progress that shows.
 const watched = $derived(!!card.state?.watched_at && !progress);
@@ -111,7 +116,7 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 				>
 					{name}
 				</p>
-				{#if progress > 0 || caption}
+				{#if progress > 0 || caption || resolution || range}
 					<p class="text-ink-2 flex items-center gap-1.5 text-xs">
 						{#if progress > 0}
 							<PlayIcon
@@ -127,6 +132,22 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 							</span>
 						{/if}
 						<span class="truncate">{caption}</span>
+						{#if resolution || range}
+							<span class="ml-auto flex shrink-0 gap-1">
+								{#if resolution}
+									<span class="quality-chip">{resolution}</span>
+								{/if}
+								{#if range}
+									<!-- Dolby Vision is "DV" on a poster, but read in full. -->
+									<span class="quality-chip">
+										<span aria-hidden="true">
+											{card.range === "dv" ? "DV" : range}
+										</span>
+										<span class="sr-only">{range}</span>
+									</span>
+								{/if}
+							</span>
+						{/if}
 					</p>
 				{/if}
 			</div>
