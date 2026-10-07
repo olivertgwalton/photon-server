@@ -9,6 +9,8 @@ x-server: &server
 services:
   server:
     <<: *server
+    # Its name among the server's nodes, which a container's own would change on every recreate.
+    hostname: ${PHOTON_HOSTNAME:-photon}
     ports: ["8640:8640"]
     volumes:
       # Libraries are added at their path inside the container: /media/Films and the like.
