@@ -65,6 +65,10 @@ var version = "(devel)"
 const (
 	defaultListen = ":8640"
 	shutdownGrace = 10 * time.Second
+	// drainFor is the longest a node stopping plays its streams to their end: a film's length.
+	drainFor = 2 * time.Hour
+	// drainPoll is how often a node draining looks whether its streams have ended.
+	drainPoll = 5 * time.Second
 )
 
 const (
@@ -324,14 +328,16 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		domain.JobConvert: conversions.Convert,
 	}, hub, jobs.When(self.TakesTranscodes)))
 	watcher := watch.New(st, logger)
-	background, stopBackground := context.WithCancel(ctx)
+	// What keeps streams playing (serving, telling the others where this node is, ending what has
+	// stopped) outlives the signal, as the node drains; what begins new work stops at it.
+	background, stopBackground := context.WithCancel(context.WithoutCancel(ctx))
 	var wg sync.WaitGroup
 	// On the signal's context, not background's, so its streams end before Shutdown waits on them.
 	wg.Go(func() { hub.Run(ctx) })
-	wg.Go(func() { scheduler.Run(background) })
+	wg.Go(func() { scheduler.Run(ctx) })
 	wg.Go(func() { gate.Run(background) })
 	for _, w := range workers {
-		wg.Go(func() { w.Run(background) })
+		wg.Go(func() { w.Run(ctx) })
 	}
 	wg.Go(func() { sweepPlaybacks(background, sessions, remuxer, logger) })
 	wg.Go(func() { pruneConversions(background, conversions, logger) })
@@ -340,7 +346,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		wg.Go(func() { advertise(background, cache, self.Node, remuxer.Changes(), self.Changes(), logger) })
 	}
 	wg.Go(func() {
-		if err := watcher.Run(background); err != nil {
+		if err := watcher.Run(ctx); err != nil {
 			logger.WarnContext(ctx, "libraries are scanned on schedule only", slog.Any("err", err))
 		}
 	})
@@ -360,11 +366,45 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	})
 	wg.Go(func() { jellyfinAPI.Run(background) })
 	logger.InfoContext(ctx, "serving", slog.String("addr", srv.Addr), slog.String("version", info.Version))
-	return listenUntilDone(ctx, srv, secured.Listen)
+	return listenUntilDone(ctx, srv, secured.Listen, func() {
+		again := make(chan os.Signal, 1)
+		signal.Notify(again, os.Interrupt, syscall.SIGTERM)
+		defer signal.Stop(again)
+		drain(context.WithoutCancel(ctx), self, remuxer, again, drainFor, logger)
+	})
 }
 
-// listenUntilDone serves until ctx ends, then gives open requests shutdownGrace to finish.
-func listenUntilDone(ctx context.Context, srv *http.Server, either func(net.Listener) net.Listener) error {
+// drain stops this node taking new work and plays its streams to their end, for limit at most,
+// before it stops serving: another node takes new streams meanwhile. A signal on again stops it
+// at once.
+func drain(ctx context.Context, self interface{ Stop() }, streams interface{ Playbacks() []uuid.UUID }, again <-chan os.Signal, limit time.Duration, logger *slog.Logger) {
+	self.Stop()
+	t := time.NewTicker(drainPoll)
+	defer t.Stop()
+	until := time.After(limit)
+	said := -1
+	for {
+		left := len(streams.Playbacks())
+		if left == 0 {
+			return
+		}
+		if left != said {
+			logger.InfoContext(ctx, "draining: playing streams to their end; stop again to stop at once", slog.Int("streams", left))
+			said = left
+		}
+		select {
+		case <-t.C:
+		case <-until:
+			return
+		case <-again:
+			return
+		}
+	}
+}
+
+// listenUntilDone serves until ctx ends and drain returns, then gives open requests shutdownGrace
+// to finish.
+func listenUntilDone(ctx context.Context, srv *http.Server, either func(net.Listener) net.Listener, drain func()) error {
 	served := make(chan error, 1)
 	go func() {
 		l, err := new(net.ListenConfig).Listen(ctx, "tcp", srv.Addr)
@@ -379,6 +419,7 @@ func listenUntilDone(ctx context.Context, srv *http.Server, either func(net.List
 		return err
 	case <-ctx.Done():
 	}
+	drain()
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownGrace)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
