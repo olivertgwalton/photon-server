@@ -77,6 +77,7 @@ type mediaStream struct {
 	IsExternal             bool    `json:"IsExternal"`
 	IsTextSubtitleStream   bool    `json:"IsTextSubtitleStream"`
 	SupportsExternalStream bool    `json:"SupportsExternalStream"`
+	DeliveryMethod         string  `json:"DeliveryMethod,omitempty"`
 	Level                  int     `json:"Level,omitempty"`
 }
 
@@ -105,8 +106,8 @@ func sourceOf(v store.VersionPage) mediaSource {
 	s := mediaSource{
 		Protocol: "File", ID: guid(v.ID), Path: file, Type: "Default", Container: domain.ContainerName(v.Container), Size: v.SizeBytes,
 		Name: cmp.Or(v.Label, v.Edition, strings.TrimSuffix(file, path.Ext(file)), domain.ContainerName(v.Container)), ETag: guid(v.ID),
-		RunTimeTicks:        v.DurationMS * ticksPerMS,
-		SupportsTranscoding: true, SupportsDirectStream: true, SupportsDirectPlay: true, VideoType: "VideoFile",
+		RunTimeTicks:         v.DurationMS * ticksPerMS,
+		SupportsDirectStream: true, SupportsDirectPlay: true, VideoType: "VideoFile",
 		MediaStreams: make([]mediaStream, 0, len(v.Streams)), MediaAttachments: []struct{}{}, Formats: []string{},
 		Bitrate: v.BitrateKbps * 1000, TranscodingSubProtocol: "http",
 		DefaultAudioStreamIndex: v.DefaultAudioStream, DefaultSubtitleStreamIndex: v.DefaultSubtitleStream,
@@ -117,6 +118,19 @@ func sourceOf(v store.VersionPage) mediaSource {
 			s.DefaultAudioStreamIndex = &t.Index
 		}
 	}
+	// Subtitle files beside the copy follow its own tracks, each at the address an app builds for
+	// it from its index and codec.
+	base := externalBase(v)
+	for n, f := range v.Subtitles {
+		m := mediaStream{
+			Codec: f.Codec, Language: iso639(f.Language), Title: f.Title, IsDefault: f.Default, IsForced: f.Forced,
+			IsHearingImpaired: f.HearingImpaired, Type: "Subtitle", Index: base + n, IsExternal: true,
+			IsTextSubtitleStream: textSubtitles[f.Codec], SupportsExternalStream: true, DeliveryMethod: "External",
+		}
+		m.DisplayTitle = strings.Join(nonEmpty(cmp.Or(f.Title, strings.ToUpper(m.Language)), strings.ToUpper(f.Codec)), " - ")
+		s.MediaStreams = append(s.MediaStreams, m)
+	}
+	s.HasSegments = len(v.Markers) > 0
 	return s
 }
 
@@ -146,6 +160,15 @@ func streamOf(t store.StreamPage) mediaStream {
 		m.DisplayTitle = strings.Join(nonEmpty(cmp.Or(t.Title, strings.ToUpper(m.Language)), strings.ToUpper(t.Codec)), " - ")
 	}
 	return m
+}
+
+// externalBase is the index of a copy's first subtitle file: after every track of its own.
+func externalBase(v store.VersionPage) int {
+	base := 0
+	for _, t := range v.Streams {
+		base = max(base, t.Index+1)
+	}
+	return base
 }
 
 // iso639 is a language as Jellyfin names one, by its three letters: "eng" for photon's "en".
