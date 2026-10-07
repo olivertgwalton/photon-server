@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +34,8 @@ type catalogue interface {
 	Home(ctx context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	LibraryCounts(ctx context.Context, profile uuid.UUID) (map[uuid.UUID]domain.TitleCounts, error)
+	LibraryOrder(ctx context.Context, profile uuid.UUID) ([]uuid.UUID, error)
+	SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error
 }
 
 type libraryJSON struct {
@@ -90,16 +93,50 @@ func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	counts, err := a.svc.Catalogue.LibraryCounts(r.Context(), sessionOf(r).Profile.ID)
+	profile := sessionOf(r).Profile.ID
+	counts, err := a.svc.Catalogue.LibraryCounts(r.Context(), profile)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
+	order, err := a.svc.Catalogue.LibraryOrder(r.Context(), profile)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	// In the profile's order, those it has not placed after, by name.
+	rank := func(id uuid.UUID) int {
+		if n := slices.Index(order, id); n >= 0 {
+			return n
+		}
+		return len(order)
+	}
+	slices.SortStableFunc(libs, func(x, y domain.Library) int { return cmp.Compare(rank(x.ID), rank(y.ID)) })
 	out := make([]libraryJSON, len(libs))
 	for i, l := range libs {
 		out[i] = libraryJSON{ID: l.ID, Name: l.Name, Kind: l.Kind, Counts: countsJSON(counts[l.ID])}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[libraryJSON]{Items: out})
+}
+
+type libraryOrderJSON struct {
+	LibraryIDs []uuid.UUID `json:"library_ids"`
+}
+
+// setLibraryOrder puts the profile's libraries in an order, as its sidebar lists them.
+func (a *API) setLibraryOrder(w http.ResponseWriter, r *http.Request) {
+	var req libraryOrderJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	err := a.svc.Catalogue.SetLibraryOrder(r.Context(), sessionOf(r).Profile.ID, req.LibraryIDs)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeProblem(w, a.logger, codeNotFound, "a library is named twice, or is no library")
+	case a.answered(w, r, err):
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 func (a *API) wall(w http.ResponseWriter, r *http.Request) {
