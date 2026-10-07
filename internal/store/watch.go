@@ -302,7 +302,7 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 		}
 	}
 	if len(groups) > 0 {
-		found, err := s.pool.Query(ctx, `
+		counts, err := queryStructs[episodeCount](ctx, s.pool, `
 			SELECT g.id, count(e.id) AS episodes, count(ws.watched_at) AS watched,
 				max(ws.last_played_at) AS last_played, max(ws.watched_at) AS watched_at
 			FROM items g
@@ -314,10 +314,6 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 			LEFT JOIN watch_state ws ON ws.item_id = e.id AND ws.profile_id = $1
 			WHERE g.id = ANY($2::uuid[])
 			GROUP BY g.id`, profile, ids(groups))
-		if err != nil {
-			return nil, err
-		}
-		counts, err := pgx.CollectRows(found, pgx.RowToStructByName[episodeCount])
 		if err != nil {
 			return nil, err
 		}

@@ -29,15 +29,11 @@ type PlaylistEntry struct {
 
 // Playlists answers a profile's playlists, by name.
 func (s *Store) Playlists(ctx context.Context, profile uuid.UUID) ([]PlaylistSummary, error) {
-	rows, err := s.pool.Query(ctx, `
+	return queryStructs[PlaylistSummary](ctx, s.pool, `
 		SELECT p.id, p.name, p.updated_at, count(e.id) AS entries,
 			coalesce(sum((SELECT max(v.duration_ms) FROM versions v WHERE v.item_id = e.item_id AND v.missing_since IS NULL)), 0) AS duration_ms
 		FROM playlists p LEFT JOIN playlist_entries e ON e.playlist_id = p.id
 		WHERE p.profile_id = $1 GROUP BY p.id ORDER BY lower(p.name), p.id`, profile)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[PlaylistSummary])
 }
 
 // AddPlaylist makes a profile's playlist of titles (see AddToPlaylist).
@@ -217,11 +213,7 @@ func playableOf(ctx context.Context, tx db, id uuid.UUID) ([]uuid.UUID, error) {
 	case domain.ItemExtra:
 		return nil, ErrNotFound
 	}
-	rows, err := tx.Query(ctx, sql, id)
-	if err != nil {
-		return nil, err
-	}
-	out, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	out, err := queryColumn[uuid.UUID](ctx, tx, sql, id)
 	if err != nil || kind != domain.ItemCollection {
 		return out, err
 	}

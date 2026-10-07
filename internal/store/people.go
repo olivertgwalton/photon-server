@@ -321,14 +321,10 @@ func personOwners(ctx context.Context, tx db, keys []personKey) (map[personKey]o
 	for n, k := range keys {
 		providers[n], values[n] = string(k.provider), k.value
 	}
-	found, err := tx.Query(ctx, `
+	rows, err := queryStructs[owner](ctx, tx, `
 		SELECT i.person_id, i.provider, i.value, p.name, p.photo_url, p.photo_id, p.photo_blurhash
 		FROM person_ids i JOIN people p ON p.id = i.person_id
 		WHERE (i.provider, i.value) IN (SELECT * FROM unnest($1::text[], $2::text[]))`, providers, values)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := pgx.CollectRows(found, pgx.RowToStructByName[owner])
 	out := make(map[personKey]owner, len(rows))
 	for _, r := range rows {
 		out[personKey{r.Provider, r.Value}] = r
@@ -388,13 +384,9 @@ func (s *Store) credits(ctx context.Context, item uuid.UUID) ([]CreditRef, error
 	if err != nil {
 		return nil, err
 	}
-	found, err := s.pool.Query(ctx, `
+	rows, err := queryStructs[creditRow](ctx, s.pool, `
 		SELECT c.source, c.person_id, p.name, c.kind, c.role, p.photo_id, p.photo_blurhash AS blurhash FROM credits c
 		JOIN people p ON p.id = c.person_id WHERE c.item_id = $1 ORDER BY c.position`, item)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := pgx.CollectRows(found, pgx.RowToStructByName[creditRow])
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}
@@ -493,7 +485,7 @@ func (s *Store) Person(ctx context.Context, id uuid.UUID) (PersonPage, error) {
 	if err != nil {
 		return PersonPage{}, err
 	}
-	languages, err := s.pool.Query(ctx, `
+	asked, err := queryColumn[string](ctx, s.pool, `
 		WITH RECURSIVE credited AS (
 			SELECT i.id, i.parent_id, i.kind, i.library_id, i.metadata_language
 			FROM credits c JOIN items i ON i.id = c.item_id WHERE c.person_id = $1
@@ -502,10 +494,6 @@ func (s *Store) Person(ctx context.Context, id uuid.UUID) (PersonPage, error) {
 		)
 		SELECT DISTINCT coalesce(t.metadata_language, l.metadata_language, '') FROM credited t
 		JOIN libraries l ON l.id = t.library_id WHERE t.kind IN ('movie', 'show')`, id)
-	if err != nil {
-		return PersonPage{}, err
-	}
-	asked, err := pgx.CollectRows(languages, pgx.RowTo[string])
 	if len(asked) == 1 {
 		out.Language = asked[0]
 	}
@@ -560,17 +548,13 @@ type creditLink struct {
 // PersonCredits answers the films and shows someone is credited on, the newest first.
 func (s *Store) PersonCredits(ctx context.Context, profile, person uuid.UUID) ([]PersonCredit, error) {
 	// An episode's credit is its show's; a person in many episodes is listed once per part.
-	found, err := s.pool.Query(ctx, `
+	links, err := queryStructs[creditLink](ctx, s.pool, `
 		SELECT DISTINCT ON (t.id, c.kind) t.id AS item_id, c.kind, c.role FROM credits c
 		JOIN items i ON i.id = c.item_id
 		JOIN items t ON t.id = CASE i.kind WHEN 'episode' THEN (SELECT s.parent_id FROM items s WHERE s.id = i.parent_id) ELSE i.id END
 		WHERE c.person_id = $1 AND t.kind IN ('movie', 'show')
 			AND EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, t) AND first_of_title(v, t))
 		ORDER BY t.id, c.kind, c.position`, person, profile)
-	if err != nil {
-		return nil, err
-	}
-	links, err := pgx.CollectRows(found, pgx.RowToStructByName[creditLink])
 	if err != nil || len(links) == 0 {
 		return nil, err
 	}

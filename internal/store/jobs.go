@@ -140,7 +140,7 @@ func (s *Store) ScanAnswered(ctx context.Context, lib uuid.UUID, folders []strin
 // planner may run the subquery again for each row it scans, each run skipping what the last
 // locked, and lease far more than n.
 func (s *Store) ClaimJobs(ctx context.Context, kinds, nowOnly []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error) {
-	rows, err := s.pool.Query(ctx, `
+	return queryStructs[domain.Job](ctx, s.pool, `
 		WITH picked AS MATERIALIZED (
 			SELECT id FROM jobs WHERE state = 'queued' AND run_after <= now() AND kind = ANY($1)
 				AND (due = 'now' OR NOT kind = ANY(coalesce($5::text[], '{}')))
@@ -148,10 +148,6 @@ func (s *Store) ClaimJobs(ctx context.Context, kinds, nowOnly []domain.JobKind, 
 		UPDATE jobs SET state = 'running', lease_until = now() + $2, attempts = attempts + 1, node_id = $3
 		FROM picked WHERE jobs.id = picked.id
 		RETURNING jobs.id, jobs.kind, jobs.subject, jobs.attempts, jobs.due`, kinds, lease, node, limit, nowOnly)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[domain.Job])
 }
 
 // CompleteJob removes a finished job, as what it produced is the record that it ran, or queues
@@ -197,12 +193,8 @@ func (s *Store) PostponeJob(ctx context.Context, job domain.Job, delay time.Dura
 
 // RunningJobs answers the jobs being run now, on every node, the oldest first.
 func (s *Store) RunningJobs(ctx context.Context) ([]domain.Job, error) {
-	rows, err := s.pool.Query(ctx, `
+	return queryStructs[domain.Job](ctx, s.pool, `
 		SELECT id, kind, subject, attempts, due FROM jobs WHERE state IN ('running', 'rerun') ORDER BY id`)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[domain.Job])
 }
 
 // JobsLeft answers how many jobs of each kind are left to run, queued or running, leaving out

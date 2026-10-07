@@ -57,6 +57,24 @@ func queryRows[T any](ctx context.Context, q db, sql string, args ...any) ([]*T,
 	return pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[T])
 }
 
+// queryStructs is queryRows by value.
+func queryStructs[T any](ctx context.Context, q db, sql string, args ...any) ([]T, error) {
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[T])
+}
+
+// queryColumn answers the one column of the rows a statement finds.
+func queryColumn[T any](ctx context.Context, q db, sql string, args ...any) ([]T, error) {
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[T])
+}
+
 // ids is the items' ids, for an array parameter.
 func ids(rows []*model.Item) []uuid.UUID {
 	out := make([]uuid.UUID, len(rows))

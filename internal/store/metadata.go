@@ -19,15 +19,11 @@ import (
 // library does not take writes nothing. A list is replaced whole, never merged, so two providers'
 // genres never stand side by side.
 func applyMetadata(ctx context.Context, tx db, item uuid.UUID, source domain.FieldSource, m domain.Metadata) error {
-	rows, err := tx.Query(ctx, `SELECT field, source FROM item_fields WHERE item_id = $1`, item)
-	if err != nil {
-		return err
-	}
 	type itemField struct {
 		Field  domain.Field
 		Source domain.FieldSource
 	}
-	fields, err := pgx.CollectRows(rows, pgx.RowToStructByName[itemField])
+	fields, err := queryStructs[itemField](ctx, tx, `SELECT field, source FROM item_fields WHERE item_id = $1`, item)
 	if err != nil {
 		return err
 	}

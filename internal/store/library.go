@@ -312,11 +312,7 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 				return err
 			}
 		}
-		rows, err := tx.Query(ctx, `SELECT id FROM items WHERE library_id = $1 AND kind IN ('movie', 'show')`, id)
-		if err != nil {
-			return err
-		}
-		titles, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		titles, err := queryColumn[uuid.UUID](ctx, tx, `SELECT id FROM items WHERE library_id = $1 AND kind IN ('movie', 'show')`, id)
 		if err != nil {
 			return err
 		}
@@ -400,11 +396,7 @@ func tags(kept []string) []language.Tag {
 // alpha-2 code. The table also keeps ratings no country gives (Jellyfin's 0-PREFER), which are
 // none.
 func (s *Store) CertificateCountries(ctx context.Context) ([]string, error) {
-	rows, err := s.pool.Query(ctx, `SELECT DISTINCT country FROM certificates WHERE country ~ '^[A-Z]{2}$' ORDER BY country`)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowTo[string])
+	return queryColumn[string](ctx, s.pool, `SELECT DISTINCT country FROM certificates WHERE country ~ '^[A-Z]{2}$' ORDER BY country`)
 }
 
 // SetLibraryOrder puts a profile's libraries in this order. ErrNotFound for one named twice or no

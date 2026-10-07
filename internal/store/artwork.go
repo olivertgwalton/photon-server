@@ -415,7 +415,7 @@ type Unhashed struct {
 // Unhashed answers up to limit of the titles' pictures and people's photos with no BlurHash, in
 // id order from after.
 func (s *Store) Unhashed(ctx context.Context, after uuid.UUID, limit int) ([]Unhashed, error) {
-	rows, err := s.pool.Query(ctx, `
+	return queryStructs[Unhashed](ctx, s.pool, `
 		(SELECT a.id, CASE a.source WHEN 'file' THEN l.root ELSE '' END AS root,
 			CASE a.source WHEN 'file' THEN a.place ELSE '' END AS path
 		FROM artwork a JOIN items i ON i.id = a.item_id JOIN libraries l ON l.id = i.library_id
@@ -424,8 +424,4 @@ func (s *Store) Unhashed(ctx context.Context, after uuid.UUID, limit int) ([]Unh
 		(SELECT photo_id, '', '' FROM people WHERE photo_blurhash IS NULL AND photo_id > @after ORDER BY photo_id LIMIT @limit)
 		ORDER BY id LIMIT @limit`,
 		pgx.NamedArgs{"after": after, "limit": limit})
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[Unhashed])
 }

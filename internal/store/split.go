@@ -26,13 +26,9 @@ func (s *Store) SplitTitle(ctx context.Context, id uuid.UUID) error {
 		if item.Kind != domain.ItemMovie {
 			return ErrNotFound
 		}
-		rows, err := tx.Query(ctx, `
+		versions, err := queryColumn[uuid.UUID](ctx, tx, `
 			SELECT id FROM versions WHERE item_id = $1
 			ORDER BY missing_since IS NOT NULL, duration_ms DESC, id`, id)
-		if err != nil {
-			return err
-		}
-		versions, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 		if err != nil {
 			return err
 		}

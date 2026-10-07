@@ -27,15 +27,11 @@ func (s *Store) Unmatch(ctx context.Context, id uuid.UUID) error {
 		if item.Kind != domain.ItemMovie && item.Kind != domain.ItemShow {
 			return ErrNotFound
 		}
-		rows, err := tx.Query(ctx, `
+		scope, err := queryColumn[uuid.UUID](ctx, tx, `
 			SELECT id FROM items WHERE id = $1
 			UNION SELECT s.id FROM items s WHERE s.parent_id = $1 AND s.kind = 'season'
 			UNION SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id WHERE s.parent_id = $1 AND e.kind = 'episode'`,
 			id)
-		if err != nil {
-			return err
-		}
-		scope, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 		if err != nil {
 			return err
 		}
@@ -70,17 +66,13 @@ func (s *Store) Unmatch(ctx context.Context, id uuid.UUID) error {
 			}
 		}
 		// A sort title follows its title as the scan sorts one.
-		sorted, err := tx.Query(ctx, `
-			SELECT f.item_id, i.title FROM item_fields f JOIN items i ON i.id = f.item_id
-			WHERE f.item_id = ANY($1) AND f.field = 'sort_title' AND f.source NOT IN `+ownSources, scope)
-		if err != nil {
-			return err
-		}
 		type titled struct {
 			ItemID uuid.UUID
 			Title  string
 		}
-		resort, err := pgx.CollectRows(sorted, pgx.RowToStructByName[titled])
+		resort, err := queryStructs[titled](ctx, tx, `
+			SELECT f.item_id, i.title FROM item_fields f JOIN items i ON i.id = f.item_id
+			WHERE f.item_id = ANY($1) AND f.field = 'sort_title' AND f.source NOT IN `+ownSources, scope)
 		if err != nil {
 			return err
 		}

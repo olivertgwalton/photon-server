@@ -367,7 +367,7 @@ func (s *Store) Visible(ctx context.Context, profile uuid.UUID, titles []uuid.UU
 	if len(titles) == 0 {
 		return nil, nil
 	}
-	return queryIDs(ctx, s.pool, `
+	return queryColumn[uuid.UUID](ctx, s.pool, `
 		SELECT t.id FROM unnest($1::uuid[]) WITH ORDINALITY AS t(id, n)
 		JOIN items i ON i.id = t.id, viewer($2) v
 		WHERE sees(v, i) ORDER BY t.n`, titles, profile)
@@ -375,7 +375,7 @@ func (s *Store) Visible(ctx context.Context, profile uuid.UUID, titles []uuid.UU
 
 // SameTitles answers a title and those the same as it in other libraries that a profile may see.
 func (s *Store) SameTitles(ctx context.Context, profile, title uuid.UUID) ([]uuid.UUID, error) {
-	return queryIDs(ctx, s.pool, `
+	return queryColumn[uuid.UUID](ctx, s.pool, `
 		SELECT t FROM same_title($1) t JOIN items i ON i.id = t, viewer($2) v
 		WHERE sees(v, i) ORDER BY t`, title, profile)
 }

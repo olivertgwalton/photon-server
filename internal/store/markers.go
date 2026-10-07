@@ -166,7 +166,7 @@ type seasonPartRow struct {
 // SeasonParts answers the parts of a season's episodes that are on disk, in a library that compares
 // sound, and have sound, by episode, copy and order.
 func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart, error) {
-	found, err := s.pool.Query(ctx, `
+	rows, err := queryStructs[seasonPartRow](ctx, s.pool, `
 		SELECT DISTINCT ON (p.id) p.id, e.id AS episode, v.id AS version, p.idx, p.duration_ms,
 			l.root, f.rel_path, p.fingerprinted_at
 		FROM items e
@@ -177,10 +177,6 @@ func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart
 		WHERE e.parent_id = $1 AND e.kind = 'episode'
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'audio')
 		ORDER BY p.id, f.rel_path`, season)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := pgx.CollectRows(found, pgx.RowToStructByName[seasonPartRow])
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +213,7 @@ type filmEndRow struct {
 // FilmEnds answers the last part of each copy of a film on disk, in a library that reads its files
 // for markers, with a picture: none for anything but a film.
 func (s *Store) FilmEnds(ctx context.Context, film uuid.UUID) ([]FilmEnd, error) {
-	found, err := s.pool.Query(ctx, `
+	rows, err := queryStructs[filmEndRow](ctx, s.pool, `
 		SELECT DISTINCT ON (p.id) p.id, p.duration_ms, l.root, f.rel_path, p.fingerprinted_at
 		FROM items i
 		JOIN versions v ON v.item_id = i.id AND v.missing_since IS NULL
@@ -227,10 +223,6 @@ func (s *Store) FilmEnds(ctx context.Context, film uuid.UUID) ([]FilmEnd, error)
 		WHERE i.id = $1 AND i.kind = 'movie'
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'video')
 		ORDER BY p.id, f.rel_path`, film)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := pgx.CollectRows(found, pgx.RowToStructByName[filmEndRow])
 	out := make([]FilmEnd, len(rows))
 	for n, r := range rows {
 		out[n] = FilmEnd{

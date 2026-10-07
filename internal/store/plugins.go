@@ -27,11 +27,7 @@ type Plugin struct {
 
 // Plugins answers every registered plugin, by slug.
 func (s *Store) Plugins(ctx context.Context) ([]Plugin, error) {
-	rows, err := s.pool.Query(ctx, `SELECT slug, url, manifest FROM plugins ORDER BY slug`)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[Plugin])
+	return queryStructs[Plugin](ctx, s.pool, `SELECT slug, url, manifest FROM plugins ORDER BY slug`)
 }
 
 // Plugin answers a registered plugin, or ErrNotFound.
