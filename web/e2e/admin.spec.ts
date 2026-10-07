@@ -317,7 +317,7 @@ test("a title is edited, matched, given a poster and marked", async ({
 	await expect(page.getByText("A field can't be emptied.")).toBeVisible();
 
 	await page.getByRole("button", { name: "Search" }).click();
-	await page.getByRole("button", { name: "This one : Quiet Hours" }).click();
+	await page.getByRole("button", { name: "Select Quiet Hours" }).click();
 	await expect(
 		page.getByText("Matched. Its details follow in a moment."),
 	).toBeVisible();
@@ -359,7 +359,7 @@ test("a title is edited and its match fixed from its card", async ({
 		"true",
 	);
 	await dialog.getByRole("button", { name: "Search" }).click();
-	await dialog.getByRole("button", { name: "This one : Quiet Hours" }).click();
+	await dialog.getByRole("button", { name: "Select Quiet Hours" }).click();
 	await expect(
 		page.getByText("Matched. Its details follow in a moment."),
 	).toBeVisible();
