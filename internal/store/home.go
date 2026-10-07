@@ -177,10 +177,15 @@ const librariesSeen = `
 	WHERE v.libraries IS NULL OR l.id = ANY (v.libraries)
 	ORDER BY o.position NULLS LAST, l.name, l.id`
 
-type libraryRow struct {
+type SeenLibrary struct {
 	ID   uuid.UUID
 	Name string
 	Kind domain.LibraryKind
+}
+
+// LibrariesSeen answers the libraries a profile sees, in the order it put them.
+func (s *Store) LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*SeenLibrary, error) {
+	return queryRows[SeenLibrary](ctx, s.pool, librariesSeen, pgx.NamedArgs{"profile": profile})
 }
 
 // rowItems are a home row and its titles, before their cards are made.
@@ -210,7 +215,7 @@ func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeR
 	if err != nil {
 		return nil, err
 	}
-	libs, err := queryRows[libraryRow](ctx, s.pool, librariesSeen, pgx.NamedArgs{"profile": profile})
+	libs, err := s.LibrariesSeen(ctx, profile)
 	if err != nil {
 		return nil, err
 	}
