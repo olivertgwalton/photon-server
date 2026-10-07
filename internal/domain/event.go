@@ -52,6 +52,9 @@ const (
 	// EventMaintenanceChanged is the maintenance window, or when work waits for it, changed by an
 	// admin; every node keeps to it from then, as Plex applies its settings at once.
 	EventMaintenanceChanged EventKind = "maintenance.changed"
+	// EventNetworkChanged is whether the port answers HTTPS, or its certificate, changed by an
+	// admin; every node serves it from then.
+	EventNetworkChanged EventKind = "network.changed"
 )
 
 func EventKinds() []EventKind {
@@ -61,7 +64,7 @@ func EventKinds() []EventKind {
 		EventLibraryAdded, EventLibraryRemoved, EventLibraryScanned, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventTitlesAdded, EventScanProgress, EventTaskStarted, EventTaskFinished, EventTaskFailed, EventBackupMade,
 		EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead, EventJobsProgress, EventWebhookTest,
-		EventMaintenanceChanged,
+		EventMaintenanceChanged, EventNetworkChanged,
 	}
 }
 
@@ -75,7 +78,8 @@ func (k EventKind) Logged() bool {
 		return true
 	case EventPlaybackPaused, EventPlaybackResumed, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventScanProgress, EventTaskStarted, EventTaskFinished, EventJobStarted,
-		EventJobFinished, EventJobFailed, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged:
+		EventJobFinished, EventJobFailed, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged,
+		EventNetworkChanged:
 		return false
 	}
 	return false
@@ -93,7 +97,7 @@ func (k EventKind) Hookable() bool {
 		return true
 	case EventLibraryChanged, EventTitleUpdated, EventUserDataChanged, EventScanProgress,
 		EventTaskStarted, EventTaskFinished, EventJobStarted, EventJobFinished, EventJobFailed,
-		EventJobDead, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged:
+		EventJobDead, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged, EventNetworkChanged:
 		return false
 	}
 	return false
