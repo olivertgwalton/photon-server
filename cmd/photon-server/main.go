@@ -144,10 +144,6 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	web, err := webApp()
-	if err != nil {
-		return err
-	}
 	tools, err := media.FindTools(ctx)
 	if err != nil {
 		return err
@@ -187,6 +183,10 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	defer stores.Close()
 	pictureCache := artwork.New(&stores.Artwork, st.SetBlurhash)
 	previews := analysis.NewPreviews(&stores.Previews)
+	web, err := webApp(stores.Origin)
+	if err != nil {
+		return err
+	}
 	signingKey, err := st.SigningKey(ctx)
 	if err != nil {
 		return err
@@ -411,8 +411,9 @@ func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *
 const defaultWebDir = "/usr/local/share/photon-server/web"
 
 // webApp is the web app's build in PHOTON_WEB_DIR, served when PHOTON_WEB is serve, as it is by
-// default wherever there is a build; nil when the server answers the API alone.
-func webApp() (*httpapi.Web, error) {
+// default wherever there is a build; nil when the server answers the API alone. Its pages may draw
+// from where objectOrigin says clients read artwork and previews.
+func webApp(objectOrigin func() string) (*httpapi.Web, error) {
 	build := os.DirFS(cmp.Or(os.Getenv("PHOTON_WEB_DIR"), defaultWebDir))
 	mode := os.Getenv("PHOTON_WEB")
 	if mode == "" {
@@ -427,7 +428,7 @@ func webApp() (*httpapi.Web, error) {
 	}
 	switch web {
 	case domain.WebServe:
-		app, err := httpapi.NewWeb(build)
+		app, err := httpapi.NewWeb(build, objectOrigin)
 		if err != nil {
 			return nil, fmt.Errorf("PHOTON_WEB is serve but PHOTON_WEB_DIR has no build: %w", err)
 		}

@@ -14,6 +14,20 @@ func StorageKinds() []StorageKind {
 	return []StorageKind{StorageDisk, StorageBucket}
 }
 
+// Delivery is how clients are given what is kept in a bucket.
+type Delivery string
+
+const (
+	// DeliverProxy sends it through the server, for a bucket clients cannot reach.
+	DeliverProxy Delivery = "proxy"
+	// DeliverRedirect sends clients to read pictures, sounds and previews from the bucket itself.
+	DeliverRedirect Delivery = "redirect"
+)
+
+func Deliveries() []Delivery {
+	return []Delivery{DeliverProxy, DeliverRedirect}
+}
+
 // Storage is where an admin has chosen artwork and previews be kept.
 type Storage struct {
 	Kind StorageKind
@@ -32,6 +46,9 @@ type Bucket struct {
 	Region string
 	// AccessKey and SecretKey sign each request; without them, AWS's own credentials do.
 	AccessKey, SecretKey string
+	Delivery             Delivery
+	// PublicEndpoint is where clients reach the store, where it is not at Endpoint.
+	PublicEndpoint string
 }
 
 // SamePlace reports whether s keeps things where o does, whatever it signs with.

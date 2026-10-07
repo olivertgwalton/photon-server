@@ -30,6 +30,10 @@ type fakeStores struct {
 
 func (f *fakeStores) Empty(context.Context) (bool, error) { return !f.holding, nil }
 
+func (f *fakeStores) Probe(context.Context) (string, error) {
+	return "https://media.example.com/photon/.photon-probe.png?X-Amz-Signature=s", nil
+}
+
 func (f *fakeStores) Check(_ context.Context, b domain.Bucket) error {
 	f.checked = append(f.checked, b)
 	if b.Name == "unreachable" {
@@ -56,6 +60,7 @@ func ask(api *API, method, target, body string) *httptest.ResponseRecorder {
 
 var keptBucket = domain.Storage{Kind: domain.StorageBucket, Bucket: domain.Bucket{
 	Endpoint: "https://s3.example.com", Name: "photon", AccessKey: "AKIA", SecretKey: "kept secret",
+	Delivery: domain.DeliverRedirect, PublicEndpoint: "https://media.example.com",
 }}
 
 // The secret key is written and never read back: the admin is told only that one is kept.
@@ -65,6 +70,22 @@ func TestABucketsSecretKeyIsNeverShown(t *testing.T) {
 	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "kept secret") ||
 		!strings.Contains(rec.Body.String(), `"secret_key_set":true`) {
 		t.Errorf("answered %d %s, want the bucket with its secret key said to be set and not shown", rec.Code, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), `"probe":"https://media.example.com/`) {
+		t.Errorf("answered %s, want a picture in the bucket for the browser to try", rec.Body)
+	}
+}
+
+// Clients are given what is kept through this server unless an admin sends them to the bucket.
+func TestClientsAreSentToTheBucketOnlyWhenAsked(t *testing.T) {
+	api, settings, _, _ := storageAPI(domain.Storage{Kind: domain.StorageDisk}, false)
+	ask(api, http.MethodPut, "/api/v1/admin/storage", `{"kind":"bucket","bucket":{"name":"photon"}}`)
+	if settings.kept.Bucket.Delivery != domain.DeliverProxy {
+		t.Errorf("kept %+v, want what is kept given through this server", settings.kept.Bucket)
+	}
+	rec := ask(api, http.MethodPut, "/api/v1/admin/storage", `{"kind":"bucket","bucket":{"name":"photon","delivery":"teleport"}}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("an unknown delivery: answered %d, want it refused", rec.Code)
 	}
 }
 

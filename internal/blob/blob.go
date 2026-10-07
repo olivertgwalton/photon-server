@@ -5,9 +5,12 @@ package blob
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"iter"
+	"maps"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -189,4 +192,24 @@ func (d *Dir) List(_ context.Context, prefix string) iter.Seq2[Entry, error] {
 			yield(Entry{}, err)
 		}
 	}
+}
+
+// Serve answers r with o, which it closes, in byte ranges and with header; or, for an object a
+// client may read where it is kept, sends it there, keeping the redirect until the link must not
+// be followed. name gives the type where header does not.
+func Serve(w http.ResponseWriter, r *http.Request, o Object, name string, header http.Header) error {
+	defer o.Close()
+	if l, ok := o.ReadSeekCloser.(*linked); ok {
+		link, until, err := l.link(r.Context(), header)
+		if err != nil {
+			return err
+		}
+		w.Header().Set("Cache-Control", fmt.Sprintf("private, max-age=%d", int(time.Until(until).Seconds())))
+		http.Redirect(w, r, link, http.StatusFound)
+		return nil
+	}
+	maps.Copy(w.Header(), header)
+	// The reader itself, not o: a file is sent by sendfile only as an *os.File.
+	http.ServeContent(w, r, name, o.ModTime, o.ReadSeekCloser)
+	return nil
 }

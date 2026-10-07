@@ -546,10 +546,13 @@ func (a *API) image(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	defer o.Close()
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	// A provider's logo may be SVG, which a browser opening it directly would run script in.
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	http.ServeContent(w, r, name, o.ModTime, o.ReadSeekCloser)
+	err = blob.Serve(w, r, o, name, http.Header{
+		"Cache-Control": {"public, max-age=31536000, immutable"},
+		// A provider's logo may be SVG, which a browser opening it directly would run script in.
+		"Content-Security-Policy": {"default-src 'none'; style-src 'unsafe-inline'; sandbox"},
+		"X-Content-Type-Options":  {"nosniff"},
+	})
+	if err != nil {
+		a.internal(w, r, err)
+	}
 }

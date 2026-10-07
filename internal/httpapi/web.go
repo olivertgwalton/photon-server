@@ -21,15 +21,18 @@ import (
 type Web struct {
 	files fs.FS
 	// index is the app's one page, with the policy that lets its own script run.
-	index []byte
-	csp   string
+	index   []byte
+	scripts string
+	// objectOrigin is where artwork and previews are read from as the page is served, or "".
+	objectOrigin func() string
 }
 
 // inlineScript is the script SvelteKit writes into index.html to start the app.
 var inlineScript = regexp.MustCompile(`(?s)<script>(.*?)</script>`)
 
-// NewWeb reads the build in files, which must hold its index.html.
-func NewWeb(files fs.FS) (*Web, error) {
+// NewWeb reads the build in files, which must hold its index.html. Its pages may show pictures and
+// play sounds from where objectOrigin says clients read artwork and previews as each is served.
+func NewWeb(files fs.FS, objectOrigin func() string) (*Web, error) {
 	index, err := fs.ReadFile(files, "index.html")
 	if err != nil {
 		return nil, fmt.Errorf("the web app's build: %w", err)
@@ -43,13 +46,22 @@ func NewWeb(files fs.FS) (*Web, error) {
 		sum := sha256.Sum256(m[1])
 		scripts = append(scripts, "'sha256-"+base64.StdEncoding.EncodeToString(sum[:])+"'")
 	}
-	csp := strings.Join([]string{
-		"default-src 'self'", "script-src " + strings.Join(scripts, " "), "worker-src 'self' blob:",
-		"style-src 'self' 'unsafe-inline'", "img-src 'self' data: " + candidatePosters, "media-src 'self' blob:",
+	return &Web{files: files, index: index, scripts: strings.Join(scripts, " "), objectOrigin: objectOrigin}, nil
+}
+
+// csp is the page's policy. A browser holds a redirect's end to it too, so artwork and previews
+// sent to their bucket are drawn only while its origin is allowed.
+func (web *Web) csp() string {
+	images, media := "img-src 'self' data: "+candidatePosters, "media-src 'self' blob:"
+	if o := web.objectOrigin(); o != "" {
+		images, media = images+" "+o, media+" "+o
+	}
+	return strings.Join([]string{
+		"default-src 'self'", "script-src " + web.scripts, "worker-src 'self' blob:",
+		"style-src 'self' 'unsafe-inline'", images, media,
 		"font-src 'self' data:", "connect-src 'self'", "object-src 'none'", "base-uri 'self'",
 		"form-action 'self'", "frame-ancestors 'none'",
 	}, "; ")
-	return &Web{files: files, index: index, csp: csp}, nil
 }
 
 // candidatePosters are the hosts a match candidate's poster is drawn from straight, as the
@@ -92,7 +104,7 @@ func (web *Web) servePage(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	// A new build names new files, so the page that names them is always asked for again.
 	h.Set("Cache-Control", "no-cache")
-	h.Set("Content-Security-Policy", web.csp)
+	h.Set("Content-Security-Policy", web.csp())
 	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(web.index))
 }
 

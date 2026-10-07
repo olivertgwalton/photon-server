@@ -5730,17 +5730,22 @@ export interface components {
         };
         Bucket: {
             access_key?: string;
+            delivery?: components["schemas"]["Delivery"];
             endpoint?: string;
             folder?: string;
             name: string;
+            public_endpoint?: string;
             region?: string;
             secret_key?: string;
         };
         BucketStatus: {
             access_key?: string;
+            delivery: components["schemas"]["Delivery"];
             endpoint?: string;
             folder?: string;
             name: string;
+            probe?: string;
+            public_endpoint?: string;
             region?: string;
             secret_key_set: boolean;
         };
@@ -5918,6 +5923,8 @@ export interface components {
         };
         /** @enum {string} */
         Decision: "copy" | "transcode";
+        /** @enum {string} */
+        Delivery: "proxy" | "redirect";
         Device: {
             client: string;
             device: string;

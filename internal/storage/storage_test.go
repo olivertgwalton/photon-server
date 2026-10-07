@@ -4,7 +4,10 @@ package storage
 
 import (
 	"context"
+	"image"
+	_ "image/png"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -38,6 +41,7 @@ func testBucket(t *testing.T) domain.Bucket {
 	b := domain.Bucket{
 		Endpoint: os.Getenv("TEST_S3_ENDPOINT"), Name: os.Getenv("TEST_S3_BUCKET"), Folder: uuid.NewV7().String(),
 		AccessKey: os.Getenv("AWS_ACCESS_KEY_ID"), SecretKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+		Delivery: domain.DeliverProxy,
 	}
 	if b.Endpoint == "" || b.Name == "" {
 		t.Fatal("TEST_S3_ENDPOINT and TEST_S3_BUCKET are unset")
@@ -103,5 +107,34 @@ func TestABucketIsCheckedBeforeItIsChosen(t *testing.T) {
 	wrong.SecretKey = "wrong"
 	if err := stores.Check(ctx, wrong); err == nil {
 		t.Error("a bucket the server cannot sign for passed its check")
+	}
+}
+
+// Where clients are sent to the bucket, its origin is told to the page's policy, and a picture
+// there given for the browser to try.
+func TestClientsSentToTheBucketAreGivenAPictureToTry(t *testing.T) {
+	b := testBucket(t)
+	b.Delivery = domain.DeliverRedirect
+	settings := &settingsAt{at: domain.Storage{Kind: domain.StorageBucket, Bucket: b}}
+	stores, err := Open(t.Context(), settings, t.TempDir(), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stores.Close()
+	if stores.Origin() != b.Endpoint {
+		t.Errorf("origin %q, want the bucket's own %q", stores.Origin(), b.Endpoint)
+	}
+	link, err := stores.Probe(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.Get(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	cfg, format, err := image.DecodeConfig(resp.Body)
+	if err != nil || format != "png" || cfg.Width != 1 {
+		t.Errorf("the probe read as %s %dx%d (%v), want a one-pixel PNG", format, cfg.Width, cfg.Height, err)
 	}
 }
