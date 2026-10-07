@@ -21,14 +21,35 @@ jobs:
         ports: ["6379:6379"]
         options: >-
           --health-cmd "valkey-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+      # An S3 gateway over a folder, which checks each request's signature as S3 does.
+      s3:
+        image: versity/versitygw:v1.8.0
+        env:
+          ROOT_ACCESS_KEY: photon
+          ROOT_SECRET_KEY: photonsecret
+          VGW_BACKEND: posix
+          VGW_BACKEND_ARG: /tmp/vgw
+        ports: ["7070:7070"]
     env:
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
       TEST_VALKEY_URL: valkey://localhost:6379
+      TEST_S3_ENDPOINT: http://localhost:7070
+      TEST_S3_BUCKET: photon
+      AWS_ACCESS_KEY_ID: photon
+      AWS_SECRET_ACCESS_KEY: photonsecret
+      AWS_REGION: us-east-1
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Make the test bucket
+        run: |
+          for try in $(seq 30); do
+            aws --endpoint-url http://localhost:7070 s3 mb s3://photon && exit 0
+            sleep 1
+          done
+          exit 1
       - run: go build ./...
       - run: go test -tags integration -race -shuffle=on -count=1 ./...
   lint:
