@@ -1,4 +1,4 @@
-import { invalidate, invalidateAll } from "$app/navigation";
+import { invalidate, refreshAll } from "$app/navigation";
 import { affected, type Change, changeKinds } from "./changes.js";
 
 // A scan sends a burst of changes; the pages reload once for the burst.
@@ -10,7 +10,7 @@ export function connectLive(): () => void {
 	const source = new EventSource("/api/v1/events");
 	let reconnected = false;
 	source.addEventListener("hello", () => {
-		if (reconnected) invalidateAll();
+		if (reconnected) refreshAll();
 		reconnected = true;
 	});
 	const stale = new Set<string>();

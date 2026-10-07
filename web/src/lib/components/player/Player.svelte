@@ -481,7 +481,7 @@ function togglePip() {
 }
 
 function playNext() {
-	if (next) void goto(`/play/${next.id}`, { replaceState: true });
+	if (next) void goto(`/play/${next.id}`, { replace: true });
 }
 
 function skip(m: Schemas["MarkerRef"]) {

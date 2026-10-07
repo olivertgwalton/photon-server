@@ -100,7 +100,7 @@ function subject(job: Schemas["DeadJob"]) {
 						</p>
 						<p class="text-ink-3 text-xs">After {job.attempts} tries</p>
 						{#if job.error}
-							<p class="text-destructive font-mono text-xs break-words">
+							<p class="text-destructive font-mono text-xs wrap-break-word">
 								{job.error}
 							</p>
 						{/if}

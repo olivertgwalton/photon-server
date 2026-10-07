@@ -104,11 +104,11 @@ const folders = $derived<[string, components["schemas"]["Folder"]][]>([
 <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
 	{#each rows as [name, value] (name)}
 		<dt class="label pt-0.5">{name}</dt>
-		<dd class="text-ink-2 min-w-0 break-words">{value}</dd>
+		<dd class="text-ink-2 min-w-0 wrap-break-word">{value}</dd>
 	{/each}
 	{#each folders as [name, folder] (name)}
 		<dt class="label pt-0.5">{name}</dt>
-		<dd class="text-ink-2 min-w-0 break-words">
+		<dd class="text-ink-2 min-w-0 wrap-break-word">
 			{folder.path}
 			{#if folder.free_bytes != null}
 				<span class="text-ink-3"

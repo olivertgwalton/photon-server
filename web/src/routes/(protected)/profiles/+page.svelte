@@ -23,7 +23,7 @@ async function choose(event: SubmitEvent) {
 			: { profile_id: profileID },
 	});
 	message = error ? problemMessage(error) : undefined;
-	if (!error) await goto(data.to, { invalidateAll: true });
+	if (!error) await goto(data.to, { refreshAll: true });
 }
 
 const avatar =

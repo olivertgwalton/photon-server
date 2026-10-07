@@ -1,5 +1,5 @@
 import { toast } from "svelte-sonner";
-import { goto, invalidateAll } from "$app/navigation";
+import { goto, refreshAll } from "$app/navigation";
 import { problemMessage } from "#lib/api/problem.js";
 
 // A change asked of the API from a page: a refusal says why in a toast, and
@@ -15,7 +15,7 @@ export async function act(
 		toast.error(problemMessage(error));
 		return false;
 	}
-	await (to ? goto(to, { invalidateAll: true }) : invalidateAll());
+	await (to ? goto(to, { refreshAll: true }) : refreshAll());
 	toast.success(said);
 	return true;
 }

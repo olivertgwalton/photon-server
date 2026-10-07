@@ -1,6 +1,6 @@
 <script lang="ts">
 import { toast } from "svelte-sonner";
-import { invalidateAll } from "$app/navigation";
+import { refreshAll } from "$app/navigation";
 import { client, problemMessage } from "#lib/api/client.js";
 import AvatarPicker from "#lib/components/AvatarPicker.svelte";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
@@ -25,7 +25,7 @@ async function change(
 	refused = error ? { [card]: problemMessage(error) } : {};
 	if (error) return false;
 	toast.success(said);
-	await invalidateAll();
+	await refreshAll();
 	return true;
 }
 

@@ -8,5 +8,5 @@ export async function logOut() {
 	await client()
 		.POST("/api/v1/auth/logout")
 		.catch(() => {});
-	await goto(LOGIN, { invalidateAll: true });
+	await goto(LOGIN, { refreshAll: true });
 }

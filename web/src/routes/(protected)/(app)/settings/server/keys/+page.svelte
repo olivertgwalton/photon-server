@@ -1,7 +1,7 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { toast } from "svelte-sonner";
-import { invalidateAll } from "$app/navigation";
+import { refreshAll } from "$app/navigation";
 import { act } from "#lib/admin/act.js";
 import { fields } from "#lib/form.js";
 import { when } from "#lib/admin/words.js";
@@ -28,7 +28,7 @@ async function add(event: SubmitEvent) {
 	if (error) return toast.error(problemMessage(error));
 	adding = false;
 	made = { name, token: key.token };
-	await invalidateAll();
+	await refreshAll();
 }
 
 async function copy(token: string) {

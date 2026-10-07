@@ -2,7 +2,7 @@
 import CircleAlertIcon from "@lucide/svelte/icons/circle-alert";
 import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
 import { toast } from "svelte-sonner";
-import { invalidateAll } from "$app/navigation";
+import { refreshAll } from "$app/navigation";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { relative } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
@@ -43,7 +43,7 @@ let checking = $state(false);
 // A move's progress is read again every few seconds until it is done.
 $effect(() => {
 	if (!move) return;
-	const timer = setInterval(() => invalidateAll(), 2000);
+	const timer = setInterval(() => refreshAll(), 2000);
 	return () => clearInterval(timer);
 });
 
@@ -116,7 +116,7 @@ async function save(event: SubmitEvent) {
 	}
 	// A page may draw from a bucket only once its policy, made as the page loads, names it.
 	if (body.bucket?.delivery === "redirect") location.reload();
-	else await invalidateAll();
+	else await refreshAll();
 }
 
 // Whether this browser reaches the bucket clients are sent to, by a picture there.
