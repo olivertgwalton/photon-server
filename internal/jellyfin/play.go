@@ -8,10 +8,10 @@ import (
 	"errors"
 	"hash/fnv"
 	"io"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 	"uuid"
 
@@ -32,6 +32,8 @@ type playbacks interface {
 	Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error)
 	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState, tracks domain.ChosenTracks) (domain.Reach, error)
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
+	Finish(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error)
+	Abandon(ctx context.Context, id uuid.UUID) error
 }
 
 type watching interface {
@@ -65,27 +67,22 @@ func itemID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	return id, err == nil
 }
 
-// playbackInfo answers a title's copies, as Jellyfin's PlaybackInfoResponse, and where the app is
-// about to play starts the playback the dashboard shows: its id is the play session the app
-// reports on. Every copy plays directly, its file as it is; an app plays what it can of it.
+// playbackInfo answers a title's copies, as Jellyfin's PlaybackInfoResponse, the copy the app
+// asked for or photon would play first, and the play session the app reports on. Where the app
+// sends its device profile, the first is decided for it: played as it is where it plays that,
+// else made into HLS it takes, at a TranscodingUrl. Nothing is started until the app plays.
 func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	id, ok := itemID(w, r)
 	if !ok {
 		return
 	}
-	var req struct {
-		MediaSourceID       string `json:"MediaSourceId"`
-		AudioStreamIndex    *int   `json:"AudioStreamIndex"`
-		SubtitleStreamIndex *int   `json:"SubtitleStreamIndex"`
-		IsPlayback          bool   `json:"IsPlayback"`
-	}
+	var req playbackRequest
 	if r.Method == http.MethodPost && !readJSON(w, r, &req) {
 		return
 	}
 	req.MediaSourceID = cmp.Or(req.MediaSourceID, query(r, "mediaSourceId"))
 	version, _ := uuid.Parse(req.MediaSourceID)
-	s := sessionOf(r)
-	c, err := a.svc.Playing.Playable(r.Context(), s.Profile.ID, id, version)
+	c, err := a.svc.Playing.Playable(r.Context(), sessionOf(r).Profile.ID, id, version)
 	if errors.Is(err, store.ErrNotFound) {
 		refuse(w, http.StatusNotFound)
 		return
@@ -99,79 +96,168 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
+	session := uuid.NewV7()
 	out := struct {
 		MediaSources  []mediaSource `json:"MediaSources"`
 		PlaySessionID string        `json:"PlaySessionId"`
-	}{MediaSources: []mediaSource{}, PlaySessionID: guid(uuid.NewV7())}
+	}{MediaSources: []mediaSource{}, PlaySessionID: guid(session)}
 	for _, v := range versions[id] {
 		src := sourceOf(v)
-		// The copy asked for, or the one photon would play, first: an app plays the first.
 		if v.ID == c.Version {
 			out.MediaSources = slices.Insert(out.MediaSources, 0, src)
 		} else {
 			out.MediaSources = append(out.MediaSources, src)
 		}
 	}
-	if req.IsPlayback {
-		title, err := a.svc.Playing.PlaybackTitle(r.Context(), id)
-		if err != nil {
-			a.internal(w, r, err)
-			return
-		}
-		p, err := a.svc.Playbacks.Start(r.Context(), uuid.NewV7(), domain.PlayDirect, playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, direct(c, req.AudioStreamIndex), embedded(c, req.SubtitleStreamIndex)))
-		if err != nil {
-			a.internal(w, r, err)
-			return
-		}
-		out.PlaySessionID = guid(p.ID)
+	if req.DeviceProfile != nil && len(out.MediaSources) > 0 {
+		a.decide(r, &out.MediaSources[0], id, session, c, req)
 	}
 	writeJSON(w, out)
 }
 
-// direct is a copy played as it is, with the audio an app chose or the first.
+// playbackRequest is Jellyfin's PlaybackInfoDto, as much of it as photon decides by.
+type playbackRequest struct {
+	MediaSourceID       string         `json:"MediaSourceId"`
+	AudioStreamIndex    *int           `json:"AudioStreamIndex"`
+	SubtitleStreamIndex *int           `json:"SubtitleStreamIndex"`
+	StartTimeTicks      int64          `json:"StartTimeTicks"`
+	MaxStreamingBitrate int64          `json:"MaxStreamingBitrate"`
+	DeviceProfile       *deviceProfile `json:"DeviceProfile"`
+}
+
+// decide says how the app plays a copy: as it is, where its profile plays that; else as HLS photon
+// makes of it, copying what the app plays and encoding the rest, where the app takes HLS photon
+// makes; else neither, and the app plays what it can of the file.
+func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID, c store.PlayCopy, req playbackRequest) {
+	p := *req.DeviceProfile
+	limit := cmp.Or(req.MaxStreamingBitrate, p.MaxStreamingBitrate)
+	tracks := direct(c, req.AudioStreamIndex)
+	sub, picked := subtitleOf(c, req.SubtitleStreamIndex)
+	if p.playsDirectly(c, streamAt(c, tracks.Video), streamAt(c, tracks.Audio), picked, limit) {
+		return
+	}
+	src.SupportsDirectPlay, src.SupportsDirectStream = false, false
+	t, ok := p.hls()
+	if !ok {
+		return
+	}
+	var audio *int
+	if tracks.Audio != nil {
+		audio = &tracks.Audio.Stream
+	}
+	d, err := playback.Decide(p.hlsProfile(t, c, limit), playback.Copy{
+		Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams,
+	}, audio, sub, a.svc.HEVC)
+	if err != nil || d.Video == nil {
+		return
+	}
+	src.SupportsTranscoding, src.TranscodingSubProtocol, src.TranscodingContainer = true, "hls", "mp4"
+	src.TranscodingURL = a.transcodingURL(r, item, session, transcode{
+		Version: c.Version, Method: d.Method, Video: *d.Video, Audio: d.Audio, Subtitle: sub, Reasons: d.Reasons,
+		StartMS: req.StartTimeTicks / ticksPerMS,
+	})
+}
+
+// direct is a copy's tracks played as they are: its first video, and the audio an app chose, else
+// its default, else its first.
 func direct(c store.PlayCopy, audio *int) playback.Decision {
 	d := playback.Decision{Method: domain.PlayDirect}
-	for _, s := range c.Streams {
-		switch {
-		case s.Kind == domain.StreamVideo && d.Video == nil:
-			d.Video = &domain.VideoPlan{Stream: s.Index, Codec: s.Codec}
-		case s.Kind == domain.StreamAudio && (d.Audio == nil && audio == nil || audio != nil && *audio == s.Index):
-			d.Audio = &domain.AudioPlan{Stream: s.Index}
+	var first, marked *domain.Stream
+	for i, s := range c.Streams {
+		switch s.Kind {
+		case domain.StreamVideo:
+			if d.Video == nil {
+				d.Video = &domain.VideoPlan{Stream: s.Index, Codec: s.Codec}
+			}
+		case domain.StreamAudio:
+			if audio != nil && *audio == s.Index {
+				d.Audio = &domain.AudioPlan{Stream: s.Index}
+			}
+			if first == nil {
+				first = &c.Streams[i]
+			}
+			if s.Default && marked == nil {
+				marked = &c.Streams[i]
+			}
+		case domain.StreamSubtitle:
+		}
+	}
+	if d.Audio == nil {
+		if chosen := cmp.Or(marked, first); chosen != nil {
+			d.Audio = &domain.AudioPlan{Stream: chosen.Index}
 		}
 	}
 	return d
 }
 
-// embedded is a subtitle an app chose, where it is one of the copy's own tracks.
-func embedded(c store.PlayCopy, subtitle *int) *int {
-	if subtitle != nil && slices.ContainsFunc(c.Streams, func(s domain.Stream) bool {
-		return s.Kind == domain.StreamSubtitle && s.Index == *subtitle
-	}) {
-		return subtitle
+// streamAt is the copy's track a plan names, nil for none.
+func streamAt[P interface {
+	*domain.VideoPlan | *domain.AudioPlan
+}](c store.PlayCopy, plan P) *domain.Stream {
+	var index int
+	switch p := any(plan).(type) {
+	case *domain.VideoPlan:
+		if p == nil {
+			return nil
+		}
+		index = p.Stream
+	case *domain.AudioPlan:
+		if p == nil {
+			return nil
+		}
+		index = p.Stream
+	}
+	for i := range c.Streams {
+		if c.Streams[i].Index == index {
+			return &c.Streams[i]
+		}
 	}
 	return nil
 }
 
+// subtitleOf is the subtitle an app chose by its index: one of the copy's own tracks, whose index
+// photon's decision takes, or a file beside it, numbered after them.
+func subtitleOf(c store.PlayCopy, index *int) (*int, *subtitleChoice) {
+	if index == nil || *index < 0 {
+		return nil, nil
+	}
+	base := 0
+	for _, s := range c.Streams {
+		if s.Kind == domain.StreamSubtitle && s.Index == *index {
+			return index, &subtitleChoice{codec: s.Codec}
+		}
+		base = max(base, s.Index+1)
+	}
+	if n := *index - base; n >= 0 && n < len(c.Subtitles) {
+		return nil, &subtitleChoice{codec: c.Subtitles[n].Codec, external: true}
+	}
+	return nil, nil
+}
+
+// errSeveralFiles is a copy in several files asked for as one: its files are joined only in HLS,
+// which every app taking HLS is given at its TranscodingUrl.
+var errSeveralFiles = errors.New("a copy in several files plays only as HLS")
+
 // stream serves a copy's file as it is, the copy an app names or the one photon would play, with
-// ranges, so an app seeks by asking for the bytes it wants. A copy in several parts is served by its
-// first; ponytail: Jellyfin's apps play one file a copy, so parts after the first wait on HLS.
+// ranges, so an app seeks by asking for the bytes it wants. A copy in several files is refused:
+// see errSeveralFiles.
 func (a *API) stream(w http.ResponseWriter, r *http.Request) {
 	id, ok := itemID(w, r)
 	if !ok {
 		return
 	}
-	if name := r.PathValue("stream"); name != "" && !strings.HasPrefix(strings.ToLower(name), "stream.") {
-		refuse(w, http.StatusNotFound)
-		return
-	}
 	version, _ := uuid.Parse(query(r, "mediaSourceId"))
 	c, err := a.svc.Playing.Playable(r.Context(), sessionOf(r).Profile.ID, id, version)
-	if errors.Is(err, store.ErrNotFound) || err == nil && len(c.Parts) == 0 {
+	switch {
+	case errors.Is(err, store.ErrNotFound) || err == nil && len(c.Parts) == 0:
 		refuse(w, http.StatusNotFound)
 		return
-	}
-	if err != nil {
+	case err != nil:
 		a.internal(w, r, err)
+		return
+	case len(c.Parts) > 1:
+		a.logger.InfoContext(r.Context(), "jellyfin stream refused", slog.Any("err", errSeveralFiles))
+		refuse(w, http.StatusConflict)
 		return
 	}
 	a.serveFile(w, r, func(ctx context.Context) (string, string, error) { return a.svc.Playing.PartFile(ctx, c.Parts[0].ID) })
@@ -247,6 +333,7 @@ func (a *API) subtitle(w http.ResponseWriter, r *http.Request) {
 // them as photon keeps.
 type report struct {
 	ItemID              string `json:"ItemId"`
+	MediaSourceID       string `json:"MediaSourceId"`
 	PlaySessionID       string `json:"PlaySessionId"`
 	PositionTicks       int64  `json:"PositionTicks"`
 	IsPaused            bool   `json:"IsPaused"`
@@ -254,8 +341,23 @@ type report struct {
 	SubtitleStreamIndex *int   `json:"SubtitleStreamIndex"`
 }
 
-// reported records where an app says its playback is: on the playback its PlaybackInfo started,
-// or, for one photon did not start (an app that played without asking), on the title alone.
+// playID is the playback a play session names: the id PlaybackInfo gave it, or one made of an id
+// of the app's own, so every app's playback is one the dashboard shows.
+func playID(session string) uuid.UUID {
+	if id, err := uuid.Parse(session); err == nil {
+		return id
+	}
+	h := fnv.New128a()
+	h.Write([]byte(session))
+	var id uuid.UUID
+	copy(id[:], h.Sum(nil))
+	return id
+}
+
+// reported records where an app says its playback is. A playback the app plays as it is is
+// started by its first report, as the dashboard shows it from then; one in HLS was started when
+// its playlist was fetched. A stop of one never started keeps where the profile got to in the
+// title.
 func (a *API) reported(stopped bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var rep report
@@ -272,18 +374,28 @@ func (a *API) reported(stopped bool) http.HandlerFunc {
 		if rep.SubtitleStreamIndex != nil && *rep.SubtitleStreamIndex >= 0 {
 			tracks.Subtitle = rep.SubtitleStreamIndex
 		}
-		id, perr := uuid.Parse(rep.PlaySessionID)
+		id := playID(cmp.Or(rep.PlaySessionID, guid(sessionOf(r).ID)+rep.ItemID))
+		progress := func(ctx context.Context) error {
+			_, err := a.svc.Playbacks.Progress(ctx, profile, id, position, state, tracks)
+			return err
+		}
 		var err error
 		switch {
-		case perr != nil:
-			err = a.saveProgress(r.Context(), profile, rep.ItemID, position)
 		case stopped:
 			_, err = a.svc.Playbacks.Stop(r.Context(), profile, id, position)
+			if errors.Is(err, playback.ErrNoPlayback) {
+				err = a.saveProgress(r.Context(), profile, rep.ItemID, position)
+			}
 		default:
-			_, err = a.svc.Playbacks.Progress(r.Context(), profile, id, position, state, tracks)
+			err = progress(r.Context())
+			if errors.Is(err, playback.ErrNoPlayback) {
+				if err = a.startDirect(r, id, rep); err == nil {
+					err = progress(r.Context())
+				}
+			}
 		}
-		if errors.Is(err, playback.ErrNoPlayback) {
-			err = a.saveProgress(r.Context(), profile, rep.ItemID, position)
+		if isNotFound(err) {
+			err = nil
 		}
 		if err != nil {
 			a.internal(w, r, err)
@@ -291,6 +403,27 @@ func (a *API) reported(stopped bool) http.HandlerFunc {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// startDirect starts the playback the dashboard shows of a copy an app plays as it is.
+func (a *API) startDirect(r *http.Request, id uuid.UUID, rep report) error {
+	item, ok := parseID(rep.ItemID)
+	if !ok {
+		return store.ErrNotFound
+	}
+	version, _ := uuid.Parse(rep.MediaSourceID)
+	s := sessionOf(r)
+	c, err := a.svc.Playing.Playable(r.Context(), s.Profile.ID, item, version)
+	if err != nil {
+		return err
+	}
+	title, err := a.svc.Playing.PlaybackTitle(r.Context(), item)
+	if err != nil {
+		return err
+	}
+	sub, _ := subtitleOf(c, rep.SubtitleStreamIndex)
+	_, err = a.svc.Playbacks.Start(r.Context(), id, domain.PlayDirect, playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, direct(c, rep.AudioStreamIndex), sub))
+	return err
 }
 
 func isNotFound(err error) bool { return errors.Is(err, store.ErrNotFound) }

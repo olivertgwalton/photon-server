@@ -44,7 +44,9 @@ type mediaSource struct {
 	Formats                    []string      `json:"Formats"`
 	Bitrate                    int           `json:"Bitrate,omitempty"`
 	RequiredHTTPHeaders        struct{}      `json:"RequiredHttpHeaders"`
+	TranscodingURL             string        `json:"TranscodingUrl,omitempty"`
 	TranscodingSubProtocol     string        `json:"TranscodingSubProtocol"`
+	TranscodingContainer       string        `json:"TranscodingContainer,omitempty"`
 	DefaultAudioStreamIndex    *int          `json:"DefaultAudioStreamIndex,omitempty"`
 	DefaultSubtitleStreamIndex *int          `json:"DefaultSubtitleStreamIndex,omitempty"`
 	HasSegments                bool          `json:"HasSegments"`

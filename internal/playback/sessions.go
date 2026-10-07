@@ -138,6 +138,16 @@ func (s *Sessions) Stop(ctx context.Context, profile, id uuid.UUID, position tim
 	return s.stop(ctx, p, position)
 }
 
+// Finish stops a profile's own playback where its player last said it was, as a player does that
+// moves on to another stream of the title without saying where it got to.
+func (s *Sessions) Finish(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error) {
+	p, err := s.own(ctx, profile, id)
+	if err != nil {
+		return "", err
+	}
+	return s.stop(ctx, p, p.Position)
+}
+
 // End stops anyone's playback where its player last said it was, as an admin does from the
 // dashboard; its player is refused from then on.
 func (s *Sessions) End(ctx context.Context, id uuid.UUID) error {

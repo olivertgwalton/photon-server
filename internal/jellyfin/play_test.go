@@ -18,26 +18,30 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
-// fakePlaybacks is the dashboard's playbacks: the one it started, and what it was told of it.
+// fakePlaybacks is the dashboard's playbacks: those started, by id, and what each was told.
 type fakePlaybacks struct {
-	id       uuid.UUID
-	started  []domain.PlaybackCard
-	told     []time.Duration
-	stoppedA time.Duration
+	started map[uuid.UUID]domain.PlaybackCard
+	told    []time.Duration
+	stopped map[uuid.UUID]time.Duration
 }
 
-func (f *fakePlaybacks) Start(_ context.Context, _ uuid.UUID, _ domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
-	f.started = append(f.started, card)
-	return domain.Playback{ID: f.id}, nil
+func newFakePlaybacks() *fakePlaybacks {
+	return &fakePlaybacks{started: map[uuid.UUID]domain.PlaybackCard{}, stopped: map[uuid.UUID]time.Duration{}}
+}
+
+func (f *fakePlaybacks) Start(_ context.Context, id uuid.UUID, _ domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
+	f.started[id] = card
+	return domain.Playback{ID: id}, nil
 }
 
 func (f *fakePlaybacks) Progress(_ context.Context, _, id uuid.UUID, position time.Duration, _ domain.PlayState, _ domain.ChosenTracks) (domain.Reach, error) {
-	if id != f.id {
+	if _, ok := f.started[id]; !ok {
 		return "", playback.ErrNoPlayback
 	}
 	f.told = append(f.told, position)
@@ -45,17 +49,30 @@ func (f *fakePlaybacks) Progress(_ context.Context, _, id uuid.UUID, position ti
 }
 
 func (f *fakePlaybacks) Stop(_ context.Context, _, id uuid.UUID, position time.Duration) (domain.Reach, error) {
-	if id != f.id {
+	if _, ok := f.started[id]; !ok {
 		return "", playback.ErrNoPlayback
 	}
-	f.stoppedA = position
+	f.stopped[id] = position
 	return domain.ReachResumable, nil
 }
 
-// An app plays a film as Infuse does: asks for its copies, which starts the playback the dashboard
-// shows, streams the file with ranges, skips its intro, reads its subtitles beside it, and says
-// where it got to; and marks it watched and a favourite.
-func TestAnAppPlaysAFilm(t *testing.T) {
+func (f *fakePlaybacks) Finish(_ context.Context, _, id uuid.UUID) (domain.Reach, error) {
+	if _, ok := f.started[id]; !ok {
+		return "", playback.ErrNoPlayback
+	}
+	f.stopped[id] = -1
+	return domain.ReachResumable, nil
+}
+
+func (f *fakePlaybacks) Abandon(_ context.Context, id uuid.UUID) error {
+	delete(f.started, id)
+	return nil
+}
+
+// aFilm is a household's film, Heat: one copy, an MKV of H.264 and AAC with an intro marked and a
+// subtitle file beside it; and Ada, who may play it.
+func aFilm(t *testing.T) (*store.Store, domain.Profile, uuid.UUID, uuid.UUID) {
+	t.Helper()
 	ctx := t.Context()
 	db := storetest.FreshDatabase(t)
 	log := slog.New(slog.DiscardHandler)
@@ -112,7 +129,17 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	plays := &fakePlaybacks{id: uuid.NewV7()}
+	return st, ada, heat, copyID
+}
+
+// An app plays a film as Infuse does: asks for its copies, reports it playing, which starts the playback
+// the dashboard shows, streams the file with ranges, skips its intro, reads its subtitles beside it, and says
+// where it got to; and marks it watched and a favourite.
+func TestAnAppPlaysAFilm(t *testing.T) {
+	ctx := t.Context()
+	st, ada, heat, copyID := aFilm(t)
+	log := slog.New(slog.DiscardHandler)
+	plays := newFakePlaybacks()
 	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st,
 	})
@@ -135,10 +162,13 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 		http.StatusOK), &info); err != nil {
 		t.Fatal(err)
 	}
-	if info.PlaySessionID != guid(plays.id) || len(plays.started) != 1 || plays.started[0].Profile.ID != ada.ID {
-		t.Fatalf("PlaybackInfo: session %s, started %+v", info.PlaySessionID, plays.started)
+	if len(plays.started) != 0 {
+		t.Errorf("PlaybackInfo started %v: only playing starts a playback", plays.started)
 	}
-	if len(info.MediaSources) != 1 || info.MediaSources[0]["Id"] != guid(copyID) || info.MediaSources[0]["SupportsDirectPlay"] != true {
+	// Infuse names nothing it plays as it is, so Jellyfin's rules leave the copy unplayable as it
+	// is, as real Jellyfin answers it; Infuse plays the file all the same, at full quality.
+	if len(info.MediaSources) != 1 || info.MediaSources[0]["Id"] != guid(copyID) || info.MediaSources[0]["SupportsDirectPlay"] != false ||
+		info.MediaSources[0]["TranscodingUrl"] != nil {
 		t.Errorf("sources: %v", info.MediaSources)
 	}
 	streams, _ := info.MediaSources[0]["MediaStreams"].([]any)
@@ -179,8 +209,17 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	report("/Sessions/Playing", 0, info.PlaySessionID)
 	report("/Sessions/Playing/Progress", 10*60*1e7, info.PlaySessionID)
 	report("/Sessions/Playing/Stopped", 12*60*1e7, info.PlaySessionID)
-	if len(plays.told) != 2 || plays.told[1] != 10*time.Minute || plays.stoppedA != 12*time.Minute {
-		t.Errorf("the playback was told %v and stopped at %v", plays.told, plays.stoppedA)
+	session, _ := uuid.Parse(info.PlaySessionID)
+	if card, ok := plays.started[session]; !ok || card.Profile.ID != ada.ID || card.Version.ID != copyID {
+		t.Errorf("playing started %v, want the session PlaybackInfo named, of the copy", plays.started)
+	}
+	if len(plays.told) != 2 || plays.told[1] != 10*time.Minute || plays.stopped[session] != 12*time.Minute {
+		t.Errorf("the playback was told %v and stopped at %v", plays.told, plays.stopped)
+	}
+	// An app's own session id, not photon's, is a playback the dashboard shows too.
+	report("/Sessions/Playing", 0, "infuse-own-session")
+	if _, ok := plays.started[playID("infuse-own-session")]; !ok {
+		t.Errorf("an app's own session was not started: %v", plays.started)
 	}
 	// An app that played without asking first is still kept to where it got to.
 	report("/Sessions/Playing/Stopped", 20*60*1e7, "aa11bb22cc33dd44ee55ff6677889900")
@@ -204,4 +243,104 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 func jsonInt(n int64) string {
 	b, _ := json.Marshal(n)
 	return string(b)
+}
+
+// fakeRemuxes are a node's remuxes: those opened, by playback, and the playlists each answers.
+type fakeRemuxes struct {
+	opened map[uuid.UUID]domain.VideoPlan
+}
+
+func (f *fakeRemuxes) Open(_ context.Context, id uuid.UUID, _ store.PlayCopy, video domain.VideoPlan, _ *domain.AudioPlan, _ domain.SegmentFormat, _ time.Duration) error {
+	f.opened[id] = video
+	return nil
+}
+
+func (f *fakeRemuxes) Has(id uuid.UUID) bool {
+	_, ok := f.opened[id]
+	return ok
+}
+
+func (f *fakeRemuxes) Resource(_ context.Context, id uuid.UUID, name string) (hls.Resource, error) {
+	if _, ok := f.opened[id]; !ok {
+		return hls.Resource{}, hls.ErrNoRemux
+	}
+	switch name {
+	case hls.MasterName:
+		return hls.Resource{Text: "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=8000000\nvideo.m3u8\n", Type: "application/vnd.apple.mpegurl"}, nil
+	case "video.m3u8":
+		return hls.Resource{Text: "#EXTM3U\n#EXT-X-MAP:URI=\"init0.mp4\"\n#EXTINF:6.0,\n0.m4s\n#EXT-X-ENDLIST\n", Type: "application/vnd.apple.mpegurl"}, nil
+	}
+	return hls.Resource{}, hls.ErrNoRemux
+}
+
+func (*fakeRemuxes) Encoder(domain.VideoPlan) domain.Acceleration { return domain.AccelSoftware }
+
+// noOwners is a cluster of one node, which runs every playback itself.
+type noOwners struct{}
+
+func (noOwners) Owner(context.Context, uuid.UUID) (string, bool, error) { return "", false, nil }
+
+// An app whose player opens no MKV is given HLS of one, at the TranscodingUrl its PlaybackInfo
+// answers: fetching it starts the playback and its remux, once, and every address in its playlists
+// carries the app's token; a plan tampered with is refused, and the app ends it as it moves on.
+func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
+	st, ada, heat, copyID := aFilm(t)
+	plays, remuxes := newFakePlaybacks(), &fakeRemuxes{opened: map[uuid.UUID]domain.VideoPlan{}}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st,
+		HLS: remuxes, Remuxing: remuxes, Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), HEVC: domain.HEVCAllow,
+	})
+	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
+	w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", swiftfinHeader, `{"MaxStreamingBitrate":120000000,"DeviceProfile":`+swiftfin+`}`)
+	var info struct {
+		MediaSources  []map[string]any
+		PlaySessionID string `json:"PlaySessionId"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	src := info.MediaSources[0]
+	transcoding, _ := src["TranscodingUrl"].(string)
+	if src["SupportsDirectPlay"] != false || src["TranscodingSubProtocol"] != "hls" || !strings.HasPrefix(transcoding, "/videos/"+guid(heat)+"/master.m3u8?") ||
+		!strings.Contains(transcoding, "ApiKey=pst_ada") || !strings.Contains(transcoding, "PlaySessionId="+info.PlaySessionID) {
+		t.Fatalf("an MKV for a player that opens none: %v", src)
+	}
+	if len(remuxes.opened) != 0 || len(plays.started) != 0 {
+		t.Error("PlaybackInfo started the remux; only fetching it does")
+	}
+
+	// The URL carries its own token: an app sends none with what it fetches of HLS.
+	fetch := func(target string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, target, nil)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, r)
+		return rec
+	}
+	master := fetch(transcoding)
+	session, _ := uuid.Parse(info.PlaySessionID)
+	if master.Code != http.StatusOK || len(remuxes.opened) != 1 || remuxes.opened[session].Encode != nil {
+		t.Fatalf("master: %d %s, opened %v: want H.264 copied out of the MKV", master.Code, master.Body, remuxes.opened)
+	}
+	if card, ok := plays.started[session]; !ok || card.Version.ID != copyID {
+		t.Errorf("the playback the dashboard shows: %v", plays.started)
+	}
+	query := transcoding[strings.Index(transcoding, "?")+1:]
+	if !strings.Contains(master.Body.String(), "video.m3u8?"+query) {
+		t.Errorf("the master's variant does not carry the app's query:\n%s", master.Body)
+	}
+	variant := fetch("/videos/" + guid(heat) + "/video.m3u8?" + query)
+	if !strings.Contains(variant.Body.String(), `URI="init0.mp4?`+query+`"`) || !strings.Contains(variant.Body.String(), "0.m4s?"+query) {
+		t.Errorf("the variant's addresses do not carry the app's query:\n%s", variant.Body)
+	}
+	if again := fetch(transcoding); again.Code != http.StatusOK || len(remuxes.opened) != 1 {
+		t.Errorf("fetching the master again: %d, %d remuxes", again.Code, len(remuxes.opened))
+	}
+
+	tampered := strings.Replace(transcoding, "PlaySessionId="+info.PlaySessionID, "PlaySessionId="+guid(uuid.NewV7()), 1)
+	if w := fetch(tampered); w.Code != http.StatusUnauthorized {
+		t.Errorf("a plan signed for another session: %d, want 401", w.Code)
+	}
+	if w := serve(api, http.MethodDelete, "/Videos/ActiveEncodings?deviceId=iOS_1&playSessionId="+info.PlaySessionID, swiftfinHeader, ""); w.Code != http.StatusNoContent || plays.stopped[session] != -1 {
+		t.Errorf("ending the encoding: %d, stopped %v", w.Code, plays.stopped)
+	}
 }
