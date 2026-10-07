@@ -265,13 +265,15 @@ func filmItem(ctx context.Context, tx db, lib uuid.UUID, f Film, changed Changed
 
 // knownItem is the title of kind holding the first of copies the catalogue already has. A copy
 // held by a title of another kind does not count: a film's copy first met as an extra is
-// reclaimed by the film, and the emptied extra goes at the end of the scan.
+// reclaimed by the film, and the emptied extra goes at the end of the scan. Nor does one an admin
+// split off, whose title is its alone.
 func knownItem(ctx context.Context, tx db, lib uuid.UUID, kind domain.ItemKind, copies []Copy) (uuid.UUID, bool, error) {
 	for _, c := range copies {
 		var id uuid.UUID
 		err := tx.QueryRow(ctx, `
 			SELECT v.item_id FROM versions v JOIN items i ON i.id = v.item_id
-			WHERE v.library_id = $1 AND v.fingerprint = $2 AND i.kind = $3 LIMIT 1`, lib, c.ContentKey, kind).Scan(&id)
+			WHERE v.library_id = $1 AND v.fingerprint = $2 AND i.kind = $3 AND v.split_at IS NULL LIMIT 1`,
+			lib, c.ContentKey, kind).Scan(&id)
 		if err == nil {
 			return id, true, nil
 		}
@@ -288,8 +290,11 @@ func saveCopy(ctx context.Context, tx db, lib uuid.UUID, settings analysis, item
 	err := tx.QueryRow(ctx, `SELECT id FROM versions WHERE library_id = $1 AND fingerprint = $2 LIMIT 1`,
 		lib, c.ContentKey).Scan(&known)
 	if err == nil {
-		_, err := tx.Exec(ctx, `UPDATE versions SET item_id = $2, edition = $3, label = $4, missing_since = NULL WHERE id = $1`,
-			known, itemID, edition, label)
+		// A copy an admin split off stays on its own title.
+		_, err := tx.Exec(ctx, `
+			UPDATE versions SET item_id = CASE WHEN split_at IS NULL THEN $2 ELSE item_id END, edition = $3, label = $4,
+				missing_since = NULL
+			WHERE id = $1`, known, itemID, edition, label)
 		if err != nil {
 			return err
 		}
