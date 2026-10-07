@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 )
@@ -47,7 +48,7 @@ func TestSignInsAreLimitedByAddressAndName(t *testing.T) {
 		api.ServeHTTP(rec, req)
 		return rec
 	}
-	for range signInsPerAddress.Burst {
+	for range auth.SignInsPerAddress.Burst {
 		attempt("203.0.113.9:5000", "")
 	}
 	rec := attempt("203.0.113.9:5000", "198.51.100.1")

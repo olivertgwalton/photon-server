@@ -1,4 +1,4 @@
-package httpapi
+package peer
 
 import (
 	"fmt"
@@ -8,13 +8,13 @@ import (
 	"testing"
 )
 
-func TestClientAddr(t *testing.T) {
-	proxy := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
+func TestClient(t *testing.T) {
+	proxy := Proxies{netip.MustParsePrefix("10.0.0.0/8")}
 	tests := []struct {
 		name    string
 		peer    string
 		xff     []string
-		trusted []netip.Prefix
+		trusted Proxies
 		want    string
 	}{
 		{"no proxy is trusted: the header is ignored", "203.0.113.9:5000", []string{"127.0.0.1"}, nil, "203.0.113.9"},
@@ -34,15 +34,15 @@ func TestClientAddr(t *testing.T) {
 			for _, v := range tt.xff {
 				r.Header.Add("X-Forwarded-For", v)
 			}
-			if got := clientAddr(r, tt.trusted); got.String() != tt.want {
-				t.Errorf("clientAddr = %s, want %s", got, tt.want)
+			if got := tt.trusted.Client(r); got.String() != tt.want {
+				t.Errorf("Client = %s, want %s", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestParseTrustedProxies(t *testing.T) {
-	got, err := ParseTrustedProxies(" 10.0.0.0/8, 127.0.0.1,::1 ,172.16.5.4/12")
+func TestParse(t *testing.T) {
+	got, err := Parse(" 10.0.0.0/8, 127.0.0.1,::1 ,172.16.5.4/12")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,10 +50,10 @@ func TestParseTrustedProxies(t *testing.T) {
 	if s := fmt.Sprint(got); s != want {
 		t.Errorf("parsed %s, want %s", s, want)
 	}
-	if empty, err := ParseTrustedProxies(""); err != nil || len(empty) != 0 {
+	if empty, err := Parse(""); err != nil || len(empty) != 0 {
 		t.Errorf("an empty list trusts %v (err %v), want nothing", empty, err)
 	}
-	if _, err := ParseTrustedProxies("10.0.0.0/8,proxy.local"); err == nil {
+	if _, err := Parse("10.0.0.0/8,proxy.local"); err == nil {
 		t.Error("a host name was accepted as a proxy")
 	}
 }

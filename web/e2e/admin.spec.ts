@@ -391,6 +391,20 @@ test("secure connections are set with a certificate", async ({ page }) => {
 	);
 });
 
+test("Jellyfin's apps are let in on a port of their own", async ({ page }) => {
+	await logIn(page, "/settings/server/network");
+	await page.getByLabel("Jellyfin apps").click();
+	await page.getByRole("option", { name: "On" }).click();
+	await page.getByLabel("Port").fill("8097");
+	await page.getByRole("button", { name: "Save" }).click();
+	await expect(page.getByText(/^Saved/)).toBeVisible();
+
+	await page.reload();
+	await expect(page.getByLabel("Jellyfin apps")).toHaveText("On");
+	await expect(page.getByLabel("Port")).toHaveValue("8097");
+	await expectAccessible(page);
+});
+
 test("a collection made here is filled from its library", async ({ page }) => {
 	await logIn(page, "/settings/server/collections");
 	await expect(page.getByText("Made here", { exact: true })).toBeVisible();

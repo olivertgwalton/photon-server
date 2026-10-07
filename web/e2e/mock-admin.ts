@@ -219,7 +219,11 @@ let maintenance: Schemas["Maintenance"] = {
 	previews: "window",
 	markers: "window_and_added",
 };
-let network: Schemas["Network"] = { secure_connections: "disabled" };
+let network: Schemas["NetworkStatus"] = {
+	secure_connections: "disabled",
+	jellyfin: "off",
+	jellyfin_port: 8096,
+};
 const deadJobs: Schemas["DeadJob"][] = [
 	{
 		id: 41,

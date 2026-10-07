@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -166,11 +166,13 @@ type Services struct {
 	// Web is the web app, served for every path the API does not own; nil serves the API alone.
 	Web *Web
 	// TrustedProxies are the peers whose X-Forwarded-For names the client. None by default.
-	TrustedProxies []netip.Prefix
+	TrustedProxies peer.Proxies
 	// Network is how the server is reached, and Secure how this node serves it now; nil Secure
 	// never sends a plain request to HTTPS.
 	Network networkSettings
 	Secure  secureConnections
+	// Jellyfin is this node's serving of Jellyfin's API; nil where it is not run.
+	Jellyfin jellyfinListener
 	// Setup is how this node was started, and Postgres and Valkey what it reaches.
 	Setup    Setup
 	Postgres versioned
@@ -725,12 +727,12 @@ func (a *API) routes() []route {
 		},
 		{
 			pattern: "GET /api/v1/admin/network", access: admin,
-			summary: "Whether the server's port answers HTTPS, and the certificate it serves",
-			status:  http.StatusOK, reply: networkJSON{}, handle: a.adminNetwork,
+			summary: "Whether the server's port answers HTTPS, the certificate it serves, and whether Jellyfin's apps reach it",
+			status:  http.StatusOK, reply: networkStatusJSON{}, handle: a.adminNetwork,
 		},
 		{
 			pattern: "PUT /api/v1/admin/network", access: admin,
-			summary: "Replace whether the port answers HTTPS, and its certificate; every node serves it at once",
+			summary: "Replace whether the port answers HTTPS, its certificate, and Jellyfin's; every node serves it at once",
 			body:    networkJSON{}, status: http.StatusOK, reply: networkJSON{}, handle: a.setNetwork,
 		},
 		{

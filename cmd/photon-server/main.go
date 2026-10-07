@@ -34,11 +34,13 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
 	"github.com/olivertgwalton/photon-server/internal/identify"
+	"github.com/olivertgwalton/photon-server/internal/jellyfin"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/mdblist"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/omdb"
+	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
 	"github.com/olivertgwalton/photon-server/internal/provider"
@@ -162,7 +164,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return fmt.Errorf("valkey: %w", err)
 	}
 	defer cache.Close()
-	trusted, err := httpapi.ParseTrustedProxies(os.Getenv("PHOTON_TRUSTED_PROXIES"))
+	trusted, err := peer.Parse(os.Getenv("PHOTON_TRUSTED_PROXIES"))
 	if err != nil {
 		return err
 	}
@@ -252,10 +254,13 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		MetadataLanguage: lang, CacheDir: cacheRoot, BackupDir: dumper.Dir, PublicURL: public,
 	}
 	secured := secure.New(st, hub.Subscribe, logger)
+	jellyfinAPI := jellyfin.NewListener(st, hub.Subscribe, jellyfin.New(logger, info, jellyfin.Services{
+		Auth: authService, Limits: cache, Raise: hub.Raise, Proxies: trusted,
+	}), listen, secured.Listen, secured.TLSConfig(), logger)
 	srv := &http.Server{
 		Addr: listen, TLSConfig: secured.TLSConfig(),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: st, Playbacks: sessions, Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Network: st, Secure: secured, Setup: setup, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: st, Playbacks: sessions, Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Network: st, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -329,6 +334,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}()
 
 	wg.Go(func() { secured.Run(background) })
+	wg.Go(func() { jellyfinAPI.Run(background) })
 	logger.InfoContext(ctx, "serving", slog.String("addr", srv.Addr), slog.String("version", info.Version))
 	return listenUntilDone(ctx, srv, secured.Listen)
 }
