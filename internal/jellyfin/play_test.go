@@ -247,11 +247,16 @@ func jsonInt(n int64) string {
 
 // fakeRemuxes are a node's remuxes: those opened, by playback, and the playlists each answers.
 type fakeRemuxes struct {
-	opened map[uuid.UUID]domain.VideoPlan
+	opened   map[uuid.UUID]domain.VideoPlan
+	segments map[uuid.UUID]domain.SegmentFormat
 }
 
-func (f *fakeRemuxes) Open(_ context.Context, id uuid.UUID, _ store.PlayCopy, video domain.VideoPlan, _ *domain.AudioPlan, _ domain.SegmentFormat, _ time.Duration) error {
-	f.opened[id] = video
+func newFakeRemuxes() *fakeRemuxes {
+	return &fakeRemuxes{opened: map[uuid.UUID]domain.VideoPlan{}, segments: map[uuid.UUID]domain.SegmentFormat{}}
+}
+
+func (f *fakeRemuxes) Open(_ context.Context, id uuid.UUID, _ store.PlayCopy, video domain.VideoPlan, _ *domain.AudioPlan, segments domain.SegmentFormat, _ time.Duration) error {
+	f.opened[id], f.segments[id] = video, segments
 	return nil
 }
 
@@ -285,7 +290,7 @@ func (noOwners) Owner(context.Context, uuid.UUID) (string, bool, error) { return
 // carries the app's token; a plan tampered with is refused, and the app ends it as it moves on.
 func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	st, ada, heat, copyID := aFilm(t)
-	plays, remuxes := newFakePlaybacks(), &fakeRemuxes{opened: map[uuid.UUID]domain.VideoPlan{}}
+	plays, remuxes := newFakePlaybacks(), newFakeRemuxes()
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st,
 		HLS: remuxes, Remuxing: remuxes, Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), HEVC: domain.HEVCAllow,
@@ -321,6 +326,9 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	if master.Code != http.StatusOK || len(remuxes.opened) != 1 || remuxes.opened[session].Encode != nil {
 		t.Fatalf("master: %d %s, opened %v: want H.264 copied out of the MKV", master.Code, master.Body, remuxes.opened)
 	}
+	if remuxes.segments[session] != domain.SegmentsFMP4 || src["TranscodingContainer"] != "mp4" {
+		t.Errorf("Swiftfin's HLS is in %s (%v), want fragmented MP4", remuxes.segments[session], src["TranscodingContainer"])
+	}
 	if card, ok := plays.started[session]; !ok || card.Version.ID != copyID {
 		t.Errorf("the playback the dashboard shows: %v", plays.started)
 	}
@@ -342,5 +350,38 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	}
 	if w := serve(api, http.MethodDelete, "/Videos/ActiveEncodings?deviceId=iOS_1&playSessionId="+info.PlaySessionID, swiftfinHeader, ""); w.Code != http.StatusNoContent || plays.stopped[session] != -1 {
 		t.Errorf("ending the encoding: %d, stopped %v", w.Code, plays.stopped)
+	}
+}
+
+// Infuse takes HLS only in MPEG-TS, as its profile says, and is given it.
+func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
+	st, ada, heat, _ := aFilm(t)
+	remuxes := newFakeRemuxes()
+	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st,
+		HLS: remuxes, Remuxing: remuxes, Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), HEVC: domain.HEVCAllow,
+	})
+	const infuse = `MediaBrowser Client="Infuse-Direct", Device="Apple TV", DeviceId="E0BE", Version="8.5.6", Token="pst_ada"`
+	w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", infuse, `{"IsPlayback":true,"EnableDirectPlay":true,
+		"MaxStreamingBitrate":8000000,"DirectPlayProtocols":["Http"],"DeviceProfile":{"MaxStreamingBitrate":8000000,"TranscodingProfiles":[
+		{"Type":"Audio","Container":"aac","AudioCodec":"aac","Protocol":"hls"},
+		{"Type":"Video","Container":"ts","VideoCodec":"hevc,h264,av1","AudioCodec":"aac","MaxAudioChannels":"2","Protocol":"hls"}]}}`)
+	var info struct {
+		MediaSources  []map[string]any
+		PlaySessionID string `json:"PlaySessionId"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	transcoding, _ := info.MediaSources[0]["TranscodingUrl"].(string)
+	if info.MediaSources[0]["TranscodingContainer"] != "ts" || transcoding == "" {
+		t.Fatalf("Infuse's source: %v", info.MediaSources[0])
+	}
+	r := httptest.NewRequest(http.MethodGet, transcoding, nil)
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, r)
+	session, _ := uuid.Parse(info.PlaySessionID)
+	if rec.Code != http.StatusOK || remuxes.segments[session] != domain.SegmentsMPEGTS {
+		t.Errorf("master: %d, segments %s, want MPEG-TS", rec.Code, remuxes.segments[session])
 	}
 }

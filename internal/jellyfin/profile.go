@@ -340,23 +340,49 @@ func subtitleFormats(codec string) []string {
 // names.
 var hlsCodecs = []string{"h264", "hevc", "av1", "vp9"}
 
-// hls is the app's HLS transcoding profile photon makes: the first of its video profiles over HLS
-// in fragmented MP4. ok is false where it takes none.
-func (d deviceProfile) hls() (transcodingProfile, bool) {
+// hls is the HLS transcoding profile the app is given HLS by, and its segments: of its video
+// profiles over HLS in fragmented MP4 or MPEG-TS, in the app's order, the first whose segments
+// carry the copy's audio as it is, as Jellyfin ranks them, else the first. ok is false where it
+// takes no HLS photon makes.
+func (d deviceProfile) hls(audio *domain.Stream) (transcodingProfile, domain.SegmentFormat, bool) {
+	type candidate struct {
+		profile transcodingProfile
+		format  domain.SegmentFormat
+	}
+	var candidates []candidate
 	for _, t := range d.TranscodingProfiles {
-		if strings.EqualFold(t.Type, "Video") && strings.EqualFold(t.Protocol, "hls") && slices.Contains(list(t.Container), "mp4") {
-			return t, true
+		if !strings.EqualFold(t.Type, "Video") || !strings.EqualFold(t.Protocol, "hls") {
+			continue
+		}
+		for _, c := range list(t.Container) {
+			switch c {
+			case "mp4":
+				candidates = append(candidates, candidate{t, domain.SegmentsFMP4})
+			case "ts", "mpegts":
+				candidates = append(candidates, candidate{t, domain.SegmentsMPEGTS})
+			}
 		}
 	}
-	return transcodingProfile{}, false
+	if len(candidates) == 0 {
+		return transcodingProfile{}, "", false
+	}
+	if audio != nil {
+		for _, c := range candidates {
+			_, carried := playback.Carried(c.format)
+			if slices.Contains(carried, audio.Codec) && matches(c.profile.AudioCodec, codecNames(audio.Codec)...) {
+				return c.profile, c.format, true
+			}
+		}
+	}
+	return candidates[0].profile, candidates[0].format, true
 }
 
 // hlsProfile is photon's profile for the HLS an app takes, for a copy: the codecs its transcoding
 // profile names, within the limits its codec profiles set on them (where their ApplyConditions
 // hold of the copy's video), and its bitrate. It opens no container, so photon's decision makes
 // HLS of the copy, copying what the app plays and encoding the rest.
-func (d deviceProfile) hlsProfile(t transcodingProfile, c store.PlayCopy, maxBitrate int64) playback.Profile {
-	p := playback.Profile{MaxBitrateKbps: int(maxBitrate / 1000), Parts: domain.PartsJoined}
+func (d deviceProfile) hlsProfile(t transcodingProfile, segments domain.SegmentFormat, c store.PlayCopy, maxBitrate int64) playback.Profile {
+	p := playback.Profile{MaxBitrateKbps: int(maxBitrate / 1000), Parts: domain.PartsJoined, Segments: segments}
 	var video domain.Stream
 	for _, s := range c.Streams {
 		if s.Kind == domain.StreamVideo {
@@ -364,7 +390,7 @@ func (d deviceProfile) hlsProfile(t transcodingProfile, c store.PlayCopy, maxBit
 			break
 		}
 	}
-	containers := []string{strings.ToLower(t.Container), "hls"}
+	containers := append(list(t.Container), "hls")
 	for _, codec := range list(t.VideoCodec) {
 		if slices.Contains(hlsCodecs, codec) {
 			p.Video = append(p.Video, d.videoLimits(codec, video, containers))
