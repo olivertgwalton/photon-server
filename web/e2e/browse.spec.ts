@@ -385,7 +385,8 @@ test("a title's link is copied to share, or shown where it cannot be", async ({
 }) => {
 	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 	await logIn(page);
-	const row = page.getByRole("region", { name: "Continue Watching" });
+	// A row no other test changes.
+	const row = page.getByRole("region", { name: "Recently Added Films" });
 	await row.getByRole("button", { name: "More for Quiet Hours" }).click();
 	await page.getByRole("menuitem", { name: "Share…" }).click();
 	await expect(
