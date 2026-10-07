@@ -250,6 +250,21 @@ let maintenance: Schemas["Maintenance"] = {
 	previews: "window",
 	markers: "window_and_added",
 };
+let storage: Schemas["StorageStatus"] = { kind: "disk" };
+
+function stored(s: Schemas["Storage"]): Schemas["StorageStatus"] {
+	if (s.kind === "disk" || !s.bucket) return { kind: "disk" };
+	const { secret_key, delivery, ...bucket } = s.bucket;
+	return {
+		kind: "bucket",
+		bucket: {
+			...bucket,
+			delivery: delivery ?? "proxy",
+			secret_key_set: Boolean(secret_key),
+		},
+	};
+}
+
 let network: Schemas["NetworkStatus"] = {
 	secure_connections: "disabled",
 	jellyfin: "off",
@@ -480,6 +495,55 @@ export async function admin(
 		case "PUT /api/v1/admin/maintenance":
 			maintenance = (await request.json()) as Schemas["Maintenance"];
 			return json(maintenance);
+		case "GET /api/v1/admin/storage":
+			return json(storage);
+		case "POST /api/v1/admin/storage/check": {
+			const body = (await request.json()) as Schemas["Storage"];
+			if (body.bucket?.name === "missing")
+				return Response.json(
+					{
+						title: "Bad Request",
+						status: 400,
+						code: "invalid_body",
+						detail: 'there is no bucket "missing" at s3.example.com',
+					},
+					{
+						status: 400,
+						headers: { "content-type": "application/problem+json" },
+					},
+				);
+			return done();
+		}
+		case "PUT /api/v1/admin/storage": {
+			const body = (await request.json()) as Schemas["Storage"];
+			storage = {
+				...storage,
+				move: {
+					to: stored(body),
+					started: new Date().toISOString(),
+					copies: [
+						{
+							node: "n-1",
+							copied: 120,
+							total: 400,
+							done: false,
+							seen: new Date().toISOString(),
+						},
+						{
+							node: "n-2",
+							copied: 0,
+							total: 0,
+							done: false,
+							seen: new Date().toISOString(),
+						},
+					],
+				},
+			};
+			return json(storage);
+		}
+		case "DELETE /api/v1/admin/storage/move":
+			storage = { kind: storage.kind, bucket: storage.bucket };
+			return done();
 		case "GET /api/v1/admin/network":
 			return json(network);
 		case "PUT /api/v1/admin/network":

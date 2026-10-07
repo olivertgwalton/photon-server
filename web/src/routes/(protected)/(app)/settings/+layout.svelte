@@ -3,6 +3,7 @@ import ActivityIcon from "@lucide/svelte/icons/activity";
 import CalendarClockIcon from "@lucide/svelte/icons/calendar-clock";
 import DatabaseIcon from "@lucide/svelte/icons/database";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
+import HardDriveIcon from "@lucide/svelte/icons/hard-drive";
 import HistoryIcon from "@lucide/svelte/icons/history";
 import HouseIcon from "@lucide/svelte/icons/house";
 import KeyRoundIcon from "@lucide/svelte/icons/key-round";
@@ -36,6 +37,7 @@ const server: [string, string, Component][] = [
 	["/settings/server/profiles", "Profiles", UsersIcon],
 	["/settings/server/providers", "Metadata", DatabaseIcon],
 	["/settings/server/network", "Network", NetworkIcon],
+	["/settings/server/storage", "Storage", HardDriveIcon],
 	["/settings/server/collections", "Collections", LayersIcon],
 	["/settings/server/tasks", "Scheduled tasks", CalendarClockIcon],
 	["/settings/server/jobs", "Jobs", ListChecksIcon],
