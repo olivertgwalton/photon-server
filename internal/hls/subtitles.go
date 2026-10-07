@@ -80,7 +80,7 @@ const (
 	// previews of a missing file are.
 	subtitlesKept = 30 * 24 * time.Hour
 	// extractRetry is how long an extraction that failed is answered with its failure before a file
-	// is read again, so a file ffmpeg cannot read is not read whole for every segment asked for.
+	// is read again, so a file ffmpeg cannot read is not read whole for every request.
 	extractRetry = 10 * time.Minute
 	// extracting names the folders extractions are written in before they are moved into place.
 	extracting = ".making-"
@@ -129,13 +129,12 @@ func (r *Remuxer) WebVTT(ctx context.Context, open func() (*os.File, error), lan
 	return string(out), cmd.Err(err)
 }
 
-// Extracted answers the folder a part's subtitle streams are read out into, with want in it,
-// reading them out if no one is. Reading one means reading the whole file, so every subtitle
-// stream of the part is read out in the same pass and kept, for this playback and the next: a
-// plain one as {index}.vtt, a styled one as it is (see StyledName), with the fonts the file
-// carries for it (see FontsDir). A folder lacking want, kept from before a stream was read out so,
-// is read again. The pass outlives the request that started it: a player that gives up waiting
-// finds it further on when it asks again.
+// Extracted answers the folder a part's styled subtitle streams are read out into, with want in
+// it, reading them out if no one is. Reading one means reading the whole file, so every styled
+// stream of the part is read out in the same pass and kept as it is (see StyledName), for this
+// playback and the next, with the fonts the file carries for them (see FontsDir). A folder lacking
+// want, kept from before a stream was read out so, is read again. The pass outlives the request
+// that started it: a player that gives up waiting finds it further on when it asks again.
 func (r *Remuxer) Extracted(ctx context.Context, src SubtitleSource, want string) (string, error) {
 	dir := filepath.Join(r.subtitles, src.Part.String())
 	r.mu.Lock()
@@ -171,10 +170,9 @@ func (r *Remuxer) Extracted(ctx context.Context, src SubtitleSource, want string
 	}
 }
 
-// extract writes each of a part's subtitle streams into dir in one read of the file, with the
-// fonts its header lists where it has styled ones, each named by its stream: FFmpeg refuses to
-// write one under the name the file gives it unless that is plain ASCII with no spaces. A
-// container's text is UTF-8 by its specification.
+// extract writes each of a part's styled subtitle streams into dir in one read of the file, with
+// the fonts its header lists, each named by its stream: FFmpeg refuses to write one under the name
+// the file gives it unless that is plain ASCII with no spaces.
 func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) error {
 	f, err := src.Open()
 	if err != nil {
@@ -209,11 +207,7 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) e
 	a = append(a, "-i", "fd:")
 	for _, s := range src.Streams {
 		n := strconv.Itoa(s.Index)
-		switch {
-		case s.Kind != domain.StreamSubtitle:
-		case TextSubtitle(s.Codec):
-			a = append(a, "-map", "0:"+n, "-c:s", "webvtt", "-f", "webvtt", filepath.Join(made, n+".vtt"))
-		case StyledSubtitle(s.Codec):
+		if s.Kind == domain.StreamSubtitle && StyledSubtitle(s.Codec) {
 			a = append(a, "-map", "0:"+n, "-c:s", "copy", "-f", "ass", filepath.Join(made, StyledName(s.Index)))
 		}
 	}
