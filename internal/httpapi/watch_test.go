@@ -68,14 +68,6 @@ func (f fakeWatching) Unwatchlist(ctx context.Context, p, i uuid.UUID) error {
 	return f.Watchlist(ctx, p, i)
 }
 
-// The watchlist holds the one film, from offset 0.
-func (fakeWatching) WatchlistPage(_ context.Context, _ uuid.UUID, offset, _ int) ([]store.Card, int64, error) {
-	if offset > 0 {
-		return []store.Card{}, 1, nil
-	}
-	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat"}}, 1, nil
-}
-
 func TestWatching(t *testing.T) {
 	title := "/api/v1/titles/" + films.String()
 	// A client's clock a minute ahead is skew; an hour ahead is wrong.

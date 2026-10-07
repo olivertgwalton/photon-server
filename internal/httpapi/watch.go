@@ -7,7 +7,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 type watching interface {
@@ -20,7 +19,6 @@ type watching interface {
 	Unfavourite(ctx context.Context, profile, item uuid.UUID) error
 	Watchlist(ctx context.Context, profile, item uuid.UUID) error
 	Unwatchlist(ctx context.Context, profile, item uuid.UUID) error
-	WatchlistPage(ctx context.Context, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
 }
 
 // clockSkew is how far ahead of the server's a client's clock may run; atRule says it.
@@ -91,7 +89,7 @@ func (a *API) watchlist(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	cards, total, err := a.svc.Watching.WatchlistPage(r.Context(), sessionOf(r).Profile.ID, offset, limit)
+	cards, total, err := a.svc.Catalogue.RowPage(r.Context(), sessionOf(r).Profile.ID, domain.RowWatchlist, offset, limit)
 	if a.answered(w, r, err) {
 		return
 	}

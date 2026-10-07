@@ -120,6 +120,17 @@ func (fakeCatalogue) Home(_ context.Context, profile uuid.UUID, limit int) ([]st
 	}, nil
 }
 
+// The watchlist holds the one film, from offset 0.
+func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow, offset, _ int) ([]store.Card, int64, error) {
+	if row != domain.RowWatchlist {
+		return nil, 0, store.ErrNotFound
+	}
+	if offset > 0 {
+		return []store.Card{}, 1, nil
+	}
+	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat"}}, 1, nil
+}
+
 func TestHome(t *testing.T) {
 	rec := serve(t, http.MethodGet, "/api/v1/home?limit=2", goodToken, "")
 	var got struct {

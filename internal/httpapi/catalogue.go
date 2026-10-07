@@ -32,6 +32,7 @@ type catalogue interface {
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Home(ctx context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error)
+	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	LibraryOrder(ctx context.Context, profile uuid.UUID) ([]uuid.UUID, error)
 	SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error
