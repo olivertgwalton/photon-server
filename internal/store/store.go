@@ -275,8 +275,12 @@ func (s *Store) Storage(ctx context.Context) (domain.Storage, error) {
 }
 
 func (s *Store) SetStorage(ctx context.Context, st domain.Storage) error {
+	return setStorage(ctx, s.pool, st)
+}
+
+func setStorage(ctx context.Context, db db, st domain.Storage) error {
 	b := st.Bucket
-	_, err := s.pool.Exec(ctx, `
+	_, err := db.Exec(ctx, `
 		UPDATE server SET storage = $1, bucket_endpoint = $2, bucket_name = $3, bucket_folder = $4,
 			bucket_region = $5, bucket_access_key = $6, bucket_secret_key = $7, bucket_delivery = $8,
 			bucket_public_endpoint = $9`,
