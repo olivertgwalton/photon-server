@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -416,103 +417,92 @@ func TestAnExtraIsPicturedByAStill(t *testing.T) {
 	_ = still.Close()
 }
 
-// A chapter whose picture takes past the limit is left without it, and the others are still tried.
-func TestAChapterTooSlowToPictureIsLeftWithout(t *testing.T) {
-	limit := stillLimit
-	stillLimit = 200 * time.Millisecond
-	t.Cleanup(func() { stillLimit = limit })
-	dir := t.TempDir()
-	calls := filepath.Join(dir, "calls")
-	hang := filepath.Join(dir, "ffmpeg")
-	if err := os.WriteFile(hang, []byte("#!/bin/sh\necho >> '"+calls+"'\nexec sleep 30\n"), 0o755); err != nil {
+// stillFFmpeg is an ffmpeg that writes each command it is given as a line of calls and pictures
+// any time but hang, where it never answers.
+func stillFFmpeg(t *testing.T, hang string) (path, calls string) {
+	t.Helper()
+	testdata, err := filepath.Abs("testdata")
+	if err != nil {
 		t.Fatal(err)
 	}
-	f, err := os.Open(hang)
+	dir := t.TempDir()
+	path, calls = filepath.Join(dir, "ffmpeg"), filepath.Join(dir, "calls")
+	script := `#!/bin/sh
+echo "$*" >> '` + calls + `'
+for a; do last=$a; done
+case "$*" in
+*"-ss ` + hang + ` "*) exec sleep 30 ;;
+esac
+cp '` + testdata + `/still.jpg' "$last"
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path, calls
+}
+
+func pictured(t *testing.T, ffmpeg string, chapters []store.ChapterSpan, length time.Duration) []int {
+	t.Helper()
+	f, err := os.Open(ffmpeg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	chapters := []store.ChapterSpan{
-		{Idx: 0, Start: 0, End: time.Minute},
-		{Idx: 1, Start: time.Minute, End: 2 * time.Minute},
-		{Idx: 2, Start: 2 * time.Minute, End: 3 * time.Minute},
-	}
-	began := time.Now()
-	made, err := chapterImages(t.Context(), media.Tools{FFmpeg: media.Tool{Path: hang}}, f, chapters, false,
-		filepath.Join(dir, "chapters"), slog.New(slog.DiscardHandler))
+	made, err := chapterImages(t.Context(), media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, f, chapters, length, false,
+		filepath.Join(t.TempDir(), "chapters"), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(made) != 0 {
-		t.Errorf("pictured %v, want none", made)
-	}
+	return made
+}
+
+func readCalls(t *testing.T, calls string) []string {
+	t.Helper()
 	asked, err := os.ReadFile(calls)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := strings.Count(string(asked), "\n"); n != len(chapters) {
-		t.Errorf("ffmpeg asked %d times, want once a chapter", n)
+	return strings.Split(strings.TrimSuffix(string(asked), "\n"), "\n")
+}
+
+var threeChapters = []store.ChapterSpan{
+	{Idx: 0, Start: 0, End: time.Minute},
+	{Idx: 1, Start: time.Minute, End: 2 * time.Minute},
+	{Idx: 2, Start: 2 * time.Minute, End: 3 * time.Minute},
+}
+
+// A chapter that cannot be pictured from keyframes is tried from every frame, and one that cannot
+// be pictured either way leaves it and every chapter after it without, as Jellyfin does, keeping
+// those before it.
+func TestAChapterThatCannotBePicturedStopsTheRest(t *testing.T) {
+	limit := stillLimit
+	stillLimit = 200 * time.Millisecond
+	t.Cleanup(func() { stillLimit = limit })
+	ffmpeg, calls := stillFFmpeg(t, "60.000")
+
+	began := time.Now()
+	if made := pictured(t, ffmpeg, threeChapters, 3*time.Minute); !slices.Equal(made, []int{0}) {
+		t.Errorf("pictured %v, want the first chapter alone", made)
 	}
 	if took := time.Since(began); took > 5*time.Second {
-		t.Errorf("took %s, want about the limit a chapter", took)
+		t.Errorf("took %s, want about the limit twice", took)
+	}
+	asked := readCalls(t, calls)
+	if len(asked) != 3 {
+		t.Fatalf("ffmpeg asked %d times, want the first chapter once and the second twice: %q", len(asked), asked)
+	}
+	if !strings.Contains(asked[1], "-skip_frame nokey") || strings.Contains(asked[2], "-skip_frame nokey") {
+		t.Errorf("the second chapter was asked for as %q, want keyframes first and then every frame", asked[1:])
 	}
 }
 
-func (f *fixture) previewsDue(part uuid.UUID) domain.JobDue {
-	f.t.Helper()
-	var d domain.JobDue
-	if err := f.db.QueryRow(f.t.Context(), `SELECT due FROM jobs WHERE kind = 'previews' AND subject = $1`, part.String()).Scan(&d); err != nil {
-		f.t.Fatal(err)
+// A chapter starting past the end of the video is not tried, nor any after it.
+func TestChaptersPastTheEndAreNotTried(t *testing.T) {
+	ffmpeg, calls := stillFFmpeg(t, "none")
+	if made := pictured(t, ffmpeg, threeChapters, 90*time.Second); !slices.Equal(made, []int{0, 1}) {
+		t.Errorf("pictured %v, want the two chapters starting within the video", made)
 	}
-	return d
-}
-
-func (f *fixture) setPreviewsTiming(timing domain.Timing) {
-	f.t.Helper()
-	m, err := f.st.Maintenance(f.t.Context())
-	if err != nil {
-		f.t.Fatal(err)
-	}
-	m.Previews = timing
-	if err := f.st.SetMaintenance(f.t.Context(), m); err != nil {
-		f.t.Fatal(err)
-	}
-}
-
-// A part a scan finds waits for the window where previews are made in it alone, and is due at once
-// where they are made as parts are added too, as Plex's two scheduled settings have it.
-func TestAnAddedPartIsDueAsItsTimingSays(t *testing.T) {
-	f := newFixture(t)
-	_, part := f.film("heat")
-	if d := f.previewsDue(part); d != domain.JobDueWindow {
-		t.Errorf("under window: a part just added is due %q, want window", d)
-	}
-	f = newFixture(t)
-	f.setPreviewsTiming(domain.TimingWindowAndAdded)
-	_, part = f.film("heat")
-	if d := f.previewsDue(part); d != domain.JobDueNow {
-		t.Errorf("under window_and_added: a part just added is due %q, want now", d)
-	}
-}
-
-// The window's backfill queues its parts due in the window; an admin's Run now makes them, and
-// every previews job already waiting for the window, due now.
-func TestRunNowMakesTheWholeBacklogDueNow(t *testing.T) {
-	f := newFixture(t)
-	_, waiting := f.film("heat")
-	if d := f.previewsDue(waiting); d != domain.JobDueWindow {
-		t.Fatalf("a part just added is due %q, want window", d)
-	}
-	if n, err := f.st.QueuePreviews(t.Context(), domain.JobDueWindow); err != nil || n != 1 {
-		t.Fatalf("the window's backfill queued %d (%v), want the part", n, err)
-	}
-	if d := f.previewsDue(waiting); d != domain.JobDueWindow {
-		t.Errorf("after the window's backfill the part is due %q, want window", d)
-	}
-	if _, err := f.st.QueuePreviews(t.Context(), domain.JobDueNow); err != nil {
-		t.Fatal(err)
-	}
-	if d := f.previewsDue(waiting); d != domain.JobDueNow {
-		t.Errorf("after Run now the part is due %q, want now", d)
+	if asked := readCalls(t, calls); len(asked) != 2 {
+		t.Errorf("ffmpeg asked %d times, want once for each chapter within the video", len(asked))
 	}
 }

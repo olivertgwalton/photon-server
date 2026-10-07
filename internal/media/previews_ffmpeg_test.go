@@ -31,12 +31,14 @@ func TestAStillPastTheEndIsNoPicture(t *testing.T) {
 	}
 	defer f.Close()
 
-	within := filepath.Join(dir, "within.jpg")
-	if err := tools.Still(t.Context(), f, time.Second, 160, false, within); err != nil {
-		t.Fatalf("a still within the video: %v", err)
-	}
-	err = tools.Still(t.Context(), f, time.Minute, 160, false, filepath.Join(dir, "past.jpg"))
-	if err == nil || strings.Contains(err.Error(), "full-range") {
-		t.Errorf("a still past the end: %v, want no picture", err)
+	for _, decode := range []Decode{DecodeKeyframes, DecodeEvery} {
+		within := filepath.Join(dir, string(decode)+"-within.jpg")
+		if err := tools.Still(t.Context(), f, decode, time.Second, 160, false, within); err != nil {
+			t.Fatalf("a still within the video from %s: %v", decode, err)
+		}
+		err = tools.Still(t.Context(), f, decode, time.Minute, 160, false, filepath.Join(dir, string(decode)+"-past.jpg"))
+		if err == nil || strings.Contains(err.Error(), "full-range") {
+			t.Errorf("a still past the end from %s: %v, want no picture", decode, err)
+		}
 	}
 }
