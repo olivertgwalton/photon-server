@@ -19,10 +19,10 @@ PostgreSQL and Valkey:
 cd deploy && cp .env.example .env    # set the passwords and MEDIA_DIR
 docker compose up -d                 # add -f compose.intel.yml or -f compose.nvidia.yml for a GPU
 docker compose exec server photon-server profile add -name Admin -role admin
-docker compose exec server photon-server library add -name Films -kind movies /media/Films
 ```
 
-Then open `http://<server>:8640` and log in.
+Then open `http://<server>:8640`, log in, and add a library under Settings, Server, Libraries
+(`POST /api/v1/admin/libraries`).
 
 ### Several servers
 
