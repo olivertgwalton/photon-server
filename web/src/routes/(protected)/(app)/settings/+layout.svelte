@@ -85,10 +85,10 @@ function current(href: string) {
 									{href}
 									aria-current={current(href) ? "page" : undefined}
 									class={[
-										"flex items-center gap-2.5 rounded-full px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap transition-colors lg:rounded-lg",
+										"flex items-center gap-2.5 rounded-full px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap transition-colors duration-200 lg:rounded-lg",
 										current(href)
-											? "bg-ink text-ground"
-											: "text-ink-2 hover:bg-raise hover:text-ink",
+											? "bg-raise text-ink"
+											: "text-ink-3 hover:bg-raise/60 hover:text-ink",
 									]}
 								>
 									<Icon
