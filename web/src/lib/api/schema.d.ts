@@ -5333,6 +5333,7 @@ export interface components {
             containers: string[];
             max_bitrate_kbps: number;
             parts?: components["schemas"]["PartPlayback"];
+            segments?: components["schemas"]["SegmentFormat"];
             subtitles?: string[];
             video: components["schemas"]["VideoSupport"][];
         };
@@ -6305,6 +6306,8 @@ export interface components {
         SecureConnections: "required" | "preferred" | "disabled";
         /** @enum {string} */
         SegmentAction: "none" | "ask" | "skip";
+        /** @enum {string} */
+        SegmentFormat: "fmp4" | "mpegts";
         Server: {
             arch: string;
             chromaprint: boolean;
