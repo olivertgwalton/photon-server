@@ -42,8 +42,13 @@ func fake(t *testing.T) (*Client, *int) {
 			return
 		}
 		switch r.URL.Path + "?" + r.URL.RawQuery {
-		case "/series/79126/extended?meta=translations&short=true":
+		case "/series/79126/extended?meta=translations":
 			_, _ = w.Write([]byte(`{"data":{"name":"The Wire","firstAired":"2002-06-02","originalLanguage":"eng",
+				"characters":[
+					{"name":"Jimmy McNulty","personName":"Dominic West","peopleId":289,"peopleType":"Actor","sort":2,"personImgURL":"https://artworks.thetvdb.com/banners/person/289/a.jpg"},
+					{"name":"Cedric Daniels","personName":"Lance Reddick","peopleId":290,"peopleType":"Actor","sort":3,"personImgURL":"https://artworks.thetvdb.com/banners/"},
+					{"name":"Himself","personName":"A Host","peopleId":291,"peopleType":"Host","sort":4},
+					{"name":"Kima Greggs","personName":" Sonja Sohn ","peopleId":292,"peopleType":"Actor","sort":1}],
 				"image":"https://artworks.thetvdb.com/banners/posters/79126-2.jpg",
 				"genres":[{"name":"Drama"}],"originalNetwork":{"name":"HBO"},"latestNetwork":{"name":"HBO"},
 				"contentRatings":[{"name":"TV-MA","country":"usa"},{"name":"18","country":"gbr"}],
@@ -51,12 +56,16 @@ func fake(t *testing.T) (*Client, *int) {
 				"translations":{"nameTranslations":[{"language":"eng","name":"The Wire (2002)","isAlias":true},{"language":"eng","name":"The Wire"}],
 				"overviewTranslations":[{"language":"fra","overview":"Baltimore, en français."},{"language":"eng","overview":"Baltimore."}]}}}`))
 		case "/series/79126/episodes/default/eng?page=0":
-			_, _ = w.Write([]byte(`{"data":{"episodes":[{"seasonNumber":1,"number":1,"name":"The Target","aired":"2002-06-02","image":"https://artworks.thetvdb.com/banners/"},
-				{"seasonNumber":2,"number":1,"name":"Ebb Tide"}]},"links":{"next":"` + srv.URL + `/series/79126/episodes/default/eng?page=1"}}`))
+			_, _ = w.Write([]byte(`{"data":{"episodes":[{"id":101,"seasonNumber":1,"number":1,"name":"The Target","aired":"2002-06-02","image":"https://artworks.thetvdb.com/banners/"},
+				{"id":201,"seasonNumber":2,"number":1,"name":"Ebb Tide"}]},"links":{"next":"` + srv.URL + `/series/79126/episodes/default/eng?page=1"}}`))
+		case "/episodes/101/extended?":
+			_, _ = w.Write([]byte(`{"data":{"characters":[
+				{"name":"Writer","personName":"David Simon","peopleId":300,"peopleType":"Writer","sort":1},
+				{"name":"Bunk","personName":"Wendell Pierce","peopleId":301,"peopleType":"Guest Star","sort":2}]}}`))
 		case "/series/79126/episodes/dvd/eng?page=0":
 			_, _ = w.Write([]byte(`{"data":{"episodes":[{"seasonNumber":1,"number":1,"name":"The Detail"}]},"links":{"next":null}}`))
 		case "/series/79126/episodes/default/eng?page=1":
-			_, _ = w.Write([]byte(`{"data":{"episodes":[{"seasonNumber":1,"number":2,"name":"The Detail"}]},"links":{"next":null}}`))
+			_, _ = w.Write([]byte(`{"data":{"episodes":[{"id":102,"seasonNumber":1,"number":2,"name":"The Detail"}]},"links":{"next":null}}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -79,6 +88,12 @@ func TestDetailsInTheClientsLanguageAndCountry(t *testing.T) {
 		Genres: []string{"Drama"}, Studios: []string{"HBO"},
 		IDs:     map[domain.Provider]string{domain.ProviderTVDB: "79126", domain.ProviderIMDb: "tt0306414", domain.ProviderTMDB: "1438"},
 		Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, URL: "https://artworks.thetvdb.com/banners/posters/79126-2.jpg"}},
+		// Billed in TVDB's order, the host left out, and a picture TVDB has none of not given.
+		Credits: []domain.Credit{
+			{Name: "Sonja Sohn", IDs: map[domain.Provider]string{domain.ProviderTVDB: "292"}, Kind: domain.CreditActor, Role: "Kima Greggs"},
+			{Name: "Dominic West", IDs: map[domain.Provider]string{domain.ProviderTVDB: "289"}, Kind: domain.CreditActor, Role: "Jimmy McNulty", Photo: "https://artworks.thetvdb.com/banners/person/289/a.jpg"},
+			{Name: "Lance Reddick", IDs: map[domain.Provider]string{domain.ProviderTVDB: "290"}, Kind: domain.CreditActor, Role: "Cedric Daniels"},
+		},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Details (-want +got):\n%s", diff)
@@ -111,5 +126,26 @@ func TestSeasonsAreNumberedInTheOrderAsked(t *testing.T) {
 	got, err := c.Seasons(t.Context(), 79126, []int{1}, domain.OrderDVD)
 	if err != nil || got[1].Episodes[1].Title != "The Detail" {
 		t.Errorf("on DVD, season 1 = %+v, %v; want The Detail first", got[1], err)
+	}
+}
+
+func TestAnEpisodeCreditsItsGuestsAndCrew(t *testing.T) {
+	c, _ := fake(t)
+	got, err := c.Seasons(t.Context(), 79126, []int{1}, domain.OrderAired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The guest before the writer TVDB sorts first: the cast is billed before the crew.
+	want := []domain.Credit{
+		{Name: "Wendell Pierce", IDs: map[domain.Provider]string{domain.ProviderTVDB: "301"}, Kind: domain.CreditGuestStar, Role: "Bunk"},
+		{Name: "David Simon", IDs: map[domain.Provider]string{domain.ProviderTVDB: "300"}, Kind: domain.CreditWriter, Role: "Writer"},
+	}
+	if diff := cmp.Diff(want, got[1].Episodes[1].Credits); diff != "" {
+		t.Errorf("the first episode's credits (-want +got):\n%s", diff)
+	}
+	// TVDB answers the second episode's record as not found: it is credited with no one, and the
+	// season is still described.
+	if got[1].Episodes[2].Title != "The Detail" || got[1].Episodes[2].Credits != nil {
+		t.Errorf("the second episode = %+v, want its title and no credits", got[1].Episodes[2])
 	}
 }

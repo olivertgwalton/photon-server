@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -170,6 +171,53 @@ type named struct {
 	Name string `json:"name"`
 }
 
+// character is someone TVDB credits on a show or an episode: an actor as the part they play, or
+// one of its crew. Its picture is the person's own, as Jellyfin's plugin takes it, not the part's.
+type character struct {
+	Role   string `json:"name"`
+	Person string `json:"personName"`
+	ID     int    `json:"peopleId"`
+	Type   string `json:"peopleType"`
+	Photo  string `json:"personImgURL"`
+	Sort   int    `json:"sort"`
+}
+
+// creditKinds are TVDB's people types of those credited; a type left out (a host, a musical
+// guest, the crew at large) is not credited.
+var creditKinds = map[string]domain.CreditKind{
+	"Actor": domain.CreditActor, "Guest Star": domain.CreditGuestStar, "Director": domain.CreditDirector,
+	"Writer": domain.CreditWriter, "Producer": domain.CreditProducer, "Executive Producer": domain.CreditProducer,
+	"Creator": domain.CreditCreator, "Composer": domain.CreditComposer,
+}
+
+// credits are the characters as credits, the cast before the crew as other sources bill them,
+// each in TVDB's order, which its list is not in.
+func credits(characters []character) []domain.Credit {
+	billing := func(c character) int {
+		if creditKinds[c.Type].Acting() {
+			return 0
+		}
+		return 1
+	}
+	slices.SortStableFunc(characters, func(a, b character) int {
+		return cmp.Or(cmp.Compare(billing(a), billing(b)), cmp.Compare(a.Sort, b.Sort))
+	})
+	var out []domain.Credit
+	for _, c := range characters {
+		kind, ok := creditKinds[c.Type]
+		name := strings.TrimSpace(c.Person)
+		if !ok || name == "" || c.ID == 0 {
+			continue
+		}
+		cr := domain.Credit{Name: name, IDs: map[domain.Provider]string{domain.ProviderTVDB: strconv.Itoa(c.ID)}, Kind: kind, Role: c.Role}
+		if pics := picture(domain.ArtworkPoster, c.Photo); pics != nil {
+			cr.Photo = pics[0].URL
+		}
+		out = append(out, cr)
+	}
+	return out
+}
+
 // sources names the providers TVDB lists among a show's remote ids.
 var sources = map[string]domain.Provider{"IMDB": domain.ProviderIMDb, "TheMovieDB.com": domain.ProviderTMDB}
 
@@ -178,13 +226,14 @@ var sources = map[string]domain.Provider{"IMDB": domain.ProviderIMDb, "TheMovieD
 func (c *Client) Details(ctx context.Context, id int) (domain.Metadata, error) {
 	var out struct {
 		Data struct {
-			Name             string  `json:"name"`
-			Image            string  `json:"image"`
-			FirstAired       string  `json:"firstAired"`
-			Genres           []named `json:"genres"`
-			OriginalNetwork  *named  `json:"originalNetwork"`
-			LatestNetwork    *named  `json:"latestNetwork"`
-			OriginalLanguage string  `json:"originalLanguage"`
+			Name             string      `json:"name"`
+			Image            string      `json:"image"`
+			FirstAired       string      `json:"firstAired"`
+			Characters       []character `json:"characters"`
+			Genres           []named     `json:"genres"`
+			OriginalNetwork  *named      `json:"originalNetwork"`
+			LatestNetwork    *named      `json:"latestNetwork"`
+			OriginalLanguage string      `json:"originalLanguage"`
 			ContentRatings   []struct {
 				Name    string `json:"name"`
 				Country string `json:"country"`
@@ -206,7 +255,8 @@ func (c *Client) Details(ctx context.Context, id int) (domain.Metadata, error) {
 			} `json:"translations"`
 		} `json:"data"`
 	}
-	if err := c.get(ctx, fmt.Sprintf("/series/%d/extended?meta=translations&short=true", id), &out); err != nil {
+	// Not short: a short record leaves out the cast, with the artwork and trailers.
+	if err := c.get(ctx, fmt.Sprintf("/series/%d/extended?meta=translations", id), &out); err != nil {
 		return domain.Metadata{}, err
 	}
 	d := out.Data
@@ -215,6 +265,7 @@ func (c *Client) Details(ctx context.Context, id int) (domain.Metadata, error) {
 		ReleaseDate: aired, Year: provider.Year(aired),
 		IDs:     map[domain.Provider]string{domain.ProviderTVDB: strconv.Itoa(id)},
 		Artwork: picture(domain.ArtworkPoster, d.Image),
+		Credits: credits(d.Characters),
 	}
 	if d.OriginalLanguage == c.language {
 		m.OriginalTitle = d.Name
@@ -266,6 +317,7 @@ func (c *Client) Seasons(ctx context.Context, id int, seasons []int, order domai
 		var page struct {
 			Data struct {
 				Episodes []struct {
+					ID       int    `json:"id"`
 					Season   int    `json:"seasonNumber"`
 					Number   int    `json:"number"`
 					Name     string `json:"name"`
@@ -283,16 +335,36 @@ func (c *Client) Seasons(ctx context.Context, id int, seasons []int, order domai
 		}
 		for _, e := range page.Data.Episodes {
 			if s, ok := out[e.Season]; ok {
+				// An episode's guests and crew are on its own record alone, as Jellyfin's plugin
+				// reads them: one request an episode, of the seasons asked about only.
+				people, err := c.episodeCredits(ctx, e.ID)
+				if err != nil && !errors.Is(err, provider.ErrNotFound) {
+					return nil, err
+				}
 				aired := provider.Date(e.Aired)
 				s.Episodes[e.Number] = domain.Metadata{
 					Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: provider.Year(aired),
-					Artwork: picture(domain.ArtworkThumb, e.Image),
+					Artwork: picture(domain.ArtworkThumb, e.Image), Credits: people,
 				}
 			}
 		}
 		path = strings.TrimPrefix(page.Links.Next, c.base)
 	}
 	return out, nil
+}
+
+// episodeCredits answers who TVDB credits on an episode: its guests, and crew such as its
+// director and writers.
+func (c *Client) episodeCredits(ctx context.Context, id int) ([]domain.Credit, error) {
+	var out struct {
+		Data struct {
+			Characters []character `json:"characters"`
+		} `json:"data"`
+	}
+	if err := c.get(ctx, fmt.Sprintf("/episodes/%d/extended", id), &out); err != nil {
+		return nil, err
+	}
+	return credits(out.Data.Characters), nil
 }
 
 // picture is TVDB's picture at address, which it answers as its bare /banners/ folder for a
