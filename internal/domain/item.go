@@ -79,6 +79,12 @@ func Providers() []Provider {
 	return []Provider{ProviderTMDB, ProviderIMDb, ProviderTVDB}
 }
 
+// Listed is a title a list kept on a provider holds: a film or a show, by its ids.
+type Listed struct {
+	Kind ItemKind
+	IDs  map[Provider]string
+}
+
 // IDSource is where a title's provider id came from, so a later source knows what it may replace.
 type IDSource string
 

@@ -3,6 +3,7 @@ package tmdb
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strconv"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -67,4 +68,31 @@ func (c *Client) DescribePerson(ctx context.Context, loc domain.Locale, ids map[
 // Candidates answers TMDB's titles by a name, for an admin fixing a match.
 func (c *Client) Candidates(ctx context.Context, loc domain.Locale, kind domain.ItemKind, title string, year int) ([]domain.Candidate, error) {
 	return c.Search(ctx, loc, kinds[kind], title, year)
+}
+
+// List answers a TMDB list's films and shows in its order, a page at a time.
+func (c *Client) List(ctx context.Context, id string) ([]domain.Listed, error) {
+	var out []domain.Listed
+	for page := 1; ; page++ {
+		var body struct {
+			Items []struct {
+				ID        int    `json:"id"`
+				MediaType string `json:"media_type"`
+			} `json:"items"`
+			TotalPages int `json:"total_pages"`
+		}
+		q := url.Values{"page": {strconv.Itoa(page)}}
+		if err := c.get(ctx, domain.Locale{}, "/list/"+url.PathEscape(id), q, &body); err != nil {
+			return nil, err
+		}
+		for _, item := range body.Items {
+			kind, ok := map[string]domain.ItemKind{"movie": domain.ItemMovie, "tv": domain.ItemShow}[item.MediaType]
+			if ok {
+				out = append(out, domain.Listed{Kind: kind, IDs: map[domain.Provider]string{domain.ProviderTMDB: strconv.Itoa(item.ID)}})
+			}
+		}
+		if page >= body.TotalPages {
+			return out, nil
+		}
+	}
 }
