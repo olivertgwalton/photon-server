@@ -3,7 +3,9 @@ package library
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"io"
+	"os"
 )
 
 const contentSample = 64 << 10
@@ -33,4 +35,29 @@ func ContentKey(root string, parts []string) ([]byte, error) {
 		}
 	}
 	return h.Sum(nil), nil
+}
+
+// MovieHash is OpenSubtitles' hash of a file, by which a subtitle made for that very release is
+// found: its size and every little-endian 64-bit word of its first and last 64 KiB, summed and
+// let wrap, as 16 hex digits. A file shorter than that has none.
+func MovieHash(f *os.File) (string, error) {
+	info, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+	size := info.Size()
+	if size < contentSample {
+		return "", nil
+	}
+	sum := uint64(size)
+	buf := make([]byte, contentSample)
+	for _, at := range []int64{0, size - contentSample} {
+		if _, err := f.ReadAt(buf, at); err != nil {
+			return "", err
+		}
+		for i := 0; i < contentSample; i += 8 {
+			sum += binary.LittleEndian.Uint64(buf[i:])
+		}
+	}
+	return fmt.Sprintf("%016x", sum), nil
 }
