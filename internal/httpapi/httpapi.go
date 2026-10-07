@@ -326,7 +326,7 @@ func (a *API) routes() []route {
 			status: http.StatusNoContent, handle: a.signOutDevice,
 		},
 		{
-			pattern: "GET /api/v1/libraries", access: signedIn, summary: "List the libraries the profile sees, with how many of each kind of title it may see in each",
+			pattern: "GET /api/v1/libraries", access: signedIn, summary: "List the libraries the profile sees",
 			status: http.StatusOK, reply: listJSON[libraryJSON]{}, handle: a.libraries,
 		},
 		{

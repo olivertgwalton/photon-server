@@ -33,27 +33,14 @@ type catalogue interface {
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Home(ctx context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
-	LibraryCounts(ctx context.Context, profile uuid.UUID) (map[uuid.UUID]domain.TitleCounts, error)
 	LibraryOrder(ctx context.Context, profile uuid.UUID) ([]uuid.UUID, error)
 	SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error
 }
 
 type libraryJSON struct {
-	ID     uuid.UUID          `json:"id"`
-	Name   string             `json:"name"`
-	Kind   domain.LibraryKind `json:"kind"`
-	Counts countsJSON         `json:"counts"`
-}
-
-// countsJSON is how many of each kind of title a library holds.
-type countsJSON struct {
-	Movies   int `json:"movies"`
-	Shows    int `json:"shows"`
-	Seasons  int `json:"seasons"`
-	Episodes int `json:"episodes"`
-	// Collections are how many its collections listing holds, so a client knows whether to offer
-	// one without asking it.
-	Collections int `json:"collections"`
+	ID   uuid.UUID          `json:"id"`
+	Name string             `json:"name"`
+	Kind domain.LibraryKind `json:"kind"`
 }
 
 type cardJSON struct {
@@ -94,11 +81,6 @@ func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profile := sessionOf(r).Profile.ID
-	counts, err := a.svc.Catalogue.LibraryCounts(r.Context(), profile)
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
 	order, err := a.svc.Catalogue.LibraryOrder(r.Context(), profile)
 	if err != nil {
 		a.internal(w, r, err)
@@ -114,7 +96,7 @@ func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
 	slices.SortStableFunc(libs, func(x, y domain.Library) int { return cmp.Compare(rank(x.ID), rank(y.ID)) })
 	out := make([]libraryJSON, len(libs))
 	for i, l := range libs {
-		out[i] = libraryJSON{ID: l.ID, Name: l.Name, Kind: l.Kind, Counts: countsJSON(counts[l.ID])}
+		out[i] = libraryJSON{ID: l.ID, Name: l.Name, Kind: l.Kind}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[libraryJSON]{Items: out})
 }

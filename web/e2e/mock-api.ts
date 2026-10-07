@@ -14,24 +14,8 @@ const server: Schemas["Info"] = { id: "s-1", name: "Den", version: "v1.0.0" };
 
 const libraries: Schemas["LibraryList"] = {
 	items: [
-		{
-			id: "l-films",
-			name: "Films",
-			kind: "movies",
-			counts: {
-				movies: 250,
-				shows: 0,
-				seasons: 0,
-				episodes: 0,
-				collections: 1,
-			},
-		},
-		{
-			id: "l-shows",
-			name: "Shows",
-			kind: "shows",
-			counts: { movies: 0, shows: 1, seasons: 1, episodes: 2, collections: 0 },
-		},
+		{ id: "l-films", name: "Films", kind: "movies" },
+		{ id: "l-shows", name: "Shows", kind: "shows" },
 	],
 };
 

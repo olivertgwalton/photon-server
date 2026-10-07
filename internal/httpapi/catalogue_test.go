@@ -43,10 +43,6 @@ func (fakeCatalogue) SetLibraryOrder(_ context.Context, _ uuid.UUID, libs []uuid
 	return nil
 }
 
-func (fakeCatalogue) LibraryCounts(context.Context, uuid.UUID) (map[uuid.UUID]domain.TitleCounts, error) {
-	return map[uuid.UUID]domain.TitleCounts{films: {Movies: 120}}, nil
-}
-
 // Wall answers one card titled after the page it was asked for, of 120 in all.
 func (fakeCatalogue) Wall(_ context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, int64, error) {
 	if lib != films {
@@ -242,9 +238,6 @@ func TestWall(t *testing.T) {
 		if len(got.Items) != 1 || got.Items[0].Title != tc.wantTitle || got.Items[0].ReleaseDate != "1995-12-15" || got.Total != 120 {
 			t.Errorf("%q: body = %+v, want one card %q released 1995-12-15 of 120", tc.query, got, tc.wantTitle)
 		}
-	}
-	if rec := serve(t, http.MethodGet, "/api/v1/libraries", goodToken, ""); !strings.Contains(rec.Body.String(), `"counts":{"movies":120,"shows":0,"seasons":0,"episodes":0,"collections":0}`) {
-		t.Errorf("libraries = %s, want each with its counts", rec.Body)
 	}
 	var listed struct{ Items []struct{ Name string } }
 	if err := json.Unmarshal(serve(t, http.MethodGet, "/api/v1/libraries", goodToken, "").Body.Bytes(), &listed); err != nil ||

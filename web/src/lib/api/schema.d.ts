@@ -3101,7 +3101,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the libraries the profile sees, with how many of each kind of title it may see in each */
+        /** List the libraries the profile sees */
         get: {
             parameters: {
                 query?: never;
@@ -5743,7 +5743,6 @@ export interface components {
             items: components["schemas"]["Letter"][];
         };
         Library: {
-            counts: components["schemas"]["Counts"];
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["LibraryKind"];
