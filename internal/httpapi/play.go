@@ -40,7 +40,7 @@ type playbacks interface {
 }
 
 type remuxing interface {
-	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, start time.Duration) error
+	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error
 }
 
 // owners say which node of the cluster serves a playback's HLS.
@@ -177,6 +177,9 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if req.Profile.Parts == "" {
 		req.Profile.Parts = domain.PartsJoined
 	}
+	if req.Profile.Segments == "" {
+		req.Profile.Segments = domain.SegmentsFMP4
+	}
 	var version uuid.UUID
 	if req.VersionID != "" {
 		var err error
@@ -241,7 +244,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if d.Method != domain.PlayDirect {
-		if err := a.svc.Remuxing.Open(r.Context(), session.ID, c, *d.Video, d.Audio, time.Duration(req.StartMS)*time.Millisecond); err != nil {
+		if err := a.svc.Remuxing.Open(r.Context(), session.ID, c, *d.Video, d.Audio, req.Profile.Segments, time.Duration(req.StartMS)*time.Millisecond); err != nil {
 			if aerr := a.svc.Playbacks.Abandon(context.WithoutCancel(r.Context()), session.ID); aerr != nil {
 				a.internal(w, r, aerr)
 				return
@@ -339,6 +342,9 @@ func tagOf(l language.Tag) string {
 
 func hlsSubject(playback uuid.UUID) string { return "/api/v1/hls/" + playback.String() }
 
+// segmentTypes are the media types of HLS segments, by their extensions.
+var segmentTypes = map[string]string{".m4s": "video/iso.segment", ".ts": "video/mp2t"}
+
 // hlsFile serves a remux's playlist, a part's initialisation or a segment, made as they are asked
 // for. The playlist addresses everything else relative to itself, so one signature covers it all.
 func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
@@ -381,14 +387,14 @@ func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
 		}
 		f, err = a.svc.HLS.Init(r.Context(), playback, part)
 		w.Header().Set("Content-Type", "video/mp4")
-	case strings.HasSuffix(name, ".m4s"):
-		n, perr := strconv.Atoi(strings.TrimSuffix(name, ".m4s"))
+	case segmentTypes[path.Ext(name)] != "":
+		n, perr := strconv.Atoi(strings.TrimSuffix(name, path.Ext(name)))
 		if perr != nil {
 			writeProblem(w, a.logger, codeNotFound, "")
 			return
 		}
 		f, err = a.svc.HLS.Segment(r.Context(), playback, n)
-		w.Header().Set("Content-Type", "video/iso.segment")
+		w.Header().Set("Content-Type", segmentTypes[path.Ext(name)])
 	default:
 		writeProblem(w, a.logger, codeNotFound, "")
 		return

@@ -34,7 +34,7 @@ func TestPlanCutsAtTheFirstKeyframeOfEachSixSeconds(t *testing.T) {
 
 func TestPlaylistMarksWhereOnePartGivesWayToTheNext(t *testing.T) {
 	segs := []Segment{{0, 0, 7500 * time.Millisecond}, {0, 7500 * time.Millisecond, 12 * time.Second}, {1, 0, 4 * time.Second}}
-	got := Playlist(segs, func(p int) string { return "init" + strconv.Itoa(p) + ".mp4" }, func(n int) string { return strconv.Itoa(n) + ".m4s" })
+	got := Playlist(segs, 7, func(p int) string { return "init" + strconv.Itoa(p) + ".mp4" }, func(n int) string { return strconv.Itoa(n) + ".m4s" })
 	want := strings.Join([]string{
 		"#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-TARGETDURATION:8", "#EXT-X-PLAYLIST-TYPE:VOD", "#EXT-X-INDEPENDENT-SEGMENTS",
 		`#EXT-X-MAP:URI="init0.mp4"`, "#EXTINF:7.500000,", "0.m4s", "#EXTINF:4.500000,", "1.m4s",

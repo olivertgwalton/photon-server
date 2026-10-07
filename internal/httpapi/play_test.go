@@ -237,7 +237,7 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 // fakeHLS remuxes into a playlist and one segment, of the playback it was opened for.
 type fakeHLS struct{ dir string }
 
-func (fakeHLS) Open(context.Context, uuid.UUID, store.PlayCopy, domain.VideoPlan, *domain.AudioPlan, time.Duration) error {
+func (fakeHLS) Open(context.Context, uuid.UUID, store.PlayCopy, domain.VideoPlan, *domain.AudioPlan, domain.SegmentFormat, time.Duration) error {
 	return nil
 }
 
@@ -327,6 +327,11 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 			t.Errorf("%s: %d %q, want %q", file, rec.Code, rec.Body.String(), want)
 		}
 	}
+	for file, want := range map[string]string{"0.m4s": "video/iso.segment", "0.ts": "video/mp2t"} {
+		if got := do(httptest.NewRequest(http.MethodGet, base+file, nil)).Header().Get("Content-Type"); got != want {
+			t.Errorf("%s served as %q, want %q", file, got, want)
+		}
+	}
 	other := strings.Replace(base, playbackID.String(), uuid.NewV7().String(), 1)
 	if rec := do(httptest.NewRequest(http.MethodGet, other+"0.m4s", nil)); rec.Code != http.StatusUnauthorized {
 		t.Errorf("one playback's signature on another's path: %d, want 401", rec.Code)
@@ -349,6 +354,7 @@ func TestAClientIsToldWhyNothingPlays(t *testing.T) {
 			[]string{"container_not_supported", "parts_not_supported", "video_codec_not_supported"},
 		},
 		{`{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "parts": "some"}}`, http.StatusBadRequest, nil},
+		{`{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "segments": "webm"}}`, http.StatusBadRequest, nil},
 		{`{"audio_stream": 0, "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}]}}`, http.StatusBadRequest, nil},
 		{`{"start_ms": -1, "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}]}}`, http.StatusBadRequest, nil},
 	} {
@@ -479,9 +485,41 @@ func (*livePlaybacks) RecordPlay(context.Context, domain.Playback, time.Time, ti
 // remuxOpener opens a copy's first part, as decided, on a real remuxer.
 type remuxOpener struct{ *hls.Remuxer }
 
-func (r remuxOpener) Open(ctx context.Context, id uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, start time.Duration) error {
+func (r remuxOpener) Open(ctx context.Context, id uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error {
 	d := time.Duration(c.Parts[0].DurationMS) * time.Millisecond
-	return r.Remuxer.Open(ctx, id, hls.Copy{Parts: []hls.Source{{Open: func() (*os.File, error) { return nil, os.ErrNotExist }, Part: hls.Part{Duration: d, Keyframes: hls.Forced(d)}, Video: video, Audio: audio}}, Start: start})
+	return r.Remuxer.Open(ctx, id, hls.Copy{Parts: []hls.Source{{Open: func() (*os.File, error) { return nil, os.ErrNotExist }, Part: hls.Part{Duration: d, Keyframes: hls.Forced(d)}, Video: video, Audio: audio}}, Start: start, Segments: segments})
+}
+
+// A player that takes MPEG-TS alone is given a playlist of it; one that does not say, of
+// fragmented MP4.
+func TestAPlayerIsGivenTheSegmentsItAsksFor(t *testing.T) {
+	remuxer, err := hls.NewRemuxer("ffmpeg", t.TempDir(), t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, hls.Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7()),
+		Remuxing: remuxOpener{remuxer}, HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
+	})
+	for segments, want := range map[string]string{``: "\n0.m4s\n", `, "segments": "fmp4"`: "\n0.m4s\n", `, "segments": "mpegts"`: "\n0.ts\n"} {
+		body := `{"profile": {"containers": ["mp4"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "parts": "each"` + segments + `}}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		var got struct {
+			Playlist string `json:"playlist"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil || got.Playlist == "" {
+			t.Fatalf("play asking %q: %d, want a playlist", segments, rec.Code)
+		}
+		rec = httptest.NewRecorder()
+		api.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, strings.TrimSuffix(got.Playlist, "main.m3u8")+"video.m3u8", nil))
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("play asking %q: playlist\n%s\nwant %q in it", segments, rec.Body, want)
+		}
+	}
 }
 
 func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
