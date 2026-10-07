@@ -51,15 +51,10 @@ func New(key, pin string, limits kv.Limiter) *Client {
 	return &Client{base: baseURL, key: key, pin: pin, api: provider.Client{Name: "tvdb", Limits: limits, Limit: limit}}
 }
 
-// codes are a locale as TVDB names it: its language ISO 639-2, its country ISO 3166-1 alpha-3 in
-// lower case.
-func codes(loc domain.Locale) (lang, country string) {
+// languageOf is a locale's language as TVDB names it, ISO 639-2.
+func languageOf(loc domain.Locale) string {
 	base, _ := language.Make(loc.Language).Base()
-	region, err := language.ParseRegion(loc.Country)
-	if err != nil {
-		return base.ISO3(), ""
-	}
-	return base.ISO3(), strings.ToLower(region.ISO3())
+	return base.ISO3()
 }
 
 func (c *Client) login(ctx context.Context) (string, error) {
@@ -115,7 +110,7 @@ func (c *Client) get(ctx context.Context, path string, into any) error {
 
 // Search answers TVDB's ranking of shows named title, first aired in year where it is not zero.
 func (c *Client) Search(ctx context.Context, loc domain.Locale, title string, year int) ([]domain.Candidate, error) {
-	lang, _ := codes(loc)
+	lang := languageOf(loc)
 	q := url.Values{"query": {title}, "type": {"series"}, "limit": {"10"}}
 	if year != 0 {
 		q.Set("year", strconv.Itoa(year))
@@ -229,7 +224,7 @@ var sources = map[string]domain.Provider{"IMDB": domain.ProviderIMDb, "TheMovieD
 // Details answers what TVDB says about a show in the client's language. A name or write-up TVDB
 // has only in other languages is left unsaid, as Jellyfin's plugin leaves it.
 func (c *Client) Details(ctx context.Context, loc domain.Locale, id int) (domain.Metadata, error) {
-	lang, country := codes(loc)
+	lang := languageOf(loc)
 	var out struct {
 		Data struct {
 			Name             string      `json:"name"`
@@ -294,11 +289,14 @@ func (c *Client) Details(ctx context.Context, loc domain.Locale, id int) (domain
 			m.Studios = append(m.Studios, n.Name)
 		}
 	}
+	var rated []provider.Rated
 	for _, r := range d.ContentRatings {
-		if r.Country == country {
-			m.Certificate = cmp.Or(m.Certificate, r.Name)
+		// TVDB names a country by its alpha-3 code.
+		if region, err := language.ParseRegion(r.Country); err == nil {
+			rated = append(rated, provider.Rated{Country: region.String(), Certificate: r.Name})
 		}
 	}
+	m.Certificate = provider.Certificate(loc.Country, rated)
 	for _, r := range d.RemoteIDs {
 		if p, ok := sources[r.SourceName]; ok {
 			// A TMDB id can arrive as "1438-the-wire".
@@ -314,7 +312,7 @@ var seasonTypes = map[domain.EpisodeOrder]string{domain.OrderAired: "default", d
 
 // Seasons answers what TVDB says about the episodes of the given seasons, numbered in order.
 func (c *Client) Seasons(ctx context.Context, loc domain.Locale, id int, seasons []int, order domain.EpisodeOrder) (map[int]domain.SeasonMetadata, error) {
-	lang, _ := codes(loc)
+	lang := languageOf(loc)
 	out := map[int]domain.SeasonMetadata{}
 	for _, n := range seasons {
 		out[n] = domain.SeasonMetadata{Episodes: map[int]domain.Metadata{}}

@@ -33,11 +33,18 @@ func (l Locale) Or(def Locale) Locale {
 	}
 }
 
-// Qualified is a certificate a provider gave in l's country, as the server reads it: bare where
-// that is the server's own country (def's), else written with its country (IN:A), as Plex writes
-// de/12, so a rating means what it meant where it was given.
+// Qualified is a certificate a provider gave in l's country, as the server keeps it: bare where it
+// is the server's own country's (def's), else written with its country (IN:A), as Plex writes
+// de/12, so a rating means what it meant where it was given. One the provider already wrote with
+// its country, falling back to another's, keeps it but where that is the server's.
 func (l Locale) Qualified(certificate string, def Locale) string {
-	if certificate == "" || l.Country == "" || l.Country == def.Country || strings.Contains(certificate, ":") {
+	if country, bare, ok := strings.Cut(certificate, ":"); ok {
+		if country == def.Country {
+			return bare
+		}
+		return certificate
+	}
+	if certificate == "" || l.Country == "" || l.Country == def.Country {
 		return certificate
 	}
 	return l.Country + ":" + certificate
