@@ -66,6 +66,9 @@ func scanLibrary(st *store.Store, scanner *scan.Scanner, hub *events.Hub, logger
 		if err := st.ScanAnswered(ctx, id, asked, read); err != nil {
 			return err
 		}
+		if err := st.RefreshSmartCollections(ctx, lib.ID); err != nil {
+			logger.WarnContext(ctx, "smart collections not refreshed", slog.String("library", lib.Name), slog.Any("err", err))
+		}
 		logger.InfoContext(ctx, "library scanned", slog.String("library", lib.Name),
 			slog.Int("folders", r.Folders), slog.Int("unchanged", r.Unchanged),
 			slog.Int("probed", r.Probed), slog.Int("left_out", r.Skipped))
@@ -338,4 +341,17 @@ func due(start task.Start) domain.JobDue {
 	case task.StartRequest:
 	}
 	return domain.JobDueNow
+}
+
+// refreshCollectionsEvery is how stale a smart collection may be of what is described after a
+// scan: matched, refreshed or edited. A scan refreshes its library's at once.
+const refreshCollectionsEvery = 15 * time.Minute
+
+// refreshCollectionsTask finds every smart collection's titles again.
+func refreshCollectionsTask(st *store.Store) task.Task {
+	return task.Task{
+		Key:     domain.TaskRefreshCollections,
+		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: refreshCollectionsEvery},
+		Run:     func(ctx context.Context, _ task.Start) error { return st.RefreshSmartCollections(ctx) },
+	}
 }

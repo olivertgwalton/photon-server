@@ -14,6 +14,8 @@ type collections interface {
 	Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
 	Members(ctx context.Context, profile, collection uuid.UUID) ([]store.Card, error)
 	AddCollection(ctx context.Context, lib uuid.UUID, title string) (uuid.UUID, error)
+	AddSmartCollection(ctx context.Context, lib uuid.UUID, title string, rule store.SmartRule) (uuid.UUID, error)
+	SetRule(ctx context.Context, collection uuid.UUID, rule store.SmartRule) error
 	SetMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error
 	SetPlacement(ctx context.Context, collection uuid.UUID, placement domain.CollectionPlacement) error
 	RemoveCollection(ctx context.Context, collection uuid.UUID) error
@@ -49,9 +51,12 @@ func (a *API) members(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
 }
 
+// addCollectionJSON is an admin's collection: titles put in it by hand, or, given a rule, a smart
+// collection of the titles the rule finds, as Plex's.
 type addCollectionJSON struct {
-	LibraryID uuid.UUID `json:"library_id"`
-	Title     string    `json:"title"`
+	LibraryID uuid.UUID        `json:"library_id"`
+	Title     string           `json:"title"`
+	Rule      *store.SmartRule `json:"rule,omitzero"`
 }
 
 // addCollection makes an admin's collection in a library.
@@ -64,7 +69,16 @@ func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "title is set")
 		return
 	}
-	id, err := a.svc.Collections.AddCollection(r.Context(), req.LibraryID, req.Title)
+	if req.Rule != nil && !a.checkedRule(w, *req.Rule) {
+		return
+	}
+	var id uuid.UUID
+	var err error
+	if req.Rule == nil {
+		id, err = a.svc.Collections.AddCollection(r.Context(), req.LibraryID, req.Title)
+	} else {
+		id, err = a.svc.Collections.AddSmartCollection(r.Context(), req.LibraryID, req.Title, *req.Rule)
+	}
 	if errors.Is(err, store.ErrNotFound) {
 		writeProblem(w, a.logger, codeInvalidBody, "library_id is not a library")
 		return
@@ -127,6 +141,30 @@ func (a *API) removeCollection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !a.answered(w, r, a.svc.Collections.RemoveCollection(r.Context(), id)) {
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// checkedRule refuses a rule a smart collection cannot keep.
+func (a *API) checkedRule(w http.ResponseWriter, rule store.SmartRule) bool {
+	if err := rule.Check(); err != nil {
+		writeProblem(w, a.logger, codeInvalidBody, err.Error())
+		return false
+	}
+	return true
+}
+
+// setRule replaces a smart collection's rule, and its titles with what it finds.
+func (a *API) setRule(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var req store.SmartRule
+	if !a.decode(w, r, &req) || !a.checkedRule(w, req) {
+		return
+	}
+	if !a.answered(w, r, a.svc.Collections.SetRule(r.Context(), id, req)) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

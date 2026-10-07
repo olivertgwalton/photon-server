@@ -33,6 +33,8 @@ export const load: PageLoad = async ({ fetch, params, url, depends }) => {
 	]);
 	return {
 		query,
+		// A smart collection whose rule is being changed here.
+		editing: url.searchParams.get("collection") ?? undefined,
 		titles,
 		letters: letters?.items,
 		view: storedView(params.id),

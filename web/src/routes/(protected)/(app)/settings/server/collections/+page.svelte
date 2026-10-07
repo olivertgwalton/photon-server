@@ -28,6 +28,8 @@ async function add(event: SubmitEvent) {
 	await goto(`/settings/server/collections/${made.id}`);
 }
 
+const origins = { user: "Made here", smart: "Smart", tmdb: "From TMDB" };
+
 const libraries = $derived(
 	data.shelves.map((s) => ({ value: s.library.id, label: s.library.name })),
 );
@@ -35,7 +37,7 @@ const libraries = $derived(
 
 <PageHeader
 	title="Collections"
-	description="Box sets of a library's titles. The providers make some as they match films; those follow the provider and are only read here. Ones made here are yours to fill and order."
+	description="Box sets of a library's titles. The providers make some as they match films; those follow the provider and are only read here. Ones made here are yours to fill and order. A smart one is saved from a library's filters, and holds what they find."
 />
 
 {#if libraries.length}
@@ -82,9 +84,9 @@ const libraries = $derived(
 								>{collection.title}</span
 							>
 							<Badge
-								variant={collection.origin === "user" ? "secondary" : "outline"}
+								variant={collection.origin === "tmdb" ? "outline" : "secondary"}
 							>
-								{collection.origin === "user" ? "Made here" : "From TMDB"}
+								{origins[collection.origin ?? "user"]}
 							</Badge>
 						</a>
 					</li>

@@ -1,8 +1,10 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"uuid"
 
@@ -12,8 +14,13 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
-// ErrNotUserCollection is a collection a provider made, which only that provider changes.
-var ErrNotUserCollection = errors.New("only a collection an admin made is changed by hand")
+// ErrNotUserCollection is a collection not made as it is asked to be changed: one a provider made,
+// which only it changes, or a smart collection's titles, which are its rule's.
+var ErrNotUserCollection = errors.New("a collection is changed as it was made: an admin's by hand, a smart one by its rule")
+
+// madeHere are the origins of the collections an admin made, shown however few titles they hold,
+// in the order they were made in.
+const madeHere = `('user', 'smart')`
 
 // minShown is how many titles a provider's collection must hold before it is shown, as Plex's
 // minimum automatic collection size: a box set of one is no set.
@@ -44,7 +51,7 @@ func saveGroupings(ctx context.Context, tx db, item uuid.UUID, source domain.Fie
 			WHERE c.origin = $4 LIMIT 1`, lib, by, g.ID, source).Scan(&id)
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
-			if id, err = newCollection(ctx, tx, lib, g.Title, domain.CollectionOrigin(source)); err != nil {
+			if id, err = newCollection(ctx, tx, lib, g.Title, domain.CollectionOrigin(source), nil); err != nil {
 				return err
 			}
 			if err := saveIDs(ctx, tx, id, domain.IDFromMatch, map[domain.Provider]string{by: g.ID}); err != nil {
@@ -78,8 +85,8 @@ func saveGroupings(ctx context.Context, tx db, item uuid.UUID, source domain.Fie
 	return err
 }
 
-// newCollection makes a collection in a library, made by origin.
-func newCollection(ctx context.Context, tx db, lib uuid.UUID, title string, origin domain.CollectionOrigin) (uuid.UUID, error) {
+// newCollection makes a collection in a library, made by origin, with the rule of a smart one.
+func newCollection(ctx context.Context, tx db, lib uuid.UUID, title string, origin domain.CollectionOrigin, rule *SmartRule) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := tx.QueryRow(ctx, `
 		INSERT INTO items (library_id, kind, title, scan_title, sort_title, folder) VALUES ($1, 'collection', $2, $2, $3, '')
@@ -87,14 +94,14 @@ func newCollection(ctx context.Context, tx db, lib uuid.UUID, title string, orig
 	if err != nil {
 		return id, err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO collections (item_id, origin) VALUES ($1, $2)`, id, origin)
+	_, err = tx.Exec(ctx, `INSERT INTO collections (item_id, origin, rule) VALUES ($1, $2, $3)`, id, origin, rule)
 	return id, err
 }
 
 // shownCollections are a library's collections worth showing: an admin's, and a provider's once
 // it holds minShown titles.
 var shownCollections = `SELECT c.item_id FROM collections c
-	WHERE c.origin = 'user' OR (SELECT count(*) FROM collection_members m WHERE m.collection_id = c.item_id) >= ` + strconv.Itoa(minShown)
+	WHERE c.origin IN ` + madeHere + ` OR (SELECT count(*) FROM collection_members m WHERE m.collection_id = c.item_id) >= ` + strconv.Itoa(minShown)
 
 // listedCollection is whether items is a collection the viewer v finds listed in its library, so
 // the listing and the library's count of them cannot disagree.
@@ -120,8 +127,8 @@ func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset,
 }
 
 // memberOrder is a collection's titles' order, with its row as c and theirs as m and items: an
-// admin's in the order they were put, a provider's from the first released.
-const memberOrder = `CASE WHEN c.origin = 'user' THEN m.position END, items.released_asc, items.sort_title, items.id`
+// admin's in the order they were put or its rule found them, a provider's from the first released.
+const memberOrder = `CASE WHEN c.origin IN ` + madeHere + ` THEN m.position END, items.released_asc, items.sort_title, items.id`
 
 // Members answers a collection's titles, in memberOrder. ErrNotFound for no such collection.
 func (s *Store) Members(ctx context.Context, profile, collection uuid.UUID) ([]Card, error) {
@@ -193,7 +200,7 @@ func (s *Store) AddCollection(ctx context.Context, lib uuid.UUID, title string) 
 			return err
 		}
 		var err error
-		if id, err = newCollection(ctx, tx, lib, title, domain.CollectionUser); err != nil {
+		if id, err = newCollection(ctx, tx, lib, title, domain.CollectionUser, nil); err != nil {
 			return err
 		}
 		return applyMetadata(ctx, tx, id, domain.SourceUser, domain.Metadata{Title: title})
@@ -205,7 +212,7 @@ func (s *Store) AddCollection(ctx context.Context, lib uuid.UUID, title string) 
 // film or show of the collection's library.
 func (s *Store) SetMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		lib, err := userCollection(ctx, tx, collection)
+		lib, err := userCollection(ctx, tx, collection, domain.CollectionUser)
 		if err != nil {
 			return err
 		}
@@ -244,10 +251,11 @@ func (s *Store) SetPlacement(ctx context.Context, collection uuid.UUID, placemen
 	return err
 }
 
-// RemoveCollection removes an admin's collection; its titles are left as they are.
+// RemoveCollection removes an admin's collection, made by hand or by a rule; its titles are left
+// as they are.
 func (s *Store) RemoveCollection(ctx context.Context, collection uuid.UUID) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if _, err := userCollection(ctx, tx, collection); err != nil {
+		if _, err := userCollection(ctx, tx, collection, domain.CollectionUser, domain.CollectionSmart); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `DELETE FROM items WHERE id = $1`, collection)
@@ -255,9 +263,9 @@ func (s *Store) RemoveCollection(ctx context.Context, collection uuid.UUID) erro
 	})
 }
 
-// userCollection answers the library of an admin's collection; ErrNotFound for no collection, and
-// ErrNotUserCollection for a provider's.
-func userCollection(ctx context.Context, tx db, collection uuid.UUID) (uuid.UUID, error) {
+// userCollection answers the library of a collection made as one of made; ErrNotFound for no
+// collection, and ErrNotUserCollection for one made otherwise.
+func userCollection(ctx context.Context, tx db, collection uuid.UUID, made ...domain.CollectionOrigin) (uuid.UUID, error) {
 	var origin domain.CollectionOrigin
 	var lib uuid.UUID
 	err := tx.QueryRow(ctx, `
@@ -266,7 +274,7 @@ func userCollection(ctx context.Context, tx db, collection uuid.UUID) (uuid.UUID
 	if err != nil {
 		return uuid.UUID{}, found(err)
 	}
-	if origin != domain.CollectionUser {
+	if !slices.Contains(made, origin) {
 		return uuid.UUID{}, ErrNotUserCollection
 	}
 	return lib, nil
@@ -281,4 +289,125 @@ func hasRepeats(ids []uuid.UUID) bool {
 		seen[id] = true
 	}
 	return false
+}
+
+// SmartRule is what a smart collection's titles are, as Plex's smart collections: its library's
+// films or shows as a wall's filter narrows them, in a wall's order, at most Limit of them, 0 for
+// all. Its titles are the same for everyone, so it reads no profile's marks or plays, and each
+// viewer sees what they may of them.
+type SmartRule struct {
+	Filter WallFilter      `json:"filter"`
+	Sort   domain.WallSort `json:"sort,omitzero"`
+	Order  domain.Order    `json:"order,omitzero"`
+	Limit  int             `json:"limit,omitzero"`
+}
+
+// ErrRuleForSomeone is a rule that would read one profile's marks or plays.
+var ErrRuleForSomeone = errors.New("a smart collection is everyone's: its rule reads no one's marks or plays")
+
+// Check is whether a rule finds the same titles for everyone, with values a wall takes.
+func (r SmartRule) Check() error {
+	if len(r.Filter.Marks) > 0 || r.Sort == domain.SortPlayed {
+		return ErrRuleForSomeone
+	}
+	if r.Limit < 0 {
+		return errors.New("limit is 0, for all, or more")
+	}
+	return r.Filter.Check()
+}
+
+// page is the wall a rule reads, in title order where it names none.
+func (r SmartRule) page() WallPage {
+	sort := cmp.Or(r.Sort, domain.SortTitle)
+	return WallPage{
+		Sort: sort, Order: cmp.Or(r.Order, sort.DefaultOrder()),
+		RatingSite: cmp.Or(r.Filter.RatingSite, domain.SiteIMDb), Filter: r.Filter,
+	}
+}
+
+// AddSmartCollection makes an admin's collection in a library whose titles a rule finds.
+func (s *Store) AddSmartCollection(ctx context.Context, lib uuid.UUID, title string, rule SmartRule) (uuid.UUID, error) {
+	if err := rule.Check(); err != nil {
+		return uuid.UUID{}, err
+	}
+	var id uuid.UUID
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := hasLibrary(ctx, tx, lib); err != nil {
+			return err
+		}
+		var err error
+		if id, err = newCollection(ctx, tx, lib, title, domain.CollectionSmart, &rule); err != nil {
+			return err
+		}
+		if err := applyMetadata(ctx, tx, id, domain.SourceUser, domain.Metadata{Title: title}); err != nil {
+			return err
+		}
+		return s.findMembers(ctx, tx, id, lib, rule)
+	})
+	return id, err
+}
+
+// SetRule replaces a smart collection's rule, and its titles with what it finds.
+func (s *Store) SetRule(ctx context.Context, collection uuid.UUID, rule SmartRule) error {
+	if err := rule.Check(); err != nil {
+		return err
+	}
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		lib, err := userCollection(ctx, tx, collection, domain.CollectionSmart)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE collections SET rule = $2 WHERE item_id = $1`, collection, rule); err != nil {
+			return err
+		}
+		return s.findMembers(ctx, tx, collection, lib, rule)
+	})
+}
+
+// findMembers replaces a smart collection's titles with what its rule finds now, in its order.
+func (s *Store) findMembers(ctx context.Context, tx db, collection, lib uuid.UUID, rule SmartRule) error {
+	titles, args, err := s.wallQuery(ctx, []uuid.UUID{lib}, uuid.UUID{}, rule.Filter)
+	if err != nil {
+		return err
+	}
+	order := rule.page().orderBy(args)
+	args["collection"] = collection
+	limit := ""
+	if rule.Limit > 0 {
+		args["limit"], limit = rule.Limit, ` LIMIT @limit`
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM collection_members WHERE collection_id = @collection`, args); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO collection_members (collection_id, item_id, position)
+		SELECT @collection, items.id, row_number() OVER (`+order+`) - 1 `+titles+` AND items.kind <> 'collection' `+order+limit, args)
+	return err
+}
+
+// RefreshSmartCollections finds the titles of the smart collections of libs again, or of every
+// library's where none is named.
+func (s *Store) RefreshSmartCollections(ctx context.Context, libs ...uuid.UUID) error {
+	type smart struct {
+		ItemID, LibraryID uuid.UUID
+		Rule              SmartRule
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT c.item_id, i.library_id, c.rule FROM collections c JOIN items i ON i.id = c.item_id
+		WHERE c.origin = 'smart' AND ($1::uuid[] IS NULL OR i.library_id = ANY($1))`, libs)
+	if err != nil {
+		return err
+	}
+	all, err := pgx.CollectRows(rows, pgx.RowToStructByPos[smart])
+	if err != nil {
+		return err
+	}
+	for _, c := range all {
+		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			return s.findMembers(ctx, tx, c.ItemID, c.LibraryID, c.Rule)
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

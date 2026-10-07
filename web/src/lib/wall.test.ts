@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import {
 	cleared,
+	ruleQuery,
+	smartRule,
 	filterCount,
 	letterOffset,
 	toggled,
@@ -55,4 +57,24 @@ test("a letter's place is the count of every title before it", () => {
 	expect(letterOffset(letters, "#", "asc")).toBe(0);
 	expect(letterOffset(letters, "C", "asc")).toBe(7);
 	expect(letterOffset(letters, "A", "desc")).toBe(3);
+});
+
+test("a narrowed wall is kept as a smart collection, and opens again as it was", () => {
+	const query = {
+		sort: "added" as const,
+		order: "desc" as const,
+		genre: ["Comedy"],
+		year: [1993],
+		resolution: ["4k" as const],
+		min_rating: 70,
+		rating_site: "imdb" as const,
+	};
+	const rule = smartRule(query);
+	expect(rule?.filter.genres).toEqual(["Comedy"]);
+	expect(rule && ruleQuery(rule)).toEqual(query);
+});
+
+test("a wall of a profile's own marks or plays is no smart collection", () => {
+	expect(smartRule({ mark: ["unwatched"] })).toBeUndefined();
+	expect(smartRule({ sort: "played" })).toBeUndefined();
 });

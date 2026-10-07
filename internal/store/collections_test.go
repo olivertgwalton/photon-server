@@ -358,3 +358,92 @@ func TestACollectionOnTheHomePageIsARowOfItsTitles(t *testing.T) {
 		t.Errorf("once it is back in its library, the home has %v, want no row", got)
 	}
 }
+
+// A smart collection is its library's titles its rule finds, in its order, the same for everyone:
+// found again as the library changes, shown with none, kept by a scan, and never changed by hand.
+func TestASmartCollectionIsWhatItsRuleFinds(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	add := func(title string, released time.Time, genre string) {
+		t.Helper()
+		film := Film{Title: title, Folder: title, Copies: []Copy{{ContentKey: []byte(title), Parts: []Part{{
+			RelPath: title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
+		}}}}}
+		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{film}, nil); err != nil {
+			t.Fatal(err)
+		}
+		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SaveIdentity(ctx, cards[0].ID, domain.SourceTMDB, domain.Metadata{Title: title, ReleaseDate: released, Genres: []string{genre}}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	year := func(y int) time.Time { return time.Date(y, 6, 1, 0, 0, 0, 0, time.UTC) }
+	add("Airplane!", year(1980), "Comedy")
+	add("Heat", year(1995), "Crime")
+	add("Groundhog Day", year(1993), "Comedy")
+
+	rule := SmartRule{Filter: WallFilter{Genres: []string{"Comedy"}}, Sort: domain.SortReleased, Order: domain.Descending}
+	set, err := s.AddSmartCollection(ctx, lib.ID, "Comedies", rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+	titles := func() []string {
+		t.Helper()
+		members, err := s.Members(ctx, uuid.UUID{}, set)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, m := range members {
+			out = append(out, m.Title)
+		}
+		return out
+	}
+	if got := titles(); !reflect.DeepEqual(got, []string{"Groundhog Day", "Airplane!"}) {
+		t.Errorf("members %v, want the comedies, newest first", got)
+	}
+
+	add("Barbie", year(2023), "Comedy")
+	if err := s.RefreshSmartCollections(ctx, lib.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(); !reflect.DeepEqual(got, []string{"Barbie", "Groundhog Day", "Airplane!"}) {
+		t.Errorf("found again: %v, want the comedy added first", got)
+	}
+
+	rule.Limit, rule.Order = 1, domain.Ascending
+	if err := s.SetRule(ctx, set, rule); err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(); !reflect.DeepEqual(got, []string{"Airplane!"}) {
+		t.Errorf("the first comedy alone: %v", got)
+	}
+	if page, err := s.Title(ctx, uuid.UUID{}, set); err != nil || page.Origin != domain.CollectionSmart || page.Rule == nil || page.Rule.Limit != 1 {
+		t.Errorf("its page: %+v, %v; want it smart, with its rule", page.Rule, err)
+	}
+
+	// Finding nothing, it is shown still, and a scan keeps it.
+	if err := s.SetRule(ctx, set, SmartRule{Filter: WallFilter{Genres: []string{"Western"}}}); err != nil {
+		t.Fatal(err)
+	}
+	add("Heat", year(1995), "Crime")
+	if shown, total, err := s.Collections(ctx, lib.ID, uuid.UUID{}, 0, 10); err != nil || total != 1 || shown[0].ID != set {
+		t.Errorf("collections %+v of %d, %v; want the empty smart one shown", shown, total, err)
+	}
+	if err := s.SetMembers(ctx, set, nil); !errors.Is(err, ErrNotUserCollection) {
+		t.Errorf("its titles set by hand: %v, want ErrNotUserCollection", err)
+	}
+	if err := s.SetRule(ctx, set, SmartRule{Filter: WallFilter{Marks: []domain.Mark{domain.MarkUnwatched}}}); !errors.Is(err, ErrRuleForSomeone) {
+		t.Errorf("a rule of marks: %v, want ErrRuleForSomeone", err)
+	}
+	if err := s.RemoveCollection(ctx, set); err != nil {
+		t.Errorf("removing it: %v", err)
+	}
+}

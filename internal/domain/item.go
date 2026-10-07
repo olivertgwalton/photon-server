@@ -33,16 +33,17 @@ func SearchKinds() []SearchKind {
 }
 
 // CollectionOrigin is who made a collection: a provider that names its titles part of it, or an
-// admin.
+// admin, by hand or by a rule its titles are found by (a smart collection, as Plex's).
 type CollectionOrigin string
 
 const (
-	CollectionTMDB CollectionOrigin = "tmdb"
-	CollectionUser CollectionOrigin = "user"
+	CollectionTMDB  CollectionOrigin = "tmdb"
+	CollectionUser  CollectionOrigin = "user"
+	CollectionSmart CollectionOrigin = "smart"
 )
 
 func CollectionOrigins() []CollectionOrigin {
-	return []CollectionOrigin{CollectionTMDB, CollectionUser}
+	return []CollectionOrigin{CollectionTMDB, CollectionUser, CollectionSmart}
 }
 
 // CollectionPlacement is where a collection is shown: in its library only, or on the home page of

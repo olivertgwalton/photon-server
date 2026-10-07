@@ -22,6 +22,7 @@ var (
 type fakeCollections struct {
 	set    []uuid.UUID
 	placed domain.CollectionPlacement
+	rule   store.SmartRule
 }
 
 func (fakeCollections) Collections(_ context.Context, lib, _ uuid.UUID, offset, _ int) ([]store.Card, int64, error) {
@@ -43,6 +44,22 @@ func (fakeCollections) AddCollection(_ context.Context, lib uuid.UUID, _ string)
 		return uuid.UUID{}, store.ErrNotFound
 	}
 	return mySet, nil
+}
+
+func (f *fakeCollections) AddSmartCollection(_ context.Context, lib uuid.UUID, _ string, rule store.SmartRule) (uuid.UUID, error) {
+	if lib != films {
+		return uuid.UUID{}, store.ErrNotFound
+	}
+	f.rule = rule
+	return mySet, nil
+}
+
+func (f *fakeCollections) SetRule(_ context.Context, id uuid.UUID, rule store.SmartRule) error {
+	if id != mySet {
+		return store.ErrNotUserCollection
+	}
+	f.rule = rule
+	return nil
 }
 
 func (f *fakeCollections) SetMembers(_ context.Context, id uuid.UUID, items []uuid.UUID) error {
@@ -88,6 +105,18 @@ func TestCollectionsAreBrowsedAndAnAdminsAreKept(t *testing.T) {
 		{memberToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Mine"}`, http.StatusForbidden, ""},
 		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Mine"}`, http.StatusCreated, mySet.String()},
 		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `"}`, http.StatusBadRequest, ""},
+		// A smart collection is a wall's filter and order, the same for everyone.
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Recent comedies",
+			"rule": {"filter": {"genres": ["Comedy"], "years": [2024]}, "sort": "added", "limit": 20}}`, http.StatusCreated, mySet.String()},
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Unwatched",
+			"rule": {"filter": {"marks": ["unwatched"]}}}`, http.StatusBadRequest, "no one's marks"},
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Played",
+			"rule": {"filter": {}, "sort": "played"}}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Best",
+			"rule": {"filter": {"min_rating": 120}}}`, http.StatusBadRequest, "min_rating"},
+		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + mySet.String() + "/rule", `{"filter": {"resolutions": ["4k"]}, "sort": "rating"}`, http.StatusNoContent, ""},
+		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + mySet.String() + "/rule", `{"filter": {}, "sort": "loudest"}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + alienSet.String() + "/rule", `{"filter": {}}`, http.StatusConflict, ""},
 		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + mySet.String() + "/members", `{"item_ids": ["` + films.String() + `"]}`, http.StatusNoContent, ""},
 		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + alienSet.String() + "/members", `{"item_ids": []}`, http.StatusConflict, ""},
 		{memberToken, http.MethodPut, "/api/v1/admin/collections/" + alienSet.String() + "/placement", `{"placement": "home"}`, http.StatusForbidden, ""},
@@ -108,6 +137,9 @@ func TestCollectionsAreBrowsedAndAnAdminsAreKept(t *testing.T) {
 	}
 	if len(c.set) != 1 || c.set[0] != films {
 		t.Errorf("members set: %v", c.set)
+	}
+	if c.rule.Sort != domain.SortRating || len(c.rule.Filter.Resolutions) != 1 {
+		t.Errorf("rule kept: %+v, want 4K by rating", c.rule)
 	}
 	if c.placed != domain.PlacementHome {
 		t.Errorf("TMDB's set is placed %q, want home", c.placed)
