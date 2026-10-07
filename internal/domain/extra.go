@@ -1,8 +1,6 @@
 package domain
 
 import (
-	"slices"
-	"strings"
 	"time"
 )
 
@@ -35,23 +33,6 @@ func ExtraKinds() []ExtraKind {
 // DefaultRemoteExtras are the kinds a library fetches from providers unless told otherwise.
 func DefaultRemoteExtras() []ExtraKind {
 	return []ExtraKind{ExtraTrailer, ExtraFeaturette, ExtraBehindTheScenes}
-}
-
-func ParseExtraKinds(list string) ([]ExtraKind, error) {
-	if list == "none" {
-		return []ExtraKind{}, nil
-	}
-	var out []ExtraKind
-	for name := range strings.SplitSeq(list, ",") {
-		k, err := Parse("extra kind", strings.TrimSpace(name), ExtraKinds())
-		if err != nil {
-			return nil, err
-		}
-		if !slices.Contains(out, k) {
-			out = append(out, k)
-		}
-	}
-	return out, nil
 }
 
 // RemoteVideo is a video a provider links to rather than one in the library: a trailer on YouTube.

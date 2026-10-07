@@ -26,7 +26,10 @@ curl -X PATCH https://photon.example/api/v1/admin/providers/plugin:films \
   -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"settings": {"api_key": "…"}}'
 
 # a library that takes its metadata after any NFO beside the files and before TMDB, and its pictures
-photon-server library set -name Films -metadata 'movie=nfo,plugin:films,tmdb' -images 'movie=plugin:films,tmdb'
+curl -X PATCH https://photon.example/api/v1/admin/libraries/$FILMS_ID \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"sources": [{"kind": "movie",
+    "metadata": [{"source": "nfo", "enabled": true}, {"source": "plugin:films", "enabled": true}, {"source": "tmdb", "enabled": true}],
+    "images": [{"source": "plugin:films", "enabled": true}, {"source": "tmdb", "enabled": true}]}]}'
 ```
 
 | Route | |
