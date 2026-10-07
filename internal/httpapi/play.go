@@ -12,13 +12,10 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
 	"uuid"
-
-	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
@@ -217,7 +214,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	session, err := a.svc.Playbacks.Start(r.Context(), d.Method, a.cardOf(r, title, c, d, req.SubtitleStream))
+	session, err := a.svc.Playbacks.Start(r.Context(), d.Method, a.playbackCard(r, title, c, d, req.SubtitleStream))
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -269,7 +266,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, f := range c.Subtitles {
 			answer.Subtitles = append(answer.Subtitles, subtitleJSON{
-				ID: f.ID, Codec: f.Codec, Language: tagOf(f.Language), Title: f.Title, Default: f.Default, Forced: f.Forced,
+				ID: f.ID, Codec: f.Codec, Language: domain.TagOf(f.Language), Title: f.Title, Default: f.Default, Forced: f.Forced,
 				HearingImpaired: f.HearingImpaired, URL: a.svc.Signer.Sign("/api/v1/subtitles/"+f.ID.String()+"/file", until),
 			})
 		}
@@ -277,67 +274,13 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, answer)
 }
 
-// cardOf is what the dashboard shows of a playback the request starts of a copy, as decided.
-func (a *API) cardOf(r *http.Request, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, subtitle *int) domain.PlaybackCard {
-	s := sessionOf(r)
-	card := domain.PlaybackCard{
-		Profile: domain.PlaybackProfile{ID: s.Profile.ID, Name: s.Profile.Name},
-		Device: domain.PlaybackDevice{
-			ID: s.ID, Name: s.Device, Client: s.Client, Address: a.svc.TrustedProxies.Client(r).String(),
-		},
-		Title: t,
-		Version: domain.PlaybackVersion{
-			ID: c.Version, Edition: c.Edition, Label: c.Label, Container: domain.ContainerName(c.Container), BitrateKbps: c.BitrateKbps,
-			DurationMS: c.DurationMS,
-		},
-		Reasons: d.Reasons,
-	}
-	stream := func(index int) domain.Stream {
-		if i := slices.IndexFunc(c.Streams, func(s domain.Stream) bool { return s.Index == index }); i >= 0 {
-			return c.Streams[i]
-		}
-		return domain.Stream{Index: index}
-	}
-	if v := d.Video; v != nil {
-		src := stream(v.Stream)
-		card.Video = &domain.PlaybackVideo{
-			Stream: v.Stream, Codec: src.Codec, Profile: src.Profile, Width: src.Width, Height: src.Height,
-			Range: src.Range, BitrateKbps: src.BitrateKbps, DolbyVision: v.DolbyVision,
-		}
-		if e := v.Encode; e != nil {
-			card.Video.Encode = &domain.PlaybackEncode{
-				Codec: string(e.Codec), Width: e.Width, Height: e.Height, Range: e.Range, BitrateKbps: e.BitrateKbps,
-				ToneMapped: e.ToneMap,
-			}
-			card.Acceleration = a.svc.HLS.Encoder(*v)
-		}
-	}
-	if au := d.Audio; au != nil {
-		src := stream(au.Stream)
-		card.Audio = &domain.PlaybackAudio{
-			Stream: au.Stream, Codec: src.Codec, Language: tagOf(src.Language), Channels: src.Channels,
-			BitrateKbps: src.BitrateKbps,
-		}
-		if e := au.Encode; e != nil {
-			card.Audio.Encode = &domain.PlaybackEncode{Codec: e.Codec, Channels: e.Channels, BitrateKbps: e.BitrateKbps}
-		}
-	}
-	if subtitle != nil {
-		src := stream(*subtitle)
-		card.Subtitle = &domain.PlaybackSubtitle{
-			Stream: *subtitle, Codec: src.Codec, Language: tagOf(src.Language),
-			Burned: d.Video != nil && d.Video.Encode != nil && d.Video.Encode.Burn != nil,
-		}
+// playbackCard is what the dashboard shows of a playback the request starts.
+func (a *API) playbackCard(r *http.Request, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, subtitle *int) domain.PlaybackCard {
+	card := playback.Card(sessionOf(r), a.svc.TrustedProxies.Client(r).String(), t, c, d, subtitle)
+	if v := d.Video; v != nil && v.Encode != nil {
+		card.Acceleration = a.svc.HLS.Encoder(*v)
 	}
 	return card
-}
-
-// tagOf is a language's BCP 47 tag, or nothing for none.
-func tagOf(l language.Tag) string {
-	if l == language.Und {
-		return ""
-	}
-	return l.String()
 }
 
 func hlsSubject(playback uuid.UUID) string { return "/api/v1/hls/" + playback.String() }
@@ -598,7 +541,7 @@ func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		f, _, err := openLibraryFile(ctx, a.svc.Playing.SubtitleFile, id)
 		return f, err
 	}
-	vtt, err := a.svc.HLS.WebVTT(ctx, open, tagOf(sub.Language))
+	vtt, err := a.svc.HLS.WebVTT(ctx, open, domain.TagOf(sub.Language))
 	if a.answered(w, r, err) {
 		return
 	}

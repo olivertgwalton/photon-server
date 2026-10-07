@@ -100,3 +100,11 @@ type Chapter struct {
 	Start, End time.Duration
 	Title      string
 }
+
+// TagOf is a language's BCP 47 tag, or nothing for none.
+func TagOf(l language.Tag) string {
+	if l == language.Und {
+		return ""
+	}
+	return l.String()
+}
