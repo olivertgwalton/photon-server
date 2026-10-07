@@ -185,3 +185,40 @@ func TestItHasItsCapabilities(t *testing.T) {
 		t.Errorf("capabilities %v, want %v", got, want)
 	}
 }
+
+func TestAShowsPicturesAreRankedByTheLanguageAskedIn(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/login" {
+			_, _ = w.Write([]byte(`{"data":{"token":"t"}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"name":"The Wire","image":"https://artworks.thetvdb.com/banners/p.jpg","artworks":[
+			{"type":2,"image":"/en.jpg","language":"eng","score":90,"width":680,"height":1000},
+			{"type":2,"image":"/de-low.jpg","language":"deu","score":10},
+			{"type":2,"image":"/de.jpg","language":"deu","score":50},
+			{"type":2,"image":"/none.jpg","score":99},
+			{"type":3,"image":"/bg-en.jpg","language":"eng","score":99},
+			{"type":3,"image":"/bg.jpg","score":1},
+			{"type":23,"image":"/logo-en.png","language":"eng"},
+			{"type":7,"image":"/season.jpg","language":"deu"}]}}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := New("key", "", unlimited{})
+	c.base = srv.URL
+	got, err := c.Details(t.Context(), domain.LocaleOf("de-DE"), 79126)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, a := range got.Artwork {
+		order = append(order, string(a.Kind)+" "+strings.TrimPrefix(a.URL, "https://artworks.thetvdb.com")+" "+a.Language)
+	}
+	want := []string{
+		"poster /de.jpg de", "poster /de-low.jpg de", "poster /en.jpg en", "poster /none.jpg ",
+		"backdrop /bg.jpg ", "backdrop /bg-en.jpg en",
+		"logo /logo-en.png en",
+	}
+	if !slices.Equal(order, want) {
+		t.Errorf("pictures:\n%v\nwant German before English before none, a backdrop with no words first, a season's left out:\n%v", order, want)
+	}
+}
