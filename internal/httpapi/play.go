@@ -233,10 +233,15 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The node with the most transcode slots free decides how the copy is played, with what it
-	// encodes; the next is asked where it has none by then, and decides again with its own.
+	// encodes; the next is asked where it has none by then, and decides again with its own. Where
+	// no node takes video to encode, this one decides, and a copy it would encode is refused.
+	asked := candidates
+	if len(asked) == 0 {
+		asked = []domain.Node{a.svc.Placer.Self()}
+	}
 	var d playback.Decision
 	var session domain.Playback
-	for _, node := range candidates {
+	for _, node := range asked {
 		d, err = playback.Decide(*req.Profile, playback.CopyOf(c), tracks, playback.EncodingOf(node))
 		if err != nil {
 			break
@@ -244,6 +249,9 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		if d.Video == nil || d.Video.Encode == nil {
 			// Nothing is encoded: the node asked plays it.
 			node = a.svc.Placer.Self()
+		} else if len(candidates) == 0 {
+			err = hls.ErrTranscodeLimit
+			break
 		}
 		session, err = a.start(r, node, title, c, d, tracks, playback.Opening{
 			Profile: sessionOf(r).Profile.ID, Item: id, Version: c.Version, Segments: req.Profile.Segments, StartMS: req.StartMS,

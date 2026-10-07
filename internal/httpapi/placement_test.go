@@ -194,3 +194,36 @@ func TestANodeThatServesOnlyTranscodesNothing(t *testing.T) {
 		t.Errorf("the node serving only transcodes %d, want none", active)
 	}
 }
+
+// With no node taking video to encode, a copy that needs encoding is refused, and one played as it
+// is still plays, from the node asked.
+func TestWithNoNodeTranscodingACopyThatNeedsItIsRefused(t *testing.T) {
+	c := newSharedValkey()
+	only := join(t, c, 2)
+	only.role.Store(domain.NodeServe)
+	play := func(body string) (int, string) {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, only.srv.URL+"/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var answer struct {
+			PlaybackID uuid.UUID `json:"playback_id"`
+			Method     string    `json:"method"`
+			Code       string    `json:"code"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&answer)
+		if resp.StatusCode == http.StatusOK && answer.PlaybackID == (uuid.UUID{}) {
+			t.Errorf("answered a play with no playback")
+		}
+		return resp.StatusCode, answer.Method + answer.Code
+	}
+	if status, said := play(`{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000, "parts": "each"}}`); status != http.StatusServiceUnavailable || said != "transcode_limit" {
+		t.Errorf("a copy to encode: %d %s, want 503 transcode_limit", status, said)
+	}
+	if status, said := play(`{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "parts": "each"}}`); status != http.StatusOK || said == "transcode" {
+		t.Errorf("a copy played as it is: %d %s, want it played", status, said)
+	}
+}
