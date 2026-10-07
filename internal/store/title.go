@@ -545,24 +545,41 @@ func (s *Store) stills(ctx context.Context, items []*model.Item) (map[uuid.UUID]
 	return out, err
 }
 
-// onDisk is what of a title is on disk: how long its longest copy runs, and how many copies.
+// onDisk is what of a title is on disk: how long its longest copy runs, how many copies, and
+// what its best copy is.
 type onDisk struct {
-	ms       int64
-	versions int
+	ms         int64
+	versions   int
+	resolution domain.Resolution
+	// rng is zero for SDR, as a poster badges only what is better than it.
+	rng domain.Range
 }
 
-// durations answers what of each title is on disk.
+// durations answers what of each title is on disk. The best copy is the widest, then the one of
+// the best range, so a 4K SDR copy beside a 1080p Dolby Vision one is not called 4K Dolby Vision.
 func (s *Store) durations(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]onDisk, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT item_id, max(duration_ms), count(*) FROM versions WHERE item_id = ANY($1) AND missing_since IS NULL
-		GROUP BY item_id`, items)
+		SELECT item_id, max(duration_ms), count(*),
+			(array_agg(width ORDER BY width DESC NULLS LAST, array_position($2::text[], video_range) DESC NULLS LAST))[1],
+			(array_agg(video_range ORDER BY width DESC NULLS LAST, array_position($2::text[], video_range) DESC NULLS LAST))[1]
+		FROM versions WHERE item_id = ANY($1) AND missing_since IS NULL
+		GROUP BY item_id`, items, domain.Ranges())
 	if err != nil {
 		return nil, err
 	}
 	out := map[uuid.UUID]onDisk{}
 	var item uuid.UUID
 	var held onDisk
-	_, err = pgx.ForEachRow(rows, []any{&item, &held.ms, &held.versions}, func() error {
+	var width *int
+	var rng *domain.Range
+	_, err = pgx.ForEachRow(rows, []any{&item, &held.ms, &held.versions, &width, &rng}, func() error {
+		held.resolution, held.rng = "", ""
+		if width != nil {
+			held.resolution = domain.ResolutionOf(*width)
+		}
+		if rng != nil && *rng != domain.RangeSDR {
+			held.rng = *rng
+		}
 		out[item] = held
 		return nil
 	})
