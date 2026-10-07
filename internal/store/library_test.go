@@ -200,33 +200,55 @@ func TestTheCountriesCertificatesAreReadForAreCountries(t *testing.T) {
 	}
 }
 
-func TestAProfileKeepsItsLibrariesInItsOwnOrder(t *testing.T) {
+func TestAProfileSeesItsLibrariesInItsOwnOrder(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
-	if err != nil {
-		t.Fatal(err)
+	var libs [3]domain.Library
+	for i, name := range []string{"Films", "Television", "Archive"} {
+		lib, err := s.AddLibrary(ctx, name, domain.LibraryMovies, "/srv/"+name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		libs[i] = lib
 	}
-	tv, err := s.AddLibrary(ctx, "Television", domain.LibraryShows, "/srv/tv")
-	if err != nil {
-		t.Fatal(err)
-	}
+	films, tv := libs[0], libs[1]
 	ada, err := s.AddProfile(ctx, "Ada", domain.RoleMember, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
-	kids, err := s.AddProfile(ctx, "Kids", domain.RoleMember, "hash")
+	kids, err := s.AddProfile(ctx, "Kids", domain.RoleRestricted, "hash")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if err := s.SetAccess(ctx, kids.ID, ProfileAccess{Libraries: []uuid.UUID{films.ID, tv.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	seen := func(profile uuid.UUID) []string {
+		t.Helper()
+		libs, err := s.LibrariesSeen(ctx, profile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var names []string
+		for _, l := range libs {
+			names = append(names, l.Name)
+		}
+		return names
+	}
+	if got := seen(kids.ID); !slices.Equal(got, []string{"Films", "Television"}) {
+		t.Errorf("Kids sees %v, want Films then Television by name, and not the Archive it may not open", got)
 	}
 	if err := s.SetLibraryOrder(ctx, ada.ID, []uuid.UUID{tv.ID, films.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := s.LibraryOrder(ctx, ada.ID); err != nil || !slices.Equal(got, []uuid.UUID{tv.ID, films.ID}) {
-		t.Errorf("Ada's order = %v, %v; want Television then Films", got, err)
+	if err := s.SetLibraryOrder(ctx, kids.ID, []uuid.UUID{tv.ID}); err != nil {
+		t.Fatal(err)
 	}
-	if got, _ := s.LibraryOrder(ctx, kids.ID); len(got) != 0 {
-		t.Errorf("Kids's order = %v, want none: Ada's is her own", got)
+	if got := seen(ada.ID); !slices.Equal(got, []string{"Television", "Films", "Archive"}) {
+		t.Errorf("Ada sees %v, want Television, Films, then the Archive she has not placed", got)
+	}
+	if got := seen(kids.ID); !slices.Equal(got, []string{"Television", "Films"}) {
+		t.Errorf("Kids sees %v, want Television then Films, in its own order", got)
 	}
 	// An order naming a library twice or none is refused, and the last one kept.
 	for _, bad := range [][]uuid.UUID{{films.ID, films.ID}, {uuid.NewV7()}} {
@@ -237,7 +259,7 @@ func TestAProfileKeepsItsLibrariesInItsOwnOrder(t *testing.T) {
 	if err := s.RemoveLibrary(ctx, tv.ID); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := s.LibraryOrder(ctx, ada.ID); !slices.Equal(got, []uuid.UUID{films.ID}) {
-		t.Errorf("after removing Television, Ada's order = %v, want Films alone", got)
+	if got := seen(ada.ID); !slices.Equal(got, []string{"Films", "Archive"}) {
+		t.Errorf("after removing Television, Ada sees %v, want Films then the Archive", got)
 	}
 }

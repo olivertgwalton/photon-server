@@ -22,16 +22,12 @@ var (
 
 type fakeCatalogue struct{}
 
-func (fakeCatalogue) Libraries(context.Context) ([]domain.Library, error) {
-	return []domain.Library{
-		{ID: films, Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films"},
-		{ID: shows, Name: "Shows", Kind: domain.LibraryShows, Root: "/srv/shows"},
+// LibrariesSeen answers that the profile put Shows first.
+func (fakeCatalogue) LibrariesSeen(context.Context, uuid.UUID) ([]*store.SeenLibrary, error) {
+	return []*store.SeenLibrary{
+		{ID: shows, Name: "Shows", Kind: domain.LibraryShows},
+		{ID: films, Name: "Films", Kind: domain.LibraryMovies},
 	}, nil
-}
-
-// LibraryOrder answers that the profile put Shows first.
-func (fakeCatalogue) LibraryOrder(context.Context, uuid.UUID) ([]uuid.UUID, error) {
-	return []uuid.UUID{shows}, nil
 }
 
 func (fakeCatalogue) SetLibraryOrder(_ context.Context, _ uuid.UUID, libs []uuid.UUID) error {
