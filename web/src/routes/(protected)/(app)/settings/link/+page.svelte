@@ -2,7 +2,8 @@
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { page } from "$app/state";
 import type { components } from "#lib/api/schema.js";
-import { client, problemMessage } from "#lib/api/client.js";
+import { client } from "#lib/api/client.js";
+import { problemMessage } from "#lib/api/problem.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";

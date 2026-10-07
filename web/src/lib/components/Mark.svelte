@@ -3,15 +3,14 @@
 // reads as a play glyph, a rounded triangle with one taken out of it, filled
 // even-odd, so it is crisp at any size. Its three stops are sampled from the
 // app's icon, the one hue on the page and barely one.
-let { size = 24, class: className = "" }: { size?: number; class?: string } =
-	$props();
+let { class: className = "" }: { class?: string } = $props();
 
 const id = $props.id();
 </script>
 
 <svg
-	width={size}
-	height={size}
+	width="24"
+	height="24"
 	viewBox="0 0 100 100"
 	class={className}
 	aria-hidden="true"

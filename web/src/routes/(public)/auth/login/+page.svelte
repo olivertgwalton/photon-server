@@ -1,7 +1,8 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
-import { client, problemMessage } from "#lib/api/client.js";
+import { client } from "#lib/api/client.js";
+import { problemMessage } from "#lib/api/problem.js";
 import { CLIENT, deviceName } from "#lib/device.js";
 import { returnPath } from "#lib/session.js";
 import { Button } from "#lib/components/ui/button/index.js";

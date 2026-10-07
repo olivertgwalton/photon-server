@@ -1,7 +1,8 @@
 <script lang="ts">
 import { toast } from "svelte-sonner";
 import { refreshAll } from "$app/navigation";
-import { client, problemMessage } from "#lib/api/client.js";
+import { client } from "#lib/api/client.js";
+import { problemMessage } from "#lib/api/problem.js";
 import AvatarPicker from "#lib/components/AvatarPicker.svelte";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
