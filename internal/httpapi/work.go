@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"slices"
 	"time"
 	"uuid"
 
@@ -20,6 +21,7 @@ type tasks interface {
 type jobQueue interface {
 	JobQueue(ctx context.Context) ([]store.JobCount, []store.DeadJob, error)
 	RetryJob(ctx context.Context, id int64) error
+	StopJobs(ctx context.Context, kinds []domain.JobKind) error
 	RunningJobs(ctx context.Context) ([]domain.Job, error)
 }
 
@@ -35,6 +37,8 @@ type taskJSON struct {
 	Result     domain.TaskResult `json:"result,omitzero"`
 	Error      string            `json:"error,omitzero"`
 	NextAt     time.Time         `json:"next_at"`
+	// Jobs are the kinds of job it queues, whose backlog is how far its work has got.
+	Jobs []domain.JobKind `json:"jobs,omitzero"`
 }
 
 // adminTasks lists the scheduled tasks as Jellyfin's dashboard does: how each last ran, whether it
@@ -49,7 +53,7 @@ func (a *API) adminTasks(w http.ResponseWriter, r *http.Request) {
 	for i, s := range statuses {
 		out[i] = taskJSON{
 			Key: s.Key, Running: s.Running, StartedAt: s.State.Started, FinishedAt: s.State.Finished,
-			Result: s.State.Result, Error: s.State.Error, NextAt: s.Next,
+			Result: s.State.Result, Error: s.State.Error, NextAt: s.Next, Jobs: s.Key.Jobs(),
 		}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[taskJSON]{Items: out})
@@ -60,6 +64,30 @@ func (a *API) runTask(w http.ResponseWriter, r *http.Request) {
 	if !a.answered(w, r, a.svc.Tasks.Request(r.Context(), domain.TaskKey(r.PathValue("key")))) {
 		w.WriteHeader(http.StatusAccepted)
 	}
+}
+
+// stopTask takes the jobs a task queued off the queue, as Jellyfin's dashboard stops a task: what
+// it had done stands, and its next run queues what is left.
+func (a *API) stopTask(w http.ResponseWriter, r *http.Request) {
+	key := domain.TaskKey(r.PathValue("key"))
+	if !slices.Contains(domain.TaskKeys(), key) {
+		a.answered(w, r, task.ErrNoTask)
+		return
+	}
+	kinds := key.Jobs()
+	if len(kinds) == 0 {
+		writeProblem(w, a.logger, codeConflict, "the task does all it does in moments, and queues no work to stop")
+		return
+	}
+	if a.answered(w, r, a.svc.Jobs.StopJobs(r.Context(), kinds)) {
+		return
+	}
+	for _, kind := range kinds {
+		if a.answered(w, r, a.svc.Events.BacklogStopped(r.Context(), kind)) {
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type jobCountJSON struct {

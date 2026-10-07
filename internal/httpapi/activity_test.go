@@ -23,6 +23,7 @@ type fakeEvents struct {
 	mu       sync.Mutex
 	raised   []domain.Event
 	webhooks []uuid.UUID
+	stopped  []domain.JobKind
 }
 
 func (f *fakeEvents) Raise(_ context.Context, e domain.Event) {
@@ -38,6 +39,13 @@ func (f *fakeEvents) Subscribe() (<-chan domain.Event, func()) {
 func (f *fakeEvents) Scans(context.Context) ([]domain.ScanProgress, error) { return nil, nil }
 
 func (f *fakeEvents) Backlogs(context.Context) ([]domain.Backlog, error) { return nil, nil }
+
+func (f *fakeEvents) BacklogStopped(_ context.Context, kind domain.JobKind) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.stopped = append(f.stopped, kind)
+	return nil
+}
 
 func (f *fakeEvents) TestWebhook(_ context.Context, id uuid.UUID) error {
 	if !slices.Contains(f.webhooks, id) {

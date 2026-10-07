@@ -294,6 +294,18 @@ func (h *Hub) JobEnded(ctx context.Context, kind domain.JobKind) {
 	}})
 }
 
+// BacklogStopped starts kind's count of jobs done again, its jobs taken off the queue, and tells
+// that none is left.
+func (h *Hub) BacklogStopped(ctx context.Context, kind domain.JobKind) error {
+	if err := h.kv.EndBacklog(ctx, kind); err != nil {
+		return err
+	}
+	h.Raise(ctx, domain.Event{Kind: domain.EventJobsProgress, Details: map[string]any{
+		"job_kind": kind, "left": 0, "done": 0,
+	}})
+	return nil
+}
+
 func (h *Hub) backlogDue(kind domain.JobKind) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()

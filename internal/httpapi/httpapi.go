@@ -718,6 +718,12 @@ func (a *API) routes() []route {
 			status: http.StatusAccepted, handle: a.runTask,
 		},
 		{
+			pattern: "POST /api/v1/admin/tasks/{key}/stop", access: admin,
+			summary: "Stop a task's work: take the jobs it queued off the queue, running or not",
+			path:    []param{{"key", domain.TaskKey(""), "The task."}},
+			status:  http.StatusNoContent, handle: a.stopTask,
+		},
+		{
 			pattern: "GET /api/v1/admin/maintenance", access: admin,
 			summary: "Say when the server reads its media for previews and markers",
 			status:  http.StatusOK, reply: maintenanceJSON{}, handle: a.adminMaintenance,
