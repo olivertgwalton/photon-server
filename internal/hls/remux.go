@@ -662,6 +662,9 @@ func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domai
 	}
 	a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts", "-i", "fd:")
 	a = append(a, streamArgs(hw, video, audio, layer)...)
+	// The MP4 muxer writes a file's chapters as a text track, which Apple's players refuse a
+	// segment for.
+	a = append(a, "-map_chapters", "-1")
 	switch f {
 	case domain.SegmentsMPEGTS:
 		// Without mpegts_copyts the muxer moves every timestamp on by its delay.
