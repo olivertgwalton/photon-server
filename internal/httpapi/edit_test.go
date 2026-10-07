@@ -15,15 +15,19 @@ import (
 )
 
 // fakeEditing has one film, "heat" from 1995, and keeps what is done to it.
+// bare is a title with nothing on disk.
+var bare = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b0")
+
 type fakeEditing struct {
-	edited domain.Metadata
-	reset  []domain.Field
-	pinned string
-	order  domain.EpisodeOrder
-	mode   domain.RefreshMode
-	marked []domain.Marker
-	absent []domain.MarkerAbsent
-	chosen map[domain.ArtworkKind]uuid.UUID
+	edited   domain.Metadata
+	reset    []domain.Field
+	pinned   string
+	order    domain.EpisodeOrder
+	mode     domain.RefreshMode
+	analysed uuid.UUID
+	marked   []domain.Marker
+	absent   []domain.MarkerAbsent
+	chosen   map[domain.ArtworkKind]uuid.UUID
 }
 
 func (f *fakeEditing) EditMetadata(_ context.Context, id uuid.UUID, m domain.Metadata) error {
@@ -61,6 +65,17 @@ func (f *fakeEditing) Refresh(_ context.Context, id uuid.UUID, mode domain.Refre
 	}
 	f.mode = mode
 	return nil
+}
+
+func (f *fakeEditing) AnalyseTitle(_ context.Context, id uuid.UUID) error {
+	switch id {
+	case films:
+		f.analysed = id
+		return nil
+	case bare:
+		return store.ErrNothingOnDisk
+	}
+	return store.ErrNotFound
 }
 
 func (f *fakeEditing) SetMarkers(_ context.Context, id uuid.UUID, markers []domain.Marker, absent []domain.MarkerAbsent) error {
@@ -148,6 +163,10 @@ func TestAnAdminFixesATitle(t *testing.T) {
 		{goodToken, http.MethodPost, base + "/refresh", `{"mode": "images"}`, http.StatusBadRequest, ""},
 		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + uuid.NewV7().String() + "/refresh", `{"mode": "all"}`, http.StatusNotFound, ""},
 		{goodToken, http.MethodPost, base + "/refresh", `{"mode": "all"}`, http.StatusAccepted, ""},
+		{memberToken, http.MethodPost, base + "/analysis", "", http.StatusForbidden, ""},
+		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + bare.String() + "/analysis", "", http.StatusConflict, "nothing of it is on disk"},
+		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + uuid.NewV7().String() + "/analysis", "", http.StatusNotFound, ""},
+		{goodToken, http.MethodPost, base + "/analysis", "", http.StatusAccepted, ""},
 		{memberToken, http.MethodGet, base + "/artwork/candidates?kind=poster", "", http.StatusForbidden, ""},
 		{goodToken, http.MethodGet, base + "/artwork/candidates?kind=disc", "", http.StatusBadRequest, ""},
 		{goodToken, http.MethodGet, base + "/artwork/candidates?kind=poster", "", http.StatusOK, `"source":"tmdb","language":"en","width":2000,"height":3000,"chosen":false`},
@@ -175,7 +194,7 @@ func TestAnAdminFixesATitle(t *testing.T) {
 			t.Errorf("%s %s %s: %d %s, want %d with %s", tc.method, tc.target, tc.body, rec.Code, rec.Body, tc.want, tc.has)
 		}
 	}
-	if e.edited.Title != "Heat" || e.edited.ReleaseDate.Year() != 1995 || len(e.edited.Locked) != 1 || len(e.reset) != 2 || e.pinned != "tmdb/949" || e.order != domain.OrderDVD || e.mode != domain.RefreshAll || len(e.marked) != 1 || e.marked[0].EndMS != 121500 ||
+	if e.edited.Title != "Heat" || e.edited.ReleaseDate.Year() != 1995 || len(e.edited.Locked) != 1 || len(e.reset) != 2 || e.pinned != "tmdb/949" || e.order != domain.OrderDVD || e.mode != domain.RefreshAll || e.analysed != films || len(e.marked) != 1 || e.marked[0].EndMS != 121500 ||
 		len(e.absent) != 1 || e.absent[0] != (domain.MarkerAbsent{Kind: domain.MarkerRecap}) {
 		t.Errorf("done: %+v %v %q", e.edited, e.reset, e.pinned)
 	}

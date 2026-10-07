@@ -486,6 +486,7 @@ export async function admin(
 			} satisfies Schemas["CandidateList"]);
 		case "PUT /api/v1/admin/titles/t-quiet/match":
 		case "PUT /api/v1/admin/titles/t-film/match":
+		case "POST /api/v1/admin/titles/t-film/analysis":
 		case "POST /api/v1/admin/titles/t-quiet/refresh":
 			return done(202);
 		case "PUT /api/v1/admin/collections/t-box/members":

@@ -111,6 +111,7 @@ var problems = []struct {
 	{err: store.ErrAdminNeedsPassword, code: codeConflict, ownWords: true},
 	{err: store.ErrSuperseded, code: codeConflict, ownWords: true},
 	{err: store.ErrNotListable, code: codeConflict, ownWords: true},
+	{err: store.ErrNothingOnDisk, code: codeConflict, ownWords: true},
 	{err: store.ErrUnknownPlugin, code: codeInvalidBody, ownWords: true},
 	{err: store.ErrNotACandidate, code: codeInvalidBody, detail: "id is one of the title's candidates of that kind"},
 	{err: store.ErrMarkerOutsidePart, code: codeInvalidBody, ownWords: true},

@@ -429,6 +429,11 @@ func (a *API) routes() []route {
 			body:    refreshJSON{}, status: http.StatusAccepted, handle: a.refresh,
 		},
 		{
+			pattern: "POST /api/v1/admin/titles/{id}/analysis", access: admin,
+			summary: "Read a title's files again, a show's or season's episodes', and remake what is made from them",
+			status:  http.StatusAccepted, handle: a.analyse,
+		},
+		{
 			pattern: "GET /api/v1/admin/titles/{id}/artwork/candidates", access: admin,
 			summary: "List the pictures of a kind each provider has for a title, to choose from",
 			query:   []param{artworkKindParam},
