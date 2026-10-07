@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"math/big"
 	"strings"
 	"time"
 
@@ -54,22 +55,12 @@ func (s *Service) StartPairing(ctx context.Context, d Device) (PairingStart, err
 
 func newUserCode() string {
 	b := make([]byte, userCodeLen)
+	size := big.NewInt(int64(len(userCodeAlphabet)))
 	for i := range b {
-		b[i] = userCodeAlphabet[randIndex(len(userCodeAlphabet))]
+		n, _ := rand.Int(rand.Reader, size)
+		b[i] = userCodeAlphabet[n.Int64()]
 	}
 	return string(b)
-}
-
-// randIndex draws uniformly from [0, n) by rejecting the bytes past the largest multiple of n.
-func randIndex(n int) int {
-	limit := 256 - 256%n
-	var b [1]byte
-	for {
-		_, _ = rand.Read(b[:])
-		if int(b[0]) < limit {
-			return int(b[0]) % n
-		}
-	}
 }
 
 // ApprovePairing gives the waiting television to the approving session's profile.
