@@ -21,4 +21,5 @@ type Library struct {
 	// MetadataLanguage and CertificationCountry are nil for the server's own.
 	MetadataLanguage     *string
 	CertificationCountry *string
+	ArtworkLanguage      domain.ArtworkLanguage
 }

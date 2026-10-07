@@ -65,6 +65,7 @@ const defaults = {
 	keyframes: "index",
 	themes: "local",
 	deletion: "off",
+	artwork_language: "localized",
 } as const;
 
 // A new library's kind changes the sources offered; a library's own is fixed.
@@ -280,6 +281,22 @@ const refreshOptions = $derived(
 			<Field.Description>
 				What its titles' names, write-ups and pictures are asked for in.
 				Changing it describes them all again.
+			</Field.Description>
+		</Field.Field>
+		<Field.Field>
+			<Field.Label for="library-artwork">Pictures</Field.Label>
+			<Choice
+				id="library-artwork"
+				name="artwork_language"
+				value={library?.artwork_language ?? defaults.artwork_language}
+				options={[
+					{ value: "localized", label: "In its language first" },
+					{ value: "any", label: "The most liked, any language" },
+				]}
+			/>
+			<Field.Description>
+				In its language first takes posters and logos in it, else English, else
+				with no words on them.
 			</Field.Description>
 		</Field.Field>
 		<Field.Field>

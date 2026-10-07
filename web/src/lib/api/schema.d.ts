@@ -4864,6 +4864,7 @@ export interface components {
             url: string;
         };
         AdminLibrary: {
+            artwork_language: components["schemas"]["ArtworkLanguage"];
             certification_country?: string;
             deletion: components["schemas"]["MediaDeletion"];
             /** Format: uuid */
@@ -4882,6 +4883,7 @@ export interface components {
             themes: components["schemas"]["ThemeLookup"];
         };
         AdminLibraryListing: {
+            artwork_language: components["schemas"]["ArtworkLanguage"];
             certification_country?: string;
             counts: components["schemas"]["Counts"];
             deletion: components["schemas"]["MediaDeletion"];
@@ -4920,6 +4922,8 @@ export interface components {
         };
         /** @enum {string} */
         ArtworkKind: "poster" | "backdrop" | "logo" | "thumb" | "banner";
+        /** @enum {string} */
+        ArtworkLanguage: "localized" | "any";
         Audio: {
             bitrate_kbps?: number;
             channels?: number;
@@ -5418,6 +5422,7 @@ export interface components {
             name: string;
         };
         LibraryChange: {
+            artwork_language?: components["schemas"]["ArtworkLanguage"];
             certification_country?: string | null;
             deletion?: components["schemas"]["MediaDeletion"];
             keyframes?: components["schemas"]["KeyframeMode"];

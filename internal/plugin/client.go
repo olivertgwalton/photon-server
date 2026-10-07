@@ -65,7 +65,7 @@ func (c *client) post(ctx context.Context, path string, body func(pluginv1.Setti
 }
 
 func sentLocale(loc domain.Locale) pluginv1.Locale {
-	return pluginv1.Locale{Language: loc.Language, Country: loc.Country}
+	return pluginv1.Locale{Language: loc.Language, Country: loc.Country, Artwork: string(loc.Artwork)}
 }
 
 func (c *client) Match(ctx context.Context, loc domain.Locale, kind domain.ItemKind, h provider.Hints) (string, error) {

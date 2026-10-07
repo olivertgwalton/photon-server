@@ -63,6 +63,9 @@ type adminLibraryJSON struct {
 	// server's own.
 	MetadataLanguage     string `json:"metadata_language,omitzero"`
 	CertificationCountry string `json:"certification_country,omitzero"`
+	// ArtworkLanguage is which of its titles' pictures it takes first: localized, those in its
+	// language, then English, then wordless; or any, the most liked.
+	ArtworkLanguage domain.ArtworkLanguage `json:"artwork_language"`
 }
 
 // kindSourcesJSON ranks where a kind of item a library holds takes its metadata and its pictures
@@ -84,7 +87,7 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 		ID: l.ID, Name: l.Name, Kind: l.Kind, Root: l.Root, Sources: []kindSourcesJSON{},
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
 		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes, Deletion: l.Deletion,
-		MetadataLanguage: l.Locale.Language, CertificationCountry: l.Locale.Country,
+		MetadataLanguage: l.Locale.Language, CertificationCountry: l.Locale.Country, ArtworkLanguage: l.Locale.Artwork,
 	}
 	ranked := func(list []domain.RankedSource) []rankedSourceJSON {
 		out := make([]rankedSourceJSON, len(list))
@@ -189,6 +192,9 @@ type libraryChangeJSON struct {
 	// "" is the server's own. Changing either describes its titles again.
 	MetadataLanguage     *string `json:"metadata_language,omitzero"`
 	CertificationCountry *string `json:"certification_country,omitzero"`
+	// ArtworkLanguage is which of its titles' pictures it takes first; changing it describes them
+	// again.
+	ArtworkLanguage domain.ArtworkLanguage `json:"artwork_language,omitzero"`
 }
 
 type kindSourcesChangeJSON struct {
@@ -239,6 +245,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 		*c = region.String()
 	}
 	change.MetadataLanguage, change.CertificationCountry = req.MetadataLanguage, req.CertificationCountry
+	change.ArtworkLanguage = req.ArtworkLanguage
 	if req.Themes == domain.ThemesThemerr && a.svc.Setup.Tools.YTDLP.Path == "" {
 		writeProblem(w, a.logger, codeConflict, "themerr needs yt-dlp, which this server does not have")
 		return
