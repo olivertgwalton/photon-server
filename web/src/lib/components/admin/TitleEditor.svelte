@@ -34,11 +34,17 @@ $effect(() => {
 	});
 });
 
+const part = "-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pt-4";
+
 const matched = $derived(title?.kind === "movie" || title?.kind === "show");
 </script>
 
 <Dialog.Root bind:open={editor.open}>
-	<Dialog.Content class="max-h-[85svh] overflow-y-auto sm:max-w-3xl">
+	<!-- One height whichever part is shown, as Plex's Edit dialog keeps: the
+		tabs stay put and the part beneath them scrolls. -->
+	<Dialog.Content
+		class="flex h-[min(85svh,48rem)] flex-col overflow-hidden sm:max-w-3xl"
+	>
 		<Dialog.Header>
 			<Dialog.Title>Edit {title?.title ?? ""}</Dialog.Title>
 		</Dialog.Header>
@@ -50,6 +56,7 @@ const matched = $derived(title?.kind === "movie" || title?.kind === "show");
 			<Tabs.Root
 				value={editor.tab}
 				onValueChange={(tab) => (editor.tab = tab as EditorTab)}
+				class="min-h-0 flex-1"
 			>
 				<Tabs.List>
 					<Tabs.Trigger value="details">Details</Tabs.Trigger>
@@ -60,16 +67,16 @@ const matched = $derived(title?.kind === "movie" || title?.kind === "show");
 						<Tabs.Trigger value="artwork">Artwork</Tabs.Trigger>
 					{/if}
 				</Tabs.List>
-				<Tabs.Content value="details" class="pt-4">
+				<Tabs.Content value="details" class={part}>
 					<MetadataForm {title} />
 				</Tabs.Content>
 				{#if matched}
-					<Tabs.Content value="match" class="grid gap-4 pt-4">
+					<Tabs.Content value="match" class="{part} grid content-start gap-4">
 						<IdentifyPanel {title} {providers} />
 					</Tabs.Content>
 				{/if}
 				{#if title.kind !== "extra"}
-					<Tabs.Content value="artwork" class="pt-4">
+					<Tabs.Content value="artwork" class={part}>
 						<ArtworkPicker {title} />
 					</Tabs.Content>
 				{/if}

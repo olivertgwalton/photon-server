@@ -121,7 +121,7 @@ async function search(event: SubmitEvent) {
 								"Matched. Its details follow in a moment.",
 							)}
 					>
-						This one <span class="sr-only">: {candidate.title}</span>
+						Select <span class="sr-only">{candidate.title}</span>
 					</Button>
 				</li>
 			{:else}
