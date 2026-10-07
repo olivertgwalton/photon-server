@@ -8,6 +8,7 @@ import (
 	"slices"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/provider"
@@ -20,8 +21,9 @@ import (
 // kind of item decides whose values and pictures stand. A title with no confident match is left as its files and NFO describe it, and a provider
 // not configured or not reachable is passed over. Each provider is asked in the title's library's
 // locale, def where it leaves anything unsaid; def is the server's. raise tells the title was
-// described again.
-func Handler(st *store.Store, providers *provider.Registry, def domain.Locale, raise func(context.Context, domain.Event), log *slog.Logger) jobs.Handler {
+// described again, once the pictures it shows first are fetched into pictures, so a client that
+// looks again finds them there.
+func Handler(st *store.Store, providers *provider.Registry, pictures *artwork.Cache, def domain.Locale, raise func(context.Context, domain.Event), log *slog.Logger) jobs.Handler {
 	return func(ctx context.Context, id uuid.UUID) error {
 		sub, ok, err := st.IdentifySubject(ctx, id)
 		if err != nil || !ok || sub.Unmatched {
@@ -50,6 +52,7 @@ func Handler(st *store.Store, providers *provider.Registry, def domain.Locale, r
 		if err := st.Identified(ctx, id); err != nil {
 			return err
 		}
+		fetch(ctx, st, pictures, id, log)
 		raise(ctx, domain.Event{Kind: domain.EventTitleUpdated, Item: id})
 		return nil
 	}
@@ -94,6 +97,19 @@ func describe(ctx context.Context, st *store.Store, d provider.Describer, loc, d
 		seasons[n] = season
 	}
 	return st.SaveIdentity(ctx, id, d.Info().ID, m, seasons)
+}
+
+// fetch fetches the pictures a title shows first. A title is described without them, so one not
+// fetched is reported rather than failing the job; it is fetched when it is first asked for.
+func fetch(ctx context.Context, st *store.Store, pictures *artwork.Cache, id uuid.UUID, log *slog.Logger) {
+	unfetched, err := st.TitleUnfetched(ctx, id)
+	n := 0
+	if err == nil {
+		n, err = pictures.Fetch(ctx, unfetched)
+	}
+	if ctx.Err() == nil && (err != nil || n < len(unfetched)) {
+		log.WarnContext(ctx, "pictures not fetched", slog.Int("pictures", len(unfetched)-n), slog.Any("err", err))
+	}
 }
 
 // passedOver is a provider that is not configured, or cannot be reached, as a plugin that is down:
