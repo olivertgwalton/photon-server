@@ -1,5 +1,6 @@
-// Package hls serves a copy of a title as HLS: fragmented MP4 cut at the copy's own keyframes, so
-// video is copied rather than encoded and every segment is exactly the length its playlist says.
+// Package hls serves a copy of a title as HLS: fragmented MP4 or MPEG-TS cut at the copy's own
+// keyframes, so video is copied rather than encoded and every segment is exactly the length its
+// playlist says.
 package hls
 
 import (
@@ -60,16 +61,16 @@ func Plan(parts []Part) []Segment {
 	return segs
 }
 
-// Playlist writes the media playlist of a plan: every segment's address from segment(n), each
-// part's initialisation from init(part) where there is one, and a discontinuity where one part
-// gives way to the next.
-func Playlist(segs []Segment, init func(part int) string, segment func(n int) string) string {
+// Playlist writes the media playlist of a plan at EXT-X-VERSION version: every segment's address
+// from segment(n), each part's initialisation from init(part) where there is one, and a
+// discontinuity where one part gives way to the next.
+func Playlist(segs []Segment, version int, init func(part int) string, segment func(n int) string) string {
 	var b strings.Builder
 	longest := time.Duration(0)
 	for _, s := range segs {
 		longest = max(longest, s.End-s.Start)
 	}
-	fmt.Fprintf(&b, "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:%d\n", int(math.Ceil(longest.Seconds())))
+	fmt.Fprintf(&b, "#EXTM3U\n#EXT-X-VERSION:%d\n#EXT-X-TARGETDURATION:%d\n", version, int(math.Ceil(longest.Seconds())))
 	b.WriteString("#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-INDEPENDENT-SEGMENTS\n")
 	part := -1
 	for n, s := range segs {
@@ -91,9 +92,9 @@ func Playlist(segs []Segment, init func(part int) string, segment func(n int) st
 // Master writes the master playlist: the video's variant and its subtitles as renditions in one
 // group, the first marked default chosen by default. Names within a group must differ, so a
 // repeated one is numbered.
-func Master(subs []Subtitle, v Variant, video string, subtitle func(track int) string) string {
+func Master(subs []Subtitle, v Variant, version int, video string, subtitle func(track int) string) string {
 	var b strings.Builder
-	b.WriteString("#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-INDEPENDENT-SEGMENTS\n")
+	fmt.Fprintf(&b, "#EXTM3U\n#EXT-X-VERSION:%d\n#EXT-X-INDEPENDENT-SEGMENTS\n", version)
 	seen := map[string]int{}
 	chosen := false
 	for n, s := range subs {
