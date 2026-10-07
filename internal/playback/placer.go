@@ -65,9 +65,10 @@ func EncodingOf(n domain.Node) Encoding {
 // Self is this node as it is now.
 func (p *Placer) Self() domain.Node { return p.self() }
 
-// Candidates are the nodes that could encode what need asks, this one among them, those with the
-// most of their transcode slots free first, ties in no set order: a node with no limit first, and
-// a full one still listed, as it may have a slot by the time it is asked.
+// Candidates are the nodes that could encode what need asks, this one among them: those with a
+// slot free first, of them those set to transcode, then those with no limit, then those with
+// more of their slots free; ties in no set order. A full one is still listed, as it may have a
+// slot by the time it is asked; a node that never encodes is not.
 func (p *Placer) Candidates(ctx context.Context, need Need) ([]domain.Node, error) {
 	self := p.self()
 	nodes, err := p.adverts.Nodes(ctx)
@@ -77,21 +78,42 @@ func (p *Placer) Candidates(ctx context.Context, need Need) ([]domain.Node, erro
 	nodes = slices.DeleteFunc(nodes, func(n domain.Node) bool { return n.ID == self.ID || n.Address == "" })
 	nodes = append(nodes, self)
 	nodes = slices.DeleteFunc(nodes, func(n domain.Node) bool {
-		return need.HEVC && n.Encoder.HEVC != domain.HEVCAllow || need.Libass && !n.Encoder.Libass
+		return !n.Role.Encodes() || need.HEVC && n.Encoder.HEVC != domain.HEVCAllow || need.Libass && !n.Encoder.Libass
 	})
 	rand.Shuffle(len(nodes), func(i, j int) { nodes[i], nodes[j] = nodes[j], nodes[i] }) //nolint:gosec // breaks ties between nodes equally free; nothing secret
 	slices.SortStableFunc(nodes, func(a, b domain.Node) int {
-		return cmp.Or(cmp.Compare(unlimited(b), unlimited(a)), cmp.Compare(free(b), free(a)))
+		return cmp.Or(
+			cmp.Compare(rank(b, roomy), rank(a, roomy)),
+			cmp.Compare(rank(b, transcoding), rank(a, transcoding)),
+			cmp.Compare(rank(b, unlimited), rank(a, unlimited)),
+			cmp.Compare(free(b), free(a)),
+		)
 	})
 	return nodes, nil
 }
 
-func unlimited(n domain.Node) int {
-	if n.Limit == hls.Unlimited {
+// rank is one for a node that is, and zero for one that is not.
+func rank(n domain.Node, is func(domain.Node) bool) int {
+	if is(n) {
 		return 1
 	}
 	return 0
 }
+
+// roomy is a node with a transcode slot free, as it last said.
+func roomy(n domain.Node) bool { return unlimited(n) || n.Transcodes < n.Limit }
+
+// transcoding is a node set to transcode before any other, where it has a slot.
+func transcoding(n domain.Node) bool {
+	switch n.Role {
+	case domain.NodeTranscode:
+		return true
+	case domain.NodeAll, domain.NodeServe:
+	}
+	return false
+}
+
+func unlimited(n domain.Node) bool { return n.Limit == hls.Unlimited }
 
 // free is the share of a node's transcode slots not held, one for a node with no limit.
 func free(n domain.Node) float64 {

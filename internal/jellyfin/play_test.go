@@ -466,7 +466,7 @@ func alone(local interface {
 	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error
 },
 ) *playback.Placer {
-	self := domain.Node{ID: uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1"), Limit: 4, Encoder: domain.Encoder{
+	self := domain.Node{ID: uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1"), Role: domain.NodeAll, Limit: 4, Encoder: domain.Encoder{
 		Acceleration: domain.AccelSoftware, HEVC: domain.HEVCAllow, Libass: true,
 	}}
 	return playback.NewPlacer(noNodes{}, func() domain.Node { return self }, local, nodecall.Key{})

@@ -298,6 +298,17 @@ func (r *Remuxer) preempt() bool {
 	return false
 }
 
+// SetLimit changes how many videos may be encoded at once, or Unlimited. Those encoding beyond a
+// lower limit go on; none is begun until there is room under it.
+func (r *Remuxer) SetLimit(limit int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if limit != r.limit {
+		r.limit = limit
+		r.change()
+	}
+}
+
 // Changes is told as a transcode slot is taken or given back, once for any number since it was
 // last read.
 func (r *Remuxer) Changes() <-chan struct{} { return r.changed }

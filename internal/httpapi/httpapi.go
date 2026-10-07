@@ -178,8 +178,10 @@ type Services struct {
 	Network networkSettings
 	// Storage is where artwork and previews are kept, and Stores this node's, kept there now.
 	Storage storageSettings
-	Stores  stores
-	Secure  secureConnections
+	// Nodes are the server's nodes as an admin sets them.
+	Nodes  nodeSettings
+	Stores stores
+	Secure secureConnections
 	// Jellyfin is this node's serving of Jellyfin's API; nil where it is not run.
 	Jellyfin jellyfinListener
 	// Setup is how this node was started, and Postgres and Valkey what it reaches.
@@ -791,6 +793,16 @@ func (a *API) routes() []route {
 			pattern: "PUT /api/v1/admin/network", access: admin,
 			summary: "Replace whether the port answers HTTPS, its certificate, and Jellyfin's; every node serves it at once",
 			body:    networkJSON{}, status: http.StatusOK, reply: networkJSON{}, handle: a.setNetwork,
+		},
+		{
+			pattern: "GET /api/v1/admin/nodes", access: admin,
+			summary: "List the server's nodes, there or that have been, what is set of each, and how busy each that is up is",
+			status:  http.StatusOK, reply: listJSON[knownNodeJSON]{}, handle: a.adminNodes,
+		},
+		{
+			pattern: "PATCH /api/v1/admin/nodes/{id}", access: admin,
+			summary: "Change a node's role or its limit on transcodes at once; it takes them up at once",
+			body:    nodeChangeJSON{}, status: http.StatusOK, reply: knownNodeJSON{}, handle: a.setNode,
 		},
 		{
 			pattern: "GET /api/v1/admin/storage", access: admin,
