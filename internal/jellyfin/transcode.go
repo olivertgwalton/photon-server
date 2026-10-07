@@ -27,8 +27,11 @@ type hlsFiles interface {
 	Encoder(video domain.VideoPlan) domain.Acceleration
 }
 
-type remuxing interface {
-	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error
+// placer chooses the node that encodes a playback, and opens its remux there.
+type placer interface {
+	Candidates(ctx context.Context, need playback.Need) ([]domain.Node, error)
+	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o playback.Opening) error
+	Self() domain.Node
 }
 
 // owners say which node of the cluster runs a playback's HLS.
@@ -171,32 +174,45 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 		return true
 	}
 	d := playback.Decision{Method: t.Method, Video: &t.Video, Audio: t.Audio, Reasons: t.Reasons}
-	card := playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: t.Subtitle})
+	// A copy encoded is opened on the node with the most transcode slots free that can encode it,
+	// the next where it has none by then; one copied, here.
+	candidates := []domain.Node{a.svc.Placer.Self()}
 	if t.Video.Encode != nil {
-		card.Acceleration = a.svc.HLS.Encoder(t.Video)
+		if candidates, err = a.svc.Placer.Candidates(r.Context(), playback.NeedOf(t.Video)); err != nil {
+			a.internal(w, r, err)
+			return true
+		}
 	}
-	if _, err := a.svc.Playbacks.Start(r.Context(), session, t.Method, card); errors.Is(err, playback.ErrStarted) {
-		// Another node, asked at once, runs it: the request is handed on to it.
-		return false
-	} else if err != nil {
-		a.internal(w, r, err)
-		return true
+	o := playback.Opening{
+		Profile: s.Profile.ID, Item: item, Version: c.Version, Video: t.Video, Audio: t.Audio, Segments: t.Segments, StartMS: t.StartMS,
 	}
-	err = a.svc.Remuxing.Open(r.Context(), session, c, t.Video, t.Audio, t.Segments, time.Duration(t.StartMS)*time.Millisecond)
-	if err != nil {
+	for _, node := range candidates {
+		card := playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: t.Subtitle})
+		card.Acceleration = hls.EncodedOn(node.Encoder.Acceleration, t.Video)
+		if _, err := a.svc.Playbacks.Start(r.Context(), session, t.Method, card, node.ID); errors.Is(err, playback.ErrStarted) {
+			// Another node, asked at once, runs it: the request is handed on to it.
+			return false
+		} else if err != nil {
+			a.internal(w, r, err)
+			return true
+		}
+		err = a.svc.Placer.Open(r.Context(), node, session, c, o)
+		if err == nil {
+			// Here, the request is answered; elsewhere, handed on to the node that runs it.
+			return false
+		}
 		if aerr := a.svc.Playbacks.Abandon(context.WithoutCancel(r.Context()), session); aerr != nil {
 			a.internal(w, r, aerr)
 			return true
 		}
-		if errors.Is(err, hls.ErrTranscodeLimit) {
-			w.Header().Set("Retry-After", "30")
-			refuse(w, http.StatusServiceUnavailable)
+		if !errors.Is(err, hls.ErrTranscodeLimit) {
+			a.internal(w, r, err)
 			return true
 		}
-		a.internal(w, r, err)
-		return true
 	}
-	return false
+	w.Header().Set("Retry-After", "30")
+	refuse(w, http.StatusServiceUnavailable)
+	return true
 }
 
 // fromOwner hands a request for a play session another node runs to that node, by the signed

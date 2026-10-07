@@ -2,8 +2,8 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -31,7 +31,7 @@ import (
 const streamFor = 24 * time.Hour
 
 type playbacks interface {
-	Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error)
+	Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard, node uuid.UUID) (domain.Playback, error)
 	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState, tracks domain.ChosenTracks) (domain.Reach, error)
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
 	End(ctx context.Context, id uuid.UUID) error
@@ -39,8 +39,11 @@ type playbacks interface {
 	Serve(ctx context.Context, id uuid.UUID, cut func()) (done func(), err error)
 }
 
-type remuxing interface {
-	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error
+// placer chooses the node that encodes a playback, and opens its remux there.
+type placer interface {
+	Candidates(ctx context.Context, need playback.Need) ([]domain.Node, error)
+	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o playback.Opening) error
+	Self() domain.Node
 }
 
 // owners say which node of the cluster serves a playback's HLS.
@@ -221,13 +224,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Profile.MaxBitrateKbps = playback.Capped(req.Profile.MaxBitrateKbps, limit)
 	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
-	d, err := playback.Decide(*req.Profile, playback.CopyOf(c), tracks,
-		playback.Encoding{HEVC: a.svc.Setup.Encoder.HEVC, Libass: a.svc.Setup.Tools.Libass})
-	if errors.Is(err, playback.ErrNoCompatibleStream) {
-		status := codeNoCompatibleStream.status()
-		writeJSON(w, a.logger, "application/problem+json", status, refusalJSON{problem{Title: http.StatusText(status), Status: status, Code: codeNoCompatibleStream}, d.Reasons})
-		return
-	}
+	candidates, err := a.svc.Placer.Candidates(r.Context(), playback.Need{})
 	if a.answered(w, r, err) {
 		return
 	}
@@ -235,9 +232,36 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	session, err := a.svc.Playbacks.Start(r.Context(), uuid.NewV7(), d.Method, a.playbackCard(r, title, c, d, tracks))
-	if err != nil {
-		a.internal(w, r, err)
+	// The node with the most transcode slots free decides how the copy is played, with what it
+	// encodes; the next is asked where it has none by then, and decides again with its own.
+	var d playback.Decision
+	var session domain.Playback
+	for _, node := range candidates {
+		d, err = playback.Decide(*req.Profile, playback.CopyOf(c), tracks, playback.EncodingOf(node))
+		if err != nil {
+			break
+		}
+		if d.Video == nil || d.Video.Encode == nil {
+			// Nothing is encoded: the node asked plays it.
+			node = a.svc.Placer.Self()
+		}
+		session, err = a.start(r, node, title, c, d, tracks, playback.Opening{
+			Profile: sessionOf(r).Profile.ID, Item: id, Version: c.Version, Segments: req.Profile.Segments, StartMS: req.StartMS,
+		})
+		if !errors.Is(err, hls.ErrTranscodeLimit) {
+			break
+		}
+	}
+	if errors.Is(err, playback.ErrNoCompatibleStream) {
+		status := codeNoCompatibleStream.status()
+		writeJSON(w, a.logger, "application/problem+json", status, refusalJSON{problem{Title: http.StatusText(status), Status: status, Code: codeNoCompatibleStream}, d.Reasons})
+		return
+	}
+	if errors.Is(err, hls.ErrTranscodeLimit) {
+		writeProblem(w, a.logger, codeTranscodeLimit, playback.Full(candidates).Error())
+		return
+	}
+	if a.answered(w, r, err) {
 		return
 	}
 	until := time.Now().Add(streamFor)
@@ -263,19 +287,6 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if d.Method != domain.PlayDirect {
-		if err := a.svc.Remuxing.Open(r.Context(), session.ID, c, *d.Video, d.Audio, req.Profile.Segments, time.Duration(req.StartMS)*time.Millisecond); err != nil {
-			if aerr := a.svc.Playbacks.Abandon(context.WithoutCancel(r.Context()), session.ID); aerr != nil {
-				a.internal(w, r, aerr)
-				return
-			}
-			if errors.Is(err, hls.ErrTranscodeLimit) {
-				_, _, limit := a.svc.HLS.Transcodes()
-				writeProblem(w, a.logger, codeTranscodeLimit, fmt.Sprintf("the server is already transcoding as many videos at once as it may: %d", limit))
-				return
-			}
-			a.internal(w, r, err)
-			return
-		}
 		subject := hlsSubject(session.ID)
 		exp, sig := a.svc.Signer.Token(subject, until)
 		answer.Playlist = subject + "/" + exp + "/" + sig + "/main.m3u8"
@@ -325,12 +336,55 @@ func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayM
 }
 
 // playbackCard is what the dashboard shows of a playback the request starts.
-func (a *API) playbackCard(r *http.Request, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, tracks domain.ChosenTracks) domain.PlaybackCard {
+func (a *API) playbackCard(r *http.Request, node domain.Node, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, tracks domain.ChosenTracks) domain.PlaybackCard {
 	card := playback.Card(sessionOf(r), a.svc.TrustedProxies.Client(r).String(), t, c, d, tracks)
 	if v := d.Video; v != nil && v.Encode != nil {
-		card.Acceleration = a.svc.HLS.Encoder(*v)
+		card.Acceleration = hls.EncodedOn(node.Encoder.Acceleration, *v)
 	}
 	return card
+}
+
+// start starts a playback of c that node serves, and its remux there where it is not played
+// directly; a node with every slot held refuses it (hls.ErrTranscodeLimit), and it is forgotten.
+func (a *API) start(r *http.Request, node domain.Node, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, tracks domain.ChosenTracks, o playback.Opening) (domain.Playback, error) {
+	session, err := a.svc.Playbacks.Start(r.Context(), uuid.NewV7(), d.Method, a.playbackCard(r, node, t, c, d, tracks), node.ID)
+	if err != nil || d.Method == domain.PlayDirect {
+		return session, err
+	}
+	o.Video, o.Audio = *d.Video, d.Audio
+	if err := a.svc.Placer.Open(r.Context(), node, session.ID, c, o); err != nil {
+		if aerr := a.svc.Playbacks.Abandon(context.WithoutCancel(r.Context()), session.ID); aerr != nil {
+			return session, errors.Join(err, aerr)
+		}
+		return session, err
+	}
+	return session, nil
+}
+
+// openRemote opens the remux of a playback another node placed on this one, reading its copy
+// again as the profile may see it: 204 once open, 503 where every transcode slot is held.
+func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	var o playback.Opening
+	if err == nil {
+		err = json.NewDecoder(r.Body).Decode(&o)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	c, err := a.svc.Playing.Playable(r.Context(), o.Profile, o.Item, o.Version)
+	if err == nil {
+		err = a.svc.Placer.Open(r.Context(), a.svc.Placer.Self(), id, c, o)
+	}
+	switch {
+	case errors.Is(err, hls.ErrTranscodeLimit):
+		w.WriteHeader(http.StatusServiceUnavailable)
+	case err != nil:
+		a.internal(w, r, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 func hlsSubject(playback uuid.UUID) string { return "/api/v1/hls/" + playback.String() }

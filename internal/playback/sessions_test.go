@@ -18,6 +18,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
+// thisNode is the node the tests' sessions are on, and start their playbacks on.
+var thisNode = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1")
+
 type memory map[uuid.UUID]domain.Playback
 
 func (m memory) ClaimPlayback(_ context.Context, p domain.Playback, _ time.Duration) (bool, error) {
@@ -84,11 +87,11 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	live, saved, streams := memory{}, positions{}, served{}
 	var told []domain.EventKind
 	raise := func(_ context.Context, e domain.Event) { told = append(told, e.Kind) }
-	s := NewSessions(live, saved, streams, raise, uuid.NewV7())
+	s := NewSessions(live, saved, streams, raise, thisNode)
 	ctx := t.Context()
 	oliver, guest, film := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
 
-	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(oliver, film))
+	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(oliver, film), thisNode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,10 +136,10 @@ func TestAnAdminEndsAnyonesPlaybackWhereItGotTo(t *testing.T) {
 	live, saved, streams := memory{}, positions{}, served{}
 	var told []domain.Event
 	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
-	s := NewSessions(live, saved, streams, raise, uuid.NewV7())
+	s := NewSessions(live, saved, streams, raise, thisNode)
 	ctx := t.Context()
 	guest, film := uuid.NewV7(), uuid.NewV7()
-	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayRemux, card(guest, film))
+	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayRemux, card(guest, film), thisNode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,14 +169,14 @@ func TestAnAdminEndsAnyonesPlaybackWhereItGotTo(t *testing.T) {
 // another node, and is refused after.
 func TestAStopCutsOffAFilePlayedAsItIs(t *testing.T) {
 	live := memory{}
-	s := NewSessions(live, positions{}, served{}, func(context.Context, domain.Event) {}, uuid.NewV7())
+	s := NewSessions(live, positions{}, served{}, func(context.Context, domain.Event) {}, thisNode)
 	ctx := t.Context()
 	guest := uuid.NewV7()
-	here, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(guest, uuid.NewV7()))
+	here, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(guest, uuid.NewV7()), thisNode)
 	if err != nil {
 		t.Fatal(err)
 	}
-	elsewhere, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(guest, uuid.NewV7()))
+	elsewhere, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(guest, uuid.NewV7()), thisNode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,9 +209,9 @@ func TestAStopCutsOffAFilePlayedAsItIs(t *testing.T) {
 func TestAPlaybackOfARemovedTitleIsSweptOnce(t *testing.T) {
 	live := memory{}
 	var told []domain.Event
-	s := NewSessions(live, positions{}, served{}, func(_ context.Context, e domain.Event) { told = append(told, e) }, uuid.NewV7())
+	s := NewSessions(live, positions{}, served{}, func(_ context.Context, e domain.Event) { told = append(told, e) }, thisNode)
 	ctx := t.Context()
-	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(uuid.NewV7(), gone))
+	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(uuid.NewV7(), gone), thisNode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,10 +243,10 @@ func (*ends) ChooseTracks(context.Context, uuid.UUID, uuid.UUID, domain.ChosenTr
 
 func TestAPlaybackTellsTheStoreItHasReachedTheEnd(t *testing.T) {
 	saved := &ends{}
-	s := NewSessions(memory{}, saved, served{}, func(context.Context, domain.Event) {}, uuid.NewV7())
+	s := NewSessions(memory{}, saved, served{}, func(context.Context, domain.Event) {}, thisNode)
 	ctx := t.Context()
 	oliver := uuid.NewV7()
-	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(oliver, uuid.NewV7()))
+	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(oliver, uuid.NewV7()), thisNode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,10 +270,10 @@ func TestAPausedPlayerThatKeepsReportingKeepsItsStream(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		s := NewSessions(memory{}, positions{}, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7())
+		s := NewSessions(memory{}, positions{}, remuxer, func(context.Context, domain.Event) {}, thisNode)
 		ctx := t.Context()
 		oliver := uuid.NewV7()
-		p, err := s.Start(ctx, uuid.NewV7(), domain.PlayRemux, card(oliver, uuid.NewV7()))
+		p, err := s.Start(ctx, uuid.NewV7(), domain.PlayRemux, card(oliver, uuid.NewV7()), thisNode)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -301,10 +304,10 @@ func TestAPlayerThatGoesQuietIsStoppedWithItsHistory(t *testing.T) {
 		live, saved, streams := memory{}, positions{}, served{}
 		var told []domain.Event
 		raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
-		s := NewSessions(live, saved, streams, raise, uuid.NewV7())
+		s := NewSessions(live, saved, streams, raise, thisNode)
 		ctx := t.Context()
 		oliver, film := uuid.NewV7(), uuid.NewV7()
-		p, err := s.Start(ctx, uuid.NewV7(), domain.PlayTranscode, card(oliver, film))
+		p, err := s.Start(ctx, uuid.NewV7(), domain.PlayTranscode, card(oliver, film), thisNode)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -351,10 +354,10 @@ func (c *chosen) ChooseTracks(_ context.Context, _, _ uuid.UUID, t domain.Chosen
 
 func TestAPlayerKeepsTheTracksItLastChose(t *testing.T) {
 	saved := &chosen{positions: positions{}}
-	s := NewSessions(memory{}, saved, served{}, func(context.Context, domain.Event) {}, uuid.NewV7())
+	s := NewSessions(memory{}, saved, served{}, func(context.Context, domain.Event) {}, thisNode)
 	ctx := t.Context()
 	oliver := uuid.NewV7()
-	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(oliver, uuid.NewV7()))
+	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(oliver, uuid.NewV7()), thisNode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,10 +392,10 @@ func TestAProfileIsToldOfItsPlaceAsItsReachChanges(t *testing.T) {
 			told++
 		}
 	}
-	s := NewSessions(memory{}, timed{positions{}}, served{}, raise, uuid.NewV7())
+	s := NewSessions(memory{}, timed{positions{}}, served{}, raise, thisNode)
 	ctx := t.Context()
 	oliver := uuid.NewV7()
-	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(oliver, uuid.NewV7()))
+	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(oliver, uuid.NewV7()), thisNode)
 	if err != nil {
 		t.Fatal(err)
 	}
