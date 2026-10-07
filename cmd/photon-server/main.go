@@ -287,6 +287,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		reader(domain.JobKeyframeWalk, analysis.WalkKeyframes(st, tools)),
 		reader(domain.JobMarkers, analysis.Markers(st, tools.Fingerprint)),
 		reader(domain.JobPreviews, analysis.MakePreviews(st, tools, previews, logger)),
+		reader(domain.JobProbe, analysis.Probe(st, tools)),
 	}
 	// Conversions have slots of their own, so a long one never holds up a scan, and each holds a
 	// transcode slot its node's playbacks may take, so they never starve them. A conversion is asked
