@@ -35,9 +35,10 @@ func NewWeb(files fs.FS) (*Web, error) {
 		return nil, fmt.Errorf("the web app's build: %w", err)
 	}
 	// Everything the app fetches comes from this origin. hls.js plays from blob: media sources and
-	// runs its worker from a blob:. Vite inlines small fonts as data:. The page's own inline script
+	// runs its worker from a blob:. JASSUB compiles libass's WebAssembly, which 'wasm-unsafe-eval'
+	// allows without allowing eval. Vite inlines small fonts as data:. The page's own inline script
 	// is allowed by its hash.
-	scripts := []string{"'self'"}
+	scripts := []string{"'self'", "'wasm-unsafe-eval'"}
 	for _, m := range inlineScript.FindAllSubmatch(index, -1) {
 		sum := sha256.Sum256(m[1])
 		scripts = append(scripts, "'sha256-"+base64.StdEncoding.EncodeToString(sum[:])+"'")

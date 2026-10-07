@@ -4,12 +4,15 @@ type Schemas = components["schemas"];
 type ClientProfile = Schemas["ClientProfile"];
 
 // What a browser says it plays, as asked: the types its video element and
-// media sources take, whether it shows HDR, and whether it plays HLS itself.
+// media sources take, whether it shows HDR, whether it plays HLS itself, and
+// whether it draws styled subtitles: JASSUB's libass, in a worker, onto an
+// offscreen canvas.
 export type Capabilities = {
 	types: string[];
 	pq: boolean;
 	hlg: boolean;
 	nativeHLS: boolean;
+	styled: boolean;
 };
 
 // Each question is a type a browser is asked about, and what a yes means in
@@ -150,10 +153,17 @@ export function browserProfile(
 		audio: sound,
 		max_bitrate_kbps: maxBitrateKbps,
 		// A video element draws only a WebVTT track it is given, which SubRip
-		// becomes; pictures and styled text are drawn into the video.
+		// becomes, and JASSUB draws ASS it is given; pictures, and styled text
+		// a browser without JASSUB cannot draw, are drawn into the video.
 		subtitles: [
 			{ codec: "subrip", delivery: "sidecar" },
 			{ codec: "webvtt", delivery: "sidecar" },
+			...(caps.styled
+				? ([
+						{ codec: "ass", delivery: "sidecar" },
+						{ codec: "ssa", delivery: "sidecar" },
+					] as const)
+				: []),
 		],
 	};
 }
@@ -196,5 +206,8 @@ export async function probe(): Promise<Capabilities> {
 		return info?.supported ?? false;
 	};
 	const [pq, hlg] = await Promise.all([shows("pq"), shows("hlg")]);
-	return { types, pq, hlg, nativeHLS };
+	const styled =
+		typeof WebAssembly === "object" &&
+		"transferControlToOffscreen" in HTMLCanvasElement.prototype;
+	return { types, pq, hlg, nativeHLS, styled };
 }

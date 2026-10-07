@@ -37,6 +37,7 @@
 		"bits-ui": "^2.19.5",
 		"clsx": "^2.1.1",
 		"hls.js": "^1.7.3",
+		"jassub": "^2.5.18",
 		"openapi-typescript": "^7.13.0",
 		"shadcn-svelte": "^1.7.0",
 		"svelte": "^5.57.1",

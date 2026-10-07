@@ -15,6 +15,7 @@ import SettingsIcon from "@lucide/svelte/icons/settings";
 import VolumeIcon from "@lucide/svelte/icons/volume-2";
 import MuteIcon from "@lucide/svelte/icons/volume-x";
 import type Hls from "hls.js";
+import type JASSUB from "jassub";
 import { onDestroy, onMount, untrack } from "svelte";
 import { goto } from "$app/navigation";
 import { client } from "#lib/api/client.js";
@@ -29,7 +30,14 @@ import {
 } from "#lib/player/profile.js";
 import { type Preferences, skipping } from "#lib/player/preferences.js";
 import { ProgressReporter, type Report } from "#lib/player/progress.js";
-import { choices, needsReplay, wants, webVTT } from "#lib/player/subtitles.js";
+import {
+	beside,
+	choices,
+	isStyled,
+	needsReplay,
+	wants,
+	webVTT,
+} from "#lib/player/subtitles.js";
 import {
 	audioLabel,
 	bitrate,
@@ -109,6 +117,9 @@ let quality = $state(untrack(() => prefs.max_bitrate_kbps));
 let convert = $state(false);
 let trackSrc = $state<string>();
 let trackFile: string | undefined;
+// The styled subtitle JASSUB draws over the video, by its address.
+let styled: JASSUB | undefined;
+let styledURL: string | undefined;
 
 let part = $state(0);
 let time = $state(0);
@@ -206,14 +217,10 @@ function tracks(): Pick<
 	Schemas["PlaybackProgress"],
 	"audio_stream" | "subtitle_stream" | "subtitle_file"
 > {
-	const file =
-		subtitle?.file === undefined
-			? undefined
-			: version?.subtitles?.[subtitle.file]?.id;
 	return {
 		audio_stream: playingAudio,
 		subtitle_stream: subtitle ? subtitle.stream : -1,
-		subtitle_file: file,
+		subtitle_file: subtitle?.id,
 	};
 }
 
@@ -311,6 +318,7 @@ async function attach(p: Schemas["Playback"], at: number) {
 function detach() {
 	hls?.destroy();
 	hls = undefined;
+	void showStyled(undefined);
 	if (trackSrc?.startsWith("blob:")) URL.revokeObjectURL(trackSrc);
 	trackSrc = undefined;
 	trackFile = undefined;
@@ -351,15 +359,15 @@ function seek(seconds: number) {
 	time = video.currentTime;
 }
 
-// Shows the subtitle chosen in the playback there is: a file beside the copy
-// as a track, or one of the HLS playlist's renditions.
+// Shows the subtitle chosen in the playback there is: styled text drawn by
+// JASSUB, a file beside the copy as a track, or one of the HLS playlist's
+// renditions.
 async function showSubtitle() {
 	if (!playback || !video) return;
+	const given = beside(subtitle, playback);
+	void showStyled(given && isStyled(given.codec) ? given : undefined);
 	if (playback.method === "direct") {
-		const file =
-			subtitle?.id === undefined
-				? undefined
-				: playback.subtitles?.find((f) => f.id === subtitle?.id);
+		const file = given && !isStyled(given.codec) ? given : undefined;
 		if (file?.id === trackFile) return;
 		if (trackSrc?.startsWith("blob:")) URL.revokeObjectURL(trackSrc);
 		trackSrc = undefined;
@@ -390,6 +398,29 @@ async function showSubtitle() {
 	tracks.forEach((t, i) => {
 		t.mode = i === n ? "showing" : "disabled";
 	});
+}
+
+// Draws styled text over the video with JASSUB, with the fonts its file
+// carries, or stops drawing it. JASSUB's worker and WebAssembly load the first
+// time; one asked for after a later one is dropped.
+async function showStyled(sub: Schemas["Subtitle"] | undefined) {
+	if (sub?.url === styledURL) return;
+	styledURL = sub?.url;
+	void styled?.destroy();
+	styled = undefined;
+	if (!sub || !video) return;
+	const absolute = (url: string) => new URL(url, location.href).href;
+	const [{ default: JASSUB }, fonts] = await Promise.all([
+		import("jassub"),
+		sub.fonts
+			? fetch(sub.fonts)
+					.then((r) => r.json() as Promise<Schemas["Fonts"]>)
+					.then((f) => f.fonts.map((font) => absolute(font.url)))
+					.catch(() => [])
+			: [],
+	]);
+	if (styledURL !== sub.url || !video) return;
+	styled = new JASSUB({ video, subUrl: absolute(sub.url), fonts });
 }
 
 function chooseSubtitle(key: string) {

@@ -416,6 +416,23 @@ const titles: Record<string, Schemas["TitlePage"]> = {
 		episode_number: 2,
 		versions: [version("v-ep2")],
 	},
+	// Signs in ASS inside the file, and a font of its own.
+	"p-anime": {
+		id: "p-anime",
+		kind: "movie",
+		title: "Bakery Street",
+		added_at: "2026-10-01T20:00:00Z",
+		versions: [
+			{
+				...version("v-anime"),
+				streams: [
+					...version("v-anime").streams,
+					{ index: 3, kind: "subtitle", codec: "ass", title: "Signs" },
+				],
+				subtitles: [],
+			},
+		],
+	},
 	"t-busy": {
 		id: "t-busy",
 		kind: "movie",
@@ -492,14 +509,25 @@ function play(id: string, body: Schemas["Play"]): Response {
 				duration_ms: 6_000,
 			},
 		];
-		playback.subtitles = [
-			{
-				id: "0199b3c0-0000-7000-8000-0000000000d1",
-				codec: "subrip",
-				language: "en",
-				url: "/api/v1/subtitles/sub-1/file?exp=1&sig=s",
-			},
-		];
+		playback.subtitles =
+			id === "p-anime"
+				? [
+						{
+							stream: 3,
+							codec: "ass",
+							title: "Signs",
+							url: "/api/v1/parts/part-1/subtitles/3?exp=1&sig=s",
+							fonts: "/api/v1/parts/part-1/fonts?exp=1&sig=s",
+						},
+					]
+				: [
+						{
+							id: "0199b3c0-0000-7000-8000-0000000000d1",
+							codec: "subrip",
+							language: "en",
+							url: "/api/v1/subtitles/sub-1/file?exp=1&sig=s",
+						},
+					];
 	}
 	return Response.json(playback);
 }
@@ -692,6 +720,20 @@ const server_ = Bun.serve({
 				return fixture("film.mp4");
 			case "GET /api/v1/subtitles/sub-1/file":
 				return fixture("film.srt");
+			case "GET /api/v1/parts/part-1/subtitles/3":
+				return fixture("film.ass");
+			case "GET /api/v1/parts/part-1/fonts":
+				return Response.json({
+					fonts: [
+						{
+							name: "2.woff2",
+							url: "/api/v1/parts/part-1/fonts/2.woff2?exp=1&sig=s",
+						},
+					],
+				} satisfies Schemas["Fonts"]);
+			// JASSUB's own Liberation Sans stands in for a font the file carries.
+			case "GET /api/v1/parts/part-1/fonts/2.woff2":
+				return new Response(Bun.file("node_modules/jassub/dist/default.woff2"));
 			case "GET /api/v1/parts/part-1/trickplay/0":
 				return fixture("sheet.jpg");
 			case "GET /api/v1/me":

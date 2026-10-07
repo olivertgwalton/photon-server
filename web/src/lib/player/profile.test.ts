@@ -21,6 +21,7 @@ const chrome: Capabilities = {
 	pq: true,
 	hlg: true,
 	nativeHLS: false,
+	styled: true,
 };
 
 const safari: Capabilities = {
@@ -37,6 +38,7 @@ const safari: Capabilities = {
 	pq: true,
 	hlg: true,
 	nativeHLS: true,
+	styled: true,
 };
 
 const firefox: Capabilities = {
@@ -53,6 +55,7 @@ const firefox: Capabilities = {
 	pq: false,
 	hlg: false,
 	nativeHLS: false,
+	styled: true,
 };
 
 const codecs = (caps: Capabilities) =>
@@ -113,8 +116,14 @@ test("the quality chosen is the most the server sends", () => {
 	expect(browserProfile(chrome, 0).max_bitrate_kbps).toBe(0);
 });
 
-test("a browser draws only plain text files it is given", () => {
+test("a browser draws the text files it is given, and ASS where JASSUB runs", () => {
 	expect(browserProfile(safari, 0).subtitles).toEqual([
+		{ codec: "subrip", delivery: "sidecar" },
+		{ codec: "webvtt", delivery: "sidecar" },
+		{ codec: "ass", delivery: "sidecar" },
+		{ codec: "ssa", delivery: "sidecar" },
+	]);
+	expect(browserProfile({ ...firefox, styled: false }, 0).subtitles).toEqual([
 		{ codec: "subrip", delivery: "sidecar" },
 		{ codec: "webvtt", delivery: "sidecar" },
 	]);

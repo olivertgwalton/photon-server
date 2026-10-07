@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { components } from "#lib/api/schema.js";
-import { choices, needsReplay, wants, webVTT } from "./subtitles.ts";
+import { beside, choices, needsReplay, wants, webVTT } from "./subtitles.ts";
 
 type Schemas = components["schemas"];
 
@@ -116,4 +116,25 @@ test("SubRip reads as WebVTT", () => {
 	expect(webVTT("﻿1\r\n00:00:01,500 --> 00:00:02,000\r\nHello\r\n")).toBe(
 		"WEBVTT\n\n1\n00:00:01.500 --> 00:00:02.000\nHello\n",
 	);
+});
+
+test("styled text handed beside the video shows without a new playback", () => {
+	const [, , songs, , signs] = choices(version);
+	const handed = {
+		...remux,
+		subtitles: [
+			{ stream: 4, codec: "ass", url: "/songs", fonts: "/fonts" },
+			{ id: "s3", codec: "ass", url: "/signs" },
+		],
+	};
+	expect(beside(songs, handed)?.url).toBe("/songs");
+	expect(beside(signs, handed)?.url).toBe("/signs");
+	expect(needsReplay(songs, handed)).toBe(false);
+	expect(needsReplay(signs, handed)).toBe(false);
+	// Another drawn in hides what is beside it, so it plays again.
+	const burning = {
+		...handed,
+		video: { stream: 0, decision: "transcode" as const, burned_subtitle: 4 },
+	};
+	expect(needsReplay(signs, burning)).toBe(true);
 });
