@@ -111,8 +111,8 @@ type NodeSettings struct {
 
 // NodeRecord is a node as the server keeps it, whether it is up or not.
 type NodeRecord struct {
-	ID        uuid.UUID
-	Name      string
-	FirstSeen time.Time
+	ID                  uuid.UUID
+	Name                string
+	FirstSeen, LastSeen time.Time
 	NodeSettings
 }

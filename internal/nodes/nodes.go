@@ -3,6 +3,7 @@ package nodes
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/follow"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // rereadEvery is how often a node reads what is set of it, besides as an admin changes it: a
@@ -18,7 +20,7 @@ const rereadEvery = time.Minute
 
 type settings interface {
 	JoinNode(ctx context.Context, id uuid.UUID, name string) (domain.NodeRecord, error)
-	Node(ctx context.Context, id uuid.UUID) (domain.NodeRecord, error)
+	SeeNode(ctx context.Context, id uuid.UUID) (domain.NodeRecord, error)
 }
 
 // transcodes are this node's transcode slots, whose number may change while in use.
@@ -68,8 +70,13 @@ func (s *Self) Run(ctx context.Context, subscribe func() (<-chan domain.Event, f
 	follow.Events(ctx, subscribe, rereadEvery, s.reread, domain.EventNodesChanged)
 }
 
+// reread keeps that this node is up, and takes up what is set of it. One an admin forgot while it
+// ran joins again, as it would starting.
 func (s *Self) reread(ctx context.Context) {
-	n, err := s.settings.Node(ctx, s.id)
+	n, err := s.settings.SeeNode(ctx, s.id)
+	if errors.Is(err, store.ErrNotFound) {
+		n, err = s.settings.JoinNode(ctx, s.id, s.name)
+	}
 	if err != nil {
 		if ctx.Err() == nil {
 			s.log.WarnContext(ctx, "node settings not read", slog.Any("err", err))

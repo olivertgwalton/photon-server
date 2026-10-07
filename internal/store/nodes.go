@@ -9,12 +9,12 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-const nodeColumns = `id, name, first_seen, role, transcode_limit, availability, note`
+const nodeColumns = `id, name, first_seen, last_seen, role, transcode_limit, availability, note`
 
 func scanNode(row pgx.Row) (domain.NodeRecord, error) {
 	var n domain.NodeRecord
 	var limit *int
-	err := row.Scan(&n.ID, &n.Name, &n.FirstSeen, &n.Role, &limit, &n.Availability, &n.Note)
+	err := row.Scan(&n.ID, &n.Name, &n.FirstSeen, &n.LastSeen, &n.Role, &limit, &n.Availability, &n.Note)
 	n.LimitSource = domain.LimitAutomatic
 	if limit != nil {
 		n.LimitSource, n.Limit = domain.LimitSet, *limit
@@ -27,7 +27,7 @@ func scanNode(row pgx.Row) (domain.NodeRecord, error) {
 func (s *Store) JoinNode(ctx context.Context, id uuid.UUID, name string) (domain.NodeRecord, error) {
 	return scanNode(s.pool.QueryRow(ctx, `
 		INSERT INTO node (id, name) VALUES ($1, $2)
-		ON CONFLICT (id) DO UPDATE SET name = excluded.name
+		ON CONFLICT (id) DO UPDATE SET name = excluded.name, last_seen = now()
 		RETURNING `+nodeColumns, id, name))
 }
 
@@ -35,6 +35,18 @@ func (s *Store) JoinNode(ctx context.Context, id uuid.UUID, name string) (domain
 func (s *Store) Node(ctx context.Context, id uuid.UUID) (domain.NodeRecord, error) {
 	n, err := scanNode(s.pool.QueryRow(ctx, `SELECT `+nodeColumns+` FROM node WHERE id = $1`, id))
 	return n, found(err)
+}
+
+// SeeNode keeps that a node is up now, and answers it as the server keeps it; ErrNotFound for one
+// an admin has forgotten while it ran.
+func (s *Store) SeeNode(ctx context.Context, id uuid.UUID) (domain.NodeRecord, error) {
+	n, err := scanNode(s.pool.QueryRow(ctx, `UPDATE node SET last_seen = now() WHERE id = $1 RETURNING `+nodeColumns, id))
+	return n, found(err)
+}
+
+// ForgetNode forgets a node; ErrNotFound for one there has never been.
+func (s *Store) ForgetNode(ctx context.Context, id uuid.UUID) error {
+	return affected(s.pool.Exec(ctx, `DELETE FROM node WHERE id = $1`, id))
 }
 
 // KnownNodes answers every node there is or has been, by when each first started.
