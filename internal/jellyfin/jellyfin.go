@@ -125,9 +125,9 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle("GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{file}", a.signedIn(a.subtitle))
 	a.handle("GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{start}/{file}", a.signedIn(a.subtitle))
 	a.handle("GET /MediaSegments/{itemId}", a.signedIn(a.mediaSegments))
-	a.handle("POST /Sessions/Playing", a.signedIn(a.reported(false)))
-	a.handle("POST /Sessions/Playing/Progress", a.signedIn(a.reported(false)))
-	a.handle("POST /Sessions/Playing/Stopped", a.signedIn(a.reported(true)))
+	a.handle("POST /Sessions/Playing", a.signedIn(a.reported(reportProgress)))
+	a.handle("POST /Sessions/Playing/Progress", a.signedIn(a.reported(reportProgress)))
+	a.handle("POST /Sessions/Playing/Stopped", a.signedIn(a.reported(reportStopped)))
 	a.handle("POST /Sessions/Playing/Ping", a.signedIn(noContent))
 	for _, prefix := range []string{"/UserPlayedItems/", "/Users/{userId}/PlayedItems/"} {
 		a.handle("POST "+prefix+"{itemId}", a.signedIn(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
