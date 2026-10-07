@@ -124,6 +124,8 @@ func TestReadyz(t *testing.T) {
 	}{
 		{name: "dependencies reachable", want: http.StatusNoContent},
 		{name: "a dependency down", readiness: errors.New("valkey: connection refused"), want: http.StatusServiceUnavailable},
+		// A node draining as it stops is sent no new clients by a balancer that asks.
+		{name: "the node stopping", readiness: domain.ErrStopping, want: http.StatusServiceUnavailable},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

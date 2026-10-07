@@ -41,6 +41,8 @@ type Self struct {
 
 	mu  sync.Mutex
 	set domain.NodeSettings
+	// stopping is whether the process is stopping, which drains it whatever is set.
+	stopping bool
 	// changed is told, once for any number of changes, as what is set of it changes.
 	changed chan struct{}
 }
@@ -100,8 +102,11 @@ func (s *Self) apply(set domain.NodeSettings) {
 // Node is this node as it tells the others of itself, now.
 func (s *Self) Node() domain.Node {
 	s.mu.Lock()
-	set := s.set
+	set, stopping := s.set, s.stopping
 	s.mu.Unlock()
+	if stopping {
+		set.Availability = domain.NodeDraining
+	}
 	n := domain.Node{
 		ID: s.id, Address: s.address, Name: s.name, Role: set.Role, Availability: set.Availability,
 		Encoder: s.encoder, LimitSource: set.LimitSource,
@@ -115,7 +120,25 @@ func (s *Self) Node() domain.Node {
 func (s *Self) TakesTranscodes() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.set.Role.Encodes() && s.set.Availability.Takes()
+	return s.set.Role.Encodes() && s.set.Availability.Takes() && !s.stopping
+}
+
+// Stopping reports whether this node's process is stopping.
+func (s *Self) Stopping() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.stopping
+}
+
+// Stop drains this node as its process stops: it takes nothing new, and tells the others at once.
+func (s *Self) Stop() {
+	s.mu.Lock()
+	s.stopping = true
+	s.mu.Unlock()
+	select {
+	case s.changed <- struct{}{}:
+	default:
+	}
 }
 
 // Changes is told as what is set of this node changes, once for any number since it was read.

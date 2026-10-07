@@ -11,6 +11,9 @@ services:
     <<: *server
     # Its name among the server's nodes, which a container's own would change on every recreate.
     hostname: ${PHOTON_HOSTNAME:-photon}
+    # Stopping, it plays its streams to their end first, up to two hours; stop it again to stop at
+    # once.
+    stop_grace_period: 2h
     ports: ["8640:8640"]
     volumes:
       # Libraries are added at their path inside the container: /media/Films and the like.

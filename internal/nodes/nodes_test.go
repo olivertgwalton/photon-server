@@ -92,3 +92,22 @@ func TestANodeTakesUpWhatIsSetOfItAsItIsTold(t *testing.T) {
 		<-done
 	})
 }
+
+// A node whose process is stopping takes nothing new whatever is set of it, and tells the others it
+// is draining, at once.
+func TestANodeStoppingTellsTheOthersItIsDraining(t *testing.T) {
+	settings := &kept{set: domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}}
+	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", "http://gpu-1", domain.Encoder{}, 8, &slots{}, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	self.Stop()
+	if n := self.Node(); self.TakesTranscodes() || n.Availability != domain.NodeDraining {
+		t.Errorf("stopping: %+v, takes %v; want it draining, taking nothing new", n, self.TakesTranscodes())
+	}
+	select {
+	case <-self.Changes():
+	default:
+		t.Error("stopping was not told, for the others to be told at once")
+	}
+}
