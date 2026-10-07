@@ -219,6 +219,7 @@ let maintenance: Schemas["Maintenance"] = {
 	previews: "window",
 	markers: "window_and_added",
 };
+let network: Schemas["Network"] = { secure_connections: "disabled" };
 const deadJobs: Schemas["DeadJob"][] = [
 	{
 		id: 41,
@@ -442,6 +443,11 @@ export async function admin(
 		case "PUT /api/v1/admin/maintenance":
 			maintenance = (await request.json()) as Schemas["Maintenance"];
 			return json(maintenance);
+		case "GET /api/v1/admin/network":
+			return json(network);
+		case "PUT /api/v1/admin/network":
+			network = (await request.json()) as Schemas["Network"];
+			return json(network);
 		case "GET /api/v1/admin/jobs":
 			return json({
 				counts: [
