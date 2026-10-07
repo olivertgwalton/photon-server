@@ -99,25 +99,10 @@ func photo(id *uuid.UUID, hash *string) (uuid.UUID, Blurhashes) {
 func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
 	out := map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID{}
 	hashes := map[uuid.UUID]string{}
-	if len(items) == 0 {
-		return out, hashes, nil
-	}
-	// The pictures and how their libraries rank them are read at once.
-	var rows []*model.Artwork
-	var taken map[uuid.UUID][]domain.FieldSource
-	g, gctx := errgroup.WithContext(ctx)
-	g.Go(func() (err error) {
-		rows, err = queryRows[model.Artwork](gctx, s.pool, `SELECT `+artworkColumns+` FROM artwork WHERE item_id = ANY($1)`, ids(items))
-		return err
-	})
-	g.Go(func() (err error) {
-		taken, err = rankings(gctx, s.pool, items, domain.FetcherImages)
-		return err
-	})
-	if err := g.Wait(); err != nil {
+	rows, err := s.rankedPictures(ctx, items)
+	if err != nil {
 		return nil, nil, err
 	}
-	rankPictures(rows, items, taken)
 	type place struct {
 		item  uuid.UUID
 		kind  domain.ArtworkKind
@@ -139,6 +124,84 @@ func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[uuid
 		}
 	}
 	return out, hashes, nil
+}
+
+// rankedPictures answers the pictures of items, best first, as rankPictures puts them.
+func (s *Store) rankedPictures(ctx context.Context, items []*model.Item) ([]*model.Artwork, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	// The pictures and how their libraries rank them are read at once.
+	var rows []*model.Artwork
+	var taken map[uuid.UUID][]domain.FieldSource
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		rows, err = queryRows[model.Artwork](gctx, s.pool, `SELECT `+artworkColumns+` FROM artwork WHERE item_id = ANY($1)`, ids(items))
+		return err
+	})
+	g.Go(func() (err error) {
+		taken, err = rankings(gctx, s.pool, items, domain.FetcherImages)
+		return err
+	})
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	rankPictures(rows, items, taken)
+	return rows, nil
+}
+
+// Unfetched are pictures titles show first that are a provider's and have no BlurHash yet, so
+// have not been fetched into the picture cache: their URLs by picture id.
+type Unfetched map[uuid.UUID]string
+
+// TitleUnfetched answers the pictures a title, its seasons and their episodes show first that have
+// not been fetched.
+func (s *Store) TitleUnfetched(ctx context.Context, id uuid.UUID) (Unfetched, error) {
+	items, err := queryRows[model.Item](ctx, s.pool, `
+		SELECT `+itemColumns+` FROM items
+		WHERE id = $1 OR parent_id = $1 OR parent_id IN (SELECT id FROM items WHERE parent_id = $1)`, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.unfetched(ctx, items)
+}
+
+// Unfetched answers the pictures that up to limit titles, in id order from after, show first and
+// that have not been fetched, and the last title read, or the zero id past the last.
+func (s *Store) Unfetched(ctx context.Context, after uuid.UUID, limit int) (Unfetched, uuid.UUID, error) {
+	items, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE id > $1 ORDER BY id LIMIT $2`, after, limit)
+	if err != nil {
+		return nil, uuid.UUID{}, err
+	}
+	out, err := s.unfetched(ctx, items)
+	var last uuid.UUID
+	if len(items) == limit {
+		last = items[len(items)-1].ID
+	}
+	return out, last, err
+}
+
+func (s *Store) unfetched(ctx context.Context, items []*model.Item) (Unfetched, error) {
+	rows, err := s.rankedPictures(ctx, items)
+	if err != nil {
+		return nil, err
+	}
+	type shown struct {
+		item uuid.UUID
+		kind domain.ArtworkKind
+	}
+	first := map[shown]bool{}
+	out := Unfetched{}
+	for _, r := range rows {
+		if first[shown{r.ItemID, r.Kind}] {
+			continue
+		}
+		first[shown{r.ItemID, r.Kind}] = true
+		if r.Source != domain.SourceFile && r.Blurhash == nil {
+			out[r.ID] = r.Place
+		}
+	}
+	return out, nil
 }
 
 // rankPictures puts the pictures of items best first: an admin's choice, files beside the title,
