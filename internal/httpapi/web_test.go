@@ -58,8 +58,9 @@ func TestEveryPageOfTheAppIsItsIndex(t *testing.T) {
 func TestThePageMayRunOnlyItsOwnScript(t *testing.T) {
 	csp := get(webAPI(t), "/").Header().Get("Content-Security-Policy")
 	sum := sha256.Sum256([]byte(startScript))
-	if !strings.Contains(csp, "script-src 'self' 'sha256-"+base64.StdEncoding.EncodeToString(sum[:])+"'") ||
-		!strings.Contains(csp, "frame-ancestors 'none'") {
+	// WebAssembly is compiled, for the player's styled subtitles, but no script is evaluated.
+	if !strings.Contains(csp, "script-src 'self' 'wasm-unsafe-eval' 'sha256-"+base64.StdEncoding.EncodeToString(sum[:])+"'") ||
+		strings.Contains(csp, "'unsafe-eval'") || !strings.Contains(csp, "frame-ancestors 'none'") {
 		t.Errorf("Content-Security-Policy %q", csp)
 	}
 	// Pictures come from the server, but for match candidates' posters from the built-in
