@@ -103,6 +103,7 @@ const films: Schemas["AdminLibrary"] = {
 	deletion: "off",
 	artwork_language: "localized",
 	title_language: "localized",
+	collection_mode: "grouped",
 };
 
 const providers: Schemas["MetadataProvider"][] = [

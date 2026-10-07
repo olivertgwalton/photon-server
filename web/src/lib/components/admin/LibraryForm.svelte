@@ -67,6 +67,7 @@ const defaults = {
 	deletion: "off",
 	artwork_language: "localized",
 	title_language: "localized",
+	collection_mode: "grouped",
 } as const;
 
 // A new library's kind changes the sources offered; a library's own is fixed.
@@ -298,6 +299,23 @@ const refreshOptions = $derived(
 			<Field.Description>
 				As first named keeps a film's or show's original title, its write-up
 				still in its language.
+			</Field.Description>
+		</Field.Field>
+		<Field.Field>
+			<Field.Label for="library-collections">Collections</Field.Label>
+			<Choice
+				id="library-collections"
+				name="collection_mode"
+				value={library?.collection_mode ?? defaults.collection_mode}
+				options={[
+					{ value: "grouped", label: "In place of their titles" },
+					{ value: "shown", label: "Beside their titles" },
+					{ value: "hidden", label: "Hidden" },
+				]}
+			/>
+			<Field.Description>
+				How the library shows its collections among its titles. A filtered
+				library shows its titles alone.
 			</Field.Description>
 		</Field.Field>
 		<Field.Field>
