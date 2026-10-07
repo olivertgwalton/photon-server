@@ -362,6 +362,10 @@ test("a title put on the watchlist is on its home row and its page", async ({
 		.getByRole("link", { name: "Watchlist" })
 		.click();
 	await expect(page).toHaveURL("/watchlist");
+	// The address changes before home, where it is on every row, is drawn over.
+	await expect(
+		page.getByRole("heading", { level: 1, name: "Watchlist" }),
+	).toBeVisible();
 	await expect(page.getByRole("link", { name: /Quiet Hours/ })).toBeVisible();
 	await expectAccessible(page);
 });
