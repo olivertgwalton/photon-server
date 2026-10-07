@@ -35,6 +35,10 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	if err != nil {
 		return Subject{}, false, err
 	}
+	// One an admin unmatched is asked of no provider until it is released.
+	if unmatched, err := held(ctx, s.pool, id); err != nil || unmatched {
+		return Subject{}, false, err
+	}
 	sub := Subject{Kind: item.Kind, Title: item.Title, IDs: map[domain.Provider]string{}, Order: item.EpisodeOrder}
 	if item.Year != nil {
 		sub.Year = *item.Year
