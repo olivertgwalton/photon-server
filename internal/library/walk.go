@@ -176,6 +176,23 @@ func (f *Folder) list(h hash.Hash, name string, info fs.FileInfo) {
 	_, _ = fmt.Fprintf(h, "f\x00%s\x00%d\x00%d\n", name, info.Size(), info.ModTime().UnixNano())
 }
 
+// Remove deletes a file of the library at root, as Open opens one, then each folder it leaves
+// empty, up to but not root, so a film deleted from its own folder leaves no empty folder behind.
+// A folder still holding anything (its poster, its NFO, another film) stays.
+func Remove(root, rel string) error {
+	local := filepath.FromSlash(rel)
+	if !filepath.IsLocal(local) {
+		return fmt.Errorf("%q: %w", rel, errNotInside)
+	}
+	if err := os.Remove(filepath.Join(root, local)); err != nil {
+		return err
+	}
+	// A folder not empty is not removed, and ends the climb.
+	for dir := filepath.Dir(local); dir != "." && os.Remove(filepath.Join(root, dir)) == nil; dir = filepath.Dir(dir) {
+	}
+	return nil
+}
+
 // Open opens a file of the library at root, rel being its path inside it as the scanner recorded
 // it. A link is followed wherever it leads, as the walk followed it; what keeps a caller to the
 // libraries is that every path opened is one the scanner recorded, and that none climbs out of

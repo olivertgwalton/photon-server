@@ -252,3 +252,45 @@ func TestWalkingAFolderWalksWhatTheWholeWalkFindsThere(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoveTakesAFileAndTheFoldersItEmpties(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel string) {
+		t.Helper()
+		path := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("Heat (1995)/Heat.mkv")
+	write("Show/Season 1/e1.mkv")
+	write("Show/Season 1/e2.mkv")
+	write("Show/poster.jpg")
+
+	if err := Remove(root, "Heat (1995)/Heat.mkv"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Heat (1995)")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the film's emptied folder: %v, want it gone", err)
+	}
+	for _, rel := range []string{"Show/Season 1/e1.mkv", "Show/Season 1/e2.mkv"} {
+		if err := Remove(root, rel); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "Show", "Season 1")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the emptied season folder: %v, want it gone", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Show", "poster.jpg")); err != nil {
+		t.Errorf("the show's folder, which holds its poster still: %v, want it kept", err)
+	}
+	if _, err := os.Stat(root); err != nil {
+		t.Errorf("the library's root: %v, want it kept", err)
+	}
+	if err := Remove(root, "../outside.mkv"); !errors.Is(err, errNotInside) {
+		t.Errorf("removing outside the library: %v, want %v", err, errNotInside)
+	}
+}
