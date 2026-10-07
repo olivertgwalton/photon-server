@@ -31,12 +31,14 @@ ARG YTDLP_SHA256_arm64=b16e4dab368a816cd05d477d698a605a6ae87ccee1c8ffd38fa21d725
 # The GPU runtimes jellyfin-ffmpeg loads: VAAPI drivers for Intel and AMD, Vulkan for libplacebo
 # (Mesa's, with a CPU device where there is no GPU), and on amd64 Quick Sync's runtime and Intel's
 # OpenCL for tone mapping. NVIDIA's come from the host through its container toolkit. Fonts are
-# for subtitles burned into a transcode. pg_dump backs the database up; it must be no older than
-# the server it dumps.
+# for subtitles libass draws into a transcode, found through fontconfig, whose configuration maps
+# the fonts styles name (Arial, Times New Roman) to Liberation's, which share their metrics. Its
+# cache is made as the fonts are installed, as the server's user can write none. pg_dump backs the
+# database up; it must be no older than the server it dumps.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl xz-utils mesa-va-drivers libvulkan1 mesa-vulkan-drivers \
-      fonts-noto-core fonts-noto-cjk postgresql-client-18 \
+      fontconfig fonts-liberation fonts-noto-core fonts-noto-cjk postgresql-client-18 \
  && if [ "$TARGETARCH" = amd64 ]; then \
       apt-get install -y --no-install-recommends intel-media-va-driver-non-free libmfx-gen1.2 intel-opencl-icd; \
     fi \
