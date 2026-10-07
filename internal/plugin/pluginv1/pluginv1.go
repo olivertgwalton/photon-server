@@ -144,6 +144,7 @@ type Candidate struct {
 	Title         string `json:"title"`
 	OriginalTitle string `json:"original_title,omitempty"`
 	Year          int    `json:"year,omitempty"`
+	Overview      string `json:"overview,omitempty"`
 	Poster        string `json:"poster,omitempty"`
 }
 

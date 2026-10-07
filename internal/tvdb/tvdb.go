@@ -124,7 +124,9 @@ func (c *Client) Search(ctx context.Context, title string, year int) ([]domain.C
 			Name         string            `json:"name"`
 			Year         string            `json:"year"`
 			Image        string            `json:"image_url"`
+			Overview     string            `json:"overview"`
 			Translations map[string]string `json:"translations"`
+			Overviews    map[string]string `json:"overviews"`
 		} `json:"data"`
 	}
 	if err := c.get(ctx, "/search?"+q.Encode(), &out); err != nil {
@@ -138,6 +140,7 @@ func (c *Client) Search(ctx context.Context, title string, year int) ([]domain.C
 		y, _ := strconv.Atoi(r.Year)
 		found = append(found, domain.Candidate{
 			ID: r.ID, Title: cmp.Or(r.Translations[c.language], r.Name), OriginalTitle: r.Name, Year: y, Poster: r.Image,
+			Overview: cmp.Or(r.Overviews[c.language], r.Overview),
 		})
 	}
 	return found, nil

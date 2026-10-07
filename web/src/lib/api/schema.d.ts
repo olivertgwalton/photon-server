@@ -4905,6 +4905,7 @@ export interface components {
         Candidate: {
             id: string;
             original_title?: string;
+            overview?: string;
             poster?: string;
             title: string;
             year?: number;
