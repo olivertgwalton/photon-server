@@ -1426,6 +1426,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/tasks/{key}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop a task's work: take the jobs it queued off the queue, running or not
+         * @description Admin only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The task. */
+                    key: components["schemas"]["TaskKey"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/titles/{id}": {
         parameters: {
             query?: never;
@@ -5960,6 +6001,7 @@ export interface components {
             error?: string;
             /** Format: date-time */
             finished_at?: string;
+            jobs?: components["schemas"]["JobKind"][];
             key: components["schemas"]["TaskKey"];
             /** Format: date-time */
             next_at: string;

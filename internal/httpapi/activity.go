@@ -31,6 +31,7 @@ type eventHub interface {
 	Subscribe() (<-chan domain.Event, func())
 	Scans(ctx context.Context) ([]domain.ScanProgress, error)
 	Backlogs(ctx context.Context) ([]domain.Backlog, error)
+	BacklogStopped(ctx context.Context, kind domain.JobKind) error
 	TestWebhook(ctx context.Context, id uuid.UUID) error
 }
 

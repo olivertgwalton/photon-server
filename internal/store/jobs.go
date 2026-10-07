@@ -232,6 +232,14 @@ func (s *Store) AnyJobsLeft(ctx context.Context, kind domain.JobKind) (bool, err
 	return left, err
 }
 
+// StopJobs takes every job of kinds off the queue, running or not; a dead one stays to be seen.
+// A job running when it goes stops as its worker next renews its lease, and finds it gone.
+func (s *Store) StopJobs(ctx context.Context, kinds []domain.JobKind) error {
+	_, err := s.pool.Exec(ctx, `
+		DELETE FROM jobs WHERE kind = ANY($1) AND state IN ('queued', 'running', 'rerun')`, kinds)
+	return err
+}
+
 // ExtendLease keeps a running job's lease while node is at it.
 func (s *Store) ExtendLease(ctx context.Context, id int64, node uuid.UUID, lease time.Duration) error {
 	info, err := s.pool.Exec(ctx, `

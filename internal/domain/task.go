@@ -29,6 +29,23 @@ func TaskKeys() []TaskKey {
 	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads, TaskPruneActivity}
 }
 
+// Jobs are the kinds of job the task queues: the work it starts that outlasts its run, and that
+// stopping it stops. A task that does all it does in its run queues none.
+func (k TaskKey) Jobs() []JobKind {
+	switch k {
+	case TaskScanLibraries:
+		return []JobKind{JobScanLibrary}
+	case TaskRefreshMetadata:
+		return []JobKind{JobIdentify}
+	case TaskDetectMarkers:
+		return []JobKind{JobMarkers}
+	case TaskBackfillPreviews:
+		return []JobKind{JobPreviews}
+	case TaskSweepJobs, TaskBackupDatabase, TaskSweepArtwork, TaskSweepDownloads, TaskPruneActivity:
+	}
+	return nil
+}
+
 type TaskResult string
 
 const (

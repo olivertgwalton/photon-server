@@ -125,6 +125,9 @@ export function apply(live: Live, name: string, data: unknown): Live {
 			const i = next.backlogs.findIndex((b) => b.kind === backlog.kind);
 			if (backlog.left === 0) {
 				next.backlogs = without(next.backlogs, (b) => b.kind === backlog.kind);
+				// None left is none running, a job stopped with its task included: its
+				// worker tells nothing of it.
+				next.jobs = without(next.jobs, (j) => j.kind === backlog.kind);
 			} else {
 				next.backlogs =
 					i < 0 ? [...next.backlogs, backlog] : next.backlogs.with(i, backlog);

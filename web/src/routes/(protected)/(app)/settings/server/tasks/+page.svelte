@@ -11,6 +11,8 @@ import { act } from "#lib/admin/act.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/admin/Choice.svelte";
+import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
+import { Progress } from "#lib/components/ui/progress/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { fields } from "#lib/form.js";
 
@@ -57,6 +59,23 @@ function saveWindow(event: SubmitEvent) {
 		}),
 		"Saved.",
 	);
+}
+
+// How far a task's work has got: the backlog of the jobs it queued, as the
+// stream tells it, and how many of them run now.
+function work(task: components["schemas"]["Task"]) {
+	const kinds = task.jobs ?? [];
+	const backlogs = live.state.backlogs.filter((b) => kinds.includes(b.kind));
+	const done = backlogs.reduce((n, b) => n + b.done, 0);
+	const total = backlogs.reduce((n, b) => n + b.done + b.left, 0);
+	const running = live.state.jobs.filter((j) => kinds.includes(j.kind)).length;
+	return {
+		done,
+		total,
+		running,
+		left: total - done,
+		percent: total ? Math.floor((done / total) * 100) : 0,
+	};
 }
 
 function took(started?: string, finished?: string) {
@@ -145,10 +164,29 @@ function took(started?: string, finished?: string) {
 		{#each data.tasks as task (task.key)}
 			{@const running =
 				task.running || live.state.tasks.some((t) => t.key === task.key)}
+			{@const w = work(task)}
 			<Table.Row>
 				<Table.Cell class="whitespace-normal">
 					<p class="text-ink font-semibold">{tasks[task.key].name}</p>
 					<p class="text-ink-3 text-xs">{tasks[task.key].does}</p>
+					{#if w.total}
+						<div class="mt-2 grid max-w-sm gap-1">
+							<Progress
+								value={w.done}
+								max={w.total}
+								aria-label="{tasks[task.key].name}: {w.percent}%"
+							/>
+							<p class="text-ink-3 text-xs tabular-nums">
+								{w.percent}% · {w.done.toLocaleString()} of
+								{w.total.toLocaleString()}
+								{#if w.running}
+									· {w.running} running
+								{/if}
+							</p>
+						</div>
+					{:else if w.running}
+						<p class="text-ink-3 mt-2 text-xs">{w.running} running</p>
+					{/if}
 				</Table.Cell>
 				<Table.Cell class="whitespace-normal">
 					{#if running}
@@ -184,7 +222,26 @@ function took(started?: string, finished?: string) {
 						{relative(task.next_at, clock.now)}
 					</time>
 				</Table.Cell>
-				<Table.Cell class="text-right">
+				<Table.Cell class="space-x-2 text-right whitespace-nowrap">
+					{#if w.total || w.running}
+						<ConfirmButton
+							label="Stop"
+							hidden={tasks[task.key].name}
+							title="Stop {tasks[task.key].name.toLowerCase()}?"
+							confirm="Stop"
+							onconfirm={() =>
+								act(
+									api.POST("/api/v1/admin/tasks/{key}/stop", {
+										params: { path: { key: task.key } },
+									}),
+									`${tasks[task.key].name} was stopped.`,
+								)}
+						>
+							The {w.left.toLocaleString()} left are taken off the queue, and
+							one running stops within a few minutes. What is done is kept: the
+							task's next run, or Run now, takes up the rest.
+						</ConfirmButton>
+					{/if}
 					<Button
 						variant="outline"
 						size="sm"
