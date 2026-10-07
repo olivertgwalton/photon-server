@@ -29,6 +29,8 @@ type Subject struct {
 	Unmatched bool
 	// Locale is what its library asks in; what it leaves unsaid is the server's.
 	Locale domain.Locale
+	// Titles is which title its library gives it.
+	Titles domain.TitleLanguage
 }
 
 // IdentifySubject answers what is known of a title to match it by, or false for one that has gone.
@@ -49,8 +51,8 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 		sub.Year = *item.Year
 	}
 	var language, country *string
-	err = s.pool.QueryRow(ctx, `SELECT metadata_language, certification_country, artwork_language FROM libraries WHERE id = $1`,
-		item.LibraryID).Scan(&language, &country, &sub.Locale.Artwork)
+	err = s.pool.QueryRow(ctx, `SELECT metadata_language, certification_country, artwork_language, title_language FROM libraries
+		WHERE id = $1`, item.LibraryID).Scan(&language, &country, &sub.Locale.Artwork, &sub.Titles)
 	if err != nil {
 		return Subject{}, false, err
 	}

@@ -32,6 +32,7 @@ const tv: Schemas["AdminLibrary"] = {
 	themes: "local",
 	deletion: "off",
 	artwork_language: "localized",
+	title_language: "localized",
 };
 
 const fields: [string, string][] = [
@@ -47,6 +48,7 @@ const fields: [string, string][] = [
 	// The server's own is sent as nothing.
 	["certification_country", "server"],
 	["artwork_language", "any"],
+	["title_language", "original"],
 	["remote_extras", "featurette"],
 	["remote_extras", "trailer"],
 ];
@@ -79,6 +81,7 @@ test("a kind's sources are sent only where what they ask changed", () => {
 		metadata_language: "de-DE",
 		certification_country: "",
 		artwork_language: "any",
+		title_language: "original",
 	});
 
 	const changed = libraryChange(

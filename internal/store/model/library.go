@@ -22,4 +22,5 @@ type Library struct {
 	MetadataLanguage     *string
 	CertificationCountry *string
 	ArtworkLanguage      domain.ArtworkLanguage
+	TitleLanguage        domain.TitleLanguage
 }

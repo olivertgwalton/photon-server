@@ -113,7 +113,7 @@ func (localFilms) Match(context.Context, domain.Locale, domain.ItemKind, provide
 
 func (f localFilms) Describe(_ context.Context, loc domain.Locale, _ domain.ItemKind, _ string, _ domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
 	*f.asked = loc
-	return domain.Metadata{Title: "Der weiße Hai", Certificate: "A"}, nil, nil
+	return domain.Metadata{Title: "Der weiße Hai", OriginalTitle: "Jaws", Certificate: "A"}, nil, nil
 }
 
 func TestATitleIsDescribedInItsLibrarysLocale(t *testing.T) {
@@ -157,5 +157,45 @@ func TestATitleIsDescribedInItsLibrarysLocale(t *testing.T) {
 	// India's A is for adults; the server reads Britain's, where it would be no certificate at all.
 	if page.Title != "Der weiße Hai" || page.Certificate != "IN:A" {
 		t.Errorf("described as %q, %q; want the German title and India's certificate, written as India's", page.Title, page.Certificate)
+	}
+}
+
+func TestALibraryGivingOriginalTitlesNamesATitleAsItWasFirstNamed(t *testing.T) {
+	url := storetest.FreshDatabase(t)
+	log := slog.New(slog.DiscardHandler)
+	if err := store.Migrate(t.Context(), url, log); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(t.Context(), url, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := t.Context()
+	lib, err := st.AddLibrary(ctx, "Filme", domain.LibraryMovies, "/srv/filme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	german := "de-DE"
+	if err := st.SetLibrary(ctx, lib.ID, store.LibraryChange{MetadataLanguage: &german, TitleLanguage: domain.TitlesOriginal}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SaveFolder(ctx, lib.ID, "jaws", []byte("v1"), []store.Film{{Title: "jaws", Folder: "jaws"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	cards, _, err := st.Wall(ctx, lib.ID, store.WallPage{Sort: domain.SortTitle, Limit: 1})
+	if err != nil || len(cards) != 1 {
+		t.Fatal(cards, err)
+	}
+	var asked domain.Locale
+	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), domain.LocaleOf("en-GB"), func(context.Context, domain.Event) {}, log)(ctx, cards[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	page, err := st.Title(ctx, uuid.UUID{}, cards[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Title != "Jaws" {
+		t.Errorf("titled %q, want Jaws, its original title, though its write-up is asked in German", page.Title)
 	}
 }

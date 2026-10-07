@@ -85,6 +85,19 @@ func KeyframeModes() []KeyframeMode {
 	return []KeyframeMode{KeyframesIndex, KeyframesFull, KeyframesOff}
 }
 
+// TitleLanguage is which title a library gives its films and shows, as Plex's "Use original
+// titles": in its own language, or in the title's original one.
+type TitleLanguage string
+
+const (
+	TitlesLocalized TitleLanguage = "localized"
+	TitlesOriginal  TitleLanguage = "original"
+)
+
+func TitleLanguages() []TitleLanguage {
+	return []TitleLanguage{TitlesLocalized, TitlesOriginal}
+}
+
 // MediaDeletion is whether an admin may delete a library's titles with their files from the
 // disk: off by default, as Plex's "Allow media deletion" is.
 type MediaDeletion string
@@ -117,6 +130,7 @@ type Library struct {
 	Deletion    MediaDeletion
 	// Locale is what its metadata is asked for in; what it leaves unsaid is the server's.
 	Locale Locale
+	Titles TitleLanguage
 }
 
 // TitleCounts are how many of each kind of title a library holds, as a profile may see them, as

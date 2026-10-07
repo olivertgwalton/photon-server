@@ -4881,6 +4881,7 @@ export interface components {
             root: string;
             sources: components["schemas"]["KindSources"][];
             themes: components["schemas"]["ThemeLookup"];
+            title_language: components["schemas"]["TitleLanguage"];
         };
         AdminLibraryListing: {
             artwork_language: components["schemas"]["ArtworkLanguage"];
@@ -4901,6 +4902,7 @@ export interface components {
             root: string;
             sources: components["schemas"]["KindSources"][];
             themes: components["schemas"]["ThemeLookup"];
+            title_language: components["schemas"]["TitleLanguage"];
         };
         AdminLibraryListingList: {
             items: components["schemas"]["AdminLibraryListing"][];
@@ -5435,6 +5437,7 @@ export interface components {
             remote_extras?: components["schemas"]["ExtraKind"][];
             sources?: components["schemas"]["KindSourcesChange"][];
             themes?: components["schemas"]["ThemeLookup"];
+            title_language?: components["schemas"]["TitleLanguage"];
         };
         /** @enum {string} */
         LibraryKind: "movies" | "shows";
@@ -6081,6 +6084,8 @@ export interface components {
         ThemeMusic: "play" | "off";
         /** @enum {string} */
         Timing: "window" | "window_and_added";
+        /** @enum {string} */
+        TitleLanguage: "localized" | "original";
         TitlePage: {
             /** Format: date-time */
             added_at: string;

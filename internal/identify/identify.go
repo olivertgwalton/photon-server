@@ -81,6 +81,10 @@ func describe(ctx context.Context, st *store.Store, d provider.Describer, loc, d
 		}
 	}
 	m.Certificate = loc.Qualified(m.Certificate, def)
+	// A library giving original titles names a film or show as it was first named, sorted by it.
+	if sub.Titles == domain.TitlesOriginal && m.OriginalTitle != "" {
+		m.Title, m.SortTitle = m.OriginalTitle, ""
+	}
 	for n, season := range seasons {
 		season.Metadata.Certificate = loc.Qualified(season.Metadata.Certificate, def)
 		for e, episode := range season.Episodes {
