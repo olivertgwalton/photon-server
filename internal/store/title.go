@@ -287,7 +287,9 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	case domain.ItemSeason:
 		p.Episodes, err = s.episodes(ctx, profile, item.ID)
 	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
-		p.Versions, err = s.versions(ctx, item.ID)
+		var versions map[uuid.UUID][]VersionPage
+		versions, err = s.Versions(ctx, []uuid.UUID{item.ID})
+		p.Versions = versions[item.ID]
 	case domain.ItemCollection:
 		err = s.pool.QueryRow(ctx, `SELECT origin, placement FROM collections WHERE item_id = $1`, item.ID).Scan(&p.Origin, &p.Placement)
 	}
@@ -607,8 +609,10 @@ func (s *Store) videos(ctx context.Context, item uuid.UUID) ([]VideoLink, error)
 }
 
 // versions answers a film's or episode's copies, those on disk first, the longest first.
-func (s *Store) versions(ctx context.Context, item uuid.UUID) ([]VersionPage, error) {
-	rows, err := queryRows[model.Version](ctx, s.pool, `SELECT `+versionColumns+` FROM versions WHERE item_id = $1`, item)
+// Versions answers the copies of each of items, those on disk first, the longest first among them;
+// a title with none is left out. However many titles, it is the same few queries.
+func (s *Store) Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID][]VersionPage, error) {
+	rows, err := queryRows[model.Version](ctx, s.pool, `SELECT `+versionColumns+` FROM versions WHERE item_id = ANY($1)`, items)
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}
@@ -660,8 +664,8 @@ func (s *Store) versions(ctx context.Context, item uuid.UUID) ([]VersionPage, er
 	if err != nil {
 		return nil, err
 	}
-	out := make([]VersionPage, len(rows))
-	for n, r := range rows {
+	out := make(map[uuid.UUID][]VersionPage, len(items))
+	for _, r := range rows {
 		vp := VersionPage{
 			ID: r.ID, Edition: deref(r.Edition), Label: deref(r.Label), Container: r.Container,
 			DurationMS: r.DurationMS, SizeBytes: r.SizeBytes, BitrateKbps: r.BitrateKbps,
@@ -713,7 +717,7 @@ func (s *Store) versions(ctx context.Context, item uuid.UUID) ([]VersionPage, er
 				})
 			}
 		}
-		out[n] = vp
+		out[r.ItemID] = append(out[r.ItemID], vp)
 	}
 	return out, nil
 }
