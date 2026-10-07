@@ -112,6 +112,19 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 	await page.getByRole("menuitem", { name: "Resume" }).click();
 	await expect(page.getByText("gpu-1 takes new streams again.")).toBeVisible();
 	await expect(gpu).not.toContainText("Draining");
+
+	// Taken away for good, it is forgotten; one running is not offered to be.
+	await gpu.getByRole("button", { name: "Actions for gpu-1" }).click();
+	await expect(page.getByRole("menuitem", { name: "Forget…" })).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await old.getByRole("button", { name: "Actions for old-mini" }).click();
+	await page.getByRole("menuitem", { name: "Forget…" }).click();
+	const forget = page.getByRole("alertdialog", { name: "Forget old-mini?" });
+	await expect(forget).toContainText("It was last seen");
+	await expectAccessible(page);
+	await forget.getByRole("button", { name: "Forget old-mini" }).click();
+	await expect(page.getByText("old-mini is forgotten.")).toBeVisible();
+	await expect(old).toHaveCount(0);
 });
 
 test("a member is told the dashboard is not theirs", async ({ page }) => {
