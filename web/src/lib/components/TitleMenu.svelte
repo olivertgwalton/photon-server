@@ -11,6 +11,7 @@ import HeartIcon from "@lucide/svelte/icons/heart";
 import HeartOffIcon from "@lucide/svelte/icons/heart-off";
 import ImageIcon from "@lucide/svelte/icons/image";
 import ListPlusIcon from "@lucide/svelte/icons/list-plus";
+import CaptionsIcon from "@lucide/svelte/icons/captions";
 import PencilIcon from "@lucide/svelte/icons/pencil";
 import PlayIcon from "@lucide/svelte/icons/play";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
@@ -30,6 +31,7 @@ import {
 	chooseVersion,
 	deleteTitle,
 	editTitle,
+	findSubtitles,
 	forgetProgress,
 	pickPlaylist,
 	refreshTitle,
@@ -138,6 +140,11 @@ const name = $derived(
 				onSelect={() => chooseVersion(card.id, name, "download")}
 			>
 				<DownloadIcon />Download…
+			</DropdownMenu.Item>
+		{/if}
+		{#if card.kind === "movie" || card.kind === "episode"}
+			<DropdownMenu.Item onSelect={() => findSubtitles(card.id, name)}>
+				<CaptionsIcon />Find subtitles…
 			</DropdownMenu.Item>
 		{/if}
 		<DropdownMenu.Item onSelect={() => shareTitle(card.id, name)}>

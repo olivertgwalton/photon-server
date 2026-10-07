@@ -34,6 +34,9 @@ var (
 	// answer cut short. A built-in provider's fails its job, to be tried again; a plugin's is
 	// ErrUnavailable.
 	ErrUnreached = errors.New("provider: not reached")
+	// ErrQuota is an account that has used what a provider lets it have today: what is left is
+	// asked for tomorrow.
+	ErrQuota = errors.New("provider: today's quota is used")
 )
 
 // maxAnswer bounds what a provider may answer to one request rather than holding whatever it sends
@@ -69,33 +72,42 @@ func (r *Refusal) Is(target error) bool {
 
 // Do sends req and decodes a 200's JSON into out; any other status is a *Refusal.
 func (c Client) Do(req *http.Request, out any) error {
-	if c.Limits != nil {
-		if err := kv.Wait(req.Context(), c.Limits, c.Name, c.Limit); err != nil {
-			return err
-		}
-	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := send(cmp.Or(c.HTTP, builtinHTTP), req)
+	data, err := c.Bytes(req)
 	if err != nil {
-		if ue, ok := errors.AsType[*url.Error](err); ok {
-			err = ue.Err
-		}
-		return fmt.Errorf("%s %s: %w: %w", c.Name, req.URL.Path, ErrUnreached, err)
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxAnswer+1))
-	switch {
-	case err != nil:
-		return fmt.Errorf("%s %s: %w: %w", c.Name, req.URL.Path, ErrUnreached, err)
-	case len(data) > maxAnswer:
-		return fmt.Errorf("%s %s: answered more than %d bytes", c.Name, req.URL.Path, maxAnswer)
-	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("%s %s: %w", c.Name, req.URL.Path, &Refusal{Code: resp.StatusCode, Status: resp.Status, Body: data})
+		return err
 	}
 	if err := json.Unmarshal(data, out); err != nil {
 		return fmt.Errorf("%s %s: %w", c.Name, req.URL.Path, err)
 	}
 	return nil
+}
+
+// Bytes sends req and answers a 200's body as it is; any other status is a *Refusal.
+func (c Client) Bytes(req *http.Request) ([]byte, error) {
+	if c.Limits != nil {
+		if err := kv.Wait(req.Context(), c.Limits, c.Name, c.Limit); err != nil {
+			return nil, err
+		}
+	}
+	resp, err := send(cmp.Or(c.HTTP, builtinHTTP), req)
+	if err != nil {
+		if ue, ok := errors.AsType[*url.Error](err); ok {
+			err = ue.Err
+		}
+		return nil, fmt.Errorf("%s %s: %w: %w", c.Name, req.URL.Path, ErrUnreached, err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxAnswer+1))
+	switch {
+	case err != nil:
+		return nil, fmt.Errorf("%s %s: %w: %w", c.Name, req.URL.Path, ErrUnreached, err)
+	case len(data) > maxAnswer:
+		return nil, fmt.Errorf("%s %s: answered more than %d bytes", c.Name, req.URL.Path, maxAnswer)
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("%s %s: %w", c.Name, req.URL.Path, &Refusal{Code: resp.StatusCode, Status: resp.Status, Body: data})
+	}
+	return data, nil
 }
 
 // maxRetryAfter is the longest a provider's asking to be given time is waited out within one
@@ -202,6 +214,14 @@ type PersonDescriber interface {
 type Lister interface {
 	Provider
 	List(ctx context.Context, id string) ([]domain.Listed, error)
+}
+
+// Subtitler finds subtitles for a title, and fetches one as SubRip, as Plex's and Jellyfin's
+// subtitle search do.
+type Subtitler interface {
+	Provider
+	SearchSubtitles(ctx context.Context, q domain.SubtitleQuery) ([]domain.FoundSubtitle, error)
+	FetchSubtitle(ctx context.Context, id string) ([]byte, error)
 }
 
 // Partial is a provider that implements every capability's methods but answers only some of
@@ -314,6 +334,60 @@ func (r *Registry) List(ctx context.Context, source domain.FieldSource, id strin
 		return nil, ErrNoLister
 	}
 	return lister.List(ctx, id)
+}
+
+// SearchSubtitles asks every provider that finds subtitles for those of a title, those made for
+// its release first, then the most fetched; a provider that fails leaves out what it has.
+func (r *Registry) SearchSubtitles(ctx context.Context, q domain.SubtitleQuery) ([]domain.FoundSubtitle, error) {
+	all, err := r.All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var found []domain.FoundSubtitle
+	var errs []error
+	asked := 0
+	for _, p := range all {
+		s, ok := p.(Subtitler)
+		if !ok {
+			continue
+		}
+		asked++
+		got, err := s.SearchSubtitles(ctx, q)
+		found = append(found, got...)
+		errs = append(errs, err)
+	}
+	if asked == 0 {
+		return nil, ErrNoSubtitler
+	}
+	slices.SortStableFunc(found, func(a, b domain.FoundSubtitle) int {
+		if a.ForRelease != b.ForRelease {
+			if a.ForRelease {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Compare(b.Downloads, a.Downloads)
+	})
+	if len(found) == 0 {
+		return nil, errors.Join(errs...)
+	}
+	return found, nil
+}
+
+// ErrNoSubtitler is a server with no provider that finds subtitles, or a subtitle from none.
+var ErrNoSubtitler = errors.New("no provider finds subtitles")
+
+// FetchSubtitle fetches a subtitle a provider found, as SubRip.
+func (r *Registry) FetchSubtitle(ctx context.Context, source domain.FieldSource, id string) ([]byte, error) {
+	p, ok, err := r.Get(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	s, isSubtitler := p.(Subtitler)
+	if !ok || !isSubtitler {
+		return nil, ErrNoSubtitler
+	}
+	return s.FetchSubtitle(ctx, id)
 }
 
 // DescribePerson asks each provider that describes people, in order, what it knows of someone;

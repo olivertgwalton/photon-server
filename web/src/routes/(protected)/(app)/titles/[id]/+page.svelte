@@ -1,5 +1,6 @@
 <script lang="ts">
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
+import CaptionsIcon from "@lucide/svelte/icons/captions";
 import CheckIcon from "@lucide/svelte/icons/check";
 import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 import DownloadIcon from "@lucide/svelte/icons/download";
@@ -14,6 +15,7 @@ import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
 import { goto } from "$app/navigation";
 import {
+	findSubtitles,
 	pickPlaylist,
 	setFavourite,
 	setWatched,
@@ -395,6 +397,17 @@ const poster = $derived(art("poster"));
 						{#if playable && chosen}
 							<DropdownMenu.Item onSelect={() => (download = true)}>
 								<DownloadIcon />Download…
+							</DropdownMenu.Item>
+						{/if}
+						{#if chosen && (t.kind === "movie" || t.kind === "episode")}
+							<DropdownMenu.Item
+								onSelect={() =>
+									findSubtitles(
+										t.id,
+										t.show ? `${t.show.title}: ${t.title}` : t.title,
+									)}
+							>
+								<CaptionsIcon />Find subtitles…
 							</DropdownMenu.Item>
 						{/if}
 						{#if t.versions?.length}

@@ -132,10 +132,12 @@ func (s *Store) PartStreams(ctx context.Context, part uuid.UUID) ([]domain.Strea
 	return streams, nil
 }
 
-// SubtitleFile answers where a subtitle file is: its library's root, and its path within it.
+// SubtitleFile answers where a subtitle file is: its library's root, and its path within it; no
+// root for one fetched, whose text is kept here (see SubtitleBody).
 func (s *Store) SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error) {
 	err = s.pool.QueryRow(ctx, `
-		SELECT l.root, f.rel_path FROM subtitle_files f JOIN libraries l ON l.id = f.library_id WHERE f.id = $1`,
+		SELECT CASE WHEN f.body IS NULL THEN l.root ELSE '' END, f.rel_path
+		FROM subtitle_files f JOIN libraries l ON l.id = f.library_id WHERE f.id = $1`,
 		id).Scan(&root, &rel)
 	return root, rel, found(err)
 }

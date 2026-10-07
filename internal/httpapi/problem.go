@@ -132,6 +132,10 @@ var problems = []struct {
 	{err: playback.ErrNoSuchSubtitleFile, code: codeInvalidBody, detail: "subtitle_file is not one of the text subtitle files beside the copy"},
 	{err: plugin.ErrRefused, code: codeInvalidBody, ownWords: true},
 	{err: provider.ErrUnavailable, code: codeProviderUnavailable, ownWords: true},
+	{err: provider.ErrUnreached, code: codeProviderUnavailable, detail: "the provider did not answer"},
+	{err: provider.ErrNoSubtitler, code: codeConflict, detail: "no provider finds subtitles: an admin sets OpenSubtitles up under Providers"},
+	{err: provider.ErrNotConfigured, code: codeConflict, detail: "the provider is not set up: an admin sets it up under Providers"},
+	{err: provider.ErrQuota, code: codeRateLimited, detail: "the provider's downloads for today are used: try again tomorrow"},
 }
 
 // answered writes the problem err is, if it is one. A client that has gone is told nothing.

@@ -145,9 +145,11 @@ type Services struct {
 	NowPlaying nowPlaying
 	Pictures   pictures
 	// Themes are titles' theme tunes, those from the theme host kept in Artwork.
-	Themes    themes
-	Watching  watching
-	Playing   playing
+	Themes   themes
+	Watching watching
+	Playing  playing
+	// Subtitles are the subtitles fetched from providers for copies.
+	Subtitles fetchedSubtitles
 	Playbacks playbacks
 	// Downloads are each profile's, and Conversions make the ones not downloaded as they are.
 	Downloads   downloads
@@ -563,6 +565,24 @@ func (a *API) routes() []route {
 			pattern: "DELETE /api/v1/titles/{id}/watchlist", access: signedIn,
 			summary: "Take a film or show from the watchlist, a season or episode its show",
 			status:  http.StatusNoContent, handle: a.mark(watching.Unwatchlist),
+		},
+		{
+			pattern: "GET /api/v1/titles/{id}/subtitles/search", access: signedIn,
+			summary: "Find the subtitles providers have in a language for a copy of a film or episode, those made for its very file first",
+			query: []param{
+				{"language", "", "The language, a BCP 47 tag."},
+				{"version_id", uuid.UUID{}, "The copy; the title's longest where none is named."},
+			},
+			status: http.StatusOK, reply: foundSubtitlesJSON{}, handle: a.searchSubtitles,
+		},
+		{
+			pattern: "POST /api/v1/titles/{id}/subtitles", access: signedIn,
+			summary: "Fetch a subtitle a search found and keep it beside the copy, for every profile",
+			body:    fetchSubtitleJSON{}, status: http.StatusCreated, reply: createdJSON{}, handle: a.fetchSubtitle,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/subtitles/{id}", access: admin, summary: "Forget a fetched subtitle",
+			status: http.StatusNoContent, handle: a.removeFetchedSubtitle,
 		},
 		{
 			pattern: "POST /api/v1/titles/{id}/play", access: signedIn,

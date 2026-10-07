@@ -54,7 +54,7 @@ func (s *Store) TitleFiles(ctx context.Context, id uuid.UUID) ([]LibraryFile, er
 		WHERE p.version_id IN (SELECT id FROM copies)
 		UNION
 		SELECT l.root, f.rel_path FROM subtitle_files f JOIN libraries l ON l.id = f.library_id
-		WHERE f.version_id IN (SELECT id FROM copies)
+		WHERE f.version_id IN (SELECT id FROM copies) AND f.body IS NULL
 		ORDER BY rel`, id)
 	if err != nil {
 		return nil, err

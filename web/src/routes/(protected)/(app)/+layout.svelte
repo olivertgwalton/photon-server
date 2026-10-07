@@ -5,6 +5,7 @@ import ActivityMenu from "#lib/components/ActivityMenu.svelte";
 import AppSidebar from "#lib/components/AppSidebar.svelte";
 import PlaylistPicker from "#lib/components/PlaylistPicker.svelte";
 import ShareDialog from "#lib/components/ShareDialog.svelte";
+import SubtitleSearch from "#lib/components/SubtitleSearch.svelte";
 import VersionPicker from "#lib/components/VersionPicker.svelte";
 import TitleEditor from "#lib/components/admin/TitleEditor.svelte";
 import ConfirmDialog from "#lib/components/ConfirmDialog.svelte";
@@ -111,6 +112,7 @@ onMount(() => {
 
 <PlaylistPicker />
 <ShareDialog />
+<SubtitleSearch />
 <VersionPicker />
 {#if data.me.role === "admin"}
 	<TitleEditor />

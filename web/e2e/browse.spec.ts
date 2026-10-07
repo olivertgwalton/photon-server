@@ -499,3 +499,26 @@ test("a version is chosen from a card to play or to download", async ({
 		page.getByText("Download requested. It's in Downloads."),
 	).toBeVisible();
 });
+
+test("a reader finds subtitles for a film and adds one", async ({ page }) => {
+	let added: Record<string, unknown> | undefined;
+	page.on("request", (r) => {
+		if (r.method() === "POST" && r.url().endsWith("/t-film/subtitles")) {
+			added = r.postDataJSON();
+		}
+	});
+	await logIn(page, "/titles/t-film");
+	await page.getByRole("button", { name: "More", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Find subtitles…" }).click();
+	const dialog = page.getByRole("dialog", { name: "Find subtitles" });
+	await expect(dialog.getByLabel("Made for this file")).toBeVisible();
+	await expect(dialog).toContainText("Quiet.Hours.2160p");
+	await expectAccessible(page);
+	await dialog.getByRole("button", { name: "Add" }).click();
+	await expect(page.getByText(/added to Quiet Hours/)).toBeVisible();
+	expect(added).toMatchObject({
+		version_id: "v-4k",
+		source: "opensubtitles",
+		id: "9",
+	});
+});

@@ -84,10 +84,12 @@ const (
 	// SourceMDBList gives ratings alone.
 	SourceMDBList FieldSource = "mdblist"
 	SourceOMDb    FieldSource = "omdb"
+	// SourceOpenSubtitles finds subtitles, and says nothing of titles.
+	SourceOpenSubtitles FieldSource = "opensubtitles"
 )
 
 func FieldSources() []FieldSource {
-	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceMDBList, SourceOMDb}
+	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceMDBList, SourceOMDb, SourceOpenSubtitles}
 }
 
 // MetadataSources are the built-in sources a library may rank, in an order it chooses: what files
