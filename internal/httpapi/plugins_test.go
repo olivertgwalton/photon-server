@@ -162,7 +162,7 @@ func TestAPluginDescribesTheTitlesOfALibraryThatTakesIt(t *testing.T) {
 	if _, err := st.SaveFolder(ctx, lib.ID, "jaws", []byte("v1"), []store.Film{{Title: "jaws", Folder: "jaws"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	cards, _, err := st.Wall(ctx, lib.ID, store.WallPage{Sort: domain.SortTitle, Limit: 1})
+	cards, _, err := st.Wall(ctx, []uuid.UUID{lib.ID}, store.WallPage{Sort: domain.SortTitle, Limit: 1})
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}

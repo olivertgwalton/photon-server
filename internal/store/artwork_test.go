@@ -53,7 +53,7 @@ func TestPicturesBesideATitleComeBeforeAProvidersAndItsCardShowsTheBest(t *testi
 	if provider, _ := s.Picture(ctx, posters[1]); provider.URL != "https://image.tmdb.org/t/p/original/heat.jpg" {
 		t.Errorf("second poster = %+v, want TMDB's", provider)
 	}
-	cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10})
+	cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10})
 	if err != nil || len(cards) != 1 || cards[0].Poster != posters[0] || cards[0].Backdrop != page.Artwork[domain.ArtworkBackdrop][0] {
 		t.Errorf("card = %+v, %v; want the best poster and backdrop", cards, err)
 	}
@@ -205,7 +205,7 @@ func TestALibrarysPictureRankingChoosesItsTitlesBest(t *testing.T) {
 	}
 	best := func() string {
 		t.Helper()
-		cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
+		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
 		if err != nil || len(cards) != 1 {
 			t.Fatalf("wall = %+v, %v", cards, err)
 		}

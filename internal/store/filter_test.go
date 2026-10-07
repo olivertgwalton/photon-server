@@ -56,7 +56,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		if _, err := s.SaveFolder(ctx, lib.ID, f.title, []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)
 		}
-		cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -109,7 +109,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		p.Profile, p.Limit = oliver.ID, 10
 		p.Order = stdcmp.Or(p.Order, domain.Ascending)
 		p.Sort = stdcmp.Or(p.Sort, domain.SortTitle)
-		cards, total, err := s.Wall(ctx, lib, p)
+		cards, total, err := s.Wall(ctx, []uuid.UUID{lib}, p)
 		if err != nil || int(total) != len(cards) {
 			t.Fatalf("%+v: %d of %d, %v", p, len(cards), total, err)
 		}

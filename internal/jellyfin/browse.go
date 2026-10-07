@@ -17,7 +17,7 @@ import (
 
 type catalogue interface {
 	LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*store.SeenLibrary, error)
-	Wall(ctx context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
+	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Seasons(ctx context.Context, profile, show uuid.UUID) ([]store.SeasonCard, error)
@@ -265,53 +265,24 @@ func (a *API) items(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// wall answers libraries' titles, those of every library merged in the order asked for: each is
-// read to the end of the page, so the page is the same as one library's would be.
+// wall answers the titles of libraries, those of several sorted together, of the kinds asked for.
 func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Request, types []string, l listed) {
-	page := wallPage(r, sessionOf(r).Profile.ID, l)
-	var cards []store.Card
-	total := 0
+	var ids []uuid.UUID
 	for _, lib := range libs {
-		if len(types) > 0 && !has(types, libraryKinds[lib.Kind]) {
-			continue
+		if len(types) == 0 || has(types, libraryKinds[lib.Kind]) {
+			ids = append(ids, lib.ID)
 		}
-		p := page
-		if len(libs) > 1 {
-			p.Offset, p.Limit = 0, min(l.start+l.limit, math.MaxInt32)
-		}
-		got, n, err := a.svc.Catalogue.Wall(r.Context(), lib.ID, p)
-		if err != nil {
-			a.internal(w, r, err)
-			return
-		}
-		cards, total = append(cards, got...), total+int(n)
 	}
-	if len(libs) > 1 {
-		cards = mergedPage(cards, page, l)
+	if len(ids) == 0 {
+		writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
+		return
 	}
-	a.writeList(w, r, cards, total, l.start, l)
-}
-
-// mergedPage sorts several libraries' titles together as each was sorted, and takes the page.
-// ponytail: only the sorts a merged list is asked for keep their order across libraries; by name
-// and by date added, which is what an app asks for of every library at once.
-func mergedPage(cards []store.Card, p store.WallPage, l listed) []store.Card {
-	slices.SortStableFunc(cards, func(x, y store.Card) int {
-		c := 0
-		switch p.Sort {
-		case domain.SortAdded:
-			c = x.AddedAt.Compare(y.AddedAt)
-		case domain.SortReleased:
-			c = x.ReleaseDate.Compare(y.ReleaseDate)
-		case domain.SortTitle, domain.SortRating, domain.SortRuntime, domain.SortPlayed:
-			c = strings.Compare(strings.ToLower(x.Title), strings.ToLower(y.Title))
-		}
-		if p.Order == domain.Descending {
-			c = -c
-		}
-		return c
-	})
-	return cards[min(l.start, len(cards)):min(l.start+l.limit, len(cards))]
+	cards, total, err := a.svc.Catalogue.Wall(r.Context(), ids, wallPage(r, sessionOf(r).Profile.ID, l))
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	a.writeList(w, r, cards, int(total), l.start, l)
 }
 
 // searchKinds are photon's kinds for Jellyfin's, of those a search finds.

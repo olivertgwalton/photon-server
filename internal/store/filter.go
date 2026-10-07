@@ -147,10 +147,12 @@ type Facets struct {
 // such library.
 func (s *Store) Facets(ctx context.Context, lib, profile uuid.UUID) (Facets, error) {
 	var f Facets
-	_, at, err := s.wallQuery(ctx, lib, profile, WallFilter{})
+	_, at, err := s.wallQuery(ctx, []uuid.UUID{lib}, profile, WallFilter{})
 	if err != nil {
 		return f, err
 	}
+	// The facets are of the one library, by its own name and kind.
+	at["lib"], at["kind"] = lib, at["kind0"]
 	titles := `SELECT items.genres, items.studios, items.year, items.certificate FROM items, viewer(@profile) v
 		WHERE library_id = @lib AND kind = @kind AND sees(v, items)`
 	// Copies on disk of the library's films and episodes.

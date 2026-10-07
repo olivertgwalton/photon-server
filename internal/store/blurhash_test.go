@@ -76,7 +76,7 @@ func TestPicturesAnswerTheirBlurhashesWhereverTheyAreShown(t *testing.T) {
 	if page.Credits[0].Blurhashes[photo] != "LKO2?U%2Tw=w]~RBVZRi};RPxuwH" {
 		t.Errorf("credit = %+v, want its photo's blurhash", page.Credits[0])
 	}
-	cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10})
+	cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10})
 	if err != nil || len(cards) != 1 || len(cards[0].Blurhashes) != 2 {
 		t.Errorf("cards = %+v, %v; want the poster's and backdrop's blurhashes", cards, err)
 	}

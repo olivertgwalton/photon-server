@@ -96,7 +96,7 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 		t.Errorf("search inside a word: %+v, want no one", found)
 	}
 	for _, l := range []uuid.UUID{lib.ID, shows.ID} {
-		cards, _, err := s.Wall(ctx, l, WallPage{Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{People: []uuid.UUID{her}}})
+		cards, _, err := s.Wall(ctx, []uuid.UUID{l}, WallPage{Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{People: []uuid.UUID{her}}})
 		if err != nil || len(cards) != 1 {
 			t.Errorf("titles she is in: %+v, %v; want the film and the show", cards, err)
 		}
@@ -249,7 +249,7 @@ func TestAPersonIsKnownByAnyProvidersID(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	cards, _, _ := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 1})
+	cards, _, _ := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 1})
 	heat := cards[0].ID
 	plugin := domain.Provider(domain.PluginSource("films"))
 	credit := func(name string, ids map[domain.Provider]string) domain.Credit {
@@ -330,7 +330,7 @@ func TestSimilarTitlesShareSomething(t *testing.T) {
 		if _, err := s.SaveFolder(ctx, lib.ID, f.title, []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)
 		}
-		cards, _, _ := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		cards, _, _ := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
 		ids[f.title] = cards[0].ID
 		if err := s.SaveIdentity(ctx, cards[0].ID, domain.SourceTMDB, domain.Metadata{Title: f.title, Genres: f.genres, Credits: f.credits}, nil); err != nil {
 			t.Fatal(err)

@@ -62,7 +62,7 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 		t.Errorf("the restored copy's files: %+v, want %+v", files, want)
 	}
 	// Its card says there are two to choose between.
-	if cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 10}); err != nil || len(cards) != 1 || cards[0].VersionCount != 2 {
+	if cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 10}); err != nil || len(cards) != 1 || cards[0].VersionCount != 2 {
 		t.Errorf("wall = %+v, %v; want the film's card counting its two copies", cards, err)
 	}
 	var theatrical uuid.UUID

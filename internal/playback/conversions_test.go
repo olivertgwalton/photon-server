@@ -71,7 +71,7 @@ func filmToDownload(t *testing.T) (st *store.Store, item, part uuid.UUID) {
 	if _, err := st.SaveFolder(ctx, lib.ID, "L", []byte("v1"), []store.Film{{Title: "Lawrence", Folder: "L", Copies: []store.Copy{{ContentKey: []byte("k"), Parts: []store.Part{p}}}}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	cards, _, err := st.Wall(ctx, lib.ID, store.WallPage{Sort: domain.SortTitle, Limit: 1})
+	cards, _, err := st.Wall(ctx, []uuid.UUID{lib.ID}, store.WallPage{Sort: domain.SortTitle, Limit: 1})
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}

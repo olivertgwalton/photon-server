@@ -64,7 +64,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 		t.Helper()
 		var out []string
 		for _, lib := range []uuid.UUID{films.ID, other.ID, tv.ID} {
-			cards, total, err := s.Wall(ctx, lib, WallPage{Profile: kid.ID, Sort: domain.SortTitle, Limit: 10})
+			cards, total, err := s.Wall(ctx, []uuid.UUID{lib}, WallPage{Profile: kid.ID, Sort: domain.SortTitle, Limit: 10})
 			if err != nil || int(total) != len(cards) {
 				t.Fatal(cards, total, err)
 			}

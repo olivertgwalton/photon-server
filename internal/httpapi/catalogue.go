@@ -24,7 +24,7 @@ const (
 
 type catalogue interface {
 	LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*store.SeenLibrary, error)
-	Wall(ctx context.Context, lib uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
+	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
 	Letters(ctx context.Context, lib, profile uuid.UUID, f store.WallFilter) ([]store.Letter, error)
 	Facets(ctx context.Context, lib, profile uuid.UUID) (store.Facets, error)
 	Similar(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
@@ -131,7 +131,7 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 	if page.Offset, page.Limit, ok = a.paging(w, r, defaultWallLimit); !ok {
 		return
 	}
-	cards, total, err := a.svc.Catalogue.Wall(r.Context(), lib, page)
+	cards, total, err := a.svc.Catalogue.Wall(r.Context(), []uuid.UUID{lib}, page)
 	if a.answered(w, r, err) {
 		return
 	}
