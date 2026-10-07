@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -291,7 +292,14 @@ func pictures(kind domain.ArtworkKind, images []image, preferred ...string) []do
 	}, preferred...)
 	out := make([]domain.Artwork, len(images))
 	for i, im := range images {
-		out[i] = domain.Artwork{Kind: kind, URL: imageURL + im.Path, Language: im.Language, Width: im.Width, Height: im.Height}
+		// TMDB draws a logo uploaded as SVG as a PNG when asked for one, as Jellyfin draws it before
+		// serving it: so it is sized and stood in for as any picture is, and no script an SVG may
+		// carry reaches a client.
+		p := im.Path
+		if base, ok := strings.CutSuffix(p, ".svg"); ok {
+			p = base + ".png"
+		}
+		out[i] = domain.Artwork{Kind: kind, URL: imageURL + p, Language: im.Language, Width: im.Width, Height: im.Height}
 	}
 	return out
 }

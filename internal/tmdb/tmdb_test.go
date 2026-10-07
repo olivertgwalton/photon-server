@@ -129,7 +129,9 @@ func TestAnotherLanguageStillGetsEnglishPictures(t *testing.T) {
 					{"file_path":"/english-few.jpg","iso_639_1":"en","vote_average":6,"vote_count":2},
 					{"file_path":"/english-many.jpg","iso_639_1":"en","vote_average":6,"vote_count":40},
 					{"file_path":"/german.jpg","iso_639_1":"de","vote_average":3}],
-				"logos":[{"file_path":"/english.png","iso_639_1":"en","vote_average":5}]}}`,
+				"logos":[
+					{"file_path":"/english.png","iso_639_1":"en","vote_average":5},
+					{"file_path":"/vector.svg","iso_639_1":"en","vote_average":4}]}}`,
 	})
 	got, err := c.Details(t.Context(), domain.LocaleOf("de-DE"), Movie, 348)
 	if err != nil {
@@ -141,6 +143,8 @@ func TestAnotherLanguageStillGetsEnglishPictures(t *testing.T) {
 		{Kind: domain.ArtworkPoster, URL: imageURL + "/english-few.jpg", Language: "en"},
 		{Kind: domain.ArtworkPoster, URL: imageURL + "/plain.jpg"},
 		{Kind: domain.ArtworkLogo, URL: imageURL + "/english.png", Language: "en"},
+		// A logo uploaded as SVG is fetched as TMDB's PNG of it.
+		{Kind: domain.ArtworkLogo, URL: imageURL + "/vector.png", Language: "en"},
 	}
 	if diff := cmp.Diff(want, got.Artwork); diff != "" {
 		t.Errorf("artwork (-want +got):\n%s", diff)
