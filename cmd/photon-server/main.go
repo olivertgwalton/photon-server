@@ -43,6 +43,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/plugin"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/scan"
+	"github.com/olivertgwalton/photon-server/internal/secure"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/task"
 	"github.com/olivertgwalton/photon-server/internal/themerr"
@@ -250,10 +251,11 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		Started: started, Node: node, Listen: listen, Tools: tools, Encoder: hw, Discovery: discoveryMode,
 		MetadataLanguage: lang, CacheDir: cacheRoot, BackupDir: dumper.Dir, PublicURL: public,
 	}
+	secured := secure.New(st, hub.Subscribe, logger)
 	srv := &http.Server{
-		Addr: listen,
+		Addr: listen, TLSConfig: secured.TLSConfig(),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: st, Playbacks: sessions, Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Setup: setup, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: st, Playbacks: sessions, Owners: playback.NewRouter(cache, node), Remuxing: playback.NewRemuxes(st, remuxer), HLS: remuxer, Signer: playback.NewSigner(signingKey), Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Network: st, Secure: secured, Setup: setup, Postgres: st, Valkey: cache, Web: web,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -318,7 +320,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	})
 	switch discoveryMode {
 	case domain.DiscoveryBroadcast:
-		wg.Go(func() { answerDiscovery(background, srv.Addr, info, logger) })
+		wg.Go(func() { answerDiscovery(background, srv.Addr, secured.Scheme, info, logger) })
 	case domain.DiscoveryOff:
 	}
 	defer func() {
@@ -326,14 +328,22 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		wg.Wait()
 	}()
 
+	wg.Go(func() { secured.Run(background) })
 	logger.InfoContext(ctx, "serving", slog.String("addr", srv.Addr), slog.String("version", info.Version))
-	return listenUntilDone(ctx, srv)
+	return listenUntilDone(ctx, srv, secured.Listen)
 }
 
 // listenUntilDone serves until ctx ends, then gives open requests shutdownGrace to finish.
-func listenUntilDone(ctx context.Context, srv *http.Server) error {
+func listenUntilDone(ctx context.Context, srv *http.Server, either func(net.Listener) net.Listener) error {
 	served := make(chan error, 1)
-	go func() { served <- srv.ListenAndServe() }()
+	go func() {
+		l, err := new(net.ListenConfig).Listen(ctx, "tcp", srv.Addr)
+		if err != nil {
+			served <- err
+			return
+		}
+		served <- srv.Serve(either(l))
+	}()
 	select {
 	case err := <-served:
 		return err
@@ -420,10 +430,10 @@ func ready(st *store.Store, cache *kv.KV) func(context.Context) error {
 
 // answerDiscovery answers clients looking for the server on UDP at the HTTP listener's port.
 // Clients can still be given the address, so a port it cannot have is only a warning.
-func answerDiscovery(ctx context.Context, addr string, info domain.Info, logger *slog.Logger) {
+func answerDiscovery(ctx context.Context, addr string, scheme func() string, info domain.Info, logger *slog.Logger) {
 	conn, err := new(net.ListenConfig).ListenPacket(ctx, "udp", addr)
 	if err == nil {
-		err = discovery.Serve(ctx, conn, info, logger)
+		err = discovery.Serve(ctx, conn, info, scheme, logger)
 	}
 	if err != nil {
 		logger.WarnContext(ctx, "clients must be given the server's address", slog.Any("err", err))

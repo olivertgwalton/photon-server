@@ -240,6 +240,22 @@ func (s *Store) SetMaintenance(ctx context.Context, m domain.Maintenance) error 
 	return err
 }
 
+// Network answers whether the server's port answers HTTPS, and the certificate it serves.
+func (s *Store) Network(ctx context.Context) (domain.Network, error) {
+	var n domain.Network
+	var cert, key *string
+	err := s.pool.QueryRow(ctx, `SELECT secure_connections, tls_certificate, tls_key FROM server`).
+		Scan(&n.Secure, &cert, &key)
+	n.Certificate, n.Key = deref(cert), deref(key)
+	return n, err
+}
+
+func (s *Store) SetNetwork(ctx context.Context, n domain.Network) error {
+	_, err := s.pool.Exec(ctx, `UPDATE server SET secure_connections = $1, tls_certificate = $2, tls_key = $3`,
+		n.Secure, optional(n.Certificate), optional(n.Key))
+	return err
+}
+
 // found turns a read that found no row into ErrNotFound.
 func found(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {

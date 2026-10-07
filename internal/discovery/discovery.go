@@ -20,12 +20,13 @@ const Question = "who is PhotonServer?"
 
 type answer struct {
 	domain.Info
-	// Address is where the client reaches the server's HTTP API.
+	// Address is where the client reaches the server's API, over HTTPS where it serves it.
 	Address string `json:"address"`
 }
 
-// Serve answers on conn, which is bound to the HTTP listener's port number, until ctx ends.
-func Serve(ctx context.Context, conn net.PacketConn, info domain.Info, logger *slog.Logger) error {
+// Serve answers on conn, which is bound to the HTTP listener's port number, until ctx ends. scheme
+// is http or https, as the listener serves when asked.
+func Serve(ctx context.Context, conn net.PacketConn, info domain.Info, scheme func() string, logger *slog.Logger) error {
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	defer stop()
 	bound, ok := conn.LocalAddr().(*net.UDPAddr)
@@ -46,7 +47,7 @@ func Serve(ctx context.Context, conn net.PacketConn, info domain.Info, logger *s
 		if !ok || !nearby(asker.AddrPort().Addr()) || !strings.EqualFold(strings.TrimSpace(string(buf[:n])), Question) {
 			continue
 		}
-		if err := reply(conn, asker, info, port); err != nil {
+		if err := reply(conn, asker, info, scheme(), port); err != nil {
 			logger.WarnContext(ctx, "discovery not answered", slog.String("asker", asker.String()), slog.Any("err", err))
 		}
 	}
@@ -59,7 +60,7 @@ func nearby(a netip.Addr) bool {
 	return a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast()
 }
 
-func reply(conn net.PacketConn, asker *net.UDPAddr, info domain.Info, port string) error {
+func reply(conn net.PacketConn, asker *net.UDPAddr, info domain.Info, scheme, port string) error {
 	// A connected socket toward the asker is bound to this machine's address on the interface
 	// facing it; nothing is sent on it.
 	toward, err := net.DialUDP("udp", nil, asker)
@@ -73,7 +74,7 @@ func reply(conn net.PacketConn, asker *net.UDPAddr, info domain.Info, port strin
 	}
 	// A link-local zone names this machine's interface, which means nothing to the asker.
 	host := local.AddrPort().Addr().Unmap().WithZone("").String()
-	body, err := json.Marshal(answer{Info: info, Address: "http://" + net.JoinHostPort(host, port)})
+	body, err := json.Marshal(answer{Info: info, Address: scheme + "://" + net.JoinHostPort(host, port)})
 	if err != nil {
 		return err
 	}

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -135,5 +136,41 @@ func TestReadyz(t *testing.T) {
 				t.Errorf("body %q leaks the dependency's error to an unauthenticated caller", body)
 			}
 		})
+	}
+}
+
+type servingAs domain.SecureConnections
+
+func (s servingAs) Mode() domain.SecureConnections { return domain.SecureConnections(s) }
+
+// Required sends a plain request to HTTPS, but one from this machine or forwarded as HTTPS by a
+// trusted proxy.
+func TestRequiredSecureConnectionsSendPlainRequestsToHTTPS(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Ready: func(context.Context) error { return nil }, Secure: servingAs(domain.SecureRequired),
+		TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.168.86.81/32")},
+	})
+	for _, tc := range []struct {
+		peer, proto string
+		want        int
+	}{
+		{"192.168.86.20:5000", "", http.StatusTemporaryRedirect},
+		{"192.168.86.20:5000", "https", http.StatusTemporaryRedirect},
+		{"127.0.0.1:5000", "", http.StatusNoContent},
+		{"192.168.86.81:5000", "https", http.StatusNoContent},
+	} {
+		r := httptest.NewRequest(http.MethodGet, "http://mini.local:8640/readyz", nil)
+		r.RemoteAddr = tc.peer
+		if tc.proto != "" {
+			r.Header.Set("X-Forwarded-Proto", tc.proto)
+		}
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, r)
+		if rec.Code != tc.want {
+			t.Errorf("from %s, forwarded %q: status %d, want %d", tc.peer, tc.proto, rec.Code, tc.want)
+		}
+		if loc := rec.Header().Get("Location"); tc.want == http.StatusTemporaryRedirect && loc != "https://mini.local:8640/readyz" {
+			t.Errorf("from %s: sent to %q", tc.peer, loc)
+		}
 	}
 }
