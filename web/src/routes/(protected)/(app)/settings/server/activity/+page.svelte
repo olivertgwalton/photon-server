@@ -1,6 +1,5 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { page } from "$app/state";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { loggedKinds } from "#lib/admin/words.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
@@ -63,9 +62,4 @@ const libraries = $derived(
 
 <ActivityList {events} {profiles} {libraries} {now} />
 
-<Pager
-	url={page.url}
-	offset={data.page.offset}
-	limit={data.limit}
-	total={data.page.total}
-/>
+<Pager offset={data.page.offset} limit={data.limit} total={data.page.total} />
