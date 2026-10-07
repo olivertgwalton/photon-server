@@ -23,7 +23,9 @@ func TestServeAnswersTheQuestion(t *testing.T) {
 	info := domain.Info{ID: "0199d1b2-0000-7000-8000-000000000001", Name: "Lounge", Version: "1.2.3"}
 	done := make(chan error)
 	ctx, stop := context.WithCancel(t.Context())
-	go func() { done <- Serve(ctx, server, info, slog.New(slog.DiscardHandler)) }()
+	go func() {
+		done <- Serve(ctx, server, info, func() string { return "https" }, slog.New(slog.DiscardHandler))
+	}()
 
 	client, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
@@ -56,7 +58,7 @@ func TestServeAnswersTheQuestion(t *testing.T) {
 		t.Fatalf("%v in %s", err, got)
 	}
 	port := server.LocalAddr().(*net.UDPAddr).Port
-	want := "http://127.0.0.1:" + strconv.Itoa(port)
+	want := "https://127.0.0.1:" + strconv.Itoa(port)
 	if a.ID != info.ID || a.Name != info.Name || a.Version != info.Version || a.Address != want {
 		t.Errorf("answer = %s, want %+v at %s", got, info, want)
 	}
