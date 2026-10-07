@@ -170,6 +170,11 @@ type VideoPlan struct {
 	Encode *VideoEncode
 }
 
+// Burns is whether a subtitle is drawn into the picture.
+func (v VideoPlan) Burns() bool {
+	return v.Encode != nil && (v.Encode.Burn != nil || v.Encode.BurnFile != nil)
+}
+
 // VideoEncode is video encoded again: the codec, the picture's size, the most bitrate it may
 // spend, the range it is encoded in, and whether HDR is tone mapped to SDR and an interlaced
 // picture deinterlaced on the way.

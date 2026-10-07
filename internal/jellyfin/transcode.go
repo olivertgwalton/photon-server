@@ -24,7 +24,6 @@ import (
 type hlsFiles interface {
 	Has(playback uuid.UUID) bool
 	Resource(ctx context.Context, playback uuid.UUID, name string) (hls.Resource, error)
-	Encoder(video domain.VideoPlan) domain.Acceleration
 }
 
 // placer chooses the node that encodes a playback, and opens its remux there.

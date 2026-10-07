@@ -54,7 +54,7 @@ func NeedOf(video domain.VideoPlan) Need {
 	if e == nil {
 		return Need{}
 	}
-	return Need{HEVC: e.Codec == "hevc", Libass: e.Burn != nil || e.BurnFile != nil}
+	return Need{HEVC: e.Codec == "hevc", Libass: video.Burns()}
 }
 
 // EncodingOf is what a node encodes, for deciding a playback it would encode.
@@ -170,21 +170,11 @@ func RemotePath(playback uuid.UUID) string {
 	return "/api/v1/internal/playbacks/" + playback.String() + "/remux"
 }
 
-// ErrFull is every node that could encode a video having every slot held; Limit is how many they
-// take at once between them.
-type ErrFull struct{ Limit int }
-
-func (e ErrFull) Error() string {
-	return fmt.Sprintf("every node is already transcoding as many videos at once as it may: %d", e.Limit)
-}
-
-func (ErrFull) Is(target error) bool { return target == hls.ErrTranscodeLimit }
-
 // Full is the refusal of a playback every one of candidates refused.
 func Full(candidates []domain.Node) error {
 	total := 0
 	for _, n := range candidates {
 		total += n.Limit
 	}
-	return ErrFull{Limit: total}
+	return fmt.Errorf("every node is already transcoding as many videos at once as it may: %d", total)
 }

@@ -23,7 +23,7 @@ type Hardware struct {
 // encoding is the hardware video planned so is encoded on: a subtitle is drawn in in software, as
 // each device overlays in its own way.
 func (h Hardware) encoding(video domain.VideoPlan) Hardware {
-	if e := video.Encode; e != nil && (e.Burn != nil || e.BurnFile != nil) {
+	if video.Burns() {
 		return Hardware{Accel: domain.AccelSoftware, HEVC: h.HEVC}
 	}
 	return h

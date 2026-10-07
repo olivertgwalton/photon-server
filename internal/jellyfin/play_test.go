@@ -282,8 +282,6 @@ func (f *fakeRemuxes) Resource(_ context.Context, id uuid.UUID, name string) (hl
 	return hls.Resource{}, hls.ErrNoRemux
 }
 
-func (*fakeRemuxes) Encoder(domain.VideoPlan) domain.Acceleration { return domain.AccelSoftware }
-
 // noOwners is a cluster of one node, which runs every playback itself.
 type noOwners struct{}
 

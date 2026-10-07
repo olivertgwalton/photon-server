@@ -152,7 +152,7 @@ func Carried(f domain.SegmentFormat) (video, audio []string) {
 // cannot, plain text is carried in HLS as WebVTT, and a picture (PGS, DVD) or styled text (ASS) is
 // drawn into the video, as Jellyfin's subtitle Encode method draws them: WebVTT carries neither.
 func Decide(p Profile, c Copy, tracks domain.ChosenTracks, enc Encoding) (Decision, error) {
-	video, sound := pick(c.Streams, tracks.Audio)
+	video, sound := Pick(c.Streams, tracks.Audio)
 	if tracks.Audio != nil && sound == nil {
 		return Decision{}, ErrNoSuchAudio
 	}
@@ -296,8 +296,8 @@ func (d Decision) audioKbps(sound *domain.Stream) int {
 	return sound.BitrateKbps
 }
 
-// pick finds the first video stream and the audio stream to play.
-func pick(streams []domain.Stream, audio *int) (video, sound *domain.Stream) {
+// Pick finds the first video stream and the audio stream to play.
+func Pick(streams []domain.Stream, audio *int) (video, sound *domain.Stream) {
 	for i := range streams {
 		s := &streams[i]
 		switch s.Kind {

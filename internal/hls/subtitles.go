@@ -279,21 +279,14 @@ func (l styledLayer) filter() string {
 	return "setpts=PTS+" + at + "/TB," + f + ",setpts=PTS-" + at + "/TB"
 }
 
-// filterValue escapes a filter's option value twice over, as FFmpeg reads a filtergraph: once
-// for the option's own reading, once for the graph's.
-func filterValue(v string) string {
-	escape := func(s, special string) string {
-		var b strings.Builder
-		for _, c := range s {
-			if strings.ContainsRune(special, c) {
-				b.WriteByte('\\')
-			}
-			b.WriteRune(c)
-		}
-		return b.String()
-	}
-	return escape(escape(v, `\':`), `\'[],;`)
-}
+// optionEscape and graphEscape escape a filter's option value as FFmpeg reads a filtergraph: once
+// for the option's own reading, then once for the graph's.
+var (
+	optionEscape = strings.NewReplacer(`\`, `\\`, `'`, `\'`, `:`, `\:`)
+	graphEscape  = strings.NewReplacer(`\`, `\\`, `'`, `\'`, `[`, `\[`, `]`, `\]`, `,`, `\,`, `;`, `\;`)
+)
+
+func filterValue(v string) string { return graphEscape.Replace(optionEscape.Replace(v)) }
 
 // SweepSubtitles removes the subtitles of parts no one has read for subtitlesKept.
 func (r *Remuxer) SweepSubtitles() {

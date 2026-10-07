@@ -406,7 +406,7 @@ func (r *Remuxer) SubtitleSegment(ctx context.Context, playback uuid.UUID, track
 // where it starts; one that started after n, or stopped before it, will not reach them.
 func (r *Remuxer) cuesOf(ctx context.Context, s *session, n int) error {
 	s.mu.Lock()
-	wait := s.cueWaiter(n)
+	wait := waiter(s.cued, n)
 	if !closed(wait) {
 		if s.run == nil || s.run.part != s.plan[n].Part || n < s.run.first || n > s.run.at+jump {
 			r.start(ctx, s, n)
@@ -432,11 +432,6 @@ func (r *Remuxer) cuesOf(ctx context.Context, s *session, n int) error {
 		return err
 	}
 	return nil
-}
-
-// Encoder answers the device video planned so is encoded on, or nothing where it is copied.
-func (r *Remuxer) Encoder(video domain.VideoPlan) domain.Acceleration {
-	return EncodedOn(r.hw.Accel, video)
 }
 
 // EncodedOn is what a node encoding on accel encodes video with, or nothing where it is copied.
@@ -497,7 +492,7 @@ func (r *Remuxer) Init(ctx context.Context, playback uuid.UUID, part int) (*os.F
 		return nil, ErrNoRemux
 	}
 	s.mu.Lock()
-	wait := s.initWaiter(part)
+	wait := waiter(s.inits, part)
 	if !closed(wait) && (s.run == nil || s.run.part != part) {
 		r.start(ctx, s, slices.IndexFunc(s.plan, func(seg Segment) bool { return seg.Part == part }))
 	}
@@ -593,7 +588,7 @@ func (r *Remuxer) Segment(ctx context.Context, playback uuid.UUID, n int) (*os.F
 	s.mu.Lock()
 	s.furthest = max(s.furthest, n)
 	s.forget(n - behind)
-	wait := s.waiter(n)
+	wait := waiter(s.ready, n)
 	select {
 	case <-wait:
 	default:
@@ -623,33 +618,13 @@ func (r *Remuxer) Segment(ctx context.Context, playback uuid.UUID, n int) (*os.F
 	return s.root.Open(segmentName(s.format, n))
 }
 
-// waiter answers the channel closed when segment n is made; the session's lock is held.
-func (s *session) waiter(n int) chan struct{} {
-	c, ok := s.ready[n]
+// waiter answers the channel closed when what waiting names n of is made: a segment, a part's
+// initialisation, or a segment's cues; the session's lock is held.
+func waiter(waiting map[int]chan struct{}, n int) chan struct{} {
+	c, ok := waiting[n]
 	if !ok {
 		c = make(chan struct{})
-		s.ready[n] = c
-	}
-	return c
-}
-
-// initWaiter answers the channel closed when part's initialisation is made; the session's lock is
-// held.
-func (s *session) initWaiter(part int) chan struct{} {
-	c, ok := s.inits[part]
-	if !ok {
-		c = make(chan struct{})
-		s.inits[part] = c
-	}
-	return c
-}
-
-// cueWaiter answers the channel closed when segment n's cues are read; the session's lock is held.
-func (s *session) cueWaiter(n int) chan struct{} {
-	c, ok := s.cued[n]
-	if !ok {
-		c = make(chan struct{})
-		s.cued[n] = c
+		waiting[n] = c
 	}
 	return c
 }
@@ -689,7 +664,7 @@ func (r *Remuxer) start(ctx context.Context, s *session, n int) {
 		}
 		// The file was read to its end, and the readers with it.
 		if err == nil && run.at > run.first {
-			if c := s.cueWaiter(run.at - 1); !closed(c) {
+			if c := waiter(s.cued, run.at-1); !closed(c) {
 				close(c)
 			}
 		}
@@ -928,7 +903,7 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 			return err
 		}
 		s.mu.Lock()
-		if c := s.initWaiter(run.part); !closed(c) {
+		if c := waiter(s.inits, run.part); !closed(c) {
 			if err = keep(s.root, initName(run.part), init); err == nil {
 				close(c)
 			}
@@ -961,7 +936,7 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 			return err
 		}
 		s.mu.Lock()
-		if c := s.waiter(n); !closed(c) {
+		if c := waiter(s.ready, n); !closed(c) {
 			close(c)
 		}
 		// ffmpeg wrote the fragment that finished this segment once it had read past it, and a
@@ -969,7 +944,7 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 		// segment ends has been read. The previous segment's are taken as whole, not this one's,
 		// leaving a segment's time for the threads ffmpeg writes each output on to keep up.
 		if n > run.first {
-			if c := s.cueWaiter(n - 1); !closed(c) {
+			if c := waiter(s.cued, n-1); !closed(c) {
 				close(c)
 			}
 		}

@@ -66,10 +66,8 @@ func (a *API) adminNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := networkStatusJSON{networkJSON: showNetwork(n)}
-	if a.svc.Jellyfin != nil {
-		if err := a.svc.Jellyfin.Err(); err != nil {
-			out.JellyfinError = err.Error()
-		}
+	if err := a.svc.Jellyfin.Err(); err != nil {
+		out.JellyfinError = err.Error()
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
