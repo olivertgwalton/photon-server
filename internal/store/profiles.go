@@ -205,6 +205,34 @@ func (s *Store) DeleteDevice(ctx context.Context, id uuid.UUID, profile *uuid.UU
 	return info.RowsAffected() == 1, err
 }
 
+type KeyListing struct {
+	ID   uuid.UUID
+	Name string
+	// Profile is the admin who made it, whom it acts as.
+	Profile    string
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+}
+
+// Keys lists the API keys, newest first.
+func (s *Store) Keys(ctx context.Context) ([]KeyListing, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT d.id, d.device_name AS name, p.name AS profile, d.created_at, d.last_seen_at
+		FROM device_sessions d JOIN profiles p ON p.id = d.profile_id
+		WHERE d.kind = 'key'
+		ORDER BY d.created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[KeyListing])
+}
+
+// DeleteKey revokes an API key, reporting whether there was one.
+func (s *Store) DeleteKey(ctx context.Context, id uuid.UUID) (bool, error) {
+	info, err := s.pool.Exec(ctx, `DELETE FROM device_sessions WHERE id = $1 AND kind = 'key'`, id)
+	return info.RowsAffected() == 1, err
+}
+
 var (
 	// ErrLastAdmin is a change that would leave the server with no admin.
 	ErrLastAdmin = errors.New("the server's last admin cannot stop being one")
