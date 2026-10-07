@@ -4769,6 +4769,7 @@ export interface components {
             ratings?: components["schemas"]["RatingRef"][];
             /** Format: date */
             release_date?: string;
+            season?: components["schemas"]["TitleRef"] | null;
             season_number?: number | null;
             show?: components["schemas"]["TitleRef"] | null;
             state?: components["schemas"]["TitleState"];
@@ -4859,6 +4860,7 @@ export interface components {
             /** Format: date */
             release_date?: string;
             role?: string;
+            season?: components["schemas"]["TitleRef"] | null;
             season_number?: number | null;
             show?: components["schemas"]["TitleRef"] | null;
             state?: components["schemas"]["TitleState"];
@@ -5004,6 +5006,7 @@ export interface components {
             ratings?: components["schemas"]["RatingRef"][];
             /** Format: date */
             release_date?: string;
+            season?: components["schemas"]["TitleRef"] | null;
             season_number?: number | null;
             show?: components["schemas"]["TitleRef"] | null;
             state?: components["schemas"]["TitleState"];

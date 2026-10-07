@@ -135,8 +135,9 @@ func TestHome(t *testing.T) {
 	}
 	for _, r := range rows {
 		for _, c := range r.Cards {
-			if c.Kind == domain.ItemEpisode && (c.Show == nil || c.Show.Title != "The Wire" || c.DurationMS != time.Hour.Milliseconds()) {
-				t.Errorf("%s: episode card %+v, want its show and its length", r.Kind, c)
+			if c.Kind == domain.ItemEpisode && (c.Show == nil || c.Show.Title != "The Wire" || c.DurationMS != time.Hour.Milliseconds() ||
+				c.Season == nil || c.Season.Title != fmt.Sprintf("Season %d", *c.SeasonNumber)) {
+				t.Errorf("%s: episode card %+v, want its show, its season and its length", r.Kind, c)
 			}
 		}
 	}

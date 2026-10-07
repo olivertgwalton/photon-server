@@ -410,3 +410,17 @@ test("a title's link is copied to share, or shown where it cannot be", async ({
 	);
 	await expectAccessible(page);
 });
+
+test("an episode's card leads to its season", async ({ page }) => {
+	await logIn(page, "/titles/t-ep");
+	await page.getByRole("button", { name: "Favourite" }).click();
+	await page.goto("/");
+	await page
+		.getByRole("region", { name: "Favourites" })
+		.getByRole("button", { name: "More for Small Show: Pilot" })
+		.click();
+	await page.getByRole("menuitem", { name: "Go to Season 1" }).click();
+	await expect(page).toHaveURL("/titles/t-s1");
+	// The server is the other tests' too: the episode is as it was.
+	await page.request.delete("/api/v1/titles/t-ep/favourite");
+});

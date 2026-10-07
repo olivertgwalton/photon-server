@@ -41,7 +41,7 @@ let {
 	card,
 	class: className,
 }: {
-	card: Pick<Card, "id" | "kind" | "title" | "state" | "show">;
+	card: Pick<Card, "id" | "kind" | "title" | "state" | "show" | "season">;
 	class?: string;
 } = $props();
 
@@ -125,6 +125,12 @@ const name = $derived(
 		{#if card.show}
 			{@const show = card.show}
 			<DropdownMenu.Separator />
+			{#if card.season}
+				{@const season = card.season}
+				<DropdownMenu.Item onSelect={() => goto(`/titles/${season.id}`)}>
+					<TvIcon />Go to {season.title}
+				</DropdownMenu.Item>
+			{/if}
 			<DropdownMenu.Item onSelect={() => goto(`/titles/${show.id}`)}>
 				<TvIcon />Go to {show.title}
 			</DropdownMenu.Item>
