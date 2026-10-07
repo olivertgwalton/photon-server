@@ -64,7 +64,9 @@ taken up at once, as it runs:
 
 A node told to stop (SIGTERM, as `docker compose stop` and Kubernetes send) drains itself: it
 tells the others at once, takes no new work, and goes on serving and telling the others where it
-is until its streams have played to their end, two hours at most, before it stops. Telling it to
+is until its streams have played to their end, two hours at most, before it stops. Meanwhile
+`/readyz` answers 503, so a balancer that asks sends it no new clients, while what its streams
+ask, landing on the others, is handed on to it. Telling it to
 stop again stops it at once. Its container must be given that long to stop: the deploy folder's
 compose file gives it `stop_grace_period: 2h`, and Kubernetes' `terminationGracePeriodSeconds`
 does the same there.

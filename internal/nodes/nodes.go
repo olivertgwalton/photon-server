@@ -123,6 +123,13 @@ func (s *Self) TakesTranscodes() bool {
 	return s.set.Role.Encodes() && s.set.Availability.Takes() && !s.stopping
 }
 
+// Stopping reports whether this node's process is stopping.
+func (s *Self) Stopping() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.stopping
+}
+
 // Stop drains this node as its process stops: it takes nothing new, and tells the others at once.
 func (s *Self) Stop() {
 	s.mu.Lock()

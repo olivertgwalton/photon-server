@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -1020,7 +1021,10 @@ func (a *API) server(w http.ResponseWriter, _ *http.Request) {
 
 func (a *API) readyz(w http.ResponseWriter, r *http.Request) {
 	if err := a.svc.Ready(r.Context()); err != nil {
-		a.logger.WarnContext(r.Context(), "not ready", slog.Any("err", err))
+		// A node draining is not ready by design, asked as often as a balancer likes.
+		if !errors.Is(err, domain.ErrStopping) {
+			a.logger.WarnContext(r.Context(), "not ready", slog.Any("err", err))
+		}
 		writeProblem(w, a.logger, codeNotReady, "")
 		return
 	}

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"time"
 	"uuid"
 )
@@ -38,6 +39,9 @@ const (
 func NodeRoles() []NodeRole {
 	return []NodeRole{NodeAll, NodeServe, NodeTranscode}
 }
+
+// ErrStopping is a node stopping, which draining is not ready for new clients.
+var ErrStopping = errors.New("the node is stopping, its streams playing to their end")
 
 // NodeAvailability is whether a node takes new work: an admin drains one before stopping it, or
 // while its GPU's driver is updated, and its streams play to their end meanwhile.
