@@ -206,6 +206,13 @@ export function deleteTitle(id: string, name: string) {
 	);
 }
 
+// The profile's libraries in its own order, as its sidebar lists them.
+export function setLibraryOrder(ids: string[]) {
+	return change(
+		api.PUT("/api/v1/me/library-order", { body: { library_ids: ids } }),
+	);
+}
+
 // What an admin can do to a library from the sidebar, as Plex's library menu
 // offers: read its folders again, ask its providers again, or remove it.
 export function scanLibrary(id: string, name: string) {

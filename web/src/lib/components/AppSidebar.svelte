@@ -1,5 +1,7 @@
 <script lang="ts">
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
+import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
+import ChevronUpIcon from "@lucide/svelte/icons/chevron-up";
 import FilmIcon from "@lucide/svelte/icons/film";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import HeartIcon from "@lucide/svelte/icons/heart";
@@ -10,6 +12,7 @@ import SettingsIcon from "@lucide/svelte/icons/settings";
 import TvIcon from "@lucide/svelte/icons/tv";
 import type { Component } from "svelte";
 import { page } from "$app/state";
+import { setLibraryOrder } from "#lib/actions.svelte.js";
 import type { components } from "#lib/api/schema.js";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
 import LibraryMenu from "./LibraryMenu.svelte";
@@ -25,7 +28,17 @@ const kindIcons: Record<Library["kind"], Component> = {
 };
 
 const sidebar = Sidebar.useSidebar();
-const admin = $derived(page.data.me?.role === "admin");
+// While on, each library is moved by a button rather than opened.
+let reordering = $state(false);
+
+function move(index: number, by: -1 | 1) {
+	const ids = libraries.map((l) => l.id);
+	[ids[index], ids[index + by]] = [ids[index + by], ids[index]];
+	setLibraryOrder(ids);
+}
+
+const moveButton =
+	"text-ink-2 hover:bg-raise hover:text-ink focus-visible:outline-signal grid size-6 place-items-center rounded-md disabled:opacity-30";
 
 // The page's own item is marked by a bar at its edge that grows in.
 const menuButton =
@@ -44,6 +57,7 @@ function current(href: string) {
 	label: string,
 	Icon: Component,
 	library?: Library,
+	index = 0,
 )}
 	<Sidebar.MenuItem class="group/library">
 		<Sidebar.MenuButton
@@ -65,8 +79,31 @@ function current(href: string) {
 				</a>
 			{/snippet}
 		</Sidebar.MenuButton>
-		{#if library && admin}
-			<LibraryMenu {library} />
+		{#if library && reordering}
+			<div
+				class="absolute top-1.5 right-1 flex gap-0.5 group-data-[collapsible=icon]:hidden"
+			>
+				<button
+					type="button"
+					class={moveButton}
+					aria-label="Move {library.name} up"
+					disabled={index === 0}
+					onclick={() => move(index, -1)}
+				>
+					<ChevronUpIcon class="size-4" />
+				</button>
+				<button
+					type="button"
+					class={moveButton}
+					aria-label="Move {library.name} down"
+					disabled={index === libraries.length - 1}
+					onclick={() => move(index, 1)}
+				>
+					<ChevronDownIcon class="size-4" />
+				</button>
+			</div>
+		{:else if library}
+			<LibraryMenu {library} onreorder={() => (reordering = true)} />
 		{/if}
 	</Sidebar.MenuItem>
 {/snippet}
@@ -94,13 +131,23 @@ function current(href: string) {
 			{#if libraries.length}
 				<Sidebar.Group>
 					<Sidebar.GroupLabel>Libraries</Sidebar.GroupLabel>
+					{#if reordering}
+						<button
+							type="button"
+							class="text-signal hover:text-ink focus-visible:outline-signal absolute top-3.5 right-3 text-xs font-semibold group-data-[collapsible=icon]:hidden"
+							onclick={() => (reordering = false)}
+						>
+							Done
+						</button>
+					{/if}
 					<Sidebar.Menu>
-						{#each libraries as library (library.id)}
+						{#each libraries as library, index (library.id)}
 							{@render item(
 								`/libraries/${library.id}`,
 								library.name,
 								kindIcons[library.kind],
 								library,
+								index,
 							)}
 						{/each}
 					</Sidebar.Menu>

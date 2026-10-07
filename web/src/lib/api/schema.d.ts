@@ -3281,6 +3281,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/library-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put the profile's libraries in an order; those left out follow, by name */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["LibraryOrder"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/password": {
         parameters: {
             query?: never;
@@ -5492,6 +5531,9 @@ export interface components {
         LibraryKind: "movies" | "shows";
         LibraryList: {
             items: components["schemas"]["Library"][];
+        };
+        LibraryOrder: {
+            library_ids: string[];
         };
         Locales: {
             countries: string[];

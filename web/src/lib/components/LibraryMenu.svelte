@@ -1,11 +1,13 @@
 <script lang="ts">
 import DatabaseBackupIcon from "@lucide/svelte/icons/database-backup";
 import EllipsisVerticalIcon from "@lucide/svelte/icons/ellipsis-vertical";
+import ArrowUpDownIcon from "@lucide/svelte/icons/arrow-up-down";
 import FolderSyncIcon from "@lucide/svelte/icons/folder-sync";
 import PencilIcon from "@lucide/svelte/icons/pencil";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import Trash2Icon from "@lucide/svelte/icons/trash-2";
 import { goto } from "$app/navigation";
+import { page } from "$app/state";
 import {
 	refreshLibrary,
 	removeLibrary,
@@ -16,9 +18,15 @@ import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
 
 type Library = components["schemas"]["Library"];
 
-// What an admin can do to a library from beside its name, as Plex's sidebar
-// offers, so its settings are a click away.
-let { library }: { library: Pick<Library, "id" | "name"> } = $props();
+// What can be done to a library from beside its name, as Plex's sidebar
+// offers: anyone puts the libraries in their own order, and an admin reaches
+// its settings and scans.
+let {
+	library,
+	onreorder,
+}: { library: Pick<Library, "id" | "name">; onreorder: () => void } = $props();
+
+const admin = $derived(page.data.me?.role === "admin");
 </script>
 
 <DropdownMenu.Root>
@@ -30,30 +38,36 @@ let { library }: { library: Pick<Library, "id" | "name"> } = $props();
 		<EllipsisVerticalIcon class="size-4" />
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Content side="right" align="start" class="w-60">
-		<DropdownMenu.Item
-			onSelect={() => goto(`/settings/server/libraries/${library.id}`)}
-		>
-			<PencilIcon />Edit…
+		<DropdownMenu.Item onSelect={onreorder}>
+			<ArrowUpDownIcon />Reorder
 		</DropdownMenu.Item>
-		<DropdownMenu.Item onSelect={() => scanLibrary(library.id, library.name)}>
-			<FolderSyncIcon />Scan library files
-		</DropdownMenu.Item>
-		<DropdownMenu.Item
-			onSelect={() => refreshLibrary(library.id, library.name, "missing")}
-		>
-			<RefreshCwIcon />Refresh missing metadata
-		</DropdownMenu.Item>
-		<DropdownMenu.Item
-			onSelect={() => refreshLibrary(library.id, library.name, "all")}
-		>
-			<DatabaseBackupIcon />Refresh all metadata
-		</DropdownMenu.Item>
-		<DropdownMenu.Separator />
-		<DropdownMenu.Item
-			variant="destructive"
-			onSelect={() => removeLibrary(library.id, library.name)}
-		>
-			<Trash2Icon />Remove…
-		</DropdownMenu.Item>
+		{#if admin}
+			<DropdownMenu.Separator />
+			<DropdownMenu.Item
+				onSelect={() => goto(`/settings/server/libraries/${library.id}`)}
+			>
+				<PencilIcon />Edit…
+			</DropdownMenu.Item>
+			<DropdownMenu.Item onSelect={() => scanLibrary(library.id, library.name)}>
+				<FolderSyncIcon />Scan library files
+			</DropdownMenu.Item>
+			<DropdownMenu.Item
+				onSelect={() => refreshLibrary(library.id, library.name, "missing")}
+			>
+				<RefreshCwIcon />Refresh missing metadata
+			</DropdownMenu.Item>
+			<DropdownMenu.Item
+				onSelect={() => refreshLibrary(library.id, library.name, "all")}
+			>
+				<DatabaseBackupIcon />Refresh all metadata
+			</DropdownMenu.Item>
+			<DropdownMenu.Separator />
+			<DropdownMenu.Item
+				variant="destructive"
+				onSelect={() => removeLibrary(library.id, library.name)}
+			>
+				<Trash2Icon />Remove…
+			</DropdownMenu.Item>
+		{/if}
 	</DropdownMenu.Content>
 </DropdownMenu.Root>

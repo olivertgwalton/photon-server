@@ -213,13 +213,34 @@ test("a library is scanned, refreshed and opened from its menu in the sidebar", 
 	await expect(page).toHaveURL("/settings/server/libraries/l-films");
 });
 
-test("a member's sidebar offers no library menu", async ({ page }) => {
+test("a member puts the libraries in their own order, and may do no more", async ({
+	page,
+}) => {
 	await asKids(page);
-	await expect(
-		page.getByRole("button", { name: "More for Films" }),
-	).toHaveCount(0);
-});
+	const nav = page.getByRole("navigation", { name: "Main" });
+	await nav.getByRole("button", { name: "More for Films" }).click();
+	await expect(page.getByRole("menuitem", { name: "Edit…" })).toHaveCount(0);
+	await page.getByRole("menuitem", { name: "Reorder" }).click();
 
+	await expect(
+		nav.getByRole("button", { name: "Move Films up" }),
+	).toBeDisabled();
+	const asked = page.waitForRequest("**/api/v1/me/library-order");
+	await nav.getByRole("button", { name: "Move Films down" }).click();
+	expect((await asked).postDataJSON()).toEqual({
+		library_ids: ["l-shows", "l-films"],
+	});
+	const names = nav.getByRole("link", { name: /^(Films|Shows)$/ });
+	await expect(names).toHaveText(["Shows", "Films"]);
+
+	await nav.getByRole("button", { name: "Done" }).click();
+	await expect(nav.getByRole("button", { name: "Move Films up" })).toHaveCount(
+		0,
+	);
+	// The order is the profile's, kept by the server.
+	await page.reload();
+	await expect(names).toHaveText(["Shows", "Films"]);
+});
 test("a profile is added, and what another may see is set", async ({
 	page,
 }) => {
