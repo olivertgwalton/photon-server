@@ -36,8 +36,8 @@ func TestLibraries(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []domain.Library{
-		{Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films", Sources: domain.DefaultSources(domain.LibraryMovies), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff, Locale: domain.Locale{Artwork: domain.ArtworkLocalized}},
-		{Name: "Television", Kind: domain.LibraryShows, Root: "/srv/tv", Sources: domain.DefaultSources(domain.LibraryShows), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff, Locale: domain.Locale{Artwork: domain.ArtworkLocalized}},
+		{Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films", Sources: domain.DefaultSources(domain.LibraryMovies), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff, Locale: domain.Locale{Artwork: domain.ArtworkLocalized}, Titles: domain.TitlesLocalized},
+		{Name: "Television", Kind: domain.LibraryShows, Root: "/srv/tv", Sources: domain.DefaultSources(domain.LibraryShows), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff, Locale: domain.Locale{Artwork: domain.ArtworkLocalized}, Titles: domain.TitlesLocalized},
 	}
 	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(domain.Library{}, "ID")); diff != "" {
 		t.Errorf("libraries (-want +got):\n%s", diff)
@@ -127,6 +127,12 @@ func TestALibrarysLocaleDescribesItsTitlesAgain(t *testing.T) {
 	}
 	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{ArtworkLanguage: domain.ArtworkAny}); err != nil || queued() != 1 {
 		t.Errorf("taking the most liked pictures: %v, %d queued; want the film described again", err, queued())
+	}
+	if _, err := s.pool.Exec(ctx, `DELETE FROM jobs`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{TitleLanguage: domain.TitlesOriginal}); err != nil || queued() != 1 {
+		t.Errorf("giving original titles: %v, %d queued; want the film described again", err, queued())
 	}
 	none := ""
 	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{MetadataLanguage: &none, CertificationCountry: &none, ArtworkLanguage: domain.ArtworkLocalized}); err != nil {

@@ -209,6 +209,9 @@ func TestAShowsPicturesAreRankedByTheLanguageAskedIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if got.OriginalTitle != "The Wire" {
+		t.Errorf("original title %q, want the show's own name, whatever language it is asked in", got.OriginalTitle)
+	}
 	var order []string
 	for _, a := range got.Artwork {
 		order = append(order, string(a.Kind)+" "+strings.TrimPrefix(a.URL, "https://artworks.thetvdb.com")+" "+a.Language)
