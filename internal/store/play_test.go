@@ -60,6 +60,10 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	if files := page.Versions[0].Files; !reflect.DeepEqual(files, want) || page.Versions[0].Parts != 2 {
 		t.Errorf("the restored copy's files: %+v, want %+v", files, want)
 	}
+	// Its card says there are two to choose between.
+	if cards, _, err := s.Wall(ctx, lib.ID, WallPage{Sort: domain.SortTitle, Limit: 10}); err != nil || len(cards) != 1 || cards[0].VersionCount != 2 {
+		t.Errorf("wall = %+v, %v; want the film's card counting its two copies", cards, err)
+	}
 	var theatrical uuid.UUID
 	if err := s.pool.QueryRow(ctx, `SELECT id FROM versions WHERE label = 'theatrical'`).Scan(&theatrical); err != nil {
 		t.Fatal(err)

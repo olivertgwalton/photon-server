@@ -28,6 +28,8 @@ type Card struct {
 	State TitleState
 	// DurationMS is how long it runs, for a progress bar: its longest copy on disk.
 	DurationMS int64
+	// VersionCount is how many copies of it are on disk, for a choice of which to play.
+	VersionCount int
 	// An episode's card says which show and season it is of, where in them, and carries its still.
 	Show          *TitleRef
 	Season        *TitleRef
@@ -205,7 +207,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 			ID: r.ID, Kind: r.Kind, Title: r.Title, AddedAt: r.AddedAt, Year: deref(r.Year),
 			ReleaseDate: deref(r.ReleaseDate), Poster: first(pictures[r.ID][domain.ArtworkPoster]),
 			Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]), State: states[r.ID],
-			DurationMS: lengths[r.ID], Show: shows[r.ID].ref, Season: shows[r.ID].season, SeasonNumber: r.SeasonNumber,
+			DurationMS: lengths[r.ID].ms, VersionCount: lengths[r.ID].versions, Show: shows[r.ID].ref, Season: shows[r.ID].season, SeasonNumber: r.SeasonNumber,
 			EpisodeNumber: r.EpisodeNumber, EpisodeEnd: r.EpisodeEnd, Thumb: first(pictures[r.ID][domain.ArtworkThumb]),
 			Origin: origins[r.ID], Overview: deref(r.Overview), Logo: first(pictures[r.ID][domain.ArtworkLogo]),
 			Genres: r.Genres, Certificate: cmp.Or(deref(r.Certificate), shows[r.ID].certificate), Ratings: ratings[r.ID],

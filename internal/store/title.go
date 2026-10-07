@@ -469,7 +469,7 @@ func (s *Store) episodes(ctx context.Context, profile, season uuid.UUID) ([]Epis
 		}
 		out[n] = EpisodeCard{
 			ID: r.ID, Number: r.EpisodeNumber, End: r.EpisodeEnd, Title: r.Title,
-			Overview: deref(r.Overview), Aired: domain.Date(deref(aired)), DurationMS: lengths[r.ID],
+			Overview: deref(r.Overview), Aired: domain.Date(deref(aired)), DurationMS: lengths[r.ID].ms,
 			Thumb: first(pictures[r.ID][domain.ArtworkThumb]), State: states[r.ID],
 		}
 		out[n].Blurhashes = blurhashesOf(hashes, out[n].Thumb)
@@ -493,7 +493,7 @@ func (s *Store) extras(ctx context.Context, owner uuid.UUID) ([]ExtraCard, error
 	}
 	out := make([]ExtraCard, len(rows))
 	for n, r := range rows {
-		out[n] = ExtraCard{ID: r.ID, Kind: deref(r.ExtraKind), Title: r.Title, DurationMS: lengths[r.ID]}
+		out[n] = ExtraCard{ID: r.ID, Kind: deref(r.ExtraKind), Title: r.Title, DurationMS: lengths[r.ID].ms}
 		if at, ok := stills[r.ID]; ok {
 			out[n].Image = fmt.Sprintf("/api/v1/parts/%s/chapters/%d/image", at.part, at.idx)
 		}
@@ -527,19 +527,25 @@ func (s *Store) stills(ctx context.Context, items []*model.Item) (map[uuid.UUID]
 	return out, err
 }
 
-// durations answers how long each title runs: its longest copy still on disk.
-func (s *Store) durations(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]int64, error) {
+// onDisk is what of a title is on disk: how long its longest copy runs, and how many copies.
+type onDisk struct {
+	ms       int64
+	versions int
+}
+
+// durations answers what of each title is on disk.
+func (s *Store) durations(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]onDisk, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT item_id, max(duration_ms) FROM versions WHERE item_id = ANY($1) AND missing_since IS NULL
+		SELECT item_id, max(duration_ms), count(*) FROM versions WHERE item_id = ANY($1) AND missing_since IS NULL
 		GROUP BY item_id`, items)
 	if err != nil {
 		return nil, err
 	}
-	out := map[uuid.UUID]int64{}
+	out := map[uuid.UUID]onDisk{}
 	var item uuid.UUID
-	var ms int64
-	_, err = pgx.ForEachRow(rows, []any{&item, &ms}, func() error {
-		out[item] = ms
+	var held onDisk
+	_, err = pgx.ForEachRow(rows, []any{&item, &held.ms, &held.versions}, func() error {
+		out[item] = held
 		return nil
 	})
 	return out, err
