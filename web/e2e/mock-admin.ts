@@ -236,9 +236,11 @@ let nodes: Schemas["KnownNode"][] = [
 		role: "all",
 		transcode_limit_source: "automatic",
 		transcode_limit: 0,
+		availability: "active",
 		online: {
 			id: "n-1",
 			name: "den",
+			availability: "active",
 			address: "http://10.0.0.4:8640",
 			last_seen: "2026-10-06T20:20:00Z",
 			encoder: { acceleration: "vaapi", hevc: "allow", libass: true },
@@ -255,9 +257,11 @@ let nodes: Schemas["KnownNode"][] = [
 		role: "all",
 		transcode_limit_source: "automatic",
 		transcode_limit: 0,
+		availability: "active",
 		online: {
 			id: "n-2",
 			name: "gpu-1",
+			availability: "active",
 			address: "http://10.0.0.5:8640",
 			last_seen: "2026-10-06T20:20:00Z",
 			encoder: { acceleration: "nvenc", hevc: "allow", libass: false },
@@ -274,6 +278,7 @@ let nodes: Schemas["KnownNode"][] = [
 		role: "serve",
 		transcode_limit_source: "automatic",
 		transcode_limit: 0,
+		availability: "active",
 	},
 ];
 
@@ -399,7 +404,14 @@ export async function admin(
 						role: change.role ?? n.role,
 						transcode_limit_source:
 							change.transcode_limit_source ?? n.transcode_limit_source,
-						transcode_limit: change.transcode_limit ?? 0,
+						transcode_limit:
+							change.transcode_limit ??
+							(change.transcode_limit_source ? 0 : n.transcode_limit),
+						availability: change.availability ?? n.availability,
+						note:
+							change.availability === "active"
+								? undefined
+								: (change.note ?? n.note),
 					}
 				: n,
 		);

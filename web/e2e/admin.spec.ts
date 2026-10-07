@@ -76,7 +76,8 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 	await expect(old).toContainText("Serves only");
 	await expectAccessible(page);
 
-	await gpu.getByRole("button", { name: "Settings for gpu-1" }).click();
+	await gpu.getByRole("button", { name: "Actions for gpu-1" }).click();
+	await page.getByRole("menuitem", { name: "Settings…" }).click();
 	const dialog = page.getByRole("dialog", { name: "gpu-1" });
 	await dialog.getByLabel("Role").click();
 	await page.getByRole("option", { name: "Transcodes first" }).click();
@@ -93,6 +94,24 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 		page.getByText("Saved. gpu-1 takes it up at once."),
 	).toBeVisible();
 	await expect(gpu).toContainText("Transcodes first");
+
+	// Drained before its driver is updated: its streams finish, and nothing new is given it.
+	await gpu.getByRole("button", { name: "Actions for gpu-1" }).click();
+	await page.getByRole("menuitem", { name: "Drain…" }).click();
+	const drain = page.getByRole("alertdialog", { name: "Drain gpu-1?" });
+	await expect(drain).toContainText("It will finish its 3 current streams");
+	await expect(drain).toContainText("Other nodes take new streams meanwhile.");
+	await drain.getByLabel("Note for other admins").fill("Driver update");
+	await expectAccessible(page);
+	await drain.getByRole("button", { name: "Drain gpu-1" }).click();
+	await expect(page.getByText("gpu-1 is draining.")).toBeVisible();
+	await expect(gpu).toContainText("Draining · 3 streams left");
+	await expect(gpu).toContainText("“Driver update”");
+
+	await gpu.getByRole("button", { name: "Actions for gpu-1" }).click();
+	await page.getByRole("menuitem", { name: "Resume" }).click();
+	await expect(page.getByText("gpu-1 takes new streams again.")).toBeVisible();
+	await expect(gpu).not.toContainText("Draining");
 });
 
 test("a member is told the dashboard is not theirs", async ({ page }) => {

@@ -126,6 +126,14 @@ export const nodeRoles: Record<
 	},
 };
 
+// Whether a node takes new streams, and how far one draining has got.
+export function nodeAvailability(n: Schemas["KnownNode"]): string {
+	if (n.availability === "active") return "Takes new streams";
+	const left = n.online?.transcodes ?? 0;
+	if (!left) return "Drained · safe to stop";
+	return `Draining · ${left === 1 ? "1 stream" : `${left} streams`} left`;
+}
+
 // Videos being transcoded of the most at once, as words: "3 of 8", or "3, no limit".
 export function transcodeLoad(active: number, limit?: number): string {
 	return limit ? `${active} of ${limit}` : `${active}, no limit`;
