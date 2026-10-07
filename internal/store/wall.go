@@ -77,6 +77,19 @@ func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card,
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) `+titles, args).Scan(&total); err != nil {
 		return nil, 0, err
 	}
+	order := p.orderBy(args)
+	args["offset"], args["limit"] = p.Offset, p.Limit
+	rows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` `+titles+` `+order+` OFFSET @offset LIMIT @limit`, args)
+	if err != nil {
+		return nil, 0, err
+	}
+	cards, err := s.cards(ctx, p.Profile, rows)
+	return cards, total, err
+}
+
+// orderBy is the ORDER BY of a page of a wall, its ties broken by id, adding the values it takes to
+// args.
+func (p WallPage) orderBy(args pgx.NamedArgs) string {
 	dir := "ASC"
 	if p.Order == domain.Descending {
 		dir = "DESC"
@@ -102,14 +115,7 @@ func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card,
 	case domain.SortTitle:
 		key = "items.sort_title"
 	}
-	args["offset"], args["limit"] = p.Offset, p.Limit
-	rows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` `+titles+`
-		ORDER BY `+key+` `+dir+nulls+`, items.id `+dir+` OFFSET @offset LIMIT @limit`, args)
-	if err != nil {
-		return nil, 0, err
-	}
-	cards, err := s.cards(ctx, p.Profile, rows)
-	return cards, total, err
+	return "ORDER BY " + key + " " + dir + nulls + ", items.id " + dir
 }
 
 // wallQuery is the FROM and WHERE of a library's films or shows a profile may see, and its

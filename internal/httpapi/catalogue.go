@@ -360,12 +360,7 @@ func list(q url.Values, name string) []string {
 }
 
 func wallFilter(q url.Values) (store.WallFilter, error) {
-	var f store.WallFilter
-	if s := q.Get("starts_with"); s != "" {
-		if f.StartsWith = strings.ToUpper(s); f.StartsWith != "#" && (len(f.StartsWith) != 1 || f.StartsWith < "A" || f.StartsWith > "Z") {
-			return f, errors.New("starts_with is a letter or #")
-		}
-	}
+	f := store.WallFilter{StartsWith: strings.ToUpper(q.Get("starts_with"))}
 	var err error
 	if f.Marks, err = parseAll(list(q, "mark"), enum("mark", domain.Marks())); err != nil {
 		return f, err
@@ -389,12 +384,12 @@ func wallFilter(q url.Values) (store.WallFilter, error) {
 		}
 	}
 	if s := q.Get("min_rating"); s != "" {
-		if f.MinRating, err = strconv.ParseFloat(s, 64); err != nil || f.MinRating < 0 || f.MinRating > 100 {
+		if f.MinRating, err = strconv.ParseFloat(s, 64); err != nil {
 			return f, errors.New("min_rating is a score from 0 to 100")
 		}
 		f.RatingSite = cmp.Or(f.RatingSite, domain.SiteIMDb)
 	}
-	return f, nil
+	return f, f.Check()
 }
 
 // enum parses one of all for parseAll.
