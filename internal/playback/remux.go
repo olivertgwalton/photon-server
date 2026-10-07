@@ -48,10 +48,8 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 	// The remux opens its files long after this request has been answered.
 	opening := context.WithoutCancel(ctx)
 	sources := make([]hls.Source, len(c.Parts))
-	opens := make([]func() (*os.File, error), len(c.Parts))
 	for i, p := range c.Parts {
 		open := func() (*os.File, error) { return openFile(opening, r.parts.PartFile, p.ID) }
-		opens[i] = open
 		duration := time.Duration(p.DurationMS) * time.Millisecond
 		keyframes := hls.Forced(duration)
 		if video.Encode == nil {
@@ -95,12 +93,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 			continue
 		}
 		sub := subtitle(st.Title, st.Language, st.Default, st.Forced, st.HearingImpaired)
-		for i, p := range c.Parts {
-			sub.Sources = append(sub.Sources, hls.SubtitleSource{
-				Open: opens[i], Stream: &st.Index, Part: p.ID, Streams: c.Streams,
-				Offset: time.Duration(p.OffsetMS) * time.Millisecond,
-			})
-		}
+		sub.Stream = &st.Index
 		h.Subtitles = append(h.Subtitles, sub)
 	}
 	for _, f := range c.Subtitles {
@@ -108,7 +101,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 			continue
 		}
 		sub := subtitle(f.Title, f.Language, f.Default, f.Forced, f.HearingImpaired)
-		sub.Sources = []hls.SubtitleSource{*r.file(opening, c, f.ID)}
+		sub.File = r.file(opening, c, f.ID)
 		h.Subtitles = append(h.Subtitles, sub)
 	}
 	return r.hls.Open(ctx, playback, h)

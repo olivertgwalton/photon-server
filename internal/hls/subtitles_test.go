@@ -59,7 +59,7 @@ func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
 	// An external file over a film in two parts, the second an hour in.
 	err = r.Open(t.Context(), playback, Copy{
 		Parts:     []Source{part(time.Hour), part(time.Hour)},
-		Subtitles: []Subtitle{{Name: "English", Language: "en", Default: true, HearingImpaired: true, Sources: []SubtitleSource{{Open: open}}}},
+		Subtitles: []Subtitle{{Name: "English", Language: "en", Default: true, HearingImpaired: true, File: &SubtitleSource{Open: open}}},
 		Variant:   Variant{BandwidthKbps: 8000, Codecs: []string{"avc1.640029", "mp4a.40.2"}, Range: "SDR", Width: 1920, Height: 1080, FrameRate: 24000.0 / 1001},
 	})
 	if err != nil {
@@ -127,10 +127,10 @@ const styledFilm = "[Script Info]\nScriptType: v4.00+\nPlayResX: 320\nPlayResY: 
 	"Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
 	"Dialogue: 0,0:00:01.00,0:00:03.00,Sign,,0,0,0,,{\\pos(160,40)}Bakery\n"
 
-// A part's embedded subtitle streams are read out together, in one read of the file, which a
-// player giving up does not stop and a later playback of the part does not repeat: plain text as
-// WebVTT, styled text as it is, with the fonts the file carries for it.
-func TestEmbeddedSubtitlesAreReadOnce(t *testing.T) {
+// A part's styled subtitle streams are read out as they are, with the fonts the file carries for
+// them, in one read of the file, which a request given up does not stop and a later one does not
+// repeat.
+func TestStyledSubtitlesAreReadOutOnce(t *testing.T) {
 	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
 	dir := t.TempDir()
 	for name, text := range map[string]string{"en.srt": "Hello.", "fr.srt": "Bonjour."} {
@@ -169,37 +169,14 @@ func TestEmbeddedSubtitlesAreReadOnce(t *testing.T) {
 		{Index: french, Kind: domain.StreamSubtitle, Codec: "subrip"},
 		{Index: signs, Kind: domain.StreamSubtitle, Codec: "ass"},
 	}
-	c := Copy{
-		Parts: []Source{{Open: unplayed, Part: Part{Duration: 10 * time.Second, Keyframes: Forced(10 * time.Second)}}},
-		Subtitles: []Subtitle{
-			{Name: "English", Sources: []SubtitleSource{{Open: open, Stream: &english, Part: part, Streams: streams}}},
-			{Name: "French", Sources: []SubtitleSource{{Open: open, Stream: &french, Part: part, Streams: streams}}},
-		},
-	}
-	first, second := uuid.NewV7(), uuid.NewV7()
-	for _, p := range []uuid.UUID{first, second} {
-		if err := r.Open(t.Context(), p, c); err != nil {
-			t.Fatal(err)
-		}
-	}
+	src := SubtitleSource{Open: open, Stream: &signs, Part: part, Streams: streams}
 	gone, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, _ = r.SubtitleSegment(gone, first, 0, 0)
-
-	for _, tc := range []struct {
-		playback uuid.UUID
-		track    int
-		want     string
-	}{{first, 0, "Hello."}, {first, 1, "Bonjour."}, {second, 1, "Bonjour."}} {
-		got, err := r.SubtitleSegment(t.Context(), tc.playback, tc.track, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(got, "00:00:01.000 --> 00:00:03.000\n"+tc.want) {
-			t.Errorf("track %d =\n%s\nwant %q", tc.track, got, tc.want)
-		}
+	_, _ = r.Extracted(gone, src, StyledName(signs))
+	if _, err := r.Extracted(t.Context(), src, FontsDir); err != nil {
+		t.Fatal(err)
 	}
-	out, err := r.Extracted(t.Context(), SubtitleSource{Open: open, Stream: &signs, Part: part, Streams: streams}, StyledName(signs))
+	out, err := r.Extracted(t.Context(), src, StyledName(signs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,6 +278,79 @@ func TestASubtitleFileReadsAsWebVTT(t *testing.T) {
 		vtt, err := r.WebVTT(t.Context(), func() (*os.File, error) { return os.Open(path) }, tc.lang)
 		if err != nil || !strings.HasPrefix(vtt, "WEBVTT") || !strings.Contains(vtt, tc.want) {
 			t.Errorf("%s: %q, %v; want WebVTT holding %q", tc.name, vtt, err, tc.want)
+		}
+	}
+}
+
+// A film's own subtitles come with the run that remuxes its video, a segment's as soon as the run
+// is past it, wherever the player starts: the film is read once, never whole beforehand. Italics
+// are kept, as WebVTT has them, and colours, which it has not, are left out.
+func TestEmbeddedSubtitlesComeWithTheVideo(t *testing.T) {
+	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
+	dir := t.TempDir()
+	for name, cues := range map[string]string{
+		"en.srt": "1\n00:00:01,000 --> 00:00:03,000\n<i>Hello.</i>\n\n2\n00:00:19,000 --> 00:00:20,000\n<font color=\"#ffff00\">Halfway.</font>\n\n3\n00:00:25,000 --> 00:00:27,000\nGoodbye.\n",
+		"fr.srt": "1\n00:00:07,000 --> 00:00:09,000\nBonjour.\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(cues), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	film := filepath.Join(dir, "film.mkv")
+	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-i", filepath.Join(dir, "en.srt"), "-i", filepath.Join(dir, "fr.srt"),
+		"-t", "30", "-map", "0", "-map", "1", "-map", "2", "-c:v", "libx264", "-g", "24", "-c:s", "srt", film)
+	if out, err := made.CombinedOutput(); err != nil {
+		t.Fatalf("making the film: %v: %s", err, out)
+	}
+	runs := filepath.Join(dir, "runs")
+	counting := filepath.Join(dir, "ffmpeg")
+	if err := os.WriteFile(counting, []byte("#!/bin/sh\necho >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		start time.Duration
+		asked []int
+		want  map[int]string
+	}{
+		{"from the start", 0, []int{0, 1, 3, 4}, map[int]string{0: "00:00:01.000 --> 00:00:03.000\n<i>Hello.</i>\n", 1: "Bonjour.", 3: "00:00:19.000 --> 00:00:20.000\nHalfway.\n", 4: "Goodbye."}},
+		{"from a seek", 18 * time.Second, []int{3, 4}, map[int]string{3: "00:00:19.000 --> 00:00:20.000\nHalfway.\n", 4: "Goodbye."}},
+	} {
+		_ = os.Remove(runs)
+		extracted := t.TempDir()
+		r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: counting}}, t.TempDir(), extracted, Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+		if err != nil {
+			t.Fatal(err)
+		}
+		english, french := 1, 2
+		playback := uuid.NewV7()
+		if err := r.Open(t.Context(), playback, Copy{
+			Parts:     []Source{{Open: func() (*os.File, error) { return os.Open(film) }, Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)}, Video: domain.VideoPlan{Codec: "h264"}}},
+			Subtitles: []Subtitle{{Name: "English", Stream: &english}, {Name: "French", Stream: &french}},
+			Start:     tc.start,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		for _, n := range tc.asked {
+			track := 0
+			if n == 1 {
+				track = 1
+			}
+			got, err := r.SubtitleSegment(t.Context(), playback, track, n)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(got, tc.want[n]) {
+				t.Errorf("%s: segment %d of track %d =\n%s\nwant %q", tc.name, n, track, got, tc.want[n])
+			}
+		}
+		r.Close(playback)
+		if read, err := os.ReadFile(runs); err != nil || strings.Count(string(read), "\n") != 1 {
+			t.Errorf("%s: the film was read %q times, %v; want once", tc.name, read, err)
+		}
+		if left, _ := os.ReadDir(extracted); len(left) != 0 {
+			t.Errorf("%s: %d read out whole, want none", tc.name, len(left))
 		}
 	}
 }

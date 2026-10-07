@@ -308,7 +308,7 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 			[]string{"-map 0:1 -af volume=2 -c:a aac -ac 2 -b:a 256k"},
 		},
 	} {
-		got := strings.Join(args(Hardware{Accel: domain.AccelSoftware}, 12*time.Second, tc.video, tc.audio, tc.layer, domain.SegmentsFMP4), " ")
+		got := strings.Join(args(Hardware{Accel: domain.AccelSoftware}, 12*time.Second, tc.video, tc.audio, tc.layer, domain.SegmentsFMP4, nil), " ")
 		for _, w := range tc.want {
 			if !strings.Contains(got, w) {
 				t.Errorf("%s: %q lacks %q", tc.name, got, w)
