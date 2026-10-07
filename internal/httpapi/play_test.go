@@ -135,6 +135,8 @@ func (fakePlaybacks) End(_ context.Context, id uuid.UUID) error {
 
 func (fakePlaybacks) Abandon(context.Context, uuid.UUID) error { return nil }
 
+func (fakePlaybacks) Serve(context.Context, uuid.UUID, func()) (func(), error) { return func() {}, nil }
+
 func TestAPlaybackReportsWhereItIs(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Playbacks: fakePlaybacks{}})
 	for _, tc := range []struct {
@@ -226,7 +228,7 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 		t.Errorf("an unsigned address: %d, want 401", rec.Code)
 	}
 	forged := httptest.NewRequest(http.MethodGet, got.Parts[1].URL, nil)
-	forged.URL.Path = "/api/v1/parts/" + partOne.String() + "/stream"
+	forged.URL.Path = strings.Replace(forged.URL.Path, partTwo.String(), partOne.String(), 1)
 	if rec := do(forged); rec.Code != http.StatusUnauthorized {
 		t.Errorf("one part's signature on another's address: %d, want 401", rec.Code)
 	}
