@@ -11,6 +11,9 @@ export async function logIn(page: Page, to = "/") {
 }
 
 export async function expectAccessible(page: Page) {
+	// A page is judged once drawn: the app draws in the browser, and a slow one
+	// has yet to name its page when the load event fires.
+	await page.waitForFunction(() => document.title !== "");
 	// Contrast is judged on settled colours: a link still fading to its current
 	// state reads as neither. Endless animations (a pulse) never settle.
 	await page.waitForFunction(() =>
