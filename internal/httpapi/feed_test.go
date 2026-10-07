@@ -17,6 +17,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
@@ -188,6 +189,12 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 		t.Fatalf("progress from the phone: %d", res.StatusCode)
 	}
 
+	stopped := uuid.NewV7()
+	hub.Raise(ctx, domain.Event{
+		Kind: domain.EventPlaybackStopped, Profile: sam.ID, Item: title["Paddington"],
+		Details: map[string]any{"playback": playback.NowPlaying{ID: stopped}},
+	})
+
 	// Oliver sees every library: once both changes reach him, Sam's stream has been handed them too.
 	libraries := map[uuid.UUID]told{}
 	oliverSaw := until(oliverTold, func() {}, func(e told) bool {
@@ -203,12 +210,14 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	if !slices.ContainsFunc(oliverSaw, func(e told) bool { return e.name == string(domain.EventScanProgress) && e.LibraryID == other.ID }) {
 		t.Error("Oliver was not told of Other's scan")
 	}
-	if slices.ContainsFunc(oliverSaw, func(e told) bool { return e.name == string(domain.EventUserDataChanged) }) {
-		t.Errorf("Oliver was told of Sam's progress: %+v", oliverSaw)
+	if slices.ContainsFunc(oliverSaw, func(e told) bool {
+		return e.name == string(domain.EventUserDataChanged) || e.name == string(domain.EventPlaybackStopped)
+	}) {
+		t.Errorf("Oliver was told of Sam's progress or playback: %+v", oliverSaw)
 	}
 
 	samSaw := settle(samTold, sam)
-	var changed, progress, scanned []told
+	var changed, progress, scanned, stops []told
 	for _, e := range samSaw {
 		switch {
 		case e.LibraryID == other.ID || e.TitleID == title["Heat"] || e.TitleID == title["Up"]:
@@ -219,6 +228,8 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 			progress = append(progress, e)
 		case e.name == string(domain.EventLibraryScanned):
 			scanned = append(scanned, e)
+		case e.name == string(domain.EventPlaybackStopped):
+			stops = append(stops, e)
 		}
 	}
 	if len(scanned) != 1 || scanned[0].LibraryID != films.ID {
@@ -235,5 +246,8 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	}
 	if same, _ := progress[0].Details["title_ids"].([]any); len(same) != 1 || same[0] != title["Paddington"].String() {
 		t.Errorf("Sam was told the progress is of %v, want Films' Paddington alone: Other's is the same but unseen", progress[0].Details)
+	}
+	if len(stops) != 1 || len(stops[0].Details) != 1 || stops[0].Details["playback_id"] != stopped.String() {
+		t.Errorf("Sam was told of stops %+v, want the one playback's id alone, for its player to close", stops)
 	}
 }

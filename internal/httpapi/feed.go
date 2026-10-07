@@ -24,7 +24,7 @@ func feedStream() asStream {
 	out := asStream{"hello": helloJSON{}}
 	for _, k := range []domain.EventKind{
 		domain.EventLibraryChanged, domain.EventTitleUpdated, domain.EventUserDataChanged, domain.EventScanProgress,
-		domain.EventLibraryScanned,
+		domain.EventLibraryScanned, domain.EventPlaybackStopped,
 	} {
 		out[string(k)] = eventJSON{}
 	}
@@ -33,8 +33,9 @@ func feedStream() asStream {
 
 // events streams what changes of what the profile sees, from every node, as Server-Sent Events,
 // so a client's pages stay right without asking again: as Jellyfin's LibraryChanged and
-// UserDataChanged, and Plex's notifications. First a hello with the scans going on. Nothing is
-// kept to resend, so a client that reconnects asks again for what it shows.
+// UserDataChanged, and Plex's notifications; and its own playbacks stopping, so a player closes.
+// First a hello with the scans going on. Nothing is kept to resend, so a client that reconnects
+// asks again for what it shows.
 func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	ctx, profile := r.Context(), sessionOf(r).Profile.ID
 	events, stop := a.svc.Events.Subscribe()
@@ -103,8 +104,18 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (ev
 		}
 		e.Details = details
 		return eventOf(e), told, nil
+	case domain.EventPlaybackStopped:
+		// A profile's player is told its playback stopped, wherever that was, so it closes, as
+		// Jellyfin's dashboard sends its session a stop. The card, with the device's name and
+		// address, is the dashboard's.
+		if e.Profile != profile {
+			return eventJSON{}, false, nil
+		}
+		shown, _ := e.Details["playback"].(map[string]any)
+		e.Details = map[string]any{"playback_id": shown["id"]}
+		return eventOf(e), true, nil
 	case domain.EventPlaybackStarted, domain.EventPlaybackPaused, domain.EventPlaybackResumed,
-		domain.EventPlaybackStopped, domain.EventSignedIn, domain.EventSignInRefused,
+		domain.EventSignedIn, domain.EventSignInRefused,
 		domain.EventProfileAdded, domain.EventProfileRemoved, domain.EventLibraryAdded,
 		domain.EventLibraryRemoved, domain.EventTitlesAdded,
 		domain.EventTaskStarted, domain.EventTaskFinished, domain.EventTaskFailed, domain.EventBackupMade,
