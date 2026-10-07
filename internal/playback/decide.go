@@ -85,9 +85,9 @@ type Decision struct {
 // file shows, or which are drawn into the video.
 var pictureSubtitles = []string{"hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle", "xsub"}
 
-// carried are the codecs HLS segments of a format carry: fragmented MP4 nearly any, MPEG-TS those
+// Carried are the codecs HLS segments of a format carry: fragmented MP4 nearly any, MPEG-TS those
 // players take from it, which is no Dolby Vision either.
-func carried(f domain.SegmentFormat) (video, audio []string) {
+func Carried(f domain.SegmentFormat) (video, audio []string) {
 	switch f {
 	case domain.SegmentsMPEGTS:
 		return []string{"h264", "hevc"}, []string{"aac", "ac3", "eac3", "mp3"}
@@ -160,7 +160,7 @@ func Decide(p Profile, c Copy, audio, subtitle *int, hevc domain.HEVCEncoding) (
 		return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
 	}
 	d.Method = domain.PlayRemux
-	carriedVideo, carriedAudio := carried(p.Segments)
+	carriedVideo, carriedAudio := Carried(p.Segments)
 	// MPEG-TS has no Dolby Vision: the client is sent the base layer where it shows that alone.
 	lostDV := false
 	if p.Segments == domain.SegmentsMPEGTS && d.Video.DolbyVision == domain.DolbyVisionKeep {

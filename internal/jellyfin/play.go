@@ -137,7 +137,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 		return
 	}
 	src.SupportsDirectPlay, src.SupportsDirectStream = false, false
-	t, ok := p.hls()
+	t, segments, ok := p.hls(streamAt(c, tracks.Audio))
 	if !ok {
 		return
 	}
@@ -145,18 +145,21 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	if tracks.Audio != nil {
 		audio = &tracks.Audio.Stream
 	}
-	d, err := playback.Decide(p.hlsProfile(t, c, limit), playback.Copy{
+	d, err := playback.Decide(p.hlsProfile(t, segments, c, limit), playback.Copy{
 		Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams,
 	}, audio, sub, a.svc.HEVC)
 	if err != nil || d.Video == nil {
 		return
 	}
-	src.SupportsTranscoding, src.TranscodingSubProtocol, src.TranscodingContainer = true, "hls", "mp4"
+	src.SupportsTranscoding, src.TranscodingSubProtocol, src.TranscodingContainer = true, "hls", transcodingContainers[segments]
 	src.TranscodingURL = a.transcodingURL(r, item, session, transcode{
 		Version: c.Version, Method: d.Method, Video: *d.Video, Audio: d.Audio, Subtitle: sub, Reasons: d.Reasons,
-		StartMS: req.StartTimeTicks / ticksPerMS,
+		Segments: segments, StartMS: req.StartTimeTicks / ticksPerMS,
 	})
 }
+
+// transcodingContainers are Jellyfin's names for the segments of each format.
+var transcodingContainers = map[domain.SegmentFormat]string{domain.SegmentsFMP4: "mp4", domain.SegmentsMPEGTS: "ts"}
 
 // direct is a copy's tracks played as they are: its first video, and the audio an app chose, else
 // its default, else its first.

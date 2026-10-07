@@ -47,6 +47,7 @@ type transcode struct {
 	Video    domain.VideoPlan         `json:"video"`
 	Audio    *domain.AudioPlan        `json:"audio,omitempty"`
 	Subtitle *int                     `json:"subtitle,omitempty"`
+	Segments domain.SegmentFormat     `json:"segments"`
 	Reasons  []domain.TranscodeReason `json:"reasons,omitempty"`
 	StartMS  int64                    `json:"start_ms,omitempty"`
 }
@@ -178,7 +179,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 		a.internal(w, r, err)
 		return true
 	}
-	err = a.svc.Remuxing.Open(r.Context(), session, c, t.Video, t.Audio, domain.SegmentsFMP4, time.Duration(t.StartMS)*time.Millisecond)
+	err = a.svc.Remuxing.Open(r.Context(), session, c, t.Video, t.Audio, t.Segments, time.Duration(t.StartMS)*time.Millisecond)
 	if err != nil {
 		if aerr := a.svc.Playbacks.Abandon(context.WithoutCancel(r.Context()), session); aerr != nil {
 			a.internal(w, r, aerr)

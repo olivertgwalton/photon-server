@@ -109,11 +109,11 @@ func TestAnAppsProfileDecidesHowACopyPlays(t *testing.T) {
 		t.Error("a copy past the bitrate asked for plays as it is")
 	}
 
-	tp, ok := p.hls()
-	if !ok {
-		t.Fatal("Swiftfin takes no HLS photon makes")
+	tp, segments, ok := p.hls(&audio)
+	if !ok || segments != domain.SegmentsFMP4 {
+		t.Fatalf("Swiftfin's HLS: %v in %s", ok, segments)
 	}
-	hp := p.hlsProfile(tp, copyOf("matroska,webm", 1), p.MaxStreamingBitrate)
+	hp := p.hlsProfile(tp, segments, copyOf("matroska,webm", 1), p.MaxStreamingBitrate)
 	if hp.MaxBitrateKbps != 120000 || len(hp.Containers) != 0 || len(hp.Video) != 2 || hp.Video[0].Codec != "hevc" || hp.Video[0].MaxLevel != 153 {
 		t.Errorf("HLS profile: %+v", hp)
 	}
@@ -131,13 +131,28 @@ func TestRangesAnAppTakesNarrowWhatHLSCarries(t *testing.T) {
 			"ApplyConditions": [{"Condition": "EqualsAny", "Property": "VideoRangeType", "Value": "DOVI|DOVIWithHDR10|DOVIWithEL", "IsRequired": false}],
 			"Conditions": [{"Condition": "NotEquals", "Property": "VideoRangeType", "Value": "DOVI|DOVIWithEL", "IsRequired": false}]}]
 	}`)
-	tp, ok := p.hls()
+	tp, segments, ok := p.hls(nil)
 	if !ok {
-		t.Fatal("no HLS in fragmented MP4")
+		t.Fatal("no HLS photon makes")
 	}
 	dv := domain.Stream{Kind: domain.StreamVideo, Codec: "hevc", Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 5}}
-	hp := p.hlsProfile(tp, store.PlayCopy{Streams: []domain.Stream{dv}}, 0)
+	hp := p.hlsProfile(tp, segments, store.PlayCopy{Streams: []domain.Stream{dv}}, 0)
 	if slices.Contains(hp.Video[0].Ranges, domain.RangeDV) || !slices.Contains(hp.Video[0].Ranges, domain.RangeHDR10) {
 		t.Errorf("ranges for a Dolby Vision profile 5 copy: %v", hp.Video[0].Ranges)
+	}
+}
+
+// Of an app's HLS profiles, the first whose segments carry the copy's audio as it is is taken, as
+// Jellyfin ranks them: Android TV lists MPEG-TS first, but DTS is carried only in fragmented MP4.
+func TestAnAppsHLSIsInSegmentsThatCarryItsAudio(t *testing.T) {
+	p := profileOf(t, `{"TranscodingProfiles": [
+		{"Type": "Video", "Container": "ts", "Protocol": "hls", "VideoCodec": "h264,hevc", "AudioCodec": "aac,ac3,eac3,mp3"},
+		{"Type": "Video", "Container": "mp4", "Protocol": "hls", "VideoCodec": "h264,hevc", "AudioCodec": "aac,ac3,eac3,dts,truehd,flac"}]}`)
+	for codec, want := range map[string]domain.SegmentFormat{
+		"aac": domain.SegmentsMPEGTS, "dts": domain.SegmentsFMP4, "flac": domain.SegmentsFMP4, "opus": domain.SegmentsMPEGTS,
+	} {
+		if _, got, ok := p.hls(&domain.Stream{Kind: domain.StreamAudio, Codec: codec}); !ok || got != want {
+			t.Errorf("%s audio: %s, want %s", codec, got, want)
+		}
 	}
 }
