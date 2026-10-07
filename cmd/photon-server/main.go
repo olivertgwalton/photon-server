@@ -186,11 +186,12 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	defer artworkBlobs.Close()
 	pictureCache := artwork.New(artworkBlobs, st.SetBlurhash)
-	previews, err := analysis.OpenPreviews(filepath.Join(cacheRoot, "previews"))
+	previewBlobs, err := blob.OpenDir(filepath.Join(cacheRoot, "previews"))
 	if err != nil {
 		return err
 	}
-	defer previews.Close()
+	defer previewBlobs.Close()
+	previews := analysis.NewPreviews(previewBlobs)
 	signingKey, err := st.SigningKey(ctx)
 	if err != nil {
 		return err

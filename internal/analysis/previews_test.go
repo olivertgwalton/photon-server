@@ -18,6 +18,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -60,7 +61,9 @@ type fixture struct {
 	lib      domain.Library
 	admin    domain.Profile
 	previews *Previews
-	make     jobs.Handler
+	// dir is where previews keeps its objects.
+	dir  string
+	make jobs.Handler
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -89,14 +92,16 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	previews, err := OpenPreviews(t.TempDir())
+	dir := t.TempDir()
+	blobs, err := blob.OpenDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = previews.Close() })
+	t.Cleanup(func() { _ = blobs.Close() })
+	previews := NewPreviews(blobs)
 	tools := media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}
 	return &fixture{
-		t: t, st: st, db: db, root: root, lib: lib, admin: admin, previews: previews,
+		t: t, st: st, db: db, root: root, lib: lib, admin: admin, previews: previews, dir: dir,
 		make: MakePreviews(st, tools, previews, log),
 	}
 }
@@ -194,7 +199,7 @@ func TestAPartGetsSheetsAndChapterImages(t *testing.T) {
 	if got != want {
 		t.Errorf("trickplay = %+v, want %+v", got, want)
 	}
-	sheet, err := f.previews.Sheet(part, 1)
+	sheet, err := f.previews.Sheet(t.Context(), part, 1)
 	if err != nil {
 		t.Fatalf("the second sheet: %v", err)
 	}
@@ -204,7 +209,7 @@ func TestAPartGetsSheetsAndChapterImages(t *testing.T) {
 	if len(images) != 2 || images[0] != "/api/v1/parts/"+part.String()+"/chapters/0/image" {
 		t.Errorf("chapter images = %q, want an address for each of the two chapters", images)
 	}
-	still, err := f.previews.ChapterImage(part, 1)
+	still, err := f.previews.ChapterImage(t.Context(), part, 1)
 	if err != nil {
 		t.Fatalf("the second chapter's image: %v", err)
 	}
@@ -255,7 +260,7 @@ func TestPreviewsFollowTheirLibrary(t *testing.T) {
 	if images := f.chapterImages(title); images[0] != "" {
 		t.Error("chapter images outlived their library turning previews off")
 	}
-	if _, err := f.previews.ChapterImage(part, 0); !errors.Is(err, fs.ErrNotExist) {
+	if _, err := f.previews.ChapterImage(t.Context(), part, 0); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("the chapter image's file: %v, want it gone", err)
 	}
 }
@@ -285,16 +290,22 @@ func TestAChangedFileDropsOldPreviews(t *testing.T) {
 	if _, err := f.previews.Sweep(t.Context(), f.st.LivePreviews); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.previews.Sheet(old, 0); !errors.Is(err, fs.ErrNotExist) {
+	if _, err := f.previews.Sheet(t.Context(), old, 0); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("the replaced file's sheet: %v, want it gone", err)
 	}
 }
 
-// age dates a part's previews folder past the sweep's wait for one being made.
+// age dates a part's previews past the sweep's wait for ones being made.
 func (f *fixture) age(part uuid.UUID) {
 	f.t.Helper()
 	long := time.Now().Add(-2 * madeLife)
-	if err := os.Chtimes(filepath.Join(f.previews.dir, part.String()), long, long); err != nil {
+	err := filepath.WalkDir(filepath.Join(f.dir, part.String()), func(name string, _ fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Chtimes(name, long, long)
+	})
+	if err != nil {
 		f.t.Fatal(err)
 	}
 }
@@ -337,7 +348,7 @@ func TestPreviewsOfAMissingFileLastTheGrace(t *testing.T) {
 			if _, err := f.previews.Sweep(t.Context(), f.st.LivePreviews); err != nil {
 				t.Fatal(err)
 			}
-			_, err := f.previews.Sheet(part, 0)
+			_, err := f.previews.Sheet(t.Context(), part, 0)
 			if kept := err == nil; kept != c.kept {
 				t.Errorf("sheet kept = %v (%v), want %v", kept, err, c.kept)
 			}
@@ -353,20 +364,24 @@ func TestTheSweepClearsPreviewsNoPartHas(t *testing.T) {
 	f := newFixture(t)
 	_, part := f.film("heat")
 	f.run(part)
-	stray := uuid.NewV7().String()
-	if err := os.MkdirAll(filepath.Join(f.previews.dir, stray, "trickplay"), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	long := time.Now().Add(-2 * madeLife)
-	for _, name := range []string{stray, part.String()} {
-		if err := os.Chtimes(filepath.Join(f.previews.dir, name), long, long); err != nil {
+	stray, making := uuid.NewV7(), uuid.NewV7()
+	for _, p := range []uuid.UUID{stray, making} {
+		if err := f.previews.blobs.Put(t.Context(), p.String()+"/trickplay/0.jpg", strings.NewReader("sheet")); err != nil {
 			t.Fatal(err)
 		}
 	}
+	f.age(stray)
+	f.age(part)
 	if n, err := f.previews.Sweep(t.Context(), f.st.LivePreviews); err != nil || n != 1 {
-		t.Errorf("swept %d folders (%v), want the stray one", n, err)
+		t.Errorf("swept %d parts' previews (%v), want the stray one's", n, err)
 	}
-	if _, err := f.previews.Sheet(part, 0); err != nil {
+	if _, err := f.previews.Sheet(t.Context(), stray, 0); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the stray sheet: %v, want it gone", err)
+	}
+	if _, err := f.previews.Sheet(t.Context(), making, 0); err != nil {
+		t.Errorf("a sheet being made: %v, want it kept", err)
+	}
+	if _, err := f.previews.Sheet(t.Context(), part, 0); err != nil {
 		t.Errorf("the part's own sheet: %v", err)
 	}
 }
@@ -410,7 +425,7 @@ func TestAnExtraIsPicturedByAStill(t *testing.T) {
 	if want := "/api/v1/parts/" + part + "/chapters/0/image"; len(page.Extras) != 1 || page.Extras[0].Image != want {
 		t.Fatalf("extras = %+v, want the trailer pictured at %s", page.Extras, want)
 	}
-	still, err := f.previews.ChapterImage(uuid.MustParse(part), 0)
+	still, err := f.previews.ChapterImage(t.Context(), uuid.MustParse(part), 0)
 	if err != nil {
 		t.Fatalf("the trailer's still: %v", err)
 	}
