@@ -155,44 +155,24 @@ type SeasonPart struct {
 	Fingerprinted bool
 }
 
-type seasonPartRow struct {
-	ID, Episode, Version uuid.UUID
-	Idx                  int
-	DurationMS           int64
-	Root, RelPath        string
-	FingerprintedAt      *time.Time
-}
-
 // SeasonParts answers the parts of a season's episodes that are on disk, in a library that compares
 // sound, and have sound, by episode, copy and order.
 func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart, error) {
-	rows, err := queryStructs[seasonPartRow](ctx, s.pool, `
-		SELECT DISTINCT ON (p.id) p.id, e.id AS episode, v.id AS version, p.idx, p.duration_ms,
-			l.root, f.rel_path, p.fingerprinted_at
-		FROM items e
-		JOIN versions v ON v.item_id = e.id AND v.missing_since IS NULL
-		JOIN parts p ON p.version_id = v.id
-		JOIN part_files f ON f.part_id = p.id
-		JOIN libraries l ON l.id = f.library_id AND l.markers = 'all'
-		WHERE e.parent_id = $1 AND e.kind = 'episode'
-			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'audio')
-		ORDER BY p.id, f.rel_path`, season)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]SeasonPart, len(rows))
-	for n, r := range rows {
-		out[n] = SeasonPart{
-			ID: r.ID, Episode: r.Episode, Version: r.Version, Idx: r.Idx,
-			Duration: time.Duration(r.DurationMS) * time.Millisecond, Root: r.Root, RelPath: r.RelPath,
-			Fingerprinted: r.FingerprintedAt != nil,
-		}
-	}
-	slices.SortFunc(out, func(a, b SeasonPart) int {
-		return cmp.Or(cmp.Compare(a.Episode.String(), b.Episode.String()),
-			cmp.Compare(a.Version.String(), b.Version.String()), cmp.Compare(a.Idx, b.Idx))
-	})
-	return out, nil
+	return queryStructs[SeasonPart](ctx, s.pool, `
+		SELECT * FROM (
+			SELECT DISTINCT ON (p.id) p.id, e.id AS episode, v.id AS version, p.idx,
+				p.duration_ms * interval '1 millisecond' AS duration, l.root, f.rel_path,
+				p.fingerprinted_at IS NOT NULL AS fingerprinted
+			FROM items e
+			JOIN versions v ON v.item_id = e.id AND v.missing_since IS NULL
+			JOIN parts p ON p.version_id = v.id
+			JOIN part_files f ON f.part_id = p.id
+			JOIN libraries l ON l.id = f.library_id AND l.markers = 'all'
+			WHERE e.parent_id = $1 AND e.kind = 'episode'
+				AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'audio')
+			ORDER BY p.id, f.rel_path
+		) found
+		ORDER BY episode, version, idx`, season)
 }
 
 // FilmEnd is the last part of a copy of a film, where its credits are.
@@ -203,18 +183,12 @@ type FilmEnd struct {
 	Read          bool
 }
 
-type filmEndRow struct {
-	ID              uuid.UUID
-	DurationMS      int64
-	Root, RelPath   string
-	FingerprintedAt *time.Time
-}
-
 // FilmEnds answers the last part of each copy of a film on disk, in a library that reads its files
 // for markers, with a picture: none for anything but a film.
 func (s *Store) FilmEnds(ctx context.Context, film uuid.UUID) ([]FilmEnd, error) {
-	rows, err := queryStructs[filmEndRow](ctx, s.pool, `
-		SELECT DISTINCT ON (p.id) p.id, p.duration_ms, l.root, f.rel_path, p.fingerprinted_at
+	return queryStructs[FilmEnd](ctx, s.pool, `
+		SELECT DISTINCT ON (p.id) p.id, p.duration_ms * interval '1 millisecond' AS duration, l.root, f.rel_path,
+			p.fingerprinted_at IS NOT NULL AS read
 		FROM items i
 		JOIN versions v ON v.item_id = i.id AND v.missing_since IS NULL
 		JOIN parts p ON p.version_id = v.id AND p.idx = (SELECT max(idx) FROM parts WHERE version_id = v.id)
@@ -223,14 +197,6 @@ func (s *Store) FilmEnds(ctx context.Context, film uuid.UUID) ([]FilmEnd, error)
 		WHERE i.id = $1 AND i.kind = 'movie'
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'video')
 		ORDER BY p.id, f.rel_path`, film)
-	out := make([]FilmEnd, len(rows))
-	for n, r := range rows {
-		out[n] = FilmEnd{
-			ID: r.ID, Duration: time.Duration(r.DurationMS) * time.Millisecond, Root: r.Root, RelPath: r.RelPath,
-			Read: r.FingerprintedAt != nil,
-		}
-	}
-	return out, err
 }
 
 // SaveFoundMarkers replaces the markers source found on the parts read, and records that they were.
