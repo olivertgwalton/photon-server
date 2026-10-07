@@ -5294,9 +5294,11 @@ export interface components {
             overview?: string;
             /** Format: uuid */
             poster?: string;
+            range?: components["schemas"]["Range"];
             ratings?: components["schemas"]["RatingRef"][];
             /** Format: date */
             release_date?: string;
+            resolution?: components["schemas"]["Resolution"];
             season?: components["schemas"]["TitleRef"] | null;
             season_number?: number | null;
             show?: components["schemas"]["TitleRef"] | null;
@@ -5392,9 +5394,11 @@ export interface components {
             overview?: string;
             /** Format: uuid */
             poster?: string;
+            range?: components["schemas"]["Range"];
             ratings?: components["schemas"]["RatingRef"][];
             /** Format: date */
             release_date?: string;
+            resolution?: components["schemas"]["Resolution"];
             role?: string;
             season?: components["schemas"]["TitleRef"] | null;
             season_number?: number | null;
@@ -5542,9 +5546,11 @@ export interface components {
             overview?: string;
             /** Format: uuid */
             poster?: string;
+            range?: components["schemas"]["Range"];
             ratings?: components["schemas"]["RatingRef"][];
             /** Format: date */
             release_date?: string;
+            resolution?: components["schemas"]["Resolution"];
             season?: components["schemas"]["TitleRef"] | null;
             season_number?: number | null;
             show?: components["schemas"]["TitleRef"] | null;
