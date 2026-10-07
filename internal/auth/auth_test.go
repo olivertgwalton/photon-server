@@ -69,6 +69,10 @@ func TestSignInAndOut(t *testing.T) {
 		}
 	}
 
+	if _, profile, err := svc.SignIn(t.Context(), "oliver", "correct horse", tv); err != nil || profile != oliver {
+		t.Errorf(`SignIn("oliver") = %+v, %v; want %+v`, profile, err, oliver)
+	}
+
 	token, profile, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv)
 	if err != nil {
 		t.Fatal(err)
