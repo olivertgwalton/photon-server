@@ -150,13 +150,14 @@ type PlaybackEncode struct {
 	ToneMapped  bool   `json:"tone_mapped,omitzero"`
 }
 
-// PlaybackSubtitle is the subtitle stream of the file shown, and whether it is drawn into the
-// video rather than by the player.
+// PlaybackSubtitle is the subtitle shown, a stream of the file or a file beside it, and whether it
+// is drawn into the video rather than by the player.
 type PlaybackSubtitle struct {
-	Stream   int    `json:"stream"`
-	Codec    string `json:"codec"`
-	Language string `json:"language,omitzero"`
-	Burned   bool   `json:"burned,omitzero"`
+	Stream   *int       `json:"stream,omitzero"`
+	File     *uuid.UUID `json:"file,omitzero"`
+	Codec    string     `json:"codec"`
+	Language string     `json:"language,omitzero"`
+	Burned   bool       `json:"burned,omitzero"`
 }
 
 // VideoPlan is the video stream played, by its index in the file, what becomes of its Dolby
@@ -292,3 +293,16 @@ const (
 )
 
 func PartPlaybacks() []PartPlayback { return []PartPlayback{PartsJoined, PartsEach} }
+
+// SubtitleDelivery is how a client draws a subtitle itself, in Jellyfin's SubtitleDeliveryMethod
+// terms: from inside the file it plays, or from a file of its own beside the video.
+type SubtitleDelivery string
+
+const (
+	SubtitleEmbedded SubtitleDelivery = "embedded"
+	SubtitleSidecar  SubtitleDelivery = "sidecar"
+)
+
+func SubtitleDeliveries() []SubtitleDelivery {
+	return []SubtitleDelivery{SubtitleEmbedded, SubtitleSidecar}
+}

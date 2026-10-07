@@ -1,18 +1,28 @@
 package playback
 
 import (
+	gocmp "cmp"
 	"errors"
 	"slices"
 	"testing"
+	"uuid"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// A film as rips have it: Dolby Vision 8.1 HEVC in Matroska, with TrueHD 7.1 and an AC-3 5.1 dub.
+// Subtitle files beside the film: signs and songs in ASS, SubRip, and a picture.
+var (
+	signsFile  = uuid.NewV7()
+	subripFile = uuid.NewV7()
+	pgsFile    = uuid.NewV7()
+)
+
+// A film as rips have it: Dolby Vision 8.1 HEVC in Matroska, with TrueHD 7.1 and an AC-3 5.1 dub,
+// and subtitles of every kind.
 var film = Copy{
-	Container: "matroska,webm", BitrateKbps: 40_000,
+	Container: "matroska,webm", BitrateKbps: 40_000, Parts: 1,
 	Streams: []domain.Stream{
 		{
 			Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Profile: "Main 10", Level: 153, Width: 3840, Height: 2160,
@@ -24,6 +34,7 @@ var film = Copy{
 		{Index: 4, Kind: domain.StreamSubtitle, Codec: "hdmv_pgs_subtitle"},
 		{Index: 5, Kind: domain.StreamSubtitle, Codec: "ass"},
 	},
+	Files: []SubtitleFile{{ID: signsFile, Codec: "ass"}, {ID: subripFile, Codec: "subrip"}, {ID: pgsFile, Codec: "hdmv_pgs_subtitle"}},
 }
 
 // appleTV plays HEVC with Dolby Vision from MP4 but not Matroska, and no TrueHD; it would rather
@@ -44,7 +55,16 @@ func TestDecide(t *testing.T) {
 	hdr10Only := appleTV
 	hdr10Only.Video = []VideoSupport{{Codec: "hevc", Ranges: []domain.Range{domain.RangeHDR10}}}
 	drawsPGS := everything
-	drawsPGS.Subtitles = []string{"hdmv_pgs_subtitle"}
+	drawsPGS.Subtitles = []SubtitleSupport{{Codec: "hdmv_pgs_subtitle", Delivery: domain.SubtitleEmbedded}}
+	drawsText := everything
+	drawsText.Subtitles = []SubtitleSupport{{Codec: "subrip", Delivery: domain.SubtitleEmbedded}}
+	drawsASS := everything
+	drawsASS.Subtitles = []SubtitleSupport{{Codec: "ass", Delivery: domain.SubtitleEmbedded}}
+	// A browser opens Matroska but draws only what it is given beside the video.
+	browser := everything
+	browser.Subtitles = []SubtitleSupport{{Codec: "ass", Delivery: domain.SubtitleSidecar}, {Codec: "subrip", Delivery: domain.SubtitleSidecar}}
+	browserNoMKV := appleTV
+	browserNoMKV.Subtitles = browser.Subtitles
 	sdrOnly := appleTV
 	sdrOnly.Video = []VideoSupport{{Codec: "hevc"}}
 	cappedRemux := appleTV
@@ -67,10 +87,12 @@ func TestDecide(t *testing.T) {
 		profile  Profile
 		audio    *int
 		subtitle *int
+		file     *uuid.UUID
 		// hevc is HEVCAllow where it is not said.
-		hevc domain.HEVCEncoding
-		want Decision
-		err  error
+		hevc     domain.HEVCEncoding
+		noLibass bool
+		want     Decision
+		err      error
 	}{
 		{
 			name: "a client that plays it all plays the file", profile: everything,
@@ -195,16 +217,72 @@ func TestDecide(t *testing.T) {
 			},
 		},
 		{
-			name: "a text subtitle is no reason to encode", profile: everything, subtitle: new(3),
+			name: "plain text the client draws from the file plays in it", profile: drawsText, subtitle: new(3),
 			want: Decision{Method: domain.PlayDirect, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 1}},
 		},
+		{
+			name: "plain text the client cannot draw from the file is carried in HLS, the video copied", profile: everything, subtitle: new(3),
+			want: Decision{
+				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 1},
+				Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported},
+			},
+		},
+		{
+			name: "styled text the client draws from the file plays in it", profile: drawsASS, subtitle: new(5),
+			want: Decision{Method: domain.PlayDirect, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 1}},
+		},
+		{
+			name: "styled text a client draws beside the video is read out of the file played as it is", profile: browser, subtitle: new(5),
+			want: Decision{Method: domain.PlayDirect, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 1}},
+		},
+		{
+			name: "styled text a client draws beside the video goes beside HLS, the video copied", profile: browserNoMKV, subtitle: new(5), audio: new(2),
+			want: Decision{
+				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 2},
+				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported},
+			},
+		},
+		{
+			name: "styled text the client cannot draw is drawn in, never made plain", profile: everything, subtitle: new(5),
+			want: Decision{
+				Method: domain.PlayTranscode,
+				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+					Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 40_000, Range: domain.RangeHDR10, Burn: new(5),
+				}},
+				Audio: &domain.AudioPlan{Stream: 1}, Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported},
+			},
+		},
+		{
+			name: "styled text the client cannot draw, on a server whose FFmpeg has no libass", profile: everything, subtitle: new(5), noLibass: true,
+			want: Decision{Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported}}, err: ErrNoCompatibleStream,
+		},
+		{
+			name: "a styled file the client draws plays beside the file", profile: browser, file: &signsFile,
+			want: Decision{Method: domain.PlayDirect, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 1}},
+		},
+		{
+			name: "a styled file the client cannot draw is drawn in", profile: drawsASS, file: &signsFile,
+			want: Decision{
+				Method: domain.PlayTranscode,
+				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+					Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 40_000, Range: domain.RangeHDR10, BurnFile: &signsFile,
+				}},
+				Audio: &domain.AudioPlan{Stream: 1}, Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported},
+			},
+		},
+		{
+			name: "a plain file the client cannot draw is carried in HLS", profile: drawsText, file: &subripFile,
+			want: Decision{
+				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 1},
+				Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported},
+			},
+		},
+		{name: "a picture beside the copy is no subtitle a player shows", profile: everything, file: &pgsFile, err: ErrNoSuchSubtitleFile},
+		{name: "a subtitle file not beside the copy", profile: everything, file: new(uuid.NewV7()), err: ErrNoSuchSubtitleFile},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			hevc := tc.hevc
-			if hevc == "" {
-				hevc = domain.HEVCAllow
-			}
-			got, err := Decide(tc.profile, film, tc.audio, tc.subtitle, hevc)
+			enc := Encoding{HEVC: gocmp.Or(tc.hevc, domain.HEVCAllow), Libass: !tc.noLibass}
+			got, err := Decide(tc.profile, film, domain.ChosenTracks{Audio: tc.audio, Subtitle: tc.subtitle, SubtitleFile: tc.file}, enc)
 			if !errors.Is(err, tc.err) {
 				t.Fatalf("err = %v, want %v", err, tc.err)
 			}
@@ -220,7 +298,7 @@ func TestAnInterlacedPictureIsDeinterlacedAsItIsEncoded(t *testing.T) {
 		{Index: 0, Kind: domain.StreamVideo, Codec: "mpeg2video", Width: 1920, Height: 1080, Interlaced: true},
 		{Index: 1, Kind: domain.StreamAudio, Codec: "ac3", Channels: 6},
 	}}
-	got, err := Decide(appleTV, broadcast, nil, nil, domain.HEVCAllow)
+	got, err := Decide(appleTV, broadcast, domain.ChosenTracks{}, Encoding{HEVC: domain.HEVCAllow})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,12 +431,18 @@ func TestACopyInSeveralFilesIsJoinedForAClientThatPlaysOne(t *testing.T) {
 	everything := appleTV
 	everything.Containers = append(everything.Containers, "matroska")
 	everything.Audio = append(everything.Audio, AudioSupport{Codec: "truehd"})
-	if d, err := Decide(everything, twoFiles, nil, nil, domain.HEVCAllow); err != nil || d.Method != domain.PlayRemux || d.Video.Encode != nil ||
+	if d, err := Decide(everything, twoFiles, domain.ChosenTracks{}, Encoding{HEVC: domain.HEVCAllow}); err != nil || d.Method != domain.PlayRemux || d.Video.Encode != nil ||
 		!slices.Equal(d.Reasons, []domain.TranscodeReason{domain.PartsNotSupported}) {
 		t.Errorf("joined: %+v, %v; want a remux, for the parts", d, err)
 	}
 	everything.Parts = domain.PartsEach
-	if d, err := Decide(everything, twoFiles, nil, nil, domain.HEVCAllow); err != nil || d.Method != domain.PlayDirect {
+	if d, err := Decide(everything, twoFiles, domain.ChosenTracks{}, Encoding{HEVC: domain.HEVCAllow}); err != nil || d.Method != domain.PlayDirect {
 		t.Errorf("each in turn: %+v, %v; want the files as they are", d, err)
+	}
+	// A styled stream is in each file, on each one's clock, and is drawn in rather than read out.
+	everything.Subtitles = []SubtitleSupport{{Codec: "ass", Delivery: domain.SubtitleSidecar}}
+	signs := domain.ChosenTracks{Subtitle: new(5)}
+	if d, err := Decide(everything, twoFiles, signs, Encoding{HEVC: domain.HEVCAllow, Libass: true}); err != nil || d.Video.Encode == nil || d.Video.Encode.Burn == nil {
+		t.Errorf("styled text in each file: %+v, %v; want it drawn in", d, err)
 	}
 }

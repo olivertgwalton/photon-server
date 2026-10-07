@@ -11,9 +11,11 @@ type Choice = {
 	codec: string;
 	stream?: number;
 	file?: number;
+	// A file's id, which a play names it by.
+	id?: string;
 	// Its place among an HLS playlist's subtitles: every plain text track
 	// inside the copy, then every plain text file beside it. A picture or
-	// styled text has none.
+	// styled text has none: the server draws it into the video.
 	rendition?: number;
 	language?: string;
 	forced?: boolean;
@@ -35,6 +37,10 @@ const text = new Set([
 
 // What a browser reads from a file played as it is.
 const drawnBeside = new Set(["subrip", "webvtt"]);
+
+// Styled text, which WebVTT would lose the look of; the server's
+// hls.StyledSubtitle.
+const styled = new Set(["ass", "ssa"]);
 
 function name(s: {
 	title?: string;
@@ -67,13 +73,14 @@ export function choices(version: Schemas["VersionPage"]): Choice[] {
 	}
 	// A picture beside the copy is never drawn: only a track inside it is.
 	(version.subtitles ?? []).forEach((f, i) => {
-		if (!text.has(f.codec)) return;
+		if (!text.has(f.codec) && !styled.has(f.codec)) return;
 		out.push({
 			key: `f${i}`,
 			label: name(f),
 			codec: f.codec,
 			file: i,
-			rendition: rendition++,
+			id: f.id,
+			rendition: text.has(f.codec) ? rendition++ : undefined,
 			language: f.language,
 			forced: f.forced,
 			default: f.default,
@@ -82,19 +89,19 @@ export function choices(version: Schemas["VersionPage"]): Choice[] {
 	return out;
 }
 
-// What a play asks for so the choice can be shown: a picture drawn into the
-// video, and plain text a browser cannot read from a file played as it is
-// (a track inside it) carried in HLS as WebVTT.
+// What a play asks for so the choice can be shown: a picture or styled text
+// drawn into the video, and plain text a browser cannot read from a file
+// played as it is (a track inside it) carried in HLS as WebVTT.
 export function wants(choice: Choice | undefined): {
 	subtitle_stream?: number;
+	subtitle_file?: string;
 	viaHLS: boolean;
 } {
 	if (!choice) return { viaHLS: false };
-	if (choice.rendition === undefined) {
-		return { subtitle_stream: choice.stream, viaHLS: false };
-	}
+	const asked = { subtitle_stream: choice.stream, subtitle_file: choice.id };
+	if (choice.rendition === undefined) return { ...asked, viaHLS: false };
 	const beside = choice.file !== undefined && drawnBeside.has(choice.codec);
-	return { subtitle_stream: choice.stream, viaHLS: !beside };
+	return { ...asked, viaHLS: !beside };
 }
 
 // Whether showing a choice needs a new playback, rather than a track switched
@@ -104,10 +111,13 @@ export function needsReplay(
 	playback: Schemas["Playback"],
 ): boolean {
 	const burned = playback.video?.burned_subtitle ?? undefined;
+	const burnedFile = playback.video?.burned_subtitle_file ?? undefined;
 	if (choice?.rendition === undefined && choice) {
-		return burned !== choice.stream;
+		return choice.id === undefined
+			? burned !== choice.stream
+			: burnedFile !== choice.id;
 	}
-	if (burned !== undefined) return true;
+	if (burned !== undefined || burnedFile !== undefined) return true;
 	return playback.method === "direct" && wants(choice).viaHLS;
 }
 

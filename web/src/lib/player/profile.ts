@@ -149,7 +149,12 @@ export function browserProfile(
 		video,
 		audio: sound,
 		max_bitrate_kbps: maxBitrateKbps,
-		subtitles: [],
+		// A video element draws only a WebVTT track it is given, which SubRip
+		// becomes; pictures and styled text are drawn into the video.
+		subtitles: [
+			{ codec: "subrip", delivery: "sidecar" },
+			{ codec: "webvtt", delivery: "sidecar" },
+		],
 	};
 }
 

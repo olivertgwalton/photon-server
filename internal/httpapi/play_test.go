@@ -352,6 +352,9 @@ func TestAClientIsToldWhyNothingPlays(t *testing.T) {
 		{`{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "parts": "some"}}`, http.StatusBadRequest, nil},
 		{`{"audio_stream": 0, "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}]}}`, http.StatusBadRequest, nil},
 		{`{"start_ms": -1, "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}]}}`, http.StatusBadRequest, nil},
+		{`{"subtitle_stream": 0, "subtitle_file": "` + subtitleID.String() + `", "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}]}}`, http.StatusBadRequest, nil},
+		{`{"subtitle_file": "` + pictureID.String() + `", "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}]}}`, http.StatusBadRequest, nil},
+		{`{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "subtitles": [{"codec": "ass", "delivery": "burned"}]}}`, http.StatusBadRequest, nil},
 	} {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(tc.body))
 		req.Header.Set("Authorization", "Bearer "+goodToken)

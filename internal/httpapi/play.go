@@ -99,8 +99,10 @@ type videoJSON struct {
 	// mapped to SDR to reach it.
 	Range      domain.Range `json:"range,omitzero"`
 	ToneMapped bool         `json:"tone_mapped,omitzero"`
-	// BurnedSubtitle is the subtitle stream drawn into the picture.
-	BurnedSubtitle *int `json:"burned_subtitle,omitzero"`
+	// BurnedSubtitle is the subtitle stream drawn into the picture, BurnedSubtitleFile the
+	// subtitle file beside the copy drawn so.
+	BurnedSubtitle     *int       `json:"burned_subtitle,omitzero"`
+	BurnedSubtitleFile *uuid.UUID `json:"burned_subtitle_file,omitzero"`
 }
 
 type audioJSON struct {
@@ -126,9 +128,11 @@ func decisions() []decision {
 type playJSON struct {
 	VersionID   string `json:"version_id,omitzero"`
 	AudioStream *int   `json:"audio_stream,omitzero"`
-	// SubtitleStream is a subtitle the client will show; one that is a picture is drawn into the
-	// video where the client cannot draw it.
+	// SubtitleStream or SubtitleFile is a subtitle the client will show, a stream of the copy or a
+	// text file beside it; one that is a picture or styled is drawn into the video where the
+	// client cannot draw it.
 	SubtitleStream *int              `json:"subtitle_stream,omitzero"`
+	SubtitleFile   *uuid.UUID        `json:"subtitle_file,omitzero"`
 	Profile        *playback.Profile `json:"profile"`
 	// StartMS is where on the copy's timeline the player starts, so an HLS playlist is made from
 	// there before the player asks for it.
@@ -174,6 +178,10 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "start_ms is not negative")
 		return
 	}
+	if req.SubtitleStream != nil && req.SubtitleFile != nil {
+		writeProblem(w, a.logger, codeInvalidBody, "a subtitle is subtitle_stream or subtitle_file, not both")
+		return
+	}
 	if req.Profile.Parts == "" {
 		req.Profile.Parts = domain.PartsJoined
 	}
@@ -201,7 +209,14 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		audio, subtitles := copyTracks(c)
 		req.AudioStream = playback.DefaultTracks(audio, subtitles, prefs, last).Audio
 	}
-	d, err := playback.Decide(*req.Profile, playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams}, req.AudioStream, req.SubtitleStream, a.svc.Setup.Encoder.HEVC)
+	files := make([]playback.SubtitleFile, len(c.Subtitles))
+	for i, f := range c.Subtitles {
+		files[i] = playback.SubtitleFile{ID: f.ID, Codec: f.Codec}
+	}
+	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
+	d, err := playback.Decide(*req.Profile,
+		playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams, Files: files},
+		tracks, playback.Encoding{HEVC: a.svc.Setup.Encoder.HEVC, Libass: a.svc.Setup.Tools.Libass})
 	if errors.Is(err, playback.ErrNoCompatibleStream) {
 		status := codeNoCompatibleStream.status()
 		writeJSON(w, a.logger, "application/problem+json", status, refusalJSON{problem{Title: http.StatusText(status), Status: status, Code: codeNoCompatibleStream}, d.Reasons})
@@ -214,7 +229,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	session, err := a.svc.Playbacks.Start(r.Context(), d.Method, a.cardOf(r, title, c, d, req.SubtitleStream))
+	session, err := a.svc.Playbacks.Start(r.Context(), d.Method, a.cardOf(r, title, c, d, tracks))
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -230,6 +245,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 			answer.Video = &videoJSON{
 				Stream: v.Stream, Decision: decisionTranscode, Codec: e.Codec, Width: e.Width, Height: e.Height,
 				BitrateKbps: e.BitrateKbps, Range: e.Range, ToneMapped: e.ToneMap, BurnedSubtitle: e.Burn,
+				BurnedSubtitleFile: e.BurnFile,
 			}
 		}
 	}
@@ -275,7 +291,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 }
 
 // cardOf is what the dashboard shows of a playback the request starts of a copy, as decided.
-func (a *API) cardOf(r *http.Request, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, subtitle *int) domain.PlaybackCard {
+func (a *API) cardOf(r *http.Request, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, tracks domain.ChosenTracks) domain.PlaybackCard {
 	s := sessionOf(r)
 	card := domain.PlaybackCard{
 		Profile: domain.PlaybackProfile{ID: s.Profile.ID, Name: s.Profile.Name},
@@ -319,11 +335,18 @@ func (a *API) cardOf(r *http.Request, t domain.PlaybackTitle, c store.PlayCopy, 
 			card.Audio.Encode = &domain.PlaybackEncode{Codec: e.Codec, Channels: e.Channels, BitrateKbps: e.BitrateKbps}
 		}
 	}
-	if subtitle != nil {
-		src := stream(*subtitle)
+	burned := d.Video != nil && d.Video.Encode != nil && (d.Video.Encode.Burn != nil || d.Video.Encode.BurnFile != nil)
+	switch {
+	case tracks.Subtitle != nil:
+		src := stream(*tracks.Subtitle)
 		card.Subtitle = &domain.PlaybackSubtitle{
-			Stream: *subtitle, Codec: src.Codec, Language: tagOf(src.Language),
-			Burned: d.Video != nil && d.Video.Encode != nil && d.Video.Encode.Burn != nil,
+			Stream: tracks.Subtitle, Codec: src.Codec, Language: tagOf(src.Language), Burned: burned,
+		}
+	case tracks.SubtitleFile != nil:
+		if i := slices.IndexFunc(c.Subtitles, func(f store.PlaySubtitle) bool { return f.ID == *tracks.SubtitleFile }); i >= 0 {
+			card.Subtitle = &domain.PlaybackSubtitle{
+				File: tracks.SubtitleFile, Codec: c.Subtitles[i].Codec, Language: tagOf(c.Subtitles[i].Language), Burned: burned,
+			}
 		}
 	}
 	return card
@@ -584,7 +607,7 @@ func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !hls.TextSubtitle(sub.Codec) {
-		writeProblem(w, a.logger, codeInvalidParameter, "format webvtt is for text subtitles, and this one is pictures")
+		writeProblem(w, a.logger, codeInvalidParameter, "format webvtt is for plain text subtitles: WebVTT carries no pictures, and would lose a styled one's look")
 		return
 	}
 	ctx := r.Context()

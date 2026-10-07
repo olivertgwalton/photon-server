@@ -5333,7 +5333,7 @@ export interface components {
             containers: string[];
             max_bitrate_kbps: number;
             parts?: components["schemas"]["PartPlayback"];
-            subtitles?: string[];
+            subtitles?: components["schemas"]["SubtitleSupport"][];
             video: components["schemas"]["VideoSupport"][];
         };
         CollectionCard: {
@@ -5995,6 +5995,8 @@ export interface components {
             profile: components["schemas"]["ClientProfile"] | null;
             /** Format: int64 */
             start_ms?: number;
+            /** Format: uuid */
+            subtitle_file?: string | null;
             subtitle_stream?: number | null;
             version_id?: string;
         };
@@ -6058,8 +6060,10 @@ export interface components {
         PlaybackSubtitle: {
             burned?: boolean;
             codec: string;
+            /** Format: uuid */
+            file?: string | null;
             language?: string;
-            stream: number;
+            stream?: number | null;
         };
         PlaybackTitle: {
             /** Format: uuid */
@@ -6387,6 +6391,8 @@ export interface components {
             url: string;
         };
         /** @enum {string} */
+        SubtitleDelivery: "embedded" | "sidecar";
+        /** @enum {string} */
         SubtitleFormat: "original" | "webvtt";
         /** @enum {string} */
         SubtitleMode: "default" | "always" | "only_forced" | "none" | "smart";
@@ -6399,6 +6405,10 @@ export interface components {
             id: string;
             language?: string;
             title?: string;
+        };
+        SubtitleSupport: {
+            codec: string;
+            delivery: components["schemas"]["SubtitleDelivery"];
         };
         Switch: {
             profile_id: string;
@@ -6553,6 +6563,8 @@ export interface components {
         Video: {
             bitrate_kbps?: number;
             burned_subtitle?: number | null;
+            /** Format: uuid */
+            burned_subtitle_file?: string | null;
             codec?: components["schemas"]["VideoCodec"];
             decision: components["schemas"]["Decision"];
             dolby_vision?: components["schemas"]["DolbyVisionHandling"];

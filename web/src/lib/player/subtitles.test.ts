@@ -21,6 +21,7 @@ const version: Schemas["VersionPage"] = {
 			language: "fr",
 			forced: true,
 		},
+		{ index: 4, kind: "subtitle", codec: "ass", title: "Songs" },
 	],
 	subtitles: [
 		{ id: "s1", codec: "subrip", language: "en", hearing_impaired: true },
@@ -55,14 +56,17 @@ test("each subtitle is named and placed where HLS publishes it", () => {
 			language: "fr",
 			forced: true,
 		},
+		{ key: "s4", label: "Songs", codec: "ass", stream: 4 },
 		{
 			key: "f0",
 			label: "English (SDH)",
 			codec: "subrip",
 			file: 0,
+			id: "s1",
 			rendition: 1,
 			language: "en",
 		},
+		{ key: "f2", label: "Signs", codec: "ass", file: 2, id: "s3" },
 	]);
 });
 
@@ -79,8 +83,8 @@ test("a picture is asked to be drawn in, then left alone once it is", () => {
 });
 
 test("a file a browser reads plays beside the file as it is", () => {
-	const srt = choices(version)[2];
-	expect(wants(srt).viaHLS).toBe(false);
+	const srt = choices(version)[3];
+	expect(wants(srt)).toEqual({ subtitle_file: "s1", viaHLS: false });
 	expect(needsReplay(srt, direct)).toBe(false);
 });
 
@@ -89,6 +93,23 @@ test("a plain track inside the file comes through HLS", () => {
 	expect(wants(inside)).toEqual({ subtitle_stream: 3, viaHLS: true });
 	expect(needsReplay(inside, direct)).toBe(true);
 	expect(needsReplay(inside, remux)).toBe(false);
+});
+
+test("styled text, inside the file or beside it, is drawn in, never made plain", () => {
+	const [, , songs, , signs] = choices(version);
+	expect(wants(songs)).toEqual({ subtitle_stream: 4, viaHLS: false });
+	expect(wants(signs)).toEqual({ subtitle_file: "s3", viaHLS: false });
+	expect(needsReplay(signs, direct)).toBe(true);
+	const burning = {
+		...remux,
+		video: {
+			stream: 0,
+			decision: "transcode" as const,
+			burned_subtitle_file: "s3",
+		},
+	};
+	expect(needsReplay(signs, burning)).toBe(false);
+	expect(needsReplay(songs, burning)).toBe(true);
 });
 
 test("SubRip reads as WebVTT", () => {

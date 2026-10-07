@@ -37,7 +37,7 @@ func Conversion(c Copy, q domain.Quality, plays []VideoSupport, hevc domain.HEVC
 	for i, v := range plays {
 		video[i] = VideoSupport{Codec: v.Codec, MaxWidth: q.MaxWidth, Ranges: v.Ranges}
 	}
-	return Decide(Profile{Video: video, Audio: []AudioSupport{{Codec: "aac"}}, MaxBitrateKbps: q.MaxBitrateKbps}, c, nil, nil, hevc)
+	return Decide(Profile{Video: video, Audio: []AudioSupport{{Codec: "aac"}}, MaxBitrateKbps: q.MaxBitrateKbps}, c, domain.ChosenTracks{}, Encoding{HEVC: hevc})
 }
 
 // Converted is what a device plays of a conversion decided already: its codec, in its range.
