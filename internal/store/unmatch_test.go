@@ -49,9 +49,10 @@ func TestAnUnmatchedFilmKeepsOnlyItsOwnWordsUntilItIsFixed(t *testing.T) {
 		t.Errorf("unmatched: ids %v, ratings %v, credits %v, artwork %v; want none of a provider's",
 			page.IDs, page.Ratings, page.Credits, page.Artwork)
 	}
-	// Held: identify asks no provider about it, however its library refreshes.
-	if _, ok, err := s.IdentifySubject(ctx, id); err != nil || ok {
-		t.Errorf("an unmatched film is offered to identify: %v, %v", ok, err)
+	// Held: identify asks no provider about it, however its library refreshes, though an admin
+	// may still search them for it, to fix its match.
+	if sub, ok, err := s.IdentifySubject(ctx, id); err != nil || !ok || !sub.Unmatched || sub.Title != "jaws 1975" {
+		t.Errorf("an unmatched film's subject: %+v, %v, %v; want it, held", sub, ok, err)
 	}
 	if err := s.Unmatch(ctx, oneItem(t, s, "true").ID); err != nil {
 		t.Errorf("unmatching again: %v", err)
@@ -61,7 +62,7 @@ func TestAnUnmatchedFilmKeepsOnlyItsOwnWordsUntilItIsFixed(t *testing.T) {
 	if err := s.PinMatch(ctx, id, domain.ProviderTMDB, "578"); err != nil {
 		t.Fatal(err)
 	}
-	if sub, ok, err := s.IdentifySubject(ctx, id); err != nil || !ok || sub.IDs[domain.ProviderTMDB] != "578" {
+	if sub, ok, err := s.IdentifySubject(ctx, id); err != nil || !ok || sub.Unmatched || sub.IDs[domain.ProviderTMDB] != "578" {
 		t.Errorf("after its match is fixed: %+v, %v, %v; want it asked of TMDB by its id", sub, ok, err)
 	}
 }

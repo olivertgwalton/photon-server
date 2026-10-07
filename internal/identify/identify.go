@@ -23,7 +23,7 @@ import (
 func Handler(st *store.Store, providers *provider.Registry, loc domain.Locale, raise func(context.Context, domain.Event), log *slog.Logger) jobs.Handler {
 	return func(ctx context.Context, id uuid.UUID) error {
 		sub, ok, err := st.IdentifySubject(ctx, id)
-		if err != nil || !ok {
+		if err != nil || !ok || sub.Unmatched {
 			return err
 		}
 		all, err := providers.All(ctx)
