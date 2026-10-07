@@ -66,6 +66,16 @@ func (r Resolution) Widths() (from, to int) {
 	return 0, 0
 }
 
+// ResolutionOf is the class a picture this wide is of.
+func ResolutionOf(width int) Resolution {
+	for _, r := range Resolutions() {
+		if from, to := r.Widths(); width >= from && (to == 0 || width < to) {
+			return r
+		}
+	}
+	return ResolutionSD
+}
+
 // Order is the direction of a sort.
 type Order string
 
