@@ -21,6 +21,7 @@ type editing interface {
 	SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder) error
 	Refresh(ctx context.Context, id uuid.UUID, mode domain.RefreshMode) error
 	AnalyseTitle(ctx context.Context, id uuid.UUID) error
+	Unmatch(ctx context.Context, id uuid.UUID) error
 	SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker, absent []domain.MarkerAbsent) error
 	IdentifySubject(ctx context.Context, id uuid.UUID) (store.Subject, bool, error)
 	ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain.ArtworkKind) ([]store.ArtworkCandidate, error)
@@ -218,6 +219,24 @@ type refreshJSON struct {
 }
 
 // refresh asks a title's providers about it again now, ahead of the schedule.
+// unmatch takes a film or show off its providers and holds it so, until its match is fixed or it
+// is refreshed: the match PUT sets, gone.
+func (a *API) unmatch(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	err := a.svc.Editing.Unmatch(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		writeProblem(w, a.logger, codeNotFound, "no film or show has that id")
+		return
+	}
+	if a.answered(w, r, err) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // analyse asks for a title's files to be read again, as Plex's Analyze does, with what is made
 // from them after: its keyframes, previews and markers.
 func (a *API) analyse(w http.ResponseWriter, r *http.Request) {

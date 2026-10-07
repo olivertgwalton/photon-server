@@ -63,6 +63,9 @@ func (s *Store) PinMatch(ctx context.Context, id uuid.UUID, provider domain.Prov
 		if err := keyTitle(ctx, tx, item.ID); err != nil {
 			return err
 		}
+		if err := release(ctx, tx, item.ID); err != nil {
+			return err
+		}
 		return enqueue(ctx, tx, domain.JobIdentify, item.ID)
 	})
 }
@@ -132,6 +135,9 @@ func (s *Store) Refresh(ctx context.Context, id uuid.UUID, mode domain.RefreshMo
 			if err != nil {
 				return err
 			}
+		}
+		if err := release(ctx, tx, title.ID); err != nil {
+			return err
 		}
 		return enqueueAsked(ctx, tx, domain.JobIdentify, title.ID)
 	})

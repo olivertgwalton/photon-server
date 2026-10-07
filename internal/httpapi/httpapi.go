@@ -419,6 +419,11 @@ func (a *API) routes() []route {
 			body:    pinMatchJSON{}, status: http.StatusAccepted, handle: a.pinMatch,
 		},
 		{
+			pattern: "DELETE /api/v1/admin/titles/{id}/match", access: admin,
+			summary: "Take a film or show off its providers, and keep it so until its match is fixed or it is refreshed",
+			status:  http.StatusNoContent, handle: a.unmatch,
+		},
+		{
 			pattern: "PUT /api/v1/admin/titles/{id}/episode-order", access: admin,
 			summary: "Say the order a show's episode files are numbered in",
 			body:    setEpisodeOrderJSON{}, status: http.StatusAccepted, handle: a.setEpisodeOrder,
