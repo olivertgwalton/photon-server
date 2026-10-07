@@ -255,7 +255,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	secured := secure.New(st, hub.Subscribe, logger)
 	jellyfinAPI := jellyfin.NewListener(st, hub.Subscribe, jellyfin.New(logger, info, jellyfin.Services{
-		Auth: authService, Limits: cache, Raise: hub.Raise, Proxies: trusted,
+		Auth: authService, Limits: cache, Raise: hub.Raise, Proxies: trusted, Catalogue: st, Pictures: pictureCache,
 	}), listen, secured.Listen, secured.TLSConfig(), logger)
 	srv := &http.Server{
 		Addr: listen, TLSConfig: secured.TLSConfig(),
