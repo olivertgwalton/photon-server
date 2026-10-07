@@ -272,7 +272,7 @@ func (d deviceProfile) playsDirectly(c store.PlayCopy, video, audio *domain.Stre
 	if len(c.Parts) != 1 || maxBitrate > 0 && int64(c.BitrateKbps)*1000 > maxBitrate {
 		return false
 	}
-	if subtitle != nil && !d.subtitleTaken(subtitle.codec, subtitle.external) {
+	if subtitle != nil && !d.subtitleTaken(subtitle.codec, subtitle.delivery) {
 		return false
 	}
 	containers := containerNames(c.Container)
@@ -302,19 +302,21 @@ func (d deviceProfile) containerAllows(video domain.Stream, containers []string)
 	return true
 }
 
-// subtitleChoice is the subtitle an app chose: its codec, and the file beside the copy it is, if
-// it is one.
+// subtitleChoice is the subtitle an app chose: its codec, how the app would draw it, and the file
+// beside the copy it is, if it is one.
 type subtitleChoice struct {
 	codec    string
-	external bool
+	delivery domain.SubtitleDelivery
 	file     uuid.UUID
 }
 
-// subtitleTaken is whether the app draws a subtitle of a codec itself: from inside the file it
-// plays, or a file beside it.
-func (d deviceProfile) subtitleTaken(codec string, external bool) bool {
-	method := "embed"
-	if external {
+// subtitleTaken is whether the app draws a subtitle of a codec itself, delivered so.
+func (d deviceProfile) subtitleTaken(codec string, delivery domain.SubtitleDelivery) bool {
+	var method string
+	switch delivery {
+	case domain.SubtitleEmbedded:
+		method = "embed"
+	case domain.SubtitleSidecar:
 		method = "external"
 	}
 	return slices.ContainsFunc(d.SubtitleProfiles, func(s subtitleProfile) bool {

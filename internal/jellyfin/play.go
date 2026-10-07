@@ -152,7 +152,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 		audio = &sound.Index
 	}
 	chosen := domain.ChosenTracks{Audio: audio, Subtitle: sub}
-	if picked != nil && picked.external {
+	if picked != nil && picked.delivery == domain.SubtitleSidecar {
 		chosen.SubtitleFile = &picked.file
 	}
 	d, err := playback.Decide(p.hlsProfile(t, segments, c, limit), playback.CopyOf(c), chosen, a.svc.Encoding)
@@ -188,12 +188,12 @@ func subtitleOf(c store.PlayCopy, index *int) (*int, *subtitleChoice) {
 	base := 0
 	for _, s := range c.Streams {
 		if s.Kind == domain.StreamSubtitle && s.Index == *index {
-			return index, &subtitleChoice{codec: s.Codec}
+			return index, &subtitleChoice{codec: s.Codec, delivery: domain.SubtitleEmbedded}
 		}
 		base = max(base, s.Index+1)
 	}
 	if n := *index - base; n >= 0 && n < len(c.Subtitles) {
-		return nil, &subtitleChoice{codec: c.Subtitles[n].Codec, external: true, file: c.Subtitles[n].ID}
+		return nil, &subtitleChoice{codec: c.Subtitles[n].Codec, delivery: domain.SubtitleSidecar, file: c.Subtitles[n].ID}
 	}
 	return nil, nil
 }

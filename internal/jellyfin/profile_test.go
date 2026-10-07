@@ -102,7 +102,7 @@ func TestAnAppsProfileDecidesHowACopyPlays(t *testing.T) {
 	if p.playsDirectly(copyOf("mov,mp4,m4a,3gp,3g2,mj2", 1), &high, &audio, nil, p.MaxStreamingBitrate) {
 		t.Error("HEVC above the level the player decodes plays as it is")
 	}
-	if p.playsDirectly(copyOf("mov,mp4,m4a,3gp,3g2,mj2", 1), &video, &audio, &subtitleChoice{codec: "subrip"}, p.MaxStreamingBitrate) {
+	if p.playsDirectly(copyOf("mov,mp4,m4a,3gp,3g2,mj2", 1), &video, &audio, &subtitleChoice{codec: "subrip", delivery: domain.SubtitleEmbedded}, p.MaxStreamingBitrate) {
 		t.Error("a subtitle the player draws only from HLS plays in the file")
 	}
 	if p.playsDirectly(copyOf("mov,mp4,m4a,3gp,3g2,mj2", 1), &video, &audio, nil, 4_000_000) {
