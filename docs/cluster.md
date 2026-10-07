@@ -13,6 +13,9 @@ must be reachable by the others.
 | `PHOTON_HWACCEL` | what it encodes video with: `software`, `nvenc`, `qsv`, `vaapi` or `videotoolbox` |
 | `PHOTON_HWACCEL_DEVICE` | the device to encode on, such as `/dev/dri/renderD128` |
 
+A node is named by its host. In a container, give each machine's its own name: the deploy
+folder's compose file takes `PHOTON_HOSTNAME`, `photon` where it is unset.
+
 Every node mounts the media at the same path, as a library is kept by its path. Node addresses
 belong on a private network: the nodes trust what they hand each other.
 
