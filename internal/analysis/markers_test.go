@@ -13,6 +13,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
@@ -72,7 +73,7 @@ func TestASeasonsSharedIntroIsFound(t *testing.T) {
 	if len(jobs) != 0 {
 		t.Fatalf("claimed %v at once, want the season left to settle first", jobs)
 	}
-	if n, err := st.QueueMarkers(ctx, domain.JobDueWindow); err != nil || n != 0 {
+	if n, err := st.QueueSeasonMarkers(ctx, domain.JobDueWindow); err != nil || n != 0 {
 		t.Errorf("the backfill queued %d (%v), want the season already queued", n, err)
 	}
 
@@ -94,7 +95,7 @@ func TestASeasonsSharedIntroIsFound(t *testing.T) {
 	if err != nil || len(parts) != 3 {
 		t.Fatalf("season parts %+v, %v", parts, err)
 	}
-	if err := Markers(st, fake)(ctx, season); err != nil {
+	if err := Markers(st, fake, nil)(ctx, season); err != nil {
 		t.Fatal(err)
 	}
 	for _, p := range parts {
@@ -117,10 +118,10 @@ func TestASeasonsSharedIntroIsFound(t *testing.T) {
 
 	// Asked again with nothing new, the season is passed over.
 	asked = 0
-	if err := Markers(st, fake)(ctx, season); err != nil || asked != 0 {
+	if err := Markers(st, fake, nil)(ctx, season); err != nil || asked != 0 {
 		t.Errorf("again: %d fingerprints taken, %v; want none", asked, err)
 	}
-	if n, err := st.QueueMarkers(ctx, domain.JobDueWindow); err != nil || n != 0 {
+	if n, err := st.QueueSeasonMarkers(ctx, domain.JobDueWindow); err != nil || n != 0 {
 		t.Errorf("the backfill queued %d (%v), want nothing left to compare", n, err)
 	}
 }
@@ -142,7 +143,7 @@ func TestALibraryOnChaptersReadsNoSound(t *testing.T) {
 			t.Errorf("the scan queued %+v, want no comparison", c)
 		}
 	}
-	if n, err := st.QueueMarkers(ctx, domain.JobDueWindow); err != nil || n != 0 {
+	if n, err := st.QueueSeasonMarkers(ctx, domain.JobDueWindow); err != nil || n != 0 {
 		t.Errorf("the daily task queued %d (%v), want none", n, err)
 	}
 	season := seasonOf(t, st, lib)
@@ -151,7 +152,7 @@ func TestALibraryOnChaptersReadsNoSound(t *testing.T) {
 		asked++
 		return points(uint64(asked), at(time.Minute)), nil
 	}
-	if err := Markers(st, fake)(ctx, season); err != nil || asked != 0 {
+	if err := Markers(st, fake, nil)(ctx, season); err != nil || asked != 0 {
 		t.Errorf("a comparison already queued took %d fingerprints (%v), want none", asked, err)
 	}
 	page, err := st.Title(ctx, uuid.UUID{}, season)
@@ -180,10 +181,10 @@ func TestALibraryOnChaptersReadsNoSound(t *testing.T) {
 	if err := st.SetLibrary(ctx, lib, store.LibraryChange{Markers: domain.MarkersAll}); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := st.QueueMarkers(ctx, domain.JobDueWindow); err != nil || n != 1 {
+	if n, err := st.QueueSeasonMarkers(ctx, domain.JobDueWindow); err != nil || n != 1 {
 		t.Errorf("set to compare sound, the daily task queued %d (%v), want the season", n, err)
 	}
-	if err := Markers(st, fake)(ctx, season); err != nil || asked != 6 {
+	if err := Markers(st, fake, nil)(ctx, season); err != nil || asked != 6 {
 		t.Errorf("compared: %d fingerprints taken (%v), want each episode's start and end", asked, err)
 	}
 	if got := markers(); len(got) != 1 || got[0] != opening {
@@ -202,4 +203,70 @@ func seasonOf(t *testing.T, st *store.Store, lib uuid.UUID) uuid.UUID {
 		t.Fatal(show.Seasons, err)
 	}
 	return show.Seasons[0].ID
+}
+
+// A film's credits are found by its picture, as a scan queues it, and shown on its title; a film
+// already read is passed over, and the backfill finds nothing left to read.
+func TestAFilmsCreditsAreFoundByItsPicture(t *testing.T) {
+	log := slog.New(slog.DiscardHandler)
+	url := storetest.FreshDatabase(t)
+	if err := store.Migrate(t.Context(), url, log); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(t.Context(), url, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(st.Close)
+	ctx := t.Context()
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "Heat"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Heat", "Heat.mkv"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	lib, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetLibrary(ctx, lib.ID, store.LibraryChange{Markers: domain.MarkersAll}); err != nil {
+		t.Fatal(err)
+	}
+	film := store.Film{Title: "Heat", Folder: "Heat", Copies: []store.Copy{{ContentKey: []byte("heat"), Parts: []store.Part{{
+		RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+			Duration: 2 * time.Hour, Streams: []domain.Stream{{Kind: domain.StreamVideo, Codec: "h264", Range: domain.RangeSDR}},
+		},
+	}}}}}
+	if _, err := st.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []store.Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := st.ClaimJobs(ctx, []domain.JobKind{domain.JobMarkers}, nil, uuid.NewV7(), time.Minute, 1)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("claimed %v, %v; want the film's markers queued by its scan", jobs, err)
+	}
+	crawl := 2*time.Hour - 8*time.Minute
+	read := 0
+	fake := func(_ context.Context, _ *os.File, from time.Duration) ([]media.Shade, error) {
+		read++
+		return shadesOf(from, 2*time.Hour, 0, func(at time.Duration) look { return pick(at >= crawl, letters, picture) }), nil
+	}
+	if err := Markers(st, nil, fake)(ctx, jobs[0].Subject); err != nil || read != 1 {
+		t.Fatalf("read %d, %v", read, err)
+	}
+	page, err := st.Title(ctx, uuid.UUID{}, jobs[0].Subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := page.Versions[0].Markers
+	if len(got) != 1 || got[0].Kind != domain.MarkerCredits || got[0].Source != domain.MarkerByBlackFrames ||
+		got[0].StartMS != crawl.Milliseconds() || got[0].EndMS != (2*time.Hour).Milliseconds() {
+		t.Errorf("markers %+v, want the credits from 1:52:00 found by black frames", got)
+	}
+	if err := Markers(st, nil, fake)(ctx, jobs[0].Subject); err != nil || read != 1 {
+		t.Errorf("asked again: read %d, %v; want the film passed over", read, err)
+	}
+	if n, err := st.QueueFilmMarkers(ctx, domain.JobDueWindow); err != nil || n != 0 {
+		t.Errorf("the backfill queued %d (%v), want the film read already", n, err)
+	}
 }

@@ -29,7 +29,7 @@ export const tasks: Record<Schemas["TaskKey"], { name: string; does: string }> =
 		},
 		detect_markers: {
 			name: "Detect intros and credits",
-			does: "Compares the sound of each season's episodes to find what they share.",
+			does: "Compares the sound of each season's episodes to find what they share, and finds where each film's picture goes dark for its credits.",
 		},
 		backfill_previews: {
 			name: "Make previews",

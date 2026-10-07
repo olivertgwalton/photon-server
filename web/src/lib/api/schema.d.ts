@@ -5980,7 +5980,7 @@ export interface components {
             start_ms: number;
         };
         /** @enum {string} */
-        MarkerSource: "user" | "chapter" | "fingerprint";
+        MarkerSource: "user" | "chapter" | "fingerprint" | "blackframes";
         Markers: {
             absent?: components["schemas"]["MarkerAbsent"][];
             markers: components["schemas"]["Marker"][];

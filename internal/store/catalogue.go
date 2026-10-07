@@ -224,6 +224,12 @@ func saveFilm(ctx context.Context, tx db, lib uuid.UUID, settings analysis, f Fi
 			return err
 		}
 	}
+	// The end of each copy is read for credits; the reading passes over a copy already read.
+	if settings.Markers == domain.MarkersAll && len(f.Copies) > 0 {
+		if err := insertJob(ctx, tx, domain.JobMarkers, itemID, 0, 0, settings.MarkersDue); err != nil {
+			return err
+		}
+	}
 	return keyTitle(ctx, tx, itemID)
 }
 

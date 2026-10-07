@@ -199,11 +199,52 @@ func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart
 	return out, nil
 }
 
-// SaveFingerprintMarkers replaces the markers fingerprints found on the parts compared, and
-// records that they were.
-func (s *Store) SaveFingerprintMarkers(ctx context.Context, compared []uuid.UUID, found map[uuid.UUID][]domain.Marker) error {
+// FilmEnd is the last part of a copy of a film, where its credits are.
+type FilmEnd struct {
+	ID            uuid.UUID
+	Duration      time.Duration
+	Root, RelPath string
+	Read          bool
+}
+
+type filmEndRow struct {
+	ID              uuid.UUID
+	DurationMS      int64
+	Root, RelPath   string
+	FingerprintedAt *time.Time
+}
+
+// FilmEnds answers the last part of each copy of a film on disk, in a library that reads its files
+// for markers, with a picture: none for anything but a film.
+func (s *Store) FilmEnds(ctx context.Context, film uuid.UUID) ([]FilmEnd, error) {
+	found, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (p.id) p.id, p.duration_ms, l.root, f.rel_path, p.fingerprinted_at
+		FROM items i
+		JOIN versions v ON v.item_id = i.id AND v.missing_since IS NULL
+		JOIN parts p ON p.version_id = v.id AND p.idx = (SELECT max(idx) FROM parts WHERE version_id = v.id)
+		JOIN part_files f ON f.part_id = p.id
+		JOIN libraries l ON l.id = f.library_id AND l.markers = 'all'
+		WHERE i.id = $1 AND i.kind = 'movie'
+			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'video')
+		ORDER BY p.id, f.rel_path`, film)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := pgx.CollectRows(found, pgx.RowToStructByName[filmEndRow])
+	out := make([]FilmEnd, len(rows))
+	for n, r := range rows {
+		out[n] = FilmEnd{
+			ID: r.ID, Duration: time.Duration(r.DurationMS) * time.Millisecond, Root: r.Root, RelPath: r.RelPath,
+			Read: r.FingerprintedAt != nil,
+		}
+	}
+	return out, err
+}
+
+// SaveFoundMarkers replaces the markers source found on the parts read, and records that they were.
+func (s *Store) SaveFoundMarkers(ctx context.Context, source domain.MarkerSource, read []uuid.UUID, found map[uuid.UUID][]domain.Marker) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `DELETE FROM markers WHERE part_id = ANY($1) AND source = $2`, compared, domain.MarkerByFingerprint)
+		_, err := tx.Exec(ctx, `DELETE FROM markers WHERE part_id = ANY($1) AND source = $2`, read, source)
 		if err != nil {
 			return err
 		}
@@ -211,23 +252,23 @@ func (s *Store) SaveFingerprintMarkers(ctx context.Context, compared []uuid.UUID
 		for part, markers := range found {
 			for _, m := range markers {
 				rows = append(rows, &model.Marker{
-					PartID: part, Kind: m.Kind, Source: domain.MarkerByFingerprint, StartMS: &m.StartMS, EndMS: &m.EndMS,
+					PartID: part, Kind: m.Kind, Source: source, StartMS: &m.StartMS, EndMS: &m.EndMS,
 				})
 			}
 		}
 		if err := createMarkers(ctx, tx, rows); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `UPDATE parts SET fingerprinted_at = $2 WHERE id = ANY($1)`, compared, time.Now())
+		_, err = tx.Exec(ctx, `UPDATE parts SET fingerprinted_at = $2 WHERE id = ANY($1)`, read, time.Now())
 		return err
 	})
 }
 
-// QueueMarkers queues a comparison of every season with an episode whose sound has not been
+// QueueSeasonMarkers queues a comparison of every season with an episode whose sound has not been
 // compared, in a library that compares sound, due as said; due now, every markers job already
 // queued is due now too. A season whose comparison failed every attempt waits for its episodes to
 // change.
-func (s *Store) QueueMarkers(ctx context.Context, due domain.JobDue) (int64, error) {
+func (s *Store) QueueSeasonMarkers(ctx context.Context, due domain.JobDue) (int64, error) {
 	var n int64
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := promoteFor(ctx, tx, domain.JobMarkers, due); err != nil {
@@ -241,6 +282,29 @@ func (s *Store) QueueMarkers(ctx context.Context, due domain.JobDue) (int64, err
 		JOIN parts p ON p.version_id = v.id
 		WHERE e.kind = 'episode' AND p.fingerprinted_at IS NULL
 			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'audio')
+		ON CONFLICT (kind, subject) DO NOTHING`, due)
+		n = tag.RowsAffected()
+		return err
+	})
+	return n, err
+}
+
+// QueueFilmMarkers queues a reading of the end of every film whose last part has not been read, in
+// a library that reads its files for markers, due as said, as QueueSeasonMarkers queues seasons.
+func (s *Store) QueueFilmMarkers(ctx context.Context, due domain.JobDue) (int64, error) {
+	var n int64
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := promoteFor(ctx, tx, domain.JobMarkers, due); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `
+		INSERT INTO jobs (kind, subject, due)
+		SELECT DISTINCT 'markers', i.id, $1 FROM items i
+		JOIN versions v ON v.item_id = i.id AND v.missing_since IS NULL
+		JOIN libraries l ON l.id = v.library_id AND l.markers = 'all'
+		JOIN parts p ON p.version_id = v.id AND p.idx = (SELECT max(idx) FROM parts WHERE version_id = v.id)
+		WHERE i.kind = 'movie' AND p.fingerprinted_at IS NULL
+			AND EXISTS (SELECT 1 FROM streams s WHERE s.part_id = p.id AND s.kind = 'video')
 		ON CONFLICT (kind, subject) DO NOTHING`, due)
 		n = tag.RowsAffected()
 		return err
