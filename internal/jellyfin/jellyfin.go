@@ -43,12 +43,13 @@ type Services struct {
 	Playing   playing
 	Playbacks playbacks
 	Watching  watching
-	// HLS is this node's remuxes, which Remuxing opens and Owners find on whichever node runs
-	// them; Signer signs a TranscodingUrl's plan and the addresses of another node's HLS.
-	HLS      hlsFiles
-	Remuxing remuxing
-	Owners   owners
-	Signer   playback.Signer
+	// HLS is this node's remuxes, which Placer opens on the node it chooses and Owners find on
+	// whichever node runs them; Signer signs a TranscodingUrl's plan and the addresses of another
+	// node's HLS.
+	HLS    hlsFiles
+	Placer placer
+	Owners owners
+	Signer playback.Signer
 	// Encoding is what video is made with for an app: HEVC where it plays it, and styled
 	// subtitles drawn in.
 	Encoding playback.Encoding

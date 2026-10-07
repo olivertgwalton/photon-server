@@ -34,7 +34,7 @@ func TestAPlaySessionIsStartedOnOneNodeOnly(t *testing.T) {
 			s := NewSessions(k, positions{}, served{}, quiet, node)
 			wg.Go(func() {
 				<-ready
-				_, errs[i] = s.Start(t.Context(), session, domain.PlayTranscode, domain.PlaybackCard{})
+				_, errs[i] = s.Start(t.Context(), session, domain.PlayTranscode, domain.PlaybackCard{}, node)
 			})
 		}
 		close(ready)

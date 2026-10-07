@@ -20,6 +20,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
@@ -36,7 +37,7 @@ func newFakePlaybacks() *fakePlaybacks {
 	return &fakePlaybacks{started: map[uuid.UUID]domain.PlaybackCard{}, stopped: map[uuid.UUID]time.Duration{}}
 }
 
-func (f *fakePlaybacks) Start(_ context.Context, id uuid.UUID, _ domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
+func (f *fakePlaybacks) Start(_ context.Context, id uuid.UUID, _ domain.PlayMethod, card domain.PlaybackCard, _ uuid.UUID) (domain.Playback, error) {
 	f.started[id] = card
 	return domain.Playback{ID: id}, nil
 }
@@ -144,7 +145,7 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	plays := newFakePlaybacks()
 	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
 		Network: st,
-		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st,
+		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st, Placer: alone(nil),
 	})
 	const infuse = `MediaBrowser Client="Infuse-Direct", Device="Apple TV", DeviceId="E0BE", Version="8.5.6", Token="pst_ada"`
 	call := func(method, target, body string, want int) []byte {
@@ -297,7 +298,7 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st,
-		HLS: remuxes, Remuxing: remuxes, Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
+		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
 	})
 	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
 	w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", swiftfinHeader, `{"MaxStreamingBitrate":120000000,"DeviceProfile":`+swiftfin+`}`)
@@ -373,7 +374,7 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st,
-		HLS: remuxes, Remuxing: remuxes, Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
+		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
 	})
 	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
 	for _, tc := range []struct {
@@ -433,7 +434,7 @@ func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st,
-		HLS: remuxes, Remuxing: remuxes, Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
+		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
 	})
 	const infuse = `MediaBrowser Client="Infuse-Direct", Device="Apple TV", DeviceId="E0BE", Version="8.5.6", Token="pst_ada"`
 	w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", infuse, `{"IsPlayback":true,"EnableDirectPlay":true,
@@ -459,3 +460,19 @@ func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 		t.Errorf("master: %d, segments %s, want MPEG-TS", rec.Code, remuxes.segments[session])
 	}
 }
+
+// alone places every playback on this node, as a server of one does.
+func alone(local interface {
+	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error
+},
+) *playback.Placer {
+	self := domain.Node{ID: uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1"), Limit: 4, Encoder: domain.Encoder{
+		Acceleration: domain.AccelSoftware, HEVC: domain.HEVCAllow, Libass: true,
+	}}
+	return playback.NewPlacer(noNodes{}, func() domain.Node { return self }, local, nodecall.Key{})
+}
+
+// noNodes is a cluster of one: no other node tells of itself.
+type noNodes struct{}
+
+func (noNodes) Nodes(context.Context) ([]domain.Node, error) { return nil, nil }

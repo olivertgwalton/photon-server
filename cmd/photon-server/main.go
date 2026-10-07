@@ -39,6 +39,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/mdblist"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/omdb"
 	"github.com/olivertgwalton/photon-server/internal/opensubtitles"
 	"github.com/olivertgwalton/photon-server/internal/peer"
@@ -260,16 +261,31 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	owners, remuxes, signer := playback.NewRouter(cache, node), playback.NewRemuxes(files, remuxer), playback.NewSigner(signingKey)
+	nodeKey, err := nodecall.NewKey(signingKey)
+	if err != nil {
+		return err
+	}
+	address := os.Getenv("PHOTON_NODE_ADDRESS")
+	// self is this node as it tells the others of itself, and as it places playbacks on itself.
+	self := func() domain.Node {
+		n := domain.Node{
+			ID: node, Address: address, Name: hostname, LimitSource: limitSource,
+			Encoder: domain.Encoder{Acceleration: hw.Accel, HEVC: hw.HEVC, Libass: tools.Libass},
+		}
+		n.Transcodes, n.Conversions, n.Limit = remuxer.Transcodes()
+		return n
+	}
+	placer := playback.NewPlacer(cache, self, remuxes, nodeKey)
 	secured := secure.New(st, hub.Subscribe, logger)
 	jellyfinAPI := jellyfin.NewListener(st, hub.Subscribe, jellyfin.New(logger, info, jellyfin.Services{
 		Auth: authService, Limits: cache, Raise: hub.Raise, Proxies: trusted, Catalogue: st, Pictures: pictureCache,
-		Playing: files, Playbacks: sessions, Watching: st, HLS: remuxer, Remuxing: remuxes, Owners: owners,
+		Playing: files, Playbacks: sessions, Watching: st, HLS: remuxer, Placer: placer, Owners: owners,
 		Signer: signer, Encoding: playback.Encoding{HEVC: hw.HEVC, Libass: tools.Libass}, Network: st,
 	}), listen, secured.Listen, secured.TLSConfig(), logger)
 	srv := &http.Server{
 		Addr: listen, TLSConfig: secured.TLSConfig(),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: files, Subtitles: fetcher, Playbacks: sessions, Owners: owners, Remuxing: remuxes, HLS: remuxer, Signer: signer, Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Network: st, Storage: st, Stores: stores, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: files, Subtitles: fetcher, Playbacks: sessions, Owners: owners, Placer: placer, NodeKey: nodeKey, HLS: remuxer, Signer: signer, Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Network: st, Storage: st, Stores: stores, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -324,12 +340,8 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	wg.Go(func() { sweepPlaybacks(background, sessions, remuxer, logger) })
 	wg.Go(func() { pruneConversions(background, conversions, logger) })
-	if address := os.Getenv("PHOTON_NODE_ADDRESS"); address != "" {
-		self := domain.Node{
-			ID: node, Address: address, Name: hostname, LimitSource: limitSource,
-			Encoder: domain.Encoder{Acceleration: hw.Accel, HEVC: hw.HEVC, Libass: tools.Libass},
-		}
-		wg.Go(func() { advertise(background, cache, self, remuxer, logger) })
+	if address != "" {
+		wg.Go(func() { advertise(background, cache, self, remuxer.Changes(), logger) })
 	}
 	wg.Go(func() {
 		if err := watcher.Run(background); err != nil {
@@ -557,19 +569,18 @@ const advertiseEvery = 15 * time.Second
 // advertise tells the others where this node's peers reach it, PHOTON_NODE_ADDRESS, so a request
 // for HLS one of its playbacks makes is handed to it whichever node it lands on, and how many
 // videos it encodes, said again as soon as that changes.
-func advertise(ctx context.Context, cache *kv.KV, self domain.Node, remuxer *hls.Remuxer, logger *slog.Logger) {
+func advertise(ctx context.Context, cache *kv.KV, self func() domain.Node, changes <-chan struct{}, logger *slog.Logger) {
 	t := time.NewTicker(advertiseEvery)
 	defer t.Stop()
 	for {
-		self.Transcodes, self.Conversions, self.Limit = remuxer.Transcodes()
-		if err := cache.SetNode(ctx, self, 3*advertiseEvery); err != nil && ctx.Err() == nil {
+		if err := cache.SetNode(ctx, self(), 3*advertiseEvery); err != nil && ctx.Err() == nil {
 			logger.WarnContext(ctx, "node not advertised", slog.Any("err", err))
 		}
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-		case <-remuxer.Changes():
+		case <-changes:
 		}
 	}
 }

@@ -366,10 +366,15 @@ func (r *Remuxer) SubtitleSegment(ctx context.Context, playback uuid.UUID, track
 
 // Encoder answers the device video planned so is encoded on, or nothing where it is copied.
 func (r *Remuxer) Encoder(video domain.VideoPlan) domain.Acceleration {
+	return EncodedOn(r.hw.Accel, video)
+}
+
+// EncodedOn is what a node encoding on accel encodes video with, or nothing where it is copied.
+func EncodedOn(accel domain.Acceleration, video domain.VideoPlan) domain.Acceleration {
 	if video.Encode == nil {
 		return ""
 	}
-	return r.hw.encoding(video).Accel
+	return Hardware{Accel: accel}.encoding(video).Accel
 }
 
 // Close ends a playback's remux and removes its segments.

@@ -12,6 +12,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -154,8 +155,11 @@ type Services struct {
 	// Downloads are each profile's, and Conversions make the ones not downloaded as they are.
 	Downloads   downloads
 	Conversions conversions
-	Remuxing    remuxing
-	HLS         hlsFiles
+	// Placer chooses the node that encodes a playback, and NodeKey checks another node's asking
+	// this one to open a remux.
+	Placer  placer
+	NodeKey nodecall.Key
+	HLS     hlsFiles
 	// Owners say which node of the cluster serves a playback's HLS.
 	Owners owners
 	// Signer signs the addresses titles play from.
@@ -225,6 +229,8 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		}
 		a.mux.Handle(r.pattern, h)
 	}
+	// Another node asking this one to open a remux is no client's to call, and so in no description.
+	a.mux.Handle("POST /api/v1/internal/playbacks/{id}/remux", a.svc.NodeKey.Verify(http.HandlerFunc(a.openRemote)))
 	a.mux.HandleFunc("/", a.unmatched)
 	a.handler = a.mux
 	if svc.Secure != nil {

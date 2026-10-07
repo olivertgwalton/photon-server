@@ -26,6 +26,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -141,7 +142,7 @@ var playbackID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000c1")
 // fakePlaybacks knows one playback, Oliver's.
 type fakePlaybacks struct{}
 
-func (fakePlaybacks) Start(_ context.Context, _ uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard) (domain.Playback, error) {
+func (fakePlaybacks) Start(_ context.Context, _ uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard, _ uuid.UUID) (domain.Playback, error) {
 	return domain.Playback{ID: playbackID, Profile: card.Profile.ID, Item: card.Title.ID, Version: card.Version.ID, Method: method, Card: card}, nil
 }
 
@@ -201,7 +202,7 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 	}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Network: fakeNetwork{},
-		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{}, HLS: fakeHLS{},
+		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{}, HLS: fakeHLS{}, Placer: alone(fakeHLS{}, false),
 		Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
@@ -305,8 +306,7 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{},
-		Remuxing: remuxOpener{remuxer}, HLS: remuxer, Signer: playback.NewSigner([]byte("key")),
-		Setup: Setup{Tools: media.Tools{Libass: true}},
+		Placer: alone(remuxOpener{remuxer}, true), HLS: remuxer, Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
 		req.Header.Set("Authorization", "Bearer "+goodToken)
@@ -445,7 +445,7 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 	h := fakeHLS{dir: dir}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Network: fakeNetwork{},
-		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: dir}, Playbacks: fakePlaybacks{}, Remuxing: h, HLS: h,
+		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: dir}, Playbacks: fakePlaybacks{}, Placer: alone(h, false), HLS: h,
 		Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
@@ -501,7 +501,7 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 func TestARemoteClientIsKeptWithinTheServersLimit(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Network: fakeNetwork{remoteKbps: 2000}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{},
-		Playbacks: fakePlaybacks{}, Remuxing: fakeHLS{}, HLS: fakeHLS{}, Signer: playback.NewSigner([]byte("key")),
+		Playbacks: fakePlaybacks{}, Placer: alone(fakeHLS{}, false), HLS: fakeHLS{}, Signer: playback.NewSigner([]byte("key")),
 	})
 	for _, tc := range []struct {
 		from, limit string
@@ -531,7 +531,7 @@ func TestARemoteClientIsKeptWithinTheServersLimit(t *testing.T) {
 }
 
 func TestAClientIsToldWhyNothingPlays(t *testing.T) {
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: fakePlaybacks{}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: fakePlaybacks{}, Placer: alone(fakeHLS{}, false)})
 	for _, tc := range []struct {
 		body        string
 		wantStatus  int
@@ -685,6 +685,29 @@ func (*livePlaybacks) RecordPlay(context.Context, domain.Playback, time.Time, ti
 }
 
 // remuxOpener opens a copy's first part, as decided, on a real remuxer.
+// alone places every playback on this node, as a server of one does, encoding in software, HEVC
+// never, and styled subtitles drawn in where libass.
+func alone(local interface {
+	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error
+}, libass bool,
+) *playback.Placer {
+	self := func() domain.Node {
+		n := domain.Node{ID: uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1"), Encoder: domain.Encoder{
+			Acceleration: domain.AccelSoftware, HEVC: domain.HEVCDeny, Libass: libass,
+		}}
+		if h, ok := local.(interface{ Transcodes() (int, int, int) }); ok {
+			n.Transcodes, n.Conversions, n.Limit = h.Transcodes()
+		}
+		return n
+	}
+	return playback.NewPlacer(noNodes{}, self, local, nodecall.Key{})
+}
+
+// noNodes is a cluster of one: no other node tells of itself.
+type noNodes struct{}
+
+func (noNodes) Nodes(context.Context) ([]domain.Node, error) { return nil, nil }
+
 type remuxOpener struct{ *hls.Remuxer }
 
 func (r remuxOpener) Open(ctx context.Context, id uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error {
@@ -703,7 +726,7 @@ func TestAPlayerIsGivenTheSegmentsItAsksFor(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7()),
-		Remuxing: remuxOpener{remuxer}, HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
+		Placer: alone(remuxOpener{remuxer}, false), HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
 	})
 	for segments, want := range map[string]string{``: "\n0.m4s\n", `, "segments": "fmp4"`: "\n0.m4s\n", `, "segments": "mpegts"`: "\n0.ts\n"} {
 		body := `{"profile": {"containers": ["mp4"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "parts": "each"` + segments + `}}`
@@ -734,7 +757,7 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7()),
-		Remuxing: remuxOpener{remuxer}, HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
+		Placer: alone(remuxOpener{remuxer}, false), HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
@@ -817,7 +840,7 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, raise, uuid.NewV7()),
-		Remuxing: remuxOpener{remuxer}, HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
+		Placer: alone(remuxOpener{remuxer}, false), HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(method, target, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, strings.NewReader(body))
