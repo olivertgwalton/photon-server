@@ -215,6 +215,11 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		audio, subtitles := copyTracks(c)
 		req.AudioStream = playback.DefaultTracks(audio, subtitles, prefs, last).Audio
 	}
+	limit, err := playback.RemoteLimit(r.Context(), a.svc.Network, a.svc.TrustedProxies.Client(r))
+	if a.answered(w, r, err) {
+		return
+	}
+	req.Profile.MaxBitrateKbps = playback.Capped(req.Profile.MaxBitrateKbps, limit)
 	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
 	d, err := playback.Decide(*req.Profile, playback.CopyOf(c), tracks,
 		playback.Encoding{HEVC: a.svc.Setup.Encoder.HEVC, Libass: a.svc.Setup.Tools.Libass})

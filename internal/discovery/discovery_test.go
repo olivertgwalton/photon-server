@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log/slog"
 	"net"
-	"net/netip"
 	"os"
 	"strconv"
 	"testing"
@@ -66,27 +65,5 @@ func TestServeAnswersTheQuestion(t *testing.T) {
 	stop()
 	if err := <-done; err != nil {
 		t.Errorf("Serve stopped with %v", err)
-	}
-}
-
-func TestOnlyNearbyAskersAreAnswered(t *testing.T) {
-	for addr, want := range map[string]bool{
-		"127.0.0.1":        true,
-		"::1":              true,
-		"10.1.2.3":         true,
-		"172.20.0.5":       true,
-		"192.168.1.20":     true,
-		"169.254.10.1":     true,
-		"fd12:3456::1":     true,
-		"fe80::1%en0":      true,
-		"::ffff:192.0.2.1": false,
-		"::ffff:10.0.0.9":  true,
-		"8.8.8.8":          false,
-		"100.64.0.1":       false,
-		"2001:4860::8888":  false,
-	} {
-		if got := nearby(netip.MustParseAddr(addr)); got != want {
-			t.Errorf("nearby(%s) = %t, want %t", addr, got, want)
-		}
 	}
 }

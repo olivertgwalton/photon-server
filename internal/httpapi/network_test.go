@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -12,10 +13,16 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-type fakeNetwork struct{ set *domain.Network }
+// fakeNetwork is the defaults, a remote stream limited to remoteKbps, and keeps what is set.
+type fakeNetwork struct {
+	set        *domain.Network
+	remoteKbps int
+}
 
-func (fakeNetwork) Network(context.Context) (domain.Network, error) {
-	return domain.Network{Secure: domain.SecureDisabled, Jellyfin: domain.JellyfinOff, JellyfinPort: 8096}, nil
+func (f fakeNetwork) Network(context.Context) (domain.Network, error) {
+	return domain.Network{
+		Secure: domain.SecureDisabled, Jellyfin: domain.JellyfinOff, JellyfinPort: 8096, RemoteMaxBitrateKbps: f.remoteKbps,
+	}, nil
 }
 
 func (f fakeNetwork) SetNetwork(_ context.Context, n domain.Network) error {
@@ -28,7 +35,7 @@ func (f fakeNetwork) SetNetwork(_ context.Context, n domain.Network) error {
 func TestSecureConnectionsNeedACertificateTheServerReads(t *testing.T) {
 	var set domain.Network
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Auth: fakeAuth{}, Events: &fakeEvents{}, Network: fakeNetwork{&set},
+		Auth: fakeAuth{}, Events: &fakeEvents{}, Network: fakeNetwork{set: &set},
 	})
 	const jellyfin = `,"jellyfin":"off","jellyfin_port":8096}`
 	for body, want := range map[string]int{
@@ -55,7 +62,7 @@ func TestSecureConnectionsNeedACertificateTheServerReads(t *testing.T) {
 func TestJellyfinIsGivenAPortOfItsOwn(t *testing.T) {
 	var set domain.Network
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Auth: fakeAuth{}, Events: &fakeEvents{}, Network: fakeNetwork{&set}, Setup: Setup{Listen: ":8640"},
+		Auth: fakeAuth{}, Events: &fakeEvents{}, Network: fakeNetwork{set: &set}, Setup: Setup{Listen: ":8640"},
 	})
 	for body, want := range map[string]int{
 		`{"secure_connections":"disabled","jellyfin":"on","jellyfin_port":8096}`:    http.StatusOK,
@@ -92,5 +99,51 @@ func TestAnAdminSeesWhyJellyfinsAppsCannotReachTheServer(t *testing.T) {
 	api.ServeHTTP(rec, req)
 	if !strings.Contains(rec.Body.String(), `"jellyfin_error":"port 8096: address already in use"`) {
 		t.Errorf("%d %s", rec.Code, rec.Body)
+	}
+}
+
+// A remote stream's limit is no limit or a bitrate, never less.
+func TestARemoteStreamsLimitIsABitrate(t *testing.T) {
+	var set domain.Network
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Events: &fakeEvents{}, Network: fakeNetwork{set: &set}, Setup: Setup{Listen: ":8640"},
+	})
+	for body, want := range map[string]int{
+		`{"secure_connections":"disabled","jellyfin":"off","jellyfin_port":8096,"remote_max_bitrate_kbps":8000}`: http.StatusOK,
+		`{"secure_connections":"disabled","jellyfin":"off","jellyfin_port":8096,"remote_max_bitrate_kbps":-1}`:   http.StatusBadRequest,
+	} {
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/network", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Errorf("%s: status %d, want %d: %s", body, rec.Code, want, rec.Body)
+		}
+	}
+	if set.RemoteMaxBitrateKbps != 8000 {
+		t.Errorf("stored %+v, want the remote limit kept", set)
+	}
+}
+
+// The networks whose clients are local are prefixes or addresses, kept as prefixes.
+func TestLocalNetworksAreNetworks(t *testing.T) {
+	var set domain.Network
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Events: &fakeEvents{}, Network: fakeNetwork{set: &set}, Setup: Setup{Listen: ":8640"},
+	})
+	for body, want := range map[string]int{
+		`{"secure_connections":"disabled","jellyfin":"off","jellyfin_port":8096,"remote_max_bitrate_kbps":0,"local_networks":["100.64.0.0/10"," 10.1.2.3 "]}`: http.StatusOK,
+		`{"secure_connections":"disabled","jellyfin":"off","jellyfin_port":8096,"remote_max_bitrate_kbps":0,"local_networks":["the office"]}`:                 http.StatusBadRequest,
+	} {
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/network", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Errorf("%s: status %d, want %d: %s", body, rec.Code, want, rec.Body)
+		}
+	}
+	if fmt.Sprint(set.LocalNetworks) != "[100.64.0.0/10 10.1.2.3/32]" {
+		t.Errorf("stored %v, want the tailnet and the one address", set.LocalNetworks)
 	}
 }

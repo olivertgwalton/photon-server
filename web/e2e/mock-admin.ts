@@ -224,6 +224,8 @@ let network: Schemas["NetworkStatus"] = {
 	secure_connections: "disabled",
 	jellyfin: "off",
 	jellyfin_port: 8096,
+	local_networks: [],
+	remote_max_bitrate_kbps: 0,
 };
 const deadJobs: Schemas["DeadJob"][] = [
 	{

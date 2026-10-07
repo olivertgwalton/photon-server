@@ -110,7 +110,12 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.DeviceProfile != nil && len(out.MediaSources) > 0 {
-		a.decide(r, &out.MediaSources[0], id, session, c, req)
+		remote, err := playback.RemoteLimit(r.Context(), a.svc.Network, a.svc.Proxies.Client(r))
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		a.decide(r, &out.MediaSources[0], id, session, c, req, remote)
 	}
 	writeJSON(w, out)
 }
@@ -127,10 +132,11 @@ type playbackRequest struct {
 
 // decide says how the app plays a copy: as it is, where its profile plays that; else as HLS photon
 // makes of it, copying what the app plays and encoding the rest, where the app takes HLS photon
-// makes; else neither, and the app plays what it can of the file.
-func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID, c store.PlayCopy, req playbackRequest) {
+// makes; else neither, and the app plays what it can of the file. The app's bitrate is kept within
+// remote, the server's limit for it, in kbps.
+func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID, c store.PlayCopy, req playbackRequest, remote int) {
 	p := *req.DeviceProfile
-	limit := cmp.Or(req.MaxStreamingBitrate, p.MaxStreamingBitrate)
+	limit := int64(playback.Capped(int(cmp.Or(req.MaxStreamingBitrate, p.MaxStreamingBitrate)/1000), remote)) * 1000
 	tracks := direct(c, req.AudioStreamIndex)
 	sub, picked := subtitleOf(c, req.SubtitleStreamIndex)
 	if p.playsDirectly(c, streamAt(c, tracks.Video), streamAt(c, tracks.Audio), picked, limit) {

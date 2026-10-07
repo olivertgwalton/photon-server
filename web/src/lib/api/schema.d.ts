@@ -6013,6 +6013,8 @@ export interface components {
             jellyfin: components["schemas"]["JellyfinMode"];
             jellyfin_port: number;
             key?: string;
+            local_networks: string[];
+            remote_max_bitrate_kbps: number;
             secure_connections: components["schemas"]["SecureConnections"];
         };
         NetworkStatus: {
@@ -6021,6 +6023,8 @@ export interface components {
             jellyfin_error?: string;
             jellyfin_port: number;
             key?: string;
+            local_networks: string[];
+            remote_max_bitrate_kbps: number;
             secure_connections: components["schemas"]["SecureConnections"];
         };
         NewKey: {

@@ -4,9 +4,11 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/secure"
 )
 
@@ -34,12 +36,19 @@ type networkJSON struct {
 	Key               string                   `json:"key,omitzero"`
 	Jellyfin          domain.JellyfinMode      `json:"jellyfin"`
 	JellyfinPort      int                      `json:"jellyfin_port"`
+	// LocalNetworks are the networks whose clients are local, as Jellyfin's LAN networks and
+	// Plex's, prefixes or addresses; none is this machine's and the private ones.
+	LocalNetworks []string `json:"local_networks"`
+	// RemoteMaxBitrateKbps is the most a stream to a client not on them is sent at, as Jellyfin's
+	// Internet streaming bitrate limit: its picture's size is the client's still. 0 is no limit.
+	RemoteMaxBitrateKbps int `json:"remote_max_bitrate_kbps"`
 }
 
 func showNetwork(n domain.Network) networkJSON {
 	return networkJSON{
 		SecureConnections: n.Secure, Certificate: n.Certificate, Key: n.Key,
-		Jellyfin: n.Jellyfin, JellyfinPort: n.JellyfinPort,
+		Jellyfin: n.Jellyfin, JellyfinPort: n.JellyfinPort, RemoteMaxBitrateKbps: n.RemoteMaxBitrateKbps,
+		LocalNetworks: each(n.LocalNetworks, netip.Prefix.String),
 	}
 }
 
@@ -72,9 +81,19 @@ func (a *API) setNetwork(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
+	local, err := peer.Prefixes(req.LocalNetworks)
+	if err != nil {
+		writeProblem(w, a.logger, codeInvalidBody, "local_networks: "+err.Error())
+		return
+	}
 	n := domain.Network{
 		Secure: req.SecureConnections, Certificate: req.Certificate, Key: req.Key,
-		Jellyfin: req.Jellyfin, JellyfinPort: req.JellyfinPort,
+		Jellyfin: req.Jellyfin, JellyfinPort: req.JellyfinPort, LocalNetworks: local,
+		RemoteMaxBitrateKbps: req.RemoteMaxBitrateKbps,
+	}
+	if n.RemoteMaxBitrateKbps < 0 {
+		writeProblem(w, a.logger, codeInvalidBody, "remote_max_bitrate_kbps is 0, for no limit, or more")
+		return
 	}
 	if _, err := secure.Load(n); err != nil {
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())
