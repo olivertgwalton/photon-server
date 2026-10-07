@@ -21,6 +21,8 @@ const (
 	baseURL = "https://api.themoviedb.org/3"
 	// imageURL serves a picture at the size it was uploaded; the server sizes it for clients.
 	imageURL = "https://image.tmdb.org/t/p/original"
+	// candidateURL serves a match candidate's poster at a size to tell it by, not to keep.
+	candidateURL = "https://image.tmdb.org/t/p/w342"
 	// keepPictures is how many of each kind are kept, best first.
 	keepPictures = 10
 )
@@ -89,7 +91,7 @@ func (r result) match() domain.Candidate {
 		Year: provider.Year(provider.Date(cmp.Or(r.ReleaseDate, r.FirstAirDate))), Overview: r.Overview,
 	}
 	if r.Poster != "" {
-		c.Poster = imageURL + r.Poster
+		c.Poster = candidateURL + r.Poster
 	}
 	return c
 }

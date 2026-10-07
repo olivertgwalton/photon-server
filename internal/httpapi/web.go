@@ -44,12 +44,16 @@ func NewWeb(files fs.FS) (*Web, error) {
 	}
 	csp := strings.Join([]string{
 		"default-src 'self'", "script-src " + strings.Join(scripts, " "), "worker-src 'self' blob:",
-		"style-src 'self' 'unsafe-inline'", "img-src 'self' data:", "media-src 'self' blob:",
+		"style-src 'self' 'unsafe-inline'", "img-src 'self' data: " + candidatePosters, "media-src 'self' blob:",
 		"font-src 'self' data:", "connect-src 'self'", "object-src 'none'", "base-uri 'self'",
 		"form-action 'self'", "frame-ancestors 'none'",
 	}, "; ")
 	return &Web{files: files, index: index, csp: csp}, nil
 }
+
+// candidatePosters are the hosts a match candidate's poster is drawn from straight, as the
+// built-in providers give it, to tell like-named titles apart by; a plugin's from elsewhere is not.
+const candidatePosters = "https://image.tmdb.org https://artworks.thetvdb.com"
 
 // ownedByAPI is whether a path is the API's, answered by it even when it has no such route.
 func ownedByAPI(p string) bool {

@@ -62,6 +62,11 @@ func TestThePageMayRunOnlyItsOwnScript(t *testing.T) {
 		!strings.Contains(csp, "frame-ancestors 'none'") {
 		t.Errorf("Content-Security-Policy %q", csp)
 	}
+	// Pictures come from the server, but for match candidates' posters from the built-in
+	// providers' own hosts, and from nowhere else.
+	if !strings.Contains(csp, "img-src 'self' data: https://image.tmdb.org https://artworks.thetvdb.com;") {
+		t.Errorf("Content-Security-Policy %q, want images from the server and the providers' hosts alone", csp)
+	}
 }
 
 func TestTheAppsFilesAreServedAsTheyAre(t *testing.T) {
