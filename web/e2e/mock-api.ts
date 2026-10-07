@@ -97,27 +97,29 @@ const season = base("t-s1", "season", "Season 1", {
 const everything = () => [...films, ...shows, season, ...episodes, collection];
 const byID = (id: string) => everything().find((c) => c.id === id);
 
+const homeRows = (): Schemas["HomeRow"][] => [
+	{
+		kind: "continue_watching",
+		items: everything().filter((c) => states.get(c.id)?.position_ms),
+	},
+	{
+		kind: "watchlist",
+		items: everything().filter((c) => states.get(c.id)?.watchlisted_at),
+	},
+	{
+		kind: "favourites",
+		items: everything().filter((c) => states.get(c.id)?.favourite_at),
+	},
+	{
+		kind: "recently_added_films",
+		library: { id: "l-films", name: "Films" },
+		items: films,
+	},
+];
+
 // The server's rows, in the reader's order and leaving out those hidden.
 function home(arranged: Schemas["HomeSection"][], limit = 20): Schemas["Home"] {
-	const rows: Schemas["HomeRow"][] = [
-		{
-			kind: "continue_watching",
-			items: everything().filter((c) => states.get(c.id)?.position_ms),
-		},
-		{
-			kind: "watchlist",
-			items: everything().filter((c) => states.get(c.id)?.watchlisted_at),
-		},
-		{
-			kind: "favourites",
-			items: everything().filter((c) => states.get(c.id)?.favourite_at),
-		},
-		{
-			kind: "recently_added_films",
-			library: { id: "l-films", name: "Films" },
-			items: films,
-		},
-	];
+	const rows = homeRows();
 	return {
 		rows: arranged
 			.filter((s) => s.visibility === "shown")
@@ -879,18 +881,6 @@ const server_ = Bun.serve({
 				downloads.unshift(d);
 				return Response.json(d);
 			}
-			case "GET /api/v1/watchlist": {
-				const items = everything().filter(
-					(c) => states.get(c.id)?.watchlisted_at,
-				);
-				const offset = Number(url.searchParams.get("offset") ?? 0);
-				const limit = Number(url.searchParams.get("limit") ?? 50);
-				return Response.json({
-					items: items.slice(offset, offset + limit).map(card),
-					offset,
-					total: items.length,
-				} satisfies Schemas["CardPage"]);
-			}
 			case "GET /api/v1/history":
 				return Response.json({
 					items: [
@@ -983,6 +973,18 @@ const server_ = Bun.serve({
 		const [kind, id, sub, entry, leaf] = parts;
 		const path = `${request.method} ${kind}/${sub ?? ""}`;
 		switch (path) {
+			case "GET home/": {
+				const row = homeRows().find((r) => r.kind === id && !r.library);
+				if (!row) return problem(404, "not_found", "Not Found");
+				const items = row.items;
+				const offset = Number(url.searchParams.get("offset") ?? 0);
+				const limit = Number(url.searchParams.get("limit") ?? 50);
+				return Response.json({
+					items: items.slice(offset, offset + limit).map(card),
+					offset,
+					total: items.length,
+				} satisfies Schemas["CardPage"]);
+			}
 			case "GET libraries/titles": {
 				const pool = byTitle(id === "l-shows" ? shows : films);
 				const genre = url.searchParams.get("genre");

@@ -557,7 +557,7 @@ func TestWatchlistPage(t *testing.T) {
 	}
 	page := func(profile uuid.UUID, offset, limit int) ([]string, int64) {
 		t.Helper()
-		cards, total, err := s.WatchlistPage(ctx, profile, offset, limit)
+		cards, total, err := s.RowPage(ctx, profile, domain.RowWatchlist, offset, limit)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -587,5 +587,82 @@ func TestWatchlistPage(t *testing.T) {
 	}
 	if got, total := page(admin, 0, 10); !slices.Equal(got, []string{"Alien", "Heat"}) || total != 2 {
 		t.Errorf("after taking the show off: %v of %d, want Alien and Heat", got, total)
+	}
+}
+
+// Each of the profile's own rows pages on from where its last page stopped, in the row's order; a
+// library's or a collection's row is paged on its own page instead.
+func TestRowPage(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	admin, _ := homeLibraries(t, s, []string{"Heat", "Alien", "Ran"}, nil)
+	libs, err := s.Libraries(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tv := libs[slices.IndexFunc(libs, func(l domain.Library) bool { return l.Kind == domain.LibraryShows })].ID
+	part := func(rel string) []Copy {
+		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
+	}
+	ago := func(days int) *time.Time {
+		at := time.Now().AddDate(0, 0, -days)
+		return &at
+	}
+	// Each film and show played some days ago, Alien and Bravo last.
+	daysAgo := map[string]int{"Heat": 3, "Alien": 1, "Ran": 2, "Alpha": 3, "Bravo": 1, "Charlie": 2}
+	for _, sh := range []string{"Alpha", "Bravo", "Charlie"} {
+		var eps []Episode
+		for n := 1; n <= 2; n++ {
+			rel := fmt.Sprintf("%s/S1E%d.mkv", sh, n)
+			eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: fmt.Sprintf("%s S1E%d", sh, n), Folder: sh, ByNumber: true, Copies: part(rel)})
+		}
+		if _, err := s.SaveShowFolder(ctx, tv, sh, []byte("v"), Show{Title: sh, Folder: sh}, eps, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.MarkWatched(ctx, admin, oneItem(t, s, `title = $1`, sh+" S1E1").ID, ago(daysAgo[sh])); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, f := range []string{"Heat", "Alien", "Ran"} {
+		id := oneItem(t, s, `title = $1`, f).ID
+		if _, err := saveProgress(ctx, s, admin, id, 20*time.Minute, domain.ReachStart, ago(daysAgo[f])); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, f := range []string{"Heat", "Ran", "Alien"} {
+		id := oneItem(t, s, `title = $1`, f).ID
+		if err := s.Favourite(ctx, admin, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		row  domain.HomeRow
+		want []string
+	}{
+		{domain.RowContinueWatching, []string{"Alien", "Ran", "Heat"}},
+		{domain.RowNextUp, []string{"Bravo S1E2", "Charlie S1E2", "Alpha S1E2"}},
+		{domain.RowFavourites, []string{"Alien", "Ran", "Heat"}},
+	} {
+		var got []string
+		for offset := 0; offset < 4; offset += 2 {
+			cards, total, err := s.RowPage(ctx, admin, tc.row, offset, 2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if total != 3 {
+				t.Errorf("%s: total = %d, want 3", tc.row, total)
+			}
+			for _, c := range cards {
+				got = append(got, c.Title)
+			}
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s in pages of two = %v, want %v", tc.row, got, tc.want)
+		}
+	}
+	for _, row := range []domain.HomeRow{domain.RowRecentFilms, domain.RowRecentShows, domain.RowCollection} {
+		if _, _, err := s.RowPage(ctx, admin, row, 0, 2); !errors.Is(err, ErrNotFound) {
+			t.Errorf("%s: err = %v, want %v", row, err, ErrNotFound)
+		}
 	}
 }

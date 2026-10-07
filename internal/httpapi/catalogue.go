@@ -31,6 +31,7 @@ type catalogue interface {
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Home(ctx context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error)
+	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error
 }
@@ -320,6 +321,20 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 		out.Rows[i] = homeRowJSON{Kind: row.Kind, Collection: (*titleRefJSON)(row.Collection), Library: (*libraryRefJSON)(row.Library), Items: cardsJSON(row.Cards)}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+}
+
+// homeRow answers a page of one of the profile's own home rows, in the row's order.
+func (a *API) homeRow(w http.ResponseWriter, r *http.Request) {
+	offset, limit, ok := a.paging(w, r, defaultWallLimit)
+	if !ok {
+		return
+	}
+	row := domain.HomeRow(r.PathValue("row"))
+	cards, total, err := a.svc.Catalogue.RowPage(r.Context(), sessionOf(r).Profile.ID, row, offset, limit)
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[cardJSON]{cardsJSON(cards), offset, total})
 }
 
 // wallFilterParameters are what a wall, and its letters, are narrowed by: each list repeated or

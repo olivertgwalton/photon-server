@@ -118,6 +118,17 @@ func (fakeCatalogue) Home(_ context.Context, profile uuid.UUID, limit int) ([]st
 	}, nil
 }
 
+// The watchlist holds the one film, from offset 0.
+func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow, offset, _ int) ([]store.Card, int64, error) {
+	if row != domain.RowWatchlist {
+		return nil, 0, store.ErrNotFound
+	}
+	if offset > 0 {
+		return []store.Card{}, 1, nil
+	}
+	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat"}}, 1, nil
+}
+
 func TestHome(t *testing.T) {
 	rec := serve(t, http.MethodGet, "/api/v1/home?limit=2", goodToken, "")
 	var got struct {
@@ -143,6 +154,24 @@ func TestHome(t *testing.T) {
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/home?limit=0", goodToken, ""); rec.Code != http.StatusBadRequest {
 		t.Errorf("limit=0: %d, want 400", rec.Code)
+	}
+}
+
+func TestHomeRow(t *testing.T) {
+	for _, tc := range []struct {
+		target   string
+		want     int
+		wantBody string
+	}{
+		{"/api/v1/home/watchlist", http.StatusOK, `"offset":0,"total":1}`},
+		{"/api/v1/home/watchlist?offset=1", http.StatusOK, `{"items":[],"offset":1,"total":1}`},
+		{"/api/v1/home/recently_added_films", http.StatusNotFound, ""},
+		{"/api/v1/home/watchlist?limit=0", http.StatusBadRequest, ""},
+	} {
+		rec := serve(t, http.MethodGet, tc.target, goodToken, "")
+		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.wantBody) {
+			t.Errorf("%s: %d %s, want %d %s", tc.target, rec.Code, rec.Body, tc.want, tc.wantBody)
+		}
 	}
 }
 

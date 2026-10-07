@@ -6,8 +6,11 @@ import { wallPageSize } from "#lib/wall.js";
 let { data } = $props();
 
 async function fetchPage(offset: number) {
-	const { data: page } = await client().GET("/api/v1/watchlist", {
-		params: { query: { offset, limit: wallPageSize } },
+	const { data: page } = await client().GET("/api/v1/home/{row}", {
+		params: {
+			path: { row: "watchlist" },
+			query: { offset, limit: wallPageSize },
+		},
 	});
 	return page?.items;
 }

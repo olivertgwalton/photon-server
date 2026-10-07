@@ -3094,6 +3094,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/home/{row}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page one of the profile's own home rows: continue watching, next up, its watchlist or its favourites */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Where the page starts, from 0. */
+                    offset?: number;
+                    /** @description How many to answer, from 1 to 200. */
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    /** @description The row; a library's or a collection's is paged on its own page. */
+                    row: components["schemas"]["HomeRowKind"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CardPage"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries": {
         parameters: {
             query?: never;
@@ -5039,48 +5084,6 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/watchlist": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Page the profile's watchlist, the latest added first */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Where the page starts, from 0. */
-                    offset?: number;
-                    /** @description How many to answer, from 1 to 200. */
-                    limit?: number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CardPage"];
-                    };
-                };
-                default: components["responses"]["Problem"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
