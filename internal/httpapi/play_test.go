@@ -272,6 +272,29 @@ func (fakeHLS) WebVTT(_ context.Context, open func() (*os.File, error), language
 	return "WEBVTT " + language + "\n\n" + string(b), err
 }
 
+// Resource answers the files the playlists name: the master, subtitle segment 2 of track 0, and
+// segment 0, in either format, with its initialisation.
+func (f fakeHLS) Resource(ctx context.Context, playback uuid.UUID, name string) (hls.Resource, error) {
+	switch name {
+	case "main.m3u8":
+		text, err := f.Playlist(playback, name)
+		return hls.Resource{Text: text, Type: "application/vnd.apple.mpegurl"}, err
+	case "sub0-2.vtt":
+		text, err := f.SubtitleSegment(ctx, playback, 0, 2)
+		return hls.Resource{Text: text, Type: "text/vtt; charset=utf-8"}, err
+	case "init0.mp4":
+		file, err := f.Init(ctx, playback, 0)
+		return hls.Resource{File: file, Type: "video/mp4"}, err
+	case "0.m4s":
+		file, err := f.Segment(ctx, playback, 0)
+		return hls.Resource{File: file, Type: "video/iso.segment"}, err
+	case "0.ts":
+		file, err := f.Segment(ctx, playback, 0)
+		return hls.Resource{File: file, Type: "video/mp2t"}, err
+	}
+	return hls.Resource{}, hls.ErrNoRemux
+}
+
 func (f fakeHLS) Init(context.Context, uuid.UUID, int) (*os.File, error) {
 	return os.Open(filepath.Join(f.dir, "segment"))
 }

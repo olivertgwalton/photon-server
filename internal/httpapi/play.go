@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 	"uuid"
@@ -47,10 +46,7 @@ type owners interface {
 
 type hlsFiles interface {
 	Has(playback uuid.UUID) bool
-	Playlist(playback uuid.UUID, name string) (string, error)
-	SubtitleSegment(ctx context.Context, playback uuid.UUID, track, n int) (string, error)
-	Init(ctx context.Context, playback uuid.UUID, part int) (*os.File, error)
-	Segment(ctx context.Context, playback uuid.UUID, n int) (*os.File, error)
+	Resource(ctx context.Context, playback uuid.UUID, name string) (hls.Resource, error)
 	Transcodes() (active, conversions, limit int)
 	Encoder(video domain.VideoPlan) domain.Acceleration
 	WebVTT(ctx context.Context, open func() (*os.File, error), language string) (string, error)
@@ -285,9 +281,6 @@ func (a *API) playbackCard(r *http.Request, t domain.PlaybackTitle, c store.Play
 
 func hlsSubject(playback uuid.UUID) string { return "/api/v1/hls/" + playback.String() }
 
-// segmentTypes are the media types of HLS segments, by their extensions.
-var segmentTypes = map[string]string{".m4s": "video/iso.segment", ".ts": "video/mp2t"}
-
 // hlsFile serves a remux's playlist, a part's initialisation or a segment, made as they are asked
 // for. The playlist addresses everything else relative to itself, so one signature covers it all.
 func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
@@ -296,56 +289,16 @@ func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.PathValue("file")
-	var f *os.File
-	var err error
-	switch {
-	case strings.HasSuffix(name, ".m3u8"):
-		playlist, err := a.svc.HLS.Playlist(playback, name)
-		if a.answered(w, r, err) {
-			return
-		}
-		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
-		_, _ = io.WriteString(w, playlist)
-		return
-	case strings.HasPrefix(name, "sub") && strings.HasSuffix(name, ".vtt"):
-		track, n, ok := strings.Cut(strings.TrimSuffix(strings.TrimPrefix(name, "sub"), ".vtt"), "-")
-		t, terr := strconv.Atoi(track)
-		k, kerr := strconv.Atoi(n)
-		if !ok || terr != nil || kerr != nil {
-			writeProblem(w, a.logger, codeNotFound, "")
-			return
-		}
-		vtt, err := a.svc.HLS.SubtitleSegment(r.Context(), playback, t, k)
-		if a.answered(w, r, err) {
-			return
-		}
-		w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
-		_, _ = io.WriteString(w, vtt)
-		return
-	case strings.HasPrefix(name, "init") && strings.HasSuffix(name, ".mp4"):
-		part, perr := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(name, "init"), ".mp4"))
-		if perr != nil {
-			writeProblem(w, a.logger, codeNotFound, "")
-			return
-		}
-		f, err = a.svc.HLS.Init(r.Context(), playback, part)
-		w.Header().Set("Content-Type", "video/mp4")
-	case segmentTypes[path.Ext(name)] != "":
-		n, perr := strconv.Atoi(strings.TrimSuffix(name, path.Ext(name)))
-		if perr != nil {
-			writeProblem(w, a.logger, codeNotFound, "")
-			return
-		}
-		f, err = a.svc.HLS.Segment(r.Context(), playback, n)
-		w.Header().Set("Content-Type", segmentTypes[path.Ext(name)])
-	default:
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
-	}
+	res, err := a.svc.HLS.Resource(r.Context(), playback, name)
 	if a.answered(w, r, err) {
 		return
 	}
-	a.serveFile(w, r, f, name, nil)
+	w.Header().Set("Content-Type", res.Type)
+	if res.File == nil {
+		_, _ = io.WriteString(w, res.Text)
+		return
+	}
+	a.serveFile(w, r, res.File, name, nil)
 }
 
 // routeToOwner hands a request about the playback the path names by param that another node of
