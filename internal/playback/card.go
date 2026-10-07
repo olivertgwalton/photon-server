@@ -51,7 +51,7 @@ func Card(s domain.Session, address string, t domain.PlaybackTitle, c store.Play
 			card.Audio.Encode = &domain.PlaybackEncode{Codec: e.Codec, Channels: e.Channels, BitrateKbps: e.BitrateKbps}
 		}
 	}
-	burned := d.Video != nil && d.Video.Encode != nil && (d.Video.Encode.Burn != nil || d.Video.Encode.BurnFile != nil)
+	burned := d.Video != nil && d.Video.Burns()
 	switch {
 	case tracks.Subtitle != nil:
 		src := stream(*tracks.Subtitle)

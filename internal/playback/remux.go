@@ -84,7 +84,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 	h := hls.Copy{Parts: sources, Variant: variant(c.Streams, video, audio, kbps), Start: start, Segments: segments}
 	// A subtitle drawn into the picture is the only one offered, as Jellyfin's master playlist
 	// has it: another turned on by a player would be drawn over it.
-	if e := video.Encode; e != nil && (e.Burn != nil || e.BurnFile != nil) {
+	if video.Burns() {
 		return r.hls.Open(ctx, playback, h)
 	}
 	// The parts of a copy are cut from one master, so each holds the first's streams.
