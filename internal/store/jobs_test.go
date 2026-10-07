@@ -5,6 +5,7 @@ package store
 import (
 	"errors"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -414,5 +415,50 @@ func TestAClaimForWorkDueNowLeavesWhatIsDueInTheWindow(t *testing.T) {
 	}
 	if claimed, err = s.ClaimJobs(ctx, kinds, nil, uuid.NewV7(), time.Minute, 5); err != nil || len(claimed) != 1 || claimed[0].Subject != window {
 		t.Errorf("in the window claimed %+v, %v; want the backfilled job", claimed, err)
+	}
+}
+
+func TestStoppingAKindTakesItsWorkOffTheQueue(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		for _, kind := range []domain.JobKind{domain.JobPreviews, domain.JobPreviews, domain.JobPreviews, domain.JobMarkers} {
+			if err := enqueue(ctx, tx, kind, uuid.NewV7()); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	node := uuid.NewV7()
+	running, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobPreviews}, nil, node, time.Minute, 1)
+	if err != nil || len(running) != 1 {
+		t.Fatalf("claimed %+v, %v", running, err)
+	}
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE jobs SET state = 'dead' WHERE id = (SELECT max(id) FROM jobs WHERE kind = 'previews' AND state = 'queued')`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.StopJobs(ctx, []domain.JobKind{domain.JobPreviews}); err != nil {
+		t.Fatal(err)
+	}
+	counts, _, err := s.JobQueue(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []JobCount{
+		{Kind: domain.JobMarkers, State: domain.JobQueued, Count: 1},
+		{Kind: domain.JobPreviews, State: domain.JobDead, Count: 1},
+	}
+	slices.SortFunc(counts, func(a, b JobCount) int { return strings.Compare(string(a.Kind), string(b.Kind)) })
+	if !slices.Equal(counts, want) {
+		t.Errorf("queue = %+v, want only the dead preview and the other kind's job left", counts)
+	}
+	// The worker still at the running one loses its lease, so stops, and what it made is no outcome.
+	if err := s.ExtendLease(ctx, running[0].ID, node, time.Minute); !errors.Is(err, domain.ErrLeaseLost) {
+		t.Errorf("renewing the running job's lease: %v, want ErrLeaseLost", err)
 	}
 }
