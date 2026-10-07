@@ -100,7 +100,8 @@ func slots(t *testing.T) *hls.Remuxer {
 func signIn(t *testing.T, st *store.Store, profile uuid.UUID) uuid.UUID {
 	t.Helper()
 	id, err := st.CreateSession(t.Context(), store.NewSession{
-		ProfileID: profile, TokenHash: []byte(uuid.NewV7().String()), DeviceName: "TV", Client: "Photon", ExpiresAt: time.Now().Add(time.Hour),
+		Kind: domain.SessionDevice, ProfileID: profile, TokenHash: []byte(uuid.NewV7().String()),
+		DeviceName: "TV", Client: "Photon", ExpiresAt: new(time.Now().Add(time.Hour)),
 	})
 	if err != nil {
 		t.Fatal(err)

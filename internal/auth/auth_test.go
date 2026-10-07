@@ -110,7 +110,7 @@ func TestExpiredSessionsAreRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	past := time.Now().Add(-time.Minute)
-	if err := st.TouchSession(t.Context(), session.ID, past, past); err != nil {
+	if err := st.TouchSession(t.Context(), session.ID, past, &past); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.Authenticate(t.Context(), token); !errors.Is(err, ErrUnauthenticated) {
@@ -387,5 +387,55 @@ func TestChangingAPasswordSignsOutTheProfilesOtherDevices(t *testing.T) {
 	}
 	if _, _, err := svc.SignIn(t.Context(), "Oliver", "battery staple", tv); err != nil {
 		t.Errorf("the new password does not sign in: %v", err)
+	}
+}
+
+func TestAnAPIKeyActsAsItsAdminUntilRevoked(t *testing.T) {
+	svc, st := newService(t)
+	oliver := addOliver(t, st)
+	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mac, err := svc.Authenticate(t.Context(), token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, key, err := svc.CreateKey(t.Context(), mac, "Sonarr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := svc.Authenticate(t.Context(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Profile != oliver || s.Kind != domain.SessionKey {
+		t.Errorf("the key is %s's %s, want Oliver's key", s.Profile.Name, s.Kind)
+	}
+	if devices, err := svc.Devices(t.Context(), mac); err != nil || len(devices) != 1 {
+		t.Errorf("%d devices listed (err %v), want the one signed in, not the key", len(devices), err)
+	}
+	if err := svc.SignOutDevice(t.Context(), mac, id); !errors.Is(err, ErrDeviceNotFound) {
+		t.Errorf("signing the key out as a device: err = %v, want %v", err, ErrDeviceNotFound)
+	}
+	if err := svc.ChangePassword(t.Context(), mac, "correct horse", "battery staple"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Authenticate(t.Context(), key); err != nil {
+		t.Errorf("changing the password revoked the key: %v", err)
+	}
+	keys, err := svc.Keys(t.Context())
+	if err != nil || len(keys) != 1 || keys[0].Name != "Sonarr" || keys[0].Profile != "Oliver" {
+		t.Errorf("keys = %+v (err %v), want Oliver's Sonarr", keys, err)
+	}
+
+	if err := svc.RevokeKey(t.Context(), id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Authenticate(t.Context(), key); !errors.Is(err, ErrUnauthenticated) {
+		t.Errorf("a revoked key still authenticates (err %v)", err)
+	}
+	if err := svc.RevokeKey(t.Context(), id); !errors.Is(err, ErrKeyNotFound) {
+		t.Errorf("revoking it again: err = %v, want %v", err, ErrKeyNotFound)
 	}
 }
