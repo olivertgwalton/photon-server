@@ -16,6 +16,7 @@ import PlayIcon from "@lucide/svelte/icons/play";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import SearchCheckIcon from "@lucide/svelte/icons/search-check";
+import SearchXIcon from "@lucide/svelte/icons/search-x";
 import SettingsIcon from "@lucide/svelte/icons/settings";
 import Share2Icon from "@lucide/svelte/icons/share-2";
 import TvIcon from "@lucide/svelte/icons/tv";
@@ -33,6 +34,7 @@ import {
 	setWatched,
 	setWatchlisted,
 	shareTitle,
+	unmatchTitle,
 } from "#lib/actions.svelte.js";
 import type { components } from "#lib/api/schema.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
@@ -163,6 +165,9 @@ const name = $derived(
 			{#if matched}
 				<DropdownMenu.Item onSelect={() => editTitle(card.id, "match")}>
 					<SearchCheckIcon />Fix match…
+				</DropdownMenu.Item>
+				<DropdownMenu.Item onSelect={() => unmatchTitle(card.id, name)}>
+					<SearchXIcon />Unmatch
 				</DropdownMenu.Item>
 			{/if}
 			{#if card.kind !== "extra"}

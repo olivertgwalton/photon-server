@@ -148,3 +148,10 @@ export function analyseTitle(id: string, name: string) {
 		`Analysing ${name}: its files are read again.`,
 	);
 }
+
+export function unmatchTitle(id: string, name: string) {
+	return change(
+		api.DELETE("/api/v1/admin/titles/{id}/match", path(id)),
+		`${name} was unmatched: it keeps what its files say until its match is fixed.`,
+	);
+}

@@ -387,3 +387,15 @@ test("a title is analysed from its card", async ({ page }) => {
 		page.getByText("Analysing Quiet Hours: its files are read again."),
 	).toBeVisible();
 });
+
+test("a title is unmatched from its card", async ({ page }) => {
+	await logIn(page);
+	await page
+		.getByRole("region", { name: "Recently Added Films" })
+		.getByRole("button", { name: "More for Quiet Hours" })
+		.click();
+	await page.getByRole("menuitem", { name: "Unmatch" }).click();
+	await expect(
+		page.getByText("Quiet Hours was unmatched", { exact: false }),
+	).toBeVisible();
+});
