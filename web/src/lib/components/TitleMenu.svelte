@@ -1,5 +1,6 @@
 <script lang="ts">
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
+import ScanSearchIcon from "@lucide/svelte/icons/scan-search";
 import BookmarkXIcon from "@lucide/svelte/icons/bookmark-x";
 import CheckIcon from "@lucide/svelte/icons/check";
 import DownloadIcon from "@lucide/svelte/icons/download";
@@ -22,6 +23,7 @@ import UndoIcon from "@lucide/svelte/icons/undo-2";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 import {
+	analyseTitle,
 	chooseVersion,
 	editTitle,
 	forgetProgress,
@@ -171,6 +173,11 @@ const name = $derived(
 			{#if refreshes}
 				<DropdownMenu.Item onSelect={() => refreshTitle(card.id, name)}>
 					<RefreshCwIcon />Refresh metadata
+				</DropdownMenu.Item>
+			{/if}
+			{#if card.kind !== "collection"}
+				<DropdownMenu.Item onSelect={() => analyseTitle(card.id, name)}>
+					<ScanSearchIcon />Analyse
 				</DropdownMenu.Item>
 			{/if}
 			<DropdownMenu.Item

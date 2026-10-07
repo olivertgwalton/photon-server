@@ -141,3 +141,10 @@ export const versions = $state({
 export function chooseVersion(id: string, title: string, use: VersionUse) {
 	Object.assign(versions, { open: true, id, title, use });
 }
+
+export function analyseTitle(id: string, name: string) {
+	return change(
+		api.POST("/api/v1/admin/titles/{id}/analysis", path(id)),
+		`Analysing ${name}: its files are read again.`,
+	);
+}

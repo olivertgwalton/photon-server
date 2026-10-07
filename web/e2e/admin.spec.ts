@@ -375,3 +375,15 @@ test("a member's card offers no editing", async ({ page }) => {
 		.click();
 	await expect(page.getByRole("menuitem", { name: "Edit…" })).toHaveCount(0);
 });
+
+test("a title is analysed from its card", async ({ page }) => {
+	await logIn(page);
+	await page
+		.getByRole("region", { name: "Recently Added Films" })
+		.getByRole("button", { name: "More for Quiet Hours" })
+		.click();
+	await page.getByRole("menuitem", { name: "Analyse" }).click();
+	await expect(
+		page.getByText("Analysing Quiet Hours: its files are read again."),
+	).toBeVisible();
+});
