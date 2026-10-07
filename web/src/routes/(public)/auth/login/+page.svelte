@@ -42,7 +42,7 @@ async function login(event: SubmitEvent) {
 		(profiles.data?.items.length ?? 0) > 1
 			? `/profiles?to=${encodeURIComponent(to)}`
 			: to,
-		{ invalidateAll: true },
+		{ refreshAll: true },
 	);
 }
 </script>

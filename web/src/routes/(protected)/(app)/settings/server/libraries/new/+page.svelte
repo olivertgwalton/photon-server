@@ -37,7 +37,7 @@ async function add(event: SubmitEvent) {
 	adding = false;
 	if (error) toast.error(problemMessage(error));
 	else toast.success(`${added.data.name} was added and is being scanned.`);
-	await goto("/settings/server/libraries", { invalidateAll: true });
+	await goto("/settings/server/libraries", { refreshAll: true });
 }
 </script>
 
