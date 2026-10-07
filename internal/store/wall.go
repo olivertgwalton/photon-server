@@ -28,8 +28,9 @@ type Card struct {
 	State TitleState
 	// DurationMS is how long it runs, for a progress bar: its longest copy on disk.
 	DurationMS int64
-	// An episode's card says which show it is of, where in it, and carries its still.
+	// An episode's card says which show and season it is of, where in them, and carries its still.
 	Show          *TitleRef
+	Season        *TitleRef
 	SeasonNumber  *int
 	EpisodeNumber *int
 	EpisodeEnd    *int
@@ -204,7 +205,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 			ID: r.ID, Kind: r.Kind, Title: r.Title, AddedAt: r.AddedAt, Year: deref(r.Year),
 			ReleaseDate: deref(r.ReleaseDate), Poster: first(pictures[r.ID][domain.ArtworkPoster]),
 			Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]), State: states[r.ID],
-			DurationMS: lengths[r.ID], Show: shows[r.ID].ref, SeasonNumber: r.SeasonNumber,
+			DurationMS: lengths[r.ID], Show: shows[r.ID].ref, Season: shows[r.ID].season, SeasonNumber: r.SeasonNumber,
 			EpisodeNumber: r.EpisodeNumber, EpisodeEnd: r.EpisodeEnd, Thumb: first(pictures[r.ID][domain.ArtworkThumb]),
 			Origin: origins[r.ID], Overview: deref(r.Overview), Logo: first(pictures[r.ID][domain.ArtworkLogo]),
 			Genres: r.Genres, Certificate: cmp.Or(deref(r.Certificate), shows[r.ID].certificate), Ratings: ratings[r.ID],
@@ -217,6 +218,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 
 type seasonShow struct {
 	Season      uuid.UUID
+	SeasonTitle string
 	ID          uuid.UUID
 	Title       string
 	Certificate *string
@@ -264,7 +266,7 @@ func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[
 // episodeShow is the show an episode is of, and the certificate it wears where it has none of its
 // own: its season's, else its show's, as Plex rates an episode by its show.
 type episodeShow struct {
-	ref         *TitleRef
+	ref, season *TitleRef
 	certificate string
 }
 
@@ -281,7 +283,7 @@ func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]
 		return out, nil
 	}
 	found, err := s.pool.Query(ctx, `
-		SELECT season.id AS season, show.id, show.title,
+		SELECT season.id AS season, season.title AS season_title, show.id, show.title,
 			coalesce(season.certificate, show.certificate) AS certificate FROM items season
 		JOIN items show ON show.id = season.parent_id WHERE season.id = ANY($1)`, seasons)
 	if err != nil {
@@ -293,7 +295,7 @@ func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]
 	}
 	bySeason := map[uuid.UUID]episodeShow{}
 	for _, p := range pairs {
-		bySeason[p.Season] = episodeShow{&TitleRef{ID: p.ID, Title: p.Title}, deref(p.Certificate)}
+		bySeason[p.Season] = episodeShow{&TitleRef{ID: p.ID, Title: p.Title}, &TitleRef{ID: p.Season, Title: p.SeasonTitle}, deref(p.Certificate)}
 	}
 	for _, r := range rows {
 		if r.Kind == domain.ItemEpisode && r.ParentID != nil {
