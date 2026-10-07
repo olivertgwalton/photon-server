@@ -55,6 +55,7 @@ type adminLibraryJSON struct {
 	Markers      domain.MarkerDetection `json:"markers"`
 	Keyframes    domain.KeyframeMode    `json:"keyframes"`
 	Themes       domain.ThemeLookup     `json:"themes"`
+	Deletion     domain.MediaDeletion   `json:"deletion"`
 }
 
 // kindSourcesJSON ranks where a kind of item a library holds takes its metadata and its pictures
@@ -75,7 +76,7 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 	j := adminLibraryJSON{
 		ID: l.ID, Name: l.Name, Kind: l.Kind, Root: l.Root, Sources: []kindSourcesJSON{},
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
-		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes,
+		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes, Deletion: l.Deletion,
 	}
 	ranked := func(list []domain.RankedSource) []rankedSourceJSON {
 		out := make([]rankedSourceJSON, len(list))
@@ -173,6 +174,8 @@ type libraryChangeJSON struct {
 	// those and, for a film or show with none, the YouTube link ThemerrDB lists, downloaded with
 	// yt-dlp, which the server must have; off none.
 	Themes domain.ThemeLookup `json:"themes,omitzero"`
+	// Deletion is whether an admin may delete its titles with their files: off, or files.
+	Deletion domain.MediaDeletion `json:"deletion,omitzero"`
 }
 
 type kindSourcesChangeJSON struct {
@@ -200,6 +203,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	change := store.LibraryChange{
 		Name: req.Name, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays,
 		Previews: req.Previews, Markers: req.Markers, Keyframes: req.Keyframes, Themes: req.Themes,
+		Deletion: req.Deletion,
 	}
 	if d := req.RefreshDays; d != nil && (*d < 0 || *d > 365) {
 		writeProblem(w, a.logger, codeInvalidBody, "refresh_days is from 0, never, to 365")

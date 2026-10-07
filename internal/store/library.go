@@ -17,7 +17,7 @@ var ErrLibraryExists = errors.New("a library with that name or root already exis
 // libraryColumns and librarySourceColumns are model.Library's and model.LibrarySource's, for a
 // statement that reads whole rows.
 const (
-	libraryColumns       = `id, name, kind, root, monitor, refresh_days, previews, markers, keyframes, themes`
+	libraryColumns       = `id, name, kind, root, monitor, refresh_days, previews, markers, keyframes, themes, deletion`
 	librarySourceColumns = `library_id, item_kind, fetcher, source, position, enabled`
 )
 
@@ -127,6 +127,8 @@ type LibraryChange struct {
 	Keyframes domain.KeyframeMode
 	// Themes is where it finds theme tunes; taking ThemerrDB's asks it of every film and show.
 	Themes domain.ThemeLookup
+	// Deletion is whether an admin may delete its titles with their files.
+	Deletion domain.MediaDeletion
 }
 
 // SetLibrary renames a library, changes whether it is watched, where each kind's metadata and
@@ -201,6 +203,11 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 		}
 		if change.Markers != "" {
 			if err := set("markers", change.Markers); err != nil {
+				return err
+			}
+		}
+		if change.Deletion != "" {
+			if err := set("deletion", change.Deletion); err != nil {
 				return err
 			}
 		}
@@ -300,6 +307,6 @@ func library(r model.Library, sources []domain.KindSources, extras []domain.Extr
 	return domain.Library{
 		ID: r.ID, Name: r.Name, Kind: r.Kind, Root: r.Root, Sources: sources, RemoteExtras: extras,
 		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews, Markers: r.Markers,
-		Keyframes: r.Keyframes, Themes: r.Themes,
+		Keyframes: r.Keyframes, Themes: r.Themes, Deletion: r.Deletion,
 	}
 }

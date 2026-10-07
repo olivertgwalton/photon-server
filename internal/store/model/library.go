@@ -16,5 +16,6 @@ type Library struct {
 	Previews    domain.PreviewLevel
 	Markers     domain.MarkerDetection
 	Keyframes   domain.KeyframeMode
+	Deletion    domain.MediaDeletion
 	Themes      domain.ThemeLookup
 }

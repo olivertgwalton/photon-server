@@ -100,6 +100,7 @@ const films: Schemas["AdminLibrary"] = {
 	markers: "all",
 	keyframes: "index",
 	themes: "local",
+	deletion: "off",
 };
 
 const providers: Schemas["MetadataProvider"][] = [

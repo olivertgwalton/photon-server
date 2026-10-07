@@ -34,6 +34,7 @@ const defaults = {
 	markers: "all",
 	keyframes: "index",
 	themes: "local",
+	deletion: "off",
 } as const;
 
 // A new library's kind changes the sources offered; a library's own is fixed.
@@ -236,6 +237,22 @@ const refreshOptions = $derived(
 				A theme.mp3 or a theme-music folder beside a title. With ThemerrDB's, a
 				film or show with neither downloads the theme audio from the YouTube
 				link ThemerrDB lists for it, which needs yt-dlp on the server.
+			</Field.Description>
+		</Field.Field>
+		<Field.Field>
+			<Field.Label for="library-deletion">Media deletion</Field.Label>
+			<Choice
+				id="library-deletion"
+				name="deletion"
+				value={library?.deletion ?? defaults.deletion}
+				options={[
+					{ value: "off", label: "Not allowed" },
+					{ value: "files", label: "Allowed, files and all" },
+				]}
+			/>
+			<Field.Description>
+				Allowed, an admin's Delete removes a title's files from the disk, which
+				the server must be able to write to. They cannot be brought back.
 			</Field.Description>
 		</Field.Field>
 	</div>

@@ -36,8 +36,8 @@ func TestLibraries(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []domain.Library{
-		{Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films", Sources: domain.DefaultSources(domain.LibraryMovies), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal},
-		{Name: "Television", Kind: domain.LibraryShows, Root: "/srv/tv", Sources: domain.DefaultSources(domain.LibraryShows), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal},
+		{Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films", Sources: domain.DefaultSources(domain.LibraryMovies), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff},
+		{Name: "Television", Kind: domain.LibraryShows, Root: "/srv/tv", Sources: domain.DefaultSources(domain.LibraryShows), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff},
 	}
 	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(domain.Library{}, "ID")); diff != "" {
 		t.Errorf("libraries (-want +got):\n%s", diff)
@@ -57,10 +57,10 @@ func TestALibraryIsRenamedAndRemoved(t *testing.T) {
 	if err := s.SetLibrary(ctx, films.ID, LibraryChange{Name: "Television"}); !errors.Is(err, ErrLibraryExists) {
 		t.Errorf("renaming onto another's name: %v, want %v", err, ErrLibraryExists)
 	}
-	if err := s.SetLibrary(ctx, films.ID, LibraryChange{Name: "Movies", Monitor: domain.MonitorOff}); err != nil {
+	if err := s.SetLibrary(ctx, films.ID, LibraryChange{Name: "Movies", Monitor: domain.MonitorOff, Deletion: domain.DeletionFiles}); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := s.Library(ctx, films.ID); err != nil || got.Name != "Movies" || got.Monitor != domain.MonitorOff {
+	if got, err := s.Library(ctx, films.ID); err != nil || got.Name != "Movies" || got.Monitor != domain.MonitorOff || got.Deletion != domain.DeletionFiles {
 		t.Errorf("after renaming: %+v, %v", got, err)
 	}
 	if err := s.RemoveLibrary(ctx, films.ID); err != nil {
