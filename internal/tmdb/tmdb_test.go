@@ -241,3 +241,27 @@ func TestAFilmUnratedInTheCountryTakesTheUSsCertificate(t *testing.T) {
 		t.Errorf("certificate %q, want the US's R, written as the US's, as Britain gives none", got.Certificate)
 	}
 }
+
+func TestALibraryTakingAnyPicturesTakesTheMostLiked(t *testing.T) {
+	c := serveIn(t, "de-DE", map[string]string{
+		"/movie/348?append_to_response=release_dates%2Cexternal_ids%2Cvideos%2Cimages%2Ccredits&include_image_language=de%2Cnull%2Cen&include_video_language=de%2Cnull&language=de-DE": `{
+			"id":348,"title":"Alien",
+			"images":{"posters":[
+				{"file_path":"/german.jpg","iso_639_1":"de","vote_average":3},
+				{"file_path":"/english.jpg","iso_639_1":"en","vote_average":8},
+				{"file_path":"/plain.jpg","vote_average":6}]}}`,
+	})
+	loc := domain.LocaleOf("de-DE")
+	loc.Artwork = domain.ArtworkAny
+	got, err := c.Details(t.Context(), loc, Movie, 348)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, a := range got.Artwork {
+		order = append(order, strings.TrimPrefix(a.URL, imageURL))
+	}
+	if !slices.Equal(order, []string{"/english.jpg", "/plain.jpg", "/german.jpg"}) {
+		t.Errorf("posters %v, want the most liked first, whatever their language", order)
+	}
+}

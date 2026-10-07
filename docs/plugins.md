@@ -50,6 +50,7 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
 - **Locale.** A match, describe, search or person request carries `language`, an IETF tag such
   as `en-GB` that its words are wanted in, and `country`, an ISO 3166-1 alpha-2 code such as `GB`
   whose certificates are wanted: the title's library's, or the server's own. Either may be absent.
+  `artwork` is `localized` for pictures in that language first, or `any` for the most liked.
 - **Ids** are maps from a provider to the title's or person's id there: `imdb`, `tmdb`, `tvdb`,
   and the plugin's own, `plugin:{id}`, once it has given one.
 - **Kinds** are `movie` and `show`. A plugin is asked only about the kinds its manifest names.

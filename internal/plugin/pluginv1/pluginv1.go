@@ -39,6 +39,8 @@ type Settings map[string]string
 type Locale struct {
 	Language string `json:"language,omitempty"`
 	Country  string `json:"country,omitempty"`
+	// Artwork is "localized", for pictures in Language first, or "any", for the most liked.
+	Artwork string `json:"artwork,omitempty"`
 }
 
 type MatchRequest struct {

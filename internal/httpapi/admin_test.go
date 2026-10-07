@@ -217,6 +217,7 @@ func TestALibraryAsksInALanguageAndCountryOfItsOwn(t *testing.T) {
 		{`{"metadata_language": "Klingon!"}`, http.StatusBadRequest},
 		// A region of the world is not a country with certificates of its own.
 		{`{"certification_country": "EU"}`, http.StatusBadRequest},
+		{`{"artwork_language": "textless"}`, http.StatusBadRequest},
 		{`{"metadata_language": "de-de", "certification_country": "in"}`, http.StatusOK},
 	} {
 		if rec := do(http.MethodPatch, target, tc.body); rec.Code != tc.want {

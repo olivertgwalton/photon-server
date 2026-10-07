@@ -10,6 +10,22 @@ import (
 type Locale struct {
 	Language string
 	Country  string
+	// Artwork is which of a title's pictures are taken first: "" is localized.
+	Artwork ArtworkLanguage
+}
+
+// ArtworkLanguage is which of a title's pictures a library takes first, as Plex's "Prefer artwork
+// based on library language": those in its language, then English, then wordless; or the most
+// liked of any language.
+type ArtworkLanguage string
+
+const (
+	ArtworkLocalized ArtworkLanguage = "localized"
+	ArtworkAny       ArtworkLanguage = "any"
+)
+
+func ArtworkLanguages() []ArtworkLanguage {
+	return []ArtworkLanguage{ArtworkLocalized, ArtworkAny}
 }
 
 // LocaleOf is the locale a language tag alone names: its region is its country, as en-GB's is GB.
@@ -30,6 +46,7 @@ func (l Locale) Or(def Locale) Locale {
 	return Locale{
 		Language: cmp.Or(l.Language, def.Language),
 		Country:  cmp.Or(l.Country, LocaleOf(l.Language).Country, def.Country),
+		Artwork:  cmp.Or(l.Artwork, def.Artwork),
 	}
 }
 

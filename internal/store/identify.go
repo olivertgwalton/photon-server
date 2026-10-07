@@ -49,12 +49,12 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 		sub.Year = *item.Year
 	}
 	var language, country *string
-	err = s.pool.QueryRow(ctx, `SELECT metadata_language, certification_country FROM libraries WHERE id = $1`, item.LibraryID).
-		Scan(&language, &country)
+	err = s.pool.QueryRow(ctx, `SELECT metadata_language, certification_country, artwork_language FROM libraries WHERE id = $1`,
+		item.LibraryID).Scan(&language, &country, &sub.Locale.Artwork)
 	if err != nil {
 		return Subject{}, false, err
 	}
-	sub.Locale = domain.Locale{Language: deref(language), Country: deref(country)}
+	sub.Locale.Language, sub.Locale.Country = deref(language), deref(country)
 	rows, err := s.pool.Query(ctx, `SELECT DISTINCT source FROM library_sources WHERE library_id = $1 AND enabled`, item.LibraryID)
 	if err == nil {
 		sub.Sources, err = pgx.CollectRows(rows, pgx.RowTo[domain.FieldSource])

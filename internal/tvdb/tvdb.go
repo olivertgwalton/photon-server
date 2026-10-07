@@ -270,7 +270,7 @@ func (c *Client) Details(ctx context.Context, loc domain.Locale, id int) (domain
 	m := domain.Metadata{
 		ReleaseDate: aired, Year: provider.Year(aired),
 		IDs:     map[domain.Provider]string{domain.ProviderTVDB: strconv.Itoa(id)},
-		Artwork: artworks(d.Artworks, lang),
+		Artwork: artworks(d.Artworks, loc),
 		Credits: credits(d.Characters),
 	}
 	if d.OriginalLanguage == lang {
@@ -395,12 +395,16 @@ var artworkKinds = map[int]domain.ArtworkKind{
 
 // artworks are a show's pictures of each kind, ranked as TMDB's are: a poster, logo or banner in
 // lang, else English, else wordless; a backdrop wordless first, as Jellyfin ranks them.
-func artworks(all []artwork, lang string) []domain.Artwork {
+func artworks(all []artwork, loc domain.Locale) []domain.Artwork {
+	lang := languageOf(loc)
 	var out []domain.Artwork
 	for _, kind := range []domain.ArtworkKind{domain.ArtworkPoster, domain.ArtworkBackdrop, domain.ArtworkLogo, domain.ArtworkBanner} {
 		of := slices.DeleteFunc(slices.Clone(all), func(a artwork) bool { return artworkKinds[a.Type] != kind || a.Image == "" })
 		preferred := []string{lang, "eng", ""}
-		if kind == domain.ArtworkBackdrop {
+		switch {
+		case loc.Artwork == domain.ArtworkAny:
+			preferred = nil
+		case kind == domain.ArtworkBackdrop:
 			preferred = []string{"", lang, "eng"}
 		}
 		ranked := provider.Preferred(of, func(a artwork) string { return a.Language }, func(a, b artwork) int {

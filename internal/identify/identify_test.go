@@ -147,7 +147,7 @@ func TestATitleIsDescribedInItsLibrarysLocale(t *testing.T) {
 	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), domain.LocaleOf("en-GB"), func(context.Context, domain.Event) {}, log)(ctx, cards[0].ID); err != nil {
 		t.Fatal(err)
 	}
-	if asked != (domain.Locale{Language: "de-DE", Country: "IN"}) {
+	if asked != (domain.Locale{Language: "de-DE", Country: "IN", Artwork: domain.ArtworkLocalized}) {
 		t.Errorf("the provider was asked in %+v, want the library's de-DE and India", asked)
 	}
 	page, err := st.Title(ctx, uuid.UUID{}, cards[0].ID)

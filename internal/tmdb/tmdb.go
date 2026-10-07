@@ -235,9 +235,9 @@ func (c *Client) Details(ctx context.Context, loc domain.Locale, kind Kind, id i
 	}
 	out.Certificate = provider.Certificate(loc.Country, rated)
 	out.Artwork = slices.Concat(
-		pictures(domain.ArtworkPoster, d.Images.Posters, loc.Base(), "en", ""),
-		pictures(domain.ArtworkBackdrop, d.Images.Backdrops, "", loc.Base(), "en"),
-		pictures(domain.ArtworkLogo, d.Images.Logos, loc.Base(), "en", ""),
+		pictures(domain.ArtworkPoster, d.Images.Posters, preferring(loc, loc.Base(), "en", "")...),
+		pictures(domain.ArtworkBackdrop, d.Images.Backdrops, preferring(loc, "", loc.Base(), "en")...),
+		pictures(domain.ArtworkLogo, d.Images.Logos, preferring(loc, loc.Base(), "en", "")...),
 	)
 	videos := d.Videos.Results
 	// The studio's own first, then the newest.
@@ -276,6 +276,15 @@ func imageLanguages(loc domain.Locale) string {
 // pictures orders a kind's pictures by language, most preferred first (a poster's lettering in the
 // reader's language, then English, then none; a backdrop with none), then by TMDB's rating and
 // how many voted, as Jellyfin does, and keeps the best.
+// preferring are the languages a locale's pictures are taken in first: none where it takes the
+// most liked of any.
+func preferring(loc domain.Locale, languages ...string) []string {
+	if loc.Artwork == domain.ArtworkAny {
+		return nil
+	}
+	return languages
+}
+
 func pictures(kind domain.ArtworkKind, images []image, preferred ...string) []domain.Artwork {
 	images = provider.Preferred(images, func(im image) string { return im.Language }, func(a, b image) int {
 		return cmp.Or(cmp.Compare(b.Votes, a.Votes), cmp.Compare(b.Count, a.Count))
