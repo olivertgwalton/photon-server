@@ -18,14 +18,16 @@ import (
 // order, what it knows: a describer matches the title and records what it says about it and, for a
 // show, its seasons and episodes, and a rater records its ratings; the library's ranking for each
 // kind of item decides whose values and pictures stand. A title with no confident match is left as its files and NFO describe it, and a provider
-// not configured or not reachable is passed over. Each provider is asked in loc. raise tells the
-// title was described again.
-func Handler(st *store.Store, providers *provider.Registry, loc domain.Locale, raise func(context.Context, domain.Event), log *slog.Logger) jobs.Handler {
+// not configured or not reachable is passed over. Each provider is asked in the title's library's
+// locale, def where it leaves anything unsaid; def is the server's. raise tells the title was
+// described again.
+func Handler(st *store.Store, providers *provider.Registry, def domain.Locale, raise func(context.Context, domain.Event), log *slog.Logger) jobs.Handler {
 	return func(ctx context.Context, id uuid.UUID) error {
 		sub, ok, err := st.IdentifySubject(ctx, id)
 		if err != nil || !ok || sub.Unmatched {
 			return err
 		}
+		loc := sub.Locale.Or(def)
 		all, err := providers.All(ctx)
 		if err != nil {
 			return err
@@ -37,7 +39,7 @@ func Handler(st *store.Store, providers *provider.Registry, loc domain.Locale, r
 			}
 			log := log.With(slog.String("provider", string(info.ID)), slog.String("title", sub.Title))
 			if d, ok := provider.As[provider.Describer](p, domain.CapabilityDescribe); ok {
-				if err := describe(ctx, st, d, loc, id, &sub, log); err != nil {
+				if err := describe(ctx, st, d, loc, def, id, &sub, log); err != nil {
 					return err
 				}
 			}
@@ -53,7 +55,7 @@ func Handler(st *store.Store, providers *provider.Registry, loc domain.Locale, r
 	}
 }
 
-func describe(ctx context.Context, st *store.Store, d provider.Describer, loc domain.Locale, id uuid.UUID, sub *store.Subject, log *slog.Logger) error {
+func describe(ctx context.Context, st *store.Store, d provider.Describer, loc, def domain.Locale, id uuid.UUID, sub *store.Subject, log *slog.Logger) error {
 	match, err := d.Match(ctx, loc, sub.Kind, provider.Hints{Title: sub.Title, Year: sub.Year, IDs: sub.IDs})
 	if passedOver(ctx, err, log) {
 		return nil
@@ -77,6 +79,15 @@ func describe(ctx context.Context, st *store.Store, d provider.Describer, loc do
 		if _, ok := sub.IDs[p]; !ok {
 			sub.IDs[p] = v
 		}
+	}
+	m.Certificate = loc.Qualified(m.Certificate, def)
+	for n, season := range seasons {
+		season.Metadata.Certificate = loc.Qualified(season.Metadata.Certificate, def)
+		for e, episode := range season.Episodes {
+			episode.Certificate = loc.Qualified(episode.Certificate, def)
+			season.Episodes[e] = episode
+		}
+		seasons[n] = season
 	}
 	return st.SaveIdentity(ctx, id, d.Info().ID, m, seasons)
 }

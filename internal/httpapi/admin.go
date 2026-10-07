@@ -8,6 +8,8 @@ import (
 	"time"
 	"uuid"
 
+	"golang.org/x/text/language"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -33,6 +35,7 @@ type libraryAdmin interface {
 	ScanFolders(ctx context.Context, lib uuid.UUID, folders []string, delay time.Duration) error
 	RefreshLibrary(ctx context.Context, lib uuid.UUID, mode domain.RefreshMode) error
 	LibraryCounts(ctx context.Context, profile uuid.UUID) (map[uuid.UUID]domain.TitleCounts, error)
+	CertificateCountries(ctx context.Context) ([]string, error)
 }
 
 // adminLibraryListingJSON is a library as an admin keeps it, with everything it holds.
@@ -56,6 +59,10 @@ type adminLibraryJSON struct {
 	Keyframes    domain.KeyframeMode    `json:"keyframes"`
 	Themes       domain.ThemeLookup     `json:"themes"`
 	Deletion     domain.MediaDeletion   `json:"deletion"`
+	// MetadataLanguage and CertificationCountry are what its metadata is asked in, absent for the
+	// server's own.
+	MetadataLanguage     string `json:"metadata_language,omitzero"`
+	CertificationCountry string `json:"certification_country,omitzero"`
 }
 
 // kindSourcesJSON ranks where a kind of item a library holds takes its metadata and its pictures
@@ -77,6 +84,7 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 		ID: l.ID, Name: l.Name, Kind: l.Kind, Root: l.Root, Sources: []kindSourcesJSON{},
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
 		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes, Deletion: l.Deletion,
+		MetadataLanguage: l.Locale.Language, CertificationCountry: l.Locale.Country,
 	}
 	ranked := func(list []domain.RankedSource) []rankedSourceJSON {
 		out := make([]rankedSourceJSON, len(list))
@@ -176,6 +184,11 @@ type libraryChangeJSON struct {
 	Themes domain.ThemeLookup `json:"themes,omitzero"`
 	// Deletion is whether an admin may delete its titles with their files: off, or files.
 	Deletion domain.MediaDeletion `json:"deletion,omitzero"`
+	// MetadataLanguage is the language its metadata is asked in, an IETF tag such as en-GB, and
+	// CertificationCountry the country whose certificates, an ISO 3166-1 alpha-2 code such as GB;
+	// "" is the server's own. Changing either describes its titles again.
+	MetadataLanguage     *string `json:"metadata_language,omitzero"`
+	CertificationCountry *string `json:"certification_country,omitzero"`
 }
 
 type kindSourcesChangeJSON struct {
@@ -209,6 +222,23 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "refresh_days is from 0, never, to 365")
 		return
 	}
+	if l := req.MetadataLanguage; l != nil && *l != "" {
+		tag, err := language.Parse(*l)
+		if err != nil {
+			writeProblem(w, a.logger, codeInvalidBody, "metadata_language is an IETF language tag, such as en-GB")
+			return
+		}
+		*l = tag.String()
+	}
+	if c := req.CertificationCountry; c != nil && *c != "" {
+		region, err := language.ParseRegion(*c)
+		if err != nil || !region.IsCountry() {
+			writeProblem(w, a.logger, codeInvalidBody, "certification_country is an ISO 3166-1 alpha-2 country, such as GB")
+			return
+		}
+		*c = region.String()
+	}
+	change.MetadataLanguage, change.CertificationCountry = req.MetadataLanguage, req.CertificationCountry
 	if req.Themes == domain.ThemesThemerr && a.svc.Setup.Tools.YTDLP.Path == "" {
 		writeProblem(w, a.logger, codeConflict, "themerr needs yt-dlp, which this server does not have")
 		return
@@ -301,4 +331,23 @@ func (a *API) refreshLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
+}
+
+type localesJSON struct {
+	// Languages a library may ask its metadata in, IETF tags: those TMDB has translations in.
+	Languages []string `json:"languages"`
+	// Countries a library may take its certificates from, ISO 3166-1 alpha-2 codes: those whose
+	// certificates the server can read for parental controls.
+	Countries []string `json:"countries"`
+}
+
+// locales lists what a library may ask its metadata in, as Jellyfin's Localization cultures and
+// countries do.
+func (a *API) locales(w http.ResponseWriter, r *http.Request) {
+	countries, err := a.svc.Libraries.CertificateCountries(r.Context())
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, localesJSON{Languages: domain.MetadataLanguages(), Countries: countries})
 }
