@@ -42,6 +42,15 @@ func saveCredits(ctx context.Context, tx db, source domain.FieldSource, titles [
 	if err != nil {
 		return err
 	}
+	adopted, err := adoptNamesakes(ctx, tx, source, entries, owners)
+	if err != nil {
+		return err
+	}
+	if adopted {
+		if owners, err = personOwners(ctx, tx, keys); err != nil {
+			return err
+		}
+	}
 	people := creditedPeople(entries, owners)
 	if err := addPeople(ctx, tx, people, owners); err != nil {
 		return err
@@ -92,6 +101,42 @@ func saveCredits(ctx context.Context, tx db, source domain.FieldSource, titles [
 		ON CONFLICT DO NOTHING`,
 		credits.items, credits.people, source, credits.kinds, credits.roles, credits.positions)
 	return err
+}
+
+// adoptNamesakes gives each id no one has to the person another source credits on the same title
+// by the same name, where that is one person with no id of the provider yet, answering whether it
+// gave any. Sources know a person by ids of their own (TVDB's, TMDB's), and two crediting one show
+// name one cast: a namesake on one title is far rarer than one person credited by two sources.
+func adoptNamesakes(ctx context.Context, tx db, source domain.FieldSource, entries []creditEntry, owners map[personKey]owner) (bool, error) {
+	var items []uuid.UUID
+	var names, providers, values []string
+	for _, e := range entries {
+		for _, k := range e.keys {
+			if _, ok := owners[k]; !ok {
+				items, names = append(items, e.item), append(names, e.credit.Name)
+				providers, values = append(providers, string(k.provider)), append(values, k.value)
+			}
+		}
+	}
+	if len(items) == 0 {
+		return false, nil
+	}
+	info, err := tx.Exec(ctx, `
+		WITH asked AS (
+			SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::text[]) AS a(item, name, provider, value)
+		), namesakes AS (
+			SELECT a.provider, a.value, (array_agg(DISTINCT c.person_id))[1] AS person_id
+			FROM asked a
+			JOIN credits c ON c.item_id = a.item AND c.source <> $5
+			JOIN people p ON p.id = c.person_id AND lower(p.name) = lower(a.name)
+			WHERE NOT EXISTS (SELECT 1 FROM person_ids i WHERE i.person_id = c.person_id AND i.provider = a.provider)
+			GROUP BY a.provider, a.value
+			HAVING count(DISTINCT c.person_id) = 1
+		)
+		INSERT INTO person_ids (person_id, provider, value)
+		SELECT person_id, provider, value FROM namesakes ORDER BY provider, value
+		ON CONFLICT DO NOTHING`, items, names, providers, values, source)
+	return err == nil && info.RowsAffected() > 0, err
 }
 
 // creditEntry is one credit with an id, at its place in its title's billing.
