@@ -5102,6 +5102,8 @@ export interface components {
             method: components["schemas"]["PlayMethod"];
             /** Format: uuid */
             part_id: string;
+            part_index: number;
+            parts: number;
             progress: number;
             /** Format: int64 */
             size_bytes?: number;

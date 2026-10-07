@@ -256,14 +256,22 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 					container: "mp4",
 					duration_ms: 6_720_000,
 					size_bytes: 8_000_000_000,
-					parts: 1,
+					// In two files, as a film on two discs is.
+					parts: 2,
 					files: [
 						{
 							id: "p-hd",
 							index: 0,
-							size_bytes: 8_000_000_000,
-							duration_ms: 6_720_000,
+							size_bytes: 4_000_000_000,
+							duration_ms: 3_360_000,
 							offset_ms: 0,
+						},
+						{
+							id: "p-hd2",
+							index: 1,
+							size_bytes: 4_000_000_000,
+							duration_ms: 3_360_000,
+							offset_ms: 3_360_000,
 						},
 					],
 					streams: [
@@ -835,10 +843,24 @@ const server_ = Bun.serve({
 				} satisfies Schemas["DownloadList"]);
 			case "POST /api/v1/downloads": {
 				const body: Schemas["DownloadRequest"] = await json(request);
+				// As the server, a copy in several files is asked for a file at a time.
+				if (body.version_id === "v-hd" && !body.part_id) {
+					return Response.json(
+						{
+							title: "Bad Request",
+							status: 400,
+							code: "invalid_body",
+							detail: "part_id names which of the copy's 2 files",
+						},
+						{ status: 400 },
+					);
+				}
 				const d: Schemas["Download"] = {
 					id: `d-${downloads.length + 1}`,
 					title_id: body.title_id,
-					part_id: "part-1",
+					part_id: body.part_id ?? "part-1",
+					part_index: body.part_id === "p-hd2" ? 1 : 0,
+					parts: body.version_id === "v-hd" ? 2 : 1,
 					device_id: "device-1",
 					method: body.max_bitrate_kbps >= 1_000_000 ? "direct" : "transcode",
 					max_bitrate_kbps: body.max_bitrate_kbps,
