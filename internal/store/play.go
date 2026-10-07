@@ -46,15 +46,11 @@ type PlaySubtitle struct {
 // Playable answers the copy of a film or episode to play: the one asked for, else its longest on
 // disk. ErrNotFound for no such title, one the profile may not see, or none of its copies on disk.
 func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) (PlayCopy, error) {
-	var asked *uuid.UUID
-	if version != (uuid.UUID{}) {
-		asked = &version
-	}
 	rows, err := queryRows[model.Version](ctx, s.pool, `
 		SELECT `+versionColumns+` FROM versions
 		WHERE item_id = $1 AND missing_since IS NULL AND ($3::uuid IS NULL OR id = $3)
 			AND EXISTS (SELECT 1 FROM items i, viewer($2) v WHERE i.id = item_id AND sees(v, i))
-		ORDER BY duration_ms DESC, id LIMIT 1`, item, profile, asked)
+		ORDER BY duration_ms DESC, id LIMIT 1`, item, profile, optional(version))
 	if err != nil || len(rows) == 0 {
 		return PlayCopy{}, cmp.Or(err, ErrNotFound)
 	}

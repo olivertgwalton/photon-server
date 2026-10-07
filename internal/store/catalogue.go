@@ -430,15 +430,15 @@ func saveFacts(ctx context.Context, tx db, partID uuid.UUID, f *domain.Facts) er
 			PartID: partID, Idx: st.Index, Kind: st.Kind, Codec: st.Codec,
 			Profile: optional(st.Profile), Title: optional(st.Title),
 			IsDefault: st.Default, Forced: st.Forced, HearingImpaired: st.HearingImpaired, Commentary: st.Commentary,
-			BitrateKbps: optionalInt(st.BitrateKbps),
+			BitrateKbps: optional(st.BitrateKbps),
 		}
 		if st.Language != language.Und {
 			row.Language = optional(st.Language.String())
 		}
 		switch st.Kind {
 		case domain.StreamVideo:
-			row.Width, row.Height, row.FrameRate = optionalInt(st.Width), optionalInt(st.Height), &st.FrameRate
-			row.VideoRange, row.Level, row.Interlaced = &st.Range, optionalInt(st.Level), st.Interlaced
+			row.Width, row.Height, row.FrameRate = optional(st.Width), optional(st.Height), &st.FrameRate
+			row.VideoRange, row.Level, row.Interlaced = &st.Range, optional(st.Level), st.Interlaced
 			if st.BitDepth > 0 {
 				depth := int16(st.BitDepth)
 				row.BitDepth = &depth
@@ -448,8 +448,8 @@ func saveFacts(ctx context.Context, tx db, partID uuid.UUID, f *domain.Facts) er
 				row.DVProfile, row.DVLevel, row.DVCompatibility = &profile, &level, &compat
 			}
 		case domain.StreamAudio:
-			row.Channels, row.ChannelLayout = optionalInt(st.Channels), optional(st.ChannelLayout)
-			row.SampleRate = optionalInt(st.SampleRate)
+			row.Channels, row.ChannelLayout = optional(st.Channels), optional(st.ChannelLayout)
+			row.SampleRate = optional(st.SampleRate)
 		case domain.StreamSubtitle:
 		}
 		b.Queue(`INSERT INTO streams (`+streamColumns+`) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
@@ -546,18 +546,12 @@ func firstVideo(f *domain.Facts) *domain.Stream {
 	return nil
 }
 
-func optional(s string) *string {
-	if s == "" {
+// optional is v, or NULL for its zero.
+func optional[T comparable](v T) *T {
+	if v == *new(T) {
 		return nil
 	}
-	return &s
-}
-
-func optionalInt(n int) *int {
-	if n == 0 {
-		return nil
-	}
-	return &n
+	return &v
 }
 
 // sortTitle orders "The Thing" under T and ignores case.

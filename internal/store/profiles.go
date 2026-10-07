@@ -337,11 +337,7 @@ func (s *Store) SetAccess(ctx context.Context, id uuid.UUID, a ProfileAccess) er
 // SetAvatar makes picture a profile's avatar, or with the zero id takes it away, answering the
 // profile as it is then. The picture it had is forgotten, and its file swept with the rest.
 func (s *Store) SetAvatar(ctx context.Context, id, picture uuid.UUID) (domain.Profile, error) {
-	var avatar *uuid.UUID
-	if picture != (uuid.UUID{}) {
-		avatar = &picture
-	}
-	if err := affected(s.pool.Exec(ctx, `UPDATE profiles SET avatar_id = $2 WHERE id = $1`, id, avatar)); err != nil {
+	if err := affected(s.pool.Exec(ctx, `UPDATE profiles SET avatar_id = $2 WHERE id = $1`, id, optional(picture))); err != nil {
 		return domain.Profile{}, err
 	}
 	return s.ProfileByID(ctx, id)

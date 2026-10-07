@@ -48,7 +48,7 @@ func saveProviderArtwork(ctx context.Context, tx db, item uuid.UUID, source doma
 	for n, p := range pictures {
 		rows[n] = &model.Artwork{
 			ItemID: item, Source: source, Kind: p.Kind, Place: p.URL, Position: n,
-			Language: optional(p.Language), Width: optionalInt(p.Width), Height: optionalInt(p.Height),
+			Language: optional(p.Language), Width: optional(p.Width), Height: optional(p.Height),
 		}
 	}
 	queueArtwork(b, rows)
