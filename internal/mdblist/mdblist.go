@@ -4,10 +4,13 @@
 package mdblist
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
+	"strconv"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -98,6 +101,69 @@ func (c *Client) ratings(ctx context.Context, key, path string) ([]domain.Rating
 			rating.Votes = *r.Votes
 		}
 		out = append(out, rating)
+	}
+	return out, nil
+}
+
+// listPage is how many of a list's titles MDBList answers at most at once.
+const listPage = 1000
+
+// List answers an MDBList list's films and shows in its order: one MDBList keeps, or mirrors from
+// Trakt or IMDb, by its id or as "user/list".
+func (c *Client) List(ctx context.Context, id string) ([]domain.Listed, error) {
+	set, err := c.settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	key := set[keySetting]
+	if key == "" {
+		return nil, provider.ErrNotConfigured
+	}
+	type item struct {
+		Rank int `json:"rank"`
+		IDs  struct {
+			TMDB int    `json:"tmdb"`
+			IMDb string `json:"imdb"`
+		} `json:"ids"`
+	}
+	type ranked struct {
+		rank int
+		domain.Listed
+	}
+	var all []ranked
+	for offset := 0; ; offset += listPage {
+		q := url.Values{"apikey": {key}, "limit": {strconv.Itoa(listPage)}, "offset": {strconv.Itoa(offset)}}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/lists/"+id+"/items?"+q.Encode(), nil)
+		if err != nil {
+			return nil, err
+		}
+		var body struct {
+			Movies []item `json:"movies"`
+			Shows  []item `json:"shows"`
+		}
+		if err := c.api.Do(req, &body); err != nil {
+			return nil, err
+		}
+		for kind, items := range map[domain.ItemKind][]item{domain.ItemMovie: body.Movies, domain.ItemShow: body.Shows} {
+			for _, it := range items {
+				ids := map[domain.Provider]string{}
+				if it.IDs.TMDB != 0 {
+					ids[domain.ProviderTMDB] = strconv.Itoa(it.IDs.TMDB)
+				}
+				if it.IDs.IMDb != "" {
+					ids[domain.ProviderIMDb] = it.IDs.IMDb
+				}
+				all = append(all, ranked{it.Rank, domain.Listed{Kind: kind, IDs: ids}})
+			}
+		}
+		if len(body.Movies)+len(body.Shows) < listPage {
+			break
+		}
+	}
+	slices.SortStableFunc(all, func(a, b ranked) int { return cmp.Compare(a.rank, b.rank) })
+	out := make([]domain.Listed, len(all))
+	for i, r := range all {
+		out[i] = r.Listed
 	}
 	return out, nil
 }

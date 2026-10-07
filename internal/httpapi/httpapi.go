@@ -509,6 +509,11 @@ func (a *API) routes() []route {
 			body:    store.SmartRule{}, status: http.StatusNoContent, handle: a.setRule,
 		},
 		{
+			pattern: "POST /api/v1/admin/collections/{id}/sync", access: admin,
+			summary: "Read a list collection's list again now, and keep the titles of it the library has",
+			status:  http.StatusNoContent, handle: a.syncList,
+		},
+		{
 			pattern: "PUT /api/v1/admin/collections/{id}/placement", access: admin,
 			summary: "Show a collection on the home page, or in its library only",
 			body:    placementJSON{}, status: http.StatusNoContent, handle: a.setPlacement,

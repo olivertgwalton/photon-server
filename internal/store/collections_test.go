@@ -447,3 +447,75 @@ func TestASmartCollectionIsWhatItsRuleFinds(t *testing.T) {
 		t.Errorf("removing it: %v", err)
 	}
 }
+
+// A list collection is the titles of its library a list holds, found by their TMDB or IMDb id,
+// in the list's order, each once; it counts what the library lacks, and is read again as asked.
+func TestAListCollectionHoldsWhatTheLibraryHasOfItsList(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for title, ids := range map[string]map[domain.Provider]string{
+		"Alien":  {domain.ProviderTMDB: "348", domain.ProviderIMDb: "tt0078748"},
+		"Aliens": {domain.ProviderTMDB: "679", domain.ProviderIMDb: "tt0090605"},
+		"Heat":   {domain.ProviderTMDB: "949"},
+	} {
+		film := Film{Title: title, Folder: title, Copies: []Copy{{ContentKey: []byte(title), Parts: []Part{{
+			RelPath: title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
+		}}}}}
+		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{film}, nil); err != nil {
+			t.Fatal(err)
+		}
+		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SaveIdentity(ctx, cards[0].ID, domain.SourceTMDB, domain.Metadata{Title: title, IDs: ids}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	film := func(ids ...string) domain.Listed {
+		l := domain.Listed{Kind: domain.ItemMovie, IDs: map[domain.Provider]string{}}
+		for i := 0; i < len(ids); i += 2 {
+			l.IDs[domain.Provider(ids[i])] = ids[i+1]
+		}
+		return l
+	}
+	listed := []domain.Listed{
+		film("tmdb", "679"),       // Aliens
+		film("imdb", "tt0078748"), // Alien, by IMDb alone
+		film("tmdb", "1091"),      // The Thing, not in the library
+		{Kind: domain.ItemShow, IDs: map[domain.Provider]string{domain.ProviderTMDB: "949"}}, // a show of Heat's id
+		film("tmdb", "679", "imdb", "tt0090605"),                                             // Aliens again
+	}
+	list := ListRef{Source: domain.SourceTMDB, ID: "8136"}
+	set, err := s.AddListCollection(ctx, lib.ID, "Alien films", list, listed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	members, err := s.Members(ctx, uuid.UUID{}, set)
+	if err != nil || len(members) != 2 || members[0].Title != "Aliens" || members[1].Title != "Alien" {
+		t.Errorf("members %+v, %v; want Aliens then Alien, as listed", members, err)
+	}
+	if got, err := s.CollectionList(ctx, set); err != nil || got.Source != domain.SourceTMDB || got.ID != "8136" || got.Missing != 2 {
+		t.Errorf("its list %+v, %v; want TMDB's 8136, two of it missing", got, err)
+	}
+
+	if err := s.SetListMembers(ctx, set, []domain.Listed{film("tmdb", "348")}); err != nil {
+		t.Fatal(err)
+	}
+	if members, _ := s.Members(ctx, uuid.UUID{}, set); len(members) != 1 || members[0].Title != "Alien" {
+		t.Errorf("read again: %+v, want Alien alone", members)
+	}
+	if lists, err := s.ListCollections(ctx); err != nil || len(lists) != 1 || lists[0].ID != set || lists[0].List.Missing != 0 {
+		t.Errorf("list collections %+v, %v", lists, err)
+	}
+	if err := s.SetMembers(ctx, set, nil); !errors.Is(err, ErrNotUserCollection) {
+		t.Errorf("its titles set by hand: %v, want ErrNotUserCollection", err)
+	}
+	if err := s.RemoveCollection(ctx, set); err != nil {
+		t.Errorf("removing it: %v", err)
+	}
+}

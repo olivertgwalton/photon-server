@@ -15,6 +15,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/events"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/task"
@@ -353,5 +354,34 @@ func refreshCollectionsTask(st *store.Store) task.Task {
 		Key:     domain.TaskRefreshCollections,
 		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: refreshCollectionsEvery},
 		Run:     func(ctx context.Context, _ task.Start) error { return st.RefreshSmartCollections(ctx) },
+	}
+}
+
+// syncListsEvery is how often list collections read their lists again: Kometa's daily run.
+const syncListsEvery = 24 * time.Hour
+
+// syncListsTask keeps every list collection's titles what its list holds. A list that cannot be
+// read leaves its collection as it was.
+func syncListsTask(st *store.Store, providers *provider.Registry) task.Task {
+	return task.Task{
+		Key:     domain.TaskSyncLists,
+		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: syncListsEvery},
+		Run: func(ctx context.Context, _ task.Start) error {
+			lists, err := st.ListCollections(ctx)
+			if err != nil {
+				return err
+			}
+			var errs []error
+			for _, c := range lists {
+				listed, err := providers.List(ctx, c.List.Source, c.List.ID)
+				if err == nil {
+					err = st.SetListMembers(ctx, c.ID, listed)
+				}
+				if err != nil {
+					errs = append(errs, fmt.Errorf("list %s %s: %w", c.List.Source, c.List.ID, err))
+				}
+			}
+			return errors.Join(errs...)
+		},
 	}
 }

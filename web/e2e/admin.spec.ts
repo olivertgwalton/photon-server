@@ -459,6 +459,35 @@ test("a filtered library is kept as a smart collection, and its filters changed 
 	await expect(page).toHaveURL("/settings/server/collections/t-smart");
 });
 
+test("a collection is made from a TMDB list, and read again as asked", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/server/collections");
+	await page.getByLabel("New collection").fill("Alien films");
+	await page.getByLabel("Titles").click();
+	await page.getByRole("option", { name: "A TMDB list" }).click();
+	await page.getByLabel("List", { exact: true }).fill("8136");
+	const made = page.waitForRequest(
+		(r) => r.method() === "POST" && r.url().endsWith("/admin/collections"),
+	);
+	await page.getByRole("button", { name: "Make it" }).click();
+	expect((await made).postDataJSON().list).toEqual({
+		source: "tmdb",
+		id: "8136",
+	});
+	await expect(page).toHaveURL("/settings/server/collections/t-smart");
+	await expect(page.locator("main")).toContainText(
+		"Holds the titles of TMDB list 8136 the library has",
+	);
+	await expect(page.locator("main")).toContainText(
+		"2 of it are not in the library.",
+	);
+	await expectAccessible(page);
+
+	await page.getByRole("button", { name: "Sync now" }).click();
+	await expect(page.getByText("Read again.")).toBeVisible();
+});
+
 test("a collection made here is filled from its library", async ({ page }) => {
 	await logIn(page, "/settings/server/collections");
 	await expect(page.getByText("Made here", { exact: true })).toBeVisible();

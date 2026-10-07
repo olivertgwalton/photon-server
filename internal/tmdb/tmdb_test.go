@@ -265,3 +265,35 @@ func TestALibraryTakingAnyPicturesTakesTheMostLiked(t *testing.T) {
 		t.Errorf("posters %v, want the most liked first, whatever their language", order)
 	}
 }
+
+// A TMDB list is read a page at a time, its films and shows in its order, by their TMDB ids; a
+// person on it is no title.
+func TestAListIsReadInItsOrder(t *testing.T) {
+	pages := map[string]string{
+		"1": `{"items":[{"id":348,"media_type":"movie"},{"id":1399,"media_type":"tv"}],"total_pages":2}`,
+		"2": `{"items":[{"id":31,"media_type":"person"},{"id":679,"media_type":"movie"}],"total_pages":2}`,
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, ok := pages[r.URL.Query().Get("page")]
+		if r.URL.Path != "/list/8136" || r.Header.Get("Authorization") != "Bearer token" || !ok {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	c := New("token", unlimited{})
+	c.base = srv.URL
+	got, err := c.List(t.Context(), "8136")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []domain.Listed{
+		{Kind: domain.ItemMovie, IDs: map[domain.Provider]string{domain.ProviderTMDB: "348"}},
+		{Kind: domain.ItemShow, IDs: map[domain.Provider]string{domain.ProviderTMDB: "1399"}},
+		{Kind: domain.ItemMovie, IDs: map[domain.Provider]string{domain.ProviderTMDB: "679"}},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("listed (-want +got):\n%s", diff)
+	}
+}

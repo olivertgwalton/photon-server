@@ -26,10 +26,12 @@ const (
 	TaskPruneActivity TaskKey = "prune_activity"
 	// TaskRefreshCollections finds the titles of every smart collection again.
 	TaskRefreshCollections TaskKey = "refresh_collections"
+	// TaskSyncLists reads every list collection's list again, as Kometa's daily run.
+	TaskSyncLists TaskKey = "sync_lists"
 )
 
 func TaskKeys() []TaskKey {
-	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections}
+	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists}
 }
 
 // Jobs are the kinds of job the task queues: the work it starts that outlasts its run, and that
@@ -44,7 +46,7 @@ func (k TaskKey) Jobs() []JobKind {
 		return []JobKind{JobMarkers}
 	case TaskBackfillPreviews:
 		return []JobKind{JobPreviews}
-	case TaskSweepJobs, TaskBackupDatabase, TaskSweepArtwork, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections:
+	case TaskSweepJobs, TaskBackupDatabase, TaskSweepArtwork, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists:
 	}
 	return nil
 }

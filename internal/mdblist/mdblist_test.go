@@ -82,3 +82,33 @@ func TestAKeyIsNeededAndNeverLogged(t *testing.T) {
 		t.Errorf("unreachable: %v, want an error that does not carry the key", err)
 	}
 }
+
+// An MDBList list is its films and shows together in its own order, by their TMDB and IMDb ids,
+// named by its id or as user/list.
+func TestAListIsItsTitlesInRankOrder(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lists/garycrawfordgc/top-horror/items" || r.URL.Query().Get("apikey") != "secret" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{
+			"movies": [{"rank": 1, "ids": {"tmdb": 694, "imdb": "tt0081505"}}, {"rank": 3, "ids": {"tmdb": 0, "imdb": "tt0078748"}}],
+			"shows": [{"rank": 2, "ids": {"tmdb": 46648, "imdb": "tt2149175"}}]
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": "secret"}, nil }, unlimited{})
+	c.base = srv.URL
+	got, err := c.List(t.Context(), "garycrawfordgc/top-horror")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []domain.Listed{
+		{Kind: domain.ItemMovie, IDs: map[domain.Provider]string{domain.ProviderTMDB: "694", domain.ProviderIMDb: "tt0081505"}},
+		{Kind: domain.ItemShow, IDs: map[domain.Provider]string{domain.ProviderTMDB: "46648", domain.ProviderIMDb: "tt2149175"}},
+		{Kind: domain.ItemMovie, IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0078748"}},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("listed (-want +got):\n%s", diff)
+	}
+}

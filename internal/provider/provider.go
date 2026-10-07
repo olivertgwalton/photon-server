@@ -198,6 +198,12 @@ type PersonDescriber interface {
 	DescribePerson(ctx context.Context, loc domain.Locale, ids map[domain.Provider]string) (domain.Person, error)
 }
 
+// Lister reads a list kept on a provider, its titles in its order, as Kometa's list builders do.
+type Lister interface {
+	Provider
+	List(ctx context.Context, id string) ([]domain.Listed, error)
+}
+
 // Partial is a provider that implements every capability's methods but answers only some of
 // them: a plugin, whose manifest says which.
 type Partial interface {
@@ -292,6 +298,22 @@ func (r *Registry) Get(ctx context.Context, id domain.FieldSource) (Provider, bo
 		}
 	}
 	return nil, false, nil
+}
+
+// ErrNoLister is a provider that keeps no lists, or no such provider.
+var ErrNoLister = errors.New("the provider keeps no lists")
+
+// List reads a list kept on the provider source, its titles in its order.
+func (r *Registry) List(ctx context.Context, source domain.FieldSource, id string) ([]domain.Listed, error) {
+	p, ok, err := r.Get(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	lister, isLister := p.(Lister)
+	if !ok || !isLister {
+		return nil, ErrNoLister
+	}
+	return lister.List(ctx, id)
 }
 
 // DescribePerson asks each provider that describes people, in order, what it knows of someone;

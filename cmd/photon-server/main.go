@@ -239,14 +239,14 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	hub := events.New(st, cache, events.Server{ID: id, Name: info.Name}, logger)
 	gate := jobs.NewGate(cache, st, hub.Subscribe, logger)
 	window := task.Trigger{Kind: task.TriggerWindow, Opens: gate.Opens}
-	scheduler := task.NewScheduler(st, logger, node, hub.Raise, scanTask(st), sweepTask(st, logger), backupTask(dumper, hub, logger), refreshTask(st, logger), sweepArtworkTask(st, pictureCache, logger), markersTask(st, tools, window, logger), previewsTask(st, previews, window, logger), sweepDownloadsTask(st, logger), pruneActivityTask(st, logger), refreshCollectionsTask(st))
+	plugins := plugin.New(st)
+	providers := metadataProviders(st, plugins, cache)
+	scheduler := task.NewScheduler(st, logger, node, hub.Raise, scanTask(st), sweepTask(st, logger), backupTask(dumper, hub, logger), refreshTask(st, logger), sweepArtworkTask(st, pictureCache, logger), markersTask(st, tools, window, logger), previewsTask(st, previews, window, logger), sweepDownloadsTask(st, logger), pruneActivityTask(st, logger), refreshCollectionsTask(st), syncListsTask(st, providers))
 	lang := cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US")
 	_, country, _ := strings.Cut(lang, "-")
 	if err := st.SetCertificateCountry(ctx, country); err != nil {
 		return err
 	}
-	plugins := plugin.New(st)
-	providers := metadataProviders(st, plugins, cache)
 	sessions := playback.NewSessions(cache, st, remuxer, hub.Raise, node)
 	listen := cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen)
 	setup := httpapi.Setup{

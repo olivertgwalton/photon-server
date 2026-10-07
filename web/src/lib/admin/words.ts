@@ -43,6 +43,10 @@ export const tasks: Record<Schemas["TaskKey"], { name: string; does: string }> =
 			name: "Prune the activity log",
 			does: "Forgets activity older than 30 days.",
 		},
+		sync_lists: {
+			name: "Sync list collections",
+			does: "Reads each list collection's TMDB or MDBList list again and keeps the titles of it the library has.",
+		},
 		refresh_collections: {
 			name: "Refresh smart collections",
 			does: "Finds what each smart collection's filters hold again, catching what was matched or edited since.",
