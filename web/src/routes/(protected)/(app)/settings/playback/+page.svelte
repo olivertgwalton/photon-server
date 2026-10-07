@@ -12,7 +12,8 @@ import type {
 	Preferences,
 	PreferencesChange,
 } from "#lib/player/preferences.js";
-import { bitrate, language, qualities } from "#lib/player/words.js";
+import { bitrate, language } from "#lib/format.js";
+import { qualities } from "#lib/player/words.js";
 
 type Schemas = components["schemas"];
 

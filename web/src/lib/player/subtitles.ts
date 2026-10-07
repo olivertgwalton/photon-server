@@ -1,5 +1,5 @@
 import type { components } from "#lib/api/schema.js";
-import { language } from "./words.js";
+import { language } from "#lib/format.js";
 
 type Schemas = components["schemas"];
 

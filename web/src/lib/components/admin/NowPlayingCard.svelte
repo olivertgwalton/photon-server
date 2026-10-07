@@ -4,7 +4,7 @@ import { confirmFirst } from "#lib/actions.svelte.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
-import { timecode } from "#lib/format.js";
+import { bitrate, timecode } from "#lib/format.js";
 import { positionAt } from "#lib/admin/live.js";
 import {
 	accelerations,
@@ -37,7 +37,7 @@ function resolution(width?: number, height?: number) {
 }
 
 function rate(kbps?: number) {
-	return kbps ? `${(kbps / 1000).toFixed(1)} Mbps` : "";
+	return kbps ? bitrate(kbps) : "";
 }
 
 // What a stream is, and what it becomes where the server encodes it.

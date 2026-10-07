@@ -1,15 +1,7 @@
 import type { components } from "#lib/api/schema.js";
+import { language } from "#lib/format.js";
 
 type Schemas = components["schemas"];
-
-// A time as a player shows it: 4:05, or 1:02:03 past an hour.
-export function clock(seconds: number): string {
-	const s = Math.max(0, Math.floor(seconds));
-	const h = Math.floor(s / 3600);
-	const m = Math.floor((s % 3600) / 60);
-	const ss = String(s % 60).padStart(2, "0");
-	return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
-}
 
 export const reasons: Record<Schemas["TranscodeReason"], string> = {
 	container_not_supported: "This browser doesn't open the file's container.",
@@ -50,13 +42,6 @@ export const qualities = [
 	0, 40_000, 20_000, 10_000, 8_000, 6_000, 4_000, 3_000, 2_000, 1_500, 720, 420,
 ];
 
-export function bitrate(kbps: number): string {
-	if (!kbps) return "Original";
-	return kbps >= 1000 ? `${kbps / 1000} Mbps` : `${kbps} kbps`;
-}
-
-const languages = new Intl.DisplayNames(["en"], { type: "language" });
-
 // The languages subtitles are most often wanted in, offered wherever they are
 // chosen, by BCP 47 tag.
 export const subtitleLanguages = [
@@ -88,15 +73,6 @@ export const subtitleLanguages = [
 	"zh-CN",
 	"zh-TW",
 ];
-
-export function language(tag: string | undefined): string {
-	if (!tag) return "";
-	try {
-		return languages.of(tag) ?? tag;
-	} catch {
-		return tag;
-	}
-}
 
 const layouts: Record<number, string> = {
 	1: "Mono",

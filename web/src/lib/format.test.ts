@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+	bitrate,
 	holding,
 	episodeLabel,
 	fullTitle,
@@ -19,6 +20,12 @@ test("a running time reads as a listing prints it", () => {
 test("a resume point reads as a player's clock", () => {
 	expect(timecode(249_000)).toBe("4:09");
 	expect(timecode(3_849_000)).toBe("1:04:09");
+});
+
+test("a bitrate reads in Mbps from a thousand kbps, a whole one without a point", () => {
+	expect(bitrate(40_000)).toBe("40 Mbps");
+	expect(bitrate(8_460)).toBe("8.5 Mbps");
+	expect(bitrate(420)).toBe("420 kbps");
 });
 
 test("an episode is placed by season and number, a double by both ends", () => {

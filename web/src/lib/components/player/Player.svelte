@@ -23,7 +23,7 @@ import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Menu from "#lib/components/ui/dropdown-menu/index.js";
-import { fullTitle } from "#lib/format.js";
+import { bitrate, fullTitle, timecode } from "#lib/format.js";
 import {
 	browserProfile,
 	type Capabilities,
@@ -39,14 +39,7 @@ import {
 	wants,
 	webVTT,
 } from "#lib/player/subtitles.js";
-import {
-	audioLabel,
-	bitrate,
-	clock,
-	qualities,
-	reasons,
-	skips,
-} from "#lib/player/words.js";
+import { audioLabel, qualities, reasons, skips } from "#lib/player/words.js";
 import PlaybackInfo from "./PlaybackInfo.svelte";
 import SeekBar from "./SeekBar.svelte";
 import UpNext from "./UpNext.svelte";
@@ -785,8 +778,8 @@ onDestroy(() => {
 					}}
 				>
 				<span class="text-ink ml-1 font-mono text-xs tabular-nums sm:text-sm">
-					{clock(position)}
-					/ {clock(duration)}
+					{timecode(position * 1000)}
+					/ {timecode(duration * 1000)}
 				</span>
 
 				<div class="ml-auto flex items-center gap-1 sm:gap-2">
@@ -877,7 +870,7 @@ onDestroy(() => {
 									>
 										{#each qualities as kbps (kbps)}
 											<Menu.RadioItem value={String(kbps)}
-												>{bitrate(kbps)}</Menu.RadioItem
+												>{kbps ? bitrate(kbps) : "Original"}</Menu.RadioItem
 											>
 										{/each}
 									</Menu.RadioGroup>
@@ -910,9 +903,7 @@ onDestroy(() => {
 												<span class="truncate"
 													>{c.title || `Chapter ${i + 1}`}</span
 												>
-												<Menu.Shortcut
-													>{clock(c.start_ms / 1000)}</Menu.Shortcut
-												>
+												<Menu.Shortcut>{timecode(c.start_ms)}</Menu.Shortcut>
 											</Menu.Item>
 										{/each}
 									</Menu.SubContent>

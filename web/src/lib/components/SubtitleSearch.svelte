@@ -8,7 +8,8 @@ import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Select from "#lib/components/ui/select/index.js";
-import { language, subtitleLanguages } from "#lib/player/words.js";
+import { language } from "#lib/format.js";
+import { subtitleLanguages } from "#lib/player/words.js";
 
 type Found = components["schemas"]["FoundSubtitles"];
 

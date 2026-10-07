@@ -32,7 +32,7 @@ export function holding(
 
 // "1:04:09", "4:09": a position on a title's timeline.
 export function timecode(ms: number): string {
-	const s = Math.floor(ms / 1000);
+	const s = Math.max(0, Math.floor(ms / 1000));
 	const h = Math.floor(s / 3600);
 	const mm = String(Math.floor((s % 3600) / 60));
 	const ss = String(s % 60).padStart(2, "0");
@@ -123,8 +123,11 @@ export function bytes(n: number): string {
 	return `${n.toFixed(i && n < 10 ? 1 : 0)} ${units[i]}`;
 }
 
+// "8.5 Mbps", "40 Mbps", "420 kbps".
 export function bitrate(kbps: number): string {
-	return kbps >= 1000 ? `${(kbps / 1000).toFixed(1)} Mbps` : `${kbps} kbps`;
+	return kbps >= 1000
+		? `${Number((kbps / 1000).toFixed(1))} Mbps`
+		: `${kbps} kbps`;
 }
 
 const languages = new Intl.DisplayNames(undefined, { type: "language" });

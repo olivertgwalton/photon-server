@@ -1,13 +1,8 @@
 <script lang="ts">
 import type { components } from "#lib/api/schema.js";
 import * as Sheet from "#lib/components/ui/sheet/index.js";
-import {
-	audioLabel,
-	bitrate,
-	channels,
-	methods,
-	reasons,
-} from "#lib/player/words.js";
+import { bitrate } from "#lib/format.js";
+import { audioLabel, channels, methods, reasons } from "#lib/player/words.js";
 
 type Schemas = components["schemas"];
 
