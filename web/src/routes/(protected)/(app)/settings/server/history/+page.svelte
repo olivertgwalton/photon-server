@@ -1,6 +1,5 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { page } from "$app/state";
 import { methods, when } from "#lib/admin/words.js";
 import Choice from "#lib/components/admin/Choice.svelte";
 import Pager from "#lib/components/admin/Pager.svelte";
@@ -88,9 +87,4 @@ function reached(position: number, duration?: number) {
 	<p class="text-ink-3 text-sm">Nothing has been played yet.</p>
 {/if}
 
-<Pager
-	url={page.url}
-	offset={data.page.offset}
-	limit={data.limit}
-	total={data.page.total}
-/>
+<Pager offset={data.page.offset} limit={data.limit} total={data.page.total} />
