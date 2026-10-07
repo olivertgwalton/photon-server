@@ -17,10 +17,10 @@ type kept struct {
 }
 
 func (k *kept) JoinNode(ctx context.Context, id uuid.UUID, _ string) (domain.NodeRecord, error) {
-	return k.Node(ctx, id)
+	return k.SeeNode(ctx, id)
 }
 
-func (k *kept) Node(_ context.Context, id uuid.UUID) (domain.NodeRecord, error) {
+func (k *kept) SeeNode(_ context.Context, id uuid.UUID) (domain.NodeRecord, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	return domain.NodeRecord{ID: id, NodeSettings: k.set}, nil

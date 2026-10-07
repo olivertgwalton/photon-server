@@ -806,6 +806,11 @@ func (a *API) routes() []route {
 			body:    nodeChangeJSON{}, status: http.StatusOK, reply: knownNodeJSON{}, handle: a.setNode,
 		},
 		{
+			pattern: "DELETE /api/v1/admin/nodes/{id}", access: admin,
+			summary: "Forget a node that is not up, as one taken away is; one up is refused",
+			status:  http.StatusNoContent, handle: a.forgetNode,
+		},
+		{
 			pattern: "GET /api/v1/admin/storage", access: admin,
 			summary: "Where artwork, avatars, theme tunes and previews are kept: each server's disk, or a bucket all share",
 			status:  http.StatusOK, reply: storageStatusJSON{}, handle: a.adminStorage,

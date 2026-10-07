@@ -62,6 +62,10 @@ taken up at once, as it runs:
   streams left", then "Drained · safe to stop", with any note an admin left for the others.
   Resume gives it work again.
 
+- **Forget.** A node not running stays listed, "Not running · last seen 3 days ago", with what an
+  admin set of it, for it may only be restarting. One taken away for good is forgotten; should it
+  start again, it joins as a new node does. A node running cannot be forgotten.
+
 A node told to stop (SIGTERM, as `docker compose stop` and Kubernetes send) drains itself: it
 tells the others at once, takes no new work, and goes on serving and telling the others where it
 is until its streams have played to their end, two hours at most, before it stops. Meanwhile

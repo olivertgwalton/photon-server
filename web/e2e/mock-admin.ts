@@ -233,6 +233,7 @@ let nodes: Schemas["KnownNode"][] = [
 		id: "n-1",
 		name: "den",
 		first_seen: "2026-09-01T08:00:00Z",
+		last_seen: "2026-10-06T20:20:00Z",
 		role: "all",
 		transcode_limit_source: "automatic",
 		transcode_limit: 0,
@@ -254,6 +255,7 @@ let nodes: Schemas["KnownNode"][] = [
 		id: "n-2",
 		name: "gpu-1",
 		first_seen: "2026-09-02T08:00:00Z",
+		last_seen: "2026-10-06T20:20:00Z",
 		role: "all",
 		transcode_limit_source: "automatic",
 		transcode_limit: 0,
@@ -275,6 +277,7 @@ let nodes: Schemas["KnownNode"][] = [
 		id: "n-3",
 		name: "old-mini",
 		first_seen: "2026-08-01T08:00:00Z",
+		last_seen: "2026-09-20T08:00:00Z",
 		role: "serve",
 		transcode_limit_source: "automatic",
 		transcode_limit: 0,
@@ -395,6 +398,10 @@ export async function admin(
 		);
 	}
 	const node = url.pathname.match(/^\/api\/v1\/admin\/nodes\/([^/]+)$/)?.[1];
+	if (request.method === "DELETE" && node) {
+		nodes = nodes.filter((n) => n.id !== node);
+		return new Response(null, { status: 204 });
+	}
 	if (request.method === "PATCH" && node) {
 		const change = (await request.json()) as Schemas["NodeChange"];
 		nodes = nodes.map((n) =>

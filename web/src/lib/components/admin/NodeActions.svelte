@@ -1,6 +1,7 @@
 <script lang="ts">
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import { act } from "#lib/admin/act.js";
+import { relative } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import NodeSettings from "#lib/components/admin/NodeSettings.svelte";
@@ -12,11 +13,13 @@ import { Textarea } from "#lib/components/ui/textarea/index.js";
 
 type Node = components["schemas"]["KnownNode"];
 
-// What an admin may do of a node: set what it does, drain it before stopping it, and resume it.
+// What an admin may do of a node: set what it does, drain it before stopping it, resume it, and
+// forget it once taken away.
 let { node, nodes }: { node: Node; nodes: Node[] } = $props();
 
 let settings = $state(false);
 let draining = $state(false);
+let forgetting = $state(false);
 let note = $state("");
 
 const streams = $derived(node.online?.transcodes ?? 0);
@@ -68,6 +71,11 @@ function set(body: components["schemas"]["NodeChange"], said: string) {
 				Resume
 			</DropdownMenu.Item>
 		{/if}
+		{#if !node.online}
+			<DropdownMenu.Item onSelect={() => (forgetting = true)}
+				>Forget…</DropdownMenu.Item
+			>
+		{/if}
 	</DropdownMenu.Content>
 </DropdownMenu.Root>
 
@@ -107,6 +115,34 @@ function set(body: components["schemas"]["NodeChange"], said: string) {
 				}}
 			>
 				Drain {node.name}
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>
+
+<AlertDialog.Root bind:open={forgetting}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Forget {node.name}?</AlertDialog.Title>
+			<AlertDialog.Description>
+				It was last seen {relative(node.last_seen, Date.now())}. What is set of
+				it goes with it; should it start again, it is back as a new node.
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+			<AlertDialog.Action
+				onclick={() => {
+					forgetting = false;
+					return act(
+						client().DELETE("/api/v1/admin/nodes/{id}", {
+							params: { path: { id: node.id } },
+						}),
+						`${node.name} is forgotten.`,
+					);
+				}}
+			>
+				Forget {node.name}
 			</AlertDialog.Action>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
