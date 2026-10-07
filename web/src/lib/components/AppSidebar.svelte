@@ -12,6 +12,7 @@ import type { Component } from "svelte";
 import { page } from "$app/state";
 import type { components } from "#lib/api/schema.js";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
+import Mark from "./Mark.svelte";
 
 type Library = components["schemas"]["Library"];
 
@@ -69,14 +70,14 @@ function current(href: string) {
 		<a
 			href="/"
 			aria-label="photon"
-			class="font-heading text-ink px-2 py-1.5 text-xl font-bold tracking-tight group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:text-center"
+			class="text-ink hover:text-ink-2 flex items-center gap-2.5 px-2 py-1.5 transition-colors duration-200 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
 		>
-			<span class="group-data-[collapsible=icon]:hidden">photon</span>
+			<Mark size={24} class="shrink-0" />
 			<span
-				class="hidden group-data-[collapsible=icon]:inline"
-				aria-hidden="true"
-				>p</span
+				class="font-heading text-xl font-black tracking-tighter group-data-[collapsible=icon]:hidden"
 			>
+				photon.
+			</span>
 		</a>
 	</Sidebar.Header>
 	<Sidebar.Content>
