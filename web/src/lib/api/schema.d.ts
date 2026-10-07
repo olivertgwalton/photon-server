@@ -6349,6 +6349,8 @@ export interface components {
             id: string;
             name: string;
         };
+        /** @enum {string} */
+        LimitSource: "automatic" | "environment";
         ListRef: {
             id: string;
             missing?: number;
@@ -6465,10 +6467,21 @@ export interface components {
         NextEpisode: "play" | "offer";
         Node: {
             address: string;
+            conversions: number;
+            encoder: components["schemas"]["NodeEncoder"];
             /** Format: uuid */
             id: string;
             /** Format: date-time */
             last_seen: string;
+            name?: string;
+            transcode_limit?: number;
+            transcode_limit_source: components["schemas"]["LimitSource"];
+            transcodes: number;
+        };
+        NodeEncoder: {
+            acceleration: components["schemas"]["Acceleration"];
+            hevc: components["schemas"]["HEVCEncoding"];
+            libass: boolean;
         };
         NowPlaying: {
             acceleration?: components["schemas"]["Acceleration"];
@@ -6931,6 +6944,8 @@ export interface components {
             /** Format: date-time */
             started_at: string;
             transcode_limit?: number;
+            transcode_limit_source: components["schemas"]["LimitSource"];
+            transcodes: number;
             trusted_proxies: string[];
             valkey: components["schemas"]["Backend"];
             version: string;

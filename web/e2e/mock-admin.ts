@@ -65,7 +65,9 @@ const server: Schemas["Server"] = {
 		device: "/dev/dri/renderD128",
 		hevc: "allow",
 	},
+	transcodes: 0,
 	transcode_limit: 2,
+	transcode_limit_source: "automatic",
 	discovery: "broadcast",
 	listen: ":8640",
 	trusted_proxies: [],
@@ -76,7 +78,30 @@ const server: Schemas["Server"] = {
 	metadata_language: "en-GB",
 	postgres: { reachable: true, version: "18.1" },
 	valkey: { reachable: true, version: "9.0" },
-	nodes: [],
+	nodes: [
+		{
+			id: "n-1",
+			name: "den",
+			address: "http://10.0.0.4:8640",
+			last_seen: "2026-10-06T20:20:00Z",
+			encoder: { acceleration: "vaapi", hevc: "allow", libass: true },
+			transcodes: 1,
+			conversions: 0,
+			transcode_limit: 2,
+			transcode_limit_source: "automatic",
+		},
+		{
+			id: "n-2",
+			name: "gpu-1",
+			address: "http://10.0.0.5:8640",
+			last_seen: "2026-10-06T20:20:00Z",
+			encoder: { acceleration: "nvenc", hevc: "allow", libass: false },
+			transcodes: 3,
+			conversions: 1,
+			transcode_limit: 8,
+			transcode_limit_source: "environment",
+		},
+	],
 };
 
 const films: Schemas["AdminLibrary"] = {
