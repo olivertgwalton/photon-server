@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // clientAddr is the address a request came from. X-Forwarded-For is believed only when the direct
@@ -51,6 +53,20 @@ func overHTTPS(r *http.Request, trusted []netip.Prefix) bool {
 		return true
 	}
 	return isTrusted(peerAddr(r), trusted) && r.Header.Get("X-Forwarded-Proto") == "https"
+}
+
+// requireHTTPS sends a plain request to its HTTPS address while secure connections are required,
+// as Plex's are, but one from this machine, which may be a health check. A trusted proxy's
+// forwarded HTTPS counts as HTTPS.
+func (a *API) requireHTTPS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if a.svc.Secure.Mode() != domain.SecureRequired || overHTTPS(r, a.svc.TrustedProxies) || peerAddr(r).IsLoopback() {
+			next.ServeHTTP(w, r)
+			return
+		}
+		//nolint:gosec // to the host the client already reached, as it named it; nowhere else
+		http.Redirect(w, r, "https://"+r.Host+r.URL.RequestURI(), http.StatusTemporaryRedirect)
+	})
 }
 
 func isTrusted(a netip.Addr, trusted []netip.Prefix) bool {

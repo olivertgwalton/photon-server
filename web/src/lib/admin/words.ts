@@ -232,6 +232,8 @@ export function describe(e: Schemas["Event"], names: Names): string {
 			return "A webhook test was sent";
 		case "maintenance.changed":
 			return "The maintenance window was changed";
+		case "network.changed":
+			return "Secure connections were changed";
 	}
 }
 

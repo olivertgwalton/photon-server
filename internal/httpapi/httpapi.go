@@ -167,6 +167,10 @@ type Services struct {
 	Web *Web
 	// TrustedProxies are the peers whose X-Forwarded-For names the client. None by default.
 	TrustedProxies []netip.Prefix
+	// Network is how the server is reached, and Secure how this node serves it now; nil Secure
+	// never sends a plain request to HTTPS.
+	Network networkSettings
+	Secure  secureConnections
 	// Setup is how this node was started, and Postgres and Valkey what it reaches.
 	Setup    Setup
 	Postgres versioned
@@ -178,6 +182,8 @@ type API struct {
 	info   domain.Info
 	svc    Services
 	mux    *http.ServeMux
+	// handler is mux, behind what Secure asks of a plain request.
+	handler http.Handler
 	// description is the API's OpenAPI description, made once.
 	description []byte
 }
@@ -213,6 +219,10 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		a.mux.Handle(r.pattern, h)
 	}
 	a.mux.HandleFunc("/", a.unmatched)
+	a.handler = a.mux
+	if svc.Secure != nil {
+		a.handler = a.requireHTTPS(a.mux)
+	}
 	return a
 }
 
@@ -714,6 +724,16 @@ func (a *API) routes() []route {
 			body: providerChangeJSON{}, status: http.StatusOK, reply: metadataProviderJSON{}, handle: a.setProvider,
 		},
 		{
+			pattern: "GET /api/v1/admin/network", access: admin,
+			summary: "Whether the server's port answers HTTPS, and the certificate it serves",
+			status:  http.StatusOK, reply: networkJSON{}, handle: a.adminNetwork,
+		},
+		{
+			pattern: "PUT /api/v1/admin/network", access: admin,
+			summary: "Replace whether the port answers HTTPS, and its certificate; every node serves it at once",
+			body:    networkJSON{}, status: http.StatusOK, reply: networkJSON{}, handle: a.setNetwork,
+		},
+		{
 			pattern: "GET /api/v1/admin/keys", access: admin, summary: "List the API keys",
 			status: http.StatusOK, reply: listJSON[keyListingJSON]{}, handle: a.keys,
 		},
@@ -862,7 +882,7 @@ func (a *API) routes() []route {
 }
 
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	a.mux.ServeHTTP(w, r)
+	a.handler.ServeHTTP(w, r)
 }
 
 func (a *API) checkQuery(rt route) http.Handler {

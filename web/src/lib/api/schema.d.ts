@@ -877,6 +877,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/network": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether the server's port answers HTTPS, and the certificate it serves
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Network"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        /**
+         * Replace whether the port answers HTTPS, and its certificate; every node serves it at once
+         * @description Admin only.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Network"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Network"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/playbacks": {
         parameters: {
             query?: never;
@@ -5530,7 +5598,7 @@ export interface components {
             title_id?: string;
         };
         /** @enum {string} */
-        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed";
+        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed";
         EventPage: {
             items: components["schemas"]["Event"][];
             offset: number;
@@ -5781,6 +5849,11 @@ export interface components {
         };
         Name: {
             name: string;
+        };
+        Network: {
+            certificate?: string;
+            key?: string;
+            secure_connections: components["schemas"]["SecureConnections"];
         };
         NewKey: {
             name: string;
@@ -6223,6 +6296,8 @@ export interface components {
             title: string;
             year?: number;
         };
+        /** @enum {string} */
+        SecureConnections: "required" | "preferred" | "disabled";
         /** @enum {string} */
         SegmentAction: "none" | "ask" | "skip";
         Server: {
