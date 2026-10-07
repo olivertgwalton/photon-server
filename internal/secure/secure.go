@@ -150,10 +150,11 @@ func (s *Server) reread(ctx context.Context) {
 }
 
 // Listen answers HTTPS and plain HTTP both on l: a connection whose first byte begins a TLS
-// handshake is served TLS, with the certificate held when it shakes hands. Each is sniffed in a
-// goroutine of its own, so a client slow to speak holds up no other.
+// handshake is served TLS, with the certificate held when it shakes hands, or closed while none
+// is held, so a client probing HTTPS first moves on to HTTP at once and nothing is logged. Each
+// is sniffed in a goroutine of its own, so a client slow to speak holds up no other.
 func (s *Server) Listen(l net.Listener) net.Listener {
-	e := &either{Listener: l, config: s.config, accepted: make(chan accepted), closed: make(chan struct{})}
+	e := &either{Listener: l, server: s, accepted: make(chan accepted), closed: make(chan struct{})}
 	go e.run()
 	return e
 }
@@ -166,7 +167,7 @@ func (s *Server) TLSConfig() *tls.Config {
 
 type either struct {
 	net.Listener
-	config   *tls.Config
+	server   *Server
 	accepted chan accepted
 	closed   chan struct{}
 	close    sync.Once
@@ -206,7 +207,11 @@ func (e *either) sniff(c net.Conn) {
 	}
 	var conn net.Conn = peeked{Conn: c, r: r}
 	if first[0] == tlsHandshake {
-		conn = tls.Server(conn, e.config)
+		if e.server.state.Load().cert == nil {
+			c.Close()
+			return
+		}
+		conn = tls.Server(conn, e.server.config)
 	}
 	select {
 	case e.accepted <- accepted{conn: conn}:
