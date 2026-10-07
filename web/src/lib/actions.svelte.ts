@@ -155,3 +155,35 @@ export function unmatchTitle(id: string, name: string) {
 		`${name} was unmatched: it keeps what its files say until its match is fixed.`,
 	);
 }
+
+// The one question before something an admin cannot take back from a menu,
+// drawn by the shell: what it is, what follows, and the word that does it.
+export const confirming = $state({
+	open: false,
+	title: "",
+	body: "",
+	act: "",
+	run: (): unknown => undefined,
+});
+
+export function confirmFirst(
+	title: string,
+	body: string,
+	act: string,
+	run: () => unknown,
+) {
+	Object.assign(confirming, { open: true, title, body, act, run });
+}
+
+export function splitTitle(id: string, name: string) {
+	confirmFirst(
+		`Split ${name} apart?`,
+		"Each of its copies but the one that plays first becomes a film of its own, matched afresh, and stays so through every scan.",
+		"Split apart",
+		() =>
+			change(
+				api.POST("/api/v1/admin/titles/{id}/split", path(id)),
+				`${name} was split apart.`,
+			),
+	);
+}

@@ -399,3 +399,20 @@ test("a title is unmatched from its card", async ({ page }) => {
 		page.getByText("Quiet Hours was unmatched", { exact: false }),
 	).toBeVisible();
 });
+
+test("a film of two copies is split apart from its card, once asked", async ({
+	page,
+}) => {
+	await logIn(page);
+	await page
+		.getByRole("region", { name: "Recently Added Films" })
+		.getByRole("button", { name: "More for Quiet Hours" })
+		.click();
+	await page.getByRole("menuitem", { name: "Split apart…" }).click();
+	const asked = page.getByRole("alertdialog", {
+		name: "Split Quiet Hours apart?",
+	});
+	await expectAccessible(page);
+	await asked.getByRole("button", { name: "Split apart" }).click();
+	await expect(page.getByText("Quiet Hours was split apart.")).toBeVisible();
+});
