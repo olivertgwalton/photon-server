@@ -351,11 +351,12 @@ func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 		t.Error("an episode watched in one library is unwatched where another library gained it")
 	}
 
-	// Kids was added first, so it is the copy shown to whoever sees both.
+	// Kids was added first, so it is the copy shown to whoever sees both, but in each library's own
+	// recently added row, as Plex's.
 	search, home := cards(oliver.ID)
-	if !slices.Equal(search, []uuid.UUID{inKids}) || !slices.Equal(home[domain.RowRecentShows], []uuid.UUID{inKids}) ||
+	if !slices.Equal(search, []uuid.UUID{inKids}) || !slices.Equal(home[domain.RowRecentShows], []uuid.UUID{inKids, inShows}) ||
 		!slices.Equal(home[domain.RowNextUp], []uuid.UUID{kidsEps[2]}) {
-		t.Errorf("search = %v, recently added = %v, next up = %v; want Kids' show once and its second episode",
+		t.Errorf("search = %v, recently added = %v, next up = %v; want Kids' show once, each library's in its row, and its second episode",
 			search, home[domain.RowRecentShows], home[domain.RowNextUp])
 	}
 	if same, err := s.SameTitles(ctx, oliver.ID, inShows); err != nil || len(same) != 2 || !slices.Contains(same, inKids) {

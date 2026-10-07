@@ -417,8 +417,21 @@ func TestRecentlyReleased(t *testing.T) {
 		}
 	}
 
-	if got, want := homeRow(t, s, admin, domain.RowRecentlyReleased), []string{"Weeks", "The Wire", "Months"}; !slices.Equal(got, want) {
-		t.Errorf("recently released = %v, want %v: the newest first, a show by its episode, nothing old or yet to come", got, want)
+	if got, want := homeRow(t, s, admin, domain.RowRecentlyReleased), []string{"Weeks", "Months", "The Wire"}; !slices.Equal(got, want) {
+		t.Errorf("recently released = %v, want %v: each library's newest first, a show by its episode, nothing old or yet to come", got, want)
+	}
+	rows, err := s.Home(t.Context(), admin, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var libs []string
+	for _, r := range rows {
+		if r.Kind == domain.RowRecentlyReleased {
+			libs = append(libs, r.Library.Name)
+		}
+	}
+	if want := []string{"Films", "TV"}; !slices.Equal(libs, want) {
+		t.Errorf("recently released rows are of %v, want a row for each library, %v", libs, want)
 	}
 	if got, want := homeRow(t, s, kid, domain.RowRecentlyReleased), []string{"Weeks", "Months"}; !slices.Equal(got, want) {
 		t.Errorf("recently released for a profile without the shows = %v, want %v", got, want)
@@ -460,8 +473,8 @@ func TestTopRatedUnwatched(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got, want := homeRow(t, s, admin, domain.RowTopRatedUnwatched), []string{"Best", "Fresh", "Good"}; !slices.Equal(got, want) {
-		t.Errorf("top rated = %v, want %v: by IMDb, nothing begun or rated by too few", got, want)
+	if got, want := homeRow(t, s, admin, domain.RowTopRatedUnwatched), []string{"Best", "Good", "Fresh"}; !slices.Equal(got, want) {
+		t.Errorf("top rated = %v, want %v: each library's by IMDb, nothing begun or rated by too few", got, want)
 	}
 	if got, want := homeRow(t, s, kid, domain.RowTopRatedUnwatched), []string{"Best", "Watched", "Started", "Good"}; !slices.Equal(got, want) {
 		t.Errorf("top rated for another profile, without the shows = %v, want %v", got, want)

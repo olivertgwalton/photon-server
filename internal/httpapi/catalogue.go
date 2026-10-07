@@ -301,7 +301,15 @@ type homeRowJSON struct {
 	Kind domain.HomeRow `json:"kind"`
 	// Collection is the collection a row of kind collection is.
 	Collection *titleRefJSON `json:"collection,omitzero"`
-	Items      []cardJSON    `json:"items"`
+	// Library is the library a row of its titles is of: recently added, recently released and top
+	// rated are a row for each library.
+	Library *libraryRefJSON `json:"library,omitzero"`
+	Items   []cardJSON      `json:"items"`
+}
+
+type libraryRefJSON struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
 }
 
 type homeJSON struct {
@@ -322,7 +330,7 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 	}
 	out := homeJSON{Rows: make([]homeRowJSON, len(rows))}
 	for i, row := range rows {
-		out.Rows[i] = homeRowJSON{Kind: row.Kind, Collection: (*titleRefJSON)(row.Collection), Items: cardsJSON(row.Cards)}
+		out.Rows[i] = homeRowJSON{Kind: row.Kind, Collection: (*titleRefJSON)(row.Collection), Library: (*libraryRefJSON)(row.Library), Items: cardsJSON(row.Cards)}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }

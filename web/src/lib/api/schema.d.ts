@@ -5678,6 +5678,7 @@ export interface components {
             collection?: components["schemas"]["TitleRef"] | null;
             items: components["schemas"]["Card"][];
             kind: components["schemas"]["HomeRowKind"];
+            library?: components["schemas"]["LibraryRef"] | null;
         };
         /** @enum {string} */
         HomeRowKind: "continue_watching" | "next_up" | "watchlist" | "favourites" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched" | "collection";
@@ -5772,6 +5773,11 @@ export interface components {
         };
         LibraryOrder: {
             library_ids: string[];
+        };
+        LibraryRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
         };
         Locales: {
             countries: string[];
