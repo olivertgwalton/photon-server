@@ -79,6 +79,7 @@ export function libraryChange(
 		markers: String(form.get("markers")) as Schemas["MarkerDetection"],
 		keyframes: String(form.get("keyframes")) as Schemas["KeyframeMode"],
 		themes: String(form.get("themes")) as Schemas["ThemeLookup"],
+		deletion: String(form.get("deletion")) as Schemas["MediaDeletion"],
 		refresh_days: Number(form.get("refresh_days")),
 	};
 	const sources: Schemas["KindSourcesChange"][] = [];

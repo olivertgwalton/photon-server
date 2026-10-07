@@ -30,6 +30,7 @@ const tv: Schemas["AdminLibrary"] = {
 	markers: "all",
 	keyframes: "index",
 	themes: "local",
+	deletion: "off",
 };
 
 const fields: [string, string][] = [
@@ -40,6 +41,7 @@ const fields: [string, string][] = [
 	["markers", "chapters"],
 	["keyframes", "full"],
 	["themes", "themerr"],
+	["deletion", "files"],
 	["remote_extras", "featurette"],
 	["remote_extras", "trailer"],
 ];
@@ -68,6 +70,7 @@ test("a kind's sources are sent only where what they ask changed", () => {
 		markers: "chapters",
 		keyframes: "full",
 		themes: "themerr",
+		deletion: "files",
 	});
 
 	const changed = libraryChange(

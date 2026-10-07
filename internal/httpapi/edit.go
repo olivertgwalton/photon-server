@@ -3,6 +3,8 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
 	"math"
 	"net/http"
 	"slices"
@@ -10,6 +12,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -23,6 +26,8 @@ type editing interface {
 	AnalyseTitle(ctx context.Context, id uuid.UUID) error
 	Unmatch(ctx context.Context, id uuid.UUID) error
 	SplitTitle(ctx context.Context, id uuid.UUID) error
+	TitleFiles(ctx context.Context, id uuid.UUID) ([]store.LibraryFile, error)
+	ForgetTitle(ctx context.Context, id uuid.UUID) error
 	SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker, absent []domain.MarkerAbsent) error
 	IdentifySubject(ctx context.Context, id uuid.UUID) (store.Subject, bool, error)
 	ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain.ArtworkKind) ([]store.ArtworkCandidate, error)
@@ -220,6 +225,37 @@ type refreshJSON struct {
 }
 
 // refresh asks a title's providers about it again now, ahead of the schedule.
+// deleteTitle deletes a title's files from the disk, then the title, as Plex's and Jellyfin's
+// Delete do, where its library allows it. The files go first: should one not, the title stays, and
+// those deleted before it are missing at the next scan, as a file deleted by hand would be.
+func (a *API) deleteTitle(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	files, err := a.svc.Editing.TitleFiles(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		writeProblem(w, a.logger, codeNotFound, "no film, show, season, episode or extra has that id")
+		return
+	}
+	if a.answered(w, r, err) {
+		return
+	}
+	for i, f := range files {
+		err := library.Remove(f.Root, f.Rel)
+		if err == nil || errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		writeProblem(w, a.logger, codeConflict, fmt.Sprintf("%d of its %d files were deleted before %s could not be: %v",
+			i, len(files), f.Rel, errors.Unwrap(err)))
+		return
+	}
+	if a.answered(w, r, a.svc.Editing.ForgetTitle(r.Context(), id)) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // split splits a film's copies apart, each other than the one that plays first a film of its own.
 func (a *API) split(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r, "id")

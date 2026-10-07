@@ -1436,7 +1436,31 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a title's files from the disk, then the title, where its library allows it
+         * @description Admin only.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
         options?: never;
         head?: never;
         /**
@@ -4759,6 +4783,7 @@ export interface components {
             url: string;
         };
         AdminLibrary: {
+            deletion: components["schemas"]["MediaDeletion"];
             /** Format: uuid */
             id: string;
             keyframes: components["schemas"]["KeyframeMode"];
@@ -4775,6 +4800,7 @@ export interface components {
         };
         AdminLibraryListing: {
             counts: components["schemas"]["Counts"];
+            deletion: components["schemas"]["MediaDeletion"];
             /** Format: uuid */
             id: string;
             keyframes: components["schemas"]["KeyframeMode"];
@@ -5304,6 +5330,7 @@ export interface components {
             name: string;
         };
         LibraryChange: {
+            deletion?: components["schemas"]["MediaDeletion"];
             keyframes?: components["schemas"]["KeyframeMode"];
             markers?: components["schemas"]["MarkerDetection"];
             monitor?: components["schemas"]["Monitor"];
@@ -5368,6 +5395,8 @@ export interface components {
             absent?: components["schemas"]["MarkerAbsent"][];
             markers: components["schemas"]["Marker"][];
         };
+        /** @enum {string} */
+        MediaDeletion: "off" | "files";
         MetadataProvider: {
             capabilities: components["schemas"]["Capability"][];
             id: components["schemas"]["FieldSource"];

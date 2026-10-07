@@ -50,6 +50,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.JobKind]():             values(domain.JobKinds()),
 	reflect.TypeFor[domain.JobState]():            values(domain.JobStates()),
 	reflect.TypeFor[domain.KeyframeMode]():        values(domain.KeyframeModes()),
+	reflect.TypeFor[domain.MediaDeletion]():       values(domain.MediaDeletions()),
 	reflect.TypeFor[domain.LibraryKind]():         values(domain.LibraryKinds()),
 	reflect.TypeFor[domain.MarkerDetection]():     values(domain.MarkerDetections()),
 	reflect.TypeFor[domain.MarkerKind]():          values(domain.MarkerKinds()),

@@ -100,6 +100,7 @@ const films: Schemas["AdminLibrary"] = {
 	markers: "all",
 	keyframes: "index",
 	themes: "local",
+	deletion: "off",
 };
 
 const providers: Schemas["MetadataProvider"][] = [
@@ -492,6 +493,20 @@ export async function admin(
 		case "DELETE /api/v1/admin/titles/t-film/match":
 		case "POST /api/v1/admin/titles/t-film/split":
 			return done();
+		case "DELETE /api/v1/admin/titles/t-film":
+			return Response.json(
+				{
+					title: "Conflict",
+					status: 409,
+					code: "conflict",
+					detail:
+						"its library does not allow its titles' files to be deleted: allow it in the library's settings",
+				},
+				{
+					status: 409,
+					headers: { "Content-Type": "application/problem+json" },
+				},
+			);
 		case "PUT /api/v1/admin/collections/t-box/members":
 			return done();
 	}

@@ -85,6 +85,19 @@ func KeyframeModes() []KeyframeMode {
 	return []KeyframeMode{KeyframesIndex, KeyframesFull, KeyframesOff}
 }
 
+// MediaDeletion is whether an admin may delete a library's titles with their files from the
+// disk: off by default, as Plex's "Allow media deletion" is.
+type MediaDeletion string
+
+const (
+	DeletionOff   MediaDeletion = "off"
+	DeletionFiles MediaDeletion = "files"
+)
+
+func MediaDeletions() []MediaDeletion {
+	return []MediaDeletion{DeletionOff, DeletionFiles}
+}
+
 type Library struct {
 	ID   uuid.UUID
 	Name string
@@ -101,6 +114,7 @@ type Library struct {
 	Markers     MarkerDetection
 	Keyframes   KeyframeMode
 	Themes      ThemeLookup
+	Deletion    MediaDeletion
 }
 
 // TitleCounts are how many of each kind of title a library holds, as a profile may see them, as

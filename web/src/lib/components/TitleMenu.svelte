@@ -20,6 +20,7 @@ import SearchXIcon from "@lucide/svelte/icons/search-x";
 import SettingsIcon from "@lucide/svelte/icons/settings";
 import SplitIcon from "@lucide/svelte/icons/split";
 import Share2Icon from "@lucide/svelte/icons/share-2";
+import Trash2Icon from "@lucide/svelte/icons/trash-2";
 import TvIcon from "@lucide/svelte/icons/tv";
 import UndoIcon from "@lucide/svelte/icons/undo-2";
 import { goto } from "$app/navigation";
@@ -27,6 +28,7 @@ import { page } from "$app/state";
 import {
 	analyseTitle,
 	chooseVersion,
+	deleteTitle,
 	editTitle,
 	forgetProgress,
 	pickPlaylist,
@@ -197,6 +199,15 @@ const name = $derived(
 			>
 				<SettingsIcon />Manage…
 			</DropdownMenu.Item>
+			{#if card.kind !== "collection"}
+				<DropdownMenu.Separator />
+				<DropdownMenu.Item
+					variant="destructive"
+					onSelect={() => deleteTitle(card.id, name)}
+				>
+					<Trash2Icon />Delete…
+				</DropdownMenu.Item>
+			{/if}
 		{/if}
 	</DropdownMenu.Content>
 </DropdownMenu.Root>
