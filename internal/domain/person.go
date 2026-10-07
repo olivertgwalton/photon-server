@@ -21,6 +21,16 @@ func CreditKinds() []CreditKind {
 	return []CreditKind{CreditActor, CreditGuestStar, CreditDirector, CreditWriter, CreditProducer, CreditComposer, CreditCreator}
 }
 
+// Acting is whether the credit is a part played, not a job on the crew.
+func (k CreditKind) Acting() bool {
+	switch k {
+	case CreditActor, CreditGuestStar:
+		return true
+	case CreditDirector, CreditWriter, CreditProducer, CreditComposer, CreditCreator:
+	}
+	return false
+}
+
 // Credit is a person's part in a title, as a source gives it: their name, ids and picture, what
 // they did and as whom.
 type Credit struct {

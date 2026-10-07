@@ -262,6 +262,13 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	if p.Credits, err = s.credits(ctx, item.ID); err != nil {
 		return TitlePage{}, err
 	}
+	if p.Show != nil {
+		show, err := s.credits(ctx, p.Show.ID)
+		if err != nil {
+			return TitlePage{}, err
+		}
+		p.Credits = billed(show, p.Credits)
+	}
 	switch item.Kind {
 	case domain.ItemShow:
 		p.EpisodeOrder = item.EpisodeOrder

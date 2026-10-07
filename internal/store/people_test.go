@@ -101,6 +101,60 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 	}
 }
 
+func TestAnEpisodeIsBilledWithItsShowsCast(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	copies := []Copy{{ContentKey: []byte("e1"), Parts: []Part{{RelPath: "e1.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}}
+	episode := Episode{Season: 1, Episodes: []int{1}, Title: "Lucifer", Folder: "Lucifer/Season 1", ByNumber: true, Copies: copies}
+	if _, err := s.SaveShowFolder(ctx, shows.ID, "Lucifer/Season 1", []byte("v1"), Show{Title: "Lucifer", Folder: "Lucifer"}, []Episode{episode}, nil); err != nil {
+		t.Fatal(err)
+	}
+	show := oneItem(t, s, "kind = 'show'")
+	person := func(name, id string, kind domain.CreditKind, role string) domain.Credit {
+		return domain.Credit{Name: name, IDs: map[domain.Provider]string{domain.ProviderTMDB: id}, Kind: kind, Role: role}
+	}
+	ellis := person("Tom Ellis", "1", domain.CreditActor, "Lucifer Morningstar")
+	german := person("Lauren German", "2", domain.CreditActor, "Chloe Decker")
+	// A provider credits an episode with its guests and crew, and sometimes a regular as a guest.
+	if err := s.SaveIdentity(ctx, show.ID, domain.SourceTMDB, domain.Metadata{Title: "Lucifer", Credits: []domain.Credit{ellis, german}},
+		map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Title: "Pilot", Credits: []domain.Credit{
+			person("Russell Wong", "3", domain.CreditGuestStar, "Vincent Green"),
+			person("Tom Ellis", "1", domain.CreditGuestStar, "Lucifer"),
+			person("Len Wiseman", "4", domain.CreditDirector, "Director"),
+		}}}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	names := func(credits []CreditRef) []string {
+		var out []string
+		for _, c := range credits {
+			out = append(out, c.Name)
+		}
+		return out
+	}
+	page, err := s.Title(ctx, uuid.UUID{}, oneItem(t, s, "kind = 'episode'").ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := names(page.Credits), []string{"Tom Ellis", "Lauren German", "Russell Wong", "Len Wiseman"}; !slices.Equal(got, want) {
+		t.Errorf("episode's credits = %v, want the show's cast, then its guest and crew, no one twice", got)
+	}
+	if page.Credits[0].Role != "Lucifer Morningstar" {
+		t.Errorf("a regular's part = %q, want the show's", page.Credits[0].Role)
+	}
+	season, err := s.Title(ctx, uuid.UUID{}, oneItem(t, s, "kind = 'season'").ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := names(season.Credits), []string{"Tom Ellis", "Lauren German"}; !slices.Equal(got, want) {
+		t.Errorf("season's credits = %v, want the show's cast", got)
+	}
+}
+
 func TestAPersonIsKnownByAnyProvidersID(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
