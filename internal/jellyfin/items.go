@@ -31,6 +31,7 @@ type item struct {
 	SortName                string              `json:"SortName,omitempty"`
 	PremiereDate            *time.Time          `json:"PremiereDate,omitempty"`
 	MediaSources            []mediaSource       `json:"MediaSources,omitempty"`
+	Path                    string              `json:"Path,omitempty"`
 	CriticRating            *float64            `json:"CriticRating,omitempty"`
 	OfficialRating          string              `json:"OfficialRating,omitempty"`
 	Overview                string              `json:"Overview,omitempty"`
@@ -258,7 +259,7 @@ func (it *item) sources(versions []store.VersionPage, streams bool) {
 	if streams {
 		it.MediaStreams = it.MediaSources[0].MediaStreams
 	}
-	it.Container = it.MediaSources[0].Container
+	it.Container, it.Path = it.MediaSources[0].Container, it.MediaSources[0].Path
 	if it.RunTimeTicks == 0 {
 		it.RunTimeTicks = it.MediaSources[0].RunTimeTicks
 	}

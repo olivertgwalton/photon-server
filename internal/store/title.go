@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"path"
 	"slices"
 	"time"
 	"uuid"
@@ -100,7 +101,9 @@ type VersionPage struct {
 
 // PartRef is one file of a copy.
 type PartRef struct {
-	ID         uuid.UUID
+	ID uuid.UUID
+	// File is the name of the part's file, without the folders it is in.
+	File       string
 	Index      int
 	SizeBytes  int64
 	DurationMS int64
@@ -687,6 +690,20 @@ func (s *Store) Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]
 	if err != nil {
 		return nil, err
 	}
+	files := map[uuid.UUID]string{}
+	named, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (part_id) part_id, rel_path FROM part_files WHERE part_id = ANY($1) ORDER BY part_id, rel_path`, pids)
+	if err != nil {
+		return nil, err
+	}
+	var part uuid.UUID
+	var rel string
+	if _, err := pgx.ForEachRow(named, []any{&part, &rel}, func() error {
+		files[part] = path.Base(rel)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
 	pictured, sheets, err := s.partPreviews(ctx, parts)
 	if err != nil {
 		return nil, err
@@ -704,7 +721,7 @@ func (s *Store) Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]
 		}
 		for k, p := range byVersion[r.ID] {
 			vp.Files = append(vp.Files, PartRef{
-				ID: p.ID, Index: int(p.Idx), SizeBytes: p.SizeBytes, DurationMS: p.DurationMS, OffsetMS: p.OffsetMS,
+				ID: p.ID, File: files[p.ID], Index: int(p.Idx), SizeBytes: p.SizeBytes, DurationMS: p.DurationMS, OffsetMS: p.OffsetMS,
 			})
 			var own []*model.Chapter
 			for _, c := range chapters {

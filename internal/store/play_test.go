@@ -48,14 +48,15 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	if err != nil || len(longest.Parts) != 2 || longest.Parts[1].OffsetMS != (2*time.Hour).Milliseconds() {
 		t.Fatalf("Playable = %+v, %v; want the four-hour copy's two parts on one timeline", longest, err)
 	}
-	// The title's page names each file of a copy, so a client can address one before playing it.
+	// The title's page names each file of a copy, by its name, so a client can address one before
+	// playing it.
 	page, err := s.Title(ctx, uuid.UUID{}, item)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []PartRef{
-		{ID: longest.Parts[0].ID, SizeBytes: 1, DurationMS: (2 * time.Hour).Milliseconds()},
-		{ID: longest.Parts[1].ID, Index: 1, SizeBytes: 1, DurationMS: (2 * time.Hour).Milliseconds(), OffsetMS: (2 * time.Hour).Milliseconds()},
+		{ID: longest.Parts[0].ID, File: "r1.mkv", SizeBytes: 1, DurationMS: (2 * time.Hour).Milliseconds()},
+		{ID: longest.Parts[1].ID, File: "r2.mkv", Index: 1, SizeBytes: 1, DurationMS: (2 * time.Hour).Milliseconds(), OffsetMS: (2 * time.Hour).Milliseconds()},
 	}
 	if files := page.Versions[0].Files; !reflect.DeepEqual(files, want) || page.Versions[0].Parts != 2 {
 		t.Errorf("the restored copy's files: %+v, want %+v", files, want)

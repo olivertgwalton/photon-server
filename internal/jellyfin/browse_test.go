@@ -155,8 +155,8 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	requireKeys(t, "MediaSourceInfo", source, "Protocol", "Type", "IsRemote", "ReadAtNativeFramerate", "IgnoreDts", "IgnoreIndex",
 		"GenPtsInput", "SupportsTranscoding", "SupportsDirectStream", "SupportsDirectPlay", "IsInfiniteStream",
 		"RequiresOpening", "RequiresClosing", "RequiresLooping", "SupportsProbing", "TranscodingSubProtocol", "HasSegments")
-	if source["Container"] != "mkv" {
-		t.Errorf("container %v, want mkv", source["Container"])
+	if source["Container"] != "mkv" || source["Path"] != "Heat.mkv" || film["Path"] != "Heat.mkv" {
+		t.Errorf("container %v and file %v (%v), want an mkv named Heat.mkv: Infuse reads both", source["Container"], source["Path"], film["Path"])
 	}
 	streams, _ := source["MediaStreams"].([]any)
 	for _, s := range streams {

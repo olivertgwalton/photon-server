@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"cmp"
+	"path"
 	"strconv"
 	"strings"
 
@@ -19,6 +20,7 @@ type mediaSource struct {
 	ID                         string        `json:"Id"`
 	Type                       string        `json:"Type"`
 	Container                  string        `json:"Container"`
+	Path                       string        `json:"Path,omitempty"`
 	Size                       int64         `json:"Size,omitempty"`
 	Name                       string        `json:"Name"`
 	IsRemote                   bool          `json:"IsRemote"`
@@ -93,10 +95,17 @@ var ranges = map[domain.Range][2]string{
 // textSubtitles are the subtitle codecs that are text, which an app can draw itself.
 var textSubtitles = map[string]bool{"subrip": true, "srt": true, "ass": true, "ssa": true, "webvtt": true, "mov_text": true, "text": true}
 
+// sourceOf is a copy as a media source. Its Path is its file's name alone, as Infuse reads one,
+// never where it is on the server.
 func sourceOf(v store.VersionPage) mediaSource {
+	file := ""
+	if len(v.Files) > 0 {
+		file = v.Files[0].File
+	}
 	s := mediaSource{
-		Protocol: "File", ID: guid(v.ID), Type: "Default", Container: domain.ContainerName(v.Container), Size: v.SizeBytes,
-		Name: cmp.Or(v.Label, v.Edition, domain.ContainerName(v.Container)), ETag: guid(v.ID), RunTimeTicks: v.DurationMS * ticksPerMS,
+		Protocol: "File", ID: guid(v.ID), Path: file, Type: "Default", Container: domain.ContainerName(v.Container), Size: v.SizeBytes,
+		Name: cmp.Or(v.Label, v.Edition, strings.TrimSuffix(file, path.Ext(file)), domain.ContainerName(v.Container)), ETag: guid(v.ID),
+		RunTimeTicks:        v.DurationMS * ticksPerMS,
 		SupportsTranscoding: true, SupportsDirectStream: true, SupportsDirectPlay: true, VideoType: "VideoFile",
 		MediaStreams: make([]mediaStream, 0, len(v.Streams)), MediaAttachments: []struct{}{}, Formats: []string{},
 		Bitrate: v.BitrateKbps * 1000, TranscodingSubProtocol: "http",
@@ -104,6 +113,9 @@ func sourceOf(v store.VersionPage) mediaSource {
 	}
 	for _, t := range v.Streams {
 		s.MediaStreams = append(s.MediaStreams, streamOf(t))
+		if t.Kind == domain.StreamAudio && s.DefaultAudioStreamIndex == nil {
+			s.DefaultAudioStreamIndex = &t.Index
+		}
 	}
 	return s
 }

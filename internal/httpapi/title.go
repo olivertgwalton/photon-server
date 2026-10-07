@@ -269,7 +269,9 @@ func versionPageOf(v store.VersionPage) versionPageJSON {
 		Subtitles: each(v.Subtitles, func(s store.SubtitleRef) subtitleRefJSON { return subtitleRefJSON(s) }),
 		Chapters:  each(v.Chapters, func(c store.ChapterRef) chapterRefJSON { return chapterRefJSON(c) }),
 		Markers:   each(v.Markers, func(m store.MarkerRef) markerRefJSON { return markerRefJSON(m) }),
-		Files:     each(v.Files, func(f store.PartRef) partRefJSON { return partRefJSON(f) }),
+		Files: each(v.Files, func(f store.PartRef) partRefJSON {
+			return partRefJSON{ID: f.ID, Index: f.Index, SizeBytes: f.SizeBytes, DurationMS: f.DurationMS, OffsetMS: f.OffsetMS}
+		}),
 		Trickplay: each(v.Trickplay, func(t store.PartTrickplay) partTrickplayJSON {
 			return partTrickplayJSON{PartID: t.PartID, OffsetMS: t.OffsetMS, trickplayJSON: trickplayJSON(t.Trickplay)}
 		}),
