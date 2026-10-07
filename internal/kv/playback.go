@@ -65,6 +65,18 @@ func every[T any](ctx context.Context, k *KV, set string) ([]T, error) {
 	return out, nil
 }
 
+// ClaimPlayback writes a new playback session, which lapses after ttl unless written again, if no
+// playback is kept under its id: of nodes claiming one id at once, only one is told it did.
+func (k *KV) ClaimPlayback(ctx context.Context, p domain.Playback, ttl time.Duration) (bool, error) {
+	record, err := json.Marshal(p)
+	if err != nil {
+		return false, err
+	}
+	n, err := k.client.Do(ctx, k.client.B().Hsetex().Key(k.key(playbacks)).Fnx().Px(ttl.Milliseconds()).Fields().
+		Numfields(1).FieldValue().FieldValue(p.ID.String(), string(record)).Build()).AsInt64()
+	return n == 1, err
+}
+
 // SavePlayback writes a playback session, which lapses after ttl unless written again.
 func (k *KV) SavePlayback(ctx context.Context, p domain.Playback, ttl time.Duration) error {
 	return k.keep(ctx, playbacks, p.ID, p, ttl)
