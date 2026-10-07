@@ -11,6 +11,7 @@ import (
 	"strings"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -31,7 +32,7 @@ type catalogue interface {
 }
 
 type pictureFiles interface {
-	Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (*os.File, string, error)
+	Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (blob.Object, string, error)
 }
 
 // queryResult is Jellyfin's BaseItemDtoQueryResult. TotalRecordCount is of every match, not the
@@ -536,7 +537,7 @@ func (a *API) image(w http.ResponseWriter, r *http.Request) {
 		}
 		return n
 	}
-	f, name, err := a.svc.Pictures.Open(r.Context(), id, pic, bound("maxWidth", "fillWidth", "width"), bound("maxHeight", "fillHeight", "height"))
+	o, name, err := a.svc.Pictures.Open(r.Context(), id, pic, bound("maxWidth", "fillWidth", "width"), bound("maxHeight", "fillHeight", "height"))
 	if errors.Is(err, os.ErrNotExist) {
 		refuse(w, http.StatusNotFound)
 		return
@@ -545,15 +546,10 @@ func (a *API) image(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
+	defer o.Close()
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	// A provider's logo may be SVG, which a browser opening it directly would run script in.
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	http.ServeContent(w, r, name, info.ModTime(), f)
+	http.ServeContent(w, r, name, o.ModTime, o.ReadSeekCloser)
 }

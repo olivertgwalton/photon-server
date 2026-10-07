@@ -19,6 +19,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/kv"
@@ -55,8 +56,8 @@ type subjects interface {
 }
 
 type cache interface {
-	KeepSound(id uuid.UUID, r io.Reader) error
-	Kept(id uuid.UUID) (*os.File, error)
+	KeepSound(ctx context.Context, id uuid.UUID, r io.Reader) error
+	Kept(ctx context.Context, id uuid.UUID) (blob.Object, error)
 }
 
 type misses interface {
@@ -87,8 +88,8 @@ func Fetch(st subjects, c cache, m misses, db, ytdlp, ffmpeg string, logger *slo
 			return m.NoteThemeMissing(ctx, item.String(), unlistedFor)
 		}
 		if link == s.URL {
-			if f, err := c.Kept(s.Theme); err == nil {
-				return f.Close()
+			if o, err := c.Kept(ctx, s.Theme); err == nil {
+				return o.Close()
 			}
 		}
 		if refused, err := m.ThemeMissing(ctx, link); err != nil || refused {
@@ -98,7 +99,7 @@ func Fetch(st subjects, c cache, m misses, db, ytdlp, ffmpeg string, logger *slo
 			return err
 		}
 		id := uuid.NewV7()
-		err = download(ctx, ytdlp, ffmpeg, link, func(r io.Reader) error { return c.KeepSound(id, r) })
+		err = download(ctx, ytdlp, ffmpeg, link, func(r io.Reader) error { return c.KeepSound(ctx, id, r) })
 		if errors.Is(err, errRefused) {
 			logger.WarnContext(ctx, "no theme from youtube", slog.String("item", item.String()), slog.String("url", link), slog.Any("err", err))
 			return m.NoteThemeMissing(ctx, link, refusedFor)

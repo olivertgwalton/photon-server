@@ -17,6 +17,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/artwork"
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -100,11 +101,12 @@ func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {
 	}))
 	defer srv.Close()
 	dir := t.TempDir()
-	cache, err := artwork.Open(dir, st.SetBlurhash)
+	blobs, err := blob.OpenDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cache.Close()
+	defer blobs.Close()
+	cache := artwork.New(blobs, st.SetBlurhash)
 	jaws := films{poster: srv.URL + "/jaws.png"}
 
 	var told []domain.Event
@@ -139,11 +141,12 @@ func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {
 
 // pictures is a picture cache of the test's own.
 func pictures(t *testing.T) *artwork.Cache {
-	c, err := artwork.Open(t.TempDir(), func(context.Context, uuid.UUID, string) error { return nil })
+	blobs, err := blob.OpenDir(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = c.Close() })
+	t.Cleanup(func() { _ = blobs.Close() })
+	c := artwork.New(blobs, func(context.Context, uuid.UUID, string) error { return nil })
 	return c
 }
 

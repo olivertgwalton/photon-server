@@ -12,6 +12,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -29,15 +30,15 @@ func (fakePreviews) Trickplay(_ context.Context, profile, part uuid.UUID) (store
 	return store.Trickplay{Width: 320, Height: 180, IntervalMS: 10_000, Columns: 10, Rows: 10, Thumbnails: 105, Sheets: 2}, nil
 }
 
-func (f fakePreviews) Sheet(_ uuid.UUID, n int) (*os.File, error) {
-	return os.Open(filepath.Join(f.dir, "sheet"+string(rune('0'+n))+".jpg"))
+func (f fakePreviews) Sheet(_ context.Context, _ uuid.UUID, n int) (blob.Object, error) {
+	return openObject(filepath.Join(f.dir, "sheet"+string(rune('0'+n))+".jpg"))
 }
 
-func (f fakePreviews) ChapterImage(_ uuid.UUID, idx int) (*os.File, error) {
+func (f fakePreviews) ChapterImage(_ context.Context, _ uuid.UUID, idx int) (blob.Object, error) {
 	if idx != 0 {
-		return nil, os.ErrNotExist
+		return blob.Object{}, os.ErrNotExist
 	}
-	return os.Open(filepath.Join(f.dir, "chapter.jpg"))
+	return openObject(filepath.Join(f.dir, "chapter.jpg"))
 }
 
 func TestPreviewsAreServedToThoseWhoMaySeeTheTitle(t *testing.T) {

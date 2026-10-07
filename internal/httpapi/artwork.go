@@ -5,9 +5,9 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"os"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
@@ -16,9 +16,9 @@ type pictures interface {
 }
 
 type pictureCache interface {
-	Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (*os.File, string, error)
-	Keep(id uuid.UUID, r io.Reader) error
-	Kept(id uuid.UUID) (*os.File, error)
+	Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (blob.Object, string, error)
+	Keep(ctx context.Context, id uuid.UUID, r io.Reader) error
+	Kept(ctx context.Context, id uuid.UUID) (blob.Object, error)
 }
 
 // artwork serves a picture, or with width or height a copy that fits inside them, for a client that
@@ -41,11 +41,11 @@ func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	f, name, err := a.svc.Artwork.Open(r.Context(), id, pic, width, height)
+	o, name, err := a.svc.Artwork.Open(r.Context(), id, pic, width, height)
 	if a.answered(w, r, err) {
 		return
 	}
-	a.serveFile(w, r, f, name, http.Header{
+	a.serveObject(w, r, o, name, http.Header{
 		"Cache-Control": {"public, max-age=31536000, immutable"},
 		// A provider's logo may be SVG, which a browser opening it directly would run script in.
 		"Content-Security-Policy": {"default-src 'none'; style-src 'unsafe-inline'; sandbox"},

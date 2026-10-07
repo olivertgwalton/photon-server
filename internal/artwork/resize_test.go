@@ -18,11 +18,12 @@ import (
 	"testing/synctest"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // picture writes a w×h image, opaque or with a transparent corner, and answers how to open it.
-func picture(t *testing.T, w, h int, opaque bool) (func(context.Context) (*os.File, error), *int) {
+func picture(t *testing.T, w, h int, opaque bool) (func(context.Context) (blob.Object, error), *int) {
 	t.Helper()
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
 	for x := range w {
@@ -43,15 +44,11 @@ func picture(t *testing.T, w, h int, opaque bool) (func(context.Context) (*os.Fi
 	}
 	_ = f.Close()
 	opens := 0
-	return func(context.Context) (*os.File, error) { opens++; return os.Open(path) }, &opens
+	return func(context.Context) (blob.Object, error) { opens++; return openFile(path) }, &opens
 }
 
 func TestResized(t *testing.T) {
-	c, err := Open(t.TempDir(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = c.Close() })
+	c := newCache(t, t.TempDir(), nil)
 
 	poster, opens := picture(t, 1000, 1500, true)
 	f, err := c.Resized(t.Context(), "poster", 300, 0, poster)
@@ -88,16 +85,12 @@ func TestResized(t *testing.T) {
 // A width and height bound a box the picture shrinks to fit inside, keeping its shape, each
 // rounded up to the next size as a width alone is.
 func TestResizedWithinABox(t *testing.T) {
-	c, err := Open(t.TempDir(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = c.Close() })
+	c := newCache(t, t.TempDir(), nil)
 	poster, _ := picture(t, 1000, 1500, true)
 	backdrop, _ := picture(t, 1500, 500, true)
 	for _, tc := range []struct {
 		name          string
-		open          func(context.Context) (*os.File, error)
+		open          func(context.Context) (blob.Object, error)
 		width, height int
 		wantW, wantH  int
 	}{
@@ -140,15 +133,11 @@ func TestAVastPictureIsAnsweredAsItIs(t *testing.T) {
 	if err := os.WriteFile(path, b, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	c, err := Open(t.TempDir(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = c.Close() })
+	c := newCache(t, t.TempDir(), nil)
 
 	var before, after runtime.MemStats
 	runtime.ReadMemStats(&before)
-	_, err = c.Resized(t.Context(), "vast", 320, 0, func(context.Context) (*os.File, error) { return os.Open(path) })
+	_, err := c.Resized(t.Context(), "vast", 320, 0, func(context.Context) (blob.Object, error) { return openFile(path) })
 	runtime.ReadMemStats(&after)
 	if !errors.Is(err, ErrNotResizable) {
 		t.Errorf("resizing a vast picture: %v, want it answered as it is", err)
@@ -161,18 +150,14 @@ func TestAVastPictureIsAnsweredAsItIs(t *testing.T) {
 // Clients asking for one size at once share its making, which carries on when the first goes away.
 func TestAResizeOutlivesTheFirstToAsk(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		c, err := Open(t.TempDir(), nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = c.Close() })
+		c := newCache(t, t.TempDir(), nil)
 		poster, _ := picture(t, 1000, 1500, true)
 		first, leave := context.WithCancel(t.Context())
 		release := make(chan struct{})
-		slow := func(ctx context.Context) (*os.File, error) {
+		slow := func(ctx context.Context) (blob.Object, error) {
 			<-release
 			if err := ctx.Err(); err != nil {
-				return nil, err
+				return blob.Object{}, err
 			}
 			return poster(ctx)
 		}
@@ -198,11 +183,7 @@ func TestAResizeOutlivesTheFirstToAsk(t *testing.T) {
 // A picture is opened from where it is, or as a copy of the size asked for, whose content says its
 // format; one that cannot be made smaller is opened as it is, by its own name.
 func TestAPictureIsOpenedAsItIsOrToSize(t *testing.T) {
-	c, err := Open(t.TempDir(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = c.Close() })
+	c := newCache(t, t.TempDir(), nil)
 	root := t.TempDir()
 	open, _ := picture(t, 1000, 1500, true)
 	src, err := open(t.Context())

@@ -14,6 +14,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/artwork"
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/identify"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
@@ -103,11 +104,12 @@ func TestAPluginDescribesTheTitlesOfALibraryThatTakesIt(t *testing.T) {
 	ctx := t.Context()
 	plugins := plugin.New(st)
 	providers := provider.NewRegistry(plugins.Load)
-	pictures, err := artwork.Open(t.TempDir(), st.SetBlurhash)
+	blobs, err := blob.OpenDir(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer pictures.Close()
+	defer blobs.Close()
+	pictures := artwork.New(blobs, st.SetBlurhash)
 	api := New(log, domain.Info{}, Services{Auth: fakeAuth{}, Libraries: st, Providers: providers, ProviderSettings: st, Plugins: plugins})
 	do := func(method, target, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, strings.NewReader(body))

@@ -16,6 +16,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/library"
@@ -32,10 +33,8 @@ const (
 	// openingChapterAt is where a chapter starting at zero is pictured, as Jellyfin does: a title's
 	// first frame is often black.
 	openingChapterAt = 15 * time.Second
-	// making names the folders previews are made in before they are moved into place.
-	making = ".making-"
-	// madeLife is how long a folder may be left being made, or made and not recorded, before it is
-	// taken for one abandoned.
+	// madeLife is how long a part's previews may be kept and not recorded before they are taken
+	// for ones abandoned while being made.
 	madeLife = time.Hour
 )
 
@@ -43,69 +42,93 @@ const (
 // and twice that for a picture tone mapped from HDR. A variable for the test to shorten.
 var stillLimit = 10 * time.Second
 
-// Previews keeps parts' previews: a folder per part holding trickplay/{n}.jpg and
-// chapters/{idx}.jpg.
+// Previews keeps parts' previews: under each part's id, trickplay/{n}.jpg and chapters/{idx}.jpg.
 type Previews struct {
-	dir  string
-	root *os.Root
+	blobs *blob.Dir
 }
 
-func OpenPreviews(dir string) (*Previews, error) {
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return nil, err
-	}
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return nil, err
-	}
-	return &Previews{dir: dir, root: root}, nil
+func NewPreviews(blobs *blob.Dir) *Previews { return &Previews{blobs: blobs} }
+
+func (p *Previews) Sheet(ctx context.Context, part uuid.UUID, n int) (blob.Object, error) {
+	return p.blobs.Open(ctx, path.Join(part.String(), "trickplay", strconv.Itoa(n)+".jpg"))
 }
 
-func (p *Previews) Close() error { return p.root.Close() }
-
-func (p *Previews) Sheet(part uuid.UUID, n int) (*os.File, error) {
-	return p.root.Open(path.Join(part.String(), "trickplay", strconv.Itoa(n)+".jpg"))
+func (p *Previews) ChapterImage(ctx context.Context, part uuid.UUID, idx int) (blob.Object, error) {
+	return p.blobs.Open(ctx, path.Join(part.String(), "chapters", strconv.Itoa(idx)+".jpg"))
 }
 
-func (p *Previews) ChapterImage(part uuid.UUID, idx int) (*os.File, error) {
-	return p.root.Open(path.Join(part.String(), "chapters", strconv.Itoa(idx)+".jpg"))
-}
-
-// Sweep removes the folders of parts that have no previews recorded, and folders abandoned while
-// being made. It answers how many it removed.
+// Sweep removes the previews of parts that have none recorded, but for those kept within madeLife,
+// which may be being made. It answers how many parts' it removed.
 func (p *Previews) Sweep(ctx context.Context, live func(ctx context.Context, parts []uuid.UUID) (map[uuid.UUID]bool, error)) (int, error) {
-	entries, err := fs.ReadDir(p.root.FS(), ".")
+	newest := map[uuid.UUID]time.Time{}
+	for e, err := range p.blobs.List(ctx, "") {
+		if err != nil {
+			return 0, err
+		}
+		folder, _, _ := strings.Cut(e.Key, "/")
+		if id, err := uuid.Parse(folder); err == nil && e.ModTime.After(newest[id]) {
+			newest[id] = e.ModTime
+		}
+	}
+	maps.DeleteFunc(newest, func(_ uuid.UUID, at time.Time) bool { return time.Since(at) < madeLife })
+	alive, err := live(ctx, slices.Collect(maps.Keys(newest)))
 	if err != nil {
 		return 0, err
 	}
-	var stale []string
-	byID := map[uuid.UUID]string{}
-	for _, e := range entries {
-		info, err := e.Info()
-		if err != nil || time.Since(info.ModTime()) < madeLife {
+	removed := 0
+	for id := range newest {
+		if alive[id] {
 			continue
 		}
-		if id, err := uuid.Parse(e.Name()); err == nil {
-			byID[id] = e.Name()
-		} else if strings.HasPrefix(e.Name(), making) {
-			stale = append(stale, e.Name())
+		if err := p.remove(ctx, id, nil); err != nil {
+			return removed, err
+		}
+		removed++
+	}
+	return removed, nil
+}
+
+// remove removes a part's previews but those keep names.
+func (p *Previews) remove(ctx context.Context, part uuid.UUID, keep map[string]bool) error {
+	var gone []string
+	for e, err := range p.blobs.List(ctx, part.String()+"/") {
+		if err != nil {
+			return err
+		}
+		if !keep[e.Key] {
+			gone = append(gone, e.Key)
 		}
 	}
-	alive, err := live(ctx, slices.Collect(maps.Keys(byID)))
+	for _, key := range gone {
+		if err := p.blobs.Delete(ctx, key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// keep puts what is in the folder made as the part's previews, answering their keys.
+func (p *Previews) keep(ctx context.Context, part uuid.UUID, made string) (map[string]bool, error) {
+	root, err := os.OpenRoot(made)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	for id, name := range byID {
-		if !alive[id] {
-			stale = append(stale, name)
+	defer root.Close()
+	kept := map[string]bool{}
+	err = fs.WalkDir(root.FS(), ".", func(name string, e fs.DirEntry, err error) error {
+		if err != nil || e.IsDir() {
+			return err
 		}
-	}
-	for n, name := range stale {
-		if err := p.root.RemoveAll(name); err != nil {
-			return n, err
+		f, err := root.Open(name)
+		if err != nil {
+			return err
 		}
-	}
-	return len(stale), nil
+		defer f.Close()
+		key := path.Join(part.String(), name)
+		kept[key] = true
+		return p.blobs.Put(ctx, key, f)
+	})
+	return kept, err
 }
 
 // MakePreviews makes a part's previews as its library asks, replacing any it had, or removes them
@@ -114,7 +137,7 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 	return func(ctx context.Context, part uuid.UUID) error {
 		src, err := st.PreviewSource(ctx, part)
 		if errors.Is(err, store.ErrNotFound) {
-			return p.root.RemoveAll(part.String())
+			return p.remove(ctx, part, nil)
 		}
 		if err != nil {
 			return err
@@ -123,14 +146,14 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 			if err := st.ForgetPreviews(ctx, part); err != nil {
 				return err
 			}
-			return p.root.RemoveAll(part.String())
+			return p.remove(ctx, part, nil)
 		}
 		f, err := openPart(ctx, st, part)
 		if err != nil {
 			return err
 		}
 		defer f.Close()
-		made, err := os.MkdirTemp(p.dir, making)
+		made, err := os.MkdirTemp("", "previews-")
 		if err != nil {
 			return err
 		}
@@ -157,14 +180,16 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 			}
 		case domain.PreviewsChapters, domain.PreviewsOff:
 		}
-		// The new folder takes the old one's place before the record says what is in it.
-		if err := p.root.RemoveAll(part.String()); err != nil {
+		// The new previews are kept before the record says what there is, and the old ones none of
+		// them replaced removed only once it does.
+		kept, err := p.keep(ctx, part, made)
+		if err != nil {
 			return err
 		}
-		if err := p.root.Rename(filepath.Base(made), part.String()); err != nil {
+		if err := st.SavePreviews(ctx, part, chapters, sheets); err != nil {
 			return err
 		}
-		return st.SavePreviews(ctx, part, chapters, sheets)
+		return p.remove(ctx, part, kept)
 	}
 }
 

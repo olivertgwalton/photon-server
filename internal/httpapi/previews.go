@@ -7,6 +7,7 @@ import (
 	"os"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -15,8 +16,8 @@ type previews interface {
 }
 
 type previewFiles interface {
-	Sheet(part uuid.UUID, n int) (*os.File, error)
-	ChapterImage(part uuid.UUID, idx int) (*os.File, error)
+	Sheet(ctx context.Context, part uuid.UUID, n int) (blob.Object, error)
+	ChapterImage(ctx context.Context, part uuid.UUID, idx int) (blob.Object, error)
 }
 
 type trickplayJSON struct {
@@ -60,7 +61,7 @@ func (a *API) trickplaySheet(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	a.servePreview(w, r, func() (*os.File, error) { return a.svc.PreviewFiles.Sheet(id, n) })
+	a.servePreview(w, r, func(ctx context.Context) (blob.Object, error) { return a.svc.PreviewFiles.Sheet(ctx, id, n) })
 }
 
 // chapterImage serves a chapter's picture at the address a title's page signed for the profile
@@ -74,17 +75,17 @@ func (a *API) chapterImage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	a.servePreview(w, r, func() (*os.File, error) { return a.svc.PreviewFiles.ChapterImage(part, idx) })
+	a.servePreview(w, r, func(ctx context.Context) (blob.Object, error) { return a.svc.PreviewFiles.ChapterImage(ctx, part, idx) })
 }
 
 // servePreview serves a preview's JPEG. A part's previews are made again only from the same bytes,
 // so a client may keep one as long as it likes.
-func (a *API) servePreview(w http.ResponseWriter, r *http.Request, open func() (*os.File, error)) {
-	f, err := open()
+func (a *API) servePreview(w http.ResponseWriter, r *http.Request, open func(context.Context) (blob.Object, error)) {
+	o, err := open(r.Context())
 	if a.answered(w, r, err) {
 		return
 	}
-	a.serveFile(w, r, f, "", http.Header{
+	a.serveObject(w, r, o, "", http.Header{
 		"Content-Type":  {"image/jpeg"},
 		"Cache-Control": {"private, max-age=31536000, immutable"},
 	})
@@ -93,12 +94,18 @@ func (a *API) servePreview(w http.ResponseWriter, r *http.Request, open func() (
 // serveFile serves f, which it closes, in byte ranges. It sets header only once f has answered, so
 // a failure carries none of it; name gives the type where header does not.
 func (a *API) serveFile(w http.ResponseWriter, r *http.Request, f *os.File, name string, header http.Header) {
-	defer f.Close()
-	info, err := f.Stat()
+	o, err := blob.OfFile(f)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
+	a.serveObject(w, r, o, name, header)
+}
+
+// serveObject is serveFile for an object.
+func (a *API) serveObject(w http.ResponseWriter, r *http.Request, o blob.Object, name string, header http.Header) {
+	defer o.Close()
 	maps.Copy(w.Header(), header)
-	http.ServeContent(w, r, name, info.ModTime(), f)
+	// The reader itself, not o: a file is sent by sendfile only as an *os.File.
+	http.ServeContent(w, r, name, o.ModTime, o.ReadSeekCloser)
 }

@@ -51,7 +51,7 @@ func (a *API) setAvatar(w http.ResponseWriter, r *http.Request, profile uuid.UUI
 	// Not every ResponseWriter has a connection to time: a test's recorder has none.
 	_ = rc.SetReadDeadline(time.Now().Add(avatarWithin))
 	picture := uuid.NewV7()
-	err := a.svc.Artwork.Keep(picture, r.Body)
+	err := a.svc.Artwork.Keep(r.Context(), picture, r.Body)
 	_ = rc.SetReadDeadline(time.Time{})
 	if errors.Is(err, artwork.ErrNotPicture) {
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())

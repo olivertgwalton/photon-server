@@ -28,6 +28,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/backup"
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/discovery"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/events"
@@ -179,16 +180,18 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	cacheRoot := cmp.Or(os.Getenv("PHOTON_CACHE_DIR"), filepath.Join(cacheDir, "photon-server"))
-	pictureCache, err := artwork.Open(filepath.Join(cacheRoot, "artwork"), st.SetBlurhash)
+	artworkBlobs, err := blob.OpenDir(filepath.Join(cacheRoot, "artwork"))
 	if err != nil {
 		return err
 	}
-	defer pictureCache.Close()
-	previews, err := analysis.OpenPreviews(filepath.Join(cacheRoot, "previews"))
+	defer artworkBlobs.Close()
+	pictureCache := artwork.New(artworkBlobs, st.SetBlurhash)
+	previewBlobs, err := blob.OpenDir(filepath.Join(cacheRoot, "previews"))
 	if err != nil {
 		return err
 	}
-	defer previews.Close()
+	defer previewBlobs.Close()
+	previews := analysis.NewPreviews(previewBlobs)
 	signingKey, err := st.SigningKey(ctx)
 	if err != nil {
 		return err
