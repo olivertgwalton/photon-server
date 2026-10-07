@@ -8,6 +8,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -192,28 +193,42 @@ func (s *Store) PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.Playbac
 
 // cards answers titles as cards for a profile, with their best pictures.
 func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item) ([]Card, error) {
-	shows, err := s.showsOf(ctx, rows)
-	if err != nil {
-		return nil, err
-	}
-	pictures, hashes, err := s.picturesWorn(ctx, rows, shows)
-	if err != nil {
-		return nil, err
-	}
-	states, err := s.states(ctx, profile, rows)
-	if err != nil {
-		return nil, err
-	}
-	lengths, err := s.durations(ctx, ids(rows))
-	if err != nil {
-		return nil, err
-	}
-	origins, err := s.origins(ctx, rows)
-	if err != nil {
-		return nil, err
-	}
-	ratings, err := s.ratings(ctx, rows)
-	if err != nil {
+	// Each lookup is asked for at once, on a connection of its own; the pictures wait on the shows
+	// an episode wears its pictures from.
+	var (
+		shows    map[uuid.UUID]episodeShow
+		pictures map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID
+		hashes   map[uuid.UUID]string
+		states   map[uuid.UUID]TitleState
+		lengths  map[uuid.UUID]onDisk
+		origins  map[uuid.UUID]domain.CollectionOrigin
+		ratings  map[uuid.UUID][]domain.Rating
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		if shows, err = s.showsOf(gctx, rows); err != nil {
+			return err
+		}
+		pictures, hashes, err = s.picturesWorn(gctx, rows, shows)
+		return err
+	})
+	g.Go(func() (err error) {
+		states, err = s.states(gctx, profile, rows)
+		return err
+	})
+	g.Go(func() (err error) {
+		lengths, err = s.durations(gctx, ids(rows))
+		return err
+	})
+	g.Go(func() (err error) {
+		origins, err = s.origins(gctx, rows)
+		return err
+	})
+	g.Go(func() (err error) {
+		ratings, err = s.ratings(gctx, rows)
+		return err
+	})
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 	cards := make([]Card, len(rows))
