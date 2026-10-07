@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -32,12 +33,29 @@ import (
 var (
 	partOne = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b1")
 	partTwo = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b2")
+	// anime is a film in one file with signs and songs in ASS, inside it and beside it.
+	anime     = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000a1")
+	animePart = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b3")
+	signsID   = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000d3")
 )
 
 // fakePlaying holds films in two parts under root: H.264 in Matroska, with stereo AAC.
 type fakePlaying struct{ root string }
 
 func (fakePlaying) Playable(_ context.Context, _, item, _ uuid.UUID) (store.PlayCopy, error) {
+	if item == anime {
+		return store.PlayCopy{
+			Version: anime, Container: "matroska,webm", BitrateKbps: 4000, DurationMS: 4_000,
+			Parts: []store.PlayPart{{ID: animePart, DurationMS: 4_000}},
+			Streams: []domain.Stream{
+				{Index: 0, Kind: domain.StreamVideo, Codec: "h264"},
+				{Index: 1, Kind: domain.StreamSubtitle, Codec: "ass", Language: language.Japanese},
+			},
+			Subtitles: []store.PlaySubtitle{
+				{ID: signsID, Codec: "ass", Language: language.English}, {ID: subtitleID, Codec: "subrip", Language: language.English},
+			},
+		}, nil
+	}
 	if item != films {
 		return store.PlayCopy{}, store.ErrNotFound
 	}
@@ -83,20 +101,31 @@ func (f fakePlaying) SubtitleFile(_ context.Context, id uuid.UUID) (string, stri
 	return f.root, "Lawrence/Lawrence.en.srt", nil
 }
 
+// PartStreams answers the streams of the first part of films, and of anime's.
+func (f fakePlaying) PartStreams(ctx context.Context, part uuid.UUID) ([]domain.Stream, error) {
+	item := map[uuid.UUID]uuid.UUID{partOne: films, animePart: anime}[part]
+	c, err := f.Playable(ctx, uuid.UUID{}, item, uuid.UUID{})
+	return c.Streams, err
+}
+
 // playRequest asks to play films on a client that opens these containers, plays H.264 and AAC, and
 // plays a copy's files each in turn.
 func playRequest(containers string) *http.Request {
-	body := `{"profile": {"containers": [` + containers + `], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "parts": "each"}}`
+	body := `{"profile": {"containers": [` + containers + `], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "parts": "each",
+		"subtitles": [{"codec": "subrip", "delivery": "sidecar"}]}}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+goodToken)
 	return req
 }
 
 func (f fakePlaying) PartFile(_ context.Context, part uuid.UUID) (string, string, error) {
-	if part != partOne {
-		return "", "", store.ErrNotFound
+	switch part {
+	case partOne:
+		return f.root, "Lawrence/Lawrence cd1.mkv", nil
+	case animePart:
+		return f.root, "Anime/Anime.mkv", nil
 	}
-	return f.root, "Lawrence/Lawrence cd1.mkv", nil
+	return "", "", store.ErrNotFound
 }
 
 // VisiblePartFile hides the first part from everyone but Oliver.
@@ -235,6 +264,100 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 	}
 }
 
+// A browser that draws styled text beside the video plays a film in one file as it is, and reads
+// its ASS out of it as it was authored, with the fonts the file carries for it; another client
+// has it drawn into the video, and nothing beside it.
+func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skipf("needs ffmpeg: %v", err)
+	}
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skipf("needs ffprobe: %v", err)
+	}
+	root, dir := t.TempDir(), t.TempDir()
+	signs := "[Script Info]\nScriptType: v4.00+\n\n[V4+ Styles]\n" +
+		"Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n" +
+		"Style: Sign,Shop Sans,24,&H0000FFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,8,10,10,10,1\n\n[Events]\n" +
+		"Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
+		"Dialogue: 0,0:00:01.00,0:00:03.00,Sign,,0,0,0,,{\\pos(160,40)}Bakery\n"
+	for name, text := range map[string]string{"signs.ass": signs, "Shop Sans.ttf": "a font"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, "Anime"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-i", filepath.Join(dir, "signs.ass"),
+		"-attach", filepath.Join(dir, "Shop Sans.ttf"), "-metadata:s:t:0", "mimetype=font/ttf",
+		"-t", "4", "-map", "0", "-map", "1", "-c:v", "libx264", "-c:s", "copy", filepath.Join(root, "Anime", "Anime.mkv"))
+	if out, err := made.CombinedOutput(); err != nil {
+		t.Fatalf("making the film: %v: %s", err, out)
+	}
+	remuxer, err := hls.NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}, FFprobe: media.Tool{Path: ffprobe}}, t.TempDir(), t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, hls.Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{},
+		Remuxing: remuxOpener{remuxer}, HLS: remuxer, Signer: playback.NewSigner([]byte("key")),
+		Setup: Setup{Tools: media.Tools{Libass: true}},
+	})
+	do := func(req *http.Request) *httptest.ResponseRecorder {
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec
+	}
+	play := func(subtitles string) (got struct {
+		Method string `json:"method"`
+		Video  struct {
+			BurnedSubtitle *int `json:"burned_subtitle"`
+		} `json:"video"`
+		Subtitles []subtitleJSON `json:"subtitles"`
+	},
+	) {
+		body := `{"subtitle_stream": 1, "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "subtitles": ` + subtitles + `}}`
+		rec := do(httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+anime.String()+"/play", strings.NewReader(body)))
+		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil || rec.Code != http.StatusOK {
+			t.Fatalf("play: %d, %v", rec.Code, err)
+		}
+		return got
+	}
+
+	browser := play(`[{"codec": "ass", "delivery": "sidecar"}, {"codec": "subrip", "delivery": "sidecar"}]`)
+	if browser.Method != "direct" || len(browser.Subtitles) != 3 || browser.Subtitles[0].Stream == nil || *browser.Subtitles[0].Stream != 1 ||
+		browser.Subtitles[1].ID != signsID || browser.Subtitles[2].ID != subtitleID {
+		t.Fatalf("a browser's play = %+v, want the file as it is, its ASS stream and both files beside it", browser)
+	}
+	stream := browser.Subtitles[0]
+	if rec := do(httptest.NewRequest(http.MethodGet, stream.URL, nil)); rec.Code != http.StatusOK ||
+		!strings.Contains(rec.Body.String(), "Style: Sign,Shop Sans,24") || !strings.Contains(rec.Body.String(), `{\pos(160,40)}Bakery`) ||
+		rec.Header().Get("Content-Type") != "text/x-ssa; charset=utf-8" {
+		t.Errorf("the ASS stream: %d %q %q, want it as it was authored", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
+	}
+	var fonts fontsJSON
+	if rec := do(httptest.NewRequest(http.MethodGet, stream.Fonts, nil)); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&fonts) != nil ||
+		len(fonts.Fonts) != 1 || fonts.Fonts[0].Name != "2.ttf" {
+		t.Fatalf("fonts: %d %+v, want the one the file carries", rec.Code, fonts)
+	}
+	if rec := do(httptest.NewRequest(http.MethodGet, fonts.Fonts[0].URL, nil)); rec.Code != http.StatusOK || rec.Body.String() != "a font" ||
+		rec.Header().Get("Content-Type") != "font/ttf" {
+		t.Errorf("the font: %d %q %q, want it as the file carries it", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
+	}
+	if rec := do(httptest.NewRequest(http.MethodGet, strings.Replace(fonts.Fonts[0].URL, "2.ttf", "3.ttf", 1), nil)); rec.Code != http.StatusUnauthorized {
+		t.Errorf("a font the list did not sign: %d, want 401", rec.Code)
+	}
+
+	drawsNothing := play(`[]`)
+	if drawsNothing.Method != "transcode" || drawsNothing.Video.BurnedSubtitle == nil || *drawsNothing.Video.BurnedSubtitle != 1 || len(drawsNothing.Subtitles) != 0 {
+		t.Errorf("a client that draws no ASS: %+v, want it drawn in, and nothing beside it", drawsNothing)
+	}
+}
+
 // fakeHLS remuxes into a playlist and one segment, of the playback it was opened for.
 type fakeHLS struct{ dir string }
 
@@ -260,6 +383,11 @@ func (fakeHLS) SubtitleSegment(_ context.Context, playback uuid.UUID, track, n i
 		return "", hls.ErrNoRemux
 	}
 	return "WEBVTT\n", nil
+}
+
+// Extracted answers a folder holding nothing.
+func (f fakeHLS) Extracted(context.Context, hls.SubtitleSource, string) (string, error) {
+	return f.dir, nil
 }
 
 // WebVTT answers the file's text under a WebVTT header naming its language.

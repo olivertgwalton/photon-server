@@ -357,9 +357,9 @@ async function showSubtitle() {
 	if (!playback || !video) return;
 	if (playback.method === "direct") {
 		const file =
-			subtitle?.file === undefined
+			subtitle?.id === undefined
 				? undefined
-				: playback.subtitles?.[subtitle.file];
+				: playback.subtitles?.find((f) => f.id === subtitle?.id);
 		if (file?.id === trackFile) return;
 		if (trackSrc?.startsWith("blob:")) URL.revokeObjectURL(trackSrc);
 		trackSrc = undefined;

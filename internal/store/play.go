@@ -115,6 +115,23 @@ func mediaStream(t *model.Stream) domain.Stream {
 	return m
 }
 
+// PartStreams answers a part's streams, as they were probed, or ErrNotFound for no such part:
+// every part has some.
+func (s *Store) PartStreams(ctx context.Context, part uuid.UUID) ([]domain.Stream, error) {
+	rows, err := queryRows[model.Stream](ctx, s.pool, `SELECT `+streamColumns+` FROM streams WHERE part_id = $1 ORDER BY idx`, part)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, ErrNotFound
+	}
+	streams := make([]domain.Stream, len(rows))
+	for i, t := range rows {
+		streams[i] = mediaStream(t)
+	}
+	return streams, nil
+}
+
 // SubtitleFile answers where a subtitle file is: its library's root, and its path within it.
 func (s *Store) SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error) {
 	err = s.pool.QueryRow(ctx, `
