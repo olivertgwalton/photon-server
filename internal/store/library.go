@@ -265,8 +265,12 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 			relocated = relocated || tag.RowsAffected() > 0
 		}
 		if relocated {
+			err := forgetDescriptions(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND parent_id IS NULL`, pgx.NamedArgs{"lib": id})
+			if err != nil {
+				return err
+			}
 			// Its seasons and episodes too, which are asked for only while they are named by their files.
-			err := describeAgain(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind IN ('season', 'episode')`, pgx.NamedArgs{"lib": id})
+			err = describeAgain(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind IN ('season', 'episode')`, pgx.NamedArgs{"lib": id})
 			if err != nil {
 				return err
 			}

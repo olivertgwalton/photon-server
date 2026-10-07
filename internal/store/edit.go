@@ -87,6 +87,9 @@ func (s *Store) SetTitleLocale(ctx context.Context, id uuid.UUID, loc domain.Loc
 		if err != nil {
 			return err
 		}
+		if err := forgetDescriptions(ctx, tx, `SELECT @show::uuid AS id`, pgx.NamedArgs{"show": id}); err != nil {
+			return err
+		}
 		return enqueueAsked(ctx, tx, domain.JobIdentify, id)
 	})
 }

@@ -24,7 +24,8 @@ func (f *fakePeople) Person(_ context.Context, id uuid.UUID) (store.PersonPage, 
 	if id != weaver {
 		return store.PersonPage{}, store.ErrNotFound
 	}
-	p := store.PersonPage{ID: weaver, Name: "Sigourney Weaver", IDs: map[domain.Provider]string{domain.ProviderTMDB: "10205"}}
+	// Her films are all in one French library.
+	p := store.PersonPage{ID: weaver, Name: "Sigourney Weaver", IDs: map[domain.Provider]string{domain.ProviderTMDB: "10205"}, Language: "fr-FR"}
 	if f.described != nil {
 		p.Biography, p.DescribedAt = f.described.Biography, time.Now()
 	}
@@ -49,11 +50,13 @@ func (f *fakePeople) SearchPeople(_ context.Context, text string, _, _ int) ([]s
 
 type describer struct {
 	asked int
+	in    domain.Locale
 	fail  bool
 }
 
-func (d *describer) DescribePerson(context.Context, domain.Locale, map[domain.Provider]string) (domain.Person, bool, error) {
+func (d *describer) DescribePerson(_ context.Context, loc domain.Locale, _ map[domain.Provider]string) (domain.Person, bool, error) {
 	d.asked++
+	d.in = loc
 	if d.fail {
 		return domain.Person{}, false, errors.New("tmdb is down")
 	}
@@ -82,6 +85,9 @@ func TestAPersonsPageSaysWhoTheyAreOnceAMonth(t *testing.T) {
 	}
 	if up.asked != 1 {
 		t.Errorf("the provider was asked %d times, want once", up.asked)
+	}
+	if up.in.Language != "fr-FR" {
+		t.Errorf("asked in %q, want the French her titles share", up.in.Language)
 	}
 	if rec := get(api, uuid.NewV7()); rec.Code != http.StatusNotFound {
 		t.Errorf("no one: %d, want 404", rec.Code)

@@ -449,6 +449,9 @@ type PersonPage struct {
 	IDs        map[domain.Provider]string
 	// DescribedAt is when a provider last said who they are, zero for never.
 	DescribedAt time.Time
+	// Language is what they are described in: the one every film and show they are credited on
+	// asks in, its own or its library's, where they all ask in one; else "", the server's.
+	Language string
 }
 
 // PersonCredit is a title someone is credited on, as a card, and what they did on it; credits on
@@ -490,7 +493,35 @@ func (s *Store) Person(ctx context.Context, id uuid.UUID) (PersonPage, error) {
 	if err != nil {
 		return PersonPage{}, err
 	}
-	return out, nil
+	languages, err := s.pool.Query(ctx, `
+		WITH RECURSIVE credited AS (
+			SELECT i.id, i.parent_id, i.kind, i.library_id, i.metadata_language
+			FROM credits c JOIN items i ON i.id = c.item_id WHERE c.person_id = $1
+			UNION
+			SELECT p.id, p.parent_id, p.kind, p.library_id, p.metadata_language FROM items p JOIN credited ON p.id = credited.parent_id
+		)
+		SELECT DISTINCT coalesce(t.metadata_language, l.metadata_language, '') FROM credited t
+		JOIN libraries l ON l.id = t.library_id WHERE t.kind IN ('movie', 'show')`, id)
+	if err != nil {
+		return PersonPage{}, err
+	}
+	asked, err := pgx.CollectRows(languages, pgx.RowTo[string])
+	if len(asked) == 1 {
+		out.Language = asked[0]
+	}
+	return out, err
+}
+
+// forgetDescriptions has everyone credited on the titles under which (and their seasons and
+// episodes) described again when next their page is opened, as those titles now ask in another
+// language.
+func forgetDescriptions(ctx context.Context, tx db, which string, args pgx.NamedArgs) error {
+	_, err := tx.Exec(ctx, `
+		WITH RECURSIVE under AS (`+which+`
+			UNION SELECT i.id FROM items i JOIN under u ON i.parent_id = u.id)
+		UPDATE people SET described_at = NULL
+		WHERE id IN (SELECT c.person_id FROM credits c WHERE c.item_id IN (SELECT id FROM under))`, args)
+	return err
 }
 
 // DescribePerson records what a provider says of someone.

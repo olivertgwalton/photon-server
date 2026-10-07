@@ -421,3 +421,59 @@ func TestTwoMatchesCreditingSomeoneNewAtOnceShareThem(t *testing.T) {
 		}
 	}
 }
+
+func TestSomeoneIsDescribedInTheLanguageTheirTitlesShare(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	german := "de-DE"
+	film := func(library, title string) uuid.UUID {
+		t.Helper()
+		lib, err := s.AddLibrary(ctx, library, domain.LibraryMovies, "/srv/"+library)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if library == "Filme" {
+			if err := s.SetLibrary(ctx, lib.ID, LibraryChange{MetadataLanguage: &german}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{{Title: title, Folder: title}}, nil); err != nil {
+			t.Fatal(err)
+		}
+		var id uuid.UUID
+		if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE kind = 'movie' AND library_id = $1`, lib.ID).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Title: title, Credits: []domain.Credit{
+			{Name: "Bruno Ganz", IDs: map[domain.Provider]string{domain.ProviderTMDB: "2310"}, Kind: domain.CreditActor},
+		}}, nil); err != nil {
+			t.Fatal(err)
+		}
+		return lib.ID
+	}
+	filme := film("Filme", "Der Himmel über Berlin")
+	ganz := oneItem(t, s, "true").ID
+	if err := s.pool.QueryRow(ctx, `SELECT person_id FROM credits LIMIT 1`).Scan(&ganz); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DescribePerson(ctx, ganz, domain.Person{Name: "Bruno Ganz", Biography: "Ein Schauspieler."}); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := s.Person(ctx, ganz); err != nil || p.Language != "de-DE" || p.DescribedAt.IsZero() {
+		t.Errorf("credited in a German library alone: %q, %v; want him described in German", p.Language, err)
+	}
+
+	// Asking the library in another language has him described again.
+	french := "fr-FR"
+	if err := s.SetLibrary(ctx, filme, LibraryChange{MetadataLanguage: &french}); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := s.Person(ctx, ganz); !p.DescribedAt.IsZero() || p.Language != "fr-FR" {
+		t.Errorf("after the library asks in French: described at %v, in %q; want him to be described again, in French", p.DescribedAt, p.Language)
+	}
+
+	film("Films", "Downfall")
+	if p, _ := s.Person(ctx, ganz); p.Language != "" {
+		t.Errorf("credited in a French and a British library: %q, want the server's own", p.Language)
+	}
+}
