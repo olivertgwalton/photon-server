@@ -1,5 +1,5 @@
 <script lang="ts">
-import { change } from "#lib/actions.svelte.js";
+import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
@@ -47,7 +47,7 @@ $effect(() => {
 });
 
 async function choose(id: string) {
-	const chosen = await change(
+	const chosen = await act(
 		api.PUT("/api/v1/admin/titles/{id}/artwork/{kind}", {
 			params: { path: { id: title.id, kind } },
 			body: { id },
@@ -59,7 +59,7 @@ async function choose(id: string) {
 }
 
 const giveBack = () =>
-	change(
+	act(
 		api.DELETE("/api/v1/admin/titles/{id}/artwork/{kind}", {
 			params: { path: { id: title.id, kind } },
 		}),

@@ -2,7 +2,7 @@
 import DownloadIcon from "@lucide/svelte/icons/download";
 import XIcon from "@lucide/svelte/icons/x";
 import { invalidate } from "$app/navigation";
-import { change } from "#lib/actions.svelte.js";
+import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
@@ -11,7 +11,7 @@ import { bitrate, bytes } from "#lib/format.js";
 let { data } = $props();
 
 function remove(id: string) {
-	change(
+	act(
 		client().DELETE("/api/v1/downloads/{id}", { params: { path: { id } } }),
 		"Download removed.",
 	);

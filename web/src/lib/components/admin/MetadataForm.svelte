@@ -10,7 +10,7 @@ import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { Label } from "#lib/components/ui/label/index.js";
 import { Textarea } from "#lib/components/ui/textarea/index.js";
-import { act } from "#lib/admin/act.js";
+import { act } from "#lib/act.js";
 import { fields as formFields } from "#lib/form.js";
 
 const api = client();

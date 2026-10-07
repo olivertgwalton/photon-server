@@ -15,7 +15,7 @@ import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
-import { act } from "#lib/admin/act.js";
+import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
 
 let { data } = $props();

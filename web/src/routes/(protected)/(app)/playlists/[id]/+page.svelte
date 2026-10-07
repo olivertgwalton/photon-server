@@ -6,8 +6,7 @@ import PlayIcon from "@lucide/svelte/icons/play";
 import ShuffleIcon from "@lucide/svelte/icons/shuffle";
 import TrashIcon from "@lucide/svelte/icons/trash";
 import XIcon from "@lucide/svelte/icons/x";
-import { goto } from "$app/navigation";
-import { change } from "#lib/actions.svelte.js";
+import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import TitleRow from "#lib/components/TitleRow.svelte";
 import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
@@ -29,16 +28,16 @@ async function rename(event: SubmitEvent) {
 		params: { path },
 		body: { name: newName.trim() },
 	});
-	if (await change(asked, "Renamed.")) renaming = false;
+	if (await act(asked, "Renamed.")) renaming = false;
 }
 
-async function remove() {
+function remove() {
 	const asked = api.DELETE("/api/v1/playlists/{id}", { params: { path } });
-	if (await change(asked)) goto("/playlists");
+	act(asked, `${data.playlist.name} was deleted.`, "/playlists");
 }
 
 function move(entry: string, position: number) {
-	change(
+	act(
 		api.PUT("/api/v1/playlists/{id}/entries/{entry}/position", {
 			params: { path: { ...path, entry } },
 			body: { position },
@@ -47,7 +46,7 @@ function move(entry: string, position: number) {
 }
 
 function drop(entry: string) {
-	change(
+	act(
 		api.DELETE("/api/v1/playlists/{id}/entries/{entry}", {
 			params: { path: { ...path, entry } },
 		}),

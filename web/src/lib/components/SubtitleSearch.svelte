@@ -1,6 +1,7 @@
 <script lang="ts">
 import StarIcon from "@lucide/svelte/icons/star";
-import { change, subtitleSearch } from "#lib/actions.svelte.js";
+import { act } from "#lib/act.js";
+import { subtitleSearch } from "#lib/actions.svelte.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
@@ -55,7 +56,7 @@ async function search() {
 
 async function fetchOne(s: Found["items"][number]) {
 	if (!found) return;
-	const done = await change(
+	const done = await act(
 		client().POST("/api/v1/titles/{id}/subtitles", {
 			params: { path: { id: subtitleSearch.id } },
 			body: { version_id: found.version_id, ...s },
