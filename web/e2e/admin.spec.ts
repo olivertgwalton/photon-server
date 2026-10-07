@@ -359,6 +359,9 @@ test("a title is edited and its match fixed from its card", async ({
 		"true",
 	);
 	await dialog.getByRole("button", { name: "Search" }).click();
+	await expect(
+		dialog.getByText("A night shift at a radio station."),
+	).toBeVisible();
 	await dialog.getByRole("button", { name: "Select Quiet Hours" }).click();
 	await expect(
 		page.getByText("Matched. Its details follow in a moment."),
