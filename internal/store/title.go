@@ -38,6 +38,8 @@ type TitlePage struct {
 	// Origin is who made a collection: an admin's is changed by hand, a provider's only by it.
 	Origin    domain.CollectionOrigin
 	Placement domain.CollectionPlacement
+	// Rule is what finds a smart collection's titles.
+	Rule *SmartRule
 	// EpisodeOrder is the order a show's episode files are numbered in.
 	EpisodeOrder domain.EpisodeOrder
 	// Locale is a film's or show's own metadata language and certification country, over its
@@ -294,7 +296,8 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		versions, err = s.Versions(ctx, []uuid.UUID{item.ID})
 		p.Versions = versions[item.ID]
 	case domain.ItemCollection:
-		err = s.pool.QueryRow(ctx, `SELECT origin, placement FROM collections WHERE item_id = $1`, item.ID).Scan(&p.Origin, &p.Placement)
+		err = s.pool.QueryRow(ctx, `SELECT origin, placement, rule FROM collections WHERE item_id = $1`, item.ID).
+			Scan(&p.Origin, &p.Placement, &p.Rule)
 	}
 	if err != nil {
 		return TitlePage{}, err

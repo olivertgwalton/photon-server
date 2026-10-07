@@ -43,6 +43,10 @@ export const tasks: Record<Schemas["TaskKey"], { name: string; does: string }> =
 			name: "Prune the activity log",
 			does: "Forgets activity older than 30 days.",
 		},
+		refresh_collections: {
+			name: "Refresh smart collections",
+			does: "Finds what each smart collection's filters hold again, catching what was matched or edited since.",
+		},
 	};
 
 export const jobKinds: Record<Schemas["JobKind"], string> = {

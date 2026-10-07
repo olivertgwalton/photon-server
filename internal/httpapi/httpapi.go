@@ -504,6 +504,11 @@ func (a *API) routes() []route {
 			body:    itemIDsJSON{}, status: http.StatusNoContent, handle: a.setMembers,
 		},
 		{
+			pattern: "PUT /api/v1/admin/collections/{id}/rule", access: admin,
+			summary: "Replace a smart collection's rule, and its titles with what it finds",
+			body:    store.SmartRule{}, status: http.StatusNoContent, handle: a.setRule,
+		},
+		{
 			pattern: "PUT /api/v1/admin/collections/{id}/placement", access: admin,
 			summary: "Show a collection on the home page, or in its library only",
 			body:    placementJSON{}, status: http.StatusNoContent, handle: a.setPlacement,

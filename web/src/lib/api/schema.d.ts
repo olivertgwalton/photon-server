@@ -223,6 +223,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/collections/{id}/rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a smart collection's rule, and its titles with what it finds
+         * @description Admin only.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SmartRule"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/events": {
         parameters: {
             query?: never;
@@ -5278,6 +5322,7 @@ export interface components {
         AddCollection: {
             /** Format: uuid */
             library_id: string;
+            rule?: components["schemas"]["SmartRule"] | null;
             title: string;
         };
         AddLibrary: {
@@ -5493,7 +5538,7 @@ export interface components {
         /** @enum {string} */
         CollectionMode: "grouped" | "shown" | "hidden";
         /** @enum {string} */
-        CollectionOrigin: "tmdb" | "user";
+        CollectionOrigin: "tmdb" | "user" | "smart";
         /** @enum {string} */
         CollectionPlacement: "library" | "home";
         Counts: {
@@ -6516,6 +6561,12 @@ export interface components {
             set: boolean;
             value?: string;
         };
+        SmartRule: {
+            filter: components["schemas"]["WallFilter"];
+            limit?: number;
+            order?: components["schemas"]["Order"];
+            sort?: components["schemas"]["WallSort"];
+        };
         Snapshot: {
             backlogs: components["schemas"]["Backlog"][];
             jobs: components["schemas"]["RunningJob"][];
@@ -6599,7 +6650,7 @@ export interface components {
             started_at?: string;
         };
         /** @enum {string} */
-        TaskKey: "scan_libraries" | "sweep_jobs" | "backup_database" | "refresh_metadata" | "sweep_artwork" | "detect_markers" | "backfill_previews" | "sweep_downloads" | "prune_activity";
+        TaskKey: "scan_libraries" | "sweep_jobs" | "backup_database" | "refresh_metadata" | "sweep_artwork" | "detect_markers" | "backfill_previews" | "sweep_downloads" | "prune_activity" | "refresh_collections";
         TaskList: {
             items: components["schemas"]["Task"][];
         };
@@ -6650,6 +6701,7 @@ export interface components {
             ratings?: components["schemas"]["RatingRef"][];
             /** Format: date */
             release_date?: string;
+            rule?: components["schemas"]["SmartRule"] | null;
             season?: components["schemas"]["TitleRef"] | null;
             season_number?: number | null;
             seasons?: components["schemas"]["SeasonCard"][];
@@ -6767,6 +6819,19 @@ export interface components {
             max_width?: number;
             profiles?: string[];
             ranges?: components["schemas"]["Range"][];
+        };
+        WallFilter: {
+            certificates?: string[];
+            genres?: string[];
+            marks?: components["schemas"]["Mark"][];
+            min_rating?: number;
+            people?: string[];
+            ranges?: components["schemas"]["Range"][];
+            rating_site?: components["schemas"]["RatingSite"];
+            resolutions?: components["schemas"]["Resolution"][];
+            starts_with?: string;
+            studios?: string[];
+            years?: number[];
         };
         /** @enum {string} */
         WallSort: "title" | "added" | "released" | "rating" | "runtime" | "played";

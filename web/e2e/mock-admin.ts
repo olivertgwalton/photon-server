@@ -210,6 +210,9 @@ const collection: Schemas["TitlePage"] = {
 	origin: "user",
 };
 
+// A smart collection saved from the films library's filters, once one is.
+let smart: Schemas["TitlePage"] | undefined;
+
 let webhooks: Schemas["Webhook"][] = [];
 let keys: Schemas["KeyListing"][] = [];
 let chosenPoster = "a-1";
@@ -562,6 +565,21 @@ export async function admin(
 			);
 		case "PUT /api/v1/admin/collections/t-box/members":
 			return done();
+		case "POST /api/v1/admin/collections": {
+			const asked = (await request.json()) as Schemas["AddCollection"];
+			smart = {
+				id: "t-smart",
+				kind: "collection",
+				title: asked.title,
+				added_at: film.added_at,
+				origin: "smart",
+				rule: asked.rule ?? undefined,
+			};
+			return json({ id: "t-smart" } satisfies Schemas["Created"], 201);
+		}
+		case "PUT /api/v1/admin/collections/t-smart/rule":
+			if (smart) smart.rule = (await request.json()) as Schemas["SmartRule"];
+			return done();
 	}
 	return undefined;
 }
@@ -574,7 +592,10 @@ export function adminTitles(route: string): Response | undefined {
 		case "GET /api/v1/titles/t-box":
 			return json(collection);
 		case "GET /api/v1/titles/t-box/members":
+		case "GET /api/v1/titles/t-smart/members":
 			return json({ items: [] } satisfies Schemas["CardList"]);
+		case "GET /api/v1/titles/t-smart":
+			return smart ? json(smart) : undefined;
 		case "GET /api/v1/libraries/l-films/collections":
 			return json({
 				items: [
@@ -585,9 +606,10 @@ export function adminTitles(route: string): Response | undefined {
 						added_at: film.added_at,
 						origin: "user",
 					},
+					...(smart ? [smart] : []),
 				],
 				offset: 0,
-				total: 1,
+				total: smart ? 2 : 1,
 			} satisfies Schemas["CardPage"]);
 		case "GET /api/v1/search":
 			return json({

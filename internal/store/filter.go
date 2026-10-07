@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -16,19 +17,30 @@ import (
 // Each list is any of its values; every field set must hold. A zero filter narrows nothing.
 type WallFilter struct {
 	// StartsWith is a letter its sort title starts with, unaccented, or "#" for before A.
-	StartsWith   string
-	Marks        []domain.Mark
-	Genres       []string
-	Years        []int
-	Certificates []string
-	Studios      []string
-	Resolutions  []domain.Resolution
-	Ranges       []domain.Range
+	StartsWith   string              `json:"starts_with,omitzero"`
+	Marks        []domain.Mark       `json:"marks,omitzero"`
+	Genres       []string            `json:"genres,omitzero"`
+	Years        []int               `json:"years,omitzero"`
+	Certificates []string            `json:"certificates,omitzero"`
+	Studios      []string            `json:"studios,omitzero"`
+	Resolutions  []domain.Resolution `json:"resolutions,omitzero"`
+	Ranges       []domain.Range      `json:"ranges,omitzero"`
 	// People are credited on it, or on one of its episodes.
-	People []uuid.UUID
+	People []uuid.UUID `json:"people,omitzero"`
 	// MinRating is the least RatingSite's score out of 100 may be, zero for any.
-	RatingSite domain.RatingSite
-	MinRating  float64
+	RatingSite domain.RatingSite `json:"rating_site,omitzero"`
+	MinRating  float64           `json:"min_rating,omitzero"`
+}
+
+// Check is what a filter's values must be beyond their kinds: a letter, and a score out of 100.
+func (f WallFilter) Check() error {
+	if s := f.StartsWith; s != "" && s != "#" && (len(s) != 1 || s < "A" || s > "Z") {
+		return errors.New("starts_with is a letter or #")
+	}
+	if f.MinRating < 0 || f.MinRating > 100 {
+		return errors.New("min_rating is a score from 0 to 100")
+	}
+	return nil
 }
 
 // firstLetter is a sort title's first letter unaccented, or "#" for anything before A.

@@ -131,6 +131,48 @@ export function letterOffset(
 	return offset;
 }
 
+// A wall's query as a smart collection's rule, as Plex saves a filtered
+// library as a smart collection; none where it reads a profile's own marks or
+// plays, which a collection everyone shares cannot.
+export function smartRule(query: WallQuery): Schemas["SmartRule"] | undefined {
+	if (query.mark?.length || query.sort === "played") return undefined;
+	return {
+		filter: {
+			genres: query.genre,
+			years: query.year,
+			certificates: query.certificate,
+			studios: query.studio,
+			resolutions: query.resolution,
+			ranges: query.range,
+			people: query.person,
+			rating_site: query.rating_site,
+			min_rating: query.min_rating,
+		},
+		sort: query.sort,
+		order: query.order,
+	};
+}
+
+// The wall a smart collection's rule reads, to open and change it there.
+export function ruleQuery(rule: Schemas["SmartRule"]): WallQuery {
+	const f = rule.filter;
+	return Object.fromEntries(
+		Object.entries({
+			sort: rule.sort,
+			order: rule.order,
+			genre: f.genres,
+			year: f.years,
+			certificate: f.certificates,
+			studio: f.studios,
+			resolution: f.resolutions,
+			range: f.ranges,
+			person: f.people,
+			rating_site: f.rating_site,
+			min_rating: f.min_rating,
+		}).filter(([, v]) => v != null && !(Array.isArray(v) && !v.length)),
+	);
+}
+
 export const viewStyles = ["poster", "still", "list"] as const;
 export type ViewStyle = (typeof viewStyles)[number];
 

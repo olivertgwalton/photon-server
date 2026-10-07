@@ -523,7 +523,7 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'show'
 				AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
 			`DELETE FROM items i USING collections c WHERE c.item_id = i.id AND i.library_id = $1
-				AND c.origin <> 'user' AND NOT EXISTS (SELECT 1 FROM collection_members m WHERE m.collection_id = c.item_id)`,
+				AND c.origin NOT IN ` + madeHere + ` AND NOT EXISTS (SELECT 1 FROM collection_members m WHERE m.collection_id = c.item_id)`,
 		} {
 			removed, err := queryIDs(ctx, tx, sql+` RETURNING i.id`, lib)
 			if err != nil {

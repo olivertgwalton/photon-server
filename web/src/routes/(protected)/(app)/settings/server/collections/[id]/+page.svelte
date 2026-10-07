@@ -8,6 +8,7 @@ import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { act } from "#lib/admin/act.js";
+import { ruleQuery, wallSearch } from "#lib/wall.js";
 
 const api = client();
 
@@ -37,6 +38,13 @@ function remove() {
 }
 
 const editable = $derived(data.collection.origin === "user");
+const smart = $derived(data.collection.rule);
+// Its library's wall, filtered by its rule, where the rule is changed.
+const changeRule = $derived.by(() => {
+	if (!smart || !data.library) return undefined;
+	const search = wallSearch(ruleQuery(smart));
+	return `/libraries/${data.library}${search}${search ? "&" : "?"}collection=${data.collection.id}`;
+});
 
 let members = $state<Card[]>([]);
 $effect.pre(() => {
@@ -83,6 +91,13 @@ function caption(card: Card) {
 				<a href="/settings/server/titles/{data.collection.id}" class="underline"
 					>Rename it, or choose its artwork</a
 				>.
+			{:else if smart}
+				A smart collection: it holds what its filters find
+				{smart.limit ? `, the first ${smart.limit}` : ""}, found again as the
+				library changes, and the same for everyone.
+				{#if changeRule}
+					<a href={changeRule} class="underline">Change its filters</a>.
+				{/if}
 			{:else}
 				Made by TMDB as it matched these films, so it follows TMDB and is not
 				edited here.
@@ -175,7 +190,8 @@ function caption(card: Card) {
 				</p>
 			{/if}
 		</section>
-
+	{/if}
+	{#if editable || smart}
 		<div>
 			<ConfirmButton
 				onconfirm={remove}

@@ -26,7 +26,9 @@ type titlePageJSON struct {
 	Credits       []creditRefJSON            `json:"credits,omitzero"`
 	Origin        domain.CollectionOrigin    `json:"origin,omitzero"`
 	Placement     domain.CollectionPlacement `json:"placement,omitzero"`
-	EpisodeOrder  domain.EpisodeOrder        `json:"episode_order,omitzero"`
+	// Rule is what finds a smart collection's titles.
+	Rule         *store.SmartRule    `json:"rule,omitzero"`
+	EpisodeOrder domain.EpisodeOrder `json:"episode_order,omitzero"`
 	// MetadataLanguage and CertificationCountry are a film's or show's own, over its library's;
 	// absent where it takes its library's.
 	MetadataLanguage     string            `json:"metadata_language,omitzero"`
@@ -235,7 +237,7 @@ func titlePageOf(p store.TitlePage) titlePageJSON {
 		Ratings:     each(p.Ratings, func(r domain.Rating) ratingRefJSON { return ratingRefJSON(r) }),
 		Collections: each(p.Collections, func(c store.CollectionCard) collectionCardJSON { return collectionCardJSON(c) }),
 		Credits:     each(p.Credits, func(c store.CreditRef) creditRefJSON { return creditRefJSON(c) }),
-		Origin:      p.Origin, Placement: p.Placement, EpisodeOrder: p.EpisodeOrder,
+		Origin:      p.Origin, Placement: p.Placement, Rule: p.Rule, EpisodeOrder: p.EpisodeOrder,
 		MetadataLanguage: p.Locale.Language, CertificationCountry: p.Locale.Country, AddedAt: p.AddedAt, SeasonNumber: p.SeasonNumber,
 		EpisodeNumber: p.EpisodeNumber, EpisodeEnd: p.EpisodeEnd,
 		Show: (*titleRefJSON)(p.Show), Season: (*titleRefJSON)(p.Season),

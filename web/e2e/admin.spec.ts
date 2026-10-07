@@ -426,6 +426,39 @@ test("remote streams are kept within a limit, in Mbps", async ({ page }) => {
 	await expectAccessible(page);
 });
 
+test("a filtered library is kept as a smart collection, and its filters changed there", async ({
+	page,
+}) => {
+	await logIn(page, "/libraries/l-films?mark=unwatched");
+	await expect(
+		page.getByRole("button", { name: "Save as a smart collection" }),
+	).toHaveCount(0);
+
+	await page.goto("/libraries/l-films?sort=added&genre=Drama");
+	await page
+		.getByRole("button", { name: "Save as a smart collection" })
+		.click();
+	await page.getByLabel("Name").fill("Dramas");
+	await page.getByRole("button", { name: "Save", exact: true }).click();
+	await expect(page).toHaveURL("/settings/server/collections/t-smart");
+	await expect(page.getByText(/A smart collection/)).toBeVisible();
+	await expectAccessible(page);
+
+	await page.getByRole("link", { name: "Change its filters" }).click();
+	await expect(page).toHaveURL(
+		"/libraries/l-films?sort=added&genre=Drama&collection=t-smart",
+	);
+	const saved = page.waitForRequest(
+		(r) => r.method() === "PUT" && r.url().endsWith("/t-smart/rule"),
+	);
+	await page.getByRole("button", { name: "Save to the collection" }).click();
+	expect((await saved).postDataJSON()).toMatchObject({
+		filter: { genres: ["Drama"] },
+		sort: "added",
+	});
+	await expect(page).toHaveURL("/settings/server/collections/t-smart");
+});
+
 test("a collection made here is filled from its library", async ({ page }) => {
 	await logIn(page, "/settings/server/collections");
 	await expect(page.getByText("Made here", { exact: true })).toBeVisible();

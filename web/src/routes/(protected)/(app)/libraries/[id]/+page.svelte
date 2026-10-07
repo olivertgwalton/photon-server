@@ -3,7 +3,9 @@ import LayoutGridIcon from "@lucide/svelte/icons/layout-grid";
 import ListIcon from "@lucide/svelte/icons/list";
 import RectangleHorizontalIcon from "@lucide/svelte/icons/rectangle-horizontal";
 import { goto } from "$app/navigation";
+import { act } from "#lib/admin/act.js";
 import { client } from "#lib/api/client.js";
+import SmartCollectionDialog from "#lib/components/admin/SmartCollectionDialog.svelte";
 import LetterBar from "#lib/components/LetterBar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import { count } from "#lib/format.js";
@@ -15,6 +17,7 @@ import {
 	cleared,
 	filterCount,
 	letterOffset,
+	smartRule,
 	type ViewStyle,
 	viewKey,
 	type WallQuery,
@@ -29,14 +32,37 @@ let view = $derived(data.view);
 
 const id = $derived(data.library.id);
 const narrowed = $derived(filterCount(data.query) > 0);
+// What an admin may keep of this wall as a smart collection.
+const rule = $derived(
+	data.me.role === "admin" && (narrowed || data.query.sort)
+		? smartRule(data.query)
+		: undefined,
+);
+let saving = $state(false);
 
 // The filters live in the address: a narrowed wall can be shared, and Back
 // leaves the library rather than undoing a filter.
 function show(query: WallQuery) {
-	goto(`/libraries/${id}${wallSearch(query)}`, {
+	const search = wallSearch(query);
+	const editing = data.editing
+		? `${search ? "&" : "?"}collection=${data.editing}`
+		: "";
+	goto(`/libraries/${id}${search}${editing}`, {
 		replace: true,
 		reset: false,
 	});
+}
+
+function saveRule() {
+	if (!rule || !data.editing) return;
+	return act(
+		client().PUT("/api/v1/admin/collections/{id}/rule", {
+			params: { path: { id: data.editing } },
+			body: rule,
+		}),
+		"Saved. The collection holds what these filters find.",
+		`/settings/server/collections/${data.editing}`,
+	);
 }
 
 function choose(style: string) {
@@ -76,6 +102,14 @@ function jump(letter: string) {
 		<Button variant="ghost" size="sm" onclick={() => show(cleared(data.query))}>
 			Clear filters
 		</Button>
+	{/if}
+	{#if rule && data.editing}
+		<Button size="sm" onclick={saveRule}>Save to the collection</Button>
+	{:else if rule}
+		<Button variant="outline" size="sm" onclick={() => (saving = true)}>
+			Save as a smart collection
+		</Button>
+		<SmartCollectionDialog bind:open={saving} library={id} {rule} />
 	{/if}
 	<WallFilterMenu query={data.query} facets={data.facets} onchange={show} />
 	<WallSortMenu

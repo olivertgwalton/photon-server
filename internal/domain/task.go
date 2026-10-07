@@ -24,10 +24,12 @@ const (
 	TaskSweepDownloads TaskKey = "sweep_downloads"
 	// TaskPruneActivity forgets activity older than the log keeps.
 	TaskPruneActivity TaskKey = "prune_activity"
+	// TaskRefreshCollections finds the titles of every smart collection again.
+	TaskRefreshCollections TaskKey = "refresh_collections"
 )
 
 func TaskKeys() []TaskKey {
-	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads, TaskPruneActivity}
+	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections}
 }
 
 // Jobs are the kinds of job the task queues: the work it starts that outlasts its run, and that
@@ -42,7 +44,7 @@ func (k TaskKey) Jobs() []JobKind {
 		return []JobKind{JobMarkers}
 	case TaskBackfillPreviews:
 		return []JobKind{JobPreviews}
-	case TaskSweepJobs, TaskBackupDatabase, TaskSweepArtwork, TaskSweepDownloads, TaskPruneActivity:
+	case TaskSweepJobs, TaskBackupDatabase, TaskSweepArtwork, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections:
 	}
 	return nil
 }
