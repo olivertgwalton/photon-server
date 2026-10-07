@@ -1,8 +1,7 @@
 <script lang="ts">
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
-import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
-import ChevronUpIcon from "@lucide/svelte/icons/chevron-up";
 import FilmIcon from "@lucide/svelte/icons/film";
+import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import HistoryIcon from "@lucide/svelte/icons/history";
@@ -28,17 +27,69 @@ const kindIcons: Record<Library["kind"], Component> = {
 };
 
 const sidebar = Sidebar.useSidebar();
-// While on, each library is moved by a button rather than opened.
+// While on, each library is dragged into place by its grip, or moved by the
+// arrow keys on it, rather than opened.
 let reordering = $state(false);
+let dragged = $state<string>();
+// The order as it is dragged, drawn until the kept one comes back.
+let draft = $state<string[]>();
+const listed = $derived(
+	draft
+		? draft.flatMap((id) => libraries.filter((l) => l.id === id))
+		: libraries,
+);
 
-function move(index: number, by: -1 | 1) {
-	const ids = libraries.map((l) => l.id);
-	[ids[index], ids[index + by]] = [ids[index + by], ids[index]];
-	setLibraryOrder(ids);
+// The rest of a drag is followed on the window: moving the dragged row in the
+// page would take the pointer away from its grip.
+function grab(event: PointerEvent, id: string) {
+	const list = (event.currentTarget as HTMLElement).closest("ul");
+	if (!list) return;
+	event.preventDefault();
+	dragged = id;
+	draft = libraries.map((l) => l.id);
+	const drag = (move: PointerEvent) => {
+		if (!draft) return;
+		// Its place is after every other library whose middle the pointer is past.
+		const to = [...list.querySelectorAll<HTMLElement>("[data-library]")].filter(
+			(row) => {
+				const box = row.getBoundingClientRect();
+				return (
+					row.dataset.library !== id && move.clientY > box.top + box.height / 2
+				);
+			},
+		).length;
+		const ids = draft.filter((other) => other !== id);
+		ids.splice(to, 0, id);
+		draft = ids;
+	};
+	const drop = async () => {
+		window.removeEventListener("pointermove", drag);
+		window.removeEventListener("pointerup", drop);
+		window.removeEventListener("pointercancel", drop);
+		const ids = draft;
+		dragged = undefined;
+		if (ids && ids.join() !== libraries.map((l) => l.id).join())
+			await setLibraryOrder(ids);
+		draft = undefined;
+	};
+	window.addEventListener("pointermove", drag);
+	window.addEventListener("pointerup", drop);
+	window.addEventListener("pointercancel", drop);
 }
 
-const moveButton =
-	"text-ink-2 hover:bg-raise hover:text-ink focus-visible:outline-signal grid size-6 place-items-center rounded-md disabled:opacity-30";
+function nudge(event: KeyboardEvent, index: number) {
+	const by = { ArrowUp: -1, ArrowDown: 1 }[event.key];
+	const to = index + (by ?? 0);
+	if (!by || to < 0 || to >= listed.length) return;
+	event.preventDefault();
+	// From the order drawn, which a move not yet kept has changed.
+	const ids = listed.map((l) => l.id);
+	[ids[index], ids[to]] = [ids[to], ids[index]];
+	draft = ids;
+	setLibraryOrder(ids).then(() => {
+		if (draft === ids) draft = undefined;
+	});
+}
 
 // The page's own item is marked by a bar at its edge that grows in.
 const menuButton =
@@ -59,7 +110,13 @@ function current(href: string) {
 	library?: Library,
 	index = 0,
 )}
-	<Sidebar.MenuItem class="group/library">
+	<Sidebar.MenuItem
+		class={[
+			"group/library",
+			library && dragged === library.id && "bg-raise rounded-lg shadow-lg",
+		]}
+		data-library={library?.id}
+	>
 		<Sidebar.MenuButton
 			isActive={current(href)}
 			tooltipContent={label}
@@ -80,28 +137,16 @@ function current(href: string) {
 			{/snippet}
 		</Sidebar.MenuButton>
 		{#if library && reordering}
-			<div
-				class="absolute top-1.5 right-1 flex gap-0.5 group-data-[collapsible=icon]:hidden"
+			<button
+				type="button"
+				class="text-ink-2 hover:bg-raise hover:text-ink focus-visible:outline-signal absolute top-1.5 right-1 grid size-6 cursor-grab touch-none place-items-center rounded-md active:cursor-grabbing group-data-[collapsible=icon]:hidden"
+				aria-label="Drag {library.name} into place"
+				title="Drag, or use the up and down arrow keys"
+				onpointerdown={(event) => grab(event, library.id)}
+				onkeydown={(event) => nudge(event, index)}
 			>
-				<button
-					type="button"
-					class={moveButton}
-					aria-label="Move {library.name} up"
-					disabled={index === 0}
-					onclick={() => move(index, -1)}
-				>
-					<ChevronUpIcon class="size-4" />
-				</button>
-				<button
-					type="button"
-					class={moveButton}
-					aria-label="Move {library.name} down"
-					disabled={index === libraries.length - 1}
-					onclick={() => move(index, 1)}
-				>
-					<ChevronDownIcon class="size-4" />
-				</button>
-			</div>
+				<GripVerticalIcon class="size-4" />
+			</button>
 		{:else if library}
 			<LibraryMenu {library} onreorder={() => (reordering = true)} />
 		{/if}
@@ -141,7 +186,7 @@ function current(href: string) {
 						</button>
 					{/if}
 					<Sidebar.Menu>
-						{#each libraries as library, index (library.id)}
+						{#each listed as library, index (library.id)}
 							{@render item(
 								`/libraries/${library.id}`,
 								library.name,

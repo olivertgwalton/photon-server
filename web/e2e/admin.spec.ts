@@ -222,25 +222,39 @@ test("a member puts the libraries in their own order, and may do no more", async
 	await expect(page.getByRole("menuitem", { name: "Edit…" })).toHaveCount(0);
 	await page.getByRole("menuitem", { name: "Reorder" }).click();
 
-	await expect(
-		nav.getByRole("button", { name: "Move Films up" }),
-	).toBeDisabled();
+	// Films is dragged by its grip below Shows.
+	const names = nav.getByRole("link", { name: /^(Films|Shows)$/ });
+	const grip = nav.getByRole("button", { name: "Drag Films into place" });
+	const shows = await nav.getByRole("link", { name: "Shows" }).boundingBox();
+	if (!shows) throw new Error("Shows is not drawn");
 	const asked = page.waitForRequest("**/api/v1/me/library-order");
-	await nav.getByRole("button", { name: "Move Films down" }).click();
+	await grip.hover();
+	await page.mouse.down();
+	await page.mouse.move(shows.x + 10, shows.y + shows.height, { steps: 5 });
+	await page.mouse.up();
 	expect((await asked).postDataJSON()).toEqual({
 		library_ids: ["l-shows", "l-films"],
 	});
-	const names = nav.getByRole("link", { name: /^(Films|Shows)$/ });
+	await expect(names).toHaveText(["Shows", "Films"]);
+
+	// And moved back up, and down again, by the keyboard.
+	const back = page.waitForRequest("**/api/v1/me/library-order");
+	await grip.focus();
+	await page.keyboard.press("ArrowUp");
+	expect((await back).postDataJSON()).toEqual({
+		library_ids: ["l-films", "l-shows"],
+	});
+	await expect(names).toHaveText(["Films", "Shows"]);
+	await page.keyboard.press("ArrowDown");
 	await expect(names).toHaveText(["Shows", "Films"]);
 
 	await nav.getByRole("button", { name: "Done" }).click();
-	await expect(nav.getByRole("button", { name: "Move Films up" })).toHaveCount(
-		0,
-	);
+	await expect(grip).toHaveCount(0);
 	// The order is the profile's, kept by the server.
 	await page.reload();
 	await expect(names).toHaveText(["Shows", "Films"]);
 });
+
 test("a profile is added, and what another may see is set", async ({
 	page,
 }) => {
