@@ -24,6 +24,9 @@ type Subject struct {
 	Order domain.EpisodeOrder
 	// Sources are what its library asks for metadata or pictures of any kind it holds.
 	Sources []domain.FieldSource
+	// Unmatched is an admin's unmatching it: no provider is asked about it until it is released,
+	// though an admin may search them to fix its match.
+	Unmatched bool
 }
 
 // IdentifySubject answers what is known of a title to match it by, or false for one that has gone.
@@ -35,11 +38,11 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	if err != nil {
 		return Subject{}, false, err
 	}
-	// One an admin unmatched is asked of no provider until it is released.
-	if unmatched, err := held(ctx, s.pool, id); err != nil || unmatched {
+	unmatched, err := held(ctx, s.pool, id)
+	if err != nil {
 		return Subject{}, false, err
 	}
-	sub := Subject{Kind: item.Kind, Title: item.Title, IDs: map[domain.Provider]string{}, Order: item.EpisodeOrder}
+	sub := Subject{Kind: item.Kind, Title: item.Title, IDs: map[domain.Provider]string{}, Order: item.EpisodeOrder, Unmatched: unmatched}
 	if item.Year != nil {
 		sub.Year = *item.Year
 	}
