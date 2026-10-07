@@ -101,6 +101,7 @@ const films: Schemas["AdminLibrary"] = {
 	keyframes: "index",
 	themes: "local",
 	deletion: "off",
+	artwork_language: "localized",
 };
 
 const providers: Schemas["MetadataProvider"][] = [

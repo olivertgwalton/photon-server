@@ -82,6 +82,9 @@ export function libraryChange(
 		deletion: String(form.get("deletion")) as Schemas["MediaDeletion"],
 		metadata_language: localeChoice(form.get("metadata_language")),
 		certification_country: localeChoice(form.get("certification_country")),
+		artwork_language: String(
+			form.get("artwork_language"),
+		) as Schemas["ArtworkLanguage"],
 		refresh_days: Number(form.get("refresh_days")),
 	};
 	const sources: Schemas["KindSourcesChange"][] = [];
