@@ -46,7 +46,7 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	if err != nil {
 		return Subject{}, false, err
 	}
-	sub := Subject{Kind: item.Kind, Title: item.Title, IDs: map[domain.Provider]string{}, Order: item.EpisodeOrder, Unmatched: unmatched}
+	sub := Subject{Kind: item.Kind, Title: item.Title, Order: item.EpisodeOrder, Unmatched: unmatched}
 	if item.Year != nil {
 		sub.Year = *item.Year
 	}
@@ -66,15 +66,7 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	if err != nil {
 		return Subject{}, false, err
 	}
-	var provider domain.Provider
-	var value string
-	rows, err := s.pool.Query(ctx, `SELECT provider, value FROM external_ids WHERE item_id = $1`, id)
-	if err == nil {
-		_, err = pgx.ForEachRow(rows, []any{&provider, &value}, func() error {
-			sub.IDs[provider] = value
-			return nil
-		})
-	}
+	sub.IDs, err = queryMap[domain.Provider, string](ctx, s.pool, `SELECT provider, value FROM external_ids WHERE item_id = $1`, id)
 	if err != nil {
 		return Subject{}, false, err
 	}
@@ -125,9 +117,7 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 		}
 		credits := []credited{{item, m.Credits}}
 		for number, season := range seasons {
-			var seasonID uuid.UUID
-			err := tx.QueryRow(ctx, `SELECT id FROM items WHERE parent_id = $1 AND kind = 'season' AND season_number = $2 LIMIT 1`,
-				item, number).Scan(&seasonID)
+			seasonID, err := seasonOf(ctx, tx, item, number)
 			if errors.Is(err, pgx.ErrNoRows) {
 				continue
 			}

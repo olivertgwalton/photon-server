@@ -59,7 +59,7 @@ func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) 
 	if err != nil || len(parts) == 0 {
 		return PlayCopy{}, cmp.Or(err, ErrNotFound)
 	}
-	streams, err := queryRows[model.Stream](ctx, s.pool, `SELECT `+streamColumns+` FROM streams WHERE part_id = $1 ORDER BY idx`, parts[0].ID)
+	streams, err := s.partStreams(ctx, parts[0].ID)
 	if err != nil {
 		return PlayCopy{}, err
 	}
@@ -70,16 +70,13 @@ func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) 
 	}
 	c := PlayCopy{
 		Version: row.ID, Edition: deref(row.Edition), Label: deref(row.Label), DurationMS: row.DurationMS,
-		Container: row.Container, BitrateKbps: row.BitrateKbps,
+		Container: row.Container, BitrateKbps: row.BitrateKbps, Streams: streams,
 	}
 	for _, f := range subs {
 		c.Subtitles = append(c.Subtitles, playSubtitle(f))
 	}
 	for _, pt := range parts {
 		c.Parts = append(c.Parts, PlayPart{ID: pt.ID, OffsetMS: pt.OffsetMS, DurationMS: pt.DurationMS})
-	}
-	for _, t := range streams {
-		c.Streams = append(c.Streams, mediaStream(t))
 	}
 	return c, nil
 }
@@ -114,18 +111,20 @@ func mediaStream(t *model.Stream) domain.Stream {
 // PartStreams answers a part's streams, as they were probed, or ErrNotFound for no such part:
 // every part has some.
 func (s *Store) PartStreams(ctx context.Context, part uuid.UUID) ([]domain.Stream, error) {
-	rows, err := queryRows[model.Stream](ctx, s.pool, `SELECT `+streamColumns+` FROM streams WHERE part_id = $1 ORDER BY idx`, part)
-	if err != nil {
-		return nil, err
-	}
-	if len(rows) == 0 {
+	streams, err := s.partStreams(ctx, part)
+	if err == nil && len(streams) == 0 {
 		return nil, ErrNotFound
 	}
-	streams := make([]domain.Stream, len(rows))
-	for i, t := range rows {
-		streams[i] = mediaStream(t)
+	return streams, err
+}
+
+func (s *Store) partStreams(ctx context.Context, part uuid.UUID) ([]domain.Stream, error) {
+	rows, err := queryRows[model.Stream](ctx, s.pool, `SELECT `+streamColumns+` FROM streams WHERE part_id = $1 ORDER BY idx`, part)
+	var streams []domain.Stream
+	for _, t := range rows {
+		streams = append(streams, mediaStream(t))
 	}
-	return streams, nil
+	return streams, err
 }
 
 // SubtitleFile answers where a subtitle file is: its library's root, and its path within it; no

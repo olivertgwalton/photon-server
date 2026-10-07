@@ -8,7 +8,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
 // Download is a profile's download of a part: the part's own file where Quality is nil, ready as
@@ -211,12 +210,9 @@ func (s *Store) StartConversion(ctx context.Context, id, node uuid.UUID) (Conver
 		return Conversion{}, found(err)
 	}
 	out.Duration = time.Duration(durationMS) * time.Millisecond
-	streams, err := queryRows[model.Stream](ctx, s.pool, `SELECT `+streamColumns+` FROM streams WHERE part_id = $1 ORDER BY idx`, out.Part)
+	out.Streams, err = s.partStreams(ctx, out.Part)
 	if err != nil {
 		return Conversion{}, err
-	}
-	for _, t := range streams {
-		out.Streams = append(out.Streams, mediaStream(t))
 	}
 	return out, nil
 }
