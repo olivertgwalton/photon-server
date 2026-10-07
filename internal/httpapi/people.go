@@ -20,7 +20,7 @@ type people interface {
 }
 
 type personDescriber interface {
-	DescribePerson(ctx context.Context, ids map[domain.Provider]string) (domain.Person, bool, error)
+	DescribePerson(ctx context.Context, loc domain.Locale, ids map[domain.Provider]string) (domain.Person, bool, error)
 }
 
 // describedFor is how long what a provider said of someone stands before it is asked again.
@@ -57,7 +57,7 @@ func (a *API) person(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if time.Since(p.DescribedAt) > describedFor && len(p.IDs) > 0 {
-		d, ok, err := a.svc.PersonDescriber.DescribePerson(r.Context(), p.IDs)
+		d, ok, err := a.svc.PersonDescriber.DescribePerson(r.Context(), domain.LocaleOf(a.svc.Setup.MetadataLanguage), p.IDs)
 		if ok {
 			err = a.svc.People.DescribePerson(r.Context(), id, d)
 		}

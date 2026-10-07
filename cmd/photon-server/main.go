@@ -243,7 +243,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	plugins := plugin.New(st)
-	providers := metadataProviders(st, plugins, lang, cache)
+	providers := metadataProviders(st, plugins, cache)
 	sessions := playback.NewSessions(cache, st, remuxer, hub.Raise, node)
 	listen := cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen)
 	setup := httpapi.Setup{
@@ -266,7 +266,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		domain.JobScanLibrary: scanLibrary(st, scan.New(st, tools, logger), hub, logger),
 	}, hub, nil)
 	matching := map[domain.JobKind]jobs.Handler{
-		domain.JobIdentify: identify.Handler(st, providers, hub.Raise, logger),
+		domain.JobIdentify: identify.Handler(st, providers, domain.LocaleOf(lang), hub.Raise, logger),
 	}
 	// A node without yt-dlp leaves themes to one with it.
 	if tools.YTDLP.Path != "" {
@@ -362,10 +362,10 @@ func logTools(ctx context.Context, logger *slog.Logger, tools media.Tools) {
 
 // metadataProviders runs TMDB before TheTVDB and OMDb, as its match may give them an id to find a
 // title by.
-func metadataProviders(st *store.Store, plugins *plugin.Plugins, lang string, cache *kv.KV) *provider.Registry {
+func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *provider.Registry {
 	return provider.NewRegistry(plugins.Load,
-		tmdb.New(cmp.Or(os.Getenv("PHOTON_TMDB_TOKEN"), tmdb.DefaultToken), lang, cache),
-		tvdb.New(cmp.Or(os.Getenv("PHOTON_TVDB_KEY"), tvdb.DefaultKey), os.Getenv("PHOTON_TVDB_PIN"), lang, cache),
+		tmdb.New(cmp.Or(os.Getenv("PHOTON_TMDB_TOKEN"), tmdb.DefaultToken), cache),
+		tvdb.New(cmp.Or(os.Getenv("PHOTON_TVDB_KEY"), tvdb.DefaultKey), os.Getenv("PHOTON_TVDB_PIN"), cache),
 		mdblist.New(func(ctx context.Context) (map[string]string, error) {
 			return st.ProviderSettings(ctx, domain.SourceMDBList)
 		}, cache),

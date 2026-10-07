@@ -169,7 +169,7 @@ func TestAPluginDescribesTheTitlesOfALibraryThatTakesIt(t *testing.T) {
 	id := cards[0].ID
 
 	// The plugin that is down is passed over for the next.
-	if err := identify.Handler(st, providers, func(context.Context, domain.Event) {}, log)(ctx, id); err != nil {
+	if err := identify.Handler(st, providers, domain.LocaleOf("en-GB"), func(context.Context, domain.Event) {}, log)(ctx, id); err != nil {
 		t.Fatalf("identifying: %v", err)
 	}
 	page, err := st.Title(ctx, uuid.UUID{}, id)

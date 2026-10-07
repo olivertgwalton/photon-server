@@ -36,12 +36,10 @@ var limit = kv.Limit{Every: 50 * time.Millisecond, Burst: 20}
 const tokenLife = 25 * 24 * time.Hour
 
 type Client struct {
-	base     string
-	key      string
-	pin      string
-	language string // ISO 639-2, as TVDB names languages
-	country  string // ISO 3166-1 alpha-3, lower case
-	api      provider.Client
+	base string
+	key  string
+	pin  string
+	api  provider.Client
 
 	mu      sync.Mutex
 	token   string
@@ -49,16 +47,19 @@ type Client struct {
 }
 
 // New makes a client for a project key and, for a key subscribers pay for, a subscriber's PIN.
-// language is an IETF tag such as en-GB: TVDB is asked for its language, and its region picks the
-// certificates.
-func New(key, pin, lang string, limits kv.Limiter) *Client {
-	tag := language.Make(lang)
-	base, _ := tag.Base()
-	region, _ := tag.Region()
-	return &Client{
-		base: baseURL, key: key, pin: pin, language: base.ISO3(), country: strings.ToLower(region.ISO3()),
-		api: provider.Client{Name: "tvdb", Limits: limits, Limit: limit},
+func New(key, pin string, limits kv.Limiter) *Client {
+	return &Client{base: baseURL, key: key, pin: pin, api: provider.Client{Name: "tvdb", Limits: limits, Limit: limit}}
+}
+
+// codes are a locale as TVDB names it: its language ISO 639-2, its country ISO 3166-1 alpha-3 in
+// lower case.
+func codes(loc domain.Locale) (lang, country string) {
+	base, _ := language.Make(loc.Language).Base()
+	region, err := language.ParseRegion(loc.Country)
+	if err != nil {
+		return base.ISO3(), ""
 	}
+	return base.ISO3(), strings.ToLower(region.ISO3())
 }
 
 func (c *Client) login(ctx context.Context) (string, error) {
@@ -113,7 +114,8 @@ func (c *Client) get(ctx context.Context, path string, into any) error {
 }
 
 // Search answers TVDB's ranking of shows named title, first aired in year where it is not zero.
-func (c *Client) Search(ctx context.Context, title string, year int) ([]domain.Candidate, error) {
+func (c *Client) Search(ctx context.Context, loc domain.Locale, title string, year int) ([]domain.Candidate, error) {
+	lang, _ := codes(loc)
 	q := url.Values{"query": {title}, "type": {"series"}, "limit": {"10"}}
 	if year != 0 {
 		q.Set("year", strconv.Itoa(year))
@@ -139,8 +141,8 @@ func (c *Client) Search(ctx context.Context, title string, year int) ([]domain.C
 		}
 		y, _ := strconv.Atoi(r.Year)
 		found = append(found, domain.Candidate{
-			ID: r.ID, Title: cmp.Or(r.Translations[c.language], r.Name), OriginalTitle: r.Name, Year: y, Poster: r.Image,
-			Overview: cmp.Or(r.Overviews[c.language], r.Overview),
+			ID: r.ID, Title: cmp.Or(r.Translations[lang], r.Name), OriginalTitle: r.Name, Year: y, Poster: r.Image,
+			Overview: cmp.Or(r.Overviews[lang], r.Overview),
 		})
 	}
 	return found, nil
@@ -226,7 +228,8 @@ var sources = map[string]domain.Provider{"IMDB": domain.ProviderIMDb, "TheMovieD
 
 // Details answers what TVDB says about a show in the client's language. A name or write-up TVDB
 // has only in other languages is left unsaid, as Jellyfin's plugin leaves it.
-func (c *Client) Details(ctx context.Context, id int) (domain.Metadata, error) {
+func (c *Client) Details(ctx context.Context, loc domain.Locale, id int) (domain.Metadata, error) {
+	lang, country := codes(loc)
 	var out struct {
 		Data struct {
 			Name             string      `json:"name"`
@@ -270,16 +273,16 @@ func (c *Client) Details(ctx context.Context, id int) (domain.Metadata, error) {
 		Artwork: picture(domain.ArtworkPoster, d.Image),
 		Credits: credits(d.Characters),
 	}
-	if d.OriginalLanguage == c.language {
+	if d.OriginalLanguage == lang {
 		m.OriginalTitle = d.Name
 	}
 	for _, t := range d.Translations.Names {
-		if t.Language == c.language && !t.IsAlias {
+		if t.Language == lang && !t.IsAlias {
 			m.Title = cmp.Or(m.Title, t.Name)
 		}
 	}
 	for _, t := range d.Translations.Overviews {
-		if t.Language == c.language {
+		if t.Language == lang {
 			m.Overview = cmp.Or(m.Overview, t.Overview)
 		}
 	}
@@ -292,7 +295,7 @@ func (c *Client) Details(ctx context.Context, id int) (domain.Metadata, error) {
 		}
 	}
 	for _, r := range d.ContentRatings {
-		if r.Country == c.country {
+		if r.Country == country {
 			m.Certificate = cmp.Or(m.Certificate, r.Name)
 		}
 	}
@@ -310,12 +313,13 @@ func (c *Client) Details(ctx context.Context, id int) (domain.Metadata, error) {
 var seasonTypes = map[domain.EpisodeOrder]string{domain.OrderAired: "default", domain.OrderDVD: "dvd", domain.OrderAbsolute: "absolute"}
 
 // Seasons answers what TVDB says about the episodes of the given seasons, numbered in order.
-func (c *Client) Seasons(ctx context.Context, id int, seasons []int, order domain.EpisodeOrder) (map[int]domain.SeasonMetadata, error) {
+func (c *Client) Seasons(ctx context.Context, loc domain.Locale, id int, seasons []int, order domain.EpisodeOrder) (map[int]domain.SeasonMetadata, error) {
+	lang, _ := codes(loc)
 	out := map[int]domain.SeasonMetadata{}
 	for _, n := range seasons {
 		out[n] = domain.SeasonMetadata{Episodes: map[int]domain.Metadata{}}
 	}
-	path := fmt.Sprintf("/series/%d/episodes/%s/%s?page=0", id, cmp.Or(seasonTypes[order], "default"), c.language)
+	path := fmt.Sprintf("/series/%d/episodes/%s/%s?page=0", id, cmp.Or(seasonTypes[order], "default"), lang)
 	for path != "" {
 		var page struct {
 			Data struct {

@@ -46,7 +46,7 @@ func (c *Client) Info() provider.Info {
 
 // Match answers the title's IMDb id: OMDb is asked by nothing else, as Jellyfin asks it, so a title
 // with none is not matched.
-func (c *Client) Match(_ context.Context, _ domain.ItemKind, h provider.Hints) (string, error) {
+func (c *Client) Match(_ context.Context, _ domain.Locale, _ domain.ItemKind, h provider.Hints) (string, error) {
 	return h.IDs[domain.ProviderIMDb], nil
 }
 
@@ -78,7 +78,7 @@ type season struct {
 
 // Describe answers what OMDb says of a title and, for a show numbered as aired, of the seasons
 // asked for. A title OMDb does not know is described with nothing.
-func (c *Client) Describe(ctx context.Context, kind domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
+func (c *Client) Describe(ctx context.Context, _ domain.Locale, kind domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
 	set, err := c.settings(ctx)
 	if err != nil {
 		return domain.Metadata{}, nil, err

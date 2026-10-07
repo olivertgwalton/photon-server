@@ -52,7 +52,7 @@ type describer struct {
 	fail  bool
 }
 
-func (d *describer) DescribePerson(context.Context, map[domain.Provider]string) (domain.Person, bool, error) {
+func (d *describer) DescribePerson(context.Context, domain.Locale, map[domain.Provider]string) (domain.Person, bool, error) {
 	d.asked++
 	if d.fail {
 		return domain.Person{}, false, errors.New("tmdb is down")

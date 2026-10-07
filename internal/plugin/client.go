@@ -64,18 +64,22 @@ func (c *client) post(ctx context.Context, path string, body func(pluginv1.Setti
 	return call(ctx, c.http, "plugin "+c.manifest.ID, http.MethodPost, c.base+path, body(sent), out, secrets)
 }
 
-func (c *client) Match(ctx context.Context, kind domain.ItemKind, h provider.Hints) (string, error) {
+func sentLocale(loc domain.Locale) pluginv1.Locale {
+	return pluginv1.Locale{Language: loc.Language, Country: loc.Country}
+}
+
+func (c *client) Match(ctx context.Context, loc domain.Locale, kind domain.ItemKind, h provider.Hints) (string, error) {
 	var out pluginv1.MatchResponse
 	err := c.post(ctx, "/match", func(s pluginv1.Settings) any {
-		return pluginv1.MatchRequest{Settings: s, Kind: string(kind), Title: h.Title, Year: h.Year, IDs: sentIDs(h.IDs)}
+		return pluginv1.MatchRequest{Settings: s, Locale: sentLocale(loc), Kind: string(kind), Title: h.Title, Year: h.Year, IDs: sentIDs(h.IDs)}
 	}, &out)
 	return out.ID, err
 }
 
-func (c *client) Describe(ctx context.Context, kind domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
+func (c *client) Describe(ctx context.Context, loc domain.Locale, kind domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
 	var out pluginv1.DescribeResponse
 	err := c.post(ctx, "/describe", func(s pluginv1.Settings) any {
-		return pluginv1.DescribeRequest{Settings: s, Kind: string(kind), ID: id, Seasons: seasons.Numbers, Order: string(seasons.Order)}
+		return pluginv1.DescribeRequest{Settings: s, Locale: sentLocale(loc), Kind: string(kind), ID: id, Seasons: seasons.Numbers, Order: string(seasons.Order)}
 	}, &out)
 	if err != nil {
 		return domain.Metadata{}, nil, err
@@ -91,10 +95,10 @@ func (c *client) Describe(ctx context.Context, kind domain.ItemKind, id string, 
 	return c.metadata(out.Metadata), said, nil
 }
 
-func (c *client) Candidates(ctx context.Context, kind domain.ItemKind, title string, year int) ([]domain.Candidate, error) {
+func (c *client) Candidates(ctx context.Context, loc domain.Locale, kind domain.ItemKind, title string, year int) ([]domain.Candidate, error) {
 	var out pluginv1.SearchResponse
 	err := c.post(ctx, "/search", func(s pluginv1.Settings) any {
-		return pluginv1.SearchRequest{Settings: s, Kind: string(kind), Title: title, Year: year}
+		return pluginv1.SearchRequest{Settings: s, Locale: sentLocale(loc), Kind: string(kind), Title: title, Year: year}
 	}, &out)
 	found := make([]domain.Candidate, 0, len(out.Results))
 	for _, r := range out.Results {
@@ -119,10 +123,10 @@ func (c *client) Ratings(ctx context.Context, kind domain.ItemKind, ids map[doma
 	return ratings, err
 }
 
-func (c *client) DescribePerson(ctx context.Context, ids map[domain.Provider]string) (domain.Person, error) {
+func (c *client) DescribePerson(ctx context.Context, loc domain.Locale, ids map[domain.Provider]string) (domain.Person, error) {
 	var out pluginv1.PersonResponse
 	err := c.post(ctx, "/person", func(s pluginv1.Settings) any {
-		return pluginv1.PersonRequest{Settings: s, IDs: sentIDs(ids)}
+		return pluginv1.PersonRequest{Settings: s, Locale: sentLocale(loc), IDs: sentIDs(ids)}
 	}, &out)
 	return domain.Person{
 		Name: out.Name, Biography: out.Biography, Born: provider.Date(out.Born), Died: provider.Date(out.Died),

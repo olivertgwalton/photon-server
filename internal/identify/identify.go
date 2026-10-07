@@ -18,8 +18,9 @@ import (
 // order, what it knows: a describer matches the title and records what it says about it and, for a
 // show, its seasons and episodes, and a rater records its ratings; the library's ranking for each
 // kind of item decides whose values and pictures stand. A title with no confident match is left as its files and NFO describe it, and a provider
-// not configured or not reachable is passed over. raise tells the title was described again.
-func Handler(st *store.Store, providers *provider.Registry, raise func(context.Context, domain.Event), log *slog.Logger) jobs.Handler {
+// not configured or not reachable is passed over. Each provider is asked in loc. raise tells the
+// title was described again.
+func Handler(st *store.Store, providers *provider.Registry, loc domain.Locale, raise func(context.Context, domain.Event), log *slog.Logger) jobs.Handler {
 	return func(ctx context.Context, id uuid.UUID) error {
 		sub, ok, err := st.IdentifySubject(ctx, id)
 		if err != nil || !ok {
@@ -36,7 +37,7 @@ func Handler(st *store.Store, providers *provider.Registry, raise func(context.C
 			}
 			log := log.With(slog.String("provider", string(info.ID)), slog.String("title", sub.Title))
 			if d, ok := provider.As[provider.Describer](p, domain.CapabilityDescribe); ok {
-				if err := describe(ctx, st, d, id, &sub, log); err != nil {
+				if err := describe(ctx, st, d, loc, id, &sub, log); err != nil {
 					return err
 				}
 			}
@@ -52,8 +53,8 @@ func Handler(st *store.Store, providers *provider.Registry, raise func(context.C
 	}
 }
 
-func describe(ctx context.Context, st *store.Store, d provider.Describer, id uuid.UUID, sub *store.Subject, log *slog.Logger) error {
-	match, err := d.Match(ctx, sub.Kind, provider.Hints{Title: sub.Title, Year: sub.Year, IDs: sub.IDs})
+func describe(ctx context.Context, st *store.Store, d provider.Describer, loc domain.Locale, id uuid.UUID, sub *store.Subject, log *slog.Logger) error {
+	match, err := d.Match(ctx, loc, sub.Kind, provider.Hints{Title: sub.Title, Year: sub.Year, IDs: sub.IDs})
 	if passedOver(ctx, err, log) {
 		return nil
 	}
@@ -64,7 +65,7 @@ func describe(ctx context.Context, st *store.Store, d provider.Describer, id uui
 		log.InfoContext(ctx, "no confident match", slog.Int("year", sub.Year))
 		return nil
 	}
-	m, seasons, err := d.Describe(ctx, sub.Kind, match, domain.SeasonRequest{Numbers: sub.Seasons, Order: sub.Order})
+	m, seasons, err := d.Describe(ctx, loc, sub.Kind, match, domain.SeasonRequest{Numbers: sub.Seasons, Order: sub.Order})
 	if passedOver(ctx, err, log) {
 		return nil
 	}

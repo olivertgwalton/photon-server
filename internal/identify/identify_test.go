@@ -22,11 +22,11 @@ func (films) Info() provider.Info {
 	return provider.Info{ID: domain.SourceTMDB, Name: "Films", Kinds: []domain.ItemKind{domain.ItemMovie}}
 }
 
-func (films) Match(_ context.Context, _ domain.ItemKind, h provider.Hints) (string, error) {
+func (films) Match(_ context.Context, _ domain.Locale, _ domain.ItemKind, h provider.Hints) (string, error) {
 	return "578", nil
 }
 
-func (films) Describe(context.Context, domain.ItemKind, string, domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
+func (films) Describe(context.Context, domain.Locale, domain.ItemKind, string, domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
 	return domain.Metadata{Title: "Jaws", Overview: "A shark.", IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0073195"}}, nil, nil
 }
 
@@ -82,10 +82,10 @@ func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {
 	var told []domain.Event
 	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
 	// A failing rater does not fail the job: the match stands.
-	if err := Handler(st, provider.NewRegistry(nil, films{}, critics{fail: true}), raise, log)(ctx, id); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, films{}, critics{fail: true}), domain.LocaleOf("en-GB"), raise, log)(ctx, id); err != nil {
 		t.Fatalf("with the rater failing: %v", err)
 	}
-	if err := Handler(st, provider.NewRegistry(nil, films{}, critics{}), raise, log)(ctx, id); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, films{}, critics{}), domain.LocaleOf("en-GB"), raise, log)(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	if len(told) != 2 || told[1].Kind != domain.EventTitleUpdated || told[1].Item != id {

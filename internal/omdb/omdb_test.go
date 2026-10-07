@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -70,11 +71,11 @@ func client(t *testing.T, key string) *Client {
 
 func TestAFilmIsDescribedByItsIMDbID(t *testing.T) {
 	c := client(t, "secret")
-	id, err := c.Match(t.Context(), domain.ItemMovie, provider.Hints{Title: "Jaws", IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0073195"}})
+	id, err := c.Match(t.Context(), domain.Locale{}, domain.ItemMovie, provider.Hints{Title: "Jaws", IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0073195"}})
 	if err != nil || id != "tt0073195" {
 		t.Fatalf("match = %q, %v", id, err)
 	}
-	m, _, err := c.Describe(t.Context(), domain.ItemMovie, id, domain.SeasonRequest{})
+	m, _, err := c.Describe(t.Context(), domain.Locale{}, domain.ItemMovie, id, domain.SeasonRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,14 +93,14 @@ func TestAFilmIsDescribedByItsIMDbID(t *testing.T) {
 }
 
 func TestATitleWithoutAnIMDbIDIsNotMatched(t *testing.T) {
-	id, err := client(t, "secret").Match(t.Context(), domain.ItemMovie, provider.Hints{Title: "Jaws", Year: 1975, IDs: map[domain.Provider]string{domain.ProviderTMDB: "578"}})
+	id, err := client(t, "secret").Match(t.Context(), domain.Locale{}, domain.ItemMovie, provider.Hints{Title: "Jaws", Year: 1975, IDs: map[domain.Provider]string{domain.ProviderTMDB: "578"}})
 	if err != nil || id != "" {
 		t.Errorf("match = %q, %v; want none", id, err)
 	}
 }
 
 func TestAShowsEpisodesAreDescribedBySeason(t *testing.T) {
-	m, seasons, err := client(t, "secret").Describe(t.Context(), domain.ItemShow, "tt0903747",
+	m, seasons, err := client(t, "secret").Describe(t.Context(), domain.Locale{}, domain.ItemShow, "tt0903747",
 		domain.SeasonRequest{Numbers: []int{1, 9}, Order: domain.OrderAired})
 	if err != nil {
 		t.Fatal(err)
@@ -115,7 +116,7 @@ func TestAShowsEpisodesAreDescribedBySeason(t *testing.T) {
 		t.Errorf("seasons (-want +got):\n%s", diff)
 	}
 	// Numbered otherwise, OMDb's episodes are not the files'.
-	_, seasons, err = client(t, "secret").Describe(t.Context(), domain.ItemShow, "tt0903747",
+	_, seasons, err = client(t, "secret").Describe(t.Context(), domain.Locale{}, domain.ItemShow, "tt0903747",
 		domain.SeasonRequest{Numbers: []int{1}, Order: domain.OrderDVD})
 	if err != nil || len(seasons) != 0 {
 		t.Errorf("in DVD order: %v, %v; want no seasons", seasons, err)
@@ -123,20 +124,28 @@ func TestAShowsEpisodesAreDescribedBySeason(t *testing.T) {
 }
 
 func TestATitleOMDbDoesNotKnowIsDescribedWithNothing(t *testing.T) {
-	m, _, err := client(t, "secret").Describe(t.Context(), domain.ItemMovie, "tt9999999", domain.SeasonRequest{})
+	m, _, err := client(t, "secret").Describe(t.Context(), domain.Locale{}, domain.ItemMovie, "tt9999999", domain.SeasonRequest{})
 	if err != nil || m.Title != "" {
 		t.Errorf("unknown title: %+v, %v; want nothing", m, err)
 	}
 }
 
 func TestAKeyIsNeededAndARefusedOneIsPassedOver(t *testing.T) {
-	if _, _, err := client(t, "").Describe(t.Context(), domain.ItemMovie, "tt0073195", domain.SeasonRequest{}); !errors.Is(err, provider.ErrNotConfigured) {
+	if _, _, err := client(t, "").Describe(t.Context(), domain.Locale{}, domain.ItemMovie, "tt0073195", domain.SeasonRequest{}); !errors.Is(err, provider.ErrNotConfigured) {
 		t.Errorf("with no key: %v, want ErrNotConfigured", err)
 	}
 	for _, key := range []string{"wrong", "spent"} {
-		_, _, err := client(t, key).Describe(t.Context(), domain.ItemMovie, "tt0073195", domain.SeasonRequest{})
+		_, _, err := client(t, key).Describe(t.Context(), domain.Locale{}, domain.ItemMovie, "tt0073195", domain.SeasonRequest{})
 		if !errors.Is(err, provider.ErrUnavailable) || strings.Contains(err.Error(), key) {
 			t.Errorf("with key %q: %v, want ErrUnavailable not carrying the key", key, err)
 		}
+	}
+}
+
+// A provider is found able to do what it does only while its methods are the capabilities' own.
+func TestItHasItsCapabilities(t *testing.T) {
+	got := provider.Capabilities(New(func(context.Context) (map[string]string, error) { return nil, nil }, unlimited{}))
+	if want := []domain.Capability{domain.CapabilityDescribe}; !slices.Equal(got, want) {
+		t.Errorf("capabilities %v, want %v", got, want)
 	}
 }

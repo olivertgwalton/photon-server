@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,9 +14,13 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
 type unlimited struct{}
+
+// gb is what the tests ask in, as a server set to en-GB asks.
+var gb = domain.LocaleOf("en-GB")
 
 func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
 
@@ -71,14 +76,14 @@ func fake(t *testing.T) (*Client, *int) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	c := New("key", "", "en-GB", unlimited{})
+	c := New("key", "", unlimited{})
 	c.base = srv.URL
 	return c, &logins
 }
 
 func TestDetailsInTheClientsLanguageAndCountry(t *testing.T) {
 	c, logins := fake(t)
-	got, err := c.Details(t.Context(), 79126)
+	got, err := c.Details(t.Context(), gb, 79126)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +110,7 @@ func TestDetailsInTheClientsLanguageAndCountry(t *testing.T) {
 
 func TestSeasonsReadEveryPage(t *testing.T) {
 	c, _ := fake(t)
-	got, err := c.Seasons(t.Context(), 79126, []int{1}, domain.OrderAired)
+	got, err := c.Seasons(t.Context(), gb, 79126, []int{1}, domain.OrderAired)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +128,7 @@ func TestSeasonsReadEveryPage(t *testing.T) {
 
 func TestSeasonsAreNumberedInTheOrderAsked(t *testing.T) {
 	c, _ := fake(t)
-	got, err := c.Seasons(t.Context(), 79126, []int{1}, domain.OrderDVD)
+	got, err := c.Seasons(t.Context(), gb, 79126, []int{1}, domain.OrderDVD)
 	if err != nil || got[1].Episodes[1].Title != "The Detail" {
 		t.Errorf("on DVD, season 1 = %+v, %v; want The Detail first", got[1], err)
 	}
@@ -131,7 +136,7 @@ func TestSeasonsAreNumberedInTheOrderAsked(t *testing.T) {
 
 func TestAnEpisodeCreditsItsGuestsAndCrew(t *testing.T) {
 	c, _ := fake(t)
-	got, err := c.Seasons(t.Context(), 79126, []int{1}, domain.OrderAired)
+	got, err := c.Seasons(t.Context(), gb, 79126, []int{1}, domain.OrderAired)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,13 +167,21 @@ func TestSearchSaysWhatEachShowIsAboutInTheClientsLanguage(t *testing.T) {
 			{"tvdb_id":"1","name":"Wired","overview":"Only in its own words."}]}`))
 	}))
 	t.Cleanup(srv.Close)
-	c := New("key", "", "en-GB", unlimited{})
+	c := New("key", "", unlimited{})
 	c.base = srv.URL
-	got, err := c.Search(t.Context(), "The Wire", 0)
+	got, err := c.Search(t.Context(), gb, "The Wire", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 2 || got[0].Overview != "Baltimore." || got[1].Overview != "Only in its own words." {
 		t.Errorf("overviews: %+v, want each in English, else as TVDB has it", got)
+	}
+}
+
+// A provider is found able to do what it does only while its methods are the capabilities' own.
+func TestItHasItsCapabilities(t *testing.T) {
+	got := provider.Capabilities(New("key", "", unlimited{}))
+	if want := []domain.Capability{domain.CapabilityDescribe, domain.CapabilitySearch}; !slices.Equal(got, want) {
+		t.Errorf("capabilities %v, want %v", got, want)
 	}
 }
