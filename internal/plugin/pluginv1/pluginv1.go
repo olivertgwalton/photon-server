@@ -33,11 +33,20 @@ type Setting struct {
 // Settings is in every request: what an admin set for the plugin, by key.
 type Settings map[string]string
 
+// Locale is what the server asks in, a library's or its own: the language its words are wanted
+// in, an IETF tag such as en-GB, and the country whose certificates it wants, an ISO 3166-1
+// alpha-2 code such as GB.
+type Locale struct {
+	Language string `json:"language,omitempty"`
+	Country  string `json:"country,omitempty"`
+}
+
 type MatchRequest struct {
 	Settings Settings `json:"settings"`
-	Kind     string   `json:"kind"`
-	Title    string   `json:"title"`
-	Year     int      `json:"year,omitempty"`
+	Locale
+	Kind  string `json:"kind"`
+	Title string `json:"title"`
+	Year  int    `json:"year,omitempty"`
 	// IDs are the ids the title carries, by provider: "imdb", "tmdb", "tvdb", and this plugin's
 	// own, "plugin:<id>", where it gave one before.
 	IDs map[string]string `json:"ids"`
@@ -50,8 +59,9 @@ type MatchResponse struct {
 
 type DescribeRequest struct {
 	Settings Settings `json:"settings"`
-	Kind     string   `json:"kind"`
-	ID       string   `json:"id"`
+	Locale
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
 	// Seasons are a show's seasons to describe, in the order its files are numbered in: "aired",
 	// "dvd" or "absolute".
 	Seasons []int  `json:"seasons,omitempty"`
@@ -130,9 +140,10 @@ type Credit struct {
 
 type SearchRequest struct {
 	Settings Settings `json:"settings"`
-	Kind     string   `json:"kind"`
-	Title    string   `json:"title"`
-	Year     int      `json:"year,omitempty"`
+	Locale
+	Kind  string `json:"kind"`
+	Title string `json:"title"`
+	Year  int    `json:"year,omitempty"`
 }
 
 type SearchResponse struct {
@@ -167,8 +178,9 @@ type Rating struct {
 }
 
 type PersonRequest struct {
-	Settings Settings          `json:"settings"`
-	IDs      map[string]string `json:"ids"`
+	Settings Settings `json:"settings"`
+	Locale
+	IDs map[string]string `json:"ids"`
 }
 
 // PersonResponse is what the plugin knows of someone; a plugin that does not know them answers

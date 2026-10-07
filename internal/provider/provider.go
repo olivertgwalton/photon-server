@@ -176,14 +176,14 @@ type Hints struct {
 type Describer interface {
 	Provider
 	// Match answers the title's id on the provider, empty for no confident match.
-	Match(ctx context.Context, kind domain.ItemKind, h Hints) (string, error)
-	Describe(ctx context.Context, kind domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error)
+	Match(ctx context.Context, loc domain.Locale, kind domain.ItemKind, h Hints) (string, error)
+	Describe(ctx context.Context, loc domain.Locale, kind domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error)
 }
 
 // Searcher lists what a provider has by a name, for an admin choosing the match by hand.
 type Searcher interface {
 	Provider
-	Candidates(ctx context.Context, kind domain.ItemKind, title string, year int) ([]domain.Candidate, error)
+	Candidates(ctx context.Context, loc domain.Locale, kind domain.ItemKind, title string, year int) ([]domain.Candidate, error)
 }
 
 // Rater says what sites' readers and critics make of a title, found by the ids it carries.
@@ -195,7 +195,7 @@ type Rater interface {
 // PersonDescriber says what a provider knows of someone it credits, found by their ids.
 type PersonDescriber interface {
 	Provider
-	DescribePerson(ctx context.Context, ids map[domain.Provider]string) (domain.Person, error)
+	DescribePerson(ctx context.Context, loc domain.Locale, ids map[domain.Provider]string) (domain.Person, error)
 }
 
 // Partial is a provider that implements every capability's methods but answers only some of
@@ -296,7 +296,7 @@ func (r *Registry) Get(ctx context.Context, id domain.FieldSource) (Provider, bo
 
 // DescribePerson asks each provider that describes people, in order, what it knows of someone;
 // false where none knows them.
-func (r *Registry) DescribePerson(ctx context.Context, ids map[domain.Provider]string) (domain.Person, bool, error) {
+func (r *Registry) DescribePerson(ctx context.Context, loc domain.Locale, ids map[domain.Provider]string) (domain.Person, bool, error) {
 	all, err := r.All(ctx)
 	if err != nil {
 		return domain.Person{}, false, err
@@ -307,7 +307,7 @@ func (r *Registry) DescribePerson(ctx context.Context, ids map[domain.Provider]s
 		if !ok {
 			continue
 		}
-		person, err := d.DescribePerson(ctx, ids)
+		person, err := d.DescribePerson(ctx, loc, ids)
 		if err == nil {
 			return person, true, nil
 		}

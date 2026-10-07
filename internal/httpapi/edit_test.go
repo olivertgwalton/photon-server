@@ -175,7 +175,7 @@ func (filmSearch) Info() provider.Info {
 	return provider.Info{ID: domain.SourceTMDB, Name: "TMDB", Kinds: []domain.ItemKind{domain.ItemMovie}}
 }
 
-func (filmSearch) Candidates(_ context.Context, _ domain.ItemKind, title string, year int) ([]domain.Candidate, error) {
+func (filmSearch) Candidates(_ context.Context, _ domain.Locale, _ domain.ItemKind, title string, year int) ([]domain.Candidate, error) {
 	return []domain.Candidate{{ID: "949", Title: title + " asked", Year: year, Poster: "https://image.tmdb.org/t/p/original/heat.jpg"}}, nil
 }
 

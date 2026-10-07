@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,9 @@ import (
 type unlimited struct{}
 
 func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
+
+// gb is what the tests ask in, as a server set to en-GB asks.
+var gb = domain.LocaleOf("en-GB")
 
 func serve(t *testing.T, routes map[string]string) *Client {
 	t.Helper()
@@ -40,7 +44,7 @@ func serveIn(t *testing.T, language string, routes map[string]string) *Client {
 		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(srv.Close)
-	c := New("token", language, unlimited{})
+	c := New("token", unlimited{})
 	c.base = srv.URL
 	return c
 }
@@ -50,7 +54,7 @@ func TestSearchAsksForTheYearByKind(t *testing.T) {
 		"/search/tv?first_air_date_year=2002&include_adult=false&language=en-GB&query=The+Wire": `{"results":[
 			{"id":1438,"name":"The Wire","original_name":"The Wire","first_air_date":"2002-06-02","overview":"Baltimore."}]}`,
 	})
-	got, err := c.Search(t.Context(), Show, "The Wire", 2002)
+	got, err := c.Search(t.Context(), gb, Show, "The Wire", 2002)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +84,7 @@ func TestDetailsTakeTheCountrysCertificate(t *testing.T) {
 				{"iso_3166_1":"US","release_dates":[{"certification":"R"}]},
 				{"iso_3166_1":"GB","release_dates":[{"certification":""},{"certification":"18"}]}]}}`,
 	})
-	got, err := c.Details(t.Context(), Movie, 348)
+	got, err := c.Details(t.Context(), gb, Movie, 348)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +131,7 @@ func TestAnotherLanguageStillGetsEnglishPictures(t *testing.T) {
 					{"file_path":"/german.jpg","iso_639_1":"de","vote_average":3}],
 				"logos":[{"file_path":"/english.png","iso_639_1":"en","vote_average":5}]}}`,
 	})
-	got, err := c.Details(t.Context(), Movie, 348)
+	got, err := c.Details(t.Context(), domain.LocaleOf("de-DE"), Movie, 348)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +149,7 @@ func TestAnotherLanguageStillGetsEnglishPictures(t *testing.T) {
 
 func TestMissingSeason(t *testing.T) {
 	c := serve(t, nil)
-	if _, err := c.Season(t.Context(), 1438, 0); !errors.Is(err, provider.ErrNotFound) {
+	if _, err := c.Season(t.Context(), gb, 1438, 0); !errors.Is(err, provider.ErrNotFound) {
 		t.Errorf("Season of a season TMDB lacks: err = %v, want ErrNotFound", err)
 	}
 }
@@ -154,7 +158,7 @@ func TestAPersonIsDescribed(t *testing.T) {
 	c := serve(t, map[string]string{
 		"/person/10205?language=en-GB": `{"name":"Sigourney Weaver","biography":"An actor.","birthday":"1949-10-08","deathday":null,"place_of_birth":"New York City","profile_path":"/sw.jpg"}`,
 	})
-	got, err := c.Person(t.Context(), "10205")
+	got, err := c.Person(t.Context(), gb, "10205")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +173,7 @@ func TestAnAnswerTooLargeIsRefused(t *testing.T) {
 	c := serve(t, map[string]string{
 		"/search/movie?include_adult=false&language=en-GB&query=Alien": `{"results":[],"padding":"` + strings.Repeat("x", 9<<20) + `"}`,
 	})
-	if got, err := c.Search(t.Context(), Movie, "Alien", 0); err == nil {
+	if got, err := c.Search(t.Context(), gb, Movie, "Alien", 0); err == nil {
 		t.Errorf("a 9 MiB answer: %v, want it refused", got)
 	}
 }
@@ -187,9 +191,9 @@ func TestARequestTMDBAsksToSlowIsSentAgain(t *testing.T) {
 		_, _ = w.Write([]byte(`{"results":[{"id":348,"title":"Alien","release_date":"1979-05-25"}]}`))
 	}))
 	t.Cleanup(srv.Close)
-	c := New("token", "en-GB", unlimited{})
+	c := New("token", unlimited{})
 	c.base = srv.URL
-	got, err := c.Search(t.Context(), Movie, "Alien", 0)
+	got, err := c.Search(t.Context(), gb, Movie, "Alien", 0)
 	if err != nil || len(got) != 1 || asked != 2 {
 		t.Errorf("Search = %v, %v after %d requests; want Alien, asked again once", got, err, asked)
 	}
@@ -201,7 +205,7 @@ func TestAnEpisodeIsRatedByItsVotesAlone(t *testing.T) {
 			{"episode_number":1,"name":"The Target","vote_average":8.1,"vote_count":120},
 			{"episode_number":2,"name":"The Detail","vote_average":0,"vote_count":0}]}`,
 	})
-	got, err := c.Season(t.Context(), 1438, 1)
+	got, err := c.Season(t.Context(), gb, 1438, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,5 +214,13 @@ func TestAnEpisodeIsRatedByItsVotesAlone(t *testing.T) {
 	}
 	if r := got.Episodes[2].Ratings; r != nil {
 		t.Errorf("an episode nobody voted on is rated %+v, want nothing", r)
+	}
+}
+
+// A provider is found able to do what it does only while its methods are the capabilities' own.
+func TestItHasItsCapabilities(t *testing.T) {
+	got := provider.Capabilities(New("token", unlimited{}))
+	if want := []domain.Capability{domain.CapabilityDescribe, domain.CapabilitySearch, domain.CapabilityPerson}; !slices.Equal(got, want) {
+		t.Errorf("capabilities %v, want %v", got, want)
 	}
 }

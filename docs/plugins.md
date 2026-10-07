@@ -47,6 +47,9 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
 - **Settings.** Every request carries `settings`: what the admin set for the plugin, by key. A
   plugin is not called at all while a setting it marks `required` is unset. Secrets are never
   shown to admins again once set, and never logged by the server.
+- **Locale.** A match, describe, search or person request carries `language`, an IETF tag such
+  as `en-GB` that its words are wanted in, and `country`, an ISO 3166-1 alpha-2 code such as `GB`
+  whose certificates are wanted: the title's library's, or the server's own. Either may be absent.
 - **Ids** are maps from a provider to the title's or person's id there: `imdb`, `tmdb`, `tvdb`,
   and the plugin's own, `plugin:{id}`, once it has given one.
 - **Kinds** are `movie` and `show`. A plugin is asked only about the kinds its manifest names.
@@ -92,6 +95,8 @@ than none.
 ```json
 {
   "settings": {"api_key": "…"},
+  "language": "en-GB",
+  "country": "GB",
   "kind": "movie",
   "title": "Jaws",
   "year": 1975,
@@ -111,6 +116,8 @@ numbered in `order` (`aired`, `dvd` or `absolute`); describe those you have.
 ```json
 {
   "settings": {"api_key": "…"},
+  "language": "en-GB",
+  "country": "GB",
   "kind": "show",
   "id": "wire-7",
   "seasons": [1, 2],

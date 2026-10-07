@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -42,29 +41,22 @@ const (
 )
 
 type Client struct {
-	base          string
-	token         string
-	language      string
-	videoLanguage string
-	country       string
-	api           provider.Client
+	base  string
+	token string
+	api   provider.Client
 }
 
-// New makes a client that authenticates with an API read access token and asks for metadata in
-// language, an IETF tag such as en-US whose region picks the certificates.
-func New(token, language string, limits kv.Limiter) *Client {
-	videoLanguage, country, _ := strings.Cut(language, "-")
-	return &Client{
-		base: baseURL, token: token, language: language, videoLanguage: videoLanguage, country: strings.ToUpper(country),
-		api: provider.Client{Name: "tmdb", Limits: limits, Limit: limit},
-	}
+// New makes a client that authenticates with an API read access token. Each request is asked in a
+// locale: its language the words', its country the certificates'.
+func New(token string, limits kv.Limiter) *Client {
+	return &Client{base: baseURL, token: token, api: provider.Client{Name: "tmdb", Limits: limits, Limit: limit}}
 }
 
-func (c *Client) get(ctx context.Context, path string, query url.Values, into any) error {
+func (c *Client) get(ctx context.Context, loc domain.Locale, path string, query url.Values, into any) error {
 	if query == nil {
 		query = url.Values{}
 	}
-	query.Set("language", c.language)
+	query.Set("language", loc.Language)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path+"?"+query.Encode(), nil)
 	if err != nil {
 		return err
@@ -105,7 +97,7 @@ func matches(rs []result) []domain.Candidate {
 }
 
 // Search answers TMDB's ranking of titles named title, released in year where it is not zero.
-func (c *Client) Search(ctx context.Context, kind Kind, title string, year int) ([]domain.Candidate, error) {
+func (c *Client) Search(ctx context.Context, loc domain.Locale, kind Kind, title string, year int) ([]domain.Candidate, error) {
 	q := url.Values{"query": {title}, "include_adult": {"false"}}
 	if year != 0 {
 		q.Set(map[Kind]string{Movie: "year", Show: "first_air_date_year"}[kind], strconv.Itoa(year))
@@ -113,14 +105,14 @@ func (c *Client) Search(ctx context.Context, kind Kind, title string, year int) 
 	var page struct {
 		Results []result `json:"results"`
 	}
-	if err := c.get(ctx, "/search/"+string(kind), q, &page); err != nil {
+	if err := c.get(ctx, loc, "/search/"+string(kind), q, &page); err != nil {
 		return nil, err
 	}
 	return matches(page.Results), nil
 }
 
 // Find answers the titles of kind that another provider's id names.
-func (c *Client) Find(ctx context.Context, kind Kind, provider domain.Provider, id string) ([]domain.Candidate, error) {
+func (c *Client) Find(ctx context.Context, loc domain.Locale, kind Kind, provider domain.Provider, id string) ([]domain.Candidate, error) {
 	source := map[domain.Provider]string{domain.ProviderIMDb: "imdb_id", domain.ProviderTVDB: "tvdb_id"}[provider]
 	if source == "" {
 		return nil, fmt.Errorf("tmdb: cannot find by %s id", provider)
@@ -129,7 +121,7 @@ func (c *Client) Find(ctx context.Context, kind Kind, provider domain.Provider, 
 		Movies []result `json:"movie_results"`
 		Shows  []result `json:"tv_results"`
 	}
-	if err := c.get(ctx, "/find/"+url.PathEscape(id), url.Values{"external_source": {source}}, &found); err != nil {
+	if err := c.get(ctx, loc, "/find/"+url.PathEscape(id), url.Values{"external_source": {source}}, &found); err != nil {
 		return nil, err
 	}
 	if kind == Movie {
@@ -189,18 +181,18 @@ type details struct {
 }
 
 // Details answers what TMDB says about a title, with its certificate in the client's country.
-func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadata, error) {
+func (c *Client) Details(ctx context.Context, loc domain.Locale, kind Kind, id int) (domain.Metadata, error) {
 	extra := map[Kind]string{Movie: "release_dates,external_ids,videos,images,credits", Show: "content_ratings,external_ids,videos,images,aggregate_credits"}[kind]
 	q := url.Values{
 		"append_to_response": {extra},
 		// Videos in the metadata language, and those in none: most trailers' music. Pictures in
 		// that language, those in none (backdrops and posters without lettering), and English, as
 		// Jellyfin asks, since a title may have no poster lettered in any other.
-		"include_video_language": {c.videoLanguage + ",null"},
-		"include_image_language": {c.imageLanguages()},
+		"include_video_language": {loc.Base() + ",null"},
+		"include_image_language": {imageLanguages(loc)},
 	}
 	var d details
-	if err := c.get(ctx, fmt.Sprintf("/%s/%d", kind, id), q, &d); err != nil {
+	if err := c.get(ctx, loc, fmt.Sprintf("/%s/%d", kind, id), q, &d); err != nil {
 		return domain.Metadata{}, err
 	}
 	m := d.match()
@@ -236,20 +228,20 @@ func (c *Client) Details(ctx context.Context, kind Kind, id int) (domain.Metadat
 	}
 	for _, r := range d.ReleaseDates.Results {
 		for _, rd := range r.Dates {
-			if r.Country == c.country {
+			if r.Country == loc.Country {
 				out.Certificate = cmp.Or(out.Certificate, rd.Certification)
 			}
 		}
 	}
 	for _, r := range d.ContentRatings.Results {
-		if r.Country == c.country {
+		if r.Country == loc.Country {
 			out.Certificate = cmp.Or(out.Certificate, r.Rating)
 		}
 	}
 	out.Artwork = slices.Concat(
-		pictures(domain.ArtworkPoster, d.Images.Posters, c.videoLanguage, "en", ""),
-		pictures(domain.ArtworkBackdrop, d.Images.Backdrops, "", c.videoLanguage, "en"),
-		pictures(domain.ArtworkLogo, d.Images.Logos, c.videoLanguage, "en", ""),
+		pictures(domain.ArtworkPoster, d.Images.Posters, loc.Base(), "en", ""),
+		pictures(domain.ArtworkBackdrop, d.Images.Backdrops, "", loc.Base(), "en"),
+		pictures(domain.ArtworkLogo, d.Images.Logos, loc.Base(), "en", ""),
 	)
 	videos := d.Videos.Results
 	// The studio's own first, then the newest.
@@ -278,11 +270,11 @@ type image struct {
 }
 
 // imageLanguages is the pictures to ask for: in the metadata language, in none, and in English.
-func (c *Client) imageLanguages() string {
-	if c.videoLanguage == "en" {
+func imageLanguages(loc domain.Locale) string {
+	if loc.Base() == "en" {
 		return "en,null"
 	}
-	return c.videoLanguage + ",null,en"
+	return loc.Base() + ",null,en"
 }
 
 // pictures orders a kind's pictures by language, most preferred first (a poster's lettering in the
@@ -333,7 +325,7 @@ var videoKinds = map[string]domain.ExtraKind{
 	"Bloopers": domain.ExtraBlooper,
 }
 
-func (c *Client) Season(ctx context.Context, show, number int) (domain.SeasonMetadata, error) {
+func (c *Client) Season(ctx context.Context, loc domain.Locale, show, number int) (domain.SeasonMetadata, error) {
 	var s struct {
 		Name     string `json:"name"`
 		Overview string `json:"overview"`
@@ -351,7 +343,7 @@ func (c *Client) Season(ctx context.Context, show, number int) (domain.SeasonMet
 			Votes      int      `json:"vote_count"`
 		} `json:"episodes"`
 	}
-	if err := c.get(ctx, fmt.Sprintf("/tv/%d/season/%d", show, number), nil, &s); err != nil {
+	if err := c.get(ctx, loc, fmt.Sprintf("/tv/%d/season/%d", show, number), nil, &s); err != nil {
 		return domain.SeasonMetadata{}, err
 	}
 	aired := provider.Date(s.AirDate)
@@ -446,7 +438,7 @@ func (p person) credit(kind domain.CreditKind, role string) domain.Credit {
 }
 
 // Person answers what TMDB knows of someone by their TMDB id.
-func (c *Client) Person(ctx context.Context, id string) (domain.Person, error) {
+func (c *Client) Person(ctx context.Context, loc domain.Locale, id string) (domain.Person, error) {
 	var p struct {
 		Name       string `json:"name"`
 		Biography  string `json:"biography"`
@@ -455,7 +447,7 @@ func (c *Client) Person(ctx context.Context, id string) (domain.Person, error) {
 		Birthplace string `json:"place_of_birth"`
 		Profile    string `json:"profile_path"`
 	}
-	if err := c.get(ctx, "/person/"+url.PathEscape(id), nil, &p); err != nil {
+	if err := c.get(ctx, loc, "/person/"+url.PathEscape(id), nil, &p); err != nil {
 		return domain.Person{}, err
 	}
 	out := domain.Person{Name: p.Name, Biography: p.Biography, Born: provider.Date(p.Birthday), Died: provider.Date(p.Deathday), Birthplace: p.Birthplace}
