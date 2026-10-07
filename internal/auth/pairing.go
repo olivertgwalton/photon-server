@@ -48,10 +48,13 @@ func (s *Service) StartPairing(ctx context.Context, d Device) (PairingStart, err
 		if err != nil {
 			return PairingStart{}, err
 		}
-		return PairingStart{DeviceCode: code + "." + deviceSecret, UserCode: code[:4] + "-" + code[4:], ExpiresIn: pairingTTL}, nil
+		return PairingStart{DeviceCode: code + "." + deviceSecret, UserCode: shown(code), ExpiresIn: pairingTTL}, nil
 	}
 	return PairingStart{}, errNoFreeCode
 }
+
+// shown is a user code as a television shows it, XXXX-XXXX.
+func shown(code string) string { return code[:4] + "-" + code[4:] }
 
 func newUserCode() string {
 	b := make([]byte, userCodeLen)
@@ -74,6 +77,29 @@ func (s *Service) ApprovePairing(ctx context.Context, approver domain.Session, u
 		return Device{}, ErrPairingNotFound
 	}
 	return Device{Name: p.Device, Client: p.Client}, nil
+}
+
+// A Pairing is what waits on a code: the television that asked, the code it shows, and when.
+type Pairing struct {
+	Device   Device
+	UserCode string
+	Started  time.Time
+}
+
+// PairingStatus answers a television asking whether its code is approved yet, without handing out
+// its token.
+func (s *Service) PairingStatus(ctx context.Context, deviceCode string) (kv.PairingState, Pairing, error) {
+	code, secret, ok := strings.Cut(deviceCode, ".")
+	if !ok {
+		return kv.PairingExpired, Pairing{}, nil
+	}
+	state, p, remaining, err := s.kv.PairingStatus(ctx, code, hashToken(secret))
+	if err != nil || state == kv.PairingExpired {
+		return state, Pairing{}, err
+	}
+	return state, Pairing{
+		Device: Device{Name: p.Device, Client: p.Client}, UserCode: shown(code), Started: time.Now().Add(remaining - pairingTTL),
+	}, nil
 }
 
 // PollPairing answers a television asking after its code. Once approved it receives a device

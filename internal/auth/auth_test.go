@@ -191,6 +191,39 @@ func TestPairingATelevision(t *testing.T) {
 	}
 }
 
+// A television may ask whether it is approved as often as it likes without taking its token, and
+// without its asking slowing the poll that takes it.
+func TestAPairingsStatusIsReadWithoutHandingItOut(t *testing.T) {
+	svc, st := newService(t)
+	oliver := addOliver(t, st)
+	start, err := svc.StartPairing(t.Context(), tv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, _, _ := strings.Cut(start.DeviceCode, ".")
+	if state, _, _ := svc.PairingStatus(t.Context(), code+".wrong-secret"); state != kv.PairingExpired {
+		t.Errorf("the status with the wrong secret: %q", state)
+	}
+	state, p, err := svc.PairingStatus(t.Context(), start.DeviceCode)
+	if err != nil || state != kv.PairingPending || p.Device != tv || p.UserCode != start.UserCode || time.Since(p.Started).Abs() > 5*time.Second {
+		t.Errorf("before approval: %q, %+v, %v", state, p, err)
+	}
+	if _, err := svc.ApprovePairing(t.Context(), domain.Session{Profile: oliver}, start.UserCode); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if state, _, err := svc.PairingStatus(t.Context(), start.DeviceCode); err != nil || state != kv.PairingApproved {
+			t.Errorf("after approval: %q, %v", state, err)
+		}
+	}
+	if state, _, _, _ := svc.PollPairing(t.Context(), start.DeviceCode); state != kv.PairingApproved {
+		t.Errorf("the poll after reading the status: %q, want approved", state)
+	}
+	if state, _, _ := svc.PairingStatus(t.Context(), start.DeviceCode); state != kv.PairingExpired {
+		t.Errorf("the status of a pairing handed out: %q, want expired", state)
+	}
+}
+
 func TestPairingPollsAreRateLimited(t *testing.T) {
 	svc, _ := newService(t)
 	start, err := svc.StartPairing(t.Context(), tv)

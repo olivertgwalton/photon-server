@@ -72,6 +72,33 @@ func (k *KV) ApprovePairing(ctx context.Context, userCode string, profile uuid.U
 	return Pairing{Device: vals[0], Client: vals[1], Profile: profile}, true, nil
 }
 
+var status = valkey.NewLuaScript(`
+if redis.call('HGET', KEYS[1], 'secret') ~= ARGV[1] then return false end
+local fields = redis.call('HMGET', KEYS[1], 'device', 'client', 'profile')
+return {fields[1], fields[2], fields[3] or '', tostring(redis.call('PTTL', KEYS[1]))}`)
+
+// PairingStatus reads the pairing a device holds the secret of as a poll would, but neither hands
+// it out nor counts as a poll. remaining is how long the pairing has left.
+func (k *KV) PairingStatus(ctx context.Context, userCode string, secretHash []byte) (state PairingState, p Pairing, remaining time.Duration, err error) {
+	vals, err := status.Exec(ctx, k.client, []string{k.pairingKey(userCode)}, []string{hex.EncodeToString(secretHash)}).AsStrSlice()
+	if valkey.IsValkeyNil(err) {
+		return PairingExpired, Pairing{}, 0, nil
+	}
+	if err != nil || len(vals) != 4 {
+		return "", Pairing{}, 0, err
+	}
+	ms, err := strconv.ParseInt(vals[3], 10, 64)
+	if err != nil {
+		return "", Pairing{}, 0, err
+	}
+	p, remaining = Pairing{Device: vals[0], Client: vals[1]}, time.Duration(ms)*time.Millisecond
+	if vals[2] == "" {
+		return PairingPending, p, remaining, nil
+	}
+	p.Profile, err = uuid.Parse(vals[2])
+	return PairingApproved, p, remaining, err
+}
+
 // poll answers the device holding the pairing's secret, refusing one that asks more often than
 // every interval, and hands an approved pairing out once.
 var poll = valkey.NewLuaScript(`
