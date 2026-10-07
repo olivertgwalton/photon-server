@@ -83,19 +83,6 @@ func (a *API) watched(w http.ResponseWriter, r *http.Request) {
 	})(w, r)
 }
 
-// watchlist answers a page of the profile's watchlist, the latest added first.
-func (a *API) watchlist(w http.ResponseWriter, r *http.Request) {
-	offset, limit, ok := a.paging(w, r, defaultWallLimit)
-	if !ok {
-		return
-	}
-	cards, total, err := a.svc.Catalogue.RowPage(r.Context(), sessionOf(r).Profile.ID, domain.RowWatchlist, offset, limit)
-	if a.answered(w, r, err) {
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[cardJSON]{cardsJSON(cards), offset, total})
-}
-
 // titleStateChanged tells the profile's other devices its own state of a title changed.
 func (a *API) titleStateChanged(r *http.Request, id uuid.UUID) {
 	profile := sessionOf(r).Profile.ID

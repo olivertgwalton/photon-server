@@ -7,8 +7,11 @@ export const load: PageLoad = async ({ fetch, depends }) => {
 	depends(keys.userdata);
 	return {
 		watchlist: await need(
-			client(fetch).GET("/api/v1/watchlist", {
-				params: { query: { limit: wallPageSize } },
+			client(fetch).GET("/api/v1/home/{row}", {
+				params: {
+					path: { row: "watchlist" },
+					query: { limit: wallPageSize },
+				},
 			}),
 		),
 	};

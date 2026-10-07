@@ -159,6 +159,24 @@ func TestHome(t *testing.T) {
 	}
 }
 
+func TestHomeRow(t *testing.T) {
+	for _, tc := range []struct {
+		target   string
+		want     int
+		wantBody string
+	}{
+		{"/api/v1/home/watchlist", http.StatusOK, `"offset":0,"total":1}`},
+		{"/api/v1/home/watchlist?offset=1", http.StatusOK, `{"items":[],"offset":1,"total":1}`},
+		{"/api/v1/home/recently_added_films", http.StatusNotFound, ""},
+		{"/api/v1/home/watchlist?limit=0", http.StatusBadRequest, ""},
+	} {
+		rec := serve(t, http.MethodGet, tc.target, goodToken, "")
+		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.wantBody) {
+			t.Errorf("%s: %d %s, want %d %s", tc.target, rec.Code, rec.Body, tc.want, tc.wantBody)
+		}
+	}
+}
+
 func TestSearch(t *testing.T) {
 	for _, tc := range []struct {
 		query      string

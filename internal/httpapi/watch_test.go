@@ -99,7 +99,6 @@ func TestWatching(t *testing.T) {
 		{http.MethodPut, title + "/watchlist", "", http.StatusNoContent, ""},
 		{http.MethodDelete, title + "/watchlist", "", http.StatusNoContent, ""},
 		{http.MethodPut, "/api/v1/titles/" + uuid.NewV7().String() + "/watchlist", "", http.StatusConflict, ""},
-		{http.MethodGet, "/api/v1/watchlist?offset=1", "", http.StatusOK, `{"items":[],"offset":1,"total":1}`},
 	} {
 		rec := serve(t, tc.method, tc.target, goodToken, tc.body)
 		if rec.Code != tc.want {

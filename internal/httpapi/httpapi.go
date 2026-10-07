@@ -846,14 +846,15 @@ func (a *API) routes() []route {
 			status: http.StatusAccepted, handle: a.testWebhook,
 		},
 		{
-			pattern: "GET /api/v1/watchlist", access: signedIn,
-			summary: "Page the profile's watchlist, the latest added first",
-			query:   pageParams, status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.watchlist,
-		},
-		{
 			pattern: "GET /api/v1/home", access: signedIn, summary: "The profile's home rows, in order",
 			query:  []param{{"limit", 0, "How many titles a row holds, from 1 to " + strconv.Itoa(maxWallLimit) + "."}},
 			status: http.StatusOK, reply: homeJSON{}, handle: a.home,
+		},
+		{
+			pattern: "GET /api/v1/home/{row}", access: signedIn,
+			summary: "Page one of the profile's own home rows: continue watching, next up, its watchlist or its favourites",
+			path:    []param{{"row", domain.HomeRow(""), "The row; a library's or a collection's is paged on its own page."}},
+			query:   pageParams, status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.homeRow,
 		},
 		{
 			pattern: "GET /api/v1/search", access: signedIn, summary: "Page the titles, episodes among them, and the people a search finds",
