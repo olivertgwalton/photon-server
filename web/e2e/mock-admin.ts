@@ -505,6 +505,8 @@ export async function admin(
 		case "POST /api/v1/admin/titles/t-quiet/refresh":
 			return done(202);
 		case "DELETE /api/v1/admin/titles/t-film/match":
+		case "PUT /api/v1/admin/titles/t-quiet/locale":
+			return done(202);
 		case "POST /api/v1/admin/titles/t-film/split":
 			return done();
 		case "DELETE /api/v1/admin/titles/t-film":

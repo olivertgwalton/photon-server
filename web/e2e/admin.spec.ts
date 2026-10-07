@@ -464,3 +464,21 @@ test("a library is set to ask in a language of its own", async ({ page }) => {
 	await expect.poll(() => sent.metadata_language).toBe("de-DE");
 	expect(sent.certification_country).toBe("");
 });
+
+test("a title is set to ask in a language of its own", async ({ page }) => {
+	let sent: Record<string, unknown> = {};
+	page.on("request", (r) => {
+		if (r.method() === "PUT" && r.url().endsWith("/titles/t-quiet/locale")) {
+			sent = r.postDataJSON();
+		}
+	});
+	await logIn(page, "/settings/server/titles/t-quiet");
+	await page.getByLabel("Metadata language").click();
+	await page.getByRole("option", { name: "French (France)" }).click();
+	await page.getByRole("button", { name: "Save language" }).click();
+	await expect(page.getByText("Saved. It is described again")).toBeVisible();
+	expect(sent).toEqual({
+		metadata_language: "fr-FR",
+		certification_country: "",
+	});
+});
