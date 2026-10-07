@@ -114,14 +114,20 @@ func (fakeCatalogue) Home(_ context.Context, profile uuid.UUID, limit int) ([]st
 	for i := range cards {
 		cards[i] = store.Card{ID: films, Kind: domain.ItemEpisode, Title: "Pilot", Show: &store.TitleRef{ID: films, Title: "The Wire"}}
 	}
-	return []store.HomeRow{{Kind: domain.RowNextUp, Cards: cards}}, nil
+	return []store.HomeRow{
+		{Kind: domain.RowNextUp, Cards: cards},
+		{Kind: domain.RowRecentFilms, Library: &store.LibraryRef{ID: films, Name: "Films"}, Cards: []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat"}}},
+	}, nil
 }
 
 func TestHome(t *testing.T) {
 	rec := serve(t, http.MethodGet, "/api/v1/home?limit=2", goodToken, "")
 	var got struct {
 		Rows []struct {
-			Kind  string `json:"kind"`
+			Kind    string `json:"kind"`
+			Library struct {
+				Name string `json:"name"`
+			} `json:"library"`
 			Items []struct {
 				Title string `json:"title"`
 				Show  struct {
@@ -133,8 +139,9 @@ func TestHome(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Rows) != 1 || got.Rows[0].Kind != "next_up" || len(got.Rows[0].Items) != 2 || got.Rows[0].Items[0].Show.Title != "The Wire" {
-		t.Errorf("home = %+v, want the signed-in profile's next up, two episodes of The Wire", got)
+	if len(got.Rows) != 2 || got.Rows[0].Kind != "next_up" || len(got.Rows[0].Items) != 2 || got.Rows[0].Items[0].Show.Title != "The Wire" ||
+		got.Rows[1].Kind != "recently_added_films" || got.Rows[1].Library.Name != "Films" {
+		t.Errorf("home = %+v, want the signed-in profile's next up, two episodes of The Wire, then Films' recently added", got)
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/home?limit=0", goodToken, ""); rec.Code != http.StatusBadRequest {
 		t.Errorf("limit=0: %d, want 400", rec.Code)

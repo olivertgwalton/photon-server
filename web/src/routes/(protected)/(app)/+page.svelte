@@ -1,6 +1,6 @@
 <script lang="ts">
 import Rail from "#lib/components/Rail.svelte";
-import { homeRows } from "#lib/rows.js";
+import { homeRows, rail } from "#lib/rows.js";
 
 let { data } = $props();
 </script>
@@ -10,17 +10,11 @@ let { data } = $props();
 <h1 class="sr-only">Home</h1>
 {#if data.home.rows.length}
 	<div class="grid gap-8">
-		{#each data.home.rows as row (row.collection?.id ?? row.kind)}
-			<Rail
-				title={row.collection?.title ?? homeRows[row.kind].title}
-				cards={row.items}
-				shape={homeRows[row.kind].shape}
-				href={row.collection
-					? `/titles/${row.collection.id}`
-					: row.kind === "watchlist"
-						? "/watchlist"
-						: `/home/${row.kind}`}
-			/>
+		{#each data.home.rows.map((row) => ({
+			row,
+			...rail(row),
+		})) as { row, key, title, href } (key)}
+			<Rail {title} cards={row.items} shape={homeRows[row.kind].shape} {href} />
 		{/each}
 	</div>
 {:else}

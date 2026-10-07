@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"uuid"
 
@@ -18,11 +19,29 @@ type HomeRow struct {
 	Kind domain.HomeRow
 	// Collection is the collection a RowCollection row is.
 	Collection *TitleRef
-	Cards      []Card
+	// Library is the library a row of libraryRows is.
+	Library *LibraryRef
+	Cards   []Card
 }
 
-// rowQueries are the rows' queries, each taking the profile and a limit, and holding only what the
-// profile may see, a title in several libraries once.
+// LibraryRef names a library.
+type LibraryRef struct {
+	ID   uuid.UUID
+	Name string
+}
+
+// libraryRows are the rows made once for each library the profile sees, as Plex's library hubs
+// are, and the kinds of library each is made for. A title in two libraries is in each one's row.
+var libraryRows = map[domain.HomeRow][]domain.LibraryKind{
+	domain.RowRecentFilms:       {domain.LibraryMovies},
+	domain.RowRecentShows:       {domain.LibraryShows},
+	domain.RowRecentlyReleased:  {domain.LibraryMovies, domain.LibraryShows},
+	domain.RowTopRatedUnwatched: {domain.LibraryMovies, domain.LibraryShows},
+}
+
+// rowQueries are the rows' queries, each taking the profile and a limit, and a library of the
+// libraryRows, and holding only what the profile may see; the profile's own rows hold a title in
+// several libraries once.
 var rowQueries = map[domain.HomeRow]string{
 	domain.RowContinueWatching: `
 		SELECT ` + itemColumnsOf("i") + ` FROM watch_state w JOIN items i ON i.id = w.item_id
@@ -62,7 +81,7 @@ var rowQueries = map[domain.HomeRow]string{
 	domain.RowFavourites: listRow("favourites"),
 	domain.RowRecentFilms: `
 		SELECT ` + itemColumns + ` FROM items
-		WHERE kind = 'movie' AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND first_of_title(v, items))
+		WHERE library_id = @lib AND kind = 'movie' AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
 		ORDER BY added_at DESC, id DESC LIMIT @limit`,
 	// A show by its newest episode. The episodes are walked newest first, one step to the next
 	// show not yet found, so only the newest are read rather than every episode of every show.
@@ -79,13 +98,13 @@ var rowQueries = map[domain.HomeRow]string{
 			CROSS JOIN LATERAL (
 				SELECT e.added_at, e.id, season.parent_id AS show_id FROM items e
 				JOIN items season ON season.id = e.parent_id AND season.kind = 'season'
-				WHERE e.kind = 'episode' AND (e.added_at, e.id) < (latest.added_at, latest.id)
+				WHERE e.library_id = @lib AND e.kind = 'episode' AND (e.added_at, e.id) < (latest.added_at, latest.id)
 					AND season.parent_id <> ALL (latest.found)
 				ORDER BY e.added_at DESC, e.id DESC LIMIT 1
 			) next
 			CROSS JOIN LATERAL (
 				SELECT EXISTS (SELECT 1 FROM items show, viewer(@profile) v
-					WHERE show.id = next.show_id AND show.kind = 'show' AND sees(v, show) AND first_of_title(v, show)) AS seen
+					WHERE show.id = next.show_id AND show.kind = 'show' AND sees(v, show)) AS seen
 			) judged
 			WHERE latest.shown < @limit
 		)
@@ -97,14 +116,14 @@ var rowQueries = map[domain.HomeRow]string{
 	domain.RowRecentlyReleased: `
 		WITH released AS (
 			SELECT id, released_desc AS released FROM items
-			WHERE kind = 'movie' AND released_desc BETWEEN current_date - ` + strconv.Itoa(releasedWithinDays) + ` AND current_date
+			WHERE library_id = @lib AND kind = 'movie' AND released_desc BETWEEN current_date - ` + strconv.Itoa(releasedWithinDays) + ` AND current_date
 			UNION ALL
 			SELECT season.parent_id, max(coalesce(e.release_date, e.air_date)) FROM items e JOIN items season ON season.id = e.parent_id
-			WHERE e.kind = 'episode' AND coalesce(e.release_date, e.air_date) BETWEEN current_date - ` + strconv.Itoa(releasedWithinDays) + ` AND current_date
+			WHERE e.library_id = @lib AND e.kind = 'episode' AND coalesce(e.release_date, e.air_date) BETWEEN current_date - ` + strconv.Itoa(releasedWithinDays) + ` AND current_date
 			GROUP BY season.parent_id
 		)
 		SELECT ` + itemColumnsOf("i") + ` FROM released JOIN items i ON i.id = released.id
-		WHERE EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))
+		WHERE EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i))
 		ORDER BY released.released DESC, i.id DESC LIMIT @limit`,
 	// The titles the profile has not begun by their IMDb rating, as the wall sorts by it, leaving
 	// out a rating too few voted for where its site counts votes. A title's best rating is the one
@@ -116,8 +135,8 @@ var rowQueries = map[domain.HomeRow]string{
 			AND NOT EXISTS (SELECT 1 FROM ratings o WHERE o.item_id = r.item_id AND o.site = r.site
 				AND (o.votes IS NULL OR o.votes >= ` + strconv.Itoa(leastVotes) + `)
 				AND (o.score > r.score OR o.score = r.score AND o.source < r.source))
-			AND items.kind IN ('movie', 'show') AND NOT ` + begun + `
-			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND first_of_title(v, items))
+			AND items.library_id = @lib AND items.kind IN ('movie', 'show') AND NOT ` + begun + `
+			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
 		ORDER BY r.score DESC, r.item_id DESC LIMIT @limit`,
 }
 
@@ -149,6 +168,20 @@ var collectionRowsQuery = `
 		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, col))
 	ORDER BY col.sort_title, col.id, member.n`
 
+// librariesSeen are the libraries a profile sees, in the order it put them, those it has not placed
+// after, by name, as its library list is.
+const librariesSeen = `
+	SELECT l.id, l.name, l.kind FROM libraries l CROSS JOIN viewer(@profile) v
+	LEFT JOIN library_order o ON o.library_id = l.id AND o.profile_id = @profile
+	WHERE v.libraries IS NULL OR l.id = ANY (v.libraries)
+	ORDER BY o.position NULLS LAST, l.name, l.id`
+
+type libraryRow struct {
+	ID   uuid.UUID
+	Name string
+	Kind domain.LibraryKind
+}
+
 type collectionMember struct {
 	CollectionID    uuid.UUID
 	CollectionTitle string
@@ -167,6 +200,10 @@ const releasedWithinDays = 365
 // arranged them, up to limit cards each.
 func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeRow, error) {
 	prefs, err := s.Preferences(ctx, profile)
+	if err != nil {
+		return nil, err
+	}
+	libs, err := queryRows[libraryRow](ctx, s.pool, librariesSeen, pgx.NamedArgs{"profile": profile})
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +228,24 @@ func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeR
 				}
 				lengths[len(lengths)-1]++
 				all = append(all, &m.Item)
+			}
+			continue
+		}
+		if kinds, ok := libraryRows[kind]; ok {
+			for _, lib := range libs {
+				if !slices.Contains(kinds, lib.Kind) {
+					continue
+				}
+				args["lib"] = lib.ID
+				items, err := queryRows[model.Item](ctx, s.pool, rowQueries[kind], args)
+				if err != nil {
+					return nil, err
+				}
+				if len(items) > 0 {
+					rows = append(rows, HomeRow{Kind: kind, Library: &LibraryRef{ID: lib.ID, Name: lib.Name}})
+					lengths = append(lengths, len(items))
+					all = append(all, items...)
+				}
 			}
 			continue
 		}

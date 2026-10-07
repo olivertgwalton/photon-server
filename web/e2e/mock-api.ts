@@ -107,7 +107,11 @@ function home(arranged: Schemas["HomeSection"][], limit = 20): Schemas["Home"] {
 			kind: "favourites",
 			items: everything().filter((c) => states.get(c.id)?.favourite_at),
 		},
-		{ kind: "recently_added_films", items: films },
+		{
+			kind: "recently_added_films",
+			library: { id: "l-films", name: "Films" },
+			items: films,
+		},
 	];
 	return {
 		rows: arranged
