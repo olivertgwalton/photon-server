@@ -421,4 +421,6 @@ test("an episode's card leads to its season", async ({ page }) => {
 		.click();
 	await page.getByRole("menuitem", { name: "Go to Season 1" }).click();
 	await expect(page).toHaveURL("/titles/t-s1");
+	// The server is the other tests' too: the episode is as it was.
+	await page.request.delete("/api/v1/titles/t-ep/favourite");
 });
