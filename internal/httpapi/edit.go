@@ -22,6 +22,7 @@ type editing interface {
 	Refresh(ctx context.Context, id uuid.UUID, mode domain.RefreshMode) error
 	AnalyseTitle(ctx context.Context, id uuid.UUID) error
 	Unmatch(ctx context.Context, id uuid.UUID) error
+	SplitTitle(ctx context.Context, id uuid.UUID) error
 	SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker, absent []domain.MarkerAbsent) error
 	IdentifySubject(ctx context.Context, id uuid.UUID) (store.Subject, bool, error)
 	ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain.ArtworkKind) ([]store.ArtworkCandidate, error)
@@ -219,6 +220,23 @@ type refreshJSON struct {
 }
 
 // refresh asks a title's providers about it again now, ahead of the schedule.
+// split splits a film's copies apart, each other than the one that plays first a film of its own.
+func (a *API) split(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	err := a.svc.Editing.SplitTitle(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		writeProblem(w, a.logger, codeNotFound, "no film has that id")
+		return
+	}
+	if a.answered(w, r, err) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // unmatch takes a film or show off its providers and holds it so, until its match is fixed or it
 // is refreshed: the match PUT sets, gone.
 func (a *API) unmatch(w http.ResponseWriter, r *http.Request) {

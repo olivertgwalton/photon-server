@@ -18,6 +18,7 @@ import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import SearchCheckIcon from "@lucide/svelte/icons/search-check";
 import SearchXIcon from "@lucide/svelte/icons/search-x";
 import SettingsIcon from "@lucide/svelte/icons/settings";
+import SplitIcon from "@lucide/svelte/icons/split";
 import Share2Icon from "@lucide/svelte/icons/share-2";
 import TvIcon from "@lucide/svelte/icons/tv";
 import UndoIcon from "@lucide/svelte/icons/undo-2";
@@ -34,6 +35,7 @@ import {
 	setWatched,
 	setWatchlisted,
 	shareTitle,
+	splitTitle,
 	unmatchTitle,
 } from "#lib/actions.svelte.js";
 import type { components } from "#lib/api/schema.js";
@@ -169,6 +171,11 @@ const name = $derived(
 				<DropdownMenu.Item onSelect={() => unmatchTitle(card.id, name)}>
 					<SearchXIcon />Unmatch
 				</DropdownMenu.Item>
+				{#if card.kind === "movie" && (card.version_count ?? 0) > 1}
+					<DropdownMenu.Item onSelect={() => splitTitle(card.id, name)}>
+						<SplitIcon />Split apart…
+					</DropdownMenu.Item>
+				{/if}
 			{/if}
 			{#if card.kind !== "extra"}
 				<DropdownMenu.Item onSelect={() => editTitle(card.id, "artwork")}>
