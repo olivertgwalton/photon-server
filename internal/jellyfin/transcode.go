@@ -175,7 +175,10 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 	if t.Video.Encode != nil {
 		card.Acceleration = a.svc.HLS.Encoder(t.Video)
 	}
-	if _, err := a.svc.Playbacks.Start(r.Context(), session, t.Method, card); err != nil {
+	if _, err := a.svc.Playbacks.Start(r.Context(), session, t.Method, card); errors.Is(err, playback.ErrStarted) {
+		// Another node, asked at once, runs it: the request is handed on to it.
+		return false
+	} else if err != nil {
 		a.internal(w, r, err)
 		return true
 	}

@@ -400,7 +400,8 @@ func (a *API) reported(stopped bool) http.HandlerFunc {
 		default:
 			err = progress(r.Context())
 			if errors.Is(err, playback.ErrNoPlayback) {
-				if err = a.startDirect(r, id, rep); err == nil {
+				// A report told to another node at once may have started it first.
+				if err = a.startDirect(r, id, rep); err == nil || errors.Is(err, playback.ErrStarted) {
 					err = progress(r.Context())
 				}
 			}
