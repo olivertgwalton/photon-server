@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { expectAccessible, logIn } from "./helpers";
+import { expectAccessible, logIn, switchToKids } from "./helpers";
 
 // Dialogs open without animating, so a check never reads one half faded in.
 test.use({ reducedMotion: "reduce" });
@@ -7,7 +7,7 @@ test.use({ reducedMotion: "reduce" });
 async function asKids(page: Page) {
 	await logIn(page);
 	await page.goto("/profiles");
-	await page.getByRole("button", { name: "Kids" }).click();
+	await switchToKids(page);
 	await expect(
 		page.getByRole("button", { name: "Kids's profile" }),
 	).toBeVisible();
@@ -262,6 +262,7 @@ test("a profile is added, and what another may see is set", async ({
 	await expectAccessible(page);
 	await page.getByRole("button", { name: "Add a profile" }).click();
 	await page.getByRole("textbox", { name: "Name" }).fill("Guest");
+	await page.getByLabel("Password").fill("battery staple");
 	await page.getByRole("button", { name: "Add profile" }).click();
 	await expect(page.getByText("Guest was added.")).toBeVisible();
 

@@ -733,7 +733,7 @@ const server_ = Bun.serve({
 				return Response.json({
 					items: [
 						{ ...ada, lock: "password" },
-						{ ...kids, lock: kidsPIN ? "pin" : "none" },
+						{ ...kids, lock: kidsPIN ? "pin" : "password" },
 					],
 				} satisfies Schemas["ProfileListingList"]);
 			case "PUT /api/v1/session/profile": {
@@ -741,7 +741,7 @@ const server_ = Bun.serve({
 				const target = [ada, kids].find((p) => p.id === body.profile_id);
 				if (!target) return problem(404, "not_found", "Not Found");
 				const locked =
-					target === kids ? kidsPIN : target === ada ? "correct horse" : "";
+					target === kids ? kidsPIN || "crayon box" : "correct horse";
 				if (target !== me && locked && body.secret !== locked) {
 					return problem(403, "wrong_secret", "Forbidden");
 				}

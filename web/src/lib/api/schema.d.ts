@@ -5151,7 +5151,7 @@ export interface components {
         };
         AddProfile: {
             name: string;
-            password?: string;
+            password: string;
             role: components["schemas"]["Role"];
         };
         AddWebhook: {
@@ -6192,7 +6192,7 @@ export interface components {
             items: components["schemas"]["ProfileListing"][];
         };
         /** @enum {string} */
-        ProfileLock: "none" | "pin" | "password";
+        ProfileLock: "pin" | "password";
         Progress: {
             /** Format: date-time */
             at?: string | null;

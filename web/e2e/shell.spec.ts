@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectAccessible, logIn } from "./helpers";
+import { expectAccessible, logIn, switchToKids } from "./helpers";
 
 test("home draws the rows and the shell lists every library", async ({
 	page,
@@ -102,7 +102,7 @@ test("switching profile from the menu asks a locked one for its secret", async (
 	await logIn(page);
 	await page.getByRole("button", { name: "Ada's profile" }).click();
 	await page.getByRole("menuitem", { name: "Switch profile" }).click();
-	await page.getByRole("button", { name: "Kids" }).click();
+	await switchToKids(page);
 	await expect(
 		page.getByRole("button", { name: "Kids's profile" }),
 	).toBeVisible();
