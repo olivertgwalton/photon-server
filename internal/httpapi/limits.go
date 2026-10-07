@@ -4,17 +4,13 @@ import (
 	"math"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/kv"
 )
 
-// What a client may attempt before it is made to wait. A name has its own limit beside the
-// address's, so guessing one profile's password from many addresses is slowed as well.
+// What a client may attempt before it is made to wait, beside signing in, which auth limits.
 var (
-	signInsPerAddress   = kv.Limit{Every: 6 * time.Second, Burst: 10}
-	signInsPerName      = kv.Limit{Every: 6 * time.Minute, Burst: 10}
 	switchesPerSession  = kv.Limit{Every: 3 * time.Minute, Burst: 5}
 	pairingsPerAddress  = kv.Limit{Every: 6 * time.Second, Burst: 10}
 	approvalsPerProfile = kv.Limit{Every: 12 * time.Second, Burst: 5}
@@ -40,8 +36,4 @@ func (a *API) allowed(w http.ResponseWriter, r *http.Request, limit kv.Limit, ke
 
 func (a *API) addrKey(r *http.Request, what string) string {
 	return what + ":addr:" + a.svc.TrustedProxies.Client(r).String()
-}
-
-func nameKey(what, name string) string {
-	return what + ":name:" + strings.ToLower(name)
 }

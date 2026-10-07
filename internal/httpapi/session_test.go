@@ -236,7 +236,7 @@ func TestChangingYourOwnPassword(t *testing.T) {
 			t.Errorf("%s: %d %q, want %d %q", tc.name, rec.Code, p.Code, tc.want, tc.code)
 		}
 	}
-	for range signInsPerName.Burst {
+	for range auth.SignInsPerName.Burst {
 		change(goodToken, `{"current":"guess","new":"battery staple"}`)
 	}
 	if rec := change(goodToken, `{"current":"correct horse","new":"battery staple"}`); rec.Code != http.StatusTooManyRequests {

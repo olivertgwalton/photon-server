@@ -164,8 +164,8 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Keep = cmp.Or(req.Keep, domain.KeepToken)
-	if !a.allowed(w, r, signInsPerAddress, a.addrKey(r, "signin")) ||
-		!a.allowed(w, r, signInsPerName, nameKey("signin", req.Name)) {
+	byAddress, byName := auth.SignInKeys(a.svc.TrustedProxies.Client(r), req.Name)
+	if !a.allowed(w, r, auth.SignInsPerAddress, byAddress) || !a.allowed(w, r, auth.SignInsPerName, byName) {
 		return
 	}
 	token, profile, err := a.svc.Auth.SignIn(r.Context(), req.Name, req.Password, auth.Device{Name: req.Device, Client: req.Client})
