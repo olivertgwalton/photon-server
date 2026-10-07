@@ -245,19 +245,14 @@ type seasonShow struct {
 // each kind it has none of (a poster, a backdrop, the lettering), as Plex answers an episode with its
 // show's art: its own still stays its thumb. The shows are read in the same lookup.
 func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[uuid.UUID]episodeShow) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
-	var showIDs []uuid.UUID
-	for _, show := range shows {
-		if show.ref != nil {
-			showIDs = append(showIDs, show.ref.ID)
+	// A show is ranked as a show of its episode's library; nothing more of it is read.
+	all := slices.Clone(rows)
+	seen := map[uuid.UUID]bool{}
+	for _, r := range rows {
+		if show := shows[r.ID].ref; show != nil && !seen[show.ID] {
+			seen[show.ID] = true
+			all = append(all, &model.Item{ID: show.ID, LibraryID: r.LibraryID, Kind: domain.ItemShow})
 		}
-	}
-	all := rows
-	if len(showIDs) > 0 {
-		showRows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE id = ANY($1)`, showIDs)
-		if err != nil {
-			return nil, nil, err
-		}
-		all = append(slices.Clone(rows), showRows...)
 	}
 	pictures, hashes, err := s.pictureOrder(ctx, all)
 	if err != nil {

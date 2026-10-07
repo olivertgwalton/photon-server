@@ -114,33 +114,23 @@ func rankings(ctx context.Context, q db, items []*model.Item, f domain.Fetcher) 
 	for n, it := range items {
 		libraries[n] = it.LibraryID
 	}
-	kinds := map[uuid.UUID]domain.LibraryKind{}
-	var id uuid.UUID
-	var kind domain.LibraryKind
-	rows, err := q.Query(ctx, `SELECT id, kind FROM libraries WHERE id = ANY($1)`, libraries)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := pgx.ForEachRow(rows, []any{&id, &kind}, func() error {
-		kinds[id] = kind
-		return nil
-	}); err != nil {
-		return nil, err
-	}
 	type ranking struct {
 		library uuid.UUID
 		kind    domain.ItemKind
 	}
+	kinds := map[uuid.UUID]domain.LibraryKind{}
 	by := map[ranking][]domain.FieldSource{}
 	var r ranking
+	var kind domain.LibraryKind
 	var source domain.FieldSource
-	rows, err = q.Query(ctx, `
-		SELECT library_id, item_kind, source FROM library_sources
-		WHERE library_id = ANY($1) AND fetcher = $2 AND enabled ORDER BY position`, libraries, f)
+	rows, err := q.Query(ctx, `
+		SELECT ls.library_id, l.kind, ls.item_kind, ls.source FROM library_sources ls JOIN libraries l ON l.id = ls.library_id
+		WHERE ls.library_id = ANY($1) AND ls.fetcher = $2 AND ls.enabled ORDER BY ls.position`, libraries, f)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := pgx.ForEachRow(rows, []any{&r.library, &r.kind, &source}, func() error {
+	if _, err := pgx.ForEachRow(rows, []any{&r.library, &kind, &r.kind, &source}, func() error {
+		kinds[r.library] = kind
 		by[r] = append(by[r], source)
 		return nil
 	}); err != nil {
