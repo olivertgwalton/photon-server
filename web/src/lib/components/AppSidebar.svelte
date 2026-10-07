@@ -160,7 +160,7 @@ function current(href: string) {
 			aria-label="photon"
 			class="text-ink hover:text-ink-2 flex items-center gap-2.5 px-2 py-1.5 transition-colors duration-200 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
 		>
-			<Mark size={24} class="shrink-0" />
+			<Mark class="shrink-0" />
 			<span
 				class="font-heading text-xl font-black tracking-tighter group-data-[collapsible=icon]:hidden"
 			>

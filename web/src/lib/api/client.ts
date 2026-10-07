@@ -5,8 +5,6 @@ import { loginPath } from "#lib/session.js";
 import { problemMessage } from "./problem.js";
 import type { paths } from "./schema.js";
 
-export { problemMessage };
-
 // The API, on this origin, as the browser's session: the server keeps it in a
 // cookie the page's script never sees. A load passes its own `fetch`.
 export function client(fetch: typeof globalThis.fetch = globalThis.fetch) {

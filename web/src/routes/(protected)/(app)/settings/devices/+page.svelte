@@ -1,7 +1,7 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { client } from "#lib/api/client.js";
-import { change } from "#lib/actions.svelte.js";
+import { act } from "#lib/act.js";
 import { logOut } from "#lib/logout.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
@@ -14,7 +14,7 @@ const when = new Intl.DateTimeFormat(undefined, {
 });
 
 const signOut = (id: string) =>
-	change(
+	act(
 		client().DELETE("/api/v1/auth/devices/{id}", { params: { path: { id } } }),
 		"That device is signed out.",
 	);

@@ -1,6 +1,6 @@
 <script lang="ts">
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
-import { act } from "#lib/admin/act.js";
+import { act } from "#lib/act.js";
 import { relative } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";

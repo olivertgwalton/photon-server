@@ -1,5 +1,5 @@
 <script lang="ts">
-import { change } from "#lib/actions.svelte.js";
+import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -82,7 +82,7 @@ async function request(event: SubmitEvent) {
 			? `${parts.length} downloads requested, one a file. They're in Downloads.`
 			: "Download requested. It's in Downloads.";
 	if (
-		await change(Promise.resolve(asked.find((a) => a.error) ?? asked[0]), said)
+		await act(Promise.resolve(asked.find((a) => a.error) ?? asked[0]), said)
 	) {
 		open = false;
 	}

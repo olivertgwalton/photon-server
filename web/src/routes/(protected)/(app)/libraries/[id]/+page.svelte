@@ -3,7 +3,7 @@ import LayoutGridIcon from "@lucide/svelte/icons/layout-grid";
 import ListIcon from "@lucide/svelte/icons/list";
 import RectangleHorizontalIcon from "@lucide/svelte/icons/rectangle-horizontal";
 import { goto } from "$app/navigation";
-import { act } from "#lib/admin/act.js";
+import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import SmartCollectionDialog from "#lib/components/admin/SmartCollectionDialog.svelte";
 import LetterBar from "#lib/components/LetterBar.svelte";

@@ -2,7 +2,7 @@
 import DatabaseBackupIcon from "@lucide/svelte/icons/database-backup";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import type { Component } from "svelte";
-import { act } from "#lib/admin/act.js";
+import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import { Button, buttonVariants } from "#lib/components/ui/button/index.js";

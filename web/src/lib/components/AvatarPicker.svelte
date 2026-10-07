@@ -1,5 +1,5 @@
 <script lang="ts">
-import { act } from "#lib/admin/act.js";
+import { act } from "#lib/act.js";
 import { Button } from "#lib/components/ui/button/index.js";
 
 // Gives a profile its picture, or takes it away, at path: the profile's own

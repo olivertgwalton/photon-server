@@ -7,7 +7,8 @@ import {
 	serverLocale,
 } from "#lib/admin/library.js";
 import { extraKinds } from "#lib/admin/words.js";
-import { language, subtitleLanguages } from "#lib/player/words.js";
+import { language } from "#lib/format.js";
+import { subtitleLanguages } from "#lib/player/words.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";

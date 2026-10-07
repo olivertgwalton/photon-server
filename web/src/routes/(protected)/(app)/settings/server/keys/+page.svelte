@@ -2,7 +2,7 @@
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { toast } from "svelte-sonner";
 import { refreshAll } from "$app/navigation";
-import { act } from "#lib/admin/act.js";
+import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
 import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";

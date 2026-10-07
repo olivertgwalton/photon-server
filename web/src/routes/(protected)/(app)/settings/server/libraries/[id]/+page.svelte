@@ -1,5 +1,5 @@
 <script lang="ts">
-import { act } from "#lib/admin/act.js";
+import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
 import { libraryChange } from "#lib/admin/library.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";

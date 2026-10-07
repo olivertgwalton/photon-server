@@ -8,7 +8,7 @@ import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { Label } from "#lib/components/ui/label/index.js";
-import { act } from "#lib/admin/act.js";
+import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
 import { markersOf } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";

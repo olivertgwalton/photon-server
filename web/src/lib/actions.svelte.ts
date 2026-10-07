@@ -1,65 +1,31 @@
 import { toast } from "svelte-sonner";
-import { refreshAll } from "$app/navigation";
 import { page } from "$app/state";
-import { act } from "./admin/act.js";
+import { act } from "./act.js";
 import { client } from "./api/client.js";
-import { problemMessage } from "./api/problem.js";
 import type { components } from "./api/schema.js";
 
 type RefreshMode = components["schemas"]["RefreshMode"];
-
-type Answer = Promise<{ error?: unknown }>;
-
-// A reader's change, from wherever it is offered: a refusal is told in a
-// toast, and what worked redraws the page.
-export async function change(call: Answer, said?: string): Promise<boolean> {
-	const { error } = await call;
-	if (error) {
-		toast.error(problemMessage(error));
-		return false;
-	}
-	if (said) toast.success(said);
-	await refreshAll();
-	return true;
-}
 
 const api = client();
 
 const path = (id: string) => ({ params: { path: { id } } });
 
-export function setWatched(id: string, watched: boolean) {
-	return change(
-		watched
-			? api.PUT("/api/v1/titles/{id}/watched", path(id))
-			: api.DELETE("/api/v1/titles/{id}/watched", path(id)),
-	);
-}
+type Mark = "watched" | "favourite" | "watchlist";
 
-export function setFavourite(id: string, favourite: boolean) {
-	return change(
-		favourite
-			? api.PUT("/api/v1/titles/{id}/favourite", path(id))
-			: api.DELETE("/api/v1/titles/{id}/favourite", path(id)),
-	);
-}
-
-export function setWatchlisted(id: string, listed: boolean) {
-	return change(
-		listed
-			? api.PUT("/api/v1/titles/{id}/watchlist", path(id))
-			: api.DELETE("/api/v1/titles/{id}/watchlist", path(id)),
-	);
+export function setMark(id: string, mark: Mark, on: boolean) {
+	const at = `/api/v1/titles/{id}/${mark}` as const;
+	return act(on ? api.PUT(at, path(id)) : api.DELETE(at, path(id)));
 }
 
 export function forgetProgress(id: string) {
-	return change(
+	return act(
 		api.DELETE("/api/v1/titles/{id}/progress", path(id)),
 		"Removed from Continue Watching.",
 	);
 }
 
 export function addToPlaylist(playlist: string, ids: string[], name: string) {
-	return change(
+	return act(
 		api.POST("/api/v1/playlists/{id}/entries", {
 			...path(playlist),
 			body: { item_ids: ids },
@@ -69,7 +35,7 @@ export function addToPlaylist(playlist: string, ids: string[], name: string) {
 }
 
 export function newPlaylist(name: string, ids: string[]) {
-	return change(
+	return act(
 		api.POST("/api/v1/playlists", { body: { name, item_ids: ids } }),
 		`Added to ${name}.`,
 	);
@@ -98,7 +64,7 @@ export function editTitle(id: string, tab: EditorTab) {
 }
 
 export function refreshTitle(id: string, name: string) {
-	return change(
+	return act(
 		api.POST("/api/v1/admin/titles/{id}/refresh", {
 			...path(id),
 			body: { mode: "all" },
@@ -156,14 +122,14 @@ export function findSubtitles(id: string, title: string) {
 }
 
 export function analyseTitle(id: string, name: string) {
-	return change(
+	return act(
 		api.POST("/api/v1/admin/titles/{id}/analysis", path(id)),
 		`Analysing ${name}: its files are read again.`,
 	);
 }
 
 export function unmatchTitle(id: string, name: string) {
-	return change(
+	return act(
 		api.DELETE("/api/v1/admin/titles/{id}/match", path(id)),
 		`${name} was unmatched: it keeps what its files say until its match is fixed.`,
 	);
@@ -194,7 +160,7 @@ export function splitTitle(id: string, name: string) {
 		"Each of its copies but the one that plays first becomes a film of its own, matched afresh, and stays so through every scan.",
 		"Split apart",
 		() =>
-			change(
+			act(
 				api.POST("/api/v1/admin/titles/{id}/split", path(id)),
 				`${name} was split apart.`,
 			),
@@ -207,7 +173,7 @@ export function deleteTitle(id: string, name: string) {
 		"Its files are deleted from the disk, a show's or season's episodes with it, and it leaves the library. They cannot be brought back.",
 		"Delete",
 		() =>
-			change(
+			act(
 				api.DELETE("/api/v1/admin/titles/{id}", path(id)),
 				`${name} was deleted.`,
 			),
@@ -216,7 +182,7 @@ export function deleteTitle(id: string, name: string) {
 
 // The profile's libraries in its own order, as its sidebar lists them.
 export function setLibraryOrder(ids: string[]) {
-	return change(
+	return act(
 		api.PUT("/api/v1/me/library-order", { body: { library_ids: ids } }),
 	);
 }
@@ -224,14 +190,14 @@ export function setLibraryOrder(ids: string[]) {
 // What an admin can do to a library from the sidebar, as Plex's library menu
 // offers: read its folders again, ask its providers again, or remove it.
 export function scanLibrary(id: string, name: string) {
-	return change(
+	return act(
 		api.POST("/api/v1/admin/libraries/{id}/scan", path(id)),
 		`${name} is being scanned.`,
 	);
 }
 
 export function refreshLibrary(id: string, name: string, mode: RefreshMode) {
-	return change(
+	return act(
 		api.POST("/api/v1/admin/libraries/{id}/refresh", {
 			...path(id),
 			body: { mode },

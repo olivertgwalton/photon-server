@@ -32,7 +32,7 @@ export function holding(
 
 // "1:04:09", "4:09": a position on a title's timeline.
 export function timecode(ms: number): string {
-	const s = Math.floor(ms / 1000);
+	const s = Math.max(0, Math.floor(ms / 1000));
 	const h = Math.floor(s / 3600);
 	const mm = String(Math.floor((s % 3600) / 60));
 	const ss = String(s % 60).padStart(2, "0");
@@ -50,6 +50,28 @@ export function episodeLabel(
 		end != null && end > episode ? `E${episode}–E${end}` : `E${episode}`;
 	return season == null ? span : `S${season} ${span}`;
 }
+
+// "Small Show S1 E2 · Second": an episode as one line, by its show and place
+// in it; anything else by its own title.
+export function fullTitle(
+	t: {
+		title: string;
+		season_number?: number | null;
+		episode_number?: number | null;
+		episode_end?: number | null;
+	},
+	show: string | undefined,
+): string {
+	if (!show) return t.title;
+	const at = episodeLabel(t.season_number, t.episode_number, t.episode_end);
+	return `${[show, at].filter(Boolean).join(" ")} · ${t.title}`;
+}
+
+export const playMethods: Record<Schemas["PlayMethod"], string> = {
+	direct: "Direct play",
+	remux: "Direct stream",
+	transcode: "Transcode",
+};
 
 export const ratingSites: Record<Schemas["RatingSite"], string> = {
 	imdb: "IMDb",
@@ -107,8 +129,11 @@ export function bytes(n: number): string {
 	return `${n.toFixed(i && n < 10 ? 1 : 0)} ${units[i]}`;
 }
 
+// "8.5 Mbps", "40 Mbps", "420 kbps".
 export function bitrate(kbps: number): string {
-	return kbps >= 1000 ? `${(kbps / 1000).toFixed(1)} Mbps` : `${kbps} kbps`;
+	return kbps >= 1000
+		? `${Number((kbps / 1000).toFixed(1))} Mbps`
+		: `${kbps} kbps`;
 }
 
 const languages = new Intl.DisplayNames(undefined, { type: "language" });

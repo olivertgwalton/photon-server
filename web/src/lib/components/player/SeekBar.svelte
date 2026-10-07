@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { components } from "#lib/api/schema.js";
 import { thumbnail } from "#lib/player/trickplay.js";
-import { clock } from "#lib/player/words.js";
+import { timecode } from "#lib/format.js";
 
 type Schemas = components["schemas"];
 
@@ -93,7 +93,7 @@ function under(event: PointerEvent): number | undefined {
 			<span
 				class="text-ink rounded bg-black/70 px-1.5 py-0.5 font-mono text-xs tabular-nums"
 			>
-				{clock(preview)}
+				{timecode(preview * 1000)}
 			</span>
 		</div>
 	{/if}
@@ -128,7 +128,7 @@ function under(event: PointerEvent): number | undefined {
 		step="any"
 		value={shown}
 		aria-label="Seek"
-		aria-valuetext="{clock(shown)} of {clock(duration)}"
+		aria-valuetext="{timecode(shown * 1000)} of {timecode(duration * 1000)}"
 		class="absolute inset-0 w-full cursor-pointer opacity-0"
 		oninput={(e) => (dragging = Number(e.currentTarget.value))}
 		onchange={(e) => {

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { act } from "#lib/admin/act.js";
+import { act } from "#lib/act.js";
 import { nodeRoles } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";

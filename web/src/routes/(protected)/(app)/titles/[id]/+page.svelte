@@ -14,13 +14,7 @@ import PlayIcon from "@lucide/svelte/icons/play";
 import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
 import { goto } from "$app/navigation";
-import {
-	findSubtitles,
-	pickPlaylist,
-	setFavourite,
-	setWatched,
-	setWatchlisted,
-} from "#lib/actions.svelte.js";
+import { findSubtitles, pickPlaylist, setMark } from "#lib/actions.svelte.js";
 import { castOf } from "#lib/credits.js";
 import { type Extra, extrasOf } from "#lib/extras.js";
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
@@ -337,7 +331,7 @@ const poster = $derived(art("poster"));
 						aria-pressed={watched}
 						aria-label="Watched"
 						title={watched ? "Mark as unwatched" : "Mark as watched"}
-						onclick={() => setWatched(t.id, !watched)}
+						onclick={() => setMark(t.id, "watched", !watched)}
 					>
 						<CheckIcon class={watched ? "stroke-[3]" : "text-ink-3"} />
 					</Button>
@@ -349,7 +343,7 @@ const poster = $derived(art("poster"));
 					aria-pressed={favourite}
 					aria-label="Favourite"
 					title={favourite ? "Remove from favourites" : "Add to favourites"}
-					onclick={() => setFavourite(t.id, !favourite)}
+					onclick={() => setMark(t.id, "favourite", !favourite)}
 				>
 					<HeartIcon class={favourite ? "fill-current" : "text-ink-3"} />
 				</Button>
@@ -361,7 +355,7 @@ const poster = $derived(art("poster"));
 						aria-pressed={watchlisted}
 						aria-label="Watchlist"
 						title={watchlisted ? "Remove from watchlist" : "Add to watchlist"}
-						onclick={() => setWatchlisted(t.id, !watchlisted)}
+						onclick={() => setMark(t.id, "watchlist", !watchlisted)}
 					>
 						<BookmarkIcon class={watchlisted ? "fill-current" : "text-ink-3"} />
 					</Button>

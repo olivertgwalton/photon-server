@@ -7,7 +7,7 @@ import type { components } from "#lib/api/schema.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import { act } from "#lib/admin/act.js";
+import { act } from "#lib/act.js";
 import { ruleQuery, wallSearch } from "#lib/wall.js";
 
 const api = client();

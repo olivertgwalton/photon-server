@@ -161,7 +161,7 @@ test("the next episode is offered in the credits and plays", async ({
 	await upNext.getByRole("button", { name: "Play now" }).click();
 	await expect(page).toHaveURL("/play/p-ep2");
 	await expect(
-		page.getByRole("heading", { name: "Small Show · S1 E2 · Second" }),
+		page.getByRole("heading", { name: "Small Show S1 E2 · Second" }),
 	).toBeVisible();
 });
 

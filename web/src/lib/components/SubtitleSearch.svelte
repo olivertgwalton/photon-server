@@ -1,12 +1,15 @@
 <script lang="ts">
 import StarIcon from "@lucide/svelte/icons/star";
-import { change, subtitleSearch } from "#lib/actions.svelte.js";
-import { client, problemMessage } from "#lib/api/client.js";
+import { act } from "#lib/act.js";
+import { subtitleSearch } from "#lib/actions.svelte.js";
+import { client } from "#lib/api/client.js";
+import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Select from "#lib/components/ui/select/index.js";
-import { language, subtitleLanguages } from "#lib/player/words.js";
+import { language } from "#lib/format.js";
+import { subtitleLanguages } from "#lib/player/words.js";
 
 type Found = components["schemas"]["FoundSubtitles"];
 
@@ -54,7 +57,7 @@ async function search() {
 
 async function fetchOne(s: Found["items"][number]) {
 	if (!found) return;
-	const done = await change(
+	const done = await act(
 		client().POST("/api/v1/titles/{id}/subtitles", {
 			params: { path: { id: subtitleSearch.id } },
 			body: { version_id: found.version_id, ...s },

@@ -3,11 +3,11 @@ import { goto, refreshAll } from "$app/navigation";
 import { problemMessage } from "#lib/api/problem.js";
 
 // A change asked of the API from a page: a refusal says why in a toast, and
-// one that worked says so and has the page load again, or goes `to` another
-// where what it changed is gone. Answers whether it worked.
+// one that worked redraws the page, or goes `to` another where what it changed
+// is gone, and says so if there is something to say. Answers whether it worked.
 export async function act(
 	call: Promise<{ error?: unknown }>,
-	said: string,
+	said?: string,
 	to?: string,
 ): Promise<boolean> {
 	const { error } = await call;
@@ -16,6 +16,6 @@ export async function act(
 		return false;
 	}
 	await (to ? goto(to, { refreshAll: true }) : refreshAll());
-	toast.success(said);
+	if (said) toast.success(said);
 	return true;
 }

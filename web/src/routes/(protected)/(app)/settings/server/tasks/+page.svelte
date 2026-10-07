@@ -7,7 +7,7 @@ import { relative, tasks, when } from "#lib/admin/words.js";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Table from "#lib/components/ui/table/index.js";
-import { act } from "#lib/admin/act.js";
+import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/admin/Choice.svelte";

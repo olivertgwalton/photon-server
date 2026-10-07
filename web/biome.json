@@ -12,7 +12,6 @@
 			"!static",
 			"!src/lib/components/ui",
 			"!src/lib/utils.ts",
-			"!src/lib/hooks",
 			"!src/lib/api/schema.d.ts",
 			"!src/lib/assets/ratings/*.svg"
 		]

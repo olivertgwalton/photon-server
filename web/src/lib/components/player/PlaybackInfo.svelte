@@ -1,13 +1,8 @@
 <script lang="ts">
 import type { components } from "#lib/api/schema.js";
 import * as Sheet from "#lib/components/ui/sheet/index.js";
-import {
-	audioLabel,
-	bitrate,
-	channels,
-	methods,
-	reasons,
-} from "#lib/player/words.js";
+import { bitrate, playMethods } from "#lib/format.js";
+import { audioLabel, channels, reasons } from "#lib/player/words.js";
 
 type Schemas = components["schemas"];
 
@@ -82,7 +77,7 @@ const audioTarget = $derived.by(() => {
 	<Sheet.Content portalProps={{ to: portal }} class="overflow-y-auto">
 		<Sheet.Header>
 			<Sheet.Title>Playback info</Sheet.Title>
-			<Sheet.Description>{methods[playback.method]}</Sheet.Description>
+			<Sheet.Description>{playMethods[playback.method]}</Sheet.Description>
 		</Sheet.Header>
 		<dl class="grid gap-4 px-4 pb-6 text-sm">
 			{#if playback.reasons?.length}

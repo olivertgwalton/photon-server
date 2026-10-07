@@ -35,9 +35,7 @@ import {
 	forgetProgress,
 	pickPlaylist,
 	refreshTitle,
-	setFavourite,
-	setWatched,
-	setWatchlisted,
+	setMark,
 	shareTitle,
 	splitTitle,
 	unmatchTitle,
@@ -106,7 +104,7 @@ const name = $derived(
 			</DropdownMenu.Item>
 		{/if}
 		{#if card.kind !== "collection"}
-			<DropdownMenu.Item onSelect={() => setWatched(card.id, !watched)}>
+			<DropdownMenu.Item onSelect={() => setMark(card.id, "watched", !watched)}>
 				{#if watched}
 					<UndoIcon />Mark as unwatched
 				{:else}
@@ -114,7 +112,9 @@ const name = $derived(
 				{/if}
 			</DropdownMenu.Item>
 		{/if}
-		<DropdownMenu.Item onSelect={() => setFavourite(card.id, !favourite)}>
+		<DropdownMenu.Item
+			onSelect={() => setMark(card.id, "favourite", !favourite)}
+		>
 			{#if favourite}
 				<HeartOffIcon />Remove from favourites
 			{:else}
@@ -122,7 +122,9 @@ const name = $derived(
 			{/if}
 		</DropdownMenu.Item>
 		{#if card.kind !== "collection" && card.kind !== "extra"}
-			<DropdownMenu.Item onSelect={() => setWatchlisted(card.id, !watchlisted)}>
+			<DropdownMenu.Item
+				onSelect={() => setMark(card.id, "watchlist", !watchlisted)}
+			>
 				{#if watchlisted}
 					<BookmarkXIcon />Remove from watchlist
 				{:else}

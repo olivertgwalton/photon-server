@@ -1,18 +1,12 @@
 <script lang="ts">
-import { toast } from "svelte-sonner";
+import { act } from "#lib/act.js";
+import { confirmFirst } from "#lib/actions.svelte.js";
 import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
-import { timecode } from "#lib/format.js";
+import { bitrate, playMethods, timecode } from "#lib/format.js";
 import { positionAt } from "#lib/admin/live.js";
-import {
-	accelerations,
-	methods,
-	playedTitle,
-	reasons,
-} from "#lib/admin/words.js";
-import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
+import { accelerations, playedTitle, reasons } from "#lib/admin/words.js";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
 
@@ -38,7 +32,7 @@ function resolution(width?: number, height?: number) {
 }
 
 function rate(kbps?: number) {
-	return kbps ? `${(kbps / 1000).toFixed(1)} Mbps` : "";
+	return kbps ? bitrate(kbps) : "";
 }
 
 // What a stream is, and what it becomes where the server encodes it.
@@ -55,14 +49,22 @@ function line(
 
 let stopping = $state(false);
 
-async function stop() {
-	stopping = true;
-	const { error } = await api.DELETE("/api/v1/admin/playbacks/{id}", {
-		params: { path: { id: p.id } },
-	});
-	stopping = false;
-	if (error) toast.error(problemMessage(error));
-	else toast.success(`${p.profile.name}'s play was stopped.`);
+function stop() {
+	confirmFirst(
+		`Stop ${p.profile.name}'s play?`,
+		`${name} stops on ${p.device.name} where it is now, and its place is kept.`,
+		"Stop",
+		async () => {
+			stopping = true;
+			await act(
+				api.DELETE("/api/v1/admin/playbacks/{id}", {
+					params: { path: { id: p.id } },
+				}),
+				`${p.profile.name}'s play was stopped.`,
+			);
+			stopping = false;
+		},
+	);
 }
 </script>
 
@@ -106,7 +108,7 @@ async function stop() {
 		</div>
 		<div class="flex flex-wrap gap-1.5">
 			<Badge variant={p.method === "transcode" ? "default" : "secondary"}>
-				{methods[p.method]}
+				{playMethods[p.method]}
 			</Badge>
 			{#if p.acceleration}
 				<Badge variant="outline">
@@ -187,26 +189,13 @@ async function stop() {
 				</dd>
 			{/if}
 		</dl>
-		<AlertDialog.Root>
-			<AlertDialog.Trigger
-				class="text-ink-2 hover:text-ink justify-self-start text-sm font-semibold underline-offset-4 hover:underline"
-				disabled={stopping}
-			>
-				Stop this play
-			</AlertDialog.Trigger>
-			<AlertDialog.Content>
-				<AlertDialog.Header>
-					<AlertDialog.Title>Stop {p.profile.name}'s play?</AlertDialog.Title>
-					<AlertDialog.Description>
-						{name}
-						stops on {p.device.name} where it is now, and its place is kept.
-					</AlertDialog.Description>
-				</AlertDialog.Header>
-				<AlertDialog.Footer>
-					<AlertDialog.Cancel>Keep playing</AlertDialog.Cancel>
-					<AlertDialog.Action onclick={stop}>Stop</AlertDialog.Action>
-				</AlertDialog.Footer>
-			</AlertDialog.Content>
-		</AlertDialog.Root>
+		<button
+			type="button"
+			class="text-ink-2 hover:text-ink justify-self-start text-sm font-semibold underline-offset-4 hover:underline"
+			disabled={stopping}
+			onclick={stop}
+		>
+			Stop this play
+		</button>
 	</div>
 </article>

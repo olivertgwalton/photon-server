@@ -9,7 +9,7 @@ import ServerInfo from "#lib/components/admin/ServerInfo.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
-import { act } from "#lib/admin/act.js";
+import { act } from "#lib/act.js";
 import { count } from "#lib/format.js";
 import { client } from "#lib/api/client.js";
 

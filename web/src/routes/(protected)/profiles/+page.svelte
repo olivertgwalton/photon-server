@@ -1,7 +1,8 @@
 <script lang="ts">
 import LockIcon from "@lucide/svelte/icons/lock";
 import { goto } from "$app/navigation";
-import { client, problemMessage } from "#lib/api/client.js";
+import { client } from "#lib/api/client.js";
+import { problemMessage } from "#lib/api/problem.js";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
