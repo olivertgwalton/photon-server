@@ -22,6 +22,7 @@ var film = Copy{
 		{Index: 2, Kind: domain.StreamAudio, Codec: "ac3", Channels: 6},
 		{Index: 3, Kind: domain.StreamSubtitle, Codec: "subrip"},
 		{Index: 4, Kind: domain.StreamSubtitle, Codec: "hdmv_pgs_subtitle"},
+		{Index: 5, Kind: domain.StreamSubtitle, Codec: "ass"},
 	},
 }
 

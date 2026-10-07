@@ -17,6 +17,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // fakeFFmpeg writes what jellyfin-ffmpeg wrote for the fixture, from its start whatever it is asked:
@@ -69,7 +70,7 @@ func shownIn(t *testing.T, init, segment *os.File) []time.Duration {
 }
 
 func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
-	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +127,7 @@ func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
 // is made again.
 func TestSegmentsFarBehindThePlayerAreRemoved(t *testing.T) {
 	dir := t.TempDir()
-	r, err := NewRemuxer(fakeFFmpeg(t), dir, t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, dir, t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +186,7 @@ func TestARemuxerStartsWithNothingLeftOver(t *testing.T) {
 	if err := os.WriteFile(read, []byte("WEBVTT"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewRemuxer(fakeFFmpeg(t), dir, subtitles, Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler)); err != nil {
+	if _, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, dir, subtitles, Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(stale); !errors.Is(err, os.ErrNotExist) {
@@ -199,7 +200,7 @@ func TestARemuxerStartsWithNothingLeftOver(t *testing.T) {
 // A file whose header says a minute and which holds thirty seconds: a player asking past its end
 // is told at once, not left waiting.
 func TestASegmentPastAShortFilesEndFails(t *testing.T) {
-	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,13 +236,15 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 		name  string
 		video domain.VideoPlan
 		audio *domain.AudioPlan
+		layer *styledLayer
 		want  []string
 	}{
-		{"HEVC is hvc1 for Apple's players", domain.VideoPlan{Codec: "hevc"}, nil, []string{"-tag:v hvc1"}},
-		{"Dolby Vision kept is dvh1", domain.VideoPlan{Codec: "hevc", DolbyVision: domain.DolbyVisionKeep}, nil, []string{"-tag:v dvh1"}},
+		{"HEVC is hvc1 for Apple's players", domain.VideoPlan{Codec: "hevc"}, nil, nil, []string{"-tag:v hvc1"}},
+		{"Dolby Vision kept is dvh1", domain.VideoPlan{Codec: "hevc", DolbyVision: domain.DolbyVisionKeep}, nil, nil, []string{"-tag:v dvh1"}},
 		{
 			"Dolby Vision stripped leaves its base layer",
 			domain.VideoPlan{Codec: "hevc", DolbyVision: domain.DolbyVisionStrip},
+			nil,
 			nil,
 			[]string{"-tag:v hvc1", "-bsf:v dovi_rpu=strip=1"},
 		},
@@ -249,29 +252,47 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 			"encoded video is H.264 with a keyframe every segment, tone mapped",
 			domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 8000, ToneMap: true}},
 			nil,
+			nil,
 			[]string{"-vf scale=1280:720,tonemapx=", "-c:v libx264", "-maxrate 8000k -bufsize 16000k", "-force_key_frames expr:gte(t,n_forced*6)"},
 		},
 		{
 			"a picture subtitle is drawn in, in software, both scaled to the size encoded",
 			domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 4000, Burn: new(3)}},
 			nil,
+			nil,
 			[]string{"-filter_complex [0:0]scale=1280:720,format=yuv420p[main];[0:3]scale=1280:720[sub];[main][sub]overlay=eof_action=pass:repeatlast=0,format=yuv420p[v] -map [v]", "-c:v libx264"},
 		},
-		{"audio asked for is copied", domain.VideoPlan{Stream: 0, Codec: "h264"}, &domain.AudioPlan{Stream: 2}, []string{"-map 0:0 -c:v copy -map 0:2 -c:a copy"}},
+		{
+			"styled text is drawn in by libass after the picture is scaled, with the fonts the file carries",
+			domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 4000, Burn: new(3)}},
+			nil,
+			&styledLayer{file: "/cache/part/3.ass", fonts: "/cache/part/fonts"},
+			[]string{"-map 0:0 -vf scale=1280:720,format=yuv420p,subtitles=f=/cache/part/3.ass:fontsdir=/cache/part/fonts -c:v libx264"},
+		},
+		{
+			"a styled file beside a copy is drawn on the copy's timeline into its second part, read in its charset",
+			domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 4000, BurnFile: new(uuid.New())}},
+			nil,
+			&styledLayer{file: "/hls/p/styled.ass", charset: "CP1251", offset: 45 * time.Minute},
+			[]string{"-vf scale=1280:720,format=yuv420p,setpts=PTS+2700.000000/TB,subtitles=f=/hls/p/styled.ass:charenc=CP1251,setpts=PTS-2700.000000/TB"},
+		},
+		{"audio asked for is copied", domain.VideoPlan{Stream: 0, Codec: "h264"}, &domain.AudioPlan{Stream: 2}, nil, []string{"-map 0:0 -c:v copy -map 0:2 -c:a copy"}},
 		{
 			"audio encoded",
 			domain.VideoPlan{Codec: "h264"},
 			&domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "eac3", Channels: 6, BitrateKbps: 640}},
+			nil,
 			[]string{"-map 0:1 -c:a eac3 -ac 6 -b:a 640k"},
 		},
 		{
 			"audio mixed down to stereo is made louder",
 			domain.VideoPlan{Codec: "h264"},
 			&domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 2, BitrateKbps: 256, Boost: 2}},
+			nil,
 			[]string{"-map 0:1 -af volume=2 -c:a aac -ac 2 -b:a 256k"},
 		},
 	} {
-		got := strings.Join(args(Hardware{Accel: domain.AccelSoftware}, 12*time.Second, tc.video, tc.audio), " ")
+		got := strings.Join(args(Hardware{Accel: domain.AccelSoftware}, 12*time.Second, tc.video, tc.audio, tc.layer), " ")
 		for _, w := range tc.want {
 			if !strings.Contains(got, w) {
 				t.Errorf("%s: %q lacks %q", tc.name, got, w)
@@ -294,7 +315,7 @@ var transcode = Copy{Parts: []Source{{
 }}}
 
 func TestTranscodesAtOnceNeverPassTheLimit(t *testing.T) {
-	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 3, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 3, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +360,7 @@ func TestTranscodesAtOnceNeverPassTheLimit(t *testing.T) {
 }
 
 func TestPlaybacksTakeTheirSlotsFromConversions(t *testing.T) {
-	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 3, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 3, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +414,7 @@ func TestPlaybacksTakeTheirSlotsFromConversions(t *testing.T) {
 }
 
 func TestAConversionWaitsForAFreeSlot(t *testing.T) {
-	r, err := NewRemuxer(fakeFFmpeg(t), t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 1, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, 1, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +451,7 @@ func TestARemuxWaitsAheadOfAPlayerThatSeeksBack(t *testing.T) {
 		t.Fatalf("making the film: %v: %s", err, out)
 	}
 	dir := t.TempDir()
-	r, err := NewRemuxer(ffmpeg, dir, t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, dir, t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -490,7 +511,7 @@ func TestAnInitIsAnsweredBeforeAnySegmentIsMade(t *testing.T) {
 	if err := os.WriteFile(ffmpeg, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	r, err := NewRemuxer(ffmpeg, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -518,7 +539,7 @@ func TestAnInitIsAnsweredBeforeAnySegmentIsMade(t *testing.T) {
 // A playback opened partway in is being made from there before its player asks for anything.
 func TestARemuxIsUnderWayWhereThePlayerStarts(t *testing.T) {
 	dir := t.TempDir()
-	r, err := NewRemuxer(fakeFFmpeg(t), dir, t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, dir, t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -561,7 +582,7 @@ func TestARunNobodyAsksOfStopsUntilAskedAgain(t *testing.T) {
 	if out, err := made.CombinedOutput(); err != nil {
 		t.Fatalf("making the film: %v: %s", err, out)
 	}
-	r, err := NewRemuxer(ffmpeg, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -63,7 +63,6 @@ test("each subtitle is named and placed where HLS publishes it", () => {
 			rendition: 1,
 			language: "en",
 		},
-		{ key: "f2", label: "Signs", codec: "ass", file: 2, rendition: 2 },
 	]);
 });
 
@@ -85,11 +84,10 @@ test("a file a browser reads plays beside the file as it is", () => {
 	expect(needsReplay(srt, direct)).toBe(false);
 });
 
-test("a track inside the file, or ASS, comes through HLS", () => {
-	const [, inside, , ass] = choices(version);
+test("a plain track inside the file comes through HLS", () => {
+	const inside = choices(version)[1];
 	expect(wants(inside)).toEqual({ subtitle_stream: 3, viaHLS: true });
 	expect(needsReplay(inside, direct)).toBe(true);
-	expect(needsReplay(ass, direct)).toBe(true);
 	expect(needsReplay(inside, remux)).toBe(false);
 });
 

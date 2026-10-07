@@ -14,6 +14,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -254,7 +255,7 @@ func TestAPlaybackTellsTheStoreItHasReachedTheEnd(t *testing.T) {
 
 func TestAPausedPlayerThatKeepsReportingKeepsItsStream(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		remuxer, err := hls.NewRemuxer("ffmpeg", t.TempDir(), t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, hls.Unlimited, slog.New(slog.DiscardHandler))
+		remuxer, err := hls.NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: "ffmpeg"}}, t.TempDir(), t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, hls.Unlimited, slog.New(slog.DiscardHandler))
 		if err != nil {
 			t.Fatal(err)
 		}

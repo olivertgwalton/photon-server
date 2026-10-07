@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
@@ -123,6 +124,50 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 				t.Errorf("subtitles (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+// Styled text drawn in reaches each part's remux: a stream read out of that part, or the file
+// beside the copy.
+func TestStyledTextDrawnInReachesEachPart(t *testing.T) {
+	file := uuid.NewV7()
+	c := store.PlayCopy{
+		BitrateKbps: film.BitrateKbps, Streams: film.Streams,
+		Parts:     []store.PlayPart{{ID: uuid.NewV7(), DurationMS: 60_000}, {ID: uuid.NewV7(), OffsetMS: 60_000, DurationMS: 60_000}},
+		Subtitles: []store.PlaySubtitle{{ID: file, Codec: "ass", Language: language.Russian}},
+	}
+	encode := func(stream *int, file *uuid.UUID) domain.VideoPlan {
+		return domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+			Codec: domain.VideoH264, Width: 1920, Height: 1080, BitrateKbps: 8_000, Range: domain.RangeSDR, ToneMap: true,
+			Burn: stream, BurnFile: file,
+		}}
+	}
+	for _, tc := range []struct {
+		name  string
+		video domain.VideoPlan
+		check func(p store.PlayPart, s *hls.SubtitleSource) bool
+	}{
+		{"a stream", encode(new(5), nil), func(p store.PlayPart, s *hls.SubtitleSource) bool {
+			return s != nil && *s.Stream == 5 && s.Part == p.ID && len(s.Streams) == len(film.Streams)
+		}},
+		{"a file", encode(nil, &file), func(_ store.PlayPart, s *hls.SubtitleSource) bool {
+			return s != nil && s.Stream == nil && s.Language == "ru"
+		}},
+		{"a picture is no styled text", encode(new(4), nil), func(_ store.PlayPart, s *hls.SubtitleSource) bool { return s == nil }},
+	} {
+		hlsOf := opened{}
+		playback := uuid.NewV7()
+		if err := NewRemuxes(indexed{}, hlsOf).Open(t.Context(), playback, c, tc.video, nil, 0); err != nil {
+			t.Fatal(err)
+		}
+		for i, src := range hlsOf[playback].Parts {
+			if !tc.check(c.Parts[i], src.Styled) {
+				t.Errorf("%s: part %d draws %+v", tc.name, i, src.Styled)
+			}
+		}
+		if n := len(hlsOf[playback].Subtitles); n != 0 {
+			t.Errorf("%s: %d subtitles beside it, want none", tc.name, n)
+		}
 	}
 }
 

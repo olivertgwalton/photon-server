@@ -180,8 +180,10 @@ type VideoEncode struct {
 	Range       Range
 	ToneMap     bool
 	Deinterlace bool
-	// Burn is a picture subtitle stream of the file drawn into the picture, by its index.
-	Burn *int
+	// Burn is a subtitle stream of the file drawn into the picture, by its index: a picture, or
+	// styled text. BurnFile is a styled subtitle file beside it drawn so.
+	Burn     *int
+	BurnFile *uuid.UUID
 }
 
 // VideoCodec is a codec the server encodes video to.

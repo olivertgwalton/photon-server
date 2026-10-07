@@ -63,14 +63,16 @@ type Source struct {
 	Part  Part
 	Video domain.VideoPlan
 	Audio *domain.AudioPlan
+	// Styled is styled text drawn into its video (see VideoEncode's Burn): a stream of the file,
+	// or a file beside the copy timed on the copy's timeline.
+	Styled *SubtitleSource
 }
 
 // Remuxer runs the remuxes of copies played as HLS, one per playback, each writing its segments
-// into a folder of its own under dir, and keeps the text streams read out of parts under
-// subtitles. It keeps the node's one account of transcode slots, its download conversions' as well
+// into a folder of its own under dir, and keeps the subtitles read out of parts under subtitles. It keeps the node's one account of transcode slots, its download conversions' as well
 // as its own.
 type Remuxer struct {
-	ffmpeg    string
+	tools     media.Tools
 	dir       string
 	subtitles string
 	hw        Hardware
@@ -88,10 +90,10 @@ type Remuxer struct {
 // takes the slot.
 type conversion struct{ stop context.CancelCauseFunc }
 
-// NewRemuxer runs remuxes on hw, at most limit of them encoding video at once, or Unlimited. What
-// is in dir is removed: no remux outlives its process, and one that stopped uncleanly left its
-// segments.
-func NewRemuxer(ffmpeg, dir, subtitles string, hw Hardware, limit int, log *slog.Logger) (*Remuxer, error) {
+// NewRemuxer runs remuxes with tools on hw, at most limit of them encoding video at once, or
+// Unlimited. What is in dir is removed: no remux outlives its process, and one that stopped
+// uncleanly left its segments.
+func NewRemuxer(tools media.Tools, dir, subtitles string, hw Hardware, limit int, log *slog.Logger) (*Remuxer, error) {
 	if err := os.RemoveAll(dir); err != nil {
 		return nil, err
 	}
@@ -106,7 +108,7 @@ func NewRemuxer(ffmpeg, dir, subtitles string, hw Hardware, limit int, log *slog
 		_ = os.RemoveAll(a)
 	}
 	return &Remuxer{
-		ffmpeg: ffmpeg, dir: dir, subtitles: subtitles, hw: hw, limit: limit, idle: idleRun, log: log,
+		tools: tools, dir: dir, subtitles: subtitles, hw: hw, limit: limit, idle: idleRun, log: log,
 		sessions: map[uuid.UUID]*session{}, conversions: map[*conversion]struct{}{}, extractions: map[uuid.UUID]*extraction{},
 	}, nil
 }
@@ -163,19 +165,6 @@ type subtitle struct {
 	mu   sync.Mutex
 	cues []Cue
 	read bool
-}
-
-// textStreams are the streams of part the session carries as subtitles.
-func (s *session) textStreams(part uuid.UUID) []int {
-	var streams []int
-	for _, sub := range s.subtitles {
-		for _, src := range sub.Sources {
-			if src.Stream != nil && src.Part == part {
-				streams = append(streams, *src.Stream)
-			}
-		}
-	}
-	return streams
 }
 
 // Open starts the remux of a playback's copy at the segment holding c.Start, so it is under way
@@ -326,7 +315,7 @@ func (r *Remuxer) SubtitleSegment(ctx context.Context, playback uuid.UUID, track
 	sub.mu.Unlock()
 	if !read {
 		for _, src := range sub.Sources {
-			c, err := r.cues(ctx, src, s.textStreams(src.Part))
+			c, err := r.cues(ctx, src)
 			if err != nil {
 				return "", err
 			}
@@ -561,7 +550,13 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	start := s.plan[run.at].Start
 	ctx, stop := context.WithCancelCause(ctx)
 	defer stop(nil)
-	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.ffmpeg, args(r.hw, start, src.Video, src.Audio)...)
+	var layer *styledLayer
+	if src.Styled != nil {
+		if layer, err = r.styled(ctx, s, *src.Styled, s.offsets[run.part]); err != nil {
+			return err
+		}
+	}
+	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.tools.FFmpeg.Path, args(r.hw, start, src.Video, src.Audio, layer)...)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -586,15 +581,16 @@ func fdInput() []string {
 
 // args copies or encodes a file's video and its audio into fragmented MP4 on stdout, from start,
 // on the file's own clock (see clockOffset). Copied video starts at the keyframe at start; encoded
-// video makes one there and every SegmentLength after, on hw.
-func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan) []string {
+// video makes one there and every SegmentLength after, on hw, with styled text drawn in where
+// there is a layer of it.
+func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer) []string {
 	a := fdInput()
 	hw = hw.encoding(video)
 	if video.Encode != nil {
 		a = append(a, hw.inputArgs(video.Codec, *video.Encode)...)
 	}
 	a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts", "-i", "fd:")
-	a = append(a, streamArgs(hw, video, audio)...)
+	a = append(a, streamArgs(hw, video, audio, layer)...)
 	// Dolby Vision's configuration, TrueHD and DTS are experimental in FFmpeg's MP4 muxer.
 	return append(a,
 		"-strict", "experimental",
@@ -606,10 +602,15 @@ func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domai
 }
 
 // streamArgs maps the input's video and audio, each copied or encoded as planned, video on hw.
-func streamArgs(hw Hardware, video domain.VideoPlan, audio *domain.AudioPlan) []string {
+func streamArgs(hw Hardware, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer) []string {
 	var a []string
 	in := "0:" + strconv.Itoa(video.Stream)
 	switch e := video.Encode; {
+	case e != nil && layer != nil:
+		// Drawn by libass after the picture is scaled and tone mapped, as Jellyfin's is, at the
+		// size encoded, so it is as sharp as it can be.
+		filter, encoder := hw.videoArgs(*e, video.Codec)
+		a = append(append(a, "-map", in, "-vf", filter+","+layer.filter()), encoder...)
 	case e != nil && e.Burn != nil:
 		// As Jellyfin's: picture and subtitle each scaled to the size encoded, the picture tone
 		// mapped first, so the subtitle is drawn as it was authored.

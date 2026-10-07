@@ -11,20 +11,19 @@ type Choice = {
 	codec: string;
 	stream?: number;
 	file?: number;
-	// Its place among an HLS playlist's subtitles: every text track inside
-	// the copy, then every text file beside it. A picture has none.
+	// Its place among an HLS playlist's subtitles: every plain text track
+	// inside the copy, then every plain text file beside it. A picture or
+	// styled text has none.
 	rendition?: number;
 	language?: string;
 	forced?: boolean;
 	default?: boolean;
 };
 
-// FFmpeg's text subtitle codecs, which HLS carries as WebVTT; the server's
-// hls.TextSubtitle.
+// FFmpeg's plain text subtitle codecs, which HLS carries as WebVTT; the
+// server's hls.TextSubtitle.
 const text = new Set([
 	"subrip",
-	"ass",
-	"ssa",
 	"webvtt",
 	"mov_text",
 	"text",
@@ -84,8 +83,8 @@ export function choices(version: Schemas["VersionPage"]): Choice[] {
 }
 
 // What a play asks for so the choice can be shown: a picture drawn into the
-// video, and anything a browser cannot read from a file played as it is
-// (a track inside it, an ASS file) carried in HLS as WebVTT.
+// video, and plain text a browser cannot read from a file played as it is
+// (a track inside it) carried in HLS as WebVTT.
 export function wants(choice: Choice | undefined): {
 	subtitle_stream?: number;
 	viaHLS: boolean;
