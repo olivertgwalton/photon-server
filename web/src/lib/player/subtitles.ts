@@ -15,7 +15,7 @@ type Choice = {
 	id?: string;
 	// Its place among an HLS playlist's subtitles: every plain text track
 	// inside the copy, then every plain text file beside it. A picture or
-	// styled text has none: the server draws it into the video.
+	// styled text has none.
 	rendition?: number;
 	language?: string;
 	forced?: boolean;
@@ -89,9 +89,10 @@ export function choices(version: Schemas["VersionPage"]): Choice[] {
 	return out;
 }
 
-// What a play asks for so the choice can be shown: a picture or styled text
-// drawn into the video, and plain text a browser cannot read from a file
-// played as it is (a track inside it) carried in HLS as WebVTT.
+// What a play asks for so the choice can be shown: a picture drawn into the
+// video, styled text handed to the browser where it draws it and drawn in
+// where it does not, and plain text a browser cannot read from a file played
+// as it is (a track inside it) carried in HLS as WebVTT.
 export function wants(choice: Choice | undefined): {
 	subtitle_stream?: number;
 	subtitle_file?: string;
@@ -104,6 +105,21 @@ export function wants(choice: Choice | undefined): {
 	return { ...asked, viaHLS: !beside };
 }
 
+// The subtitle a playback hands the browser to draw beside the video for a
+// choice: a file beside the copy, or a styled track read out of it.
+export function beside(
+	choice: Choice | undefined,
+	playback: Schemas["Playback"],
+): Schemas["Subtitle"] | undefined {
+	if (!choice) return undefined;
+	return playback.subtitles?.find((s) =>
+		choice.id === undefined ? s.stream === choice.stream : s.id === choice.id,
+	);
+}
+
+// Whether a codec is styled text, which JASSUB draws.
+export const isStyled = (codec: string) => styled.has(codec);
+
 // Whether showing a choice needs a new playback, rather than a track switched
 // on in the one playing.
 export function needsReplay(
@@ -113,6 +129,13 @@ export function needsReplay(
 	const burned = playback.video?.burned_subtitle ?? undefined;
 	const burnedFile = playback.video?.burned_subtitle_file ?? undefined;
 	if (choice?.rendition === undefined && choice) {
+		if (
+			burned === undefined &&
+			burnedFile === undefined &&
+			beside(choice, playback)
+		) {
+			return false;
+		}
 		return choice.id === undefined
 			? burned !== choice.stream
 			: burnedFile !== choice.id;

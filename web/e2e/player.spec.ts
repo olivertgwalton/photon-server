@@ -87,6 +87,31 @@ test("subtitles beside the file show as a track", async ({ page }) => {
 		.toBe("A line to read");
 });
 
+test("ASS inside the file is drawn over it by JASSUB, with the file's fonts", async ({
+	page,
+}) => {
+	const asked = page.waitForRequest("**/api/v1/titles/p-anime/play");
+	const font = page.waitForRequest("**/api/v1/parts/part-1/fonts/2.woff2?*");
+	await logIn(page, "/play/p-anime?t=1&subtitle=3");
+	const body = (await asked).postDataJSON();
+	expect(body.subtitle_stream).toBe(3);
+	expect(body.profile.subtitles).toContainEqual({
+		codec: "ass",
+		delivery: "sidecar",
+	});
+	await font;
+	await expect(page.locator("canvas.JASSUB")).toBeAttached();
+
+	// Turned off, nothing is drawn, and the file plays on.
+	const replayed = page
+		.waitForRequest("**/api/v1/titles/p-anime/play", { timeout: 1_000 })
+		.then(() => true)
+		.catch(() => false);
+	await page.getByRole("button", { name: "Subtitles" }).click();
+	await expect(page.locator("canvas.JASSUB")).not.toBeAttached();
+	expect(await replayed).toBe(false);
+});
+
 test("a lower quality stops the playback and plays the server's HLS", async ({
 	page,
 }) => {
