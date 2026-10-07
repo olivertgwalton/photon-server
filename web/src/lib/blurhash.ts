@@ -69,10 +69,26 @@ export function decodeBlurhash(hash: string, width: number, height: number) {
 // The blur is drawn this small and stretched: it has no detail to lose.
 const drawn = 32;
 
+// Each hash is drawn once: a wall redraws its cards as it scrolls, and a
+// title shows on many rows. Each is a couple of kilobytes, so the oldest go
+// past a few thousand.
+const drawnStyles = new Map<string, string>();
+const drawnLimit = 4_000;
+
 // The style that draws a hash behind an <img>, stretched to its box, so the
 // picture loads over it with nothing moving.
 export function blurStyle(hash: string | undefined): string | undefined {
 	if (!hash) return undefined;
+	const drawnStyle = drawnStyles.get(hash);
+	if (drawnStyle) return drawnStyle;
+	const style = drawBlur(hash);
+	if (style) drawnStyles.set(hash, style);
+	if (drawnStyles.size > drawnLimit)
+		drawnStyles.delete(drawnStyles.keys().next().value as string);
+	return style;
+}
+
+function drawBlur(hash: string): string | undefined {
 	const canvas = document.createElement("canvas");
 	canvas.width = canvas.height = drawn;
 	const context = canvas.getContext("2d");
