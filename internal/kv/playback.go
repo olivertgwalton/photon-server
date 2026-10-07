@@ -99,26 +99,20 @@ func (k *KV) Playbacks(ctx context.Context) ([]domain.Playback, error) {
 	return every[domain.Playback](ctx, k, playbacks)
 }
 
-// Node is a server node that says where its peers reach it, and when it last said so.
-type Node struct {
-	ID      uuid.UUID
-	Address string
-	Seen    time.Time
-}
-
-// SetNode says where a server node answers its peers, for ttl unless said again.
-func (k *KV) SetNode(ctx context.Context, id uuid.UUID, address string, ttl time.Duration) error {
-	return k.keep(ctx, nodes, id, Node{ID: id, Address: address, Seen: time.Now()}, ttl)
+// SetNode tells the others of a server node, for ttl unless told again, as seen now.
+func (k *KV) SetNode(ctx context.Context, n domain.Node, ttl time.Duration) error {
+	n.Seen = time.Now()
+	return k.keep(ctx, nodes, n.ID, n, ttl)
 }
 
 // NodeAddress answers where a node answers its peers, or false for one that has gone quiet.
 func (k *KV) NodeAddress(ctx context.Context, id uuid.UUID) (string, bool, error) {
-	var n Node
+	var n domain.Node
 	ok, err := k.kept(ctx, nodes, id, &n)
 	return n.Address, ok, err
 }
 
 // Nodes answers every node that has said where its peers reach it and not gone quiet.
-func (k *KV) Nodes(ctx context.Context) ([]Node, error) {
-	return every[Node](ctx, k, nodes)
+func (k *KV) Nodes(ctx context.Context) ([]domain.Node, error) {
+	return every[domain.Node](ctx, k, nodes)
 }

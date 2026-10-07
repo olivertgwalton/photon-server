@@ -86,6 +86,8 @@ type Remuxer struct {
 	sessions    map[uuid.UUID]*session
 	conversions map[*conversion]struct{}
 	extractions map[uuid.UUID]*extraction
+	// changed is told, once for any number of changes, as a transcode slot is taken or given back.
+	changed chan struct{}
 }
 
 // conversion is a download's conversion holding a transcode slot until it ends or a playback
@@ -112,6 +114,7 @@ func NewRemuxer(tools media.Tools, dir, subtitles string, hw Hardware, limit int
 	return &Remuxer{
 		tools: tools, dir: dir, subtitles: subtitles, hw: hw, limit: limit, idle: idleRun, log: log,
 		sessions: map[uuid.UUID]*session{}, conversions: map[*conversion]struct{}{}, extractions: map[uuid.UUID]*extraction{},
+		changed: make(chan struct{}, 1),
 	}, nil
 }
 
@@ -231,6 +234,9 @@ func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 		r.start(ctx, s, first)
 	}
 	r.sessions[playback] = s
+	if s.encodes() {
+		r.change()
+	}
 	return nil
 }
 
@@ -246,9 +252,13 @@ func (r *Remuxer) HoldConversion(ctx context.Context) (held context.Context, rel
 	held, stop := context.WithCancelCause(ctx)
 	c := &conversion{stop: stop}
 	r.conversions[c] = struct{}{}
+	r.change()
 	return held, func() {
 		r.mu.Lock()
-		delete(r.conversions, c)
+		if _, ok := r.conversions[c]; ok {
+			delete(r.conversions, c)
+			r.change()
+		}
 		r.mu.Unlock()
 		stop(nil)
 	}, true
@@ -263,6 +273,18 @@ func (r *Remuxer) preempt() bool {
 		return true
 	}
 	return false
+}
+
+// Changes is told as a transcode slot is taken or given back, once for any number since it was
+// last read.
+func (r *Remuxer) Changes() <-chan struct{} { return r.changed }
+
+// change tells Changes, without waiting for it to be read.
+func (r *Remuxer) change() {
+	select {
+	case r.changed <- struct{}{}:
+	default:
+	}
 }
 
 // Transcodes answers how many videos this node is encoding, how many of those are conversions,
@@ -355,6 +377,9 @@ func (r *Remuxer) Close(playback uuid.UUID) {
 	r.mu.Lock()
 	s := r.sessions[playback]
 	delete(r.sessions, playback)
+	if s != nil && s.encodes() {
+		r.change()
+	}
 	r.mu.Unlock()
 	if s == nil {
 		return

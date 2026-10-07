@@ -199,7 +199,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	transcodes, err := maxTranscodes(hw.Accel)
+	transcodes, limitSource, err := maxTranscodes(hw.Accel)
 	if err != nil {
 		return err
 	}
@@ -251,7 +251,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	sessions := playback.NewSessions(cache, st, remuxer, hub.Raise, node)
 	listen := cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen)
 	setup := httpapi.Setup{
-		Started: started, Node: node, Listen: listen, Tools: tools, Encoder: hw, Discovery: discoveryMode,
+		Started: started, Node: node, Listen: listen, Tools: tools, Encoder: hw, LimitSource: limitSource, Discovery: discoveryMode,
 		MetadataLanguage: lang, CacheDir: cacheRoot, BackupDir: dumper.Dir, PublicURL: public,
 	}
 	// Fetched subtitles are written from Postgres into each node's cache as it opens them.
@@ -325,7 +325,11 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	wg.Go(func() { sweepPlaybacks(background, sessions, remuxer, logger) })
 	wg.Go(func() { pruneConversions(background, conversions, logger) })
 	if address := os.Getenv("PHOTON_NODE_ADDRESS"); address != "" {
-		wg.Go(func() { advertise(background, cache, node, address, logger) })
+		self := domain.Node{
+			ID: node, Address: address, Name: hostname, LimitSource: limitSource,
+			Encoder: domain.Encoder{Acceleration: hw.Accel, HEVC: hw.HEVC, Libass: tools.Libass},
+		}
+		wg.Go(func() { advertise(background, cache, self, remuxer, logger) })
 	}
 	wg.Go(func() {
 		if err := watcher.Run(background); err != nil {
@@ -518,50 +522,54 @@ const (
 	// about two cores, four hyperthreads, to encode 1080p in real time, and more from a 4K or tone
 	// mapped source.
 	cpusPerTranscode = 4
-	// hardwareTranscodes is NVIDIA's cap on NVENC sessions at once on a GeForce card, which the
-	// other encoders, bound by their throughput rather than a count, reach at about 1080p too.
+	// hardwareTranscodes is the NVENC sessions a GeForce card's driver allowed at once before
+	// 591.44 (December 2025), which allows 12 per machine: older drivers still stop at 8, and the
+	// other encoders, bound by their throughput rather than a count, reach it at about 1080p too.
 	hardwareTranscodes = 8
 )
 
-// maxTranscodes is how many videos the node encodes at once: PHOTON_MAX_TRANSCODES, a number or
-// unlimited, else what the device it encodes on keeps up with.
-func maxTranscodes(accel domain.Acceleration) (int, error) {
+// maxTranscodes is how many videos the node encodes at once, and where that comes from:
+// PHOTON_MAX_TRANSCODES, a number or unlimited, else what the device it encodes on keeps up with.
+func maxTranscodes(accel domain.Acceleration) (int, domain.LimitSource, error) {
 	switch v := os.Getenv("PHOTON_MAX_TRANSCODES"); v {
 	case "":
 	case "unlimited":
-		return hls.Unlimited, nil
+		return hls.Unlimited, domain.LimitEnvironment, nil
 	default:
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 {
-			return 0, fmt.Errorf("PHOTON_MAX_TRANSCODES is a positive number or unlimited, not %q", v)
+			return 0, "", fmt.Errorf("PHOTON_MAX_TRANSCODES is a positive number or unlimited, not %q", v)
 		}
-		return n, nil
+		return n, domain.LimitEnvironment, nil
 	}
 	switch accel {
 	case domain.AccelSoftware:
-		return max(runtime.NumCPU()/cpusPerTranscode, 1), nil
+		return max(runtime.NumCPU()/cpusPerTranscode, 1), domain.LimitAutomatic, nil
 	case domain.AccelVideoToolbox, domain.AccelVAAPI, domain.AccelQSV, domain.AccelNVENC:
 	}
-	return hardwareTranscodes, nil
+	return hardwareTranscodes, domain.LimitAutomatic, nil
 }
 
 // advertiseEvery is how often a node says where its peers reach it; it is forgotten after three
 // times that, quiet.
 const advertiseEvery = 15 * time.Second
 
-// advertise says where this node's peers reach it, PHOTON_NODE_ADDRESS, so a request for HLS one
-// of its playbacks makes is handed to it whichever node it lands on.
-func advertise(ctx context.Context, cache *kv.KV, node uuid.UUID, address string, logger *slog.Logger) {
+// advertise tells the others where this node's peers reach it, PHOTON_NODE_ADDRESS, so a request
+// for HLS one of its playbacks makes is handed to it whichever node it lands on, and how many
+// videos it encodes, said again as soon as that changes.
+func advertise(ctx context.Context, cache *kv.KV, self domain.Node, remuxer *hls.Remuxer, logger *slog.Logger) {
 	t := time.NewTicker(advertiseEvery)
 	defer t.Stop()
 	for {
-		if err := cache.SetNode(ctx, node, address, 3*advertiseEvery); err != nil && ctx.Err() == nil {
-			logger.WarnContext(ctx, "node address not advertised", slog.Any("err", err))
+		self.Transcodes, self.Conversions, self.Limit = remuxer.Transcodes()
+		if err := cache.SetNode(ctx, self, 3*advertiseEvery); err != nil && ctx.Err() == nil {
+			logger.WarnContext(ctx, "node not advertised", slog.Any("err", err))
 		}
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+		case <-remuxer.Changes():
 		}
 	}
 }

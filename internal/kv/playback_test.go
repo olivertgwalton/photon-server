@@ -77,7 +77,11 @@ func TestANodeIsReachedWhileItSaysWhere(t *testing.T) {
 	if _, ok, err := k.NodeAddress(ctx, node); ok || err != nil {
 		t.Fatalf("before it said: %v, %v", ok, err)
 	}
-	if err := k.SetNode(ctx, node, "http://10.0.0.5:8640", time.Minute); err != nil {
+	advert := domain.Node{
+		ID: node, Address: "http://10.0.0.5:8640", Name: "gpu-1", Transcodes: 3, Limit: 8, LimitSource: domain.LimitAutomatic,
+		Encoder: domain.Encoder{Acceleration: domain.AccelNVENC, HEVC: domain.HEVCAllow, Libass: true},
+	}
+	if err := k.SetNode(ctx, advert, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	if got, ok, err := k.NodeAddress(ctx, node); !ok || err != nil || got != "http://10.0.0.5:8640" {
@@ -87,9 +91,13 @@ func TestANodeIsReachedWhileItSaysWhere(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	i := slices.IndexFunc(nodes, func(n Node) bool { return n.ID == node })
-	if i < 0 || nodes[i].Address != "http://10.0.0.5:8640" || time.Since(nodes[i].Seen) > time.Minute {
-		t.Errorf("Nodes = %+v, want %v among them, seen just now", nodes, node)
+	i := slices.IndexFunc(nodes, func(n domain.Node) bool { return n.ID == node })
+	if i < 0 || time.Since(nodes[i].Seen) > time.Minute {
+		t.Fatalf("Nodes = %+v, want %v among them, seen just now", nodes, node)
+	}
+	advert.Seen = nodes[i].Seen
+	if nodes[i] != advert {
+		t.Errorf("told the others %+v, want %+v", nodes[i], advert)
 	}
 }
 
@@ -147,7 +155,7 @@ func TestListingReadsNoKeyItDoesNotList(t *testing.T) {
 		if err := k.SavePlayback(ctx, domain.Playback{ID: id, Card: domain.PlaybackCard{}}, time.Minute); err != nil {
 			t.Fatal(err)
 		}
-		if err := k.SetNode(ctx, id, "http://10.0.0.5:8640", time.Minute); err != nil {
+		if err := k.SetNode(ctx, domain.Node{ID: id, Address: "http://10.0.0.5:8640"}, time.Minute); err != nil {
 			t.Fatal(err)
 		}
 		if err := k.SaveScan(ctx, domain.ScanProgress{Library: id, Phase: domain.ScanReading}, time.Minute); err != nil {
@@ -176,7 +184,7 @@ func TestListingReadsNoKeyItDoesNotList(t *testing.T) {
 	}
 	for _, id := range ids {
 		if !slices.ContainsFunc(plays, func(p domain.Playback) bool { return p.ID == id }) ||
-			!slices.ContainsFunc(nodes, func(n Node) bool { return n.ID == id }) ||
+			!slices.ContainsFunc(nodes, func(n domain.Node) bool { return n.ID == id }) ||
 			!slices.ContainsFunc(scans, func(s domain.ScanProgress) bool { return s.Library == id }) {
 			t.Fatalf("%v is not listed among %d playbacks, %d nodes and %d scans", id, len(plays), len(nodes), len(scans))
 		}

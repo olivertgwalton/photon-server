@@ -22,14 +22,14 @@ func TestAnOperatorSetsHowManyVideosAreEncodedAtOnce(t *testing.T) {
 		{env: "lots", invalid: true},
 	} {
 		t.Setenv("PHOTON_MAX_TRANSCODES", tc.env)
-		got, err := maxTranscodes(tc.accel)
+		got, _, err := maxTranscodes(tc.accel)
 		if tc.invalid != (err != nil) || got != tc.want {
 			t.Errorf("PHOTON_MAX_TRANSCODES=%q on %s: %d, %v; want %d, invalid %t", tc.env, tc.accel, got, err, tc.want, tc.invalid)
 		}
 	}
 	t.Setenv("PHOTON_MAX_TRANSCODES", "")
-	if got, _ := maxTranscodes(domain.AccelSoftware); got < 1 {
-		t.Errorf("software by default: %d, want at least one", got)
+	if got, source, _ := maxTranscodes(domain.AccelSoftware); got < 1 || source != domain.LimitAutomatic {
+		t.Errorf("software by default: %d, %s; want at least one, worked out", got, source)
 	}
 }
 
