@@ -1079,7 +1079,31 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Forget a node that is not up, as one taken away is; one up is refused
+         * @description Admin only.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
         options?: never;
         head?: never;
         /**
@@ -6396,6 +6420,8 @@ export interface components {
             first_seen: string;
             /** Format: uuid */
             id: string;
+            /** Format: date-time */
+            last_seen: string;
             name: string;
             note?: string;
             online?: components["schemas"]["Node"] | null;

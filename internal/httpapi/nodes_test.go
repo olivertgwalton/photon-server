@@ -34,6 +34,14 @@ func (f fakeNodes) Node(_ context.Context, id uuid.UUID) (domain.NodeRecord, err
 	return n, nil
 }
 
+func (f fakeNodes) ForgetNode(_ context.Context, id uuid.UUID) error {
+	if _, ok := f[id]; !ok {
+		return store.ErrNotFound
+	}
+	delete(f, id)
+	return nil
+}
+
 func (f fakeNodes) SetNodeSettings(_ context.Context, id uuid.UUID, s domain.NodeSettings) error {
 	n, ok := f[id]
 	if !ok {
@@ -115,6 +123,18 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"availability":"active"}`)
 	if got := nodes[gpu].NodeSettings; got.Availability != domain.NodeActive || got.Note != "" {
 		t.Errorf("resumed: %+v, want active, its note gone", got)
+	}
+	// A node up is not forgotten, as it would be back within the minute; one stopped is.
+	for _, up := range []uuid.UUID{self, gpu} {
+		if rec := ask(api, http.MethodDelete, "/api/v1/admin/nodes/"+up.String(), ""); rec.Code != http.StatusConflict {
+			t.Errorf("forgetting a node up: %d, want 409", rec.Code)
+		}
+	}
+	if rec := ask(api, http.MethodDelete, "/api/v1/admin/nodes/"+gone.String(), ""); rec.Code != http.StatusNoContent || len(nodes) != 2 {
+		t.Errorf("forgetting the node stopped: %d, %d known; want it gone", rec.Code, len(nodes))
+	}
+	if rec := ask(api, http.MethodDelete, "/api/v1/admin/nodes/"+gone.String(), ""); rec.Code != http.StatusNotFound {
+		t.Errorf("forgetting it again: %d, want 404", rec.Code)
 	}
 	if rec := ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+uuid.NewV7().String(), `{"role":"serve"}`); rec.Code != http.StatusNotFound {
 		t.Errorf("a node there has never been: %d, want 404", rec.Code)

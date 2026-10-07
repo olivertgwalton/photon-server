@@ -13,6 +13,7 @@ type nodeSettings interface {
 	KnownNodes(ctx context.Context) ([]domain.NodeRecord, error)
 	Node(ctx context.Context, id uuid.UUID) (domain.NodeRecord, error)
 	SetNodeSettings(ctx context.Context, id uuid.UUID, s domain.NodeSettings) error
+	ForgetNode(ctx context.Context, id uuid.UUID) error
 }
 
 // nodeJSON is a node as it tells the others of itself: what it encodes with, and transcodes, of
@@ -50,11 +51,13 @@ func showNode(n domain.Node) nodeJSON {
 // transcode_limit_source set, is how many videos it encodes at once, 0 for no limit, and is worked
 // out from its encoder where automatic. availability is whether it takes new work: one draining
 // plays its streams to their end and is given nothing new, note saying why. online is it as it
-// tells the others of itself now, absent while it says nothing.
+// tells the others of itself now, absent while it says nothing, as one stopped or not answering
+// is, last_seen being when it last said it was up.
 type knownNodeJSON struct {
 	ID           uuid.UUID               `json:"id"`
 	Name         string                  `json:"name"`
 	FirstSeen    time.Time               `json:"first_seen"`
+	LastSeen     time.Time               `json:"last_seen"`
 	Role         domain.NodeRole         `json:"role"`
 	LimitSource  domain.LimitSource      `json:"transcode_limit_source"`
 	Limit        int                     `json:"transcode_limit"`
@@ -76,7 +79,7 @@ type nodeChangeJSON struct {
 
 func showKnownNode(n domain.NodeRecord, online map[uuid.UUID]domain.Node) knownNodeJSON {
 	out := knownNodeJSON{
-		ID: n.ID, Name: n.Name, FirstSeen: n.FirstSeen.UTC(), Role: n.Role, LimitSource: n.LimitSource, Limit: n.Limit,
+		ID: n.ID, Name: n.Name, FirstSeen: n.FirstSeen.UTC(), LastSeen: n.LastSeen.UTC(), Role: n.Role, LimitSource: n.LimitSource, Limit: n.Limit,
 		Availability: n.Availability, Note: n.Note,
 	}
 	if advert, ok := online[n.ID]; ok {
@@ -166,4 +169,26 @@ func (a *API) setNode(w http.ResponseWriter, r *http.Request) {
 	}
 	n.NodeSettings = set
 	writeJSON(w, a.logger, "application/json", http.StatusOK, showKnownNode(n, online))
+}
+
+// forgetNode forgets a node that is not up, as one taken away is; one up is refused, as it would be
+// back within the minute.
+func (a *API) forgetNode(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	online, err := a.online(r.Context())
+	if a.answered(w, r, err) {
+		return
+	}
+	if _, up := online[id]; up {
+		writeProblem(w, a.logger, codeConflict, "the node is up: stop it first, or it is back within the minute")
+		return
+	}
+	if a.answered(w, r, a.svc.Nodes.ForgetNode(r.Context(), id)) {
+		return
+	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNodesChanged})
+	w.WriteHeader(http.StatusNoContent)
 }
