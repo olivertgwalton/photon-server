@@ -26,7 +26,11 @@ const (
 // ErrNoPlayback is a playback that has stopped, lapsed, or is another profile's.
 var ErrNoPlayback = errors.New("no such playback")
 
+// ErrStarted is a playback started already, on this node or another, under the id asked for.
+var ErrStarted = errors.New("the playback is started already")
+
 type sessionStore interface {
+	ClaimPlayback(ctx context.Context, p domain.Playback, ttl time.Duration) (bool, error)
 	SavePlayback(ctx context.Context, p domain.Playback, ttl time.Duration) error
 	Playback(ctx context.Context, id uuid.UUID) (domain.Playback, bool, error)
 	Playbacks(ctx context.Context) ([]domain.Playback, error)
@@ -81,8 +85,12 @@ func (s *Sessions) Start(ctx context.Context, id uuid.UUID, method domain.PlayMe
 		ID: id, Profile: card.Profile.ID, Item: card.Title.ID, Version: card.Version.ID, Method: method,
 		State: domain.StatePlaying, Started: now, Updated: now, Length: length, Node: s.node, Card: card,
 	}
-	if err := s.live.SavePlayback(ctx, p, keptFor); err != nil {
+	claimed, err := s.live.ClaimPlayback(ctx, p, keptFor)
+	if err != nil {
 		return p, err
+	}
+	if !claimed {
+		return p, ErrStarted
 	}
 	s.raise(ctx, event(domain.EventPlaybackStarted, p))
 	return p, nil

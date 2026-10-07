@@ -20,6 +20,14 @@ import (
 
 type memory map[uuid.UUID]domain.Playback
 
+func (m memory) ClaimPlayback(_ context.Context, p domain.Playback, _ time.Duration) (bool, error) {
+	if _, ok := m[p.ID]; ok {
+		return false, nil
+	}
+	m[p.ID] = p
+	return true, nil
+}
+
 func (m memory) SavePlayback(_ context.Context, p domain.Playback, _ time.Duration) error {
 	m[p.ID] = p
 	return nil
