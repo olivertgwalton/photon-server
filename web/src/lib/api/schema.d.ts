@@ -1029,6 +1029,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the server's nodes, there or that have been, what is set of each, and how busy each that is up is
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KnownNodeList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/nodes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a node's role or its limit on transcodes at once; it takes them up at once
+         * @description Admin only.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["NodeChange"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KnownNode"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        trace?: never;
+    };
     "/api/v1/admin/playbacks": {
         parameters: {
             query?: never;
@@ -6130,7 +6216,7 @@ export interface components {
             title_id?: string;
         };
         /** @enum {string} */
-        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed";
+        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed" | "nodes.changed";
         EventPage: {
             items: components["schemas"]["Event"][];
             offset: number;
@@ -6304,6 +6390,20 @@ export interface components {
             kind: components["schemas"]["ItemKind"];
             metadata?: components["schemas"]["RankedSource"][];
         };
+        KnownNode: {
+            /** Format: date-time */
+            first_seen: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
+            online?: components["schemas"]["Node"] | null;
+            role: components["schemas"]["NodeRole"];
+            transcode_limit: number;
+            transcode_limit_source: components["schemas"]["LimitSource"];
+        };
+        KnownNodeList: {
+            items: components["schemas"]["KnownNode"][];
+        };
         Letter: {
             count: number;
             letter: string;
@@ -6350,7 +6450,7 @@ export interface components {
             name: string;
         };
         /** @enum {string} */
-        LimitSource: "automatic" | "environment";
+        LimitSource: "automatic" | "set";
         ListRef: {
             id: string;
             missing?: number;
@@ -6478,11 +6578,18 @@ export interface components {
             transcode_limit_source: components["schemas"]["LimitSource"];
             transcodes: number;
         };
+        NodeChange: {
+            role?: components["schemas"]["NodeRole"];
+            transcode_limit?: number | null;
+            transcode_limit_source?: components["schemas"]["LimitSource"];
+        };
         NodeEncoder: {
             acceleration: components["schemas"]["Acceleration"];
             hevc: components["schemas"]["HEVCEncoding"];
             libass: boolean;
         };
+        /** @enum {string} */
+        NodeRole: "all" | "serve" | "transcode";
         NowPlaying: {
             acceleration?: components["schemas"]["Acceleration"];
             audio?: components["schemas"]["PlaybackAudio"] | null;
@@ -6937,10 +7044,10 @@ export interface components {
             name: string;
             /** Format: uuid */
             node_id: string;
-            nodes: components["schemas"]["Node"][];
             os: string;
             postgres: components["schemas"]["Backend"];
             public_url?: string;
+            role: components["schemas"]["NodeRole"];
             /** Format: date-time */
             started_at: string;
             transcode_limit?: number;

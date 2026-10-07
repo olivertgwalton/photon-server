@@ -68,6 +68,7 @@ const server: Schemas["Server"] = {
 	transcodes: 0,
 	transcode_limit: 2,
 	transcode_limit_source: "automatic",
+	role: "all",
 	discovery: "broadcast",
 	listen: ":8640",
 	trusted_proxies: [],
@@ -78,30 +79,6 @@ const server: Schemas["Server"] = {
 	metadata_language: "en-GB",
 	postgres: { reachable: true, version: "18.1" },
 	valkey: { reachable: true, version: "9.0" },
-	nodes: [
-		{
-			id: "n-1",
-			name: "den",
-			address: "http://10.0.0.4:8640",
-			last_seen: "2026-10-06T20:20:00Z",
-			encoder: { acceleration: "vaapi", hevc: "allow", libass: true },
-			transcodes: 1,
-			conversions: 0,
-			transcode_limit: 2,
-			transcode_limit_source: "automatic",
-		},
-		{
-			id: "n-2",
-			name: "gpu-1",
-			address: "http://10.0.0.5:8640",
-			last_seen: "2026-10-06T20:20:00Z",
-			encoder: { acceleration: "nvenc", hevc: "allow", libass: false },
-			transcodes: 3,
-			conversions: 1,
-			transcode_limit: 8,
-			transcode_limit_source: "environment",
-		},
-	],
 };
 
 const films: Schemas["AdminLibrary"] = {
@@ -250,6 +227,56 @@ let maintenance: Schemas["Maintenance"] = {
 	previews: "window",
 	markers: "window_and_added",
 };
+// The server's nodes: this one, the GPU node, and one that has stopped.
+let nodes: Schemas["KnownNode"][] = [
+	{
+		id: "n-1",
+		name: "den",
+		first_seen: "2026-09-01T08:00:00Z",
+		role: "all",
+		transcode_limit_source: "automatic",
+		transcode_limit: 0,
+		online: {
+			id: "n-1",
+			name: "den",
+			address: "http://10.0.0.4:8640",
+			last_seen: "2026-10-06T20:20:00Z",
+			encoder: { acceleration: "vaapi", hevc: "allow", libass: true },
+			transcodes: 1,
+			conversions: 0,
+			transcode_limit: 2,
+			transcode_limit_source: "automatic",
+		},
+	},
+	{
+		id: "n-2",
+		name: "gpu-1",
+		first_seen: "2026-09-02T08:00:00Z",
+		role: "all",
+		transcode_limit_source: "automatic",
+		transcode_limit: 0,
+		online: {
+			id: "n-2",
+			name: "gpu-1",
+			address: "http://10.0.0.5:8640",
+			last_seen: "2026-10-06T20:20:00Z",
+			encoder: { acceleration: "nvenc", hevc: "allow", libass: false },
+			transcodes: 3,
+			conversions: 1,
+			transcode_limit: 8,
+			transcode_limit_source: "automatic",
+		},
+	},
+	{
+		id: "n-3",
+		name: "old-mini",
+		first_seen: "2026-08-01T08:00:00Z",
+		role: "serve",
+		transcode_limit_source: "automatic",
+		transcode_limit: 0,
+	},
+];
+
 let storage: Schemas["StorageStatus"] = { kind: "disk" };
 
 function stored(s: Schemas["Storage"]): Schemas["StorageStatus"] {
@@ -361,6 +388,22 @@ export async function admin(
 			},
 			{ status: 403, headers: { "content-type": "application/problem+json" } },
 		);
+	}
+	const node = url.pathname.match(/^\/api\/v1\/admin\/nodes\/([^/]+)$/)?.[1];
+	if (request.method === "PATCH" && node) {
+		const change = (await request.json()) as Schemas["NodeChange"];
+		nodes = nodes.map((n) =>
+			n.id === node
+				? {
+						...n,
+						role: change.role ?? n.role,
+						transcode_limit_source:
+							change.transcode_limit_source ?? n.transcode_limit_source,
+						transcode_limit: change.transcode_limit ?? 0,
+					}
+				: n,
+		);
+		return json(nodes.find((n) => n.id === node));
 	}
 	switch (route) {
 		case "GET /api/v1/admin/locales":
@@ -495,6 +538,8 @@ export async function admin(
 		case "PUT /api/v1/admin/maintenance":
 			maintenance = (await request.json()) as Schemas["Maintenance"];
 			return json(maintenance);
+		case "GET /api/v1/admin/nodes":
+			return json({ items: nodes });
 		case "GET /api/v1/admin/storage":
 			return json(storage);
 		case "POST /api/v1/admin/storage/check": {

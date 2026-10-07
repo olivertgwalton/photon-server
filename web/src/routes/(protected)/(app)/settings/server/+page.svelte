@@ -153,7 +153,7 @@ const attention = $derived(
 						<NowPlayingCard
 							{playback}
 							now={clock.now}
-							nodes={data.server.nodes.length}
+							nodes={data.nodes.filter((n) => n.online).length}
 						/>
 					{/each}
 				</div>
@@ -175,13 +175,14 @@ const attention = $derived(
 			<Card.Header>
 				<Card.Title><h2 class="heading">Server</h2></Card.Title>
 				<Card.Description>
-					Set by the server's environment; see the README to change it. The
+					Set by the server's environment, but for what each node does; see the
+					README to change it. The
 					<a href="/api/v1/openapi.json" class="underline">API</a>
 					is described in full.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
-				<ServerInfo server={data.server} now={clock.now} />
+				<ServerInfo server={data.server} nodes={data.nodes} now={clock.now} />
 			</Card.Content>
 		</Card.Root>
 	</div>

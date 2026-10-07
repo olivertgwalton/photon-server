@@ -53,8 +53,8 @@ const now = $derived(Date.now());
 function from(node?: string) {
 	if (!node) return "The shared bucket";
 	if (node === data.server.node_id) return `This server's disk`;
-	const n = data.server.nodes.find((n) => n.id === node);
-	return `${n?.name || n?.address || "A server"}'s disk`;
+	const n = data.nodes.find((n) => n.id === node);
+	return `${n?.name || "A server"}'s disk`;
 }
 
 function place(s: components["schemas"]["StorageStatus"]) {
