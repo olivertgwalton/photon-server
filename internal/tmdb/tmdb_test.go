@@ -224,3 +224,20 @@ func TestItHasItsCapabilities(t *testing.T) {
 		t.Errorf("capabilities %v, want %v", got, want)
 	}
 }
+
+func TestAFilmUnratedInTheCountryTakesTheUSsCertificate(t *testing.T) {
+	c := serve(t, map[string]string{
+		"/movie/348?append_to_response=release_dates%2Cexternal_ids%2Cvideos%2Cimages%2Ccredits&include_image_language=en%2Cnull&include_video_language=en%2Cnull&language=en-GB": `{
+			"id":348,"title":"Alien",
+			"release_dates":{"results":[
+				{"iso_3166_1":"FR","release_dates":[{"certification":"12"}]},
+				{"iso_3166_1":"US","release_dates":[{"certification":""},{"certification":"R"}]}]}}`,
+	})
+	got, err := c.Details(t.Context(), gb, Movie, 348)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Certificate != "US:R" {
+		t.Errorf("certificate %q, want the US's R, written as the US's, as Britain gives none", got.Certificate)
+	}
+}

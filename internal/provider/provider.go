@@ -330,3 +330,32 @@ func Year(t time.Time) int {
 	}
 	return t.Year()
 }
+
+// Rated is a certificate a country gives a title, by the country's ISO 3166-1 alpha-2 code.
+type Rated struct {
+	Country     string
+	Certificate string
+}
+
+// Certificate is the certificate a title is given in country, else in the US, else the first any
+// country gives it, as Jellyfin picks one; one from elsewhere than country is written with its own
+// (US:PG-13), so it is read in its own system. "" where none is given.
+func Certificate(country string, given []Rated) string {
+	given = slices.DeleteFunc(slices.Clone(given), func(r Rated) bool { return r.Certificate == "" })
+	for _, from := range []string{country, "US"} {
+		if i := slices.IndexFunc(given, func(r Rated) bool { return r.Country == from }); i >= 0 {
+			return written(given[i], country)
+		}
+	}
+	if len(given) == 0 {
+		return ""
+	}
+	return written(given[0], country)
+}
+
+func written(r Rated, country string) string {
+	if r.Country == country {
+		return r.Certificate
+	}
+	return r.Country + ":" + r.Certificate
+}

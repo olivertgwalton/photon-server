@@ -226,18 +226,16 @@ func (c *Client) Details(ctx context.Context, loc domain.Locale, kind Kind, id i
 	if d.ExternalIDs.TVDB != 0 {
 		out.IDs[domain.ProviderTVDB] = strconv.Itoa(d.ExternalIDs.TVDB)
 	}
+	var rated []provider.Rated
 	for _, r := range d.ReleaseDates.Results {
 		for _, rd := range r.Dates {
-			if r.Country == loc.Country {
-				out.Certificate = cmp.Or(out.Certificate, rd.Certification)
-			}
+			rated = append(rated, provider.Rated{Country: r.Country, Certificate: rd.Certification})
 		}
 	}
 	for _, r := range d.ContentRatings.Results {
-		if r.Country == loc.Country {
-			out.Certificate = cmp.Or(out.Certificate, r.Rating)
-		}
+		rated = append(rated, provider.Rated{Country: r.Country, Certificate: r.Rating})
 	}
+	out.Certificate = provider.Certificate(loc.Country, rated)
 	out.Artwork = slices.Concat(
 		pictures(domain.ArtworkPoster, d.Images.Posters, loc.Base(), "en", ""),
 		pictures(domain.ArtworkBackdrop, d.Images.Backdrops, "", loc.Base(), "en"),
