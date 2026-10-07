@@ -15,13 +15,12 @@ import (
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/follow"
 )
 
 const (
 	// rereadEvery also takes up a certificate renewed in place, as certbot's and Tailscale's are.
 	rereadEvery = time.Minute
-	// resubscribeAfter is the wait before following events again once a stream has ended.
-	resubscribeAfter = time.Second
 	// sniffWithin is how long a connection has to send its first byte, which says whether it
 	// speaks TLS, before it is closed.
 	sniffWithin = 10 * time.Second
@@ -100,36 +99,7 @@ func (s *Server) Scheme() string {
 // Run keeps the node serving what is set until ctx ends, reading it again as an admin changes it
 // and every rereadEvery.
 func (s *Server) Run(ctx context.Context) {
-	t := time.NewTicker(rereadEvery)
-	defer t.Stop()
-	for ctx.Err() == nil {
-		events, stop := s.subscribe()
-		s.reread(ctx)
-		s.follow(ctx, events, t.C)
-		stop()
-	}
-}
-
-func (s *Server) follow(ctx context.Context, events <-chan domain.Event, tick <-chan time.Time) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-tick:
-			s.reread(ctx)
-		case e, ok := <-events:
-			if !ok {
-				select {
-				case <-ctx.Done():
-				case <-time.After(resubscribeAfter):
-				}
-				return
-			}
-			if e.Kind == domain.EventNetworkChanged {
-				s.reread(ctx)
-			}
-		}
-	}
+	follow.Events(ctx, s.subscribe, rereadEvery, s.reread, domain.EventNetworkChanged)
 }
 
 // reread applies what is set. What cannot be read leaves the node serving as it was, so a

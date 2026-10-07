@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/follow"
 )
 
 const (
@@ -15,8 +16,6 @@ const (
 	// each playback starts or stops and as the window is changed: the window's edges, and an event
 	// lost with Valkey's connection, are noticed within it.
 	rereadEvery = time.Minute
-	// resubscribeAfter is the wait before a gate follows events again once its stream has ended.
-	resubscribeAfter = time.Second
 )
 
 var (
@@ -71,39 +70,9 @@ func NewGate(p playbacks, settings maintenance, subscribe func() (<-chan domain.
 
 // Run keeps the gate told what plays and when the window is until ctx ends.
 func (g *Gate) Run(ctx context.Context) {
-	t := time.NewTicker(rereadEvery)
-	defer t.Stop()
-	for ctx.Err() == nil {
-		events, stop := g.subscribe()
-		// Read once subscribed, so no playback starts unseen between the two.
-		g.reread(ctx)
-		g.follow(ctx, events, t.C)
-		stop()
-	}
-}
-
-// follow reads again as events tell of a playback starting or stopping or the window changed, and
-// at every tick, until ctx ends or events does, as a stream that fell behind is ended.
-func (g *Gate) follow(ctx context.Context, events <-chan domain.Event, tick <-chan time.Time) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-tick:
-			g.reread(ctx)
-		case e, ok := <-events:
-			if !ok {
-				select {
-				case <-ctx.Done():
-				case <-time.After(resubscribeAfter):
-				}
-				return
-			}
-			if e.Kind == domain.EventPlaybackStarted || e.Kind == domain.EventPlaybackStopped || e.Kind == domain.EventMaintenanceChanged {
-				g.reread(ctx)
-			}
-		}
-	}
+	// Read once subscribed, so no playback starts unseen between the two.
+	follow.Events(ctx, g.subscribe, rereadEvery, g.reread,
+		domain.EventPlaybackStarted, domain.EventPlaybackStopped, domain.EventMaintenanceChanged)
 }
 
 // reread reads what plays and the window, and stops each job holding the gate that may not go on.

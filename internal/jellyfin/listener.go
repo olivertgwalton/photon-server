@@ -13,13 +13,12 @@ import (
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/follow"
 )
 
 const (
 	// rereadEvery also retries a port this node could not have, which may since have been freed.
 	rereadEvery = time.Minute
-	// resubscribeAfter is the wait before following events again once a stream has ended.
-	resubscribeAfter = time.Second
 	// shutdownGrace is how long requests have to finish when the port changes or the API is turned
 	// off, as photon's own listener gives them.
 	shutdownGrace = 10 * time.Second
@@ -70,36 +69,10 @@ type served struct {
 // Run serves what is set until ctx ends, reading it again as an admin changes it and every
 // rereadEvery.
 func (l *Listener) Run(ctx context.Context) {
-	tick := time.NewTicker(rereadEvery)
-	defer tick.Stop()
-	events, unsubscribe := l.subscribe()
-	defer func() { unsubscribe() }()
 	var cur *served
 	defer func() { cur.stop(ctx) }()
-	for {
-		cur = l.apply(ctx, cur)
-		for changed := false; !changed; {
-			select {
-			case <-ctx.Done():
-				return
-			case <-tick.C:
-				changed = true
-			case e, ok := <-events:
-				changed = !ok || e.Kind == domain.EventNetworkChanged
-				if ok {
-					continue
-				}
-				// A change told while the stream was down is read once it is back.
-				unsubscribe()
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(resubscribeAfter):
-				}
-				events, unsubscribe = l.subscribe()
-			}
-		}
-	}
+	follow.Events(ctx, l.subscribe, rereadEvery, func(ctx context.Context) { cur = l.apply(ctx, cur) },
+		domain.EventNetworkChanged)
 }
 
 // apply serves the API as set, on cur still where that is unchanged. What cannot be read leaves
