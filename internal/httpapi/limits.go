@@ -9,12 +9,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/kv"
 )
 
-// What a client may attempt before it is made to wait, beside signing in, which auth limits.
-var (
-	switchesPerSession  = kv.Limit{Every: 3 * time.Minute, Burst: 5}
-	pairingsPerAddress  = kv.Limit{Every: 6 * time.Second, Burst: 10}
-	approvalsPerProfile = kv.Limit{Every: 12 * time.Second, Burst: 5}
-)
+// What a client may attempt before it is made to wait, beside signing in and pairing, which auth
+// limits.
+var switchesPerSession = kv.Limit{Every: 3 * time.Minute, Burst: 5}
 
 // allowed spends one attempt from each key's allowance and answers 429 with Retry-After when any
 // is spent. When the limits cannot be checked it refuses rather than letting attempts through.
