@@ -147,6 +147,14 @@ export function chooseVersion(id: string, title: string, use: VersionUse) {
 	Object.assign(versions, { open: true, id, title, use });
 }
 
+// The one subtitle search, drawn by the shell and opened from any film's or
+// episode's menu, as Plex's Search for subtitles is.
+export const subtitleSearch = $state({ open: false, id: "", title: "" });
+
+export function findSubtitles(id: string, title: string) {
+	Object.assign(subtitleSearch, { open: true, id, title });
+}
+
 export function analyseTitle(id: string, name: string) {
 	return change(
 		api.POST("/api/v1/admin/titles/{id}/analysis", path(id)),

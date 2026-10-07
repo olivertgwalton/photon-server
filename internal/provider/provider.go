@@ -34,6 +34,9 @@ var (
 	// answer cut short. A built-in provider's fails its job, to be tried again; a plugin's is
 	// ErrUnavailable.
 	ErrUnreached = errors.New("provider: not reached")
+	// ErrQuota is an account that has used what a provider lets it have today: what is left is
+	// asked for tomorrow.
+	ErrQuota = errors.New("provider: today's quota is used")
 )
 
 // maxAnswer bounds what a provider may answer to one request rather than holding whatever it sends

@@ -121,7 +121,7 @@ func TestASubtitleIsFetchedSignedIn(t *testing.T) {
 	if err != nil || !strings.Contains(string(got), "In space") || s.signIns != 2 {
 		t.Fatalf("fetched %q, %v after %d sign-ins; want the SubRip, signed in again once", got, err, s.signIns)
 	}
-	if _, err := c.FetchSubtitle(t.Context(), "12"); !errors.Is(err, ErrQuota) {
+	if _, err := c.FetchSubtitle(t.Context(), "12"); !errors.Is(err, provider.ErrQuota) {
 		t.Errorf("past the quota: %v, want ErrQuota", err)
 	}
 	if s.signIns != 2 {

@@ -40,6 +40,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/mdblist"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/omdb"
+	"github.com/olivertgwalton/photon-server/internal/opensubtitles"
 	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
@@ -47,6 +48,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/secure"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/subtitles"
 	"github.com/olivertgwalton/photon-server/internal/task"
 	"github.com/olivertgwalton/photon-server/internal/themerr"
 	"github.com/olivertgwalton/photon-server/internal/tmdb"
@@ -253,17 +255,22 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		Started: started, Node: node, Listen: listen, Tools: tools, Encoder: hw, Discovery: discoveryMode,
 		MetadataLanguage: lang, CacheDir: cacheRoot, BackupDir: dumper.Dir, PublicURL: public,
 	}
-	owners, remuxes, signer := playback.NewRouter(cache, node), playback.NewRemuxes(st, remuxer), playback.NewSigner(signingKey)
+	// Fetched subtitles are written from Postgres into each node's cache as it opens them.
+	files, err := subtitles.NewFiles(st, filepath.Join(cacheRoot, "fetched-subtitles"))
+	if err != nil {
+		return err
+	}
+	owners, remuxes, signer := playback.NewRouter(cache, node), playback.NewRemuxes(files, remuxer), playback.NewSigner(signingKey)
 	secured := secure.New(st, hub.Subscribe, logger)
 	jellyfinAPI := jellyfin.NewListener(st, hub.Subscribe, jellyfin.New(logger, info, jellyfin.Services{
 		Auth: authService, Limits: cache, Raise: hub.Raise, Proxies: trusted, Catalogue: st, Pictures: pictureCache,
-		Playing: st, Playbacks: sessions, Watching: st, HLS: remuxer, Remuxing: remuxes, Owners: owners,
+		Playing: files, Playbacks: sessions, Watching: st, HLS: remuxer, Remuxing: remuxes, Owners: owners,
 		Signer: signer, Encoding: playback.Encoding{HEVC: hw.HEVC, Libass: tools.Libass}, Network: st,
 	}), listen, secured.Listen, secured.TLSConfig(), logger)
 	srv := &http.Server{
 		Addr: listen, TLSConfig: secured.TLSConfig(),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: st, Playbacks: sessions, Owners: owners, Remuxing: remuxes, HLS: remuxer, Signer: signer, Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Network: st, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: files, Subtitles: subtitles.NewFetcher(st, providers), Playbacks: sessions, Owners: owners, Remuxing: remuxes, HLS: remuxer, Signer: signer, Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, TrustedProxies: trusted, Network: st, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -393,6 +400,9 @@ func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *
 		}, cache),
 		omdb.New(func(ctx context.Context) (map[string]string, error) {
 			return st.ProviderSettings(ctx, domain.SourceOMDb)
+		}, cache),
+		opensubtitles.New(func(ctx context.Context) (map[string]string, error) {
+			return st.ProviderSettings(ctx, domain.SourceOpenSubtitles)
 		}, cache),
 	)
 }

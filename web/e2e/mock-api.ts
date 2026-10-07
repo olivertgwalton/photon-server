@@ -716,6 +716,24 @@ const server_ = Bun.serve({
 		const hls = url.pathname.match(/^\/api\/v1\/hls\/pb\/1\/sig\/([\w.]+)$/);
 		if (hls) return fixture(`hls/${hls[1]}`);
 		switch (route) {
+			case "GET /api/v1/titles/t-film/subtitles/search":
+				return Response.json({
+					version_id: "v-4k",
+					items: [
+						{
+							source: "opensubtitles",
+							id: "9",
+							language: url.searchParams.get("language") ?? "",
+							release: "Quiet.Hours.2160p",
+							for_release: true,
+							downloads: 1200,
+						},
+					],
+				} satisfies Schemas["FoundSubtitles"]);
+			case "POST /api/v1/titles/t-film/subtitles":
+				return Response.json({ id: "sub-9" } satisfies Schemas["Created"], {
+					status: 201,
+				});
 			case "GET /api/v1/parts/part-1/stream":
 				return fixture("film.mp4");
 			case "GET /api/v1/subtitles/sub-1/file":

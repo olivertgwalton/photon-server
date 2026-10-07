@@ -496,8 +496,9 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 	var changed Changed
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		changed = Changed{}
-		for _, table := range []string{"part_files", "subtitle_files"} {
-			_, err := tx.Exec(ctx, `DELETE FROM `+table+` WHERE library_id = $1 AND `+notIn("rel_path", "$2")+` AND `+inScope("rel_path", "$3"),
+		// A fetched subtitle is kept in no folder of the library.
+		for _, from := range []string{"part_files WHERE", "subtitle_files WHERE body IS NULL AND"} {
+			_, err := tx.Exec(ctx, `DELETE FROM `+from+` library_id = $1 AND `+notIn("rel_path", "$2")+` AND `+inScope("rel_path", "$3"),
 				lib, present, scopes)
 			if err != nil {
 				return err

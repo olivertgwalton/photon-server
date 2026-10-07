@@ -1645,6 +1645,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/subtitles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Forget a fetched subtitle
+         * @description Admin only.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/tasks": {
         parameters: {
             query?: never;
@@ -5193,6 +5233,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/titles/{id}/subtitles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fetch a subtitle a search found and keep it beside the copy, for every profile */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FetchSubtitle"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Created"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/titles/{id}/subtitles/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Find the subtitles providers have in a language for a copy of a film or episode, those made for its very file first */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description The language, a BCP 47 tag. */
+                    language?: string;
+                    /** @description The copy; the title's longest where none is named. */
+                    version_id?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FoundSubtitles"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/titles/{id}/watched": {
         parameters: {
             query?: never;
@@ -5856,9 +5983,21 @@ export interface components {
             studios: string[];
             years: number[];
         };
+        FetchSubtitle: {
+            downloads?: number;
+            for_release?: boolean;
+            forced?: boolean;
+            hearing_impaired?: boolean;
+            id: string;
+            language?: string;
+            release?: string;
+            source: components["schemas"]["FieldSource"];
+            /** Format: uuid */
+            version_id: string;
+        };
         /** @enum {string} */
         Field: "title" | "sort_title" | "original_title" | "overview" | "tagline" | "certificate" | "release_date" | "year" | "genres" | "studios";
-        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "mdblist" | "omdb") | unknown;
+        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "mdblist" | "omdb" | "opensubtitles") | unknown;
         Folder: {
             /** Format: int64 */
             free_bytes?: number | null;
@@ -5880,6 +6019,21 @@ export interface components {
         };
         Fonts: {
             fonts: components["schemas"]["Font"][];
+        };
+        FoundSubtitle: {
+            downloads?: number;
+            for_release?: boolean;
+            forced?: boolean;
+            hearing_impaired?: boolean;
+            id: string;
+            language?: string;
+            release?: string;
+            source: components["schemas"]["FieldSource"];
+        };
+        FoundSubtitles: {
+            items: components["schemas"]["FoundSubtitle"][];
+            /** Format: uuid */
+            version_id: string;
         };
         /** @enum {string} */
         HEVCEncoding: "allow" | "deny";

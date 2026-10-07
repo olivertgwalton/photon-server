@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -42,9 +43,6 @@ var limit = kv.Limit{Every: 200 * time.Millisecond, Burst: 5}
 
 // tokenFor is how long a sign-in is used before signing in again; OpenSubtitles' last a day.
 const tokenFor = 12 * time.Hour
-
-// ErrQuota is an account that has fetched as many subtitles as it may today.
-var ErrQuota = errors.New("opensubtitles: the account's downloads for today are used")
 
 type Client struct {
 	base     string
@@ -203,12 +201,13 @@ func (c *Client) FetchSubtitle(ctx context.Context, id string) ([]byte, error) {
 			return nil, err
 		}
 		err = c.api.Do(req, &link)
-		var refusal *provider.Refusal
-		if errors.As(err, &refusal) && refusal.Code == http.StatusUnauthorized && attempt == 0 {
-			continue
-		}
-		if errors.As(err, &refusal) && refusal.Code == http.StatusNotAcceptable {
-			return nil, ErrQuota
+		if refusal, ok := errors.AsType[*provider.Refusal](err); ok {
+			switch {
+			case refusal.Code == http.StatusUnauthorized && attempt == 0:
+				continue
+			case refusal.Code == http.StatusNotAcceptable:
+				return nil, fmt.Errorf("opensubtitles: the account's downloads for today are used: %w", provider.ErrQuota)
+			}
 		}
 		if err != nil {
 			return nil, err
