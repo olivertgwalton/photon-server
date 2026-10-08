@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"image"
 	"image/png"
 	"io"
 	"net/http"
@@ -82,6 +84,51 @@ func TestAPictureIsFetchedOnceAndHashed(t *testing.T) {
 
 	if _, err := c.File(t.Context(), uuid.NewV7(), srv.URL+"/page.html"); err == nil {
 		t.Error("a page that is not an image was kept as a picture")
+	}
+}
+
+// A fetched picture is kept at the widths a card is drawn at before anything asks: a poster's
+// for a portrait picture, a still's for a landscape one; a page's larger sizes wait to be asked.
+func TestAFetchedPictureIsSizedForCards(t *testing.T) {
+	pictures := map[string]image.Image{"/poster.png": gradient(1000, 1500), "/still.png": gradient(1600, 900)}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_ = png.Encode(w, pictures[r.URL.Path])
+	}))
+	t.Cleanup(srv.Close)
+	dir := t.TempDir()
+	c := newCache(t, dir, func(context.Context, uuid.UUID, string) error { return nil })
+	for _, tc := range []struct {
+		path        string
+		kept, later []int
+		height      int
+	}{
+		{"/poster.png", []int{160, 320, 480}, []int{640, 960}, 480},
+		{"/still.png", []int{320, 480, 640, 960}, []int{160, 1280}, 180},
+	} {
+		id := uuid.NewV7()
+		f, err := c.File(t.Context(), id, srv.URL+tc.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = f.Close()
+		for _, w := range tc.kept {
+			f, err := os.Open(filepath.Join(dir, fmt.Sprintf("%s-w%d", id, w)))
+			if err != nil {
+				t.Errorf("%s at %d wide: %v, want it kept as fetched", tc.path, w, err)
+				continue
+			}
+			cfg, _, err := image.DecodeConfig(f)
+			_ = f.Close()
+			if err != nil || cfg.Width != w || w != 320 && cfg.Height == 0 || w == 320 && cfg.Height != tc.height {
+				t.Errorf("%s at %d wide is %d×%d, %v", tc.path, w, cfg.Width, cfg.Height, err)
+			}
+		}
+		for _, w := range tc.later {
+			if _, err := os.Stat(filepath.Join(dir, fmt.Sprintf("%s-w%d", id, w))); err == nil {
+				t.Errorf("%s at %d wide was made before it was asked for", tc.path, w)
+			}
+		}
 	}
 }
 

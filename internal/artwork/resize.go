@@ -31,6 +31,14 @@ import (
 // next, so each picture is kept at a handful of sizes whatever clients ask for.
 var sizes = []int{160, 320, 480, 640, 960, 1280, 1920, 2560, 3840}
 
+// The widths a provider's picture is kept at as it is fetched, before anything asks, so a wall
+// of titles just added draws without a decode a card: a portrait picture's are a poster's, a
+// landscape one's a still's. Anything wider, as a title page's backdrop is, is made as asked for.
+var (
+	portraitAhead  = []int{160, 320, 480}
+	landscapeAhead = []int{320, 480, 640, 960}
+)
+
 // maxPixels bounds the pictures decoded here: a few MiB of PNG can claim a picture that takes GiBs
 // to decode. A 4K backdrop is 8 megapixels.
 const maxPixels = 50_000_000
@@ -121,23 +129,26 @@ func (c *Cache) resize(ctx context.Context, name string, width, height int, open
 	}
 	src, err := decode(f)
 	_ = f.Close()
-	var b image.Rectangle
-	var w, h int
-	if err == nil {
-		b = src.Bounds()
-		w, h = fit(b.Dx(), b.Dy(), width, height)
+	if err != nil {
+		// A picture that cannot be decoded (a format not decoded here, or a damaged or vast file)
+		// is marked, so the next ask does not try again.
+		return c.asIs(ctx, name)
 	}
-	// A picture that cannot be made smaller (a format not decoded here, a damaged or vast file, or
-	// one that fits already) is marked, so the next ask does not decode it again.
-	if err != nil || w == b.Dx() && h == b.Dy() {
-		if err := c.blobs.Put(ctx, name+".as-is", bytes.NewReader(nil)); err != nil {
-			return err
-		}
-		return ErrNotResizable
+	return c.keepResized(ctx, name, src, width, height)
+}
+
+// keepResized keeps src shrunk to fit inside width×height under name; one that fits already is
+// marked answered as it is (ErrNotResizable), so the next ask does not decode it again.
+func (c *Cache) keepResized(ctx context.Context, name string, src image.Image, width, height int) error {
+	b := src.Bounds()
+	w, h := fit(b.Dx(), b.Dy(), width, height)
+	if w == b.Dx() && h == b.Dy() {
+		return c.asIs(ctx, name)
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 	draw.CatmullRom.Scale(dst, dst.Bounds(), src, b, draw.Src, nil)
 	var out bytes.Buffer
+	var err error
 	if dst.Opaque() {
 		err = jpeg.Encode(&out, dst, &jpeg.Options{Quality: 85})
 	} else {
@@ -147,6 +158,22 @@ func (c *Cache) resize(ctx context.Context, name string, width, height int, open
 		return err
 	}
 	return c.blobs.Put(ctx, name, &out)
+}
+
+// asIs marks the copy name as one the picture is answered as it is for.
+func (c *Cache) asIs(ctx context.Context, name string) error {
+	if err := c.blobs.Put(ctx, name+".as-is", bytes.NewReader(nil)); err != nil {
+		return err
+	}
+	return ErrNotResizable
+}
+
+// ahead are the widths a fetched picture of bounds b is kept at before anything asks.
+func ahead(b image.Rectangle) []int {
+	if b.Dx() > b.Dy() {
+		return landscapeAhead
+	}
+	return portraitAhead
 }
 
 // fit answers the size a dx×dy picture shrinks to inside width×height, where a bound of 0 is none.

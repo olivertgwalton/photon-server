@@ -152,12 +152,34 @@ func (c *Cache) fetch(ctx context.Context, id uuid.UUID, url string) error {
 	if err := c.blobs.Put(ctx, id.String(), body); err != nil {
 		return err
 	}
-	hash, err := c.Blurhash(ctx, id)
+	return c.hashAndSize(ctx, id)
+}
+
+// hashAndSize decodes the picture kept under id once, for its BlurHash, which hashed is told, and
+// the copies a card is drawn at, taking a place among the pictures being resized. An SVG, or a
+// picture too vast to decode, is still served; it has no stand-in.
+func (c *Cache) hashAndSize(ctx context.Context, id uuid.UUID) error {
+	select {
+	case c.resizing <- struct{}{}:
+		defer func() { <-c.resizing }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	o, err := c.blobs.Open(ctx, id.String())
 	if err != nil {
-		// An SVG, or a picture too vast to decode, is still served; it has no stand-in.
+		return err
+	}
+	src, err := decode(o)
+	_ = o.Close()
+	if err != nil {
 		return nil
 	}
-	return c.hashed(ctx, id, hash)
+	for _, w := range ahead(src.Bounds()) {
+		if err := c.keepResized(ctx, fmt.Sprintf("%s-w%d", id, w), src, w, 0); err != nil && !errors.Is(err, ErrNotResizable) {
+			return err
+		}
+	}
+	return c.hashed(ctx, id, blurhashOf(src))
 }
 
 // Blurhash answers the BlurHash of the picture kept under id, taking a place among the pictures
