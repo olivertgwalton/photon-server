@@ -355,6 +355,43 @@ func TestARenamedEpisodeKeepsItsItem(t *testing.T) {
 	}
 }
 
+// failingOnce fails to probe each file named once, as a debrid mount fails a read now and then.
+type failingOnce struct {
+	fakeProber
+	mu    sync.Mutex
+	names map[string]bool
+}
+
+func (p *failingOnce) Probe(ctx context.Context, f *os.File) (domain.Facts, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if name := filepath.Base(f.Name()); p.names[name] {
+		delete(p.names, name)
+		return domain.Facts{}, errors.New("input/output error")
+	}
+	return p.fakeProber.Probe(ctx, f)
+}
+
+func TestAFileThatFailedToReadIsTriedAgainAtTheNextScan(t *testing.T) {
+	f := newFixture(t, domain.LibraryShows)
+	f.scanner = New(f.st, &failingOnce{names: map[string]bool{"Desperate Housewives - s03e18.mkv": true}}, slog.New(slog.DiscardHandler))
+	for _, e := range []string{"17", "18", "19"} {
+		f.put("Desperate Housewives (2004)/Season 03/Desperate Housewives - s03e"+e+".mkv", "e"+e)
+	}
+	if r := f.scan(); r.Skipped != 1 {
+		t.Errorf("left out %d files, want the one that failed", r.Skipped)
+	}
+	if r := f.scan(); r.Probed != 1 || r.Skipped != 0 {
+		t.Errorf("the next scan probed %d and left out %d, want only the file that failed probed", r.Probed, r.Skipped)
+	}
+	if n := f.count(`SELECT count(*) FROM items WHERE kind = 'episode' AND episode_number = 18`); n != 1 {
+		t.Error("the file that failed is not an episode after the next scan")
+	}
+	if r := f.scan(); r.Probed != 0 || r.Unchanged != r.Folders {
+		t.Errorf("a scan after the file was read: %+v, want every folder unchanged", r)
+	}
+}
+
 func TestOneFileInTwoLibrariesIsACopyInEach(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")

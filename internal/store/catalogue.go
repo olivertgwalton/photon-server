@@ -127,8 +127,8 @@ type Saved struct {
 	Titles  Changed
 }
 
-// SaveFolder writes a scanned folder's films and extras and remembers its fingerprint, in one
-// transaction.
+// SaveFolder writes a scanned folder's films and extras and remembers its fingerprint, nil for
+// none, in one transaction.
 func (s *Store) SaveFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, films []Film, extras []Extra) (Saved, error) {
 	saved := Saved{Titles: Changed{}}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -166,8 +166,13 @@ func analysisOf(ctx context.Context, tx db, lib uuid.UUID) (analysis, error) {
 	return a, err
 }
 
-// rememberFolder keeps the fingerprint a folder had when it was scanned.
+// rememberFolder keeps the fingerprint a folder had when it was scanned. A nil fingerprint forgets
+// the folder's, so the next scan reads it again.
 func rememberFolder(ctx context.Context, tx db, lib uuid.UUID, path string, fingerprint []byte) error {
+	if fingerprint == nil {
+		_, err := tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND path = $2`, lib, path)
+		return err
+	}
 	_, err := tx.Exec(ctx, `
 		INSERT INTO folders (library_id, path, fingerprint) VALUES ($1, $2, $3)
 		ON CONFLICT (library_id, path) DO UPDATE SET fingerprint = excluded.fingerprint`, lib, path, fingerprint)
