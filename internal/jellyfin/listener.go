@@ -70,7 +70,7 @@ type served struct {
 // rereadEvery.
 func (l *Listener) Run(ctx context.Context) {
 	var cur *served
-	defer func() { cur.stop(ctx) }()
+	defer func() { l.stop(ctx, cur) }()
 	follow.Events(ctx, l.subscribe, rereadEvery, func(ctx context.Context) { cur = l.apply(ctx, cur) },
 		domain.EventNetworkChanged)
 }
@@ -95,7 +95,7 @@ func (l *Listener) apply(ctx context.Context, cur *served) *served {
 		return cur
 	}
 	// Stopped before the next is bound, which may be on the same port.
-	cur.stop(ctx)
+	l.stop(ctx, cur)
 	l.err.Store(nil)
 	if port == 0 {
 		return nil
@@ -141,14 +141,16 @@ func (s *served) ended() bool {
 
 // stop gives open requests shutdownGrace to finish, then closes what is left, whether or not ctx
 // has ended.
-func (s *served) stop(ctx context.Context) {
+func (l *Listener) stop(ctx context.Context, s *served) {
 	if s == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownGrace)
+	grace, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownGrace)
 	defer cancel()
-	if err := s.srv.Shutdown(ctx); err != nil {
-		_ = s.srv.Close()
+	if err := s.srv.Shutdown(grace); err != nil {
+		if err := s.srv.Close(); err != nil {
+			l.log.WarnContext(ctx, "jellyfin's api not closed", slog.Any("err", err))
+		}
 	}
 	<-s.done
 }

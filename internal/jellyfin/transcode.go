@@ -87,13 +87,13 @@ func (a *API) video(w http.ResponseWriter, r *http.Request) {
 // hls serves a play session's HLS: its master playlist starts it where no node runs it yet, and the
 // rest is served by the node that runs it.
 func (a *API) hls(w http.ResponseWriter, r *http.Request, name string) {
-	item, ok := itemID(w, r)
+	item, ok := a.itemID(w, r)
 	if !ok {
 		return
 	}
 	session, err := uuid.Parse(query(r, "PlaySessionId"))
 	if err != nil {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	if name == "master.m3u8" || name == "main.m3u8" {
@@ -115,7 +115,7 @@ func (a *API) hls(w http.ResponseWriter, r *http.Request, name string) {
 func (a *API) serveHLS(w http.ResponseWriter, r *http.Request, session uuid.UUID, name string) {
 	res, err := a.svc.HLS.Resource(r.Context(), session, name)
 	if errors.Is(err, hls.ErrNoRemux) {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	if err != nil {
@@ -124,7 +124,7 @@ func (a *API) serveHLS(w http.ResponseWriter, r *http.Request, session uuid.UUID
 	}
 	w.Header().Set("Content-Type", res.Type)
 	if res.File == nil {
-		_, _ = io.WriteString(w, carryQuery(res.Text, r.URL.RawQuery, name))
+		a.write(w, []byte(carryQuery(res.Text, r.URL.RawQuery, name)))
 		return
 	}
 	defer res.File.Close()
@@ -161,13 +161,13 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 		err = json.Unmarshal(b, &t)
 	}
 	if err != nil {
-		refuse(w, http.StatusBadRequest)
+		a.refuse(w, http.StatusBadRequest)
 		return true
 	}
 	s := sessionOf(r)
 	c, err := a.svc.Playing.Playable(r.Context(), s.Profile.ID, item, t.Version)
 	if isNotFound(err) {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return true
 	}
 	if err != nil {
@@ -220,7 +220,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 	}
 	a.logger.InfoContext(r.Context(), "jellyfin transcode refused", slog.Any("err", a.svc.Placer.Refuse(candidates)))
 	w.Header().Set("Retry-After", "30")
-	refuse(w, http.StatusServiceUnavailable)
+	a.refuse(w, http.StatusServiceUnavailable)
 	return true
 }
 
@@ -235,7 +235,7 @@ func (a *API) fromOwner(w http.ResponseWriter, r *http.Request, session uuid.UUI
 	}
 	target, perr := url.Parse(address)
 	if !elsewhere || perr != nil {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	subject := "/api/v1/hls/" + session.String()
@@ -254,8 +254,7 @@ func (a *API) fromOwner(w http.ResponseWriter, r *http.Request, session uuid.UUI
 				return nil
 			}
 			b, err := io.ReadAll(resp.Body)
-			_ = resp.Body.Close()
-			if err != nil {
+			if err := errors.Join(err, resp.Body.Close()); err != nil {
 				return err
 			}
 			b = []byte(carryQuery(string(b), appQuery, name))

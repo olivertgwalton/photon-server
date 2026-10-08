@@ -30,7 +30,7 @@ type quickConnectResult struct {
 func (a *API) initiateQuickConnect(w http.ResponseWriter, r *http.Request) {
 	app := appOf(r)
 	if app.Client == "" || app.Device == "" || app.DeviceID == "" || app.Version == "" {
-		refuse(w, http.StatusBadRequest)
+		a.refuse(w, http.StatusBadRequest)
 		return
 	}
 	if !a.allowed(w, r, auth.PairingsPerAddress, auth.PairingKey(a.svc.Proxies.Client(r))) {
@@ -41,7 +41,7 @@ func (a *API) initiateQuickConnect(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	writeJSON(w, quickConnectResult{
+	a.writeJSON(w, quickConnectResult{
 		Secret: start.DeviceCode, Code: start.UserCode, DeviceID: app.DeviceID, DeviceName: app.Device,
 		AppName: app.Client, AppVersion: app.Version, DateAdded: time.Now().UTC(),
 	})
@@ -59,11 +59,11 @@ func (a *API) quickConnectState(w http.ResponseWriter, r *http.Request) {
 	switch state {
 	case kv.PairingPending, kv.PairingApproved:
 	case kv.PairingExpired, kv.PairingSlowDown:
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	app := appOf(r)
-	writeJSON(w, quickConnectResult{
+	a.writeJSON(w, quickConnectResult{
 		Authenticated: state == kv.PairingApproved, Secret: secret, Code: p.UserCode, DeviceID: app.DeviceID,
 		DeviceName: p.Device.Name, AppName: p.Device.Client, AppVersion: app.Version, DateAdded: p.Started.UTC(),
 	})
@@ -74,7 +74,7 @@ func (a *API) authorizeQuickConnect(w http.ResponseWriter, r *http.Request) {
 	s := sessionOf(r)
 	if userID := query(r, "userId"); userID != "" {
 		if id, err := uuid.Parse(userID); err != nil || id != s.Profile.ID {
-			refuse(w, http.StatusForbidden)
+			a.refuse(w, http.StatusForbidden)
 			return
 		}
 	}
@@ -84,13 +84,13 @@ func (a *API) authorizeQuickConnect(w http.ResponseWriter, r *http.Request) {
 	_, err := a.svc.Auth.ApprovePairing(r.Context(), s, query(r, "code"))
 	switch {
 	case errors.Is(err, auth.ErrPairingNotFound):
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	case err != nil:
 		a.internal(w, r, err)
 		return
 	}
-	writeJSON(w, true)
+	a.writeJSON(w, true)
 }
 
 // authenticateWithQuickConnect signs in the app holding an approved secret, once.
@@ -98,9 +98,9 @@ func (a *API) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Reques
 	var req struct {
 		Secret string `json:"Secret"`
 	}
-	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(bodyWithin))
+	a.readWithin(w)
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSignIn)).Decode(&req); err != nil {
-		refuse(w, http.StatusBadRequest)
+		a.refuse(w, http.StatusBadRequest)
 		return
 	}
 	state, token, profile, err := a.svc.Auth.PollPairing(r.Context(), req.Secret)
@@ -111,8 +111,8 @@ func (a *API) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Reques
 	switch state {
 	case kv.PairingApproved:
 	case kv.PairingPending, kv.PairingSlowDown, kv.PairingExpired:
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
-	writeJSON(w, authenticationResult{User: a.userOf(profile), AccessToken: token, ServerID: a.id})
+	a.writeJSON(w, authenticationResult{User: a.userOf(profile), AccessToken: token, ServerID: a.id})
 }

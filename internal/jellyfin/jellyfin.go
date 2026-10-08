@@ -7,10 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
@@ -86,18 +88,20 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		mux: http.NewServeMux(), segments: map[string]string{},
 	}
 	a.handle("GET /System/Info/Public", a.publicInfo)
+	// Ping answers as Jellyfin does: its product's name, not the server's.
+	ping := a.constant(`"` + product + `"`)
 	a.handle("GET /System/Ping", ping)
 	a.handle("POST /System/Ping", ping)
-	a.handle("GET /Branding/Configuration", constant(`{"SplashscreenEnabled":false}`))
+	a.handle("GET /Branding/Configuration", a.constant(`{"SplashscreenEnabled":false}`))
 	a.handle("GET /Branding/Css", css)
 	a.handle("GET /Branding/Css.css", css)
-	a.handle("GET /QuickConnect/Enabled", constant(`true`))
+	a.handle("GET /QuickConnect/Enabled", a.constant(`true`))
 	a.handle("POST /QuickConnect/Initiate", a.initiateQuickConnect)
 	a.handle("GET /QuickConnect/Connect", a.quickConnectState)
 	a.handle("POST /QuickConnect/Authorize", a.signedIn(a.authorizeQuickConnect))
 	a.handle("POST /Users/AuthenticateWithQuickConnect", a.authenticateWithQuickConnect)
 	// No profile is listed to whoever asks: an app shows its form for a name and password.
-	a.handle("GET /Users/Public", constant(`[]`))
+	a.handle("GET /Users/Public", a.constant(`[]`))
 	a.handle("POST /Users/AuthenticateByName", a.authenticateByName)
 	a.handle("GET /System/Info", a.signedIn(a.systemInfo))
 	a.handle("GET /Users/Me", a.signedIn(a.me))
@@ -121,10 +125,10 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle("GET /Shows/Upcoming", a.signedIn(a.upcoming))
 	a.handle("GET /Items/Latest", a.signedIn(a.latest))
 	a.handle("GET /Users/{userId}/Items/Latest", a.signedIn(a.latest))
-	a.handle("GET /Items/{itemId}/LocalTrailers", a.signedIn(none))
-	a.handle("GET /Users/{userId}/Items/{itemId}/LocalTrailers", a.signedIn(none))
-	a.handle("GET /Items/{itemId}/SpecialFeatures", a.signedIn(none))
-	a.handle("GET /Users/{userId}/Items/{itemId}/SpecialFeatures", a.signedIn(none))
+	a.handle("GET /Items/{itemId}/LocalTrailers", a.signedIn(a.none))
+	a.handle("GET /Users/{userId}/Items/{itemId}/LocalTrailers", a.signedIn(a.none))
+	a.handle("GET /Items/{itemId}/SpecialFeatures", a.signedIn(a.none))
+	a.handle("GET /Users/{userId}/Items/{itemId}/SpecialFeatures", a.signedIn(a.none))
 	a.handle("GET /Items/{itemId}/Images/{imageType}", a.image)
 	a.handle("GET /Items/{itemId}/Images/{imageType}/{imageIndex}", a.image)
 	// Playing: a title's copies, its file as it is, and where the app has got to.
@@ -230,20 +234,41 @@ func sessionOf(r *http.Request) domain.Session {
 	return s
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
+func (a *API) writeJSON(w http.ResponseWriter, v any) {
+	body, err := json.Marshal(v)
+	if err != nil {
+		a.logger.Error("reply not encoded", slog.Any("err", err))
+		a.refuse(w, http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(v)
+	a.write(w, append(body, '\n'))
 }
 
-func constant(body string) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_, _ = w.Write([]byte(body))
+// write writes a reply's body. A write fails only once the app has gone, or stopped reading for
+// longer than the server waits, and then there is no one left to tell: the failure is kept for
+// debugging alone.
+func (a *API) write(w io.Writer, body []byte) {
+	if _, err := w.Write(body); err != nil {
+		a.logger.Debug("reply not written", slog.Any("err", err))
 	}
 }
 
-// ping answers as Jellyfin does: its product's name, not the server's.
-var ping = constant(`"` + product + `"`)
+// readWithin gives the app bodyWithin to send its body. Not every ResponseWriter has a connection
+// to time: a test's recorder has none. Any other failure is of a connection already gone, whose
+// reads fail anyway.
+func (a *API) readWithin(w http.ResponseWriter) {
+	if err := http.NewResponseController(w).SetReadDeadline(time.Now().Add(bodyWithin)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		a.logger.Debug("read deadline not set", slog.Any("err", err))
+	}
+}
+
+func (a *API) constant(body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		a.write(w, []byte(body))
+	}
+}
 
 func css(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/css")
@@ -251,13 +276,13 @@ func css(w http.ResponseWriter, _ *http.Request) {
 
 // refuse answers as Jellyfin answers what it will not do: its status, and the same words whatever
 // the reason, so an app learns nothing it should not.
-func refuse(w http.ResponseWriter, status int) {
+func (a *API) refuse(w http.ResponseWriter, status int) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(status)
-	_, _ = w.Write([]byte("Error processing request."))
+	a.write(w, []byte("Error processing request."))
 }
 
 func (a *API) internal(w http.ResponseWriter, r *http.Request, err error) {
 	a.logger.ErrorContext(r.Context(), "jellyfin request failed", slog.String("path", r.URL.Path), slog.Any("err", err))
-	refuse(w, http.StatusInternalServerError)
+	a.refuse(w, http.StatusInternalServerError)
 }
