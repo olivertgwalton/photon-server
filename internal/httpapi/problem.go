@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/historyimport"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
@@ -131,6 +132,7 @@ var problems = []struct {
 	{err: playback.ErrNoSuchSubtitle, code: codeInvalidBody, detail: "subtitle_stream is not one of the copy's subtitle streams"},
 	{err: playback.ErrNoSuchSubtitleFile, code: codeInvalidBody, detail: "subtitle_file is not one of the text subtitle files beside the copy"},
 	{err: plugin.ErrRefused, code: codeInvalidBody, ownWords: true},
+	{err: historyimport.ErrRefused, code: codeInvalidBody, ownWords: true},
 	{err: provider.ErrUnavailable, code: codeProviderUnavailable, ownWords: true},
 	{err: provider.ErrUnreached, code: codeProviderUnavailable, detail: "the provider did not answer"},
 	{err: provider.ErrNoSubtitler, code: codeConflict, detail: "no provider finds subtitles: an admin sets OpenSubtitles up under Providers"},

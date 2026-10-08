@@ -69,6 +69,7 @@ export const jobKinds: Record<Schemas["JobKind"], string> = {
 	deliver_webhook: "Send a webhook",
 	theme: "Fetch a theme tune",
 	probe: "Read media info",
+	import_history: "Import watch history",
 };
 
 export const reasons: Record<Schemas["TranscodeReason"], string> = {
@@ -178,6 +179,19 @@ export const hookable: Partial<Record<Schemas["EventKind"], string>> = {
 	"library.titles_added": "Titles are added",
 	"task.failed": "A task fails",
 	"backup.made": "A backup is made",
+};
+
+export const importSources: Record<Schemas["ImportSource"], string> = {
+	plex: "Plex",
+	jellyfin: "Jellyfin",
+	emby: "Emby",
+};
+
+// Why a title another server had watched was not imported.
+export const importMisses: Record<Schemas["ImportMiss"], string> = {
+	no_ids: "no TMDB, TheTVDB or IMDb id",
+	not_found: "not here",
+	undated: "no date watched",
 };
 
 // The kinds the activity log keeps, as its filter offers them.

@@ -143,6 +143,9 @@ type Services struct {
 	Audience audience
 	// Webhooks are the addresses told of events.
 	Webhooks webhooks
+	// Importer starts imports of other servers' watch history, and HistoryImports are how each went.
+	Importer       importer
+	HistoryImports importList
 	// NowPlaying is every playback going on, across the cluster.
 	NowPlaying nowPlaying
 	Pictures   pictures
@@ -941,6 +944,19 @@ func (a *API) routes() []route {
 		{
 			pattern: "POST /api/v1/admin/webhooks/{id}/test", access: admin, summary: "Send a webhook.test event to one webhook",
 			status: http.StatusAccepted, handle: a.testWebhook,
+		},
+		{
+			pattern: "GET /api/v1/admin/imports", access: admin, summary: "List the imports of watch history, the newest first",
+			status: http.StatusOK, reply: listJSON[importJSON]{}, handle: a.adminImports,
+		},
+		{
+			pattern: "POST /api/v1/admin/imports", access: admin,
+			summary: "Import a Plex, Jellyfin or Emby user's watch history into a profile, once the source takes its credentials",
+			body:    startImportJSON{}, status: http.StatusCreated, reply: createdJSON{}, handle: a.startImport,
+		},
+		{
+			pattern: "GET /api/v1/admin/imports/{id}", access: admin, summary: "How an import of watch history went",
+			status: http.StatusOK, reply: importJSON{}, handle: a.adminImport,
 		},
 		{
 			pattern: "GET /api/v1/home", access: signedIn, summary: "The profile's home rows, in order",

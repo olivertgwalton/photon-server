@@ -439,6 +439,116 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the imports of watch history, the newest first
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        /**
+         * Import a Plex, Jellyfin or Emby user's watch history into a profile, once the source takes its credentials
+         * @description Admin only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["StartImport"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Created"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/imports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How an import of watch history went
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Import"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/jobs": {
         parameters: {
             query?: never;
@@ -6008,6 +6118,11 @@ export interface components {
             id: string;
             token: string;
         };
+        Credentials: {
+            password?: string;
+            token?: string;
+            username?: string;
+        };
         Credit: {
             /** Format: date-time */
             added_at: string;
@@ -6362,6 +6477,34 @@ export interface components {
             row: components["schemas"]["HomeRowKind"];
             visibility: components["schemas"]["RowVisibility"];
         };
+        Import: {
+            /** Format: date-time */
+            created_at: string;
+            error?: string;
+            /** Format: date-time */
+            finished_at: string | null;
+            /** Format: uuid */
+            id: string;
+            imported: number;
+            matched: number;
+            misses: components["schemas"]["Missed"][];
+            /** Format: uuid */
+            profile_id: string;
+            skipped: number;
+            source: components["schemas"]["ImportSource"];
+            status: components["schemas"]["ImportStatus"];
+            unmatched: number;
+            url: string;
+        };
+        ImportList: {
+            items: components["schemas"]["Import"][];
+        };
+        /** @enum {string} */
+        ImportMiss: "no_ids" | "not_found" | "undated";
+        /** @enum {string} */
+        ImportSource: "plex" | "jellyfin" | "emby";
+        /** @enum {string} */
+        ImportStatus: "queued" | "running" | "done" | "failed";
         Info: {
             id: string;
             name: string;
@@ -6380,7 +6523,7 @@ export interface components {
             state: components["schemas"]["JobState"];
         };
         /** @enum {string} */
-        JobKind: "keyframes" | "keyframe_walk" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme" | "probe";
+        JobKind: "keyframes" | "keyframe_walk" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme" | "probe" | "import_history";
         JobQueue: {
             counts: components["schemas"]["JobCount"][];
             dead: components["schemas"]["DeadJob"][];
@@ -6551,6 +6694,10 @@ export interface components {
         };
         MetadataProviderList: {
             items: components["schemas"]["MetadataProvider"][];
+        };
+        Missed: {
+            reason: components["schemas"]["ImportMiss"];
+            title: string;
         };
         /** @enum {string} */
         Monitor: "realtime" | "off";
@@ -7114,6 +7261,13 @@ export interface components {
             playbacks: components["schemas"]["NowPlaying"][];
             scans: components["schemas"]["Scan"][];
             tasks: components["schemas"]["RunningTask"][];
+        };
+        StartImport: {
+            credentials: components["schemas"]["Credentials"];
+            /** Format: uuid */
+            profile_id: string;
+            source: components["schemas"]["ImportSource"];
+            url: string;
         };
         Storage: {
             bucket?: components["schemas"]["Bucket"];
