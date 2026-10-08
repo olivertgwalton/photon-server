@@ -99,10 +99,14 @@ func (c CodeStyle) newCode() (string, error) {
 	return string(b), nil
 }
 
+// typedCode is a code as someone typed it, read as it was made: in capitals, with no dash or space.
+func typedCode(code string) string {
+	return strings.ToUpper(strings.NewReplacer("-", "", " ", "").Replace(code))
+}
+
 // ApprovePairing gives the waiting television to the approving session's profile.
 func (s *Service) ApprovePairing(ctx context.Context, approver domain.Session, userCode string) (Device, error) {
-	code := strings.ToUpper(strings.NewReplacer("-", "", " ", "").Replace(userCode))
-	p, ok, err := s.kv.ApprovePairing(ctx, code, approver.Profile.ID)
+	p, ok, err := s.kv.ApprovePairing(ctx, typedCode(userCode), approver.Profile.ID)
 	if err != nil {
 		return Device{}, err
 	}

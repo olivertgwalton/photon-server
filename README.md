@@ -27,6 +27,10 @@ no profile, and only to a client on its local networks that reaches it directly:
 trusts no reverse proxy, so it is set up at its own address, and the proxy trusted after under
 Settings, Server, Network, with the address it is reached at from outside.
 
+A forgotten password is reset from the login page, as Jellyfin resets one: asked for from the
+server's local network, its code is written to the server's log (`docker compose logs server`)
+for the operator to hand on, and lasts 30 minutes (`POST /api/v1/auth/password-resets`).
+
 ### Backups
 
 Every three days the server dumps its database with `pg_dump` into its user's config folder

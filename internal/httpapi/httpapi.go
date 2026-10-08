@@ -94,6 +94,8 @@ type authenticator interface {
 	auth.Authenticator
 	SetUp(ctx context.Context, name, password string, device auth.Device) (string, domain.Profile, error)
 	SwitchProfile(ctx context.Context, session domain.Session, target uuid.UUID, secret string) (domain.Profile, error)
+	StartReset(ctx context.Context, name string) (string, error)
+	RedeemReset(ctx context.Context, code, password string) (uuid.UUID, error)
 	SetPIN(ctx context.Context, profile uuid.UUID, pin string) error
 	ChangePassword(ctx context.Context, session domain.Session, current, password string) error
 	Devices(ctx context.Context, session domain.Session) ([]store.DeviceListing, error)
@@ -289,6 +291,7 @@ func (a *API) routes() []route {
 		a.sessionRoutes(),
 		a.setupRoutes(),
 		a.pairingRoutes(),
+		a.resetRoutes(),
 		a.profilesRoutes(),
 		a.preferencesRoutes(),
 		a.catalogueRoutes(),
