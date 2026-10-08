@@ -182,7 +182,7 @@ func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL 
 	if err != nil {
 		return err
 	}
-	cacheRoot := cmp.Or(os.Getenv("PHOTON_CACHE_DIR"), filepath.Join(cacheDir, "photon-server"))
+	cacheRoot := filepath.Join(cacheDir, "photon-server")
 	stores, err := storage.Open(ctx, st, cacheRoot, logger)
 	if err != nil {
 		return err

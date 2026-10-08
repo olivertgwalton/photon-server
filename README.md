@@ -27,10 +27,11 @@ proxy in `PHOTON_TRUSTED_PROXIES` first, or every client would look local, as th
 
 ### Backups
 
-Every three days the server dumps its database with `pg_dump` into `PHOTON_BACKUP_DIR` (the
-image's `/var/lib/photon-server/backups`), keeping the newest three. Settings, Server, Backups
-lists them, downloads one and backs up now (`GET /api/v1/admin/backups`). With several servers,
-a dump is kept by whichever made it, as it ran the scheduled tasks; each lists its own.
+Every three days the server dumps its database with `pg_dump` into its user's config folder
+(`~/.config/photon-server/backups`; the image's `/var/lib/photon-server/backups`), keeping the
+newest three. Settings, Server, Backups lists them, downloads one and backs up now
+(`GET /api/v1/admin/backups`). With several servers, a dump is kept by whichever made it, as it ran
+the scheduled tasks; each lists its own.
 
 Restore, beside a dump there, restores it as Jellyfin does, by restarting
 (`POST /api/v1/admin/backups/{name}/restore`). A dump the server answering does not keep, or one
