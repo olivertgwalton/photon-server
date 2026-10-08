@@ -1361,11 +1361,12 @@ const server_ = Bun.serve({
 					? [{ id: person, name: "Ada Lane" }]
 					: [];
 				return Response.json({
-					items: found.slice(0, 20).map(card),
-					people,
-					offset: 0,
-					total: found.length,
-					people_total: people.length,
+					titles: {
+						items: found.slice(0, 20).map(card),
+						offset: 0,
+						total: found.length,
+					},
+					people: { items: people, offset: 0, total: people.length },
 				} satisfies Schemas["Search"]);
 			}
 			case `GET /api/v1/people/${person}`:

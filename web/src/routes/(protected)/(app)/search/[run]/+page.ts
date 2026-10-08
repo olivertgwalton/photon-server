@@ -17,10 +17,15 @@ export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 		}),
 	);
 	if (params.run === "people") {
-		return { q, name: "People", people: results.people, cards: undefined };
+		return {
+			q,
+			name: "People",
+			people: results.people.items,
+			cards: undefined,
+		};
 	}
 	const { words } = await parent();
-	const group = byKind(results.items, words.kinds).find(
+	const group = byKind(results.titles.items, words.kinds).find(
 		(g) => g.kind === params.run,
 	);
 	if (!group) error(404, "Nothing of that kind matches.");

@@ -790,19 +790,20 @@ export function adminTitles(route: string): Response | undefined {
 			} satisfies Schemas["CardPage"]);
 		case "GET /api/v1/search":
 			return json({
-				items: [
-					{
-						id: "t-quiet",
-						kind: "movie",
-						title: "Quiet Hours",
-						year: 2018,
-						added_at: film.added_at,
-					},
-				],
-				offset: 0,
-				total: 1,
-				people: [],
-				people_total: 0,
+				titles: {
+					items: [
+						{
+							id: "t-quiet",
+							kind: "movie",
+							title: "Quiet Hours",
+							year: 2018,
+							added_at: film.added_at,
+						},
+					],
+					offset: 0,
+					total: 1,
+				},
+				people: { items: [], offset: 0, total: 0 },
 			} satisfies Schemas["Search"]);
 	}
 	return undefined;

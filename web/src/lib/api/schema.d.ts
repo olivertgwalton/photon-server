@@ -7302,6 +7302,12 @@ export interface components {
             /** Format: uuid */
             photo?: string;
         };
+        PersonRefPage: {
+            items: components["schemas"]["PersonRef"][];
+            offset: number;
+            /** Format: int64 */
+            total: number;
+        };
         Pin: {
             pin: string;
         };
@@ -7625,13 +7631,8 @@ export interface components {
         /** @enum {string} */
         ScanPhase: "reading" | "removing";
         Search: {
-            items: components["schemas"]["Card"][];
-            offset: number;
-            people: components["schemas"]["PersonRef"][];
-            /** Format: int64 */
-            people_total: number;
-            /** Format: int64 */
-            total: number;
+            people: components["schemas"]["PersonRefPage"];
+            titles: components["schemas"]["CardPage"];
         };
         /** @enum {string} */
         SearchKind: "movie" | "show" | "collection" | "episode" | "person";

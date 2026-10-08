@@ -208,29 +208,23 @@ func TestSearch(t *testing.T) {
 		if tc.wantStatus != http.StatusOK {
 			continue
 		}
-		var got struct {
-			Items []struct {
-				Title string `json:"title"`
-			} `json:"items"`
-			People []struct {
-				Name string `json:"name"`
-			} `json:"people"`
-		}
+		var got searchJSON
 		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 			t.Fatal(err)
 		}
-		if tc.wantTitle == "" && len(got.Items) != 0 || tc.wantTitle != "" && (len(got.Items) != 1 || got.Items[0].Title != tc.wantTitle) {
-			t.Errorf("%q: items = %+v, want %q", tc.query, got.Items, tc.wantTitle)
+		titles := got.Titles.Items
+		if tc.wantTitle == "" && len(titles) != 0 || tc.wantTitle != "" && (len(titles) != 1 || titles[0].Title != tc.wantTitle) {
+			t.Errorf("%q: titles = %+v, want %q", tc.query, titles, tc.wantTitle)
 		}
-		if len(got.People) != tc.wantPeople {
-			t.Errorf("%q: people = %+v, want %d", tc.query, got.People, tc.wantPeople)
+		if len(got.People.Items) != tc.wantPeople {
+			t.Errorf("%q: people = %+v, want %d", tc.query, got.People.Items, tc.wantPeople)
 		}
 	}
 	var next searchJSON
 	if err := json.NewDecoder(serve(t, http.MethodGet, "/api/v1/search?q=sigourney&offset=1&limit=1", goodToken, "").Body).Decode(&next); err != nil {
 		t.Fatal(err)
 	}
-	if next.Offset != 1 || next.Total != 1 || next.PeopleTotal != 1 || len(next.Items) != 0 {
+	if next.Titles.Offset != 1 || next.Titles.Total != 1 || next.People.Offset != 1 || next.People.Total != 1 || len(next.Titles.Items) != 0 {
 		t.Errorf("the second page = %+v, want it empty, counting the one title and one person", next)
 	}
 }
