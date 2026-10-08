@@ -10,7 +10,6 @@ import { client } from "#lib/api/client.js";
 import SmartCollectionDialog from "#lib/components/admin/SmartCollectionDialog.svelte";
 import LetterBar from "#lib/components/LetterBar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
-import { Skeleton } from "#lib/components/ui/skeleton/index.js";
 import * as ToggleGroup from "#lib/components/ui/toggle-group/index.js";
 import Wall from "#lib/components/Wall.svelte";
 import WallFilterMenu from "#lib/components/WallFilterMenu.svelte";
@@ -42,7 +41,7 @@ const shown = $derived(
 		? streamed.value
 		: undefined,
 );
-// Blank cards, a screenful, until the wall arrives.
+// Empty card frames, a screenful, until the wall arrives.
 const blanks = Array.from({ length: 24 }, (_, n) => n);
 
 const id = $derived(data.library.id);
@@ -110,8 +109,6 @@ function jump(letter: string) {
 	<p class="text-ink-3 mr-auto text-sm" aria-live="polite">
 		{#if shown}
 			{count(shown.titles.total, "title")}
-		{:else}
-			<Skeleton class="inline-block h-4 w-16 align-middle" />
 		{/if}
 	</p>
 	{#if narrowed}
@@ -167,16 +164,16 @@ function jump(letter: string) {
 	>
 		{#each blanks as card (card)}
 			<li>
-				<Skeleton
+				<div
 					class={[
-						"rounded-xl",
+						"bg-raise rounded-xl",
 						view === "list"
 							? "h-18 w-full"
 							: view === "still"
 								? "aspect-video"
 								: "aspect-[2/3]",
 					]}
-				/>
+				></div>
 			</li>
 		{/each}
 	</ul>
