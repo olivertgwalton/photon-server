@@ -178,7 +178,7 @@ func (a *API) newItem(id uuid.UUID, kind domain.ItemKind, name string) item {
 func (a *API) fromCard(c store.Card) item {
 	it := a.newItem(c.ID, c.Kind, c.Title)
 	it.DateCreated, it.PremiereDate = optionalTime(c.AddedAt), optionalTime(c.ReleaseDate)
-	it.ProductionYear, it.Overview, it.Genres, it.OfficialRating = c.Year, c.Overview, c.Genres, c.Certificate
+	it.ProductionYear, it.Overview, it.Genres, it.OfficialRating = c.Year, c.Overview, c.Genres, domain.Bare(c.Certificate)
 	it.RunTimeTicks = c.DurationMS * ticksPerMS
 	it.ratings(c.Ratings)
 	it.SeriesID, it.SeriesName = ref(c.Show)
