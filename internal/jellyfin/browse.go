@@ -22,6 +22,8 @@ type catalogue interface {
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
 	Named(ctx context.Context, profile, id uuid.UUID) (store.Named, error)
+	SearchPeople(ctx context.Context, text string, offset, limit int) ([]store.PersonRef, int64, error)
+	Person(ctx context.Context, id uuid.UUID) (store.PersonPage, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Seasons(ctx context.Context, profile, show uuid.UUID) ([]store.SeasonCard, error)
 	Episodes(ctx context.Context, profile, of uuid.UUID) ([]store.Card, error)
@@ -232,6 +234,11 @@ func wallPage(r *http.Request, profile uuid.UUID, l listed) store.WallPage {
 		}
 	}
 	p.Filter.Genres = values(r, "genres")
+	// An id that is none names no one, so narrows to nothing rather than letting everything through.
+	for _, v := range values(r, "personIds") {
+		id, _ := parseID(v)
+		p.Filter.People = append(p.Filter.People, id)
+	}
 	for _, y := range values(r, "years") {
 		if n, err := strconv.Atoi(y); err == nil {
 			p.Filter.Years = append(p.Filter.Years, n)
@@ -383,7 +390,7 @@ func (a *API) children(w http.ResponseWriter, r *http.Request, profile, parent u
 	switch named.Kind {
 	case store.NamedTitle:
 		a.titleChildren(w, r, profile, parent, named.Title, types, l)
-	case store.NamedAnnounced:
+	case store.NamedAnnounced, store.NamedPerson:
 		a.writeJSON(w, none)
 	}
 }
@@ -429,7 +436,8 @@ func (a *API) writeSeasons(w http.ResponseWriter, r *http.Request, show uuid.UUI
 	a.writeJSON(w, out)
 }
 
-// item answers one item: a library, a title with all photon knows of it, or an episode announced.
+// item answers one item: a library, a title with all photon knows of it, an episode announced,
+// or someone credited on a title.
 func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("itemId"))
 	if err != nil {
@@ -459,6 +467,8 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 		a.titleItem(w, r, id)
 	case store.NamedAnnounced:
 		a.announcedItem(w, r, id)
+	case store.NamedPerson:
+		a.person(w, r, id)
 	}
 }
 

@@ -31,6 +31,7 @@ type item struct {
 	Container               string              `json:"Container,omitempty"`
 	SortName                string              `json:"SortName,omitempty"`
 	PremiereDate            *time.Time          `json:"PremiereDate,omitempty"`
+	EndDate                 *time.Time          `json:"EndDate,omitempty"`
 	MediaSources            []mediaSource       `json:"MediaSources,omitempty"`
 	Path                    string              `json:"Path,omitempty"`
 	CriticRating            *float64            `json:"CriticRating,omitempty"`
@@ -41,6 +42,7 @@ type item struct {
 	CommunityRating         *float64            `json:"CommunityRating,omitempty"`
 	RunTimeTicks            int64               `json:"RunTimeTicks,omitempty"`
 	ProductionYear          int                 `json:"ProductionYear,omitempty"`
+	ProductionLocations     []string            `json:"ProductionLocations,omitempty"`
 	IndexNumber             *int                `json:"IndexNumber,omitempty"`
 	IndexNumberEnd          *int                `json:"IndexNumberEnd,omitempty"`
 	ParentIndexNumber       *int                `json:"ParentIndexNumber,omitempty"`

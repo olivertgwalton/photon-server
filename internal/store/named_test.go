@@ -12,7 +12,7 @@ import (
 )
 
 // An id is told for what it names, a title and its kind or an episode announced, only to a profile
-// that may open it.
+// that may open it; someone credited, to anyone.
 func TestAnIDIsToldForWhatItNames(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
@@ -43,7 +43,9 @@ func TestAnIDIsToldForWhatItNames(t *testing.T) {
 	}
 	show, season := oneItem(t, s, "kind = 'show'").ID, oneItem(t, s, "kind = 'season'").ID
 	aired := time.Date(2026, time.October, 17, 0, 0, 0, 0, time.UTC)
-	if err := s.SaveIdentity(ctx, show, domain.SourceTMDB, domain.Metadata{}, map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{
+	if err := s.SaveIdentity(ctx, show, domain.SourceTMDB, domain.Metadata{Title: "Severance", Credits: []domain.Credit{{
+		Name: "Adam Scott", IDs: map[domain.Provider]string{domain.ProviderTMDB: "55536"}, Kind: domain.CreditActor, Role: "Mark",
+	}}}, map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{
 		2: {Title: "Half Loop", ReleaseDate: aired},
 	}}}); err != nil {
 		t.Fatal(err)
@@ -53,6 +55,15 @@ func TestAnIDIsToldForWhatItNames(t *testing.T) {
 		t.Fatal(days, err)
 	}
 	announced := days[0].Entries[0].ID
+	page, err := s.Title(ctx, admin.ID, show)
+	if err != nil || len(page.Credits) != 1 {
+		t.Fatal(page.Credits, err)
+	}
+	for _, p := range []uuid.UUID{admin.ID, kid.ID} {
+		if got, err := s.Named(ctx, p, page.Credits[0].PersonID); err != nil || got.Kind != NamedPerson {
+			t.Errorf("someone credited names %+v, %v; want a person", got, err)
+		}
+	}
 
 	for _, c := range []struct {
 		id   uuid.UUID
