@@ -38,7 +38,7 @@ func subtitleCharset(r io.Reader, lang string) (string, error) {
 		return "", nil
 	}
 	// A language no one tagged, or none, is undetermined, and takes the default below.
-	tag, _ := language.Parse(lang)
+	tag := language.Make(lang)
 	base, _ := tag.Base()
 	if base.String() == "zh" {
 		if script, _ := tag.Script(); script.String() == "Hant" {
