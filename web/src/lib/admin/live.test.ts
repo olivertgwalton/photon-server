@@ -47,7 +47,12 @@ describe("the admin event stream", () => {
 	test("follows a play from its start through a pause to its stop", () => {
 		const started = after([
 			"playback.started",
-			{ kind: "playback.started", at, details: { playback: playing } },
+			{
+				id: "a-1",
+				kind: "playback.started",
+				at,
+				details: { playback: playing },
+			},
 		]);
 		expect(started.playbacks).toHaveLength(1);
 		expect(started.arrived).toHaveLength(1);
@@ -58,10 +63,11 @@ describe("the admin event stream", () => {
 			details: { playback: { ...playing, state: "paused" } },
 		});
 		expect(paused.playbacks[0]?.state).toBe("paused");
-		// A pause is not something the activity log keeps.
+		// A pause is not something the activity log keeps, so it has no id.
 		expect(paused.arrived).toHaveLength(1);
 
 		const stopped = apply(paused, "playback.stopped", {
+			id: "a-2",
 			kind: "playback.stopped",
 			at,
 			details: { playback: playing, reach: "end" },

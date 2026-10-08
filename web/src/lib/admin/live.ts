@@ -26,23 +26,6 @@ export const idle: Live = {
 	arrived: [],
 };
 
-// The kinds the activity log keeps (domain.EventKind.Logged).
-const logged = new Set<EventKind>([
-	"playback.started",
-	"playback.stopped",
-	"auth.signed_in",
-	"auth.sign_in_refused",
-	"profile.added",
-	"profile.removed",
-	"library.added",
-	"library.removed",
-	"library.scanned",
-	"library.titles_added",
-	"task.failed",
-	"backup.made",
-	"job.dead",
-]);
-
 // How many arrived events are kept; a page that wants more pages the log.
 const keep = 50;
 
@@ -56,7 +39,8 @@ export function apply(live: Live, name: string, data: unknown): Live {
 		return { ...(data as Snapshot), ready: true, arrived: live.arrived };
 	}
 	const e = data as Event;
-	const next = logged.has(e.kind)
+	// The server gives an event an id only where its activity log keeps it.
+	const next = e.id
 		? { ...live, arrived: [e, ...live.arrived].slice(0, keep) }
 		: { ...live };
 	const d = e.details;
