@@ -188,6 +188,10 @@ func (c *Client) FetchSubtitle(ctx context.Context, id string) ([]byte, error) {
 	if err != nil {
 		return nil, provider.ErrNotFound
 	}
+	ask := struct {
+		FileID int    `json:"file_id"`
+		Format string `json:"sub_format"`
+	}{file, "srt"}
 	var link struct {
 		Link string `json:"link"`
 	}
@@ -196,7 +200,7 @@ func (c *Client) FetchSubtitle(ctx context.Context, id string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		req, err := c.request(ctx, http.MethodPost, "/download", nil, map[string]any{"file_id": file, "sub_format": "srt"}, set[keySetting], token)
+		req, err := c.request(ctx, http.MethodPost, "/download", nil, ask, set[keySetting], token)
 		if err != nil {
 			return nil, err
 		}
