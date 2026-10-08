@@ -194,6 +194,20 @@ func TestAManagerKeepsTheProfilesItAdds(t *testing.T) {
 			t.Errorf("%s another's profile: %v, want ErrNotFound", name, err)
 		}
 	}
+	if _, err := s.SetProfile(ctx, kid.ID, ProfileChange{Role: domain.RoleAdmin}, nil); err != nil {
+		t.Fatal(err)
+	}
+	for name, change := range map[string]func() error{
+		"changing": func() error {
+			_, err := s.SetProfile(ctx, kid.ID, ProfileChange{PasswordHash: "mine"}, &sam.ID)
+			return err
+		},
+		"removing": func() error { _, err := s.RemoveProfile(ctx, kid.ID, &sam.ID); return err },
+	} {
+		if err := change(); !errors.Is(err, ErrNotFound) {
+			t.Errorf("%s a kept profile the admin raised: %v, want ErrNotFound", name, err)
+		}
+	}
 	if _, err := s.RemoveProfile(ctx, sam.ID, nil); err != nil {
 		t.Fatal(err)
 	}

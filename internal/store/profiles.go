@@ -27,9 +27,9 @@ const profileColumns = `id, name, role, password_hash, pin_hash, avatar_id, mana
 // keeps more than it may see itself.
 var ErrBeyondManager = errors.New("a manager keeps users, granting them no more than it may see itself")
 
-// keptBy is the profiles a profile administers: every one for an admin, nil, or those a manager
-// added and keeps.
-const keptBy = `($2::uuid IS NULL OR managed_by = $2)`
+// keptBy is the profiles a profile administers: every one for an admin, nil, or the users a
+// manager added and keeps. One the admin has since raised is the admin's, whoever added it.
+const keptBy = `($2::uuid IS NULL OR (managed_by = $2 AND role = 'user'))`
 
 // AddProfile adds a profile the admin keeps, or, for a manager by, one the manager keeps, which
 // starts seeing what the manager sees.
