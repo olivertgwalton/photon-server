@@ -30,7 +30,7 @@ func (a *API) upcoming(w http.ResponseWriter, r *http.Request) {
 	}
 	if parent, err := uuid.Parse(query(r, "parentId")); err == nil {
 		if _, ok := seen[parent]; !ok {
-			writeJSON(w, queryResult{Items: []item{}})
+			a.writeJSON(w, queryResult{Items: []item{}})
 			return
 		}
 		q.Library = parent
@@ -63,14 +63,14 @@ func (a *API) upcoming(w http.ResponseWriter, r *http.Request) {
 			items[n].virtual()
 		}
 	}
-	writeJSON(w, queryResult{Items: items, TotalRecordCount: len(cards), StartIndex: from})
+	a.writeJSON(w, queryResult{Items: items, TotalRecordCount: len(cards), StartIndex: from})
 }
 
 // announcedItem answers an episode announced with no file, as an app opens one from upcoming.
 func (a *API) announcedItem(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
 	c, err := a.svc.Catalogue.AnnouncedEpisode(r.Context(), sessionOf(r).Profile.ID, id)
 	if errors.Is(err, store.ErrNotFound) {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	if err != nil {
@@ -79,7 +79,7 @@ func (a *API) announcedItem(w http.ResponseWriter, r *http.Request, id uuid.UUID
 	}
 	it := a.fromCard(c)
 	it.virtual()
-	writeJSON(w, it)
+	a.writeJSON(w, it)
 }
 
 // virtual makes an episode one with no file, as Jellyfin's missing and unaired episodes are.

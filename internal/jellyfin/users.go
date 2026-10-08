@@ -91,14 +91,14 @@ func (a *API) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"Username"`
 		Pw       string `json:"Pw"`
 	}
-	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(bodyWithin))
+	a.readWithin(w)
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSignIn)).Decode(&req); err != nil {
-		refuse(w, http.StatusBadRequest)
+		a.refuse(w, http.StatusBadRequest)
 		return
 	}
 	app := appOf(r)
 	if req.Username == "" || app.Client == "" || app.Device == "" || app.DeviceID == "" || app.Version == "" {
-		refuse(w, http.StatusBadRequest)
+		a.refuse(w, http.StatusBadRequest)
 		return
 	}
 	addr := a.svc.Proxies.Client(r)
@@ -111,14 +111,14 @@ func (a *API) authenticateByName(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		a.svc.Raise(r.Context(), domain.Event{Kind: domain.EventSignInRefused, Details: details})
-		refuse(w, http.StatusUnauthorized)
+		a.refuse(w, http.StatusUnauthorized)
 		return
 	case err != nil:
 		a.internal(w, r, err)
 		return
 	}
 	a.svc.Raise(r.Context(), domain.Event{Kind: domain.EventSignedIn, Profile: profile.ID, Details: details})
-	writeJSON(w, authenticationResult{User: a.userOf(profile), AccessToken: token, ServerID: a.id})
+	a.writeJSON(w, authenticationResult{User: a.userOf(profile), AccessToken: token, ServerID: a.id})
 }
 
 // allowed spends one attempt from key's allowance, answering 429 with Retry-After when it is
@@ -131,24 +131,24 @@ func (a *API) allowed(w http.ResponseWriter, r *http.Request, limit kv.Limit, ke
 	}
 	if wait > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(wait.Seconds()))))
-		refuse(w, http.StatusTooManyRequests)
+		a.refuse(w, http.StatusTooManyRequests)
 		return false
 	}
 	return true
 }
 
 func (a *API) me(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, a.userOf(sessionOf(r).Profile))
+	a.writeJSON(w, a.userOf(sessionOf(r).Profile))
 }
 
 // user answers the signed-in profile by its id, and no other, so no profile learns of another.
 func (a *API) user(w http.ResponseWriter, r *http.Request) {
 	p := sessionOf(r).Profile
 	if id, err := uuid.Parse(r.PathValue("userId")); err != nil || id != p.ID {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
-	writeJSON(w, a.userOf(p))
+	a.writeJSON(w, a.userOf(p))
 }
 
 // logout signs the device out. An API key is not a device and stays, revoked only by an admin.
@@ -182,7 +182,7 @@ type displayPreferences struct {
 }
 
 func (a *API) displayPreferences(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, displayPreferences{
+	a.writeJSON(w, displayPreferences{
 		SortBy: "SortName", PrimaryImageHeight: 250, PrimaryImageWidth: 250, CustomPrefs: map[string]string{},
 		ScrollDirection: "Horizontal", ShowBackdrop: true, SortOrder: "Ascending", Client: query(r, "client"),
 	})

@@ -124,7 +124,7 @@ func (a *API) writeList(w http.ResponseWriter, r *http.Request, cards []store.Ca
 		a.internal(w, r, err)
 		return
 	}
-	writeJSON(w, queryResult{Items: items, TotalRecordCount: total, StartIndex: start})
+	a.writeJSON(w, queryResult{Items: items, TotalRecordCount: total, StartIndex: start})
 }
 
 // seenLibraries are the libraries the profile sees, by id.
@@ -148,7 +148,7 @@ func (a *API) views(w http.ResponseWriter, r *http.Request) {
 	for n, l := range libs {
 		out.Items[n] = a.library(l)
 	}
-	writeJSON(w, out)
+	a.writeJSON(w, out)
 }
 
 // groupingOptions are the libraries a view may be grouped by, as Jellyfin's SpecialViewOptionDto.
@@ -166,7 +166,7 @@ func (a *API) groupingOptions(w http.ResponseWriter, r *http.Request) {
 	for n, l := range libs {
 		out[n] = option{Name: l.Name, ID: guid(l.ID)}
 	}
-	writeJSON(w, out)
+	a.writeJSON(w, out)
 }
 
 // virtualFolders are the libraries and what each holds, which Infuse reads to know which is which;
@@ -187,7 +187,7 @@ func (a *API) virtualFolders(w http.ResponseWriter, r *http.Request) {
 	for n, l := range libs {
 		out[n] = folder{Name: l.Name, Locations: []string{}, CollectionType: a.library(l).CollectionType, ItemID: guid(l.ID)}
 	}
-	writeJSON(w, out)
+	a.writeJSON(w, out)
 }
 
 // sorts are photon's sorts for Jellyfin's ItemSortBy, which an app sends most important first.
@@ -280,7 +280,7 @@ func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Req
 		}
 	}
 	if len(ids) == 0 {
-		writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
+		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
 		return
 	}
 	cards, total, err := a.svc.Catalogue.Wall(r.Context(), ids, wallPage(r, sessionOf(r).Profile.ID, l))
@@ -304,7 +304,7 @@ func (a *API) search(w http.ResponseWriter, r *http.Request, text string, librar
 		}
 	}
 	if len(q.Kinds) == 0 && len(types) > 0 {
-		writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
+		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
 		return
 	}
 	cards, total, err := a.svc.Catalogue.Search(r.Context(), q)
@@ -320,7 +320,7 @@ func (a *API) search(w http.ResponseWriter, r *http.Request, text string, librar
 func (a *API) children(w http.ResponseWriter, r *http.Request, profile, parent uuid.UUID, types []string, l listed) {
 	seasons, err := a.svc.Catalogue.Seasons(r.Context(), profile, parent)
 	if errors.Is(err, store.ErrNotFound) {
-		writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
+		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
 		return
 	}
 	if err != nil {
@@ -352,14 +352,14 @@ func (a *API) writeSeasons(w http.ResponseWriter, r *http.Request, show uuid.UUI
 		out.Items[n] = a.fromSeason(store.TitleRef{ID: show, Title: name}, s)
 		out.Items[n].Etag = etag(out.Items[n])
 	}
-	writeJSON(w, out)
+	a.writeJSON(w, out)
 }
 
 // item answers one item: a library, or a title with all photon knows of it.
 func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("itemId"))
 	if err != nil {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	_, seen, err := a.seenLibraries(r)
@@ -368,7 +368,7 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if lib, ok := seen[id]; ok {
-		writeJSON(w, a.library(lib))
+		a.writeJSON(w, a.library(lib))
 		return
 	}
 	p, err := a.svc.Catalogue.Title(r.Context(), sessionOf(r).Profile.ID, id)
@@ -382,18 +382,18 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	}
 	it := a.fromTitle(p, words.Negotiate(w, r))
 	it.Etag = etag(it)
-	writeJSON(w, it)
+	a.writeJSON(w, it)
 }
 
 func (a *API) seasons(w http.ResponseWriter, r *http.Request) {
 	show, err := uuid.Parse(r.PathValue("seriesId"))
 	if err != nil {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	seasons, err := a.svc.Catalogue.Seasons(r.Context(), sessionOf(r).Profile.ID, show)
 	if errors.Is(err, store.ErrNotFound) {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	if err != nil {
@@ -408,7 +408,7 @@ func (a *API) seasons(w http.ResponseWriter, r *http.Request) {
 func (a *API) episodes(w http.ResponseWriter, r *http.Request) {
 	of, err := uuid.Parse(r.PathValue("seriesId"))
 	if err != nil {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	if season, err := uuid.Parse(query(r, "seasonId")); err == nil {
@@ -416,7 +416,7 @@ func (a *API) episodes(w http.ResponseWriter, r *http.Request) {
 	}
 	cards, err := a.svc.Catalogue.Episodes(r.Context(), sessionOf(r).Profile.ID, of)
 	if errors.Is(err, store.ErrNotFound) {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	if err != nil {
@@ -505,14 +505,14 @@ func (a *API) latest(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	writeJSON(w, items)
+	a.writeJSON(w, items)
 }
 
 // none answers a list photon has nothing for yet, as an empty one: Infuse asks for every title's
 // trailers and features, and takes a missing route for a failure.
-func none(w http.ResponseWriter, _ *http.Request) {
+func (a *API) none(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_, _ = w.Write([]byte(`[]`))
+	a.write(w, []byte(`[]`))
 }
 
 // image answers a picture by its tag, sized to fit what an app asks for. A tag is a picture's id,
@@ -521,12 +521,12 @@ func none(w http.ResponseWriter, _ *http.Request) {
 func (a *API) image(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(query(r, "tag"))
 	if err != nil {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	pic, err := a.svc.Catalogue.Picture(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	if err != nil {
@@ -544,7 +544,7 @@ func (a *API) image(w http.ResponseWriter, r *http.Request) {
 	}
 	o, name, err := a.svc.Pictures.Open(r.Context(), id, pic, bound("maxWidth", "fillWidth", "width"), bound("maxHeight", "fillHeight", "height"))
 	if errors.Is(err, os.ErrNotExist) {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	if err != nil {

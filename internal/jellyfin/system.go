@@ -29,7 +29,7 @@ func (a *API) public(r *http.Request) publicInfo {
 }
 
 func (a *API) publicInfo(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, a.public(r))
+	a.writeJSON(w, a.public(r))
 }
 
 // systemInfo is Jellyfin's SystemInfo: what an app asks of a server it is signed in to. Jellyfin's
@@ -49,7 +49,7 @@ func (a *API) systemInfo(w http.ResponseWriter, r *http.Request) {
 	if addr, ok := r.Context().Value(http.LocalAddrContextKey).(*net.TCPAddr); ok {
 		port = addr.Port
 	}
-	writeJSON(w, systemInfo{
+	a.writeJSON(w, systemInfo{
 		SupportsLibraryMonitor: true, WebSocketPortNumber: port,
 		CompletedInstallations: []struct{}{}, CastReceiverApplications: []struct{}{},
 		publicInfo: a.public(r),

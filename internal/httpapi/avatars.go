@@ -48,11 +48,10 @@ func (a *API) clearProfileAvatar(w http.ResponseWriter, r *http.Request) {
 // good is shown the new one, and makes it the profile's.
 func (a *API) setAvatar(w http.ResponseWriter, r *http.Request, profile uuid.UUID, by *uuid.UUID) {
 	rc := http.NewResponseController(w)
-	// Not every ResponseWriter has a connection to time: a test's recorder has none.
-	_ = rc.SetReadDeadline(time.Now().Add(avatarWithin))
+	readWithin(rc, a.logger, time.Now().Add(avatarWithin))
 	picture := uuid.NewV7()
 	err := a.svc.Artwork.Keep(r.Context(), picture, r.Body)
-	_ = rc.SetReadDeadline(time.Time{})
+	readWithin(rc, a.logger, time.Time{})
 	if errors.Is(err, artwork.ErrNotPicture) {
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())
 		return

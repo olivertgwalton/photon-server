@@ -8,10 +8,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 	"uuid"
-
-	"golang.org/x/sync/singleflight"
 )
 
 // rootAccess is whether a node can reach and read a library's root.
@@ -63,8 +62,15 @@ type nodeRootCheckJSON struct {
 
 // rootReads reads roots for the checks of them, one read of a root at a time.
 type rootReads struct {
-	group singleflight.Group
-	read  func(root string) rootCheckJSON
+	mu      sync.Mutex
+	reading map[string]*rootRead
+	read    func(root string) rootCheckJSON
+}
+
+// rootRead is a read of a root under way: done closes once its check is there.
+type rootRead struct {
+	done  chan struct{}
+	check rootCheckJSON
 }
 
 // check reads root as the scanner does, giving up after checkWithin or when ctx is done.
@@ -72,16 +78,38 @@ func (rr *rootReads) check(ctx context.Context, root string) rootCheckJSON {
 	// On a hung mount the read is stuck in the kernel and outlives the check, and the request,
 	// that started it, until the mount answers. A check of the root meanwhile waits on that read
 	// rather than leaving another stuck beside it.
-	read := rr.group.DoChan(root, func() (any, error) { return rr.read(root), nil })
+	read := rr.start(root)
 	timer := time.NewTimer(checkWithin)
 	defer timer.Stop()
 	select {
-	case r := <-read:
-		return r.Val.(rootCheckJSON) //nolint:forcetypeassert // the read answers nothing else
+	case <-read.done:
+		return read.check
 	case <-timer.C:
 	case <-ctx.Done():
 	}
 	return rootCheckJSON{Access: accessTimedOut, Error: fmt.Sprintf("%s did not answer within %s", root, checkWithin)}
+}
+
+// start answers the read of root under way, or starts one.
+func (rr *rootReads) start(root string) *rootRead {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	if read, ok := rr.reading[root]; ok {
+		return read
+	}
+	read := &rootRead{done: make(chan struct{})}
+	if rr.reading == nil {
+		rr.reading = map[string]*rootRead{}
+	}
+	rr.reading[root] = read
+	go func() {
+		read.check = rr.read(root)
+		rr.mu.Lock()
+		delete(rr.reading, root)
+		rr.mu.Unlock()
+		close(read.done)
+	}()
+	return read
 }
 
 func readRoot(root string) rootCheckJSON {

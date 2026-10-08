@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -44,7 +43,7 @@ func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", res.Type)
 	if res.File == nil {
-		_, _ = io.WriteString(w, res.Text)
+		writeBody(w, a.logger, []byte(res.Text))
 		return
 	}
 	a.serveFile(w, r, res.File, name, nil)

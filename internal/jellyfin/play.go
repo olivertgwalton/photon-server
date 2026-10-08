@@ -51,20 +51,20 @@ type watching interface {
 const maxReport = 1 << 20
 
 // readJSON reads a body an app may leave empty, its keys in any case, within bodyWithin.
-func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
-	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(bodyWithin))
+func (a *API) readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
+	a.readWithin(w)
 	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxReport)).Decode(v)
 	if err != nil && !errors.Is(err, io.EOF) {
-		refuse(w, http.StatusBadRequest)
+		a.refuse(w, http.StatusBadRequest)
 		return false
 	}
 	return true
 }
 
-func itemID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+func (a *API) itemID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	id, err := uuid.Parse(r.PathValue("itemId"))
 	if err != nil {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 	}
 	return id, err == nil
 }
@@ -74,19 +74,19 @@ func itemID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 // sends its device profile, the first is decided for it: played as it is where it plays that,
 // else made into HLS it takes, at a TranscodingUrl. Nothing is started until the app plays.
 func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
-	id, ok := itemID(w, r)
+	id, ok := a.itemID(w, r)
 	if !ok {
 		return
 	}
 	var req playbackRequest
-	if r.Method == http.MethodPost && !readJSON(w, r, &req) {
+	if r.Method == http.MethodPost && !a.readJSON(w, r, &req) {
 		return
 	}
 	req.MediaSourceID = cmp.Or(req.MediaSourceID, query(r, "mediaSourceId"))
 	version, _ := uuid.Parse(req.MediaSourceID)
 	c, err := a.svc.Playing.Playable(r.Context(), sessionOf(r).Profile.ID, id, version)
 	if errors.Is(err, store.ErrNotFound) {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	if err != nil {
@@ -120,7 +120,7 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		}
 		a.decide(r, &out.MediaSources[0], id, session, c, req, remote)
 	}
-	writeJSON(w, out)
+	a.writeJSON(w, out)
 }
 
 // playbackRequest is Jellyfin's PlaybackInfoDto, as much of it as photon decides by.
@@ -209,7 +209,7 @@ var errSeveralFiles = errors.New("a copy in several files plays only as HLS")
 // ranges, so an app seeks by asking for the bytes it wants. A copy in several files is refused:
 // see errSeveralFiles.
 func (a *API) stream(w http.ResponseWriter, r *http.Request) {
-	id, ok := itemID(w, r)
+	id, ok := a.itemID(w, r)
 	if !ok {
 		return
 	}
@@ -217,14 +217,14 @@ func (a *API) stream(w http.ResponseWriter, r *http.Request) {
 	c, err := a.svc.Playing.Playable(r.Context(), sessionOf(r).Profile.ID, id, version)
 	switch {
 	case errors.Is(err, store.ErrNotFound) || err == nil && len(c.Parts) == 0:
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	case err != nil:
 		a.internal(w, r, err)
 		return
 	case len(c.Parts) > 1:
 		a.logger.InfoContext(r.Context(), "jellyfin stream refused", slog.Any("err", errSeveralFiles))
-		refuse(w, http.StatusConflict)
+		a.refuse(w, http.StatusConflict)
 		return
 	}
 	a.serveFile(w, r, func(ctx context.Context) (string, string, error) { return a.svc.Playing.PartFile(ctx, c.Parts[0].ID) })
@@ -233,7 +233,7 @@ func (a *API) stream(w http.ResponseWriter, r *http.Request) {
 func (a *API) serveFile(w http.ResponseWriter, r *http.Request, where func(context.Context) (root, rel string, err error)) {
 	root, rel, err := where(r.Context())
 	if errors.Is(err, store.ErrNotFound) {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	if err != nil {
@@ -257,19 +257,19 @@ func (a *API) serveFile(w http.ResponseWriter, r *http.Request, where func(conte
 
 // subtitle serves a subtitle file beside a copy, by the index its media source gives it.
 func (a *API) subtitle(w http.ResponseWriter, r *http.Request) {
-	id, ok := itemID(w, r)
+	id, ok := a.itemID(w, r)
 	if !ok {
 		return
 	}
 	source, err := uuid.Parse(r.PathValue("sourceId"))
 	index, ierr := strconv.Atoi(r.PathValue("index"))
 	if err != nil || ierr != nil {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	if _, err := a.svc.Playing.Playable(r.Context(), sessionOf(r).Profile.ID, id, source); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			refuse(w, http.StatusNotFound)
+			a.refuse(w, http.StatusNotFound)
 			return
 		}
 		a.internal(w, r, err)
@@ -282,13 +282,13 @@ func (a *API) subtitle(w http.ResponseWriter, r *http.Request) {
 	}
 	n := slices.IndexFunc(versions[id], func(v store.VersionPage) bool { return v.ID == source })
 	if n < 0 {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	v := versions[id][n]
 	file := index - externalBase(v)
 	if file < 0 || file >= len(v.Subtitles) {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	a.serveFile(w, r, func(ctx context.Context) (string, string, error) {
@@ -336,7 +336,7 @@ const (
 func (a *API) reported(kind reportKind) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var rep report
-		if !readJSON(w, r, &rep) {
+		if !a.readJSON(w, r, &rep) {
 			return
 		}
 		profile := sessionOf(r).Profile.ID
@@ -442,14 +442,14 @@ func (a *API) saveProgress(ctx context.Context, profile uuid.UUID, item string, 
 // mark sets or clears what a profile has made of a title, and answers its UserData as it is then.
 func (a *API) mark(set func(ctx context.Context, profile, item uuid.UUID) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := itemID(w, r)
+		id, ok := a.itemID(w, r)
 		if !ok {
 			return
 		}
 		profile := sessionOf(r).Profile.ID
 		err := set(r.Context(), profile, id)
 		if isNotFound(err) {
-			refuse(w, http.StatusNotFound)
+			a.refuse(w, http.StatusNotFound)
 			return
 		}
 		if err != nil {
@@ -461,7 +461,7 @@ func (a *API) mark(set func(ctx context.Context, profile, item uuid.UUID) error)
 			a.internal(w, r, err)
 			return
 		}
-		writeJSON(w, a.userData(id, p.State, 0, p.Kind))
+		a.writeJSON(w, a.userData(id, p.State, 0, p.Kind))
 	}
 }
 
@@ -481,13 +481,13 @@ type segment struct {
 // mediaSegments answers a title's intro, credits, recap and preview, as Jellyfin's media segments: the
 // markers of the copy photon would play, which apps offer to skip.
 func (a *API) mediaSegments(w http.ResponseWriter, r *http.Request) {
-	id, ok := itemID(w, r)
+	id, ok := a.itemID(w, r)
 	if !ok {
 		return
 	}
 	c, err := a.svc.Playing.Playable(r.Context(), sessionOf(r).Profile.ID, id, uuid.UUID{})
 	if isNotFound(err) {
-		refuse(w, http.StatusNotFound)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	if err != nil {
@@ -524,7 +524,7 @@ func (a *API) mediaSegments(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	out.TotalRecordCount = len(out.Items)
-	writeJSON(w, out)
+	a.writeJSON(w, out)
 }
 
 func noContent(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }

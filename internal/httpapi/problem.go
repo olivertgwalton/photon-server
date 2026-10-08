@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -188,5 +189,14 @@ func writeJSON(w http.ResponseWriter, logger *slog.Logger, contentType string, s
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		logger.Warn("response not written", slog.Any("err", err))
+	}
+}
+
+// writeBody writes a reply's body once its status is sent. A write fails only once the client has
+// gone, or stopped reading for longer than the server waits, and then there is no one left to
+// tell: the failure is kept for debugging alone.
+func writeBody(w io.Writer, logger *slog.Logger, body []byte) {
+	if _, err := w.Write(body); err != nil {
+		logger.Debug("reply not written", slog.Any("err", err))
 	}
 }

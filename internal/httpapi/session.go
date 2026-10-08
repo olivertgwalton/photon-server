@@ -83,8 +83,7 @@ const (
 // a value of an enum none of its values.
 func (a *API) decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	rc := http.NewResponseController(w)
-	// Not every ResponseWriter has a connection to time: a test's recorder has none.
-	_ = rc.SetReadDeadline(time.Now().Add(bodyWithin))
+	readWithin(rc, a.logger, time.Now().Add(bodyWithin))
 	body := http.MaxBytesReader(w, r.Body, maxBody)
 	dec := json.NewDecoder(body)
 	dec.DisallowUnknownFields()
@@ -105,8 +104,17 @@ func (a *API) decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	}
 	// A deadline left set would end the request's context as it passed, as a server's ReadTimeout
 	// does, and a handler may outlast it.
-	_ = rc.SetReadDeadline(time.Time{})
+	readWithin(rc, a.logger, time.Time{})
 	return true
+}
+
+// readWithin sets when the client must have sent the rest of its body by, the zero time never. Not
+// every ResponseWriter has a connection to time: a test's recorder has none. Any other failure is
+// of a connection already gone, whose reads fail anyway.
+func readWithin(rc *http.ResponseController, logger *slog.Logger, t time.Time) {
+	if err := rc.SetReadDeadline(t); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		logger.Debug("read deadline not set", slog.Any("err", err))
+	}
 }
 
 type profileJSON struct {

@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"compress/gzip"
+	"errors"
+	"log/slog"
 	"mime"
 	"net/http"
 	"sync"
@@ -18,14 +20,14 @@ const gzipLevel = gzip.BestSpeed
 var gzipWriters sync.Pool
 
 // compressJSON gzips a JSON answer of compressAbove or more for a client that takes gzip.
-func compressJSON(next http.Handler) http.Handler {
+func (a *API) compressJSON(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Accept-Encoding")
 		if !accepts(r, "gzip") {
 			next.ServeHTTP(w, r)
 			return
 		}
-		cw := &compressingWriter{ResponseWriter: w}
+		cw := &compressingWriter{ResponseWriter: w, logger: a.logger}
 		defer cw.close()
 		next.ServeHTTP(cw, r)
 	})
@@ -35,6 +37,7 @@ func compressJSON(next http.Handler) http.Handler {
 // answer is JSON enough to compress.
 type compressingWriter struct {
 	http.ResponseWriter
+	logger  *slog.Logger
 	status  int
 	start   []byte
 	decided bool
@@ -78,7 +81,11 @@ func (c *compressingWriter) decide() error {
 			gz.Reset(c.ResponseWriter)
 			c.gz = gz
 		} else {
-			c.gz, _ = gzip.NewWriterLevel(c.ResponseWriter, gzipLevel)
+			gz, err := gzip.NewWriterLevel(c.ResponseWriter, gzipLevel)
+			if err != nil {
+				return err
+			}
+			c.gz = gz
 		}
 	}
 	c.ResponseWriter.WriteHeader(c.status)
@@ -94,12 +101,16 @@ func (c *compressingWriter) close() {
 	if c.status == 0 {
 		return
 	}
+	var err error
 	if !c.decided {
-		_ = c.decide()
+		err = c.decide()
 	}
 	if c.gz != nil {
-		_ = c.gz.Close()
+		err = errors.Join(err, c.gz.Close())
 		gzipWriters.Put(c.gz)
+	}
+	if err != nil {
+		c.logger.Debug("reply not written", slog.Any("err", err))
 	}
 }
 

@@ -11,7 +11,7 @@ import (
 // revalidate tags a JSON answer to a GET with a weak ETag of its body, and answers a client that
 // already holds that body 304 Not Modified with none. The tag hashes the body as the handler wrote
 // it, before compressJSON, so it is the same gzipped or not.
-func revalidate(next http.Handler) http.Handler {
+func (a *API) revalidate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		bw := &bufferingWriter{ResponseWriter: w}
 		next.ServeHTTP(bw, r)
@@ -21,13 +21,14 @@ func revalidate(next http.Handler) http.Handler {
 		h := w.Header()
 		if !isJSON(h.Get("Content-Type")) {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write(bw.body.Bytes())
+			writeBody(w, a.logger, bw.body.Bytes())
 			return
 		}
 		// FNV-1a is in the standard library, quick, and the same on every server and after every
 		// restart; telling one version of an answer from the next needs nothing stronger.
 		sum := fnv.New64a()
-		_, _ = sum.Write(bw.body.Bytes())
+		// A hash's Write never fails.
+		sum.Write(bw.body.Bytes())
 		tag := fmt.Sprintf(`W/"%016x"`, sum.Sum64())
 		h.Set("ETag", tag)
 		// An answer is the signed-in profile's own, and may change at any moment.
@@ -38,7 +39,7 @@ func revalidate(next http.Handler) http.Handler {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(bw.body.Bytes())
+		writeBody(w, a.logger, bw.body.Bytes())
 	})
 }
 
