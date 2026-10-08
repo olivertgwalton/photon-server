@@ -15,10 +15,10 @@ import * as Table from "#lib/components/ui/table/index.js";
 let { data } = $props();
 
 const locks = { pin: "PIN", password: "Password" } as const;
-const roleOptions = Object.entries(roles).map(([value, label]) => ({
-	value: value as keyof typeof roles,
-	label,
-}));
+// A manager adds users.
+const roleOptions = Object.entries(roles)
+	.filter(([value]) => data.me.role === "admin" || value === "user")
+	.map(([value, label]) => ({ value: value as keyof typeof roles, label }));
 
 let adding = $state(false);
 let role = $state<keyof typeof roles>("user");
@@ -70,18 +70,21 @@ async function add(event: SubmitEvent) {
 								autocomplete="off"
 							/>
 						</Field.Field>
-						<Field.Field>
-							<Field.Label for="profile-role">Role</Field.Label>
-							<Choice
-								id="profile-role"
-								name="role"
-								bind:value={role}
-								options={roleOptions}
-							/>
-							<Field.Description>
-								A user sees only what its access allows, set once it is added.
-							</Field.Description>
-						</Field.Field>
+						{#if roleOptions.length > 1}
+							<Field.Field>
+								<Field.Label for="profile-role">Role</Field.Label>
+								<Choice
+									id="profile-role"
+									name="role"
+									bind:value={role}
+									options={roleOptions}
+								/>
+								<Field.Description>
+									A user sees only what its access allows, set once it is added.
+									A manager adds users and keeps the ones it added.
+								</Field.Description>
+							</Field.Field>
+						{/if}
 						<Field.Field>
 							<Field.Label for="profile-password">Password</Field.Label>
 							<Input
@@ -109,7 +112,9 @@ async function add(event: SubmitEvent) {
 			<Table.Head>Profile</Table.Head>
 			<Table.Head>Role</Table.Head>
 			<Table.Head>Lock</Table.Head>
-			<Table.Head>Last seen</Table.Head>
+			{#if data.me.role === "admin"}
+				<Table.Head>Last seen</Table.Head>
+			{/if}
 		</Table.Row>
 	</Table.Header>
 	<Table.Body>
@@ -117,7 +122,7 @@ async function add(event: SubmitEvent) {
 			<Table.Row>
 				<Table.Cell>
 					<a
-						href="/settings/server/profiles/{profile.id}"
+						href="/settings/profiles/{profile.id}"
 						class="text-ink flex items-center gap-3 font-semibold hover:underline"
 					>
 						<ProfileAvatar
@@ -130,9 +135,11 @@ async function add(event: SubmitEvent) {
 				</Table.Cell>
 				<Table.Cell>{roles[profile.role]}</Table.Cell>
 				<Table.Cell>{locks[profile.lock]}</Table.Cell>
-				<Table.Cell
-					>{profile.seen ? relative(profile.seen, now) : "Never"}</Table.Cell
-				>
+				{#if data.me.role === "admin"}
+					<Table.Cell
+						>{profile.seen ? relative(profile.seen, now) : "Never"}</Table.Cell
+					>
+				{/if}
 			</Table.Row>
 		{/each}
 	</Table.Body>

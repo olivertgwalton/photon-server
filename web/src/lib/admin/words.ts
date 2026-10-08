@@ -137,6 +137,7 @@ export function transcodeLoad(active: number, limit?: number): string {
 
 export const roles: Record<Schemas["Role"], string> = {
 	admin: "Admin",
+	manager: "Manager",
 	user: "User",
 };
 

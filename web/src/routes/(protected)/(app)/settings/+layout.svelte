@@ -38,7 +38,7 @@ const server: [string, string, Component][] = [
 	["/settings/server", "Dashboard", GaugeIcon],
 	["/settings/server/metrics", "Metrics", ChartLineIcon],
 	["/settings/server/libraries", "Libraries", LibraryIcon],
-	["/settings/server/profiles", "Profiles", UsersIcon],
+	["/settings/profiles", "Profiles", UsersIcon],
 	["/settings/server/providers", "Metadata", DatabaseIcon],
 	["/settings/server/network", "Network", NetworkIcon],
 	["/settings/server/storage", "Storage", HardDriveIcon],
@@ -52,13 +52,22 @@ const server: [string, string, Component][] = [
 	["/settings/server/backups", "Backups", ArchiveIcon],
 	["/settings/server/keys", "API keys", KeyRoundIcon],
 ];
+// A manager keeps profiles, and nothing else of the server's.
+const manages: [string, string, Component][] = [
+	["/settings/profiles", "Profiles", UsersIcon],
+];
 const groups = $derived(
 	data.me.role === "admin"
 		? [
 				["Your account", you],
 				["Server", server],
 			]
-		: [["Your account", you]],
+		: data.me.role === "manager"
+			? [
+					["Your account", you],
+					["Profiles", manages],
+				]
+			: [["Your account", you]],
 ) as [string, [string, string, Component][]][];
 
 // On a phone the links are a strip: the page's own is brought into view.

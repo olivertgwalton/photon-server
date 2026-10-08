@@ -1698,7 +1698,7 @@ export interface paths {
         put?: never;
         /**
          * Add a profile
-         * @description Admin only.
+         * @description Admin, or a manager over the profiles it keeps.
          */
         post: {
             parameters: {
@@ -1743,7 +1743,7 @@ export interface paths {
         post?: never;
         /**
          * Remove a profile, its devices and what it has watched
-         * @description Admin only.
+         * @description Admin, or a manager over the profiles it keeps.
          */
         delete: {
             parameters: {
@@ -1770,7 +1770,7 @@ export interface paths {
         head?: never;
         /**
          * Change a profile
-         * @description Admin only.
+         * @description Admin, or a manager over the profiles it keeps.
          */
         patch: {
             parameters: {
@@ -1810,7 +1810,7 @@ export interface paths {
         };
         /**
          * What a profile may see
-         * @description Admin only.
+         * @description Admin, or a manager over the profiles it keeps.
          */
         get: {
             parameters: {
@@ -1837,7 +1837,7 @@ export interface paths {
         };
         /**
          * Replace what a profile may see
-         * @description Admin only.
+         * @description Admin, or a manager over the profiles it keeps.
          */
         put: {
             parameters: {
@@ -1882,7 +1882,7 @@ export interface paths {
         put?: never;
         /**
          * Give any profile a picture: a JPEG, PNG, GIF or WebP of at most 32 MiB and 50 megapixels
-         * @description Admin only.
+         * @description Admin, or a manager over the profiles it keeps.
          */
         post: {
             parameters: {
@@ -1916,7 +1916,7 @@ export interface paths {
         };
         /**
          * Take any profile's picture away
-         * @description Admin only.
+         * @description Admin, or a manager over the profiles it keeps.
          */
         delete: {
             parameters: {
@@ -7458,6 +7458,8 @@ export interface components {
             /** Format: uuid */
             avatar?: string;
             id: string;
+            /** Format: uuid */
+            manager?: string;
             name: string;
             role: components["schemas"]["Role"];
         };
@@ -7471,6 +7473,8 @@ export interface components {
             avatar?: string;
             id: string;
             lock: components["schemas"]["ProfileLock"];
+            /** Format: uuid */
+            manager?: string;
             name: string;
             role: components["schemas"]["Role"];
         };
@@ -7543,7 +7547,7 @@ export interface components {
         /** @enum {string} */
         RestoreResult: "succeeded" | "failed";
         /** @enum {string} */
-        Role: "admin" | "user";
+        Role: "admin" | "manager" | "user";
         /** @enum {string} */
         RootAccess: "readable" | "missing" | "not_a_folder" | "denied" | "unreadable" | "timed_out" | "unreachable_node";
         /** @enum {string} */

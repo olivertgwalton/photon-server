@@ -93,11 +93,9 @@ async function setPassword(event: SubmitEvent) {
 			<h1 class="title">{data.me.name}</h1>
 			<p class="text-ink-2 text-sm">
 				{roles[data.me.role]}.
-				{#if data.me.role === "admin"}
+				{#if data.me.role === "admin" || data.me.role === "manager"}
 					What each profile may see is changed under
-					<a href="/settings/server/profiles" class="text-ink underline"
-						>Profiles</a
-					>.
+					<a href="/settings/profiles" class="text-ink underline">Profiles</a>.
 				{:else}
 					An admin changes what this profile may see.
 				{/if}
