@@ -567,7 +567,9 @@ func TestAClientIsToldWhyNothingPlays(t *testing.T) {
 		var got struct {
 			Reasons []string `json:"reasons"`
 		}
-		_ = json.NewDecoder(rec.Body).Decode(&got)
+		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+			t.Fatalf("%s: %v", tc.body, err)
+		}
 		if rec.Code != tc.wantStatus || !slices.Equal(got.Reasons, tc.wantReasons) {
 			t.Errorf("%s: %d %v, want %d %v", tc.body, rec.Code, got.Reasons, tc.wantStatus, tc.wantReasons)
 		}
@@ -911,8 +913,15 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 	if shown.ID != started.PlaybackID || shown.Method != domain.PlayTranscode || !cmp.Equal(shown.PlaybackCard, want) {
 		t.Errorf("the playback shown: %s; want %+v", items[0], want)
 	}
-	d, _ := told[0].Details.(domain.PlaybackDetails)
-	if got, _ := json.Marshal(d.Playback); told[0].Kind != domain.EventPlaybackStarted || string(got) != string(items[0]) {
+	d, ok := told[0].Details.(domain.PlaybackDetails)
+	if !ok {
+		t.Fatalf("told details %T; want a playback's", told[0].Details)
+	}
+	got, err := json.Marshal(d.Playback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if told[0].Kind != domain.EventPlaybackStarted || string(got) != string(items[0]) {
 		t.Errorf("told %v %s; want it started, shown as the list shows it", told[0].Kind, got)
 	}
 

@@ -75,7 +75,9 @@ func TestADownloadIsTheFileOrAConversionServedInRanges(t *testing.T) {
 		rec := httptest.NewRecorder()
 		api.ServeHTTP(rec, req)
 		var d downloadJSON
-		_ = json.Unmarshal(rec.Body.Bytes(), &d)
+		if err := json.Unmarshal(rec.Body.Bytes(), &d); err != nil {
+			t.Fatalf("%s: %v", body, err)
+		}
 		return rec.Code, d
 	}
 	film := `"title_id": "` + films.String() + `"`
@@ -141,7 +143,9 @@ func TestADeviceListsItsOwnDownloadsUnlessItAsksForTheProfiles(t *testing.T) {
 		rec := httptest.NewRecorder()
 		api.ServeHTTP(rec, req)
 		var got listJSON[downloadJSON]
-		_ = json.Unmarshal(rec.Body.Bytes(), &got)
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("%s: %v", tc.target, err)
+		}
 		if rec.Code != tc.code || len(got.Items) != tc.want {
 			t.Errorf("%s: %d with %d downloads, want %d with %d", tc.target, rec.Code, len(got.Items), tc.code, tc.want)
 		}

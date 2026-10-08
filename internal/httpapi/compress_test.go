@@ -60,7 +60,10 @@ func TestAnEventStreamIsNeverCompressed(t *testing.T) {
 	told := streamingEvents{fakeEvents: &fakeEvents{}, events: make(chan domain.Event), gone: make(chan struct{})}
 	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: told, Profiles: listedProfiles{oliver}, Libraries: &fakeLibraries{}}))
 	t.Cleanup(srv.Close)
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/admin/events", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/admin/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	req.Header.Set("Authorization", "Bearer "+goodToken)
 	req.Header.Set("Accept-Encoding", "gzip")
 	res, err := http.DefaultClient.Do(req)

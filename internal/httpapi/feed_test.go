@@ -108,7 +108,10 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	t.Cleanup(srv.Close)
 	open := func(token string) <-chan told {
 		t.Helper()
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/v1/events", nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/v1/events", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 		req.Header.Set("Authorization", "Bearer "+token)
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -179,7 +182,10 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	hub.Scanning(ctx)(domain.ScanProgress{Library: other.ID, Phase: domain.ScanReading, Done: 1, Known: 2})
 	hub.Raise(ctx, domain.Event{Kind: domain.EventLibraryScanned, Library: films.ID})
 	defer hub.Scanned(ctx, other.ID)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, srv.URL+"/api/v1/titles/"+title["Paddington"].String()+"/progress", strings.NewReader(`{"position_ms": 60000}`))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, srv.URL+"/api/v1/titles/"+title["Paddington"].String()+"/progress", strings.NewReader(`{"position_ms": 60000}`))
+	if err != nil {
+		t.Fatal(err)
+	}
 	req.Header.Set("Authorization", "Bearer sam-phone")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {

@@ -75,12 +75,15 @@ func (n *peerNode) self() domain.Node {
 	return d
 }
 
-var clusterKey, _ = nodecall.NewKey([]byte("sharedValkey signing key"))
-
 // join starts a node of c that encodes at most limit videos at once, telling the others of itself.
 func join(t *testing.T, c *sharedValkey, limit int) *peerNode {
 	t.Helper()
 	remuxer, err := hls.NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: "ffmpeg"}}, t.TempDir(), t.TempDir(), hls.Hardware{Accel: domain.AccelSoftware}, limit, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Every node derives the same key, so each takes the others' calls.
+	clusterKey, err := nodecall.NewKey([]byte("sharedValkey signing key"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +120,10 @@ func (n *peerNode) encode(t *testing.T) {
 func transcodeOn(t *testing.T, n *peerNode) (uuid.UUID, string) {
 	t.Helper()
 	body := `{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000, "parts": "each"}}`
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, n.srv.URL+"/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, n.srv.URL+"/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
 	req.Header.Set("Authorization", "Bearer "+goodToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -143,7 +149,11 @@ func TestATranscodeIsMadeWhereASlotIsFree(t *testing.T) {
 	front.encode(t)
 	c.tell(front.self())
 	id, playlist := transcodeOn(t, front)
-	if p, _, _ := c.Playback(t.Context(), id); p.Node != gpu.id {
+	p, _, err := c.Playback(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Node != gpu.id {
 		t.Fatalf("the playback is kept as on %s, want the node with a slot, %s", p.Node, gpu.id)
 	}
 	if !gpu.remuxer.Has(id) || front.remuxer.Has(id) {
@@ -171,10 +181,18 @@ func TestANodeFullByTheTimeItIsAskedPassesThePlayOn(t *testing.T) {
 	stale.Transcodes = 0
 	c.tell(stale)
 	id, _ := transcodeOn(t, front)
-	if p, _, _ := c.Playback(t.Context(), id); p.Node != front.id || !front.remuxer.Has(id) {
+	p, _, err := c.Playback(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Node != front.id || !front.remuxer.Has(id) {
 		t.Errorf("the playback is kept as on %s, remuxed on the front %v; want the front, the node with a slot", p.Node, front.remuxer.Has(id))
 	}
-	if plays, _ := c.Playbacks(t.Context()); len(plays) != 1 {
+	plays, err := c.Playbacks(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plays) != 1 {
 		t.Errorf("%d playbacks kept, want only the one made, not the one refused", len(plays))
 	}
 	if got := front.started.Load(); got != 1 {
@@ -195,7 +213,10 @@ func TestAPlayRefusedForEveryNodeFullNeverStarts(t *testing.T) {
 		c.tell(stale)
 	}
 	body := `{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000, "parts": "each"}}`
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, front.srv.URL+"/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, front.srv.URL+"/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
 	req.Header.Set("Authorization", "Bearer "+goodToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -222,7 +243,10 @@ func TestANodeThatServesOnlyTranscodesNothing(t *testing.T) {
 	stale.Role = domain.NodeAll
 	c.tell(stale)
 	body := `{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000, "parts": "each"}}`
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, front.srv.URL+"/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, front.srv.URL+"/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
 	req.Header.Set("Authorization", "Bearer "+goodToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -244,7 +268,10 @@ func TestWithNoNodeTranscodingACopyThatNeedsItIsRefused(t *testing.T) {
 	only := join(t, c, 2)
 	only.role.Store(domain.NodeServe)
 	play := func(body string) (int, string) {
-		req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, only.srv.URL+"/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, only.srv.URL+"/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
 		req.Header.Set("Authorization", "Bearer "+goodToken)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -256,7 +283,9 @@ func TestWithNoNodeTranscodingACopyThatNeedsItIsRefused(t *testing.T) {
 			Method     string    `json:"method"`
 			Code       string    `json:"code"`
 		}
-		_ = json.NewDecoder(resp.Body).Decode(&answer)
+		if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil {
+			t.Fatal(err)
+		}
 		if resp.StatusCode == http.StatusOK && answer.PlaybackID == (uuid.UUID{}) {
 			t.Errorf("answered a play with no playback")
 		}
