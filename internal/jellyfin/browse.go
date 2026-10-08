@@ -32,6 +32,7 @@ type catalogue interface {
 	Seasons(ctx context.Context, profile, show uuid.UUID) ([]store.SeasonCard, error)
 	Episodes(ctx context.Context, profile, of uuid.UUID) ([]store.Card, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
+	Similar(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
 	Calendar(ctx context.Context, q store.CalendarQuery) ([]store.CalendarDay, error)
 	AnnouncedEpisode(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error)
