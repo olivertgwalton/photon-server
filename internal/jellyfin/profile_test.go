@@ -44,9 +44,13 @@ func TestConditionsAreJudgedAsJellyfinJudgesThem(t *testing.T) {
 			t.Errorf("%+v: %v, want %v", tc.c, got, tc.want)
 		}
 	}
-	dv := domain.Stream{Kind: domain.StreamVideo, Codec: "hevc", Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Compatibility: 1}}
+	dv := domain.Stream{Kind: domain.StreamVideo, Codec: "hevc", Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Compatibility: domain.CompatibleHDR10}}
 	if !(condition{Condition: "EqualsAny", Property: "VideoRangeType", Value: "DOVIWithHDR10", IsRequired: &no}).holds(dv) {
 		t.Error("Dolby Vision profile 8.1 is not DOVIWithHDR10")
+	}
+	dv.DolbyVision = &domain.DolbyVision{Profile: 7, Compatibility: domain.CompatibleBluRay}
+	if !(condition{Condition: "EqualsAny", Property: "VideoRangeType", Value: "DOVIWithEL", IsRequired: &no}).holds(dv) {
+		t.Error("Dolby Vision profile 7 is not DOVIWithEL")
 	}
 }
 

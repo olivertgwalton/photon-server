@@ -102,7 +102,7 @@ func mediaStream(t *model.Stream) domain.Stream {
 	}
 	if t.DVProfile != nil {
 		m.DolbyVision = &domain.DolbyVision{
-			Profile: int(*t.DVProfile), Level: int(deref(t.DVLevel)), Compatibility: int(deref(t.DVCompatibility)),
+			Profile: int(*t.DVProfile), Level: int(deref(t.DVLevel)), Compatibility: domain.CompatibilityOf(int(deref(t.DVCompatibility))),
 		}
 	}
 	return m

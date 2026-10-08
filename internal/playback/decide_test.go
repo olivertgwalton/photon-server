@@ -26,7 +26,7 @@ var film = Copy{
 	Streams: []domain.Stream{
 		{
 			Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Profile: "Main 10", Level: 153, Width: 3840, Height: 2160,
-			FrameRate: 24000.0 / 1001, BitDepth: 10, Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Compatibility: 1},
+			FrameRate: 24000.0 / 1001, BitDepth: 10, Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Compatibility: domain.CompatibleHDR10},
 		},
 		{Index: 1, Kind: domain.StreamAudio, Codec: "truehd", Channels: 8, Default: true},
 		{Index: 2, Kind: domain.StreamAudio, Codec: "ac3", Channels: 6},
@@ -391,7 +391,7 @@ func TestTheEncodeIsGivenTheRoomItNeedsToMatchTheSource(t *testing.T) {
 func TestTheEncodeKeepsHDROnlyWhereTheClientShowsIt(t *testing.T) {
 	hdr10 := domain.Stream{Codec: "hevc", Range: domain.RangeHDR10}
 	hlg := domain.Stream{Codec: "hevc", Range: domain.RangeHLG}
-	dv := func(compatibility int) domain.Stream {
+	dv := func(compatibility domain.DolbyVisionCompatibility) domain.Stream {
 		return domain.Stream{Codec: "hevc", Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Compatibility: compatibility}}
 	}
 	shows := func(ranges ...domain.Range) VideoSupport { return VideoSupport{Codec: "hevc", Ranges: ranges} }
@@ -414,9 +414,9 @@ func TestTheEncodeKeepsHDROnlyWhereTheClientShowsIt(t *testing.T) {
 		{"HDR10+ as its HDR10", domain.Stream{Codec: "hevc", Range: domain.RangeHDR10Plus}, []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHDR10, false},
 		{"HLG to an HLG client", hlg, []VideoSupport{shows(domain.RangeHLG)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHLG, false},
 		{"HLG to an HDR10 client", hlg, []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, true},
-		{"Dolby Vision 8.1 as HDR10", dv(1), []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHDR10, false},
-		{"Dolby Vision 8.4 as HLG", dv(4), []VideoSupport{shows(domain.RangeHLG)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHLG, false},
-		{"Dolby Vision 5, which no base layer shows", dv(0), []VideoSupport{shows(domain.RangeHDR10, domain.RangeDV)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, true},
+		{"Dolby Vision 8.1 as HDR10", dv(domain.CompatibleHDR10), []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHDR10, false},
+		{"Dolby Vision 8.4 as HLG", dv(domain.CompatibleHLG), []VideoSupport{shows(domain.RangeHLG)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHLG, false},
+		{"Dolby Vision 5, which no base layer shows", dv(domain.CompatibleNone), []VideoSupport{shows(domain.RangeHDR10, domain.RangeDV)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, true},
 		{"SDR to HEVC", domain.Stream{Codec: "mpeg2video"}, []VideoSupport{h264, shows()}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, false},
 	} {
 		got, ok := Profile{Video: tc.plays}.videoEncode(tc.source, 8000, tc.hevc)

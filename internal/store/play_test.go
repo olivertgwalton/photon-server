@@ -28,7 +28,7 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	theatricalPart.Facts.Container = "matroska,webm"
 	video := domain.Stream{
 		Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Profile: "Main 10", Width: 3840, Height: 2160, BitDepth: 10,
-		Level: 153, Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Level: 6, Compatibility: 1},
+		Level: 153, Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Level: 6, Compatibility: domain.CompatibleHDR10},
 	}
 	theatricalPart.Facts.Streams = []domain.Stream{video, {Index: 1, Kind: domain.StreamAudio, Codec: "truehd", Channels: 8}}
 	film := Film{Title: "Lawrence", Folder: "L", Copies: []Copy{

@@ -398,12 +398,13 @@ func (p Profile) showsDolbyVision(s domain.Stream) bool {
 func (v VideoSupport) showsBase(dv *domain.DolbyVision) bool {
 	ranges := v.ranges()
 	switch dv.Compatibility {
-	case 1:
+	case domain.CompatibleHDR10:
 		return slices.Contains(ranges, domain.RangeHDR10)
-	case 2:
+	case domain.CompatibleSDR:
 		return slices.Contains(ranges, domain.RangeSDR)
-	case 4:
+	case domain.CompatibleHLG:
 		return slices.Contains(ranges, domain.RangeHLG)
+	case domain.CompatibleNone, domain.CompatibleBluRay:
 	}
 	return false
 }
@@ -526,10 +527,9 @@ func hdrOf(s domain.Stream) domain.Range {
 	case domain.RangeHLG:
 		return domain.RangeHLG
 	case domain.RangeDV:
-		// 6 is a Blu-ray's profile 7, whose base layer is HDR10.
-		if dv := s.DolbyVision; dv != nil && (dv.Compatibility == 1 || dv.Compatibility == 6) {
+		if dv := s.DolbyVision; dv != nil && (dv.Compatibility == domain.CompatibleHDR10 || dv.Compatibility == domain.CompatibleBluRay) {
 			return domain.RangeHDR10
-		} else if dv != nil && dv.Compatibility == 4 {
+		} else if dv != nil && dv.Compatibility == domain.CompatibleHLG {
 			return domain.RangeHLG
 		}
 	case domain.RangeSDR:

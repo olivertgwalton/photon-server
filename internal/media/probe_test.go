@@ -61,7 +61,7 @@ func TestProbeRange(t *testing.T) {
 		{fixture: "sdr.json", want: domain.RangeSDR},
 		{fixture: "hdr10.json", want: domain.RangeHDR10},
 		{fixture: "hdr10plus.json", want: domain.RangeHDR10Plus},
-		{fixture: "dv8.json", want: domain.RangeDV, dv: &domain.DolbyVision{Profile: 8, Level: 6, Compatibility: 1, BaseLayer: true, RPU: true}},
+		{fixture: "dv8.json", want: domain.RangeDV, dv: &domain.DolbyVision{Profile: 8, Level: 6, Compatibility: domain.CompatibleHDR10}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.fixture, func(t *testing.T) {

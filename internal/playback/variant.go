@@ -112,9 +112,9 @@ func videoRange(s domain.Stream, v domain.VideoPlan) string {
 	case domain.RangeHLG:
 		return "HLG"
 	case domain.RangeDV:
-		if dv := s.DolbyVision; dv != nil && dv.Compatibility == 2 {
+		if dv := s.DolbyVision; dv != nil && dv.Compatibility == domain.CompatibleSDR {
 			return "SDR"
-		} else if dv != nil && dv.Compatibility == 4 {
+		} else if dv != nil && dv.Compatibility == domain.CompatibleHLG {
 			return "HLG"
 		}
 		return "PQ"
