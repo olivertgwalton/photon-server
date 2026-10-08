@@ -184,8 +184,13 @@ func creditedPeople(entries []creditEntry, owners map[personKey]owner) []*credit
 		}
 		return n
 	}
-	first := map[any]int{}
-	join := func(at any, n int) {
+	// An entry is first found by one of its ids or by a person they already name.
+	type found struct {
+		key    personKey
+		person uuid.UUID
+	}
+	first := map[found]int{}
+	join := func(at found, n int) {
 		if m, ok := first[at]; ok {
 			parent[find(m)] = find(n)
 		} else {
@@ -195,9 +200,9 @@ func creditedPeople(entries []creditEntry, owners map[personKey]owner) []*credit
 	for n, e := range entries {
 		parent[n] = n
 		for _, k := range e.keys {
-			join(k, n)
+			join(found{key: k}, n)
 			if o, ok := owners[k]; ok {
-				join(o.PersonID, n)
+				join(found{person: o.PersonID}, n)
 			}
 		}
 	}
