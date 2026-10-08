@@ -130,4 +130,30 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 	if len(kids.Items) != 1 || kids.Items[0].Name != "Racing" {
 		t.Errorf("the kid's collections = %v, want those of the documentaries alone", names(kids))
 	}
+
+	// Opened, a box set says how many titles it holds, and lists them in its order.
+	alien := all.Items[1].ID
+	var set struct {
+		Name, Type string
+		ChildCount *int
+	}
+	get("pst_ada", "/Users/"+guid(ada.ID)+"/Items/"+alien, &set)
+	if set.Type != "BoxSet" || set.ChildCount == nil || *set.ChildCount != 2 {
+		t.Errorf("the Alien collection = %+v, want a box set of two", set)
+	}
+	var members result
+	get("pst_ada", "/Items?parentId="+alien+"&fields="+infuseFields, &members)
+	if got := names(members); members.TotalRecordCount != 2 || len(got) != 2 || got[0] != "Alien" || got[1] != "Aliens" || members.Items[0].Type != "Movie" {
+		t.Errorf("the Alien collection's titles = %v of %d, want Alien then Aliens", got, members.TotalRecordCount)
+	}
+	var page result
+	get("pst_ada", "/Items?parentId="+alien+"&startIndex=1&limit=1", &page)
+	if got := names(page); page.TotalRecordCount != 2 || len(got) != 1 || got[0] != "Aliens" {
+		t.Errorf("the second of the Alien collection's titles = %v of %d, want Aliens", got, page.TotalRecordCount)
+	}
+	var none result
+	get("pst_kid", "/Items?parentId="+alien, &none)
+	if len(none.Items) != 0 {
+		t.Errorf("the kid opens a collection of films it may not see: %v, want nothing", names(none))
+	}
 }

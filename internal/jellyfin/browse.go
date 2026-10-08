@@ -22,6 +22,7 @@ type catalogue interface {
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
 	Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
+	Members(ctx context.Context, profile, collection uuid.UUID) ([]store.Card, error)
 	Named(ctx context.Context, profile, id uuid.UUID) (store.Named, error)
 	SearchPeople(ctx context.Context, text string, offset, limit int) ([]store.PersonRef, int64, error)
 	Person(ctx context.Context, id uuid.UUID) (store.PersonPage, error)
@@ -391,8 +392,9 @@ func (a *API) search(w http.ResponseWriter, r *http.Request, text string, librar
 	a.writeList(w, r, cards, int(total), l.start, l)
 }
 
-// children answers what is in a show or a season: a show's seasons, or its episodes where an app
-// asks for them; a season's episodes. Anything else holds nothing an app can ask for here.
+// children answers what is in a collection, a show or a season: a collection's titles; a show's
+// seasons, or its episodes where an app asks for them; a season's episodes. Anything else holds
+// nothing an app can ask for here.
 func (a *API) children(w http.ResponseWriter, r *http.Request, profile, parent uuid.UUID, types []string, l listed) {
 	none := queryResult{Items: []item{}, StartIndex: l.start}
 	named, err := a.svc.Catalogue.Named(r.Context(), profile, parent)
@@ -432,7 +434,14 @@ func (a *API) titleChildren(w http.ResponseWriter, r *http.Request, profile, par
 			return
 		}
 		a.writeList(w, r, cards[min(l.start, len(cards)):min(l.start+l.limit, len(cards))], len(cards), l.start, l)
-	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection:
+	case domain.ItemCollection:
+		members, err := a.svc.Catalogue.Members(r.Context(), profile, parent)
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		a.writeList(w, r, members[min(l.start, len(members)):min(l.start+l.limit, len(members))], len(members), l.start, l)
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
 		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
 	}
 }
@@ -506,6 +515,15 @@ func (a *API) titleItem(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
 		return
 	}
 	it := a.fromTitle(p, words.Negotiate(w, r))
+	if p.Kind == domain.ItemCollection {
+		members, err := a.svc.Catalogue.Members(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		n := len(members)
+		it.ChildCount = &n
+	}
 	it.Etag = etag(it)
 	a.writeJSON(w, it)
 }
