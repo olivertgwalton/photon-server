@@ -105,7 +105,7 @@ func filmMarkers(ctx context.Context, st *store.Store, shades shader, ends []sto
 			return err
 		}
 		got, err := shades(ctx, f, max(end.Duration-domain.MarkerCredits.Longest(), 0))
-		_ = f.Close()
+		err = errors.Join(err, f.Close())
 		if err != nil {
 			return err
 		}
