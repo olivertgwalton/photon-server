@@ -14,7 +14,7 @@ import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { Label } from "#lib/components/ui/label/index.js";
-import Choice from "./Choice.svelte";
+import Choice from "#lib/components/Choice.svelte";
 import FolderPicker from "./FolderPicker.svelte";
 import SourceRanker from "./SourceRanker.svelte";
 
