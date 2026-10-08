@@ -27,12 +27,15 @@ let {
 	providers,
 	locales,
 	serverLanguage,
+	serverCountry,
 }: {
 	library?: Schemas["AdminLibrary"];
 	providers: Schemas["MetadataProvider"][];
 	locales: Schemas["Locales"];
-	// The server's own metadata language, which a library asks in by default.
+	// The server's own metadata language and certification country, which a
+	// library asks in by default.
 	serverLanguage: string;
+	serverCountry?: string;
 } = $props();
 const words = vocabulary();
 
@@ -40,7 +43,6 @@ const words = vocabulary();
 // Jellyfin's library settings list them.
 const languageNames = new Intl.DisplayNames(undefined, { type: "language" });
 const countryNames = new Intl.DisplayNames(undefined, { type: "region" });
-const serverCountry = $derived(new Intl.Locale(serverLanguage).region);
 const languages = $derived([
 	{
 		value: serverLocale,

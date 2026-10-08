@@ -51,6 +51,7 @@ async function add(event: SubmitEvent) {
 		providers={data.providers}
 		locales={data.locales}
 		serverLanguage={data.serverLanguage}
+		serverCountry={data.serverCountry}
 	/>
 	<div class="flex gap-2">
 		<Button type="submit" disabled={adding}>Add and scan</Button>

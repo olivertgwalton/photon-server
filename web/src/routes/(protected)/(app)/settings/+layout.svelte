@@ -15,6 +15,7 @@ import LibraryIcon from "@lucide/svelte/icons/library";
 import ListChecksIcon from "@lucide/svelte/icons/list-checks";
 import MonitorSmartphoneIcon from "@lucide/svelte/icons/monitor-smartphone";
 import NetworkIcon from "@lucide/svelte/icons/network";
+import SettingsIcon from "@lucide/svelte/icons/settings";
 import SlidersHorizontalIcon from "@lucide/svelte/icons/sliders-horizontal";
 import TvIcon from "@lucide/svelte/icons/tv";
 import UserIcon from "@lucide/svelte/icons/user";
@@ -36,6 +37,7 @@ const you: [string, string, Component][] = [
 ];
 const server: [string, string, Component][] = [
 	["/settings/server", "Dashboard", GaugeIcon],
+	["/settings/server/general", "General", SettingsIcon],
 	["/settings/server/metrics", "Metrics", ChartLineIcon],
 	["/settings/server/libraries", "Libraries", LibraryIcon],
 	["/settings/profiles", "Profiles", UsersIcon],

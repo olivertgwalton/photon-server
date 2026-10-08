@@ -12,5 +12,6 @@ export const load: PageLoad = async ({ fetch, parent }) => {
 		providers: providers.items,
 		locales,
 		serverLanguage: server.metadata_language,
+		serverCountry: server.certification_country,
 	};
 };
