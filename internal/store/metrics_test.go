@@ -67,3 +67,49 @@ func TestItemCountsCountTitlesByKind(t *testing.T) {
 		t.Errorf("counts (-want +got):\n%s", diff)
 	}
 }
+
+// A library's storage is the bytes on its disk: an hd and an ultra hd copy of one film are two
+// files, while one file read under two paths, or under two episode numbers, is one.
+func TestItemBytesCountSharedBytesOnce(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	copyOf := func(key, rel string, size int64) Copy {
+		return Copy{ContentKey: []byte(key), Parts: []Part{{RelPath: rel, Size: size, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Container: "mkv"}}}}
+	}
+	const hd, ultraHD, episode = 8_000_000_000, 60_000_000_000, 2_000_000_000
+	heat := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{copyOf("heat-hd", "Heat/Heat.1080p.mkv", hd), copyOf("heat-uhd", "Heat/Heat.2160p.mkv", ultraHD)}}
+	if _, err := s.SaveFolder(ctx, films.ID, "Heat", []byte("v1"), []Film{heat}, nil); err != nil {
+		t.Fatal(err)
+	}
+	again := Film{Title: "Heat", Folder: "Heat (1995)", Copies: []Copy{copyOf("heat-hd", "Heat (1995)/Heat.mkv", hd)}}
+	if _, err := s.SaveFolder(ctx, films.ID, "Heat (1995)", []byte("v1"), []Film{again}, nil); err != nil {
+		t.Fatal(err)
+	}
+	eps := []Episode{
+		{Season: 1, Episodes: []int{1}, Title: "S1E1", Folder: "Wire", ByNumber: true, Copies: []Copy{copyOf("e1", "Wire/S01E01.mkv", episode)}},
+		{Season: 1, Episodes: []int{2}, Title: "S1E2", Folder: "Wire", ByNumber: true, Copies: []Copy{copyOf("e1", "Wire/S01E02.mkv", episode)}},
+	}
+	if _, err := s.SaveShowFolder(ctx, shows.ID, "Wire", []byte("v1"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
+		t.Fatal(err)
+	}
+	var paths, episodeVersions int
+	if err := s.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM part_files), (SELECT count(*) FROM versions v JOIN items i ON i.id = v.item_id WHERE i.kind = 'episode')`).
+		Scan(&paths, &episodeVersions); err != nil || paths != 5 || episodeVersions != 2 {
+		t.Fatalf("%d paths and %d episode versions, %v; want 5 and 2", paths, episodeVersions, err)
+	}
+	got, err := s.ItemBytes(ctx, []domain.ItemKind{domain.ItemMovie, domain.ItemEpisode})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(map[domain.ItemKind]int64{domain.ItemMovie: hd + ultraHD, domain.ItemEpisode: episode}, got); diff != "" {
+		t.Errorf("bytes (-want +got):\n%s", diff)
+	}
+}

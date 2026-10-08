@@ -39,6 +39,10 @@ func (shared) ItemCounts(context.Context, []domain.ItemKind) (map[domain.ItemKin
 	return map[domain.ItemKind]int{domain.ItemMovie: 812}, nil
 }
 
+func (shared) ItemBytes(context.Context, []domain.ItemKind) (map[domain.ItemKind]int64, error) {
+	return map[domain.ItemKind]int64{domain.ItemMovie: 9_500_000_000_000}, nil
+}
+
 var advertised, unadvertised = uuid.NewV7(), uuid.NewV7()
 
 func (shared) Nodes(context.Context) ([]domain.Node, error) {
@@ -66,6 +70,10 @@ func TestTheClustersMetricsAreSaidByTheLeaderAlone(t *testing.T) {
 # TYPE photon_jobs gauge
 photon_jobs{kind="identify",state="queued"} 40
 photon_jobs{kind="identify",state="running"} 16
+# HELP photon_library_bytes The bytes the films and episodes in the libraries hold on disk, each file once.
+# TYPE photon_library_bytes gauge
+photon_library_bytes{kind="episode"} 0
+photon_library_bytes{kind="movie"} 9.5e+12
 # HELP photon_library_items The films and episodes in the libraries.
 # TYPE photon_library_items gauge
 photon_library_items{kind="episode"} 0
@@ -79,7 +87,7 @@ photon_nodes{state="draining"} 1
 photon_task_last_finished_timestamp_seconds{result="succeeded",task="scan_libraries"} 1.7e+09
 `
 	if err := testutil.CollectAndCompare(lead, strings.NewReader(want),
-		"photon_jobs", "photon_library_items", "photon_nodes", "photon_task_last_finished_timestamp_seconds"); err != nil {
+		"photon_jobs", "photon_library_bytes", "photon_library_items", "photon_nodes", "photon_task_last_finished_timestamp_seconds"); err != nil {
 		t.Error(err)
 	}
 	once := cluster{lead: leading(true), st: shared{}, nodes: shared{}, self: own(advertised)}
