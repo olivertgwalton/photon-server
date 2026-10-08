@@ -234,6 +234,11 @@ func wallPage(r *http.Request, profile uuid.UUID, l listed) store.WallPage {
 		}
 	}
 	p.Filter.Genres = values(r, "genres")
+	// An id that is none names no one, so narrows to nothing rather than letting everything through.
+	for _, v := range values(r, "personIds") {
+		id, _ := parseID(v)
+		p.Filter.People = append(p.Filter.People, id)
+	}
 	for _, y := range values(r, "years") {
 		if n, err := strconv.Atoi(y); err == nil {
 			p.Filter.Years = append(p.Filter.Years, n)

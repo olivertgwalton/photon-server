@@ -15,8 +15,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
-// An app finds someone by name and opens them by the id it found.
-func TestAnAppOpensSomeone(t *testing.T) {
+// An app finds someone by name, opens them by the id it found, and lists their films and shows as
+// Jellyfin's web app does; the kid's list holds only what the kid may see.
+func TestAnAppOpensSomeoneAndTheirWork(t *testing.T) {
 	ctx := t.Context()
 	db := storetest.FreshDatabase(t)
 	log := slog.New(slog.DiscardHandler)
@@ -106,5 +107,24 @@ func TestAnAppOpensSomeone(t *testing.T) {
 	if code := get("pst_ada", "/Users/"+guid(ada.ID)+"/Items/"+guid(her), &one); code != http.StatusOK || one.Type != "Person" || one.Overview != "An actor." ||
 		one.PremiereDate[:10] != "1949-10-08" || len(one.ProductionLocations) != 1 || one.ProviderIDs["Tmdb"] != "10205" {
 		t.Errorf("her: %d %+v", code, one)
+	}
+	work := func(token, people string) []string {
+		t.Helper()
+		var list struct{ Items []found }
+		get(token, "/Items?personIds="+people+"&recursive=true&includeItemTypes=Movie,Series&sortBy=SortName", &list)
+		var names []string
+		for _, it := range list.Items {
+			names = append(names, it.Name)
+		}
+		return names
+	}
+	if got := work("pst_ada", guid(her)); len(got) != 2 || got[0] != "Alien" || got[1] != "Show" {
+		t.Errorf("her work: %v, want Alien and Show", got)
+	}
+	if got := work("pst_kid", guid(her)); len(got) != 1 || got[0] != "Alien" {
+		t.Errorf("her work, for the kid: %v, want Alien alone", got)
+	}
+	if got := work("pst_ada", "nobody"); len(got) != 0 {
+		t.Errorf("the work of an id that is none: %v, want nothing", got)
 	}
 }
