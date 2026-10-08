@@ -89,3 +89,43 @@ download's conversion takes a transcode slot only while no playback wants it.
 
 A node missing from Settings › Server, while running, has stopped telling the others of itself:
 it has no `PHOTON_NODE_ADDRESS`, or it cannot reach Valkey. Its log says which.
+
+## Metrics
+
+Every node answers `GET /metrics` on its own port in Prometheus' text format, to a client on the
+server's local networks (Settings › Network; this machine's and the private ones where none is
+set) and to no other: anyone else is answered 404. Behind a proxy, a client is known by the
+proxy's `X-Forwarded-For` only where `PHOTON_TRUSTED_PROXIES` trusts it. Scrape each node.
+
+Each node says what is its own:
+
+| Metric | |
+|---|---|
+| `photon_build_info{version}` | the version it runs |
+| `photon_node_info{node, role, state}` | its name, its role, and `active` or `draining` |
+| `photon_playbacks{method}` | the playbacks it serves now: `direct`, `remux` or `transcode` |
+| `photon_playback_starts_total{method}` | playbacks started by clients asking it, wherever each is served; one refused is not counted |
+| `photon_sent_bytes_total{delivery}` | the bytes of media it sent players, a `file` as it is or HLS `segment`s (playlists among them), by either API; a request handed to another node is counted there |
+| `photon_transcodes{kind}` | the videos it encodes now, for a `playback` or a download's `conversion` |
+| `photon_transcode_slots` | the most it encodes at once; absent with no limit |
+| `photon_transcode_refusals_total{reason}` | plays it refused for want of a node to encode them: every one `full`, or `no_encoder` taking it |
+| `photon_hls_segment_wait_seconds` | how long a request for a segment waits for it to be made |
+| `photon_jobs_finished_total{kind, outcome}` | runs of jobs it ended, `done` or `failed` (a failed run may be tried again) |
+
+beside the Go runtime's (`go_*`) and the process's (`process_*`). These are summed across the
+nodes: `sum(photon_playbacks)` is every playback going on.
+
+What the nodes share, in Postgres and Valkey, is said only by the node holding the scheduler lease,
+the one running scheduled tasks; the others leave it out, so it is never counted twice:
+
+| Metric | |
+|---|---|
+| `photon_jobs{kind, state}` | the jobs queued, running, to run again (`rerun`) and `dead` |
+| `photon_jobs_oldest_due_seconds{kind}` | how long the queued job due now and waiting longest has been due; one held for the maintenance window, or put off until later, is left out |
+| `photon_task_last_finished_timestamp_seconds{task, result}` | when each task's last run ended, `succeeded`, `failed` or `cancelled`; absent while it runs again |
+| `photon_nodes{state}` | the nodes telling the others of themselves, `active` or `draining` |
+| `photon_library_items{kind}` | the films (`movie`) and episodes in the libraries |
+
+The lease passes to another node within 20 seconds of its holder stopping, so for a moment either
+or neither says them. Query them across instances with `max without(instance)`, as
+`max without(instance) (photon_jobs{state="queued"})`, never `sum`.
