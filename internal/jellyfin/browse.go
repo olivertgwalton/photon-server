@@ -578,6 +578,12 @@ func (a *API) episodes(w http.ResponseWriter, r *http.Request) {
 	if n, err := strconv.Atoi(query(r, "season")); err == nil {
 		cards = slices.DeleteFunc(cards, func(c store.Card) bool { return c.SeasonNumber == nil || *c.SeasonNumber != n })
 	}
+	// Jellyfin's web app queues a show from the episode it plays on: none, where that is not here.
+	if start, err := uuid.Parse(query(r, "startItemId")); err == nil {
+		for len(cards) > 0 && cards[0].ID != start {
+			cards = cards[1:]
+		}
+	}
 	l := listedOf(w, r)
 	page, total := paged(cards, cardID, l)
 	a.writeList(w, r, page, total, l.start, l)

@@ -239,6 +239,11 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 		{"/Items?parentId=" + seasons[0]["Id"].(string) + "&adjacentTo=" + ep(1), episodes[:2], 2},
 		{"/Items?parentId=" + show + "&includeItemTypes=Episode&adjacentTo=" + ep(2), episodes[1:], 2},
 		{"/Shows/" + show + "/Seasons?adjacentTo=" + seasons[1]["Id"].(string), seasons, 2},
+		// A queue runs from the episode played on, then is narrowed and paged as any list is.
+		{"/Shows/" + show + "/Episodes?startItemId=" + ep(1), episodes[1:], 2},
+		{"/Shows/" + show + "/Episodes?startItemId=" + ep(1) + "&startIndex=1&limit=1", episodes[2:], 2},
+		{"/Shows/" + show + "/Episodes?startItemId=" + ep(1) + "&adjacentTo=" + ep(0), nil, 0},
+		{"/Shows/" + show + "/Episodes?startItemId=" + guid(films.ID), nil, 0},
 	} {
 		got, total := list("pst_ada", c.target)
 		if !slices.EqualFunc(got, c.want, func(a, b map[string]any) bool { return a["Id"] == b["Id"] }) || int(total) != c.total {
