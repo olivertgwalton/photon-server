@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { components } from "#lib/api/schema.js";
 import * as Select from "#lib/components/ui/select/index.js";
-import { trackName, versionName } from "#lib/format.js";
+import { onDisk, trackName, versionName } from "#lib/format.js";
 
 type Version = components["schemas"]["VersionPage"];
 
@@ -21,11 +21,7 @@ let {
 } = $props();
 
 const id = $props.id();
-const chosen = $derived(
-	versions.find((v) => v.id === version) ??
-		versions.find((v) => !v.missing_since) ??
-		versions[0],
-);
+const chosen = $derived(onDisk(versions, version) ?? versions[0]);
 const audios = $derived(
 	chosen?.streams.filter((s) => s.kind === "audio") ?? [],
 );

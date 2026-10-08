@@ -115,10 +115,16 @@ export function chooseVersion(id: string, title: string, use: VersionUse) {
 
 // The one subtitle search, drawn by the shell and opened from any film's or
 // episode's menu, as Plex's Search for subtitles is.
-export const subtitleSearch = $state({ open: false, id: "", title: "" });
+// It opens in the reader's subtitle language; `language` is the one chosen since.
+export const subtitleSearch = $state({
+	open: false,
+	id: "",
+	title: "",
+	language: "",
+});
 
 export function findSubtitles(id: string, title: string) {
-	Object.assign(subtitleSearch, { open: true, id, title });
+	Object.assign(subtitleSearch, { open: true, id, title, language: "" });
 }
 
 export function analyseTitle(id: string, name: string) {

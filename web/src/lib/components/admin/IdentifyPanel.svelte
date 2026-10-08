@@ -31,16 +31,10 @@ const searchers = $derived(
 		.map((p) => ({ value: String(p.id), label: p.name })),
 );
 
-let provider = $state("");
-$effect.pre(() => {
-	if (!provider) provider = searchers[0]?.value ?? "";
-});
-let name = $state("");
-let year = $state("");
-$effect.pre(() => {
-	name = title.title;
-	year = title.year ? String(title.year) : "";
-});
+// What is searched for starts as the title says, and is the admin's from then on.
+let provider = $derived(searchers[0]?.value ?? "");
+let name = $derived(title.title);
+let year = $derived(title.year ? String(title.year) : "");
 
 let candidates = $state<Schemas["Candidate"][]>();
 let refusal = $state("");

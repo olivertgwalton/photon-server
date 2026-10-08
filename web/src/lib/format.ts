@@ -179,6 +179,18 @@ export function videoName(stream: Schemas["StreamPage"] | undefined): string {
 	return [lines, stream.codec.toUpperCase(), range].filter(Boolean).join(" ");
 }
 
+// The copy asked for by id, else the one the server plays when none is: the
+// first with its files on disk.
+export function onDisk(
+	versions: Schemas["VersionPage"][] | undefined,
+	id?: string,
+): Schemas["VersionPage"] | undefined {
+	return (
+		versions?.find((v) => v.id === id) ??
+		versions?.find((v) => !v.missing_since)
+	);
+}
+
 // A copy as a choice names it: its label or edition and its picture, and
 // whether its files are gone.
 export function versionName(v: Schemas["VersionPage"]): string {

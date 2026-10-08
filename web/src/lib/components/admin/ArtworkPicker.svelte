@@ -26,25 +26,17 @@ const kinds: { kind: Kind; label: string; shape: string; width: number }[] = [
 ];
 
 let kind = $state<Kind>("poster");
-let candidates = $state<Schemas["ArtworkCandidate"][]>();
-let refusal = $state("");
+const current = $derived(kinds.find((k) => k.kind === kind) ?? kinds[0]);
 
-async function load(of: Kind) {
-	candidates = undefined;
-	const { data, error } = await api.GET(
-		"/api/v1/admin/titles/{id}/artwork/candidates",
-		{
-			params: { path: { id: title.id }, query: { kind: of } },
-		},
-	);
-	refusal = error ? problemMessage(error) : "";
-	if (of === kind) candidates = data?.items ?? [];
+function ask(of: Kind) {
+	return api.GET("/api/v1/admin/titles/{id}/artwork/candidates", {
+		params: { path: { id: title.id }, query: { kind: of } },
+	});
 }
-
-// Asked again whenever the title is, since a refresh lists its pictures afresh.
-$effect(() => {
-	load(kind);
-});
+// The providers' pictures of the kind shown, asked again as the kind
+// changes, and after a choice refused: a refresh in between listed them
+// afresh, so what is there now is shown.
+let listed = $state.raw(ask("poster"));
 
 async function choose(id: string) {
 	const chosen = await act(
@@ -54,8 +46,7 @@ async function choose(id: string) {
 		}),
 		"Chosen.",
 	);
-	// A refresh in between lists the pictures afresh; show what is there now.
-	if (!chosen) return load(kind);
+	if (!chosen) listed = ask(kind);
 }
 
 const giveBack = () =>
@@ -65,32 +56,37 @@ const giveBack = () =>
 		}),
 		"Given back to the sources.",
 	);
-
-const current = $derived(kinds.find((k) => k.kind === kind) ?? kinds[0]);
 </script>
 
-<Tabs.Root bind:value={kind}>
+<Tabs.Root
+	bind:value={kind}
+	onValueChange={(k) => {
+		listed = ask(k as Kind);
+	}}
+>
 	<Tabs.List>
 		{#each kinds as k (k.kind)}
 			<Tabs.Trigger value={k.kind}>{k.label}</Tabs.Trigger>
 		{/each}
 	</Tabs.List>
-	{#each kinds as k (k.kind)}
-		<Tabs.Content value={k.kind} class="grid gap-4 pt-2">
-			{#if refusal}
-				<p role="alert" class="text-destructive text-sm">{refusal}</p>
-			{:else if !candidates}
-				<p class="text-ink-3 text-sm">Asking the providers…</p>
-			{:else if candidates.length}
+	<Tabs.Content value={kind} class="grid gap-4 pt-2">
+		{#await listed}
+			<p class="text-ink-3 text-sm">Asking the providers…</p>
+		{:then { data, error }}
+			{#if !data}
+				<p role="alert" class="text-destructive text-sm">
+					{problemMessage(error)}
+				</p>
+			{:else if data.items.length}
 				<ul
 					class={[
 						"grid gap-3",
-						k.kind === "poster"
+						kind === "poster"
 							? "grid-cols-3 sm:grid-cols-4 lg:grid-cols-6"
 							: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
 					]}
 				>
-					{#each candidates as candidate (candidate.id)}
+					{#each data.items as candidate (candidate.id)}
 						<li>
 							<button
 								type="button"
@@ -126,12 +122,12 @@ const current = $derived(kinds.find((k) => k.kind === kind) ?? kinds[0]);
 				</ul>
 			{:else}
 				<p class="text-ink-3 text-sm">
-					The providers have no {k.label.toLowerCase()} for this title.
+					The providers have no {current.label.toLowerCase()} for this title.
 				</p>
 			{/if}
-			<Button variant="outline" class="justify-self-start" onclick={giveBack}>
-				Give the {k.label.toLowerCase()} back to the sources
-			</Button>
-		</Tabs.Content>
-	{/each}
+		{/await}
+		<Button variant="outline" class="justify-self-start" onclick={giveBack}>
+			Give the {current.label.toLowerCase()} back to the sources
+		</Button>
+	</Tabs.Content>
 </Tabs.Root>

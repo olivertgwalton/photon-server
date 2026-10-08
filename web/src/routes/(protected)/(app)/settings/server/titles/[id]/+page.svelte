@@ -114,7 +114,7 @@ const name = $derived(
 			</Card.Header>
 			<Card.Content>
 				{#key t}
-					<TitleLocale title={t} />
+					<TitleLocale title={t} locales={data.locales} />
 				{/key}
 			</Card.Content>
 		</Card.Root>

@@ -3,6 +3,7 @@ import type { components } from "#lib/api/schema.js";
 import {
 	defaultSources,
 	itemKinds,
+	localeOptions,
 	offeredSources,
 	serverLocale,
 } from "#lib/admin/library.js";
@@ -38,24 +39,20 @@ let {
 // Jellyfin's library settings list them.
 const languageNames = new Intl.DisplayNames(undefined, { type: "language" });
 const countryNames = new Intl.DisplayNames(undefined, { type: "region" });
-const named = (codes: string[], names: Intl.DisplayNames) =>
-	codes
-		.map((value) => ({ value, label: names.of(value) ?? value }))
-		.toSorted((a, b) => a.label.localeCompare(b.label));
 const serverCountry = $derived(new Intl.Locale(serverLanguage).region);
 const languages = $derived([
 	{
 		value: serverLocale,
 		label: `Server default (${languageNames.of(serverLanguage) ?? serverLanguage})`,
 	},
-	...named(locales.languages, languageNames),
+	...localeOptions(locales.languages, "language"),
 ]);
 const countries = $derived([
 	{
 		value: serverLocale,
 		label: `Automatic${serverCountry ? ` (${countryNames.of(serverCountry)})` : ""}`,
 	},
-	...named(locales.countries, countryNames),
+	...localeOptions(locales.countries, "region"),
 ]);
 
 const defaults = {
