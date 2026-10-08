@@ -832,6 +832,11 @@ func (a *API) routes() []route {
 			status:  http.StatusOK, reply: listJSON[knownNodeJSON]{}, handle: a.adminNodes,
 		},
 		{
+			pattern: "GET /api/v1/admin/metrics", access: admin,
+			summary: "What each node's metrics say now, and what the nodes share, for a dashboard; Prometheus scrapes /metrics for history",
+			status:  http.StatusOK, reply: metricsJSON{}, handle: a.adminMetrics,
+		},
+		{
 			pattern: "PATCH /api/v1/admin/nodes/{id}", access: admin,
 			summary: "Change a node's role or its limit on transcodes at once; it takes them up at once",
 			body:    nodeChangeJSON{}, status: http.StatusOK, reply: knownNodeJSON{}, handle: a.setNode,

@@ -1195,6 +1195,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What each node's metrics say now, and what the nodes share, for a dashboard; Prometheus scrapes /metrics for history
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Metrics"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/network": {
         parameters: {
             query?: never;
@@ -6301,6 +6341,21 @@ export interface components {
             subtitles?: components["schemas"]["SubtitleSupport"][];
             video: components["schemas"]["VideoSupport"][];
         };
+        ClusterMetrics: {
+            jobs: components["schemas"]["JobCount"][];
+            library_items: {
+                [key: string]: number;
+            };
+            /** Format: uuid */
+            node: string;
+            nodes: {
+                [key: string]: number;
+            };
+            oldest_due_seconds: {
+                [key: string]: number;
+            };
+            tasks: components["schemas"]["TaskFinished"][];
+        };
         CollectionCard: {
             blurhashes?: {
                 [key: string]: string;
@@ -6657,6 +6712,17 @@ export interface components {
         };
         /** @enum {string} */
         HiddenFolders: "hide" | "show";
+        Histogram: {
+            buckets: components["schemas"]["HistogramBucket"][];
+            /** Format: int64 */
+            count: number;
+            sum: number;
+        };
+        HistogramBucket: {
+            /** Format: int64 */
+            count: number;
+            le: number;
+        };
         HistoryEntry: {
             /** Format: uuid */
             id: string;
@@ -6910,6 +6976,10 @@ export interface components {
         MetadataProviderList: {
             items: components["schemas"]["MetadataProvider"][];
         };
+        Metrics: {
+            cluster?: components["schemas"]["ClusterMetrics"] | null;
+            nodes: components["schemas"]["NodeMetrics"][];
+        };
         /** @enum {string} */
         Milestone: "series_premiere" | "season_premiere" | "season_finale";
         Missed: {
@@ -6985,6 +7055,14 @@ export interface components {
             hevc: components["schemas"]["HEVCEncoding"];
             libass: boolean;
         };
+        NodeMetrics: {
+            availability: components["schemas"]["NodeAvailability"];
+            /** Format: uuid */
+            id: string;
+            metrics: components["schemas"]["OwnMetrics"];
+            name: string;
+            role: components["schemas"]["NodeRole"];
+        };
         /** @enum {string} */
         NodeRole: "all" | "serve" | "transcode";
         NowPlaying: {
@@ -7016,6 +7094,29 @@ export interface components {
         };
         /** @enum {string} */
         Order: "asc" | "desc";
+        OwnMetrics: {
+            /** Format: date-time */
+            at: string;
+            cpu_seconds: number;
+            playback_starts: {
+                [key: string]: number;
+            };
+            playbacks: {
+                [key: string]: number;
+            };
+            resident_memory_bytes: number;
+            segment_wait: components["schemas"]["Histogram"];
+            sent_bytes: {
+                [key: string]: number;
+            };
+            transcode_refusals: {
+                [key: string]: number;
+            };
+            transcode_slots?: number;
+            transcodes: {
+                [key: string]: number;
+            };
+        };
         PairingStart: {
             device_code: string;
             /** Format: int64 */
@@ -7598,6 +7699,12 @@ export interface components {
             running: boolean;
             /** Format: date-time */
             started_at?: string;
+        };
+        TaskFinished: {
+            /** Format: date-time */
+            finished_at: string;
+            result: components["schemas"]["TaskResult"];
+            task: components["schemas"]["TaskKey"];
         };
         /** @enum {string} */
         TaskKey: "scan_libraries" | "sweep_jobs" | "backup_database" | "refresh_metadata" | "sweep_artwork" | "detect_markers" | "backfill_previews" | "sweep_downloads" | "prune_activity" | "refresh_collections" | "sync_lists" | "fetch_subtitles";
