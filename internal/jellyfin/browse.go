@@ -21,6 +21,7 @@ type catalogue interface {
 	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
+	Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
 	Named(ctx context.Context, profile, id uuid.UUID) (store.Named, error)
 	SearchPeople(ctx context.Context, text string, offset, limit int) ([]store.PersonRef, int64, error)
 	Person(ctx context.Context, id uuid.UUID) (store.PersonPage, error)
@@ -341,8 +342,13 @@ func (a *API) byID(w http.ResponseWriter, r *http.Request, names []string, seen 
 	a.writeJSON(w, queryResult{Items: out[min(l.start, len(out)):min(l.start+l.limit, len(out))], TotalRecordCount: len(out), StartIndex: l.start})
 }
 
-// wall answers the titles of libraries, those of several sorted together, of the kinds asked for.
+// wall answers the titles of libraries, those of several sorted together, of the kinds asked for;
+// or their collections, where an app asks for box sets alone.
 func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Request, types []string, l listed) {
+	if len(types) == 1 && strings.EqualFold(types[0], "BoxSet") {
+		a.collections(libs, w, r, l)
+		return
+	}
 	var ids []uuid.UUID
 	for _, lib := range libs {
 		if len(types) == 0 || has(types, libraryKinds[lib.Kind]) {
