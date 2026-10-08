@@ -323,6 +323,22 @@ func TestASignedInAppReadsItsUserAndServer(t *testing.T) {
 	}
 }
 
+// An app says what it can do straight after signing in, and goes on only once that is taken.
+func TestAnAppSaysWhatItCanDo(t *testing.T) {
+	api, _, _, _ := newAPI()
+	for _, tc := range []struct{ target, body string }{
+		{"/Sessions/Capabilities?playableMediaTypes=Video&supportedCommands=DisplayMessage&supportsMediaControl=false", ""},
+		{"/Sessions/Capabilities/Full", `{"PlayableMediaTypes":["Video"],"SupportedCommands":["DisplayMessage"],"SupportsMediaControl":false}`},
+	} {
+		if w := serve(api, http.MethodPost, tc.target, kotlin+`, Token="pst_device"`, tc.body); w.Code != http.StatusNoContent {
+			t.Errorf("%s: %d, want 204", tc.target, w.Code)
+		}
+		if w := serve(api, http.MethodPost, tc.target, kotlin, tc.body); w.Code != http.StatusUnauthorized {
+			t.Errorf("%s signed out: %d, want 401", tc.target, w.Code)
+		}
+	}
+}
+
 // Signing out ends the device's session, and only a device's: an API key stays until an admin
 // revokes it.
 func TestAnAppSignsOut(t *testing.T) {

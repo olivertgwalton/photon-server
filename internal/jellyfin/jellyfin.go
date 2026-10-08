@@ -101,6 +101,10 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle(a.me, "GET /Users/Me")
 	a.handle(a.user, "GET /Users/{userId}")
 	a.handle(a.logout, "POST /Sessions/Logout")
+	// What an app says it can do, sent as it signs in: the media it plays and the commands it
+	// takes from another app. Photon sends no app commands, and chooses how a copy plays from the
+	// device profile PlaybackInfo is sent, so none of it is kept.
+	a.handle(noContent, "POST /Sessions/Capabilities", "POST /Sessions/Capabilities/Full")
 	a.handle(a.displayPreferences, "GET /DisplayPreferences/{id}")
 	// Browsing, under the routes Jellyfin 12.2 answers, and the /Users/{userId} forms apps still use.
 	a.handle(a.views, "GET /UserViews", "GET /Users/{userId}/Views")
