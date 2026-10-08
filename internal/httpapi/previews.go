@@ -107,3 +107,24 @@ func (a *API) serveObject(w http.ResponseWriter, r *http.Request, o blob.Object,
 		a.internal(w, r, err)
 	}
 }
+
+func (a *API) previewsRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/parts/{id}/trickplay", access: signedIn,
+			summary: "How a part's trickplay sheets are laid out, to find the thumbnail for a time",
+			status:  http.StatusOK, reply: trickplayJSON{}, handle: a.trickplay,
+		},
+		{
+			pattern: "GET /api/v1/parts/{id}/trickplay/{n}", access: signedIn, summary: "A part's trickplay sheet",
+			path:   []param{{"n", 0, "The sheet, counted from 0."}},
+			status: http.StatusOK, reply: asFile{"image/jpeg"}, handle: a.trickplaySheet,
+		},
+		{
+			pattern: "GET /api/v1/parts/{id}/chapters/{idx}/image", access: signedAddress,
+			summary: "A picture of a chapter, at the signed address the title's page gives",
+			path:    []param{{"idx", 0, "The chapter, counted from 0 in its part."}},
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"image/jpeg"}, handle: a.chapterImage,
+		},
+	}
+}

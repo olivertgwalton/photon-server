@@ -41,3 +41,16 @@ func (a *API) signOutDevice(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+func (a *API) devicesRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/auth/devices", access: signedIn, summary: "List the devices signed in",
+			status: http.StatusOK, reply: listJSON[deviceListingJSON]{}, handle: a.devices,
+		},
+		{
+			pattern: "DELETE /api/v1/auth/devices/{id}", access: signedIn, summary: "Sign a device out",
+			status: http.StatusNoContent, handle: a.signOutDevice,
+		},
+	}
+}

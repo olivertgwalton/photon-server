@@ -55,3 +55,13 @@ func (a *API) theme(w http.ResponseWriter, r *http.Request) {
 	}
 	a.serveObject(w, r, o, "", h)
 }
+
+func (a *API) themesRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/themes/{id}", access: public,
+			summary: "A theme tune, in byte ranges, kept for good: its id changes when it does",
+			status:  http.StatusOK, reply: asFile{"audio/*"}, handle: a.theme,
+		},
+	}
+}

@@ -108,3 +108,18 @@ func (a *API) setNetwork(w http.ResponseWriter, r *http.Request) {
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNetworkChanged})
 	writeJSON(w, a.logger, "application/json", http.StatusOK, showNetwork(n))
 }
+
+func (a *API) networkRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/admin/network", access: admin,
+			summary: "Whether the server's port answers HTTPS, the certificate it serves, and whether Jellyfin's apps reach it",
+			status:  http.StatusOK, reply: networkStatusJSON{}, handle: a.adminNetwork,
+		},
+		{
+			pattern: "PUT /api/v1/admin/network", access: admin,
+			summary: "Replace whether the port answers HTTPS, its certificate, and Jellyfin's; every node serves it at once",
+			body:    networkJSON{}, status: http.StatusOK, reply: networkJSON{}, handle: a.setNetwork,
+		},
+	}
+}

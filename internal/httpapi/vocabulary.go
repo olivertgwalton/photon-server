@@ -152,3 +152,13 @@ func (n *eventNames) lookUp(names func() map[uuid.UUID]string, id uuid.UUID) str
 	}
 	return names()[id]
 }
+
+func (a *API) vocabularyRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/words", access: signedIn,
+			summary: "Say what the API's values are called, in the reader's language",
+			status:  http.StatusOK, reply: vocabularyJSON{}, handle: a.vocabulary,
+		},
+	}
+}

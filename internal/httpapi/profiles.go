@@ -116,3 +116,34 @@ func (a *API) renameSelf(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(p))
 	}
 }
+
+func (a *API) profilesRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/profiles", access: signedIn, summary: "List the household's profiles and their locks",
+			status: http.StatusOK, reply: listJSON[profileListingJSON]{}, handle: a.profiles,
+		},
+		{
+			pattern: "PUT /api/v1/session/profile", access: signedIn, summary: "Switch the profile this device watches as",
+			body: switchJSON{}, status: http.StatusOK, reply: profileJSON{}, handle: a.switchProfile,
+		},
+		{
+			pattern: "PATCH /api/v1/me", access: signedIn,
+			summary: "Rename the profile; names are unique, and every device shows the new one at once",
+			body:    nameJSON{}, status: http.StatusOK, reply: profileJSON{}, handle: a.renameSelf,
+		},
+		{
+			pattern: "PUT /api/v1/me/pin", access: signedIn, summary: "Set the profile's PIN",
+			body: pinJSON{}, status: http.StatusNoContent, handle: a.setPIN,
+		},
+		{
+			pattern: "DELETE /api/v1/me/pin", access: signedIn, summary: "Clear the profile's PIN",
+			status: http.StatusNoContent, handle: a.clearPIN,
+		},
+		{
+			pattern: "PUT /api/v1/me/password", access: signedIn,
+			summary: "Change the profile's password, signing out its other devices",
+			body:    passwordChangeJSON{}, status: http.StatusNoContent, handle: a.changePassword,
+		},
+	}
+}

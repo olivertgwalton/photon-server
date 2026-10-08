@@ -116,3 +116,45 @@ func (a *API) mark(set func(w watching, ctx context.Context, profile, item uuid.
 		}
 	}
 }
+
+func (a *API) watchRoutes() []route {
+	return []route{
+		{
+			pattern: "PUT /api/v1/titles/{id}/progress", access: signedIn,
+			summary: "Record where the profile stopped a film or episode, and when: progress from before the title's state last changed is refused as a conflict",
+			body:    progressJSON{}, status: http.StatusOK, reply: reachedJSON{}, handle: a.progress,
+		},
+		{
+			pattern: "DELETE /api/v1/titles/{id}/progress", access: signedIn,
+			summary: "Remove a title, or a show's or season's episodes, from Continue Watching, keeping what was watched",
+			status:  http.StatusNoContent, handle: a.mark(watching.ClearProgress),
+		},
+		{
+			pattern: "PUT /api/v1/titles/{id}/watched", access: signedIn,
+			summary: "Mark a title watched, and when: each film or episode whose state changed since is left as it is",
+			body:    optionalBody{watchedJSON{}}, status: http.StatusNoContent, handle: a.watched,
+		},
+		{
+			pattern: "DELETE /api/v1/titles/{id}/watched", access: signedIn, summary: "Mark a title unwatched",
+			status: http.StatusNoContent, handle: a.mark(watching.MarkUnwatched),
+		},
+		{
+			pattern: "PUT /api/v1/titles/{id}/favourite", access: signedIn, summary: "Make a title a favourite",
+			status: http.StatusNoContent, handle: a.mark(watching.Favourite),
+		},
+		{
+			pattern: "DELETE /api/v1/titles/{id}/favourite", access: signedIn, summary: "Take a title from the favourites",
+			status: http.StatusNoContent, handle: a.mark(watching.Unfavourite),
+		},
+		{
+			pattern: "PUT /api/v1/titles/{id}/watchlist", access: signedIn,
+			summary: "Put a film or show on the watchlist, a season or episode its show; watching a film, or every episode of a show, takes it off",
+			status:  http.StatusNoContent, handle: a.mark(watching.Watchlist),
+		},
+		{
+			pattern: "DELETE /api/v1/titles/{id}/watchlist", access: signedIn,
+			summary: "Take a film or show from the watchlist, a season or episode its show",
+			status:  http.StatusNoContent, handle: a.mark(watching.Unwatchlist),
+		},
+	}
+}

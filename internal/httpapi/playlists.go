@@ -188,3 +188,41 @@ func (a *API) removeEntry(w http.ResponseWriter, r *http.Request) {
 	a.playlistChanged(r, id)
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (a *API) playlistsRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/playlists", access: signedIn, summary: "List the profile's playlists, by name",
+			status: http.StatusOK, reply: listJSON[playlistJSON]{}, handle: a.playlistsOf,
+		},
+		{
+			pattern: "POST /api/v1/playlists", access: signedIn, summary: "Make a playlist",
+			body: addPlaylistJSON{}, status: http.StatusCreated, reply: createdJSON{}, handle: a.addPlaylist,
+		},
+		{
+			pattern: "PATCH /api/v1/playlists/{id}", access: signedIn, summary: "Rename a playlist",
+			body: nameJSON{}, status: http.StatusNoContent, handle: a.setPlaylist,
+		},
+		{
+			pattern: "DELETE /api/v1/playlists/{id}", access: signedIn, summary: "Remove a playlist",
+			status: http.StatusNoContent, handle: a.removePlaylist,
+		},
+		{
+			pattern: "GET /api/v1/playlists/{id}/entries", access: signedIn, summary: "Page a playlist, in its order",
+			query: pageParams, status: http.StatusOK, reply: pageJSON[entryJSON]{}, handle: a.playlistEntries,
+		},
+		{
+			pattern: "POST /api/v1/playlists/{id}/entries", access: signedIn,
+			summary: "Put titles at the end of a playlist: a show or season as its episodes",
+			body:    itemIDsJSON{}, status: http.StatusNoContent, handle: a.addToPlaylist,
+		},
+		{
+			pattern: "PUT /api/v1/playlists/{id}/entries/{entry}/position", access: signedIn,
+			summary: "Move a playlist's entry", body: moveJSON{}, status: http.StatusNoContent, handle: a.moveEntry,
+		},
+		{
+			pattern: "DELETE /api/v1/playlists/{id}/entries/{entry}", access: signedIn,
+			summary: "Take an entry out of a playlist", status: http.StatusNoContent, handle: a.removeEntry,
+		},
+	}
+}

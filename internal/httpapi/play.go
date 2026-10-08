@@ -4,25 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"io/fs"
-	"log/slog"
-	"math"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
-	"os"
-	"path"
-	"path/filepath"
-	"slices"
 	"strconv"
-	"strings"
 	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
-	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -46,19 +34,6 @@ type placer interface {
 	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o playback.Opening) error
 	Self() domain.Node
 	Refuse(candidates []domain.Node) error
-}
-
-// owners say which node of the cluster serves a playback's HLS.
-type owners interface {
-	Owner(ctx context.Context, playback uuid.UUID) (string, bool, error)
-}
-
-type hlsFiles interface {
-	Has(playback uuid.UUID) bool
-	Resource(ctx context.Context, playback uuid.UUID, name string) (hls.Resource, error)
-	Transcodes() (active, conversions, limit int)
-	WebVTT(ctx context.Context, open func() (*os.File, error), language string) (string, error)
-	Extracted(ctx context.Context, src hls.SubtitleSource, want string) (string, error)
 }
 
 type playing interface {
@@ -170,39 +145,12 @@ type refusalJSON struct {
 
 // play opens a playback of a film or episode as the client's profile decides: its copy's files in
 // order, each with where it starts on the copy's timeline, or an HLS playlist of them, its video
-// copied or encoded, at signed
-// addresses a player fetches directly. It says what becomes of each stream, and why the copy could
-// not be played as it is.
+// copied or encoded, at signed addresses a player fetches directly. It says what becomes of each
+// stream, and why the copy could not be played as it is.
 func (a *API) play(w http.ResponseWriter, r *http.Request) {
-	var req playJSON
-	if !a.decode(w, r, &req) {
+	req, version, ok := a.playRequest(w, r)
+	if !ok {
 		return
-	}
-	if req.Profile == nil {
-		writeProblem(w, a.logger, codeInvalidBody, "profile says what the client plays")
-		return
-	}
-	if req.StartMS < 0 {
-		writeProblem(w, a.logger, codeInvalidBody, "start_ms is not negative")
-		return
-	}
-	if req.SubtitleStream != nil && req.SubtitleFile != nil {
-		writeProblem(w, a.logger, codeInvalidBody, "a subtitle is subtitle_stream or subtitle_file, not both")
-		return
-	}
-	if req.Profile.Parts == "" {
-		req.Profile.Parts = domain.PartsJoined
-	}
-	if req.Profile.Segments == "" {
-		req.Profile.Segments = domain.SegmentsFMP4
-	}
-	var version uuid.UUID
-	if req.VersionID != "" {
-		var err error
-		if version, err = uuid.Parse(req.VersionID); err != nil {
-			writeProblem(w, a.logger, codeInvalidBody, "version_id is not an id")
-			return
-		}
 	}
 	id, ok := a.pathID(w, r, "id")
 	if !ok {
@@ -225,7 +173,6 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Profile.MaxBitrateKbps = playback.Capped(req.Profile.MaxBitrateKbps, limit)
-	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
 	candidates, err := a.svc.Placer.Candidates(r.Context(), playback.Need{})
 	if a.answered(w, r, err) {
 		return
@@ -234,15 +181,71 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	// The node with the most transcode slots free decides how the copy is played, with what it
-	// encodes; the next is asked where it has none by then, and decides again with its own. Where
-	// no node takes video to encode, this one decides, and a copy it would encode is refused.
+	d, session, err := a.place(r, req, id, c, title, candidates)
+	if errors.Is(err, playback.ErrNoCompatibleStream) {
+		status := codeNoCompatibleStream.status()
+		writeJSON(w, a.logger, "application/problem+json", status, refusalJSON{problem{Title: http.StatusText(status), Status: status, Code: codeNoCompatibleStream}, d.Reasons})
+		return
+	}
+	if errors.Is(err, hls.ErrTranscodeLimit) {
+		writeProblem(w, a.logger, codeTranscodeLimit, a.svc.Placer.Refuse(candidates).Error())
+		return
+	}
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, a.opened(*req.Profile, c, d, session))
+}
+
+// playRequest is a play's body, checked, with the parts and segments the client left out filled
+// in, and the copy it names.
+func (a *API) playRequest(w http.ResponseWriter, r *http.Request) (playJSON, uuid.UUID, bool) {
+	var req playJSON
+	if !a.decode(w, r, &req) {
+		return req, uuid.UUID{}, false
+	}
+	if req.Profile == nil {
+		writeProblem(w, a.logger, codeInvalidBody, "profile says what the client plays")
+		return req, uuid.UUID{}, false
+	}
+	if req.StartMS < 0 {
+		writeProblem(w, a.logger, codeInvalidBody, "start_ms is not negative")
+		return req, uuid.UUID{}, false
+	}
+	if req.SubtitleStream != nil && req.SubtitleFile != nil {
+		writeProblem(w, a.logger, codeInvalidBody, "a subtitle is subtitle_stream or subtitle_file, not both")
+		return req, uuid.UUID{}, false
+	}
+	if req.Profile.Parts == "" {
+		req.Profile.Parts = domain.PartsJoined
+	}
+	if req.Profile.Segments == "" {
+		req.Profile.Segments = domain.SegmentsFMP4
+	}
+	var version uuid.UUID
+	if req.VersionID != "" {
+		var err error
+		if version, err = uuid.Parse(req.VersionID); err != nil {
+			writeProblem(w, a.logger, codeInvalidBody, "version_id is not an id")
+			return req, uuid.UUID{}, false
+		}
+	}
+	return req, version, true
+}
+
+// place decides how c is played and starts its playback. The node with the most transcode slots
+// free decides, with what it encodes; the next is asked where it has none by then, and decides
+// again with its own. Where no node takes video to encode, this one decides, and a copy it would
+// encode is refused.
+func (a *API) place(r *http.Request, req playJSON, id uuid.UUID, c store.PlayCopy, title domain.PlaybackTitle, candidates []domain.Node) (playback.Decision, domain.Playback, error) {
+	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
 	asked := candidates
 	if len(asked) == 0 {
 		asked = []domain.Node{a.svc.Placer.Self()}
 	}
 	var d playback.Decision
 	var session domain.Playback
+	var err error
 	for _, node := range asked {
 		d, err = playback.Decide(*req.Profile, playback.CopyOf(c), tracks, playback.EncodingOf(node))
 		if err != nil {
@@ -262,18 +265,11 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	if errors.Is(err, playback.ErrNoCompatibleStream) {
-		status := codeNoCompatibleStream.status()
-		writeJSON(w, a.logger, "application/problem+json", status, refusalJSON{problem{Title: http.StatusText(status), Status: status, Code: codeNoCompatibleStream}, d.Reasons})
-		return
-	}
-	if errors.Is(err, hls.ErrTranscodeLimit) {
-		writeProblem(w, a.logger, codeTranscodeLimit, a.svc.Placer.Refuse(candidates).Error())
-		return
-	}
-	if a.answered(w, r, err) {
-		return
-	}
+	return d, session, err
+}
+
+// opened is what the client is told of a playback of c, played as d decided.
+func (a *API) opened(p playback.Profile, c store.PlayCopy, d playback.Decision, session domain.Playback) playbackJSON {
 	until := time.Now().Add(streamFor)
 	answer := playbackJSON{
 		PlaybackID: session.ID, Method: d.Method, VersionID: c.Version, Reasons: d.Reasons,
@@ -301,17 +297,17 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		exp, sig := a.svc.Signer.Token(subject, until)
 		answer.Playlist = subject + "/" + exp + "/" + sig + "/main.m3u8"
 	} else {
-		for _, p := range c.Parts {
+		for _, part := range c.Parts {
 			answer.Parts = append(answer.Parts, partJSON{
-				ID: p.ID, URL: a.svc.Signer.Sign("/api/v1/playbacks/"+session.ID.String()+"/parts/"+p.ID.String()+"/stream", until),
-				OffsetMS: p.OffsetMS, DurationMS: p.DurationMS,
+				ID: part.ID, URL: a.svc.Signer.Sign("/api/v1/playbacks/"+session.ID.String()+"/parts/"+part.ID.String()+"/stream", until),
+				OffsetMS: part.OffsetMS, DurationMS: part.DurationMS,
 			})
 		}
 	}
 	if v := d.Video; v == nil || v.Encode == nil || v.Encode.Burn == nil && v.Encode.BurnFile == nil {
-		answer.Subtitles = a.sidecars(*req.Profile, c, d.Method, until)
+		answer.Subtitles = a.sidecars(p, c, d.Method, until)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, answer)
+	return answer
 }
 
 // sidecars are the subtitles a playback hands the client to draw beside its video, but none
@@ -405,78 +401,6 @@ func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func hlsSubject(playback uuid.UUID) string { return "/api/v1/hls/" + playback.String() }
-
-// hlsFile serves a remux's playlist, a part's initialisation or a segment, made as they are asked
-// for. The playlist addresses everything else relative to itself, so one signature covers it all.
-func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
-	playback, ok := a.pathID(w, r, "playback")
-	if !ok {
-		return
-	}
-	name := r.PathValue("file")
-	res, err := a.svc.HLS.Resource(r.Context(), playback, name)
-	if a.answered(w, r, err) {
-		return
-	}
-	w.Header().Set("Content-Type", res.Type)
-	if res.File == nil {
-		_, _ = io.WriteString(w, res.Text)
-		return
-	}
-	a.serveFile(w, r, res.File, name, nil)
-}
-
-// routeToOwner hands a request about the playback the path names by param that another node of
-// the cluster runs to that node, which checks the request again: its HLS, whose signature every
-// node makes with the server's one key, or its player's or an admin's stop of it, so its stream
-// ends and its transcode slot is free at once.
-func (a *API) routeToOwner(param string, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		playback, err := uuid.Parse(r.PathValue(param))
-		if err != nil || a.svc.Owners == nil || a.svc.HLS.Has(playback) {
-			next.ServeHTTP(w, r)
-			return
-		}
-		address, elsewhere, err := a.svc.Owners.Owner(r.Context(), playback)
-		if err != nil {
-			a.internal(w, r, err)
-			return
-		}
-		target, perr := url.Parse(address)
-		if !elsewhere || perr != nil {
-			next.ServeHTTP(w, r)
-			return
-		}
-		a.proxy(w, r, target)
-	})
-}
-
-// proxy hands a request to another node of the cluster.
-func (a *API) proxy(w http.ResponseWriter, r *http.Request, target *url.URL) {
-	proxy := &httputil.ReverseProxy{
-		Rewrite: func(pr *httputil.ProxyRequest) {
-			pr.SetURL(target)
-			pr.SetXForwarded()
-		},
-		ErrorLog: slog.NewLogLogger(a.logger.Handler(), slog.LevelWarn),
-	}
-	proxy.ServeHTTP(w, r)
-}
-
-// requireSignedPath admits a request whose path carries a signature of its HLS playback, as
-// /api/v1/hls/{playback}/{exp}/{sig}/…, that has not lapsed.
-func (a *API) requireSignedPath(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		subject := "/api/v1/hls/" + r.PathValue("playback")
-		if !a.svc.Signer.Valid(subject, r.PathValue("exp"), r.PathValue("sig"), time.Now()) {
-			writeProblem(w, a.logger, codeUnauthenticated, "the address is not signed, or has lapsed")
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 type playbackProgressJSON struct {
 	PositionMS int64            `json:"position_ms"`
 	State      domain.PlayState `json:"state"`
@@ -534,277 +458,22 @@ func (a *API) reportPlayback(w http.ResponseWriter, r *http.Request, report func
 	}
 }
 
-// fileTypes are the types of the files a library holds, which Go's own table lacks.
-var fileTypes = map[string]string{
-	".mkv": "video/x-matroska", ".mk3d": "video/x-matroska", ".webm": "video/webm", ".mp4": "video/mp4",
-	".m4v": "video/x-m4v", ".mov": "video/quicktime", ".ts": "video/mp2t", ".m2ts": "video/mp2t",
-	".mts": "video/mp2t", ".avi": "video/x-msvideo", ".wmv": "video/x-ms-wmv", ".mpg": "video/mpeg",
-	".mpeg": "video/mpeg", ".ogv": "video/ogg", ".flv": "video/x-flv",
-	".srt": "application/x-subrip", ".vtt": "text/vtt", ".ass": "text/x-ssa", ".ssa": "text/x-ssa",
-}
-
-// partStream serves one file of a copy as it is, in byte ranges.
-func (a *API) partStream(w http.ResponseWriter, r *http.Request) {
-	a.serveLibraryFile(w, r, a.svc.Playing.PartFile, math.MaxInt64)
-}
-
-// playbackPartStream serves a copy's file as it is to its playback, for as long as the playback
-// lasts: its stop cuts off what is still being sent.
-func (a *API) playbackPartStream(w http.ResponseWriter, r *http.Request) {
-	playback, ok := a.pathID(w, r, "playback")
-	if !ok {
-		return
+func (a *API) playRoutes() []route {
+	return []route{
+		{
+			pattern: "POST /api/v1/titles/{id}/play", access: signedIn,
+			summary: "Open a playback of a film or episode, as the client's profile can play it",
+			body:    playJSON{}, status: http.StatusOK, reply: playbackJSON{},
+			refusals: map[int]any{codeNoCompatibleStream.status(): refusalJSON{}}, handle: a.play,
+		},
+		{
+			pattern: "POST /api/v1/playbacks/{id}/progress", access: signedIn, summary: "Say where a playback has got to, paused too: one unheard from for two minutes is stopped",
+			body: playbackProgressJSON{}, status: http.StatusOK, reply: reachedJSON{}, handle: a.playbackProgress,
+		},
+		{
+			pattern: "POST /api/v1/playbacks/{id}/stop", access: signedIn, summary: "Stop a playback, and say where",
+			body: positionJSON{}, status: http.StatusOK, reply: reachedJSON{},
+			handle: a.routeToOwner("id", http.HandlerFunc(a.playbackStop)).ServeHTTP,
+		},
 	}
-	rc := http.NewResponseController(w)
-	done, err := a.svc.Playbacks.Serve(r.Context(), playback, func() { _ = rc.SetWriteDeadline(time.Now()) })
-	if a.answered(w, r, err) {
-		return
-	}
-	defer done()
-	a.serveLibraryFile(w, r, a.svc.Playing.PartFile, math.MaxInt64)
-}
-
-// sampleBytes is as much of a part as a connection test may read: enough to time a fast link,
-// too little to stand in for a download.
-const sampleBytes = 16 << 20
-
-// partSample serves the start of a part's file to time the connection, as Jellyfin's bitrate test
-// does, but of the file itself. It is no playback: nothing is recorded of it.
-func (a *API) partSample(w http.ResponseWriter, r *http.Request) {
-	visible := func(ctx context.Context, part uuid.UUID) (string, string, error) {
-		return a.svc.Playing.VisiblePartFile(ctx, sessionOf(r).Profile.ID, part)
-	}
-	a.serveLibraryFile(w, r, visible, sampleBytes)
-}
-
-// subtitleFormat is how a subtitle file beside a copy is served.
-type subtitleFormat string
-
-const (
-	subtitleOriginal subtitleFormat = "original"
-	subtitleWebVTT   subtitleFormat = "webvtt"
-)
-
-func subtitleFormats() []subtitleFormat { return []subtitleFormat{subtitleOriginal, subtitleWebVTT} }
-
-// subtitleFile serves a subtitle file beside a copy as it is, or a text one converted to WebVTT,
-// as Jellyfin's subtitle route converts, for a player that draws nothing else.
-func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
-	format, ok := queryEnum(a, w, r, "format", subtitleOriginal, subtitleFormats())
-	if !ok {
-		return
-	}
-	switch format {
-	case subtitleOriginal:
-		a.serveLibraryFile(w, r, a.svc.Playing.SubtitleFile, math.MaxInt64)
-	case subtitleWebVTT:
-		a.subtitleVTT(w, r)
-	}
-}
-
-func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	sub, err := a.svc.Playing.Subtitle(r.Context(), id)
-	if a.answered(w, r, err) {
-		return
-	}
-	if !hls.TextSubtitle(sub.Codec) {
-		writeProblem(w, a.logger, codeInvalidParameter, "format webvtt is for plain text subtitles: WebVTT carries no pictures, and would lose a styled one's look")
-		return
-	}
-	ctx := r.Context()
-	open := func() (*os.File, error) {
-		f, _, err := openLibraryFile(ctx, a.svc.Playing.SubtitleFile, id)
-		return f, err
-	}
-	vtt, err := a.svc.HLS.WebVTT(ctx, open, domain.TagOf(sub.Language))
-	if a.answered(w, r, err) {
-		return
-	}
-	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
-	_, _ = io.WriteString(w, vtt)
-}
-
-// serveLibraryFile serves the first limit bytes of the file of a library that where finds for the
-// id in the path: only a file the scanner recorded.
-func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where func(context.Context, uuid.UUID) (string, string, error), limit int64) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	f, rel, err := openLibraryFile(r.Context(), where, id)
-	if a.answered(w, r, err) {
-		return
-	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	if t, ok := fileTypes[strings.ToLower(path.Ext(rel))]; ok {
-		w.Header().Set("Content-Type", t)
-	}
-	if limit >= info.Size() {
-		// The bare file keeps the copy in the kernel: sendfile takes only an *os.File.
-		http.ServeContent(w, r, rel, info.ModTime(), f)
-		return
-	}
-	http.ServeContent(w, r, rel, info.ModTime(), io.NewSectionReader(f, 0, limit))
-}
-
-// openLibraryFile opens the file of a library that where finds for an id.
-func openLibraryFile(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (*os.File, string, error) {
-	root, rel, err := where(ctx, id)
-	if err != nil {
-		return nil, "", err
-	}
-	f, err := library.Open(root, rel)
-	return f, rel, err
-}
-
-// requireSignature admits a request whose address the server signed and which has not lapsed.
-func (a *API) requireSignature(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if !a.svc.Signer.Valid(r.URL.Path, q.Get("exp"), q.Get("sig"), time.Now()) {
-			writeProblem(w, a.logger, codeUnauthenticated, "the address is not signed, or has lapsed")
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// fontTypes are the types of the fonts a file carries for its styled subtitles.
-var fontTypes = map[string]string{
-	".ttf": "font/ttf", ".otf": "font/otf", ".ttc": "font/collection", ".woff": "font/woff", ".woff2": "font/woff2",
-}
-
-type fontsJSON struct {
-	Fonts []fontJSON `json:"fonts"`
-}
-
-// fontJSON is a font a file carries, at an address signed as long as the list's own.
-type fontJSON struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
-}
-
-// partSubtitles is a part's file, opened as the scanner recorded it, and its streams, for reading
-// its subtitles out. The read outlives the request that starts it.
-func (a *API) partSubtitles(ctx context.Context, part uuid.UUID) (hls.SubtitleSource, error) {
-	streams, err := a.svc.Playing.PartStreams(ctx, part)
-	if err != nil {
-		return hls.SubtitleSource{}, err
-	}
-	opening := context.WithoutCancel(ctx)
-	open := func() (*os.File, error) {
-		f, _, err := openLibraryFile(opening, a.svc.Playing.PartFile, part)
-		return f, err
-	}
-	return hls.SubtitleSource{Open: open, Part: part, Streams: streams}, nil
-}
-
-// styledStream serves a styled subtitle stream of a part, read out as it is.
-func (a *API) styledStream(w http.ResponseWriter, r *http.Request) {
-	part, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	n, err := strconv.Atoi(r.PathValue("stream"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
-	}
-	src, err := a.partSubtitles(r.Context(), part)
-	if a.answered(w, r, err) {
-		return
-	}
-	if !slices.ContainsFunc(src.Streams, func(s domain.Stream) bool {
-		return s.Index == n && s.Kind == domain.StreamSubtitle && hls.StyledSubtitle(s.Codec)
-	}) {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
-	}
-	dir, err := a.svc.HLS.Extracted(r.Context(), src, hls.StyledName(n))
-	if a.answered(w, r, err) {
-		return
-	}
-	f, err := os.Open(filepath.Join(dir, hls.StyledName(n)))
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	a.serveFile(w, r, f, hls.StyledName(n), http.Header{"Content-Type": {"text/x-ssa; charset=utf-8"}})
-}
-
-// partFonts lists the fonts a part's file carries for its styled subtitles, each at an address
-// signed until the list's own lapses.
-func (a *API) partFonts(w http.ResponseWriter, r *http.Request) {
-	part, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	src, err := a.partSubtitles(r.Context(), part)
-	if a.answered(w, r, err) {
-		return
-	}
-	dir, err := a.svc.HLS.Extracted(r.Context(), src, hls.FontsDir)
-	if a.answered(w, r, err) {
-		return
-	}
-	entries, err := os.ReadDir(filepath.Join(dir, hls.FontsDir))
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	// requireSignature has read exp already.
-	exp, _ := strconv.ParseInt(r.URL.Query().Get("exp"), 10, 64)
-	answer := fontsJSON{Fonts: []fontJSON{}}
-	for _, e := range entries {
-		if _, ok := fontTypes[strings.ToLower(filepath.Ext(e.Name()))]; !ok || !e.Type().IsRegular() {
-			continue
-		}
-		at := r.URL.Path + "/" + e.Name()
-		expires, sig := a.svc.Signer.Token(at, time.Unix(exp, 0))
-		u := url.URL{Path: at, RawQuery: url.Values{"exp": {expires}, "sig": {sig}}.Encode()}
-		answer.Fonts = append(answer.Fonts, fontJSON{Name: e.Name(), URL: u.String()})
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, answer)
-}
-
-// partFont serves a font a part's file carries, as partFonts listed it.
-func (a *API) partFont(w http.ResponseWriter, r *http.Request) {
-	part, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	name := r.PathValue("name")
-	t, ok := fontTypes[strings.ToLower(filepath.Ext(name))]
-	if !ok {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
-	}
-	src, err := a.partSubtitles(r.Context(), part)
-	if a.answered(w, r, err) {
-		return
-	}
-	dir, err := a.svc.HLS.Extracted(r.Context(), src, hls.FontsDir)
-	if a.answered(w, r, err) {
-		return
-	}
-	f, err := os.OpenInRoot(filepath.Join(dir, hls.FontsDir), name)
-	if errors.Is(err, fs.ErrNotExist) {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
-	}
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	// A font's bytes never change under its address: the part's file is read out once.
-	a.serveFile(w, r, f, name, http.Header{"Content-Type": {t}, "Cache-Control": {"private, max-age=86400"}})
 }

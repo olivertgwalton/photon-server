@@ -72,3 +72,26 @@ func (a *API) clearAvatar(w http.ResponseWriter, r *http.Request, profile uuid.U
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+func (a *API) avatarsRoutes() []route {
+	return []route{
+		{
+			pattern: "POST /api/v1/me/avatar", access: signedIn,
+			summary: "Give the profile a picture: a JPEG, PNG, GIF or WebP of at most 32 MiB and 50 megapixels",
+			body:    avatarTypes, status: http.StatusOK, reply: profileJSON{}, handle: a.setOwnAvatar,
+		},
+		{
+			pattern: "DELETE /api/v1/me/avatar", access: signedIn, summary: "Take the profile's picture away",
+			status: http.StatusNoContent, handle: a.clearOwnAvatar,
+		},
+		{
+			pattern: "POST /api/v1/admin/profiles/{id}/avatar", access: manages,
+			summary: "Give any profile a picture: a JPEG, PNG, GIF or WebP of at most 32 MiB and 50 megapixels",
+			body:    avatarTypes, status: http.StatusOK, reply: profileJSON{}, handle: a.setProfileAvatar,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/profiles/{id}/avatar", access: manages, summary: "Take any profile's picture away",
+			status: http.StatusNoContent, handle: a.clearProfileAvatar,
+		},
+	}
+}

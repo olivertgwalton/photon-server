@@ -146,3 +146,13 @@ func (a *API) checkLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
+
+func (a *API) accessRoutes() []route {
+	return []route{
+		{
+			pattern: "POST /api/v1/admin/libraries/{id}/check", access: admin,
+			summary: "Check that every node running can reach and read a library's root, as any may scan or play from it",
+			status:  http.StatusOK, reply: libraryCheckJSON{}, handle: a.checkLibrary,
+		},
+	}
+}

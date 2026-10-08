@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -485,4 +486,69 @@ func (a *API) paging(w http.ResponseWriter, r *http.Request, defaultLimit int) (
 	}
 	limit, ok = a.queryNumber(w, r, "limit", defaultLimit, 1, maxWallLimit)
 	return offset, limit, ok
+}
+
+func (a *API) catalogueRoutes() []route {
+	return []route{
+		{
+			pattern: "PUT /api/v1/me/library-order", access: signedIn,
+			summary: "Put the profile's libraries in an order; those left out follow, by name",
+			body:    libraryOrderJSON{}, status: http.StatusNoContent, handle: a.setLibraryOrder,
+		},
+		{
+			pattern: "GET /api/v1/libraries", access: signedIn, summary: "List the libraries the profile sees",
+			status: http.StatusOK, reply: listJSON[libraryJSON]{}, handle: a.libraries,
+		},
+		{
+			pattern: "GET /api/v1/libraries/{id}/titles", access: signedIn, summary: "Page a library's titles",
+			query: slices.Concat([]param{
+				{"sort", domain.SortTitle, "The order, title by default."},
+				{"order", domain.Ascending, "Its direction; titles from A, anything else the newest first, by default."},
+			}, pageParams, wallFilterParameters),
+			status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.wall,
+		},
+		{
+			pattern: "GET /api/v1/libraries/{id}/letters", access: signedIn,
+			summary: "Count a library's titles under each letter, in title order",
+			query:   wallFilterParameters, status: http.StatusOK, reply: listJSON[letterJSON]{}, handle: a.letters,
+		},
+		{
+			pattern: "GET /api/v1/libraries/{id}/facets", access: signedIn,
+			summary: "The values a library's titles can be narrowed to",
+			status:  http.StatusOK, reply: facetsJSON{}, handle: a.facets,
+		},
+		{
+			pattern: "GET /api/v1/titles/{id}/next", access: signedIn,
+			summary: "The episode to play next: after an episode, or where the profile is in a show or season",
+			status:  http.StatusOK, reply: cardJSON{}, handle: a.next,
+		},
+		{
+			pattern: "GET /api/v1/titles/{id}/similar", access: signedIn, summary: "The titles most like one",
+			status: http.StatusOK, reply: listJSON[cardJSON]{}, handle: a.similar,
+		},
+		{
+			pattern: "GET /api/v1/titles/{id}", access: signedIn, summary: "A title's page",
+			status: http.StatusOK, reply: titlePageJSON{}, handle: a.title,
+		},
+		{
+			pattern: "GET /api/v1/home", access: signedIn, summary: "The profile's home rows, in order",
+			query:  []param{{"limit", 0, "How many titles a row holds, from 1 to " + strconv.Itoa(maxWallLimit) + "."}},
+			status: http.StatusOK, reply: homeJSON{}, handle: a.home,
+		},
+		{
+			pattern: "GET /api/v1/home/{row}", access: signedIn,
+			summary: "Page one of the profile's own home rows: continue watching, next up, its watchlist or its favourites",
+			path:    []param{{"row", domain.HomeRow(""), "The row; a library's or a collection's is paged on its own page."}},
+			query:   pageParams, status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.homeRow,
+		},
+		{
+			pattern: "GET /api/v1/search", access: signedIn, summary: "Page the titles, episodes among them, and the people a search finds",
+			query: append([]param{
+				{"q", "", "What to search for; required."},
+				{"library", uuid.UUID{}, "Only this library's titles."},
+				{"kind", []domain.SearchKind{}, "Only these kinds of title, or people; repeated or comma-separated, everything by default."},
+			}, pageParams...),
+			status: http.StatusOK, reply: searchJSON{}, handle: a.search,
+		},
+	}
 }

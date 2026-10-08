@@ -1,0 +1,193 @@
+package httpapi
+
+import (
+	"context"
+	"io"
+	"math"
+	"net/http"
+	"os"
+	"path"
+	"strconv"
+	"strings"
+	"time"
+	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/library"
+	"github.com/olivertgwalton/photon-server/internal/playback"
+)
+
+// fileTypes are the types of the files a library holds, which Go's own table lacks.
+var fileTypes = map[string]string{
+	".mkv": "video/x-matroska", ".mk3d": "video/x-matroska", ".webm": "video/webm", ".mp4": "video/mp4",
+	".m4v": "video/x-m4v", ".mov": "video/quicktime", ".ts": "video/mp2t", ".m2ts": "video/mp2t",
+	".mts": "video/mp2t", ".avi": "video/x-msvideo", ".wmv": "video/x-ms-wmv", ".mpg": "video/mpeg",
+	".mpeg": "video/mpeg", ".ogv": "video/ogg", ".flv": "video/x-flv",
+	".srt": "application/x-subrip", ".vtt": "text/vtt", ".ass": "text/x-ssa", ".ssa": "text/x-ssa",
+}
+
+// partStream serves one file of a copy as it is, in byte ranges.
+func (a *API) partStream(w http.ResponseWriter, r *http.Request) {
+	a.serveLibraryFile(w, r, a.svc.Playing.PartFile, math.MaxInt64)
+}
+
+// playbackPartStream serves a copy's file as it is to its playback, for as long as the playback
+// lasts: its stop cuts off what is still being sent.
+func (a *API) playbackPartStream(w http.ResponseWriter, r *http.Request) {
+	playback, ok := a.pathID(w, r, "playback")
+	if !ok {
+		return
+	}
+	rc := http.NewResponseController(w)
+	done, err := a.svc.Playbacks.Serve(r.Context(), playback, func() { _ = rc.SetWriteDeadline(time.Now()) })
+	if a.answered(w, r, err) {
+		return
+	}
+	defer done()
+	a.serveLibraryFile(w, r, a.svc.Playing.PartFile, math.MaxInt64)
+}
+
+// sampleBytes is as much of a part as a connection test may read: enough to time a fast link,
+// too little to stand in for a download.
+const sampleBytes = 16 << 20
+
+// partSample serves the start of a part's file to time the connection, as Jellyfin's bitrate test
+// does, but of the file itself. It is no playback: nothing is recorded of it.
+func (a *API) partSample(w http.ResponseWriter, r *http.Request) {
+	visible := func(ctx context.Context, part uuid.UUID) (string, string, error) {
+		return a.svc.Playing.VisiblePartFile(ctx, sessionOf(r).Profile.ID, part)
+	}
+	a.serveLibraryFile(w, r, visible, sampleBytes)
+}
+
+// subtitleFormat is how a subtitle file beside a copy is served.
+type subtitleFormat string
+
+const (
+	subtitleOriginal subtitleFormat = "original"
+	subtitleWebVTT   subtitleFormat = "webvtt"
+)
+
+func subtitleFormats() []subtitleFormat { return []subtitleFormat{subtitleOriginal, subtitleWebVTT} }
+
+// subtitleFile serves a subtitle file beside a copy as it is, or a text one converted to WebVTT,
+// as Jellyfin's subtitle route converts, for a player that draws nothing else.
+func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
+	format, ok := queryEnum(a, w, r, "format", subtitleOriginal, subtitleFormats())
+	if !ok {
+		return
+	}
+	switch format {
+	case subtitleOriginal:
+		a.serveLibraryFile(w, r, a.svc.Playing.SubtitleFile, math.MaxInt64)
+	case subtitleWebVTT:
+		a.subtitleVTT(w, r)
+	}
+}
+
+func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	sub, err := a.svc.Playing.Subtitle(r.Context(), id)
+	if a.answered(w, r, err) {
+		return
+	}
+	if !hls.TextSubtitle(sub.Codec) {
+		writeProblem(w, a.logger, codeInvalidParameter, "format webvtt is for plain text subtitles: WebVTT carries no pictures, and would lose a styled one's look")
+		return
+	}
+	ctx := r.Context()
+	open := func() (*os.File, error) {
+		f, _, err := openLibraryFile(ctx, a.svc.Playing.SubtitleFile, id)
+		return f, err
+	}
+	vtt, err := a.svc.HLS.WebVTT(ctx, open, domain.TagOf(sub.Language))
+	if a.answered(w, r, err) {
+		return
+	}
+	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	_, _ = io.WriteString(w, vtt)
+}
+
+// serveLibraryFile serves the first limit bytes of the file of a library that where finds for the
+// id in the path: only a file the scanner recorded.
+func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where func(context.Context, uuid.UUID) (string, string, error), limit int64) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	f, rel, err := openLibraryFile(r.Context(), where, id)
+	if a.answered(w, r, err) {
+		return
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	if t, ok := fileTypes[strings.ToLower(path.Ext(rel))]; ok {
+		w.Header().Set("Content-Type", t)
+	}
+	if limit >= info.Size() {
+		// The bare file keeps the copy in the kernel: sendfile takes only an *os.File.
+		http.ServeContent(w, r, rel, info.ModTime(), f)
+		return
+	}
+	http.ServeContent(w, r, rel, info.ModTime(), io.NewSectionReader(f, 0, limit))
+}
+
+// openLibraryFile opens the file of a library that where finds for an id.
+func openLibraryFile(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (*os.File, string, error) {
+	root, rel, err := where(ctx, id)
+	if err != nil {
+		return nil, "", err
+	}
+	f, err := library.Open(root, rel)
+	return f, rel, err
+}
+
+// requireSignature admits a request whose address the server signed and which has not lapsed.
+func (a *API) requireSignature(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if !a.svc.Signer.Valid(r.URL.Path, q.Get("exp"), q.Get("sig"), time.Now()) {
+			writeProblem(w, a.logger, codeUnauthenticated, "the address is not signed, or has lapsed")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (a *API) streamsRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/playbacks/{playback}/parts/{id}/stream", access: signedAddress,
+			summary: "A copy's file as it is, in byte ranges, at the address play answered, for as long as the playback lasts",
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, delivery: playback.DeliveryFile,
+			handle: a.playbackPartStream,
+		},
+		{
+			pattern: "GET /api/v1/parts/{id}/stream", access: signedAddress,
+			summary: "A copy's file as it is, in byte ranges, at the address a download answered",
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, delivery: playback.DeliveryFile,
+			handle: a.partStream,
+		},
+		{
+			pattern: "GET /api/v1/parts/{id}/sample", access: signedIn,
+			summary: "The first " + strconv.Itoa(sampleBytes>>20) + " MiB of a part's file, in byte ranges, to time the connection; no playback",
+			status:  http.StatusOK, reply: asFile{"video/*"}, handle: a.partSample,
+		},
+		{
+			pattern: "GET /api/v1/subtitles/{id}/file", access: signedAddress,
+			summary: "A subtitle file beside a copy, as it is or as WebVTT, at the address play answered",
+			query: append([]param{
+				{"format", subtitleOriginal, "webvtt converts a text subtitle to WebVTT; original, the default, is the file as it is."},
+			}, signatureParams...),
+			status: http.StatusOK, reply: asFile{"application/x-subrip", "text/vtt", "text/x-ssa"}, handle: a.subtitleFile,
+		},
+	}
+}

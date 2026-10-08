@@ -253,3 +253,23 @@ func (a *API) forgetNode(w http.ResponseWriter, r *http.Request) {
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNodesChanged})
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (a *API) nodesRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/admin/nodes", access: admin,
+			summary: "List the server's nodes, there or that have been, what is set of each, and how busy each that is up is",
+			status:  http.StatusOK, reply: listJSON[knownNodeJSON]{}, handle: a.adminNodes,
+		},
+		{
+			pattern: "PATCH /api/v1/admin/nodes/{id}", access: admin,
+			summary: "Change a node's role or its limit on transcodes at once; it takes them up at once",
+			body:    nodeChangeJSON{}, status: http.StatusOK, reply: knownNodeJSON{}, handle: a.setNode,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/nodes/{id}", access: admin,
+			summary: "Forget a node that is not up, as one taken away is; one up is refused",
+			status:  http.StatusNoContent, handle: a.forgetNode,
+		},
+	}
+}

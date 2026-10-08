@@ -108,3 +108,21 @@ func (a *API) adminImport(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, importOf(h))
 }
+
+func (a *API) importsRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/admin/imports", access: admin, summary: "List the imports of watch history, the newest first",
+			status: http.StatusOK, reply: listJSON[importJSON]{}, handle: a.adminImports,
+		},
+		{
+			pattern: "POST /api/v1/admin/imports", access: admin,
+			summary: "Import a Plex, Jellyfin or Emby user's watch history into a profile, once the source takes its credentials",
+			body:    startImportJSON{}, status: http.StatusCreated, reply: createdJSON{}, handle: a.startImport,
+		},
+		{
+			pattern: "GET /api/v1/admin/imports/{id}", access: admin, summary: "How an import of watch history went",
+			status: http.StatusOK, reply: importJSON{}, handle: a.adminImport,
+		},
+	}
+}

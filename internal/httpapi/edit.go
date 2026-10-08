@@ -227,7 +227,6 @@ type refreshJSON struct {
 	Mode domain.RefreshMode `json:"mode"`
 }
 
-// refresh asks a title's providers about it again now, ahead of the schedule.
 // deleteTitle deletes a title's files from the disk, then the title, as Plex's and Jellyfin's
 // Delete do, where its library allows it. The files go first: should one not, the title stays, and
 // those deleted before it are missing at the next scan, as a file deleted by hand would be.
@@ -343,6 +342,7 @@ func (a *API) analyse(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// refresh asks a title's providers about it again now, ahead of the schedule.
 func (a *API) refresh(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r, "id")
 	if !ok {
@@ -367,156 +367,68 @@ func (a *API) refresh(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-var artworkKindParam = param{"kind", domain.ArtworkKind(""), "The kind of picture."}
-
-// artworkCandidateJSON is a picture a provider has, served at /api/v1/artwork/{id} like a title's
-// own, so a browser shows it sized and from this server.
-type artworkCandidateJSON struct {
-	ID       uuid.UUID          `json:"id"`
-	Source   domain.FieldSource `json:"source"`
-	Language string             `json:"language,omitzero"`
-	Width    int                `json:"width,omitzero"`
-	Height   int                `json:"height,omitzero"`
-	Chosen   bool               `json:"chosen"`
-}
-
-// artworkCandidates lists the pictures of a kind each provider has for a title, as Jellyfin's Edit
-// Images and Plex's poster chooser do.
-func (a *API) artworkCandidates(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
+func (a *API) editRoutes() []route {
+	return []route{
+		{
+			pattern: "PATCH /api/v1/admin/titles/{id}", access: admin,
+			summary: "Edit a title's fields, locking those named against its sources",
+			body:    editJSON{}, status: http.StatusNoContent, handle: a.editTitle,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/titles/{id}/edits", access: admin,
+			summary: "Give a title's edited fields back to its sources",
+			query:   []param{{"field", []domain.Field{}, "The fields to give back; every one where none are named."}},
+			status:  http.StatusAccepted, handle: a.resetEdits,
+		},
+		{
+			pattern: "GET /api/v1/admin/titles/{id}/candidates", access: admin,
+			summary: "List what a provider has by a title's name, to match it to",
+			query: []param{
+				{"provider", domain.FieldSource(""), "A provider that searches."},
+				{"title", "", "The name to search for, the title's own by default."},
+				{"year", 0, "The year to search in, the title's own by default."},
+			},
+			status: http.StatusOK, reply: listJSON[candidateJSON]{}, handle: a.candidates,
+		},
+		{
+			pattern: "PUT /api/v1/admin/titles/{id}/match", access: admin,
+			summary: "Match a film or show to a provider's title by its id",
+			body:    pinMatchJSON{}, status: http.StatusAccepted, handle: a.pinMatch,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/titles/{id}/match", access: admin,
+			summary: "Take a film or show off its providers, and keep it so until its match is fixed or it is refreshed",
+			status:  http.StatusNoContent, handle: a.unmatch,
+		},
+		{
+			pattern: "PUT /api/v1/admin/titles/{id}/locale", access: admin,
+			summary: "Give a film or show a metadata language and certification country of its own, and describe it again in them",
+			body:    titleLocaleJSON{}, status: http.StatusAccepted, handle: a.setTitleLocale,
+		},
+		{
+			pattern: "POST /api/v1/admin/titles/{id}/split", access: admin,
+			summary: "Split a film's copies apart: each but the one that plays first becomes a film of its own, and stays so",
+			status:  http.StatusNoContent, handle: a.split,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/titles/{id}", access: admin,
+			summary: "Delete a title's files from the disk, then the title, where its library allows it",
+			status:  http.StatusNoContent, handle: a.deleteTitle,
+		},
+		{
+			pattern: "PUT /api/v1/admin/titles/{id}/episode-order", access: admin,
+			summary: "Say the order a show's episode files are numbered in",
+			body:    setEpisodeOrderJSON{}, status: http.StatusAccepted, handle: a.setEpisodeOrder,
+		},
+		{
+			pattern: "POST /api/v1/admin/titles/{id}/refresh", access: admin,
+			summary: "Ask a title's providers about it again now: a season or episode as its show",
+			body:    refreshJSON{}, status: http.StatusAccepted, handle: a.refresh,
+		},
+		{
+			pattern: "POST /api/v1/admin/titles/{id}/analysis", access: admin,
+			summary: "Read a title's files again, a show's or season's episodes', and remake what is made from them",
+			status:  http.StatusAccepted, handle: a.analyse,
+		},
 	}
-	kind := domain.ArtworkKind(r.URL.Query().Get("kind"))
-	if !slices.Contains(domain.ArtworkKinds(), kind) {
-		writeProblem(w, a.logger, codeInvalidParameter, "kind is a kind of picture")
-		return
-	}
-	offered, err := a.svc.Editing.ArtworkCandidates(r.Context(), id, kind)
-	if a.answered(w, r, err) {
-		return
-	}
-	out := make([]artworkCandidateJSON, len(offered))
-	for i, c := range offered {
-		out[i] = artworkCandidateJSON{ID: c.ID, Source: c.Source, Language: c.Language, Width: c.Width, Height: c.Height, Chosen: c.Chosen}
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[artworkCandidateJSON]{Items: out})
-}
-
-// pathArtworkKind answers the kind of picture a path names, or writes why not.
-func (a *API) pathArtworkKind(w http.ResponseWriter, r *http.Request) (domain.ArtworkKind, bool) {
-	kind := domain.ArtworkKind(r.PathValue("kind"))
-	if !slices.Contains(domain.ArtworkKinds(), kind) {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return "", false
-	}
-	return kind, true
-}
-
-type chooseArtworkJSON struct {
-	ID uuid.UUID `json:"id"`
-}
-
-// chooseArtwork makes a provider's picture a title's own of its kind, over every source and
-// through every refresh.
-func (a *API) chooseArtwork(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	kind, ok := a.pathArtworkKind(w, r)
-	if !ok {
-		return
-	}
-	var req chooseArtworkJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
-	if a.answered(w, r, a.svc.Editing.ChooseArtwork(r.Context(), id, kind, req.ID)) {
-		return
-	}
-	a.titleUpdated(r, id)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// forgetArtwork gives a title's picture of a kind back to its sources.
-func (a *API) forgetArtwork(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	kind, ok := a.pathArtworkKind(w, r)
-	if !ok {
-		return
-	}
-	if a.answered(w, r, a.svc.Editing.ForgetArtworkChoice(r.Context(), id, kind)) {
-		return
-	}
-	a.titleUpdated(r, id)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// markerJSON is a stretch of a copy, on its whole timeline.
-type markerJSON struct {
-	Kind    domain.MarkerKind `json:"kind"`
-	StartMS int64             `json:"start_ms"`
-	EndMS   int64             `json:"end_ms"`
-}
-
-// markerAbsentJSON says a part of a copy, counted from 0, has no stretch of a kind.
-type markerAbsentJSON struct {
-	Kind domain.MarkerKind `json:"kind"`
-	Part int               `json:"part"`
-}
-
-type markersJSON struct {
-	Markers []markerJSON       `json:"markers"`
-	Absent  []markerAbsentJSON `json:"absent,omitzero"`
-}
-
-// setMarkers says where a copy's intro, credits, recap and preview are, on its whole timeline as
-// its chapters are, and which of its parts have none of a kind, over whatever its chapters or
-// fingerprints say; saying nothing clears what was said.
-func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	var req markersJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
-	markers := make([]domain.Marker, len(req.Markers))
-	for i, m := range req.Markers {
-		if m.Kind == "" {
-			writeProblem(w, a.logger, codeInvalidBody, "a marker's kind is intro, credits, recap or preview")
-			return
-		}
-		if m.StartMS < 0 || m.EndMS <= m.StartMS {
-			writeProblem(w, a.logger, codeInvalidBody, "a marker ends after it starts, at 0 or later")
-			return
-		}
-		markers[i] = domain.Marker{Kind: m.Kind, StartMS: m.StartMS, EndMS: m.EndMS}
-	}
-	absent := make([]domain.MarkerAbsent, len(req.Absent))
-	for i, m := range req.Absent {
-		if m.Kind == "" {
-			writeProblem(w, a.logger, codeInvalidBody, "a marker's kind is intro, credits, recap or preview")
-			return
-		}
-		if m.Part < 0 {
-			writeProblem(w, a.logger, codeInvalidBody, "a part is counted from 0")
-			return
-		}
-		absent[i] = domain.MarkerAbsent{Kind: m.Kind, Part: m.Part}
-	}
-	err := a.svc.Editing.SetMarkers(r.Context(), id, markers, absent)
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, "no copy has that id")
-		return
-	}
-	if a.answered(w, r, err) {
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }

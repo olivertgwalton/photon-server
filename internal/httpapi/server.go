@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -141,4 +142,38 @@ func folder(path string) folderJSON {
 		f.FreeBytes = &free
 	}
 	return f
+}
+
+func (a *API) server(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, a.logger, "application/json", http.StatusOK, a.info)
+}
+
+func (a *API) readyz(w http.ResponseWriter, r *http.Request) {
+	if err := a.svc.Ready(r.Context()); err != nil {
+		// A node draining is not ready by design, asked as often as a balancer likes.
+		if !errors.Is(err, domain.ErrStopping) {
+			a.logger.WarnContext(r.Context(), "not ready", slog.Any("err", err))
+		}
+		writeProblem(w, a.logger, codeNotReady, "")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) serverRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/server", access: public, summary: "Say which server this is",
+			status: http.StatusOK, reply: domain.Info{}, handle: a.server,
+		},
+		{
+			pattern: "GET /readyz", access: public, summary: "Say whether Postgres and Valkey are reachable",
+			status: http.StatusNoContent, handle: a.readyz,
+		},
+		{
+			pattern: "GET /api/v1/admin/server", access: admin,
+			summary: "Say how this node was set up, what it reaches, and the cluster's nodes",
+			status:  http.StatusOK, reply: serverJSON{}, handle: a.adminServer,
+		},
+	}
 }

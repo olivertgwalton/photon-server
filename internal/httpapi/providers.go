@@ -152,3 +152,18 @@ func rankedFor(info provider.Info, can []domain.Capability, f domain.Fetcher) []
 	}
 	return out
 }
+
+func (a *API) providersRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/admin/providers", access: admin,
+			summary: "List the metadata providers, what each can do and needs set",
+			status:  http.StatusOK, reply: listJSON[metadataProviderJSON]{}, handle: a.adminProviders,
+		},
+		{
+			pattern: "PATCH /api/v1/admin/providers/{id}", access: admin, summary: "Change a provider's settings",
+			path: []param{{"id", domain.FieldSource(""), "The provider."}},
+			body: providerChangeJSON{}, status: http.StatusOK, reply: metadataProviderJSON{}, handle: a.setProvider,
+		},
+	}
+}
