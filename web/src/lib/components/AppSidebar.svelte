@@ -15,6 +15,7 @@ import { page } from "$app/state";
 import { setLibraryOrder } from "#lib/actions.svelte.js";
 import type { components } from "#lib/api/schema.js";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
+import { rowPages } from "#lib/rows.js";
 import LibraryMenu from "./LibraryMenu.svelte";
 import Mark from "./Mark.svelte";
 
@@ -204,8 +205,8 @@ function current(href: string) {
 			{/if}
 			<Sidebar.Group>
 				<Sidebar.Menu>
-					{@render item("/watchlist", "Watchlist", BookmarkIcon)}
-					{@render item("/favourites", "Favourites", HeartIcon)}
+					{@render item(rowPages.watchlist, "Watchlist", BookmarkIcon)}
+					{@render item(rowPages.favourites, "Favourites", HeartIcon)}
 					{@render item("/playlists", "Playlists", ListVideoIcon)}
 					{@render item("/history", "History", RotateCcwClockIcon)}
 					{@render item("/downloads", "Downloads", DownloadIcon)}

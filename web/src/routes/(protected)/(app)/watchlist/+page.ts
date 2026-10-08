@@ -1,18 +1,6 @@
-import { client, need } from "#lib/api/client.js";
-import { keys } from "#lib/changes.js";
-import { wallPageSize } from "#lib/wall.js";
+import { loadRow } from "#lib/home.js";
 import type { PageLoad } from "./$types";
 
-export const load: PageLoad = async ({ fetch, depends }) => {
-	depends(keys.userdata);
-	return {
-		watchlist: await need(
-			client(fetch).GET("/api/v1/home/{row}", {
-				params: {
-					path: { row: "watchlist" },
-					query: { limit: wallPageSize },
-				},
-			}),
-		),
-	};
-};
+// The watchlist is a page of its own, as Plex's is, not a row's.
+export const load: PageLoad = ({ fetch, depends }) =>
+	loadRow(fetch, depends, "watchlist");

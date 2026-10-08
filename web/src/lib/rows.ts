@@ -13,11 +13,22 @@ export const railLimit = 20;
 // "Recently Added in Films", leading to that library's wall in the row's order.
 export const homeRows: Record<
 	Kind,
-	{ title: string; shape: Shape; library?: { title: string; wall: WallQuery } }
+	{
+		title: string;
+		shape: Shape;
+		library?: { title: string; wall: WallQuery };
+		// What its own page says where it has nothing.
+		empty?: string;
+	}
 > = {
 	continue_watching: { title: "Continue Watching", shape: "still" },
 	next_up: { title: "Next Up", shape: "still" },
-	watchlist: { title: "Watchlist", shape: "poster" },
+	watchlist: {
+		title: "Watchlist",
+		shape: "poster",
+		empty:
+			"Nothing here yet. Choose the bookmark on a film or show to keep it here until it is watched.",
+	},
 	favourites: { title: "Favourites", shape: "poster" },
 	recently_added_films: {
 		title: "Recently Added Films",
@@ -46,6 +57,13 @@ export const homeRows: Record<
 	collection: { title: "Collections", shape: "poster" },
 };
 
+// The rows with a page of their own, as Plex's Watchlist and Jellyfin's
+// Favorites are, rather than the row's.
+export const rowPages = {
+	watchlist: "/watchlist",
+	favourites: "/favourites",
+} as const satisfies Partial<Record<Kind, string>>;
+
 export function isHomeRow(kind: string): kind is Kind {
 	return kind in homeRows;
 }
@@ -71,7 +89,10 @@ export function rail(row: Row): { key: string; title: string; href: string } {
 	return {
 		key: row.kind,
 		title: kind.title,
-		href: row.kind === "watchlist" ? "/watchlist" : `/home/${row.kind}`,
+		href:
+			row.kind in rowPages
+				? rowPages[row.kind as keyof typeof rowPages]
+				: `/home/${row.kind}`,
 	};
 }
 

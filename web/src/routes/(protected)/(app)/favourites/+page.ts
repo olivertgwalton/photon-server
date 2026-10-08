@@ -5,10 +5,10 @@ import type { PageLoad } from "./$types";
 // Every favourite the server will list at once: its home row at its longest.
 export const load: PageLoad = async ({ fetch, depends }) => {
 	depends(keys.home, keys.userdata);
-	const home = await need(
-		client(fetch).GET("/api/v1/home", { params: { query: { limit: 200 } } }),
+	const row = await need(
+		client(fetch).GET("/api/v1/home/{row}", {
+			params: { path: { row: "favourites" }, query: { limit: 200 } },
+		}),
 	);
-	return {
-		cards: home.rows.find((r) => r.kind === "favourites")?.items ?? [],
-	};
+	return { cards: row.items };
 };
