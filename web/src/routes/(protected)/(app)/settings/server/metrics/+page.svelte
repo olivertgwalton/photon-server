@@ -216,9 +216,13 @@ function ago(seconds: number, now: number) {
 			{#if cluster}
 				<dd class="text-ink font-heading text-2xl font-bold">
 					{count(cluster.library_items.movie ?? 0, "film")}
+					<span class="text-ink-3 font-sans text-sm font-normal">
+						{bytes(cluster.library_bytes.movie ?? 0)}
+					</span>
 				</dd>
 				<dd class="text-ink-3 text-xs">
 					{count(cluster.library_items.episode ?? 0, "episode")}
+					· {bytes(cluster.library_bytes.episode ?? 0)}
 				</dd>
 			{:else}
 				<dd class="text-ink-3 text-sm">Not known yet</dd>
