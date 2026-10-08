@@ -1,14 +1,22 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/backup"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 var backupNameParam = param{"name", "", "The dump's file name, as the list gives it."}
+
+type backupRestores interface {
+	Begin(ctx context.Context, name string) error
+	Underway(ctx context.Context) (domain.Restore, bool, error)
+	Last(ctx context.Context) (domain.RestoreOutcome, bool, error)
+}
 
 type backupJSON struct {
 	Name      string    `json:"name"`
@@ -16,16 +24,34 @@ type backupJSON struct {
 	MadeAt    time.Time `json:"made_at"`
 }
 
+type restoreJSON struct {
+	Dump      string              `json:"dump"`
+	NodeID    uuid.UUID           `json:"node_id"`
+	StartedAt time.Time           `json:"started_at"`
+	Phase     domain.RestorePhase `json:"phase"`
+}
+
+type restoreOutcomeJSON struct {
+	Dump   string               `json:"dump"`
+	At     time.Time            `json:"at"`
+	Result domain.RestoreResult `json:"result"`
+	Reason string               `json:"reason,omitzero"`
+}
+
 // backupsJSON are the dumps in the backup folder of the node answering, named by node: each node
-// keeps those it made, as it held the scheduler's lease, so others may keep others.
+// keeps those it made, as it held the scheduler's lease, so others may keep others. Restoring is
+// the restore under way, across the cluster, and last_restore how the last ended.
 type backupsJSON struct {
-	NodeID   uuid.UUID    `json:"node_id"`
-	NodeName string       `json:"node_name"`
-	Folder   string       `json:"folder"`
-	Items    []backupJSON `json:"items"`
+	NodeID      uuid.UUID           `json:"node_id"`
+	NodeName    string              `json:"node_name"`
+	Folder      string              `json:"folder"`
+	Items       []backupJSON        `json:"items"`
+	Restoring   *restoreJSON        `json:"restoring,omitzero"`
+	LastRestore *restoreOutcomeJSON `json:"last_restore,omitzero"`
 }
 
 func (a *API) adminBackups(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	dumps, err := backup.List(a.svc.Setup.BackupDir)
 	if a.answered(w, r, err) {
 		return
@@ -34,6 +60,20 @@ func (a *API) adminBackups(w http.ResponseWriter, r *http.Request) {
 	out := backupsJSON{NodeID: self.ID, NodeName: self.Name, Folder: a.svc.Setup.BackupDir, Items: []backupJSON{}}
 	for _, d := range dumps {
 		out.Items = append(out.Items, backupJSON{d.Name, d.Size, d.MadeAt})
+	}
+	underway, ok, err := a.svc.Backups.Underway(ctx)
+	if a.answered(w, r, err) {
+		return
+	}
+	if ok {
+		out.Restoring = &restoreJSON{underway.Dump, underway.Node, underway.Started, underway.Phase}
+	}
+	last, ok, err := a.svc.Backups.Last(ctx)
+	if a.answered(w, r, err) {
+		return
+	}
+	if ok {
+		out.LastRestore = &restoreOutcomeJSON{last.Dump, last.At, last.Result, last.Reason}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
@@ -52,4 +92,13 @@ func (a *API) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
 	http.ServeContent(w, r, name, info.ModTime(), f)
+}
+
+// restoreBackup asks every node to stop so this one may restore the dump, as Jellyfin schedules
+// a restore and restarts; what can be refused is refused first, changing nothing.
+func (a *API) restoreBackup(w http.ResponseWriter, r *http.Request) {
+	if a.answered(w, r, a.svc.Backups.Begin(r.Context(), r.PathValue("name"))) {
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
 }

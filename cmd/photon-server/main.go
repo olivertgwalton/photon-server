@@ -126,11 +126,7 @@ func run(logger *slog.Logger, args []string) error {
 		if err != nil {
 			return err
 		}
-		r := backup.Restorer{
-			PGRestore: cmp.Or(os.Getenv("PHOTON_PG_RESTORE"), "pg_restore"), PSQL: cmp.Or(os.Getenv("PHOTON_PSQL"), "psql"),
-			DatabaseURL: databaseURL, ValkeyURL: valkeyURL, Log: logger,
-		}
-		return r.Restore(ctx, args[1], os.Stdout)
+		return restorer(databaseURL, valkeyURL, logger).Restore(ctx, args[1], os.Stdout)
 	}
 	return fmt.Errorf("usage: photon-server [migrate | profile | restore <dump> | openapi], got %q", args)
 }
@@ -144,6 +140,14 @@ func writeDescription(w io.Writer) error {
 	}
 	_, err = w.Write(append(doc, '\n'))
 	return err
+}
+
+// restorer restores dumps with the Postgres tools the environment names.
+func restorer(databaseURL, valkeyURL string, logger *slog.Logger) backup.Restorer {
+	return backup.Restorer{
+		PGRestore: cmp.Or(os.Getenv("PHOTON_PG_RESTORE"), "pg_restore"), PSQL: cmp.Or(os.Getenv("PHOTON_PSQL"), "psql"),
+		DatabaseURL: databaseURL, ValkeyURL: valkeyURL, Log: logger,
+	}
 }
 
 func requiredEnv(name string) (string, error) {
@@ -256,6 +260,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		Dir: cmp.Or(os.Getenv("PHOTON_BACKUP_DIR"), filepath.Join(configDir, "photon-server", "backups")),
 	}
 	hub := events.New(st, cache, events.Server{ID: id, Name: info.Name}, logger)
+	restores := backup.Restores{Restorer: restorer(databaseURL, valkeyURL, logger), Dir: dumper.Dir, Node: node, KV: cache, Raise: hub.Raise}
 	gate := jobs.NewGate(cache, st, hub.Subscribe, logger)
 	window := task.Trigger{Kind: task.TriggerWindow, Opens: gate.Opens}
 	plugins := plugin.New(st)
@@ -294,7 +299,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	srv := &http.Server{
 		Addr: listen, TLSConfig: secured.TLSConfig(),
 		Handler: httpapi.New(logger, info, httpapi.Services{
-			Ready: ready(st, cache, self), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: files, Subtitles: fetcher, Playbacks: sessions, Owners: owners, Placer: placer, NodeKey: nodeKey, HLS: remuxer, Signer: signer, Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, Importer: imports, HistoryImports: st, TrustedProxies: trusted, Network: st, Storage: st, Stores: stores, Nodes: st, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache, self), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Backups: restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: files, Subtitles: fetcher, Playbacks: sessions, Owners: owners, Placer: placer, NodeKey: nodeKey, HLS: remuxer, Signer: signer, Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, Importer: imports, HistoryImports: st, TrustedProxies: trusted, Network: st, Storage: st, Stores: stores, Nodes: st, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
