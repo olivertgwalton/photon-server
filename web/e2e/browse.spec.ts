@@ -291,6 +291,12 @@ test("search finds titles and people", async ({ page }) => {
 		page.getByRole("heading", { name: "Collections" }),
 	).toBeVisible();
 	await expectAccessible(page);
+	// A run of results narrowed to a library leads back to them so narrowed.
+	await page.goto("/search/films?q=quiet&library=l-films");
+	await expect(page.getByRole("link", { name: /Results for/ })).toHaveAttribute(
+		"href",
+		"/search?q=quiet&library=l-films",
+	);
 });
 
 test("a playlist is made, filled, reordered and deleted", async ({ page }) => {

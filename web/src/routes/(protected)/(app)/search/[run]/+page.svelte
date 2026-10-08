@@ -1,6 +1,7 @@
 <script lang="ts">
 import CardGrid from "#lib/components/CardGrid.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
+import { page } from "$app/state";
 
 let { data } = $props();
 </script>
@@ -11,10 +12,7 @@ let { data } = $props();
 
 <div class="grid gap-6">
 	<div>
-		<a
-			href="/search?q={encodeURIComponent(data.q)}"
-			class="label hover:underline"
-		>
+		<a href="/search{page.url.search}" class="label hover:underline">
 			Results for “{data.q}”
 		</a>
 		<h1 class="title">{data.name}</h1>
