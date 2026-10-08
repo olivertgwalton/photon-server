@@ -10,15 +10,17 @@ test("a row moves to where it is put, the rest keeping their order", () => {
 
 test("a library's row is named for it and leads to its wall in the row's order", () => {
 	const library = { id: "l-films", name: "Films" };
-	expect(rail({ kind: "recently_added_films", library, items: [] })).toEqual({
+	expect(
+		rail({ kind: "recently_added_films", title: "", library, items: [] }),
+	).toEqual({
 		key: "recently_added_films/l-films",
 		title: "Recently Added in Films",
 		href: "/libraries/l-films?sort=added",
 	});
-	expect(rail({ kind: "top_rated_unwatched", library, items: [] }).href).toBe(
-		"/libraries/l-films?sort=rating&mark=unwatched",
-	);
-	expect(rail({ kind: "next_up", items: [] })).toEqual({
+	expect(
+		rail({ kind: "top_rated_unwatched", title: "", library, items: [] }).href,
+	).toBe("/libraries/l-films?sort=rating&mark=unwatched");
+	expect(rail({ kind: "next_up", title: "", items: [] })).toEqual({
 		key: "next_up",
 		title: "Next Up",
 		href: "/home/next_up",

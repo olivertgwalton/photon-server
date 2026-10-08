@@ -286,6 +286,8 @@ const defaultHomeLimit = 20
 
 type homeRowJSON struct {
 	Kind domain.HomeRow `json:"kind"`
+	// Title is the row's heading, in the reader's language.
+	Title string `json:"title"`
 	// Collection is the collection a row of kind collection is.
 	Collection *titleRefJSON `json:"collection,omitzero"`
 	// Library is the library a row of its titles is of: recently added, recently released and top
@@ -315,9 +317,20 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
+	said := words.Negotiate(w, r)
 	out := homeJSON{Rows: make([]homeRowJSON, len(rows))}
 	for i, row := range rows {
-		out.Rows[i] = homeRowJSON{Kind: row.Kind, Collection: (*titleRefJSON)(row.Collection), Library: (*libraryRefJSON)(row.Library), Items: cardsJSON(row.Cards)}
+		var library, collection string
+		if row.Library != nil {
+			library = row.Library.Name
+		}
+		if row.Collection != nil {
+			collection = row.Collection.Title
+		}
+		out.Rows[i] = homeRowJSON{
+			Kind: row.Kind, Title: said.HomeRow(row.Kind, library, collection), Collection: (*titleRefJSON)(row.Collection),
+			Library: (*libraryRefJSON)(row.Library), Items: cardsJSON(row.Cards),
+		}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }

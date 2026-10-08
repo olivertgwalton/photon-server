@@ -6836,6 +6836,7 @@ export interface components {
             items: components["schemas"]["Card"][];
             kind: components["schemas"]["HomeRowKind"];
             library?: components["schemas"]["LibraryRef"] | null;
+            title: string;
         };
         /** @enum {string} */
         HomeRowKind: "continue_watching" | "next_up" | "watchlist" | "favourites" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched" | "collection";
@@ -8002,6 +8003,9 @@ export interface components {
         };
         Vocabulary: {
             jobs: {
+                [key: string]: string;
+            };
+            rows: {
                 [key: string]: string;
             };
             tasks: {

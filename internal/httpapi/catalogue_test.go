@@ -135,6 +135,7 @@ func TestHome(t *testing.T) {
 	var got struct {
 		Rows []struct {
 			Kind    string `json:"kind"`
+			Title   string `json:"title"`
 			Library struct {
 				Name string `json:"name"`
 			} `json:"library"`
@@ -152,6 +153,10 @@ func TestHome(t *testing.T) {
 	if len(got.Rows) != 2 || got.Rows[0].Kind != "next_up" || len(got.Rows[0].Items) != 2 || got.Rows[0].Items[0].Show.Title != "The Wire" ||
 		got.Rows[1].Kind != "recently_added_films" || got.Rows[1].Library.Name != "Films" {
 		t.Errorf("home = %+v, want the signed-in profile's next up, two episodes of The Wire, then Films' recently added", got)
+	}
+	// Each row is headed as the server words it, a library's by the library.
+	if got.Rows[0].Title != "Next Up" || got.Rows[1].Title != "Recently Added in Films" {
+		t.Errorf("headings %q and %q", got.Rows[0].Title, got.Rows[1].Title)
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/home?limit=0", goodToken, ""); rec.Code != http.StatusBadRequest {
 		t.Errorf("limit=0: %d, want 400", rec.Code)
