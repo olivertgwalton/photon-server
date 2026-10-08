@@ -1,4 +1,3 @@
-import { browser } from "$app/env";
 import { client, need } from "#lib/api/client.js";
 import { keys } from "#lib/changes.js";
 import {
@@ -46,7 +45,6 @@ export const load: PageLoad = ({ fetch, params, url, depends }) => {
 
 // How the reader last drew this library, kept by this browser.
 function storedView(library: string): ViewStyle {
-	if (!browser) return "poster";
 	try {
 		const view = localStorage.getItem(viewKey(library)) as ViewStyle;
 		return viewStyles.includes(view) ? view : "poster";
