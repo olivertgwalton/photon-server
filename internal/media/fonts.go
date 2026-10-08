@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"strings"
 )
 
@@ -49,10 +50,8 @@ func parseFonts(out []byte) ([]Font, error) {
 		case "ttf", "otf":
 			ext = "." + s.CodecName
 		}
-		for _, e := range fontExts {
-			if ext == e {
-				fonts = append(fonts, Font{Index: s.Index, Ext: ext})
-			}
+		if slices.Contains(fontExts, ext) {
+			fonts = append(fonts, Font{Index: s.Index, Ext: ext})
 		}
 	}
 	return fonts, nil
