@@ -100,7 +100,12 @@ func (a *API) list(ctx context.Context, cards []store.Card, l listed) ([]item, e
 		}
 		for n, id := range ids {
 			if v := versions[id]; len(v) > 0 {
-				out[n].sources(v, l.fields["mediastreams"], l.words)
+				out[n].sources(v, l.words)
+				// Jellyfin writes the first copy's tracks beside it only when asked: they double
+				// what is written of the item.
+				if l.fields["mediastreams"] {
+					out[n].MediaStreams = out[n].MediaSources[0].MediaStreams
+				}
 			}
 		}
 	}

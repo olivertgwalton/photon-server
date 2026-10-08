@@ -240,7 +240,8 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 		it.People = append(it.People, person{Name: c.Name, ID: guid(c.PersonID), Role: c.Role, Type: cmp.Or(personKinds[c.Kind], "Unknown")})
 	}
 	if len(p.Versions) > 0 {
-		it.sources(p.Versions, true, w)
+		it.sources(p.Versions, w)
+		it.MediaStreams = it.MediaSources[0].MediaStreams
 	}
 	if p.Kind == domain.ItemShow {
 		n := len(p.Seasons)
@@ -249,16 +250,11 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 	return it
 }
 
-// sources fills a playable item's copies, and its running time and container from the first; and
-// with streams its first copy's tracks beside them, which Jellyfin writes only when asked, as they
-// double what is written of the item.
-func (it *item) sources(versions []store.VersionPage, streams bool, w words.Words) {
+// sources fills a playable item's copies, and its running time and container from the first.
+func (it *item) sources(versions []store.VersionPage, w words.Words) {
 	it.MediaSources = make([]mediaSource, len(versions))
 	for n, v := range versions {
 		it.MediaSources[n] = sourceOf(v, w)
-	}
-	if streams {
-		it.MediaStreams = it.MediaSources[0].MediaStreams
 	}
 	it.Container, it.Path = it.MediaSources[0].Container, it.MediaSources[0].Path
 	if it.RunTimeTicks == 0 {
