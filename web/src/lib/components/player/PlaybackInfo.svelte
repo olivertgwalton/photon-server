@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { components } from "#lib/api/schema.js";
 import * as Sheet from "#lib/components/ui/sheet/index.js";
-import { bitrate, playMethods } from "#lib/format.js";
+import { bitrate, playMethods, rangeName } from "#lib/format.js";
 import { audioLabel, channels, reasons } from "#lib/player/words.js";
 
 type Schemas = components["schemas"];
@@ -33,7 +33,7 @@ const picture = (s: Schemas["StreamPage"] | undefined) =>
 				s.codec.toUpperCase(),
 				s.profile,
 				s.width && s.height ? `${s.width}×${s.height}` : "",
-				s.range && s.range !== "sdr" ? s.range.toUpperCase() : "",
+				s.range && s.range !== "sdr" ? rangeName(s.range) : "",
 				s.bitrate_kbps ? bitrate(s.bitrate_kbps) : "",
 			]
 				.filter(Boolean)
