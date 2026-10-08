@@ -137,6 +137,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle(a.playbackInfo, "GET /Items/{itemId}/PlaybackInfo", "POST /Items/{itemId}/PlaybackInfo")
 	a.handle(a.sending(playback.DeliveryFile, a.stream), "GET /Videos/{itemId}/stream")
 	a.handle(a.video, "GET /Videos/{itemId}/{file}")
+	a.handle(a.sending(playback.DeliveryFile, a.download), "GET /Items/{itemId}/Download")
 	a.handle(a.endEncoding, "DELETE /Videos/ActiveEncodings")
 	a.handle(a.subtitle,
 		"GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{file}",
@@ -277,6 +278,8 @@ func css(w http.ResponseWriter, _ *http.Request) {
 // refuse answers as Jellyfin answers what it will not do: its status, and the same words whatever
 // the reason, so an app learns nothing it should not.
 func (a *API) refuse(w http.ResponseWriter, status int) {
+	// A refusal is never saved as the file a download asked for.
+	w.Header().Del("Content-Disposition")
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(status)
 	a.write(w, []byte("Error processing request."))
