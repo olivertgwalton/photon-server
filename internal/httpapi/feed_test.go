@@ -17,7 +17,6 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
@@ -192,7 +191,7 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	stopped := uuid.NewV7()
 	hub.Raise(ctx, domain.Event{
 		Kind: domain.EventPlaybackStopped, Profile: sam.ID, Item: title["Paddington"],
-		Details: map[string]any{"playback": playback.NowPlaying{ID: stopped}},
+		Details: map[string]any{"playback": domain.NowPlaying{ID: stopped}},
 	})
 
 	// Oliver sees every library: once both changes reach him, Sam's stream has been handed them too.

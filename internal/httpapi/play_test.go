@@ -890,7 +890,7 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 		return playing.Items
 	}
 	items := list()
-	var shown playback.NowPlaying
+	var shown domain.NowPlaying
 	if len(items) != 1 || json.Unmarshal(items[0], &shown) != nil {
 		t.Fatalf("admin playbacks = %s, want the one playing", items)
 	}

@@ -11,7 +11,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
@@ -183,11 +182,11 @@ func eventStream() asStream {
 }
 
 type snapshotJSON struct {
-	Tasks     []runningTaskJSON     `json:"tasks"`
-	Jobs      []runningJobJSON      `json:"jobs"`
-	Backlogs  []backlogJSON         `json:"backlogs"`
-	Scans     []scanJSON            `json:"scans"`
-	Playbacks []playback.NowPlaying `json:"playbacks"`
+	Tasks     []runningTaskJSON   `json:"tasks"`
+	Jobs      []runningJobJSON    `json:"jobs"`
+	Backlogs  []backlogJSON       `json:"backlogs"`
+	Scans     []scanJSON          `json:"scans"`
+	Playbacks []domain.NowPlaying `json:"playbacks"`
 }
 
 type runningTaskJSON struct {

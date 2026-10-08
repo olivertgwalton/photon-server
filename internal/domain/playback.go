@@ -57,6 +57,26 @@ type Playback struct {
 	Card PlaybackCard
 }
 
+// NowPlaying is a playback as an admin's dashboard shows it, in the list of playbacks, the event
+// stream's snapshot and each playback event alike.
+type NowPlaying struct {
+	ID uuid.UUID `json:"id"`
+	PlaybackCard
+	Method     PlayMethod `json:"method"`
+	State      PlayState  `json:"state"`
+	PositionMS int64      `json:"position_ms"`
+	StartedAt  time.Time  `json:"started_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+	NodeID     uuid.UUID  `json:"node_id"`
+}
+
+func (p Playback) Showing() NowPlaying {
+	return NowPlaying{
+		ID: p.ID, PlaybackCard: p.Card, Method: p.Method, State: p.State, PositionMS: p.Position.Milliseconds(),
+		StartedAt: p.Started.UTC(), UpdatedAt: p.Updated.UTC(), NodeID: p.Node,
+	}
+}
+
 // PlaybackCard is what an admin's dashboard shows of a playback beside where it has got to, as
 // Jellyfin's session card does: who, on what, which title and copy, and how it plays. It is fixed
 // as the playback starts, so listing playbacks decides nothing again, and kept and sent as JSON.
