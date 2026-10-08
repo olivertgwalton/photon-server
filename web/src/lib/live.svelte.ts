@@ -1,5 +1,6 @@
 import { invalidate, refreshAll } from "$app/navigation";
 import { affected, type Change, changeKinds } from "./changes.js";
+import { restoring } from "./restoring.svelte.js";
 
 // A scan sends a burst of changes; the pages reload once for the burst.
 const settle = 1000;
@@ -28,6 +29,9 @@ export function connectLive(): () => void {
 		}
 	};
 	for (const kind of changeKinds) source.addEventListener(kind, take);
+	source.addEventListener("restore.started", () => {
+		restoring.on = true;
+	});
 	return () => {
 		clearTimeout(timer);
 		source.close();
