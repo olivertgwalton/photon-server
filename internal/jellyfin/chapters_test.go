@@ -6,15 +6,19 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"path"
+	"strings"
 	"testing"
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/analysis"
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // An app reads a film's chapters, to list them and to seek by them: on the film itself, and in a
-// list where it asks for them, each with a tag for its picture where it has one.
+// list where it asks for them; and fetches a chapter's picture by the tag the chapter gives.
 func TestAnAppReadsAFilmsChapters(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
 	versions, err := st.Versions(t.Context(), []uuid.UUID{heat})
@@ -26,8 +30,16 @@ func TestAnAppReadsAFilmsChapters(t *testing.T) {
 	if err := st.SavePreviews(t.Context(), part, []int{1}, nil); err != nil {
 		t.Fatal(err)
 	}
+	dir, err := blob.OpenDir(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dir.Close() })
+	if err := dir.Put(t.Context(), path.Join(part.String(), "chapters", "1.jpg"), strings.NewReader("chapter 1")); err != nil {
+		t.Fatal(err)
+	}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
-		Auth: profiles{"pst_ada": ada}, Catalogue: st,
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, PreviewFiles: analysis.NewPreviews(dir),
 	})
 	chapters := func(target string) []map[string]any {
 		t.Helper()
@@ -66,5 +78,16 @@ func TestAnAppReadsAFilmsChapters(t *testing.T) {
 	}
 	if got := chapters("/Items?recursive=true&includeItemTypes=Movie&fields=MediaSources"); got != nil {
 		t.Errorf("a list that did not ask for chapters: %v", got)
+	}
+
+	// Its picture is fetched by its tag, without a token, as Jellyfin's web app sets it on a card.
+	w := serve(api, http.MethodGet, "/Items/"+guid(heat)+"/Images/Chapter/1?maxWidth=400&tag="+chapterTag(part, 1), "", "")
+	if w.Code != http.StatusOK || w.Body.String() != "chapter 1" || w.Header().Get("Content-Type") != "image/jpeg" {
+		t.Errorf("the second chapter's picture: %d %s %q", w.Code, w.Header().Get("Content-Type"), w.Body)
+	}
+	for _, tag := range []string{chapterTag(part, 0), "nonsense", guid(part)} {
+		if w := serve(api, http.MethodGet, "/Items/"+guid(heat)+"/Images/Chapter/0?tag="+tag, "", ""); w.Code != http.StatusNotFound {
+			t.Errorf("a chapter picture tagged %q: %d, want 404", tag, w.Code)
+		}
 	}
 }

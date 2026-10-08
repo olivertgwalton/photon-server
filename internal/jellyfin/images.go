@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/blob"
@@ -21,6 +22,10 @@ type pictureFiles interface {
 // which changes whenever the picture does, so it is kept for good. It is public, as Jellyfin's
 // images are, so a page can show one without a token; ids are random.
 func (a *API) image(w http.ResponseWriter, r *http.Request) {
+	if strings.EqualFold(r.PathValue("imageType"), "Chapter") {
+		a.chapterImage(w, r)
+		return
+	}
 	id, err := uuid.Parse(query(r, "tag"))
 	if err != nil {
 		a.refuse(w, http.StatusNotFound)
