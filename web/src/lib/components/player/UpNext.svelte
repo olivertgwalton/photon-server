@@ -1,7 +1,6 @@
 <script lang="ts">
 import Artwork from "#lib/components/Artwork.svelte";
 import { episodeLabel } from "#lib/format.js";
-import { onDestroy } from "svelte";
 import { blurStyle } from "#lib/blurhash.js";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -26,15 +25,17 @@ let {
 const countdown = 10;
 let left = $state(countdown);
 
-const timer = setInterval(() => {
+// It counts only while the title plays and autoplay is on.
+$effect(() => {
 	if (paused || !autoplay) return;
-	left -= 1;
-	if (left <= 0) {
+	const timer = setInterval(() => {
+		left -= 1;
+		if (left > 0) return;
 		clearInterval(timer);
 		onplay();
-	}
-}, 1000);
-onDestroy(() => clearInterval(timer));
+	}, 1000);
+	return () => clearInterval(timer);
+});
 
 const picture = $derived(card.thumb ?? card.backdrop);
 const where = $derived(episodeLabel(card.season_number, card.episode_number));

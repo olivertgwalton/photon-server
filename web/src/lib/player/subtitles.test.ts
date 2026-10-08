@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
 import type { components } from "#lib/api/schema.js";
-import { beside, choices, needsReplay, wants, webVTT } from "./subtitles.ts";
+import {
+	beside,
+	choices,
+	needsReplay,
+	startingSubtitle,
+	wants,
+	webVTT,
+} from "./subtitles.ts";
 
 type Schemas = components["schemas"];
 
@@ -168,4 +175,16 @@ test("styled text handed beside the video shows without a new playback", () => {
 		video: { stream: 0, decision: "transcode" as const, burned_subtitle: 4 },
 	};
 	expect(needsReplay(signs, burning)).toBe(true);
+});
+
+test("a play starts with the subtitle asked for, else the server's choice", () => {
+	expect(startingSubtitle(version, "off")).toBeUndefined();
+	expect(startingSubtitle(version, 3)).toBe("s3");
+	expect(
+		startingSubtitle({ ...version, default_subtitle_file: "s3" }, undefined),
+	).toBe("f2");
+	expect(
+		startingSubtitle({ ...version, default_subtitle_stream: 4 }, undefined),
+	).toBe("s4");
+	expect(startingSubtitle(version, undefined)).toBeUndefined();
 });
