@@ -66,6 +66,22 @@ export function choices(version: Schemas["VersionPage"]): Choice[] {
 	return out;
 }
 
+// The subtitle a play starts with, by its choice's key: the one the address
+// asks for, else the one the server chose for this profile, else none.
+export function startingSubtitle(
+	version: Schemas["VersionPage"],
+	asked: number | "off" | undefined,
+): string | undefined {
+	if (asked === "off") return undefined;
+	if (asked !== undefined) return `s${asked}`;
+	const file = (version.subtitles ?? []).findIndex(
+		(f) => f.id === version.default_subtitle_file,
+	);
+	if (file >= 0) return `f${file}`;
+	const stream = version.default_subtitle_stream;
+	return stream == null ? undefined : `s${stream}`;
+}
+
 // What a play asks for so the choice can be shown: a picture drawn into the
 // video, styled text handed to the browser where it draws it and drawn in
 // where it does not, and plain text a browser cannot read from a file played

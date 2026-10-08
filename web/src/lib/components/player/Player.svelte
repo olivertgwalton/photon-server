@@ -16,7 +16,8 @@ import VolumeIcon from "@lucide/svelte/icons/volume-2";
 import MuteIcon from "@lucide/svelte/icons/volume-x";
 import type Hls from "hls.js";
 import type JASSUB from "jassub";
-import { onDestroy, onMount, untrack } from "svelte";
+import { onMount, untrack } from "svelte";
+import { on } from "svelte/events";
 import { goto } from "$app/navigation";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
@@ -35,6 +36,7 @@ import {
 	beside,
 	choices,
 	needsReplay,
+	startingSubtitle,
 	wants,
 	webVTT,
 } from "#lib/player/subtitles.js";
@@ -83,26 +85,19 @@ let refusal = $state<{
 	message: string;
 	reasons: Schemas["TranscodeReason"][];
 }>();
+const version = $derived(
+	title.versions?.find(
+		(v) => v.id === (playback?.version_id ?? askedVersion),
+	) ?? title.versions?.[0],
+);
 // The choices start as the address asked, else as the server chose them for
 // this profile, and are the reader's from then on.
-const startVersion = untrack(
-	() =>
-		title.versions?.find((v) => v.id === askedVersion) ?? title.versions?.[0],
-);
+const startVersion = untrack(() => version);
 let audio = $state(
 	untrack(() => askedAudio ?? startVersion?.default_audio_stream ?? undefined),
 );
 let subtitleKey = $state(
-	untrack(() => {
-		if (askedSubtitle === "off" || !startVersion) return undefined;
-		if (askedSubtitle !== undefined) return `s${askedSubtitle}`;
-		const file = startVersion.subtitles?.findIndex(
-			(f) => f.id === startVersion.default_subtitle_file,
-		);
-		if (file !== undefined && file >= 0) return `f${file}`;
-		const stream = startVersion.default_subtitle_stream;
-		return stream == null ? undefined : `s${stream}`;
-	}),
+	untrack(() => startVersion && startingSubtitle(startVersion, askedSubtitle)),
 );
 let lastSubtitle = $state<string>();
 let quality = $state(untrack(() => prefs.max_bitrate_kbps));
@@ -116,14 +111,15 @@ let styledURL: string | undefined;
 
 let part = $state(0);
 let time = $state(0);
-let bufferedTo = $state(0);
+// What the video element says of itself, bound to it.
+let buffered = $state<{ start: number; end: number }[]>([]);
+let readyState = $state(0);
 let paused = $state(true);
-let waiting = $state(true);
 let volume = $state(1);
 let muted = $state(false);
 let rate = $state(1);
-let fullscreen = $state(false);
-let pipAvailable = $state(false);
+let fullscreenElement = $state<Element | null>(null);
+const pipAvailable = document.pictureInPictureEnabled;
 let resting = $state(false);
 let menuOpen = $state(false);
 let infoOpen = $state(false);
@@ -132,14 +128,12 @@ let next = $state<Schemas["Card"]>();
 let upNextHidden = $state(false);
 let restTimer: ReturnType<typeof setTimeout> | undefined;
 
-const version = $derived(
-	title.versions?.find(
-		(v) => v.id === (playback?.version_id ?? askedVersion),
-	) ?? title.versions?.[0],
-);
 const duration = $derived((version?.duration_ms ?? 0) / 1000);
 const offset = $derived((playback?.parts?.[part]?.offset_ms ?? 0) / 1000);
 const position = $derived(offset + time);
+const bufferedTo = $derived(offset + (buffered.at(-1)?.end ?? 0));
+const waiting = $derived(readyState < HTMLMediaElement.HAVE_FUTURE_DATA);
+const fullscreen = $derived(!!fullscreenElement);
 const subtitleChoices = $derived(version ? choices(version) : []);
 const subtitle = $derived(subtitleChoices.find((c) => c.key === subtitleKey));
 const audioStreams = $derived(
@@ -173,16 +167,12 @@ const heading = $derived(fullTitle(title, title.show?.title));
 
 function send(id: string) {
 	return (r: Report) => {
-		// The stop is fetched directly: openapi-fetch starts its request a
-		// tick later, after a closing page has gone.
+		// A stop may go as the page closes, so it is kept alive past it.
 		const call =
 			r.kind === "stop"
-				? fetch(`/api/v1/playbacks/${id}/stop`, {
-						method: "POST",
-						headers: { "content-type": "application/json" },
-						body: JSON.stringify({
-							position_ms: r.position_ms,
-						} satisfies Schemas["Position"]),
+				? api.POST("/api/v1/playbacks/{id}/stop", {
+						params: { path: { id } },
+						body: { position_ms: r.position_ms },
 						keepalive: r.keepalive,
 					})
 				: api.POST("/api/v1/playbacks/{id}/progress", {
@@ -209,7 +199,6 @@ function tracks(): Pick<
 // server is never transcoding twice for one reader.
 async function open(at: number) {
 	const mine = ++opening;
-	waiting = true;
 	refusal = undefined;
 	const previous = reporter;
 	reporter = undefined;
@@ -243,7 +232,6 @@ async function open(at: number) {
 		return;
 	}
 	if (!data) {
-		waiting = false;
 		refusal = {
 			message: problemMessage(error),
 			reasons:
@@ -293,22 +281,24 @@ async function attach(p: Schemas["Playback"], at: number, mine: number) {
 		load(partAt(at), at);
 	}
 	await showSubtitle();
-	video.play().catch(() => {
-		paused = true;
-	});
+	video.play().catch(() => undefined);
 }
 
 function detach() {
 	hls?.destroy();
 	hls = undefined;
 	void showStyled(undefined);
-	if (trackSrc?.startsWith("blob:")) URL.revokeObjectURL(trackSrc);
-	trackSrc = undefined;
-	trackFile = undefined;
+	clearTrack();
 	if (video?.hasAttribute("src")) {
 		video.removeAttribute("src");
 		video.load();
 	}
+}
+
+function clearTrack() {
+	if (trackSrc?.startsWith("blob:")) URL.revokeObjectURL(trackSrc);
+	trackSrc = undefined;
+	trackFile = undefined;
 }
 
 function partAt(seconds: number): number {
@@ -353,8 +343,7 @@ async function showSubtitle() {
 	if (playback.method === "direct") {
 		const file = styledText ? undefined : given;
 		if (file?.id === trackFile) return;
-		if (trackSrc?.startsWith("blob:")) URL.revokeObjectURL(trackSrc);
-		trackSrc = undefined;
+		clearTrack();
 		trackFile = file?.id;
 		if (!file) return;
 		if (file.codec === "webvtt") {
@@ -409,6 +398,8 @@ async function showStyled(sub: Schemas["Subtitle"] | undefined) {
 	styled = new JASSUB({ video, subUrl: absolute(sub.url), fonts });
 }
 
+// A choice in one of the settings menu's submenus leaves bits-ui's menu open,
+// so each closes it.
 function chooseSubtitle(key: string) {
 	menuOpen = false;
 	const chosen = subtitleChoices.find((c) => c.key === key);
@@ -441,11 +432,11 @@ function chooseQuality(kbps: number) {
 	reopen();
 }
 
+// A new source starts at the default rate, so it is the chosen one too.
 function chooseSpeed(r: number) {
 	menuOpen = false;
-	if (!video) return;
-	video.defaultPlaybackRate = r;
-	video.playbackRate = r;
+	if (video) video.defaultPlaybackRate = r;
+	rate = r;
 }
 
 function toggle() {
@@ -503,11 +494,9 @@ function keydown(event: KeyboardEvent) {
 		seek(position + nudge);
 	else if (key === "j") seek(position - step);
 	else if (key === "l") seek(position + step);
-	else if (key === "ArrowUp" && !control && video)
-		video.volume = Math.min(video.volume + 0.05, 1);
-	else if (key === "ArrowDown" && !control && video)
-		video.volume = Math.max(video.volume - 0.05, 0);
-	else if (key === "m" && video) video.muted = !video.muted;
+	else if (key === "ArrowUp" && !control) volume = Math.min(volume + 0.05, 1);
+	else if (key === "ArrowDown" && !control) volume = Math.max(volume - 0.05, 0);
+	else if (key === "m") muted = !muted;
 	else if (key === "f") toggleFullscreen();
 	else if (key === "c") toggleSubtitles();
 	else if (/^[0-9]$/.test(key) && duration) seek((duration * Number(key)) / 10);
@@ -518,17 +507,12 @@ function keydown(event: KeyboardEvent) {
 	}
 }
 
+// The browser's own HLS adds the playlist's subtitles as it reads them.
+function tracksAdded() {
+	if (playback?.playlist && !hls) void showSubtitle();
+}
+
 onMount(() => {
-	const fullscreenChange = () => {
-		fullscreen = !!document.fullscreenElement;
-	};
-	// The browser's own HLS adds the playlist's subtitles as it reads them.
-	const tracksAdded = () => {
-		if (playback?.playlist && !hls) void showSubtitle();
-	};
-	pipAvailable = document.pictureInPictureEnabled;
-	document.addEventListener("fullscreenchange", fullscreenChange);
-	video?.textTracks.addEventListener("addtrack", tracksAdded);
 	if (title.kind === "episode") {
 		api
 			.GET("/api/v1/titles/{id}/next", { params: { path: { id: title.id } } })
@@ -540,16 +524,11 @@ onMount(() => {
 	void open(start);
 	wake();
 	return () => {
-		document.removeEventListener("fullscreenchange", fullscreenChange);
-		video?.textTracks.removeEventListener("addtrack", tracksAdded);
+		opening++;
+		clearTimeout(restTimer);
+		void reporter?.stop();
+		detach();
 	};
-});
-
-onDestroy(() => {
-	opening++;
-	clearTimeout(restTimer);
-	void reporter?.stop();
-	detach();
 });
 </script>
 
@@ -562,6 +541,8 @@ onDestroy(() => {
 		if (e.persisted) reopen();
 	}}
 />
+
+<svelte:document bind:fullscreenElement />
 
 <svelte:head><title>{heading} · Photon</title></svelte:head>
 
@@ -580,6 +561,13 @@ onDestroy(() => {
 	<!-- biome-ignore lint/a11y/useMediaCaption: subtitles arrive as tracks once chosen, or as the stream's own renditions -->
 	<video
 		bind:this={video}
+		bind:paused
+		bind:volume
+		bind:muted
+		bind:playbackRate={rate}
+		bind:buffered
+		bind:readyState
+		{@attach (v) => on(v.textTracks, "addtrack", tracksAdded)}
 		class="size-full object-contain"
 		playsinline
 		preload="auto"
@@ -592,28 +580,9 @@ onDestroy(() => {
 		ontimeupdate={() => {
 			if (video && pendingSeek === undefined) time = video.currentTime;
 		}}
-		onprogress={() => {
-			if (video?.buffered.length)
-				bufferedTo = offset + video.buffered.end(video.buffered.length - 1);
-		}}
-		onplay={() => {
-			paused = false;
-			wake();
-		}}
-		onplaying={() => {
-			waiting = false;
-			reporter?.playing();
-		}}
-		onpause={() => {
-			paused = true;
-			reporter?.paused();
-		}}
-		oncanplay={() => {
-			waiting = false;
-		}}
-		onwaiting={() => {
-			waiting = true;
-		}}
+		onplay={wake}
+		onplaying={() => reporter?.playing()}
+		onpause={() => reporter?.paused()}
 		onseeked={() => reporter?.seeked()}
 		onended={() => {
 			const parts = playback?.parts ?? [];
@@ -633,14 +602,6 @@ onDestroy(() => {
 					reasons: [],
 				};
 			}
-		}}
-		onvolumechange={() => {
-			if (!video) return;
-			volume = video.volume;
-			muted = video.muted;
-		}}
-		onratechange={() => {
-			if (video) rate = video.playbackRate;
 		}}
 	>
 		{#if trackSrc}
@@ -764,9 +725,7 @@ onDestroy(() => {
 					variant="ghost"
 					size="icon"
 					aria-label={muted ? "Unmute" : "Mute"}
-					onclick={() => {
-						if (video) video.muted = !video.muted;
-					}}
+					onclick={() => (muted = !muted)}
 				>
 					{#if muted || volume === 0}
 						<MuteIcon class="size-5" />
@@ -783,9 +742,8 @@ onDestroy(() => {
 					aria-label="Volume"
 					class="accent-ink hidden w-24 sm:block"
 					oninput={(e) => {
-						if (!video) return;
-						video.volume = Number(e.currentTarget.value);
-						video.muted = false;
+						volume = Number(e.currentTarget.value);
+						muted = false;
 					}}
 				>
 				<span class="text-ink ml-1 font-mono text-xs tabular-nums sm:text-sm">
