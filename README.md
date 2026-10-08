@@ -24,6 +24,30 @@ docker compose exec server photon-server profile add -name Admin -role admin
 Then open `http://<server>:8640`, log in, and add a library under Settings, Server, Libraries
 (`POST /api/v1/admin/libraries`).
 
+### Backups
+
+Every three days the server dumps its database with `pg_dump` into `PHOTON_BACKUP_DIR` (the
+image's `/var/lib/photon-server/backups`), keeping the newest three. Settings, Server, Backups
+lists them, downloads one and backs up now (`GET /api/v1/admin/backups`). With several servers,
+a dump is kept by whichever made it, as it ran the scheduled tasks; each lists its own.
+
+A dump is restored with every server stopped:
+
+```sh
+docker compose stop server    # every node; stopping one twice stops it without draining
+docker compose run --rm server restore /var/lib/photon-server/backups/photon-20261008T120000Z.dump
+docker compose start server
+```
+
+The restore refuses while anything is connected to the database, naming each connection, and
+refuses a dump made by a newer server than itself. It replaces the database with the dump's in
+one transaction, so a restore that fails changes nothing; migrates an older dump to this version;
+and clears the server's keys in Valkey, which may name playbacks, nodes and pairings the dump
+never had. Cached artwork, previews and transcodes are left: each server's sweeps forget what the
+database no longer has. It runs `pg_restore` and `psql` (`PHOTON_PG_RESTORE` and `PHOTON_PSQL`,
+as `PHOTON_PG_DUMP` names `pg_dump`) as a role that may drop and create the database's `public`
+schema: its owner.
+
 ### Several servers
 
 Several servers can serve one household together, sharing its PostgreSQL and Valkey; see
