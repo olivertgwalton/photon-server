@@ -2,7 +2,6 @@
 import { tick, untrack } from "svelte";
 import { onResize } from "#lib/size.js";
 import type { components } from "#lib/api/schema.js";
-import { Skeleton } from "#lib/components/ui/skeleton/index.js";
 import { columnGap, columnsFor, gridColumns } from "#lib/grid.js";
 import type { ViewStyle } from "#lib/wall.js";
 import TitleCard from "./TitleCard.svelte";
@@ -175,15 +174,17 @@ const sizes = $derived(`${Math.ceil(cardWidth) || 200}px`);
 			>
 				{#if c}
 					{@render item(c)}
-				{:else if view === "list"}
-					<Skeleton class="h-18 w-full" />
 				{:else}
-					<Skeleton
+					<div
 						class={[
-							"rounded-xl",
-							shape === "poster" ? "aspect-[2/3]" : "aspect-video",
+							"bg-raise rounded-xl",
+							view === "list"
+								? "h-18"
+								: shape === "poster"
+									? "aspect-[2/3]"
+									: "aspect-video",
 						]}
-					/>
+					></div>
 				{/if}
 			</li>
 		{/each}
