@@ -167,7 +167,9 @@ func TestADamagedIndexIsRefused(t *testing.T) {
 			}
 			damaged := bytes.Clone(data)
 			damaged[cut] ^= 0xff
-			_, _ = indexedKeyframes(io.NewSectionReader(bytes.NewReader(damaged), 0, int64(len(damaged))))
+			if _, err := indexedKeyframes(io.NewSectionReader(bytes.NewReader(damaged), 0, int64(len(damaged)))); err != nil && !errors.Is(err, ErrNoIndex) {
+				t.Errorf("%s damaged at %d: %v", name, cut, err)
+			}
 		}
 	}
 }
