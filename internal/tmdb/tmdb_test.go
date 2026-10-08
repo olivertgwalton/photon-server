@@ -47,7 +47,7 @@ func serveIn(t *testing.T, language string, routes map[string]string) *Client {
 	}))
 	t.Cleanup(srv.Close)
 	c := New("token", unlimited{})
-	c.base = srv.URL
+	c.api.Base = srv.URL
 	return c
 }
 
@@ -198,7 +198,7 @@ func TestARequestTMDBAsksToSlowIsSentAgain(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	c := New("token", unlimited{})
-	c.base = srv.URL
+	c.api.Base = srv.URL
 	got, err := c.Search(t.Context(), gb, Movie, "Alien", 0)
 	if err != nil || len(got) != 1 || asked != 2 {
 		t.Errorf("Search = %v, %v after %d requests; want Alien, asked again once", got, err, asked)
@@ -289,7 +289,7 @@ func TestAListIsReadInItsOrder(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	c := New("token", unlimited{})
-	c.base = srv.URL
+	c.api.Base = srv.URL
 	got, err := c.List(t.Context(), "8136")
 	if err != nil {
 		t.Fatal(err)

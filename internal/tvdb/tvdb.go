@@ -2,7 +2,6 @@
 package tvdb
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -36,10 +35,8 @@ var limit = kv.Limit{Every: 50 * time.Millisecond, Burst: 20}
 const tokenLife = 25 * 24 * time.Hour
 
 type Client struct {
-	base string
-	key  string
-	pin  string
-	api  provider.Client
+	login login
+	api   provider.Client
 
 	mu      sync.Mutex
 	token   string
@@ -48,7 +45,7 @@ type Client struct {
 
 // New makes a client for a project key and, for a key subscribers pay for, a subscriber's PIN.
 func New(key, pin string, limits kv.Limiter) *Client {
-	return &Client{base: baseURL, key: key, pin: pin, api: provider.Client{Name: "tvdb", Limits: limits, Limit: limit}}
+	return &Client{login: login{key: key, pin: pin}, api: provider.Client{Name: "tvdb", Base: baseURL, Limits: limits, Limit: limit}}
 }
 
 // languageOf is a locale's language as TVDB names it, ISO 639-2.
@@ -57,48 +54,43 @@ func languageOf(loc domain.Locale) string {
 	return base.ISO3()
 }
 
-func (c *Client) login(ctx context.Context) (string, error) {
+// login is what TVDB is signed in with: the key, and a subscriber's PIN. It is written out only as
+// the body of a sign-in.
+type login struct{ key, pin string }
+
+func (l login) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Key string `json:"apikey"`
+		PIN string `json:"pin,omitzero"`
+	}{l.key, l.pin})
+}
+
+func (c *Client) signIn(ctx context.Context) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.token != "" && time.Now().Before(c.expires) {
 		return c.token, nil
 	}
-	body, err := json.Marshal(struct { //nolint:gosec // the login request is where the key is meant to go
-		Key string `json:"apikey"`
-		PIN string `json:"pin,omitzero"`
-	}{c.key, c.pin})
-	if err != nil {
-		return "", err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/login", bytes.NewReader(body))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
 	var out struct {
 		Data struct {
 			Token string `json:"token"`
 		} `json:"data"`
 	}
-	if err := c.api.Do(req, &out); err != nil {
+	if err := c.api.Do(ctx, provider.Request{Method: http.MethodPost, Path: "/login", Body: c.login}, &out); err != nil {
 		return "", fmt.Errorf("tvdb login: %w", err)
 	}
 	c.token, c.expires = out.Data.Token, time.Now().Add(tokenLife)
 	return c.token, nil
 }
 
-func (c *Client) get(ctx context.Context, path string, into any) error {
+func (c *Client) get(ctx context.Context, path string, query url.Values, into any) error {
 	for attempt := 0; ; attempt++ {
-		token, err := c.login(ctx)
+		token, err := c.signIn(ctx)
 		if err != nil {
 			return err
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path, nil)
-		if err != nil {
-			return err
-		}
-		req.Header.Set("Authorization", "Bearer "+token)
-		err = c.api.Do(req, into)
+		header := http.Header{"Authorization": {"Bearer " + token}}
+		err = c.api.Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: query, Header: header}, into)
 		if refused, ok := errors.AsType[*provider.Refusal](err); !ok || refused.Code != http.StatusUnauthorized || attempt > 0 {
 			return err
 		}
@@ -126,7 +118,7 @@ func (c *Client) Search(ctx context.Context, loc domain.Locale, title string, ye
 			Overviews    map[string]string `json:"overviews"`
 		} `json:"data"`
 	}
-	if err := c.get(ctx, "/search?"+q.Encode(), &out); err != nil {
+	if err := c.get(ctx, "/search", q, &out); err != nil {
 		return nil, err
 	}
 	found := make([]domain.Candidate, 0, len(out.Data))
@@ -153,7 +145,7 @@ func (c *Client) Find(ctx context.Context, id string) ([]domain.Candidate, error
 			} `json:"series"`
 		} `json:"data"`
 	}
-	if err := c.get(ctx, "/search/remoteid/"+url.PathEscape(id), &out); err != nil {
+	if err := c.get(ctx, "/search/remoteid/"+url.PathEscape(id), nil, &out); err != nil {
 		return nil, err
 	}
 	var found []domain.Candidate
@@ -258,7 +250,7 @@ func (c *Client) Details(ctx context.Context, loc domain.Locale, id int) (domain
 		} `json:"data"`
 	}
 	// Not short: a short record leaves out the cast, with the artwork and trailers.
-	if err := c.get(ctx, fmt.Sprintf("/series/%d/extended?meta=translations", id), &out); err != nil {
+	if err := c.get(ctx, fmt.Sprintf("/series/%d/extended", id), url.Values{"meta": {"translations"}}, &out); err != nil {
 		return domain.Metadata{}, err
 	}
 	d := out.Data
@@ -323,8 +315,9 @@ func (c *Client) Seasons(ctx context.Context, loc domain.Locale, id int, seasons
 	for _, n := range seasons {
 		out[n] = domain.SeasonMetadata{Episodes: map[int]domain.Metadata{}}
 	}
-	path := fmt.Sprintf("/series/%d/episodes/%s/%s?page=0", id, cmp.Or(seasonTypes[order], "default"), lang)
-	for path != "" {
+	path := fmt.Sprintf("/series/%d/episodes/%s/%s", id, cmp.Or(seasonTypes[order], "default"), lang)
+	// Pages are asked for by number, as the link to the next says, while there is a next.
+	for n, more := 0, true; more; n++ {
 		var page struct {
 			Data struct {
 				Episodes []struct {
@@ -341,7 +334,7 @@ func (c *Client) Seasons(ctx context.Context, loc domain.Locale, id int, seasons
 				Next string `json:"next"`
 			} `json:"links"`
 		}
-		if err := c.get(ctx, path, &page); err != nil {
+		if err := c.get(ctx, path, url.Values{"page": {strconv.Itoa(n)}}, &page); err != nil {
 			return nil, err
 		}
 		for _, e := range page.Data.Episodes {
@@ -371,7 +364,7 @@ func (c *Client) Seasons(ctx context.Context, loc domain.Locale, id int, seasons
 				Artwork: picture(domain.ArtworkThumb, e.Image), Credits: people,
 			}
 		}
-		path = strings.TrimPrefix(page.Links.Next, c.base)
+		more = page.Links.Next != ""
 	}
 	return out, nil
 }
@@ -384,7 +377,7 @@ func (c *Client) episodeCredits(ctx context.Context, id int) ([]domain.Credit, e
 			Characters []character `json:"characters"`
 		} `json:"data"`
 	}
-	if err := c.get(ctx, fmt.Sprintf("/episodes/%d/extended", id), &out); err != nil {
+	if err := c.get(ctx, fmt.Sprintf("/episodes/%d/extended", id), nil, &out); err != nil {
 		return nil, err
 	}
 	return credits(out.Data.Characters), nil

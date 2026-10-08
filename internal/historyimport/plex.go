@@ -73,15 +73,12 @@ func (m plexMetadata) ids() map[domain.Provider]string {
 }
 
 func (p plex) get(ctx context.Context, path string, query url.Values, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.base+path+"?"+query.Encode(), nil)
-	if err != nil {
-		return err
+	header := http.Header{
+		"X-Plex-Token": {p.token}, "X-Plex-Client-Identifier": {"photon-server-history-import"},
+		"X-Plex-Product": {"photon-server"}, "X-Plex-Version": {"1"},
 	}
-	req.Header.Set("X-Plex-Token", p.token)
-	req.Header.Set("X-Plex-Client-Identifier", "photon-server-history-import")
-	req.Header.Set("X-Plex-Product", "photon-server")
-	req.Header.Set("X-Plex-Version", "1")
-	return provider.Client{Name: string(domain.ImportPlex), HTTP: client}.Do(req, out)
+	return provider.Client{Name: string(domain.ImportPlex), Base: p.base, HTTP: client}.
+		Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: query, Header: header}, out)
 }
 
 func (p plex) connect(ctx context.Context, c Credentials) (store.ImportLogin, error) {

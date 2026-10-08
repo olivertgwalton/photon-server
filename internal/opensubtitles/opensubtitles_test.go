@@ -27,7 +27,9 @@ func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error)
 type server struct {
 	signIns, downloads, quota int
 	asked                     string
-	t                         *testing.T
+	// linkTo is the host a download links to, the server's own where it is empty.
+	linkTo string
+	t      *testing.T
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +61,11 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"remaining":0}`, http.StatusNotAcceptable)
 		default:
 			s.downloads++
-			reply(s.t, w, `{"link":"http://`+r.Host+`/file/12.srt","remaining":4}`)
+			host := r.Host
+			if s.linkTo != "" {
+				host = s.linkTo
+			}
+			reply(s.t, w, `{"link":"http://`+host+`/file/12.srt","remaining":4}`)
 		}
 	default:
 		http.NotFound(w, r)
@@ -74,7 +80,7 @@ func client(t *testing.T, s *server) *Client {
 	c := New(func(context.Context) (map[string]string, error) {
 		return map[string]string{"api_key": "consumer", "username": "ada", "password": "secret"}, nil
 	}, unlimited{})
-	c.base = srv.URL
+	c.api.Base = srv.URL
 	return c
 }
 
@@ -133,6 +139,18 @@ func TestASubtitleIsFetchedSignedIn(t *testing.T) {
 	if _, err := New(func(context.Context) (map[string]string, error) { return map[string]string{}, nil }, unlimited{}).
 		SearchSubtitles(t.Context(), domain.SubtitleQuery{}); !errors.Is(err, provider.ErrNotConfigured) {
 		t.Errorf("with no key: %v, want ErrNotConfigured", err)
+	}
+}
+
+// A download linking anywhere but OpenSubtitles is not followed.
+func TestADownloadLinkingElsewhereIsRefused(t *testing.T) {
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reply(t, w, "1\n00:00:01,000 --> 00:00:02,000\nIn space\n")
+	}))
+	t.Cleanup(elsewhere.Close)
+	s := &server{quota: 1, linkTo: strings.TrimPrefix(elsewhere.URL, "http://")}
+	if got, err := client(t, s).FetchSubtitle(t.Context(), "12"); err == nil {
+		t.Errorf("fetched %q from a link off OpenSubtitles", got)
 	}
 }
 

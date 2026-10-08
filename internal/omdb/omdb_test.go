@@ -68,7 +68,7 @@ func client(t *testing.T, key string) *Client {
 	}))
 	t.Cleanup(srv.Close)
 	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": key}, nil }, unlimited{})
-	c.base = srv.URL + "/"
+	c.api.Base = srv.URL + "/"
 	return c
 }
 

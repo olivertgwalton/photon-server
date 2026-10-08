@@ -1,12 +1,9 @@
 package historyimport
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -56,36 +53,17 @@ type jellyfinItem struct {
 }
 
 func (j jellyfin) send(ctx context.Context, method, path string, query url.Values, body, out any) error {
-	var sent io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			return err
-		}
-		sent = bytes.NewReader(b)
-	}
-	target := j.base + path
-	if len(query) > 0 {
-		target += "?" + query.Encode()
-	}
-	req, err := http.NewRequestWithContext(ctx, method, target, sent)
-	if err != nil {
-		return err
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
 	auth := `MediaBrowser Client="photon-server", Device="photon-server", DeviceId="photon-server-history-import", Version="1"`
 	if j.login.Token != "" {
 		auth += `, Token="` + j.login.Token + `"`
 	}
-	req.Header.Set(j.header, auth)
-	c := provider.Client{Name: string(j.kind), HTTP: client}
+	c := provider.Client{Name: string(j.kind), Base: j.base, HTTP: client}
+	req := provider.Request{Method: method, Path: path, Query: query, Header: http.Header{j.header: {auth}}, Body: body}
 	if out == nil {
-		_, err = c.Bytes(req)
+		_, err := c.Bytes(ctx, req)
 		return err
 	}
-	return c.Do(req, out)
+	return c.Do(ctx, req, out)
 }
 
 func (j jellyfin) connect(ctx context.Context, c Credentials) (store.ImportLogin, error) {

@@ -4,7 +4,7 @@ type Problem = components["schemas"]["Problem"];
 
 // What a refusal says to a reader where the server gives no detail of its own.
 const messages: Partial<Record<Problem["code"], string>> = {
-	invalid_credentials: "That name and password don't match.",
+	sign_in_refused: "That name and password don't match.",
 	wrong_secret: "That's not the right PIN or password.",
 	pairing_not_found:
 		"No device is showing that code. Check it, or start again on the device.",

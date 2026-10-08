@@ -40,7 +40,6 @@ const (
 )
 
 type Client struct {
-	base  string
 	token string
 	api   provider.Client
 }
@@ -48,7 +47,7 @@ type Client struct {
 // New makes a client that authenticates with an API read access token. Each request is asked in a
 // locale: its language the words', its country the certificates'.
 func New(token string, limits kv.Limiter) *Client {
-	return &Client{base: baseURL, token: token, api: provider.Client{Name: "tmdb", Limits: limits, Limit: limit}}
+	return &Client{token: token, api: provider.Client{Name: "tmdb", Base: baseURL, Limits: limits, Limit: limit}}
 }
 
 func (c *Client) get(ctx context.Context, loc domain.Locale, path string, query url.Values, into any) error {
@@ -56,12 +55,8 @@ func (c *Client) get(ctx context.Context, loc domain.Locale, path string, query 
 		query = url.Values{}
 	}
 	query.Set("language", loc.Language)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path+"?"+query.Encode(), nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	return c.api.Do(req, into)
+	header := http.Header{"Authorization": {"Bearer " + c.token}}
+	return c.api.Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: query, Header: header}, into)
 }
 
 type result struct {

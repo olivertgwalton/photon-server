@@ -4,13 +4,10 @@
 package opensubtitles
 
 import (
-	"bytes"
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -26,6 +23,9 @@ import (
 )
 
 const baseURL = "https://api.opensubtitles.com/api/v1"
+
+// filesDomain is where OpenSubtitles serves the files its downloads link to.
+const filesDomain = "opensubtitles.com"
 
 // userAgent is how the server names itself, as OpenSubtitles requires of every request.
 const userAgent = "Photon v1"
@@ -45,7 +45,6 @@ var limit = kv.Limit{Every: 200 * time.Millisecond, Burst: 5}
 const tokenFor = 12 * time.Hour
 
 type Client struct {
-	base     string
 	settings provider.Settings
 	api      provider.Client
 
@@ -55,7 +54,7 @@ type Client struct {
 }
 
 func New(settings provider.Settings, limits kv.Limiter) *Client {
-	return &Client{base: baseURL, settings: settings, api: provider.Client{Name: "opensubtitles", Limits: limits, Limit: limit}}
+	return &Client{settings: settings, api: provider.Client{Name: "opensubtitles", Base: baseURL, Limits: limits, Limit: limit}}
 }
 
 func (c *Client) Info() provider.Info {
@@ -70,30 +69,12 @@ func (c *Client) Info() provider.Info {
 }
 
 // request is a call to the API with the consumer key, as the user signed in where token is set.
-func (c *Client) request(ctx context.Context, method, path string, query url.Values, body any, key, token string) (*http.Request, error) {
-	var payload io.Reader = http.NoBody
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			return nil, err
-		}
-		payload = bytes.NewReader(b)
-	}
-	target := c.base + path
-	if len(query) > 0 {
-		target += "?" + query.Encode()
-	}
-	req, err := http.NewRequestWithContext(ctx, method, target, payload)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Api-Key", key)
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Content-Type", "application/json")
+func request(method, path string, query url.Values, body any, key, token string) provider.Request {
+	header := http.Header{"Api-Key": {key}, "User-Agent": {userAgent}, "Content-Type": {"application/json"}}
 	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+		header.Set("Authorization", "Bearer "+token)
 	}
-	return req, nil
+	return provider.Request{Method: method, Path: path, Query: query, Header: header, Body: body}
 }
 
 func (c *Client) key(ctx context.Context) (map[string]string, error) {
@@ -139,10 +120,6 @@ func (c *Client) SearchSubtitles(ctx context.Context, q domain.SubtitleQuery) ([
 	if q.Hash != "" {
 		query.Set("moviehash", q.Hash)
 	}
-	req, err := c.request(ctx, http.MethodGet, "/subtitles", query, nil, set[keySetting], "")
-	if err != nil {
-		return nil, err
-	}
 	var body struct {
 		Data []struct {
 			Attributes struct {
@@ -158,7 +135,7 @@ func (c *Client) SearchSubtitles(ctx context.Context, q domain.SubtitleQuery) ([
 			} `json:"attributes"`
 		} `json:"data"`
 	}
-	if err := c.api.Do(req, &body); err != nil {
+	if err := c.api.Do(ctx, request(http.MethodGet, "/subtitles", query, nil, set[keySetting], ""), &body); err != nil {
 		return nil, err
 	}
 	var out []domain.FoundSubtitle
@@ -200,11 +177,7 @@ func (c *Client) FetchSubtitle(ctx context.Context, id string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		req, err := c.request(ctx, http.MethodPost, "/download", nil, ask, set[keySetting], token)
-		if err != nil {
-			return nil, err
-		}
-		err = c.api.Do(req, &link)
+		err = c.api.Do(ctx, request(http.MethodPost, "/download", nil, ask, set[keySetting], token), &link)
 		if refusal, ok := errors.AsType[*provider.Refusal](err); ok {
 			switch {
 			case refusal.Code == http.StatusUnauthorized && attempt == 0:
@@ -218,11 +191,26 @@ func (c *Client) FetchSubtitle(ctx context.Context, id string) ([]byte, error) {
 		}
 		break
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, link.Link, nil)
+	return c.file(ctx, link.Link)
+}
+
+// file fetches the file a download links to, from OpenSubtitles alone: a link elsewhere is refused.
+func (c *Client) file(ctx context.Context, link string) ([]byte, error) {
+	at, err := url.Parse(link)
+	if err != nil {
+		return nil, fmt.Errorf("opensubtitles: download link: %w", err)
+	}
+	api, err := url.Parse(c.api.Base)
 	if err != nil {
 		return nil, err
 	}
-	return c.api.Bytes(req)
+	host := at.Hostname()
+	if at.Scheme != api.Scheme || at.Host != api.Host && host != filesDomain && !strings.HasSuffix(host, "."+filesDomain) {
+		return nil, fmt.Errorf("opensubtitles: a download links off OpenSubtitles, to %s", at.Redacted())
+	}
+	files := c.api
+	files.Base = at.Scheme + "://" + at.Host
+	return files.Bytes(ctx, provider.Request{Method: http.MethodGet, Path: at.EscapedPath(), Query: at.Query()})
 }
 
 // signIn answers a token of the account set, signing in where there is none, it is old, or again
@@ -236,15 +224,12 @@ func (c *Client) signIn(ctx context.Context, set map[string]string, again bool) 
 	if set[userSetting] == "" || set[passwordSetting] == "" {
 		return "", provider.ErrNotConfigured
 	}
-	req, err := c.request(ctx, http.MethodPost, "/login", nil,
+	login := request(http.MethodPost, "/login", nil,
 		map[string]string{"username": set[userSetting], "password": set[passwordSetting]}, set[keySetting], "")
-	if err != nil {
-		return "", err
-	}
 	var body struct {
 		Token string `json:"token"`
 	}
-	if err := c.api.Do(req, &body); err != nil {
+	if err := c.api.Do(ctx, login, &body); err != nil {
 		return "", err
 	}
 	c.token, c.signed = body.Token, time.Now()
