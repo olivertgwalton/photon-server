@@ -94,7 +94,11 @@ func TestFailedJobsBackOffThenDie(t *testing.T) {
 		if dead, err := s.FailJob(t.Context(), jobs[0], errors.New("unreadable")); err != nil || dead != (attempt == maxAttempts) {
 			t.Fatalf("attempt %d: dead %v, %v; want dead on the last", attempt, dead, err)
 		}
-		if again, _ := s.ClaimJobs(t.Context(), kinds, nil, node, time.Minute, 1); len(again) != 0 {
+		again, err := s.ClaimJobs(t.Context(), kinds, nil, node, time.Minute, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(again) != 0 {
 			t.Fatalf("attempt %d: a failed job was claimable before its backoff", attempt)
 		}
 		if _, err := s.pool.Exec(t.Context(), `UPDATE jobs SET run_after = now() - interval '1 second' WHERE id = $1`, jobs[0].ID); err != nil {
@@ -121,7 +125,11 @@ func TestFailedJobsBackOffThenDie(t *testing.T) {
 	if err := s.RetryJob(t.Context(), id); err != nil {
 		t.Fatal(err)
 	}
-	if again, _ := s.ClaimJobs(t.Context(), kinds, nil, node, time.Minute, 1); len(again) != 1 || again[0].Attempts != 1 {
+	again, err := s.ClaimJobs(t.Context(), kinds, nil, node, time.Minute, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(again) != 1 || again[0].Attempts != 1 {
 		t.Errorf("after a retry: claimed %+v, want the job on a fresh first attempt", again)
 	}
 	if err := s.RetryJob(t.Context(), id); !errors.Is(err, ErrNotFound) {
@@ -142,7 +150,11 @@ func TestAPostponedJobNeverDies(t *testing.T) {
 		if err := s.PostponeJob(t.Context(), jobs[0], time.Hour); err != nil {
 			t.Fatal(err)
 		}
-		if again, _ := s.ClaimJobs(t.Context(), kinds, nil, node, time.Minute, 1); len(again) != 0 {
+		again, err := s.ClaimJobs(t.Context(), kinds, nil, node, time.Minute, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(again) != 0 {
 			t.Fatalf("claim %d: a postponed job was claimable before its delay", attempt)
 		}
 		if _, err := s.pool.Exec(t.Context(), `UPDATE jobs SET run_after = now() - interval '1 second' WHERE id = $1`, jobs[0].ID); err != nil {
@@ -312,7 +324,11 @@ func TestTitlesDueAFreshMatchAreQueued(t *testing.T) {
 	if n, err := s.RefreshStale(ctx); err != nil || n != 0 {
 		t.Errorf("a library never refreshed: queued %d, %v", n, err)
 	}
-	if got, _ := s.Library(ctx, lib.ID); got.RefreshDays != 0 {
+	got, err := s.Library(ctx, lib.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RefreshDays != 0 {
 		t.Errorf("refresh days = %d, want 0", got.RefreshDays)
 	}
 }
@@ -409,7 +425,11 @@ func TestAScanAnswersTheFoldersAskedBeforeItStarted(t *testing.T) {
 	if err := s.ScanAnswered(ctx, lib.ID, asked, read); err != nil {
 		t.Fatal(err)
 	}
-	if asked, _, _ := s.ScanRequests(ctx, lib.ID); !slices.Equal(asked, []string{"Heat"}) {
+	asked, _, err = s.ScanRequests(ctx, lib.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(asked, []string{"Heat"}) {
 		t.Errorf("left %v asked, want Heat for the next scan", asked)
 	}
 }

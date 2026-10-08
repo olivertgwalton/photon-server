@@ -111,7 +111,11 @@ func TestAProfileKeepsItsPicture(t *testing.T) {
 	if got, err := s.SetAvatar(ctx, kid.ID, uuid.UUID{}, nil); err != nil || got.Avatar != (uuid.UUID{}) {
 		t.Errorf("taking it away = %+v, %v", got, err)
 	}
-	if live, _ := s.LivePictures(ctx, []uuid.UUID{picture}); live[picture] {
+	live, err := s.LivePictures(ctx, []uuid.UUID{picture})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if live[picture] {
 		t.Error("a picture taken away is kept from the sweep")
 	}
 	if _, err := s.SetAvatar(ctx, uuid.NewV7(), picture, nil); !errors.Is(err, ErrNotFound) {

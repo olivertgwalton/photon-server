@@ -39,8 +39,12 @@ func TestAProfileKeepsItsPreferencesAndTheTracksItChose(t *testing.T) {
 			t.Errorf("kept %+v, want %+v", got, want)
 		}
 	}
-	if got, _ := s.Preferences(ctx, ada); !got.SavedAt.IsZero() {
-		t.Errorf("another profile's changed too: %+v", got)
+	other, err := s.Preferences(ctx, ada)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !other.SavedAt.IsZero() {
+		t.Errorf("another profile's changed too: %+v", other)
 	}
 	if _, err := s.SetPreferences(ctx, uuid.NewV7(), want); !errors.Is(err, ErrNotFound) {
 		t.Errorf("no such profile: %v", err)
@@ -64,11 +68,18 @@ func TestAProfileKeepsItsPreferencesAndTheTracksItChose(t *testing.T) {
 	if err := s.ChooseTracks(ctx, oliver, film, domain.ChosenTracks{Subtitle: new(domain.NoSubtitle)}); err != nil {
 		t.Fatal(err)
 	}
-	got, _ = s.ChosenTracks(ctx, oliver, film)
+	got, err = s.ChosenTracks(ctx, oliver, film)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if diff := cmp.Diff(domain.ChosenTracks{Audio: new(1), Subtitle: new(domain.NoSubtitle)}, got); diff != "" {
 		t.Errorf("subtitles off (-want +got):\n%s", diff)
 	}
-	if got, _ := s.ChosenTracks(ctx, ada, film); got != (domain.ChosenTracks{}) {
+	got, err = s.ChosenTracks(ctx, ada, film)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != (domain.ChosenTracks{}) {
 		t.Errorf("another profile's tracks: %+v", got)
 	}
 }

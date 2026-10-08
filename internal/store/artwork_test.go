@@ -52,7 +52,11 @@ func TestPicturesBesideATitleComeBeforeAProvidersAndItsCardShowsTheBest(t *testi
 	if err != nil || local.Path != "Heat/poster.jpg" || local.Root != "/srv/films" {
 		t.Errorf("best poster = %+v, %v; want the file beside the film", local, err)
 	}
-	if provider, _ := s.Picture(ctx, posters[1]); provider.URL != "https://image.tmdb.org/t/p/original/heat.jpg" {
+	provider, err := s.Picture(ctx, posters[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider.URL != "https://image.tmdb.org/t/p/original/heat.jpg" {
 		t.Errorf("second poster = %+v, want TMDB's", provider)
 	}
 	cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10})
@@ -145,7 +149,11 @@ func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
 	if got, n := best(); got != "b.jpg" || n != 3 {
 		t.Errorf("chosen: best poster %q of %d; want b.jpg over the file, listed once", got, n)
 	}
-	if offered, _ := s.ArtworkCandidates(ctx, id, domain.ArtworkPoster); !offered[1].Chosen || offered[0].Chosen {
+	offered, err = s.ArtworkCandidates(ctx, id, domain.ArtworkPoster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !offered[1].Chosen || offered[0].Chosen {
 		t.Errorf("candidates = %+v; want b.jpg marked chosen", offered)
 	}
 
@@ -154,8 +162,13 @@ func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
 		t.Errorf("after a match that no longer offers it, best poster %q; want the choice to stand", got)
 	}
 	var file uuid.UUID
-	_ = s.pool.QueryRow(ctx, `SELECT id FROM artwork WHERE source = 'file'`).Scan(&file)
-	offered, _ = s.ArtworkCandidates(ctx, id, domain.ArtworkPoster)
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM artwork WHERE source = 'file'`).Scan(&file); err != nil {
+		t.Fatal(err)
+	}
+	offered, err = s.ArtworkCandidates(ctx, id, domain.ArtworkPoster)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, pick := range []uuid.UUID{file, uuid.NewV7()} {
 		if err := s.ChooseArtwork(ctx, id, domain.ArtworkPoster, pick); !errors.Is(err, ErrNotACandidate) {
 			t.Errorf("choosing %v: %v; want ErrNotACandidate", pick, err)

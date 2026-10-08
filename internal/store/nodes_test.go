@@ -31,7 +31,11 @@ func TestANodeKeepsWhatAnAdminSetsAcrossRestarts(t *testing.T) {
 	if err := s.SetNodeSettings(ctx, id, none); err != nil {
 		t.Fatal(err)
 	}
-	if n, _ := s.Node(ctx, id); n.LimitSource != domain.LimitSet || n.Limit != 0 {
+	n, err = s.Node(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n.LimitSource != domain.LimitSet || n.Limit != 0 {
 		t.Errorf("set to no limit: %+v", n)
 	}
 	if err := s.SetNodeSettings(ctx, uuid.NewV7(), set); !errors.Is(err, ErrNotFound) {
@@ -41,18 +45,27 @@ func TestANodeKeepsWhatAnAdminSetsAcrossRestarts(t *testing.T) {
 		t.Error("a role there is not was kept")
 	}
 	// Seen up, its time is kept; forgotten, it is gone, and seeing it again finds none.
-	before, _ := s.Node(ctx, id)
+	before, err := s.Node(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if seen, err := s.SeeNode(ctx, id); err != nil || !seen.LastSeen.After(before.LastSeen) {
 		t.Errorf("seen: %+v, %v; want its last seen later than %v", seen, err, before.LastSeen)
 	}
-	gone, _ := s.JoinNode(ctx, uuid.NewV7(), "old")
+	gone, err := s.JoinNode(ctx, uuid.NewV7(), "old")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := s.ForgetNode(ctx, gone.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.SeeNode(ctx, gone.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("seeing a node forgotten: %v, want ErrNotFound", err)
 	}
-	other, _ := s.JoinNode(ctx, uuid.NewV7(), "gpu-1")
+	other, err := s.JoinNode(ctx, uuid.NewV7(), "gpu-1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if nodes, err := s.KnownNodes(ctx); err != nil || len(nodes) != 2 || nodes[0].ID != id || nodes[1].ID != other.ID {
 		t.Errorf("known nodes: %+v, %v; want both, the first to start first", nodes, err)
 	}

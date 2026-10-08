@@ -52,7 +52,11 @@ func TestAnEditStandsUntilItIsReset(t *testing.T) {
 	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, locked, nil); err != nil {
 		t.Fatal(err)
 	}
-	if page, _ = s.Title(ctx, uuid.UUID{}, id); page.Title != "Heat" || page.Tagline != "A Los Angeles crime saga" {
+	page, err = s.Title(ctx, uuid.UUID{}, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Title != "Heat" || page.Tagline != "A Los Angeles crime saga" {
 		t.Errorf("after resetting the title alone: %q, tagline %q; want TMDB's title and the tagline kept as it was locked", page.Title, page.Tagline)
 	}
 	if n := countRows(t, s, `SELECT count(*) FROM jobs WHERE kind = 'scan_library'`); n != 1 {
@@ -73,7 +77,11 @@ func TestAnEditStandsUntilItIsReset(t *testing.T) {
 	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Title: "Heat", IDs: map[domain.Provider]string{domain.ProviderTMDB: "999"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if sub, _, _ = s.IdentifySubject(ctx, id); sub.IDs[domain.ProviderTMDB] != "949" {
+	sub, _, err = s.IdentifySubject(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sub.IDs[domain.ProviderTMDB] != "949" {
 		t.Errorf("a match gave %q, want the pinned id to stand", sub.IDs[domain.ProviderTMDB])
 	}
 	if err := s.EditMetadata(ctx, uuid.NewV7(), domain.Metadata{Title: "x"}); !errors.Is(err, ErrNotFound) {
@@ -107,13 +115,17 @@ func TestAShowRenumberedIsMatchedAgainWhole(t *testing.T) {
 	if err := s.Identified(ctx, id); err != nil {
 		t.Fatal(err)
 	}
-	if sub, _, _ := s.IdentifySubject(ctx, id); len(sub.Seasons) != 0 || sub.Order != domain.OrderAired {
+	sub, _, err := s.IdentifySubject(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sub.Seasons) != 0 || sub.Order != domain.OrderAired {
 		t.Fatalf("matched: %+v; want nothing left to ask, in aired order", sub)
 	}
 	if err := s.SetEpisodeOrder(ctx, id, domain.OrderDVD); err != nil {
 		t.Fatal(err)
 	}
-	sub, _, err := s.IdentifySubject(ctx, id)
+	sub, _, err = s.IdentifySubject(ctx, id)
 	if err != nil || sub.Order != domain.OrderDVD || len(sub.Seasons) != 1 {
 		t.Fatalf("renumbered: %+v, %v; want season 1 asked again, on DVD", sub, err)
 	}
@@ -174,14 +186,22 @@ func TestARefreshIsAskedAheadOfTheQueue(t *testing.T) {
 	if err != nil || len(claimed) != 1 || claimed[0].Kind != domain.JobIdentify || claimed[0].Subject != id {
 		t.Fatalf("claimed %+v, %v; want the show's match, asked after the scan was queued", claimed, err)
 	}
-	if sub, _, _ := s.IdentifySubject(ctx, id); len(sub.Seasons) != 0 {
+	sub, _, err := s.IdentifySubject(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sub.Seasons) != 0 {
 		t.Errorf("refreshing what is missing asks about seasons %v; want none, all are described", sub.Seasons)
 	}
 
 	if err := s.Refresh(ctx, id, domain.RefreshAll); err != nil {
 		t.Fatal(err)
 	}
-	if sub, _, _ := s.IdentifySubject(ctx, id); len(sub.Seasons) != 1 {
+	sub, _, err = s.IdentifySubject(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sub.Seasons) != 1 {
 		t.Errorf("refreshing all asks about seasons %v; want season 1 again", sub.Seasons)
 	}
 	for n, want := range map[int]string{1: "Serenity", 2: "Mine"} {
@@ -289,13 +309,21 @@ func TestALibraryRefreshOfAllAsksAboutEverySeason(t *testing.T) {
 		map[int]domain.SeasonMetadata{1: {Metadata: domain.Metadata{Title: "Season 1"}, Episodes: map[int]domain.Metadata{1: {Title: "Serenity"}}}}); err != nil {
 		t.Fatal(err)
 	}
-	if sub, _, _ := s.IdentifySubject(ctx, id); len(sub.Seasons) != 0 {
+	sub, _, err := s.IdentifySubject(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sub.Seasons) != 0 {
 		t.Fatalf("seasons %v asked about after the match; want none", sub.Seasons)
 	}
 	if err := s.RefreshLibrary(ctx, lib.ID, domain.RefreshAll); err != nil {
 		t.Fatal(err)
 	}
-	if sub, _, _ := s.IdentifySubject(ctx, id); !slices.Equal(sub.Seasons, []int{1}) {
+	sub, _, err = s.IdentifySubject(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(sub.Seasons, []int{1}) {
 		t.Errorf("refreshing the library asks about seasons %v; want season 1 again", sub.Seasons)
 	}
 }

@@ -76,7 +76,10 @@ func TestARunningNodeIsListedAmongTheDatabasesConnections(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	host, _ := os.Hostname()
+	host, err := os.Hostname()
+	if err != nil {
+		t.Fatal(err)
+	}
 	others, err := Connections(t.Context(), db)
 	if err != nil || len(others) != 1 || !strings.HasPrefix(others[0], "photon-server "+host+" from ") {
 		t.Errorf("with a node running: %q, %v; want it, named by its host", others, err)

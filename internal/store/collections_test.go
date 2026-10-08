@@ -62,14 +62,22 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if page, err := s.Title(ctx, uuid.UUID{}, set); err != nil || page.Origin != domain.CollectionTMDB {
 		t.Errorf("the set's page says it was made by %q, %v; want tmdb", page.Origin, err)
 	}
-	if page, _ := s.Title(ctx, uuid.UUID{}, set); page.Placement != domain.PlacementLibrary {
+	page, err = s.Title(ctx, uuid.UUID{}, set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Placement != domain.PlacementLibrary {
 		t.Errorf("a new set is placed %q, want library", page.Placement)
 	}
 	// A provider's set is put on the home page as an admin's is.
 	if err := s.SetPlacement(ctx, set, domain.PlacementHome); err != nil {
 		t.Fatal(err)
 	}
-	if page, _ := s.Title(ctx, uuid.UUID{}, set); page.Placement != domain.PlacementHome {
+	page, err = s.Title(ctx, uuid.UUID{}, set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Placement != domain.PlacementHome {
 		t.Errorf("the promoted set is placed %q, want home", page.Placement)
 	}
 	if err := s.SetPlacement(ctx, uuid.NewV7(), domain.PlacementHome); !errors.Is(err, ErrNotFound) {
@@ -96,7 +104,11 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if err := s.SaveIdentity(ctx, ids["Aliens"], domain.SourceTMDB, domain.Metadata{Title: "Aliens"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if shown, _, _ := s.Collections(ctx, lib.ID, uuid.UUID{}, 0, 10); len(shown) != 0 {
+	shown, _, err = s.Collections(ctx, lib.ID, uuid.UUID{}, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shown) != 0 {
 		t.Errorf("with one title left: %+v, want none shown", shown)
 	}
 	if err := s.SaveIdentity(ctx, ids["Alien"], domain.SourceTMDB, domain.Metadata{Title: "Alien"}, nil); err != nil {
@@ -137,7 +149,11 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if err := s.MarkWatched(ctx, viewer.ID, mine, nil); err != nil {
 		t.Fatal(err)
 	}
-	if watched, _, _ := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: viewer.ID, Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{Marks: []domain.Mark{domain.MarkWatched}}}); len(watched) != 2 {
+	watched, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: viewer.ID, Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{Marks: []domain.Mark{domain.MarkWatched}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(watched) != 2 {
 		t.Errorf("after marking the set watched, %d titles are, want both", len(watched))
 	}
 	if err := s.RemoveCollection(ctx, mine); err != nil {
@@ -510,7 +526,11 @@ func TestAListCollectionHoldsWhatTheLibraryHasOfItsList(t *testing.T) {
 	if err := s.SetListMembers(ctx, set, []domain.Listed{film("tmdb", "348")}); err != nil {
 		t.Fatal(err)
 	}
-	if members, _ := s.Members(ctx, uuid.UUID{}, set); len(members) != 1 || members[0].Title != "Alien" {
+	members, err = s.Members(ctx, uuid.UUID{}, set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 1 || members[0].Title != "Alien" {
 		t.Errorf("read again: %+v, want Alien alone", members)
 	}
 	if lists, err := s.ListCollections(ctx); err != nil || len(lists) != 1 || lists[0].ID != set || lists[0].List.Missing != 0 {
