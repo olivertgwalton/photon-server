@@ -145,39 +145,12 @@ type refusalJSON struct {
 
 // play opens a playback of a film or episode as the client's profile decides: its copy's files in
 // order, each with where it starts on the copy's timeline, or an HLS playlist of them, its video
-// copied or encoded, at signed
-// addresses a player fetches directly. It says what becomes of each stream, and why the copy could
-// not be played as it is.
+// copied or encoded, at signed addresses a player fetches directly. It says what becomes of each
+// stream, and why the copy could not be played as it is.
 func (a *API) play(w http.ResponseWriter, r *http.Request) {
-	var req playJSON
-	if !a.decode(w, r, &req) {
+	req, version, ok := a.playRequest(w, r)
+	if !ok {
 		return
-	}
-	if req.Profile == nil {
-		writeProblem(w, a.logger, codeInvalidBody, "profile says what the client plays")
-		return
-	}
-	if req.StartMS < 0 {
-		writeProblem(w, a.logger, codeInvalidBody, "start_ms is not negative")
-		return
-	}
-	if req.SubtitleStream != nil && req.SubtitleFile != nil {
-		writeProblem(w, a.logger, codeInvalidBody, "a subtitle is subtitle_stream or subtitle_file, not both")
-		return
-	}
-	if req.Profile.Parts == "" {
-		req.Profile.Parts = domain.PartsJoined
-	}
-	if req.Profile.Segments == "" {
-		req.Profile.Segments = domain.SegmentsFMP4
-	}
-	var version uuid.UUID
-	if req.VersionID != "" {
-		var err error
-		if version, err = uuid.Parse(req.VersionID); err != nil {
-			writeProblem(w, a.logger, codeInvalidBody, "version_id is not an id")
-			return
-		}
 	}
 	id, ok := a.pathID(w, r, "id")
 	if !ok {
@@ -200,7 +173,6 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Profile.MaxBitrateKbps = playback.Capped(req.Profile.MaxBitrateKbps, limit)
-	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
 	candidates, err := a.svc.Placer.Candidates(r.Context(), playback.Need{})
 	if a.answered(w, r, err) {
 		return
@@ -209,15 +181,71 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	// The node with the most transcode slots free decides how the copy is played, with what it
-	// encodes; the next is asked where it has none by then, and decides again with its own. Where
-	// no node takes video to encode, this one decides, and a copy it would encode is refused.
+	d, session, err := a.place(r, req, id, c, title, candidates)
+	if errors.Is(err, playback.ErrNoCompatibleStream) {
+		status := codeNoCompatibleStream.status()
+		writeJSON(w, a.logger, "application/problem+json", status, refusalJSON{problem{Title: http.StatusText(status), Status: status, Code: codeNoCompatibleStream}, d.Reasons})
+		return
+	}
+	if errors.Is(err, hls.ErrTranscodeLimit) {
+		writeProblem(w, a.logger, codeTranscodeLimit, a.svc.Placer.Refuse(candidates).Error())
+		return
+	}
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, a.opened(*req.Profile, c, d, session))
+}
+
+// playRequest is a play's body, checked, with the parts and segments the client left out filled
+// in, and the copy it names.
+func (a *API) playRequest(w http.ResponseWriter, r *http.Request) (playJSON, uuid.UUID, bool) {
+	var req playJSON
+	if !a.decode(w, r, &req) {
+		return req, uuid.UUID{}, false
+	}
+	if req.Profile == nil {
+		writeProblem(w, a.logger, codeInvalidBody, "profile says what the client plays")
+		return req, uuid.UUID{}, false
+	}
+	if req.StartMS < 0 {
+		writeProblem(w, a.logger, codeInvalidBody, "start_ms is not negative")
+		return req, uuid.UUID{}, false
+	}
+	if req.SubtitleStream != nil && req.SubtitleFile != nil {
+		writeProblem(w, a.logger, codeInvalidBody, "a subtitle is subtitle_stream or subtitle_file, not both")
+		return req, uuid.UUID{}, false
+	}
+	if req.Profile.Parts == "" {
+		req.Profile.Parts = domain.PartsJoined
+	}
+	if req.Profile.Segments == "" {
+		req.Profile.Segments = domain.SegmentsFMP4
+	}
+	var version uuid.UUID
+	if req.VersionID != "" {
+		var err error
+		if version, err = uuid.Parse(req.VersionID); err != nil {
+			writeProblem(w, a.logger, codeInvalidBody, "version_id is not an id")
+			return req, uuid.UUID{}, false
+		}
+	}
+	return req, version, true
+}
+
+// place decides how c is played and starts its playback. The node with the most transcode slots
+// free decides, with what it encodes; the next is asked where it has none by then, and decides
+// again with its own. Where no node takes video to encode, this one decides, and a copy it would
+// encode is refused.
+func (a *API) place(r *http.Request, req playJSON, id uuid.UUID, c store.PlayCopy, title domain.PlaybackTitle, candidates []domain.Node) (playback.Decision, domain.Playback, error) {
+	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
 	asked := candidates
 	if len(asked) == 0 {
 		asked = []domain.Node{a.svc.Placer.Self()}
 	}
 	var d playback.Decision
 	var session domain.Playback
+	var err error
 	for _, node := range asked {
 		d, err = playback.Decide(*req.Profile, playback.CopyOf(c), tracks, playback.EncodingOf(node))
 		if err != nil {
@@ -237,18 +265,11 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	if errors.Is(err, playback.ErrNoCompatibleStream) {
-		status := codeNoCompatibleStream.status()
-		writeJSON(w, a.logger, "application/problem+json", status, refusalJSON{problem{Title: http.StatusText(status), Status: status, Code: codeNoCompatibleStream}, d.Reasons})
-		return
-	}
-	if errors.Is(err, hls.ErrTranscodeLimit) {
-		writeProblem(w, a.logger, codeTranscodeLimit, a.svc.Placer.Refuse(candidates).Error())
-		return
-	}
-	if a.answered(w, r, err) {
-		return
-	}
+	return d, session, err
+}
+
+// opened is what the client is told of a playback of c, played as d decided.
+func (a *API) opened(p playback.Profile, c store.PlayCopy, d playback.Decision, session domain.Playback) playbackJSON {
 	until := time.Now().Add(streamFor)
 	answer := playbackJSON{
 		PlaybackID: session.ID, Method: d.Method, VersionID: c.Version, Reasons: d.Reasons,
@@ -276,17 +297,17 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		exp, sig := a.svc.Signer.Token(subject, until)
 		answer.Playlist = subject + "/" + exp + "/" + sig + "/main.m3u8"
 	} else {
-		for _, p := range c.Parts {
+		for _, part := range c.Parts {
 			answer.Parts = append(answer.Parts, partJSON{
-				ID: p.ID, URL: a.svc.Signer.Sign("/api/v1/playbacks/"+session.ID.String()+"/parts/"+p.ID.String()+"/stream", until),
-				OffsetMS: p.OffsetMS, DurationMS: p.DurationMS,
+				ID: part.ID, URL: a.svc.Signer.Sign("/api/v1/playbacks/"+session.ID.String()+"/parts/"+part.ID.String()+"/stream", until),
+				OffsetMS: part.OffsetMS, DurationMS: part.DurationMS,
 			})
 		}
 	}
 	if v := d.Video; v == nil || v.Encode == nil || v.Encode.Burn == nil && v.Encode.BurnFile == nil {
-		answer.Subtitles = a.sidecars(*req.Profile, c, d.Method, until)
+		answer.Subtitles = a.sidecars(p, c, d.Method, until)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, answer)
+	return answer
 }
 
 // sidecars are the subtitles a playback hands the client to draw beside its video, but none
