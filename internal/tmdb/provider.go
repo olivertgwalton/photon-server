@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -27,14 +28,15 @@ func (c *Client) Match(ctx context.Context, loc domain.Locale, kind domain.ItemK
 }
 
 // Describe answers TMDB's details of a title, its score among them, and of the seasons of a show
-// asked for that TMDB has. TMDB numbers episodes as aired, so a show numbered otherwise is
-// described without its seasons.
+// asked for that TMDB has, with the season its next episode to air is in, so the episodes yet to
+// air are known. TMDB numbers episodes as aired, so a show numbered otherwise is described without
+// its seasons.
 func (c *Client) Describe(ctx context.Context, loc domain.Locale, kind domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
 	n, err := strconv.Atoi(id)
 	if err != nil {
 		return domain.Metadata{}, nil, err
 	}
-	m, err := c.Details(ctx, loc, kinds[kind], n)
+	m, airing, err := c.Details(ctx, loc, kinds[kind], n)
 	if err != nil {
 		return domain.Metadata{}, nil, err
 	}
@@ -42,7 +44,9 @@ func (c *Client) Describe(ctx context.Context, loc domain.Locale, kind domain.It
 	if seasons.Order != domain.OrderAired {
 		return m, said, nil
 	}
-	for _, number := range seasons.Numbers {
+	numbers := slices.Concat(seasons.Numbers, airing)
+	slices.Sort(numbers)
+	for _, number := range slices.Compact(numbers) {
 		s, err := c.Season(ctx, loc, n, number)
 		if errors.Is(err, provider.ErrNotFound) {
 			continue

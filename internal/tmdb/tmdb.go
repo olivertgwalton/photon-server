@@ -177,10 +177,14 @@ type details struct {
 			Rating  string `json:"rating"`
 		} `json:"results"`
 	} `json:"content_ratings"`
+	NextEpisodeToAir *struct {
+		SeasonNumber int `json:"season_number"`
+	} `json:"next_episode_to_air"`
 }
 
-// Details answers what TMDB says about a title, with its certificate in the client's country.
-func (c *Client) Details(ctx context.Context, loc domain.Locale, kind Kind, id int) (domain.Metadata, error) {
+// Details answers what TMDB says about a title, with its certificate in the client's country, and
+// of a show, the season its next episode to air is in, if it has one.
+func (c *Client) Details(ctx context.Context, loc domain.Locale, kind Kind, id int) (domain.Metadata, []int, error) {
 	extra := map[Kind]string{Movie: "release_dates,external_ids,videos,images,credits", Show: "content_ratings,external_ids,videos,images,aggregate_credits"}[kind]
 	q := url.Values{
 		"append_to_response": {extra},
@@ -192,7 +196,7 @@ func (c *Client) Details(ctx context.Context, loc domain.Locale, kind Kind, id i
 	}
 	var d details
 	if err := c.get(ctx, loc, fmt.Sprintf("/%s/%d", kind, id), q, &d); err != nil {
-		return domain.Metadata{}, err
+		return domain.Metadata{}, nil, err
 	}
 	m := d.match()
 	released := provider.Date(cmp.Or(d.ReleaseDate, d.FirstAirDate))
@@ -254,7 +258,11 @@ func (c *Client) Details(ctx context.Context, loc domain.Locale, kind Kind, id i
 			Language: v.Language, Published: v.Published,
 		})
 	}
-	return out, nil
+	var airing []int
+	if next := d.NextEpisodeToAir; next != nil {
+		airing = []int{next.SeasonNumber}
+	}
+	return out, airing, nil
 }
 
 type image struct {

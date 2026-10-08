@@ -84,7 +84,7 @@ func TestDetailsTakeTheCountrysCertificate(t *testing.T) {
 				{"iso_3166_1":"US","release_dates":[{"certification":"R"}]},
 				{"iso_3166_1":"GB","release_dates":[{"certification":""},{"certification":"18"}]}]}}`,
 	})
-	got, err := c.Details(t.Context(), gb, Movie, 348)
+	got, _, err := c.Details(t.Context(), gb, Movie, 348)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestAnotherLanguageStillGetsEnglishPictures(t *testing.T) {
 					{"file_path":"/english.png","iso_639_1":"en","vote_average":5},
 					{"file_path":"/vector.svg","iso_639_1":"en","vote_average":4}]}}`,
 	})
-	got, err := c.Details(t.Context(), domain.LocaleOf("de-DE"), Movie, 348)
+	got, _, err := c.Details(t.Context(), domain.LocaleOf("de-DE"), Movie, 348)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +237,7 @@ func TestAFilmUnratedInTheCountryTakesTheUSsCertificate(t *testing.T) {
 				{"iso_3166_1":"FR","release_dates":[{"certification":"12"}]},
 				{"iso_3166_1":"US","release_dates":[{"certification":""},{"certification":"R"}]}]}}`,
 	})
-	got, err := c.Details(t.Context(), gb, Movie, 348)
+	got, _, err := c.Details(t.Context(), gb, Movie, 348)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func TestALibraryTakingAnyPicturesTakesTheMostLiked(t *testing.T) {
 	})
 	loc := domain.LocaleOf("de-DE")
 	loc.Artwork = domain.ArtworkAny
-	got, err := c.Details(t.Context(), loc, Movie, 348)
+	got, _, err := c.Details(t.Context(), loc, Movie, 348)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,5 +299,23 @@ func TestAListIsReadInItsOrder(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("listed (-want +got):\n%s", diff)
+	}
+}
+
+func TestAShowStillAiringIsDescribedWithItsComingSeason(t *testing.T) {
+	c := serve(t, map[string]string{
+		"/tv/95396?append_to_response=content_ratings%2Cexternal_ids%2Cvideos%2Cimages%2Caggregate_credits&include_image_language=en%2Cnull&include_video_language=en%2Cnull&language=en-GB": `{
+			"id":95396,"name":"Severance","next_episode_to_air":{"season_number":2,"episode_number":3}}`,
+		"/tv/95396/season/2?language=en-GB": `{"episodes":[
+			{"episode_number":2,"name":"Goodbye, Mrs. Selvig","air_date":"2025-01-24"},
+			{"episode_number":3,"name":"Who Is Alive?","air_date":"2025-01-31"}]}`,
+	})
+	_, seasons, err := c.Describe(t.Context(), gb, domain.ItemShow, "95396", domain.SeasonRequest{Order: domain.OrderAired})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := seasons[2].Episodes[3]
+	if got.Title != "Who Is Alive?" || !got.ReleaseDate.Equal(time.Date(2025, 1, 31, 0, 0, 0, 0, time.UTC)) || len(seasons) != 1 {
+		t.Errorf("seasons = %+v, want the season of the next episode to air, though no file of it was asked about", seasons)
 	}
 }
