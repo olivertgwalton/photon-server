@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -81,8 +82,12 @@ func countFrames(out []byte) (Thumbnails, error) {
 		line := sc.Text()
 		if size, ok := strings.CutPrefix(line, "#dimensions 0: "); ok {
 			w, h, _ := strings.Cut(size, "x")
-			th.Width, _ = strconv.Atoi(w)
-			th.Height, _ = strconv.Atoi(h)
+			var werr, herr error
+			th.Width, werr = strconv.Atoi(w)
+			th.Height, herr = strconv.Atoi(h)
+			if err := errors.Join(werr, herr); err != nil {
+				return th, fmt.Errorf("ffmpeg's thumbnail size %q: %w", size, err)
+			}
 		} else if line != "" && !strings.HasPrefix(line, "#") {
 			th.Count++
 		}
