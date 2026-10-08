@@ -91,6 +91,7 @@ func connect(ctx context.Context, url string, log *slog.Logger) (*Store, error) 
 		host, _ := os.Hostname()
 		cfg.ConnConfig.RuntimeParams["application_name"] = strings.TrimSpace("photon-server " + host)
 	}
+	cfg.ConnConfig.RuntimeParams["pg_trgm.word_similarity_threshold"] = nearEnough
 	cfg.ConnConfig.Tracer = queryLog{log}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
