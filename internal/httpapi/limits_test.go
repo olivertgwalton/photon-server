@@ -41,7 +41,7 @@ func TestSignInsAreLimitedByAddressAndName(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Limits: limits, Events: &fakeEvents{}})
 	attempt := func(peer, forwarded string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login",
-			strings.NewReader(`{"name":"Oliver","password":"guess","device":"d","client":"c"}`))
+			strings.NewReader(`{"method":"password","name":"Oliver","password":"guess","device":"d","client":"c"}`))
 		req.RemoteAddr = peer
 		req.Header.Set("X-Forwarded-For", forwarded)
 		rec := httptest.NewRecorder()

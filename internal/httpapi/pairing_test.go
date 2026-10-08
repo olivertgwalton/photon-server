@@ -34,7 +34,7 @@ func TestAPairingSaysWhereToEnterItsCode(t *testing.T) {
 		api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 			Auth: fakeAuth{}, Limits: &fakeLimiter{}, Setup: tc.setup, TrustedProxies: proxy,
 		})
-		req := httptest.NewRequest(http.MethodPost, "http://den.local:8640/api/v1/auth/device/start", strings.NewReader(`{"device": "TV", "client": "Photon"}`))
+		req := httptest.NewRequest(http.MethodPost, "http://den.local:8640/api/v1/auth/pairings", strings.NewReader(`{"device": "TV", "client": "Photon"}`))
 		req.RemoteAddr = tc.peer
 		if tc.from != "" {
 			req.Header.Set("X-Forwarded-Proto", tc.from)

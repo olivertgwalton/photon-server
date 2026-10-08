@@ -1041,7 +1041,11 @@ const server_ = Bun.serve({
 		}
 		if (route === "POST /api/v1/auth/login") {
 			const body = (await request.json()) as Schemas["LoginRequest"];
-			if (body.name !== "Ada" || body.password !== "correct horse") {
+			if (
+				body.method !== "password" ||
+				body.name !== "Ada" ||
+				body.password !== "correct horse"
+			) {
 				return problem(401, "invalid_credentials", "Unauthorized");
 			}
 			const issued = crypto.randomUUID();
@@ -1411,7 +1415,7 @@ const server_ = Bun.serve({
 				} satisfies Schemas["DeviceListingList"]);
 			case "DELETE /api/v1/auth/devices/d-tv":
 				return new Response(null, { status: 204 });
-			case "POST /api/v1/auth/device/approve": {
+			case "POST /api/v1/auth/pairings/approve": {
 				const body = (await request.json()) as Schemas["Approval"];
 				if (body.user_code.replace(/[- ]/g, "").toUpperCase() !== "BCDFGHJK") {
 					return problem(404, "pairing_not_found", "Not Found");

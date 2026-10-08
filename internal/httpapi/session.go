@@ -123,11 +123,15 @@ func profileOf(p domain.Profile) profileJSON {
 	return profileJSON{ID: p.ID.String(), Name: p.Name, Role: p.Role, Avatar: p.Avatar, Manager: p.Manager}
 }
 
+// loginRequest signs a device in by one method: a password with the profile's name and the device
+// it names, or a pairing by its device code, the device having been named as the pairing started.
 type loginRequest struct {
-	Name     string `json:"name"`
-	Password string `json:"password"`
-	Device   string `json:"device"`
-	Client   string `json:"client"`
+	Method     domain.SignInMethod `json:"method"`
+	Name       string              `json:"name,omitzero"`
+	Password   string              `json:"password,omitzero"`
+	Device     string              `json:"device,omitzero"`
+	Client     string              `json:"client,omitzero"`
+	DeviceCode string              `json:"device_code,omitzero"`
 	// Keep is token when left out.
 	Keep domain.Keep `json:"keep,omitzero"`
 }
@@ -161,11 +165,22 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
+	req.Keep = cmp.Or(req.Keep, domain.KeepToken)
+	switch req.Method {
+	case domain.SignInPassword:
+		a.signInByPassword(w, r, req)
+	case domain.SignInPairing:
+		a.signInByPairing(w, r, req)
+	default:
+		writeProblem(w, a.logger, codeInvalidBody, "method is required")
+	}
+}
+
+func (a *API) signInByPassword(w http.ResponseWriter, r *http.Request, req loginRequest) {
 	if req.Name == "" || req.Device == "" || req.Client == "" {
 		writeProblem(w, a.logger, codeInvalidBody, "name, device and client are required")
 		return
 	}
-	req.Keep = cmp.Or(req.Keep, domain.KeepToken)
 	byAddress, byName := auth.SignInKeys(a.svc.TrustedProxies.Client(r), req.Name)
 	if !a.allowed(w, r, auth.SignInsPerAddress, byAddress) || !a.allowed(w, r, auth.SignInsPerName, byName) {
 		return
@@ -186,7 +201,12 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSignedIn, Profile: profile.ID, Details: details})
-	switch req.Keep {
+	a.signedIn(w, r, req.Keep, token, profile)
+}
+
+// signedIn answers a device's new session as it keeps it.
+func (a *API) signedIn(w http.ResponseWriter, r *http.Request, keep domain.Keep, token string, profile domain.Profile) {
+	switch keep {
 	case domain.KeepToken:
 		writeJSON(w, a.logger, "application/json", http.StatusOK, loginResponse{Token: token, Profile: profileOf(profile)})
 	case domain.KeepCookie:
@@ -213,7 +233,7 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 func (a *API) sessionRoutes() []route {
 	return []route{
 		{
-			pattern: "POST /api/v1/auth/login", access: public, summary: "Sign a device in with a profile's password",
+			pattern: "POST /api/v1/auth/login", access: public, summary: "Sign a device in, by a profile's password or by a pairing a signed-in device approved",
 			body: loginRequest{}, status: http.StatusOK, reply: loginResponse{}, handle: a.login,
 		},
 		{

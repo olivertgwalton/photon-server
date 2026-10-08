@@ -17,7 +17,7 @@ let linked = $state<components["schemas"]["Device"]>();
 async function link(event: SubmitEvent) {
 	const code = fields(event).get("code");
 	const { data: device, error } = await client().POST(
-		"/api/v1/auth/device/approve",
+		"/api/v1/auth/pairings/approve",
 		{ body: { user_code: String(code) } },
 	);
 	message = error ? problemMessage(error) : undefined;

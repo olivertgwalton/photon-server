@@ -22,6 +22,7 @@ async function login(event: SubmitEvent) {
 	const { data: signedIn, error } = await api
 		.POST("/api/v1/auth/login", {
 			body: {
+				method: "password",
 				name: String(form.get("name")),
 				password: String(form.get("password")),
 				device: deviceName(navigator.userAgent),
