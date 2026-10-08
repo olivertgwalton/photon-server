@@ -6,6 +6,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
@@ -36,6 +37,16 @@ const (
 	markerColumns       = `part_id, kind, source, start_ms, end_ms`
 	subtitleFileColumns = `id, version_id, codec, language, title, forced, is_default, hearing_impaired`
 )
+
+// counted runs page while counting, with count, the rows it is taken from, on a connection each,
+// so a page costs the longer of the two rather than both; and answers the count.
+func (s *Store) counted(ctx context.Context, count string, args pgx.NamedArgs, page func(ctx context.Context) error) (int64, error) {
+	var total int64
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error { return s.pool.QueryRow(gctx, count, args).Scan(&total) })
+	g.Go(func() error { return page(gctx) })
+	return total, g.Wait()
+}
 
 // readRow answers the one row a statement finds, each column into the field of its name, or
 // ErrNotFound.

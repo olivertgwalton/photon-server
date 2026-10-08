@@ -46,15 +46,15 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error
 		"kinds": kinds, "episode": domain.ItemEpisode,
 		"query": query, "text": q.Text, "library": optional(q.Library), "offset": q.Offset, "limit": q.Limit, "profile": q.Profile,
 	}
-	var total int64
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) `+matching, args).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-	rows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` `+matching+`
-		ORDER BY search_text(title) = search_text(@text) DESC,
-			starts_with(search_text(title), search_text(@text)) DESC, kind = @episode,
-			ts_rank_cd(search, to_tsquery('simple', search_text(@query))) DESC, sort_title, id
-		OFFSET @offset LIMIT @limit`, args)
+	var rows []*model.Item
+	total, err := s.counted(ctx, `SELECT count(*) `+matching, args, func(ctx context.Context) (err error) {
+		rows, err = queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` `+matching+`
+			ORDER BY search_text(title) = search_text(@text) DESC,
+				starts_with(search_text(title), search_text(@text)) DESC, kind = @episode,
+				ts_rank_cd(search, to_tsquery('simple', search_text(@query))) DESC, sort_title, id
+			OFFSET @offset LIMIT @limit`, args)
+		return err
+	})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -80,24 +80,24 @@ func (s *Store) SearchPeople(ctx context.Context, text string, offset, limit int
 	}
 	matching := `FROM people p WHERE to_tsvector('simple', search_text(p.name)) @@ to_tsquery('simple', search_text(@query))`
 	args := pgx.NamedArgs{"query": query, "text": text, "offset": offset, "limit": limit}
-	var total int64
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) `+matching, args).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-	rows, err := s.pool.Query(ctx, `SELECT p.id, p.name, p.photo_id, p.photo_blurhash `+matching+`
-		ORDER BY starts_with(search_text(p.name), search_text(@text)) DESC,
-			(SELECT count(*) FROM credits c WHERE c.person_id = p.id) DESC, p.name, p.id
-		OFFSET @offset LIMIT @limit`, args)
-	if err != nil {
-		return nil, 0, err
-	}
-	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (PersonRef, error) {
-		var p PersonRef
-		var photoID *uuid.UUID
-		var hash *string
-		err := r.Scan(&p.ID, &p.Name, &photoID, &hash)
-		p.Photo, p.Blurhashes = photo(photoID, hash)
-		return p, err
+	var out []PersonRef
+	total, err := s.counted(ctx, `SELECT count(*) `+matching, args, func(ctx context.Context) error {
+		rows, err := s.pool.Query(ctx, `SELECT p.id, p.name, p.photo_id, p.photo_blurhash `+matching+`
+			ORDER BY starts_with(search_text(p.name), search_text(@text)) DESC,
+				(SELECT count(*) FROM credits c WHERE c.person_id = p.id) DESC, p.name, p.id
+			OFFSET @offset LIMIT @limit`, args)
+		if err != nil {
+			return err
+		}
+		out, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (PersonRef, error) {
+			var p PersonRef
+			var photoID *uuid.UUID
+			var hash *string
+			err := r.Scan(&p.ID, &p.Name, &photoID, &hash)
+			p.Photo, p.Blurhashes = photo(photoID, hash)
+			return p, err
+		})
+		return err
 	})
 	return out, total, err
 }

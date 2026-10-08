@@ -304,13 +304,13 @@ func (s *Store) RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeR
 	if _, ofLibrary := libraryRows[row]; !ok || ofLibrary {
 		return nil, 0, ErrNotFound
 	}
-	var total int64
 	// LIMIT NULL is no limit.
 	all := pgx.NamedArgs{"profile": profile, "offset": 0, "limit": nil}
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM (`+q+`) page`, all).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-	items, err := queryRows[model.Item](ctx, s.pool, q, pgx.NamedArgs{"profile": profile, "offset": offset, "limit": limit})
+	var items []*model.Item
+	total, err := s.counted(ctx, `SELECT count(*) FROM (`+q+`) page`, all, func(ctx context.Context) (err error) {
+		items, err = queryRows[model.Item](ctx, s.pool, q, pgx.NamedArgs{"profile": profile, "offset": offset, "limit": limit})
+		return err
+	})
 	if err != nil {
 		return nil, 0, err
 	}
