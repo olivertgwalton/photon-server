@@ -385,6 +385,22 @@ func TestAnAppSaysWhatItCanDo(t *testing.T) {
 }
 
 // Jellyfin's web app keeps how it lays out a view, its home's sections among them, on the server,
+// A route is matched whatever the case an app writes it in, and an id in it is kept as the app
+// sent it, even one that is a word of another route's.
+func TestAnIDInARouteKeepsItsCase(t *testing.T) {
+	api, _, _, _ := newAPI()
+	header := kotlin + `, Token="pst_device"`
+	for _, view := range []string{"full", "Latest", "resume"} {
+		if w := serve(api, http.MethodPost, "/displaypreferences/"+view+"?client=emby", header, `{"SortBy":"DateCreated"}`); w.Code != http.StatusNoContent {
+			t.Fatalf("saving %s: %d %s", view, w.Code, w.Body)
+		}
+		got := object(t, serve(api, http.MethodGet, "/DISPLAYPREFERENCES/"+view+"?client=emby", header, ""))
+		if got["Id"] != view || got["SortBy"] != "DateCreated" {
+			t.Errorf("view %s read back as %v", view, got)
+		}
+	}
+}
+
 // and reads back what it saved; another app's are its own.
 func TestAnAppKeepsHowItLaysOutAView(t *testing.T) {
 	api, _, _, _ := newAPI()
