@@ -30,7 +30,7 @@ const (
 	codeNotReady           problemCode = "not_ready"
 	codeInvalidBody        problemCode = "invalid_body"
 	codeUnauthenticated    problemCode = "unauthenticated"
-	codeInvalidCredentials problemCode = "invalid_credentials" //nolint:gosec // a problem code, not a credential
+	codeSignInRefused      problemCode = "sign_in_refused"
 	codeInternal           problemCode = "internal"
 	codePairingNotFound    problemCode = "pairing_not_found"
 	codeWrongSecret        problemCode = "wrong_secret"
@@ -52,7 +52,7 @@ const (
 func problemCodes() []problemCode {
 	return []problemCode{
 		codeNotFound, codeMethodNotAllowed, codeUnknownParameter, codeInvalidParameter, codeNotReady,
-		codeInvalidBody, codeUnauthenticated, codeInvalidCredentials, codeInternal, codePairingNotFound,
+		codeInvalidBody, codeUnauthenticated, codeSignInRefused, codeInternal, codePairingNotFound,
 		codeWrongSecret, codeRateLimited, codeNoCompatibleStream, codeForbidden, codeConflict,
 		codeTranscodeLimit, codeProviderUnavailable, codeAuthorizationPending, codeSlowDown, codeExpiredToken,
 	}
@@ -70,7 +70,7 @@ func (c problemCode) status() int {
 		return http.StatusServiceUnavailable
 	case codeInvalidBody:
 		return http.StatusBadRequest
-	case codeUnauthenticated, codeInvalidCredentials:
+	case codeUnauthenticated, codeSignInRefused:
 		return http.StatusUnauthorized
 	case codeWrongSecret:
 		return http.StatusForbidden

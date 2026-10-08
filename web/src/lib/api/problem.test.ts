@@ -17,7 +17,7 @@ test("a refusal with no detail is told in words, by its code", () => {
 		problemMessage({
 			title: "Unauthorized",
 			status: 401,
-			code: "invalid_credentials",
+			code: "sign_in_refused",
 		}),
 	).toBe("That name and password don't match.");
 });

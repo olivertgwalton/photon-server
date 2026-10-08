@@ -194,7 +194,7 @@ func (a *API) signInByPassword(w http.ResponseWriter, r *http.Request, req login
 	switch {
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSignInRefused, Details: details})
-		writeProblem(w, a.logger, codeInvalidCredentials, "")
+		writeProblem(w, a.logger, codeSignInRefused, "")
 		return
 	case err != nil:
 		a.internal(w, r, err)

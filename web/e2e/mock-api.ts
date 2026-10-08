@@ -1046,7 +1046,7 @@ const server_ = Bun.serve({
 				body.name !== "Ada" ||
 				body.password !== "correct horse"
 			) {
-				return problem(401, "invalid_credentials", "Unauthorized");
+				return problem(401, "sign_in_refused", "Unauthorized");
 			}
 			const issued = crypto.randomUUID();
 			sessions.set(issued, ada);
