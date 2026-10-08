@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -146,7 +147,9 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	st, ada, heat, copyID := aFilm(t)
 	log := slog.New(slog.DiscardHandler)
 	plays := newFakePlaybacks()
+	var told []domain.Event
 	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+		Raise:   func(_ context.Context, e domain.Event) { told = append(told, e) },
 		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st, Placer: alone(nil),
@@ -246,6 +249,13 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	}
 	if err := json.Unmarshal(call(http.MethodDelete, "/UserFavoriteItems/"+guid(heat), "", http.StatusOK), &data); err != nil || data["IsFavorite"] != false {
 		t.Errorf("no longer a favourite: %v, %v", data, err)
+	}
+	// The profile's other devices hear of where it got to without a playback, and of each mark.
+	want := domain.Event{Kind: domain.EventUserDataChanged, Profile: ada.ID, Item: heat}
+	if len(told) != 4 || slices.ContainsFunc(told, func(e domain.Event) bool {
+		return e.Kind != want.Kind || e.Profile != want.Profile || e.Item != want.Item
+	}) {
+		t.Errorf("told %+v, want four of %+v", told, want)
 	}
 }
 

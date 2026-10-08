@@ -462,10 +462,14 @@ func (a *API) saveProgress(ctx context.Context, profile uuid.UUID, item string, 
 	if isNotFound(err) || errors.Is(err, store.ErrSuperseded) {
 		return nil
 	}
+	if err == nil {
+		a.svc.Raise(ctx, domain.Event{Kind: domain.EventUserDataChanged, Profile: profile, Item: id})
+	}
 	return err
 }
 
-// mark sets or clears what a profile has made of a title, and answers its UserData as it is then.
+// mark sets or clears what a profile has made of a title, tells the profile's other devices, and
+// answers its UserData as it is then.
 func (a *API) mark(set func(ctx context.Context, profile, item uuid.UUID) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := a.itemID(w, r)
@@ -482,6 +486,7 @@ func (a *API) mark(set func(ctx context.Context, profile, item uuid.UUID) error)
 			a.internal(w, r, err)
 			return
 		}
+		a.svc.Raise(r.Context(), domain.Event{Kind: domain.EventUserDataChanged, Profile: profile, Item: id})
 		p, err := a.svc.Catalogue.Title(r.Context(), profile, id)
 		if err != nil {
 			a.internal(w, r, err)
