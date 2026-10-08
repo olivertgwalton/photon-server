@@ -109,7 +109,7 @@ func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
-	_, _ = io.WriteString(w, vtt)
+	writeBody(w, a.logger, []byte(vtt))
 }
 
 // serveLibraryFile serves the first limit bytes of the file of a library that where finds for the

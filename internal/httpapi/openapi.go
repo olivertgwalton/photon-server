@@ -280,7 +280,7 @@ func parameter(s *schemas, p param, in string) apiParameter {
 
 func (a *API) openAPI(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", openAPIType)
-	_, _ = w.Write(a.description)
+	writeBody(w, a.logger, a.description)
 }
 
 func (a *API) openAPIRoutes() []route {

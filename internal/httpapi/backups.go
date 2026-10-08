@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -126,7 +125,7 @@ func Restoring(logger *slog.Logger) http.Handler {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = io.WriteString(w, restoringPage)
+		writeBody(w, logger, []byte(restoringPage))
 	})
 }
 
