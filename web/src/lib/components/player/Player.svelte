@@ -259,14 +259,14 @@ async function open(at: number) {
 		() => position * 1000,
 		send(data.playback_id),
 	);
-	await attach(data, at);
+	await attach(data, at, mine);
 }
 
 function reopen() {
 	void open(position);
 }
 
-async function attach(p: Schemas["Playback"], at: number) {
+async function attach(p: Schemas["Playback"], at: number, mine: number) {
 	if (!video || !caps) return;
 	if (p.playlist) {
 		part = 0;
@@ -276,6 +276,8 @@ async function attach(p: Schemas["Playback"], at: number) {
 			video.src = p.playlist;
 		} else {
 			const { default: HLS } = await import("hls.js");
+			// Opened again while hls.js loaded: that playback has the video.
+			if (mine !== opening) return;
 			hls = new HLS({ startPosition: at });
 			hls.on(HLS.Events.SUBTITLE_TRACKS_UPDATED, () => void showSubtitle());
 			hls.on(HLS.Events.ERROR, (_, e) => {
@@ -360,6 +362,8 @@ async function showSubtitle() {
 			return;
 		}
 		const srt = await fetch(file.url).then((r) => r.text());
+		// Another file was chosen, or the playback closed, while this one came.
+		if (trackFile !== file.id) return;
 		trackSrc = URL.createObjectURL(
 			new Blob([webVTT(srt)], { type: "text/vtt" }),
 		);
@@ -431,7 +435,9 @@ function chooseQuality(kbps: number) {
 	if (kbps === quality) return;
 	quality = kbps;
 	// The quality chosen here is the profile's from now on, as Jellyfin's is.
-	api.PATCH("/api/v1/me/preferences", { body: { max_bitrate_kbps: kbps } });
+	api
+		.PATCH("/api/v1/me/preferences", { body: { max_bitrate_kbps: kbps } })
+		.catch(() => undefined);
 	reopen();
 }
 
@@ -547,9 +553,14 @@ onDestroy(() => {
 });
 </script>
 
+<!-- A page the browser kept and brought back has stopped its playback on
+	leaving; it opens another where it is. -->
 <svelte:window
 	onkeydown={keydown}
 	onpagehide={() => void reporter?.stop(true)}
+	onpageshow={(e) => {
+		if (e.persisted) reopen();
+	}}
 />
 
 <svelte:head><title>{heading} · Photon</title></svelte:head>
