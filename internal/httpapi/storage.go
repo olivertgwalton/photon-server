@@ -34,7 +34,7 @@ type storageJSON struct {
 // bucketJSON is an S3 bucket. Endpoint is its store's address, as https://host[:port], or none for
 // Amazon S3; folder is where in the bucket things are kept, or none for its root; region is asked
 // of the store when none is given. Without an access key, the server's own AWS credentials sign:
-// its environment, shared credentials file or instance role. The secret key is written and never
+// its shared credentials file or instance role. The secret key is written and never
 // read back: one left out keeps the one kept for the same access key. Delivery is how clients are
 // given what is kept: proxy, through this server, as when it is left out; redirect, sent to read
 // pictures, sounds and previews from the bucket, at public_endpoint where they reach the store at

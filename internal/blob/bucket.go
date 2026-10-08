@@ -45,7 +45,7 @@ type Config struct {
 	// Region is the bucket's; "" asks the store.
 	Region string
 	// AccessKey and SecretKey sign each request. Without them AWS's own credentials do, from the
-	// environment, the shared credentials file, or the instance's role, as AWS's tools find them.
+	// shared credentials file or the instance's role, as AWS's tools find them.
 	AccessKey, SecretKey string
 	// LinkEndpoint is where clients reach the store, as Endpoint is, to read the pictures, sounds
 	// and videos they are sent to; "" sends them none, and their bytes go through the server.
@@ -74,7 +74,7 @@ func OpenBucket(ctx context.Context, c Config) (*Bucket, error) {
 	creds := credentials.NewStaticV4(c.AccessKey, c.SecretKey, "")
 	if c.AccessKey == "" && c.SecretKey == "" {
 		creds = credentials.NewChainCredentials([]credentials.Provider{
-			&credentials.EnvAWS{}, &credentials.FileAWSCredentials{}, &credentials.IAM{},
+			&credentials.FileAWSCredentials{}, &credentials.IAM{},
 		})
 	}
 	// Addressed by name in the host for AWS and Google, and in the path anywhere else, as every
