@@ -334,9 +334,11 @@ func (s *Store) Network(ctx context.Context) (domain.Network, error) {
 	var n domain.Network
 	var cert, key *string
 	err := s.pool.QueryRow(ctx, `
-		SELECT secure_connections, tls_certificate, tls_key, jellyfin, jellyfin_port, local_networks, remote_max_bitrate_kbps
+		SELECT secure_connections, tls_certificate, tls_key, jellyfin, jellyfin_port, local_networks, remote_max_bitrate_kbps,
+			public_url, trusted_proxies, discovery
 		FROM server`).
-		Scan(&n.Secure, &cert, &key, &n.Jellyfin, &n.JellyfinPort, &n.LocalNetworks, &n.RemoteMaxBitrateKbps)
+		Scan(&n.Secure, &cert, &key, &n.Jellyfin, &n.JellyfinPort, &n.LocalNetworks, &n.RemoteMaxBitrateKbps,
+			&n.PublicURL, &n.TrustedProxies, &n.Discovery)
 	n.Certificate, n.Key = deref(cert), deref(key)
 	return n, err
 }
@@ -344,8 +346,10 @@ func (s *Store) Network(ctx context.Context) (domain.Network, error) {
 func (s *Store) SetNetwork(ctx context.Context, n domain.Network) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE server SET secure_connections = $1, tls_certificate = $2, tls_key = $3, jellyfin = $4, jellyfin_port = $5,
-			local_networks = coalesce($6, '{}'::cidr[]), remote_max_bitrate_kbps = $7`,
-		n.Secure, optional(n.Certificate), optional(n.Key), n.Jellyfin, n.JellyfinPort, n.LocalNetworks, n.RemoteMaxBitrateKbps)
+			local_networks = coalesce($6, '{}'::cidr[]), remote_max_bitrate_kbps = $7, public_url = $8,
+			trusted_proxies = coalesce($9, '{}'::cidr[]), discovery = $10`,
+		n.Secure, optional(n.Certificate), optional(n.Key), n.Jellyfin, n.JellyfinPort, n.LocalNetworks, n.RemoteMaxBitrateKbps,
+		n.PublicURL, n.TrustedProxies, n.Discovery)
 	return err
 }
 

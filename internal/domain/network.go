@@ -45,6 +45,12 @@ type Network struct {
 	JellyfinPort         int
 	LocalNetworks        []netip.Prefix
 	RemoteMaxBitrateKbps int
+	// PublicURL is where readers reach the web app from outside, an http or https address; none
+	// is the address a request came to.
+	PublicURL string
+	// TrustedProxies are the peers whose X-Forwarded-For names the client; none trusts no one.
+	TrustedProxies []netip.Prefix
+	Discovery      Discovery
 }
 
 var ErrNoCertificate = errors.New("secure connections need a certificate and its key")
