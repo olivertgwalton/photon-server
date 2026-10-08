@@ -5,6 +5,8 @@ package store
 import (
 	"errors"
 	"log/slog"
+	"os"
+	"strings"
 	"testing"
 	"uuid"
 
@@ -56,6 +58,27 @@ func TestServerIDSurvivesReopening(t *testing.T) {
 	}
 	if ids[0] == (uuid.UUID{}) || ids[0] != ids[1] {
 		t.Errorf("server ids = %v, want one stable non-zero id", ids)
+	}
+}
+
+func TestARunningNodeIsListedAmongTheDatabasesConnections(t *testing.T) {
+	db := storetest.FreshDatabase(t)
+	if others, err := Connections(t.Context(), db); err != nil || len(others) != 0 {
+		t.Fatalf("a database no one uses: %v, %v; want no one", others, err)
+	}
+	log := slog.New(slog.DiscardHandler)
+	if err := Migrate(t.Context(), db, log); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(t.Context(), db, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	host, _ := os.Hostname()
+	others, err := Connections(t.Context(), db)
+	if err != nil || len(others) != 1 || !strings.HasPrefix(others[0], "photon-server "+host+" from ") {
+		t.Errorf("with a node running: %q, %v; want it, named by its host", others, err)
 	}
 }
 

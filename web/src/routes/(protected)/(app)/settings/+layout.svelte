@@ -1,5 +1,6 @@
 <script lang="ts">
 import ActivityIcon from "@lucide/svelte/icons/activity";
+import ArchiveIcon from "@lucide/svelte/icons/archive";
 import CalendarClockIcon from "@lucide/svelte/icons/calendar-clock";
 import DatabaseIcon from "@lucide/svelte/icons/database";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
@@ -46,6 +47,7 @@ const server: [string, string, Component][] = [
 	["/settings/server/history", "Play history", RotateCcwClockIcon],
 	["/settings/server/imports", "Import history", ImportIcon],
 	["/settings/server/webhooks", "Webhooks", WebhookIcon],
+	["/settings/server/backups", "Backups", ArchiveIcon],
 	["/settings/server/keys", "API keys", KeyRoundIcon],
 ];
 const groups = $derived(

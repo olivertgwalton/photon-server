@@ -903,6 +903,15 @@ func (a *API) routes() []route {
 			status:  http.StatusNoContent, handle: a.stopTask,
 		},
 		{
+			pattern: "GET /api/v1/admin/backups", access: admin,
+			summary: "List the database dumps this node keeps; the backup_database task makes them on the node running it",
+			status:  http.StatusOK, reply: backupsJSON{}, handle: a.adminBackups,
+		},
+		{
+			pattern: "GET /api/v1/admin/backups/{name}", access: admin, summary: "Download a database dump this node keeps",
+			path: []param{backupNameParam}, status: http.StatusOK, reply: asFile{"application/octet-stream"}, handle: a.downloadBackup,
+		},
+		{
 			pattern: "GET /api/v1/admin/maintenance", access: admin,
 			summary: "Say when the server reads its media for previews and markers",
 			status:  http.StatusOK, reply: maintenanceJSON{}, handle: a.adminMaintenance,
