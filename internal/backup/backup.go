@@ -5,7 +5,9 @@ package backup
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"os/exec"
@@ -18,7 +20,61 @@ import (
 // Keep is how many dumps are kept, the newest.
 const Keep = 3
 
-const prefix, suffix = "photon-", ".dump"
+const prefix, stamp, suffix = "photon-", "20060102T150405Z", ".dump"
+
+// madeAt answers when the dump named name was made, or false for a name no dump is given: what
+// keeps a name from a request from reaching outside the folder.
+func madeAt(name string) (time.Time, bool) {
+	s, ok := strings.CutPrefix(name, prefix)
+	if !ok {
+		return time.Time{}, false
+	}
+	if s, ok = strings.CutSuffix(s, suffix); !ok {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(stamp, s)
+	return t, err == nil && t.Format(stamp) == s
+}
+
+// Dump is a dump kept in the folder.
+type Dump struct {
+	Name   string
+	Size   int64
+	MadeAt time.Time
+}
+
+// List answers the dumps in dir, the newest first; none where there is no dir yet.
+func List(dir string) ([]Dump, error) {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var dumps []Dump
+	for _, e := range entries {
+		at, ok := madeAt(e.Name())
+		if !ok || !e.Type().IsRegular() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			return nil, err
+		}
+		dumps = append(dumps, Dump{Name: e.Name(), Size: info.Size(), MadeAt: at})
+	}
+	slices.Reverse(dumps)
+	return dumps, nil
+}
+
+// Open opens the dump in dir named name; fs.ErrNotExist for a name no dump has.
+func Open(dir, name string) (*os.File, error) {
+	if _, ok := madeAt(name); !ok {
+		return nil, fs.ErrNotExist
+	}
+	return os.Open(filepath.Join(dir, name))
+}
 
 // Dumper writes dumps of a database into a folder with pg_dump.
 type Dumper struct {
@@ -43,7 +99,7 @@ func (d Dumper) Dump(ctx context.Context, now time.Time) (string, error) {
 		env = append(env, "PGPASSWORD="+pw)
 		u.User = url.User(u.User.Username())
 	}
-	name := filepath.Join(d.Dir, prefix+now.UTC().Format("20060102T150405Z")+suffix)
+	name := filepath.Join(d.Dir, prefix+now.UTC().Format(stamp)+suffix)
 	part := name + ".part"
 	cmd := exec.CommandContext(ctx, d.PGDump, "--format=custom", "--no-owner", "--file="+part, "--dbname="+u.String()) //nolint:gosec // the configured pg_dump; every argument is built here
 	cmd.Env = env
@@ -67,11 +123,10 @@ func (d Dumper) prune() error {
 	}
 	var dumps []string
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), prefix) && strings.HasSuffix(e.Name(), suffix) {
+		if _, ok := madeAt(e.Name()); ok {
 			dumps = append(dumps, e.Name())
 		}
 	}
-	slices.Sort(dumps)
 	for _, old := range dumps[:max(len(dumps)-Keep, 0)] {
 		if err := os.Remove(filepath.Join(d.Dir, old)); err != nil {
 			return err
