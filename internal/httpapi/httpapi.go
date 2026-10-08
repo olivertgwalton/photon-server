@@ -1009,6 +1009,16 @@ func (a *API) routes() []route {
 			query:   pageParams, status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.homeRow,
 		},
 		{
+			pattern: "GET /api/v1/calendar", access: signedIn,
+			summary: "The days between two with a film released or an episode aired, here or announced, that the profile sees",
+			query: []param{
+				{"start", domain.Date{}, "The first day; required."},
+				{"end", domain.Date{}, "The last day, from start to " + strconv.Itoa(maxCalendarDays-1) + " days on; required."},
+				{"filter", domain.CalendarFilter(""), "Whose titles: everything the profile sees by default, or its own, begun, on its watchlist or favourites."},
+			},
+			status: http.StatusOK, reply: calendarJSON{}, handle: a.calendar,
+		},
+		{
 			pattern: "GET /api/v1/search", access: signedIn, summary: "Page the titles, episodes among them, and the people a search finds",
 			query: append([]param{
 				{"q", "", "What to search for; required."},

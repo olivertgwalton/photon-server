@@ -3365,6 +3365,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The days between two with a film released or an episode aired, here or announced, that the profile sees */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description The first day; required. */
+                    start?: string;
+                    /** @description The last day, from start to 41 days on; required. */
+                    end?: string;
+                    /** @description Whose titles: everything the profile sees by default, or its own, begun, on its watchlist or favourites. */
+                    filter?: components["schemas"]["CalendarFilter"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Calendar"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/downloads": {
         parameters: {
             query?: never;
@@ -6097,6 +6141,8 @@ export interface components {
         };
         /** @enum {string} */
         AudioTrack: "default" | "language";
+        /** @enum {string} */
+        Availability: "available" | "announced";
         Backend: {
             reachable: boolean;
             version?: string;
@@ -6147,6 +6193,35 @@ export interface components {
             region?: string;
             secret_key_set: boolean;
         };
+        Calendar: {
+            days: components["schemas"]["CalendarDay"][];
+        };
+        CalendarDay: {
+            /** Format: date */
+            date: string;
+            entries: components["schemas"]["CalendarEntry"][];
+        };
+        CalendarEntry: {
+            availability: components["schemas"]["Availability"];
+            blurhashes?: {
+                [key: string]: string;
+            };
+            episode_end?: number | null;
+            episode_number?: number | null;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ItemKind"];
+            milestones?: components["schemas"]["Milestone"][];
+            /** Format: uuid */
+            poster?: string;
+            season_number?: number | null;
+            show?: components["schemas"]["TitleRef"] | null;
+            title: string;
+            /** Format: date-time */
+            watched_at?: string | null;
+        };
+        /** @enum {string} */
+        CalendarFilter: "all" | "mine" | "watchlist" | "favourites";
         Candidate: {
             id: string;
             original_title?: string;
@@ -6835,6 +6910,8 @@ export interface components {
         MetadataProviderList: {
             items: components["schemas"]["MetadataProvider"][];
         };
+        /** @enum {string} */
+        Milestone: "series_premiere" | "season_premiere" | "season_finale";
         Missed: {
             reason: components["schemas"]["ImportMiss"];
             title: string;
