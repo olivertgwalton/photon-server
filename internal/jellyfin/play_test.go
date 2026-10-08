@@ -39,7 +39,7 @@ func newFakePlaybacks() *fakePlaybacks {
 	return &fakePlaybacks{started: map[uuid.UUID]domain.PlaybackCard{}, stopped: map[uuid.UUID]time.Duration{}}
 }
 
-func (f *fakePlaybacks) Start(_ context.Context, id uuid.UUID, _ domain.PlayMethod, card domain.PlaybackCard, _ uuid.UUID) (domain.Playback, error) {
+func (f *fakePlaybacks) Start(_ context.Context, id uuid.UUID, _ domain.PlayMethod, card domain.PlaybackCard, _ time.Duration, _ uuid.UUID) (domain.Playback, error) {
 	f.started[id] = card
 	return domain.Playback{ID: id}, nil
 }
