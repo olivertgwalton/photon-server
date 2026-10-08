@@ -35,7 +35,10 @@ func TestADirectPlayIsCountedAsItIsSent(t *testing.T) {
 		http.ServeContent(w, r, "film.mkv", time.Time{}, f)
 	})))
 	defer srv.Close()
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL, nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

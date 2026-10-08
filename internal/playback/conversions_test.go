@@ -143,7 +143,11 @@ func TestTwoProfilesShareOneConversionUntilBothRemoveIt(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if b, _ := os.ReadFile(runs); strings.Count(string(b), "run") != 1 {
+	b, err := os.ReadFile(runs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(b), "run") != 1 {
 		t.Errorf("ffmpeg ran %d times, want once for both profiles", strings.Count(string(b), "run"))
 	}
 	for n, d := range downloads {
@@ -155,8 +159,11 @@ func TestTwoProfilesShareOneConversionUntilBothRemoveIt(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		b, _ := io.ReadAll(f)
+		b, err := io.ReadAll(f)
 		_ = f.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
 		if string(b) != "converted" {
 			t.Errorf("profile %d's file is %q", n, b)
 		}
@@ -253,7 +260,11 @@ func TestAConversionWaitsForASlotAndGivesItUpToAPlay(t *testing.T) {
 	if got := state(); got.State != domain.DownloadQueued || got.Progress != 0 {
 		t.Errorf("the download stopped for a play: %+v, want it queued from the beginning", got)
 	}
-	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
 		t.Errorf("the stopped conversion left %v", entries)
 	}
 
@@ -302,8 +313,11 @@ func TestARestartedNodeKeepsItsReadyDownloads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the ready download after a restart: %v", err)
 	}
-	b, _ := io.ReadAll(f)
+	b, err := io.ReadAll(f)
 	_ = f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(b) != "converted" {
 		t.Errorf("its file is %q", b)
 	}
