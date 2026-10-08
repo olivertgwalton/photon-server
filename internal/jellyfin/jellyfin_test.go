@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -519,5 +520,27 @@ func TestAnAppIsToldATitleHasNoIntros(t *testing.T) {
 		if items, ok := m["Items"].([]any); w.Code != http.StatusOK || !ok || len(items) != 0 || m["TotalRecordCount"] != 0.0 || m["StartIndex"] != 0.0 {
 			t.Errorf("%s: %d %s, want an empty query result", target, w.Code, w.Body)
 		}
+	}
+}
+
+// An app measures how fast the server reaches it by the bytes it asks for, to choose a quality
+// for Auto; it is refused more than Jellyfin would send.
+func TestAnAppMeasuresItsBitrate(t *testing.T) {
+	api, _, _, _ := newAPI()
+	header := kotlin + `, Token="pst_device"`
+	for target, want := range map[string]int{"/Playback/BitrateTest?size=500000": 500_000, "/Playback/BitrateTest": 102_400} {
+		w := serve(api, http.MethodGet, target, header, "")
+		if w.Code != http.StatusOK || w.Body.Len() != want || w.Header().Get("Content-Type") != "application/octet-stream" ||
+			w.Header().Get("Content-Length") != strconv.Itoa(want) {
+			t.Errorf("%s: %d %s of %d bytes, want %d", target, w.Code, w.Header().Get("Content-Type"), w.Body.Len(), want)
+		}
+	}
+	for _, target := range []string{"/Playback/BitrateTest?size=100000001", "/Playback/BitrateTest?size=0", "/Playback/BitrateTest?size=lots"} {
+		if w := serve(api, http.MethodGet, target, header, ""); w.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d, want 400", target, w.Code)
+		}
+	}
+	if w := serve(api, http.MethodGet, "/Playback/BitrateTest?size=10", kotlin, ""); w.Code != http.StatusUnauthorized {
+		t.Errorf("signed out: %d, want 401", w.Code)
 	}
 }

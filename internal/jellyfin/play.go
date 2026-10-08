@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"math/rand/v2"
 	"mime"
 	"net/http"
 	"path"
@@ -544,3 +545,28 @@ func (a *API) userDataOf(w http.ResponseWriter, r *http.Request) {
 }
 
 func noContent(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
+
+// A bitrate test is 100 kB where an app does not say, and at most 100 MB, as Jellyfin's is.
+const (
+	bitrateTestSize = 102_400
+	maxBitrateTest  = 100_000_000
+)
+
+// bitrateTest sends as many bytes as an app asks for, which it times to choose a quality by.
+// They are random, so nothing between can send them in fewer.
+func (a *API) bitrateTest(w http.ResponseWriter, r *http.Request) {
+	size := bitrateTestSize
+	if s := query(r, "size"); s != "" {
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 1 || n > maxBitrateTest {
+			a.refuse(w, http.StatusBadRequest)
+			return
+		}
+		size = n
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Length", strconv.Itoa(size))
+	if _, err := io.CopyN(w, rand.NewChaCha8([32]byte{}), int64(size)); err != nil {
+		a.logger.DebugContext(r.Context(), "reply not written", slog.Any("err", err))
+	}
+}
