@@ -3,12 +3,14 @@ package scan
 import (
 	"bytes"
 	"context"
+	"errors"
 	"path"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -140,7 +142,11 @@ func (s *Scanner) probeParts(ctx context.Context, r reading, c store.Copy) (bool
 		facts, err := s.probe(ctx, r.run.lib.Root, p.RelPath)
 		done()
 		r.run.count(func(rep *Report) { rep.Probed++ })
-		if err != nil {
+		switch {
+		case errors.Is(err, media.ErrNotMedia):
+			s.skip(ctx, r.run, p.RelPath, err)
+			return false, nil
+		case err != nil:
 			s.unreadable(ctx, r, p.RelPath, err)
 			return false, nil
 		}
