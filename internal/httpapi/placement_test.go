@@ -62,6 +62,8 @@ type peerNode struct {
 	remuxer *hls.Remuxer
 	placer  *playback.Placer
 	srv     *httptest.Server
+	// started counts the playback.started events this node raised.
+	started atomic.Int32
 }
 
 func (n *peerNode) self() domain.Node {
@@ -88,8 +90,12 @@ func join(t *testing.T, c *sharedValkey, limit int) *peerNode {
 	n.srv = httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Sent:    playback.NewSent(),
 		Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{},
-		Playbacks: playback.NewSessions(c.livePlaybacks, c.livePlaybacks, remuxer, func(context.Context, domain.Event) {}, n.id),
-		Placer:    n.placer, NodeKey: clusterKey,
+		Playbacks: playback.NewSessions(c.livePlaybacks, c.livePlaybacks, remuxer, func(_ context.Context, e domain.Event) {
+			if e.Kind == domain.EventPlaybackStarted {
+				n.started.Add(1)
+			}
+		}, n.id),
+		Placer: n.placer, NodeKey: clusterKey,
 		HLS: remuxer, Owners: playback.NewRouter(c, n.id), Signer: playback.NewSigner([]byte("key")),
 	}))
 	t.Cleanup(n.srv.Close)
@@ -170,6 +176,37 @@ func TestANodeFullByTheTimeItIsAskedPassesThePlayOn(t *testing.T) {
 	}
 	if plays, _ := c.Playbacks(t.Context()); len(plays) != 1 {
 		t.Errorf("%d playbacks kept, want only the one made, not the one refused", len(plays))
+	}
+	if got := front.started.Load(); got != 1 {
+		t.Errorf("%d playbacks said to start, want only the one made, not the one refused", got)
+	}
+}
+
+// A play refused because every node that could encode it is full is not said to start.
+func TestAPlayRefusedForEveryNodeFullNeverStarts(t *testing.T) {
+	c := newSharedValkey()
+	front, gpu := join(t, c, 1), join(t, c, 1)
+	front.encode(t)
+	gpu.encode(t)
+	// Both last said they had their one slot free.
+	for _, n := range []*peerNode{front, gpu} {
+		stale := n.self()
+		stale.Transcodes = 0
+		c.tell(stale)
+	}
+	body := `{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000, "parts": "each"}}`
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, front.srv.URL+"/api/v1/titles/"+films.String()+"/play", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("a transcode with every node full: %s, want 503", resp.Status)
+	}
+	if got := front.started.Load() + gpu.started.Load(); got != 0 {
+		t.Errorf("%d playbacks said to start, want none", got)
 	}
 }
 

@@ -66,7 +66,7 @@ func (f *fakePlaybacks) Finish(_ context.Context, _, id uuid.UUID) (domain.Reach
 	return domain.ReachResumable, nil
 }
 
-func (f *fakePlaybacks) Opened(domain.PlayMethod) {}
+func (f *fakePlaybacks) Opened(context.Context, domain.Playback) {}
 
 func (f *fakePlaybacks) Abandon(_ context.Context, id uuid.UUID) error {
 	delete(f.started, id)

@@ -195,7 +195,8 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 	for _, node := range candidates {
 		card := playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: t.Subtitle})
 		card.Acceleration = hls.EncodedOn(node.Encoder.Acceleration, t.Video)
-		if _, err := a.svc.Playbacks.Start(r.Context(), session, t.Method, card, node.ID); errors.Is(err, playback.ErrStarted) {
+		p, err := a.svc.Playbacks.Start(r.Context(), session, t.Method, card, node.ID)
+		if errors.Is(err, playback.ErrStarted) {
 			// Another node, asked at once, runs it: the request is handed on to it.
 			return false
 		} else if err != nil {
@@ -204,7 +205,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 		}
 		err = a.svc.Placer.Open(r.Context(), node, session, c, o)
 		if err == nil {
-			a.svc.Playbacks.Opened(t.Method)
+			a.svc.Playbacks.Opened(r.Context(), p)
 			// Here, the request is answered; elsewhere, handed on to the node that runs it.
 			return false
 		}

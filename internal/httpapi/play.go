@@ -36,7 +36,7 @@ type playbacks interface {
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
 	End(ctx context.Context, id uuid.UUID) error
 	Abandon(ctx context.Context, id uuid.UUID) error
-	Opened(method domain.PlayMethod)
+	Opened(ctx context.Context, p domain.Playback)
 	Serve(ctx context.Context, id uuid.UUID, cut func()) (done func(), err error)
 }
 
@@ -369,7 +369,7 @@ func (a *API) start(r *http.Request, node domain.Node, t domain.PlaybackTitle, c
 			return session, err
 		}
 	}
-	a.svc.Playbacks.Opened(d.Method)
+	a.svc.Playbacks.Opened(r.Context(), session)
 	return session, nil
 }
 

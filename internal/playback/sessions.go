@@ -81,7 +81,8 @@ func NewSessions(live sessionStore, saved progressStore, st streams, raise func(
 }
 
 // Start opens playback id, of the copy of a title its card names, by its card's profile, served by
-// node, unless one is started under id already (ErrStarted).
+// node, unless one is started under id already (ErrStarted). It is not said to have started until
+// its stream opens (Opened): one whose stream is refused is abandoned, and never started.
 func (s *Sessions) Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard, node uuid.UUID) (domain.Playback, error) {
 	length, err := s.saved.Length(ctx, card.Title.ID)
 	if err != nil {
@@ -99,8 +100,14 @@ func (s *Sessions) Start(ctx context.Context, id uuid.UUID, method domain.PlayMe
 	if !claimed {
 		return p, ErrStarted
 	}
-	s.raise(ctx, event(domain.EventPlaybackStarted, p))
 	return p, nil
+}
+
+// Opened says playback p started, and counts it, once its stream has opened: one a node refused,
+// abandoned for the next to be asked, is no start.
+func (s *Sessions) Opened(ctx context.Context, p domain.Playback) {
+	s.starts.WithLabelValues(string(p.Method)).Inc()
+	s.raise(ctx, event(domain.EventPlaybackStarted, p))
 }
 
 // Progress records where a profile's playback has got to, and how far through the title that is,
