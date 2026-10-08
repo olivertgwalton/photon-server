@@ -33,6 +33,28 @@ func Open(url string, server uuid.UUID) (*KV, error) {
 
 func (k *KV) Close() { k.client.Close() }
 
+// Clear deletes every key of this server's, answering how many, and leaves other servers' alone.
+func (k *KV) Clear(ctx context.Context) (int, error) {
+	cleared := 0
+	var cursor uint64
+	for {
+		e, err := k.client.Do(ctx, k.client.B().Scan().Cursor(cursor).Match(k.ns+"*").Count(1000).Build()).AsScanEntry()
+		if err != nil {
+			return cleared, err
+		}
+		if len(e.Elements) > 0 {
+			n, err := k.client.Do(ctx, k.client.B().Unlink().Key(e.Elements...).Build()).AsInt64()
+			cleared += int(n)
+			if err != nil {
+				return cleared, err
+			}
+		}
+		if cursor = e.Cursor; cursor == 0 {
+			return cleared, nil
+		}
+	}
+}
+
 func (k *KV) Ping(ctx context.Context) error {
 	return k.client.Do(ctx, k.client.B().Ping().Build()).Error()
 }
