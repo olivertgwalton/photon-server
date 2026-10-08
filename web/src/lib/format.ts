@@ -170,10 +170,7 @@ export const resolutionNames: Record<Schemas["Resolution"], string> = {
 // "2160p HEVC Dolby Vision": what a copy's picture is, for choosing between copies.
 export function videoName(stream: Schemas["StreamPage"] | undefined): string {
 	if (!stream) return "";
-	const lines =
-		stream.width && stream.height
-			? resolutionOf(stream.width, stream.height)
-			: "";
+	const lines = stream.resolution ? resolutionNames[stream.resolution] : "";
 	const range =
 		stream.range && stream.range !== "sdr" ? rangeName(stream.range) : "";
 	return [lines, stream.codec.toUpperCase(), range].filter(Boolean).join(" ");
@@ -202,14 +199,6 @@ export function versionName(v: Schemas["VersionPage"]): string {
 			? picture
 			: [name, picture].filter(Boolean).join(" · ");
 	return `${said || "Version"}${v.missing_since ? " (missing)" : ""}`;
-}
-
-// A frame named by its width, so a scope master is not "1600p".
-function resolutionOf(width: number, height: number): string {
-	if (width >= 3200 || height >= 1800) return "4K";
-	if (width >= 1700 || height >= 1000) return "1080p";
-	if (width >= 1100 || height >= 650) return "720p";
-	return "SD";
 }
 
 // "English · AC3 5.1 · Commentary": an audio or subtitle track in a menu.
