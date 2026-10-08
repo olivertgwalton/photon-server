@@ -14,6 +14,8 @@ import (
 	"time"
 	"uuid"
 
+	"golang.org/x/text/language"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -322,9 +324,9 @@ func (matroskaCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitleP
 		ID: id, Kind: domain.ItemMovie, Title: "Heat",
 		Versions: []store.VersionPage{{
 			ID: id, Container: "matroska,webm", Edition: "Director's Cut",
-			Streams: []store.StreamPage{
+			Streams: []domain.Stream{
 				{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Range: domain.RangeDV},
-				{Index: 1, Kind: domain.StreamAudio, Codec: "eac3", Language: "en", Channels: 6},
+				{Index: 1, Kind: domain.StreamAudio, Codec: "eac3", Language: language.English, Channels: 6},
 			},
 			Subtitles: []store.SubtitleRef{{ID: id, Codec: "subrip", Language: "de", Forced: true}},
 		}},

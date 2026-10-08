@@ -56,8 +56,7 @@ func ChooseTracks(versions []store.VersionPage, p domain.Preferences, last domai
 // pageTracks are a copy's sound and subtitles as its page lists them.
 func pageTracks(v store.VersionPage) (audio, subtitles []Track) {
 	for _, s := range v.Streams {
-		l := language.Make(s.Language)
-		t := Track{Stream: s.Index, Language: l, Default: s.Default, Forced: s.Forced, Commentary: s.Commentary}
+		t := Track{Stream: s.Index, Language: s.Language, Default: s.Default, Forced: s.Forced, Commentary: s.Commentary}
 		switch s.Kind {
 		case domain.StreamAudio:
 			audio = append(audio, t)

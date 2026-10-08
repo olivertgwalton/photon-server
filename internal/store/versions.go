@@ -27,10 +27,11 @@ type VersionPage struct {
 	BitrateKbps  int
 	Parts        int
 	MissingSince *time.Time
-	Streams      []StreamPage
-	Subtitles    []SubtitleRef
-	Chapters     []ChapterRef
-	Markers      []MarkerRef
+	// Streams are the first part's; the parts of one copy are cut from one master.
+	Streams   []domain.Stream
+	Subtitles []SubtitleRef
+	Chapters  []ChapterRef
+	Markers   []MarkerRef
 	// Files are its parts in order, each where it starts on the copy's timeline, by the id the
 	// /api/v1/parts/{id} routes take.
 	Files []PartRef
@@ -61,31 +62,6 @@ type PartTrickplay struct {
 	PartID   uuid.UUID
 	OffsetMS int64
 	Trickplay
-}
-
-// StreamPage is a track of a copy's first part; the parts of one copy are cut from one master.
-type StreamPage struct {
-	Index           int
-	Kind            domain.StreamKind
-	Codec           string
-	Profile         string
-	Language        string
-	Title           string
-	Default         bool
-	Forced          bool
-	HearingImpaired bool
-	Commentary      bool
-	Width           int
-	Height          int
-	FrameRate       float64
-	BitDepth        int16
-	Level           int
-	Range           domain.Range
-	DVProfile       int16
-	Channels        int
-	ChannelLayout   string
-	SampleRate      int
-	BitrateKbps     int
 }
 
 type SubtitleRef struct {
@@ -211,7 +187,7 @@ func (in versionRows) page(r *model.Version) VersionPage {
 	vp := VersionPage{
 		ID: r.ID, Edition: deref(r.Edition), Label: deref(r.Label), Container: r.Container,
 		DurationMS: r.DurationMS, SizeBytes: r.SizeBytes, BitrateKbps: r.BitrateKbps,
-		Parts: len(in.byVersion[r.ID]), MissingSince: r.MissingSince, Streams: []StreamPage{},
+		Parts: len(in.byVersion[r.ID]), MissingSince: r.MissingSince, Streams: []domain.Stream{},
 	}
 	for k, p := range in.byVersion[r.ID] {
 		vp.Files = append(vp.Files, PartRef{
@@ -247,7 +223,7 @@ func (in versionRows) page(r *model.Version) VersionPage {
 		}
 		for _, t := range in.streams {
 			if t.PartID == p.ID {
-				vp.Streams = append(vp.Streams, streamPage(t))
+				vp.Streams = append(vp.Streams, mediaStream(t))
 			}
 		}
 	}
@@ -297,15 +273,4 @@ func (s *Store) partPreviews(ctx context.Context, parts []*model.Part) (map[uuid
 		return nil
 	})
 	return pictured, sheets, err
-}
-
-func streamPage(t *model.Stream) StreamPage {
-	return StreamPage{
-		Index: t.Idx, Kind: t.Kind, Codec: t.Codec, Profile: deref(t.Profile), Language: deref(t.Language),
-		Title: deref(t.Title), Default: t.IsDefault, Forced: t.Forced, HearingImpaired: t.HearingImpaired,
-		Commentary: t.Commentary, Width: deref(t.Width), Height: deref(t.Height), FrameRate: deref(t.FrameRate),
-		BitDepth: deref(t.BitDepth), Level: deref(t.Level),
-		Range: deref(t.VideoRange), DVProfile: deref(t.DVProfile), Channels: deref(t.Channels),
-		ChannelLayout: deref(t.ChannelLayout), SampleRate: deref(t.SampleRate), BitrateKbps: deref(t.BitrateKbps),
-	}
 }
