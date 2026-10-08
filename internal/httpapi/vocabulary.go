@@ -15,6 +15,8 @@ import (
 type vocabularyJSON struct {
 	Tasks map[domain.TaskKey]taskWordsJSON `json:"tasks"`
 	Jobs  map[domain.JobKind]string        `json:"jobs"`
+	// Rows are the kinds of home row, as each one's own page heads it.
+	Rows map[domain.HomeRow]string `json:"rows"`
 }
 
 type taskWordsJSON struct {
@@ -24,13 +26,16 @@ type taskWordsJSON struct {
 
 func (a *API) vocabulary(w http.ResponseWriter, r *http.Request) {
 	said := words.Negotiate(w, r)
-	out := vocabularyJSON{Tasks: map[domain.TaskKey]taskWordsJSON{}, Jobs: map[domain.JobKind]string{}}
+	out := vocabularyJSON{Tasks: map[domain.TaskKey]taskWordsJSON{}, Jobs: map[domain.JobKind]string{}, Rows: map[domain.HomeRow]string{}}
 	for _, k := range domain.TaskKeys() {
 		name, does := said.Task(k)
 		out.Tasks[k] = taskWordsJSON{Name: name, Description: does}
 	}
 	for _, k := range domain.JobKinds() {
 		out.Jobs[k] = said.Job(k)
+	}
+	for _, k := range domain.HomeRows() {
+		out.Rows[k] = said.Row(k)
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }

@@ -95,18 +95,22 @@ const byID = (id: string) => everything().find((c) => c.id === id);
 const homeRows = (): Schemas["HomeRow"][] => [
 	{
 		kind: "continue_watching",
+		title: "Continue Watching",
 		items: everything().filter((c) => states.get(c.id)?.position_ms),
 	},
 	{
 		kind: "watchlist",
+		title: "Watchlist",
 		items: everything().filter((c) => states.get(c.id)?.watchlisted_at),
 	},
 	{
 		kind: "favourites",
+		title: "Favourites",
 		items: everything().filter((c) => states.get(c.id)?.favourite_at),
 	},
 	{
 		kind: "recently_added_films",
+		title: "Recently Added in Films",
 		library: { id: "l-films", name: "Films" },
 		items: films,
 	},
@@ -426,6 +430,17 @@ const vocabulary: Schemas["Vocabulary"] = {
 		theme: "Fetch a theme tune",
 		probe: "Read media info",
 		import_history: "Import watch history",
+	},
+	rows: {
+		continue_watching: "Continue Watching",
+		next_up: "Next Up",
+		watchlist: "Watchlist",
+		favourites: "Favourites",
+		recently_added_films: "Recently Added Films",
+		recently_added_shows: "Recently Added Shows",
+		recently_released: "Recently Released",
+		top_rated_unwatched: "Top Rated",
+		collection: "Collections",
 	},
 };
 

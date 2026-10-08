@@ -9,52 +9,46 @@ type Row = components["schemas"]["HomeRow"];
 // apps' rows are twenty with the heading as the rest.
 export const railLimit = 20;
 
-// A row of a library's titles is one for each library, as Plex's library hubs:
-// "Recently Added in Films", leading to that library's wall in the row's order.
+// How each kind of row is drawn. A row of a library's titles is one for each
+// library, as Plex's library hubs are, leading to that library's wall in the
+// row's order. The server names every row.
 export const homeRows: Record<
 	Kind,
 	{
-		title: string;
 		shape: Shape;
-		library?: { title: string; wall: WallQuery };
+		library?: { wall: WallQuery };
 		// What its own page says where it has nothing.
 		empty?: string;
 	}
 > = {
-	continue_watching: { title: "Continue Watching", shape: "still" },
-	next_up: { title: "Next Up", shape: "still" },
+	continue_watching: { shape: "still" },
+	next_up: { shape: "still" },
 	watchlist: {
-		title: "Watchlist",
 		shape: "poster",
 		empty:
 			"Nothing here yet. Choose the bookmark on a film or show to keep it here until it is watched.",
 	},
-	favourites: { title: "Favourites", shape: "poster" },
+	favourites: { shape: "poster" },
 	recently_added_films: {
-		title: "Recently Added Films",
 		shape: "poster",
-		library: { title: "Recently Added", wall: { sort: "added" } },
+		library: { wall: { sort: "added" } },
 	},
 	recently_added_shows: {
-		title: "Recently Added Shows",
 		shape: "poster",
-		library: { title: "Recently Added", wall: { sort: "added" } },
+		library: { wall: { sort: "added" } },
 	},
 	recently_released: {
-		title: "Recently Released",
 		shape: "poster",
-		library: { title: "Recently Released", wall: { sort: "released" } },
+		library: { wall: { sort: "released" } },
 	},
 	top_rated_unwatched: {
-		title: "Top Rated",
 		shape: "poster",
 		library: {
-			title: "Top Rated",
 			wall: { sort: "rating", mark: ["unwatched"] },
 		},
 	},
 	// A row each, under the collection's own name, leading to its page.
-	collection: { title: "Collections", shape: "poster" },
+	collection: { shape: "poster" },
 };
 
 // The rows with a page of their own, as Plex's Watchlist and Jellyfin's
@@ -68,27 +62,24 @@ export function isHomeRow(kind: string): kind is Kind {
 	return kind in homeRows;
 }
 
-// What a home row is drawn as: its key among the rows, its heading, and where
-// its heading leads.
-export function rail(row: Row): { key: string; title: string; href: string } {
+// What a home row is drawn as: its key among the rows, and where its heading
+// leads.
+export function rail(row: Row): { key: string; href: string } {
 	const kind = homeRows[row.kind];
 	if (row.collection) {
 		return {
 			key: row.collection.id,
-			title: row.collection.title,
 			href: `/titles/${row.collection.id}`,
 		};
 	}
 	if (row.library && kind.library) {
 		return {
 			key: `${row.kind}/${row.library.id}`,
-			title: `${kind.library.title} in ${row.library.name}`,
 			href: `/libraries/${row.library.id}${wallSearch(kind.library.wall)}`,
 		};
 	}
 	return {
 		key: row.kind,
-		title: kind.title,
 		href:
 			row.kind in rowPages
 				? rowPages[row.kind as keyof typeof rowPages]

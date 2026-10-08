@@ -11,11 +11,13 @@ import PageHeader from "#lib/components/PageHeader.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import { Switch } from "#lib/components/ui/switch/index.js";
-import { homeRows, moved } from "#lib/rows.js";
+import { moved } from "#lib/rows.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 type Section = components["schemas"]["HomeSection"];
 
 let { data } = $props();
+const words = vocabulary();
 // Each change answers the home as kept; a load gives it afresh.
 let kept = $state<Section[]>();
 const home = $derived(kept ?? data.prefs.home);
@@ -41,7 +43,7 @@ async function save(next: Section[], message: string) {
 
 function move(from: number, to: number) {
 	if (to < 0 || to >= home.length || to === from) return;
-	const name = homeRows[home[from].row].title;
+	const name = words.rows[home[from].row];
 	void save(
 		moved(home, from, to),
 		`${name} moved to ${to + 1} of ${home.length}.`,
@@ -49,7 +51,7 @@ function move(from: number, to: number) {
 }
 
 function show(i: number, shown: boolean) {
-	const name = homeRows[home[i].row].title;
+	const name = words.rows[home[i].row];
 	void save(
 		home.with(i, { ...home[i], visibility: shown ? "shown" : "hidden" }),
 		`${name} ${shown ? "shown" : "hidden"}.`,
@@ -59,7 +61,7 @@ function show(i: number, shown: boolean) {
 // A keyed row is moved in the page, which takes focus from its arrow: it is
 // given back, or to the other arrow where this one has reached the end.
 async function step(i: number, by: number) {
-	const name = homeRows[home[i].row].title;
+	const name = words.rows[home[i].row];
 	move(i, i + by);
 	await tick();
 	const arrow = (way: string) =>
@@ -81,7 +83,7 @@ async function step(i: number, by: number) {
 	<Card.Content>
 		<ol class="grid gap-2" aria-label="Home rows">
 			{#each home as section, i (section.row)}
-				{@const name = homeRows[section.row].title}
+				{@const name = words.rows[section.row]}
 				<li
 					draggable="true"
 					ondragstart={(e) => {
