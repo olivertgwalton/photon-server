@@ -168,6 +168,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle(noContent, "POST /Sessions/Playing/Ping")
 	a.handle(a.userDataOf, "GET /UserItems/{itemId}/UserData", "GET /Users/{userId}/Items/{itemId}/UserData")
 	a.handle(a.changeUserData, "POST /UserItems/{itemId}/UserData", "POST /Users/{userId}/Items/{itemId}/UserData")
+	a.handle(a.bitrateTest, "GET /Playback/BitrateTest")
 	a.handle(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
 		return a.svc.Watching.MarkWatched(ctx, profile, item, nil)
 	}), "POST /UserPlayedItems/{itemId}", "POST /Users/{userId}/PlayedItems/{itemId}")
