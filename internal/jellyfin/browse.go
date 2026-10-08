@@ -5,14 +5,12 @@ import (
 	"errors"
 	"math"
 	"net/http"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
-	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/words"
@@ -22,6 +20,7 @@ type catalogue interface {
 	LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*store.SeenLibrary, error)
 	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
+	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Seasons(ctx context.Context, profile, show uuid.UUID) ([]store.SeasonCard, error)
 	Episodes(ctx context.Context, profile, of uuid.UUID) ([]store.Card, error)
@@ -33,10 +32,6 @@ type catalogue interface {
 	Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID][]store.VersionPage, error)
 	ExternalIDs(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]map[domain.Provider]string, error)
 	Picture(ctx context.Context, id uuid.UUID) (domain.Picture, error)
-}
-
-type pictureFiles interface {
-	Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (blob.Object, string, error)
 }
 
 // queryResult is Jellyfin's BaseItemDtoQueryResult. TotalRecordCount is of every match, not the
@@ -250,14 +245,19 @@ func wallPage(r *http.Request, profile uuid.UUID, l listed) store.WallPage {
 // libraryKinds are the kinds of title each kind of library holds, as Jellyfin's apps ask for them.
 var libraryKinds = map[domain.LibraryKind]string{domain.LibraryMovies: "Movie", domain.LibraryShows: "Series"}
 
-// items answers Jellyfin's /Items: a library's films or shows, a show's seasons or episodes, a
-// season's episodes, or what matches a search; every library at once where an app names none.
+// items answers Jellyfin's /Items: the items an app names, a library's films or shows, a show's
+// seasons or episodes, a season's episodes, or what matches a search; every library at once where
+// an app names none.
 func (a *API) items(w http.ResponseWriter, r *http.Request) {
 	profile, l := auth.SessionOf(r.Context()).Profile.ID, listedOf(w, r)
 	types := values(r, "includeItemTypes")
 	libs, seen, err := a.seenLibraries(r)
 	if err != nil {
 		a.internal(w, r, err)
+		return
+	}
+	if ids := values(r, "ids"); len(ids) > 0 {
+		a.byID(w, r, ids, seen, l)
 		return
 	}
 	parent, ok := optionalID(query(r, "parentId"))
@@ -279,6 +279,47 @@ func (a *API) items(w http.ResponseWriter, r *http.Request) {
 	default:
 		a.children(w, r, profile, parent, types, l)
 	}
+}
+
+// byID answers the items an app names, in its order, each once: the libraries and titles the
+// profile may see, and nothing for the rest.
+func (a *API) byID(w http.ResponseWriter, r *http.Request, names []string, seen map[uuid.UUID]*store.SeenLibrary, l listed) {
+	ids := make([]uuid.UUID, len(names))
+	for n, name := range names {
+		id, ok := parseID(name)
+		if !ok {
+			a.refuse(w, http.StatusBadRequest)
+			return
+		}
+		ids[n] = id
+	}
+	cards, err := a.svc.Catalogue.Cards(r.Context(), auth.SessionOf(r.Context()).Profile.ID, ids)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	titles, err := a.list(r.Context(), cards, l)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	found := map[uuid.UUID]item{}
+	for n, c := range cards {
+		found[c.ID] = titles[n]
+	}
+	for _, id := range ids {
+		if lib, ok := seen[id]; ok {
+			found[id] = a.library(lib)
+		}
+	}
+	out := []item{}
+	for _, id := range ids {
+		if it, ok := found[id]; ok {
+			out = append(out, it)
+			delete(found, id)
+		}
+	}
+	a.writeJSON(w, queryResult{Items: out[min(l.start, len(out)):min(l.start+l.limit, len(out))], TotalRecordCount: len(out), StartIndex: l.start})
 }
 
 // wall answers the titles of libraries, those of several sorted together, of the kinds asked for.
@@ -523,51 +564,4 @@ func (a *API) latest(w http.ResponseWriter, r *http.Request) {
 func (a *API) none(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	a.write(w, []byte(`[]`))
-}
-
-// image answers a picture by its tag, sized to fit what an app asks for. A tag is a picture's id,
-// which changes whenever the picture does, so it is kept for good. It is public, as Jellyfin's
-// images are, so a page can show one without a token; ids are random.
-func (a *API) image(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(query(r, "tag"))
-	if err != nil {
-		a.refuse(w, http.StatusNotFound)
-		return
-	}
-	pic, err := a.svc.Catalogue.Picture(r.Context(), id)
-	if errors.Is(err, store.ErrNotFound) {
-		a.refuse(w, http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	bound := func(names ...string) int {
-		n := 0
-		for _, name := range names {
-			if v, err := strconv.Atoi(query(r, name)); err == nil && v > 0 {
-				n = max(n, v)
-			}
-		}
-		return n
-	}
-	o, name, err := a.svc.Pictures.Open(r.Context(), id, pic, bound("maxWidth", "fillWidth", "width"), bound("maxHeight", "fillHeight", "height"))
-	if errors.Is(err, os.ErrNotExist) {
-		a.refuse(w, http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	err = blob.Serve(w, r, o, name, http.Header{
-		"Cache-Control": {"public, max-age=31536000, immutable"},
-		// A provider's logo may be SVG, which a browser opening it directly would run script in.
-		"Content-Security-Policy": {"default-src 'none'; style-src 'unsafe-inline'; sandbox"},
-		"X-Content-Type-Options":  {"nosniff"},
-	})
-	if err != nil {
-		a.internal(w, r, err)
-	}
 }

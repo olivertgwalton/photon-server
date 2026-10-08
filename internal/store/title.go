@@ -293,6 +293,27 @@ func (s *Store) Visible(ctx context.Context, profile uuid.UUID, titles []uuid.UU
 		WHERE sees(v, i) ORDER BY t.n`, titles, profile)
 }
 
+// Cards answers those of titles a profile may see as cards, in their order, each once.
+func (s *Store) Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]Card, error) {
+	rows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items
+		WHERE id = ANY($1) AND EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, items))`, titles, profile)
+	if err != nil {
+		return nil, err
+	}
+	byID := map[uuid.UUID]*model.Item{}
+	for _, r := range rows {
+		byID[r.ID] = r
+	}
+	rows = rows[:0]
+	for _, id := range titles {
+		if r, ok := byID[id]; ok {
+			rows = append(rows, r)
+			delete(byID, id)
+		}
+	}
+	return s.cards(ctx, profile, rows)
+}
+
 // SameTitles answers a title and those the same as it in other libraries that a profile may see.
 func (s *Store) SameTitles(ctx context.Context, profile, title uuid.UUID) ([]uuid.UUID, error) {
 	return queryColumn[uuid.UUID](ctx, s.pool, `
