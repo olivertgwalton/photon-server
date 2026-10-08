@@ -127,7 +127,9 @@ func send(hc *http.Client, req *http.Request) (*http.Response, error) {
 		if waited += wait; waited > maxRetryAfter {
 			return resp, nil
 		}
-		_ = resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			return nil, err
+		}
 		if req.GetBody != nil {
 			if req.Body, err = req.GetBody(); err != nil {
 				return nil, err
