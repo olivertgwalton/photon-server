@@ -45,6 +45,9 @@ type Services struct {
 	Playing   playing
 	Playbacks playbacks
 	Watching  watching
+	// Previews are parts' trickplay sheets, which PreviewFiles keeps.
+	Previews     previews
+	PreviewFiles previewFiles
 	// HLS is this node's remuxes, which Placer opens on the node it chooses and Owners find on
 	// whichever node runs them; Signer signs a TranscodingUrl's plan and the addresses of another
 	// node's HLS.
@@ -147,6 +150,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		"GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{file}",
 		"GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{start}/{file}")
 	a.handle(a.mediaSegments, "GET /MediaSegments/{itemId}")
+	a.handle(a.trickplayFile, "GET /Videos/{itemId}/Trickplay/{width}/{file}")
 	a.handle(a.reported(reportProgress), "POST /Sessions/Playing", "POST /Sessions/Playing/Progress")
 	a.handle(a.reported(reportStopped), "POST /Sessions/Playing/Stopped")
 	a.handle(noContent, "POST /Sessions/Playing/Ping")
