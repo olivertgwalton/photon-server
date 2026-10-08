@@ -341,7 +341,7 @@ func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL 
 		Addr: listen, TLSConfig: secured.TLSConfig(),
 		Handler: httpapi.New(logger, info, httpapi.Services{
 			Ready: ready(st, cache, self), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Backups: restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: files, Subtitles: fetcher, Playbacks: sessions, Owners: owners, Placer: placer, NodeKey: nodeKey, HLS: remuxer, Signer: signer, Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, Importer: imports, HistoryImports: st, TrustedProxies: trusted, Network: st, Storage: st, Stores: stores, Nodes: st, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
-			Metrics: metrics(version, self, remuxer, sessions, placer, sent, finished, cluster{lead: scheduler, st: st, nodes: cache}),
+			Metrics: metrics(version, self, remuxer, sessions, placer, sent, finished, cluster{lead: scheduler, st: st, nodes: cache, self: placer}),
 			Sent:    sent,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
