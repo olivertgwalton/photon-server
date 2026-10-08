@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -292,12 +293,16 @@ func filterValue(v string) string { return graphEscape.Replace(optionEscape.Repl
 func (r *Remuxer) SweepSubtitles() {
 	entries, err := os.ReadDir(r.subtitles)
 	if err != nil {
+		r.log.Warn("subtitles not swept", slog.String("dir", r.subtitles), slog.Any("err", err))
 		return
 	}
 	for _, e := range entries {
 		info, err := e.Info()
-		if err == nil && !strings.HasPrefix(e.Name(), extracting) && time.Since(info.ModTime()) > subtitlesKept {
-			_ = os.RemoveAll(filepath.Join(r.subtitles, e.Name()))
+		if err != nil || strings.HasPrefix(e.Name(), extracting) || time.Since(info.ModTime()) <= subtitlesKept {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(r.subtitles, e.Name())); err != nil {
+			r.log.Warn("subtitles not removed", slog.String("dir", r.subtitles), slog.Any("err", err))
 		}
 	}
 }

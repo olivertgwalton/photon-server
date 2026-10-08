@@ -137,20 +137,12 @@ func (c *Conversions) Convert(ctx context.Context, id uuid.UUID) error {
 		err = os.Rename(temp, dst)
 	}
 	if err != nil {
-		_ = os.Remove(temp)
-		switch {
-		case ctx.Err() != nil:
-			return ctx.Err()
-		case errors.Is(err, store.ErrNotFound):
-			return nil
-		case errors.Is(err, hls.ErrPreempted):
-			err := c.store.RequeueConversion(ctx, id, c.node)
-			if errors.Is(err, store.ErrNotFound) {
-				return nil
-			}
-			return cmp.Or(err, jobs.ErrNotNow)
+		// One that failed before ffmpeg wrote anything leaves nothing to remove.
+		removed := os.Remove(temp)
+		if errors.Is(removed, fs.ErrNotExist) {
+			removed = nil
 		}
-		return c.fail(ctx, id, err)
+		return errors.Join(c.stopped(ctx, id, err), removed)
 	}
 	info, err := os.Stat(dst)
 	if err == nil {
@@ -160,6 +152,24 @@ func (c *Conversions) Convert(ctx context.Context, id uuid.UUID) error {
 		return os.Remove(dst)
 	}
 	return err
+}
+
+// stopped answers for a conversion that did not finish: requeued where a playback took its slot,
+// failed with its reason where ffmpeg could not make it.
+func (c *Conversions) stopped(ctx context.Context, id uuid.UUID, err error) error {
+	switch {
+	case ctx.Err() != nil:
+		return ctx.Err()
+	case errors.Is(err, store.ErrNotFound):
+		return nil
+	case errors.Is(err, hls.ErrPreempted):
+		err := c.store.RequeueConversion(ctx, id, c.node)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil
+		}
+		return cmp.Or(err, jobs.ErrNotNow)
+	}
+	return c.fail(ctx, id, err)
 }
 
 func (c *Conversions) fail(ctx context.Context, id uuid.UUID, reason error) error {

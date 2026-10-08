@@ -103,9 +103,14 @@ func NewRemuxer(tools media.Tools, dir, subtitles string, hw Hardware, limit int
 		}
 	}
 	// No extraction outlives its process.
-	abandoned, _ := filepath.Glob(filepath.Join(subtitles, extracting+"*"))
+	abandoned, err := filepath.Glob(filepath.Join(subtitles, extracting+"*"))
+	if err != nil {
+		return nil, err
+	}
 	for _, a := range abandoned {
-		_ = os.RemoveAll(a)
+		if err := os.RemoveAll(a); err != nil {
+			return nil, err
+		}
 	}
 	return &Remuxer{
 		tools: tools, dir: dir, subtitles: subtitles, hw: hw, limit: limit, idle: idleRun, log: log,
@@ -235,8 +240,9 @@ func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if s.encodes() && r.full() && !r.preempt() {
-		_ = root.Close()
-		_ = os.RemoveAll(s.dir)
+		if err := s.remove(); err != nil {
+			r.log.WarnContext(ctx, "remux folder not removed", slog.String("dir", s.dir), slog.Any("err", err))
+		}
 		return ErrTranscodeLimit
 	}
 	if len(s.plan) > 0 {
@@ -284,8 +290,14 @@ func (r *Remuxer) Close(playback uuid.UUID) {
 		s.run.cancel()
 	}
 	s.mu.Unlock()
-	_ = s.root.Close()
-	_ = os.RemoveAll(s.dir)
+	if err := s.remove(); err != nil {
+		r.log.Warn("remux folder not removed", slog.String("dir", s.dir), slog.Any("err", err))
+	}
+}
+
+// remove removes the session's folder and what is in it.
+func (s *session) remove() error {
+	return errors.Join(s.root.Close(), os.RemoveAll(s.dir))
 }
 
 // Playbacks answers the playbacks this remuxer runs a remux of.
