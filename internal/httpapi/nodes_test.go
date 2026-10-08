@@ -112,6 +112,21 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 	if got := nodes[gpu].NodeSettings; got.LimitSource != domain.LimitAutomatic {
 		t.Errorf("after setting it automatic: %+v", got)
 	}
+	// Its address is an origin the others put a path after, kept without a trailing slash, and
+	// cleared by an empty one.
+	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"address":"http://10.0.0.6:8640/"}`)
+	if got := nodes[gpu].Address; got != "http://10.0.0.6:8640" {
+		t.Errorf("address kept as %q, want http://10.0.0.6:8640", got)
+	}
+	for _, bad := range []string{"10.0.0.6:8640", "ftp://10.0.0.6", "http://10.0.0.6:8640/api", "http://u:p@10.0.0.6"} {
+		if rec := ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"address":"`+bad+`"}`); rec.Code != http.StatusBadRequest {
+			t.Errorf("address %q: %d, want 400", bad, rec.Code)
+		}
+	}
+	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"address":""}`)
+	if got := nodes[gpu].Address; got != "" {
+		t.Errorf("address cleared to %q", got)
+	}
 	// Drained with a note for other admins, then resumed, which clears it.
 	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"availability":"draining","note":"driver update"}`)
 	if got := nodes[gpu].NodeSettings; got.Availability != domain.NodeDraining || got.Note != "driver update" || got.Role != domain.NodeServe {
