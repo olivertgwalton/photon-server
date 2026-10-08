@@ -84,7 +84,11 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.MediaSourceID = cmp.Or(req.MediaSourceID, query(r, "mediaSourceId"))
-	version, _ := uuid.Parse(req.MediaSourceID)
+	version, ok := optionalID(req.MediaSourceID)
+	if !ok {
+		a.refuse(w, http.StatusBadRequest)
+		return
+	}
 	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, version)
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)
@@ -163,11 +167,15 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	if err != nil || d.Video == nil {
 		return
 	}
-	src.SupportsTranscoding, src.TranscodingSubProtocol, src.TranscodingContainer = true, "hls", transcodingContainers[segments]
-	src.TranscodingURL = a.transcodingURL(r, item, session, transcode{
+	address, err := a.transcodingURL(r, item, session, transcode{
 		Version: c.Version, Method: d.Method, Video: *d.Video, Audio: d.Audio, Subtitle: sub, Reasons: d.Reasons,
 		Segments: segments, StartMS: req.StartTimeTicks / ticksPerMS,
 	})
+	if err != nil {
+		return
+	}
+	src.SupportsTranscoding, src.TranscodingSubProtocol, src.TranscodingContainer = true, "hls", transcodingContainers[segments]
+	src.TranscodingURL = address
 }
 
 // transcodingContainers are Jellyfin's names for the segments of each format.
@@ -214,7 +222,11 @@ func (a *API) stream(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	version, _ := uuid.Parse(query(r, "mediaSourceId"))
+	version, ok := optionalID(query(r, "mediaSourceId"))
+	if !ok {
+		a.refuse(w, http.StatusBadRequest)
+		return
+	}
 	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, version)
 	switch {
 	case errors.Is(err, store.ErrNotFound) || err == nil && len(c.Parts) == 0:
@@ -388,7 +400,10 @@ func (a *API) startDirect(r *http.Request, id uuid.UUID, rep report) error {
 	if !ok {
 		return store.ErrNotFound
 	}
-	version, _ := uuid.Parse(rep.MediaSourceID)
+	version, ok := optionalID(rep.MediaSourceID)
+	if !ok {
+		return store.ErrNotFound
+	}
 	s := auth.SessionOf(r.Context())
 	c, err := a.svc.Playing.Playable(r.Context(), s.Profile.ID, item, version)
 	if err != nil {
@@ -420,6 +435,14 @@ func isNotFound(err error) bool { return errors.Is(err, store.ErrNotFound) }
 func parseID(s string) (uuid.UUID, bool) {
 	id, err := uuid.Parse(s)
 	return id, err == nil
+}
+
+// optionalID reads an id an app may leave out, the zero id where it does.
+func optionalID(s string) (uuid.UUID, bool) {
+	if s == "" {
+		return uuid.UUID{}, true
+	}
+	return parseID(s)
 }
 
 // saveProgress keeps where a profile got to in a title it played without a playback of photon's.

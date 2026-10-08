@@ -401,7 +401,7 @@ func (d deviceProfile) hlsProfile(t transcodingProfile, segments domain.SegmentF
 			p.Video = append(p.Video, d.videoLimits(codec, video, containers))
 		}
 	}
-	channels, _ := strconv.Atoi(t.MaxAudioChannels)
+	channels := profileNumber(t.MaxAudioChannels)
 	for _, codec := range list(t.AudioCodec) {
 		a := playback.AudioSupport{Codec: strings.ReplaceAll(codec, "dca", "dts"), MaxChannels: channels}
 		for _, cp := range d.CodecProfiles {
@@ -431,7 +431,7 @@ func (d deviceProfile) videoLimits(codec string, video domain.Stream, containers
 			continue
 		}
 		for _, c := range cp.Conditions {
-			n, _ := strconv.Atoi(c.Value)
+			n := profileNumber(c.Value)
 			op := strings.ToLower(c.Condition)
 			switch strings.ToLower(c.Property) {
 			case "width":
@@ -464,6 +464,16 @@ func (d deviceProfile) videoLimits(codec string, video domain.Stream, containers
 		v.Ranges = domain.Ranges()
 	}
 	return v
+}
+
+// profileNumber is a number a device profile gives, zero, no limit, where it gives none or one
+// Jellyfin's own int.TryParse would not read, as for a condition on a property that is not one.
+func profileNumber(s string) int {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 // rangesOf narrows the ranges a codec takes by a condition on VideoRangeType: those it names, or

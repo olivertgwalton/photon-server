@@ -255,7 +255,11 @@ func (a *API) items(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	parent, _ := uuid.Parse(query(r, "parentId"))
+	parent, ok := optionalID(query(r, "parentId"))
+	if !ok {
+		a.refuse(w, http.StatusBadRequest)
+		return
+	}
 	if text := query(r, "searchTerm"); text != "" {
 		a.search(w, r, text, parent, types, l)
 		return

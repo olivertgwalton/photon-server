@@ -188,6 +188,7 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	if w.Code != http.StatusOK || w.Body.String() != "0123456789" {
 		t.Errorf("the stream: %d %q", w.Code, w.Body)
 	}
+	call(http.MethodGet, "/Videos/"+guid(heat)+"/stream?MediaSourceId=nonsense&Static=true", "", http.StatusBadRequest)
 	r := httptest.NewRequest(http.MethodGet, "/videos/"+guid(heat)+"/stream.mkv?static=true", nil)
 	r.Header.Set("Authorization", infuse)
 	r.Header.Set("Range", "bytes=2-4")

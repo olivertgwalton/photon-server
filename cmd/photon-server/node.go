@@ -179,11 +179,14 @@ func (n *node) wire(ctx context.Context) error {
 		sent:   playback.NewSent(), trusted: trusted, plugins: plugins, fetcher: fetcher,
 	}
 	n.secured = secure.New(st, n.hub.Subscribe, logger)
-	n.jellyfin = jellyfin.NewListener(st, n.hub.Subscribe, jellyfin.New(logger, n.info, jellyfin.Services{
+	n.jellyfin, err = jellyfin.NewListener(st, n.hub.Subscribe, jellyfin.New(logger, n.info, jellyfin.Services{
 		Auth: n.auth, Limits: n.cache, Raise: n.hub.Raise, Proxies: trusted, Catalogue: st, Pictures: n.pictures,
 		Playing: files, Playbacks: n.sessions, Watching: st, HLS: n.remuxer, Placer: p.placer, Owners: p.owners,
 		Signer: p.signer, Encoding: playback.Encoding{HEVC: n.hw.HEVC, Libass: n.tools.Libass}, Network: st, Sent: p.sent,
 	}), n.listen, n.secured.Listen, n.secured.TLSConfig(), logger)
+	if err != nil {
+		return err
+	}
 	n.finished = jobs.NewFinished()
 	if n.discovery, err = discoveryMode(); err != nil {
 		return err
