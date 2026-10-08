@@ -460,7 +460,7 @@ func (a *API) playRoutes() []route {
 			refusals: map[int]any{codeNoCompatibleStream.status(): refusalJSON{}}, handle: a.play,
 		},
 		{
-			pattern: "POST /api/v1/playbacks/{id}/progress", access: signedIn, summary: "Say where a playback has got to, paused too: one unheard from for two minutes is stopped",
+			pattern: "POST /api/v1/playbacks/{id}/progress", access: signedIn, summary: "A playback's heartbeat: where it has got to, paused too; one unheard from for two minutes is stopped",
 			body: playbackProgressJSON{}, status: http.StatusOK, reply: reachedJSON{}, handle: a.playbackProgress,
 		},
 		{

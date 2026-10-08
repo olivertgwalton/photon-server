@@ -4835,7 +4835,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Say where a playback has got to, paused too: one unheard from for two minutes is stopped */
+        /** A playback's heartbeat: where it has got to, paused too; one unheard from for two minutes is stopped */
         post: {
             parameters: {
                 query?: never;
@@ -5715,7 +5715,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Record where the profile stopped a film or episode, and when: progress from before the title's state last changed is refused as a conflict */
+        /** Record where the profile stopped a film or episode it watched outside a playback, a download's say, and when: progress from before the title's state last changed is refused as a conflict */
         put: {
             parameters: {
                 query?: never;
