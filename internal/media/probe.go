@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -139,10 +140,23 @@ func parseProbe(out []byte) (domain.Facts, error) {
 	}
 	for _, c := range p.Chapters {
 		facts.Chapters = append(facts.Chapters, domain.Chapter{
-			Start: seconds(c.StartTime), End: seconds(c.EndTime), Title: c.Tags["title"],
+			Start: seconds(c.StartTime), End: seconds(c.EndTime), Title: chapterTitle(c.Tags["title"]),
 		})
 	}
 	return facts, nil
+}
+
+// timeName is a chapter named with nothing but its time, as some rippers name every chapter:
+// "00:20:46.996", or numbered, "(02)00:04:59:424".
+var timeName = regexp.MustCompile(`^(?:\(\d+\))?\d{1,2}:\d{2}(?::\d{2})?(?:[.,:]\d+)?$`)
+
+// chapterTitle is a chapter's title, but none where it is only its time, as Jellyfin reads one:
+// a client then names it by its place.
+func chapterTitle(title string) string {
+	if timeName.MatchString(title) {
+		return ""
+	}
+	return title
 }
 
 func dolbyVision(side []probeSideData) *domain.DolbyVision {
