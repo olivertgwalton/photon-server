@@ -76,6 +76,8 @@ type item struct {
 
 	// Trickplay is each copy's thumbnail sheets, by the copy's id and their width.
 	Trickplay map[string]map[int]trickplayInfo `json:"Trickplay,omitempty"`
+
+	Chapters []chapterInfo `json:"Chapters,omitempty"`
 }
 
 // blurhash is the BlurHashes of an item's pictures of one kind, by tag.
@@ -250,6 +252,7 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 		it.sources(p.Versions, w)
 		it.MediaStreams = it.MediaSources[0].MediaStreams
 		it.trickplay(p.Versions)
+		it.chapters(p.Versions)
 	}
 	if p.Kind == domain.ItemShow {
 		n := len(p.Seasons)

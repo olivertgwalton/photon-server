@@ -98,15 +98,16 @@ func has(vs []string, v string) bool {
 	return slices.ContainsFunc(vs, func(s string) bool { return strings.EqualFold(s, v) })
 }
 
-// list writes cards as items, with their copies, whether each downloads, trickplay and providers' ids
-// where the app asked for them: read for the whole page at once.
+// list writes cards as items, with their copies, whether each downloads, trickplay, chapters and
+// providers' ids where the app asked for them: read for the whole page at once.
 func (a *API) list(ctx context.Context, cards []store.Card, l listed) ([]item, error) {
 	out := make([]item, len(cards))
 	ids := make([]uuid.UUID, len(cards))
 	for n, c := range cards {
 		out[n], ids[n] = a.fromCard(c), c.ID
 	}
-	if l.fields["mediasources"] || l.fields["mediastreams"] || l.fields["candownload"] || l.fields["trickplay"] {
+	if l.fields["mediasources"] || l.fields["mediastreams"] || l.fields["candownload"] || l.fields["trickplay"] ||
+		l.fields["chapters"] {
 		versions, err := a.svc.Catalogue.Versions(ctx, ids)
 		if err != nil {
 			return nil, err
@@ -116,6 +117,9 @@ func (a *API) list(ctx context.Context, cards []store.Card, l listed) ([]item, e
 			out[n].CanDownload = downloadable(v)
 			if l.fields["trickplay"] {
 				out[n].trickplay(v)
+			}
+			if l.fields["chapters"] {
+				out[n].chapters(v)
 			}
 			if len(v) > 0 && (l.fields["mediasources"] || l.fields["mediastreams"]) {
 				out[n].sources(v, l.words)
