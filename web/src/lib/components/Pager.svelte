@@ -1,5 +1,6 @@
 <script lang="ts">
 import { page } from "$app/state";
+import { withQuery } from "#lib/address.js";
 import { Button } from "#lib/components/ui/button/index.js";
 
 // Newer and older pages of a list the server pages by offset, as links, so
@@ -7,12 +8,8 @@ import { Button } from "#lib/components/ui/button/index.js";
 let { offset, limit, total }: { offset: number; limit: number; total: number } =
 	$props();
 
-function at(next: number) {
-	const to = new URL(page.url.href);
-	if (next) to.searchParams.set("offset", String(next));
-	else to.searchParams.delete("offset");
-	return to.pathname + to.search;
-}
+const at = (next: number) =>
+	withQuery(page.url, { offset: next ? String(next) : undefined });
 </script>
 
 {#if total > limit}

@@ -1,5 +1,6 @@
 <script lang="ts">
 import Artwork from "#lib/components/Artwork.svelte";
+import { withQuery } from "#lib/address.js";
 import CheckIcon from "@lucide/svelte/icons/check";
 import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
 import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
@@ -61,14 +62,8 @@ const days = $derived(
 const busyDays = $derived(days.filter((d) => d.inMonth && d.entries.length));
 
 // This page with some of what it asks changed.
-function to(changes: Record<string, string | undefined>) {
-	const url = new URL(page.url.href);
-	for (const [name, value] of Object.entries(changes)) {
-		if (value) url.searchParams.set(name, value);
-		else url.searchParams.delete(name);
-	}
-	return url.pathname + url.search;
-}
+const to = (changes: Record<string, string | undefined>) =>
+	withQuery(page.url, changes);
 
 // An announced episode leads to its show, which has its place in it.
 const href = (e: Entry) =>

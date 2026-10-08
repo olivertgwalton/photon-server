@@ -1,8 +1,10 @@
 <script lang="ts">
 import LayoutGridIcon from "@lucide/svelte/icons/layout-grid";
+import { withQuery } from "#lib/address.js";
 import ListIcon from "@lucide/svelte/icons/list";
 import RectangleHorizontalIcon from "@lucide/svelte/icons/rectangle-horizontal";
 import { goto } from "$app/navigation";
+import { page } from "$app/state";
 import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import SmartCollectionDialog from "#lib/components/admin/SmartCollectionDialog.svelte";
@@ -56,11 +58,8 @@ let saving = $state(false);
 // The filters live in the address: a narrowed wall can be shared, and Back
 // leaves the library rather than undoing a filter.
 function show(query: WallQuery) {
-	const search = wallSearch(query);
-	const editing = data.editing
-		? `${search ? "&" : "?"}collection=${data.editing}`
-		: "";
-	goto(`/libraries/${id}${search}${editing}`, {
+	const wall = new URL(`/libraries/${id}${wallSearch(query)}`, page.url.href);
+	goto(withQuery(wall, { collection: data.editing }), {
 		replace: true,
 		reset: false,
 	});
