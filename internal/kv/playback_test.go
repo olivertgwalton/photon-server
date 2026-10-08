@@ -162,12 +162,16 @@ func TestListingReadsNoKeyItDoesNotList(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	t.Cleanup(func() {
+	defer func() {
 		for _, id := range ids {
-			_, _ = k.EndPlayback(context.WithoutCancel(ctx), id)
-			_ = k.EndScan(context.WithoutCancel(ctx), id)
+			if _, err := k.EndPlayback(ctx, id); err != nil {
+				t.Error(err)
+			}
+			if err := k.EndScan(ctx, id); err != nil {
+				t.Error(err)
+			}
 		}
-	})
+	}()
 	c := &counting{Client: k.client}
 	k.client = c
 	plays, err := k.Playbacks(ctx)

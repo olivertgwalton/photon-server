@@ -29,7 +29,11 @@ func TestAllowSpendsABurstThenWaits(t *testing.T) {
 	if wait < 50*time.Second || wait > time.Minute {
 		t.Errorf("past the burst: wait %v, want about a minute", wait)
 	}
-	if other, _ := k.Allow(t.Context(), key+":other", l); other != 0 {
+	other, err := k.Allow(t.Context(), key+":other", l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other != 0 {
 		t.Error("another key was limited")
 	}
 }
