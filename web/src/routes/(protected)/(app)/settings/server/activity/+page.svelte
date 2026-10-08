@@ -1,5 +1,6 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
+import { ticking } from "#lib/admin/clock.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { loggedKinds } from "#lib/admin/words.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
@@ -11,7 +12,7 @@ import { Label } from "#lib/components/ui/label/index.js";
 let { data } = $props();
 
 const live = liveStream();
-const now = Date.now();
+const clock = ticking(30_000);
 
 const kinds = [
 	{ value: "all", label: "Everything" },
@@ -60,6 +61,6 @@ const libraries = $derived(
 </PageHeader>
 <p class="text-sm">Kept for 30 days.</p>
 
-<ActivityList {events} {profiles} {libraries} {now} />
+<ActivityList {events} {profiles} {libraries} now={clock.now} />
 
 <Pager offset={data.page.offset} limit={data.limit} total={data.page.total} />
