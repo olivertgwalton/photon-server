@@ -119,6 +119,18 @@ export function libraryChange(
 // server's own, which the API names "".
 export const serverLocale = "server";
 
+// Languages or countries as choices, named in the reader's own language and
+// in its order, as Plex's and Jellyfin's library settings list them.
+export function localeOptions(
+	codes: string[],
+	type: "language" | "region",
+): { value: string; label: string }[] {
+	const names = new Intl.DisplayNames(undefined, { type });
+	return codes
+		.map((value) => ({ value, label: names.of(value) ?? value }))
+		.toSorted((a, b) => a.label.localeCompare(b.label));
+}
+
 function localeChoice(value: FormDataEntryValue | null): string {
 	const chosen = String(value ?? serverLocale);
 	return chosen === serverLocale ? "" : chosen;
