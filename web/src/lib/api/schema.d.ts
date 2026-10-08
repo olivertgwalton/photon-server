@@ -3434,6 +3434,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/password-resets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask, from the server's local network, to reset a profile's forgotten password; its code is written to the server's log */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Reset"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResetStart"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-resets/redemptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set a new password by a reset's code, signing out the profile's every device */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Redemption"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/calendar": {
         parameters: {
             query?: never;
@@ -7627,6 +7707,10 @@ export interface components {
         Reached: {
             reach: components["schemas"]["Reach"];
         };
+        Redemption: {
+            code: string;
+            password: string;
+        };
         Refresh: {
             mode: components["schemas"]["RefreshMode"];
         };
@@ -7638,6 +7722,14 @@ export interface components {
             reasons: components["schemas"]["TranscodeReason"][];
             status: number;
             title: string;
+        };
+        Reset: {
+            name: string;
+        };
+        ResetStart: {
+            /** Format: int64 */
+            expires_in_ms: number;
+            node: string;
         };
         /** @enum {string} */
         Resolution: "sd" | "720p" | "1080p" | "4k";

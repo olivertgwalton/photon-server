@@ -79,6 +79,9 @@ async function login(event: SubmitEvent) {
 						type="password"
 						autocomplete="current-password"
 					/>
+					<Field.Description>
+						<a href="/auth/reset">Forgot your password?</a>
+					</Field.Description>
 				</Field.Field>
 				<Field.Error errors={[{ message }]} />
 				<Field.Field>
