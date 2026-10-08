@@ -314,9 +314,11 @@ func (c *Client) Details(ctx context.Context, loc domain.Locale, id int) (domain
 // seasonTypes are TheTVDB's names for its episode orders.
 var seasonTypes = map[domain.EpisodeOrder]string{domain.OrderAired: "default", domain.OrderDVD: "dvd", domain.OrderAbsolute: "absolute"}
 
-// Seasons answers what TVDB says about the episodes of the given seasons, numbered in order.
+// Seasons answers what TVDB says about the episodes of the given seasons, numbered in order, and
+// about every episode yet to air.
 func (c *Client) Seasons(ctx context.Context, loc domain.Locale, id int, seasons []int, order domain.EpisodeOrder) (map[int]domain.SeasonMetadata, error) {
 	lang := languageOf(loc)
+	today := time.Now().UTC().Truncate(24 * time.Hour)
 	out := map[int]domain.SeasonMetadata{}
 	for _, n := range seasons {
 		out[n] = domain.SeasonMetadata{Episodes: map[int]domain.Metadata{}}
@@ -343,18 +345,30 @@ func (c *Client) Seasons(ctx context.Context, loc domain.Locale, id int, seasons
 			return nil, err
 		}
 		for _, e := range page.Data.Episodes {
-			if s, ok := out[e.Season]; ok {
+			aired := provider.Date(e.Aired)
+			s, ok := out[e.Season]
+			var people []domain.Credit
+			switch {
+			case slices.Contains(seasons, e.Season):
 				// An episode's guests and crew are on its own record alone, as Jellyfin's plugin
 				// reads them: one request an episode, of the seasons asked about only.
-				people, err := c.episodeCredits(ctx, e.ID)
+				var err error
+				people, err = c.episodeCredits(ctx, e.ID)
 				if err != nil && !errors.Is(err, provider.ErrNotFound) {
 					return nil, err
 				}
-				aired := provider.Date(e.Aired)
-				s.Episodes[e.Number] = domain.Metadata{
-					Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: provider.Year(aired),
-					Artwork: picture(domain.ArtworkThumb, e.Image), Credits: people,
+			case !aired.Before(today):
+				// So it is known what is coming; it has no guests or crew to ask for yet.
+				if !ok {
+					s = domain.SeasonMetadata{Episodes: map[int]domain.Metadata{}}
+					out[e.Season] = s
 				}
+			default:
+				continue
+			}
+			s.Episodes[e.Number] = domain.Metadata{
+				Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: provider.Year(aired),
+				Artwork: picture(domain.ArtworkThumb, e.Image), Credits: people,
 			}
 		}
 		path = strings.TrimPrefix(page.Links.Next, c.base)
