@@ -12,13 +12,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"uuid"
 )
 
-// testBucket is the bucket TEST_S3_ENDPOINT and TEST_S3_BUCKET name, signed for with AWS's own
-// credentials from the environment.
+// testBucket is the bucket TEST_S3_ENDPOINT and TEST_S3_BUCKET name, with no keys of its own.
 func testBucket(t *testing.T) Config {
 	t.Helper()
 	c := Config{Endpoint: os.Getenv("TEST_S3_ENDPOINT"), Bucket: os.Getenv("TEST_S3_BUCKET")}
@@ -64,6 +64,13 @@ func TestABucketKeepsObjectsWholeOrNotAtAll(t *testing.T) {
 func TestABucketListsObjectsByPrefix(t *testing.T) { testListedByPrefix(t, newBucket(t, false)) }
 
 func TestABucketIsOpenedWithTheKeysGivenOrAWSsOwn(t *testing.T) {
+	shared := filepath.Join(t.TempDir(), "credentials")
+	profile := fmt.Sprintf("[default]\naws_access_key_id = %s\naws_secret_access_key = %s\n",
+		os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"))
+	if err := os.WriteFile(shared, []byte(profile), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", shared)
 	if _, err := OpenBucket(t.Context(), testBucket(t)); err != nil {
 		t.Errorf("opened with AWS's own credentials: %v", err)
 	}
