@@ -169,3 +169,30 @@ func TestOneWallOfSeveralLibraries(t *testing.T) {
 		t.Errorf("the second title of both: %v", got)
 	}
 }
+
+// Titles asked for by id come in the order asked, each once, and only those the profile may see.
+func TestCardsAreTheTitlesAskedForByID(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	admin, kid := homeLibraries(t, s, []string{"Alien", "Heat"}, []string{"Fargo"})
+	heat, fargo := oneItem(t, s, "title = 'Heat'").ID, oneItem(t, s, "kind = 'show'").ID
+	episode := oneItem(t, s, "kind = 'episode'").ID
+	titles := func(profile uuid.UUID, ids ...uuid.UUID) []string {
+		t.Helper()
+		cards, err := s.Cards(ctx, profile, ids)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, c := range cards {
+			out = append(out, c.Title)
+		}
+		return out
+	}
+	if got := titles(admin, fargo, uuid.NewV7(), heat, fargo, episode); !slices.Equal(got, []string{"Fargo", "Heat", "Fargo S1E1"}) {
+		t.Errorf("by id: %v", got)
+	}
+	if got := titles(kid, fargo, heat); !slices.Equal(got, []string{"Heat"}) {
+		t.Errorf("for a profile without the shows: %v, want the film alone", got)
+	}
+}
