@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"time"
+	"uuid"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -24,7 +25,7 @@ var (
 	taskDesc = prometheus.NewDesc("photon_task_last_finished_timestamp_seconds",
 		"When each scheduled task's last run ended, and how.", []string{"task", "result"}, nil)
 	nodesDesc = prometheus.NewDesc("photon_nodes",
-		"The nodes telling the others of themselves, by whether each takes new work.", []string{"state"}, nil)
+		"The nodes running, by whether each takes new work.", []string{"state"}, nil)
 	itemsDesc = prometheus.NewDesc("photon_library_items", "The films and episodes in the libraries.", []string{"kind"}, nil)
 )
 
@@ -42,12 +43,17 @@ type adverts interface {
 	Nodes(ctx context.Context) ([]domain.Node, error)
 }
 
+type selfNode interface {
+	Self() domain.Node
+}
+
 // cluster is what the nodes share, in Postgres and Valkey, said only by the node holding the
 // scheduler lease, so that each is said once across the cluster.
 type cluster struct {
 	lead  leader
 	st    clusterStore
 	nodes adverts
+	self  selfNode
 }
 
 func (c cluster) Describe(ch chan<- *prometheus.Desc) {
@@ -84,8 +90,16 @@ func (c cluster) Collect(ch chan<- prometheus.Metric) {
 	if nodes, err := c.nodes.Nodes(ctx); err != nil {
 		ch <- prometheus.NewInvalidMetric(nodesDesc, err)
 	} else {
-		by := map[domain.NodeAvailability]int{}
+		// The leader is counted whether or not it tells the others of itself: one with no address
+		// to be reached at never does, as the admin's list of nodes counts it.
+		online := map[uuid.UUID]domain.Node{}
 		for _, n := range nodes {
+			online[n.ID] = n
+		}
+		self := c.self.Self()
+		online[self.ID] = self
+		by := map[domain.NodeAvailability]int{}
+		for _, n := range online {
 			by[n.Availability]++
 		}
 		for _, a := range domain.NodeAvailabilities() {

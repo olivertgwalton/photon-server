@@ -123,7 +123,7 @@ the one running scheduled tasks; the others leave it out, so it is never counted
 | `photon_jobs{kind, state}` | the jobs queued, running, to run again (`rerun`) and `dead` |
 | `photon_jobs_oldest_due_seconds{kind}` | how long the queued job due now and waiting longest has been due; one held for the maintenance window, or put off until later, is left out |
 | `photon_task_last_finished_timestamp_seconds{task, result}` | when each task's last run ended, `succeeded`, `failed` or `cancelled`; absent while it runs again |
-| `photon_nodes{state}` | the nodes telling the others of themselves, `active` or `draining` |
+| `photon_nodes{state}` | the nodes running, `active` or `draining`, the leader among them whether or not it has an address |
 | `photon_library_items{kind}` | the films (`movie`) and episodes in the libraries |
 
 The lease passes to another node within 20 seconds of its holder stopping, so for a moment either
