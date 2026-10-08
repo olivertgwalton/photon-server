@@ -1411,7 +1411,7 @@ const server_ = Bun.serve({
 				} satisfies Schemas["DeviceListingList"]);
 			case "DELETE /api/v1/auth/devices/d-tv":
 				return new Response(null, { status: 204 });
-			case "POST /api/v1/auth/device/approve": {
+			case "POST /api/v1/auth/pairings/approve": {
 				const body = (await request.json()) as Schemas["Approval"];
 				if (body.user_code.replace(/[- ]/g, "").toUpperCase() !== "BCDFGHJK") {
 					return problem(404, "pairing_not_found", "Not Found");

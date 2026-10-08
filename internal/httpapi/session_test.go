@@ -194,7 +194,7 @@ func TestMeIsTheSessionsProfile(t *testing.T) {
 
 func TestPollingAnswersInRFC8628Terms(t *testing.T) {
 	for code, want := range map[string]problemCode{"BCDFGHJK.secret": codeAuthorizationPending, "guessed": codeExpiredToken} {
-		rec := serve(t, http.MethodPost, "/api/v1/auth/device/poll", "", `{"device_code":"`+code+`"}`)
+		rec := serve(t, http.MethodPost, "/api/v1/auth/pairings/poll", "", `{"device_code":"`+code+`"}`)
 		var p problem
 		if err := json.NewDecoder(rec.Body).Decode(&p); err != nil || rec.Code != http.StatusBadRequest || p.Code != want {
 			t.Errorf("poll %q: %d %q (err %v), want 400 %q", code, rec.Code, p.Code, err, want)

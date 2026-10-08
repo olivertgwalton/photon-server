@@ -99,17 +99,17 @@ func (a *API) pollPairing(w http.ResponseWriter, r *http.Request) {
 func (a *API) pairingRoutes() []route {
 	return []route{
 		{
-			pattern: "POST /api/v1/auth/device/start", access: public,
+			pattern: "POST /api/v1/auth/pairings", access: public,
 			summary: "Start pairing a device by a code shown on it (RFC 8628)",
 			body:    deviceJSON{}, status: http.StatusOK, reply: pairingStartJSON{}, handle: a.startPairing,
 		},
 		{
-			pattern: "POST /api/v1/auth/device/approve", access: signedIn,
+			pattern: "POST /api/v1/auth/pairings/approve", access: signedIn,
 			summary: "Approve a pairing by its code, signing that device in as this profile",
 			body:    approvalJSON{}, status: http.StatusOK, reply: deviceJSON{}, handle: a.approvePairing,
 		},
 		{
-			pattern: "POST /api/v1/auth/device/poll", access: public,
+			pattern: "POST /api/v1/auth/pairings/poll", access: public,
 			summary: "Ask whether a pairing is approved; until it is, the problem says why not",
 			body:    pollJSON{}, status: http.StatusOK, reply: loginResponse{}, handle: a.pollPairing,
 		},
