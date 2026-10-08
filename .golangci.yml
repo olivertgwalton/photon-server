@@ -43,8 +43,14 @@ linters:
     - dupl
     - unparam
     - gosec
+    # size
+    - funlen
 
   settings:
+    funlen:
+      lines: 100
+      statements: -1
+      ignore-comments: true
     govet:
       enable-all: true
       disable: [fieldalignment, shadow]
@@ -122,6 +128,8 @@ linters:
         - name: superfluous-else
         - name: use-any
         - name: datarace
+        - name: file-length-limit
+          arguments: [{ max: 600 }]
 
   exclusions:
     generated: lax
@@ -129,7 +137,10 @@ linters:
     presets: [std-error-handling, common-false-positives]
     rules:
       - path: _test\.go
-        linters: [dupl, forcetypeassert, gosec, noctx]
+        linters: [dupl, forcetypeassert, gosec, noctx, funlen]
+      - path: _test\.go
+        linters: [revive]
+        text: file-length-limit
 
 issues:
   max-issues-per-linter: 0
