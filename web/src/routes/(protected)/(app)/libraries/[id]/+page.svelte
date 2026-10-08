@@ -8,11 +8,14 @@ import { client } from "#lib/api/client.js";
 import SmartCollectionDialog from "#lib/components/admin/SmartCollectionDialog.svelte";
 import LetterBar from "#lib/components/LetterBar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
-import { count } from "#lib/format.js";
+import { Skeleton } from "#lib/components/ui/skeleton/index.js";
 import * as ToggleGroup from "#lib/components/ui/toggle-group/index.js";
 import Wall from "#lib/components/Wall.svelte";
 import WallFilterMenu from "#lib/components/WallFilterMenu.svelte";
 import WallSortMenu from "#lib/components/WallSortMenu.svelte";
+import { count } from "#lib/format.js";
+import { gridColumns } from "#lib/grid.js";
+import { settled } from "#lib/settled.svelte.js";
 import {
 	cleared,
 	filterCount,
@@ -29,6 +32,16 @@ let { data } = $props();
 
 let wall = $state<Wall>();
 let view = $derived(data.view);
+const streamed = settled(() => data.wall);
+// The wall of this address: one of another query, still here while this one
+// is on its way, is not drawn beside this one's filters.
+const shown = $derived(
+	streamed.value && wallSearch(streamed.value.query) === wallSearch(data.query)
+		? streamed.value
+		: undefined,
+);
+// Blank cards, a screenful, until the wall arrives.
+const blanks = Array.from({ length: 24 }, (_, n) => n);
 
 const id = $derived(data.library.id);
 const narrowed = $derived(filterCount(data.query) > 0);
@@ -86,8 +99,8 @@ async function fetchPage(offset: number) {
 }
 
 function jump(letter: string) {
-	if (!data.letters) return;
-	wall?.jump(letterOffset(data.letters, letter, data.query.order ?? "asc"));
+	if (!shown?.letters) return;
+	wall?.jump(letterOffset(shown.letters, letter, data.query.order ?? "asc"));
 }
 </script>
 
@@ -96,7 +109,11 @@ function jump(letter: string) {
 <h2 class="sr-only">Titles</h2>
 <div class="flex flex-wrap items-center gap-2">
 	<p class="text-ink-3 mr-auto text-sm" aria-live="polite">
-		{count(data.titles.total, "title")}
+		{#if shown}
+			{count(shown.titles.total, "title")}
+		{:else}
+			<Skeleton class="inline-block h-4 w-16 align-middle" />
+		{/if}
 	</p>
 	{#if narrowed}
 		<Button variant="ghost" size="sm" onclick={() => show(cleared(data.query))}>
@@ -137,16 +154,43 @@ function jump(letter: string) {
 	</ToggleGroup.Root>
 </div>
 
-{#if data.titles.total}
+{#if streamed.failed}
+	<div class="grid min-h-[30svh] place-content-center gap-3 text-center">
+		<p class="heading">{streamed.failed}</p>
+	</div>
+{:else if !shown}
+	<ul
+		class={view === "list" ? "grid gap-y-4.5" : "grid gap-x-3 gap-y-4.5"}
+		style={view === "list"
+			? ""
+			: `grid-template-columns: ${gridColumns(view === "still" ? "still" : "poster")}`}
+		aria-hidden="true"
+	>
+		{#each blanks as card (card)}
+			<li>
+				<Skeleton
+					class={[
+						"rounded-xl",
+						view === "list"
+							? "h-18 w-full"
+							: view === "still"
+								? "aspect-video"
+								: "aspect-[2/3]",
+					]}
+				/>
+			</li>
+		{/each}
+	</ul>
+{:else if shown.titles.total}
 	<div class="flex flex-col gap-4 md:flex-row-reverse">
-		{#if data.letters}
-			<LetterBar letters={data.letters} onjump={jump} />
+		{#if shown.letters}
+			<LetterBar letters={shown.letters} onjump={jump} />
 		{/if}
 		<div class="min-w-0 flex-1">
 			<Wall
 				bind:this={wall}
-				total={data.titles.total}
-				first={data.titles.items}
+				total={shown.titles.total}
+				first={shown.titles.items}
 				pageSize={wallPageSize}
 				{fetchPage}
 				{view}

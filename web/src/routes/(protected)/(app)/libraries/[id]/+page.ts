@@ -10,14 +10,16 @@ import {
 } from "#lib/wall.js";
 import type { PageLoad } from "./$types";
 
-export const load: PageLoad = async ({ fetch, params, url, depends }) => {
+export const load: PageLoad = ({ fetch, params, url, depends }) => {
 	depends(keys.library(params.id), keys.userdata);
 	const api = client(fetch);
 	const query = wallQuery(url.searchParams);
 	const { sort, order, ...filters } = query;
 	const path = { id: params.id };
 	// Letters are where the wall is in title order; any other order has none.
-	const [titles, letters] = await Promise.all([
+	// Streamed, not awaited: the page is drawn at once, the wall as it comes,
+	// saying which query it answers.
+	const wall = Promise.all([
 		need(
 			api.GET("/api/v1/libraries/{id}/titles", {
 				params: { path, query: { ...query, limit: wallPageSize } },
@@ -30,13 +32,14 @@ export const load: PageLoad = async ({ fetch, params, url, depends }) => {
 					}),
 				)
 			: undefined,
-	]);
+	]).then(([titles, letters]) => ({ query, titles, letters: letters?.items }));
+	// The page takes the refusal; a load preloaded and never shown has no page.
+	wall.catch(() => {});
 	return {
 		query,
 		// A smart collection whose rule is being changed here.
 		editing: url.searchParams.get("collection") ?? undefined,
-		titles,
-		letters: letters?.items,
+		wall,
 		view: storedView(params.id),
 	};
 };
