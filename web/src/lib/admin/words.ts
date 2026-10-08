@@ -181,6 +181,19 @@ export const hookable: Partial<Record<Schemas["EventKind"], string>> = {
 	"backup.made": "A backup is made",
 };
 
+export const importSources: Record<Schemas["ImportSource"], string> = {
+	plex: "Plex",
+	jellyfin: "Jellyfin",
+	emby: "Emby",
+};
+
+// Why a title another server had watched was not imported.
+export const importMisses: Record<Schemas["ImportMiss"], string> = {
+	no_ids: "no TMDB, TheTVDB or IMDb id",
+	not_found: "not here",
+	undated: "no date watched",
+};
+
 // The kinds the activity log keeps, as its filter offers them.
 export const loggedKinds: Partial<Record<Schemas["EventKind"], string>> = {
 	"playback.started": "Plays started",

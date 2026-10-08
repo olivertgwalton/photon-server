@@ -4,6 +4,7 @@ import CalendarClockIcon from "@lucide/svelte/icons/calendar-clock";
 import DatabaseIcon from "@lucide/svelte/icons/database";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
 import HardDriveIcon from "@lucide/svelte/icons/hard-drive";
+import ImportIcon from "@lucide/svelte/icons/import";
 import RotateCcwClockIcon from "@lucide/svelte/icons/rotate-ccw-clock";
 import HouseIcon from "@lucide/svelte/icons/house";
 import KeyRoundIcon from "@lucide/svelte/icons/key-round";
@@ -43,6 +44,7 @@ const server: [string, string, Component][] = [
 	["/settings/server/jobs", "Jobs", ListChecksIcon],
 	["/settings/server/activity", "Activity", ActivityIcon],
 	["/settings/server/history", "Play history", RotateCcwClockIcon],
+	["/settings/server/imports", "Import history", ImportIcon],
 	["/settings/server/webhooks", "Webhooks", WebhookIcon],
 	["/settings/server/keys", "API keys", KeyRoundIcon],
 ];
