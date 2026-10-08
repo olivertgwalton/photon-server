@@ -73,6 +73,9 @@ type item struct {
 	LocationType            string              `json:"LocationType"`
 	MediaType               string              `json:"MediaType"`
 	PlaylistItemID          string              `json:"PlaylistItemId,omitempty"`
+
+	// Trickplay is each copy's thumbnail sheets, by the copy's id and their width.
+	Trickplay map[string]map[int]trickplayInfo `json:"Trickplay,omitempty"`
 }
 
 // blurhash is the BlurHashes of an item's pictures of one kind, by tag.
@@ -246,6 +249,7 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 	if len(p.Versions) > 0 {
 		it.sources(p.Versions, w)
 		it.MediaStreams = it.MediaSources[0].MediaStreams
+		it.trickplay(p.Versions)
 	}
 	if p.Kind == domain.ItemShow {
 		n := len(p.Seasons)
