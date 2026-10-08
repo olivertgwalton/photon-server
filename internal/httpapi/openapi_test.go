@@ -174,23 +174,23 @@ type shadowing struct {
 func TestASchemaHasTheFieldsEncodingJSONWrites(t *testing.T) {
 	s := newSchemas()
 	s.of(reflect.TypeFor[shadowing]())
-	schema, _ := s.defs["Shadowing"].(map[string]any)
-	props, _ := schema["properties"].(map[string]any)
-	if diff := cmp.Diff(map[string]any{"type": "boolean"}, props["kind"]); diff != "" {
+	schema := s.defs["Shadowing"]
+	props := schema.Properties
+	if diff := cmp.Diff(jsonSchema{Type: schemaType{name: "boolean"}}, props["kind"], cmp.AllowUnexported(schemaType{})); diff != "" {
 		t.Errorf("kind (-want +got):\n%s", diff)
 	}
 	b, err := json.Marshal(shadowing{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var written map[string]any
+	var written map[string]json.RawMessage
 	if err := json.Unmarshal(b, &written); err != nil {
 		t.Fatal(err)
 	}
 	if diff := cmp.Diff(slices.Sorted(maps.Keys(written)), slices.Sorted(maps.Keys(props))); diff != "" {
 		t.Errorf("properties (-written +described):\n%s", diff)
 	}
-	if diff := cmp.Diff([]string{"kind", "other"}, schema["required"]); diff != "" {
+	if diff := cmp.Diff([]string{"kind", "other"}, schema.Required); diff != "" {
 		t.Errorf("required (-want +got):\n%s", diff)
 	}
 }

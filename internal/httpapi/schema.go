@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"reflect"
 	"regexp"
 	"slices"
@@ -199,11 +198,40 @@ func values[T ~string](list []T) []string {
 	return out
 }
 
+// jsonSchema is a JSON Schema, its fields in the order of their names.
+type jsonSchema struct {
+	Ref                  string                `json:"$ref,omitempty"`
+	AdditionalProperties *jsonSchema           `json:"additionalProperties,omitempty"`
+	AnyOf                []jsonSchema          `json:"anyOf,omitempty"`
+	ContentMediaType     string                `json:"contentMediaType,omitempty"`
+	Enum                 []string              `json:"enum,omitempty"`
+	Format               string                `json:"format,omitempty"`
+	Items                *jsonSchema           `json:"items,omitempty"`
+	Pattern              string                `json:"pattern,omitempty"`
+	Properties           map[string]jsonSchema `json:"properties,omitzero"`
+	PropertyNames        *jsonSchema           `json:"propertyNames,omitempty"`
+	Required             []string              `json:"required,omitempty"`
+	Type                 schemaType            `json:"type,omitzero"`
+}
+
+// schemaType is a schema's type, written as its name, or with null beside it where it may be null.
+type schemaType struct {
+	name     string
+	nullable bool
+}
+
+func (t schemaType) MarshalJSON() ([]byte, error) {
+	if t.nullable {
+		return json.Marshal([]string{t.name, "null"})
+	}
+	return json.Marshal(t.name)
+}
+
 // formats are the types that write themselves as a string.
-var formats = map[reflect.Type]map[string]any{
-	reflect.TypeFor[time.Time]():   {"type": "string", "format": "date-time"},
-	reflect.TypeFor[uuid.UUID]():   {"type": "string", "format": "uuid"},
-	reflect.TypeFor[domain.Date](): {"type": "string", "format": "date"},
+var formats = map[reflect.Type]jsonSchema{
+	reflect.TypeFor[time.Time]():   {Type: schemaType{name: "string"}, Format: "date-time"},
+	reflect.TypeFor[uuid.UUID]():   {Type: schemaType{name: "string"}, Format: "uuid"},
+	reflect.TypeFor[domain.Date](): {Type: schemaType{name: "string"}, Format: "date"},
 }
 
 // renamed are types whose names say too little beside the API's own.
@@ -221,16 +249,16 @@ var (
 // name, among defs. A field tagged omitempty or omitzero may be left out, and request types are
 // tagged so too, though decoding ignores it.
 type schemas struct {
-	defs  map[string]any
+	defs  map[string]jsonSchema
 	named map[string]reflect.Type
 	err   error
 }
 
 func newSchemas() *schemas {
-	return &schemas{defs: map[string]any{}, named: map[string]reflect.Type{}}
+	return &schemas{defs: map[string]jsonSchema{}, named: map[string]reflect.Type{}}
 }
 
-func (s *schemas) of(t reflect.Type) map[string]any {
+func (s *schemas) of(t reflect.Type) jsonSchema {
 	if f, ok := formats[t]; ok {
 		return f
 	}
@@ -239,58 +267,61 @@ func (s *schemas) of(t reflect.Type) map[string]any {
 	}
 	if t.Implements(marshaler) || t.Implements(textMarshaler) || reflect.PointerTo(t).Implements(marshaler) {
 		s.fail(fmt.Errorf("%v writes itself and has no format", t))
-		return map[string]any{}
+		return jsonSchema{}
 	}
 	switch t.Kind() {
 	case reflect.Struct:
-		return s.ref(t, func() map[string]any { return s.object(t) })
+		return s.ref(t, func() jsonSchema { return s.object(t) })
 	case reflect.String:
 		if t.PkgPath() == "" {
-			return map[string]any{"type": "string"}
+			return jsonSchema{Type: schemaType{name: "string"}}
 		}
 		enum, ok := enums[t]
 		if !ok {
 			s.fail(fmt.Errorf("%v has no values in enums", t))
-			return map[string]any{}
+			return jsonSchema{}
 		}
-		return s.ref(t, func() map[string]any {
+		return s.ref(t, func() jsonSchema {
 			if pattern, ok := open[t]; ok {
-				return map[string]any{"type": "string", "anyOf": []any{map[string]any{"enum": enum}, map[string]any{"pattern": pattern.String()}}}
+				return jsonSchema{Type: schemaType{name: "string"}, AnyOf: []jsonSchema{{Enum: enum}, {Pattern: pattern.String()}}}
 			}
-			return map[string]any{"type": "string", "enum": enum}
+			return jsonSchema{Type: schemaType{name: "string"}, Enum: enum}
 		})
 	case reflect.Slice, reflect.Array:
-		return map[string]any{"type": "array", "items": s.of(t.Elem())}
+		items := s.of(t.Elem())
+		return jsonSchema{Type: schemaType{name: "array"}, Items: &items}
 	case reflect.Map:
-		m := map[string]any{"type": "object", "additionalProperties": s.of(t.Elem())}
+		values := s.of(t.Elem())
+		m := jsonSchema{Type: schemaType{name: "object"}, AdditionalProperties: &values}
 		if t.Key().PkgPath() != "" {
-			m["propertyNames"] = s.of(t.Key())
+			keys := s.of(t.Key())
+			m.PropertyNames = &keys
 		}
 		return m
 	case reflect.Bool:
-		return map[string]any{"type": "boolean"}
+		return jsonSchema{Type: schemaType{name: "boolean"}}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32:
-		return map[string]any{"type": "integer"}
+		return jsonSchema{Type: schemaType{name: "integer"}}
 	case reflect.Int64, reflect.Uint64:
-		return map[string]any{"type": "integer", "format": "int64"}
+		return jsonSchema{Type: schemaType{name: "integer"}, Format: "int64"}
 	case reflect.Float32, reflect.Float64:
-		return map[string]any{"type": "number"}
+		return jsonSchema{Type: schemaType{name: "number"}}
 	case reflect.Interface:
-		return map[string]any{}
+		return jsonSchema{}
 	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
 		reflect.Pointer, reflect.UnsafePointer:
 		s.fail(fmt.Errorf("%v cannot be described", t))
 	}
-	return map[string]any{}
+	return jsonSchema{}
 }
 
 // ref describes a named type once among defs and answers a reference to it.
-func (s *schemas) ref(t reflect.Type, describe func() map[string]any) map[string]any {
+func (s *schemas) ref(t reflect.Type, describe func() jsonSchema) jsonSchema {
 	if t.Name() == "" {
 		return describe()
 	}
 	name := schemaName(t)
-	ref := map[string]any{"$ref": "#/components/schemas/" + name}
+	ref := jsonSchema{Ref: "#/components/schemas/" + name}
 	if seen, ok := s.named[name]; ok {
 		if seen != t {
 			s.fail(fmt.Errorf("%v and %v are both %s: name one in renamed", seen, t, name))
@@ -302,10 +333,10 @@ func (s *schemas) ref(t reflect.Type, describe func() map[string]any) map[string
 	return ref
 }
 
-func (s *schemas) object(t reflect.Type) map[string]any {
+func (s *schemas) object(t reflect.Type) jsonSchema {
 	var all []jsonField
 	collect(t, 0, &all)
-	props, required := map[string]any{}, []string{}
+	props, required := map[string]jsonSchema{}, []string{}
 	for _, f := range all {
 		if !dominant(f, all) {
 			continue
@@ -315,11 +346,7 @@ func (s *schemas) object(t reflect.Type) map[string]any {
 			required = append(required, f.name)
 		}
 	}
-	o := map[string]any{"type": "object", "properties": props}
-	if len(required) > 0 {
-		o["required"] = required
-	}
-	return o
+	return jsonSchema{Type: schemaType{name: "object"}, Properties: props, Required: required}
 }
 
 type jsonField struct {
@@ -372,13 +399,12 @@ func (s *schemas) fail(err error) {
 	}
 }
 
-func nullable(schema map[string]any) map[string]any {
-	if t, ok := schema["type"].(string); ok {
-		n := maps.Clone(schema)
-		n["type"] = []string{t, "null"}
-		return n
+func nullable(schema jsonSchema) jsonSchema {
+	if schema.Type.name != "" {
+		schema.Type.nullable = true
+		return schema
 	}
-	return map[string]any{"anyOf": []any{schema, map[string]any{"type": "null"}}}
+	return jsonSchema{AnyOf: []jsonSchema{schema, {Type: schemaType{name: "null"}}}}
 }
 
 // schemaName is a type's name for a client: cardJSON is Card, and listJSON[cardJSON] CardList.

@@ -53,11 +53,77 @@ func Describe(info domain.Info) ([]byte, error) {
 	return describe(info, new(API).routes())
 }
 
+// An OpenAPI description's objects declare their fields in the order of their names, so each is
+// written as a map of them would be.
+type (
+	apiDocument struct {
+		Components apiComponents       `json:"components"`
+		Info       apiInfo             `json:"info"`
+		OpenAPI    string              `json:"openapi"`
+		Paths      map[string]pathItem `json:"paths"`
+	}
+	apiInfo struct {
+		Description string     `json:"description"`
+		License     apiLicense `json:"license"`
+		Title       string     `json:"title"`
+		Version     string     `json:"version"`
+	}
+	apiLicense struct {
+		Identifier string `json:"identifier"`
+		Name       string `json:"name"`
+	}
+	apiComponents struct {
+		Responses       map[string]apiResponse    `json:"responses"`
+		Schemas         map[string]jsonSchema     `json:"schemas"`
+		SecuritySchemes map[string]securityScheme `json:"securitySchemes"`
+	}
+	securityScheme struct {
+		Description string `json:"description"`
+		In          string `json:"in,omitempty"`
+		Name        string `json:"name,omitempty"`
+		Scheme      string `json:"scheme,omitempty"`
+		Type        string `json:"type"`
+	}
+	// pathItem is a path's operations, by lower-case method.
+	pathItem     map[string]apiOperation
+	apiOperation struct {
+		Description string                 `json:"description,omitempty"`
+		Parameters  []apiParameter         `json:"parameters,omitempty"`
+		RequestBody *requestBody           `json:"requestBody,omitempty"`
+		Responses   map[string]apiResponse `json:"responses"`
+		// Security is the schemes any one of which admits a request; none is a public route.
+		Security []map[string][]string `json:"security"`
+		Summary  string                `json:"summary"`
+		Access   access                `json:"x-access"`
+	}
+	apiParameter struct {
+		Description string     `json:"description,omitempty"`
+		In          string     `json:"in"`
+		Name        string     `json:"name"`
+		Required    bool       `json:"required,omitempty"`
+		Schema      jsonSchema `json:"schema"`
+	}
+	requestBody struct {
+		Content  map[string]mediaType `json:"content"`
+		Required bool                 `json:"required,omitempty"`
+	}
+	apiResponse struct {
+		Ref         string               `json:"$ref,omitempty"`
+		Content     map[string]mediaType `json:"content,omitempty"`
+		Description string               `json:"description,omitempty"`
+	}
+	mediaType struct {
+		Schema *jsonSchema `json:"schema,omitempty"`
+		// Events are a stream's events, by name, as the JSON each one's data carries.
+		Events map[string]jsonSchema `json:"x-events,omitempty"`
+	}
+)
+
 // describe answers the API's OpenAPI description, from its routes.
 func describe(info domain.Info, routes []route) ([]byte, error) {
 	s := newSchemas()
 	problemRef := s.of(reflect.TypeFor[problem]())
-	paths := map[string]map[string]any{}
+	paths := map[string]pathItem{}
 	for _, r := range routes {
 		if r.access == localNetwork {
 			continue
@@ -68,40 +134,40 @@ func describe(info domain.Info, routes []route) ([]byte, error) {
 			return nil, err
 		}
 		if paths[path] == nil {
-			paths[path] = map[string]any{}
+			paths[path] = pathItem{}
 		}
 		paths[path][strings.ToLower(method)] = op
 	}
 	if s.err != nil {
 		return nil, s.err
 	}
-	return json.Marshal(map[string]any{
-		"openapi": "3.1.1",
-		"info": map[string]any{
-			"title":   "photon-server",
-			"version": info.Version,
-			"license": map[string]any{"name": "GPL-3.0-only", "identifier": "GPL-3.0-only"},
-			"description": "A media server's API. Every refusal is a problem (RFC 9457) whose code says which. " +
+	return json.Marshal(apiDocument{
+		OpenAPI: "3.1.1",
+		Info: apiInfo{
+			Title:   "photon-server",
+			Version: info.Version,
+			License: apiLicense{Name: "GPL-3.0-only", Identifier: "GPL-3.0-only"},
+			Description: "A media server's API. Every refusal is a problem (RFC 9457) whose code says which. " +
 				"A route marked admin answers only an admin's session. A signed address, as play answers, " +
 				"is fetched as given, with no token: the signature is in its exp and sig, or in its path.",
 		},
-		"paths": paths,
-		"components": map[string]any{
-			"schemas": s.defs,
-			"responses": map[string]any{
-				"Problem": map[string]any{
-					"description": "A refusal.",
-					"content":     map[string]any{"application/problem+json": map[string]any{"schema": problemRef}},
+		Paths: paths,
+		Components: apiComponents{
+			Schemas: s.defs,
+			Responses: map[string]apiResponse{
+				"Problem": {
+					Description: "A refusal.",
+					Content:     map[string]mediaType{"application/problem+json": {Schema: &problemRef}},
 				},
 			},
-			"securitySchemes": map[string]any{
-				"session": map[string]any{
-					"type": "http", "scheme": "bearer",
-					"description": "A device's token, from signing in or pairing, in the Authorization header.",
+			SecuritySchemes: map[string]securityScheme{
+				"session": {
+					Type: "http", Scheme: "bearer",
+					Description: "A device's token, from signing in or pairing, in the Authorization header.",
 				},
-				"cookie": map[string]any{
-					"type": "apiKey", "in": "cookie", "name": sessionCookie,
-					"description": "The web app's session: the same token, kept by the browser. " +
+				"cookie": {
+					Type: "apiKey", In: "cookie", Name: sessionCookie,
+					Description: "The web app's session: the same token, kept by the browser. " +
 						"A write carrying it is refused as forbidden unless it comes from this server's own pages.",
 				},
 			},
@@ -109,113 +175,107 @@ func describe(info domain.Info, routes []route) ([]byte, error) {
 	})
 }
 
-func operation(s *schemas, r route, path string) (map[string]any, error) {
+func operation(s *schemas, r route, path string) (apiOperation, error) {
 	if r.summary == "" || r.status == 0 {
-		return nil, fmt.Errorf("%s has no summary or status", r.pattern)
+		return apiOperation{}, fmt.Errorf("%s has no summary or status", r.pattern)
 	}
 	if (r.reply == nil) != (r.status == http.StatusNoContent || r.status == http.StatusAccepted) {
-		return nil, fmt.Errorf("%s answers %d with reply %T", r.pattern, r.status, r.reply)
+		return apiOperation{}, fmt.Errorf("%s answers %d with reply %T", r.pattern, r.status, r.reply)
 	}
-	var params []any
+	op := apiOperation{Summary: r.summary, Access: r.access, Security: []map[string][]string{}}
 	for _, m := range wildcard.FindAllStringSubmatch(path, -1) {
 		p := param{m[1], uuid.UUID{}, ""}
 		if i := slices.IndexFunc(r.path, func(p param) bool { return p.name == m[1] }); i >= 0 {
 			p = r.path[i]
 		}
-		params = append(params, parameter(s, p, "path"))
+		op.Parameters = append(op.Parameters, parameter(s, p, "path"))
 	}
 	for _, p := range r.path {
 		if !strings.Contains(path, "{"+p.name+"}") {
-			return nil, fmt.Errorf("%s has no wildcard %s", r.pattern, p.name)
+			return apiOperation{}, fmt.Errorf("%s has no wildcard %s", r.pattern, p.name)
 		}
 	}
 	for _, p := range r.query {
-		params = append(params, parameter(s, p, "query"))
-	}
-	op := map[string]any{
-		"summary":  r.summary,
-		"x-access": string(r.access),
-		"security": []any{},
+		op.Parameters = append(op.Parameters, parameter(s, p, "query"))
 	}
 	switch r.access {
 	case signedIn, admin, manages:
-		op["security"] = []any{map[string]any{"session": []string{}}, map[string]any{"cookie": []string{}}}
+		op.Security = []map[string][]string{{"session": {}}, {"cookie": {}}}
 	case public, signedAddress, signedPath, localNetwork:
 	}
 	switch r.access {
 	case admin:
-		op["description"] = "Admin only."
+		op.Description = "Admin only."
 	case manages:
-		op["description"] = "Admin, or a manager over the profiles it keeps."
+		op.Description = "Admin, or a manager over the profiles it keeps."
 	case public, signedIn, signedAddress, signedPath, localNetwork:
 	}
-	if params != nil {
-		op["parameters"] = params
-	}
-	switch body := r.body.(type) {
-	case nil:
-	case asFile:
-		content := map[string]any{}
-		for _, t := range body {
-			content[t] = map[string]any{"schema": map[string]any{"type": "string", "contentMediaType": t}}
-		}
-		op["requestBody"] = map[string]any{"required": true, "content": content}
-	case optionalBody:
-		op["requestBody"] = map[string]any{
-			"content": map[string]any{"application/json": map[string]any{"schema": s.of(reflect.TypeOf(body.of))}},
-		}
-	default:
-		op["requestBody"] = map[string]any{
-			"required": true,
-			"content":  map[string]any{"application/json": map[string]any{"schema": s.of(reflect.TypeOf(r.body))}},
-		}
-	}
-	success := map[string]any{"description": http.StatusText(r.status)}
-	switch reply := r.reply.(type) {
-	case nil:
-	case asFile:
-		content := map[string]any{}
-		for _, t := range reply {
-			content[t] = map[string]any{}
-		}
-		success["content"] = content
-	case asStream:
-		events := map[string]any{}
-		for name, data := range reply {
-			events[name] = s.of(reflect.TypeOf(data))
-		}
-		success["content"] = map[string]any{"text/event-stream": map[string]any{
-			"schema": map[string]any{"type": "string"}, "x-events": events,
-		}}
-	default:
-		success["content"] = map[string]any{"application/json": map[string]any{"schema": s.of(reflect.TypeOf(reply))}}
-	}
-	responses := map[string]any{
+	op.RequestBody = describeBody(s, r.body)
+	success := apiResponse{Description: http.StatusText(r.status), Content: describeReply(s, r.reply)}
+	op.Responses = map[string]apiResponse{
 		strconv.Itoa(r.status): success,
-		"default":              map[string]any{"$ref": "#/components/responses/Problem"},
+		"default":              {Ref: "#/components/responses/Problem"},
 	}
 	if r.again != 0 {
-		responses[strconv.Itoa(r.again)] = map[string]any{"description": http.StatusText(r.again), "content": success["content"]}
+		op.Responses[strconv.Itoa(r.again)] = apiResponse{Description: http.StatusText(r.again), Content: success.Content}
 	}
 	for status, refusal := range r.refusals {
-		responses[strconv.Itoa(status)] = map[string]any{
-			"description": http.StatusText(status),
-			"content":     map[string]any{"application/problem+json": map[string]any{"schema": s.of(reflect.TypeOf(refusal))}},
+		schema := s.of(reflect.TypeOf(refusal))
+		op.Responses[strconv.Itoa(status)] = apiResponse{
+			Description: http.StatusText(status),
+			Content:     map[string]mediaType{"application/problem+json": {Schema: &schema}},
 		}
 	}
-	op["responses"] = responses
 	return op, nil
 }
 
-func parameter(s *schemas, p param, in string) map[string]any {
-	out := map[string]any{"name": p.name, "in": in, "schema": s.of(reflect.TypeOf(p.of))}
-	if in == "path" {
-		out["required"] = true
+// describeBody is what a route takes: none, a file, or JSON a client must send or may leave out.
+func describeBody(s *schemas, of any) *requestBody {
+	switch of := of.(type) {
+	case nil:
+		return nil
+	case asFile:
+		c := map[string]mediaType{}
+		for _, t := range of {
+			c[t] = mediaType{Schema: &jsonSchema{Type: schemaType{name: "string"}, ContentMediaType: t}}
+		}
+		return &requestBody{Required: true, Content: c}
+	case optionalBody:
+		schema := s.of(reflect.TypeOf(of.of))
+		return &requestBody{Content: map[string]mediaType{"application/json": {Schema: &schema}}}
+	default:
+		schema := s.of(reflect.TypeOf(of))
+		return &requestBody{Required: true, Content: map[string]mediaType{"application/json": {Schema: &schema}}}
 	}
-	if p.doc != "" {
-		out["description"] = p.doc
+}
+
+// describeReply is what a route answers on success: nothing, a file, a stream of events, or JSON.
+func describeReply(s *schemas, reply any) map[string]mediaType {
+	switch reply := reply.(type) {
+	case nil:
+		return nil
+	case asFile:
+		c := map[string]mediaType{}
+		for _, t := range reply {
+			c[t] = mediaType{}
+		}
+		return c
+	case asStream:
+		events := map[string]jsonSchema{}
+		for name, data := range reply {
+			events[name] = s.of(reflect.TypeOf(data))
+		}
+		return map[string]mediaType{"text/event-stream": {
+			Schema: &jsonSchema{Type: schemaType{name: "string"}}, Events: events,
+		}}
+	default:
+		schema := s.of(reflect.TypeOf(reply))
+		return map[string]mediaType{"application/json": {Schema: &schema}}
 	}
-	return out
+}
+
+func parameter(s *schemas, p param, in string) apiParameter {
+	return apiParameter{Name: p.name, In: in, Schema: s.of(reflect.TypeOf(p.of)), Required: in == "path", Description: p.doc}
 }
 
 func (a *API) openAPI(w http.ResponseWriter, _ *http.Request) {
