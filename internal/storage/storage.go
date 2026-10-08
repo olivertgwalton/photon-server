@@ -314,7 +314,7 @@ func (*Stores) Check(ctx context.Context, b domain.Bucket) error {
 		return fmt.Errorf("what was put in the bucket cannot be read: %w", err)
 	}
 	got, err := io.ReadAll(o)
-	_ = o.Close()
+	err = errors.Join(err, o.Close())
 	if err != nil || !bytes.Equal(got, want) {
 		return fmt.Errorf("what was put in the bucket did not read back as it was: %w", err)
 	}
