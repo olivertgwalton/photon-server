@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -11,17 +12,22 @@ import (
 )
 
 // A node that starts while a restore is under way does not go on to open the database: it says it
-// is not ready, to a balancer and to a browser, until the restore ends or lapses.
+// is not ready, to a balancer and to a browser, until the restore ends or lapses, and failing to
+// look for it once does not end the wait.
 func TestANodeStartingDuringARestoreWaitsSayingItIsNotReady(t *testing.T) {
 	l, err := new(net.ListenConfig).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ended := make(chan bool)
-	underway := func(context.Context) (bool, error) { //nolint:unparam // answers as restoreUnderway does
+	type answer struct {
+		still bool
+		err   error
+	}
+	ended := make(chan answer)
+	underway := func(context.Context) (bool, error) {
 		select {
-		case still := <-ended:
-			return still, nil
+		case a := <-ended:
+			return a.still, a.err
 		default:
 			return true, nil
 		}
@@ -46,7 +52,12 @@ func TestANodeStartingDuringARestoreWaitsSayingItIsNotReady(t *testing.T) {
 		t.Fatalf("stopped waiting while the restore was under way: %v", err)
 	default:
 	}
-	ended <- false
+	ended <- answer{err: errors.New("valkey is unreachable")}
+	select {
+	case ended <- answer{still: false}:
+	case err := <-done:
+		t.Fatalf("stopped waiting when it could not look for the restore: %v", err)
+	}
 	if err := <-done; err != nil {
 		t.Errorf("once the restore ended: %v, want the node to go on starting", err)
 	}
