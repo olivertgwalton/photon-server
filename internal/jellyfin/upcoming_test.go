@@ -43,7 +43,7 @@ func TestAnAppListsUpcomingEpisodes(t *testing.T) {
 	if _, err := st.SaveShowFolder(ctx, tv.ID, "Severance", []byte("v"), store.Show{Title: "Severance", Folder: "Severance"}, []store.Episode{ep}, nil); err != nil {
 		t.Fatal(err)
 	}
-	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash")
+	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

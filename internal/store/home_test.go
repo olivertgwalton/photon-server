@@ -24,7 +24,7 @@ func TestHome(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestNextEpisode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,11 +247,11 @@ func TestNextEpisode(t *testing.T) {
 		t.Errorf("a finished show starts at %s, want its first episode", got)
 	}
 
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{films.ID}}); err != nil {
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{films.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Next(ctx, kid.ID, show); !errors.Is(err, ErrNotFound) {
@@ -266,7 +266,7 @@ func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,15 +377,15 @@ func homeLibraries(t *testing.T, s *Store, films, shows []string) (admin, kid uu
 			t.Fatal(err)
 		}
 	}
-	a, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	a, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	k, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
+	k, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetAccess(ctx, k.ID, ProfileAccess{Libraries: []uuid.UUID{filmLib.ID}}); err != nil {
+	if err := s.SetAccess(ctx, k.ID, ProfileAccess{Libraries: []uuid.UUID{filmLib.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	return a.ID, k.ID

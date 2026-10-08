@@ -61,6 +61,8 @@ const (
 	// signedPath is an HLS route whose path carries its playback's signature.
 	signedPath access = "signed_path"
 	admin      access = "admin"
+	// manages is a route for an admin, or a manager over the profiles it keeps.
+	manages access = "manages"
 	// localNetwork is a route answered only to a client on the server's local networks, and to
 	// any other as though it were not there. It is an operator's, and in no description.
 	localNetwork access = "local_network"
@@ -248,6 +250,8 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 			h = a.requireSignedPath(a.routeToOwner("playback", h))
 		case admin:
 			h = a.requireAdmin(h)
+		case manages:
+			h = a.requireManager(h)
 		case localNetwork:
 			h = a.requireLocalNetwork(h)
 		}
@@ -790,33 +794,33 @@ func (a *API) routes() []route {
 			status: http.StatusOK, reply: asFile{"application/x-subrip", "text/vtt", "text/x-ssa"}, handle: a.subtitleFile,
 		},
 		{
-			pattern: "POST /api/v1/admin/profiles", access: admin, summary: "Add a profile",
+			pattern: "POST /api/v1/admin/profiles", access: manages, summary: "Add a profile",
 			body: addProfileJSON{}, status: http.StatusCreated, reply: profileJSON{}, handle: a.addProfile,
 		},
 		{
-			pattern: "PATCH /api/v1/admin/profiles/{id}", access: admin, summary: "Change a profile",
+			pattern: "PATCH /api/v1/admin/profiles/{id}", access: manages, summary: "Change a profile",
 			body: profileChangeJSON{}, status: http.StatusOK, reply: profileJSON{}, handle: a.setProfile,
 		},
 		{
-			pattern: "DELETE /api/v1/admin/profiles/{id}", access: admin,
+			pattern: "DELETE /api/v1/admin/profiles/{id}", access: manages,
 			summary: "Remove a profile, its devices and what it has watched", status: http.StatusNoContent,
 			handle: a.removeProfile,
 		},
 		{
-			pattern: "POST /api/v1/admin/profiles/{id}/avatar", access: admin,
+			pattern: "POST /api/v1/admin/profiles/{id}/avatar", access: manages,
 			summary: "Give any profile a picture: a JPEG, PNG, GIF or WebP of at most 32 MiB and 50 megapixels",
 			body:    avatarTypes, status: http.StatusOK, reply: profileJSON{}, handle: a.setProfileAvatar,
 		},
 		{
-			pattern: "DELETE /api/v1/admin/profiles/{id}/avatar", access: admin, summary: "Take any profile's picture away",
+			pattern: "DELETE /api/v1/admin/profiles/{id}/avatar", access: manages, summary: "Take any profile's picture away",
 			status: http.StatusNoContent, handle: a.clearProfileAvatar,
 		},
 		{
-			pattern: "GET /api/v1/admin/profiles/{id}/access", access: admin, summary: "What a profile may see",
+			pattern: "GET /api/v1/admin/profiles/{id}/access", access: manages, summary: "What a profile may see",
 			status: http.StatusOK, reply: accessJSON{}, handle: a.profileAccess,
 		},
 		{
-			pattern: "PUT /api/v1/admin/profiles/{id}/access", access: admin, summary: "Replace what a profile may see",
+			pattern: "PUT /api/v1/admin/profiles/{id}/access", access: manages, summary: "Replace what a profile may see",
 			body: accessJSON{}, status: http.StatusNoContent, handle: a.setProfileAccess,
 		},
 		{

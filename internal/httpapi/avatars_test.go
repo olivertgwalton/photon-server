@@ -28,7 +28,7 @@ type fakeAvatars struct {
 	has map[uuid.UUID]uuid.UUID
 }
 
-func (f *fakeAvatars) SetAvatar(_ context.Context, profile, picture uuid.UUID) (domain.Profile, error) {
+func (f *fakeAvatars) SetAvatar(_ context.Context, profile, picture uuid.UUID, _ *uuid.UUID) (domain.Profile, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.has[profile] = picture

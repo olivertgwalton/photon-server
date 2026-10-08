@@ -39,7 +39,7 @@ func newHub(t *testing.T) (*Hub, *store.Store) {
 func TestTheLogKeepsWhatAnAdminReadsLater(t *testing.T) {
 	hub, st := newHub(t)
 	ctx := t.Context()
-	oliver, err := st.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h")
+	oliver, err := st.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

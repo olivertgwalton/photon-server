@@ -15,22 +15,33 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// fakeProfiles has Oliver, the only admin, and keeps the hashes it is given.
+// fakeProfiles has Oliver, the only admin, whom the admin keeps, and keeps the hashes it is given
+// and who each call was made as.
 type fakeProfiles struct {
 	hashes map[string]string
 	access store.ProfileAccess
+	by     []*uuid.UUID
 }
 
-func (f *fakeProfiles) AddProfile(_ context.Context, name string, role domain.Role, hash string) (domain.Profile, error) {
+func (f *fakeProfiles) AddProfile(_ context.Context, name string, role domain.Role, hash string, by *uuid.UUID) (domain.Profile, error) {
+	f.by = append(f.by, by)
 	if name == oliver.Name {
 		return domain.Profile{}, store.ErrProfileExists
 	}
+	if by != nil && role != domain.RoleUser {
+		return domain.Profile{}, store.ErrBeyondManager
+	}
 	f.hashes[name] = hash
-	return domain.Profile{ID: uuid.NewV7(), Name: name, Role: role}, nil
+	p := domain.Profile{ID: uuid.NewV7(), Name: name, Role: role}
+	if by != nil {
+		p.Manager = *by
+	}
+	return p, nil
 }
 
-func (f *fakeProfiles) SetProfile(_ context.Context, id uuid.UUID, c store.ProfileChange) (domain.Profile, error) {
-	if id != oliver.ID {
+func (f *fakeProfiles) SetProfile(_ context.Context, id uuid.UUID, c store.ProfileChange, by *uuid.UUID) (domain.Profile, error) {
+	f.by = append(f.by, by)
+	if id != oliver.ID || by != nil {
 		return domain.Profile{}, store.ErrNotFound
 	}
 	if c.Role != "" && c.Role != domain.RoleAdmin {
@@ -44,22 +55,25 @@ func (f *fakeProfiles) SetProfile(_ context.Context, id uuid.UUID, c store.Profi
 	return renamed, nil
 }
 
-func (f *fakeProfiles) RemoveProfile(_ context.Context, id uuid.UUID) (string, error) {
-	if id == oliver.ID {
+func (f *fakeProfiles) RemoveProfile(_ context.Context, id uuid.UUID, by *uuid.UUID) (string, error) {
+	f.by = append(f.by, by)
+	if id == oliver.ID && by == nil {
 		return "", store.ErrLastAdmin
 	}
 	return "", store.ErrNotFound
 }
 
-func (f *fakeProfiles) Access(_ context.Context, id uuid.UUID) (store.ProfileAccess, error) {
-	if id != oliver.ID {
+func (f *fakeProfiles) Access(_ context.Context, id uuid.UUID, by *uuid.UUID) (store.ProfileAccess, error) {
+	f.by = append(f.by, by)
+	if id != oliver.ID || by != nil {
 		return store.ProfileAccess{}, store.ErrNotFound
 	}
 	return f.access, nil
 }
 
-func (f *fakeProfiles) SetAccess(_ context.Context, id uuid.UUID, a store.ProfileAccess) error {
-	if id != oliver.ID {
+func (f *fakeProfiles) SetAccess(_ context.Context, id uuid.UUID, a store.ProfileAccess, by *uuid.UUID) error {
+	f.by = append(f.by, by)
+	if id != oliver.ID || by != nil {
 		return store.ErrNotFound
 	}
 	f.access = a
@@ -133,5 +147,36 @@ func TestAProfileIsRenamed(t *testing.T) {
 		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.said) {
 			t.Errorf("%s %s %s = %d %s, want %d %s", tc.method, tc.target, tc.body, rec.Code, rec.Body, tc.want, tc.said)
 		}
+	}
+}
+
+// A manager adds users it keeps, as itself, and is refused the admin's other routes and the
+// profiles it does not keep.
+func TestAManagerKeepsOnlyItsOwnProfiles(t *testing.T) {
+	profiles := &fakeProfiles{hashes: map[string]string{}}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, ProfileAdmin: profiles, Events: &fakeEvents{}})
+	for _, tc := range []struct {
+		method, target, body string
+		want                 int
+	}{
+		{http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "user", "password": "correct horse"}`, http.StatusCreated},
+		{http.MethodPost, "/api/v1/admin/profiles", `{"name": "Boss", "role": "admin", "password": "correct horse"}`, http.StatusForbidden},
+		{http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"name": "Ollie"}`, http.StatusNotFound},
+		{http.MethodDelete, "/api/v1/admin/profiles/" + oliver.ID.String(), "", http.StatusNotFound},
+		{http.MethodGet, "/api/v1/admin/profiles/" + oliver.ID.String() + "/access", "", http.StatusNotFound},
+		{http.MethodPut, "/api/v1/admin/profiles/" + oliver.ID.String() + "/access", `{"libraries": []}`, http.StatusNotFound},
+		{http.MethodGet, "/api/v1/admin/server", "", http.StatusForbidden},
+		{http.MethodGet, "/api/v1/admin/network", "", http.StatusForbidden},
+	} {
+		req := httptest.NewRequest(tc.method, tc.target, strings.NewReader(tc.body))
+		req.Header.Set("Authorization", "Bearer "+managerToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Errorf("%s %s %s: %d, want %d: %s", tc.method, tc.target, tc.body, rec.Code, tc.want, rec.Body)
+		}
+	}
+	if len(profiles.by) != 6 || slices.ContainsFunc(profiles.by, func(by *uuid.UUID) bool { return by == nil || *by != sam.ID }) {
+		t.Errorf("made as %v, want six calls as Sam", profiles.by)
 	}
 }

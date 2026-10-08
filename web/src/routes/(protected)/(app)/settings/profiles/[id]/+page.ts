@@ -8,7 +8,7 @@ export const load: PageLoad = async ({ fetch, params }) => {
 	const [profiles, access, libraries] = await Promise.all([
 		need(api.GET("/api/v1/profiles")),
 		need(api.GET("/api/v1/admin/profiles/{id}/access", path)),
-		need(api.GET("/api/v1/admin/libraries")),
+		need(api.GET("/api/v1/libraries")),
 	]);
 	const profile = profiles.items.find((p) => p.id === params.id);
 	if (!profile) error(404, "That isn't here any more.");

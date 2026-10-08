@@ -23,10 +23,10 @@ let { data } = $props();
 const api = client();
 const path = $derived({ params: { path: { id: data.profile.id } } });
 
-const roleOptions = Object.entries(roles).map(([value, label]) => ({
-	value: value as keyof typeof roles,
-	label,
-}));
+// A manager keeps users.
+const roleOptions = Object.entries(roles)
+	.filter(([value]) => data.me.role === "admin" || value === "user")
+	.map(([value, label]) => ({ value: value as keyof typeof roles, label }));
 
 // The ages certificates are for, as the server reads them.
 const ages = [
@@ -93,7 +93,7 @@ function remove() {
 	return act(
 		api.DELETE("/api/v1/admin/profiles/{id}", path),
 		`${data.profile.name} was removed.`,
-		"/settings/server/profiles",
+		"/settings/profiles",
 	);
 }
 </script>
@@ -240,8 +240,6 @@ function remove() {
 			Its devices are signed out, and what it has watched is forgotten. The last
 			admin cannot be removed.
 		</ConfirmButton>
-		<Button href="/settings/server/profiles" variant="ghost"
-			>Back to profiles</Button
-		>
+		<Button href="/settings/profiles" variant="ghost">Back to profiles</Button>
 	</div>
 </div>

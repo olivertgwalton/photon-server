@@ -330,7 +330,7 @@ test("a member puts the libraries in their own order, and may do no more", async
 test("a profile is added, and what another may see is set", async ({
 	page,
 }) => {
-	await logIn(page, "/settings/server/profiles");
+	await logIn(page, "/settings/profiles");
 	await expectAccessible(page);
 	await page.getByRole("button", { name: "Add a profile" }).click();
 	await page.getByRole("textbox", { name: "Name" }).fill("Guest");

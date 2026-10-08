@@ -78,7 +78,7 @@ func TestAWebhookIsToldWhatItAskedFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oliver, err := st.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h")
+	oliver, err := st.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
