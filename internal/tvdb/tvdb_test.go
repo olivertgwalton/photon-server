@@ -70,7 +70,8 @@ func fake(t *testing.T) (*Client, *int) {
 		case "/series/79126/episodes/dvd/eng?page=0":
 			_, _ = w.Write([]byte(`{"data":{"episodes":[{"seasonNumber":1,"number":1,"name":"The Detail"}]},"links":{"next":null}}`))
 		case "/series/79126/episodes/default/eng?page=1":
-			_, _ = w.Write([]byte(`{"data":{"episodes":[{"id":102,"seasonNumber":1,"number":2,"name":"The Detail"}]},"links":{"next":null}}`))
+			_, _ = w.Write([]byte(`{"data":{"episodes":[{"id":102,"seasonNumber":1,"number":2,"name":"The Detail"},
+				{"id":601,"seasonNumber":6,"number":1,"name":"Coming","aired":"2100-01-04"}]},"links":{"next":null}}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -121,8 +122,20 @@ func TestSeasonsReadEveryPage(t *testing.T) {
 	if got[1].Episodes[1].Artwork != nil {
 		t.Errorf("an episode TVDB has no picture for has %v", got[1].Episodes[1].Artwork)
 	}
-	if strings.Join(titles, ", ") != "The Target, The Detail" || len(got) != 1 {
-		t.Errorf("seasons = %+v, want season 1 alone with both pages' episodes", got)
+	if _, ok := got[2]; strings.Join(titles, ", ") != "The Target, The Detail" || ok {
+		t.Errorf("seasons = %+v, want season 1 with both pages' episodes, and nothing of season 2", got)
+	}
+}
+
+func TestAnEpisodeYetToAirIsDescribedThoughItsSeasonIsNotAsked(t *testing.T) {
+	c, _ := fake(t)
+	got, err := c.Seasons(t.Context(), gb, 79126, []int{1}, domain.OrderAired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	coming := got[6].Episodes[1]
+	if coming.Title != "Coming" || !coming.ReleaseDate.Equal(time.Date(2100, 1, 4, 0, 0, 0, 0, time.UTC)) || len(got[6].Episodes) != 1 {
+		t.Errorf("season 6 = %+v, want its episode yet to air", got[6])
 	}
 }
 

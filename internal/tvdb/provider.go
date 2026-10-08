@@ -22,7 +22,7 @@ func (c *Client) Match(ctx context.Context, loc domain.Locale, _ domain.ItemKind
 }
 
 // Describe answers TheTVDB's details of a show and of the seasons asked for, in the order its
-// files are numbered in.
+// files are numbered in, with the episodes yet to air.
 func (c *Client) Describe(ctx context.Context, loc domain.Locale, _ domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
 	n, err := strconv.Atoi(id)
 	if err != nil {

@@ -1,5 +1,6 @@
 <script lang="ts">
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
+import CalendarDaysIcon from "@lucide/svelte/icons/calendar-days";
 import FilmIcon from "@lucide/svelte/icons/film";
 import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
 import DownloadIcon from "@lucide/svelte/icons/download";
@@ -171,7 +172,10 @@ function current(href: string) {
 	<Sidebar.Content>
 		<nav aria-label="Main" class="flex flex-1 flex-col">
 			<Sidebar.Group>
-				<Sidebar.Menu>{@render item("/", "Home", HouseIcon)}</Sidebar.Menu>
+				<Sidebar.Menu>
+					{@render item("/", "Home", HouseIcon)}
+					{@render item("/calendar", "Calendar", CalendarDaysIcon)}
+				</Sidebar.Menu>
 			</Sidebar.Group>
 			{#if libraries.length}
 				<Sidebar.Group>

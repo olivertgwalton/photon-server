@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
 // Subject is what a film or show is matched to a provider by, with the seasons of a show that
@@ -116,7 +117,16 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 			return err
 		}
 		credits := []credited{{item, m.Credits}}
+		var rank map[domain.FieldSource]int
+		if len(seasons) > 0 {
+			if rank, err = episodeRanks(ctx, tx, item); err != nil {
+				return err
+			}
+		}
 		for number, season := range seasons {
+			if err := announce(ctx, tx, item, source, rank, number, season.Episodes); err != nil {
+				return err
+			}
 			seasonID, err := seasonOf(ctx, tx, item, number)
 			if errors.Is(err, pgx.ErrNoRows) {
 				continue
@@ -166,6 +176,54 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 		}
 		return keyTitle(ctx, tx, item)
 	})
+}
+
+// episodeRanks is how highly a show's library ranks each source for its episodes, as ranks is.
+func episodeRanks(ctx context.Context, tx db, show uuid.UUID) (map[domain.FieldSource]int, error) {
+	row := &model.Item{ID: show, Kind: domain.ItemEpisode}
+	if err := tx.QueryRow(ctx, `SELECT library_id FROM items WHERE id = $1`, show).Scan(&row.LibraryID); err != nil {
+		return nil, found(err)
+	}
+	taken, err := rankings(ctx, tx, []*model.Item{row}, domain.FetcherMetadata)
+	if err != nil {
+		return nil, err
+	}
+	return rankOf(taken[show]), nil
+}
+
+// announce keeps the episodes a source lists in a season of a show, each with the day it airs where
+// it says, in place of what was kept of the season, unless a source the show's library ranks above
+// this one for episodes said it.
+func announce(ctx context.Context, tx db, show uuid.UUID, source domain.FieldSource, rank map[domain.FieldSource]int, season int, episodes map[int]domain.Metadata) error {
+	if _, ok := rank[source]; !ok {
+		return nil
+	}
+	var by domain.FieldSource
+	err := tx.QueryRow(ctx, `SELECT source FROM announced_episodes WHERE show_id = $1 AND season_number = $2 LIMIT 1`, show, season).Scan(&by)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if err == nil && rank[by] > rank[source] {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM announced_episodes WHERE show_id = $1 AND season_number = $2`, show, season); err != nil {
+		return err
+	}
+	b := &pgx.Batch{}
+	for number, e := range episodes {
+		var aired *time.Time
+		if !e.ReleaseDate.IsZero() {
+			aired = &e.ReleaseDate
+		}
+		b.Queue(`
+			INSERT INTO announced_episodes (show_id, season_number, episode_number, source, title, overview, air_date)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			show, season, number, source, e.Title, e.Overview, aired)
+	}
+	if b.Len() == 0 {
+		return nil
+	}
+	return tx.SendBatch(ctx, b).Close()
 }
 
 // saveRemoteVideos replaces what a provider links to for a title with the videos it links to now,

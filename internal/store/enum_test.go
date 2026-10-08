@@ -63,6 +63,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"library_extra_kind":       names(domain.ExtraKinds()),
 		"remote_video_kind":        names(domain.ExtraKinds()),
 		"remote_video_source":      plugins([]string{string(domain.SourceTMDB), string(domain.SourceTVDB)}),
+		"announced_source":         plugins([]string{string(domain.SourceTMDB), string(domain.SourceTVDB)}),
 		"task_key":                 names(domain.TaskKeys()),
 		"task_result":              names(domain.TaskResults()),
 		"rating_source":            plugins(names(domain.RatingSources())),

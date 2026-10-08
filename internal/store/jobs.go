@@ -389,14 +389,22 @@ func (s *Store) Identified(ctx context.Context, id uuid.UUID) error {
 	})
 }
 
+// airingRefreshDays is how often a show with an episode announced to air since it was last matched
+// is matched again, sooner than its library refreshes, so its calendar keeps up with its dates and
+// titles and learns of the episode after.
+const airingRefreshDays = 7
+
 // RefreshStale queues a match of every film and show its library refreshes and that was last
-// matched longer ago than the library says, as Jellyfin's scheduled metadata refresh does. It
-// answers how many.
+// matched longer ago than the library says, as Jellyfin's scheduled metadata refresh does, or than
+// airingRefreshDays for a show still airing. It answers how many.
 func (s *Store) RefreshStale(ctx context.Context) (int64, error) {
 	tag, err := s.pool.Exec(ctx, `
 		INSERT INTO jobs (kind, subject, priority)
 		SELECT 'identify', i.id, $1 FROM items i JOIN libraries l ON l.id = i.library_id
 		WHERE i.kind IN ('movie', 'show') AND l.refresh_days > 0
-			AND coalesce(i.identified_at, '-infinity') < now() - make_interval(days => l.refresh_days)`+requeue, refreshPriority)
+			AND (coalesce(i.identified_at, '-infinity') < now() - make_interval(days => l.refresh_days)
+				OR i.identified_at < now() - make_interval(days => $2)
+					AND EXISTS (SELECT 1 FROM announced_episodes a WHERE a.show_id = i.id AND a.air_date >= i.identified_at::date))`+requeue,
+		refreshPriority, airingRefreshDays)
 	return tag.RowsAffected(), err
 }
