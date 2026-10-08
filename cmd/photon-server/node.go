@@ -128,7 +128,7 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	}
 	n.pictures = artwork.New(&n.stores.Artwork, n.st.SetBlurhash)
 	n.previews = analysis.NewPreviews(&n.stores.Previews)
-	pgDump, err := media.Look(cmp.Or(os.Getenv("PHOTON_PG_DUMP"), "pg_dump"))
+	pgDump, err := media.Look("pg_dump")
 	if err != nil {
 		return err
 	}

@@ -58,9 +58,8 @@ refuses a dump made by a newer server than itself. It replaces the database with
 one transaction, so a restore that fails changes nothing; migrates an older dump to this version;
 and clears the server's keys in Valkey, which may name playbacks, nodes and pairings the dump
 never had. Cached artwork, previews and transcodes are left: each server's sweeps forget what the
-database no longer has. It runs `pg_restore` and `psql` (`PHOTON_PG_RESTORE` and `PHOTON_PSQL`,
-as `PHOTON_PG_DUMP` names `pg_dump`) as a role that may drop and create the database's `public`
-schema: its owner.
+database no longer has. It runs `pg_restore` and `psql`, as it backs up with `pg_dump`, each found
+on the `PATH`, as a role that may drop and create the database's `public` schema: its owner.
 
 ### Several servers
 
@@ -86,8 +85,7 @@ need not compress again.
 
 ## Develop
 
-Needs PostgreSQL 18, Valkey 9 and FFmpeg 8 or newer (`ffmpeg` and `ffprobe` on the `PATH`, or
-`PHOTON_FFMPEG` and `PHOTON_FFPROBE`). Without libass in its FFmpeg, as Homebrew's lacks, a server
+Needs PostgreSQL 18, Valkey 9 and FFmpeg 8 or newer (`ffmpeg` and `ffprobe` on the `PATH`). Without libass in its FFmpeg, as Homebrew's lacks, a server
 draws no styled subtitles (ASS) into video, and plays them only on clients that draw them.
 
 ```sh
