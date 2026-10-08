@@ -1,5 +1,6 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
+import { forgetting } from "#lib/answers.js";
 import { Button } from "#lib/components/ui/button/index.js";
 
 // Gives a profile its picture, or takes it away, at path: the profile's own
@@ -14,7 +15,7 @@ let {
 let input = $state<HTMLInputElement>();
 
 async function send(method: "POST" | "DELETE", body?: File) {
-	const answer = await fetch(path, { method, body });
+	const answer = await forgetting(fetch)(path, { method, body });
 	return answer.ok ? {} : { error: await answer.json().catch(() => ({})) };
 }
 

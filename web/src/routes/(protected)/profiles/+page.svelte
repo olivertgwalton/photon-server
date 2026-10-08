@@ -1,6 +1,7 @@
 <script lang="ts">
 import LockIcon from "@lucide/svelte/icons/lock";
 import { goto } from "$app/navigation";
+import { forget } from "#lib/answers.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
@@ -24,7 +25,10 @@ async function choose(event: SubmitEvent) {
 			: { profile_id: profileID },
 	});
 	message = error ? problemMessage(error) : undefined;
-	if (!error) await goto(data.to, { refreshAll: true });
+	if (!error) {
+		forget();
+		await goto(data.to, { refreshAll: true });
+	}
 }
 
 const avatar =

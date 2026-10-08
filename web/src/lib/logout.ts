@@ -1,4 +1,5 @@
 import { goto } from "$app/navigation";
+import { forget } from "#lib/answers.js";
 import { client } from "#lib/api/client.js";
 import { LOGIN } from "#lib/session.js";
 
@@ -8,5 +9,6 @@ export async function logOut() {
 	await client()
 		.POST("/api/v1/auth/logout")
 		.catch(() => {});
+	forget();
 	await goto(LOGIN, { refreshAll: true });
 }

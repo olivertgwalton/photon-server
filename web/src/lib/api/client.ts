@@ -1,14 +1,23 @@
 import { error, redirect } from "@sveltejs/kit";
 import createClient from "openapi-fetch";
+import { invalidate } from "$app/navigation";
 import { navigating } from "$app/state";
+import { type Fetch, forgetting, remembering } from "#lib/answers.js";
 import { loginPath } from "#lib/session.js";
 import { problemMessage } from "./problem.js";
 import type { paths } from "./schema.js";
 
 // The API, on this origin, as the browser's session: the server keeps it in a
-// cookie the page's script never sees. A load passes its own `fetch`.
-export function client(fetch: typeof globalThis.fetch = globalThis.fetch) {
-	return createClient<paths>({ fetch });
+// cookie the page's script never sees. A load passes its own `fetch`, and is
+// answered what it was last and loaded again where that changed; a component
+// asks the server, as nothing would draw it again, and its writes forget what
+// the loads were answered.
+export function client(fetch?: Fetch) {
+	return createClient<paths>({
+		fetch: fetch
+			? remembering(fetch, invalidate)
+			: forgetting(globalThis.fetch),
+	});
 }
 
 type Answer<T> = { data?: T; error?: unknown; response: Response };

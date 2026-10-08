@@ -14,6 +14,7 @@ import ForwardIcon from "@lucide/svelte/icons/rotate-cw";
 import SettingsIcon from "@lucide/svelte/icons/settings";
 import VolumeIcon from "@lucide/svelte/icons/volume-2";
 import MuteIcon from "@lucide/svelte/icons/volume-x";
+import { forgetting } from "#lib/answers.js";
 import type Hls from "hls.js";
 import type JASSUB from "jassub";
 import { onDestroy, onMount, untrack } from "svelte";
@@ -178,7 +179,7 @@ function send(id: string) {
 		// tick later, after a closing page has gone.
 		const call =
 			r.kind === "stop"
-				? fetch(`/api/v1/playbacks/${id}/stop`, {
+				? forgetting(fetch)(`/api/v1/playbacks/${id}/stop`, {
 						method: "POST",
 						headers: { "content-type": "application/json" },
 						body: JSON.stringify({
