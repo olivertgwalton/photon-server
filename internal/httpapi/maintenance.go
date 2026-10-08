@@ -60,3 +60,18 @@ func (a *API) setMaintenance(w http.ResponseWriter, r *http.Request) {
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventMaintenanceChanged})
 	writeJSON(w, a.logger, "application/json", http.StatusOK, showMaintenance(m))
 }
+
+func (a *API) maintenanceRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/admin/maintenance", access: admin,
+			summary: "Say when the server reads its media for previews and markers",
+			status:  http.StatusOK, reply: maintenanceJSON{}, handle: a.adminMaintenance,
+		},
+		{
+			pattern: "PUT /api/v1/admin/maintenance", access: admin,
+			summary: "Replace the maintenance window and when previews and markers wait for it",
+			body:    maintenanceJSON{}, status: http.StatusOK, reply: maintenanceJSON{}, handle: a.setMaintenance,
+		},
+	}
+}

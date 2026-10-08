@@ -129,3 +129,22 @@ func Restoring(logger *slog.Logger) http.Handler {
 		_, _ = io.WriteString(w, restoringPage)
 	})
 }
+
+func (a *API) backupsRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/admin/backups", access: admin,
+			summary: "List the database dumps this node keeps; the backup_database task makes them on the node running it",
+			status:  http.StatusOK, reply: backupsJSON{}, handle: a.adminBackups,
+		},
+		{
+			pattern: "GET /api/v1/admin/backups/{name}", access: admin, summary: "Download a database dump this node keeps",
+			path: []param{backupNameParam}, status: http.StatusOK, reply: asFile{"application/octet-stream"}, handle: a.downloadBackup,
+		},
+		{
+			pattern: "POST /api/v1/admin/backups/{name}/restore", access: admin,
+			summary: "Restore a database dump this node keeps: every node stops, and every stream with it, and starts again once it is restored",
+			path:    []param{backupNameParam}, status: http.StatusAccepted, handle: a.restoreBackup,
+		},
+	}
+}

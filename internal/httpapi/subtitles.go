@@ -114,3 +114,26 @@ func tag(t language.Tag) string {
 	}
 	return t.String()
 }
+
+func (a *API) subtitlesRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/titles/{id}/subtitles/search", access: signedIn,
+			summary: "Find the subtitles providers have in a language for a copy of a film or episode, those made for its very file first",
+			query: []param{
+				{"language", "", "The language, a BCP 47 tag."},
+				{"version_id", uuid.UUID{}, "The copy; the title's longest where none is named."},
+			},
+			status: http.StatusOK, reply: foundSubtitlesJSON{}, handle: a.searchSubtitles,
+		},
+		{
+			pattern: "POST /api/v1/titles/{id}/subtitles", access: signedIn,
+			summary: "Fetch a subtitle a search found and keep it beside the copy, for every profile",
+			body:    fetchSubtitleJSON{}, status: http.StatusCreated, reply: createdJSON{}, handle: a.fetchSubtitle,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/subtitles/{id}", access: admin, summary: "Forget a fetched subtitle",
+			status: http.StatusNoContent, handle: a.removeFetchedSubtitle,
+		},
+	}
+}

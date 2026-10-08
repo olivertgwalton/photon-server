@@ -97,3 +97,26 @@ func (a *API) answeredPlugin(w http.ResponseWriter, r *http.Request, err error) 
 	}
 	return a.answered(w, r, err)
 }
+
+func (a *API) pluginsRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/admin/plugins", access: admin, summary: "List the registered metadata plugins",
+			status: http.StatusOK, reply: listJSON[pluginJSON]{}, handle: a.adminPlugins,
+		},
+		{
+			pattern: "POST /api/v1/admin/plugins", access: admin,
+			summary: "Register the metadata plugin at an address, once its manifest is read",
+			body:    addPluginJSON{}, status: http.StatusCreated, reply: pluginJSON{}, handle: a.addPlugin,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/plugins/{slug}", access: admin,
+			summary: "Forget a plugin; what it said about titles stays",
+			path:    []param{slugParam}, status: http.StatusNoContent, handle: a.removePlugin,
+		},
+		{
+			pattern: "POST /api/v1/admin/plugins/{slug}/refresh", access: admin, summary: "Read a plugin's manifest again",
+			path: []param{slugParam}, status: http.StatusOK, reply: pluginJSON{}, handle: a.refreshPlugin,
+		},
+	}
+}

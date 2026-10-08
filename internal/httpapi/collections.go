@@ -223,3 +223,45 @@ func (a *API) syncList(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+func (a *API) collectionsRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/libraries/{id}/collections", access: signedIn, summary: "Page a library's collections",
+			query: pageParams, status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.libraryCollections,
+		},
+		{
+			pattern: "GET /api/v1/titles/{id}/members", access: signedIn, summary: "A collection's titles",
+			status: http.StatusOK, reply: listJSON[cardJSON]{}, handle: a.members,
+		},
+		{
+			pattern: "POST /api/v1/admin/collections", access: admin, summary: "Make a collection in a library",
+			body: addCollectionJSON{}, status: http.StatusCreated, reply: createdJSON{}, handle: a.addCollection,
+		},
+		{
+			pattern: "PUT /api/v1/admin/collections/{id}/members", access: admin,
+			summary: "Replace an admin's collection's titles, in order",
+			body:    itemIDsJSON{}, status: http.StatusNoContent, handle: a.setMembers,
+		},
+		{
+			pattern: "PUT /api/v1/admin/collections/{id}/rule", access: admin,
+			summary: "Replace a smart collection's rule, and its titles with what it finds",
+			body:    store.SmartRule{}, status: http.StatusNoContent, handle: a.setRule,
+		},
+		{
+			pattern: "POST /api/v1/admin/collections/{id}/sync", access: admin,
+			summary: "Read a list collection's list again now, and keep the titles of it the library has",
+			status:  http.StatusNoContent, handle: a.syncList,
+		},
+		{
+			pattern: "PUT /api/v1/admin/collections/{id}/placement", access: admin,
+			summary: "Show a collection on the home page, or in its library only",
+			body:    placementJSON{}, status: http.StatusNoContent, handle: a.setPlacement,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/collections/{id}", access: admin,
+			summary: "Remove an admin's collection, leaving its titles", status: http.StatusNoContent,
+			handle: a.removeCollection,
+		},
+	}
+}

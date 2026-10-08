@@ -209,3 +209,20 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 func (a *API) me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(sessionOf(r).Profile))
 }
+
+func (a *API) sessionRoutes() []route {
+	return []route{
+		{
+			pattern: "POST /api/v1/auth/login", access: public, summary: "Sign a device in with a profile's password",
+			body: loginRequest{}, status: http.StatusOK, reply: loginResponse{}, handle: a.login,
+		},
+		{
+			pattern: "POST /api/v1/auth/logout", access: signedIn, summary: "Sign this device out",
+			status: http.StatusNoContent, handle: a.logout,
+		},
+		{
+			pattern: "GET /api/v1/me", access: signedIn, summary: "The profile this device is watching as",
+			status: http.StatusOK, reply: profileJSON{}, handle: a.me,
+		},
+	}
+}

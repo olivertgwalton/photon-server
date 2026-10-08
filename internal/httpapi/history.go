@@ -58,3 +58,17 @@ func (a *API) history(w http.ResponseWriter, r *http.Request, profile uuid.UUID)
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[historyEntryJSON]{out, offset, total})
 }
+
+func (a *API) historyRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/history", access: signedIn, summary: "Page the profile's plays, the latest first",
+			query: pageParams, status: http.StatusOK, reply: pageJSON[historyEntryJSON]{}, handle: a.ownHistory,
+		},
+		{
+			pattern: "GET /api/v1/admin/history", access: admin, summary: "Page everyone's plays, or one profile's",
+			query:  append([]param{{"profile", uuid.UUID{}, "Only this profile's plays."}}, pageParams...),
+			status: http.StatusOK, reply: pageJSON[historyEntryJSON]{}, handle: a.adminHistory,
+		},
+	}
+}

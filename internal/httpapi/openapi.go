@@ -222,3 +222,12 @@ func (a *API) openAPI(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", openAPIType)
 	_, _ = w.Write(a.description)
 }
+
+func (a *API) openAPIRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/openapi.json", access: public, summary: "Describe the API in OpenAPI 3.1",
+			status: http.StatusOK, reply: asFile{openAPIType}, handle: a.openAPI,
+		},
+	}
+}

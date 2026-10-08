@@ -244,3 +244,28 @@ func (a *API) checkStorage(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (a *API) storageRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/admin/storage", access: admin,
+			summary: "Where artwork, avatars, theme tunes and previews are kept: each server's disk, or a bucket all share",
+			status:  http.StatusOK, reply: storageStatusJSON{}, handle: a.adminStorage,
+		},
+		{
+			pattern: "PUT /api/v1/admin/storage", access: admin,
+			summary: "Keep artwork and previews elsewhere, once a bucket is checked: the same place signed for differently at once, another moved to as every node copies what it keeps",
+			body:    storageJSON{}, status: http.StatusOK, reply: storageStatusJSON{}, handle: a.setStorage,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/storage/move", access: admin,
+			summary: "Cancel moving what is kept; every node keeps it where it was",
+			status:  http.StatusNoContent, handle: a.cancelStorageMove,
+		},
+		{
+			pattern: "POST /api/v1/admin/storage/check", access: admin,
+			summary: "Check a bucket can keep artwork and previews: that it answers, and keeps, lists and removes what is put there",
+			body:    storageJSON{}, status: http.StatusNoContent, handle: a.checkStorage,
+		},
+	}
+}

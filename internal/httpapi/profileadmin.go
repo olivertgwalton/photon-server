@@ -154,3 +154,29 @@ func (a *API) removeProfile(w http.ResponseWriter, r *http.Request) {
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileRemoved, Details: map[string]any{"name": name}})
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (a *API) profileAdminRoutes() []route {
+	return []route{
+		{
+			pattern: "POST /api/v1/admin/profiles", access: manages, summary: "Add a profile",
+			body: addProfileJSON{}, status: http.StatusCreated, reply: profileJSON{}, handle: a.addProfile,
+		},
+		{
+			pattern: "PATCH /api/v1/admin/profiles/{id}", access: manages, summary: "Change a profile",
+			body: profileChangeJSON{}, status: http.StatusOK, reply: profileJSON{}, handle: a.setProfile,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/profiles/{id}", access: manages,
+			summary: "Remove a profile, its devices and what it has watched", status: http.StatusNoContent,
+			handle: a.removeProfile,
+		},
+		{
+			pattern: "GET /api/v1/admin/profiles/{id}/access", access: manages, summary: "What a profile may see",
+			status: http.StatusOK, reply: accessJSON{}, handle: a.profileAccess,
+		},
+		{
+			pattern: "PUT /api/v1/admin/profiles/{id}/access", access: manages, summary: "Replace what a profile may see",
+			body: accessJSON{}, status: http.StatusNoContent, handle: a.setProfileAccess,
+		},
+	}
+}

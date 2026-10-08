@@ -108,3 +108,25 @@ func (a *API) testWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusAccepted)
 }
+
+func (a *API) webhooksRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/admin/webhooks", access: admin, summary: "List the webhooks, without their secrets",
+			status: http.StatusOK, reply: listJSON[webhookJSON]{}, handle: a.adminWebhooks,
+		},
+		{
+			pattern: "POST /api/v1/admin/webhooks", access: admin,
+			summary: "Add a webhook, answering the secret its bodies are signed with, this once",
+			body:    addWebhookJSON{}, status: http.StatusCreated, reply: addedWebhookJSON{}, handle: a.addWebhook,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/webhooks/{id}", access: admin, summary: "Remove a webhook and what waits to be sent to it",
+			status: http.StatusNoContent, handle: a.removeWebhook,
+		},
+		{
+			pattern: "POST /api/v1/admin/webhooks/{id}/test", access: admin, summary: "Send a webhook.test event to one webhook",
+			status: http.StatusAccepted, handle: a.testWebhook,
+		},
+	}
+}

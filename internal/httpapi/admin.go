@@ -462,3 +462,40 @@ func certificationCountry(s string) (canonical, refusal string) {
 	}
 	return region.String(), ""
 }
+
+func (a *API) adminRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/admin/libraries", access: admin, summary: "List the libraries as an admin keeps them, with everything each holds",
+			status: http.StatusOK, reply: listJSON[adminLibraryListingJSON]{}, handle: a.adminLibraries,
+		},
+		{
+			pattern: "GET /api/v1/admin/locales", access: admin,
+			summary: "List the languages a library may ask its metadata in, and the countries it may take certificates from",
+			status:  http.StatusOK, reply: localesJSON{}, handle: a.locales,
+		},
+		{
+			pattern: "POST /api/v1/admin/libraries", access: admin, summary: "Add a library of a folder and scan it",
+			body: addLibraryJSON{}, status: http.StatusCreated, reply: adminLibraryJSON{}, handle: a.addLibrary,
+		},
+		{
+			pattern: "PATCH /api/v1/admin/libraries/{id}", access: admin, summary: "Change how a library is kept",
+			body: libraryChangeJSON{}, status: http.StatusOK, reply: adminLibraryJSON{}, handle: a.setLibrary,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/libraries/{id}", access: admin, summary: "Remove a library",
+			status: http.StatusNoContent, handle: a.removeLibrary,
+		},
+		{
+			pattern: "POST /api/v1/admin/libraries/{id}/scan", access: admin,
+			summary: "Scan a library now, or only the folder of it a path is in",
+			query:   []param{{"path", "", "An absolute path inside the library: the folder it is, or the nearest folder above it that is there, is scanned with everything under it."}},
+			status:  http.StatusAccepted, handle: a.scanLibrary,
+		},
+		{
+			pattern: "POST /api/v1/admin/libraries/{id}/refresh", access: admin,
+			summary: "Ask the providers about a library's films and shows again: those not yet described, or all",
+			body:    refreshJSON{}, status: http.StatusAccepted, handle: a.refreshLibrary,
+		},
+	}
+}

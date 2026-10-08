@@ -70,3 +70,21 @@ func (a *API) revokeKey(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+func (a *API) keysRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/admin/keys", access: admin, summary: "List the API keys",
+			status: http.StatusOK, reply: listJSON[keyListingJSON]{}, handle: a.keys,
+		},
+		{
+			pattern: "POST /api/v1/admin/keys", access: admin,
+			summary: "Make an API key acting as this admin; its token is shown only now",
+			body:    newKeyJSON{}, status: http.StatusCreated, reply: createdKeyJSON{}, handle: a.createKey,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/keys/{id}", access: admin, summary: "Revoke an API key",
+			status: http.StatusNoContent, handle: a.revokeKey,
+		},
+	}
+}

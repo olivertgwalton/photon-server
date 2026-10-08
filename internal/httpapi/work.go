@@ -182,3 +182,42 @@ func (a *API) stopPlayback(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+func (a *API) workRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/admin/tasks", access: admin, summary: "List the scheduled tasks and how each last ran",
+			status: http.StatusOK, reply: listJSON[taskJSON]{}, handle: a.adminTasks,
+		},
+		{
+			pattern: "POST /api/v1/admin/tasks/{key}/run", access: admin, summary: "Run a task now",
+			path:   []param{{"key", domain.TaskKey(""), "The task."}},
+			status: http.StatusAccepted, handle: a.runTask,
+		},
+		{
+			pattern: "POST /api/v1/admin/tasks/{key}/stop", access: admin,
+			summary: "Stop a task's work: take the jobs it queued off the queue, running or not",
+			path:    []param{{"key", domain.TaskKey(""), "The task."}},
+			status:  http.StatusNoContent, handle: a.stopTask,
+		},
+		{
+			pattern: "GET /api/v1/admin/jobs", access: admin, summary: "Count the job queue and list the dead jobs",
+			status: http.StatusOK, reply: jobQueueJSON{}, handle: a.adminJobs,
+		},
+		{
+			pattern: "POST /api/v1/admin/jobs/{id}/retry", access: admin, summary: "Retry a dead job",
+			path:   []param{{"id", int64(0), "The job."}},
+			status: http.StatusAccepted, handle: a.retryJob,
+		},
+		{
+			pattern: "GET /api/v1/admin/playbacks", access: admin,
+			summary: "List who is playing what, and how many videos this node is transcoding",
+			status:  http.StatusOK, reply: nowPlayingListJSON{}, handle: a.adminPlaybacks,
+		},
+		{
+			pattern: "DELETE /api/v1/admin/playbacks/{id}", access: admin,
+			summary: "Stop anyone's playback, keeping where it had got to", status: http.StatusNoContent,
+			handle: a.routeToOwner("id", http.HandlerFunc(a.stopPlayback)).ServeHTTP,
+		},
+	}
+}

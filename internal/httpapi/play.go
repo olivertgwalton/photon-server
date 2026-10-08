@@ -457,3 +457,23 @@ func (a *API) reportPlayback(w http.ResponseWriter, r *http.Request, report func
 		writeJSON(w, a.logger, "application/json", http.StatusOK, reachedJSON{Reach: reach})
 	}
 }
+
+func (a *API) playRoutes() []route {
+	return []route{
+		{
+			pattern: "POST /api/v1/titles/{id}/play", access: signedIn,
+			summary: "Open a playback of a film or episode, as the client's profile can play it",
+			body:    playJSON{}, status: http.StatusOK, reply: playbackJSON{},
+			refusals: map[int]any{codeNoCompatibleStream.status(): refusalJSON{}}, handle: a.play,
+		},
+		{
+			pattern: "POST /api/v1/playbacks/{id}/progress", access: signedIn, summary: "Say where a playback has got to, paused too: one unheard from for two minutes is stopped",
+			body: playbackProgressJSON{}, status: http.StatusOK, reply: reachedJSON{}, handle: a.playbackProgress,
+		},
+		{
+			pattern: "POST /api/v1/playbacks/{id}/stop", access: signedIn, summary: "Stop a playback, and say where",
+			body: positionJSON{}, status: http.StatusOK, reply: reachedJSON{},
+			handle: a.routeToOwner("id", http.HandlerFunc(a.playbackStop)).ServeHTTP,
+		},
+	}
+}

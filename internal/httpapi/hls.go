@@ -12,6 +12,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/playback"
 )
 
 // owners say which node of the cluster serves a playback's HLS.
@@ -97,4 +98,20 @@ func (a *API) requireSignedPath(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (a *API) hlsRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/hls/{playback}/{exp}/{sig}/{file}", access: signedPath,
+			summary: "A remux's playlist, initialisation, segment or subtitle segment, at the address play answered",
+			path: []param{
+				{"exp", "", "When the address lapses, as the server signed it."},
+				{"sig", "", "The server's signature of the playback and exp."},
+				{"file", "", "main.m3u8, and what it names."},
+			},
+			status: http.StatusOK, reply: asFile{"application/vnd.apple.mpegurl", "text/vtt", "video/mp4", "video/iso.segment"},
+			delivery: playback.DeliverySegment, handle: a.hlsFile,
+		},
+	}
 }

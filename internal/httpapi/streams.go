@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 	"uuid"
@@ -14,6 +15,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/library"
+	"github.com/olivertgwalton/photon-server/internal/playback"
 )
 
 // fileTypes are the types of the files a library holds, which Go's own table lacks.
@@ -158,4 +160,34 @@ func (a *API) requireSignature(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (a *API) streamsRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/playbacks/{playback}/parts/{id}/stream", access: signedAddress,
+			summary: "A copy's file as it is, in byte ranges, at the address play answered, for as long as the playback lasts",
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, delivery: playback.DeliveryFile,
+			handle: a.playbackPartStream,
+		},
+		{
+			pattern: "GET /api/v1/parts/{id}/stream", access: signedAddress,
+			summary: "A copy's file as it is, in byte ranges, at the address a download answered",
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, delivery: playback.DeliveryFile,
+			handle: a.partStream,
+		},
+		{
+			pattern: "GET /api/v1/parts/{id}/sample", access: signedIn,
+			summary: "The first " + strconv.Itoa(sampleBytes>>20) + " MiB of a part's file, in byte ranges, to time the connection; no playback",
+			status:  http.StatusOK, reply: asFile{"video/*"}, handle: a.partSample,
+		},
+		{
+			pattern: "GET /api/v1/subtitles/{id}/file", access: signedAddress,
+			summary: "A subtitle file beside a copy, as it is or as WebVTT, at the address play answered",
+			query: append([]param{
+				{"format", subtitleOriginal, "webvtt converts a text subtitle to WebVTT; original, the default, is the file as it is."},
+			}, signatureParams...),
+			status: http.StatusOK, reply: asFile{"application/x-subrip", "text/vtt", "text/x-ssa"}, handle: a.subtitleFile,
+		},
+	}
 }

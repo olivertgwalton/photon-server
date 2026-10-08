@@ -263,3 +263,18 @@ func (a *API) snapshot(ctx context.Context) (snapshotJSON, error) {
 	out.Playbacks = playbacksJSON(playbacks)
 	return out, nil
 }
+
+func (a *API) activityRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/admin/activity", access: admin, summary: "Page the activity log, the newest first",
+			query:  append([]param{{"kind", domain.EventKind(""), "Only entries of this kind, one the log keeps."}}, pageParams...),
+			status: http.StatusOK, reply: pageJSON[eventJSON]{}, handle: a.adminActivity,
+		},
+		{
+			pattern: "GET /api/v1/admin/events", access: admin,
+			summary: "Stream a snapshot of what is going on, then each event as it happens, as Server-Sent Events",
+			status:  http.StatusOK, reply: eventStream(), handle: a.adminEvents,
+		},
+	}
+}

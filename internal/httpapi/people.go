@@ -83,3 +83,12 @@ func (a *API) person(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
+
+func (a *API) peopleRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/people/{id}", access: signedIn, summary: "Someone's page and their titles here",
+			status: http.StatusOK, reply: personJSON{}, handle: a.person,
+		},
+	}
+}

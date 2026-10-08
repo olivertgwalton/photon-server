@@ -3,6 +3,7 @@ package httpapi
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 	"uuid"
 
@@ -78,4 +79,19 @@ func (a *API) calendar(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+}
+
+func (a *API) calendarRoutes() []route {
+	return []route{
+		{
+			pattern: "GET /api/v1/calendar", access: signedIn,
+			summary: "The days between two with a film released or an episode aired, here or announced, that the profile sees",
+			query: []param{
+				{"start", domain.Date{}, "The first day; required."},
+				{"end", domain.Date{}, "The last day, from start to " + strconv.Itoa(maxCalendarDays-1) + " days on; required."},
+				{"filter", domain.CalendarFilter(""), "Whose titles: everything the profile sees by default, or its own, begun, on its watchlist or favourites."},
+			},
+			status: http.StatusOK, reply: calendarJSON{}, handle: a.calendar,
+		},
+	}
 }

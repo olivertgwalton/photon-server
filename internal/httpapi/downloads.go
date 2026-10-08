@@ -242,3 +242,34 @@ func (a *API) downloadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	a.serveFile(w, r, f, "", http.Header{"Content-Type": {"video/mp4"}})
 }
+
+func (a *API) downloadsRoutes() []route {
+	return []route{
+		{
+			pattern: "POST /api/v1/downloads", access: signedIn,
+			summary: "Download a film or episode no larger than a bitrate: its file as it is, else converted to the video the device plays; asked again, the same download",
+			body:    downloadRequestJSON{}, status: http.StatusCreated, reply: downloadJSON{}, again: http.StatusOK, handle: a.addDownload,
+		},
+		{
+			pattern: "GET /api/v1/downloads", access: signedIn,
+			summary: "List this device's downloads, or the profile's on every device, the newest first",
+			query:   []param{{"scope", scopeDevice, "device, the default, is this device's; profile is the profile's on every device."}},
+			status:  http.StatusOK, reply: listJSON[downloadJSON]{}, handle: a.ownDownloads,
+		},
+		{
+			pattern: "GET /api/v1/downloads/{id}", access: signedIn, summary: "A download, as far as its conversion has got",
+			status: http.StatusOK, reply: downloadJSON{}, handle: a.download,
+		},
+		{
+			pattern: "DELETE /api/v1/downloads/{id}", access: signedIn,
+			summary: "Remove a download, and its conversion where no other download needs it",
+			status:  http.StatusNoContent, handle: a.removeDownload,
+		},
+		{
+			pattern: "GET /api/v1/downloads/{id}/file", access: signedAddress,
+			summary: "A download's conversion, in byte ranges, at the address the download answered",
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/mp4"}, delivery: playback.DeliveryFile,
+			handle: a.downloadFile,
+		},
+	}
+}
