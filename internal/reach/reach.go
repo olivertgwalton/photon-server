@@ -85,9 +85,6 @@ func (r *Reach) now() *state {
 	return r.state.Load()
 }
 
-// Proxies are the peers whose X-Forwarded-For names the client.
-func (r *Reach) Proxies() peer.Proxies { return r.now().proxies }
-
 // Client is the client a request came from, as a trusted proxy says.
 func (r *Reach) Client(req *http.Request) netip.Addr { return r.now().proxies.Client(req) }
 
