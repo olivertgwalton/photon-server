@@ -92,6 +92,8 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"previews_timing":          names(domain.Timings()),
 		"markers_timing":           names(domain.Timings()),
 		"delivery_event":           names(append(domain.HookableEventKinds(), domain.EventWebhookTest)),
+		"import_source":            names(domain.ImportSources()),
+		"import_status":            names(domain.ImportStatuses()),
 	} {
 		var def string
 		err := s.pool.QueryRow(t.Context(),

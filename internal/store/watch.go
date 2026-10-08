@@ -55,7 +55,7 @@ func (s *Store) SaveProgress(ctx context.Context, profile, item uuid.UUID, posit
 	switch reach {
 	case domain.ReachEnd:
 		if before == domain.ReachEnd {
-			tag, err = s.watched(ctx, profile, []uuid.UUID{item}, at)
+			tag, err = s.watched(ctx, profile, []uuid.UUID{item}, 1, at)
 		} else {
 			tag, err = s.played(ctx, profile, item, at)
 		}
@@ -90,26 +90,36 @@ func (s *Store) MarkWatched(ctx context.Context, profile, item uuid.UUID, at *ti
 	if err != nil {
 		return err
 	}
-	_, err = s.watched(ctx, profile, ids(leaves), at)
+	_, err = s.watched(ctx, profile, ids(leaves), 1, at)
+	return err
+}
+
+// ImportWatched marks a film or episode watched at a time, played at least plays times, as another
+// server had it. ErrSuperseded if the profile's state of it has changed since.
+func (s *Store) ImportWatched(ctx context.Context, profile, item uuid.UUID, plays int, at time.Time) error {
+	tag, err := s.watched(ctx, profile, []uuid.UUID{item}, plays, &at)
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrSuperseded
+	}
 	return err
 }
 
 // watched marks titles watched without counting a play: one marked by hand has been played at
 // least once, and keeps when it was first watched, as Jellyfin's MarkPlayed does. A profile's state
 // of a title is its state wherever the title is listed, so each of these writes them all.
-func (s *Store) watched(ctx context.Context, profile uuid.UUID, items []uuid.UUID, at *time.Time) (pgconn.CommandTag, error) {
+func (s *Store) watched(ctx context.Context, profile uuid.UUID, items []uuid.UUID, plays int, at *time.Time) (pgconn.CommandTag, error) {
 	if len(items) == 0 {
 		return pgconn.CommandTag{}, nil
 	}
 	return s.finish(ctx, profile, items, `
 		INSERT INTO watch_state (profile_id, item_id, plays, watched_at, last_played_at, changed_at)
-		SELECT DISTINCT $1::uuid, t, 1, w, w, w
+		SELECT DISTINCT $1::uuid, t, $4::int, w, w, w
 		FROM unnest($2::uuid[]) i, same_title(i) t, least($3::timestamptz, now()) w ORDER BY t
 		ON CONFLICT (profile_id, item_id) DO UPDATE SET
-			position_ms = 0, plays = greatest(watch_state.plays, 1),
+			position_ms = 0, plays = greatest(watch_state.plays, excluded.plays),
 			watched_at = coalesce(watch_state.watched_at, excluded.watched_at),
 			last_played_at = excluded.last_played_at, changed_at = excluded.changed_at`+newest,
-		profile, items, at)
+		profile, items, at, plays)
 }
 
 // played counts a viewing that reached the end.

@@ -69,6 +69,7 @@ export const jobKinds: Record<Schemas["JobKind"], string> = {
 	deliver_webhook: "Send a webhook",
 	theme: "Fetch a theme tune",
 	probe: "Read media info",
+	import_history: "Import watch history",
 };
 
 export const reasons: Record<Schemas["TranscodeReason"], string> = {
