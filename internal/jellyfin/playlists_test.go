@@ -253,3 +253,48 @@ func TestAnAppRearrangesAPlaylist(t *testing.T) {
 		t.Errorf("moving an entry taken out: %d, want 404", code)
 	}
 }
+
+// An app reads a playlist as Jellyfin's apps edit one, shared with no one, and renames it; it may
+// not share it, nor replace its titles at once, and no profile reads or renames another's.
+func TestAnAppEditsAPlaylist(t *testing.T) {
+	h := newHousehold(t)
+	night, err := h.st.AddPlaylist(t.Context(), h.ada.ID, "Night", []uuid.UUID{h.films["Heat"], h.films["Thief"]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/Playlists/" + guid(night)
+	var dto struct {
+		OpenAccess bool
+		Shares     []any
+		ItemIDs    []string
+	}
+	h.read(t, "pst_ada", path, &dto)
+	if dto.OpenAccess || dto.Shares == nil || len(dto.Shares) != 0 || len(dto.ItemIDs) != 2 || dto.ItemIDs[1] != guid(h.films["Thief"]) {
+		t.Errorf("Night = %+v, want Heat and Thief, shared with no one", dto)
+	}
+	if code := h.send(t, http.MethodPost, "pst_ada", path, `{"Name":"Late","IsPublic":false}`, nil); code != http.StatusNoContent {
+		t.Errorf("renaming Night: %d, want 204", code)
+	}
+	var late struct{ Name string }
+	if h.read(t, "pst_ada", "/Items/"+guid(night), &late); late.Name != "Late" {
+		t.Errorf("renamed, Night is %q, want Late", late.Name)
+	}
+	for _, refused := range []struct{ name, body string }{
+		{"shared", `{"Name":"Ours","IsPublic":true}`},
+		{"given titles at once", `{"Name":"Late","Ids":["` + guid(h.films["Alien"]) + `"]}`},
+		{"unnamed", `{}`},
+	} {
+		if code := h.send(t, http.MethodPost, "pst_ada", path, refused.body, nil); code != http.StatusBadRequest {
+			t.Errorf("Late %s: %d, want 400", refused.name, code)
+		}
+	}
+	if code := h.read(t, "pst_bob", path, nil); code != http.StatusNotFound {
+		t.Errorf("Bob reads Ada's playlist: %d, want 404", code)
+	}
+	if code := h.send(t, http.MethodPost, "pst_bob", path, `{"Name":"Mine"}`, nil); code != http.StatusNotFound {
+		t.Errorf("Bob renames Ada's playlist: %d, want 404", code)
+	}
+	if h.read(t, "pst_ada", "/Items/"+guid(night), &late); late.Name != "Late" {
+		t.Errorf("after all that, Night is %q, want Late", late.Name)
+	}
+}

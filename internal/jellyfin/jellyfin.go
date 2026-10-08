@@ -121,6 +121,8 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		"GET /Items/{itemId}/LocalTrailers", "GET /Users/{userId}/Items/{itemId}/LocalTrailers",
 		"GET /Items/{itemId}/SpecialFeatures", "GET /Users/{userId}/Items/{itemId}/SpecialFeatures")
 	a.handle(a.createPlaylist, "POST /Playlists")
+	a.handle(a.playlist, "GET /Playlists/{playlistId}")
+	a.handle(a.updatePlaylist, "POST /Playlists/{playlistId}")
 	a.handle(a.playlistItems, "GET /Playlists/{playlistId}/Items")
 	a.handle(a.addToPlaylist, "POST /Playlists/{playlistId}/Items")
 	a.handle(a.removeFromPlaylist, "DELETE /Playlists/{playlistId}/Items")

@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"strconv"
 	"uuid"
@@ -18,6 +19,7 @@ type playlists interface {
 	AddToPlaylist(ctx context.Context, profile, playlist uuid.UUID, items []uuid.UUID) error
 	RemoveFromPlaylist(ctx context.Context, profile, playlist, entry uuid.UUID) error
 	MovePlaylistEntry(ctx context.Context, profile, playlist, entry uuid.UUID, position int) error
+	RenamePlaylist(ctx context.Context, profile, playlist uuid.UUID, name string) error
 }
 
 // fromPlaylist is one of the profile's playlists, as Jellyfin's apps list one: a folder of video.
@@ -219,6 +221,56 @@ func (a *API) moveInPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.changed(w, r, id, a.svc.Playlists.MovePlaylistEntry(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, entry, index))
+}
+
+// playlist answers the profile's playlist as Jellyfin's PlaylistDto: shared with no one, and the
+// titles it plays in order.
+func (a *API) playlist(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.playlistID(w, r)
+	if !ok {
+		return
+	}
+	entries, _, err := a.svc.Playlists.PlaylistEntries(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, 0, math.MaxInt32)
+	if isNotFound(err) {
+		a.refuse(w, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	out := struct {
+		OpenAccess bool       `json:"OpenAccess"`
+		Shares     []struct{} `json:"Shares"`
+		ItemIDs    []string   `json:"ItemIds"`
+	}{Shares: []struct{}{}, ItemIDs: make([]string, len(entries))}
+	for n, e := range entries {
+		out.ItemIDs[n] = guid(e.Card.ID)
+	}
+	a.writeJSON(w, out)
+}
+
+// updatePlaylist renames the profile's playlist. Its titles are changed an entry at a time, so a
+// whole new list of them is refused, as is sharing it.
+func (a *API) updatePlaylist(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.playlistID(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Name string   `json:"Name"`
+		IDs  []string `json:"Ids"`
+		sharing
+	}
+	if !a.readJSON(w, r, &req) {
+		return
+	}
+	profile := auth.SessionOf(r.Context()).Profile.ID
+	if req.Name == "" || req.IDs != nil || req.shared(profile) {
+		a.refuse(w, http.StatusBadRequest)
+		return
+	}
+	a.changed(w, r, id, a.svc.Playlists.RenamePlaylist(r.Context(), profile, id, req.Name))
 }
 
 // changed answers a change to the profile's playlist: 404 where it has no such playlist, or the
