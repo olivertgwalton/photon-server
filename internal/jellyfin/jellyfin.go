@@ -40,6 +40,7 @@ type Services struct {
 	Raise     func(ctx context.Context, e domain.Event)
 	Proxies   peer.Proxies
 	Catalogue catalogue
+	Playlists playlists
 	Pictures  pictureFiles
 	Playing   playing
 	Playbacks playbacks

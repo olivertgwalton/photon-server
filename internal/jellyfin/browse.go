@@ -255,7 +255,7 @@ var libraryKinds = map[domain.LibraryKind]string{domain.LibraryMovies: "Movie", 
 
 // items answers Jellyfin's /Items: the items an app names, a library's films or shows, a show's
 // seasons or episodes, a season's episodes, or what matches a search; every library at once where
-// an app names none.
+// an app names none, and the profile's playlists where it asks for those alone.
 func (a *API) items(w http.ResponseWriter, r *http.Request) {
 	profile, l := auth.SessionOf(r.Context()).Profile.ID, listedOf(w, r)
 	types := values(r, "includeItemTypes")
@@ -280,6 +280,8 @@ func (a *API) items(w http.ResponseWriter, r *http.Request) {
 	switch lib, ok := seen[parent]; {
 	case ok:
 		a.wall([]*store.SeenLibrary{lib}, w, r, types, l)
+	case parent == uuid.UUID{} && len(types) == 1 && strings.EqualFold(types[0], "Playlist"):
+		a.playlists(w, r, l)
 	case parent == uuid.UUID{} && len(types) == 0 && !strings.EqualFold(query(r, "recursive"), "true"):
 		a.views(w, r)
 	case parent == uuid.UUID{}:
@@ -390,7 +392,7 @@ func (a *API) children(w http.ResponseWriter, r *http.Request, profile, parent u
 	switch named.Kind {
 	case store.NamedTitle:
 		a.titleChildren(w, r, profile, parent, named.Title, types, l)
-	case store.NamedAnnounced, store.NamedPerson:
+	case store.NamedAnnounced, store.NamedPerson, store.NamedPlaylist:
 		a.writeJSON(w, none)
 	}
 }
@@ -437,7 +439,7 @@ func (a *API) writeSeasons(w http.ResponseWriter, r *http.Request, show uuid.UUI
 }
 
 // item answers one item: a library, a title with all photon knows of it, an episode announced,
-// or someone credited on a title.
+// someone credited on a title, or one of the profile's playlists.
 func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("itemId"))
 	if err != nil {
@@ -469,6 +471,8 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 		a.announcedItem(w, r, id)
 	case store.NamedPerson:
 		a.person(w, r, id)
+	case store.NamedPlaylist:
+		a.playlistItem(w, r, id)
 	}
 }
 
