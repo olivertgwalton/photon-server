@@ -3,14 +3,9 @@ package httpapi
 import (
 	"context"
 	"net/http"
-	"os"
-	"path"
 	"uuid"
 
-	"github.com/olivertgwalton/photon-server/internal/blob"
-	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/library"
-	"github.com/olivertgwalton/photon-server/internal/naming"
+	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -29,20 +24,7 @@ func (a *API) theme(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	var o blob.Object
-	// The standard library knows no sound file's type by its name.
-	var kind string
-	switch t.Source {
-	case domain.ThemeFromFile:
-		var f *os.File
-		if f, err = library.Open(t.Root, t.Path); err == nil {
-			o, err = blob.OfFile(f)
-		}
-		kind, _ = naming.AudioType(path.Base(t.Path))
-	case domain.ThemeFromThemerr:
-		o, err = a.svc.Artwork.Kept(r.Context(), id)
-		kind = "audio/mp4"
-	}
+	o, kind, err := artwork.OpenTheme(r.Context(), a.svc.Artwork, id, t.Source, t.Root, t.Path)
 	if a.answered(w, r, err) {
 		return
 	}

@@ -189,7 +189,7 @@ func (n *node) wire(ctx context.Context) error {
 	n.secured = secure.New(st, n.hub.Subscribe, logger)
 	n.jellyfin, err = jellyfin.NewListener(st, n.hub.Subscribe, jellyfin.New(logger, n.info, jellyfin.Services{
 		Auth: n.auth, Limits: n.cache, Raise: n.hub.Raise, Proxies: trusted, Catalogue: st, Playlists: st,
-		Pictures: n.pictures, Playing: files, Playbacks: n.sessions, Watching: st, Previews: st, PreviewFiles: n.previews,
+		Pictures: n.pictures, Playing: files, Playbacks: n.sessions, Watching: st, Themes: st, Previews: st, PreviewFiles: n.previews,
 		HLS: n.remuxer, Placer: p.placer, Owners: p.owners, Signer: p.signer,
 		Encoding: playback.Encoding{HEVC: n.hw.HEVC, Libass: n.tools.Libass}, Network: st, Sent: p.sent,
 	}), n.listen, n.secured.Listen, n.secured.TLSConfig(), logger)
