@@ -129,3 +129,7 @@ the one running scheduled tasks; the others leave it out, so it is never counted
 The lease passes to another node within 20 seconds of its holder stopping, so for a moment either
 or neither says them. Query them across instances with `max without(instance)`, as
 `max without(instance) (photon_jobs{state="queued"})`, never `sum`.
+
+An admin is answered what every node's metrics say now, and what the nodes share, at
+`GET /api/v1/admin/metrics`: the node asked asks each other at `GET /api/v1/internal/metrics`,
+signed as a remux is, and lists one that does not answer within 2 seconds as unreachable.

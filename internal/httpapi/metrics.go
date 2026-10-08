@@ -1,9 +1,15 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
+	"slices"
+	"sync"
 	"time"
 	"uuid"
 
@@ -31,13 +37,35 @@ type metricsJSON struct {
 	Cluster *clusterMetricsJSON `json:"cluster,omitempty"`
 }
 
+// nodeMetricsJSON is a node running, as it tells the others of itself, and what its metrics say;
+// one unreachable says why instead.
 type nodeMetricsJSON struct {
 	ID           uuid.UUID               `json:"id"`
 	Name         string                  `json:"name"`
 	Role         domain.NodeRole         `json:"role"`
 	Availability domain.NodeAvailability `json:"availability"`
-	Metrics      ownMetricsJSON          `json:"metrics"`
+	Reach        nodeReach               `json:"reach"`
+	Error        string                  `json:"error,omitzero"`
+	Metrics      *ownMetricsJSON         `json:"metrics,omitempty"`
 }
+
+// nodeReach is whether a node answered when asked for its metrics.
+type nodeReach string
+
+const (
+	reachAnswered nodeReach = "answered"
+	// reachUnreachable is a node that did not answer within gatherWithin, or answered an error.
+	reachUnreachable nodeReach = "unreachable"
+)
+
+func nodeReaches() []nodeReach { return []nodeReach{reachAnswered, reachUnreachable} }
+
+// gatherWithin is how long a node has to answer its metrics before it is shown unreachable: a
+// dashboard asks every few seconds, and waits on the slowest node.
+const gatherWithin = 2 * time.Second
+
+// metricsPath is where a node is asked for its metrics by another.
+const metricsPath = "/api/v1/internal/metrics"
 
 // ownMetricsJSON is what a node's metrics say of itself, gathered at at. The counters, starts,
 // refusals, sent bytes and CPU seconds, are totals since it started, for rates between two
@@ -173,16 +201,71 @@ func label(m *dto.Metric, name string) string {
 	return ""
 }
 
-// adminMetrics answers what the nodes' metrics say now.
+// nodeMetrics answers another node what this one's metrics say.
+func (a *API) nodeMetrics(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, a.logger, "application/json", http.StatusOK, a.gather(r.Context()))
+}
+
+// adminMetrics answers what the metrics of every node running say now, asking the others at once,
+// and what the nodes share, from the node holding the scheduler lease. A node that does not answer
+// is listed unreachable.
 func (a *API) adminMetrics(w http.ResponseWriter, r *http.Request) {
-	self := a.svc.Placer.Self()
-	g := a.gather(r.Context())
-	out := metricsJSON{
-		Nodes:   []nodeMetricsJSON{{ID: self.ID, Name: self.Name, Role: self.Role, Availability: self.Availability, Metrics: g.Own}},
-		Cluster: g.Cluster,
+	ctx := r.Context()
+	online, err := a.online(ctx)
+	if a.answered(w, r, err) {
+		return
 	}
-	if out.Cluster != nil {
-		out.Cluster.Node = self.ID
+	nodes := slices.SortedFunc(maps.Values(online), func(x, y domain.Node) int {
+		return cmp.Or(cmp.Compare(x.Name, y.Name), x.ID.Compare(y.ID))
+	})
+	self := a.svc.Placer.Self().ID
+	gathered := make([]gatheredJSON, len(nodes))
+	errs := make([]error, len(nodes))
+	var wg sync.WaitGroup
+	for i, n := range nodes {
+		wg.Go(func() {
+			if n.ID == self {
+				gathered[i] = a.gather(ctx)
+				return
+			}
+			gathered[i], errs[i] = a.askMetrics(ctx, n)
+		})
+	}
+	wg.Wait()
+	out := metricsJSON{Nodes: make([]nodeMetricsJSON, len(nodes))}
+	for i, n := range nodes {
+		out.Nodes[i] = nodeMetricsJSON{ID: n.ID, Name: n.Name, Role: n.Role, Availability: n.Availability, Reach: reachAnswered}
+		if errs[i] != nil {
+			out.Nodes[i].Reach, out.Nodes[i].Error = reachUnreachable, errs[i].Error()
+			continue
+		}
+		out.Nodes[i].Metrics = &gathered[i].Own
+		// While the lease passes, two nodes may say what is shared, or neither.
+		if c := gathered[i].Cluster; c != nil && out.Cluster == nil {
+			c.Node = n.ID
+			out.Cluster = c
+		}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+}
+
+// askMetrics asks n, another node, what its metrics say.
+func (a *API) askMetrics(ctx context.Context, n domain.Node) (gatheredJSON, error) {
+	ctx, cancel := context.WithTimeout(ctx, gatherWithin)
+	defer cancel()
+	var g gatheredJSON
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, n.Address+metricsPath, nil)
+	if err != nil {
+		return g, err
+	}
+	a.svc.NodeKey.Sign(req, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return g, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return g, fmt.Errorf("%s answered %s", n.Name, resp.Status)
+	}
+	return g, json.NewDecoder(resp.Body).Decode(&g)
 }

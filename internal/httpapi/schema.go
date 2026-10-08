@@ -106,6 +106,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[decision]():                   values(decisions()),
 	reflect.TypeFor[hiddenFolders]():              values(hiddenFolderModes()),
 	reflect.TypeFor[problemCode]():                values(problemCodes()),
+	reflect.TypeFor[nodeReach]():                  values(nodeReaches()),
 	reflect.TypeFor[subtitleFormat]():             values(subtitleFormats()),
 }
 

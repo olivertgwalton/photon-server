@@ -256,8 +256,10 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		}
 		a.mux.Handle(r.pattern, h)
 	}
-	// Another node asking this one to open a remux is no client's to call, and so in no description.
+	// Another node asking this one to open a remux, or for its metrics, is no client's to call, and
+	// so in no description.
 	a.mux.Handle("POST /api/v1/internal/playbacks/{id}/remux", a.svc.NodeKey.Verify(http.HandlerFunc(a.openRemote)))
+	a.mux.Handle("GET "+metricsPath, a.svc.NodeKey.Verify(http.HandlerFunc(a.nodeMetrics)))
 	a.mux.HandleFunc("/", a.unmatched)
 	a.handler = a.mux
 	if svc.Secure != nil {

@@ -7057,12 +7057,16 @@ export interface components {
         };
         NodeMetrics: {
             availability: components["schemas"]["NodeAvailability"];
+            error?: string;
             /** Format: uuid */
             id: string;
-            metrics: components["schemas"]["OwnMetrics"];
+            metrics?: components["schemas"]["OwnMetrics"] | null;
             name: string;
+            reach: components["schemas"]["NodeReach"];
             role: components["schemas"]["NodeRole"];
         };
+        /** @enum {string} */
+        NodeReach: "answered" | "unreachable";
         /** @enum {string} */
         NodeRole: "all" | "serve" | "transcode";
         NowPlaying: {

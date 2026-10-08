@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -16,6 +18,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 )
 
@@ -123,4 +126,77 @@ func metricsAs(api *API, token string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	api.ServeHTTP(rec, req)
 	return rec
+}
+
+// Every node running is asked for its metrics, by a request only a node can make: what the nodes
+// share is said once, by the node holding the lease, and a node that does not answer is listed as
+// unreachable beside those that do.
+func TestEveryNodeIsAskedForItsMetrics(t *testing.T) {
+	key, err := nodecall.NewKey([]byte("cluster signing key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gauge := func(reg *prometheus.Registry, name string, value float64, labels ...string) {
+		var names, values []string
+		for i := 0; i < len(labels); i += 2 {
+			names, values = append(names, labels[i]), append(values, labels[i+1])
+		}
+		g := prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: name, Help: name}, names)
+		g.WithLabelValues(values...).Set(value)
+		reg.MustRegister(g)
+	}
+	leading := prometheus.NewRegistry()
+	gauge(leading, "photon_jobs", 3, "kind", "identify", "state", "queued")
+	gauge(leading, "photon_nodes", 2, "state", "active")
+	gauge(leading, "photon_task_last_finished_timestamp_seconds", 1_791_460_800, "task", "scan_libraries", "result", "succeeded")
+	leader := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Metrics: leading, NodeKey: key}))
+	defer leader.Close()
+	gone := httptest.NewServer(http.NotFoundHandler())
+	gone.Close()
+
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, leader.URL+metricsPath, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("a client asking a node for its metrics: %s, want 401", resp.Status)
+	}
+
+	own := prometheus.NewRegistry()
+	gauge(own, "photon_playbacks", 1, "method", "direct")
+	self, beta, gamma := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Metrics: own, NodeKey: key,
+		Valkey: fakeBackend{nodes: []domain.Node{
+			{ID: gamma, Name: "gamma", Address: gone.URL, Role: domain.NodeAll, Availability: domain.NodeActive},
+			{ID: beta, Name: "beta", Address: leader.URL, Role: domain.NodeTranscode, Availability: domain.NodeDraining},
+		}},
+		Placer: playback.NewPlacer(fakeBackend{}, func() domain.Node {
+			return domain.Node{ID: self, Name: "alpha", Role: domain.NodeAll, Availability: domain.NodeActive}
+		}, nil, key),
+	})
+	got := adminMetrics(t, api)
+	if len(got.Nodes) != 3 {
+		t.Fatalf("nodes %+v, want alpha, beta and gamma", got.Nodes)
+	}
+	alpha, b, g := got.Nodes[0], got.Nodes[1], got.Nodes[2]
+	if alpha.ID != self || alpha.Reach != reachAnswered || alpha.Metrics == nil || alpha.Metrics.Playbacks[domain.PlayDirect] != 1 {
+		t.Errorf("this node: %+v, want it answering its one direct play", alpha)
+	}
+	if b.ID != beta || b.Reach != reachAnswered || b.Metrics == nil || b.Availability != domain.NodeDraining {
+		t.Errorf("the leader: %+v, want it answering, draining", b)
+	}
+	if g.ID != gamma || g.Reach != reachUnreachable || g.Error == "" || g.Metrics != nil {
+		t.Errorf("the node gone: %+v, want it unreachable, saying why", g)
+	}
+	want := clusterMetricsJSON{
+		Node: beta, Jobs: []jobCountJSON{{Kind: domain.JobIdentify, State: domain.JobQueued, Count: 3}},
+		OldestDue: map[domain.JobKind]float64{}, Nodes: map[domain.NodeAvailability]int{domain.NodeActive: 2}, LibraryItems: map[domain.ItemKind]int{},
+		Tasks: []taskFinishedJSON{{Task: domain.TaskScanLibraries, Result: domain.TaskSucceeded, FinishedAt: time.Unix(1_791_460_800, 0).UTC()}},
+	}
+	if got.Cluster == nil || !reflect.DeepEqual(*got.Cluster, want) {
+		t.Errorf("cluster %+v, want %+v", got.Cluster, want)
+	}
 }
