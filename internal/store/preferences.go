@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"uuid"
 
 	"golang.org/x/text/language"
@@ -88,6 +90,44 @@ func languageText(t language.Tag) string {
 		return ""
 	}
 	return t.String()
+}
+
+// DisplayPreferences answers how a profile's app, its client, last said it lays out a view: as the
+// app sent it, or ErrNotFound for one it never said.
+func (s *Store) DisplayPreferences(ctx context.Context, profile uuid.UUID, client, view string) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := s.pool.QueryRow(ctx, `
+		SELECT preferences FROM display_preferences WHERE profile_id = $1 AND client = $2 AND view = $3`,
+		profile, client, view).Scan(&out)
+	return out, found(err)
+}
+
+// maxDisplayViews is the most views a profile's apps keep the layout of, together, as an app names
+// both its client and its views. Jellyfin's web app keeps one for its settings and one for each
+// library it lays out otherwise; 200 is many times what a household's apps use, and bounds what one
+// app can make the server keep.
+const maxDisplayViews = 200
+
+var ErrTooManyViews = fmt.Errorf("a profile's apps keep the layout of at most %d views", maxDisplayViews)
+
+// SetDisplayPreferences keeps how a profile's app lays out a view. ErrNotFound for no profile, and
+// ErrTooManyViews for a view beyond maxDisplayViews. Two views saved at once may both take the last
+// place: the limit bounds what is kept, not to the row.
+func (s *Store) SetDisplayPreferences(ctx context.Context, profile uuid.UUID, client, view string, prefs json.RawMessage) error {
+	tag, err := s.pool.Exec(ctx, `
+		INSERT INTO display_preferences (profile_id, client, view, preferences)
+		SELECT $1, $2, $3, $4
+		WHERE (SELECT count(*) FROM display_preferences WHERE profile_id = $1) < $5
+			OR EXISTS (SELECT 1 FROM display_preferences WHERE profile_id = $1 AND client = $2 AND view = $3)
+		ON CONFLICT (profile_id, client, view) DO UPDATE SET preferences = excluded.preferences`,
+		profile, client, view, prefs, maxDisplayViews)
+	switch {
+	case violates(err, foreignKeyViolation):
+		return ErrNotFound
+	case err == nil && tag.RowsAffected() == 0:
+		return ErrTooManyViews
+	}
+	return err
 }
 
 // ChosenTracks answers the tracks a profile last chose for a film or episode.
