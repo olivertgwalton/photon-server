@@ -309,7 +309,7 @@ func versionPageOf(v store.VersionPage, w words.Words) versionPageJSON {
 	return versionPageJSON{
 		ID: v.ID, DisplayTitle: w.Version(v), Edition: v.Edition, Label: v.Label, Container: domain.ContainerName(v.Container), DurationMS: v.DurationMS,
 		SizeBytes: v.SizeBytes, BitrateKbps: v.BitrateKbps, Parts: v.Parts, MissingSince: v.MissingSince,
-		Streams: each(v.Streams, func(s store.StreamPage) streamPageJSON { return streamPageOf(s, w) }),
+		Streams: each(v.Streams, func(s domain.Stream) streamPageJSON { return streamPageOf(s, w) }),
 		Subtitles: each(v.Subtitles, func(s store.SubtitleRef) subtitleRefJSON {
 			return subtitleRefJSON{
 				ID: s.ID, DisplayTitle: w.SubtitleFile(s), Codec: s.Codec, Kind: subtitleKindOf(s.Codec), Language: s.Language, Title: s.Title,
@@ -331,13 +331,16 @@ func versionPageOf(v store.VersionPage, w words.Words) versionPageJSON {
 	}
 }
 
-func streamPageOf(s store.StreamPage, w words.Words) streamPageJSON {
+func streamPageOf(s domain.Stream, w words.Words) streamPageJSON {
 	out := streamPageJSON{
-		Index: s.Index, DisplayTitle: w.Stream(s), Kind: s.Kind, Codec: s.Codec, Profile: s.Profile, Language: s.Language, Title: s.Title,
+		Index: s.Index, DisplayTitle: w.Stream(s), Kind: s.Kind, Codec: s.Codec, Profile: s.Profile, Language: domain.TagOf(s.Language), Title: s.Title,
 		Default: s.Default, Forced: s.Forced, HearingImpaired: s.HearingImpaired, Commentary: s.Commentary,
-		Width: s.Width, Height: s.Height, FrameRate: s.FrameRate, BitDepth: s.BitDepth, Level: s.Level,
-		Range: s.Range, DVProfile: s.DVProfile, Channels: s.Channels, ChannelLayout: s.ChannelLayout,
+		Width: s.Width, Height: s.Height, FrameRate: s.FrameRate, BitDepth: int16(s.BitDepth), Level: s.Level,
+		Range: s.Range, Channels: s.Channels, ChannelLayout: s.ChannelLayout,
 		SampleRate: s.SampleRate, BitrateKbps: s.BitrateKbps,
+	}
+	if s.DolbyVision != nil {
+		out.DVProfile = int16(s.DolbyVision.Profile)
 	}
 	switch s.Kind {
 	case domain.StreamVideo:

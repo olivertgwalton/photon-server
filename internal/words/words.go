@@ -80,7 +80,7 @@ func (w Words) Language(tag string) string {
 // brackets: "French (Dolby Digital 5.1)". A menu that cuts the name short keeps the part that
 // matters. A track with a title of its own leads with it, as that is the name its maker gave it:
 // "Director's commentary (English AAC Stereo)".
-func (w Words) Stream(s store.StreamPage) string {
+func (w Words) Stream(s domain.Stream) string {
 	switch s.Kind {
 	case domain.StreamVideo:
 		picture := []string{codecName(s.Codec), rangeName(s.Range)}
@@ -90,10 +90,10 @@ func (w Words) Stream(s store.StreamPage) string {
 		return named(Resolution(s.Width), picture)
 	case domain.StreamAudio:
 		marks := mark(s.Commentary, commentary)
-		return w.track(s.Title, s.Language, marks, codecName(s.Codec), channels(s.Channels, s.ChannelLayout))
+		return w.track(s.Title, domain.TagOf(s.Language), marks, codecName(s.Codec), channels(s.Channels, s.ChannelLayout))
 	case domain.StreamSubtitle:
 		marks := append(mark(s.HearingImpaired, sdh), mark(s.Forced, forced)...)
-		return w.track(s.Title, s.Language, marks, codecName(s.Codec))
+		return w.track(s.Title, domain.TagOf(s.Language), marks, codecName(s.Codec))
 	}
 	return s.Title
 }
@@ -109,7 +109,7 @@ func (w Words) SubtitleFile(f store.SubtitleRef) string {
 // Vision)"), or by its picture alone ("4K (HEVC Dolby Vision)"). A label that is the picture's
 // own name ("4K") says it once.
 func (w Words) Version(v store.VersionPage) string {
-	var video store.StreamPage
+	var video domain.Stream
 	for _, s := range v.Streams {
 		if s.Kind == domain.StreamVideo {
 			video = s

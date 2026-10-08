@@ -141,21 +141,21 @@ func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 	return s
 }
 
-func streamOf(t store.StreamPage, w words.Words) mediaStream {
+func streamOf(t domain.Stream, w words.Words) mediaStream {
 	m := mediaStream{
 		DisplayTitle: w.Stream(t),
-		Codec:        t.Codec, Language: iso639(t.Language), Title: t.Title, IsDefault: t.Default, IsForced: t.Forced,
+		Codec:        t.Codec, Language: iso639(domain.TagOf(t.Language)), Title: t.Title, IsDefault: t.Default, IsForced: t.Forced,
 		IsHearingImpaired: t.HearingImpaired, Type: streamTypes[t.Kind], Index: t.Index, Profile: t.Profile,
 		Level: t.Level, BitRate: t.BitrateKbps * 1000,
 	}
 	switch t.Kind {
 	case domain.StreamVideo:
-		m.Width, m.Height, m.RealFrameRate, m.BitDepth = t.Width, t.Height, t.FrameRate, t.BitDepth
+		m.Width, m.Height, m.RealFrameRate, m.BitDepth = t.Width, t.Height, t.FrameRate, int16(t.BitDepth)
 		r := ranges[cmp.Or(t.Range, domain.RangeSDR)]
 		m.VideoRange, m.VideoRangeType = r[0], r[1]
-		if t.Range == domain.RangeDV {
-			m.DvProfile = t.DVProfile
-			if t.DVProfile == 7 || t.DVProfile == 8 {
+		if t.Range == domain.RangeDV && t.DolbyVision != nil {
+			m.DvProfile = int16(t.DolbyVision.Profile)
+			if m.DvProfile == 7 || m.DvProfile == 8 {
 				m.VideoRangeType = "DOVIWithHDR10"
 			}
 		}
