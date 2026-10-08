@@ -8,6 +8,7 @@ import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
+import RevealOnce from "#lib/components/admin/RevealOnce.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -29,11 +30,6 @@ async function add(event: SubmitEvent) {
 	adding = false;
 	made = { name, token: key.token };
 	await refreshAll();
-}
-
-async function copy(token: string) {
-	await navigator.clipboard.writeText(token);
-	toast.success("The key was copied.");
 }
 </script>
 
@@ -117,27 +113,12 @@ async function copy(token: string) {
 	<p class="text-ink-3 text-sm">No API keys yet.</p>
 {/if}
 
-<Dialog.Root
-	open={!!made}
-	onOpenChange={(open) => {
-		if (!open) made = undefined;
-	}}
+<RevealOnce
+	value={made?.token}
+	title="The new API key"
+	label="Key"
+	copied="The key was copied."
+	onclose={() => (made = undefined)}
 >
-	<Dialog.Content>
-		<Dialog.Header>
-			<Dialog.Title>The new API key</Dialog.Title>
-			<Dialog.Description>
-				Give it to {made?.name}. It is not shown again.
-			</Dialog.Description>
-		</Dialog.Header>
-		<div class="flex gap-2">
-			<Input
-				value={made?.token ?? ""}
-				readonly
-				aria-label="Key"
-				class="font-mono"
-			/>
-			<Button onclick={() => copy(made?.token ?? "")}>Copy</Button>
-		</div>
-	</Dialog.Content>
-</Dialog.Root>
+	Give it to {made?.name}. It is not shown again.
+</RevealOnce>
