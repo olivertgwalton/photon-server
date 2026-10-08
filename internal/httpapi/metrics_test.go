@@ -1,13 +1,14 @@
 package httpapi
 
 import (
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"strings"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
@@ -17,7 +18,7 @@ import (
 func TestMetricsAreAnsweredOnlyOnLocalNetworks(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Network: fakeNetwork{}, TrustedProxies: []netip.Prefix{netip.MustParsePrefix("10.0.0.2/32")},
-		Metrics: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "photon_build_info 1\n") }),
+		Metrics: prometheus.NewRegistry(),
 	})
 	for _, tc := range []struct {
 		peer, forwarded string
