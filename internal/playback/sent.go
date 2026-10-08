@@ -2,10 +2,14 @@ package playback
 
 import (
 	"io"
+	"math"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
+
+// sentChunk is how much of a file is sent between counts of what has been sent.
+const sentChunk = 4 << 20
 
 // Delivery is how media is sent to a player: a file as it is, or HLS made for it.
 type Delivery string
@@ -55,16 +59,33 @@ func (c *counting) Write(b []byte) (int, error) {
 	return n, err
 }
 
-func (c *counting) ReadFrom(r io.Reader) (int64, error) {
-	var n int64
-	var err error
-	if rf, ok := c.ResponseWriter.(io.ReaderFrom); ok {
-		n, err = rf.ReadFrom(r)
-	} else {
-		n, err = io.Copy(struct{ io.Writer }{c.ResponseWriter}, r)
+// ReadFrom hands src on a chunk at a time, counting each as it is sent, so a play hours long is
+// counted as it goes rather than when it ends. Each chunk is one LimitedReader around src's own
+// reader, the one wrapping net's sendfile unwraps to reach a file.
+func (c *counting) ReadFrom(src io.Reader) (int64, error) {
+	lr, ok := src.(*io.LimitedReader)
+	if !ok {
+		lr = &io.LimitedReader{R: src, N: math.MaxInt64}
 	}
-	c.sent.Add(float64(n))
-	return n, err
+	var sent int64
+	for lr.N > 0 {
+		want := min(sentChunk, lr.N)
+		n, err := c.readFrom(&io.LimitedReader{R: lr.R, N: want})
+		lr.N -= n
+		sent += n
+		c.sent.Add(float64(n))
+		if err != nil || n < want {
+			return sent, err
+		}
+	}
+	return sent, nil
+}
+
+func (c *counting) readFrom(r io.Reader) (int64, error) {
+	if rf, ok := c.ResponseWriter.(io.ReaderFrom); ok {
+		return rf.ReadFrom(r)
+	}
+	return io.Copy(struct{ io.Writer }{c.ResponseWriter}, r)
 }
 
 func (c *counting) Flush() { _ = http.NewResponseController(c.ResponseWriter).Flush() }
