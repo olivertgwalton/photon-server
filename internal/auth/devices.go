@@ -17,7 +17,7 @@ func scope(s domain.Session) *uuid.UUID {
 	switch s.Profile.Role {
 	case domain.RoleAdmin:
 		return nil
-	case domain.RoleMember, domain.RoleRestricted:
+	case domain.RoleUser:
 	}
 	return &s.Profile.ID
 }

@@ -46,7 +46,7 @@ func TestAnEpisodeWearsItsShowsPictures(t *testing.T) {
 		t.Fatal(err)
 	}
 	ep := eps[0]
-	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleMember, "hash")
+	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}

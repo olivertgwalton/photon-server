@@ -106,7 +106,7 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	kid, err := st.AddProfile(ctx, "Kid", domain.RoleRestricted, "hash")
+	kid, err := st.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}

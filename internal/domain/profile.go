@@ -10,14 +10,13 @@ import (
 type Role string
 
 const (
-	RoleAdmin  Role = "admin"
-	RoleMember Role = "member"
-	// RoleRestricted is a profile whose library and rating limits apply; set up for children.
-	RoleRestricted Role = "restricted"
+	RoleAdmin Role = "admin"
+	// RoleUser watches: what it sees is what its access allows, and the server is the admin's.
+	RoleUser Role = "user"
 )
 
 func Roles() []Role {
-	return []Role{RoleAdmin, RoleMember, RoleRestricted}
+	return []Role{RoleAdmin, RoleUser}
 }
 
 type Profile struct {

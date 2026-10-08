@@ -62,7 +62,7 @@ func TestAShowsEpisodesInOrder(t *testing.T) {
 		t.Errorf("season 2's: %v, %v", titles(one), err)
 	}
 
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "hash")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7543,7 +7543,7 @@ export interface components {
         /** @enum {string} */
         RestoreResult: "succeeded" | "failed";
         /** @enum {string} */
-        Role: "admin" | "member" | "restricted";
+        Role: "admin" | "user";
         /** @enum {string} */
         RootAccess: "readable" | "missing" | "not_a_folder" | "denied" | "unreadable" | "timed_out" | "unreachable_node";
         /** @enum {string} */

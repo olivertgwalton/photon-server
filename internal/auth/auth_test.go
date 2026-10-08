@@ -269,11 +269,11 @@ func TestSwitchingProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sam, err := st.AddProfile(t.Context(), "Sam", domain.RoleMember, hash)
+	sam, err := st.AddProfile(t.Context(), "Sam", domain.RoleUser, hash)
 	if err != nil {
 		t.Fatal(err)
 	}
-	kid, err := st.AddProfile(t.Context(), "Kid", domain.RoleRestricted, hash)
+	kid, err := st.AddProfile(t.Context(), "Kid", domain.RoleUser, hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.AddProfile(t.Context(), "Sam", domain.RoleMember, hash); err != nil {
+	if _, err := st.AddProfile(t.Context(), "Sam", domain.RoleUser, hash); err != nil {
 		t.Fatal(err)
 	}
 	signIn := func(name, password, device string) domain.Session {
@@ -398,7 +398,7 @@ func TestChangingAPasswordSignsOutTheProfilesOtherDevices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	guest, err := st.AddProfile(t.Context(), "Guest", domain.RoleMember, hash)
+	guest, err := st.AddProfile(t.Context(), "Guest", domain.RoleUser, hash)
 	if err != nil {
 		t.Fatal(err)
 	}

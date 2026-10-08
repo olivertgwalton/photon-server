@@ -527,7 +527,7 @@ export async function admin(
 		case "GET /api/v1/admin/plugins":
 			return json({ items: [] });
 		case "POST /api/v1/admin/profiles":
-			return json({ id: "p-new", name: "Guest", role: "member" }, 201);
+			return json({ id: "p-new", name: "Guest", role: "user" }, 201);
 		case "GET /api/v1/admin/profiles/p-kids/access":
 			return json({
 				max_age: 12,

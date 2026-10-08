@@ -214,11 +214,11 @@ func TestAProfileSeesItsLibrariesInItsOwnOrder(t *testing.T) {
 		libs[i] = lib
 	}
 	films, tv := libs[0], libs[1]
-	ada, err := s.AddProfile(ctx, "Ada", domain.RoleMember, "hash")
+	ada, err := s.AddProfile(ctx, "Ada", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
-	kids, err := s.AddProfile(ctx, "Kids", domain.RoleRestricted, "hash")
+	kids, err := s.AddProfile(ctx, "Kids", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}

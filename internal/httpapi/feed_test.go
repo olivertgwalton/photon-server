@@ -87,7 +87,7 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sam, err := st.AddProfile(ctx, "Sam", domain.RoleMember, "h")
+	sam, err := st.AddProfile(ctx, "Sam", domain.RoleUser, "h")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -74,13 +74,13 @@ func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 		token, method, target, body string
 		want                        int
 	}{
-		{memberToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "restricted", "password": "correct horse"}`, http.StatusForbidden},
-		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "restricted"}`, http.StatusBadRequest},
-		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Partner", "role": "member", "password": "correct horse"}`, http.StatusCreated},
-		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Short", "role": "member", "password": "hunter2"}`, http.StatusBadRequest},
-		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Oliver", "role": "member", "password": "correct horse"}`, http.StatusConflict},
+		{memberToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "user", "password": "correct horse"}`, http.StatusForbidden},
+		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "user"}`, http.StatusBadRequest},
+		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Partner", "role": "user", "password": "correct horse"}`, http.StatusCreated},
+		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Short", "role": "user", "password": "hunter2"}`, http.StatusBadRequest},
+		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Oliver", "role": "user", "password": "correct horse"}`, http.StatusConflict},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Cat", "role": "pet"}`, http.StatusBadRequest},
-		{goodToken, http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"role": "member"}`, http.StatusConflict},
+		{goodToken, http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"role": "user"}`, http.StatusConflict},
 		{goodToken, http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"password": ""}`, http.StatusBadRequest},
 		{goodToken, http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"name": "Ollie"}`, http.StatusOK},
 		{goodToken, http.MethodPatch, "/api/v1/admin/profiles/" + uuid.NewV7().String(), `{"name": "Nobody"}`, http.StatusNotFound},
