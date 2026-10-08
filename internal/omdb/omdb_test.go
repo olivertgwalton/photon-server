@@ -3,6 +3,7 @@ package omdb
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -61,7 +62,9 @@ func client(t *testing.T, key string) *Client {
 			t.Errorf("asked %s", q.Encode())
 			a = `{"Response":"False","Error":"Incorrect IMDb ID."}`
 		}
-		_, _ = w.Write([]byte(a))
+		if _, err := io.WriteString(w, a); err != nil {
+			t.Error(err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": key}, nil }, unlimited{})
