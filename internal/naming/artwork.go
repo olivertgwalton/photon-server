@@ -3,7 +3,6 @@ package naming
 import (
 	"path"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -74,7 +73,7 @@ func SeasonArtwork(name string) (season int, kind domain.ArtworkKind, ok bool) {
 		return 0, "", false
 	}
 	if !strings.EqualFold(m[1], "-specials") {
-		season, _ = strconv.Atoi(m[1])
+		season = atoi(m[1])
 	}
 	return season, kind, true
 }

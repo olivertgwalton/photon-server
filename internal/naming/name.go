@@ -60,7 +60,7 @@ func CleanName(stem string) Name {
 	toks := tokenize(stem)
 	end := len(stem)
 	if i := yearToken(toks); i >= 0 {
-		n.Year, _ = strconv.Atoi(toks[i].text)
+		n.Year = atoi(toks[i].text)
 		end = toks[i].start
 	} else if i := releaseToken(toks); i > 0 {
 		end = toks[i].start
