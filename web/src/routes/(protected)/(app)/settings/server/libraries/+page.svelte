@@ -1,12 +1,19 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
+import DatabaseBackupIcon from "@lucide/svelte/icons/database-backup";
 import FilmIcon from "@lucide/svelte/icons/film";
+import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
+import PencilIcon from "@lucide/svelte/icons/pencil";
+import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
+import Trash2Icon from "@lucide/svelte/icons/trash-2";
 import TvIcon from "@lucide/svelte/icons/tv";
 import { act } from "#lib/act.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { client } from "#lib/api/client.js";
 import { holding } from "#lib/format.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
+import IconButton from "#lib/components/IconButton.svelte";
+import LibraryCheck from "#lib/components/admin/LibraryCheck.svelte";
 import LibraryRefresh from "#lib/components/admin/LibraryRefresh.svelte";
 import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -64,31 +71,35 @@ const path = (id: string) => ({ params: { path: { id } } });
 						{/if}
 					</div>
 				</div>
-				<div class="flex flex-wrap gap-2">
-					<Button
-						variant="outline"
-						size="sm"
+				<div class="-ml-1.5 flex items-center gap-1 sm:ml-0">
+					<IconButton
+						label={scan ? "Scanning…" : "Scan now"}
+						hidden={library.name}
+						icon={scan ? LoaderCircleIcon : RefreshCwIcon}
+						aria-busy={!!scan}
 						disabled={!!scan}
 						onclick={() =>
 							act(
 								api.POST("/api/v1/admin/libraries/{id}/scan", path(library.id)),
 								`${library.name} is being scanned.`,
 							)}
-					>
-						{scan ? "Scanning…" : "Scan now"}
-						<span class="sr-only">{library.name}</span>
-					</Button>
-					<LibraryRefresh id={library.id} name={library.name} />
-					<Button
+					/>
+					<LibraryRefresh
+						id={library.id}
+						name={library.name}
+						icon={DatabaseBackupIcon}
+					/>
+					<LibraryCheck id={library.id} name={library.name} />
+					<IconButton
+						label="Edit"
+						hidden={library.name}
+						icon={PencilIcon}
 						href="/settings/server/libraries/{library.id}"
-						variant="outline"
-						size="sm"
-					>
-						Edit <span class="sr-only">{library.name}</span>
-					</Button>
+					/>
 					<ConfirmButton
 						label="Remove"
 						hidden={library.name}
+						icon={Trash2Icon}
 						title="Remove {library.name}?"
 						confirm="Remove library"
 						onconfirm={() =>
