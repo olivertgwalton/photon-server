@@ -1,11 +1,9 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // markerJSON is a stretch of a copy, on its whole timeline.
@@ -63,11 +61,7 @@ func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
 		absent[i] = domain.MarkerAbsent{Kind: m.Kind, Part: m.Part}
 	}
 	err := a.svc.Editing.SetMarkers(r.Context(), id, markers, absent)
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, "no copy has that id")
-		return
-	}
-	if a.answered(w, r, err) {
+	if a.answeredAs(w, r, err, "no copy has that id") {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

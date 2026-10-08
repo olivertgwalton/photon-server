@@ -183,11 +183,7 @@ func (a *API) pinMatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := a.svc.Editing.PinMatch(r.Context(), id, req.Provider, req.ID)
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, "no film or show has that id")
-		return
-	}
-	if a.answered(w, r, err) {
+	if a.answeredAs(w, r, err, "no film or show has that id") {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
@@ -213,11 +209,7 @@ func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := a.svc.Editing.SetEpisodeOrder(r.Context(), id, req.Order)
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, "no show has that id")
-		return
-	}
-	if a.answered(w, r, err) {
+	if a.answeredAs(w, r, err, "no show has that id") {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
@@ -236,11 +228,7 @@ func (a *API) deleteTitle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	files, err := a.svc.Editing.TitleFiles(r.Context(), id)
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, "no film, show, season, episode or extra has that id")
-		return
-	}
-	if a.answered(w, r, err) {
+	if a.answeredAs(w, r, err, "no film, show, season, episode or extra has that id") {
 		return
 	}
 	for i, f := range files {
@@ -265,11 +253,7 @@ func (a *API) split(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := a.svc.Editing.SplitTitle(r.Context(), id)
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, "no film has that id")
-		return
-	}
-	if a.answered(w, r, err) {
+	if a.answeredAs(w, r, err, "no film has that id") {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -301,11 +285,7 @@ func (a *API) setTitleLocale(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := a.svc.Editing.SetTitleLocale(r.Context(), id, domain.Locale{Language: lang, Country: country})
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, "no film or show has that id")
-		return
-	}
-	if a.answered(w, r, err) {
+	if a.answeredAs(w, r, err, "no film or show has that id") {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
@@ -319,11 +299,7 @@ func (a *API) unmatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := a.svc.Editing.Unmatch(r.Context(), id)
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, "no film or show has that id")
-		return
-	}
-	if a.answered(w, r, err) {
+	if a.answeredAs(w, r, err, "no film or show has that id") {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -357,11 +333,7 @@ func (a *API) refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := a.svc.Editing.Refresh(r.Context(), id, req.Mode)
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, "no film or show, or season or episode of one, has that id")
-		return
-	}
-	if a.answered(w, r, err) {
+	if a.answeredAs(w, r, err, "no film or show, or season or episode of one, has that id") {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
