@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -14,8 +16,10 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // The header as each app sends it: Swiftfin unquoted and in any order, the Kotlin and TypeScript
@@ -59,7 +63,10 @@ func TestTheAuthorizationHeaderIsReadAsEachAppWritesIt(t *testing.T) {
 
 var (
 	serverID = uuid.MustParse("3f2504e0-4f89-41d3-9a0c-0305e82c3301")
-	ada      = domain.Profile{ID: uuid.MustParse("8d2b4c1e-0f6a-4b7c-9e2d-1a3b5c7d9e0f"), Name: "Ada", Role: domain.RoleAdmin}
+	ada      = domain.Profile{
+		ID: uuid.MustParse("8d2b4c1e-0f6a-4b7c-9e2d-1a3b5c7d9e0f"), Name: "Ada", Role: domain.RoleAdmin,
+		Avatar: uuid.MustParse("0199b3c0-0000-7000-8000-00000000a7a2"),
+	}
 )
 
 type fakeAuth struct {
@@ -440,5 +447,63 @@ func TestAnAppSignsInByQuickConnect(t *testing.T) {
 	}
 	if w := authenticate(); w.Code != http.StatusNotFound {
 		t.Errorf("authenticating twice: %d, want 404", w.Code)
+	}
+}
+
+// onePicture is a server holding one picture, kept in file.
+type onePicture struct {
+	catalogue
+	id   uuid.UUID
+	file string
+}
+
+func (p onePicture) Picture(_ context.Context, id uuid.UUID) (domain.Picture, error) {
+	if id != p.id {
+		return domain.Picture{}, store.ErrNotFound
+	}
+	return domain.Picture{Kept: true}, nil
+}
+
+func (p onePicture) Open(context.Context, uuid.UUID, domain.Picture, int, int) (blob.Object, string, error) {
+	f, err := os.Open(p.file)
+	if err != nil {
+		return blob.Object{}, "", err
+	}
+	o, err := blob.OfFile(f)
+	return o, "avatar.png", err
+}
+
+// Kept finds no theme tune: the server holds a picture alone.
+func (onePicture) Kept(context.Context, uuid.UUID) (blob.Object, error) {
+	return blob.Object{}, os.ErrNotExist
+}
+
+// An app shows its profile's picture by the tag its user carries, under either route, as a page
+// shows one: without a token.
+func TestAnAppShowsAProfilesPicture(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "avatar.png")
+	if err := os.WriteFile(file, []byte("\x89PNG\r\n\x1a\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pictures := onePicture{id: ada.Avatar, file: file}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: serverID.String(), Name: "Den"}, Services{
+		Auth: fakeAuth{}, Catalogue: pictures, Pictures: pictures,
+	})
+	tag, _ := object(t, serve(api, http.MethodGet, "/Users/Me", kotlin+`, Token="pst_device"`, ""))["PrimaryImageTag"].(string)
+	if tag != guid(ada.Avatar) {
+		t.Fatalf("PrimaryImageTag %q, want the picture's", tag)
+	}
+	for _, target := range []string{
+		"/Users/" + guid(ada.ID) + "/Images/Primary?tag=" + tag + "&maxWidth=96",
+		"/UserImage?userId=" + guid(ada.ID) + "&tag=" + tag,
+	} {
+		if w := serve(api, http.MethodGet, target, "", ""); w.Code != http.StatusOK || w.Header().Get("Content-Type") != "image/png" {
+			t.Errorf("%s: %d %s, want the PNG", target, w.Code, w.Header().Get("Content-Type"))
+		}
+	}
+	for _, target := range []string{"/UserImage?userId=" + guid(ada.ID), "/UserImage?tag=" + guid(uuid.NewV7())} {
+		if w := serve(api, http.MethodGet, target, "", ""); w.Code != http.StatusNotFound {
+			t.Errorf("%s: %d, want 404", target, w.Code)
+		}
 	}
 }
