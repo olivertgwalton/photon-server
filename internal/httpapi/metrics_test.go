@@ -148,6 +148,7 @@ func TestEveryNodeIsAskedForItsMetrics(t *testing.T) {
 	leading := prometheus.NewRegistry()
 	gauge(leading, "photon_jobs", 3, "kind", "identify", "state", "queued")
 	gauge(leading, "photon_nodes", 2, "state", "active")
+	gauge(leading, "photon_library_bytes", 9_500_000_000_000, "kind", "movie")
 	gauge(leading, "photon_task_last_finished_timestamp_seconds", 1_791_460_800, "task", "scan_libraries", "result", "succeeded")
 	leader := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Metrics: leading, NodeKey: key}))
 	defer leader.Close()
@@ -194,7 +195,8 @@ func TestEveryNodeIsAskedForItsMetrics(t *testing.T) {
 	want := clusterMetricsJSON{
 		Node: beta, Jobs: []jobCountJSON{{Kind: domain.JobIdentify, State: domain.JobQueued, Count: 3}},
 		OldestDue: map[domain.JobKind]float64{}, Nodes: map[domain.NodeAvailability]int{domain.NodeActive: 2}, LibraryItems: map[domain.ItemKind]int{},
-		Tasks: []taskFinishedJSON{{Task: domain.TaskScanLibraries, Result: domain.TaskSucceeded, FinishedAt: time.Unix(1_791_460_800, 0).UTC()}},
+		LibraryBytes: map[domain.ItemKind]int64{domain.ItemMovie: 9_500_000_000_000},
+		Tasks:        []taskFinishedJSON{{Task: domain.TaskScanLibraries, Result: domain.TaskSucceeded, FinishedAt: time.Unix(1_791_460_800, 0).UTC()}},
 	}
 	if got.Cluster == nil || !reflect.DeepEqual(*got.Cluster, want) {
 		t.Errorf("cluster %+v, want %+v", got.Cluster, want)

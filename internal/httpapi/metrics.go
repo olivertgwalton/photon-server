@@ -105,6 +105,7 @@ type clusterMetricsJSON struct {
 	Tasks        []taskFinishedJSON              `json:"tasks"`
 	Nodes        map[domain.NodeAvailability]int `json:"nodes"`
 	LibraryItems map[domain.ItemKind]int         `json:"library_items"`
+	LibraryBytes map[domain.ItemKind]int64       `json:"library_bytes"`
 }
 
 type taskFinishedJSON struct {
@@ -141,6 +142,7 @@ func shapeMetrics(families []*dto.MetricFamily, at time.Time) gatheredJSON {
 			cluster = &clusterMetricsJSON{
 				Jobs: []jobCountJSON{}, OldestDue: map[domain.JobKind]float64{}, Tasks: []taskFinishedJSON{},
 				Nodes: map[domain.NodeAvailability]int{}, LibraryItems: map[domain.ItemKind]int{},
+				LibraryBytes: map[domain.ItemKind]int64{},
 			}
 		}
 		return cluster
@@ -186,6 +188,8 @@ func shapeMetrics(families []*dto.MetricFamily, at time.Time) gatheredJSON {
 				shared().Nodes[domain.NodeAvailability(label(m, "state"))] = int(v)
 			case "photon_library_items":
 				shared().LibraryItems[domain.ItemKind(label(m, "kind"))] = int(v)
+			case "photon_library_bytes":
+				shared().LibraryBytes[domain.ItemKind(label(m, "kind"))] = int64(v)
 			}
 		}
 	}

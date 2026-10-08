@@ -6343,6 +6343,9 @@ export interface components {
         };
         ClusterMetrics: {
             jobs: components["schemas"]["JobCount"][];
+            library_bytes: {
+                [key: string]: number;
+            };
             library_items: {
                 [key: string]: number;
             };
