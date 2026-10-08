@@ -43,13 +43,13 @@ type Listener struct {
 	err       atomic.Pointer[error]
 }
 
-// NewListener serves h beside photon's own API at listen, an address as PHOTON_LISTEN gives it.
+// NewListener serves h beside photon's own API at listen's host.
 func NewListener(s settings, subscribe func() (<-chan domain.Event, func()), h http.Handler, listen string,
 	secure func(net.Listener) net.Listener, tlsConfig *tls.Config, log *slog.Logger,
 ) (*Listener, error) {
 	host, _, err := net.SplitHostPort(listen)
 	if err != nil {
-		return nil, fmt.Errorf("PHOTON_LISTEN: %w", err)
+		return nil, fmt.Errorf("listen: %w", err)
 	}
 	return &Listener{settings: s, subscribe: subscribe, handler: h, host: host, secure: secure, tlsConfig: tlsConfig, log: log}, nil
 }

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"uuid"
@@ -77,35 +78,20 @@ func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *
 	)
 }
 
-// defaultWebDir is where the image puts the web app's build.
-const defaultWebDir = "/usr/local/share/photon-server/web"
-
-// webApp is the web app's build in PHOTON_WEB_DIR, served when PHOTON_WEB is serve, as it is by
-// default wherever there is a build; nil when the server answers the API alone. Its pages may draw
-// from where objectOrigin says clients read artwork and previews.
+// webApp is the web app's build, beside the binary as an install lays it out
+// (/usr/local/share/photon-server/web for /usr/local/bin/photon-server), served wherever there is
+// one; nil where there is none, and the server answers the API alone. Its pages may draw from
+// where objectOrigin says clients read artwork and previews.
 func webApp(objectOrigin func() string) (*httpapi.Web, error) {
-	build := os.DirFS(cmp.Or(os.Getenv("PHOTON_WEB_DIR"), defaultWebDir))
-	mode := os.Getenv("PHOTON_WEB")
-	if mode == "" {
-		mode = string(domain.WebOff)
-		if _, err := fs.Stat(build, "index.html"); err == nil {
-			mode = string(domain.WebServe)
-		}
-	}
-	web, err := domain.Parse("web", mode, domain.Webs())
+	exe, err := os.Executable()
 	if err != nil {
-		return nil, fmt.Errorf("PHOTON_WEB: %w", err)
+		return nil, err
 	}
-	switch web {
-	case domain.WebServe:
-		app, err := httpapi.NewWeb(build, objectOrigin)
-		if err != nil {
-			return nil, fmt.Errorf("PHOTON_WEB is serve but PHOTON_WEB_DIR has no build: %w", err)
-		}
-		return app, nil
-	case domain.WebOff:
+	build := os.DirFS(filepath.Join(filepath.Dir(exe), "..", "share", "photon-server", "web"))
+	if _, err := fs.Stat(build, "index.html"); errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
 	}
-	return nil, nil
+	return httpapi.NewWeb(build, objectOrigin)
 }
 
 // hardware is the device PHOTON_HWACCEL names to encode on (software when unset), on
