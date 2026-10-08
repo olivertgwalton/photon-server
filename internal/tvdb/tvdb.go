@@ -35,9 +35,8 @@ var limit = kv.Limit{Every: 50 * time.Millisecond, Burst: 20}
 const tokenLife = 25 * 24 * time.Hour
 
 type Client struct {
-	key string
-	pin string
-	api provider.Client
+	login login
+	api   provider.Client
 
 	mu      sync.Mutex
 	token   string
@@ -46,7 +45,7 @@ type Client struct {
 
 // New makes a client for a project key and, for a key subscribers pay for, a subscriber's PIN.
 func New(key, pin string, limits kv.Limiter) *Client {
-	return &Client{key: key, pin: pin, api: provider.Client{Name: "tvdb", Base: baseURL, Limits: limits, Limit: limit}}
+	return &Client{login: login{key: key, pin: pin}, api: provider.Client{Name: "tvdb", Base: baseURL, Limits: limits, Limit: limit}}
 }
 
 // languageOf is a locale's language as TVDB names it, ISO 639-2.
@@ -55,25 +54,29 @@ func languageOf(loc domain.Locale) string {
 	return base.ISO3()
 }
 
-func (c *Client) login(ctx context.Context) (string, error) {
+// login is what TVDB is signed in with: the key, and a subscriber's PIN. It is written out only as
+// the body of a sign-in.
+type login struct{ key, pin string }
+
+func (l login) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Key string `json:"apikey"`
+		PIN string `json:"pin,omitzero"`
+	}{l.key, l.pin})
+}
+
+func (c *Client) signIn(ctx context.Context) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.token != "" && time.Now().Before(c.expires) {
 		return c.token, nil
-	}
-	body, err := json.Marshal(struct { //nolint:gosec // the login request is where the key is meant to go
-		Key string `json:"apikey"`
-		PIN string `json:"pin,omitzero"`
-	}{c.key, c.pin})
-	if err != nil {
-		return "", err
 	}
 	var out struct {
 		Data struct {
 			Token string `json:"token"`
 		} `json:"data"`
 	}
-	if err := c.api.Do(ctx, provider.Request{Method: http.MethodPost, Path: "/login", Body: json.RawMessage(body)}, &out); err != nil {
+	if err := c.api.Do(ctx, provider.Request{Method: http.MethodPost, Path: "/login", Body: c.login}, &out); err != nil {
 		return "", fmt.Errorf("tvdb login: %w", err)
 	}
 	c.token, c.expires = out.Data.Token, time.Now().Add(tokenLife)
@@ -82,7 +85,7 @@ func (c *Client) login(ctx context.Context) (string, error) {
 
 func (c *Client) get(ctx context.Context, path string, query url.Values, into any) error {
 	for attempt := 0; ; attempt++ {
-		token, err := c.login(ctx)
+		token, err := c.signIn(ctx)
 		if err != nil {
 			return err
 		}
