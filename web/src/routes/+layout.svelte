@@ -7,7 +7,9 @@ let { children } = $props();
 
 // A page of the shell is led in from another by a View Transition, where the
 // browser has them and the reader has not asked for less motion. Not the
-// player, nor signing in: the pointer is the transition's while it runs.
+// player, nor signing in: the pointer is the transition's while it runs. Nor
+// the same page with its query changed, a filter or a sort: the transition
+// paints the page over an open menu while it runs.
 const inShell = (id: string | null | undefined) =>
 	!!id?.startsWith("/(protected)/(app)");
 
@@ -15,6 +17,7 @@ onNavigate((navigation) => {
 	if (
 		!inShell(navigation.from?.route.id) ||
 		!inShell(navigation.to?.route.id) ||
+		navigation.from?.url.pathname === navigation.to?.url.pathname ||
 		!document.startViewTransition ||
 		matchMedia("(prefers-reduced-motion: reduce)").matches
 	)
