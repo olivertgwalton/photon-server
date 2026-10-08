@@ -44,7 +44,7 @@ func (fakeAuth) Authenticate(_ context.Context, token string) (domain.Session, e
 	case goodToken:
 		return domain.Session{ID: uuid.NewV7(), Profile: oliver, Device: "Living room", Client: "Photon Web 1.0"}, nil
 	case memberToken:
-		return domain.Session{ID: uuid.NewV7(), Profile: domain.Profile{ID: uuid.NewV7(), Name: "Kid", Role: domain.RoleMember}}, nil
+		return domain.Session{ID: uuid.NewV7(), Profile: domain.Profile{ID: uuid.NewV7(), Name: "Kid", Role: domain.RoleUser}}, nil
 	}
 	return domain.Session{}, auth.ErrUnauthenticated
 }

@@ -56,7 +56,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "hash")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
 	}
 	rate(ids["an episode rated TV-MA"], "TV-MA")
 
-	teen, err := s.AddProfile(ctx, "Teen", domain.RoleRestricted, "hash")
+	teen, err := s.AddProfile(ctx, "Teen", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}

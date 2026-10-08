@@ -84,7 +84,7 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	name, ok := domain.ProfileName(req.Name)
 	if req.Role == "" || !ok {
-		writeProblem(w, a.logger, codeInvalidBody, badName+", and role is admin, member or restricted")
+		writeProblem(w, a.logger, codeInvalidBody, badName+", and role is admin or user")
 		return
 	}
 	req.Name = name

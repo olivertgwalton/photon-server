@@ -17,7 +17,7 @@ func TestTheServerKeepsAnAdmin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "hash")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestTheServerKeepsAnAdmin(t *testing.T) {
 		want   error
 	}{
 		{"demoting the last admin", func() error {
-			_, err := s.SetProfile(ctx, oliver.ID, ProfileChange{Role: domain.RoleMember})
+			_, err := s.SetProfile(ctx, oliver.ID, ProfileChange{Role: domain.RoleUser})
 			return err
 		}, ErrLastAdmin},
 		{"removing the last admin", func() error { _, err := s.RemoveProfile(ctx, oliver.ID); return err }, ErrLastAdmin},
@@ -36,7 +36,7 @@ func TestTheServerKeepsAnAdmin(t *testing.T) {
 			return err
 		}, ErrProfileExists},
 		{"adding another's name in another case", func() error {
-			_, err := s.AddProfile(ctx, "kid", domain.RoleMember, "hash")
+			_, err := s.AddProfile(ctx, "kid", domain.RoleUser, "hash")
 			return err
 		}, ErrProfileExists},
 		{"renaming onto another's name in another case", func() error {
@@ -53,7 +53,7 @@ func TestTheServerKeepsAnAdmin(t *testing.T) {
 		t.Fatalf("promoting: %+v, %v", promoted, err)
 	}
 	// With two admins, either may go.
-	if _, err := s.SetProfile(ctx, oliver.ID, ProfileChange{Role: domain.RoleMember}); err != nil {
+	if _, err := s.SetProfile(ctx, oliver.ID, ProfileChange{Role: domain.RoleUser}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.RemoveProfile(ctx, oliver.ID); err != nil {
@@ -68,7 +68,7 @@ func TestTheServerKeepsAnAdmin(t *testing.T) {
 func TestEveryProfileHasAPassword(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleRestricted, "hash")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestEveryProfileHasAPassword(t *testing.T) {
 	if _, secrets, err := s.ProfileSecrets(ctx, kid.ID); err != nil || secrets.Password != "new hash" {
 		t.Errorf("password hash %q, %v; want the one set last", secrets.Password, err)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO profiles (name, role) VALUES ('Guest', 'member')`); err == nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO profiles (name, role) VALUES ('Guest', 'user')`); err == nil {
 		t.Error("a profile was stored with no password")
 	}
 }
@@ -88,7 +88,7 @@ func TestEveryProfileHasAPassword(t *testing.T) {
 func TestAProfileKeepsItsPicture(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleMember, "hash")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}

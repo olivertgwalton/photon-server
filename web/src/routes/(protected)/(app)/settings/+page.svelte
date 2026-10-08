@@ -1,6 +1,7 @@
 <script lang="ts">
 import { toast } from "svelte-sonner";
 import { refreshAll } from "$app/navigation";
+import { roles } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import AvatarPicker from "#lib/components/AvatarPicker.svelte";
@@ -77,8 +78,6 @@ async function setPassword(event: SubmitEvent) {
 		form.reset();
 	}
 }
-
-const roles = { admin: "Admin", member: "Member", restricted: "Restricted" };
 </script>
 
 <svelte:head><title>Profile · Settings · Photon</title></svelte:head>

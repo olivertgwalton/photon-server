@@ -76,7 +76,7 @@ func filmToDownload(t *testing.T) (st *store.Store, item, part uuid.UUID) {
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
-	owner, err := st.AddProfile(ctx, "Owner", domain.RoleMember, "hash")
+	owner, err := st.AddProfile(ctx, "Owner", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestTwoProfilesShareOneConversionUntilBothRemoveIt(t *testing.T) {
 	ctx := t.Context()
 	var profiles []uuid.UUID
 	for _, name := range []string{"Oliver", "Ada"} {
-		p, err := st.AddProfile(ctx, name, domain.RoleMember, "hash")
+		p, err := st.AddProfile(ctx, name, domain.RoleUser, "hash")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -179,7 +179,7 @@ func TestTwoProfilesShareOneConversionUntilBothRemoveIt(t *testing.T) {
 func TestAConversionWaitsForASlotAndGivesItUpToAPlay(t *testing.T) {
 	st, item, part := filmToDownload(t)
 	ctx := t.Context()
-	profile, err := st.AddProfile(ctx, "Oliver", domain.RoleMember, "hash")
+	profile, err := st.AddProfile(ctx, "Oliver", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func TestAConversionWaitsForASlotAndGivesItUpToAPlay(t *testing.T) {
 func TestARestartedNodeKeepsItsReadyDownloads(t *testing.T) {
 	st, item, part := filmToDownload(t)
 	ctx := t.Context()
-	profile, err := st.AddProfile(ctx, "Oliver", domain.RoleMember, "hash")
+	profile, err := st.AddProfile(ctx, "Oliver", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}

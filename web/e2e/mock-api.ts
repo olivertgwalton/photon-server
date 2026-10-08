@@ -8,7 +8,7 @@ import { admin, adminTitles } from "./mock-admin.ts";
 type Schemas = components["schemas"];
 
 const ada: Schemas["Profile"] = { id: "p-ada", name: "Ada", role: "admin" };
-const kids: Schemas["Profile"] = { id: "p-kids", name: "Kids", role: "member" };
+const kids: Schemas["Profile"] = { id: "p-kids", name: "Kids", role: "user" };
 
 const server: Schemas["Info"] = { id: "s-1", name: "Den", version: "v1.0.0" };
 

@@ -21,7 +21,7 @@ const roleOptions = Object.entries(roles).map(([value, label]) => ({
 }));
 
 let adding = $state(false);
-let role = $state<keyof typeof roles>("member");
+let role = $state<keyof typeof roles>("user");
 const now = Date.now();
 
 async function add(event: SubmitEvent) {
@@ -79,7 +79,7 @@ async function add(event: SubmitEvent) {
 								options={roleOptions}
 							/>
 							<Field.Description>
-								A restricted profile sees only what its access allows.
+								A user sees only what its access allows, set once it is added.
 							</Field.Description>
 						</Field.Field>
 						<Field.Field>

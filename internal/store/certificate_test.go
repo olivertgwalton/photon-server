@@ -29,7 +29,7 @@ func TestAnEpisodeWearsItsShowsCertificate(t *testing.T) {
 	if err := s.SaveIdentity(ctx, show.ID, domain.SourceTMDB, domain.Metadata{Certificate: "TV-14"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleMember, "hash")
+	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleUser, "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
