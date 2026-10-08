@@ -47,6 +47,14 @@ test("an edit sends only what changed, and the fields held", () => {
 	});
 });
 
+test("a certificate is edited with its country, as parental controls read it", () => {
+	const rated = { ...film, certificate: "R", qualified_certificate: "US:R" };
+	expect(editOf(as({ certificate: "US:R" }), rated)).toEqual({});
+	expect(editOf(as({ certificate: "US:PG-13" }), rated)).toEqual({
+		certificate: "US:PG-13",
+	});
+});
+
 test("an emptied field is refused, not sent as nothing", () => {
 	expect(typeof editOf(as({ overview: "" }), film)).toBe("string");
 });

@@ -180,7 +180,7 @@ func cardOf(c store.Card) cardJSON {
 		ID: c.ID, Kind: c.Kind, Title: c.Title, Year: c.Year, ReleaseDate: domain.Date(c.ReleaseDate), AddedAt: c.AddedAt,
 		Poster: c.Poster, Backdrop: c.Backdrop, State: titleStateJSON(c.State), DurationMS: c.DurationMS, VersionCount: c.VersionCount, Show: (*titleRefJSON)(c.Show), Season: (*titleRefJSON)(c.Season),
 		SeasonNumber: c.SeasonNumber, EpisodeNumber: c.EpisodeNumber, EpisodeEnd: c.EpisodeEnd, Thumb: c.Thumb,
-		Origin: c.Origin, Overview: c.Overview, Logo: c.Logo, Genres: c.Genres, Certificate: c.Certificate,
+		Origin: c.Origin, Overview: c.Overview, Logo: c.Logo, Genres: c.Genres, Certificate: domain.Bare(c.Certificate),
 		Blurhashes: c.Blurhashes,
 	}
 	for _, r := range c.Ratings {
@@ -426,14 +426,21 @@ func parseAll[T any](values []string, parse func(string) (T, error)) ([]T, error
 }
 
 type facetsJSON struct {
-	Genres       []string            `json:"genres"`
-	Years        []int               `json:"years"`
-	Certificates []string            `json:"certificates"`
-	Studios      []string            `json:"studios"`
-	Resolutions  []domain.Resolution `json:"resolutions"`
-	Ranges       []domain.Range      `json:"ranges"`
-	RatingSites  []domain.RatingSite `json:"rating_sites"`
-	Marks        []domain.Mark       `json:"marks"`
+	Genres       []string               `json:"genres"`
+	Years        []int                  `json:"years"`
+	Certificates []certificateFacetJSON `json:"certificates"`
+	Studios      []string               `json:"studios"`
+	Resolutions  []domain.Resolution    `json:"resolutions"`
+	Ranges       []domain.Range         `json:"ranges"`
+	RatingSites  []domain.RatingSite    `json:"rating_sites"`
+	Marks        []domain.Mark          `json:"marks"`
+}
+
+// certificateFacetJSON is a certificate a wall can be narrowed to: Value, with its country, is what
+// the filter takes, Name what a viewer is shown.
+type certificateFacetJSON struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 // facets answers the values a library's titles have, which its wall can be narrowed to.
@@ -447,7 +454,9 @@ func (a *API) facets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, facetsJSON{
-		nonNil(f.Genres), nonNil(f.Years), nonNil(f.Certificates), nonNil(f.Studios), nonNil(f.Resolutions),
+		nonNil(f.Genres), nonNil(f.Years),
+		nonNil(each(f.Certificates, func(c string) certificateFacetJSON { return certificateFacetJSON{domain.Bare(c), c} })),
+		nonNil(f.Studios), nonNil(f.Resolutions),
 		nonNil(f.Ranges), nonNil(f.RatingSites), domain.Marks(),
 	})
 }

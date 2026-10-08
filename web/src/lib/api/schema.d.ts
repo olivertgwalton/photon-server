@@ -6358,6 +6358,10 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        CertificateFacet: {
+            name: string;
+            value: string;
+        };
         ChapterRef: {
             /** Format: int64 */
             end_ms: number;
@@ -6692,7 +6696,7 @@ export interface components {
         /** @enum {string} */
         ExtraKind: "trailer" | "teaser" | "featurette" | "behind_the_scenes" | "deleted_scene" | "interview" | "scene" | "short" | "clip" | "blooper" | "theme_video" | "other";
         Facets: {
-            certificates: string[];
+            certificates: components["schemas"]["CertificateFacet"][];
             genres: string[];
             marks: components["schemas"]["Mark"][];
             ranges: components["schemas"]["Range"][];
@@ -7845,6 +7849,7 @@ export interface components {
             original_title?: string;
             overview?: string;
             placement?: components["schemas"]["CollectionPlacement"];
+            qualified_certificate?: string;
             ratings?: components["schemas"]["RatingRef"][];
             /** Format: date */
             release_date?: string;

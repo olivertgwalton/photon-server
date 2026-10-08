@@ -12,7 +12,7 @@ export function fieldsOf(t: Schemas["TitlePage"]): Record<Field, string> {
 		original_title: t.original_title ?? "",
 		overview: t.overview ?? "",
 		tagline: t.tagline ?? "",
-		certificate: t.certificate ?? "",
+		certificate: t.qualified_certificate ?? "",
 		release_date: t.release_date ?? "",
 		year: t.year ? String(t.year) : "",
 		genres: (t.genres ?? []).join(", "),

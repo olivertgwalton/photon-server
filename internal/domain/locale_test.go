@@ -38,3 +38,11 @@ func TestACertificateIsWrittenWithItsCountryWhereItIsNotTheServers(t *testing.T)
 		}
 	}
 }
+
+func TestACertificateIsShownWithoutItsCountry(t *testing.T) {
+	for certificate, want := range map[string]string{"IN:A": "A", "15": "15", "": "", "PG-13": "PG-13"} {
+		if got := Bare(certificate); got != want {
+			t.Errorf("%q shown as %q, want %q", certificate, got, want)
+		}
+	}
+}
