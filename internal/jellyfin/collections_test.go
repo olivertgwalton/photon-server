@@ -68,6 +68,7 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 	}
 	cinema := library("Films", "Alien", "Aliens", "Heat")
 	docs := library("Documentaries", "Senna")
+	shorts := library("Shorts", "Pilot")
 	collection(cinema, "Alien Collection", "Alien", "Aliens")
 	collection(docs, "Racing", "Senna")
 	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)
@@ -81,14 +82,21 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 	if err := st.SetAccess(ctx, kid.ID, store.ProfileAccess{Libraries: []uuid.UUID{docs.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
+	guest, err := st.AddProfile(ctx, "Guest", domain.RoleUser, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetAccess(ctx, guest.ID, store.ProfileAccess{Libraries: []uuid.UUID{shorts.ID}}, nil); err != nil {
+		t.Fatal(err)
+	}
 	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
-		Auth: profiles{"pst_ada": ada, "pst_kid": kid}, Catalogue: st,
+		Auth: profiles{"pst_ada": ada, "pst_kid": kid, "pst_guest": guest}, Catalogue: st, Playlists: st,
 	})
 	type result struct {
 		Items []struct {
-			ID, Name, Type string
-			IsFolder       bool
-			ChildCount     *int
+			ID, Name, Type, CollectionType string
+			IsFolder                       bool
+			ChildCount                     *int
 		}
 		TotalRecordCount int
 	}
@@ -155,5 +163,39 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 	get("pst_kid", "/Items?parentId="+alien, &none)
 	if len(none.Items) != 0 {
 		t.Errorf("the kid opens a collection of films it may not see: %v, want nothing", names(none))
+	}
+
+	// Jellyfin's web app and Streamyfin find collections only as a view, after the libraries, of
+	// those of every library the profile sees; one with none has no such view.
+	var views result
+	get("pst_kid", "/UserViews", &views)
+	if len(views.Items) != 2 || views.Items[1].Name != "Collections" || views.Items[1].Type != "CollectionFolder" || views.Items[1].CollectionType != "boxsets" {
+		t.Fatalf("the kid's views = %+v, want the documentaries, then the collections", views.Items)
+	}
+	view := views.Items[1].ID
+	var adas result
+	get("pst_ada", "/Users/"+guid(ada.ID)+"/Views", &adas)
+	if len(adas.Items) != 4 || adas.Items[3].ID != view {
+		t.Errorf("Ada's views = %v, want the three libraries and the same view of collections", names(adas))
+	}
+	var guests result
+	get("pst_guest", "/UserViews", &guests)
+	if len(guests.Items) != 1 {
+		t.Errorf("the views of a profile with no collections = %v, want its library alone", names(guests))
+	}
+	var opened struct{ ID, Type, CollectionType string }
+	get("pst_kid", "/Items/"+view, &opened)
+	if opened.ID != view || opened.CollectionType != "boxsets" {
+		t.Errorf("the view of collections by id = %+v", opened)
+	}
+	var inView result
+	get("pst_ada", "/Items?parentId="+view+"&includeItemTypes=BoxSet&recursive=true&sortBy=SortName", &inView)
+	if got := names(inView); inView.TotalRecordCount != 2 || len(got) != 2 || got[0] != "Racing" {
+		t.Errorf("the view of collections holds %v, want every collection", got)
+	}
+	var kidsView result
+	get("pst_kid", "/Items?parentId="+view, &kidsView)
+	if got := names(kidsView); len(got) != 1 || got[0] != "Racing" {
+		t.Errorf("the kid's view of collections holds %v, want Racing alone", got)
 	}
 }

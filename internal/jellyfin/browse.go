@@ -22,6 +22,7 @@ type catalogue interface {
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
 	Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
+	HasCollections(ctx context.Context, profile uuid.UUID) (bool, error)
 	Members(ctx context.Context, profile, collection uuid.UUID) ([]store.Card, error)
 	Named(ctx context.Context, profile, id uuid.UUID) (store.Named, error)
 	SearchPeople(ctx context.Context, text string, offset, limit int) ([]store.PersonRef, int64, error)
@@ -143,8 +144,8 @@ func (a *API) seenLibraries(r *http.Request) ([]*store.SeenLibrary, map[uuid.UUI
 	return libs, byID, err
 }
 
-// views are the libraries as Jellyfin's apps open them, in the profile's order, then the view of
-// its playlists where it has any.
+// views are the libraries as Jellyfin's apps open them, in the profile's order, then the views of
+// its collections and its playlists where it has any.
 func (a *API) views(w http.ResponseWriter, r *http.Request) {
 	libs, _, err := a.seenLibraries(r)
 	if err != nil {
@@ -155,7 +156,16 @@ func (a *API) views(w http.ResponseWriter, r *http.Request) {
 	for n, l := range libs {
 		out[n] = a.library(l)
 	}
-	playlists, err := a.svc.Playlists.Playlists(r.Context(), auth.SessionOf(r.Context()).Profile.ID)
+	profile := auth.SessionOf(r.Context()).Profile.ID
+	collections, err := a.svc.Catalogue.HasCollections(r.Context(), profile)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	if collections {
+		out = append(out, a.collectionsFolder())
+	}
+	playlists, err := a.svc.Playlists.Playlists(r.Context(), profile)
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -265,8 +275,9 @@ func wallPage(r *http.Request, profile uuid.UUID, l listed) store.WallPage {
 var libraryKinds = map[domain.LibraryKind]string{domain.LibraryMovies: "Movie", domain.LibraryShows: "Series"}
 
 // items answers Jellyfin's /Items: the items an app names, a library's films or shows, a show's
-// seasons or episodes, a season's episodes, or what matches a search; every library at once where
-// an app names none, and the profile's playlists where it asks for those alone or opens their view.
+// seasons or episodes, a season's episodes, every collection, or what matches a search; every
+// library at once where an app names none, and the profile's playlists where it asks for those
+// alone or opens their view.
 func (a *API) items(w http.ResponseWriter, r *http.Request) {
 	profile, l := auth.SessionOf(r.Context()).Profile.ID, listedOf(w, r)
 	types := values(r, "includeItemTypes")
@@ -291,6 +302,8 @@ func (a *API) items(w http.ResponseWriter, r *http.Request) {
 	switch lib, ok := seen[parent]; {
 	case ok:
 		a.wall([]*store.SeenLibrary{lib}, w, r, types, l)
+	case parent == a.viewID(collectionsView):
+		a.collections(libs, w, r, l)
 	case parent == a.viewID(playlistsView), parent == uuid.UUID{} && len(types) == 1 && strings.EqualFold(types[0], "Playlist"):
 		a.playlists(w, r, l)
 	case parent == uuid.UUID{} && len(types) == 0 && !strings.EqualFold(query(r, "recursive"), "true"):
@@ -462,8 +475,9 @@ func (a *API) writeSeasons(w http.ResponseWriter, r *http.Request, show uuid.UUI
 	a.writeJSON(w, out)
 }
 
-// item answers one item: a library or the view of playlists, a title with all photon knows of it,
-// an episode announced, someone credited on a title, or one of the profile's playlists.
+// item answers one item: a library or the view of collections or playlists, a title with all
+// photon knows of it, an episode announced, someone credited on a title, or one of the profile's
+// playlists.
 func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("itemId"))
 	if err != nil {
@@ -477,6 +491,10 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	}
 	if lib, ok := seen[id]; ok {
 		a.writeJSON(w, a.library(lib))
+		return
+	}
+	if id == a.viewID(collectionsView) {
+		a.writeJSON(w, a.collectionsFolder())
 		return
 	}
 	if id == a.viewID(playlistsView) {

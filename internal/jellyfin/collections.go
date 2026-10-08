@@ -7,6 +7,14 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
+// collectionsView is the name of the view of every collection the profile sees, which Jellyfin's
+// apps find collections by.
+const collectionsView = "Collections"
+
+func (a *API) collectionsFolder() item {
+	return a.view(collectionsView, "CollectionFolder", "boxsets")
+}
+
 // collections answers the collections of libraries, each library's by title, library after library
 // in the profile's order.
 func (a *API) collections(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Request, l listed) {
