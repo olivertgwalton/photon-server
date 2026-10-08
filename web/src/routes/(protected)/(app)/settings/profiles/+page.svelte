@@ -2,6 +2,7 @@
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
+import { ticking } from "#lib/admin/clock.svelte.js";
 import { relative, roles } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import Choice from "#lib/components/admin/Choice.svelte";
@@ -22,7 +23,7 @@ const roleOptions = Object.entries(roles)
 
 let adding = $state(false);
 let role = $state<keyof typeof roles>("user");
-const now = Date.now();
+const clock = ticking(30_000);
 
 async function add(event: SubmitEvent) {
 	const form = fields(event);
@@ -137,7 +138,9 @@ async function add(event: SubmitEvent) {
 				<Table.Cell>{locks[profile.lock]}</Table.Cell>
 				{#if data.me.role === "admin"}
 					<Table.Cell
-						>{profile.seen ? relative(profile.seen, now) : "Never"}</Table.Cell
+						>{profile.seen
+							? relative(profile.seen, clock.now)
+							: "Never"}</Table.Cell
 					>
 				{/if}
 			</Table.Row>

@@ -4,6 +4,7 @@ import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
 import { toast } from "svelte-sonner";
 import { refreshAll } from "$app/navigation";
 import PageHeader from "#lib/components/PageHeader.svelte";
+import { ticking } from "#lib/admin/clock.svelte.js";
 import { relative } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
@@ -47,7 +48,7 @@ $effect(() => {
 	return () => clearInterval(timer);
 });
 
-const now = $derived(Date.now());
+const clock = ticking(30_000);
 
 // Where a copy is from: a server's own disk, by its name, or the bucket every server shares.
 function from(node?: string) {
@@ -148,9 +149,9 @@ const origin = $derived(bucket?.probe ? new URL(bucket.probe).origin : "");
 				><h2 class="heading">Moving to {place(move.to)}</h2></Card.Title
 			>
 			<Card.Description>
-				Begun {relative(move.started, now)}. Every server writes to both places,
-				and keeps everything in the new one once each copy is done. Nothing can
-				be chosen until then.
+				Begun {relative(move.started, clock.now)}. Every server writes to both
+				places, and keeps everything in the new one once each copy is done.
+				Nothing can be chosen until then.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="grid gap-4">
