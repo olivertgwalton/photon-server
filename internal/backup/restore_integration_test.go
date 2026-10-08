@@ -31,7 +31,11 @@ func TestAskingToRestoreTellsEveryNodeAndAllowsOneAtATime(t *testing.T) {
 		t.Fatalf("TEST_VALKEY_URL: %v", err)
 	}
 	defer k.Close()
-	t.Cleanup(func() { _, _ = k.Clear(context.Background()) })
+	defer func() {
+		if _, err := k.Clear(context.Background()); err != nil {
+			t.Error(err)
+		}
+	}()
 	var told []domain.Event
 	node := uuid.NewV7()
 	s := Restores{
