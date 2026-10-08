@@ -104,9 +104,9 @@ func TestAnAdminSeesAPlaybackStartedInTheMetrics(t *testing.T) {
 	if scraped["remux"] != 1 || own.PlaybackStarts[domain.PlayRemux] != scraped["remux"] || own.PlaybackStarts[domain.PlayDirect] != scraped["direct"] {
 		t.Errorf("starts %v, scraped %v; want one remux in both", own.PlaybackStarts, scraped)
 	}
-	if own.TranscodeSlots != 2 || len(own.SegmentWait.Buckets) == 0 || own.At.IsZero() || got.Cluster != nil {
-		t.Errorf("slots %d, segment wait %+v, at %v, cluster %+v; want 2 slots, its buckets, a time and no cluster from a node not leading",
-			own.TranscodeSlots, own.SegmentWait, own.At, got.Cluster)
+	if own.TranscodeSlots != 2 || own.At.IsZero() || got.Cluster != nil {
+		t.Errorf("slots %d, at %v, cluster %+v; want 2 slots, a time and no cluster from a node not leading",
+			own.TranscodeSlots, own.At, got.Cluster)
 	}
 }
 

@@ -14,7 +14,6 @@ function reading(at: string, sent: number, cpu: number): Own {
 		sent_bytes: { file: sent, segment: sent },
 		cpu_seconds: cpu,
 		resident_memory_bytes: 0,
-		segment_wait: { buckets: [], count: 0, sum: 0 },
 	};
 }
 
