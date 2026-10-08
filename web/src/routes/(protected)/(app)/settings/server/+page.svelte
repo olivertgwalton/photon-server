@@ -24,7 +24,6 @@ const playbacks = $derived(
 const transcodes = $derived(data.playbacks.transcodes);
 
 const libraries = $derived(byName(data.libraries));
-const profiles = $derived(byName(data.profiles));
 const activity = $derived(
 	[
 		...live.state.arrived.filter(
@@ -186,7 +185,7 @@ const attention = $derived(
 			</Card.Action>
 		</Card.Header>
 		<Card.Content>
-			<ActivityList events={activity} {profiles} {libraries} now={clock.now} />
+			<ActivityList events={activity} now={clock.now} />
 		</Card.Content>
 	</Card.Root>
 </div>

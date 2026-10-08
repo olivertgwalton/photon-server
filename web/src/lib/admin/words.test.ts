@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { timecode } from "../format";
-import { describe, elapsed, parseClock } from "./words";
+import { elapsed, parseClock } from "./words";
 
 test("a marker's time reads and writes as a clock", () => {
 	expect(timecode(83_000)).toBe("1:23");
@@ -12,49 +12,6 @@ test("a marker's time reads and writes as a clock", () => {
 	expect(parseClock("soon")).toBeUndefined();
 });
 
-test("an event reads as who did what", () => {
-	const names = {
-		profiles: new Map([["p-ada", "Ada"]]),
-		libraries: new Map([["l-films", "Films"]]),
-	};
-	expect(
-		describe(
-			{
-				kind: "playback.stopped",
-				at: "2026-10-06T20:00:00Z",
-				details: {
-					reach: "end",
-					playback: {
-						profile: { id: "p-ada", name: "Ada" },
-						title: {
-							id: "t",
-							kind: "episode",
-							title: "Pilot",
-							show: "Small Show",
-							season_number: 1,
-							episode_number: 2,
-						},
-					},
-				},
-			},
-			names,
-		),
-	).toBe("Ada finished Small Show S1 E2 · Pilot");
-	expect(
-		describe(
-			{
-				kind: "library.titles_added",
-				at: "2026-10-06T20:00:00Z",
-				library_id: "l-films",
-				details: { titles: 1 },
-			},
-			names,
-		),
-	).toBe("1 title was added to Films");
-});
-
-// The dashboard says how long the server has been up in words of their own,
-// not a relative time with its "ago" cut off, which only English ends with.
 test("how long something has run reads in its largest whole unit", () => {
 	const unit = (n: number, u: "day" | "hour" | "minute" | "second") =>
 		new Intl.NumberFormat(undefined, {

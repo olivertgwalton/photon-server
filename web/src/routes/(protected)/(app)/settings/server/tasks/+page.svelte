@@ -1,11 +1,12 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
+import { vocabulary } from "#lib/vocabulary.js";
 import { runTask } from "#lib/actions.svelte.js";
 import { runtime } from "#lib/format.js";
 import PlayIcon from "@lucide/svelte/icons/play";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
-import { relative, tasks, when } from "#lib/admin/words.js";
+import { relative, when } from "#lib/admin/words.js";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Table from "#lib/components/ui/table/index.js";
@@ -19,6 +20,7 @@ import * as Field from "#lib/components/ui/field/index.js";
 import { fields } from "#lib/form.js";
 
 let { data } = $props();
+const words = vocabulary();
 
 const api = client();
 
@@ -168,14 +170,14 @@ function took(started?: string, finished?: string) {
 			{@const w = work(task)}
 			<Table.Row>
 				<Table.Cell class="whitespace-normal">
-					<p class="text-ink font-semibold">{tasks[task.key].name}</p>
-					<p class="text-ink-3 text-xs">{tasks[task.key].does}</p>
+					<p class="text-ink font-semibold">{words.tasks[task.key].name}</p>
+					<p class="text-ink-3 text-xs">{words.tasks[task.key].description}</p>
 					{#if w.total}
 						<div class="mt-2 grid max-w-sm gap-1">
 							<Progress
 								value={w.done}
 								max={w.total}
-								aria-label="{tasks[task.key].name}: {w.percent}%"
+								aria-label="{words.tasks[task.key].name}: {w.percent}%"
 							/>
 							<p class="text-ink-3 text-xs tabular-nums">
 								{w.percent}% · {w.done.toLocaleString()} of
@@ -227,15 +229,15 @@ function took(started?: string, finished?: string) {
 					{#if w.total || w.running}
 						<ConfirmButton
 							label="Stop"
-							hidden={tasks[task.key].name}
-							title="Stop {tasks[task.key].name.toLowerCase()}?"
+							hidden={words.tasks[task.key].name}
+							title="Stop {words.tasks[task.key].name.toLowerCase()}?"
 							confirm="Stop"
 							onconfirm={() =>
 								act(
 									api.POST("/api/v1/admin/tasks/{key}/stop", {
 										params: { path: { key: task.key } },
 									}),
-									`${tasks[task.key].name} was stopped.`,
+									`${words.tasks[task.key].name} was stopped.`,
 								)}
 						>
 							The {w.left.toLocaleString()} left are taken off the queue, and
@@ -248,11 +250,11 @@ function took(started?: string, finished?: string) {
 						size="sm"
 						disabled={running}
 						onclick={() =>
-							runTask(task.key, `${tasks[task.key].name} is running.`)}
+							runTask(task.key, `${words.tasks[task.key].name} is running.`)}
 					>
 						<PlayIcon aria-hidden="true" />
 						<span class="max-sm:sr-only">Run now</span>
-						<span class="sr-only">{tasks[task.key].name}</span>
+						<span class="sr-only">{words.tasks[task.key].name}</span>
 					</Button>
 				</Table.Cell>
 			</Table.Row>

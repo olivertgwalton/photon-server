@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
+import { vocabulary } from "#lib/vocabulary.js";
 import type { components } from "#lib/api/schema.js";
-import { jobKinds } from "#lib/admin/words.js";
 import * as Table from "#lib/components/ui/table/index.js";
 
 type Schemas = components["schemas"];
@@ -30,6 +30,8 @@ const states: [Schemas["JobState"], string][] = [
 function count(kind: Schemas["JobKind"], state: Schemas["JobState"]) {
 	return counts.find((c) => c.kind === kind && c.state === state)?.count ?? 0;
 }
+
+const words = vocabulary();
 </script>
 
 <Table.Root>
@@ -47,7 +49,9 @@ function count(kind: Schemas["JobKind"], state: Schemas["JobState"]) {
 	<Table.Body>
 		{#each kinds as kind (kind)}
 			<Table.Row>
-				<Table.Cell class="text-ink font-semibold">{jobKinds[kind]}</Table.Cell>
+				<Table.Cell class="text-ink font-semibold"
+					>{words.jobs[kind]}</Table.Cell
+				>
 				{#each states as [state] (state)}
 					<Table.Cell class="text-right font-mono"
 						>{count(kind, state) || ""}</Table.Cell
