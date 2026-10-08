@@ -67,7 +67,7 @@ func TestAnAppNarrowsALibraryByWhatItsTitlesHave(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
 	get := func(target string, into any) {
 		t.Helper()
 		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Jellyfin Web", Token="pst_ada"`, "")

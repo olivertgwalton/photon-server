@@ -33,7 +33,7 @@ func newHub(t *testing.T) (*Hub, *store.Store) {
 		t.Fatalf("TEST_VALKEY_URL: %v", err)
 	}
 	t.Cleanup(k.Close)
-	return New(st, k, Server{ID: uuid.NewV7(), Name: "den"}, log), st
+	return New(st, k, uuid.NewV7(), func() string { return "den" }, log), st
 }
 
 func TestTheLogKeepsWhatAnAdminReadsLater(t *testing.T) {

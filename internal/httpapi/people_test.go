@@ -72,12 +72,12 @@ func TestAPersonsPageSaysWhoTheyAreOnceAMonth(t *testing.T) {
 		return rec
 	}
 	down := &describer{fail: true}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, People: &fakePeople{}, PersonDescriber: down})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Identity: den(), People: &fakePeople{}, PersonDescriber: down})
 	if rec := get(api, weaver); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"credits":[{"credit":"actor","role":"Ripley","id"`) || !strings.Contains(rec.Body.String(), `"kind":"movie"`) {
 		t.Errorf("with the provider down: %d %s, want the page as known", rec.Code, rec.Body)
 	}
 	up := &describer{}
-	api = New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, People: &fakePeople{}, PersonDescriber: up})
+	api = New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Identity: den(), People: &fakePeople{}, PersonDescriber: up})
 	for range 2 {
 		if rec := get(api, weaver); !strings.Contains(rec.Body.String(), `"biography":"An actor."`) {
 			t.Errorf("described: %s", rec.Body)

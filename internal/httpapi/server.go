@@ -1,12 +1,17 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 	"runtime"
+	"strconv"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -16,14 +21,13 @@ import (
 
 // Setup is how this node was started, read once from its environment.
 type Setup struct {
-	Started          time.Time
-	Node             uuid.UUID
-	Listen           string
-	Tools            media.Tools
-	Encoder          hls.Hardware
-	MetadataLanguage string
-	CacheDir         string
-	BackupDir        string
+	Started   time.Time
+	Node      uuid.UUID
+	Listen    string
+	Tools     media.Tools
+	Encoder   hls.Hardware
+	CacheDir  string
+	BackupDir string
 }
 
 type versioned interface {
@@ -77,17 +81,20 @@ type serverJSON struct {
 	Chromaprint bool      `json:"chromaprint"`
 	Libass      bool      `json:"libass"`
 	// YTDLP fetches theme tunes from ThemerrDB's links; its path and version are empty without it.
-	YTDLP            toolJSON           `json:"yt_dlp"`
-	Encoder          encoderJSON        `json:"encoder"`
-	Transcodes       int                `json:"transcodes"`
-	Role             domain.NodeRole    `json:"role"`
-	TranscodeLimit   int                `json:"transcode_limit,omitzero"`
-	LimitSource      domain.LimitSource `json:"transcode_limit_source"`
-	Listen           string             `json:"listen"`
-	Folders          foldersJSON        `json:"folders"`
-	MetadataLanguage string             `json:"metadata_language"`
-	Postgres         backendJSON        `json:"postgres"`
-	Valkey           backendJSON        `json:"valkey"`
+	YTDLP          toolJSON           `json:"yt_dlp"`
+	Encoder        encoderJSON        `json:"encoder"`
+	Transcodes     int                `json:"transcodes"`
+	Role           domain.NodeRole    `json:"role"`
+	TranscodeLimit int                `json:"transcode_limit,omitzero"`
+	LimitSource    domain.LimitSource `json:"transcode_limit_source"`
+	Listen         string             `json:"listen"`
+	Folders        foldersJSON        `json:"folders"`
+	// MetadataLanguage and CertificationCountry are what its metadata is asked in, as
+	// serverSettingsJSON says.
+	MetadataLanguage     string      `json:"metadata_language"`
+	CertificationCountry string      `json:"certification_country,omitzero"`
+	Postgres             backendJSON `json:"postgres"`
+	Valkey               backendJSON `json:"valkey"`
 }
 
 // adminServer answers how the node answering was set up and what it reaches, as Jellyfin's
@@ -96,14 +103,14 @@ func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
 	s := a.svc.Setup
 	active, _, limit := a.svc.HLS.Transcodes()
 	out := serverJSON{
-		Info: a.info, NodeID: s.Node, StartedAt: s.Started.UTC(), OS: runtime.GOOS, Arch: runtime.GOARCH,
+		Info: a.self(), NodeID: s.Node, StartedAt: s.Started.UTC(), OS: runtime.GOOS, Arch: runtime.GOARCH,
 		FFmpeg:      toolJSON{s.Tools.FFmpeg.Path, s.Tools.FFmpeg.Version},
 		FFprobe:     toolJSON{s.Tools.FFprobe.Path, s.Tools.FFprobe.Version},
 		YTDLP:       toolJSON{s.Tools.YTDLP.Path, s.Tools.YTDLP.Version},
 		Chromaprint: s.Tools.Chromaprint, Libass: s.Tools.Libass, Encoder: encoderJSON{s.Encoder.Accel, s.Encoder.Device, s.Encoder.HEVC},
 		Transcodes: active, TranscodeLimit: limit, Listen: s.Listen,
 		Folders:          foldersJSON{folder(s.CacheDir), folder(s.BackupDir)},
-		MetadataLanguage: s.MetadataLanguage,
+		MetadataLanguage: a.svc.Identity.Locale().Language, CertificationCountry: a.svc.Identity.Locale().Country,
 	}
 	self := a.svc.Placer.Self()
 	out.Role, out.LimitSource = self.Role, self.LimitSource
@@ -132,7 +139,58 @@ func folder(path string) folderJSON {
 }
 
 func (a *API) server(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, a.logger, "application/json", http.StatusOK, a.info)
+	writeJSON(w, a.logger, "application/json", http.StatusOK, a.self())
+}
+
+// self is the server as it says of itself now.
+func (a *API) self() domain.Info {
+	info := a.info
+	info.Name = a.svc.Identity.Name()
+	return info
+}
+
+type serverSettings interface {
+	SetServerSettings(ctx context.Context, set domain.ServerSettings) error
+}
+
+// serverSettingsJSON is what the server is called, as clients and the login page show it, and what
+// its metadata is asked in where a library or title says none: an IETF language tag, and the
+// country certificates are fetched in. An empty name is each node's host's.
+type serverSettingsJSON struct {
+	Name                 string `json:"name"`
+	MetadataLanguage     string `json:"metadata_language"`
+	CertificationCountry string `json:"certification_country,omitzero"`
+}
+
+// maxServerName is the longest name a server is given, in characters, as a profile's is.
+const maxServerName = domain.MaxProfileName
+
+// setServer renames the server and sets what its metadata is asked in, and tells every node.
+func (a *API) setServer(w http.ResponseWriter, r *http.Request) {
+	var req serverSettingsJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	if utf8.RuneCountInString(req.Name) > maxServerName || strings.ContainsFunc(req.Name, unicode.IsControl) {
+		writeProblem(w, a.logger, codeInvalidBody, "name is up to "+strconv.Itoa(maxServerName)+" characters, and no control characters")
+		return
+	}
+	lang, refusal := metadataLanguage(req.MetadataLanguage)
+	if req.MetadataLanguage == "" {
+		refusal = "metadata_language is required: an IETF language tag, such as en-GB"
+	}
+	country, refusal2 := certificationCountry(req.CertificationCountry)
+	if refusal = cmp.Or(refusal, refusal2); refusal != "" {
+		writeProblem(w, a.logger, codeInvalidBody, refusal)
+		return
+	}
+	set := domain.ServerSettings{Name: req.Name, Locale: domain.Locale{Language: lang, Country: country}}
+	if a.answered(w, r, a.svc.ServerSettings.SetServerSettings(r.Context(), set)) {
+		return
+	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventServerChanged})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, serverSettingsJSON{Name: set.Name, MetadataLanguage: lang, CertificationCountry: country})
 }
 
 func (a *API) readyz(w http.ResponseWriter, r *http.Request) {
@@ -156,6 +214,11 @@ func (a *API) serverRoutes() []route {
 		{
 			pattern: "GET /readyz", access: public, summary: "Say whether Postgres and Valkey are reachable",
 			status: http.StatusNoContent, handle: a.readyz,
+		},
+		{
+			pattern: "PUT /api/v1/admin/server", access: admin,
+			summary: "Name the server and set what its metadata is asked in, which every node takes up at once",
+			body:    serverSettingsJSON{}, status: http.StatusOK, reply: serverSettingsJSON{}, handle: a.setServer,
 		},
 		{
 			pattern: "GET /api/v1/admin/server", access: admin,

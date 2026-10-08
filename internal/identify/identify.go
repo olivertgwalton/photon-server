@@ -20,11 +20,12 @@ import (
 // show, its seasons and episodes, and a rater records its ratings; the library's ranking for each
 // kind of item decides whose values and pictures stand. A title with no confident match is left as its files and NFO describe it, and a provider
 // not configured or not reachable is passed over. Each provider is asked in the title's library's
-// locale, def where it leaves anything unsaid; def is the server's. raise tells the title was
+// locale, the server's, as it is when the job runs, where that leaves anything unsaid. raise tells the title was
 // described again, once the pictures it shows first are fetched into pictures, so a client that
 // looks again finds them there.
-func Handler(st *store.Store, providers *provider.Registry, pictures *artwork.Cache, def domain.Locale, raise func(context.Context, domain.Event), log *slog.Logger) jobs.Handler {
+func Handler(st *store.Store, providers *provider.Registry, pictures *artwork.Cache, server func() domain.Locale, raise func(context.Context, domain.Event), log *slog.Logger) jobs.Handler {
 	return func(ctx context.Context, id uuid.UUID) error {
+		def := server()
 		sub, ok, err := st.IdentifySubject(ctx, id)
 		if err != nil || !ok || sub.Unmatched {
 			return err
@@ -41,7 +42,7 @@ func Handler(st *store.Store, providers *provider.Registry, pictures *artwork.Ca
 			}
 			log := log.With(slog.String("provider", string(info.ID)), slog.String("title", sub.Title))
 			if d, ok := provider.As[provider.Describer](p, domain.CapabilityDescribe); ok {
-				if err := describe(ctx, st, d, loc, def, id, &sub, log); err != nil {
+				if err := describe(ctx, st, d, loc, id, &sub, log); err != nil {
 					return err
 				}
 			}
@@ -58,7 +59,7 @@ func Handler(st *store.Store, providers *provider.Registry, pictures *artwork.Ca
 	}
 }
 
-func describe(ctx context.Context, st *store.Store, d provider.Describer, loc, def domain.Locale, id uuid.UUID, sub *store.Subject, log *slog.Logger) error {
+func describe(ctx context.Context, st *store.Store, d provider.Describer, loc domain.Locale, id uuid.UUID, sub *store.Subject, log *slog.Logger) error {
 	match, err := d.Match(ctx, loc, sub.Kind, provider.Hints{Title: sub.Title, Year: sub.Year, IDs: sub.IDs})
 	if passedOver(ctx, err, log) {
 		return nil
@@ -83,15 +84,15 @@ func describe(ctx context.Context, st *store.Store, d provider.Describer, loc, d
 			sub.IDs[p] = v
 		}
 	}
-	m.Certificate = loc.Qualified(m.Certificate, def)
+	m.Certificate = loc.Qualified(m.Certificate)
 	// A library giving original titles names a film or show as it was first named, sorted by it.
 	if sub.Titles == domain.TitlesOriginal && m.OriginalTitle != "" {
 		m.Title, m.SortTitle = m.OriginalTitle, ""
 	}
 	for n, season := range seasons {
-		season.Metadata.Certificate = loc.Qualified(season.Metadata.Certificate, def)
+		season.Metadata.Certificate = loc.Qualified(season.Metadata.Certificate)
 		for e, episode := range season.Episodes {
-			episode.Certificate = loc.Qualified(episode.Certificate, def)
+			episode.Certificate = loc.Qualified(episode.Certificate)
 			season.Episodes[e] = episode
 		}
 		seasons[n] = season

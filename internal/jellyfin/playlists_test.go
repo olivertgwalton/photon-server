@@ -63,7 +63,7 @@ func newHousehold(t *testing.T) household {
 	if h.bob, err = st.AddProfile(ctx, "Bob", domain.RoleUser, "hash", nil); err != nil {
 		t.Fatal(err)
 	}
-	h.api = New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	h.api = New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Auth: profiles{"pst_ada": h.ada, "pst_bob": h.bob}, Catalogue: st, Preferences: st, Playlists: st,
 		Raise: func(_ context.Context, e domain.Event) { *h.raised = append(*h.raised, e) },
 	})

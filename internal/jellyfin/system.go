@@ -23,7 +23,7 @@ func (a *API) public(r *http.Request) publicInfo {
 		scheme = "https"
 	}
 	return publicInfo{
-		LocalAddress: scheme + "://" + r.Host, ServerName: a.name, Version: version, ProductName: product,
+		LocalAddress: scheme + "://" + r.Host, ServerName: a.name(), Version: version, ProductName: product,
 		ID: a.id, StartupWizardCompleted: true,
 	}
 }

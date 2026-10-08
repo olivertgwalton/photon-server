@@ -186,7 +186,7 @@ func TestAnAppIsToldWhatChangesOfWhatItsProfileSees(t *testing.T) {
 	s := shelf{library: uuid.NewV7(), hidden: uuid.NewV7(), film: uuid.NewV7(), twin: uuid.NewV7(), playlist: uuid.NewV7()}
 	stranger, added, removed, deleted := uuid.NewV7(), uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
 	events := make(chan domain.Event, 16)
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: serverID.String(), Name: "Den"}, Services{
+	api := New(slog.New(slog.DiscardHandler), serverID.String(), func() string { return "Den" }, Services{
 		Auth: fakeAuth{}, Catalogue: s, Audience: s,
 		Subscribe: func() (<-chan domain.Event, func()) { return events, func() {} },
 	})

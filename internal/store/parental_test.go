@@ -165,7 +165,7 @@ func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetCertificateCountry(ctx, "in"); err != nil {
+	if err := s.SetServerSettings(ctx, domain.ServerSettings{Locale: domain.Locale{Language: "hi-IN", Country: "in"}}); err != nil {
 		t.Fatal(err)
 	}
 	part := func(name string) Copy {

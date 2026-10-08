@@ -149,7 +149,7 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	plays := newFakePlaybacks()
 	var told []domain.Event
-	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Raise:   func(_ context.Context, e domain.Event) { told = append(told, e) },
 		Sent:    playback.NewSent(),
 		Network: st,
@@ -266,7 +266,7 @@ func TestAnAppReadsAndChangesItsUserData(t *testing.T) {
 	if err := st.Favourite(t.Context(), ada.ID, heat); err != nil {
 		t.Fatal(err)
 	}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Watching: st,
 		Raise: func(context.Context, domain.Event) {},
 	})
@@ -360,7 +360,7 @@ func (noOwners) Owner(context.Context, uuid.UUID) (string, bool, error) { return
 func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	st, ada, heat, copyID := aFilm(t)
 	plays, remuxes := newFakePlaybacks(), newFakeRemuxes()
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st, Preferences: st,
@@ -437,7 +437,7 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	remuxes := newFakeRemuxes()
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
@@ -498,7 +498,7 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
 	remuxes := newFakeRemuxes()
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,

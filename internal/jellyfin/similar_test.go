@@ -62,7 +62,7 @@ func TestAnAppFindsSimilarTitles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
 	type result struct {
 		Items []struct {
 			Name         string

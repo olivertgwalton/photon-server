@@ -89,7 +89,7 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 	if err := st.SetAccess(ctx, guest.ID, store.ProfileAccess{Libraries: []uuid.UUID{shorts.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Auth: profiles{"pst_ada": ada, "pst_kid": kid, "pst_guest": guest}, Catalogue: st, Preferences: st, Playlists: st,
 	})
 	type result struct {

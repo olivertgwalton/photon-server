@@ -49,3 +49,38 @@ func TestNoLocalNetworksAreSaved(t *testing.T) {
 		t.Errorf("kept %v and %v, %v; want none", got.LocalNetworks, got.TrustedProxies, err)
 	}
 }
+
+// A new server asks for metadata in en-US, and so for the United States' certificates. Its
+// country is changed at any time: a certificate it kept is read as the country it was given in.
+func TestTheServersCountryChangesNoCertificateKept(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	set, err := s.ServerSettings(ctx)
+	if want := (domain.ServerSettings{Locale: domain.Locale{Language: "en-US", Country: "US"}}); err != nil || set != want {
+		t.Fatalf("a new server: %+v, %v; want %+v", set, err, want)
+	}
+	age := func() int {
+		t.Helper()
+		var age int
+		if err := s.pool.QueryRow(ctx, `SELECT certificate_age('GB:15')`).Scan(&age); err != nil {
+			t.Fatal(err)
+		}
+		return age
+	}
+	gb := domain.ServerSettings{Name: "Den", Locale: domain.Locale{Language: "en-GB", Country: "GB"}}
+	if err := s.SetServerSettings(ctx, gb); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.ServerSettings(ctx); err != nil || got != gb {
+		t.Fatalf("kept %+v, %v; want %+v", got, err, gb)
+	}
+	before := age()
+	in := gb
+	in.Locale = domain.Locale{Language: "en-IN", Country: "IN"}
+	if err := s.SetServerSettings(ctx, in); err != nil {
+		t.Fatal(err)
+	}
+	if after := age(); before != 15 || after != before {
+		t.Errorf("GB:15 is for %d, then %d in India; want 15 whatever the server's country", before, after)
+	}
+}

@@ -144,7 +144,7 @@ func (a *API) candidates(w http.ResponseWriter, r *http.Request) {
 	if year, ok = a.queryNumber(w, r, "year", year, 0, math.MaxInt); !ok {
 		return
 	}
-	offered, err := searcher.Candidates(r.Context(), sub.Locale.Or(domain.LocaleOf(a.svc.Setup.MetadataLanguage)), sub.Kind, title, year)
+	offered, err := searcher.Candidates(r.Context(), sub.Locale.Or(a.svc.Identity.Locale()), sub.Kind, title, year)
 	if a.answered(w, r, err) {
 		return
 	}

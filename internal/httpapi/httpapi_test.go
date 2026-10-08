@@ -16,11 +16,13 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/identity"
 )
 
 func newAPI(readiness error) *API {
-	info := domain.Info{ID: "0199b3c0-0000-7000-8000-000000000000", Name: "den", Version: "v0.1.0"}
+	info := domain.Info{ID: "0199b3c0-0000-7000-8000-000000000000", Version: "v0.1.0"}
 	return New(slog.New(slog.DiscardHandler), info, Services{
+		Identity:  den(),
 		Ready:     func(context.Context) error { return readiness },
 		Auth:      fakeAuth{},
 		Limits:    &fakeLimiter{},
@@ -192,4 +194,19 @@ func TestRequiredSecureConnectionsSendPlainRequestsToHTTPS(t *testing.T) {
 				tc.public, tc.peer, tc.proto, rec.Code, rec.Header().Get("Location"), tc.want, tc.location)
 		}
 	}
+}
+
+// den is a server named den, asking for metadata in en-GB.
+func den() *identity.Server {
+	s, err := identity.New(context.Background(), serverSet{Name: "den", Locale: domain.LocaleOf("en-GB")}, "", slog.New(slog.DiscardHandler))
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
+type serverSet domain.ServerSettings
+
+func (s serverSet) ServerSettings(context.Context) (domain.ServerSettings, error) {
+	return domain.ServerSettings(s), nil
 }

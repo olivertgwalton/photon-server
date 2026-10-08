@@ -45,9 +45,11 @@ type Server struct {
 }
 
 type Hub struct {
-	store  *store.Store
-	kv     *kv.KV
-	server Server
+	store *store.Store
+	kv    *kv.KV
+	// server is the server's id, and name what it is called when a webhook is told.
+	server uuid.UUID
+	name   func() string
 	log    *slog.Logger
 
 	mu      sync.Mutex
@@ -59,9 +61,9 @@ type Hub struct {
 	toldBacklog map[domain.JobKind]time.Time
 }
 
-func New(st *store.Store, k *kv.KV, server Server, log *slog.Logger) *Hub {
+func New(st *store.Store, k *kv.KV, server uuid.UUID, name func() string, log *slog.Logger) *Hub {
 	return &Hub{
-		store: st, kv: k, server: server, log: log,
+		store: st, kv: k, server: server, name: name, log: log,
 		streams: map[chan domain.Event]struct{}{}, changed: map[uuid.UUID]store.Changed{},
 		toldBacklog: map[domain.JobKind]time.Time{},
 	}
@@ -134,7 +136,7 @@ func (h *Hub) payload(ctx context.Context, e domain.Event) ([]byte, error) {
 		Title   *title              `json:"title,omitzero"`
 		Library *named              `json:"library,omitzero"`
 		Details domain.EventDetails `json:"details"`
-	}{Event: e.Kind, At: e.At.UTC(), Server: h.server, Details: e.Details}
+	}{Event: e.Kind, At: e.At.UTC(), Server: Server{ID: h.server, Name: h.name()}, Details: e.Details}
 	if body.Details == nil {
 		body.Details = domain.NoDetails{}
 	}

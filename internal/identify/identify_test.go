@@ -24,6 +24,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
+// gb is the server's locale, as one set to en-GB has it.
+func gb() domain.Locale { return domain.LocaleOf("en-GB") }
+
 // films knows Jaws, by any title, and gives its IMDb id and poster.
 type films struct{ poster string }
 
@@ -123,10 +126,10 @@ func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {
 		}
 	}
 	// A failing rater does not fail the job: the match stands.
-	if err := Handler(st, provider.NewRegistry(nil, jaws, critics{fail: true}), cache, domain.LocaleOf("en-GB"), raise, log)(ctx, id); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, jaws, critics{fail: true}), cache, gb, raise, log)(ctx, id); err != nil {
 		t.Fatalf("with the rater failing: %v", err)
 	}
-	if err := Handler(st, provider.NewRegistry(nil, jaws, critics{}), cache, domain.LocaleOf("en-GB"), raise, log)(ctx, id); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, jaws, critics{}), cache, gb, raise, log)(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	if len(told) != 2 || told[1].Kind != domain.EventTitleUpdated || told[1].Item != id {
@@ -196,7 +199,7 @@ func TestATitleIsDescribedInItsLibrarysLocale(t *testing.T) {
 		t.Fatal(cards, err)
 	}
 	var asked domain.Locale
-	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), pictures(t), domain.LocaleOf("en-GB"), func(context.Context, domain.Event) {}, log)(ctx, cards[0].ID); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), pictures(t), gb, func(context.Context, domain.Event) {}, log)(ctx, cards[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	if asked != (domain.Locale{Language: "de-DE", Country: "IN", Artwork: domain.ArtworkLocalized}) {
@@ -240,7 +243,7 @@ func TestALibraryGivingOriginalTitlesNamesATitleAsItWasFirstNamed(t *testing.T) 
 		t.Fatal(cards, err)
 	}
 	var asked domain.Locale
-	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), pictures(t), domain.LocaleOf("en-GB"), func(context.Context, domain.Event) {}, log)(ctx, cards[0].ID); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), pictures(t), gb, func(context.Context, domain.Event) {}, log)(ctx, cards[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	page, err := st.Title(ctx, uuid.UUID{}, cards[0].ID)

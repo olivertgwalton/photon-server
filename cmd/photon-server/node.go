@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"log/slog"
@@ -9,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -25,6 +23,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
 	"github.com/olivertgwalton/photon-server/internal/identify"
+	"github.com/olivertgwalton/photon-server/internal/identity"
 	"github.com/olivertgwalton/photon-server/internal/jellyfin"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/kv"
@@ -77,7 +76,7 @@ type node struct {
 	scheduler *task.Scheduler
 	sessions  *playback.Sessions
 	imports   *historyimport.Imports
-	lang      string
+	identity  *identity.Server
 	secured   *secure.Server
 	jellyfin  *jellyfin.Listener
 	finished  *jobs.Finished
@@ -114,7 +113,11 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	if err != nil {
 		return err
 	}
-	n.info = domain.Info{ID: n.server.String(), Name: cmp.Or(os.Getenv("PHOTON_NAME"), hostname), Version: version}
+	// The server's name is its identity's, said as it is now.
+	n.info = domain.Info{ID: n.server.String(), Version: version}
+	if n.identity, err = identity.New(ctx, n.st, hostname, n.logger); err != nil {
+		return err
+	}
 	n.conversions, err = playback.NewConversions(n.st, n.cache, n.remuxer, n.tools.FFmpeg.Path, hw, filepath.Join(n.cacheRoot, "downloads"), n.id)
 	if err != nil {
 		return err
@@ -137,7 +140,7 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 		PGDump: pgDump, URL: databaseURL,
 		Dir: filepath.Join(configDir, "photon-server", "backups"),
 	}
-	n.hub = events.New(n.st, n.cache, events.Server{ID: n.server, Name: n.info.Name}, n.logger)
+	n.hub = events.New(n.st, n.cache, n.server, n.identity.Name, n.logger)
 	n.restores = backup.Restores{Restorer: rest, Dir: n.dumper.Dir, Node: n.id, KV: n.cache, Raise: n.hub.Raise}
 	return nil
 }
@@ -154,11 +157,6 @@ func (n *node) wire(ctx context.Context) error {
 		refreshTask(st, logger), sweepArtworkTask(st, n.pictures, logger), markersTask(st, n.tools, window, logger),
 		previewsTask(st, n.previews, window, logger), sweepDownloadsTask(st, logger), pruneActivityTask(st, logger),
 		refreshCollectionsTask(st), syncListsTask(st, n.providers), fetchSubtitlesTask(fetcher, logger))
-	n.lang = cmp.Or(os.Getenv("PHOTON_METADATA_LANGUAGE"), "en-US")
-	_, country, _ := strings.Cut(n.lang, "-")
-	if err := st.SetCertificateCountry(ctx, country); err != nil {
-		return err
-	}
 	n.sessions = playback.NewSessions(n.cache, st, n.remuxer, n.hub.Raise, n.id)
 	n.imports = historyimport.New(st, n.logger)
 	// Fetched subtitles are written from Postgres into each node's cache as it opens them.
@@ -183,7 +181,7 @@ func (n *node) wire(ctx context.Context) error {
 		sent:   playback.NewSent(), plugins: plugins, fetcher: fetcher,
 	}
 	n.secured = secure.New(st, n.hub.Subscribe, logger)
-	n.jellyfin, err = jellyfin.NewListener(st, n.hub.Subscribe, jellyfin.New(logger, n.info, jellyfin.Services{
+	n.jellyfin, err = jellyfin.NewListener(st, n.hub.Subscribe, jellyfin.New(logger, n.info.ID, n.identity.Name, jellyfin.Services{
 		Auth: n.auth, Limits: n.cache, Raise: n.hub.Raise, Reach: n.reach, Catalogue: st, Subscribe: n.hub.Subscribe, Audience: st, Displays: st, Preferences: st, Playlists: st,
 		Pictures: n.pictures, Playing: files, Playbacks: n.sessions, Watching: st, Themes: st, Previews: st, PreviewFiles: n.previews,
 		HLS: n.remuxer, Placer: p.placer, Owners: p.owners, Signer: p.signer,
@@ -217,13 +215,13 @@ func (n *node) httpServer(p playing) (*http.Server, error) {
 	}
 	setup := httpapi.Setup{
 		Started: n.started, Node: n.id, Listen: n.listen, Tools: n.tools, Encoder: n.hw,
-		MetadataLanguage: n.lang, CacheDir: n.cacheRoot, BackupDir: n.dumper.Dir,
+		CacheDir: n.cacheRoot, BackupDir: n.dumper.Dir,
 	}
 	st, cache := n.st, n.cache
 	return &http.Server{
 		Addr: n.listen, TLSConfig: n.secured.TLSConfig(),
 		Handler: httpapi.New(n.logger, n.info, httpapi.Services{
-			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Postgres: st, Valkey: cache, Web: web,
 			Metrics: metrics(version, n.self, n.remuxer, n.sessions, p.placer, p.sent, n.finished, cluster{lead: n.scheduler, st: st, nodes: cache, self: p.placer}),
 			Sent:    p.sent,
 		}),
@@ -241,7 +239,7 @@ func (n *node) workers() []*jobs.Worker {
 		domain.JobScanLibrary: scanLibrary(st, scan.New(st, n.tools, logger), hub, logger),
 	}, hub, nil, n.finished)
 	matching := map[domain.JobKind]jobs.Handler{
-		domain.JobIdentify: identify.Handler(st, n.providers, n.pictures, domain.LocaleOf(n.lang), hub.Raise, logger),
+		domain.JobIdentify: identify.Handler(st, n.providers, n.pictures, n.identity.Locale, hub.Raise, logger),
 	}
 	// A node without yt-dlp leaves themes to one with it.
 	if n.tools.YTDLP.Path != "" {
@@ -307,7 +305,8 @@ func (n *node) serve(ctx context.Context) error {
 		}
 	})
 	wg.Go(func() { n.reach.Run(background) })
-	wg.Go(func() { answerDiscovery(background, n.srv.Addr, n.reach, n.secured.Scheme, n.info, logger) })
+	wg.Go(func() { answerDiscovery(background, n.srv.Addr, n.reach, n.secured.Scheme, n.said, logger) })
+	wg.Go(func() { n.identity.Run(background, n.hub.Subscribe) })
 	wg.Go(func() { n.secured.Run(background) })
 	wg.Go(func() {
 		n.stores.Run(background, storage.Cluster{Node: n.id, Subscribe: n.hub.Subscribe, Raise: n.hub.Raise, Nodes: nodeIDs(n.cache)})
@@ -328,4 +327,11 @@ func (n *node) serve(ctx context.Context) error {
 		return stopped
 	}
 	return err
+}
+
+// said is the server as this node says of itself now, named as an admin last named it.
+func (n *node) said() domain.Info {
+	info := n.info
+	info.Name = n.identity.Name()
+	return info
 }

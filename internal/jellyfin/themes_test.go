@@ -75,7 +75,7 @@ type themeResult struct {
 // while the owner stays the same. photon has no theme videos.
 func TestAnAppListsAShowsThemeSongs(t *testing.T) {
 	st, ada, show, episode := aShowWithATheme(t)
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st,
 	})
 	get := func(target string, v any) {
@@ -114,7 +114,7 @@ func TestAnAppListsAShowsThemeSongs(t *testing.T) {
 // address with the token in it, others at its stream, in ranges.
 func TestAnAppPlaysAThemeSong(t *testing.T) {
 	st, ada, show, _ := aShowWithATheme(t)
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Themes: st,
 	})
 	page, err := st.Title(t.Context(), ada.ID, show)

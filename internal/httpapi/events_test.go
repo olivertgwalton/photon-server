@@ -35,7 +35,7 @@ func node(t *testing.T, st *store.Store) *events.Hub {
 		t.Fatalf("TEST_VALKEY_URL: %v", err)
 	}
 	t.Cleanup(k.Close)
-	return events.New(st, k, events.Server{ID: uuid.NewV7(), Name: "den"}, slog.New(slog.DiscardHandler))
+	return events.New(st, k, uuid.NewV7(), func() string { return "den" }, slog.New(slog.DiscardHandler))
 }
 
 type sse struct {

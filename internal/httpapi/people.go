@@ -58,7 +58,7 @@ func (a *API) person(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if time.Since(p.DescribedAt) > describedFor && len(p.IDs) > 0 {
-		d, ok, err := a.svc.PersonDescriber.DescribePerson(r.Context(), domain.Locale{Language: p.Language}.Or(domain.LocaleOf(a.svc.Setup.MetadataLanguage)), p.IDs)
+		d, ok, err := a.svc.PersonDescriber.DescribePerson(r.Context(), domain.Locale{Language: p.Language}.Or(a.svc.Identity.Locale()), p.IDs)
 		if ok {
 			err = a.svc.People.DescribePerson(r.Context(), id, d)
 		}
