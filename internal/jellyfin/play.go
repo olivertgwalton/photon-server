@@ -45,6 +45,7 @@ type watching interface {
 	SaveProgress(ctx context.Context, profile, item uuid.UUID, position, length time.Duration, before domain.Reach, at *time.Time) (domain.Reach, error)
 	MarkWatched(ctx context.Context, profile, item uuid.UUID, at *time.Time) error
 	MarkUnwatched(ctx context.Context, profile, item uuid.UUID) error
+	ClearProgress(ctx context.Context, profile, item uuid.UUID) error
 	Favourite(ctx context.Context, profile, item uuid.UUID) error
 	Unfavourite(ctx context.Context, profile, item uuid.UUID) error
 }
@@ -488,12 +489,34 @@ func (a *API) mark(set func(ctx context.Context, profile, item uuid.UUID) error)
 		}
 		a.svc.Raise(r.Context(), domain.Event{Kind: domain.EventUserDataChanged, Profile: profile, Item: id})
 		p, err := a.svc.Catalogue.Title(r.Context(), profile, id)
+		if isNotFound(err) {
+			a.refuse(w, http.StatusNotFound)
+			return
+		}
 		if err != nil {
 			a.internal(w, r, err)
 			return
 		}
 		a.writeJSON(w, a.userData(id, p.State, 0, p.Kind))
 	}
+}
+
+// userDataOf answers what a profile has made of a title, changing nothing.
+func (a *API) userDataOf(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.itemID(w, r)
+	if !ok {
+		return
+	}
+	p, err := a.svc.Catalogue.Title(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
+	if isNotFound(err) {
+		a.refuse(w, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	a.writeJSON(w, a.userData(id, p.State, 0, p.Kind))
 }
 
 // segmentTypes are Jellyfin's MediaSegmentType for each kind of marker.
