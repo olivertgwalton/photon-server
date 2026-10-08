@@ -31,7 +31,20 @@ image's `/var/lib/photon-server/backups`), keeping the newest three. Settings, S
 lists them, downloads one and backs up now (`GET /api/v1/admin/backups`). With several servers,
 a dump is kept by whichever made it, as it ran the scheduled tasks; each lists its own.
 
-A dump is restored with every server stopped:
+Restore, beside a dump there, restores it as Jellyfin does, by restarting
+(`POST /api/v1/admin/backups/{name}/restore`). A dump the server answering does not keep, or one
+made by a newer server, is refused. Otherwise every server stops, ending every stream, and clients
+are told the server will be back; the one keeping the dump waits, two minutes at most, for the
+others to let go of the database, restores it, and stops too. Each exits with code 75
+(EX_TEMPFAIL), for its restart policy to start it again: the deploy folder's
+`restart: unless-stopped`, Docker's `on-failure` and systemd's `Restart=on-failure` all do; a
+server with none is started again by hand. A server starting meanwhile waits, its `/readyz`
+answering 503, until the restore is done, or until the server restoring has said nothing for 30
+seconds, as one that died would. A server that serves HTTPS answers plain HTTP while it waits.
+Settings, Server, Backups then says how the restore ended. Devices signed in since the dump was
+made are signed out by it.
+
+Where a server cannot start, a dump is restored from the command line, with every server stopped:
 
 ```sh
 docker compose stop server    # every node; stopping one twice stops it without draining
@@ -39,7 +52,7 @@ docker compose run --rm server restore /var/lib/photon-server/backups/photon-202
 docker compose start server
 ```
 
-The restore refuses while anything is connected to the database, naming each connection, and
+Either way, the restore refuses while anything is connected to the database, naming each connection, and
 refuses a dump made by a newer server than itself. It replaces the database with the dump's in
 one transaction, so a restore that fails changes nothing; migrates an older dump to this version;
 and clears the server's keys in Valkey, which may name playbacks, nodes and pairings the dump
