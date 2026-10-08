@@ -259,14 +259,15 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	}
 }
 
-// An app reads what its profile has made of a title, under either route.
-func TestAnAppReadsItsUserData(t *testing.T) {
+// An app reads and changes what its profile has made of a title, under either route.
+func TestAnAppReadsAndChangesItsUserData(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
 	if err := st.Favourite(t.Context(), ada.ID, heat); err != nil {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Watching: st,
+		Raise: func(context.Context, domain.Event) {},
 	})
 	const header = `MediaBrowser Token="pst_ada"`
 	for _, target := range []string{"/UserItems/" + guid(heat) + "/UserData", "/Users/" + guid(ada.ID) + "/Items/" + guid(heat) + "/UserData"} {
@@ -282,6 +283,35 @@ func TestAnAppReadsItsUserData(t *testing.T) {
 	}
 	if w := serve(api, http.MethodGet, "/UserItems/"+guid(uuid.NewV7())+"/UserData", header, ""); w.Code != http.StatusNotFound {
 		t.Errorf("a title nobody has: %d, want 404", w.Code)
+	}
+
+	// Each change answers the UserData it leaves; what it leaves out stays, and what photon does not
+	// keep is not taken.
+	for _, tc := range []struct {
+		body string
+		want map[string]any
+	}{
+		{`{"Played":true}`, map[string]any{"Played": true, "PlayCount": 1.0, "IsFavorite": true}},
+		{`{"Played":false,"PlaybackPositionTicks":6000000000}`, map[string]any{"Played": false, "PlaybackPositionTicks": 6e9, "IsFavorite": true}},
+		{`{"IsFavorite":false,"PlayCount":7,"Likes":true}`, map[string]any{"PlaybackPositionTicks": 6e9, "IsFavorite": false, "PlayCount": 1.0}},
+		{`{"PlaybackPositionTicks":0}`, map[string]any{"Played": false, "PlaybackPositionTicks": 0.0}},
+	} {
+		w := serve(api, http.MethodPost, "/Users/"+guid(ada.ID)+"/Items/"+guid(heat)+"/UserData", header, tc.body)
+		var data map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &data); err != nil || w.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", tc.body, w.Code, w.Body)
+		}
+		for k, v := range tc.want {
+			if data[k] != v {
+				t.Errorf("%s: %s %v, want %v", tc.body, k, data[k], v)
+			}
+		}
+	}
+	if w := serve(api, http.MethodPost, "/UserItems/"+guid(heat)+"/UserData", header, `{"PlaybackPositionTicks":-1}`); w.Code != http.StatusBadRequest {
+		t.Errorf("a position before the start: %d, want 400", w.Code)
+	}
+	if w := serve(api, http.MethodPost, "/UserItems/"+guid(uuid.NewV7())+"/UserData", header, `{"IsFavorite":true}`); w.Code != http.StatusNotFound {
+		t.Errorf("changing a title nobody has: %d, want 404", w.Code)
 	}
 }
 
