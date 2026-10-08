@@ -198,13 +198,13 @@
 
 	/* A card's picture, in the link (a `group`) it leads to: it lifts under the
 	   pointer, its picture easing closer, and gives a little when pressed. The
-	   picture fades in as `fadeIn` lets it. */
+	   picture comes into focus out of the frame's blur as `fadeIn` lets it. */
 	.card-frame {
 		@apply bg-raise group-hover:ring-line-strong group-focus-visible:ring-signal relative overflow-hidden rounded-xl ring-2 ring-transparent transition-[translate,box-shadow] duration-300 ease-out-expo group-hover:-translate-y-1 group-hover:shadow-[0_1rem_2rem_-0.75rem_oklch(0_0_0/80%)] group-active:translate-y-0 group-active:scale-[0.98];
 	}
 
 	.card-picture {
-		@apply size-full object-cover transition-[opacity,scale] duration-500 ease-out-expo group-hover:scale-105 data-loading:opacity-0;
+		@apply size-full object-cover transition-[opacity,scale,filter] duration-500 ease-out-expo group-hover:scale-105 data-loading:opacity-0 data-loading:blur-md;
 	}
 
 	/* What a card's words sit on over its picture: a shade that gathers toward

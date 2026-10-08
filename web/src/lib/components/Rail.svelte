@@ -60,10 +60,10 @@ function page(direction: 1 | -1) {
 	list?.scrollBy({ left: direction * list.clientWidth * 0.9 });
 }
 
-// Cards fade in one after another, the first screenful only. Only their
-// opacity moves: their places are already kept.
+// Cards fade in one after another, the first screenful only, rising a little
+// into the places already kept for them.
 const arrive =
-	"animate-in fade-in fill-mode-both shrink-0 snap-start duration-500 ease-out-expo";
+	"animate-in fade-in slide-in-from-bottom-2 fill-mode-both shrink-0 snap-start duration-500 ease-out-expo";
 const stagger = (i: number) => `animation-delay: ${Math.min(i, 8) * 35}ms`;
 
 const sizes = $derived(
