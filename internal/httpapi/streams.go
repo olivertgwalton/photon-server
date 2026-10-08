@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"io"
+	"log/slog"
 	"math"
 	"net/http"
 	"os"
@@ -40,7 +41,14 @@ func (a *API) playbackPartStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rc := http.NewResponseController(w)
-	done, err := a.svc.Playbacks.Serve(r.Context(), playback, func() { _ = rc.SetWriteDeadline(time.Now()) })
+	ctx := r.Context()
+	cut := func() {
+		// Failing, the connection is gone already, and so is what was being sent.
+		if err := rc.SetWriteDeadline(time.Now()); err != nil {
+			a.logger.DebugContext(ctx, "stream not cut", slog.Any("err", err))
+		}
+	}
+	done, err := a.svc.Playbacks.Serve(ctx, playback, cut)
 	if a.answered(w, r, err) {
 		return
 	}
