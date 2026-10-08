@@ -11,12 +11,15 @@ type Role string
 
 const (
 	RoleAdmin Role = "admin"
-	// RoleUser watches: what it sees is what its access allows, and the server is the admin's.
+	// RoleManager adds users and keeps the ones it added, granting them no more than it may see
+	// itself; the rest of the server is the admin's.
+	RoleManager Role = "manager"
+	// RoleUser watches: what it sees is what its access allows.
 	RoleUser Role = "user"
 )
 
 func Roles() []Role {
-	return []Role{RoleAdmin, RoleUser}
+	return []Role{RoleAdmin, RoleManager, RoleUser}
 }
 
 type Profile struct {
@@ -25,6 +28,8 @@ type Profile struct {
 	Role Role
 	// Avatar is its picture's id, served as any picture is; zero for none.
 	Avatar uuid.UUID
+	// Manager is the manager that added and keeps it; zero for one the admin keeps.
+	Manager uuid.UUID
 }
 
 // SessionKind is how a session began: a device signing in, or an admin making an API key.
@@ -62,10 +67,16 @@ func ProfileLocks() []ProfileLock {
 	return []ProfileLock{LockPIN, LockPassword}
 }
 
-// Lock is what a profile asks for: its PIN if it set one, else its password. An admin asks for its
-// password always, so a household profile cannot become an admin by guessing a few digits.
+// Lock is what a profile asks for: its PIN if it set one, else its password. An admin or a manager
+// asks for its password always, so a household profile cannot come to keep others by guessing a
+// few digits.
 func Lock(role Role, hasPIN bool) ProfileLock {
-	if hasPIN && role != RoleAdmin {
+	switch role {
+	case RoleAdmin, RoleManager:
+		return LockPassword
+	case RoleUser:
+	}
+	if hasPIN {
 		return LockPIN
 	}
 	return LockPassword
