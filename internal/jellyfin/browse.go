@@ -20,6 +20,7 @@ type catalogue interface {
 	LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*store.SeenLibrary, error)
 	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
+	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Seasons(ctx context.Context, profile, show uuid.UUID) ([]store.SeasonCard, error)
 	Episodes(ctx context.Context, profile, of uuid.UUID) ([]store.Card, error)
@@ -244,14 +245,19 @@ func wallPage(r *http.Request, profile uuid.UUID, l listed) store.WallPage {
 // libraryKinds are the kinds of title each kind of library holds, as Jellyfin's apps ask for them.
 var libraryKinds = map[domain.LibraryKind]string{domain.LibraryMovies: "Movie", domain.LibraryShows: "Series"}
 
-// items answers Jellyfin's /Items: a library's films or shows, a show's seasons or episodes, a
-// season's episodes, or what matches a search; every library at once where an app names none.
+// items answers Jellyfin's /Items: the items an app names, a library's films or shows, a show's
+// seasons or episodes, a season's episodes, or what matches a search; every library at once where
+// an app names none.
 func (a *API) items(w http.ResponseWriter, r *http.Request) {
 	profile, l := auth.SessionOf(r.Context()).Profile.ID, listedOf(w, r)
 	types := values(r, "includeItemTypes")
 	libs, seen, err := a.seenLibraries(r)
 	if err != nil {
 		a.internal(w, r, err)
+		return
+	}
+	if ids := values(r, "ids"); len(ids) > 0 {
+		a.byID(w, r, ids, seen, l)
 		return
 	}
 	parent, ok := optionalID(query(r, "parentId"))
@@ -273,6 +279,47 @@ func (a *API) items(w http.ResponseWriter, r *http.Request) {
 	default:
 		a.children(w, r, profile, parent, types, l)
 	}
+}
+
+// byID answers the items an app names, in its order, each once: the libraries and titles the
+// profile may see, and nothing for the rest.
+func (a *API) byID(w http.ResponseWriter, r *http.Request, names []string, seen map[uuid.UUID]*store.SeenLibrary, l listed) {
+	ids := make([]uuid.UUID, len(names))
+	for n, name := range names {
+		id, ok := parseID(name)
+		if !ok {
+			a.refuse(w, http.StatusBadRequest)
+			return
+		}
+		ids[n] = id
+	}
+	cards, err := a.svc.Catalogue.Cards(r.Context(), auth.SessionOf(r.Context()).Profile.ID, ids)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	titles, err := a.list(r.Context(), cards, l)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	found := map[uuid.UUID]item{}
+	for n, c := range cards {
+		found[c.ID] = titles[n]
+	}
+	for _, id := range ids {
+		if lib, ok := seen[id]; ok {
+			found[id] = a.library(lib)
+		}
+	}
+	out := []item{}
+	for _, id := range ids {
+		if it, ok := found[id]; ok {
+			out = append(out, it)
+			delete(found, id)
+		}
+	}
+	a.writeJSON(w, queryResult{Items: out[min(l.start, len(out)):min(l.start+l.limit, len(out))], TotalRecordCount: len(out), StartIndex: l.start})
 }
 
 // wall answers the titles of libraries, those of several sorted together, of the kinds asked for.

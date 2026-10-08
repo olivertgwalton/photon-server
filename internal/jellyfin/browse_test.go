@@ -196,6 +196,19 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	if got := names(all); len(got) != 3 || got[0] != "Alien" || got[2] != "The Wire" {
 		t.Errorf("every library at once: %v", got)
 	}
+	// Findroid and Jellyfin's web app fetch the items they hold by id: those alone, in their order,
+	// as Jellyfin writes an id or with dashes.
+	byID := "/Items?ids=" + all[2]["Id"].(string) + "," + uuidOf(t, all[0]["Id"]).String() + "," + guid(films.ID) + "," + guid(uuid.NewV7()) + "&fields=MediaSources"
+	if got, total := list("pst_ada", byID); len(got) != 3 || total != 3 || got[0]["Name"] != "The Wire" || got[1]["Name"] != "Alien" ||
+		got[1]["MediaSources"] == nil || got[2]["Type"] != "CollectionFolder" {
+		t.Errorf("by id: %v of %v", names(got), total)
+	}
+	if got, _ := list("pst_kid", byID); len(got) != 2 || got[0]["Name"] != "Alien" {
+		t.Errorf("by id, for the kid: %v, want what the kid may see alone", names(got))
+	}
+	if w := serve(api, http.MethodGet, "/Items?ids=heat", `MediaBrowser Token="pst_ada"`, ""); w.Code != http.StatusBadRequest {
+		t.Errorf("an id that is none: %d, want 400", w.Code)
+	}
 	shows, _ := list("pst_ada", "/Items?parentId="+guid(tv.ID)+"&includeItemTypes=Series&recursive=true")
 	show := shows[0]["Id"].(string)
 	seasons, _ := list("pst_ada", "/Shows/"+show+"/Seasons?userId="+guid(admin.ID)+"&excludeLocationTypes=Virtual&fields=Genres,ParentId")
