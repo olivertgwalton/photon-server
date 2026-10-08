@@ -32,7 +32,7 @@ func TestAConversionIsATranscodeWithinTheQuality(t *testing.T) {
 	c := Copy{Container: "matroska,webm", BitrateKbps: 40_000, Streams: []domain.Stream{
 		{
 			Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Height: 2160, Range: domain.RangeDV,
-			DolbyVision: &domain.DolbyVision{Profile: 8, Compatibility: 1},
+			DolbyVision: &domain.DolbyVision{Profile: 8, Compatibility: domain.CompatibleHDR10},
 		},
 		{Index: 1, Kind: domain.StreamAudio, Codec: "truehd", Channels: 8},
 	}}

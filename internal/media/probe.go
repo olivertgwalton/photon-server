@@ -78,9 +78,6 @@ type probeSideData struct {
 	Profile       int    `json:"dv_profile"`
 	Level         int    `json:"dv_level"`
 	Compatibility int    `json:"dv_bl_signal_compatibility_id"`
-	BLPresent     int    `json:"bl_present_flag"`
-	ELPresent     int    `json:"el_present_flag"`
-	RPUPresent    int    `json:"rpu_present_flag"`
 }
 
 func parseProbe(out []byte) (domain.Facts, error) {
@@ -163,8 +160,7 @@ func dolbyVision(side []probeSideData) *domain.DolbyVision {
 	for _, d := range side {
 		if d.Type == "DOVI configuration record" {
 			return &domain.DolbyVision{
-				Profile: d.Profile, Level: d.Level, Compatibility: d.Compatibility,
-				BaseLayer: d.BLPresent == 1, EnhancementLayer: d.ELPresent == 1, RPU: d.RPUPresent == 1,
+				Profile: d.Profile, Level: d.Level, Compatibility: domain.CompatibilityOf(d.Compatibility),
 			}
 		}
 	}

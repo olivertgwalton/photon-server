@@ -89,11 +89,70 @@ type Stream struct {
 }
 
 type DolbyVision struct {
-	Profile, Level   int
-	Compatibility    int // the base layer's signal: 0 none, 1 HDR10, 2 SDR, 4 HLG
-	BaseLayer        bool
-	EnhancementLayer bool
-	RPU              bool
+	Profile, Level int
+	Compatibility  DolbyVisionCompatibility
+}
+
+// DolbyVisionLayers is what a Dolby Vision stream carries beside its RPU: the base layer alone,
+// or an enhancement layer too.
+type DolbyVisionLayers string
+
+const (
+	LayersBase     DolbyVisionLayers = "base"
+	LayersEnhanced DolbyVisionLayers = "enhanced"
+)
+
+// Layers follows from the profile: 4 and 7 are the dual-layer ones.
+func (dv DolbyVision) Layers() DolbyVisionLayers {
+	if dv.Profile == 4 || dv.Profile == 7 {
+		return LayersEnhanced
+	}
+	return LayersBase
+}
+
+// DolbyVisionCompatibility is what a Dolby Vision stream's base layer shows without its RPU.
+type DolbyVisionCompatibility string
+
+const (
+	// CompatibleNone is a base layer that is nothing alone, as profile 5's.
+	CompatibleNone  DolbyVisionCompatibility = ""
+	CompatibleHDR10 DolbyVisionCompatibility = "hdr10"
+	CompatibleSDR   DolbyVisionCompatibility = "sdr"
+	CompatibleHLG   DolbyVisionCompatibility = "hlg"
+	// CompatibleBluRay is an Ultra HD Blu-ray's HDR10, profile 7's.
+	CompatibleBluRay DolbyVisionCompatibility = "bluray"
+)
+
+// CompatibilityOf reads Dolby's bl_signal_compatibility_id, as ffprobe gives it and the catalogue
+// keeps it; an id Dolby reserves is none.
+func CompatibilityOf(id int) DolbyVisionCompatibility {
+	switch id {
+	case 1:
+		return CompatibleHDR10
+	case 2:
+		return CompatibleSDR
+	case 4:
+		return CompatibleHLG
+	case 6:
+		return CompatibleBluRay
+	}
+	return CompatibleNone
+}
+
+// ID is Dolby's bl_signal_compatibility_id.
+func (c DolbyVisionCompatibility) ID() int {
+	switch c {
+	case CompatibleHDR10:
+		return 1
+	case CompatibleSDR:
+		return 2
+	case CompatibleHLG:
+		return 4
+	case CompatibleBluRay:
+		return 6
+	case CompatibleNone:
+	}
+	return 0
 }
 
 type Chapter struct {

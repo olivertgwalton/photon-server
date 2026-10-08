@@ -135,13 +135,13 @@ func rangeType(s domain.Stream) string {
 		switch {
 		case dv == nil:
 			return "DOVI"
-		case dv.EnhancementLayer:
+		case dv.Layers() == domain.LayersEnhanced:
 			return "DOVIWithEL"
-		case dv.Compatibility == 1:
+		case dv.Compatibility == domain.CompatibleHDR10:
 			return "DOVIWithHDR10"
-		case dv.Compatibility == 2:
+		case dv.Compatibility == domain.CompatibleSDR:
 			return "DOVIWithSDR"
-		case dv.Compatibility == 4:
+		case dv.Compatibility == domain.CompatibleHLG:
 			return "DOVIWithHLG"
 		}
 		return "DOVI"

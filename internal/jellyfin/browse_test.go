@@ -83,7 +83,7 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 		return []store.Copy{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1 << 30, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
 			Duration: time.Hour, Container: "matroska,webm",
 			Streams: []domain.Stream{
-				{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Height: 2160, Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Compatibility: 1}},
+				{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Height: 2160, Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Compatibility: domain.CompatibleHDR10}},
 				{Index: 1, Kind: domain.StreamAudio, Codec: "eac3", Language: language.English, Channels: 6, Default: true},
 				{Index: 2, Kind: domain.StreamSubtitle, Codec: "subrip", Language: language.English},
 			},
