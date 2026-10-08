@@ -27,6 +27,7 @@ type catalogue interface {
 	Named(ctx context.Context, profile, id uuid.UUID) (store.Named, error)
 	SearchPeople(ctx context.Context, text string, offset, limit int) ([]store.PersonRef, int64, error)
 	Person(ctx context.Context, id uuid.UUID) (store.PersonPage, error)
+	Facets(ctx context.Context, lib, profile uuid.UUID) (store.Facets, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Seasons(ctx context.Context, profile, show uuid.UUID) ([]store.SeasonCard, error)
 	Episodes(ctx context.Context, profile, of uuid.UUID) ([]store.Card, error)

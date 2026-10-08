@@ -117,6 +117,10 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	// Someone is found by name and opened by id: /Persons/{name} is not answered, as two people
 	// here may share a name, and apps open a cast member by the id an item gives.
 	a.handle(a.persons, "GET /Persons")
+	a.handle(a.genres, "GET /Genres")
+	a.handle(a.studios, "GET /Studios")
+	a.handle(a.filters, "GET /Items/Filters")
+	a.handle(a.filters2, "GET /Items/Filters2")
 	a.handle(a.none,
 		"GET /Items/{itemId}/LocalTrailers", "GET /Users/{userId}/Items/{itemId}/LocalTrailers",
 		"GET /Items/{itemId}/SpecialFeatures", "GET /Users/{userId}/Items/{itemId}/SpecialFeatures")
