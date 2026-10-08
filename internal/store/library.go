@@ -159,96 +159,16 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 		if err := tx.QueryRow(ctx, `SELECT keyframes, themes FROM libraries WHERE id = $1`, id).Scan(&keyframes, &themes); err != nil {
 			return found(err)
 		}
-		set := func(column string, v any) error {
-			_, err := tx.Exec(ctx, `UPDATE libraries SET `+column+` = $2 WHERE id = $1`, id, v)
+		if change.Sources != nil {
+			if err := replaceSources(ctx, tx, id, change.Sources); err != nil {
+				return err
+			}
+		}
+		if err := setColumns(ctx, tx, id, change); err != nil {
 			return err
 		}
-		if change.Name != "" {
-			if err := set("name", change.Name); err != nil {
-				return err
-			}
-		}
-		if change.Sources != nil {
-			for _, k := range change.Sources {
-				for _, f := range domain.Fetchers() {
-					if k.Of(f) == nil {
-						continue
-					}
-					_, err := tx.Exec(ctx, `DELETE FROM library_sources WHERE library_id = $1 AND item_kind = $2 AND fetcher = $3`,
-						id, k.Kind, f)
-					if err != nil {
-						return err
-					}
-				}
-			}
-			if err := saveSources(ctx, tx, id, change.Sources); err != nil {
-				return err
-			}
-			// A show's match asks only about seasons not yet described, so those whose own
-			// sources changed are described again.
-			var deeper []string
-			for _, k := range change.Sources {
-				if k.Kind == domain.ItemSeason || k.Kind == domain.ItemEpisode {
-					deeper = append(deeper, string(k.Kind))
-				}
-			}
-			if len(deeper) > 0 {
-				err := describeAgain(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind = ANY(@kinds)`,
-					pgx.NamedArgs{"lib": id, "kinds": deeper})
-				if err != nil {
-					return err
-				}
-			}
-			if _, err := tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1`, id); err != nil {
-				return err
-			}
-		}
-		if change.RefreshDays != nil {
-			if err := set("refresh_days", *change.RefreshDays); err != nil {
-				return err
-			}
-		}
-		if change.Monitor != "" {
-			if err := set("monitor", change.Monitor); err != nil {
-				return err
-			}
-		}
-		if change.Previews != "" {
-			if err := set("previews", change.Previews); err != nil {
-				return err
-			}
-		}
-		if change.Markers != "" {
-			if err := set("markers", change.Markers); err != nil {
-				return err
-			}
-		}
-		if change.Deletion != "" {
-			if err := set("deletion", change.Deletion); err != nil {
-				return err
-			}
-		}
-		if change.Collections != "" {
-			if err := set("collection_mode", change.Collections); err != nil {
-				return err
-			}
-		}
-		if change.SubtitleLanguages != nil {
-			tags := make([]string, len(change.SubtitleLanguages))
-			for i, t := range change.SubtitleLanguages {
-				tags[i] = t.String()
-			}
-			if err := set("subtitle_languages", tags); err != nil {
-				return err
-			}
-		}
-		if change.SubtitleMatch != "" {
-			if err := set("subtitle_match", change.SubtitleMatch); err != nil {
-				return err
-			}
-		}
 		if change.Keyframes != "" && change.Keyframes != keyframes {
-			if err := set("keyframes", change.Keyframes); err != nil {
+			if err := setColumn(ctx, tx, id, "keyframes", change.Keyframes); err != nil {
 				return err
 			}
 			if err := rekeyframe(ctx, tx, id, change.Keyframes); err != nil {
@@ -256,7 +176,7 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 			}
 		}
 		if change.Themes != "" && change.Themes != themes {
-			if err := set("themes", change.Themes); err != nil {
+			if err := setColumn(ctx, tx, id, "themes", change.Themes); err != nil {
 				return err
 			}
 			if change.Themes == domain.ThemesThemerr {
@@ -265,44 +185,9 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 				}
 			}
 		}
-		relocated := false
-		for column, v := range map[string]*string{"metadata_language": change.MetadataLanguage, "certification_country": change.CertificationCountry} {
-			if v == nil {
-				continue
-			}
-			tag, err := tx.Exec(ctx, `UPDATE libraries SET `+column+` = nullif($2, '') WHERE id = $1 AND `+column+` IS DISTINCT FROM nullif($2, '')`, id, *v)
-			if err != nil {
-				return err
-			}
-			relocated = relocated || tag.RowsAffected() > 0
-		}
-		if change.ArtworkLanguage != "" {
-			tag, err := tx.Exec(ctx, `UPDATE libraries SET artwork_language = $2 WHERE id = $1 AND artwork_language <> $2`, id, change.ArtworkLanguage)
-			if err != nil {
-				return err
-			}
-			relocated = relocated || tag.RowsAffected() > 0
-		}
-		if change.TitleLanguage != "" {
-			tag, err := tx.Exec(ctx, `UPDATE libraries SET title_language = $2 WHERE id = $1 AND title_language <> $2`, id, change.TitleLanguage)
-			if err != nil {
-				return err
-			}
-			relocated = relocated || tag.RowsAffected() > 0
-		}
-		if relocated {
-			err := forgetDescriptions(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND parent_id IS NULL`, pgx.NamedArgs{"lib": id})
-			if err != nil {
-				return err
-			}
-			// Its seasons and episodes too, which are asked for only while they are named by their files.
-			err = describeAgain(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind IN ('season', 'episode')`, pgx.NamedArgs{"lib": id})
-			if err != nil {
-				return err
-			}
-		}
-		if change.Sources == nil && change.RemoteExtras == nil && !relocated {
-			return nil
+		relocated, err := relocate(ctx, tx, id, change)
+		if err != nil || change.Sources == nil && change.RemoteExtras == nil && !relocated {
+			return err
 		}
 		if change.RemoteExtras != nil {
 			if _, err := tx.Exec(ctx, `DELETE FROM library_remote_extras WHERE library_id = $1`, id); err != nil {
@@ -327,6 +212,140 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 		return ErrLibraryExists
 	}
 	return err
+}
+
+// replaceSources puts sources in place of the library's rankings of the kinds and fetchers they
+// give, and forgets its folders' fingerprints so the next scan reads them all again.
+func replaceSources(ctx context.Context, tx db, id uuid.UUID, sources []domain.KindSources) error {
+	for _, k := range sources {
+		for _, f := range domain.Fetchers() {
+			if k.Of(f) == nil {
+				continue
+			}
+			_, err := tx.Exec(ctx, `DELETE FROM library_sources WHERE library_id = $1 AND item_kind = $2 AND fetcher = $3`,
+				id, k.Kind, f)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if err := saveSources(ctx, tx, id, sources); err != nil {
+		return err
+	}
+	// A show's match asks only about seasons not yet described, so those whose own
+	// sources changed are described again.
+	var deeper []string
+	for _, k := range sources {
+		if k.Kind == domain.ItemSeason || k.Kind == domain.ItemEpisode {
+			deeper = append(deeper, string(k.Kind))
+		}
+	}
+	if len(deeper) > 0 {
+		err := describeAgain(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind = ANY(@kinds)`,
+			pgx.NamedArgs{"lib": id, "kinds": deeper})
+		if err != nil {
+			return err
+		}
+	}
+	_, err := tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1`, id)
+	return err
+}
+
+// setColumns writes the settings change gives that ask nothing more of the library's titles.
+func setColumns(ctx context.Context, tx db, id uuid.UUID, change LibraryChange) error {
+	if change.Name != "" {
+		if err := setColumn(ctx, tx, id, "name", change.Name); err != nil {
+			return err
+		}
+	}
+	if change.RefreshDays != nil {
+		if err := setColumn(ctx, tx, id, "refresh_days", *change.RefreshDays); err != nil {
+			return err
+		}
+	}
+	if change.Monitor != "" {
+		if err := setColumn(ctx, tx, id, "monitor", change.Monitor); err != nil {
+			return err
+		}
+	}
+	if change.Previews != "" {
+		if err := setColumn(ctx, tx, id, "previews", change.Previews); err != nil {
+			return err
+		}
+	}
+	if change.Markers != "" {
+		if err := setColumn(ctx, tx, id, "markers", change.Markers); err != nil {
+			return err
+		}
+	}
+	if change.Deletion != "" {
+		if err := setColumn(ctx, tx, id, "deletion", change.Deletion); err != nil {
+			return err
+		}
+	}
+	if change.Collections != "" {
+		if err := setColumn(ctx, tx, id, "collection_mode", change.Collections); err != nil {
+			return err
+		}
+	}
+	if change.SubtitleLanguages != nil {
+		tags := make([]string, len(change.SubtitleLanguages))
+		for i, t := range change.SubtitleLanguages {
+			tags[i] = t.String()
+		}
+		if err := setColumn(ctx, tx, id, "subtitle_languages", tags); err != nil {
+			return err
+		}
+	}
+	if change.SubtitleMatch != "" {
+		return setColumn(ctx, tx, id, "subtitle_match", change.SubtitleMatch)
+	}
+	return nil
+}
+
+func setColumn(ctx context.Context, tx db, id uuid.UUID, column string, v any) error {
+	_, err := tx.Exec(ctx, `UPDATE libraries SET `+column+` = $2 WHERE id = $1`, id, v)
+	return err
+}
+
+// relocate writes the languages and country change gives and answers whether any of them differs
+// from the library's own, in which case its titles are described again.
+func relocate(ctx context.Context, tx db, id uuid.UUID, change LibraryChange) (bool, error) {
+	relocated := false
+	for column, v := range map[string]*string{"metadata_language": change.MetadataLanguage, "certification_country": change.CertificationCountry} {
+		if v == nil {
+			continue
+		}
+		tag, err := tx.Exec(ctx, `UPDATE libraries SET `+column+` = nullif($2, '') WHERE id = $1 AND `+column+` IS DISTINCT FROM nullif($2, '')`, id, *v)
+		if err != nil {
+			return false, err
+		}
+		relocated = relocated || tag.RowsAffected() > 0
+	}
+	if change.ArtworkLanguage != "" {
+		tag, err := tx.Exec(ctx, `UPDATE libraries SET artwork_language = $2 WHERE id = $1 AND artwork_language <> $2`, id, change.ArtworkLanguage)
+		if err != nil {
+			return false, err
+		}
+		relocated = relocated || tag.RowsAffected() > 0
+	}
+	if change.TitleLanguage != "" {
+		tag, err := tx.Exec(ctx, `UPDATE libraries SET title_language = $2 WHERE id = $1 AND title_language <> $2`, id, change.TitleLanguage)
+		if err != nil {
+			return false, err
+		}
+		relocated = relocated || tag.RowsAffected() > 0
+	}
+	if !relocated {
+		return false, nil
+	}
+	err := forgetDescriptions(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND parent_id IS NULL`, pgx.NamedArgs{"lib": id})
+	if err != nil {
+		return false, err
+	}
+	// Its seasons and episodes too, which are asked for only while they are named by their files.
+	err = describeAgain(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind IN ('season', 'episode')`, pgx.NamedArgs{"lib": id})
+	return err == nil, err
 }
 
 // RemoveLibrary forgets a library and everything in it; its files are left alone.

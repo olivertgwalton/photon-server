@@ -4,8 +4,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"path"
-	"slices"
 	"time"
 	"uuid"
 
@@ -72,98 +70,6 @@ type TitlePage struct {
 type TitleRef struct {
 	ID    uuid.UUID
 	Title string
-}
-
-// VersionPage is one copy: what it is, the tracks in it and the subtitles beside it. A copy whose
-// files are gone says since when.
-type VersionPage struct {
-	ID           uuid.UUID
-	Edition      string
-	Label        string
-	Container    string
-	DurationMS   int64
-	SizeBytes    int64
-	BitrateKbps  int
-	Parts        int
-	MissingSince *time.Time
-	Streams      []StreamPage
-	Subtitles    []SubtitleRef
-	Chapters     []ChapterRef
-	Markers      []MarkerRef
-	// Files are its parts in order, each where it starts on the copy's timeline, by the id the
-	// /api/v1/parts/{id} routes take.
-	Files []PartRef
-	// Trickplay is the thumbnail sheets of each part that has them; a part's sheets are at
-	// /api/v1/parts/{part_id}/trickplay/{n}.
-	Trickplay []PartTrickplay
-	// DefaultAudioStream and DefaultSubtitleStream or DefaultSubtitleFile are the tracks it plays
-	// with unasked, for the profile asking: none where no subtitle comes on.
-	DefaultAudioStream    *int
-	DefaultSubtitleStream *int
-	DefaultSubtitleFile   *uuid.UUID
-}
-
-// PartRef is one file of a copy.
-type PartRef struct {
-	ID uuid.UUID
-	// File is the name of the part's file, without the folders it is in.
-	File       string
-	Index      int
-	SizeBytes  int64
-	DurationMS int64
-	OffsetMS   int64
-}
-
-// PartTrickplay is a part's thumbnail sheets, its thumbnails timed from OffsetMS on the copy's
-// timeline.
-type PartTrickplay struct {
-	PartID   uuid.UUID
-	OffsetMS int64
-	Trickplay
-}
-
-// StreamPage is a track of a copy's first part; the parts of one copy are cut from one master.
-type StreamPage struct {
-	Index           int
-	Kind            domain.StreamKind
-	Codec           string
-	Profile         string
-	Language        string
-	Title           string
-	Default         bool
-	Forced          bool
-	HearingImpaired bool
-	Commentary      bool
-	Width           int
-	Height          int
-	FrameRate       float64
-	BitDepth        int16
-	Level           int
-	Range           domain.Range
-	DVProfile       int16
-	Channels        int
-	ChannelLayout   string
-	SampleRate      int
-	BitrateKbps     int
-}
-
-type SubtitleRef struct {
-	ID              uuid.UUID
-	Codec           string
-	Language        string
-	Title           string
-	Default         bool
-	Forced          bool
-	HearingImpaired bool
-}
-
-// ChapterRef is a chapter on the copy's whole timeline, across its parts. Image is the address of
-// its picture, for those that have one.
-type ChapterRef struct {
-	StartMS int64
-	EndMS   int64
-	Title   string
-	Image   string
 }
 
 // SignChapterImages signs the address of each chapter's picture, and of each extra's still, as
@@ -279,14 +185,35 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		}
 		p.Credits = billed(show, p.Credits)
 	}
+	if err := s.ofKind(ctx, profile, item, &p); err != nil {
+		return TitlePage{}, err
+	}
+	if p.Extras, err = s.extras(ctx, item.ID); err != nil {
+		return TitlePage{}, err
+	}
+	if p.Videos, err = s.videos(ctx, item.ID); err != nil {
+		return TitlePage{}, err
+	}
+	if err := s.dress(ctx, item, &p); err != nil {
+		return TitlePage{}, err
+	}
+	states, err := s.states(ctx, profile, []*model.Item{item})
+	p.State = states[item.ID]
+	return p, err
+}
+
+// ofKind fills in what only a title of item's kind has: a film's or show's locale, a show's
+// seasons, a season's episodes, a film's or episode's copies, a collection's rule and list.
+func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item, p *TitlePage) error {
 	if item.Kind == domain.ItemMovie || item.Kind == domain.ItemShow {
 		err := s.pool.QueryRow(ctx, `
-			SELECT coalesce(metadata_language, ''), coalesce(certification_country, '') FROM items WHERE id = $1`, id).
+			SELECT coalesce(metadata_language, ''), coalesce(certification_country, '') FROM items WHERE id = $1`, item.ID).
 			Scan(&p.Locale.Language, &p.Locale.Country)
 		if err != nil {
-			return TitlePage{}, err
+			return err
 		}
 	}
+	var err error
 	switch item.Kind {
 	case domain.ItemShow:
 		p.EpisodeOrder = item.EpisodeOrder
@@ -306,22 +233,19 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 			p.List = &ListRef{Source: domain.FieldSource(*source), ID: *list, Missing: missing}
 		}
 	}
-	if err != nil {
-		return TitlePage{}, err
-	}
-	if p.Extras, err = s.extras(ctx, item.ID); err != nil {
-		return TitlePage{}, err
-	}
-	if p.Videos, err = s.videos(ctx, item.ID); err != nil {
-		return TitlePage{}, err
-	}
+	return err
+}
+
+// dress fills in the pictures item wears, their blurhashes, and its themes, which an episode or
+// season takes from its show.
+func (s *Store) dress(ctx context.Context, item *model.Item, p *TitlePage) error {
 	shows, err := s.showsOf(ctx, []*model.Item{item})
 	if err != nil {
-		return TitlePage{}, err
+		return err
 	}
 	pictures, hashes, err := s.picturesWorn(ctx, []*model.Item{item}, shows)
 	if err != nil {
-		return TitlePage{}, err
+		return err
 	}
 	p.Artwork = pictures[item.ID]
 	var shown []uuid.UUID
@@ -329,20 +253,15 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		shown = append(shown, of...)
 	}
 	p.Blurhashes = blurhashesOf(hashes, shown...)
-	owner := id
+	owner := item.ID
 	if p.Show != nil {
 		owner = p.Show.ID
 	}
 	themes, err := s.themes(ctx, owner)
-	if err != nil {
-		return TitlePage{}, err
-	}
 	if len(themes) > 0 {
 		p.Themes = themes
 	}
-	states, err := s.states(ctx, profile, []*model.Item{item})
-	p.State = states[item.ID]
-	return p, err
+	return err
 }
 
 // readItem answers a title's row, or ErrNotFound.
@@ -624,180 +543,4 @@ func (s *Store) videos(ctx context.Context, item uuid.UUID) ([]VideoLink, error)
 		out = nil
 	}
 	return out, err
-}
-
-// versions answers a film's or episode's copies, those on disk first, the longest first.
-// Versions answers the copies of each of items, those on disk first, the longest first among them;
-// a title with none is left out. However many titles, it is the same few queries.
-func (s *Store) Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID][]VersionPage, error) {
-	rows, err := queryRows[model.Version](ctx, s.pool, `SELECT `+versionColumns+` FROM versions WHERE item_id = ANY($1)`, items)
-	if err != nil || len(rows) == 0 {
-		return nil, err
-	}
-	slices.SortStableFunc(rows, func(a, b *model.Version) int {
-		if (a.MissingSince == nil) != (b.MissingSince == nil) {
-			return map[bool]int{true: -1, false: 1}[a.MissingSince == nil]
-		}
-		return cmp.Compare(b.DurationMS, a.DurationMS)
-	})
-	vids := make([]uuid.UUID, len(rows))
-	for n, r := range rows {
-		vids[n] = r.ID
-	}
-	parts, err := queryRows[model.Part](ctx, s.pool, `
-		SELECT `+partColumns+` FROM parts WHERE version_id = ANY($1) ORDER BY version_id, idx`, vids)
-	if err != nil {
-		return nil, err
-	}
-	byVersion := map[uuid.UUID][]*model.Part{}
-	var pids []uuid.UUID
-	for _, p := range parts {
-		byVersion[p.VersionID] = append(byVersion[p.VersionID], p)
-		pids = append(pids, p.ID)
-	}
-	streams, err := queryRows[model.Stream](ctx, s.pool, `
-		SELECT `+streamColumns+` FROM streams WHERE part_id = ANY($1) ORDER BY part_id, idx`, pids)
-	if err != nil {
-		return nil, err
-	}
-	chapters, err := queryRows[model.Chapter](ctx, s.pool, `
-		SELECT `+chapterColumns+` FROM chapters WHERE part_id = ANY($1) ORDER BY part_id, idx`, pids)
-	if err != nil {
-		return nil, err
-	}
-	markers, err := queryRows[model.Marker](ctx, s.pool, `SELECT `+markerColumns+` FROM markers WHERE part_id = ANY($1)`, pids)
-	if err != nil {
-		return nil, err
-	}
-	subs, err := queryRows[model.SubtitleFile](ctx, s.pool, `
-		SELECT `+subtitleFileColumns+` FROM subtitle_files WHERE version_id = ANY($1) ORDER BY rel_path`, vids)
-	if err != nil {
-		return nil, err
-	}
-	files := map[uuid.UUID]string{}
-	named, err := s.pool.Query(ctx, `
-		SELECT DISTINCT ON (part_id) part_id, rel_path FROM part_files WHERE part_id = ANY($1) ORDER BY part_id, rel_path`, pids)
-	if err != nil {
-		return nil, err
-	}
-	var part uuid.UUID
-	var rel string
-	if _, err := pgx.ForEachRow(named, []any{&part, &rel}, func() error {
-		files[part] = path.Base(rel)
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-	pictured, sheets, err := s.partPreviews(ctx, parts)
-	if err != nil {
-		return nil, err
-	}
-	detection, err := s.markerDetection(ctx, rows)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[uuid.UUID][]VersionPage, len(items))
-	for _, r := range rows {
-		vp := VersionPage{
-			ID: r.ID, Edition: deref(r.Edition), Label: deref(r.Label), Container: r.Container,
-			DurationMS: r.DurationMS, SizeBytes: r.SizeBytes, BitrateKbps: r.BitrateKbps,
-			Parts: len(byVersion[r.ID]), MissingSince: r.MissingSince, Streams: []StreamPage{},
-		}
-		for k, p := range byVersion[r.ID] {
-			vp.Files = append(vp.Files, PartRef{
-				ID: p.ID, File: files[p.ID], Index: int(p.Idx), SizeBytes: p.SizeBytes, DurationMS: p.DurationMS, OffsetMS: p.OffsetMS,
-			})
-			var own []*model.Chapter
-			for _, c := range chapters {
-				if c.PartID == p.ID {
-					own = append(own, c)
-					ref := ChapterRef{StartMS: p.OffsetMS + c.StartMS, EndMS: p.OffsetMS + c.EndMS, Title: deref(c.Title)}
-					if slices.Contains(pictured[p.ID], c.Idx) {
-						ref.Image = fmt.Sprintf("/api/v1/parts/%s/chapters/%d/image", p.ID, c.Idx)
-					}
-					vp.Chapters = append(vp.Chapters, ref)
-				}
-			}
-			var stored []*model.Marker
-			for _, m := range markers {
-				if m.PartID == p.ID {
-					stored = append(stored, m)
-				}
-			}
-			for _, m := range partMarkers(stored, own, detection[r.LibraryID]) {
-				m.StartMS += p.OffsetMS
-				m.EndMS += p.OffsetMS
-				vp.Markers = append(vp.Markers, m)
-			}
-			if t, ok := sheets[p.ID]; ok {
-				vp.Trickplay = append(vp.Trickplay, PartTrickplay{PartID: p.ID, OffsetMS: p.OffsetMS, Trickplay: t})
-			}
-			if k > 0 {
-				continue
-			}
-			for _, t := range streams {
-				if t.PartID == p.ID {
-					vp.Streams = append(vp.Streams, streamPage(t))
-				}
-			}
-		}
-		for _, f := range subs {
-			if f.VersionID == r.ID {
-				vp.Subtitles = append(vp.Subtitles, SubtitleRef{
-					ID: f.ID, Codec: f.Codec, Language: deref(f.Language), Title: deref(f.Title), Default: f.IsDefault,
-					Forced: f.Forced, HearingImpaired: f.HearingImpaired,
-				})
-			}
-		}
-		out[r.ItemID] = append(out[r.ItemID], vp)
-	}
-	return out, nil
-}
-
-// markerDetection answers how each copy's library finds markers.
-func (s *Store) markerDetection(ctx context.Context, versions []*model.Version) (map[uuid.UUID]domain.MarkerDetection, error) {
-	libs := make([]uuid.UUID, len(versions))
-	for n, v := range versions {
-		libs[n] = v.LibraryID
-	}
-	return queryMap[uuid.UUID, domain.MarkerDetection](ctx, s.pool,
-		`SELECT id, markers FROM libraries WHERE id = ANY($1)`, libs)
-}
-
-// partPreviews answers the idx of each part's chapters that have an image, and each part's
-// trickplay sheets.
-func (s *Store) partPreviews(ctx context.Context, parts []*model.Part) (map[uuid.UUID][]int, map[uuid.UUID]Trickplay, error) {
-	ids := make([]uuid.UUID, len(parts))
-	for n, p := range parts {
-		ids[n] = p.ID
-	}
-	rows, err := s.pool.Query(ctx, `
-		SELECT pv.part_id, pv.chapter_images, t.width, t.height, t.interval_ms, t.columns, t.rows, t.thumbnails
-		FROM previews pv LEFT JOIN trickplay t ON t.part_id = pv.part_id WHERE pv.part_id = ANY($1)`, ids)
-	if err != nil {
-		return nil, nil, err
-	}
-	pictured, sheets := map[uuid.UUID][]int{}, map[uuid.UUID]Trickplay{}
-	var part uuid.UUID
-	var idx []int
-	var w, h, interval, cols, rws, n *int
-	_, err = pgx.ForEachRow(rows, []any{&part, &idx, &w, &h, &interval, &cols, &rws, &n}, func() error {
-		pictured[part] = idx
-		if n != nil {
-			sheets[part] = sheetsOf(*w, *h, *interval, *cols, *rws, *n)
-		}
-		return nil
-	})
-	return pictured, sheets, err
-}
-
-func streamPage(t *model.Stream) StreamPage {
-	return StreamPage{
-		Index: t.Idx, Kind: t.Kind, Codec: t.Codec, Profile: deref(t.Profile), Language: deref(t.Language),
-		Title: deref(t.Title), Default: t.IsDefault, Forced: t.Forced, HearingImpaired: t.HearingImpaired,
-		Commentary: t.Commentary, Width: deref(t.Width), Height: deref(t.Height), FrameRate: deref(t.FrameRate),
-		BitDepth: deref(t.BitDepth), Level: deref(t.Level),
-		Range: deref(t.VideoRange), DVProfile: deref(t.DVProfile), Channels: deref(t.Channels),
-		ChannelLayout: deref(t.ChannelLayout), SampleRate: deref(t.SampleRate), BitrateKbps: deref(t.BitrateKbps),
-	}
 }
