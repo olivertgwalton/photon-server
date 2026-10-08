@@ -6,12 +6,15 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 type playlists interface {
 	Playlists(ctx context.Context, profile uuid.UUID) ([]store.PlaylistSummary, error)
 	PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID, offset, limit int) ([]store.PlaylistEntry, int64, error)
+	AddPlaylist(ctx context.Context, profile uuid.UUID, name string, items []uuid.UUID) (uuid.UUID, error)
+	AddToPlaylist(ctx context.Context, profile, playlist uuid.UUID, items []uuid.UUID) error
 }
 
 // fromPlaylist is one of the profile's playlists, as Jellyfin's apps list one: a folder of video.
@@ -94,4 +97,109 @@ func (a *API) playlistItems(w http.ResponseWriter, r *http.Request) {
 		items[n].PlaylistItemID = guid(e.ID)
 	}
 	a.writeJSON(w, queryResult{Items: items, TotalRecordCount: int(total), StartIndex: l.start})
+}
+
+// sharing is whom a playlist is shared with, as Jellyfin's dtos to make or change one say. Photon's
+// playlists are their profile's alone, so one asked to be shared with anyone else is refused.
+type sharing struct {
+	Users []struct {
+		UserID string `json:"UserId"`
+	} `json:"Users"`
+	IsPublic bool `json:"IsPublic"`
+}
+
+func (s sharing) shared(profile uuid.UUID) bool {
+	for _, u := range s.Users {
+		if id, ok := parseID(u.UserID); !ok || id != profile {
+			return true
+		}
+	}
+	return s.IsPublic
+}
+
+// ids reads Guids, and says whether every one was one.
+func ids(vs []string) ([]uuid.UUID, bool) {
+	out := make([]uuid.UUID, len(vs))
+	for n, v := range vs {
+		id, ok := parseID(v)
+		if !ok {
+			return nil, false
+		}
+		out[n] = id
+	}
+	return out, true
+}
+
+// createPlaylist makes one of the profile's playlists, of the titles named if any: a show or season
+// as its episodes, a collection as its titles. A playlist for another profile is refused as
+// Jellyfin refuses one to a user who is not an administrator.
+func (a *API) createPlaylist(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name   string   `json:"Name"`
+		IDs    []string `json:"Ids"`
+		UserID string   `json:"UserId"`
+		sharing
+	}
+	if !a.readJSON(w, r, &req) {
+		return
+	}
+	profile := auth.SessionOf(r.Context()).Profile.ID
+	if owner, ok := parseID(req.UserID); req.UserID != "" && (!ok || owner != profile) {
+		a.refuse(w, http.StatusForbidden)
+		return
+	}
+	items, ok := ids(req.IDs)
+	if !ok || req.Name == "" || req.shared(profile) {
+		a.refuse(w, http.StatusBadRequest)
+		return
+	}
+	id, err := a.svc.Playlists.AddPlaylist(r.Context(), profile, req.Name, items)
+	if isNotFound(err) {
+		a.refuse(w, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	a.playlistChanged(r, id)
+	a.writeJSON(w, struct {
+		ID string `json:"Id"`
+	}{guid(id)})
+}
+
+// addToPlaylist puts titles at the end of the profile's playlist, as making one does.
+func (a *API) addToPlaylist(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.playlistID(w, r)
+	if !ok {
+		return
+	}
+	items, ok := ids(values(r, "ids"))
+	if !ok {
+		a.refuse(w, http.StatusBadRequest)
+		return
+	}
+	a.changed(w, r, id, a.svc.Playlists.AddToPlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, items))
+}
+
+// changed answers a change to the profile's playlist: 404 where it has no such playlist, or the
+// change names a title or entry that is not there; else 204, once its apps are told.
+func (a *API) changed(w http.ResponseWriter, r *http.Request, id uuid.UUID, err error) {
+	switch {
+	case isNotFound(err):
+		a.refuse(w, http.StatusNotFound)
+	case err != nil:
+		a.internal(w, r, err)
+	default:
+		a.playlistChanged(r, id)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// playlistChanged tells the profile's apps, photon's own among them, that its playlist changed.
+func (a *API) playlistChanged(r *http.Request, id uuid.UUID) {
+	profile := auth.SessionOf(r.Context()).Profile.ID
+	a.svc.Raise(r.Context(), domain.Event{
+		Kind: domain.EventUserDataChanged, Profile: profile, Details: domain.UserDataDetails{PlaylistID: id},
+	})
 }

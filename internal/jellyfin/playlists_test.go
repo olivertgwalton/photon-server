@@ -3,6 +3,7 @@
 package jellyfin
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -15,9 +16,17 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
-// playlistsAPI is a household's films, Heat, Alien and Thief, and two profiles, Ada and Bob, each
-// signed in by their own token.
-func playlistsAPI(t *testing.T) (*API, *store.Store, map[string]uuid.UUID, domain.Profile) {
+// household is a household's films, Heat, Alien and Thief, and two profiles, Ada and Bob, each
+// signed in by their own token; and the events the server raised.
+type household struct {
+	api      *API
+	st       *store.Store
+	films    map[string]uuid.UUID
+	ada, bob domain.Profile
+	raised   *[]domain.Event
+}
+
+func newHousehold(t *testing.T) household {
 	t.Helper()
 	ctx := t.Context()
 	db := storetest.FreshDatabase(t)
@@ -34,7 +43,7 @@ func playlistsAPI(t *testing.T) (*API, *store.Store, map[string]uuid.UUID, domai
 	if err != nil {
 		t.Fatal(err)
 	}
-	films := map[string]uuid.UUID{}
+	h := household{st: st, films: map[string]uuid.UUID{}, raised: &[]domain.Event{}}
 	for _, f := range []string{"Heat", "Alien", "Thief"} {
 		film := store.Film{Title: f, Folder: f, Copies: []store.Copy{{ContentKey: []byte(f), Parts: []store.Part{{
 			RelPath: f + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour},
@@ -46,20 +55,36 @@ func playlistsAPI(t *testing.T) (*API, *store.Store, map[string]uuid.UUID, domai
 		if err != nil {
 			t.Fatal(err)
 		}
-		films[f] = cards[0].ID
+		h.films[f] = cards[0].ID
 	}
-	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)
-	if err != nil {
+	if h.ada, err = st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil); err != nil {
 		t.Fatal(err)
 	}
-	bob, err := st.AddProfile(ctx, "Bob", domain.RoleUser, "hash", nil)
-	if err != nil {
+	if h.bob, err = st.AddProfile(ctx, "Bob", domain.RoleUser, "hash", nil); err != nil {
 		t.Fatal(err)
 	}
-	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
-		Auth: profiles{"pst_ada": ada, "pst_bob": bob}, Catalogue: st, Playlists: st,
+	h.api = New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+		Auth: profiles{"pst_ada": h.ada, "pst_bob": h.bob}, Catalogue: st, Playlists: st,
+		Raise: func(_ context.Context, e domain.Event) { *h.raised = append(*h.raised, e) },
 	})
-	return api, st, films, ada
+	return h
+}
+
+// send asks target as the profile token names, reading the reply into into where it is answered.
+func (h household) send(t *testing.T, method, token, target, body string, into any) int {
+	t.Helper()
+	w := serve(h.api, method, target, `MediaBrowser Client="Jellyfin Web", Token="`+token+`"`, body)
+	if w.Code == http.StatusOK && into != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), into); err != nil {
+			t.Fatalf("%s %s: %v", method, target, err)
+		}
+	}
+	return w.Code
+}
+
+func (h household) read(t *testing.T, token, target string, into any) int {
+	t.Helper()
+	return h.send(t, http.MethodGet, token, target, "", into)
 }
 
 // playlistResult is a BaseItemDtoQueryResult of playlists, or of a playlist's items.
@@ -73,27 +98,23 @@ type playlistResult struct {
 	TotalRecordCount int
 }
 
-// readAs reads target as the profile token names, into into where it is answered.
-func readAs(t *testing.T, api *API, token, target string, into any) int {
-	t.Helper()
-	w := serve(api, http.MethodGet, target, `MediaBrowser Client="Jellyfin Web", Token="`+token+`"`, "")
-	if w.Code == http.StatusOK && into != nil {
-		if err := json.Unmarshal(w.Body.Bytes(), into); err != nil {
-			t.Fatalf("%s: %v", target, err)
-		}
+func (r playlistResult) names() []string {
+	var out []string
+	for _, it := range r.Items {
+		out = append(out, it.Name)
 	}
-	return w.Code
+	return out
 }
 
 // An app lists the profile's playlists, and opens one by its id; no profile sees another's.
 func TestAnAppListsItsPlaylists(t *testing.T) {
-	api, st, films, ada := playlistsAPI(t)
-	night, err := st.AddPlaylist(t.Context(), ada.ID, "Night", []uuid.UUID{films["Heat"], films["Thief"]})
+	h := newHousehold(t)
+	night, err := h.st.AddPlaylist(t.Context(), h.ada.ID, "Night", []uuid.UUID{h.films["Heat"], h.films["Thief"]})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var mine playlistResult
-	readAs(t, api, "pst_ada", "/Items?includeItemTypes=Playlist&recursive=true&fields=ChildCount", &mine)
+	h.read(t, "pst_ada", "/Items?includeItemTypes=Playlist&recursive=true&fields=ChildCount", &mine)
 	if len(mine.Items) != 1 || mine.TotalRecordCount != 1 {
 		t.Fatalf("Ada's playlists = %+v, want Night", mine)
 	}
@@ -102,15 +123,15 @@ func TestAnAppListsItsPlaylists(t *testing.T) {
 		t.Errorf("Night = %+v, want a folder of video, of two", p)
 	}
 	var opened struct{ Name, Type string }
-	if code := readAs(t, api, "pst_ada", "/Items/"+guid(night), &opened); code != http.StatusOK || opened.Name != "Night" || opened.Type != "Playlist" {
+	if code := h.read(t, "pst_ada", "/Items/"+guid(night), &opened); code != http.StatusOK || opened.Name != "Night" || opened.Type != "Playlist" {
 		t.Errorf("Night opened = %d %+v", code, opened)
 	}
 	var bobs playlistResult
-	readAs(t, api, "pst_bob", "/Items?includeItemTypes=Playlist&recursive=true", &bobs)
+	h.read(t, "pst_bob", "/Items?includeItemTypes=Playlist&recursive=true", &bobs)
 	if len(bobs.Items) != 0 {
 		t.Errorf("Bob's playlists = %+v, want none: Night is Ada's", bobs)
 	}
-	if code := readAs(t, api, "pst_bob", "/Items/"+guid(night), nil); code != http.StatusNotFound {
+	if code := h.read(t, "pst_bob", "/Items/"+guid(night), nil); code != http.StatusNotFound {
 		t.Errorf("Bob opens Ada's playlist: %d, want 404", code)
 	}
 }
@@ -118,13 +139,13 @@ func TestAnAppListsItsPlaylists(t *testing.T) {
 // An app reads a playlist's items in its order, a page at a time, each with the entry's own id;
 // no profile reads another's.
 func TestAnAppReadsAPlaylist(t *testing.T) {
-	api, st, films, ada := playlistsAPI(t)
-	night, err := st.AddPlaylist(t.Context(), ada.ID, "Night", []uuid.UUID{films["Thief"], films["Heat"], films["Thief"]})
+	h := newHousehold(t)
+	night, err := h.st.AddPlaylist(t.Context(), h.ada.ID, "Night", []uuid.UUID{h.films["Thief"], h.films["Heat"], h.films["Thief"]})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var all playlistResult
-	readAs(t, api, "pst_ada", "/Playlists/"+guid(night)+"/Items?userId="+guid(ada.ID)+"&fields=MediaSources", &all)
+	h.read(t, "pst_ada", "/Playlists/"+guid(night)+"/Items?userId="+guid(h.ada.ID)+"&fields=MediaSources", &all)
 	if all.TotalRecordCount != 3 || len(all.Items) != 3 || all.Items[0].Name != "Thief" || all.Items[1].Name != "Heat" ||
 		all.Items[2].ID != all.Items[0].ID || len(all.Items[1].MediaSources) != 1 {
 		t.Fatalf("Night = %+v, want Thief, Heat and Thief again, with their copies", all)
@@ -133,11 +154,57 @@ func TestAnAppReadsAPlaylist(t *testing.T) {
 		t.Errorf("entries %q and %q: want each its own id, Thief twice told apart", all.Items[0].PlaylistItemID, all.Items[2].PlaylistItemID)
 	}
 	var second playlistResult
-	readAs(t, api, "pst_ada", "/playlists/"+guid(night)+"/items?startIndex=1&limit=1", &second)
+	h.read(t, "pst_ada", "/playlists/"+guid(night)+"/items?startIndex=1&limit=1", &second)
 	if second.TotalRecordCount != 3 || len(second.Items) != 1 || second.Items[0].PlaylistItemID != all.Items[1].PlaylistItemID {
 		t.Errorf("the second entry of three = %+v, want Heat's", second)
 	}
-	if code := readAs(t, api, "pst_bob", "/Playlists/"+guid(night)+"/Items", nil); code != http.StatusNotFound {
+	if code := h.read(t, "pst_bob", "/Playlists/"+guid(night)+"/Items", nil); code != http.StatusNotFound {
 		t.Errorf("Bob reads Ada's playlist: %d, want 404", code)
+	}
+}
+
+// An app makes a playlist of titles and adds more to its end, as the profile's alone; the
+// profile's other apps are told of each change. One for another profile, or shared, is refused,
+// and no profile adds to another's.
+func TestAnAppMakesAPlaylist(t *testing.T) {
+	h := newHousehold(t)
+	var made struct{ ID string }
+	body := `{"Name":"Night","Ids":["` + guid(h.films["Heat"]) + `"],"UserId":"` + guid(h.ada.ID) + `","MediaType":"Video","IsPublic":false}`
+	if code := h.send(t, http.MethodPost, "pst_ada", "/Playlists", body, &made); code != http.StatusOK || !hexID.MatchString(made.ID) {
+		t.Fatalf("making Night: %d %+v, want its id", code, made)
+	}
+	if code := h.send(t, http.MethodPost, "pst_ada", "/Playlists/"+made.ID+"/Items?ids="+guid(h.films["Alien"])+","+guid(h.films["Thief"])+"&userId="+guid(h.ada.ID), "", nil); code != http.StatusNoContent {
+		t.Errorf("adding Alien and Thief: %d, want 204", code)
+	}
+	var night playlistResult
+	h.read(t, "pst_ada", "/Playlists/"+made.ID+"/Items", &night)
+	if got := night.names(); len(got) != 3 || got[0] != "Heat" || got[1] != "Alien" || got[2] != "Thief" {
+		t.Errorf("Night = %v, want Heat, Alien, Thief", got)
+	}
+	if len(*h.raised) != 2 || (*h.raised)[0].Kind != domain.EventUserDataChanged || (*h.raised)[0].Profile != h.ada.ID {
+		t.Errorf("raised %+v, want Ada told twice her playlist changed", *h.raised)
+	}
+
+	for _, refused := range []struct {
+		name, body string
+		want       int
+	}{
+		{"for Bob", `{"Name":"Theirs","UserId":"` + guid(h.bob.ID) + `"}`, http.StatusForbidden},
+		{"public", `{"Name":"Ours","IsPublic":true}`, http.StatusBadRequest},
+		{"shared with Bob", `{"Name":"Ours","Users":[{"UserId":"` + guid(h.bob.ID) + `","CanEdit":true}]}`, http.StatusBadRequest},
+		{"with no name", `{"Ids":["` + guid(h.films["Heat"]) + `"]}`, http.StatusBadRequest},
+		{"of a title not there", `{"Name":"Ghosts","Ids":["` + guid(uuid.NewV7()) + `"]}`, http.StatusNotFound},
+	} {
+		if code := h.send(t, http.MethodPost, "pst_ada", "/Playlists", refused.body, nil); code != refused.want {
+			t.Errorf("a playlist %s: %d, want %d", refused.name, code, refused.want)
+		}
+	}
+	var mine playlistResult
+	h.read(t, "pst_ada", "/Items?includeItemTypes=Playlist", &mine)
+	if got := mine.names(); len(got) != 1 {
+		t.Errorf("Ada's playlists = %v, want Night alone: none refused is made", got)
+	}
+	if code := h.send(t, http.MethodPost, "pst_bob", "/Playlists/"+made.ID+"/Items?ids="+guid(h.films["Heat"]), "", nil); code != http.StatusNotFound {
+		t.Errorf("Bob adds to Ada's playlist: %d, want 404", code)
 	}
 }
