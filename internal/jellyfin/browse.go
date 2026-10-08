@@ -24,6 +24,8 @@ type catalogue interface {
 	Seasons(ctx context.Context, profile, show uuid.UUID) ([]store.SeasonCard, error)
 	Episodes(ctx context.Context, profile, of uuid.UUID) ([]store.Card, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
+	Calendar(ctx context.Context, q store.CalendarQuery) ([]store.CalendarDay, error)
+	AnnouncedEpisode(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error)
 	LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library uuid.UUID, limit int) ([]store.Card, error)
 	Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID][]store.VersionPage, error)
@@ -368,7 +370,7 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := a.svc.Catalogue.Title(r.Context(), sessionOf(r).Profile.ID, id)
 	if errors.Is(err, store.ErrNotFound) {
-		refuse(w, http.StatusNotFound)
+		a.announcedItem(w, r, id)
 		return
 	}
 	if err != nil {

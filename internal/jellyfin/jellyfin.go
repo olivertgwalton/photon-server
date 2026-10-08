@@ -118,6 +118,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle("GET /UserItems/Resume", a.signedIn(a.row(domain.RowContinueWatching)))
 	a.handle("GET /Users/{userId}/Items/Resume", a.signedIn(a.row(domain.RowContinueWatching)))
 	a.handle("GET /Shows/NextUp", a.signedIn(a.nextUp))
+	a.handle("GET /Shows/Upcoming", a.signedIn(a.upcoming))
 	a.handle("GET /Items/Latest", a.signedIn(a.latest))
 	a.handle("GET /Users/{userId}/Items/Latest", a.signedIn(a.latest))
 	a.handle("GET /Items/{itemId}/LocalTrailers", a.signedIn(none))
