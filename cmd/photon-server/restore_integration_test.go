@@ -38,7 +38,9 @@ func migratedServer(t *testing.T) (string, uuid.UUID, *kv.KV) {
 		t.Fatalf("TEST_VALKEY_URL: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = cache.Clear(context.Background())
+		if _, err := cache.Clear(context.Background()); err != nil {
+			t.Error(err)
+		}
 		cache.Close()
 	})
 	return db, id, cache
