@@ -30,6 +30,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/discovery"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/events"
+	"github.com/olivertgwalton/photon-server/internal/historyimport"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
 	"github.com/olivertgwalton/photon-server/internal/identify"
@@ -84,6 +85,9 @@ const (
 	// webhookSlots is how many deliveries a node makes at once, so one receiver that does not
 	// answer holds up no other.
 	webhookSlots = 2
+	// importSlots is how many history imports a node runs at once, each a source's whole library
+	// read a page at a time.
+	importSlots = 1
 	// mediaSlots is how many jobs of each kind that reads media a node runs at once: one, as
 	// Jellyfin's chapter images and trickplay go through files one by one and Plex's butler file by
 	// file. A still is a seek into the whole file, and on a network mount ten at once took every
@@ -302,13 +306,17 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	notifier := jobs.NewWorker(st, logger, node, webhookSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobDeliverWebhook: webhook.Deliver(st),
 	}, hub, nil)
+	imports := historyimport.New(st)
+	importer := jobs.NewWorker(st, logger, node, importSlots, map[domain.JobKind]jobs.Handler{
+		domain.JobImportHistory: imports.Run,
+	}, hub, nil)
 	// Each kind of job that reads media has a worker of its own, so however many of one are queued,
 	// the others keep their slot, and each gives way to playback and keeps to its timing's hours.
 	reader := func(kind domain.JobKind, h jobs.Handler) *jobs.Worker {
 		return jobs.NewWorker(st, logger, node, mediaSlots, map[domain.JobKind]jobs.Handler{kind: h}, hub, gate)
 	}
 	workers := []*jobs.Worker{
-		scanner, matcher, notifier,
+		scanner, matcher, notifier, importer,
 		reader(domain.JobKeyframes, analysis.Keyframes(st)),
 		reader(domain.JobKeyframeWalk, analysis.WalkKeyframes(st, tools)),
 		reader(domain.JobMarkers, analysis.Markers(st, tools.Fingerprint, tools.Shades)),
