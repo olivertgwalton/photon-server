@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -14,8 +16,10 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // The header as each app sends it: Swiftfin unquoted and in any order, the Kotlin and TypeScript
@@ -440,5 +444,53 @@ func TestAnAppSignsInByQuickConnect(t *testing.T) {
 	}
 	if w := authenticate(); w.Code != http.StatusNotFound {
 		t.Errorf("authenticating twice: %d, want 404", w.Code)
+	}
+}
+
+// onePicture is a server holding one picture, kept in file.
+type onePicture struct {
+	catalogue
+	id   uuid.UUID
+	file string
+}
+
+func (p onePicture) Picture(_ context.Context, id uuid.UUID) (domain.Picture, error) {
+	if id != p.id {
+		return domain.Picture{}, store.ErrNotFound
+	}
+	return domain.Picture{Kept: true}, nil
+}
+
+func (p onePicture) Open(context.Context, uuid.UUID, domain.Picture, int, int) (blob.Object, string, error) {
+	f, err := os.Open(p.file)
+	if err != nil {
+		return blob.Object{}, "", err
+	}
+	o, err := blob.OfFile(f)
+	return o, "avatar.png", err
+}
+
+// An app shows a profile's picture by its tag, under either route, as a page shows one: without a
+// token.
+func TestAnAppShowsAProfilesPicture(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "avatar.png")
+	if err := os.WriteFile(file, []byte("\x89PNG\r\n\x1a\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	avatar := uuid.NewV7()
+	pictures := onePicture{id: avatar, file: file}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: serverID.String(), Name: "Den"}, Services{Catalogue: pictures, Pictures: pictures})
+	for _, target := range []string{
+		"/Users/" + guid(ada.ID) + "/Images/Primary?tag=" + guid(avatar) + "&maxWidth=96",
+		"/UserImage?userId=" + guid(ada.ID) + "&tag=" + guid(avatar),
+	} {
+		if w := serve(api, http.MethodGet, target, "", ""); w.Code != http.StatusOK || w.Header().Get("Content-Type") != "image/png" {
+			t.Errorf("%s: %d %s, want the PNG", target, w.Code, w.Header().Get("Content-Type"))
+		}
+	}
+	for _, target := range []string{"/UserImage?userId=" + guid(ada.ID), "/UserImage?tag=" + guid(uuid.NewV7())} {
+		if w := serve(api, http.MethodGet, target, "", ""); w.Code != http.StatusNotFound {
+			t.Errorf("%s: %d, want 404", target, w.Code)
+		}
 	}
 }

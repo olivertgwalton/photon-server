@@ -100,6 +100,9 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.anyone(a.constant(`[]`), "GET /Users/Public")
 	a.anyone(a.authenticateByName, "POST /Users/AuthenticateByName")
 	a.anyone(a.image, "GET /Items/{itemId}/Images/{imageType}", "GET /Items/{itemId}/Images/{imageType}/{imageIndex}")
+	// A profile's picture, by the PrimaryImageTag of its own user, under Jellyfin 12's route and
+	// the one apps still use.
+	a.anyone(a.image, "GET /UserImage", "GET /Users/{userId}/Images/{imageType}")
 	a.handle(a.authorizeQuickConnect, "POST /QuickConnect/Authorize")
 	a.handle(a.systemInfo, "GET /System/Info")
 	a.handle(a.me, "GET /Users/Me")
