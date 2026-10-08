@@ -152,6 +152,37 @@ func TestSchedulerRunsDueTasksOneAtATime(t *testing.T) {
 	})
 }
 
+// A node says it leads while it holds the lease, and not once it loses it or stops asking for it,
+// as a node draining does while it serves on.
+func TestANodeLeadsOnlyWhileItHoldsTheLease(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		st := &memoryStore{leader: true, starts: map[domain.TaskKey]time.Time{}, requested: map[domain.TaskKey]time.Time{}}
+		s := NewScheduler(st, discard(), uuid.NewV7(), ignore)
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			s.Run(ctx)
+			close(done)
+		}()
+		synctest.Sleep(time.Minute)
+		if !s.Leads() {
+			t.Error("holding the lease, it does not lead")
+		}
+		st.setLeader(false)
+		synctest.Sleep(time.Minute)
+		if s.Leads() {
+			t.Error("having lost the lease, it leads")
+		}
+		st.setLeader(true)
+		synctest.Sleep(time.Minute)
+		cancel()
+		<-done
+		if s.Leads() {
+			t.Error("stopped, it leads")
+		}
+	})
+}
+
 func TestSchedulerRunsNothingWithoutTheLease(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		st := &memoryStore{starts: map[domain.TaskKey]time.Time{}, requested: map[domain.TaskKey]time.Time{}}

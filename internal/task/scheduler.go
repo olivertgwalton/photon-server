@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 	"uuid"
 
@@ -49,6 +50,8 @@ type Scheduler struct {
 	node  uuid.UUID
 	raise func(context.Context, domain.Event)
 	tasks []Task
+	// leads is whether this node held the lease when it last asked.
+	leads atomic.Bool
 }
 
 // node identifies this process to the other nodes of the cluster; raise says as each task starts
@@ -57,9 +60,14 @@ func NewScheduler(st stateStore, log *slog.Logger, node uuid.UUID, raise func(co
 	return &Scheduler{store: st, log: log, node: node, raise: raise, tasks: tasks}
 }
 
+// Leads reports whether this node holds the scheduler lease: one node of the cluster at a time.
+func (s *Scheduler) Leads() bool { return s.leads.Load() }
+
 func (s *Scheduler) Run(ctx context.Context) {
 	t := time.NewTicker(tick)
 	defer t.Stop()
+	// A node draining goes on serving after it stops asking, while another takes the lease.
+	defer s.leads.Store(false)
 	for ctx.Err() == nil {
 		if s.holdLease(ctx) {
 			s.lead(ctx, t)
@@ -128,6 +136,7 @@ func (s *Scheduler) holdLease(ctx context.Context) bool {
 	if err != nil && ctx.Err() == nil {
 		s.log.WarnContext(ctx, "scheduler lease not held", slog.Any("err", err))
 	}
+	s.leads.Store(held && err == nil)
 	return held && err == nil
 }
 
