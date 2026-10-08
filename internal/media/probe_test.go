@@ -3,6 +3,7 @@ package media
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -115,5 +116,22 @@ func TestProbeReadsTheOpenFile(t *testing.T) {
 	}
 	if facts.Container != "mov,mp4,m4a,3gp,3g2,mj2" {
 		t.Errorf("container = %q", facts.Container)
+	}
+}
+
+func TestProbeLeavesAChapterNamedByItsTimeUnnamed(t *testing.T) {
+	facts, err := parseProbe([]byte(`{"format": {"format_name": "matroska,webm", "duration": "120"}, "chapters": [
+		{"start_time": "0", "end_time": "60", "tags": {"title": "00:00:00.000"}},
+		{"start_time": "60", "end_time": "90", "tags": {"title": "(02)00:01:00:000"}},
+		{"start_time": "90", "end_time": "120", "tags": {"title": "Act 3"}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var titles []string
+	for _, c := range facts.Chapters {
+		titles = append(titles, c.Title)
+	}
+	if want := []string{"", "", "Act 3"}; !slices.Equal(titles, want) {
+		t.Errorf("titles = %q, want %q", titles, want)
 	}
 }
