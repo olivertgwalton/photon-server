@@ -206,12 +206,11 @@ func TestPollingAnswersInRFC8628Terms(t *testing.T) {
 }
 
 func TestSwitchingNeedsTheLocksSecret(t *testing.T) {
-	body := `{"profile_id":"` + oliver.ID.String() + `","secret":"guess"}`
-	if rec := serve(t, http.MethodPut, "/api/v1/session/profile", goodToken, body); rec.Code != http.StatusForbidden {
+	target := "/api/v1/profiles/" + oliver.ID.String() + "/switch"
+	if rec := serve(t, http.MethodPost, target, goodToken, `{"secret":"guess"}`); rec.Code != http.StatusForbidden {
 		t.Errorf("a wrong secret: status %d, want 403", rec.Code)
 	}
-	body = `{"profile_id":"` + oliver.ID.String() + `","secret":"correct horse"}`
-	if rec := serve(t, http.MethodPut, "/api/v1/session/profile", goodToken, body); rec.Code != http.StatusOK {
+	if rec := serve(t, http.MethodPost, target, goodToken, `{"secret":"correct horse"}`); rec.Code != http.StatusOK {
 		t.Errorf("the right secret: status %d, want 200", rec.Code)
 	}
 	if rec := serve(t, http.MethodPut, "/api/v1/profile/pin", goodToken, `{"pin":"12"}`); rec.Code != http.StatusBadRequest {

@@ -1189,10 +1189,11 @@ const server_ = Bun.serve({
 						{ ...kids, lock: kidsPIN ? "pin" : "password" },
 					],
 				} satisfies Schemas["ProfileListingList"]);
-			case "PUT /api/v1/session/profile": {
-				const body = (await request.json()) as Schemas["Switch"];
-				const target = [ada, kids].find((p) => p.id === body.profile_id);
-				if (!target) return problem(404, "not_found", "Not Found");
+			case `POST /api/v1/profiles/${ada.id}/switch`:
+			case `POST /api/v1/profiles/${kids.id}/switch`: {
+				const sent = await request.text();
+				const body = (sent ? JSON.parse(sent) : {}) as Schemas["Switch"];
+				const target = ada.id === url.pathname.split("/")[4] ? ada : kids;
 				const locked =
 					target === kids ? kidsPIN || "crayon box" : "correct horse";
 				if (target !== me && locked && body.secret !== locked) {
