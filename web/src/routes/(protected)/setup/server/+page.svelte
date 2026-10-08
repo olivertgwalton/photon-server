@@ -1,6 +1,5 @@
 <script lang="ts">
 import ServerSettingsForm from "#lib/components/admin/ServerSettingsForm.svelte";
-import SetupSteps from "#lib/components/SetupSteps.svelte";
 import * as Card from "#lib/components/ui/card/index.js";
 
 let { data } = $props();
@@ -10,7 +9,6 @@ let { data } = $props();
 
 <Card.Root class="w-full max-w-2xl">
 	<Card.Header>
-		<SetupSteps current={1} />
 		<Card.Title><h1 class="heading text-xl">Name the server</h1></Card.Title>
 		<Card.Description>
 			What apps call it, and what it describes titles in. Each can be changed
