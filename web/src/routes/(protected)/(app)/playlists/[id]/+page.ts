@@ -7,7 +7,7 @@ import type { PageLoad } from "./$types";
 const pageLimit = 200;
 
 export const load: PageLoad = async ({ fetch, params, depends }) => {
-	depends(keys.userdata, "photon:playlists");
+	depends(keys.userdata, keys.playlists);
 	const api = client(fetch);
 	const path = { id: params.id };
 	const entries = (offset: number) =>

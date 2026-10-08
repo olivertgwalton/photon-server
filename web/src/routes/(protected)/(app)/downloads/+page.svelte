@@ -2,6 +2,7 @@
 import DownloadIcon from "@lucide/svelte/icons/download";
 import XIcon from "@lucide/svelte/icons/x";
 import { invalidate } from "$app/navigation";
+import { keys } from "#lib/changes.js";
 import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -31,7 +32,7 @@ const working = $derived(
 );
 $effect(() => {
 	if (!working) return;
-	const timer = setInterval(() => invalidate("photon:downloads"), 3000);
+	const timer = setInterval(() => invalidate(keys.downloads), 3000);
 	return () => clearInterval(timer);
 });
 </script>
