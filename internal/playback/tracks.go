@@ -112,16 +112,19 @@ func defaultSubtitle(subs []Track, sound language.Tag, p domain.Preferences, las
 			return &subs[i]
 		}
 	}
+	// Unlike Jellyfin, a file beside the copy comes after the copy's own tracks as good: one fetched
+	// or left by another tool is often timed for another release, and a text track inside the copy
+	// plays as cheaply as one beside it.
 	want := p.SubtitleLanguage
 	sorted := slices.Clone(subs)
 	slices.SortStableFunc(sorted, func(a, b Track) int {
 		return cmp.Or(
-			first(a.File != uuid.UUID{}, b.File != uuid.UUID{}),
 			first(a.Default, b.Default),
 			first(!a.Forced && matches(a.Language, want), !b.Forced && matches(b.Language, want)),
 			first(a.Forced && matches(a.Language, want), b.Forced && matches(b.Language, want)),
 			first(a.Forced && a.Language == language.Und, b.Forced && b.Language == language.Und),
 			first(a.Forced, b.Forced),
+			first(a.File == uuid.UUID{}, b.File == uuid.UUID{}),
 		)
 	})
 	find := func(ok func(Track) bool) *Track {
@@ -138,7 +141,7 @@ func defaultSubtitle(subs []Track, sound language.Tag, p domain.Preferences, las
 	}
 	switch p.SubtitleMode {
 	case domain.SubtitlesDefault:
-		return find(func(t Track) bool { return t.File != uuid.UUID{} || t.Default || t.Forced })
+		return find(func(t Track) bool { return t.Default || t.Forced })
 	case domain.SubtitlesAlways:
 		if t := find(func(t Track) bool { return !t.Forced && matches(t.Language, want) }); t != nil {
 			return t

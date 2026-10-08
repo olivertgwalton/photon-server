@@ -19,6 +19,8 @@ var (
 	fullEnglish   = Track{Stream: 5, Language: language.English}
 	fullFrench    = Track{Stream: 6, Language: language.French, Default: true}
 	srtFile       = Track{File: uuid.MustParse("0199b3c0-0000-7000-8000-0000000000f1"), Language: language.German}
+	englishSrt    = Track{File: uuid.MustParse("0199b3c0-0000-7000-8000-0000000000f2"), Language: language.English}
+	defaultSrt    = Track{File: uuid.MustParse("0199b3c0-0000-7000-8000-0000000000f3"), Language: language.German, Default: true}
 )
 
 func prefs(change func(*domain.Preferences)) domain.Preferences {
@@ -71,9 +73,19 @@ func TestSubtitlesComeOnAsTheModeSays(t *testing.T) {
 		want  domain.ChosenTracks
 	}{
 		{"the file's default", japanese, subs, domain.DefaultPreferences(), domain.ChosenTracks{}, stream(6)},
+		{"the copy's own default before a file beside it", japanese, append(subs, srtFile), domain.DefaultPreferences(), domain.ChosenTracks{}, stream(6)},
+		{"no file beside the copy only for being there", japanese, []Track{fullEnglish, srtFile}, domain.DefaultPreferences(), domain.ChosenTracks{}, none},
 		{
-			"a file beside the copy before its own", japanese, append(subs, srtFile), domain.DefaultPreferences(),
+			"a file beside the copy marked default", japanese,
+			[]Track{fullEnglish, defaultSrt},
+			domain.DefaultPreferences(),
 			domain.ChosenTracks{},
+			domain.ChosenTracks{Audio: new(1), SubtitleFile: &defaultSrt.File},
+		},
+		{"always, the copy's own track before a file beside it", japanese, []Track{englishSrt, fullEnglish}, inEnglish(domain.SubtitlesAlways), domain.ChosenTracks{}, stream(5)},
+		{
+			"a remembered file beside the copy", japanese, append(subs, srtFile), domain.DefaultPreferences(),
+			domain.ChosenTracks{SubtitleFile: &srtFile.File},
 			domain.ChosenTracks{Audio: new(1), SubtitleFile: &srtFile.File},
 		},
 		{"never", japanese, subs, inEnglish(domain.SubtitlesNone), domain.ChosenTracks{}, none},
