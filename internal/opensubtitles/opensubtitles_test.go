@@ -3,6 +3,7 @@ package opensubtitles
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -26,12 +27,13 @@ func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error)
 type server struct {
 	signIns, downloads, quota int
 	asked                     string
+	t                         *testing.T
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// The file a download links to is served apart, with no key.
 	if r.URL.Path == "/file/12.srt" {
-		_, _ = w.Write([]byte("1\n00:00:01,000 --> 00:00:02,000\nIn space\n"))
+		reply(s.t, w, "1\n00:00:01,000 --> 00:00:02,000\nIn space\n")
 		return
 	}
 	if r.Header.Get("Api-Key") != "consumer" || r.Header.Get("User-Agent") == "" {
@@ -41,14 +43,14 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/subtitles":
 		s.asked = r.URL.RawQuery
-		_, _ = w.Write([]byte(`{"data":[
+		reply(s.t, w, `{"data":[
 			{"attributes":{"language":"en","release":"Alien.1979.Directors.Cut","download_count":900,"files":[{"file_id":11}]}},
 			{"attributes":{"language":"en","release":"Alien.1979.1080p","download_count":20,"moviehash_match":true,"hearing_impaired":true,"files":[{"file_id":12}]}},
 			{"attributes":{"language":"en","release":"Alien.1979.2CD","files":[{"file_id":13},{"file_id":14}]}}
-		]}`))
+		]}`)
 	case "/login":
 		s.signIns++
-		_, _ = w.Write([]byte(`{"token":"t` + string(rune('0'+s.signIns)) + `"}`))
+		reply(s.t, w, `{"token":"t`+string(rune('0'+s.signIns))+`"}`)
 	case "/download":
 		switch {
 		case r.Header.Get("Authorization") == "Bearer t1":
@@ -57,7 +59,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"remaining":0}`, http.StatusNotAcceptable)
 		default:
 			s.downloads++
-			_, _ = w.Write([]byte(`{"link":"http://` + r.Host + `/file/12.srt","remaining":4}`))
+			reply(s.t, w, `{"link":"http://`+r.Host+`/file/12.srt","remaining":4}`)
 		}
 	default:
 		http.NotFound(w, r)
@@ -66,6 +68,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func client(t *testing.T, s *server) *Client {
 	t.Helper()
+	s.t = t
 	srv := httptest.NewServer(s)
 	t.Cleanup(srv.Close)
 	c := New(func(context.Context) (map[string]string, error) {
@@ -130,5 +133,12 @@ func TestASubtitleIsFetchedSignedIn(t *testing.T) {
 	if _, err := New(func(context.Context) (map[string]string, error) { return map[string]string{}, nil }, unlimited{}).
 		SearchSubtitles(t.Context(), domain.SubtitleQuery{}); !errors.Is(err, provider.ErrNotConfigured) {
 		t.Errorf("with no key: %v, want ErrNotConfigured", err)
+	}
+}
+
+func reply(t *testing.T, w io.Writer, body string) {
+	t.Helper()
+	if _, err := io.WriteString(w, body); err != nil {
+		t.Error(err)
 	}
 }
