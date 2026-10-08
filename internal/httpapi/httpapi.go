@@ -140,6 +140,8 @@ type Services struct {
 	ProfileAdmin profileAdmin
 	Tasks        tasks
 	Jobs         jobQueue
+	// Backups restores one of this node's dumps, every node stopping for it.
+	Backups backupRestores
 	// Maintenance is when work that reads media, and that no one waits on, is done.
 	Maintenance maintenanceSettings
 	// Activity is the log of what has happened, and Events tells it, and more, as it happens.
@@ -910,6 +912,11 @@ func (a *API) routes() []route {
 		{
 			pattern: "GET /api/v1/admin/backups/{name}", access: admin, summary: "Download a database dump this node keeps",
 			path: []param{backupNameParam}, status: http.StatusOK, reply: asFile{"application/octet-stream"}, handle: a.downloadBackup,
+		},
+		{
+			pattern: "POST /api/v1/admin/backups/{name}/restore", access: admin,
+			summary: "Restore a database dump this node keeps: every node stops, and every stream with it, and starts again once it is restored",
+			path:    []param{backupNameParam}, status: http.StatusAccepted, handle: a.restoreBackup,
 		},
 		{
 			pattern: "GET /api/v1/admin/maintenance", access: admin,

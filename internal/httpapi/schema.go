@@ -88,6 +88,8 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.NodeAvailability]():    values(domain.NodeAvailabilities()),
 	reflect.TypeFor[domain.NodeRole]():            values(domain.NodeRoles()),
 	reflect.TypeFor[domain.LimitSource]():         values(domain.LimitSources()),
+	reflect.TypeFor[domain.RestorePhase]():        values(domain.RestorePhases()),
+	reflect.TypeFor[domain.RestoreResult]():       values(domain.RestoreResults()),
 	reflect.TypeFor[domain.JellyfinMode]():        values(domain.JellyfinModes()),
 	reflect.TypeFor[domain.StorageKind]():         values(domain.StorageKinds()),
 	reflect.TypeFor[domain.Delivery]():            values(domain.Deliveries()),
