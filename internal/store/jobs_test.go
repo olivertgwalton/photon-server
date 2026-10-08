@@ -317,6 +317,47 @@ func TestTitlesDueAFreshMatchAreQueued(t *testing.T) {
 	}
 }
 
+func TestAShowStillAiringIsMatchedWeekly(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"Severance", "The Wire"} {
+		ep := Episode{Season: 1, Episodes: []int{1}, Title: title, Folder: title, ByNumber: true}
+		if _, err := s.SaveShowFolder(ctx, lib.ID, title, []byte("v1"), Show{Title: title, Folder: title}, []Episode{ep}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	severance, wire := oneItem(t, s, "kind = 'show' AND title = 'Severance'").ID, oneItem(t, s, "kind = 'show' AND title = 'The Wire'").ID
+	coming := map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{2: {Title: "Half Loop", ReleaseDate: time.Now().AddDate(0, 0, 3)}}}}
+	if err := s.SaveIdentity(ctx, severance, domain.SourceTMDB, domain.Metadata{}, coming); err != nil {
+		t.Fatal(err)
+	}
+	ended := map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{2: {Title: "The Detail", ReleaseDate: time.Date(2002, 6, 9, 0, 0, 0, 0, time.UTC)}}}}
+	if err := s.SaveIdentity(ctx, wire, domain.SourceTMDB, domain.Metadata{}, ended); err != nil {
+		t.Fatal(err)
+	}
+	matchedDaysAgo := func(days int) {
+		t.Helper()
+		if _, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE kind = 'identify'`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.pool.Exec(ctx, `UPDATE items SET identified_at = now() - make_interval(days => $1) WHERE kind = 'show'`, days); err != nil {
+			t.Fatal(err)
+		}
+	}
+	matchedDaysAgo(2)
+	if n, err := s.RefreshStale(ctx); err != nil || n != 0 {
+		t.Errorf("queued %d, %v two days after matching; want none", n, err)
+	}
+	matchedDaysAgo(8)
+	if n, err := s.RefreshStale(ctx); err != nil || n != 1 || countRows(t, s, `SELECT count(*) FROM jobs WHERE subject = $1`, severance) != 1 {
+		t.Errorf("queued %d, %v a week after matching; want Severance, still airing, alone", n, err)
+	}
+}
+
 func TestATitleAScanFindsIsMatchedBeforeTheRefresh(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
