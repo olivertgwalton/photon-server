@@ -3,14 +3,11 @@ import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
 import Prose from "#lib/components/Prose.svelte";
 import Rail from "#lib/components/Rail.svelte";
-import { workOf } from "#lib/credits.js";
 import { wallSearch } from "#lib/wall.js";
 
 let { data } = $props();
 
 const p = $derived(data.person);
-
-const work = $derived(workOf(p.credits));
 
 const date = (d: string) =>
 	new Date(d).toLocaleDateString(undefined, {
@@ -68,7 +65,7 @@ const life = $derived(
 		</div>
 	</header>
 
-	{#each work as group (group.slug)}
+	{#each data.work as group (group.slug)}
 		<Rail
 			title={group.name}
 			cards={group.cards}

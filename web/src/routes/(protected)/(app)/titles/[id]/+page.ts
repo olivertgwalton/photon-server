@@ -1,12 +1,10 @@
 import { client, need } from "#lib/api/client.js";
-import { keys } from "#lib/changes.js";
 import type { PageLoad } from "./$types";
 
-export const load: PageLoad = async ({ fetch, params, depends }) => {
-	depends(keys.title(params.id), keys.userdata);
+export const load: PageLoad = async ({ fetch, params, parent }) => {
 	const api = client(fetch);
 	const path = { params: { path: { id: params.id } } };
-	const title = await need(api.GET("/api/v1/titles/{id}", path));
+	const { title } = await parent();
 	const [members, next, themeMusic] = await Promise.all([
 		title.kind === "collection"
 			? need(api.GET("/api/v1/titles/{id}/members", path))
@@ -23,7 +21,6 @@ export const load: PageLoad = async ({ fetch, params, depends }) => {
 			: false,
 	]);
 	return {
-		title,
 		members: members?.items,
 		next,
 		themeMusic,

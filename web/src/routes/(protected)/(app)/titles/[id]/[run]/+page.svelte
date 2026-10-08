@@ -1,22 +1,13 @@
 <script lang="ts">
-import { castOf } from "#lib/credits.js";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import ExtraCard from "#lib/components/ExtraCard.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
-import { type Extra, extrasOf } from "#lib/extras.js";
+import type { Extra } from "#lib/extras.js";
 import { count } from "#lib/format.js";
 
 let { data } = $props();
 
 const t = $derived(data.title);
-const cast = $derived(castOf(t.credits ?? []));
-const extras: Extra[] = $derived(extrasOf(t));
-const seasons = $derived(
-	(t.seasons ?? []).map((s) => ({ ...s, kind: "season" as const })),
-);
-const collections = $derived(
-	(t.collections ?? []).map((c) => ({ ...c, kind: "collection" as const })),
-);
 </script>
 
 <svelte:head><title>{data.name} · {t.title} · Photon</title></svelte:head>
@@ -28,13 +19,13 @@ const collections = $derived(
 	</div>
 	{#if data.run === "seasons"}
 		<CardGrid
-			cards={seasons}
-			caption={(i: number) => count(seasons[i].episodes, "episode")}
+			cards={data.seasons}
+			caption={(i: number) => count(data.seasons[i].episodes, "episode")}
 		/>
 	{:else if data.run === "cast"}
-		<CardGrid items={cast}>
+		<CardGrid items={data.cast}>
 			{#snippet card(
-				credit: (typeof cast)[number],
+				credit: (typeof data.cast)[number],
 			)}
 				<PersonCard
 					id={credit.person_id}
@@ -46,7 +37,7 @@ const collections = $derived(
 			{/snippet}
 		</CardGrid>
 	{:else if data.run === "extras"}
-		<CardGrid items={extras} shape="still">
+		<CardGrid items={data.extras} shape="still">
 			{#snippet card(
 				item: Extra,
 			)}
@@ -54,7 +45,7 @@ const collections = $derived(
 			{/snippet}
 		</CardGrid>
 	{:else if data.run === "collections"}
-		<CardGrid cards={collections} />
+		<CardGrid cards={data.collections} />
 	{:else}
 		<CardGrid cards={data.similar} />
 	{/if}
