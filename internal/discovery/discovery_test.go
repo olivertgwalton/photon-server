@@ -27,7 +27,7 @@ func TestServeAnswersTheQuestion(t *testing.T) {
 	var on atomic.Bool
 	on.Store(true)
 	go func() {
-		done <- Serve(ctx, server, info, on.Load, func() string { return "https" }, slog.New(slog.DiscardHandler))
+		done <- Serve(ctx, server, func() domain.Info { return info }, on.Load, func() string { return "https" }, slog.New(slog.DiscardHandler))
 	}()
 
 	client, err := net.ListenPacket("udp", "127.0.0.1:0")

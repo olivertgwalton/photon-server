@@ -61,6 +61,9 @@ const (
 	EventStorageChanged EventKind = "storage.changed"
 	// EventNodesChanged is what an admin sets of a node, changed; the node takes it up from then.
 	EventNodesChanged EventKind = "nodes.changed"
+	// EventServerChanged is the server's name, or what its metadata is asked in, changed by an
+	// admin; every node goes by it from then.
+	EventServerChanged EventKind = "server.changed"
 	// EventRestoreStarted is a restore asked for: every node stops until it is done, so every
 	// client is told, to say the server will be back.
 	EventRestoreStarted EventKind = "restore.started"
@@ -73,7 +76,8 @@ func EventKinds() []EventKind {
 		EventLibraryAdded, EventLibraryRemoved, EventLibraryScanned, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventTitlesAdded, EventScanProgress, EventTaskStarted, EventTaskFinished, EventTaskFailed, EventBackupMade,
 		EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead, EventJobsProgress, EventWebhookTest,
-		EventMaintenanceChanged, EventNetworkChanged, EventStorageChanged, EventNodesChanged, EventRestoreStarted,
+		EventMaintenanceChanged, EventNetworkChanged, EventStorageChanged, EventNodesChanged, EventServerChanged,
+		EventRestoreStarted,
 	}
 }
 
@@ -88,7 +92,7 @@ func (k EventKind) Logged() bool {
 	case EventPlaybackPaused, EventPlaybackResumed, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventScanProgress, EventTaskStarted, EventTaskFinished, EventJobStarted,
 		EventJobFinished, EventJobFailed, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged,
-		EventNetworkChanged, EventStorageChanged, EventNodesChanged, EventRestoreStarted:
+		EventNetworkChanged, EventStorageChanged, EventNodesChanged, EventServerChanged, EventRestoreStarted:
 		return false
 	}
 	return false
@@ -107,7 +111,7 @@ func (k EventKind) Hookable() bool {
 	case EventLibraryChanged, EventTitleUpdated, EventUserDataChanged, EventScanProgress,
 		EventTaskStarted, EventTaskFinished, EventJobStarted, EventJobFinished, EventJobFailed,
 		EventJobDead, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged, EventNetworkChanged,
-		EventStorageChanged, EventNodesChanged, EventRestoreStarted:
+		EventStorageChanged, EventNodesChanged, EventServerChanged, EventRestoreStarted:
 		return false
 	}
 	return false
@@ -189,7 +193,7 @@ func DetailsOf(k EventKind, raw []byte) (EventDetails, error) {
 	case EventJobsProgress:
 		return detailsOf[BacklogDetails](raw)
 	case EventTitleUpdated, EventWebhookTest, EventMaintenanceChanged, EventNetworkChanged,
-		EventStorageChanged, EventNodesChanged:
+		EventStorageChanged, EventNodesChanged, EventServerChanged:
 	}
 	return nil, nil
 }

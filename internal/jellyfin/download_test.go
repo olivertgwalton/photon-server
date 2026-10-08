@@ -36,7 +36,7 @@ func TestAnAppDownloadsAFilm(t *testing.T) {
 		t.Fatal(err)
 	}
 	sent := playback.NewSent()
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Auth: profiles{"pst_ada": ada, "pst_kid": kid}, Catalogue: st, Preferences: st, Playing: st, Sent: sent,
 	})
 	w := serve(api, http.MethodGet, "/Items/"+guid(heat)+"/Download?ApiKey=pst_ada", "", "")
@@ -88,7 +88,7 @@ func TestAnAppOffersToDownloadOnlyWhatDownloads(t *testing.T) {
 		t.Fatal(cards, err)
 	}
 	shoah := cards[0].ID
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Sent: playback.NewSent(),
 	})
 	const header = `MediaBrowser Token="pst_ada"`

@@ -165,7 +165,8 @@ func (a *API) told(ctx context.Context, profile uuid.UUID, e domain.Event) (mess
 		domain.EventTaskStarted, domain.EventTaskFinished, domain.EventTaskFailed, domain.EventBackupMade,
 		domain.EventJobStarted, domain.EventJobFinished, domain.EventJobFailed, domain.EventJobDead,
 		domain.EventJobsProgress, domain.EventWebhookTest, domain.EventMaintenanceChanged,
-		domain.EventNetworkChanged, domain.EventStorageChanged, domain.EventNodesChanged, domain.EventRestoreStarted:
+		domain.EventNetworkChanged, domain.EventStorageChanged, domain.EventNodesChanged, domain.EventServerChanged,
+		domain.EventRestoreStarted:
 	}
 	return message{}, false, nil
 }

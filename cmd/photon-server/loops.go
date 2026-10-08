@@ -98,7 +98,7 @@ func ready(st *store.Store, cache *kv.KV, self interface{ Stopping() bool }) fun
 // answerDiscovery answers clients looking for the server on UDP at the HTTP listener's port, while
 // an admin has it on. Clients can still be given the address, so a port it cannot have is only a
 // warning.
-func answerDiscovery(ctx context.Context, addr string, r *reach.Reach, scheme func() string, info domain.Info, logger *slog.Logger) {
+func answerDiscovery(ctx context.Context, addr string, r *reach.Reach, scheme func() string, info func() domain.Info, logger *slog.Logger) {
 	conn, err := new(net.ListenConfig).ListenPacket(ctx, "udp", addr)
 	if err == nil {
 		on := func() bool { return r.Discovery() == domain.DiscoveryBroadcast }

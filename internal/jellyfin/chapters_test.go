@@ -14,7 +14,6 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/analysis"
 	"github.com/olivertgwalton/photon-server/internal/blob"
-	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // An app reads a film's chapters, to list them and to seek by them: on the film itself, and in a
@@ -38,7 +37,7 @@ func TestAnAppReadsAFilmsChapters(t *testing.T) {
 	if err := dir.Put(t.Context(), path.Join(part.String(), "chapters", "1.jpg"), strings.NewReader("chapter 1")); err != nil {
 		t.Fatal(err)
 	}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, PreviewFiles: analysis.NewPreviews(dir),
 	})
 	chapters := func(target string) []map[string]any {

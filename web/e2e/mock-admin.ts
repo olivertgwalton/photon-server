@@ -47,7 +47,7 @@ const playing: Schemas["NowPlaying"] = {
 	node_id: "n-1",
 };
 
-const server: Schemas["Server"] = {
+let server: Schemas["Server"] = {
 	id: "s-1",
 	name: "Den",
 	version: "v1.0.0",
@@ -75,6 +75,7 @@ const server: Schemas["Server"] = {
 		backups: { path: "/backups", free_bytes: 120_000_000_000 },
 	},
 	metadata_language: "en-GB",
+	certification_country: "GB",
 	postgres: { reachable: true, version: "18.1" },
 	valkey: { reachable: true, version: "9.0" },
 };
@@ -442,6 +443,11 @@ export async function admin(
 			} satisfies Schemas["Locales"]);
 		case "GET /api/v1/admin/server":
 			return json(server);
+		case "PUT /api/v1/admin/server": {
+			const set = (await request.json()) as Schemas["ServerSettings"];
+			server = { ...server, ...set };
+			return json(set);
+		}
 		case "GET /api/v1/admin/events":
 			return events();
 		case "GET /api/v1/admin/playbacks":

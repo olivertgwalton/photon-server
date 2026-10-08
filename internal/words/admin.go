@@ -117,6 +117,8 @@ func (w Words) Event(e domain.Event, names Names) string {
 		return "Where artwork and previews are kept was changed"
 	case domain.EventNodesChanged:
 		return "What a server node does was changed"
+	case domain.EventServerChanged:
+		return "The server's name or metadata language was changed"
 	case domain.EventRestoreStarted:
 		d, _ := e.Details.(domain.RestoreDetails)
 		return "The database is being restored from " + d.Dump

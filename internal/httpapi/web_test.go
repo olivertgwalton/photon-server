@@ -34,7 +34,7 @@ func webAPIFrom(t *testing.T, objectOrigin func() string) *API {
 		t.Fatal(err)
 	}
 	return New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Ready: func(context.Context) error { return nil }, Auth: fakeAuth{}, Limits: &fakeLimiter{}, Web: web,
+		Ready: func(context.Context) error { return nil }, Auth: fakeAuth{}, Limits: &fakeLimiter{}, Web: web, Identity: den(),
 	})
 }
 

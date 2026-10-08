@@ -13,7 +13,6 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/analysis"
 	"github.com/olivertgwalton/photon-server/internal/blob"
-	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -39,7 +38,7 @@ func aFilmWithTrickplay(t *testing.T) (*API, uuid.UUID, uuid.UUID) {
 	if err := dir.Put(t.Context(), path.Join(part.String(), "trickplay", "1.jpg"), strings.NewReader("sheet 1")); err != nil {
 		t.Fatal(err)
 	}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Previews: st, PreviewFiles: analysis.NewPreviews(dir),
 	})
 	return api, heat, copyID

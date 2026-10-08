@@ -2063,7 +2063,35 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
-        put?: never;
+        /**
+         * Name the server and set what its metadata is asked in, which every node takes up at once
+         * @description Admin only.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ServerSettings"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ServerSettings"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
         post?: never;
         delete?: never;
         options?: never;
@@ -6741,7 +6769,7 @@ export interface components {
             title_id?: string;
         };
         /** @enum {string} */
-        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed" | "nodes.changed" | "restore.started";
+        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed" | "nodes.changed" | "server.changed" | "restore.started";
         EventPage: {
             items: components["schemas"]["Event"][];
             offset: number;
@@ -7696,6 +7724,7 @@ export interface components {
         SegmentFormat: "fmp4" | "mpegts";
         Server: {
             arch: string;
+            certification_country?: string;
             chromaprint: boolean;
             encoder: components["schemas"]["Encoder"];
             ffmpeg: components["schemas"]["Tool"];
@@ -7719,6 +7748,11 @@ export interface components {
             valkey: components["schemas"]["Backend"];
             version: string;
             yt_dlp: components["schemas"]["Tool"];
+        };
+        ServerSettings: {
+            certification_country?: string;
+            metadata_language: string;
+            name: string;
         };
         SetEpisodeOrder: {
             order: components["schemas"]["EpisodeOrder"];

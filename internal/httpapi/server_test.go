@@ -37,12 +37,12 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 	node := uuid.NewV7()
 	seen := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 	svc := Services{
-		Auth: fakeAuth{}, HLS: fakeHLS{},
+		Auth: fakeAuth{}, HLS: fakeHLS{}, Identity: den(),
 		Setup: Setup{
 			Started: seen.Add(-time.Hour), Node: node, Listen: ":8640",
-			Tools:            media.Tools{FFmpeg: media.Tool{Path: "/usr/bin/ffmpeg", Version: "8.0"}, Chromaprint: true},
-			Encoder:          hls.Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128"},
-			MetadataLanguage: "en-GB", CacheDir: t.TempDir(), BackupDir: t.TempDir() + "/missing",
+			Tools:    media.Tools{FFmpeg: media.Tool{Path: "/usr/bin/ffmpeg", Version: "8.0"}, Chromaprint: true},
+			Encoder:  hls.Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128"},
+			CacheDir: t.TempDir(), BackupDir: t.TempDir() + "/missing",
 		},
 		Postgres: fakeBackend{version: "18.1"},
 		Valkey:   fakeBackend{version: "9.0.0"},
@@ -54,7 +54,7 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/server", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec := httptest.NewRecorder()
-		New(slog.New(slog.DiscardHandler), domain.Info{Name: "den"}, svc).ServeHTTP(rec, req)
+		New(slog.New(slog.DiscardHandler), domain.Info{}, svc).ServeHTTP(rec, req)
 		return rec
 	}
 	if rec := get(svc, memberToken); rec.Code != http.StatusForbidden {
@@ -82,5 +82,37 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 	}
 	if got.Valkey.Reachable || !got.Postgres.Reachable {
 		t.Errorf("with Valkey down: %+v", got.Valkey)
+	}
+}
+
+// keptServer keeps what an admin sets of the server.
+type keptServer struct{ set domain.ServerSettings }
+
+func (k *keptServer) SetServerSettings(_ context.Context, set domain.ServerSettings) error {
+	k.set = set
+	return nil
+}
+
+// An admin names the server and sets what its metadata is asked in, and every node is told.
+func TestAnAdminNamesTheServerAndItsLanguage(t *testing.T) {
+	kept := &keptServer{}
+	events := &fakeEvents{}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Events: events, ServerSettings: kept})
+	for body, want := range map[string]int{
+		`{"name":" Den ","metadata_language":"en-gb","certification_country":"gb"}`: http.StatusOK,
+		`{"name":"Den","metadata_language":""}`:                                     http.StatusBadRequest,
+		`{"name":"Den","metadata_language":"not a tag!"}`:                           http.StatusBadRequest,
+		`{"name":"Den","metadata_language":"en-GB","certification_country":"EU"}`:   http.StatusBadRequest,
+		`{"name":"Den\u0007","metadata_language":"en-GB"}`:                          http.StatusBadRequest,
+	} {
+		if rec := ask(api, http.MethodPut, "/api/v1/admin/server", body); rec.Code != want {
+			t.Errorf("%s: %d %s, want %d", body, rec.Code, rec.Body, want)
+		}
+	}
+	if want := (domain.ServerSettings{Name: "Den", Locale: domain.Locale{Language: "en-GB", Country: "GB"}}); kept.set != want {
+		t.Errorf("kept %+v, want %+v", kept.set, want)
+	}
+	if len(events.raised) != 1 || events.raised[0].Kind != domain.EventServerChanged {
+		t.Errorf("raised %+v, want every node told once", events.raised)
 	}
 }

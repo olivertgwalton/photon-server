@@ -12,6 +12,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/identity"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/peer"
@@ -197,6 +198,10 @@ type Services struct {
 	Secure secureConnections
 	// Jellyfin is this node's serving of Jellyfin's API; nil where it is not run.
 	Jellyfin jellyfinListener
+	// Identity is what the server is called and what its metadata is asked in, and ServerSettings
+	// where an admin sets them.
+	Identity       *identity.Server
+	ServerSettings serverSettings
 	// Setup is how this node was started, and Postgres and Valkey what it reaches.
 	Setup    Setup
 	Postgres versioned

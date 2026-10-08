@@ -71,7 +71,7 @@ func TestAWebhookIsToldWhatItAskedFor(t *testing.T) {
 	}
 	t.Cleanup(k.Close)
 	server := events.Server{ID: uuid.NewV7(), Name: "den"}
-	hub := events.New(st, k, server, log)
+	hub := events.New(st, k, server.ID, func() string { return server.Name }, log)
 	ctx := t.Context()
 
 	rx := &receiver{t: t, statuses: []int{http.StatusServiceUnavailable}}

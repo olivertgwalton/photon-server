@@ -62,6 +62,7 @@ function save(event: SubmitEvent) {
 			providers={data.providers}
 			locales={data.locales}
 			serverLanguage={data.serverLanguage}
+			serverCountry={data.serverCountry}
 		/>
 	{/key}
 	<div class="flex gap-2">

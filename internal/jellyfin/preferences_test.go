@@ -38,7 +38,7 @@ func defaultSubtitle(t *testing.T, api http.Handler, item uuid.UUID) any {
 // in photon's own apps.
 func TestAnAppsSubtitlesFollowTheProfilesPreferences(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Sent: playback.NewSent(), Network: st,
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Watching: st, Preferences: st,
 	})
@@ -68,7 +68,7 @@ func TestAnAppSavesItsUsersConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Sent: playback.NewSent(), Network: st,
 		Auth: profiles{"pst_ada": ada, "pst_bea": bea}, Catalogue: st, Playing: st, Watching: st, Preferences: st,
 	})

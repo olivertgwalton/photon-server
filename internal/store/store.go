@@ -297,11 +297,20 @@ func (s *Store) SigningKey(ctx context.Context) ([]byte, error) {
 	return key, err
 }
 
-// SetCertificateCountry keeps the country providers fetch certificates in, by its ISO code, so a
-// bare certificate is read in its system (India's A is for adults, Bulgaria's for anyone); "" for
-// none.
-func (s *Store) SetCertificateCountry(ctx context.Context, country string) error {
-	_, err := s.pool.Exec(ctx, "UPDATE server SET certificate_country = nullif(upper($1), '')", country)
+// ServerSettings answers what the server is called and what its metadata is asked in.
+func (s *Store) ServerSettings(ctx context.Context) (domain.ServerSettings, error) {
+	var set domain.ServerSettings
+	var country *string
+	err := s.pool.QueryRow(ctx, `SELECT name, metadata_language, certificate_country FROM server`).
+		Scan(&set.Name, &set.Locale.Language, &country)
+	set.Locale.Country = deref(country)
+	return set, err
+}
+
+// SetServerSettings replaces them.
+func (s *Store) SetServerSettings(ctx context.Context, set domain.ServerSettings) error {
+	_, err := s.pool.Exec(ctx, `UPDATE server SET name = $1, metadata_language = $2, certificate_country = nullif(upper($3), '')`,
+		set.Name, set.Locale.Language, set.Locale.Country)
 	return err
 }
 

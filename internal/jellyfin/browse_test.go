@@ -114,7 +114,7 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	if err := st.SetAccess(ctx, kid.ID, store.ProfileAccess{Libraries: []uuid.UUID{films.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Auth: profiles{"pst_ada": admin, "pst_kid": kid}, Catalogue: st, Playlists: st, Preferences: st,
 	})
 	get := func(token, target string) any {

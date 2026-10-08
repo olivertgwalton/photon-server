@@ -566,6 +566,43 @@ test("remote streams are kept within a limit, in Mbps", async ({ page }) => {
 	await expectAccessible(page);
 });
 
+test("an admin names the server and sets what it describes titles in", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/server/general");
+	await expect(page.getByLabel("Name")).toHaveValue("Den");
+	await expect(page.getByLabel("Metadata language")).toHaveText(
+		"British English",
+	);
+	await page.getByLabel("Name").fill("Lounge");
+	await page.getByLabel("Metadata language").click();
+	await page.getByRole("option", { name: "German (Germany)" }).click();
+	await page.getByLabel("Certification country").click();
+	await page.getByRole("option", { name: "Germany" }).click();
+	await expectAccessible(page);
+	const saved = page.waitForRequest(
+		(r) => r.method() === "PUT" && r.url().endsWith("/api/v1/admin/server"),
+	);
+	await page.getByRole("button", { name: "Save" }).click();
+	expect((await saved).postDataJSON()).toEqual({
+		name: "Lounge",
+		metadata_language: "de-DE",
+		certification_country: "DE",
+	});
+	await expect(page.getByText(/^Saved/)).toBeVisible();
+	await expect(page.getByRole("heading", { name: "General" })).toBeVisible();
+	await page.goto("/settings/server");
+	await expect(page.getByRole("heading", { name: "Lounge" })).toBeVisible();
+	// The mock is every test's server: it is put back as it was.
+	await page.request.put("/api/v1/admin/server", {
+		data: {
+			name: "Den",
+			metadata_language: "en-GB",
+			certification_country: "GB",
+		},
+	});
+});
+
 test("an admin sets how the server is reached from outside and behind a proxy", async ({
 	page,
 }) => {

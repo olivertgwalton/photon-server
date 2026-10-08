@@ -19,22 +19,22 @@ func TestALibraryAsksInItsOwnLocaleElseTheServers(t *testing.T) {
 	}
 }
 
-func TestACertificateIsWrittenWithItsCountryWhereItIsNotTheServers(t *testing.T) {
-	server := LocaleOf("en-GB")
+// A certificate is kept with the country it was given in, so it reads the same whichever country
+// the server takes certificates from later.
+func TestACertificateIsKeptWithItsCountry(t *testing.T) {
 	for _, tc := range []struct {
 		loc               Locale
 		certificate, want string
 	}{
-		{server, "15", "15"},
+		{LocaleOf("en-GB"), "15", "GB:15"},
 		{Locale{Language: "en-IN", Country: "IN"}, "A", "IN:A"},
 		{Locale{Language: "en-IN", Country: "IN"}, "", ""},
-		{Locale{Language: "en-IN", Country: "IN"}, "IN:A", "IN:A"},
-		// A provider's fallback to the server's own country's is read bare, another's with it.
-		{Locale{Language: "en-IN", Country: "IN"}, "GB:15", "15"},
+		// A provider's fallback to another country's keeps that country.
 		{Locale{Language: "en-IN", Country: "IN"}, "US:R", "US:R"},
+		{Locale{Language: "fr"}, "12", "12"},
 	} {
-		if got := tc.loc.Qualified(tc.certificate, server); got != tc.want {
-			t.Errorf("%q given in %s: %q, want %q", tc.certificate, tc.loc.Country, got, tc.want)
+		if got := tc.loc.Qualified(tc.certificate); got != tc.want {
+			t.Errorf("%q given in %q: %q, want %q", tc.certificate, tc.loc.Country, got, tc.want)
 		}
 	}
 }

@@ -190,7 +190,7 @@ func (filmSearch) Candidates(_ context.Context, _ domain.Locale, _ domain.ItemKi
 
 func TestAnAdminFixesATitle(t *testing.T) {
 	e, told := &fakeEditing{}, &fakeEvents{}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Editing: e, Providers: provider.NewRegistry(nil, filmSearch{}), Events: told})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Identity: den(), Editing: e, Providers: provider.NewRegistry(nil, filmSearch{}), Events: told})
 	base := "/api/v1/admin/titles/" + films.String()
 	copyBase := "/api/v1/admin/versions/" + films.String() + "/markers"
 	for _, tc := range []struct {

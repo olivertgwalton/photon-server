@@ -78,8 +78,9 @@ type API struct {
 	svc    Services
 	// id is the server's, as Jellyfin writes a Guid: 32 lowercase hex digits. Apps key the server
 	// on it, so every node answers the same.
-	id   string
-	name string
+	id string
+	// name is what the server is called now.
+	name func() string
 	mux  *http.ServeMux
 	// routes are the paths of the routes by segment, a wildcard as "", for Jellyfin's routes are
 	// matched whatever their case and ServeMux's are not.
@@ -89,10 +90,11 @@ type API struct {
 	opening sync.Mutex
 }
 
-func New(logger *slog.Logger, info domain.Info, svc Services) *API {
+// New serves Jellyfin's API as the server whose id is server and that name says is called.
+func New(logger *slog.Logger, server string, name func() string, svc Services) *API {
 	a := &API{
-		logger: logger, svc: svc, name: info.Name,
-		id:  strings.ReplaceAll(info.ID, "-", ""),
+		logger: logger, svc: svc, name: name,
+		id:  strings.ReplaceAll(server, "-", ""),
 		mux: http.NewServeMux(),
 	}
 	// Ping answers as Jellyfin does: its product's name, not the server's.
