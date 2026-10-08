@@ -48,7 +48,7 @@ type Episode struct {
 }
 
 // SaveShowFolder writes a folder of a series' episodes and extras and remembers its fingerprint,
-// in one transaction.
+// nil for none, in one transaction.
 func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, show Show, episodes []Episode, extras []Extra) (Saved, error) {
 	saved := Saved{Titles: Changed{}}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
