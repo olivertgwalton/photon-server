@@ -273,6 +273,10 @@ func checkUser(t *testing.T, u map[string]any) {
 	if c["SubtitleMode"] != "Default" || p["SyncPlayAccess"] != "None" {
 		t.Errorf("SubtitleMode %v, SyncPlayAccess %v: an enum value the apps know", c["SubtitleMode"], p["SyncPlayAccess"])
 	}
+	// An app offers to download a title only where the policy lets it, and deleting nowhere.
+	if p["EnableContentDownloading"] != true || p["EnableContentDeletion"] != false {
+		t.Errorf("downloading %v, deleting %v: want downloading alone", p["EnableContentDownloading"], p["EnableContentDeletion"])
+	}
 }
 
 // A signed-in app reads who it is and the server it is on, by the token in its header or in

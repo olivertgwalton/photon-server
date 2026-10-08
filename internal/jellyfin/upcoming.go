@@ -85,6 +85,6 @@ func (a *API) announcedItem(w http.ResponseWriter, r *http.Request, id uuid.UUID
 
 // virtual makes an episode one with no file, as Jellyfin's missing and unaired episodes are.
 func (it *item) virtual() {
-	it.LocationType, it.VideoType, it.CanDownload, it.MediaSources = "Virtual", "", false, nil
+	it.LocationType, it.VideoType, it.MediaSources = "Virtual", "", nil
 	it.Etag = etag(*it)
 }
