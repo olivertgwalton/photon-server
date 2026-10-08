@@ -114,5 +114,5 @@ func (a *API) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Reques
 		a.refuse(w, http.StatusNotFound)
 		return
 	}
-	a.writeJSON(w, authenticationResult{User: a.userOf(profile), AccessToken: token, ServerID: a.id})
+	a.writeUser(w, r, profile, token)
 }

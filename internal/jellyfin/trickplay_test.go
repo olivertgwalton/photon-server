@@ -40,7 +40,7 @@ func aFilmWithTrickplay(t *testing.T) (*API, uuid.UUID, uuid.UUID) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
-		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Previews: st, PreviewFiles: analysis.NewPreviews(dir),
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Previews: st, PreviewFiles: analysis.NewPreviews(dir),
 	})
 	return api, heat, copyID
 }

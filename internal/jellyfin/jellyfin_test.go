@@ -144,10 +144,25 @@ func (f *fakeLimits) Allow(context.Context, string, kv.Limit) (time.Duration, er
 	return 0, nil
 }
 
+// noLibraries is a household with no library yet; nothing else of a catalogue is asked of it.
+type noLibraries struct{ catalogue }
+
+func (noLibraries) LibrariesSeen(context.Context, uuid.UUID) ([]*store.SeenLibrary, error) {
+	return nil, nil
+}
+
+// newPreferences are profiles that have never changed how they play.
+type newPreferences struct{ preferences }
+
+func (newPreferences) Preferences(context.Context, uuid.UUID) (domain.Preferences, error) {
+	return domain.DefaultPreferences(), nil
+}
+
 func newAPI() (*API, *[]uuid.UUID, *fakeLimits, *[]domain.EventKind) {
 	signedOut, limits, raised := &[]uuid.UUID{}, &fakeLimits{}, &[]domain.EventKind{}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: serverID.String(), Name: "Den"}, Services{
 		Auth: fakeAuth{signedOut: signedOut, pairing: new(kv.PairingState)}, Limits: limits,
+		Catalogue: noLibraries{}, Preferences: newPreferences{},
 		Raise: func(_ context.Context, e domain.Event) { *raised = append(*raised, e.Kind) },
 	})
 	return api, signedOut, limits, raised
@@ -453,7 +468,7 @@ func TestAnAppSignsInByQuickConnect(t *testing.T) {
 
 // onePicture is a server holding one picture, kept in file.
 type onePicture struct {
-	catalogue
+	noLibraries
 	id   uuid.UUID
 	file string
 }
@@ -488,7 +503,7 @@ func TestAnAppShowsAProfilesPicture(t *testing.T) {
 	}
 	pictures := onePicture{id: ada.Avatar, file: file}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: serverID.String(), Name: "Den"}, Services{
-		Auth: fakeAuth{}, Catalogue: pictures, Pictures: pictures,
+		Auth: fakeAuth{}, Catalogue: pictures, Pictures: pictures, Preferences: newPreferences{},
 	})
 	tag, _ := object(t, serve(api, http.MethodGet, "/Users/Me", kotlin+`, Token="pst_device"`, ""))["PrimaryImageTag"].(string)
 	if tag != guid(ada.Avatar) {

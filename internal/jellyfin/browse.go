@@ -40,6 +40,7 @@ type catalogue interface {
 	Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID][]store.VersionPage, error)
 	ExternalIDs(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]map[domain.Provider]string, error)
 	Picture(ctx context.Context, id uuid.UUID) (domain.Picture, error)
+	SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error
 }
 
 // queryResult is Jellyfin's BaseItemDtoQueryResult. TotalRecordCount is of every match, not the
@@ -486,10 +487,14 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) titleItem(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
-	p, err := a.svc.Catalogue.Title(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
+	profile := auth.SessionOf(r.Context()).Profile.ID
+	p, err := a.svc.Catalogue.Title(r.Context(), profile, id)
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)
 		return
+	}
+	if err == nil {
+		err = a.chooseTracks(r.Context(), profile, id, p.Versions)
 	}
 	if err != nil {
 		a.internal(w, r, err)

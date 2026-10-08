@@ -156,8 +156,7 @@ func (a *API) playingAs(ctx context.Context, profile, item uuid.UUID) (domain.Pr
 	return p, last, err
 }
 
-// chooseTracks says the tracks each copy of a film or episode plays with for a profile, as
-// Jellyfin's item answers its media sources' defaults.
+// chooseTracks says the tracks each copy of a film or episode plays with for a profile.
 func (a *API) chooseTracks(ctx context.Context, profile uuid.UUID, page *store.TitlePage) error {
 	if len(page.Versions) == 0 {
 		return nil
@@ -166,33 +165,8 @@ func (a *API) chooseTracks(ctx context.Context, profile uuid.UUID, page *store.T
 	if err != nil {
 		return err
 	}
-	for i, v := range page.Versions {
-		audio, subtitles := pageTracks(v)
-		d := playback.DefaultTracks(audio, subtitles, prefs, last)
-		page.Versions[i].DefaultAudioStream, page.Versions[i].DefaultSubtitleStream = d.Audio, d.Subtitle
-		page.Versions[i].DefaultSubtitleFile = d.SubtitleFile
-	}
+	playback.ChooseTracks(page.Versions, prefs, last)
 	return nil
-}
-
-// pageTracks are a copy's sound and subtitles as its page lists them.
-func pageTracks(v store.VersionPage) (audio, subtitles []playback.Track) {
-	for _, s := range v.Streams {
-		l := language.Make(s.Language)
-		t := playback.Track{Stream: s.Index, Language: l, Default: s.Default, Forced: s.Forced, Commentary: s.Commentary}
-		switch s.Kind {
-		case domain.StreamAudio:
-			audio = append(audio, t)
-		case domain.StreamSubtitle:
-			subtitles = append(subtitles, t)
-		case domain.StreamVideo:
-		}
-	}
-	for _, f := range v.Subtitles {
-		l := language.Make(f.Language)
-		subtitles = append(subtitles, playback.Track{File: f.ID, Language: l, Default: f.Default, Forced: f.Forced})
-	}
-	return audio, subtitles
 }
 
 // copyTracks are a copy's sound and subtitles as it is played.
