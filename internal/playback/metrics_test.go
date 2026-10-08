@@ -27,7 +27,7 @@ func TestANodesMetricsCountThePlaybacksItServes(t *testing.T) {
 		{domain.PlayTranscode, elsewhere},
 		{domain.PlayRemux, elsewhere},
 	} {
-		if _, err := s.Start(t.Context(), uuid.NewV7(), start.method, card(uuid.NewV7(), uuid.NewV7()), start.node); err != nil {
+		if _, err := s.Start(t.Context(), uuid.NewV7(), start.method, card(uuid.NewV7(), uuid.NewV7()), 0, start.node); err != nil {
 			t.Fatal(err)
 		}
 	}

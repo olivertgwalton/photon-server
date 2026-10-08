@@ -80,10 +80,10 @@ func NewSessions(live sessionStore, saved progressStore, st streams, raise func(
 	}
 }
 
-// Start opens playback id, of the copy of a title its card names, by its card's profile, served by
-// node, unless one is started under id already (ErrStarted). It is not said to have started until
+// Start opens playback id, of the copy of a title its card names, by its card's profile, from
+// start, served by node, unless one is started under id already (ErrStarted). It is not said to have started until
 // its stream opens (Opened): one whose stream is refused is abandoned, and never started.
-func (s *Sessions) Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard, node uuid.UUID) (domain.Playback, error) {
+func (s *Sessions) Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard, start time.Duration, node uuid.UUID) (domain.Playback, error) {
 	length, err := s.saved.Length(ctx, card.Title.ID)
 	if err != nil {
 		return domain.Playback{}, err
@@ -91,7 +91,7 @@ func (s *Sessions) Start(ctx context.Context, id uuid.UUID, method domain.PlayMe
 	now := time.Now()
 	p := domain.Playback{
 		ID: id, Profile: card.Profile.ID, Item: card.Title.ID, Version: card.Version.ID, Method: method,
-		State: domain.StatePlaying, Started: now, Updated: now, Length: length, Node: node, Card: card,
+		State: domain.StatePlaying, Position: start, Started: now, Updated: now, Length: length, Node: node, Card: card,
 	}
 	claimed, err := s.live.ClaimPlayback(ctx, p, keptFor)
 	if err != nil {

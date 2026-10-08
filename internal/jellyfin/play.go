@@ -34,7 +34,7 @@ type playing interface {
 }
 
 type playbacks interface {
-	Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard, node uuid.UUID) (domain.Playback, error)
+	Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard, start time.Duration, node uuid.UUID) (domain.Playback, error)
 	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState, tracks domain.ChosenTracks) (domain.Reach, error)
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
 	Finish(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error)
@@ -454,7 +454,7 @@ func (a *API) startDirect(r *http.Request, id uuid.UUID, rep report) error {
 	if sound != nil {
 		d.Audio = &domain.AudioPlan{Stream: sound.Index}
 	}
-	p, err := a.svc.Playbacks.Start(r.Context(), id, domain.PlayDirect, playback.Card(s, a.svc.Reach.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: sub}), a.svc.Placer.Self().ID)
+	p, err := a.svc.Playbacks.Start(r.Context(), id, domain.PlayDirect, playback.Card(s, a.svc.Reach.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: sub}), time.Duration(rep.PositionTicks/ticksPerMS)*time.Millisecond, a.svc.Placer.Self().ID)
 	if err != nil {
 		return err
 	}

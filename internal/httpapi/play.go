@@ -20,7 +20,7 @@ import (
 const streamFor = 24 * time.Hour
 
 type playbacks interface {
-	Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard, node uuid.UUID) (domain.Playback, error)
+	Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard, start time.Duration, node uuid.UUID) (domain.Playback, error)
 	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState, tracks domain.ChosenTracks) (domain.Reach, error)
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
 	End(ctx context.Context, id uuid.UUID) error
@@ -346,7 +346,7 @@ func (a *API) playbackCard(r *http.Request, node domain.Node, t domain.PlaybackT
 // start starts a playback of c that node serves, and its remux there where it is not played
 // directly; a node with every slot held refuses it (hls.ErrTranscodeLimit), and it is forgotten.
 func (a *API) start(r *http.Request, node domain.Node, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, tracks domain.ChosenTracks, o playback.Opening) (domain.Playback, error) {
-	session, err := a.svc.Playbacks.Start(r.Context(), uuid.NewV7(), d.Method, a.playbackCard(r, node, t, c, d, tracks), node.ID)
+	session, err := a.svc.Playbacks.Start(r.Context(), uuid.NewV7(), d.Method, a.playbackCard(r, node, t, c, d, tracks), time.Duration(o.StartMS)*time.Millisecond, node.ID)
 	if err != nil {
 		return session, err
 	}
