@@ -60,6 +60,9 @@ const (
 	EventStorageChanged EventKind = "storage.changed"
 	// EventNodesChanged is what an admin sets of a node, changed; the node takes it up from then.
 	EventNodesChanged EventKind = "nodes.changed"
+	// EventRestoreStarted is a restore asked for: every node stops until it is done, so every
+	// client is told, to say the server will be back.
+	EventRestoreStarted EventKind = "restore.started"
 )
 
 func EventKinds() []EventKind {
@@ -69,7 +72,7 @@ func EventKinds() []EventKind {
 		EventLibraryAdded, EventLibraryRemoved, EventLibraryScanned, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventTitlesAdded, EventScanProgress, EventTaskStarted, EventTaskFinished, EventTaskFailed, EventBackupMade,
 		EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead, EventJobsProgress, EventWebhookTest,
-		EventMaintenanceChanged, EventNetworkChanged, EventStorageChanged, EventNodesChanged,
+		EventMaintenanceChanged, EventNetworkChanged, EventStorageChanged, EventNodesChanged, EventRestoreStarted,
 	}
 }
 
@@ -84,7 +87,7 @@ func (k EventKind) Logged() bool {
 	case EventPlaybackPaused, EventPlaybackResumed, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventScanProgress, EventTaskStarted, EventTaskFinished, EventJobStarted,
 		EventJobFinished, EventJobFailed, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged,
-		EventNetworkChanged, EventStorageChanged, EventNodesChanged:
+		EventNetworkChanged, EventStorageChanged, EventNodesChanged, EventRestoreStarted:
 		return false
 	}
 	return false
@@ -103,7 +106,7 @@ func (k EventKind) Hookable() bool {
 	case EventLibraryChanged, EventTitleUpdated, EventUserDataChanged, EventScanProgress,
 		EventTaskStarted, EventTaskFinished, EventJobStarted, EventJobFinished, EventJobFailed,
 		EventJobDead, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged, EventNetworkChanged,
-		EventStorageChanged, EventNodesChanged:
+		EventStorageChanged, EventNodesChanged, EventRestoreStarted:
 		return false
 	}
 	return false

@@ -1,7 +1,9 @@
 package backup
 
 import (
+	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -28,7 +30,27 @@ func TestADumpFromANewerServerIsRefusedBeforeAnythingIsTouched(t *testing.T) {
 		Log: slog.New(slog.DiscardHandler),
 	}
 	err := r.Restore(t.Context(), "photon-20261008T120000Z.dump", io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "schema version 99999, newer than this photon-server's") {
+	if !errors.Is(err, ErrNewer) || !strings.Contains(err.Error(), "schema version 99999") {
 		t.Errorf("restoring a newer dump: %v, want it refused as newer", err)
+	}
+}
+
+// Asking from the web for a dump this node does not keep, or a newer one, is refused before the
+// other nodes are asked to stop: these Restores have no Valkey to ask them with.
+func TestAskingToRestoreAMissingOrNewerDumpChangesNothing(t *testing.T) {
+	dir := t.TempDir()
+	name := "photon-20261008T120000Z.dump"
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("dump"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := Restores{Restorer: Restorer{PGRestore: fakePGRestore(t, "99999")}, Dir: dir}
+	if err := s.Begin(t.Context(), "photon-20261001T120000Z.dump"); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("a dump this node does not keep: %v, want no such dump", err)
+	}
+	if err := s.Begin(t.Context(), "../"+name); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("a name reaching outside the folder: %v, want no such dump", err)
+	}
+	if err := s.Begin(t.Context(), name); !errors.Is(err, ErrNewer) {
+		t.Errorf("a newer dump: %v, want it refused as newer", err)
 	}
 }
