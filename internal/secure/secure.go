@@ -167,10 +167,15 @@ func (e *either) run() {
 }
 
 func (e *either) sniff(c net.Conn) {
-	_ = c.SetReadDeadline(time.Now().Add(sniffWithin))
+	if err := c.SetReadDeadline(time.Now().Add(sniffWithin)); err != nil {
+		c.Close()
+		return
+	}
 	r := bufio.NewReader(c)
 	first, err := r.Peek(1)
-	_ = c.SetReadDeadline(time.Time{})
+	if err == nil {
+		err = c.SetReadDeadline(time.Time{})
+	}
 	if err != nil {
 		c.Close()
 		return
