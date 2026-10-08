@@ -164,7 +164,11 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 		chosen.SubtitleFile = &picked.file
 	}
 	d, err := playback.Decide(p.hlsProfile(t, segments, c, limit), playback.CopyOf(c), chosen, a.svc.Encoding)
-	if err != nil || d.Video == nil {
+	if err != nil {
+		a.logger.InfoContext(r.Context(), "jellyfin transcode refused", slog.Any("reasons", d.Reasons), slog.Any("err", err))
+		return
+	}
+	if d.Video == nil {
 		return
 	}
 	address, err := a.transcodingURL(r, item, session, transcode{
@@ -172,6 +176,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 		Segments: segments, StartMS: req.StartTimeTicks / ticksPerMS,
 	})
 	if err != nil {
+		a.logger.ErrorContext(r.Context(), "jellyfin transcode not addressed", slog.Any("err", err))
 		return
 	}
 	src.SupportsTranscoding, src.TranscodingSubProtocol, src.TranscodingContainer = true, "hls", transcodingContainers[segments]
