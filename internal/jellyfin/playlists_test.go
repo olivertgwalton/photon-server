@@ -208,3 +208,48 @@ func TestAnAppMakesAPlaylist(t *testing.T) {
 		t.Errorf("Bob adds to Ada's playlist: %d, want 404", code)
 	}
 }
+
+// An app moves a playlist's entries and takes them out by their own ids, so of a title in it twice
+// only the one named goes; no profile changes another's.
+func TestAnAppRearrangesAPlaylist(t *testing.T) {
+	h := newHousehold(t)
+	night, err := h.st.AddPlaylist(t.Context(), h.ada.ID, "Night", []uuid.UUID{h.films["Heat"], h.films["Alien"], h.films["Thief"], h.films["Heat"]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/Playlists/" + guid(night) + "/Items"
+	entries := func() (names, ids []string) {
+		t.Helper()
+		var r playlistResult
+		h.read(t, "pst_ada", path, &r)
+		for _, it := range r.Items {
+			names, ids = append(names, it.Name), append(ids, it.PlaylistItemID)
+		}
+		return names, ids
+	}
+	_, ids := entries()
+	if code := h.send(t, http.MethodPost, "pst_ada", path+"/"+ids[2]+"/Move/0", "", nil); code != http.StatusNoContent {
+		t.Errorf("moving Thief first: %d, want 204", code)
+	}
+	if names, _ := entries(); len(names) != 4 || names[0] != "Thief" || names[1] != "Heat" || names[3] != "Heat" {
+		t.Errorf("Night = %v, want Thief, Heat, Alien, Heat", names)
+	}
+	if code := h.send(t, http.MethodDelete, "pst_ada", path+"?entryIds="+ids[0]+","+ids[1], "", nil); code != http.StatusNoContent {
+		t.Errorf("taking out the first Heat and Alien: %d, want 204", code)
+	}
+	if names, _ := entries(); len(names) != 2 || names[0] != "Thief" || names[1] != "Heat" {
+		t.Errorf("Night = %v, want Thief and the second Heat", names)
+	}
+	if len(*h.raised) != 2 {
+		t.Errorf("raised %d events, want one for each change", len(*h.raised))
+	}
+	if code := h.send(t, http.MethodPost, "pst_bob", path+"/"+ids[3]+"/Move/0", "", nil); code != http.StatusNotFound {
+		t.Errorf("Bob moves Ada's entry: %d, want 404", code)
+	}
+	if code := h.send(t, http.MethodDelete, "pst_bob", path+"?entryIds="+ids[3], "", nil); code != http.StatusNotFound {
+		t.Errorf("Bob takes out Ada's entry: %d, want 404", code)
+	}
+	if code := h.send(t, http.MethodPost, "pst_ada", path+"/"+ids[0]+"/Move/0", "", nil); code != http.StatusNotFound {
+		t.Errorf("moving an entry taken out: %d, want 404", code)
+	}
+}

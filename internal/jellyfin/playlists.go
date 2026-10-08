@@ -3,6 +3,7 @@ package jellyfin
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
@@ -15,6 +16,8 @@ type playlists interface {
 	PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID, offset, limit int) ([]store.PlaylistEntry, int64, error)
 	AddPlaylist(ctx context.Context, profile uuid.UUID, name string, items []uuid.UUID) (uuid.UUID, error)
 	AddToPlaylist(ctx context.Context, profile, playlist uuid.UUID, items []uuid.UUID) error
+	RemoveFromPlaylist(ctx context.Context, profile, playlist, entry uuid.UUID) error
+	MovePlaylistEntry(ctx context.Context, profile, playlist, entry uuid.UUID, position int) error
 }
 
 // fromPlaylist is one of the profile's playlists, as Jellyfin's apps list one: a folder of video.
@@ -180,6 +183,42 @@ func (a *API) addToPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.changed(w, r, id, a.svc.Playlists.AddToPlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, items))
+}
+
+// removeFromPlaylist takes entries out of the profile's playlist, by their own ids.
+func (a *API) removeFromPlaylist(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.playlistID(w, r)
+	if !ok {
+		return
+	}
+	entries, ok := ids(values(r, "entryIds"))
+	if !ok {
+		a.refuse(w, http.StatusBadRequest)
+		return
+	}
+	var err error
+	for _, entry := range entries {
+		if err = a.svc.Playlists.RemoveFromPlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, entry); err != nil {
+			break
+		}
+	}
+	a.changed(w, r, id, err)
+}
+
+// moveInPlaylist moves an entry of the profile's playlist to an index counted from zero. The entry
+// is named by its own id, though Jellyfin's route calls it the item's.
+func (a *API) moveInPlaylist(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.playlistID(w, r)
+	if !ok {
+		return
+	}
+	entry, ok := parseID(r.PathValue("itemId"))
+	index, err := strconv.Atoi(r.PathValue("newIndex"))
+	if !ok || err != nil {
+		a.refuse(w, http.StatusBadRequest)
+		return
+	}
+	a.changed(w, r, id, a.svc.Playlists.MovePlaylistEntry(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, entry, index))
 }
 
 // changed answers a change to the profile's playlist: 404 where it has no such playlist, or the
