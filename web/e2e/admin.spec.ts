@@ -88,8 +88,21 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 	await dialog.getByLabel("Transcodes at once").click();
 	await page.getByRole("option", { name: "At most" }).click();
 	await dialog.getByLabel("Most transcodes at once").fill("12");
+	// Where the others reach it, which it takes up at once.
+	await expect(dialog.getByLabel("Address")).toHaveValue(
+		"http://10.0.0.5:8640",
+	);
+	await dialog.getByLabel("Address").fill("http://10.0.0.6:8640");
 	await expectAccessible(page);
+	const saved = page.waitForRequest(
+		(r) => r.method() === "PATCH" && r.url().endsWith("/admin/nodes/n-2"),
+	);
 	await dialog.getByRole("button", { name: "Save" }).click();
+	expect((await saved).postDataJSON()).toMatchObject({
+		role: "transcode",
+		address: "http://10.0.0.6:8640",
+		transcode_limit: 12,
+	});
 	await expect(
 		page.getByText("Saved. gpu-1 takes it up at once."),
 	).toBeVisible();

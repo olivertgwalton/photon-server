@@ -6956,6 +6956,7 @@ export interface components {
             metadata?: components["schemas"]["RankedSource"][];
         };
         KnownNode: {
+            address: string;
             availability: components["schemas"]["NodeAvailability"];
             /** Format: date-time */
             first_seen: string;
@@ -7167,6 +7168,7 @@ export interface components {
         /** @enum {string} */
         NodeAvailability: "active" | "draining";
         NodeChange: {
+            address?: string | null;
             availability?: components["schemas"]["NodeAvailability"];
             note?: string;
             role?: components["schemas"]["NodeRole"];

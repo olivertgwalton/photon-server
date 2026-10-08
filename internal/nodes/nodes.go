@@ -35,7 +35,6 @@ type transcodes interface {
 type Self struct {
 	id      uuid.UUID
 	name    string
-	address string
 	encoder domain.Encoder
 	// automatic is the limit its encoder keeps up with.
 	automatic  int
@@ -51,15 +50,15 @@ type Self struct {
 	changed chan struct{}
 }
 
-// Join keeps this node among the server's nodes, as name, reached by the others at address, and
-// takes up what an admin has set of it.
-func Join(ctx context.Context, s settings, id uuid.UUID, name, address string, encoder domain.Encoder, automatic int, t transcodes, log *slog.Logger) (*Self, error) {
+// Join keeps this node among the server's nodes, as name, and takes up what an admin has set of
+// it.
+func Join(ctx context.Context, s settings, id uuid.UUID, name string, encoder domain.Encoder, automatic int, t transcodes, log *slog.Logger) (*Self, error) {
 	n, err := s.JoinNode(ctx, id, name)
 	if err != nil {
 		return nil, err
 	}
 	self := &Self{
-		id: id, name: name, address: address, encoder: encoder, automatic: automatic,
+		id: id, name: name, encoder: encoder, automatic: automatic,
 		settings: s, transcodes: t, log: log, changed: make(chan struct{}, 1),
 	}
 	self.apply(n.NodeSettings)
@@ -117,7 +116,7 @@ func (s *Self) Node() domain.Node {
 		set.Availability = domain.NodeDraining
 	}
 	n := domain.Node{
-		ID: s.id, Address: s.address, Name: s.name, Role: set.Role, Availability: set.Availability,
+		ID: s.id, Address: set.Address, Name: s.name, Role: set.Role, Availability: set.Availability,
 		Encoder: s.encoder, LimitSource: set.LimitSource,
 	}
 	n.Transcodes, n.Conversions, n.Limit = s.transcodes.Transcodes()

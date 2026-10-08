@@ -20,7 +20,7 @@ func TestANodeKeepsWhatAnAdminSetsAcrossRestarts(t *testing.T) {
 	if err != nil || n.Role != domain.NodeAll || n.LimitSource != domain.LimitAutomatic || n.Name != "mini" || n.Availability != domain.NodeActive {
 		t.Fatalf("a new node: %+v, %v; want all, its limit worked out, taking work", n, err)
 	}
-	set := domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitSet, Limit: 12, Availability: domain.NodeDraining, Note: "driver update"}
+	set := domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitSet, Limit: 12, Availability: domain.NodeDraining, Note: "driver update", Address: "http://10.0.0.5:8640"}
 	if err := s.SetNodeSettings(ctx, id, set); err != nil {
 		t.Fatal(err)
 	}

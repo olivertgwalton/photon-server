@@ -63,7 +63,6 @@ type node struct {
 	id          uuid.UUID
 	info        domain.Info
 	self        *nodes.Self
-	address     string
 	hw          hls.Hardware
 	remuxer     *hls.Remuxer
 	conversions *playback.Conversions
@@ -110,9 +109,8 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	if n.id, err = nodeID(n.cacheRoot); err != nil {
 		return err
 	}
-	n.address = os.Getenv("PHOTON_NODE_ADDRESS")
 	// self is this node, doing what an admin sets of it: its role, and how many videos it encodes.
-	n.self, err = nodes.Join(ctx, n.st, n.id, hostname, n.address,
+	n.self, err = nodes.Join(ctx, n.st, n.id, hostname,
 		domain.Encoder{Acceleration: hw.Accel, HEVC: hw.HEVC, Libass: n.tools.Libass}, automatic, n.remuxer, n.logger)
 	if err != nil {
 		return err
@@ -312,9 +310,7 @@ func (n *node) serve(ctx context.Context) error {
 	wg.Go(func() { sweepPlaybacks(background, n.sessions, n.remuxer, logger) })
 	wg.Go(func() { pruneConversions(background, n.conversions, logger) })
 	wg.Go(func() { n.self.Run(background, n.hub.Subscribe) })
-	if n.address != "" {
-		wg.Go(func() { advertise(background, n.cache, n.self.Node, n.remuxer.Changes(), n.self.Changes(), logger) })
-	}
+	wg.Go(func() { advertise(background, n.cache, n.self.Node, n.remuxer.Changes(), n.self.Changes(), logger) })
 	wg.Go(func() {
 		if err := watch.New(n.st, logger).Run(ctx); err != nil {
 			logger.WarnContext(ctx, "libraries are scanned on schedule only", slog.Any("err", err))
