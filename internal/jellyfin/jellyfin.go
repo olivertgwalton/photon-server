@@ -35,9 +35,13 @@ type authenticator interface {
 }
 
 type Services struct {
-	Auth      authenticator
-	Limits    kv.Limiter
-	Raise     func(ctx context.Context, e domain.Event)
+	Auth   authenticator
+	Limits kv.Limiter
+	Raise  func(ctx context.Context, e domain.Event)
+	// Subscribe is what happens on every node, which an app's socket is told as its profile may
+	// see it.
+	Subscribe func() (<-chan domain.Event, func())
+	Audience  audience
 	Proxies   peer.Proxies
 	Catalogue catalogue
 	Playlists playlists
@@ -119,6 +123,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle(noContent, "POST /Sessions/Capabilities", "POST /Sessions/Capabilities/Full")
 	a.handle(a.displayPreferences, "GET /DisplayPreferences/{id}")
 	a.handle(a.setDisplayPreferences, "POST /DisplayPreferences/{id}")
+	a.handle(a.socket, "GET /socket")
 	// Browsing, under the routes Jellyfin 12.2 answers, and the /Users/{userId} forms apps still use.
 	a.handle(a.views, "GET /UserViews", "GET /Users/{userId}/Views")
 	a.handle(a.groupingOptions, "GET /UserViews/GroupingOptions")

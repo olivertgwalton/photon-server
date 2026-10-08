@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/websocket/websockettest"
 )
 
 type fakeSettings struct {
@@ -114,4 +115,32 @@ func TestTheAPIIsServedWhereAndWhileAnAdminSays(t *testing.T) {
 	if answers(second) {
 		t.Error("still served after the node stopped")
 	}
+}
+
+// An app's socket is closed as the API stops being served, though the server no longer tracks a
+// connection taken from it.
+func TestAnAppsSocketClosesAsTheAPIStops(t *testing.T) {
+	api, _, _, _ := newAPI()
+	port := freePort(t)
+	settings := &fakeSettings{n: domain.Network{Jellyfin: domain.JellyfinOn, JellyfinPort: port}}
+	events := make(chan domain.Event, 1)
+	l, err := NewListener(settings, func() (<-chan domain.Event, func()) { return events, func() {} }, api,
+		"127.0.0.1:8640", func(l net.Listener) net.Listener { return l }, nil, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() { defer close(done); l.Run(ctx) }()
+	eventually(t, "served", func() bool { return answers(port) })
+	c := openSocket(t, "http://127.0.0.1:"+strconv.Itoa(port)+"/socket?ApiKey=pst_device", nil)
+	heard(t, c)
+
+	settings.set(domain.JellyfinOff, port)
+	events <- domain.Event{Kind: domain.EventNetworkChanged}
+	if head, _, err := c.Next(); err != nil || head != websockettest.Fin|websockettest.OpClose {
+		t.Errorf("once off: %#x %v, want the socket closed", head, err)
+	}
+	cancel()
+	<-done
 }

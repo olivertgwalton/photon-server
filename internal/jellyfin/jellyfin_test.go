@@ -184,6 +184,8 @@ func newAPI() (*API, *[]uuid.UUID, *fakeLimits, *[]domain.EventKind) {
 		Catalogue: noLibraries{}, Preferences: newPreferences{},
 		Raise:    func(_ context.Context, e domain.Event) { *raised = append(*raised, e.Kind) },
 		Displays: fakeDisplays{},
+		// Nothing happens.
+		Subscribe: func() (<-chan domain.Event, func()) { return nil, func() {} },
 	})
 	return api, signedOut, limits, raised
 }
