@@ -42,6 +42,7 @@ const limits = $derived<readonly { value: Limit; label: string }[]>([
 ]);
 
 let role = $derived<Role>(node.role);
+let address = $derived(node.address);
 let limit = $derived<Limit>(
 	node.transcode_limit_source === "automatic"
 		? "automatic"
@@ -56,9 +57,10 @@ async function save(event: SubmitEvent) {
 	event.preventDefault();
 	const body: components["schemas"]["NodeChange"] =
 		limit === "automatic"
-			? { role, transcode_limit_source: "automatic" }
+			? { role, address, transcode_limit_source: "automatic" }
 			: {
 					role,
+					address,
 					transcode_limit_source: "set",
 					transcode_limit: limit === "none" ? 0 : most,
 				};
@@ -77,11 +79,9 @@ async function save(event: SubmitEvent) {
 	<Dialog.Content>
 		<Dialog.Header>
 			<Dialog.Title>{name}</Dialog.Title>
-			<Dialog.Description>
-				{node.online?.address
-					? `What this node, at ${node.online.address}, does for the server.`
-					: "What this node does for the server."}
-			</Dialog.Description>
+			<Dialog.Description
+				>What this node does for the server.</Dialog.Description
+			>
 		</Dialog.Header>
 		<form onsubmit={save} class="grid gap-6">
 			<Field.Field>
@@ -90,6 +90,21 @@ async function save(event: SubmitEvent) {
 				<Field.Description
 					>{words.node_roles[role].description}</Field.Description
 				>
+			</Field.Field>
+			<Field.Field>
+				<Field.Label for="node-address">Address</Field.Label>
+				<Input
+					id="node-address"
+					name="address"
+					type="url"
+					placeholder="http://10.0.0.5:8640"
+					bind:value={address}
+					class="font-mono"
+				/>
+				<Field.Description>
+					Where the other nodes reach it, on a private network. Without one it
+					serves only the clients that reach it directly.
+				</Field.Description>
 			</Field.Field>
 			{#if role !== "serve"}
 				<Field.Field>

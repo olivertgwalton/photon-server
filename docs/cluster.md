@@ -7,9 +7,10 @@ must be reachable by the others.
 
 ## Setting a node up
 
-| Variable | |
-|---|---|
-| `PHOTON_NODE_ADDRESS` | where the other nodes reach this one, such as `http://10.0.0.5:8640`. A node without one is never handed another node's requests and is not listed. |
+A node joins the server as it starts, given only the database and Valkey. Settings › Server sets
+where the other nodes reach it, such as `http://10.0.0.5:8640`, which it takes up at once
+(`PATCH /api/v1/admin/nodes/{id}`). A node without one is never handed another node's requests
+and is not listed as running.
 
 A node finds what it encodes video with as it starts: VideoToolbox on a Mac, NVENC, then QSV and
 VAAPI on each render node, the first that encodes a test picture, or software where none does.
@@ -97,7 +98,7 @@ download's conversion takes a transcode slot only while no playback wants it.
 ## When a node is missing
 
 A node missing from Settings › Server, while running, has stopped telling the others of itself:
-it has no `PHOTON_NODE_ADDRESS`, or it cannot reach Valkey. Its log says which.
+it has no address, or it cannot reach Valkey. Its log says which.
 
 ## Metrics
 
