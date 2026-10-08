@@ -174,26 +174,9 @@ type fragments interface {
 // ffmpeg's seek lands on the keyframe at or before the one asked for, so fragments before the
 // segment's start are dropped; every fragment starts on a keyframe, and so does every segment.
 func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) error {
-	var st fragments
-	switch s.format {
-	case domain.SegmentsMPEGTS:
-		st = readTS(out, s.plan[run.at].Start)
-	case domain.SegmentsFMP4:
-		fmp4, init, err := readInit(out)
-		if err != nil {
-			return err
-		}
-		s.mu.Lock()
-		if c := waiter(s.inits, run.part); !closed(c) {
-			if err = keep(s.root, initName(run.part), init); err == nil {
-				close(c)
-			}
-		}
-		s.mu.Unlock()
-		if err != nil {
-			return err
-		}
-		st = fmp4
+	st, err := s.fragments(run, out)
+	if err != nil {
+		return err
 	}
 	// A frame sits a few milliseconds off the keyframe index: both are rounded.
 	const slack = 5 * time.Millisecond
@@ -271,6 +254,29 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 			return err
 		}
 	}
+}
+
+// fragments reads ffmpeg's output in the session's format, keeping a fragmented MP4's
+// initialisation as the part's where it is not yet.
+func (s *session) fragments(run *run, out io.Reader) (fragments, error) {
+	switch s.format {
+	case domain.SegmentsMPEGTS:
+		return readTS(out, s.plan[run.at].Start), nil
+	case domain.SegmentsFMP4:
+	}
+	fmp4, init, err := readInit(out)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if c := waiter(s.inits, run.part); !closed(c) {
+		if err := keep(s.root, initName(run.part), init); err != nil {
+			return nil, err
+		}
+		close(c)
+	}
+	return fmp4, nil
 }
 
 // throttle waits while the run is far enough ahead of what has been asked for, and gives up with
