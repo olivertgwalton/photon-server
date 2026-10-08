@@ -37,6 +37,7 @@ import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
 import {
 	count,
 	episodeLabel,
+	onDisk,
 	playHref,
 	runtime,
 	timecode,
@@ -57,10 +58,7 @@ let subtitle = $state<number | "off">();
 let mediaInfo = $state(false);
 let download = $state(false);
 
-const chosen = $derived(
-	t.versions?.find((v) => v.id === version) ??
-		t.versions?.find((v) => !v.missing_since),
-);
+const chosen = $derived(onDisk(t.versions, version));
 const duration = $derived(chosen?.duration_ms);
 const position = $derived(t.state?.position_ms ?? 0);
 const choice = $derived({
@@ -676,6 +674,6 @@ const poster = $derived(art("poster"));
 		bind:open={download}
 		id={t.id}
 		title={t.title}
-		version={choice.version}
+		version={chosen}
 	/>
 {/if}
