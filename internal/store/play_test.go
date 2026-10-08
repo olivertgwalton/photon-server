@@ -91,6 +91,42 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	}
 }
 
+// Of two copies as long, a title's page lists first the one played unasked, however the database
+// happens to return them.
+func TestATitlesFirstCopyIsTheOnePlayed(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	part := func(rel string) Part {
+		return Part{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}
+	}
+	film := Film{Title: "Heat", Folder: "H", Copies: []Copy{
+		{ContentKey: []byte("a"), Label: "a", Parts: []Part{part("H/a.mkv")}},
+		{ContentKey: []byte("b"), Label: "b", Parts: []Part{part("H/b.mkv")}},
+	}}
+	if _, err := s.SaveFolder(ctx, lib.ID, "H", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var item uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items`).Scan(&item); err != nil {
+		t.Fatal(err)
+	}
+	// Rewriting a row moves it after the other, as the database returns them.
+	if _, err := s.pool.Exec(ctx, `UPDATE versions SET fingerprint = fingerprint || '\x00' WHERE id = (SELECT id FROM versions ORDER BY id LIMIT 1)`); err != nil {
+		t.Fatal(err)
+	}
+	played, err := s.Playable(ctx, uuid.UUID{}, item, uuid.UUID{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, err := s.Versions(ctx, []uuid.UUID{item}); err != nil || len(v[item]) != 2 || v[item][0].ID != played.Version {
+		t.Errorf("Versions = %+v, %v; want %v first", v[item], err, played.Version)
+	}
+}
+
 func TestPlaybackTitleSaysWhichShow(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
