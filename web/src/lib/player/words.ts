@@ -2,26 +2,6 @@ import type { components } from "#lib/api/schema.js";
 
 type Schemas = components["schemas"];
 
-export const reasons: Record<Schemas["TranscodeReason"], string> = {
-	container_not_supported: "This browser doesn't open the file's container.",
-	video_codec_not_supported: "This browser doesn't play the video's codec.",
-	video_profile_not_supported: "This browser doesn't play the video's profile.",
-	video_level_not_supported:
-		"The video's level is higher than this browser plays.",
-	video_resolution_not_supported:
-		"The picture is larger than this browser plays.",
-	video_bit_depth_not_supported:
-		"The video's bit depth is more than this browser plays.",
-	video_range_not_supported: "This screen doesn't show the video's HDR.",
-	audio_codec_not_supported: "This browser doesn't play the audio's codec.",
-	audio_channels_not_supported:
-		"The audio has more channels than this browser plays.",
-	bitrate_exceeds_limit: "The file is above the quality chosen.",
-	subtitle_codec_not_supported:
-		"The subtitles are pictures, drawn into the video.",
-	parts_not_supported: "The title is in several files, played as one.",
-};
-
 export const skips: Record<Schemas["MarkerKind"], string> = {
 	intro: "Skip Intro",
 	recap: "Skip Recap",

@@ -1,9 +1,11 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
+import type { components } from "#lib/api/schema.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
 import { ticking } from "#lib/admin/clock.svelte.js";
-import { relative, roleOptions, roles } from "#lib/admin/words.js";
+import { relative, roleOptions } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import Choice from "#lib/components/Choice.svelte";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
@@ -14,13 +16,14 @@ import { Input } from "#lib/components/ui/input/index.js";
 import * as Table from "#lib/components/ui/table/index.js";
 
 let { data } = $props();
+const words = vocabulary();
 
 const locks = { pin: "PIN", password: "Password" } as const;
 // A manager adds users.
-const options = $derived(roleOptions(data.me.role));
+const options = $derived(roleOptions(data.me.role, words.roles));
 
 let adding = $state(false);
-let role = $state<keyof typeof roles>("user");
+let role = $state<components["schemas"]["Role"]>("user");
 const clock = ticking(30_000);
 
 async function add(event: SubmitEvent) {
@@ -132,7 +135,7 @@ async function add(event: SubmitEvent) {
 						{profile.name}
 					</a>
 				</Table.Cell>
-				<Table.Cell>{roles[profile.role]}</Table.Cell>
+				<Table.Cell>{words.roles[profile.role]}</Table.Cell>
 				<Table.Cell>{locks[profile.lock]}</Table.Cell>
 				{#if data.me.role === "admin"}
 					<Table.Cell

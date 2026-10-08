@@ -1,14 +1,8 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import type { components } from "#lib/api/schema.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
-import {
-	bitrate,
-	bytes,
-	language,
-	rangeName,
-	runtime,
-	timecode,
-} from "#lib/format.js";
+import { bitrate, bytes, language, runtime, timecode } from "#lib/format.js";
 
 type Version = components["schemas"]["VersionPage"];
 type Stream = components["schemas"]["StreamPage"];
@@ -19,12 +13,7 @@ let {
 	title,
 	versions,
 }: { open?: boolean; title: string; versions: Version[] } = $props();
-
-const kinds: Record<Stream["kind"], string> = {
-	video: "Video",
-	audio: "Audio",
-	subtitle: "Subtitle",
-};
+const words = vocabulary();
 
 function facts(s: Stream): [string, string | number | undefined][] {
 	return [
@@ -38,7 +27,7 @@ function facts(s: Stream): [string, string | number | undefined][] {
 		],
 		["Bit depth", s.bit_depth ? `${s.bit_depth}-bit` : undefined],
 		["Level", s.level],
-		["Range", s.range ? rangeName(s.range) : undefined],
+		["Range", s.range ? words.ranges[s.range] : undefined],
 		["Dolby Vision profile", s.dv_profile],
 		["Channels", s.channel_layout ?? s.channels],
 		["Sample rate", s.sample_rate ? `${s.sample_rate / 1000} kHz` : undefined],
@@ -97,7 +86,10 @@ function facts(s: Stream): [string, string | number | undefined][] {
 				])}
 				{#each version.streams as stream (stream.index)}
 					<div class="border-line grid gap-2 border-t pt-3">
-						<h4 class="label">{kinds[stream.kind]} · stream {stream.index}</h4>
+						<h4 class="label">
+							{words.stream_kinds[stream.kind]}
+							· stream {stream.index}
+						</h4>
 						{@render list(facts(stream))}
 					</div>
 				{/each}

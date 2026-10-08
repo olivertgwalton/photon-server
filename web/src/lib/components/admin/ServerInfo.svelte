@@ -1,11 +1,10 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import type { components } from "#lib/api/schema.js";
 import { bytes } from "#lib/format.js";
 import {
-	accelerations,
 	limitSources,
 	nodeAvailability,
-	nodeRoles,
 	relative,
 	transcodeLoad,
 	when,
@@ -23,6 +22,7 @@ let {
 	nodes: components["schemas"]["KnownNode"][];
 	now: number;
 } = $props();
+const words = vocabulary();
 
 const self = $derived(nodes.find((n) => n.id === s.node_id));
 
@@ -33,7 +33,7 @@ function tool(t: components["schemas"]["Tool"]) {
 // What a node encodes with, in a few words.
 function encodes(e: components["schemas"]["Node"]["encoder"]) {
 	return [
-		accelerations[e.acceleration],
+		words.accelerations[e.acceleration],
 		e.hevc === "allow" ? "H.264, HEVC" : "H.264",
 		e.libass ? "subtitles" : "",
 	]
@@ -71,14 +71,14 @@ const rows = $derived<[string, string][]>([
 	[
 		"Encoder",
 		[
-			accelerations[s.encoder.acceleration],
+			words.accelerations[s.encoder.acceleration],
 			s.encoder.device,
 			s.encoder.hevc === "allow" ? "HEVC and H.264" : "H.264 only",
 		]
 			.filter(Boolean)
 			.join(", "),
 	],
-	["Role", nodeRoles[s.role].name],
+	["Role", words.node_roles[s.role].name],
 	[
 		"Transcodes",
 		`${transcodeLoad(s.transcodes, s.transcode_limit)} at once · ${limitSources[s.transcode_limit_source]}`,
@@ -145,7 +145,7 @@ const folders = $derived<[string, components["schemas"]["Folder"]][]>([
 						</span>
 					</Table.Cell>
 					<Table.Cell class="whitespace-normal">
-						{nodeRoles[node.role].name}
+						{words.node_roles[node.role].name}
 						{#if up && node.role !== "serve"}
 							<span class="text-ink-3 block text-xs"
 								>{encodes(up.encoder)}</span

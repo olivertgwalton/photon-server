@@ -2,21 +2,6 @@ import type { components } from "#lib/api/schema.js";
 
 type Schemas = components["schemas"];
 
-export const extraKinds: Record<Schemas["ExtraKind"], string> = {
-	trailer: "Trailer",
-	teaser: "Teaser",
-	featurette: "Featurette",
-	behind_the_scenes: "Behind the scenes",
-	deleted_scene: "Deleted scene",
-	interview: "Interview",
-	scene: "Scene",
-	short: "Short",
-	clip: "Clip",
-	blooper: "Blooper",
-	theme_video: "Theme video",
-	other: "Extra",
-};
-
 function videoURL(site: string, key: string): string | undefined {
 	switch (site.toLowerCase()) {
 		case "youtube":

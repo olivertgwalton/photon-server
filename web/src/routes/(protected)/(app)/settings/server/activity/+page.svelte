@@ -1,8 +1,8 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
-import { loggedKinds } from "#lib/admin/words.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
 import Choice from "#lib/components/Choice.svelte";
 import Pager from "#lib/components/Pager.svelte";
@@ -10,13 +10,14 @@ import { narrow } from "#lib/admin/narrow.js";
 import { Label } from "#lib/components/ui/label/index.js";
 
 let { data } = $props();
+const words = vocabulary();
 
 const live = liveStream();
 const clock = ticking(30_000);
 
 const kinds = [
 	{ value: "all", label: "Everything" },
-	...Object.entries(loggedKinds).map(([value, label]) => ({ value, label })),
+	...Object.entries(words.logged).map(([value, label]) => ({ value, label })),
 ];
 
 // What arrived since the page loaded leads the first page, where it belongs.

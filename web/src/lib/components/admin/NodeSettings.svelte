@@ -1,6 +1,6 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import { act } from "#lib/act.js";
-import { nodeRoles } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/Choice.svelte";
@@ -14,13 +14,14 @@ let {
 	node,
 	open = $bindable(false),
 }: { node: components["schemas"]["KnownNode"]; open?: boolean } = $props();
+const words = vocabulary();
 
 type Role = components["schemas"]["NodeRole"];
 type Limit = "automatic" | "at_most" | "none";
 
-const roles = (Object.keys(nodeRoles) as Role[]).map((value) => ({
-	value,
-	label: nodeRoles[value].name,
+const roles = Object.entries(words.node_roles).map(([value, { name }]) => ({
+	value: value as Role,
+	label: name,
 }));
 
 // The limit its encoder keeps up with, where the node says it while up.
@@ -86,7 +87,9 @@ async function save(event: SubmitEvent) {
 			<Field.Field>
 				<Field.Label for="node-role">Role</Field.Label>
 				<Choice id="node-role" name="role" bind:value={role} options={roles} />
-				<Field.Description>{nodeRoles[role].description}</Field.Description>
+				<Field.Description
+					>{words.node_roles[role].description}</Field.Description
+				>
 			</Field.Field>
 			{#if role !== "serve"}
 				<Field.Field>

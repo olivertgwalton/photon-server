@@ -1,4 +1,5 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 import { withQuery } from "#lib/address.js";
@@ -8,8 +9,9 @@ import Choice from "#lib/components/Choice.svelte";
 import { byKind } from "#lib/rows.js";
 
 let { data } = $props();
+const words = vocabulary();
 
-const groups = $derived(byKind(data.results?.items ?? []));
+const groups = $derived(byKind(data.results?.items ?? [], words.kinds));
 const nothing = $derived(
 	data.results && !data.results.items.length && !data.results.people.length,
 );
@@ -57,7 +59,7 @@ function scope(library: string) {
 			title={group.name}
 			cards={group.cards}
 			shape={group.kind === "episode" ? "still" : "poster"}
-			href="/search/{group.slug}{page.url.search}"
+			href="/search/{group.kind}{page.url.search}"
 		/>
 	{/each}
 

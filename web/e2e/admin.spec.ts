@@ -31,7 +31,7 @@ test("the overview follows the server live: who is playing, and a scan as it gro
 	await expect(card).toContainText("Kids · Living Room · Photon for tvOS");
 	await expect(card).toContainText("Transcode");
 	await expect(card).toContainText("Hardware · VideoToolbox");
-	await expect(card).toContainText("Because of the video codec");
+	await expect(card).toContainText("Because of: Video codec");
 	await expect(card).toContainText(
 		"hevc 3840×2160 HDR10 → h264 1920×1080 tone mapped",
 	);

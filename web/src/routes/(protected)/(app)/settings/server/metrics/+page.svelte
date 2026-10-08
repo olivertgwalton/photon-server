@@ -10,7 +10,7 @@ import {
 	series,
 	total,
 } from "#lib/admin/metrics.js";
-import { nodeRoles, relative } from "#lib/admin/words.js";
+import { relative } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
@@ -19,7 +19,7 @@ import Sparkline from "#lib/components/admin/Sparkline.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Table from "#lib/components/ui/table/index.js";
-import { bitrate, bytes, count, playMethods } from "#lib/format.js";
+import { bitrate, bytes, count } from "#lib/format.js";
 
 type Schemas = components["schemas"];
 
@@ -83,7 +83,7 @@ function line(id: string, value: (p: Point) => number | undefined) {
 	});
 }
 
-const methods = Object.keys(playMethods) as Schemas["PlayMethod"][];
+const methods = Object.keys(words.play_methods) as Schemas["PlayMethod"][];
 const streams = $derived(
 	methods.map(
 		(m) =>
@@ -164,7 +164,7 @@ function ago(seconds: number, now: number) {
 			</dd>
 			<dd class="text-ink-3 text-xs">
 				{streams
-					.map(([m, n]) => `${n} ${playMethods[m].toLowerCase()}`)
+					.map(([m, n]) => `${n} ${words.play_methods[m].toLowerCase()}`)
 					.join(" · ")}
 			</dd>
 		</div>
@@ -235,7 +235,7 @@ function ago(seconds: number, now: number) {
 						><h3 class="text-ink font-semibold">{n.name}</h3></Card.Title
 					>
 					<Card.Description>
-						{nodeRoles[n.role].name}
+						{words.node_roles[n.role].name}
 					</Card.Description>
 					<Card.Action>
 						{#if !m}

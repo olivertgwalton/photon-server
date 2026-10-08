@@ -1,12 +1,13 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import Artwork from "#lib/components/Artwork.svelte";
 import { act } from "#lib/act.js";
 import { confirmFirst } from "#lib/actions.svelte.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import { bitrate, playMethods, timecode } from "#lib/format.js";
+import { bitrate, timecode } from "#lib/format.js";
 import { positionAt } from "#lib/admin/live.js";
-import { accelerations, playedTitle, reasons } from "#lib/admin/words.js";
+import { playedTitle } from "#lib/admin/words.js";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
 
@@ -22,6 +23,7 @@ let {
 	now,
 	nodes,
 }: { playback: NowPlaying; now: number; nodes: number } = $props();
+const words = vocabulary();
 
 const picture = $derived(p.title.thumb ?? p.title.backdrop);
 const position = $derived(positionAt(p, now));
@@ -106,13 +108,13 @@ function stop() {
 		</div>
 		<div class="flex flex-wrap gap-1.5">
 			<Badge variant={p.method === "transcode" ? "default" : "secondary"}>
-				{playMethods[p.method]}
+				{words.play_methods[p.method]}
 			</Badge>
 			{#if p.acceleration}
 				<Badge variant="outline">
 					{p.acceleration === "software"
-						? "Software"
-						: `Hardware · ${accelerations[p.acceleration]}`}
+						? words.accelerations[p.acceleration]
+						: `Hardware · ${words.accelerations[p.acceleration]}`}
 				</Badge>
 			{/if}
 			{#if nodes > 1}
@@ -123,7 +125,7 @@ function stop() {
 		</div>
 		{#if p.reasons?.length}
 			<p class="text-ink-2 text-sm">
-				Because of the {p.reasons.map((r) => reasons[r]).join(", ")}
+				Because of: {p.reasons.map((r) => words.reasons[r].name).join(", ")}
 			</p>
 		{/if}
 		<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">

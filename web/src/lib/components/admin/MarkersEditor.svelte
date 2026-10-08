@@ -1,9 +1,9 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import PlusIcon from "@lucide/svelte/icons/plus";
 import XIcon from "@lucide/svelte/icons/x";
 import { untrack } from "svelte";
 import type { components } from "#lib/api/schema.js";
-import { markerKinds } from "#lib/admin/words.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -22,6 +22,7 @@ type Schemas = components["schemas"];
 // chapters, sound or picture say, and which of its parts have none of a kind.
 // Saving with nothing listed gives the copy back to what was found.
 let { version }: { version: Schemas["VersionPage"] } = $props();
+const words = vocabulary();
 
 let refusal = $state("");
 
@@ -44,7 +45,7 @@ const sources = {
 	fingerprint: "found by sound",
 	blackframes: "found by picture",
 };
-const kindOptions = Object.entries(markerKinds).map(([value, label]) => ({
+const kindOptions = Object.entries(words.markers).map(([value, label]) => ({
 	value: value as Schemas["MarkerKind"],
 	label,
 }));
@@ -117,7 +118,7 @@ const parts = $derived(Array.from({ length: version.parts }, (_, i) => i));
 					<Button
 						variant="ghost"
 						size="icon"
-						aria-label="Take out the {markerKinds[
+						aria-label="Take out the {words.markers[
 							row.kind
 						].toLowerCase()} at {row.start}"
 						onclick={() => (rows = rows.filter((r) => r.key !== row.key))}

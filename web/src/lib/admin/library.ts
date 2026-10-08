@@ -7,14 +7,8 @@ type Fetcher = "metadata" | "images";
 
 // The kinds of item a library ranks its sources for, as Jellyfin titles
 // its downloaders and fetchers.
-export function itemKinds(kind: Schemas["LibraryKind"]) {
-	return kind === "movies"
-		? ([["movie", "Films"]] as const)
-		: ([
-				["show", "Shows"],
-				["season", "Seasons"],
-				["episode", "Episodes"],
-			] as const);
+export function itemKinds(kind: Schemas["LibraryKind"]): Schemas["ItemKind"][] {
+	return kind === "movies" ? ["movie"] : ["show", "season", "episode"];
 }
 
 // The sources a library may rank to fetch f for an item of a kind: an NFO

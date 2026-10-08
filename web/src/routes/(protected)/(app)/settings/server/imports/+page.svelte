@@ -1,9 +1,10 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { toast } from "svelte-sonner";
 import { refreshAll } from "$app/navigation";
 import { fields } from "#lib/form.js";
-import { byName, importMisses, importSources, when } from "#lib/admin/words.js";
+import { byName, when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
@@ -17,6 +18,7 @@ import { Input } from "#lib/components/ui/input/index.js";
 type Source = components["schemas"]["ImportSource"];
 
 let { data } = $props();
+const words = vocabulary();
 
 const api = client();
 let starting = $state(false);
@@ -24,7 +26,7 @@ let source = $state<Source>("plex");
 let busy = $state(false);
 
 const names = $derived(byName(data.profiles));
-const sources = Object.entries(importSources).map(([value, label]) => ({
+const sources = Object.entries(words.import_sources).map(([value, label]) => ({
 	value: value as Source,
 	label,
 }));
@@ -173,7 +175,7 @@ async function start(event: SubmitEvent) {
 		{#each data.imports as run (run.id)}
 			<li class="bg-raise grid gap-3 rounded-xl p-4">
 				<div class="flex flex-wrap items-center gap-2">
-					<Badge variant="outline">{importSources[run.source]}</Badge>
+					<Badge variant="outline">{words.import_sources[run.source]}</Badge>
 					<p class="text-ink min-w-0 truncate font-mono text-sm">{run.url}</p>
 					<p class="text-ink-3 text-sm">
 						into {names.get(run.profile_id) ?? "a removed profile"}
@@ -202,7 +204,7 @@ async function start(event: SubmitEvent) {
 								<li class="flex justify-between gap-4">
 									<span class="text-ink truncate">{miss.title}</span>
 									<span class="text-ink-3 shrink-0"
-										>{importMisses[miss.reason]}</span
+										>{words.import_misses[miss.reason]}</span
 									>
 								</li>
 							{/each}

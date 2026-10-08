@@ -1,4 +1,5 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import Artwork from "#lib/components/Artwork.svelte";
 import { withQuery } from "#lib/address.js";
 import CheckIcon from "@lucide/svelte/icons/check";
@@ -16,24 +17,12 @@ import * as Dialog from "#lib/components/ui/dialog/index.js";
 import { episodeLabel } from "#lib/format.js";
 
 type Entry = components["schemas"]["CalendarEntry"];
-type Filter = components["schemas"]["CalendarFilter"];
 
 let { data } = $props();
+const words = vocabulary();
 
 // A month's day shows this many, and the rest behind "+n more".
 const shown = 3;
-
-const filterNames: Record<Filter, string> = {
-	mine: "My titles",
-	watchlist: "Watchlist",
-	favourites: "Favourites",
-	all: "Everything",
-};
-const milestoneNames: Record<components["schemas"]["Milestone"], string> = {
-	series_premiere: "Series premiere",
-	season_premiere: "Season premiere",
-	season_finale: "Finale",
-};
 
 const utc = { timeZone: "UTC" } as const;
 const monthName = new Intl.DateTimeFormat(undefined, {
@@ -85,7 +74,7 @@ const absence = (e: Entry, day: string) =>
 )}
 	{#each e.milestones ?? [] as m (m)}
 		<Badge class={m === "season_finale" ? "bg-ink text-ground" : ""}>
-			{milestoneNames[m]}
+			{words.milestones[m]}
 		</Badge>
 	{/each}
 	{#if absence(e, day)}
@@ -212,7 +201,7 @@ const absence = (e: Entry, day: string) =>
 						size="sm"
 						aria-current={data.filter === f ? "page" : undefined}
 					>
-						{filterNames[f]}
+						{words.calendar_filters[f]}
 					</Button>
 				{/each}
 			</div>
@@ -283,7 +272,7 @@ const absence = (e: Entry, day: string) =>
 				<p class="text-ink-2">
 					{data.filter === "all"
 						? "Nothing out in this time."
-						: `Nothing out from ${filterNames[data.filter].toLowerCase()} in this time.`}
+						: `Nothing out from ${words.calendar_filters[data.filter].toLowerCase()} in this time.`}
 				</p>
 				{#if data.filter !== "all"}
 					<Button href={to({ filter: "all" })} variant="outline" size="sm">

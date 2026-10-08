@@ -1,5 +1,4 @@
 import type { components, paths } from "./api/schema.js";
-import { ratingSites, resolutionNames } from "./format.js";
 
 type Schemas = components["schemas"];
 
@@ -9,13 +8,20 @@ export type WallQuery = NonNullable<
 	paths["/api/v1/libraries/{id}/titles"]["get"]["parameters"]["query"]
 >;
 
-const sorts: Schemas["WallSort"][] = [
+// The sorts a wall offers, in the order its menu lists them.
+export const sorts: Schemas["WallSort"][] = [
 	"title",
 	"added",
 	"released",
 	"rating",
 	"runtime",
 	"played",
+];
+const sites: Schemas["RatingSite"][] = [
+	"imdb",
+	"tmdb",
+	"rotten_tomatoes",
+	"rotten_tomatoes_audience",
 ];
 const lists = [
 	"mark",
@@ -33,7 +39,7 @@ export type ListFilter = (typeof lists)[number];
 // The lists whose values are the server's own words.
 const known: Partial<Record<ListFilter, string[]>> = {
 	mark: ["watched", "unwatched", "in_progress", "favourite", "watchlist"],
-	resolution: Object.keys(resolutionNames),
+	resolution: ["sd", "720p", "1080p", "4k"],
 	range: ["sdr", "hlg", "hdr10", "hdr10plus", "dv"],
 };
 
@@ -47,10 +53,8 @@ export function wallQuery(search: URLSearchParams): WallQuery {
 	if (sorts.includes(sort)) query.sort = sort;
 	const order = search.get("order");
 	if (order === "asc" || order === "desc") query.order = order;
-	const site = search.get("rating_site");
-	if (site && site in ratingSites) {
-		query.rating_site = site as Schemas["RatingSite"];
-	}
+	const site = search.get("rating_site") as Schemas["RatingSite"];
+	if (sites.includes(site)) query.rating_site = site;
 	const min = Number(search.get("min_rating"));
 	if (min > 0 && min <= 100) query.min_rating = min;
 	for (const name of lists) {

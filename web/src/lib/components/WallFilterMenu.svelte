@@ -1,9 +1,10 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import ListFilterIcon from "@lucide/svelte/icons/list-filter";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
-import { rangeName, ratingSites, resolutionNames, score } from "#lib/format.js";
+import { score } from "#lib/format.js";
 import {
 	filterCount,
 	type ListFilter,
@@ -23,20 +24,13 @@ let {
 	facets: Facets;
 	onchange: (query: WallQuery) => void;
 } = $props();
-
-const marks: Record<components["schemas"]["Mark"], string> = {
-	unwatched: "Unwatched",
-	in_progress: "In progress",
-	watched: "Watched",
-	favourite: "Favourites",
-	watchlist: "Watchlist",
-};
+const words = vocabulary();
 
 // Each list a library has values for, as the server named them.
 const groups = $derived(
 	(
 		[
-			["Status", "mark", facets.marks, (v) => marks[v as keyof typeof marks]],
+			["Status", "mark", facets.marks, (v) => words.marks[v]],
 			["Genre", "genre", facets.genres],
 			["Year", "year", facets.years],
 			["Certificate", "certificate", facets.certificates],
@@ -45,14 +39,9 @@ const groups = $derived(
 				"Resolution",
 				"resolution",
 				facets.resolutions,
-				(v) => resolutionNames[v as keyof typeof resolutionNames],
+				(v) => words.resolutions[v],
 			],
-			[
-				"Dynamic range",
-				"range",
-				facets.ranges,
-				(v) => rangeName(v as components["schemas"]["Range"]),
-			],
+			["Dynamic range", "range", facets.ranges, (v) => words.ranges[v]],
 		] as [
 			string,
 			ListFilter,
@@ -151,7 +140,7 @@ function chosen(name: ListFilter, value: string | number): boolean {
 							>
 								{#each facets.rating_sites as value (value)}
 									<DropdownMenu.RadioItem {value} closeOnSelect={false}>
-										{ratingSites[value]}
+										{words.rating_sites[value]}
 									</DropdownMenu.RadioItem>
 								{/each}
 							</DropdownMenu.RadioGroup>

@@ -8,7 +8,7 @@ import type { PageLoad } from "./$types";
 const most = 200;
 
 // The whole of one run of a search's results: a kind of title, or people.
-export const load: PageLoad = async ({ fetch, params, url }) => {
+export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 	const q = url.searchParams.get("q")?.trim() ?? "";
 	const library = url.searchParams.get("library") ?? undefined;
 	const results = await need(
@@ -19,7 +19,10 @@ export const load: PageLoad = async ({ fetch, params, url }) => {
 	if (params.run === "people") {
 		return { q, name: "People", people: results.people, cards: undefined };
 	}
-	const group = byKind(results.items).find((g) => g.slug === params.run);
+	const { words } = await parent();
+	const group = byKind(results.items, words.kinds).find(
+		(g) => g.kind === params.run,
+	);
 	if (!group) error(404, "Nothing of that kind matches.");
 	return {
 		q,

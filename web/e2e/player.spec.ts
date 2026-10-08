@@ -144,10 +144,10 @@ test("a busy server and an unplayable file are said plainly", async ({
 	await page.goto("/play/t-odd");
 	const alert = page.getByRole("alert");
 	await expect(alert).toContainText(
-		"This browser doesn't play the video's codec.",
+		"The player doesn't play the video's codec.",
 	);
 	await expect(alert).toContainText(
-		"This browser doesn't play the audio's codec.",
+		"The player doesn't play the audio's codec.",
 	);
 	await expectAccessible(page);
 });

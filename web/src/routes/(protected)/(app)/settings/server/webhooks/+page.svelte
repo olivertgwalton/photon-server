@@ -1,10 +1,11 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { toast } from "svelte-sonner";
 import { refreshAll } from "$app/navigation";
 import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
-import { hookable, when } from "#lib/admin/words.js";
+import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
@@ -19,6 +20,7 @@ import { Input } from "#lib/components/ui/input/index.js";
 import { Label } from "#lib/components/ui/label/index.js";
 
 let { data } = $props();
+const words = vocabulary();
 
 const api = client();
 let adding = $state(false);
@@ -79,7 +81,7 @@ async function add(event: SubmitEvent) {
 						<Field.Set>
 							<Field.Legend>Send it when</Field.Legend>
 							<div class="grid gap-2 sm:grid-cols-2">
-								{#each Object.entries(hookable) as [kind, label] (kind)}
+								{#each Object.entries(words.hookable) as [kind, label] (kind)}
 									<div class="flex items-center gap-2">
 										<Checkbox id="event-{kind}" name="events" value={kind} />
 										<Label for="event-{kind}">{label}</Label>
@@ -108,7 +110,7 @@ async function add(event: SubmitEvent) {
 					<p class="text-ink truncate font-mono text-sm">{hook.url}</p>
 					<div class="flex flex-wrap gap-1.5">
 						{#each hook.events as kind (kind)}
-							<Badge variant="outline">{hookable[kind] ?? kind}</Badge>
+							<Badge variant="outline">{words.hookable[kind] ?? kind}</Badge>
 						{/each}
 					</div>
 					<p class="text-ink-3 text-xs">

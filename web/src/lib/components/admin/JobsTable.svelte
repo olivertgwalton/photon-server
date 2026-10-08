@@ -20,12 +20,7 @@ let {
 	afterLabel?: string;
 } = $props();
 
-const states: [Schemas["JobState"], string][] = [
-	["queued", "Queued"],
-	["running", "Running"],
-	["rerun", "To run again"],
-	["dead", "Gave up"],
-];
+const states: Schemas["JobState"][] = ["queued", "running", "rerun", "dead"];
 
 function count(kind: Schemas["JobKind"], state: Schemas["JobState"]) {
 	return counts.find((c) => c.kind === kind && c.state === state)?.count ?? 0;
@@ -38,8 +33,8 @@ const words = vocabulary();
 	<Table.Header>
 		<Table.Row>
 			<Table.Head>Kind</Table.Head>
-			{#each states as [, label] (label)}
-				<Table.Head class="text-right">{label}</Table.Head>
+			{#each states as state (state)}
+				<Table.Head class="text-right">{words.job_states[state]}</Table.Head>
 			{/each}
 			{#if after}
 				<Table.Head class="text-right">{afterLabel}</Table.Head>
@@ -52,7 +47,7 @@ const words = vocabulary();
 				<Table.Cell class="text-ink font-semibold"
 					>{words.jobs[kind]}</Table.Cell
 				>
-				{#each states as [state] (state)}
+				{#each states as state (state)}
 					<Table.Cell class="text-right font-mono"
 						>{count(kind, state) || ""}</Table.Cell
 					>
