@@ -51,6 +51,24 @@ func (fakeAuth) SetUp(_ context.Context, _, password string, _ auth.Device) (str
 	return goodToken, oliver, nil
 }
 
+// StartReset has a code for Oliver alone.
+func (fakeAuth) StartReset(_ context.Context, name string) (string, error) {
+	if name == "Oliver" {
+		return "BCDF-GHJK", nil
+	}
+	return "", nil
+}
+
+func (fakeAuth) RedeemReset(_ context.Context, code, password string) (uuid.UUID, error) {
+	switch {
+	case len(password) < 8:
+		return uuid.UUID{}, auth.ErrPasswordTooShort
+	case code != "bcdf-ghjk":
+		return uuid.UUID{}, auth.ErrResetNotFound
+	}
+	return oliver.ID, nil
+}
+
 func (fakeAuth) Authenticate(_ context.Context, token string) (domain.Session, error) {
 	switch token {
 	case goodToken:

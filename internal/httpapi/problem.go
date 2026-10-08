@@ -112,6 +112,7 @@ var problems = []struct {
 	{err: store.ErrNotUserCollection, code: codeConflict, ownWords: true},
 	{err: store.ErrLastAdmin, code: codeConflict, ownWords: true},
 	{err: store.ErrSetUp, code: codeConflict, ownWords: true},
+	{err: auth.ErrResetNotFound, code: codeNotFound, ownWords: true},
 	{err: store.ErrBeyondManager, code: codeForbidden, ownWords: true},
 	{err: store.ErrSuperseded, code: codeConflict, ownWords: true},
 	{err: store.ErrNotListable, code: codeConflict, ownWords: true},
