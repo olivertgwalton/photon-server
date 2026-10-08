@@ -37,6 +37,7 @@ const changes: Record<string, string> = {
 	"library.removed": "admin:libraries",
 	"profile.added": "admin:profiles",
 	"profile.removed": "admin:profiles",
+	"backup.made": "admin:backups",
 };
 
 // What the server is doing, for an admin: the activity menu and the dashboard
