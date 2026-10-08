@@ -42,13 +42,22 @@ type networkJSON struct {
 	// RemoteMaxBitrateKbps is the most a stream to a client not on them is sent at, as Jellyfin's
 	// Internet streaming bitrate limit: its picture's size is the client's still. 0 is no limit.
 	RemoteMaxBitrateKbps int `json:"remote_max_bitrate_kbps"`
+	// PublicURL is where readers reach the web app from outside, as a television's pairing link
+	// names it and secure connections send plain requests to; empty is the address each came to.
+	PublicURL string `json:"public_url"`
+	// TrustedProxies are the proxies, prefixes or addresses, whose X-Forwarded-For names the
+	// client, as Jellyfin's known proxies; none trusts no one.
+	TrustedProxies []string `json:"trusted_proxies"`
+	// Discovery is whether the server answers apps looking for it on the local network.
+	Discovery domain.Discovery `json:"discovery"`
 }
 
 func showNetwork(n domain.Network) networkJSON {
 	return networkJSON{
 		SecureConnections: n.Secure, Certificate: n.Certificate, Key: n.Key,
 		Jellyfin: n.Jellyfin, JellyfinPort: n.JellyfinPort, RemoteMaxBitrateKbps: n.RemoteMaxBitrateKbps,
-		LocalNetworks: each(n.LocalNetworks, netip.Prefix.String),
+		LocalNetworks: each(n.LocalNetworks, netip.Prefix.String), PublicURL: n.PublicURL,
+		TrustedProxies: each(n.TrustedProxies, netip.Prefix.String), Discovery: n.Discovery,
 	}
 }
 
@@ -84,10 +93,27 @@ func (a *API) setNetwork(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "local_networks: "+err.Error())
 		return
 	}
+	proxies, err := peer.Prefixes(req.TrustedProxies)
+	if err != nil {
+		writeProblem(w, a.logger, codeInvalidBody, "trusted_proxies: "+err.Error())
+		return
+	}
+	public, err := parsePublicURL(req.PublicURL)
+	if err != nil {
+		writeProblem(w, a.logger, codeInvalidBody, err.Error())
+		return
+	}
+	if req.Discovery == "" {
+		writeProblem(w, a.logger, codeInvalidBody, "discovery is broadcast or off")
+		return
+	}
 	n := domain.Network{
 		Secure: req.SecureConnections, Certificate: req.Certificate, Key: req.Key,
 		Jellyfin: req.Jellyfin, JellyfinPort: req.JellyfinPort, LocalNetworks: local,
-		RemoteMaxBitrateKbps: req.RemoteMaxBitrateKbps,
+		RemoteMaxBitrateKbps: req.RemoteMaxBitrateKbps, TrustedProxies: proxies, Discovery: req.Discovery,
+	}
+	if public != nil {
+		n.PublicURL = public.String()
 	}
 	if n.RemoteMaxBitrateKbps < 0 {
 		writeProblem(w, a.logger, codeInvalidBody, "remote_max_bitrate_kbps is 0, for no limit, or more")

@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"net/netip"
 	"testing"
 	"time"
 	"uuid"
@@ -38,12 +37,12 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 	node := uuid.NewV7()
 	seen := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 	svc := Services{
-		Auth: fakeAuth{}, HLS: fakeHLS{}, TrustedProxies: []netip.Prefix{netip.MustParsePrefix("172.16.0.0/12")},
+		Auth: fakeAuth{}, HLS: fakeHLS{},
 		Setup: Setup{
 			Started: seen.Add(-time.Hour), Node: node, Listen: ":8640",
-			Tools:     media.Tools{FFmpeg: media.Tool{Path: "/usr/bin/ffmpeg", Version: "8.0"}, Chromaprint: true},
-			Encoder:   hls.Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128"},
-			Discovery: domain.DiscoveryOff, MetadataLanguage: "en-GB", CacheDir: t.TempDir(), BackupDir: t.TempDir() + "/missing",
+			Tools:            media.Tools{FFmpeg: media.Tool{Path: "/usr/bin/ffmpeg", Version: "8.0"}, Chromaprint: true},
+			Encoder:          hls.Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128"},
+			MetadataLanguage: "en-GB", CacheDir: t.TempDir(), BackupDir: t.TempDir() + "/missing",
 		},
 		Postgres: fakeBackend{version: "18.1"},
 		Valkey:   fakeBackend{version: "9.0.0"},
@@ -67,11 +66,8 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 	}
 	if got.Name != "den" || got.NodeID != node || got.Encoder.Acceleration != domain.AccelVAAPI || got.Transcodes != 1 || got.TranscodeLimit != 4 ||
 		got.Role != domain.NodeTranscode || got.LimitSource != domain.LimitSet ||
-		got.Discovery != domain.DiscoveryOff || !got.Chromaprint || got.MetadataLanguage != "en-GB" {
+		!got.Chromaprint || got.MetadataLanguage != "en-GB" {
 		t.Errorf("setup = %+v", got)
-	}
-	if len(got.TrustedProxies) != 1 || got.TrustedProxies[0] != "172.16.0.0/12" {
-		t.Errorf("trusted proxies = %v", got.TrustedProxies)
 	}
 	if got.Folders.Cache.FreeBytes == nil || *got.Folders.Cache.FreeBytes <= 0 || got.Folders.Backups.FreeBytes != nil {
 		t.Errorf("folders = %+v, want the cache's free space and none for a folder not there", got.Folders)

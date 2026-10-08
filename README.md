@@ -22,8 +22,9 @@ docker compose up -d                 # add -f compose.intel.yml or -f compose.nv
 
 Then open `http://<server>:8640` from the server's local network to set it up: name its first admin
 and add a library (`POST /api/v1/setup`). As Plex's claiming is, setting up is open only while the
-server has no profile, and only to a client on its local networks; behind a reverse proxy, list the
-proxy in `PHOTON_TRUSTED_PROXIES` first, or every client would look local, as the proxy does.
+server has no profile, and only to a client on its local networks that reaches it directly: a new
+server trusts no reverse proxy, so it is set up at its own address, and the proxy trusted after
+under Settings, Server, Network, with the address it is reached at from outside.
 
 ### Backups
 

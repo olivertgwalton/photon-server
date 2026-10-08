@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +20,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
-	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -326,11 +326,7 @@ func TestABrowserKeepsItsSessionInACookie(t *testing.T) {
 
 func TestTheCookieIsSecureBehindAnHTTPSProxy(t *testing.T) {
 	a := newAPI(nil)
-	proxies, err := peer.Parse("192.0.2.1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	a.svc.TrustedProxies = proxies
+	a.svc.Reach = reaching(t, domain.Network{TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.0.2.1/32")}})
 	for peer, want := range map[string]bool{"192.0.2.1:4000": true, "198.51.100.7:4000": false} {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(
 			`{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c","keep":"cookie"}`))

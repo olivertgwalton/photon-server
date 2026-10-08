@@ -24,9 +24,9 @@ type answer struct {
 	Address string `json:"address"`
 }
 
-// Serve answers on conn, which is bound to the HTTP listener's port number, until ctx ends. scheme
-// is http or https, as the listener serves when asked.
-func Serve(ctx context.Context, conn net.PacketConn, info domain.Info, scheme func() string, logger *slog.Logger) error {
+// Serve answers on conn, which is bound to the HTTP listener's port number, until ctx ends, while on
+// says to, as an admin sets it. scheme is http or https, as the listener serves when asked.
+func Serve(ctx context.Context, conn net.PacketConn, info domain.Info, on func() bool, scheme func() string, logger *slog.Logger) error {
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	defer stop()
 	bound, ok := conn.LocalAddr().(*net.UDPAddr)
@@ -46,7 +46,7 @@ func Serve(ctx context.Context, conn net.PacketConn, info domain.Info, scheme fu
 		asker, ok := from.(*net.UDPAddr)
 		// A reply is several times the question, so answering anyone not local would lend the
 		// server to an amplification attack.
-		if !ok || !peer.Local(asker.AddrPort().Addr()) || !strings.EqualFold(strings.TrimSpace(string(buf[:n])), Question) {
+		if !ok || !on() || !peer.Local(asker.AddrPort().Addr()) || !strings.EqualFold(strings.TrimSpace(string(buf[:n])), Question) {
 			continue
 		}
 		if err := reply(conn, asker, info, scheme(), port); err != nil {

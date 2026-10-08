@@ -45,9 +45,6 @@ test("the overview follows the server live: who is playing, and a scan as it gro
 	await expect(
 		page.getByText("Back up the database failed: disk full"),
 	).toBeVisible();
-	await expect(
-		page.getByText("Answers apps looking on the network"),
-	).toBeVisible();
 	await expectAccessible(page);
 
 	await card.getByRole("button", { name: "Stop this play" }).click();
@@ -567,6 +564,34 @@ test("remote streams are kept within a limit, in Mbps", async ({ page }) => {
 		"192.168.1.0/24, 100.64.0.0/10",
 	);
 	await expectAccessible(page);
+});
+
+test("an admin sets how the server is reached from outside and behind a proxy", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/server/network");
+	await page.getByLabel("Public address").fill("https://photon.example.com");
+	await page.getByLabel("Trusted proxies").fill("172.16.0.0/12");
+	await page.getByLabel("Discovery").click();
+	await page.getByRole("option", { name: "Off" }).click();
+	await expectAccessible(page);
+	const saved = page.waitForRequest(
+		(r) => r.method() === "PUT" && r.url().endsWith("/api/v1/admin/network"),
+	);
+	await page.getByRole("button", { name: "Save" }).click();
+	expect((await saved).postDataJSON()).toMatchObject({
+		public_url: "https://photon.example.com",
+		trusted_proxies: ["172.16.0.0/12"],
+		discovery: "off",
+	});
+	await expect(page.getByText(/^Saved/)).toBeVisible();
+
+	await page.reload();
+	await expect(page.getByLabel("Public address")).toHaveValue(
+		"https://photon.example.com",
+	);
+	await expect(page.getByLabel("Trusted proxies")).toHaveValue("172.16.0.0/12");
+	await expect(page.getByLabel("Discovery")).toHaveText("Off");
 });
 
 test("a filtered library is kept as a smart collection, and its filters changed there", async ({

@@ -105,7 +105,7 @@ it has no address, or it cannot reach Valkey. Its log says which.
 Every node answers `GET /metrics` on its own port in Prometheus' text format, to a client on the
 server's local networks (Settings › Network; this machine's and the private ones where none is
 set) and to no other: anyone else is answered 404. Behind a proxy, a client is known by the
-proxy's `X-Forwarded-For` only where `PHOTON_TRUSTED_PROXIES` trusts it. Scrape each node.
+proxy's `X-Forwarded-For` only where Settings › Network trusts it. Scrape each node.
 
 Each node says what is its own:
 

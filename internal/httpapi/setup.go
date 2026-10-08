@@ -12,7 +12,9 @@ import (
 // setupState is whether a server is still to be set up by making its first admin, and whether the
 // client asking may. Setting up is open while the server has no profile, so it cannot open again
 // once it has one, and, as Plex's claiming is, only to a client on the server's local networks:
-// whoever reaches a new server first from anywhere else could otherwise claim it.
+// whoever reaches a new server first from anywhere else could otherwise claim it. A request
+// through a proxy not yet trusted is not local, whatever its address: a new server trusts none,
+// and every client behind one would look like it.
 type setupState string
 
 const (
@@ -44,6 +46,9 @@ func (a *API) setupState(r *http.Request) (setupState, error) {
 	has, err := a.svc.Profiles.HasProfiles(r.Context())
 	if err != nil || has {
 		return setupDone, err
+	}
+	if a.svc.Reach.Untrusted(r) {
+		return setupLocalOnly, nil
 	}
 	local, err := a.local(r)
 	if err != nil || !local {

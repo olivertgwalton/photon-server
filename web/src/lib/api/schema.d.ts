@@ -7129,22 +7129,28 @@ export interface components {
         };
         Network: {
             certificate?: string;
+            discovery: components["schemas"]["Discovery"];
             jellyfin: components["schemas"]["JellyfinMode"];
             jellyfin_port: number;
             key?: string;
             local_networks: string[];
+            public_url: string;
             remote_max_bitrate_kbps: number;
             secure_connections: components["schemas"]["SecureConnections"];
+            trusted_proxies: string[];
         };
         NetworkStatus: {
             certificate?: string;
+            discovery: components["schemas"]["Discovery"];
             jellyfin: components["schemas"]["JellyfinMode"];
             jellyfin_error?: string;
             jellyfin_port: number;
             key?: string;
             local_networks: string[];
+            public_url: string;
             remote_max_bitrate_kbps: number;
             secure_connections: components["schemas"]["SecureConnections"];
+            trusted_proxies: string[];
         };
         NewKey: {
             name: string;
@@ -7691,7 +7697,6 @@ export interface components {
         Server: {
             arch: string;
             chromaprint: boolean;
-            discovery: components["schemas"]["Discovery"];
             encoder: components["schemas"]["Encoder"];
             ffmpeg: components["schemas"]["Tool"];
             ffprobe: components["schemas"]["Tool"];
@@ -7705,14 +7710,12 @@ export interface components {
             node_id: string;
             os: string;
             postgres: components["schemas"]["Backend"];
-            public_url?: string;
             role: components["schemas"]["NodeRole"];
             /** Format: date-time */
             started_at: string;
             transcode_limit?: number;
             transcode_limit_source: components["schemas"]["LimitSource"];
             transcodes: number;
-            trusted_proxies: string[];
             valkey: components["schemas"]["Backend"];
             version: string;
             yt_dlp: components["schemas"]["Tool"];

@@ -41,8 +41,9 @@ func TestClient(t *testing.T) {
 	}
 }
 
-func TestParse(t *testing.T) {
-	got, err := Parse(" 10.0.0.0/8, 127.0.0.1,::1 ,172.16.5.4/12")
+// Networks an admin lists are read as prefixes, an address alone as its own, blanks passed over.
+func TestPrefixes(t *testing.T) {
+	got, err := Prefixes([]string{" 10.0.0.0/8", " 127.0.0.1", "::1 ", "172.16.5.4/12", ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,10 +51,10 @@ func TestParse(t *testing.T) {
 	if s := fmt.Sprint(got); s != want {
 		t.Errorf("parsed %s, want %s", s, want)
 	}
-	if empty, err := Parse(""); err != nil || len(empty) != 0 {
+	if empty, err := Prefixes(nil); err != nil || len(empty) != 0 {
 		t.Errorf("an empty list trusts %v (err %v), want nothing", empty, err)
 	}
-	if _, err := Parse("10.0.0.0/8,proxy.local"); err == nil {
+	if _, err := Prefixes([]string{"10.0.0.0/8", "proxy.local"}); err == nil {
 		t.Error("a host name was accepted as a proxy")
 	}
 }

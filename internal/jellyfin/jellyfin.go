@@ -18,8 +18,8 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
-	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/playback"
+	"github.com/olivertgwalton/photon-server/internal/reach"
 )
 
 // version is the Jellyfin the server answers as. Apps compare it as three numbers, and the
@@ -42,7 +42,7 @@ type Services struct {
 	// see it.
 	Subscribe func() (<-chan domain.Event, func())
 	Audience  audience
-	Proxies   peer.Proxies
+	Reach     *reach.Reach
 	Catalogue catalogue
 	Playlists playlists
 	Displays  displays

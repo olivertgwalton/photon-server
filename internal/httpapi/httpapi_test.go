@@ -147,7 +147,7 @@ type servingAs domain.SecureConnections
 func (s servingAs) Mode() domain.SecureConnections { return domain.SecureConnections(s) }
 
 func TestAPlainRequestIsSentToItsPlaceAtThePublicURL(t *testing.T) {
-	public, err := ParsePublicURL("https://photon.example.com/base")
+	public, err := parsePublicURL("https://photon.example.com/base")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,13 +176,9 @@ func TestRequiredSecureConnectionsSendPlainRequestsToHTTPS(t *testing.T) {
 		{"", "127.0.0.1:5000", "", http.StatusNoContent, ""},
 		{"", "192.168.86.81:5000", "https", http.StatusNoContent, ""},
 	} {
-		public, err := ParsePublicURL(tc.public)
-		if err != nil {
-			t.Fatal(err)
-		}
 		api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 			Ready: func(context.Context) error { return nil }, Secure: servingAs(domain.SecureRequired),
-			TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.168.86.81/32")}, Setup: Setup{PublicURL: public},
+			Reach: reaching(t, domain.Network{TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.168.86.81/32")}, PublicURL: tc.public}),
 		})
 		r := httptest.NewRequest(http.MethodGet, "http://evil.example/readyz", nil)
 		r.RemoteAddr = tc.peer

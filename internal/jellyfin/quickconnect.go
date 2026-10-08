@@ -33,7 +33,7 @@ func (a *API) initiateQuickConnect(w http.ResponseWriter, r *http.Request) {
 		a.refuse(w, http.StatusBadRequest)
 		return
 	}
-	if !a.allowed(w, r, auth.PairingsPerAddress, auth.PairingKey(a.svc.Proxies.Client(r))) {
+	if !a.allowed(w, r, auth.PairingsPerAddress, auth.PairingKey(a.svc.Reach.Client(r))) {
 		return
 	}
 	start, err := a.svc.Auth.StartPairing(r.Context(), auth.Device{Name: app.Device, Client: app.Client}, auth.CodeDigits)

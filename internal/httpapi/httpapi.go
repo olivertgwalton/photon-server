@@ -16,6 +16,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/playback"
+	"github.com/olivertgwalton/photon-server/internal/reach"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -182,8 +183,9 @@ type Services struct {
 	Limits       kv.Limiter
 	// Web is the web app, served for every path the API does not own; nil serves the API alone.
 	Web *Web
-	// TrustedProxies are the peers whose X-Forwarded-For names the client. None by default.
-	TrustedProxies peer.Proxies
+	// Reach is how clients reach the server: the proxies trusted to name the client, and its
+	// address outside.
+	Reach *reach.Reach
 	// Network is how the server is reached, and Secure how this node serves it now; nil Secure
 	// never sends a plain request to HTTPS.
 	Network networkSettings
@@ -386,5 +388,5 @@ func (a *API) local(r *http.Request) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return peer.LocalIn(n.LocalNetworks, a.svc.TrustedProxies.Client(r)), nil
+	return peer.LocalIn(n.LocalNetworks, a.svc.Reach.Client(r)), nil
 }

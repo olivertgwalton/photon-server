@@ -98,7 +98,7 @@ func (a *API) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		a.refuse(w, http.StatusBadRequest)
 		return
 	}
-	addr := a.svc.Proxies.Client(r)
+	addr := a.svc.Reach.Client(r)
 	byAddress, byName := auth.SignInKeys(addr, req.Username)
 	if !a.allowed(w, r, auth.SignInsPerAddress, byAddress) || !a.allowed(w, r, auth.SignInsPerName, byName) {
 		return

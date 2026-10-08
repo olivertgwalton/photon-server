@@ -83,13 +83,7 @@ const rows = $derived<[string, string][]>([
 		"Transcodes",
 		`${transcodeLoad(s.transcodes, s.transcode_limit)} at once · ${limitSources[s.transcode_limit_source]}`,
 	],
-	[
-		"Discovery",
-		s.discovery === "broadcast" ? "Answers apps looking on the network" : "Off",
-	],
 	["Listening on", s.listen],
-	["Web app at", s.public_url ?? "Where each device reaches the server"],
-	["Trusted proxies", s.trusted_proxies.join(", ") || "None"],
 	["Metadata language", s.metadata_language],
 	["Postgres", backend(s.postgres)],
 	["Valkey", backend(s.valkey)],

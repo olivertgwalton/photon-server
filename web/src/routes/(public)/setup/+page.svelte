@@ -53,7 +53,7 @@ async function setUp(event: SubmitEvent) {
 		<Card.Description>
 			{data.state === "open"
 				? "Create the admin profile. It runs the server and adds everyone else."
-				: "A new server is set up from its own network. Open this page on a device at home, or on the server itself."}
+				: "A new server is set up from its own network, at its own address rather than through a proxy. Open this page on a device at home, or on the server itself."}
 		</Card.Description>
 	</Card.Header>
 	{#if data.state === "open"}
