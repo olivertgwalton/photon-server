@@ -1,5 +1,6 @@
 <script lang="ts">
 import { tick, untrack } from "svelte";
+import { onResize } from "#lib/size.js";
 import type { components } from "#lib/api/schema.js";
 import { Skeleton } from "#lib/components/ui/skeleton/index.js";
 import { columnGap, columnsFor, gridColumns } from "#lib/grid.js";
@@ -72,14 +73,9 @@ function measure() {
 	viewport = window.innerHeight;
 }
 
-$effect(() => {
-	if (!list) return;
-	const observer = new ResizeObserver(([entry]) => {
-		width = entry.contentRect.width;
-		measure();
-	});
-	observer.observe(list);
-	return () => observer.disconnect();
+const resized = onResize((_, box) => {
+	width = box.width;
+	measure();
 });
 
 const shape = $derived(view === "still" ? "still" : "poster");
@@ -155,6 +151,7 @@ const sizes = $derived(`${Math.ceil(cardWidth) || 200}px`);
 
 <ul
 	bind:this={list}
+	{@attach resized}
 	aria-label={label}
 	class={width ? "relative" : "grid gap-x-3 gap-y-4.5"}
 	style={width

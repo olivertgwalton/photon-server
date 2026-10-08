@@ -4,6 +4,7 @@ import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 import type { Snippet } from "svelte";
 import type { Shape } from "#lib/artwork.js";
 import { railLimit } from "#lib/rows.js";
+import { onResize } from "#lib/size.js";
 import TitleCard, { type CardLike } from "./TitleCard.svelte";
 
 // A named row of titles that scrolls sideways. Where it holds more than it
@@ -51,12 +52,7 @@ function measure() {
 	back = list.scrollLeft > 1;
 	on = list.scrollLeft + list.clientWidth < list.scrollWidth - 1;
 }
-$effect(() => {
-	if (!list) return;
-	const watch = new ResizeObserver(measure);
-	watch.observe(list);
-	return () => watch.disconnect();
-});
+const resized = onResize(measure);
 
 // A page at a time, as Plex Web's and Jellyfin's rows go: a little less than
 // the row's width, so the card cut at the edge is the first one shown.
@@ -106,6 +102,7 @@ const sizes = $derived(
 	<div class="group/rail relative">
 		<ul
 			bind:this={list}
+			{@attach resized}
 			onscroll={measure}
 			class="relative -mx-3 flex scroll-smooth snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
 		>

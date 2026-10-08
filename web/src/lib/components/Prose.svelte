@@ -1,5 +1,6 @@
 <script lang="ts">
 import * as Dialog from "#lib/components/ui/dialog/index.js";
+import { onResize } from "#lib/size.js";
 
 // Writing held to a few lines, as the app's synopses and biographies are, with
 // Read more opening the whole of it over the page rather than pushing the page
@@ -12,22 +13,14 @@ let {
 }: { text: string; lines: number; title: string; class?: string } = $props();
 
 let clamped = $state(false);
-let paragraph = $state<HTMLParagraphElement>();
-
-$effect(() => {
-	const p = paragraph;
-	if (!p) return;
-	const watch = new ResizeObserver(() => {
-		clamped = p.scrollHeight > p.clientHeight + 1;
-	});
-	watch.observe(p);
-	return () => watch.disconnect();
+const measure = onResize<HTMLParagraphElement>((p) => {
+	clamped = p.scrollHeight > p.clientHeight + 1;
 });
 </script>
 
 <div class={className}>
 	<p
-		bind:this={paragraph}
+		{@attach measure}
 		class="line-clamp-(--lines) leading-relaxed whitespace-pre-line"
 		style="--lines: {lines}"
 	>
