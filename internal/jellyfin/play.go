@@ -93,7 +93,8 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		a.refuse(w, http.StatusBadRequest)
 		return
 	}
-	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, version)
+	profile := auth.SessionOf(r.Context()).Profile.ID
+	c, err := a.svc.Playing.Playable(r.Context(), profile, id, version)
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)
 		return
@@ -103,6 +104,9 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	versions, err := a.svc.Catalogue.Versions(r.Context(), []uuid.UUID{id})
+	if err == nil {
+		err = a.chooseTracks(r.Context(), profile, id, versions[id])
+	}
 	if err != nil {
 		a.internal(w, r, err)
 		return

@@ -49,6 +49,8 @@ type Services struct {
 	Previews     previews
 	PreviewFiles previewFiles
 	Themes       themes
+	// Preferences are how each profile plays, which its media sources' default tracks follow.
+	Preferences preferences
 	// HLS is this node's remuxes, which Placer opens on the node it chooses and Owners find on
 	// whichever node runs them; Signer signs a TranscodingUrl's plan and the addresses of another
 	// node's HLS.

@@ -132,6 +132,9 @@ func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 			IsTextSubtitleStream: textual(f.Codec), SupportsExternalStream: true, DeliveryMethod: "External",
 			DisplayTitle: w.SubtitleFile(f),
 		}
+		if v.DefaultSubtitleFile != nil && *v.DefaultSubtitleFile == f.ID {
+			s.DefaultSubtitleStreamIndex = &m.Index
+		}
 		s.MediaStreams = append(s.MediaStreams, m)
 	}
 	s.HasSegments = len(v.Markers) > 0
