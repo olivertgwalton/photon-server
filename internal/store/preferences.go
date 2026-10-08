@@ -37,8 +37,7 @@ func (s *Store) Preferences(ctx context.Context, profile uuid.UUID) (domain.Pref
 	if err != nil {
 		return domain.Preferences{}, err
 	}
-	out.AudioLanguage, _ = language.Parse(audio)
-	out.SubtitleLanguage, _ = language.Parse(subtitles)
+	out.AudioLanguage, out.SubtitleLanguage = language.Make(audio), language.Make(subtitles)
 	out.Home = domain.ArrangeHome(home)
 	return out, nil
 }

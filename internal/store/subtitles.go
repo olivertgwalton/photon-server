@@ -131,7 +131,7 @@ func (s *Store) WantedSubtitles(ctx context.Context, searchedSince time.Time, af
 		var w WantedSubtitle
 		var lang string
 		err := row.Scan(&w.Item, &w.Version, &lang, &w.Match)
-		w.Language, _ = language.Parse(lang)
+		w.Language = language.Make(lang)
 		return w, err
 	})
 }

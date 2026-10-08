@@ -88,8 +88,11 @@ func connect(ctx context.Context, url string, log *slog.Logger) (*Store, error) 
 	}
 	if _, ok := cfg.ConnConfig.RuntimeParams["application_name"]; !ok {
 		// So a node still running is named by its host where Postgres lists who is connected, as a
-		// restore does when it refuses.
-		host, _ := os.Hostname()
+		// restore does when it refuses; one whose host has no name it can read is photon-server alone.
+		host, err := os.Hostname()
+		if err != nil {
+			host = ""
+		}
 		cfg.ConnConfig.RuntimeParams["application_name"] = strings.TrimSpace("photon-server " + host)
 	}
 	cfg.ConnConfig.RuntimeParams["pg_trgm.word_similarity_threshold"] = nearEnough
