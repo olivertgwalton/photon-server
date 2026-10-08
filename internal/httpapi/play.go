@@ -372,12 +372,12 @@ func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
 		err = json.NewDecoder(r.Body).Decode(&o)
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeProblem(w, a.logger, codeInvalidBody, err.Error())
 		return
 	}
 	// A node set to serve only, or drained, since another placed this on it, takes nothing new.
 	if self := a.svc.Placer.Self(); !self.Role.Encodes() || !self.Availability.Takes() {
-		w.WriteHeader(http.StatusServiceUnavailable)
+		writeProblem(w, a.logger, codeTranscodeLimit, "this node encodes nothing new")
 		return
 	}
 	c, err := a.svc.Playing.Playable(r.Context(), o.Profile, o.Item, o.Version)
@@ -386,7 +386,7 @@ func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case errors.Is(err, hls.ErrTranscodeLimit):
-		w.WriteHeader(http.StatusServiceUnavailable)
+		writeProblem(w, a.logger, codeTranscodeLimit, err.Error())
 	case err != nil:
 		a.internal(w, r, err)
 	default:
