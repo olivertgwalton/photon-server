@@ -33,13 +33,17 @@ type received struct {
 
 // receiver answers each POST with the next of its statuses, then 204.
 type receiver struct {
+	t        *testing.T
 	mu       sync.Mutex
 	statuses []int
 	got      []received
 }
 
 func (r *receiver) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	body, _ := io.ReadAll(req.Body)
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		r.t.Error(err)
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.got = append(r.got, received{req.Header, body})
@@ -70,7 +74,7 @@ func TestAWebhookIsToldWhatItAskedFor(t *testing.T) {
 	hub := events.New(st, k, server, log)
 	ctx := t.Context()
 
-	rx := &receiver{statuses: []int{http.StatusServiceUnavailable}}
+	rx := &receiver{t: t, statuses: []int{http.StatusServiceUnavailable}}
 	srv := httptest.NewServer(rx)
 	defer srv.Close()
 	const secret = "s3cret"
