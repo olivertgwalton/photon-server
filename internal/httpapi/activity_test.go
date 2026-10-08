@@ -79,6 +79,8 @@ func (f *fakeActivity) Activity(_ context.Context, kind domain.EventKind, _, _ i
 // listedProfiles lists the profiles an event is worded with.
 type listedProfiles []domain.Profile
 
+func (l listedProfiles) HasProfiles(context.Context) (bool, error) { return len(l) > 0, nil }
+
 func (l listedProfiles) Profiles(context.Context) ([]store.ProfileListing, error) {
 	out := make([]store.ProfileListing, len(l))
 	for i, p := range l {

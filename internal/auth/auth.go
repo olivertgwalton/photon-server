@@ -92,6 +92,20 @@ func (s *Service) SignIn(ctx context.Context, name, password string, device Devi
 	return token, profile, err
 }
 
+// SetUp adds the server's first profile, an admin, and signs in the device that set it up.
+func (s *Service) SetUp(ctx context.Context, name, password string, device Device) (string, domain.Profile, error) {
+	hash, err := HashPassword(ctx, password)
+	if err != nil {
+		return "", domain.Profile{}, err
+	}
+	profile, err := s.store.AddFirstAdmin(ctx, name, hash)
+	if err != nil {
+		return "", domain.Profile{}, err
+	}
+	token, err := s.startSession(ctx, profile, device)
+	return token, profile, err
+}
+
 func (s *Service) startSession(ctx context.Context, profile domain.Profile, device Device) (string, error) {
 	token, tokenHash := newToken()
 	_, err := s.store.CreateSession(ctx, store.NewSession{

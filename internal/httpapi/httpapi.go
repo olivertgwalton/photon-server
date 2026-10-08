@@ -90,6 +90,7 @@ type route struct {
 
 type authenticator interface {
 	auth.Authenticator
+	SetUp(ctx context.Context, name, password string, device auth.Device) (string, domain.Profile, error)
 	SwitchProfile(ctx context.Context, session domain.Session, target uuid.UUID, secret string) (domain.Profile, error)
 	SetPIN(ctx context.Context, profile uuid.UUID, pin string) error
 	ChangePassword(ctx context.Context, session domain.Session, current, password string) error
@@ -102,6 +103,7 @@ type authenticator interface {
 
 type profileLister interface {
 	Profiles(ctx context.Context) ([]store.ProfileListing, error)
+	HasProfiles(ctx context.Context) (bool, error)
 }
 
 // Services are what the API's routes call.
@@ -278,6 +280,7 @@ func (a *API) routes() []route {
 		a.openAPIRoutes(),
 		a.metricsRoutes(),
 		a.sessionRoutes(),
+		a.setupRoutes(),
 		a.pairingRoutes(),
 		a.profilesRoutes(),
 		a.preferencesRoutes(),
@@ -365,15 +368,23 @@ func (a *API) unmatched(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) requireLocalNetwork(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n, err := a.svc.Network.Network(r.Context())
-		if err != nil {
+		local, err := a.local(r)
+		switch {
+		case err != nil:
 			a.internal(w, r, err)
-			return
-		}
-		if !peer.LocalIn(n.LocalNetworks, a.svc.TrustedProxies.Client(r)) {
+		case !local:
 			writeProblem(w, a.logger, codeNotFound, "")
-			return
+		default:
+			next.ServeHTTP(w, r)
 		}
-		next.ServeHTTP(w, r)
 	})
+}
+
+// local is whether the client is on the server's local networks.
+func (a *API) local(r *http.Request) (bool, error) {
+	n, err := a.svc.Network.Network(r.Context())
+	if err != nil {
+		return false, err
+	}
+	return peer.LocalIn(n.LocalNetworks, a.svc.TrustedProxies.Client(r)), nil
 }
