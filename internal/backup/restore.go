@@ -185,9 +185,7 @@ func (r Restorer) replace(ctx context.Context, file string) error {
 	var psqlErr, dumpErr bytes.Buffer
 	psql := exec.CommandContext(ctx, r.PSQL, "--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1", "--dbname="+dbURL) //nolint:gosec // the configured psql; every argument is built here
 	psql.Env, psql.Stdin, psql.Stderr = env, read, &psqlErr
-	err = psql.Start()
-	_ = read.Close()
-	if err != nil {
+	if err := errors.Join(psql.Start(), read.Close()); err != nil {
 		return fmt.Errorf("psql: %w", err)
 	}
 	dump := exec.CommandContext(ctx, r.PGRestore, "--no-owner", "--no-privileges", "--file=-", file) //nolint:gosec // the configured pg_restore; the file is the operator's
@@ -200,7 +198,7 @@ func (r Restorer) replace(ctx context.Context, file string) error {
 		_, err = io.WriteString(write, "COMMIT;\n")
 	}
 	// Without COMMIT, psql reaches the end of its input and Postgres rolls the transaction back.
-	_ = write.Close()
+	err = errors.Join(err, write.Close())
 	if waitErr := psql.Wait(); waitErr != nil {
 		return fmt.Errorf("psql: %w: %s", waitErr, bytes.TrimSpace(psqlErr.Bytes()))
 	}

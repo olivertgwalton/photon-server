@@ -123,11 +123,17 @@ func awaitRestore(ctx context.Context, listen string, underway func(context.Cont
 // restore has ended.
 func answerRestoring(ctx context.Context, l net.Listener, underway func(context.Context) (bool, error), logger *slog.Logger) error {
 	srv := &http.Server{Handler: httpapi.Restoring(logger), ReadHeaderTimeout: 10 * time.Second}
-	go func() { _ = srv.Serve(l) }()
+	go func() {
+		if err := srv.Serve(l); !errors.Is(err, http.ErrServerClosed) {
+			logger.WarnContext(ctx, "could not answer while restoring", slog.Any("err", err))
+		}
+	}()
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownGrace)
 		defer cancel()
-		_ = srv.Shutdown(shutdownCtx)
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			logger.WarnContext(ctx, "could not stop answering while restoring", slog.Any("err", err))
+		}
 	}()
 	t := time.NewTicker(restorePoll)
 	defer t.Stop()

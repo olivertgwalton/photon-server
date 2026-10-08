@@ -179,8 +179,7 @@ func (b *Bucket) Open(ctx context.Context, key string) (Object, error) {
 	}
 	info, err := o.Stat()
 	if err != nil {
-		_ = o.Close()
-		return Object{}, notFound(key, err)
+		return Object{}, errors.Join(notFound(key, err), o.Close())
 	}
 	return Object{ReadSeekCloser: o, ModTime: info.LastModified}, nil
 }

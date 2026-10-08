@@ -36,7 +36,9 @@ func (s Restores) Begin(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	_ = f.Close()
+	if err := f.Close(); err != nil {
+		return err
+	}
 	if _, _, err := s.Restorer.check(ctx, filepath.Join(s.Dir, name)); err != nil {
 		return err
 	}

@@ -37,15 +37,21 @@ func (f Fetcher) Search(ctx context.Context, profile, item, version uuid.UUID, l
 }
 
 // query is what a copy's subtitles are searched by in a language: its release is hashed where it
-// is one file, as one file of several is no release on its own.
+// is one file, as one file of several is no release on its own. A file that cannot be read is
+// searched for without its hash.
 func query(s store.SubtitleSearch, lang language.Tag) domain.SubtitleQuery {
 	q := s.Query
 	q.Language = lang
-	if s.Parts == 1 {
-		if file, err := library.Open(s.Root, s.RelPath); err == nil {
-			q.Hash, _ = library.MovieHash(file)
-			_ = file.Close()
-		}
+	if s.Parts != 1 {
+		return q
+	}
+	file, err := library.Open(s.Root, s.RelPath)
+	if err != nil {
+		return q
+	}
+	defer file.Close()
+	if hash, err := library.MovieHash(file); err == nil {
+		q.Hash = hash
 	}
 	return q
 }

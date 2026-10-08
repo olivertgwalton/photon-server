@@ -28,8 +28,7 @@ type Object struct {
 func OfFile(f *os.File) (Object, error) {
 	info, err := f.Stat()
 	if err != nil {
-		_ = f.Close()
-		return Object{}, err
+		return Object{}, errors.Join(err, f.Close())
 	}
 	return Object{ReadSeekCloser: f, ModTime: info.ModTime()}, nil
 }
@@ -64,8 +63,7 @@ func OpenDir(dir string) (*Dir, error) {
 	}
 	d := &Dir{root: root}
 	if err := d.removeAbandoned(); err != nil {
-		_ = root.Close()
-		return nil, err
+		return nil, errors.Join(err, root.Close())
 	}
 	return d, nil
 }
@@ -103,8 +101,7 @@ func (d *Dir) Open(_ context.Context, key string) (Object, error) {
 		err = &fs.PathError{Op: "open", Path: key, Err: fs.ErrNotExist}
 	}
 	if err != nil {
-		_ = f.Close()
-		return Object{}, err
+		return Object{}, errors.Join(err, f.Close())
 	}
 	return Object{ReadSeekCloser: f, ModTime: info.ModTime()}, nil
 }
@@ -136,7 +133,7 @@ func (d *Dir) Put(_ context.Context, key string, r io.Reader) error {
 		err = d.root.Rename(part, key)
 	}
 	if err != nil {
-		_ = d.root.Remove(part)
+		err = errors.Join(err, d.root.Remove(part))
 	}
 	return err
 }

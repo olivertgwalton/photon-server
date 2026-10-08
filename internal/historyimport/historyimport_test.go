@@ -120,7 +120,7 @@ func (h household) state(t *testing.T, item uuid.UUID) state {
 // run starts an import and runs its job, answering how it ended.
 func (h household) run(t *testing.T, kind domain.ImportSource, base string, c Credentials) domain.HistoryImport {
 	t.Helper()
-	imports := New(h.st)
+	imports := New(h.st, slog.New(slog.DiscardHandler))
 	id, err := imports.Start(t.Context(), kind, base, h.profile, c)
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +159,7 @@ func TestAPlexHistoryIsImportedWhereItIsNewer(t *testing.T) {
 	})
 	base := f.serve(t)
 
-	imports := New(h.st)
+	imports := New(h.st, slog.New(slog.DiscardHandler))
 	if _, err := imports.Start(ctx, domain.ImportPlex, base, h.profile, Credentials{Token: "wrong"}); !errors.Is(err, ErrRefused) {
 		t.Fatalf("a wrong token: err = %v, want the import refused before it is queued", err)
 	}

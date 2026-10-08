@@ -124,11 +124,12 @@ func (c *Cache) resize(ctx context.Context, name string, width, height int, open
 	case c.resizing <- struct{}{}:
 		defer func() { <-c.resizing }()
 	case <-ctx.Done():
-		_ = f.Close()
-		return ctx.Err()
+		return errors.Join(ctx.Err(), f.Close())
 	}
 	src, err := decode(f)
-	_ = f.Close()
+	if cerr := f.Close(); cerr != nil {
+		return cerr
+	}
 	if err != nil {
 		// A picture that cannot be decoded (a format not decoded here, or a damaged or vast file)
 		// is marked, so the next ask does not try again.

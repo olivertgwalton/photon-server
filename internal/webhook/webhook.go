@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -58,7 +57,6 @@ func Deliver(st *store.Store) jobs.Handler {
 			}
 			return fmt.Errorf("%s: %w", req.URL.Host, err)
 		}
-		_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 64<<10))
 		res.Body.Close()
 		if res.StatusCode/100 != 2 {
 			return fmt.Errorf("%s answered %s", req.URL.Host, res.Status)
