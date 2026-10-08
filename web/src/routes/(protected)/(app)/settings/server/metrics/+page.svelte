@@ -1,5 +1,6 @@
 <script lang="ts">
 import { untrack } from "svelte";
+import { vocabulary } from "#lib/vocabulary.js";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import {
 	keepFor,
@@ -9,7 +10,7 @@ import {
 	series,
 	total,
 } from "#lib/admin/metrics.js";
-import { jobKinds, nodeRoles, relative, tasks } from "#lib/admin/words.js";
+import { nodeRoles, relative } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
@@ -23,6 +24,7 @@ import { bitrate, bytes, count, playMethods } from "#lib/format.js";
 type Schemas = components["schemas"];
 
 let { data } = $props();
+const words = vocabulary();
 
 const api = client();
 const clock = ticking(pollEvery);
@@ -115,7 +117,7 @@ const refused = $derived(
 const unreachable = $derived(latest.nodes.length - answered.length);
 
 const kinds = $derived(
-	(Object.keys(jobKinds) as Schemas["JobKind"][]).filter(
+	(Object.keys(words.jobs) as Schemas["JobKind"][]).filter(
 		(k) =>
 			cluster?.jobs.some((j) => j.kind === k && j.count) ||
 			cluster?.oldest_due_seconds[k] !== undefined,
@@ -359,7 +361,7 @@ function ago(seconds: number, now: number) {
 					{#each finished as t (t.task)}
 						<Table.Row>
 							<Table.Cell class="text-ink font-semibold"
-								>{tasks[t.task].name}</Table.Cell
+								>{words.tasks[t.task].name}</Table.Cell
 							>
 							<Table.Cell class="text-ink-2"
 								>{relative(t.finished_at, clock.now)}</Table.Cell

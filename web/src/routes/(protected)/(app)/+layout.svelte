@@ -1,6 +1,8 @@
 <script lang="ts">
 import SearchIcon from "@lucide/svelte/icons/search";
+import { setVocabulary } from "#lib/vocabulary.js";
 import { page } from "$app/state";
+import { untrack } from "svelte";
 import ActivityMenu from "#lib/components/ActivityMenu.svelte";
 import AppSidebar from "#lib/components/AppSidebar.svelte";
 import PlaylistPicker from "#lib/components/PlaylistPicker.svelte";
@@ -24,6 +26,7 @@ $effect(() => connectLive());
 // What the server is doing, for an admin: the activity menu and the dashboard
 // read the one stream, and the pages it tells of changes reload.
 const stream = setLiveStream(new LiveStream());
+setVocabulary(untrack(() => data.words));
 $effect(() => {
 	if (data.me.role !== "admin") return;
 	const later = invalidateLater();

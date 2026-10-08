@@ -1,7 +1,8 @@
 <script lang="ts">
 import { ticking } from "#lib/admin/clock.svelte.js";
+import { vocabulary } from "#lib/vocabulary.js";
 import type { Live } from "#lib/admin/live.js";
-import { jobKinds, relative, tasks } from "#lib/admin/words.js";
+import { relative } from "#lib/admin/words.js";
 import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
 import { Progress } from "#lib/components/ui/progress/index.js";
 
@@ -31,6 +32,8 @@ const jobs = $derived(
 		};
 	}),
 );
+
+const words = vocabulary();
 </script>
 
 {#each live.scans as scan (scan.library_id)}
@@ -44,7 +47,7 @@ const jobs = $derived(
 	<ul class="grid gap-1 text-sm" aria-label="Scheduled tasks running">
 		{#each live.tasks as task (task.key)}
 			<li class="flex justify-between gap-4">
-				<span class="text-ink">{tasks[task.key].name}</span>
+				<span class="text-ink">{words.tasks[task.key].name}</span>
 				<span class="text-ink-3">
 					started {relative(task.started_at, clock.now)}
 				</span>
@@ -55,7 +58,7 @@ const jobs = $derived(
 {#if jobs.length}
 	<ul class="grid gap-3 text-sm" aria-label="Jobs running">
 		{#each jobs as job (job.kind)}
-			{@const name = jobKinds[job.kind]}
+			{@const name = words.jobs[job.kind]}
 			{@const said = `${job.done.toLocaleString()} of ${job.total.toLocaleString()}`}
 			<li class="grid gap-1.5">
 				<p class="flex justify-between gap-4">

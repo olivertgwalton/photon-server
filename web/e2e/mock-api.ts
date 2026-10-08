@@ -353,6 +353,82 @@ const downloads: Schemas["Download"][] = [];
 // The change feed's open streams, and a way for a test to speak on them.
 const feeds = new Set<ReadableStreamDefaultController<string>>();
 
+// The words the server names its values by, as it answers in English.
+const vocabulary: Schemas["Vocabulary"] = {
+	tasks: {
+		scan_libraries: {
+			name: "Scan libraries",
+			description:
+				"Reads every library's folders for what is new, changed or gone.",
+		},
+		sweep_jobs: {
+			name: "Requeue stalled jobs",
+			description: "Puts back the jobs a node stopped working on.",
+		},
+		backup_database: {
+			name: "Back up the database",
+			description: "Dumps the database for pg_restore, keeping the newest few.",
+		},
+		refresh_metadata: {
+			name: "Refresh metadata",
+			description:
+				"Asks the providers again about titles whose libraries say it is time.",
+		},
+		sweep_artwork: {
+			name: "Clear old artwork",
+			description:
+				"Removes replaced pictures from the cache, takes the blur drawn while each loads where it has none, and fetches the pictures titles show that the cache lacks.",
+		},
+		detect_markers: {
+			name: "Detect intros and credits",
+			description:
+				"Compares the sound of each season's episodes to find what they share, and finds where each film's picture goes dark for its credits.",
+		},
+		backfill_previews: {
+			name: "Make previews",
+			description:
+				"Makes the chapter images and seek previews libraries ask for, and clears unused ones.",
+		},
+		sweep_downloads: {
+			name: "Clear old downloads",
+			description:
+				"Forgets downloads kept past their time, and conversions nothing needs.",
+		},
+		prune_activity: {
+			name: "Prune the activity log",
+			description: "Forgets activity older than 30 days.",
+		},
+		sync_lists: {
+			name: "Sync list collections",
+			description:
+				"Reads each list collection's TMDB or MDBList list again and keeps the titles of it the library has.",
+		},
+		refresh_collections: {
+			name: "Refresh smart collections",
+			description:
+				"Finds what each smart collection's filters hold again, catching what was matched or edited since.",
+		},
+		fetch_subtitles: {
+			name: "Download missing subtitles",
+			description:
+				"Fetches subtitles in the languages libraries name for copies with none in them.",
+		},
+	},
+	jobs: {
+		keyframes: "Read keyframes",
+		keyframe_walk: "Walk files for keyframes",
+		identify: "Identify",
+		scan_library: "Scan a library",
+		markers: "Find intros and credits",
+		previews: "Make previews",
+		convert: "Convert for download",
+		deliver_webhook: "Send a webhook",
+		theme: "Fetch a theme tune",
+		probe: "Read media info",
+		import_history: "Import watch history",
+	},
+};
+
 const json = (request: Request) => request.json() as Promise<never>;
 const none = () => new Response(null, { status: 204 });
 
@@ -902,6 +978,8 @@ const server_ = Bun.serve({
 				preferences.set(token as string, kept);
 				return Response.json(kept);
 			}
+			case "GET /api/v1/words":
+				return Response.json(vocabulary);
 			case "GET /api/v1/libraries": {
 				const order = libraryOrders.get(token as string) ?? [];
 				const rank = (id: string) =>

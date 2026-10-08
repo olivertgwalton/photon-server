@@ -1,7 +1,7 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
+import { vocabulary } from "#lib/vocabulary.js";
 import type { components } from "#lib/api/schema.js";
-import { jobKinds } from "#lib/admin/words.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import JobsTable from "#lib/components/admin/JobsTable.svelte";
 import { act } from "#lib/act.js";
@@ -10,11 +10,12 @@ import { client } from "#lib/api/client.js";
 type Schemas = components["schemas"];
 
 let { data } = $props();
+const words = vocabulary();
 
 const api = client();
 
 const kinds = $derived(
-	(Object.keys(jobKinds) as Schemas["JobKind"][]).filter((kind) =>
+	(Object.keys(words.jobs) as Schemas["JobKind"][]).filter((kind) =>
 		data.counts.some((c) => c.kind === kind),
 	),
 );
@@ -54,7 +55,7 @@ function subject(job: Schemas["DeadJob"]) {
 				>
 					<div class="grid min-w-0 gap-1">
 						<p class="text-ink font-semibold">
-							{jobKinds[job.kind]}
+							{words.jobs[job.kind]}
 							{#if href}
 								·
 								<a {href} class="underline-offset-4 hover:underline"

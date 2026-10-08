@@ -285,6 +285,11 @@ func (a *API) routes() []route {
 			status: http.StatusOK, reply: domain.Info{}, handle: a.server,
 		},
 		{
+			pattern: "GET /api/v1/words", access: signedIn,
+			summary: "Say what the API's values are called, in the reader's language",
+			status:  http.StatusOK, reply: vocabularyJSON{}, handle: a.vocabulary,
+		},
+		{
 			pattern: "GET /api/v1/openapi.json", access: public, summary: "Describe the API in OpenAPI 3.1",
 			status: http.StatusOK, reply: asFile{openAPIType}, handle: a.openAPI,
 		},

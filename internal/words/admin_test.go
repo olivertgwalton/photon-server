@@ -1,0 +1,62 @@
+package words
+
+import (
+	"testing"
+	"uuid"
+
+	"golang.org/x/text/language"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
+)
+
+// A dashboard never shows a task or a job by its key.
+func TestEveryTaskAndJobHasAName(t *testing.T) {
+	w := In(language.English)
+	for _, k := range domain.TaskKeys() {
+		if name, does := w.Task(k); name == string(k) || does == "" {
+			t.Errorf("task %s is named %q, %q", k, name, does)
+		}
+	}
+	for _, k := range domain.JobKinds() {
+		if name := w.Job(k); name == string(k) {
+			t.Errorf("job kind %s has no name", k)
+		}
+	}
+}
+
+type names map[uuid.UUID]string
+
+func (n names) Profile(id uuid.UUID) string { return n[id] }
+func (n names) Library(id uuid.UUID) string { return n[id] }
+
+// An event reads as a sentence, whether raised a moment ago with Go values or read back from the
+// activity log as JSON.
+func TestAnEventReadsAsASentence(t *testing.T) {
+	w := In(language.English)
+	films := uuid.NewV7()
+	known := names{films: "Films"}
+	two, three, one := 2, 3, 1
+	episode := domain.PlaybackCard{
+		Profile: domain.PlaybackProfile{Name: "Ada"},
+		Title:   domain.PlaybackTitle{Kind: domain.ItemEpisode, Title: "Second", Show: "Small Show", SeasonNumber: &one, EpisodeNumber: &two, EpisodeEnd: &three},
+	}
+	for _, c := range []struct {
+		event domain.Event
+		want  string
+	}{
+		{domain.Event{Kind: domain.EventPlaybackStarted, Details: map[string]any{"playback": episode}}, "Ada started Small Show S1 E2–E3 · Second"},
+		{domain.Event{Kind: domain.EventPlaybackStopped, Details: map[string]any{
+			"playback": map[string]any{"profile": map[string]any{"name": "Ada"}, "title": map[string]any{"kind": "movie", "title": "Heat"}},
+			"reach":    "end",
+		}}, "Ada finished Heat"},
+		{domain.Event{Kind: domain.EventLibraryScanned, Library: films, Details: map[string]any{"folders": 12, "probed": 3}}, "Films was scanned: 12 folders, 3 read"},
+		{domain.Event{Kind: domain.EventTitlesAdded, Library: films, Details: map[string]any{"titles": 1}}, "1 title was added to Films"},
+		{domain.Event{Kind: domain.EventTaskFailed, Details: map[string]any{"task": domain.TaskBackupDatabase, "error": "disk full"}}, "Back up the database failed: disk full"},
+		{domain.Event{Kind: domain.EventJobDead, Details: map[string]any{"job_kind": "previews", "attempt": 5, "error": "no ffmpeg"}}, "Make previews gave up after 5 tries: no ffmpeg"},
+		{domain.Event{Kind: domain.EventLibraryChanged, Library: uuid.NewV7()}, "A library changed"},
+	} {
+		if got := w.Event(c.event, known); got != c.want {
+			t.Errorf("%s: %q, want %q", c.event.Kind, got, c.want)
+		}
+	}
+}

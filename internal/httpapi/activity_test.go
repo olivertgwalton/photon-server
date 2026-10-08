@@ -69,12 +69,28 @@ type fakeActivity struct{ asked []domain.EventKind }
 
 func (f *fakeActivity) Activity(_ context.Context, kind domain.EventKind, _, _ int) ([]domain.Event, int64, error) {
 	f.asked = append(f.asked, kind)
-	return []domain.Event{{ID: uuid.NewV7(), Kind: domain.EventSignedIn, Profile: oliver.ID}}, 1, nil
+	return []domain.Event{{
+		ID: uuid.NewV7(), Kind: domain.EventSignedIn, Profile: oliver.ID,
+		Details: map[string]any{"name": oliver.Name, "device": "Living room", "client": "Photon"},
+	}}, 1, nil
+}
+
+// listedProfiles lists the profiles an event is worded with.
+type listedProfiles []domain.Profile
+
+func (l listedProfiles) Profiles(context.Context) ([]store.ProfileListing, error) {
+	out := make([]store.ProfileListing, len(l))
+	for i, p := range l {
+		out[i] = store.ProfileListing{Profile: p}
+	}
+	return out, nil
 }
 
 func TestAnAdminReadsTheActivityLog(t *testing.T) {
 	log := &fakeActivity{}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Activity: log, Events: &fakeEvents{}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Activity: log, Events: &fakeEvents{}, Profiles: listedProfiles{oliver}, Libraries: &fakeLibraries{},
+	})
 	for _, tc := range []struct {
 		token, target string
 		want          int
@@ -83,6 +99,8 @@ func TestAnAdminReadsTheActivityLog(t *testing.T) {
 		{memberToken, "/api/v1/admin/activity", http.StatusForbidden, ""},
 		{memberToken, "/api/v1/admin/events", http.StatusForbidden, ""},
 		{goodToken, "/api/v1/admin/activity", http.StatusOK, `"kind":"auth.signed_in"`},
+		// An admin reads what happened as a sentence the server words.
+		{goodToken, "/api/v1/admin/activity", http.StatusOK, `"text":"Oliver signed in on Living room (Photon)"`},
 		{goodToken, "/api/v1/admin/activity?kind=auth.signed_in&offset=0&limit=10", http.StatusOK, `"total":1`},
 		{goodToken, "/api/v1/admin/activity?kind=job.started", http.StatusBadRequest, "is not one of"},
 		{goodToken, "/api/v1/admin/activity?limit=0", http.StatusBadRequest, ""},
@@ -95,7 +113,7 @@ func TestAnAdminReadsTheActivityLog(t *testing.T) {
 			t.Errorf("%s: %d %s, want %d with %s", tc.target, rec.Code, rec.Body, tc.want, tc.body)
 		}
 	}
-	if len(log.asked) != 2 || log.asked[0] != "" || log.asked[1] != domain.EventSignedIn {
+	if len(log.asked) != 3 || log.asked[0] != "" || log.asked[2] != domain.EventSignedIn {
 		t.Errorf("asked for %q, want every kind then sign-ins", log.asked)
 	}
 }
@@ -144,7 +162,9 @@ func TestAStreamNobodyReadsIsGivenUp(t *testing.T) {
 	t.Parallel()
 	work := &fakeWork{}
 	told := streamingEvents{fakeEvents: &fakeEvents{}, events: make(chan domain.Event), gone: make(chan struct{})}
-	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: told}))
+	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: told, Profiles: listedProfiles{oliver}, Libraries: &fakeLibraries{},
+	}))
 	defer srv.Close()
 	conn, err := net.Dial("tcp", srv.Listener.Addr().String())
 	if err != nil {

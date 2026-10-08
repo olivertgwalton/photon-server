@@ -12,6 +12,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/playback"
+	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
 // heartbeatEvery is how often a quiet event stream sends a comment, so proxies that close idle
@@ -44,6 +45,8 @@ type eventJSON struct {
 	TitleID   uuid.UUID        `json:"title_id,omitzero"`
 	LibraryID uuid.UUID        `json:"library_id,omitzero"`
 	Details   map[string]any   `json:"details"`
+	// Text is what happened as a sentence, in the reader's language, on the admin's log and stream.
+	Text string `json:"text,omitzero"`
 }
 
 func eventOf(e domain.Event) eventJSON {
@@ -73,9 +76,16 @@ func (a *API) adminActivity(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
+	names, err := a.eventNames(r.Context())
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	said := words.Negotiate(w, r)
 	out := make([]eventJSON, len(entries))
 	for i, e := range entries {
 		out[i] = eventOf(e)
+		out[i].Text = said.Event(e, names)
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[eventJSON]{out, offset, total})
 }
@@ -93,8 +103,16 @@ func (a *API) adminEvents(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
+	names, err := a.eventNames(r.Context())
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	said := words.Negotiate(w, r)
 	a.streamEvents(w, r, events, "snapshot", now, func(e domain.Event) (eventJSON, bool, error) {
-		return eventOf(e), true, nil
+		out := eventOf(e)
+		out.Text = said.Event(e, names)
+		return out, true, nil
 	})
 }
 

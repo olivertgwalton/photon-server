@@ -2,7 +2,7 @@
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
-import { byName, loggedKinds } from "#lib/admin/words.js";
+import { loggedKinds } from "#lib/admin/words.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
 import Choice from "#lib/components/Choice.svelte";
 import Pager from "#lib/components/Pager.svelte";
@@ -32,8 +32,6 @@ const events = $derived(
 			]
 		: data.page.items,
 );
-const profiles = $derived(byName(data.profiles));
-const libraries = $derived(byName(data.libraries));
 </script>
 
 <PageHeader
@@ -57,6 +55,6 @@ const libraries = $derived(byName(data.libraries));
 </PageHeader>
 <p class="text-sm">Kept for 30 days.</p>
 
-<ActivityList {events} {profiles} {libraries} now={clock.now} />
+<ActivityList {events} now={clock.now} />
 
 <Pager offset={data.page.offset} limit={data.limit} total={data.page.total} />
