@@ -5,7 +5,6 @@ package themerr
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -24,6 +23,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -46,8 +46,6 @@ const (
 	refusedFor = 7 * 24 * time.Hour
 	// maxSize bounds a tune; ThemerrDB's run to a few minutes, a few MiB.
 	maxSize = "32M"
-	// maxEntry bounds a ThemerrDB entry, a few KiB of TMDB's details.
-	maxEntry = 1 << 20
 )
 
 type subjects interface {
@@ -71,7 +69,7 @@ type misses interface {
 // fetched again; a title ThemerrDB does not list, or a link YouTube refuses, is an answer of no
 // theme, noted for a while rather than failed.
 func Fetch(st subjects, c cache, m misses, db, ytdlp, ffmpeg string, logger *slog.Logger) jobs.Handler {
-	client := &http.Client{Timeout: 30 * time.Second}
+	api := provider.Client{Name: "themerrdb", Base: db, Limits: m, Limit: dbLimit}
 	return func(ctx context.Context, item uuid.UUID) error {
 		s, ok, err := st.ThemeSubject(ctx, item)
 		if err != nil || !ok {
@@ -80,7 +78,7 @@ func Fetch(st subjects, c cache, m misses, db, ytdlp, ffmpeg string, logger *slo
 		if unlisted, err := m.ThemeMissing(ctx, item.String()); err != nil || unlisted {
 			return err
 		}
-		link, err := lookUp(ctx, client, m, db, s)
+		link, err := lookUp(ctx, api, s)
 		if err != nil {
 			return err
 		}
@@ -113,7 +111,7 @@ func Fetch(st subjects, c cache, m misses, db, ytdlp, ffmpeg string, logger *slo
 
 // lookUp answers the YouTube link ThemerrDB lists for s, by its TMDB id, then a film's IMDb id,
 // as ThemerrDB keeps films under both and shows under TMDB's alone; "" where it lists none.
-func lookUp(ctx context.Context, client *http.Client, l kv.Limiter, db string, s store.ThemeSubject) (string, error) {
+func lookUp(ctx context.Context, api provider.Client, s store.ThemeSubject) (string, error) {
 	kind, keys := "movies", []string{"themoviedb/" + s.TMDB, "imdb/" + s.IMDb}
 	if s.Kind == domain.ItemShow {
 		kind, keys = "tv_shows", keys[:1]
@@ -122,10 +120,7 @@ func lookUp(ctx context.Context, client *http.Client, l kv.Limiter, db string, s
 		if strings.HasSuffix(key, "/") {
 			continue
 		}
-		if err := kv.Wait(ctx, l, "themerrdb", dbLimit); err != nil {
-			return "", err
-		}
-		link, err := entry(ctx, client, db+kind+"/"+key+".json")
+		link, err := entry(ctx, api, kind+"/"+key+".json")
 		if link != "" || err != nil {
 			return link, err
 		}
@@ -133,33 +128,21 @@ func lookUp(ctx context.Context, client *http.Client, l kv.Limiter, db string, s
 	return "", nil
 }
 
-func entry(ctx context.Context, client *http.Client, address string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	switch resp.StatusCode {
-	case http.StatusOK:
-	case http.StatusNotFound:
-		return "", nil
-	default:
-		return "", fmt.Errorf("%s: %s", address, resp.Status)
-	}
+func entry(ctx context.Context, api provider.Client, path string) (string, error) {
 	var e struct {
 		Link string `json:"youtube_theme_url"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxEntry)).Decode(&e); err != nil {
-		return "", fmt.Errorf("%s: %w", address, err)
-	}
-	if u, err := url.Parse(e.Link); err != nil || u.Scheme != "https" {
+	err := api.Do(ctx, provider.Request{Method: http.MethodGet, Path: path}, &e)
+	if errors.Is(err, provider.ErrNotFound) {
 		return "", nil
 	}
-	return e.Link, nil
+	if err != nil {
+		return "", err
+	}
+	if u, err := url.Parse(e.Link); err == nil && u.Scheme == "https" {
+		return e.Link, nil
+	}
+	return "", nil
 }
 
 // errRefused is YouTube declining to give a video: removed, private, blocked by its rights holder,
