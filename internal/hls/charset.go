@@ -8,10 +8,10 @@ import (
 	"golang.org/x/text/language"
 )
 
-// legacyCharsets are the codepages subtitles in a language were written in before UTF-8, by iconv's
+// codepages are what subtitles in a language were written in before UTF-8, by iconv's
 // names, as players fall back on the reader's locale: Windows' for Europe and the Middle East, the
 // national ones for East Asia.
-var legacyCharsets = map[string]string{
+var codepages = map[string]string{
 	"ru": "CP1251", "uk": "CP1251", "be": "CP1251", "bg": "CP1251", "mk": "CP1251", "sr": "CP1251",
 	"pl": "CP1250", "cs": "CP1250", "sk": "CP1250", "hu": "CP1250", "ro": "CP1250", "hr": "CP1250", "sl": "CP1250", "bs": "CP1250",
 	"el": "CP1253", "tr": "CP1254", "he": "CP1255", "ar": "CP1256", "fa": "CP1256",
@@ -45,7 +45,7 @@ func subtitleCharset(r io.Reader, lang string) (string, error) {
 			return "BIG5", nil
 		}
 	}
-	if cs, ok := legacyCharsets[base.String()]; ok {
+	if cs, ok := codepages[base.String()]; ok {
 		return cs, nil
 	}
 	return "CP1252", nil
