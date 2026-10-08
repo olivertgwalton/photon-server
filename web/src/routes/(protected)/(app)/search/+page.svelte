@@ -4,7 +4,7 @@ import { page } from "$app/state";
 import { withQuery } from "#lib/address.js";
 import Rail from "#lib/components/Rail.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
-import * as Select from "#lib/components/ui/select/index.js";
+import Choice from "#lib/components/Choice.svelte";
 import { byKind } from "#lib/rows.js";
 
 let { data } = $props();
@@ -33,22 +33,16 @@ function scope(library: string) {
 			{/if}
 		</h1>
 		{#if data.q && data.libraries.length > 1}
-			<Select.Root
-				type="single"
+			<Choice
+				aria-label="Search in"
+				class="min-w-44"
 				value={data.library ?? ""}
-				onValueChange={scope}
-			>
-				<Select.Trigger aria-label="Search in" class="min-w-44">
-					{data.libraries.find((l) => l.id === data.library)?.name ??
-						"Every library"}
-				</Select.Trigger>
-				<Select.Content>
-					<Select.Item value="" label="Every library" />
-					{#each data.libraries as library (library.id)}
-						<Select.Item value={library.id} label={library.name} />
-					{/each}
-				</Select.Content>
-			</Select.Root>
+				options={[
+					{ value: "", label: "Every library" },
+					...data.libraries.map((l) => ({ value: l.id, label: l.name })),
+				]}
+				onchange={scope}
+			/>
 		{/if}
 	</div>
 

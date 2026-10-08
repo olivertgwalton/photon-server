@@ -9,7 +9,7 @@ import { relative } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
-import Choice from "#lib/components/admin/Choice.svelte";
+import Choice from "#lib/components/Choice.svelte";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";

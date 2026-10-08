@@ -3,7 +3,7 @@ import { act } from "#lib/act.js";
 import { localeOptions, serverLocale } from "#lib/admin/library.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import Choice from "#lib/components/admin/Choice.svelte";
+import Choice from "#lib/components/Choice.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { fields } from "#lib/form.js";

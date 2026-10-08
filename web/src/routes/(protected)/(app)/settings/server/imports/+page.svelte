@@ -7,7 +7,7 @@ import { byName, importMisses, importSources, when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
-import Choice from "#lib/components/admin/Choice.svelte";
+import Choice from "#lib/components/Choice.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";

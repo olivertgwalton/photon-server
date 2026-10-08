@@ -5,7 +5,7 @@ import { fields } from "#lib/form.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import ArtworkPicker from "#lib/components/admin/ArtworkPicker.svelte";
-import Choice from "#lib/components/admin/Choice.svelte";
+import Choice from "#lib/components/Choice.svelte";
 import IdentifyPanel from "#lib/components/admin/IdentifyPanel.svelte";
 import MarkersEditor from "#lib/components/admin/MarkersEditor.svelte";
 import MetadataForm from "#lib/components/admin/MetadataForm.svelte";

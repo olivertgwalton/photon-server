@@ -4,7 +4,7 @@ import { toast } from "svelte-sonner";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
-import Choice from "#lib/components/admin/Choice.svelte";
+import Choice from "#lib/components/Choice.svelte";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Switch } from "#lib/components/ui/switch/index.js";

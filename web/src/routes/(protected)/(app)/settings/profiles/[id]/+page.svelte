@@ -4,7 +4,7 @@ import { fields } from "#lib/form.js";
 import { roleOptions } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import Choice from "#lib/components/admin/Choice.svelte";
+import Choice from "#lib/components/Choice.svelte";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import AvatarPicker from "#lib/components/AvatarPicker.svelte";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";

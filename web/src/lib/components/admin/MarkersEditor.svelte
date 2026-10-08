@@ -14,7 +14,7 @@ import { fields } from "#lib/form.js";
 import { markersOf } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
 import { timecode } from "#lib/format.js";
-import Choice from "./Choice.svelte";
+import Choice from "#lib/components/Choice.svelte";
 
 type Schemas = components["schemas"];
 

@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { components } from "#lib/api/schema.js";
-import * as Select from "#lib/components/ui/select/index.js";
+import Choice from "#lib/components/Choice.svelte";
 import { onDisk, trackName, versionName } from "#lib/format.js";
 
 type Version = components["schemas"]["VersionPage"];
@@ -45,22 +45,13 @@ const captioned = $derived(subtitles.find((s) => s.default || s.forced));
 )}
 	<div class="grid max-w-full gap-1">
 		<span id="{id}-{key}" class="label">{name}</span>
-		<Select.Root type="single" {value} onValueChange={set}>
-			<Select.Trigger aria-labelledby="{id}-{key}" class="max-w-80">
-				<span class="truncate">
-					{options.find((o) => o.value === value)?.label}
-				</span>
-			</Select.Trigger>
-			<Select.Content>
-				{#each options as option (option.value)}
-					<Select.Item
-						value={option.value}
-						label={option.label}
-						disabled={option.disabled}
-					/>
-				{/each}
-			</Select.Content>
-		</Select.Root>
+		<Choice
+			aria-labelledby="{id}-{key}"
+			class="max-w-80"
+			{value}
+			{options}
+			onchange={set}
+		/>
 	</div>
 {/snippet}
 

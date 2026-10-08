@@ -7,7 +7,7 @@ import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
-import * as Select from "#lib/components/ui/select/index.js";
+import Choice from "#lib/components/Choice.svelte";
 import { language } from "#lib/format.js";
 import { subtitleLanguages } from "#lib/player/words.js";
 
@@ -59,22 +59,15 @@ async function fetchOne(found: Found, s: Found["items"][number]) {
 			<p class="text-ink-3 text-sm">Searching…</p>
 		{:then first}
 			{@const lang = subtitleSearch.language || first}
-			<Select.Root
-				type="single"
+			<Choice
+				aria-label="Language"
+				class="w-56"
 				value={lang}
-				onValueChange={(v) => {
+				options={options(lang)}
+				onchange={(v: string) => {
 					subtitleSearch.language = v;
 				}}
-			>
-				<Select.Trigger aria-label="Language" class="w-56">
-					{language(lang) || "Language"}
-				</Select.Trigger>
-				<Select.Content>
-					{#each options(lang) as l (l.value)}
-						<Select.Item value={l.value} label={l.label} />
-					{/each}
-				</Select.Content>
-			</Select.Root>
+			/>
 			{#await search(lang)}
 				<div class="min-h-0 overflow-y-auto" aria-busy="true">
 					<p class="text-ink-3 text-sm">Searching…</p>

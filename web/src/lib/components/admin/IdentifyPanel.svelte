@@ -6,7 +6,7 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { act } from "#lib/act.js";
-import Choice from "./Choice.svelte";
+import Choice from "#lib/components/Choice.svelte";
 
 const api = client();
 
