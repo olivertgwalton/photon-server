@@ -11,9 +11,11 @@ import { byKind } from "#lib/rows.js";
 let { data } = $props();
 const words = vocabulary();
 
-const groups = $derived(byKind(data.results?.items ?? [], words.kinds));
+const groups = $derived(byKind(data.results?.titles.items ?? [], words.kinds));
 const nothing = $derived(
-	data.results && !data.results.items.length && !data.results.people.length,
+	data.results &&
+		!data.results.titles.items.length &&
+		!data.results.people.items.length,
 );
 
 function scope(library: string) {
@@ -63,15 +65,15 @@ function scope(library: string) {
 		/>
 	{/each}
 
-	{#if data.results?.people.length}
+	{#if data.results?.people.items.length}
 		<Rail
 			title="People"
-			items={data.results.people}
-			total={data.results.people_total}
+			items={data.results.people.items}
+			total={data.results.people.total}
 			href="/search/people{page.url.search}"
 		>
 			{#snippet card(
-				person: (typeof data.results.people)[number],
+				person: (typeof data.results.people.items)[number],
 			)}
 				<PersonCard {...person} />
 			{/snippet}

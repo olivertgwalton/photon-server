@@ -71,7 +71,7 @@ async function search(event: SubmitEvent) {
 	const { data: answer } = await api.GET("/api/v1/search", {
 		params: { query: { q: query, library: data.library, limit: 12 } },
 	});
-	found = (answer?.items ?? []).filter(
+	found = (answer?.titles.items ?? []).filter(
 		(c) =>
 			(c.kind === "movie" || c.kind === "show") &&
 			!members.some((m) => m.id === c.id),

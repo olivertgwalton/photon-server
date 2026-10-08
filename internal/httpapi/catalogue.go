@@ -196,15 +196,11 @@ type personRefJSON struct {
 	Blurhashes store.Blurhashes `json:"blurhashes,omitzero"`
 }
 
-// searchJSON is a page of the titles (films, shows, collections and episodes) and of the people
-// found, both from offset, and how many of each there are in all; a section the kinds asked for
-// leave out is empty.
+// searchJSON is a page of the titles (films, shows, collections and episodes) and one of the
+// people found, both from the same offset; a page the kinds asked for leave out is empty.
 type searchJSON struct {
-	Items       []cardJSON      `json:"items"`
-	People      []personRefJSON `json:"people"`
-	Offset      int             `json:"offset"`
-	Total       int64           `json:"total"`
-	PeopleTotal int64           `json:"people_total"`
+	Titles pageJSON[cardJSON]      `json:"titles"`
+	People pageJSON[personRefJSON] `json:"people"`
 }
 
 func (a *API) search(w http.ResponseWriter, r *http.Request) {
@@ -235,24 +231,27 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 			query.Kinds = append(query.Kinds, domain.ItemKind(k))
 		}
 	}
-	out := searchJSON{Items: []cardJSON{}, People: []personRefJSON{}, Offset: query.Offset}
+	out := searchJSON{
+		Titles: pageJSON[cardJSON]{Items: []cardJSON{}, Offset: query.Offset},
+		People: pageJSON[personRefJSON]{Items: []personRefJSON{}, Offset: query.Offset},
+	}
 	ctx := r.Context()
 	var wg sync.WaitGroup
 	var titlesErr, peopleErr error
 	if len(kinds) == 0 || len(query.Kinds) > 0 {
 		wg.Go(func() {
 			var cards []store.Card
-			cards, out.Total, titlesErr = a.svc.Catalogue.Search(ctx, query)
-			out.Items = cardsJSON(cards)
+			cards, out.Titles.Total, titlesErr = a.svc.Catalogue.Search(ctx, query)
+			out.Titles.Items = cardsJSON(cards)
 		})
 	}
 	if findPeople {
 		wg.Go(func() {
 			var found []store.PersonRef
-			found, out.PeopleTotal, peopleErr = a.svc.People.SearchPeople(ctx, query.Text, query.Offset, query.Limit)
-			out.People = make([]personRefJSON, len(found))
+			found, out.People.Total, peopleErr = a.svc.People.SearchPeople(ctx, query.Text, query.Offset, query.Limit)
+			out.People.Items = make([]personRefJSON, len(found))
 			for i, p := range found {
-				out.People[i] = personRefJSON(p)
+				out.People.Items[i] = personRefJSON(p)
 			}
 		})
 	}
