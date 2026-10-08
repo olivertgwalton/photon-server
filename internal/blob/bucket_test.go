@@ -45,8 +45,12 @@ func newBucket(t *testing.T, links bool) *Bucket {
 	t.Cleanup(func() {
 		ctx := context.Background()
 		for e, err := range b.List(ctx, "") {
-			if err == nil {
-				_ = b.Delete(ctx, e.Key)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if err := b.Delete(ctx, e.Key); err != nil {
+				t.Error(err)
 			}
 		}
 	})
@@ -110,7 +114,10 @@ func TestAPictureIsSentToItsBucketWhereClientsAreSent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	got, _ := io.ReadAll(resp.Body)
+	got, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if resp.StatusCode != http.StatusOK || !bytes.Equal(got, jpeg) {
 		t.Errorf("the link answered %s and %d bytes, want the poster's %d", resp.Status, len(got), len(jpeg))
 	}

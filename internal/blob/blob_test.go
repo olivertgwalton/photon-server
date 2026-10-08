@@ -88,7 +88,11 @@ func testWholeOrNotAtAll(t *testing.T, s store) {
 	if _, err := o.Seek(partSize-2, io.SeekStart); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := io.ReadAll(o); len(b) != 3 {
+	b, err := io.ReadAll(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b) != 3 {
 		t.Errorf("read %d bytes from 3 before the end, want 3", len(b))
 	}
 	_ = o.Close()
@@ -184,7 +188,10 @@ func TestAnObjectAbandonedHalfWrittenIsRemovedOnOpening(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	left, _ := os.ReadDir(filepath.Join(dir, parts))
+	left, err := os.ReadDir(filepath.Join(dir, parts))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(left) != 1 || left[0].Name() != "writing" {
 		t.Errorf("left %v, want only the object another process may be writing", left)
 	}
