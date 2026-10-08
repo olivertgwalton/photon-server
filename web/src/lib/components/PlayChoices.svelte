@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/Choice.svelte";
-import { onDisk, trackName, versionName } from "#lib/format.js";
+import { onDisk } from "#lib/format.js";
 
 type Version = components["schemas"]["VersionPage"];
 
@@ -63,7 +63,9 @@ const captioned = $derived(subtitles.find((s) => s.default || s.forced));
 			chosen?.id ?? "",
 			versions.map((v) => ({
 				value: v.id,
-				label: versionName(v),
+				label: v.missing_since
+					? `${v.display_title} (missing)`
+					: v.display_title,
 				disabled: !!v.missing_since,
 			})),
 			(value) => {
@@ -78,7 +80,7 @@ const captioned = $derived(subtitles.find((s) => s.default || s.forced));
 			"Audio",
 			"audio",
 			String(audio ?? audible?.index),
-			audios.map((s) => ({ value: String(s.index), label: trackName(s) })),
+			audios.map((s) => ({ value: String(s.index), label: s.display_title })),
 			(value) => (audio = Number(value)),
 		)}
 	{/if}
@@ -91,7 +93,7 @@ const captioned = $derived(subtitles.find((s) => s.default || s.forced));
 				{ value: "off", label: "Off" },
 				...subtitles.map((s) => ({
 					value: String(s.index),
-					label: trackName(s),
+					label: s.display_title,
 				})),
 			],
 			(value) => (subtitle = value === "off" ? "off" : Number(value)),

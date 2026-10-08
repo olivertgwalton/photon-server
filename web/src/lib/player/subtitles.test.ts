@@ -85,14 +85,14 @@ test("each subtitle is named and placed where HLS publishes it", () => {
 	expect(choices(version)).toEqual([
 		{
 			key: "s2",
-			label: "English",
+			label: "English (PGS)",
 			codec: "hdmv_pgs_subtitle",
 			kind: "picture",
 			stream: 2,
 		},
 		{
 			key: "s3",
-			label: "French (Forced)",
+			label: "French Forced (SRT)",
 			codec: "subrip",
 			kind: "text",
 			stream: 3,
@@ -100,14 +100,14 @@ test("each subtitle is named and placed where HLS publishes it", () => {
 		},
 		{
 			key: "s4",
-			label: "Songs",
+			label: "Songs (ASS)",
 			codec: "ass",
 			kind: "styled",
 			stream: 4,
 		},
 		{
 			key: "f0",
-			label: "English (SDH)",
+			label: "English SDH (SRT External)",
 			codec: "subrip",
 			kind: "text",
 			file: 0,
@@ -116,7 +116,7 @@ test("each subtitle is named and placed where HLS publishes it", () => {
 		},
 		{
 			key: "f2",
-			label: "Signs",
+			label: "Signs (ASS External)",
 			codec: "ass",
 			kind: "styled",
 			file: 2,

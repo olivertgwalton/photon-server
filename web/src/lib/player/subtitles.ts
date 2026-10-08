@@ -1,5 +1,4 @@
 import type { components } from "#lib/api/schema.js";
-import { language } from "#lib/format.js";
 
 type Schemas = components["schemas"];
 
@@ -23,19 +22,6 @@ type Choice = {
 // What a browser reads from a file played as it is.
 const drawnBeside = new Set(["subrip", "webvtt"]);
 
-function name(s: {
-	title?: string;
-	language?: string;
-	forced?: boolean;
-	hearing_impaired?: boolean;
-}): string {
-	const base = s.title || language(s.language) || "Unknown";
-	const marks = [s.forced && "Forced", s.hearing_impaired && "SDH"].filter(
-		Boolean,
-	);
-	return marks.length ? `${base} (${marks.join(", ")})` : base;
-}
-
 export function choices(version: Schemas["VersionPage"]): Choice[] {
 	const out: Choice[] = [];
 	let rendition = 0;
@@ -43,7 +29,7 @@ export function choices(version: Schemas["VersionPage"]): Choice[] {
 		if (s.kind !== "subtitle") continue;
 		out.push({
 			key: `s${s.index}`,
-			label: name(s),
+			label: s.display_title,
 			codec: s.codec,
 			kind: s.subtitle_kind,
 			stream: s.index,
@@ -55,7 +41,7 @@ export function choices(version: Schemas["VersionPage"]): Choice[] {
 		if (f.kind === "picture") return;
 		out.push({
 			key: `f${i}`,
-			label: name(f),
+			label: f.display_title,
 			codec: f.codec,
 			kind: f.kind,
 			file: i,
