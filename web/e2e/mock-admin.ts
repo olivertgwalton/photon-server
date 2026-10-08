@@ -69,9 +69,7 @@ const server: Schemas["Server"] = {
 	transcode_limit: 2,
 	transcode_limit_source: "automatic",
 	role: "all",
-	discovery: "broadcast",
 	listen: ":8640",
-	trusted_proxies: [],
 	folders: {
 		cache: { path: "/cache", free_bytes: 120_000_000_000 },
 		backups: { path: "/backups", free_bytes: 120_000_000_000 },
@@ -314,6 +312,9 @@ let network: Schemas["NetworkStatus"] = {
 	jellyfin_port: 8096,
 	local_networks: [],
 	remote_max_bitrate_kbps: 0,
+	public_url: "",
+	trusted_proxies: [],
+	discovery: "broadcast",
 };
 const deadJobs: Schemas["DeadJob"][] = [
 	{

@@ -13,6 +13,7 @@ let { data } = $props();
 
 type Secure = components["schemas"]["SecureConnections"];
 type Jellyfin = components["schemas"]["JellyfinMode"];
+type Discovery = components["schemas"]["Discovery"];
 
 // As Plex's Secure connections.
 const modes: readonly { value: Secure; label: string }[] = [
@@ -26,9 +27,17 @@ const jellyfinModes: readonly { value: Jellyfin; label: string }[] = [
 	{ value: "off", label: "Off" },
 ];
 
+const discoveryModes: readonly { value: Discovery; label: string }[] = [
+	{ value: "broadcast", label: "On" },
+	{ value: "off", label: "Off" },
+];
+
 // What is chosen, until a save loads the page again.
 let secure = $derived<Secure>(data.network.secure_connections);
 let jellyfin = $derived<Jellyfin>(data.network.jellyfin);
+let discovery = $derived<Discovery>(data.network.discovery);
+
+const list = (text: string) => text.split(/[\s,]+/).filter(Boolean);
 
 function save(event: SubmitEvent) {
 	const form = fields(event);
@@ -41,9 +50,10 @@ function save(event: SubmitEvent) {
 				key: path("key"),
 				jellyfin,
 				jellyfin_port: Number(form.get("jellyfin_port")),
-				local_networks: path("local_networks")
-					.split(/[\s,]+/)
-					.filter(Boolean),
+				local_networks: list(path("local_networks")),
+				public_url: path("public_url"),
+				trusted_proxies: list(path("trusted_proxies")),
+				discovery,
 				remote_max_bitrate_kbps: Math.round(
 					Number(form.get("remote_max_mbps")) * 1000,
 				),
@@ -107,6 +117,55 @@ function save(event: SubmitEvent) {
 					placeholder="/certs/privkey.pem"
 					class="font-mono"
 				/>
+			</Field.Field>
+		</Field.Group>
+	</Field.Set>
+	<Field.Set>
+		<Field.Legend>Reaching the server</Field.Legend>
+		<Field.Group>
+			<Field.Field>
+				<Field.Label for="public-url">Public address</Field.Label>
+				<Input
+					id="public-url"
+					name="public_url"
+					type="url"
+					value={data.network.public_url}
+					placeholder="https://photon.example.com"
+					class="font-mono"
+				/>
+				<Field.Description>
+					Where people reach the server from outside, as a TV's sign-in link
+					names it and secure connections send plain HTTP. Left empty, each
+					device is answered at the address it used.
+				</Field.Description>
+			</Field.Field>
+			<Field.Field>
+				<Field.Label for="trusted-proxies">Trusted proxies</Field.Label>
+				<Input
+					id="trusted-proxies"
+					name="trusted_proxies"
+					value={data.network.trusted_proxies.join(", ")}
+					placeholder="172.16.0.0/12"
+					class="font-mono"
+				/>
+				<Field.Description>
+					Reverse proxies whose X-Forwarded-For says who a device is, as
+					prefixes or addresses. Without them every device behind a proxy looks
+					like the proxy, and local if it is.
+				</Field.Description>
+			</Field.Field>
+			<Field.Field>
+				<Field.Label for="discovery">Discovery</Field.Label>
+				<Choice
+					id="discovery"
+					name="discovery"
+					bind:value={discovery}
+					options={discoveryModes}
+					class="w-48"
+				/>
+				<Field.Description>
+					Answers apps looking for a server on the local network.
+				</Field.Description>
 			</Field.Field>
 		</Field.Group>
 	</Field.Set>
