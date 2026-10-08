@@ -128,14 +128,16 @@ var rowQueries = map[domain.HomeRow]string{
 		ORDER BY released.released DESC, i.id DESC LIMIT @limit`,
 	// The titles the profile has not begun by their IMDb rating, as the wall sorts by it, leaving
 	// out a rating too few voted for where its site counts votes. A title's best rating is the one
-	// no other of its own beats, so the ratings are read down their index and only as many titles
-	// as the row takes are tried.
+	// its own sort first, so the ratings are read down their index and only as many titles as the
+	// row takes are tried. It is asked for as a value, not as no better one existing: Postgres
+	// turns the latter into an anti join, and for a limited profile, whose few titles it
+	// misjudges, it ran that over every rating of every title, a minute for a large library.
 	domain.RowTopRatedUnwatched: `
 		SELECT ` + itemColumns + ` FROM ratings r JOIN items ON items.id = r.item_id
 		WHERE r.site = '` + string(domain.SiteIMDb) + `' AND (r.votes IS NULL OR r.votes >= ` + strconv.Itoa(leastVotes) + `)
-			AND NOT EXISTS (SELECT 1 FROM ratings o WHERE o.item_id = r.item_id AND o.site = r.site
+			AND (r.score, r.source) = (SELECT o.score, o.source FROM ratings o WHERE o.item_id = r.item_id AND o.site = r.site
 				AND (o.votes IS NULL OR o.votes >= ` + strconv.Itoa(leastVotes) + `)
-				AND (o.score > r.score OR o.score = r.score AND o.source < r.source))
+				ORDER BY o.score DESC, o.source LIMIT 1)
 			AND items.library_id = @lib AND items.kind IN ('movie', 'show') AND NOT ` + begun + `
 			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
 		ORDER BY r.score DESC, r.item_id DESC LIMIT @limit`,
