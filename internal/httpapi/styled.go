@@ -102,7 +102,11 @@ func (a *API) partFonts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// requireSignature has read exp already.
-	exp, _ := strconv.ParseInt(r.URL.Query().Get("exp"), 10, 64)
+	exp, err := strconv.ParseInt(r.URL.Query().Get("exp"), 10, 64)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
 	answer := fontsJSON{Fonts: []fontJSON{}}
 	for _, e := range entries {
 		if _, ok := fontTypes[strings.ToLower(filepath.Ext(e.Name()))]; !ok || !e.Type().IsRegular() {

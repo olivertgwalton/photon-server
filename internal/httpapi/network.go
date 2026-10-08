@@ -97,7 +97,12 @@ func (a *API) setNetwork(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())
 		return
 	}
-	if _, own, _ := net.SplitHostPort(a.svc.Setup.Listen); n.JellyfinPort < 1 || n.JellyfinPort > 65535 || own == strconv.Itoa(n.JellyfinPort) {
+	_, own, err := net.SplitHostPort(a.svc.Setup.Listen)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	if n.JellyfinPort < 1 || n.JellyfinPort > 65535 || own == strconv.Itoa(n.JellyfinPort) {
 		writeProblem(w, a.logger, codeInvalidBody, "the Jellyfin port is 1 to 65535, and not the one photon's own API is served on")
 		return
 	}

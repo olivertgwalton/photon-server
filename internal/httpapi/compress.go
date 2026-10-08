@@ -115,6 +115,6 @@ func (c *compressingWriter) close() {
 }
 
 func isJSON(contentType string) bool {
-	t, _, _ := mime.ParseMediaType(contentType)
-	return t == "application/json" || t == "application/problem+json"
+	t, _, err := mime.ParseMediaType(contentType)
+	return err == nil && (t == "application/json" || t == "application/problem+json")
 }
