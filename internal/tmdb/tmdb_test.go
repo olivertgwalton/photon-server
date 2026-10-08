@@ -3,10 +3,12 @@ package tmdb
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -41,7 +43,7 @@ func serveIn(t *testing.T, language string, routes map[string]string) *Client {
 			http.NotFound(w, r)
 			return
 		}
-		_, _ = w.Write([]byte(body))
+		reply(t, w, body)
 	}))
 	t.Cleanup(srv.Close)
 	c := New("token", unlimited{})
@@ -192,7 +194,7 @@ func TestARequestTMDBAsksToSlowIsSentAgain(t *testing.T) {
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
-		_, _ = w.Write([]byte(`{"results":[{"id":348,"title":"Alien","release_date":"1979-05-25"}]}`))
+		reply(t, w, `{"results":[{"id":348,"title":"Alien","release_date":"1979-05-25"}]}`)
 	}))
 	t.Cleanup(srv.Close)
 	c := New("token", unlimited{})
@@ -283,7 +285,7 @@ func TestAListIsReadInItsOrder(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		_, _ = w.Write([]byte(body))
+		reply(t, w, body)
 	}))
 	t.Cleanup(srv.Close)
 	c := New("token", unlimited{})
@@ -317,5 +319,13 @@ func TestAShowStillAiringIsDescribedWithItsComingSeason(t *testing.T) {
 	got := seasons[2].Episodes[3]
 	if got.Title != "Who Is Alive?" || !got.ReleaseDate.Equal(time.Date(2025, 1, 31, 0, 0, 0, 0, time.UTC)) || len(seasons) != 1 {
 		t.Errorf("seasons = %+v, want the season of the next episode to air, though no file of it was asked about", seasons)
+	}
+}
+
+func reply(t *testing.T, w io.Writer, body string) {
+	t.Helper()
+	// A client hangs up on an answer it refuses, as one too large.
+	if _, err := io.WriteString(w, body); err != nil && !errors.Is(err, syscall.EPIPE) && !errors.Is(err, syscall.ECONNRESET) {
+		t.Error(err)
 	}
 }

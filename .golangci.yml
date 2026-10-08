@@ -47,6 +47,8 @@ linters:
     - funlen
 
   settings:
+    errcheck:
+      check-blank: true
     funlen:
       lines: 100
       statements: -1

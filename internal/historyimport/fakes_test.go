@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -11,9 +12,21 @@ import (
 
 type object = map[string]any
 
-func writeJSON(w http.ResponseWriter, v any) {
+func writeJSON(t *testing.T, w http.ResponseWriter, v any) {
+	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		t.Error(err)
+	}
+}
+
+func queryInt(t *testing.T, q url.Values, key string) int {
+	t.Helper()
+	n, err := strconv.Atoi(q.Get(key))
+	if err != nil {
+		t.Errorf("%s: %v", key, err)
+	}
+	return n
 }
 
 // page answers the part of items a Plex or Jellyfin request asks for.
@@ -36,12 +49,10 @@ func (f *fakePlex) serve(t *testing.T) string {
 			return
 		}
 		q := r.URL.Query()
-		start, _ := strconv.Atoi(q.Get("X-Plex-Container-Start"))
-		size, _ := strconv.Atoi(q.Get("X-Plex-Container-Size"))
 		var items []object
 		switch r.URL.Path + "?" + q.Get("type") {
 		case "/library/sections?":
-			writeJSON(w, object{"MediaContainer": object{"size": 2, "Directory": []object{
+			writeJSON(t, w, object{"MediaContainer": object{"size": 2, "Directory": []object{
 				{"key": "1", "type": "movie", "title": "Films"},
 				{"key": "2", "type": "show", "title": "TV"},
 			}}})
@@ -59,7 +70,8 @@ func (f *fakePlex) serve(t *testing.T) string {
 		if q.Get("includeGuids") != "1" {
 			t.Errorf("%s asked without includeGuids", r.URL)
 		}
-		writeJSON(w, object{"MediaContainer": object{"totalSize": len(items), "Metadata": page(items, start, size)}})
+		start, size := queryInt(t, q, "X-Plex-Container-Start"), queryInt(t, q, "X-Plex-Container-Size")
+		writeJSON(t, w, object{"MediaContainer": object{"totalSize": len(items), "Metadata": page(items, start, size)}})
 	}))
 	t.Cleanup(srv.Close)
 	return srv.URL
@@ -96,7 +108,7 @@ func (f *fakeJellyfin) serve(t *testing.T) string {
 				return
 			}
 			f.signedIn++
-			writeJSON(w, object{"AccessToken": fakeJellyfinToken, "User": object{"Id": "user-1", "Name": f.user}})
+			writeJSON(t, w, object{"AccessToken": fakeJellyfinToken, "User": object{"Id": "user-1", "Name": f.user}})
 			return
 		}
 		if !strings.Contains(auth, `Token="`+fakeJellyfinToken+`"`) {
@@ -127,9 +139,8 @@ func (f *fakeJellyfin) serve(t *testing.T) string {
 				}
 			}
 		}
-		start, _ := strconv.Atoi(q.Get("StartIndex"))
-		limit, _ := strconv.Atoi(q.Get("Limit"))
-		writeJSON(w, object{"Items": page(found, start, limit), "TotalRecordCount": len(found)})
+		start, limit := queryInt(t, q, "StartIndex"), queryInt(t, q, "Limit")
+		writeJSON(t, w, object{"Items": page(found, start, limit), "TotalRecordCount": len(found)})
 	}))
 	t.Cleanup(srv.Close)
 	return srv.URL

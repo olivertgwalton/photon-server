@@ -155,7 +155,10 @@ func TestEveryNodeIsAskedForItsMetrics(t *testing.T) {
 	gone := httptest.NewServer(http.NotFoundHandler())
 	gone.Close()
 
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, leader.URL+metricsPath, nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, leader.URL+metricsPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

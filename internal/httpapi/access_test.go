@@ -99,7 +99,10 @@ func TestAnAdminChecksEveryNodeCanReadALibrarysRoot(t *testing.T) {
 		}
 	}
 
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, other.URL+"/api/v1/internal/libraries/"+readable.ID.String()+"/check", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, other.URL+"/api/v1/internal/libraries/"+readable.ID.String()+"/check", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

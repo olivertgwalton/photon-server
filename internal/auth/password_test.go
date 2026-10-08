@@ -14,7 +14,11 @@ func TestPasswordHash(t *testing.T) {
 	if !strings.HasPrefix(encoded, "$argon2id$v=19$m=65536,t=3,p=4$") {
 		t.Errorf("hash %q is not argon2id with today's parameters", encoded)
 	}
-	if again, _ := h.Hash(t.Context(), "correct horse"); again == encoded {
+	again, err := h.Hash(t.Context(), "correct horse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again == encoded {
 		t.Error("two hashes of one password are equal: the salt is not random")
 	}
 	for _, tt := range []struct {

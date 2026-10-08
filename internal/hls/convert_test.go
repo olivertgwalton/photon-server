@@ -72,7 +72,10 @@ func TestAConversionIsAPlayableMP4AtTheBitrateAsked(t *testing.T) {
 	if err := json.Unmarshal(probe, &got); err != nil {
 		t.Fatal(err)
 	}
-	bps, _ := strconv.Atoi(got.Format.BitRate)
+	bps, err := strconv.Atoi(got.Format.BitRate)
+	if err != nil {
+		t.Fatalf("ffprobe's bit rate: %v", err)
+	}
 	if got.Format.FormatName != "mov,mp4,m4a,3gp,3g2,mj2" || len(got.Streams) != 2 ||
 		got.Streams[0].CodecName != "h264" || got.Streams[0].Width != 640 || got.Streams[0].Height != 360 ||
 		got.Streams[1].CodecName != "aac" || bps == 0 || bps > 1_000_000 {

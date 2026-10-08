@@ -120,7 +120,11 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 	}
 	// The episode is called Show too, and is rated by its show.
 	for _, text := range []string{"heat", "show"} {
-		if found, total, _ := s.Search(ctx, SearchQuery{Profile: kid.ID, Text: text, Limit: 10}); len(found) != 0 || total != 0 {
+		found, total, err := s.Search(ctx, SearchQuery{Profile: kid.ID, Text: text, Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(found) != 0 || total != 0 {
 			t.Errorf("searching for %q: %+v, want nothing", text, found)
 		}
 	}
@@ -219,7 +223,10 @@ func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
 	if want := (domain.TitleCounts{Movies: 1, Shows: 1, Seasons: 1, Episodes: 1}); err != nil || counts[lib.ID] != want {
 		t.Errorf("counts at 14: %+v, %v; want %+v", counts[lib.ID], err, want)
 	}
-	counts, _ = s.LibraryCounts(ctx, uuid.UUID{})
+	counts, err = s.LibraryCounts(ctx, uuid.UUID{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if want := (domain.TitleCounts{Movies: 4, Shows: 1, Seasons: 1, Episodes: 2}); counts[lib.ID] != want {
 		t.Errorf("the server's counts: %+v, want %+v", counts[lib.ID], want)
 	}

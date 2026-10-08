@@ -18,10 +18,16 @@ func TestOnlyANodeOfTheClusterIsHonoured(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, _ := NewKey([]byte("another cluster's key"))
+	other, err := NewKey([]byte("another cluster's key"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	var got []byte
 	h := key.Verify(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got, _ = io.ReadAll(r.Body)
+		var err error
+		if got, err = io.ReadAll(r.Body); err != nil {
+			t.Error(err)
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	body := []byte(`{"item":"heat"}`)

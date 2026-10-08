@@ -36,11 +36,11 @@ func TestAPictureIsFetchedOnceAndHashed(t *testing.T) {
 		<-release
 		if r.URL.Path == "/page.html" {
 			w.Header().Set("Content-Type", "text/html")
-			_, _ = w.Write([]byte("<html>"))
+			reply(t, w, []byte("<html>"))
 			return
 		}
 		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write(poster.Bytes())
+		reply(t, w, poster.Bytes())
 	}))
 	t.Cleanup(srv.Close)
 	var mu sync.Mutex
@@ -65,7 +65,12 @@ func TestAPictureIsFetchedOnceAndHashed(t *testing.T) {
 				return
 			}
 			defer f.Close()
-			if b, _ := io.ReadAll(f); !bytes.Equal(b, poster.Bytes()) {
+			b, err := io.ReadAll(f)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if !bytes.Equal(b, poster.Bytes()) {
 				t.Errorf("read %d bytes, want the poster's %d", len(b), poster.Len())
 			}
 		})
@@ -93,7 +98,9 @@ func TestAFetchedPictureIsSizedForCards(t *testing.T) {
 	pictures := map[string]image.Image{"/poster.png": gradient(1000, 1500), "/still.png": gradient(1600, 900)}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
-		_ = png.Encode(w, pictures[r.URL.Path])
+		if err := png.Encode(w, pictures[r.URL.Path]); err != nil {
+			t.Error(err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 	dir := t.TempDir()
@@ -147,7 +154,7 @@ func TestPicturesFetchedAheadAreCachedAndOnesMissingOrForbiddenPassedOver(t *tes
 			return
 		}
 		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write(poster.Bytes())
+		reply(t, w, poster.Bytes())
 	}))
 	t.Cleanup(srv.Close)
 	dir := t.TempDir()
@@ -252,7 +259,10 @@ func TestAPictureOverTheLimitIsNotKept(t *testing.T) {
 	}{{maxPicture, true}, {maxPicture + 1, false}} {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "image/png")
-			_, _ = io.CopyN(w, zeros{}, c.size)
+			// The client hangs up on a picture over the limit before it is all written.
+			if _, err := io.CopyN(w, zeros{}, c.size); err != nil && c.kept {
+				t.Error(err)
+			}
 		}))
 		cache := newCache(t, t.TempDir(), nil)
 		o, err := cache.File(t.Context(), uuid.NewV7(), srv.URL+"/vast.png")
@@ -282,7 +292,7 @@ func TestAProvidersPictureIsResizedWhenEveryPlaceIsTaken(t *testing.T) {
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write(poster.Bytes())
+		reply(t, w, poster.Bytes())
 	}))
 	t.Cleanup(srv.Close)
 	c := newCache(t, t.TempDir(), func(context.Context, uuid.UUID, string) error { return nil })
@@ -296,4 +306,11 @@ func TestAProvidersPictureIsResizedWhenEveryPlaceIsTaken(t *testing.T) {
 		t.Fatalf("resizing a picture not yet fetched: %v", err)
 	}
 	_ = f.Close()
+}
+
+func reply(t *testing.T, w io.Writer, body []byte) {
+	t.Helper()
+	if _, err := w.Write(body); err != nil {
+		t.Error(err)
+	}
 }

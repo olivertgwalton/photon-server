@@ -240,7 +240,11 @@ func TestChangingYourOwnPassword(t *testing.T) {
 	} {
 		rec := change(tc.token, tc.body)
 		var p problem
-		_ = json.Unmarshal(rec.Body.Bytes(), &p)
+		if rec.Code != http.StatusNoContent {
+			if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+		}
 		if rec.Code != tc.want || p.Code != tc.code {
 			t.Errorf("%s: %d %q, want %d %q", tc.name, rec.Code, p.Code, tc.want, tc.code)
 		}
@@ -315,7 +319,11 @@ func TestABrowserKeepsItsSessionInACookie(t *testing.T) {
 
 func TestTheCookieIsSecureBehindAnHTTPSProxy(t *testing.T) {
 	a := newAPI(nil)
-	a.svc.TrustedProxies, _ = peer.Parse("192.0.2.1")
+	proxies, err := peer.Parse("192.0.2.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.svc.TrustedProxies = proxies
 	for peer, want := range map[string]bool{"192.0.2.1:4000": true, "198.51.100.7:4000": false} {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(
 			`{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c","keep":"cookie"}`))

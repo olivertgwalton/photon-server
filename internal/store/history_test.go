@@ -29,8 +29,14 @@ func TestEachPlayIsKeptInTheHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oliver, _ := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h", nil)
-	kid, _ := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	start := time.Now().Add(-time.Hour).Truncate(time.Second)
 	for n, who := range []uuid.UUID{oliver.ID, kid.ID, oliver.ID} {
 		p := domain.Playback{ID: uuid.NewV7(), Profile: who, Item: item, Version: c.Version, Method: domain.PlayRemux, Started: start.Add(time.Duration(n) * time.Minute)}

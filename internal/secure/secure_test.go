@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"io"
 	"log"
 	"log/slog"
@@ -92,11 +93,20 @@ func TestOnePortServesWhatIsSet(t *testing.T) {
 	}
 	var logged lockedBuffer
 	srv := &http.Server{ErrorLog: log.New(&logged, "", 0), TLSConfig: s.TLSConfig(), ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, r.Proto)
+		if _, err := io.WriteString(w, r.Proto); err != nil {
+			t.Error(err)
+		}
 	})}
-	go func() { _ = srv.Serve(s.Listen(l)) }()
+	go func() {
+		if err := srv.Serve(s.Listen(l)); !errors.Is(err, http.ErrServerClosed) {
+			t.Error(err)
+		}
+	}()
 	t.Cleanup(func() { srv.Close() })
-	_, port, _ := net.SplitHostPort(l.Addr().String())
+	_, port, err := net.SplitHostPort(l.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
 	https := "https://localhost:" + port
 	secure := &http.Client{Timeout: time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool}, ForceAttemptHTTP2: true}}
 	get := func(c *http.Client, url string) (string, error) {

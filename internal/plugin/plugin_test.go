@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,7 +21,9 @@ func TestAPluginsErrorNamesItAndNeverItsKey(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/problem+json")
 		w.WriteHeader(status)
-		_, _ = w.Write([]byte(`{"title": "Bad key", "detail": "s3cret is not a key"}`))
+		if _, err := io.WriteString(w, `{"title": "Bad key", "detail": "s3cret is not a key"}`); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer srv.Close()
 	c := &client{

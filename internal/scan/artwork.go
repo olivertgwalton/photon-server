@@ -44,7 +44,11 @@ func picturesIn(root, dir string, names []string) pictures {
 
 // picture is the file at rel, with its BlurHash where it is a picture decoded here.
 func picture(root, rel string, kind domain.ArtworkKind) domain.Artwork {
-	hash, _ := artwork.FileBlurhash(root, rel)
+	// One not decoded here, as an SVG, or not read now, is kept all the same, without a hash.
+	hash, err := artwork.FileBlurhash(root, rel)
+	if err != nil {
+		hash = ""
+	}
 	return domain.Artwork{Kind: kind, Path: rel, Blurhash: hash}
 }
 

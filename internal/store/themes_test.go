@@ -81,7 +81,11 @@ func TestAThemeComesFromItsFolderElseThemerrDB(t *testing.T) {
 	if n := asked(); n != 1 {
 		t.Errorf("matched again: %d fetches queued, want 1, to see whether its link changed", n)
 	}
-	if subject, _, _ := s.ThemeSubject(ctx, show); subject.Theme != fetched || subject.URL != link {
+	subject, _, err := s.ThemeSubject(ctx, show)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subject.Theme != fetched || subject.URL != link {
 		t.Errorf("theme subject = %+v, want the theme fetched and its link", subject)
 	}
 	refetched := uuid.NewV7()
@@ -116,7 +120,11 @@ func TestAThemeComesFromItsFolderElseThemerrDB(t *testing.T) {
 	if err := s.Identified(ctx, show); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, _ := s.ThemeSubject(ctx, show); ok || asked() != 0 {
+	_, ok, err := s.ThemeSubject(ctx, show)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok || asked() != 0 {
 		t.Error("a show with its own theme file is asked of ThemerrDB, want it left be")
 	}
 	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Themes: domain.ThemesOff}); err != nil {

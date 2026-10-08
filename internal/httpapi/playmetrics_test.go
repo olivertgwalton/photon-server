@@ -98,14 +98,20 @@ func TestADirectPlaysRangeIsCountedSent(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&played); err != nil || len(played.Parts) == 0 {
 		t.Fatalf("play: %s, %v", rec.Body, err)
 	}
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+played.Parts[0].URL, nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+played.Parts[0].URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	req.Header.Set("Range", "bytes=2-5")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if resp.StatusCode != http.StatusPartialContent || string(body) != "2345" {
 		t.Fatalf("the range: %s %q, want 206 \"2345\"", resp.Status, body)
 	}

@@ -78,7 +78,10 @@ var disambiguated = regexp.MustCompile(`\s*\(\d{4}\)$`)
 // added to tell them apart.
 func normalise(s string) string {
 	s = disambiguated.ReplaceAllString(strings.TrimSpace(s), "")
-	s, _, _ = transform.String(unmark(), strings.ToLower(s))
+	s = strings.ToLower(s)
+	if unmarked, _, err := transform.String(unmark(), s); err == nil {
+		s = unmarked
+	}
 	s = strings.ReplaceAll(s, "&", " and ")
 	return strings.Join(strings.FieldsFunc(s, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)

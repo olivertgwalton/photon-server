@@ -49,19 +49,35 @@ func TestAMoveFinishesOnlyOnceEveryCopyIsDone(t *testing.T) {
 	if err := s.StartStorageMove(ctx, to); !errors.Is(err, ErrMoving) {
 		t.Errorf("a second move: %v, want ErrMoving", err)
 	}
-	if ok, _ := s.ClaimMoveSource(ctx, a, time.Now().Add(-time.Minute)); !ok {
+	ok, err := s.ClaimMoveSource(ctx, a, time.Now().Add(-time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
 		t.Error("a copy not begun was not claimed")
 	}
-	if ok, _ := s.ClaimMoveSource(ctx, a, time.Now().Add(-time.Minute)); ok {
+	ok, err = s.ClaimMoveSource(ctx, a, time.Now().Add(-time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
 		t.Error("a copy that said something within the minute was taken over")
 	}
-	if ok, _ := s.ClaimMoveSource(ctx, b, time.Now()); !ok {
+	ok, err = s.ClaimMoveSource(ctx, b, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
 		t.Error("another copy was not claimed")
 	}
 	if err := s.ReportMoveSource(ctx, a, 3, 3, true); err != nil {
 		t.Fatal(err)
 	}
-	if ok, _ := s.ClaimMoveSource(ctx, a, time.Now().Add(time.Hour)); ok {
+	ok, err = s.ClaimMoveSource(ctx, a, time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
 		t.Error("a done copy was taken again")
 	}
 	if done, err := s.FinishStorageMove(ctx, []uuid.UUID{a, b}); done || err != nil {
@@ -77,10 +93,18 @@ func TestAMoveFinishesOnlyOnceEveryCopyIsDone(t *testing.T) {
 	if done, err := s.FinishStorageMove(ctx, []uuid.UUID{a, b}); !done || err != nil {
 		t.Errorf("not finished with every copy done: %v, %v", done, err)
 	}
-	if got, _ := s.Storage(ctx); got != to {
+	got, err := s.Storage(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != to {
 		t.Errorf("things are kept %+v, want where the move took them", got)
 	}
-	if _, moving, _ := s.StorageMove(ctx); moving {
+	_, moving, err = s.StorageMove(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moving {
 		t.Error("the move is still under way once finished")
 	}
 	if err := s.CancelStorageMove(ctx); !errors.Is(err, ErrNotFound) {

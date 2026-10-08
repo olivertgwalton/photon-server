@@ -3,6 +3,7 @@
 package media
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"strconv"
@@ -33,8 +34,13 @@ func TestABackgroundToolRunsAtALowerPriority(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := niceness(t, c.Process.Pid)
-		_ = c.Process.Kill()
-		_ = c.Wait()
+		if err := c.Process.Kill(); err != nil {
+			t.Fatal(err)
+		}
+		var killed *exec.ExitError
+		if err := c.Wait(); err != nil && !errors.As(err, &killed) {
+			t.Fatal(err)
+		}
 		if got != want {
 			t.Errorf("%s: niceness %d, want %d", priority, got, want)
 		}

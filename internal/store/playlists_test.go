@@ -102,7 +102,11 @@ func TestAPlaylistKeepsItsOrder(t *testing.T) {
 	if err := s.RemovePlaylist(ctx, oliver.ID, list); err != nil {
 		t.Fatal(err)
 	}
-	if left, _ := s.Playlists(ctx, oliver.ID); len(left) != 0 {
+	left, err := s.Playlists(ctx, oliver.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) != 0 {
 		t.Errorf("after removing it: %+v", left)
 	}
 }

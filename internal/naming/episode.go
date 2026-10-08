@@ -66,8 +66,13 @@ func validSeason(n int) bool {
 	return n < 200 || (n > 1927 && n <= 2500)
 }
 
+// atoi reads the digits a pattern matched; past an int, which no season, episode or year is, it is
+// zero.
 func atoi(s string) int {
-	n, _ := strconv.Atoi(s)
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
 	return n
 }
 

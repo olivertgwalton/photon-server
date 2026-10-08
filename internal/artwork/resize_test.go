@@ -161,7 +161,11 @@ func TestAResizeOutlivesTheFirstToAsk(t *testing.T) {
 			}
 			return poster(ctx)
 		}
-		go func() { _, _ = c.Resized(first, "poster", 320, 0, slow) }()
+		go func() {
+			if _, err := c.Resized(first, "poster", 320, 0, slow); !errors.Is(err, context.Canceled) {
+				t.Errorf("the client that went away got %v, want %v", err, context.Canceled)
+			}
+		}()
 		stayed := make(chan error)
 		go func() {
 			f, err := c.Resized(t.Context(), "poster", 320, 0, slow)
@@ -190,7 +194,10 @@ func TestAPictureIsOpenedAsItIsOrToSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, _ := io.ReadAll(src)
+	b, err := io.ReadAll(src)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_ = src.Close()
 	if err := os.WriteFile(filepath.Join(root, "poster.png"), b, 0o600); err != nil {
 		t.Fatal(err)

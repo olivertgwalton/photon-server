@@ -46,9 +46,12 @@ type Listener struct {
 // NewListener serves h beside photon's own API at listen, an address as PHOTON_LISTEN gives it.
 func NewListener(s settings, subscribe func() (<-chan domain.Event, func()), h http.Handler, listen string,
 	secure func(net.Listener) net.Listener, tlsConfig *tls.Config, log *slog.Logger,
-) *Listener {
-	host, _, _ := net.SplitHostPort(listen)
-	return &Listener{settings: s, subscribe: subscribe, handler: h, host: host, secure: secure, tlsConfig: tlsConfig, log: log}
+) (*Listener, error) {
+	host, _, err := net.SplitHostPort(listen)
+	if err != nil {
+		return nil, fmt.Errorf("PHOTON_LISTEN: %w", err)
+	}
+	return &Listener{settings: s, subscribe: subscribe, handler: h, host: host, secure: secure, tlsConfig: tlsConfig, log: log}, nil
 }
 
 // Err is why this node is not serving the API on the port set, nil while it is or it is off.

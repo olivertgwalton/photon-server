@@ -138,7 +138,11 @@ func TestWeakHashIsUpgradedAtSignIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, stale, _ := svc.hasher.Verify(t.Context(), hash, "correct horse"); hash == old || stale {
+	_, stale, err := svc.hasher.Verify(t.Context(), hash, "correct horse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash == old || stale {
 		t.Errorf("the stored hash was not upgraded: %s", hash)
 	}
 }
@@ -176,7 +180,11 @@ func TestPairingATelevision(t *testing.T) {
 	}
 
 	code, _, _ := strings.Cut(start.DeviceCode, ".")
-	if state, _, _, _ := svc.PollPairing(t.Context(), code+".wrong-secret"); state != kv.PairingExpired {
+	state, _, _, err := svc.PollPairing(t.Context(), code+".wrong-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != kv.PairingExpired {
 		t.Errorf("a poll with the wrong secret answered %q", state)
 	}
 	state, token, profile, err := svc.PollPairing(t.Context(), start.DeviceCode)
@@ -186,7 +194,11 @@ func TestPairingATelevision(t *testing.T) {
 	if session, err := svc.Authenticate(t.Context(), token); err != nil || session.Profile.Name != "Oliver" {
 		t.Errorf("the television's token: %+v, %v", session, err)
 	}
-	if state, _, _, _ := svc.PollPairing(t.Context(), start.DeviceCode); state != kv.PairingExpired {
+	state, _, _, err = svc.PollPairing(t.Context(), start.DeviceCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != kv.PairingExpired {
 		t.Errorf("an approved pairing was handed out twice (%q)", state)
 	}
 }
@@ -201,7 +213,11 @@ func TestAPairingsStatusIsReadWithoutHandingItOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, _, _ := strings.Cut(start.DeviceCode, ".")
-	if state, _, _ := svc.PairingStatus(t.Context(), code+".wrong-secret"); state != kv.PairingExpired {
+	state, _, err := svc.PairingStatus(t.Context(), code+".wrong-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != kv.PairingExpired {
 		t.Errorf("the status with the wrong secret: %q", state)
 	}
 	state, p, err := svc.PairingStatus(t.Context(), start.DeviceCode)
@@ -216,10 +232,18 @@ func TestAPairingsStatusIsReadWithoutHandingItOut(t *testing.T) {
 			t.Errorf("after approval: %q, %v", state, err)
 		}
 	}
-	if state, _, _, _ := svc.PollPairing(t.Context(), start.DeviceCode); state != kv.PairingApproved {
+	state, _, _, err = svc.PollPairing(t.Context(), start.DeviceCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != kv.PairingApproved {
 		t.Errorf("the poll after reading the status: %q, want approved", state)
 	}
-	if state, _, _ := svc.PairingStatus(t.Context(), start.DeviceCode); state != kv.PairingExpired {
+	state, _, err = svc.PairingStatus(t.Context(), start.DeviceCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != kv.PairingExpired {
 		t.Errorf("the status of a pairing handed out: %q, want expired", state)
 	}
 }
@@ -236,7 +260,11 @@ func TestPairingByDigits(t *testing.T) {
 	if len(start.UserCode) != 6 || strings.Trim(start.UserCode, "0123456789") != "" {
 		t.Errorf("user code %q is not six digits", start.UserCode)
 	}
-	if _, p, _ := svc.PairingStatus(t.Context(), start.DeviceCode); p.UserCode != start.UserCode {
+	_, p, err := svc.PairingStatus(t.Context(), start.DeviceCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.UserCode != start.UserCode {
 		t.Errorf("the status shows %q, want %q", p.UserCode, start.UserCode)
 	}
 	spaced := start.UserCode[:3] + " " + start.UserCode[3:]
@@ -254,10 +282,18 @@ func TestPairingPollsAreRateLimited(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state, _, _, _ := svc.PollPairing(t.Context(), start.DeviceCode); state != kv.PairingPending {
+	state, _, _, err := svc.PollPairing(t.Context(), start.DeviceCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != kv.PairingPending {
 		t.Errorf("first poll: %q, want pending", state)
 	}
-	if state, _, _, _ := svc.PollPairing(t.Context(), start.DeviceCode); state != kv.PairingSlowDown {
+	state, _, _, err = svc.PollPairing(t.Context(), start.DeviceCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != kv.PairingSlowDown {
 		t.Errorf("an immediate second poll: %q, want slow_down", state)
 	}
 }

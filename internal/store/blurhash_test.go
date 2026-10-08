@@ -58,7 +58,11 @@ func TestPicturesAnswerTheirBlurhashesWhereverTheyAreShown(t *testing.T) {
 	if !slices.Equal(unhashed, want) {
 		t.Errorf("unhashed = %+v, want the provider's backdrop and the photo, to be fetched: %+v", unhashed, want)
 	}
-	if after, _ := s.Unhashed(ctx, want[0].ID, 10); !slices.Equal(after, want[1:]) {
+	after, err := s.Unhashed(ctx, want[0].ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(after, want[1:]) {
 		t.Errorf("unhashed after the first = %+v, want the second alone", after)
 	}
 

@@ -182,6 +182,9 @@ func jellyfinDate(s string) time.Time {
 	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
 		return t
 	}
-	t, _ := time.Parse("2006-01-02T15:04:05.9999999", s)
+	t, err := time.Parse("2006-01-02T15:04:05.9999999", s)
+	if err != nil {
+		return time.Time{}
+	}
 	return t
 }

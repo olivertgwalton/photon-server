@@ -96,7 +96,9 @@ func fakeDB(t *testing.T, links map[string]string) (string, *atomic.Int32) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"id": 1, "youtube_theme_added": 1694834191, "youtube_theme_url": "`+link+`"}`)
+		if _, err := io.WriteString(w, `{"id": 1, "youtube_theme_added": 1694834191, "youtube_theme_url": "`+link+`"}`); err != nil {
+			t.Error(err)
+		}
 	}))
 	t.Cleanup(db.Close)
 	return db.URL + "/", &asked
@@ -130,7 +132,10 @@ func TestAListedThemeIsKeptAndFetchedAgainOnlyWhenItsLinkChanges(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer f.Close()
-		b, _ := io.ReadAll(f)
+		b, err := io.ReadAll(f)
+		if err != nil {
+			t.Fatal(err)
+		}
 		return string(b)
 	}
 

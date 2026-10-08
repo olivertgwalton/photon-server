@@ -82,7 +82,7 @@ func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) 
 }
 
 func playSubtitle(f *model.SubtitleFile) PlaySubtitle {
-	lang, _ := language.Parse(deref(f.Language))
+	lang := language.Make(deref(f.Language))
 	return PlaySubtitle{
 		ID: f.ID, Codec: f.Codec, Language: lang, Title: deref(f.Title), Default: f.IsDefault,
 		Forced: f.Forced, HearingImpaired: f.HearingImpaired,
@@ -91,7 +91,7 @@ func playSubtitle(f *model.SubtitleFile) PlaySubtitle {
 
 // mediaStream is a stream as it was probed.
 func mediaStream(t *model.Stream) domain.Stream {
-	lang, _ := language.Parse(deref(t.Language))
+	lang := language.Make(deref(t.Language))
 	m := domain.Stream{
 		Index: t.Idx, Kind: t.Kind, Codec: t.Codec, Profile: deref(t.Profile), Language: lang, Title: deref(t.Title),
 		Default: t.IsDefault, Forced: t.Forced, HearingImpaired: t.HearingImpaired, Commentary: t.Commentary,

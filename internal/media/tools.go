@@ -102,7 +102,11 @@ func releaseVersion(out []byte) (string, error) {
 	if m == nil {
 		return "", fmt.Errorf("not a release build: %q", line)
 	}
-	if major, _ := strconv.Atoi(string(m[2])); major < minimumMajor {
+	major, err := strconv.Atoi(string(m[2]))
+	if err != nil {
+		return "", fmt.Errorf("version %s: %w", m[1], err)
+	}
+	if major < minimumMajor {
 		return "", fmt.Errorf("version %s is older than %d", m[1], minimumMajor)
 	}
 	return string(m[1]), nil
@@ -173,9 +177,9 @@ func NewCommand(ctx context.Context, priority Priority, files []*os.File, path s
 }
 
 // Start starts the tool and, for a Background one, lowers it to backgroundNice at once, as Jellyfin
-// sets a process's priority class straight after starting it. A tool not lowered runs all the same:
-// that fails only for one already gone, or on a server already running lower than backgroundNice.
-// Jellyfin says so at debug, which this server's log never shows, so nothing is said.
+// sets a process's priority class straight after starting it. A tool already gone, or one on a
+// server already running lower than backgroundNice, runs as it is (see lower); one that cannot be
+// lowered for any other reason is stopped, and Start answers why, with what stopping it said.
 func (c *Command) Start() error {
 	if err := c.Cmd.Start(); err != nil {
 		return err
@@ -183,7 +187,9 @@ func (c *Command) Start() error {
 	switch c.priority {
 	case Foreground:
 	case Background:
-		_ = lower(c.Process.Pid)
+		if err := lower(c.Process.Pid); err != nil {
+			return errors.Join(err, c.Process.Kill(), c.Wait())
+		}
 	}
 	return nil
 }

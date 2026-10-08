@@ -172,7 +172,9 @@ func TestStyledSubtitlesAreReadOutOnce(t *testing.T) {
 	src := SubtitleSource{Open: open, Stream: &signs, Part: part, Streams: streams}
 	gone, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, _ = r.Extracted(gone, src, StyledName(signs))
+	if _, err := r.Extracted(gone, src, StyledName(signs)); !errors.Is(err, context.Canceled) {
+		t.Fatalf("extracting for a client gone: %v, want %v", err, context.Canceled)
+	}
 	if _, err := r.Extracted(t.Context(), src, FontsDir); err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +351,11 @@ func TestEmbeddedSubtitlesComeWithTheVideo(t *testing.T) {
 		if read, err := os.ReadFile(runs); err != nil || strings.Count(string(read), "\n") != 1 {
 			t.Errorf("%s: the film was read %q times, %v; want once", tc.name, read, err)
 		}
-		if left, _ := os.ReadDir(extracted); len(left) != 0 {
+		left, err := os.ReadDir(extracted)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(left) != 0 {
 			t.Errorf("%s: %d read out whole, want none", tc.name, len(left))
 		}
 	}

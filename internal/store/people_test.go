@@ -92,7 +92,11 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 			t.Errorf("search %q: %+v, %v; want her", q, found, err)
 		}
 	}
-	if found, total, _ := s.SearchPeople(ctx, "gourney", 0, 10); len(found) != 0 || total != 0 {
+	found, total, err := s.SearchPeople(ctx, "gourney", 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 0 || total != 0 {
 		t.Errorf("search inside a word: %+v, want no one", found)
 	}
 	for _, l := range []uuid.UUID{lib.ID, shows.ID} {
@@ -249,7 +253,10 @@ func TestAPersonIsKnownByAnyProvidersID(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	cards, _, _ := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 1})
+	cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
 	heat := cards[0].ID
 	plugin := domain.Provider(domain.PluginSource("films"))
 	credit := func(name string, ids map[domain.Provider]string) domain.Credit {
@@ -301,7 +308,11 @@ func TestAPersonIsKnownByAnyProvidersID(t *testing.T) {
 		if err != nil || !maps.Equal(p.IDs, want[c.Name]) {
 			t.Errorf("%s = %+v, %v; want one person with ids %v", c.Name, p, err, want[c.Name])
 		}
-		if found, _, _ := s.SearchPeople(ctx, c.Name, 0, 10); len(found) != 1 {
+		found, _, err := s.SearchPeople(ctx, c.Name, 0, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(found) != 1 {
 			t.Errorf("search %q: %+v, want one person", c.Name, found)
 		}
 	}
@@ -330,7 +341,10 @@ func TestSimilarTitlesShareSomething(t *testing.T) {
 		if _, err := s.SaveFolder(ctx, lib.ID, f.title, []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)
 		}
-		cards, _, _ := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
 		ids[f.title] = cards[0].ID
 		if err := s.SaveIdentity(ctx, cards[0].ID, domain.SourceTMDB, domain.Metadata{Title: f.title, Genres: f.genres, Credits: f.credits}, nil); err != nil {
 			t.Fatal(err)
@@ -354,7 +368,11 @@ func TestSimilarTitlesShareSomething(t *testing.T) {
 	if err := s.SaveIdentity(ctx, ids["Heat"], domain.SourceTMDB, domain.Metadata{Title: "Heat", Genres: []string{"Crime", "Thriller", "Drama", "Comedy"}, Credits: []domain.Credit{mann}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ = s.Similar(ctx, uuid.UUID{}, ids["Heat"]); slices.ContainsFunc(got, func(c Card) bool { return c.Title == "Amélie" }) {
+	got, err = s.Similar(ctx, uuid.UUID{}, ids["Heat"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.ContainsFunc(got, func(c Card) bool { return c.Title == "Amélie" }) {
 		t.Errorf("a fourth genre counted: %+v", got)
 	}
 }
@@ -416,7 +434,11 @@ func TestTwoMatchesCreditingSomeoneNewAtOnceShareThem(t *testing.T) {
 		if len(credited[0]) != len(cast) || !slices.Equal(credited[0], credited[1]) {
 			t.Errorf("round %d: credited %v and %v, want the same %d people on both", round, credited[0], credited[1], len(cast))
 		}
-		if found, _, _ := s.SearchPeople(ctx, "Actor 7", 0, 10); len(found) != round+1 {
+		found, _, err := s.SearchPeople(ctx, "Actor 7", 0, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(found) != round+1 {
 			t.Errorf("round %d: %d people named Actor 7, want one a round", round, len(found))
 		}
 	}
@@ -468,12 +490,20 @@ func TestSomeoneIsDescribedInTheLanguageTheirTitlesShare(t *testing.T) {
 	if err := s.SetLibrary(ctx, filme, LibraryChange{MetadataLanguage: &french}); err != nil {
 		t.Fatal(err)
 	}
-	if p, _ := s.Person(ctx, ganz); !p.DescribedAt.IsZero() || p.Language != "fr-FR" {
+	p, err := s.Person(ctx, ganz)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.DescribedAt.IsZero() || p.Language != "fr-FR" {
 		t.Errorf("after the library asks in French: described at %v, in %q; want him to be described again, in French", p.DescribedAt, p.Language)
 	}
 
 	film("Films", "Downfall")
-	if p, _ := s.Person(ctx, ganz); p.Language != "" {
+	p, err = s.Person(ctx, ganz)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Language != "" {
 		t.Errorf("credited in a French and a British library: %q, want the server's own", p.Language)
 	}
 }

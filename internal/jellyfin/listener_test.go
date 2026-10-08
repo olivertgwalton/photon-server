@@ -73,8 +73,11 @@ func TestTheAPIIsServedWhereAndWhileAnAdminSays(t *testing.T) {
 	settings := &fakeSettings{n: domain.Network{Jellyfin: domain.JellyfinOff, JellyfinPort: 8096}}
 	events := make(chan domain.Event, 1)
 	tell := func() { events <- domain.Event{Kind: domain.EventNetworkChanged} }
-	l := NewListener(settings, func() (<-chan domain.Event, func()) { return events, func() {} }, api,
+	l, err := NewListener(settings, func() (<-chan domain.Event, func()) { return events, func() {} }, api,
 		"127.0.0.1:8640", func(l net.Listener) net.Listener { return l }, nil, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() { defer close(done); l.Run(ctx) }()

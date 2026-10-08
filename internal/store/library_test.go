@@ -141,7 +141,11 @@ func TestALibrarysLocaleDescribesItsTitlesAgain(t *testing.T) {
 	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{MetadataLanguage: &none, CertificationCountry: &none, ArtworkLanguage: domain.ArtworkLocalized}); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := s.Library(ctx, lib.ID); got.Locale != (domain.Locale{Artwork: domain.ArtworkLocalized}) {
+	got, err := s.Library(ctx, lib.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Locale != (domain.Locale{Artwork: domain.ArtworkLocalized}) {
 		t.Errorf("given back: %+v, want the server's own", got.Locale)
 	}
 }
@@ -181,7 +185,11 @@ func TestAFilmAsksInALocaleOfItsOwnOverItsLibrarys(t *testing.T) {
 	if err := s.SetTitleLocale(ctx, film, domain.Locale{}); err != nil {
 		t.Fatal(err)
 	}
-	if sub, _, _ := s.IdentifySubject(ctx, film); sub.Locale.Language != "de-DE" {
+	sub, _, err = s.IdentifySubject(ctx, film)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sub.Locale.Language != "de-DE" {
 		t.Errorf("given back, it asks in %+v, want its library's German", sub.Locale)
 	}
 }

@@ -139,7 +139,11 @@ func TestSignInsAreTold(t *testing.T) {
 		t.Errorf("refusal told as %+v", refused)
 	}
 	for _, e := range told.raised {
-		if said, _ := json.Marshal(e.Details); strings.Contains(string(said), "guess") || strings.Contains(string(said), "correct horse") {
+		said, err := json.Marshal(e.Details)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(said), "guess") || strings.Contains(string(said), "correct horse") {
 			t.Errorf("%s carries the password", e.Kind)
 		}
 	}

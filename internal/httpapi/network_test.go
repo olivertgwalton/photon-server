@@ -35,7 +35,7 @@ func (f fakeNetwork) SetNetwork(_ context.Context, n domain.Network) error {
 func TestSecureConnectionsNeedACertificateTheServerReads(t *testing.T) {
 	var set domain.Network
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Auth: fakeAuth{}, Events: &fakeEvents{}, Network: fakeNetwork{set: &set},
+		Auth: fakeAuth{}, Events: &fakeEvents{}, Network: fakeNetwork{set: &set}, Setup: Setup{Listen: ":8640"},
 	})
 	const jellyfin = `,"jellyfin":"off","jellyfin_port":8096}`
 	for body, want := range map[string]int{

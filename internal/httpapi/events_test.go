@@ -89,7 +89,10 @@ func TestAnAdminsStreamTellsWhatHappensOnEveryNode(t *testing.T) {
 	srv := httptest.NewServer(New(log, domain.Info{}, Services{Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: here, Profiles: listedProfiles{oliver}, Libraries: &fakeLibraries{}}))
 	defer srv.Close()
 	open := func(token string) *http.Response {
-		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/admin/events", nil)
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/admin/events", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 		req.Header.Set("Authorization", "Bearer "+token)
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {

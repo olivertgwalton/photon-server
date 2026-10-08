@@ -97,7 +97,9 @@ func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write(poster.Bytes())
+		if _, err := w.Write(poster.Bytes()); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer srv.Close()
 	dir := t.TempDir()

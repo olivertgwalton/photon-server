@@ -178,7 +178,7 @@ func (a *API) chooseTracks(ctx context.Context, profile uuid.UUID, page *store.T
 // pageTracks are a copy's sound and subtitles as its page lists them.
 func pageTracks(v store.VersionPage) (audio, subtitles []playback.Track) {
 	for _, s := range v.Streams {
-		l, _ := language.Parse(s.Language)
+		l := language.Make(s.Language)
 		t := playback.Track{Stream: s.Index, Language: l, Default: s.Default, Forced: s.Forced, Commentary: s.Commentary}
 		switch s.Kind {
 		case domain.StreamAudio:
@@ -189,7 +189,7 @@ func pageTracks(v store.VersionPage) (audio, subtitles []playback.Track) {
 		}
 	}
 	for _, f := range v.Subtitles {
-		l, _ := language.Parse(f.Language)
+		l := language.Make(f.Language)
 		subtitles = append(subtitles, playback.Track{File: f.ID, Language: l, Default: f.Default, Forced: f.Forced})
 	}
 	return audio, subtitles

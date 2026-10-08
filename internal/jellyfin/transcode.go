@@ -63,15 +63,18 @@ func transcodeSubject(item, session uuid.UUID, plan string) string {
 
 // transcodingURL is where an app fetches a copy's HLS: relative, as every app puts its own base
 // before it, and carrying the app's token, as no app sends one with media.
-func (a *API) transcodingURL(r *http.Request, item, session uuid.UUID, t transcode) string {
-	b, _ := json.Marshal(t)
+func (a *API) transcodingURL(r *http.Request, item, session uuid.UUID, t transcode) (string, error) {
+	b, err := json.Marshal(t)
+	if err != nil {
+		return "", err
+	}
 	plan := base64.RawURLEncoding.EncodeToString(b)
 	exp, sig := a.svc.Signer.Token(transcodeSubject(item, session, plan), time.Now().Add(transcodeFor))
 	q := url.Values{
 		"PlaySessionId": {guid(session)}, "MediaSourceId": {guid(t.Version)}, "ApiKey": {appOf(r).Token},
 		"Plan": {plan}, "Expires": {exp}, "Signature": {sig},
 	}
-	return "/videos/" + guid(item) + "/master.m3u8?" + q.Encode()
+	return "/videos/" + guid(item) + "/master.m3u8?" + q.Encode(), nil
 }
 
 // video serves what is under a video's own path: its file as it is (stream, stream.mkv), or its

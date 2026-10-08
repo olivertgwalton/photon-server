@@ -18,7 +18,11 @@ func TestARestoreUnderwayLapsesUnlessItsNodeKeepsIt(t *testing.T) {
 	}
 	defer k.Close()
 	ctx := t.Context()
-	t.Cleanup(func() { _, _ = k.Clear(t.Context()) })
+	defer func() {
+		if _, err := k.Clear(ctx); err != nil {
+			t.Error(err)
+		}
+	}()
 	r := domain.Restore{Dump: "photon-20261008T120000Z.dump", Node: uuid.NewV7(), Started: time.Unix(1_800_000_000, 0).UTC(), Phase: domain.RestoreStopping}
 	if ok, err := k.BeginRestore(ctx, r, 30*time.Second); err != nil || !ok {
 		t.Fatalf("beginning: %v %v", ok, err)
