@@ -1000,6 +1000,48 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/v1/admin/libraries/{id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check that every node running can reach and read a library's root, as any may scan or play from it
+         * @description Admin only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LibraryCheck"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/libraries/{id}/refresh": {
         parameters: {
             query?: never;
@@ -6891,6 +6933,10 @@ export interface components {
             themes?: components["schemas"]["ThemeLookup"];
             title_language?: components["schemas"]["TitleLanguage"];
         };
+        LibraryCheck: {
+            nodes: components["schemas"]["NodeRootCheck"][];
+            root: string;
+        };
         /** @enum {string} */
         LibraryKind: "movies" | "shows";
         LibraryList: {
@@ -7072,6 +7118,14 @@ export interface components {
         NodeReach: "answered" | "unreachable";
         /** @enum {string} */
         NodeRole: "all" | "serve" | "transcode";
+        NodeRootCheck: {
+            access: components["schemas"]["RootAccess"];
+            entries: number;
+            error?: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
         NowPlaying: {
             acceleration?: components["schemas"]["Acceleration"];
             audio?: components["schemas"]["PlaybackAudio"] | null;
@@ -7490,6 +7544,8 @@ export interface components {
         RestoreResult: "succeeded" | "failed";
         /** @enum {string} */
         Role: "admin" | "member" | "restricted";
+        /** @enum {string} */
+        RootAccess: "readable" | "missing" | "not_a_folder" | "denied" | "unreadable" | "timed_out" | "unreachable_node";
         /** @enum {string} */
         RowVisibility: "shown" | "hidden";
         RunningJob: {

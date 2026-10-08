@@ -3,6 +3,7 @@ import DatabaseBackupIcon from "@lucide/svelte/icons/database-backup";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import type { Component } from "svelte";
 import { act } from "#lib/act.js";
+import IconButton from "#lib/components/IconButton.svelte";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import { Button, buttonVariants } from "#lib/components/ui/button/index.js";
@@ -11,8 +12,10 @@ import * as Dialog from "#lib/components/ui/dialog/index.js";
 type Mode = components["schemas"]["RefreshMode"];
 
 // Asks a library's providers about its titles again, as Jellyfin's Refresh
-// metadata on a library does: what is missing, or everything.
-let { id, name }: { id: string; name: string } = $props();
+// metadata on a library does: what is missing, or everything. With an icon,
+// its button is shown as it.
+let { id, name, icon }: { id: string; name: string; icon?: Component } =
+	$props();
 
 let open = $state(false);
 let asking = $state(false);
@@ -54,9 +57,24 @@ async function refresh(mode: Mode, said: string) {
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Trigger class={buttonVariants({ variant: "outline", size: "sm" })}>
-		Refresh metadata <span class="sr-only">of {name}</span>
-	</Dialog.Trigger>
+	{#if icon}
+		<Dialog.Trigger>
+			{#snippet child({
+				props,
+			})}
+				<IconButton
+					{...props}
+					label="Refresh metadata"
+					hidden="of {name}"
+					{icon}
+				/>
+			{/snippet}
+		</Dialog.Trigger>
+	{:else}
+		<Dialog.Trigger class={buttonVariants({ variant: "outline", size: "sm" })}>
+			Refresh metadata <span class="sr-only">of {name}</span>
+		</Dialog.Trigger>
+	{/if}
 	<Dialog.Content class="sm:max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>Refresh library metadata</Dialog.Title>

@@ -19,6 +19,13 @@ folder's compose file takes `PHOTON_HOSTNAME`, `photon` where it is unset.
 Every node mounts the media at the same path, as a library is kept by its path. Node addresses
 belong on a private network: the nodes trust what they hand each other.
 
+Settings › Libraries checks a library's root on every node running, at
+`POST /api/v1/admin/libraries/{id}/check`: the node asked asks each other at
+`GET /api/v1/internal/libraries/{id}/check`, signed as a remux is. Each stats and lists the root,
+and says it is `readable`, with how many entries it holds, or `missing`, `not_a_folder`, `denied`
+or `unreadable`, with why; one that has not finished in 5 seconds, as on a hung network mount, is
+`timed_out`, and a node that does not answer within 7 is `unreachable_node`.
+
 ## What each node tells the others
 
 Every 15 seconds, and as soon as a transcode starts or ends, each node tells the others, through

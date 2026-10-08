@@ -1,12 +1,15 @@
 <script lang="ts">
-import type { Snippet } from "svelte";
+import type { Component, Snippet } from "svelte";
+import IconButton from "#lib/components/IconButton.svelte";
 import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
 import { buttonVariants } from "#lib/components/ui/button/index.js";
 
-// A button for something that cannot be undone, which asks first.
+// A button for something that cannot be undone, which asks first; with an
+// icon, shown as it.
 let {
 	label,
 	hidden = "",
+	icon,
 	title,
 	confirm,
 	onconfirm,
@@ -15,6 +18,7 @@ let {
 	label: string;
 	// Said to a screen reader after the label, to tell one row's button from the next.
 	hidden?: string;
+	icon?: Component;
 	title: string;
 	confirm: string;
 	onconfirm: () => unknown;
@@ -23,14 +27,24 @@ let {
 </script>
 
 <AlertDialog.Root>
-	<AlertDialog.Trigger
-		class={buttonVariants({ variant: "outline", size: "sm" })}
-	>
-		{label}
-		{#if hidden}
-			<span class="sr-only">{hidden}</span>
-		{/if}
-	</AlertDialog.Trigger>
+	{#if icon}
+		<AlertDialog.Trigger>
+			{#snippet child({
+				props,
+			})}
+				<IconButton {...props} {label} {hidden} {icon} tone="destructive" />
+			{/snippet}
+		</AlertDialog.Trigger>
+	{:else}
+		<AlertDialog.Trigger
+			class={buttonVariants({ variant: "outline", size: "sm" })}
+		>
+			{label}
+			{#if hidden}
+				<span class="sr-only">{hidden}</span>
+			{/if}
+		</AlertDialog.Trigger>
+	{/if}
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>{title}</AlertDialog.Title>
