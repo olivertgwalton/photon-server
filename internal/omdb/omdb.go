@@ -118,7 +118,7 @@ func (c *Client) Describe(ctx context.Context, _ domain.Locale, kind domain.Item
 			if err != nil {
 				continue
 			}
-			aired, _ := time.Parse(time.DateOnly, e.Released)
+			aired := provider.Date(e.Released)
 			episode := domain.Metadata{Title: value(e.Title), ReleaseDate: aired, Year: provider.Year(aired)}
 			// A season lists no plots: each episode is asked for its own, as Jellyfin asks.
 			if value(e.IMDbID) != "" {
@@ -139,12 +139,15 @@ func (c *Client) Describe(ctx context.Context, _ domain.Locale, kind domain.Item
 }
 
 func (t title) metadata() domain.Metadata {
-	released, _ := time.Parse("02 Jan 2006", t.Released)
-	// A show's year is its run, "2008–2013".
-	y, _ := strconv.Atoi(t.Year[:min(len(t.Year), 4)])
+	// OMDb gives "N/A" for a date it does not know.
+	released, err := time.Parse("02 Jan 2006", t.Released)
+	if err != nil {
+		released = time.Time{}
+	}
 	out := domain.Metadata{
 		Title: value(t.Title), Overview: value(t.Plot), Certificate: value(t.Rated),
-		ReleaseDate: released, Year: y,
+		// A show's year is its run, "2008–2013".
+		ReleaseDate: released, Year: provider.Number(t.Year[:min(len(t.Year), 4)]),
 	}
 	if genres := value(t.Genre); genres != "" {
 		out.Genres = strings.Split(genres, ", ")
@@ -157,7 +160,7 @@ func (t title) metadata() domain.Metadata {
 func (t title) ratings() []domain.Rating {
 	var out []domain.Rating
 	if score, err := strconv.ParseFloat(t.IMDbRating, 64); err == nil {
-		votes, _ := strconv.Atoi(strings.ReplaceAll(t.IMDbVotes, ",", ""))
+		votes := provider.Number(strings.ReplaceAll(t.IMDbVotes, ",", ""))
 		out = append(out, domain.Rating{Site: domain.SiteIMDb, Score: score * 10, Votes: votes})
 	}
 	for _, r := range t.Ratings {

@@ -417,8 +417,20 @@ func (r *Registry) DescribePerson(ctx context.Context, loc domain.Locale, ids ma
 // Date reads a provider's YYYY-MM-DD date; one it does not give, or gives malformed, is the zero
 // time.
 func Date(s string) time.Time {
-	t, _ := time.Parse(time.DateOnly, s)
+	t, err := time.Parse(time.DateOnly, s)
+	if err != nil {
+		return time.Time{}
+	}
 	return t
+}
+
+// Number reads a provider's number; one it does not give, or gives malformed, is zero.
+func Number(s string) int {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 // Year is the year of a date, or zero for the zero time.

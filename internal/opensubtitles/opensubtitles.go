@@ -168,7 +168,7 @@ func (c *Client) SearchSubtitles(ctx context.Context, q domain.SubtitleQuery) ([
 		if len(a.Files) != 1 {
 			continue
 		}
-		lang, _ := language.Parse(a.Language)
+		lang := language.Make(a.Language)
 		out = append(out, domain.FoundSubtitle{
 			Source: domain.SourceOpenSubtitles, ID: strconv.Itoa(a.Files[0].ID), Language: lang, Release: a.Release,
 			HearingImpaired: a.HearingImpaired, Forced: a.ForeignOnly, ForRelease: a.HashMatch, Downloads: a.Downloads,
