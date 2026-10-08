@@ -17,7 +17,7 @@ import (
 
 // playlistsAPI is a household's films, Heat, Alien and Thief, and two profiles, Ada and Bob, each
 // signed in by their own token.
-func playlistsAPI(t *testing.T) (*API, *store.Store, map[string]uuid.UUID, domain.Profile, domain.Profile) {
+func playlistsAPI(t *testing.T) (*API, *store.Store, map[string]uuid.UUID, domain.Profile) {
 	t.Helper()
 	ctx := t.Context()
 	db := storetest.FreshDatabase(t)
@@ -59,15 +59,16 @@ func playlistsAPI(t *testing.T) (*API, *store.Store, map[string]uuid.UUID, domai
 	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
 		Auth: profiles{"pst_ada": ada, "pst_bob": bob}, Catalogue: st, Playlists: st,
 	})
-	return api, st, films, ada, bob
+	return api, st, films, ada
 }
 
-// playlistResult is a BaseItemDtoQueryResult of playlists.
+// playlistResult is a BaseItemDtoQueryResult of playlists, or of a playlist's items.
 type playlistResult struct {
 	Items []struct {
-		ID, Name, Type, MediaType string
-		IsFolder                  bool
-		ChildCount                *int
+		ID, Name, Type, MediaType, PlaylistItemID string
+		IsFolder                                  bool
+		ChildCount                                *int
+		MediaSources                              []any
 	}
 	TotalRecordCount int
 }
@@ -86,7 +87,7 @@ func readAs(t *testing.T, api *API, token, target string, into any) int {
 
 // An app lists the profile's playlists, and opens one by its id; no profile sees another's.
 func TestAnAppListsItsPlaylists(t *testing.T) {
-	api, st, films, ada, _ := playlistsAPI(t)
+	api, st, films, ada := playlistsAPI(t)
 	night, err := st.AddPlaylist(t.Context(), ada.ID, "Night", []uuid.UUID{films["Heat"], films["Thief"]})
 	if err != nil {
 		t.Fatal(err)
@@ -111,5 +112,32 @@ func TestAnAppListsItsPlaylists(t *testing.T) {
 	}
 	if code := readAs(t, api, "pst_bob", "/Items/"+guid(night), nil); code != http.StatusNotFound {
 		t.Errorf("Bob opens Ada's playlist: %d, want 404", code)
+	}
+}
+
+// An app reads a playlist's items in its order, a page at a time, each with the entry's own id;
+// no profile reads another's.
+func TestAnAppReadsAPlaylist(t *testing.T) {
+	api, st, films, ada := playlistsAPI(t)
+	night, err := st.AddPlaylist(t.Context(), ada.ID, "Night", []uuid.UUID{films["Thief"], films["Heat"], films["Thief"]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var all playlistResult
+	readAs(t, api, "pst_ada", "/Playlists/"+guid(night)+"/Items?userId="+guid(ada.ID)+"&fields=MediaSources", &all)
+	if all.TotalRecordCount != 3 || len(all.Items) != 3 || all.Items[0].Name != "Thief" || all.Items[1].Name != "Heat" ||
+		all.Items[2].ID != all.Items[0].ID || len(all.Items[1].MediaSources) != 1 {
+		t.Fatalf("Night = %+v, want Thief, Heat and Thief again, with their copies", all)
+	}
+	if all.Items[0].PlaylistItemID == "" || all.Items[0].PlaylistItemID == all.Items[2].PlaylistItemID {
+		t.Errorf("entries %q and %q: want each its own id, Thief twice told apart", all.Items[0].PlaylistItemID, all.Items[2].PlaylistItemID)
+	}
+	var second playlistResult
+	readAs(t, api, "pst_ada", "/playlists/"+guid(night)+"/items?startIndex=1&limit=1", &second)
+	if second.TotalRecordCount != 3 || len(second.Items) != 1 || second.Items[0].PlaylistItemID != all.Items[1].PlaylistItemID {
+		t.Errorf("the second entry of three = %+v, want Heat's", second)
+	}
+	if code := readAs(t, api, "pst_bob", "/Playlists/"+guid(night)+"/Items", nil); code != http.StatusNotFound {
+		t.Errorf("Bob reads Ada's playlist: %d, want 404", code)
 	}
 }

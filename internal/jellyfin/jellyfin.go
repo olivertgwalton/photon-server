@@ -120,6 +120,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle(a.none,
 		"GET /Items/{itemId}/LocalTrailers", "GET /Users/{userId}/Items/{itemId}/LocalTrailers",
 		"GET /Items/{itemId}/SpecialFeatures", "GET /Users/{userId}/Items/{itemId}/SpecialFeatures")
+	a.handle(a.playlistItems, "GET /Playlists/{playlistId}/Items")
 	// Playing: a title's copies, its file as it is, and where the app has got to.
 	a.handle(a.playbackInfo, "GET /Items/{itemId}/PlaybackInfo", "POST /Items/{itemId}/PlaybackInfo")
 	a.handle(a.sending(playback.DeliveryFile, a.stream), "GET /Videos/{itemId}/stream")
