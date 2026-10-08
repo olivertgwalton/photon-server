@@ -13,6 +13,7 @@ import { jobKinds, nodeRoles, relative, tasks } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
+import JobsTable from "#lib/components/admin/JobsTable.svelte";
 import Sparkline from "#lib/components/admin/Sparkline.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
@@ -113,12 +114,6 @@ const refused = $derived(
 );
 const unreachable = $derived(latest.nodes.length - answered.length);
 
-const states: [Schemas["JobState"], string][] = [
-	["queued", "Queued"],
-	["running", "Running"],
-	["rerun", "To run again"],
-	["dead", "Gave up"],
-];
 const kinds = $derived(
 	(Object.keys(jobKinds) as Schemas["JobKind"][]).filter(
 		(k) =>
@@ -126,11 +121,6 @@ const kinds = $derived(
 			cluster?.oldest_due_seconds[k] !== undefined,
 	),
 );
-function jobs(kind: Schemas["JobKind"], state: Schemas["JobState"]) {
-	return (
-		cluster?.jobs.find((j) => j.kind === kind && j.state === state)?.count ?? 0
-	);
-}
 const finished = $derived(
 	[...(cluster?.tasks ?? [])].sort((a, b) =>
 		b.finished_at.localeCompare(a.finished_at),
@@ -340,35 +330,14 @@ function ago(seconds: number, now: number) {
 			seconds.
 		</p>
 	{:else if kinds.length}
-		<Table.Root>
-			<Table.Header>
-				<Table.Row>
-					<Table.Head>Kind</Table.Head>
-					{#each states as [, label] (label)}
-						<Table.Head class="text-right">{label}</Table.Head>
-					{/each}
-					<Table.Head class="text-right">Oldest due</Table.Head>
-				</Table.Row>
-			</Table.Header>
-			<Table.Body>
-				{#each kinds as kind (kind)}
-					{@const due = cluster.oldest_due_seconds[kind]}
-					<Table.Row>
-						<Table.Cell class="text-ink font-semibold"
-							>{jobKinds[kind]}</Table.Cell
-						>
-						{#each states as [state] (state)}
-							<Table.Cell class="text-right font-mono"
-								>{jobs(kind, state) || ""}</Table.Cell
-							>
-						{/each}
-						<Table.Cell class="text-ink-2 text-right"
-							>{due === undefined ? "" : ago(due, clock.now)}</Table.Cell
-						>
-					</Table.Row>
-				{/each}
-			</Table.Body>
-		</Table.Root>
+		<JobsTable counts={cluster.jobs} {kinds} afterLabel="Oldest due">
+			{#snippet after(
+				kind: Schemas["JobKind"],
+			)}
+				{@const due = cluster.oldest_due_seconds[kind]}
+				{due === undefined ? "" : ago(due, clock.now)}
+			{/snippet}
+		</JobsTable>
 	{:else}
 		<p class="text-ink-3 text-sm">The queue is empty.</p>
 	{/if}

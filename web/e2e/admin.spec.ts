@@ -283,6 +283,14 @@ test("a library is scanned, refreshed and opened from its menu in the sidebar", 
 	await menu.click();
 	await page.getByRole("menuitem", { name: "Edit…" }).click();
 	await expect(page).toHaveURL("/settings/server/libraries/l-films");
+
+	// Removed from its own settings, it leads back to the libraries.
+	await page.getByRole("button", { name: "Remove Films" }).click();
+	await page
+		.getByRole("alertdialog")
+		.getByRole("button", { name: "Remove library" })
+		.click();
+	await expect(page).toHaveURL("/settings/server/libraries");
 });
 
 test("a member puts the libraries in their own order, and may do no more", async ({

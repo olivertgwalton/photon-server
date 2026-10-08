@@ -1,5 +1,6 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
+import { runTask } from "#lib/actions.svelte.js";
 import { act } from "#lib/act.js";
 import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
@@ -36,12 +37,7 @@ async function restore(name: string) {
 		<Button
 			variant="outline"
 			onclick={() =>
-				act(
-					client().POST("/api/v1/admin/tasks/{key}/run", {
-						params: { path: { key: "backup_database" } },
-					}),
-					"The database is being backed up.",
-				)}
+				runTask("backup_database", "The database is being backed up.")}
 		>
 			Back up now
 		</Button>

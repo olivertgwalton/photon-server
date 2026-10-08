@@ -9,6 +9,7 @@ import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
+import RevealOnce from "#lib/components/admin/RevealOnce.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
@@ -38,11 +39,6 @@ async function add(event: SubmitEvent) {
 	adding = false;
 	added = hook;
 	await refreshAll();
-}
-
-async function copy(secret: string) {
-	await navigator.clipboard.writeText(secret);
-	toast.success("The secret was copied.");
 }
 </script>
 
@@ -154,28 +150,13 @@ async function copy(secret: string) {
 	<p class="text-ink-3 text-sm">No webhooks yet.</p>
 {/if}
 
-<Dialog.Root
-	open={!!added}
-	onOpenChange={(open) => {
-		if (!open) added = undefined;
-	}}
+<RevealOnce
+	value={added?.secret}
+	title="The webhook's secret"
+	label="Secret"
+	copied="The secret was copied."
+	onclose={() => (added = undefined)}
 >
-	<Dialog.Content>
-		<Dialog.Header>
-			<Dialog.Title>The webhook's secret</Dialog.Title>
-			<Dialog.Description>
-				Keep it where {added?.url} can check signatures with it. It is not shown
-				again.
-			</Dialog.Description>
-		</Dialog.Header>
-		<div class="flex gap-2">
-			<Input
-				value={added?.secret ?? ""}
-				readonly
-				aria-label="Secret"
-				class="font-mono"
-			/>
-			<Button onclick={() => copy(added?.secret ?? "")}>Copy</Button>
-		</div>
-	</Dialog.Content>
-</Dialog.Root>
+	Keep it where {added?.url} can check signatures with it. It is not shown
+	again.
+</RevealOnce>

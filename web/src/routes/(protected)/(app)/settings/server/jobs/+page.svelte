@@ -3,7 +3,7 @@ import PageHeader from "#lib/components/PageHeader.svelte";
 import type { components } from "#lib/api/schema.js";
 import { jobKinds } from "#lib/admin/words.js";
 import { Button } from "#lib/components/ui/button/index.js";
-import * as Table from "#lib/components/ui/table/index.js";
+import JobsTable from "#lib/components/admin/JobsTable.svelte";
 import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 
@@ -13,24 +13,11 @@ let { data } = $props();
 
 const api = client();
 
-const states: [Schemas["JobState"], string][] = [
-	["queued", "Queued"],
-	["running", "Running"],
-	["rerun", "To run again"],
-	["dead", "Gave up"],
-];
-
 const kinds = $derived(
 	(Object.keys(jobKinds) as Schemas["JobKind"][]).filter((kind) =>
 		data.counts.some((c) => c.kind === kind),
 	),
 );
-
-function count(kind: Schemas["JobKind"], state: Schemas["JobState"]) {
-	return (
-		data.counts.find((c) => c.kind === kind && c.state === state)?.count ?? 0
-	);
-}
 
 // Where a dead job's subject can be looked at: a scan's library, or a title.
 function subject(job: Schemas["DeadJob"]) {
@@ -51,30 +38,7 @@ function subject(job: Schemas["DeadJob"]) {
 />
 
 {#if kinds.length}
-	<Table.Root>
-		<Table.Header>
-			<Table.Row>
-				<Table.Head>Kind</Table.Head>
-				{#each states as [, label] (label)}
-					<Table.Head class="text-right">{label}</Table.Head>
-				{/each}
-			</Table.Row>
-		</Table.Header>
-		<Table.Body>
-			{#each kinds as kind (kind)}
-				<Table.Row>
-					<Table.Cell class="text-ink font-semibold"
-						>{jobKinds[kind]}</Table.Cell
-					>
-					{#each states as [state] (state)}
-						<Table.Cell class="text-right font-mono"
-							>{count(kind, state) || ""}</Table.Cell
-						>
-					{/each}
-				</Table.Row>
-			{/each}
-		</Table.Body>
-	</Table.Root>
+	<JobsTable counts={data.counts} {kinds} />
 {:else}
 	<p class="text-ink-3 text-sm">The queue is empty.</p>
 {/if}
