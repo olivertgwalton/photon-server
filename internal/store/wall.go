@@ -73,13 +73,13 @@ func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card,
 	if err != nil {
 		return nil, 0, err
 	}
-	var total int64
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) `+titles, args).Scan(&total); err != nil {
-		return nil, 0, err
-	}
 	order := p.orderBy(args)
 	args["offset"], args["limit"] = p.Offset, p.Limit
-	rows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` `+titles+` `+order+` OFFSET @offset LIMIT @limit`, args)
+	var rows []*model.Item
+	total, err := s.counted(ctx, `SELECT count(*) `+titles, args, func(ctx context.Context) (err error) {
+		rows, err = queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` `+titles+` `+order+` OFFSET @offset LIMIT @limit`, args)
+		return err
+	})
 	if err != nil {
 		return nil, 0, err
 	}
