@@ -496,6 +496,24 @@ func (a *API) mark(set func(ctx context.Context, profile, item uuid.UUID) error)
 	}
 }
 
+// userDataOf answers what a profile has made of a title, changing nothing.
+func (a *API) userDataOf(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.itemID(w, r)
+	if !ok {
+		return
+	}
+	p, err := a.svc.Catalogue.Title(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
+	if isNotFound(err) {
+		a.refuse(w, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	a.writeJSON(w, a.userData(id, p.State, 0, p.Kind))
+}
+
 // segmentTypes are Jellyfin's MediaSegmentType for each kind of marker.
 var segmentTypes = map[domain.MarkerKind]string{
 	domain.MarkerIntro: "Intro", domain.MarkerCredits: "Outro", domain.MarkerRecap: "Recap", domain.MarkerPreview: "Preview",

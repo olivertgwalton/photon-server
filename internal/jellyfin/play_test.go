@@ -259,6 +259,32 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	}
 }
 
+// An app reads what its profile has made of a title, under either route.
+func TestAnAppReadsItsUserData(t *testing.T) {
+	st, ada, heat, _ := aFilm(t)
+	if err := st.Favourite(t.Context(), ada.ID, heat); err != nil {
+		t.Fatal(err)
+	}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Watching: st,
+	})
+	const header = `MediaBrowser Token="pst_ada"`
+	for _, target := range []string{"/UserItems/" + guid(heat) + "/UserData", "/Users/" + guid(ada.ID) + "/Items/" + guid(heat) + "/UserData"} {
+		w := serve(api, http.MethodGet, target, header, "")
+		var data map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &data); err != nil || w.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
+		}
+		requireKeys(t, "UserItemDataDto", data, "PlaybackPositionTicks", "PlayCount", "IsFavorite", "Played", "Key", "ItemId")
+		if data["IsFavorite"] != true || data["Played"] != false || data["ItemId"] != guid(heat) {
+			t.Errorf("%s: %v", target, data)
+		}
+	}
+	if w := serve(api, http.MethodGet, "/UserItems/"+guid(uuid.NewV7())+"/UserData", header, ""); w.Code != http.StatusNotFound {
+		t.Errorf("a title nobody has: %d, want 404", w.Code)
+	}
+}
+
 // fakeRemuxes are a node's remuxes: those opened, by playback, and the playlists each answers.
 type fakeRemuxes struct {
 	opened   map[uuid.UUID]domain.VideoPlan
