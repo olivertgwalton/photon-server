@@ -161,8 +161,8 @@ func TestAnAdminEndsAnyonesPlaybackWhereItGotTo(t *testing.T) {
 		t.Errorf("ending it again: %v, want ErrNoPlayback", err)
 	}
 	last := told[len(told)-1]
-	if shown, _ := last.Details.(domain.PlaybackDetails); last.Kind != domain.EventPlaybackStopped || shown.Playback.PositionMS != (40*time.Minute).Milliseconds() || shown.Playback.Title.ID != film {
-		t.Errorf("told %v %+v, want it stopped at 40 minutes", last.Kind, last.Details)
+	if shown, _ := last.Details.(domain.PlaybackDetails); last.Kind != domain.EventPlaybackStopped || shown.Playback.PositionMS != (40*time.Minute).Milliseconds() || shown.Playback.Title.ID != film || shown.StoppedBy != domain.StoppedByAdmin {
+		t.Errorf("told %v %+v, want it stopped by an admin at 40 minutes", last.Kind, last.Details)
 	}
 }
 

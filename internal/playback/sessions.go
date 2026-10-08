@@ -157,7 +157,7 @@ func (s *Sessions) Stop(ctx context.Context, profile, id uuid.UUID, position tim
 	if err != nil {
 		return "", err
 	}
-	return s.stop(ctx, p, position)
+	return s.stop(ctx, p, position, domain.StoppedByPlayer)
 }
 
 // Finish stops a profile's own playback where its player last said it was, as a player does that
@@ -167,7 +167,7 @@ func (s *Sessions) Finish(ctx context.Context, profile, id uuid.UUID) (domain.Re
 	if err != nil {
 		return "", err
 	}
-	return s.stop(ctx, p, p.Position)
+	return s.stop(ctx, p, p.Position, domain.StoppedByPlayer)
 }
 
 // End stops anyone's playback where its player last said it was, as an admin does from the
@@ -180,13 +180,13 @@ func (s *Sessions) End(ctx context.Context, id uuid.UUID) error {
 	if !ok {
 		return ErrNoPlayback
 	}
-	_, err = s.stop(ctx, p, p.Position)
+	_, err = s.stop(ctx, p, p.Position, domain.StoppedByAdmin)
 	return err
 }
 
 // stop ends a playback once, whoever else ends it at the same time, and closes its stream at once
 // where this node serves it; another node's sweep closes its own.
-func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Duration) (domain.Reach, error) {
+func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Duration, by domain.StoppedBy) (domain.Reach, error) {
 	ended, err := s.live.EndPlayback(ctx, p.ID)
 	if err != nil {
 		return "", err
@@ -212,7 +212,7 @@ func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Du
 	s.raise(ctx, domain.Event{Kind: domain.EventUserDataChanged, Profile: p.Profile, Item: p.Item})
 	stopped := event(domain.EventPlaybackStopped, p)
 	// How far it got says whether it was watched to the end, as Plex's media.scrobble does.
-	stopped.Details = domain.PlaybackDetails{Playback: p.Showing(), Reach: reach}
+	stopped.Details = domain.PlaybackDetails{Playback: p.Showing(), Reach: reach, StoppedBy: by}
 	s.raise(ctx, stopped)
 	return reach, nil
 }
@@ -245,7 +245,7 @@ func (s *Sessions) Sweep(ctx context.Context) error {
 			going[p.ID] = true
 			continue
 		}
-		if _, err := s.stop(ctx, p, p.Position); err != nil && !errors.Is(err, ErrNoPlayback) {
+		if _, err := s.stop(ctx, p, p.Position, domain.StoppedBySweep); err != nil && !errors.Is(err, ErrNoPlayback) {
 			errs = append(errs, err)
 		}
 	}

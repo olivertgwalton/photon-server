@@ -21,6 +21,22 @@ func PlayMethods() []PlayMethod {
 	return []PlayMethod{PlayDirect, PlayRemux, PlayTranscode}
 }
 
+// StoppedBy is what ended a playback.
+type StoppedBy string
+
+const (
+	// StoppedByPlayer is its own player saying it stopped.
+	StoppedByPlayer StoppedBy = "player"
+	// StoppedByAdmin is an admin stopping it from the dashboard.
+	StoppedByAdmin StoppedBy = "admin"
+	// StoppedBySweep is the sweep of one its player stopped reporting.
+	StoppedBySweep StoppedBy = "sweep"
+)
+
+func StoppedBys() []StoppedBy {
+	return []StoppedBy{StoppedByPlayer, StoppedByAdmin, StoppedBySweep}
+}
+
 // PlayState is what the player says it is doing.
 type PlayState string
 
