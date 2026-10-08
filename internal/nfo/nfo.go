@@ -39,7 +39,7 @@ type document struct {
 	UniqueIDs     []uniqueID `xml:"uniqueid"`
 	ID            string     `xml:"id"`
 	IMDbID        string     `xml:"imdbid"`
-	IMDbIDLegacy  string     `xml:"imdb_id"`
+	IMDbIDSnake   string     `xml:"imdb_id"`
 	TMDBID        string     `xml:"tmdbid"`
 	TVDBID        string     `xml:"tvdbid"`
 	SeasonNumber  string     `xml:"seasonnumber"`
@@ -228,7 +228,7 @@ func (doc document) metadata() domain.Metadata {
 		}
 	}
 	setID(&m, domain.ProviderIMDb, doc.IMDbID)
-	setID(&m, domain.ProviderIMDb, doc.IMDbIDLegacy)
+	setID(&m, domain.ProviderIMDb, doc.IMDbIDSnake)
 	setID(&m, domain.ProviderTMDB, doc.TMDBID)
 	setID(&m, domain.ProviderTVDB, doc.TVDBID)
 	// <id> predates <uniqueid>: an IMDb id wherever it starts tt, else the scraper's own, which
