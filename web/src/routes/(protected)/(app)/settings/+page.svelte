@@ -35,7 +35,7 @@ async function change(
 function rename(event: SubmitEvent) {
 	const name = String(fields(event).get("name"));
 	return change(
-		client().PATCH("/api/v1/me", { body: { name } }),
+		client().PATCH("/api/v1/profile", { body: { name } }),
 		"name",
 		"Renamed, on every device.",
 	);
@@ -46,7 +46,7 @@ async function setPIN(event: SubmitEvent) {
 	const pin = String(fields(event).get("pin"));
 	if (
 		await change(
-			client().PUT("/api/v1/me/pin", { body: { pin } }),
+			client().PUT("/api/v1/profile/pin", { body: { pin } }),
 			"pin",
 			"PIN set.",
 		)
@@ -56,7 +56,7 @@ async function setPIN(event: SubmitEvent) {
 }
 
 const clearPIN = () =>
-	change(client().DELETE("/api/v1/me/pin"), "pin", "PIN removed.");
+	change(client().DELETE("/api/v1/profile/pin"), "pin", "PIN removed.");
 
 async function setPassword(event: SubmitEvent) {
 	const form = event.currentTarget as HTMLFormElement;
@@ -66,7 +66,7 @@ async function setPassword(event: SubmitEvent) {
 		refused = { password: "The new password and its repeat differ." };
 		return;
 	}
-	const asked = client().PUT("/api/v1/me/password", {
+	const asked = client().PUT("/api/v1/profile/password", {
 		body: { current: String(values.get("current")), new: next },
 	});
 	if (
@@ -104,7 +104,7 @@ async function setPassword(event: SubmitEvent) {
 			<AvatarPicker
 				name={data.me.name}
 				avatar={data.me.avatar}
-				path="/api/v1/me/avatar"
+				path="/api/v1/profile/avatar"
 			/>
 		</div>
 	</header>

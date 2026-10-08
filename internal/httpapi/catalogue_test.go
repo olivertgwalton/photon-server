@@ -283,7 +283,7 @@ func TestWall(t *testing.T) {
 		`{"library_ids":["` + uuid.NewV7().String() + `"]}`:                   http.StatusNotFound,
 		`{"library_ids":"films"}`:                                             http.StatusBadRequest,
 	} {
-		if rec := serve(t, http.MethodPut, "/api/v1/me/library-order", goodToken, body); rec.Code != want {
+		if rec := serve(t, http.MethodPut, "/api/v1/profile/library-order", goodToken, body); rec.Code != want {
 			t.Errorf("ordering %s: status = %d, want %d", body, rec.Code, want)
 		}
 	}

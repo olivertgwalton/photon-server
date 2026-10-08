@@ -132,11 +132,11 @@ func TestAProfileIsRenamed(t *testing.T) {
 		want                 int
 		said                 string
 	}{
-		{http.MethodPatch, "/api/v1/me", `{"name": "  Olly  "}`, http.StatusOK, `"name":"Olly"`},
-		{http.MethodPatch, "/api/v1/me", `{"name": "Kid"}`, http.StatusConflict, ""},
-		{http.MethodPatch, "/api/v1/me", `{"name": "   "}`, http.StatusBadRequest, "64 characters"},
-		{http.MethodPatch, "/api/v1/me", `{"name": "` + strings.Repeat("o", 65) + `"}`, http.StatusBadRequest, ""},
-		{http.MethodPatch, "/api/v1/me", `{"name": "Ol\u0007ly"}`, http.StatusBadRequest, ""},
+		{http.MethodPatch, "/api/v1/profile", `{"name": "  Olly  "}`, http.StatusOK, `"name":"Olly"`},
+		{http.MethodPatch, "/api/v1/profile", `{"name": "Kid"}`, http.StatusConflict, ""},
+		{http.MethodPatch, "/api/v1/profile", `{"name": "   "}`, http.StatusBadRequest, "64 characters"},
+		{http.MethodPatch, "/api/v1/profile", `{"name": "` + strings.Repeat("o", 65) + `"}`, http.StatusBadRequest, ""},
+		{http.MethodPatch, "/api/v1/profile", `{"name": "Ol\u0007ly"}`, http.StatusBadRequest, ""},
 		{http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"name": " "}`, http.StatusBadRequest, ""},
 		{http.MethodPatch, "/api/v1/admin/profiles/" + oliver.ID.String(), `{"name": "Oliver W"}`, http.StatusOK, `"name":"Oliver W"`},
 	} {

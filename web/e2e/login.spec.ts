@@ -43,7 +43,7 @@ test("the session cookie never reaches the page's script", async ({ page }) => {
 test("the browser calls the API itself, as its session", async ({ page }) => {
 	await logIn(page);
 	const me = await page.evaluate(() =>
-		fetch("/api/v1/me").then((r) => r.json()),
+		fetch("/api/v1/profile").then((r) => r.json()),
 	);
 	expect(me.name).toBe("Ada");
 });

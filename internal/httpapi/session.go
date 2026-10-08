@@ -241,7 +241,7 @@ func (a *API) sessionRoutes() []route {
 			status: http.StatusNoContent, handle: a.logout,
 		},
 		{
-			pattern: "GET /api/v1/me", access: signedIn, summary: "The profile this device is watching as",
+			pattern: "GET /api/v1/profile", access: signedIn, summary: "The profile this device is watching as",
 			status: http.StatusOK, reply: profileJSON{}, handle: a.me,
 		},
 	}

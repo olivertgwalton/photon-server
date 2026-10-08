@@ -128,20 +128,20 @@ func (a *API) profilesRoutes() []route {
 			body: switchJSON{}, status: http.StatusOK, reply: profileJSON{}, handle: a.switchProfile,
 		},
 		{
-			pattern: "PATCH /api/v1/me", access: signedIn,
+			pattern: "PATCH /api/v1/profile", access: signedIn,
 			summary: "Rename the profile; names are unique, and every device shows the new one at once",
 			body:    nameJSON{}, status: http.StatusOK, reply: profileJSON{}, handle: a.renameSelf,
 		},
 		{
-			pattern: "PUT /api/v1/me/pin", access: signedIn, summary: "Set the profile's PIN",
+			pattern: "PUT /api/v1/profile/pin", access: signedIn, summary: "Set the profile's PIN",
 			body: pinJSON{}, status: http.StatusNoContent, handle: a.setPIN,
 		},
 		{
-			pattern: "DELETE /api/v1/me/pin", access: signedIn, summary: "Clear the profile's PIN",
+			pattern: "DELETE /api/v1/profile/pin", access: signedIn, summary: "Clear the profile's PIN",
 			status: http.StatusNoContent, handle: a.clearPIN,
 		},
 		{
-			pattern: "PUT /api/v1/me/password", access: signedIn,
+			pattern: "PUT /api/v1/profile/password", access: signedIn,
 			summary: "Change the profile's password, signing out its other devices",
 			body:    passwordChangeJSON{}, status: http.StatusNoContent, handle: a.changePassword,
 		},

@@ -50,7 +50,7 @@ func TestAnAnswerTheClientHoldsIsNotSentAgain(t *testing.T) {
 func TestAChangeGivesANewTag(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Preferences: &fakePreferences{}})
 	call := func(method, body, tags string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(method, "/api/v1/me/preferences", strings.NewReader(body))
+		req := httptest.NewRequest(method, "/api/v1/profile/preferences", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+goodToken)
 		req.Header.Set("If-None-Match", tags)
 		rec := httptest.NewRecorder()

@@ -83,7 +83,7 @@ func TestAProfileIsGivenAPicture(t *testing.T) {
 		return rec
 	}
 
-	rec := do(goodToken, http.MethodPost, "/api/v1/me/avatar", pngOf(64, 64))
+	rec := do(goodToken, http.MethodPost, "/api/v1/profile/avatar", pngOf(64, 64))
 	var me profileJSON
 	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &me) != nil || me.Avatar == (uuid.UUID{}) {
 		t.Fatalf("POST avatar = %d %s", rec.Code, rec.Body)
@@ -98,7 +98,7 @@ func TestAProfileIsGivenAPicture(t *testing.T) {
 		"a PNG said too wide": claiming(20_000, 20_000),
 		"a PNG cut short":     pngOf(8, 8)[:20],
 	} {
-		if rec := do(memberToken, http.MethodPost, "/api/v1/me/avatar", body); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "not a picture") {
+		if rec := do(memberToken, http.MethodPost, "/api/v1/profile/avatar", body); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "not a picture") {
 			t.Errorf("%s: %d %s, want 400", name, rec.Code, rec.Body)
 		}
 	}
@@ -110,7 +110,7 @@ func TestAProfileIsGivenAPicture(t *testing.T) {
 	if rec := do(goodToken, http.MethodPost, "/api/v1/admin/profiles/"+other.String()+"/avatar", pngOf(8, 8)); rec.Code != http.StatusOK {
 		t.Errorf("an admin setting another's picture: %d %s", rec.Code, rec.Body)
 	}
-	if rec := do(goodToken, http.MethodDelete, "/api/v1/me/avatar", nil); rec.Code != http.StatusNoContent {
+	if rec := do(goodToken, http.MethodDelete, "/api/v1/profile/avatar", nil); rec.Code != http.StatusNoContent {
 		t.Errorf("DELETE avatar = %d", rec.Code)
 	}
 	if got := do("", http.MethodGet, "/api/v1/artwork/"+me.Avatar.String(), nil); got.Code != http.StatusNotFound {

@@ -8,7 +8,7 @@ import type { PageLoad } from "./$types";
 export const load: PageLoad = async ({ fetch, url }) => {
 	const api = client(fetch);
 	const [me, server] = await Promise.all([
-		api.GET("/api/v1/me").catch(() => null),
+		api.GET("/api/v1/profile").catch(() => null),
 		api.GET("/api/v1/server").catch(() => null),
 	]);
 	if (me?.data) redirect(303, returnPath(url));

@@ -1157,14 +1157,14 @@ const server_ = Bun.serve({
 				return new Response(Bun.file("node_modules/jassub/dist/default.woff2"));
 			case "GET /api/v1/parts/part-1/trickplay/0":
 				return fixture("sheet.jpg");
-			case "GET /api/v1/me":
+			case "GET /api/v1/profile":
 				return Response.json(me);
-			case "POST /api/v1/me/avatar":
+			case "POST /api/v1/profile/avatar":
 				return avatar(me, request);
-			case "DELETE /api/v1/me/avatar":
+			case "DELETE /api/v1/profile/avatar":
 				delete me.avatar;
 				return new Response(null, { status: 204 });
-			case "PATCH /api/v1/me": {
+			case "PATCH /api/v1/profile": {
 				const { name } = (await request.json()) as Schemas["Name"];
 				if ([ada, kids].some((p) => p !== me && p.name === name.trim())) {
 					return problem(
@@ -1201,7 +1201,7 @@ const server_ = Bun.serve({
 				sessions.set(token as string, target);
 				return Response.json(target);
 			}
-			case "PUT /api/v1/me/pin": {
+			case "PUT /api/v1/profile/pin": {
 				const body = (await request.json()) as Schemas["Pin"];
 				if (!/^\d{4,6}$/.test(body.pin)) {
 					return Response.json(
@@ -1220,18 +1220,18 @@ const server_ = Bun.serve({
 				kidsPIN = body.pin;
 				return new Response(null, { status: 204 });
 			}
-			case "PUT /api/v1/me/password": {
+			case "PUT /api/v1/profile/password": {
 				const body = (await request.json()) as Schemas["PasswordChange"];
 				return body.current === "correct horse"
 					? new Response(null, { status: 204 })
 					: problem(403, "wrong_secret", "That isn't the current password.");
 			}
-			case "DELETE /api/v1/me/pin":
+			case "DELETE /api/v1/profile/pin":
 				kidsPIN = "";
 				return new Response(null, { status: 204 });
-			case "GET /api/v1/me/preferences":
+			case "GET /api/v1/profile/preferences":
 				return Response.json(preferences.get(token as string) ?? defaults);
-			case "PATCH /api/v1/me/preferences": {
+			case "PATCH /api/v1/profile/preferences": {
 				const change = (await request.json()) as Schemas["PreferencesChange"];
 				const kept: Schemas["Preferences"] = {
 					...(preferences.get(token as string) ?? defaults),
@@ -1253,7 +1253,7 @@ const server_ = Bun.serve({
 					items: libraries.items.toSorted((a, b) => rank(a.id) - rank(b.id)),
 				});
 			}
-			case "PUT /api/v1/me/library-order": {
+			case "PUT /api/v1/profile/library-order": {
 				const body = (await request.json()) as Schemas["LibraryOrder"];
 				libraryOrders.set(token as string, body.library_ids);
 				return new Response(null, { status: 204 });

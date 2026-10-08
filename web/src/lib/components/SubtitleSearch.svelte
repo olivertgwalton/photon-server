@@ -21,7 +21,7 @@ type Found = components["schemas"]["FoundSubtitles"];
 // Opened, it searches at once in the reader's subtitle language, else their
 // browser's.
 async function startLanguage(): Promise<string> {
-	const { data } = await client().GET("/api/v1/me/preferences");
+	const { data } = await client().GET("/api/v1/profile/preferences");
 	return data?.subtitle_language || navigator.language.split("-")[0];
 }
 

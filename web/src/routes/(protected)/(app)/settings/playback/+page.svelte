@@ -23,7 +23,7 @@ let saved = $state<Preferences>();
 const prefs = $derived(saved ?? data.prefs);
 
 async function set(change: PreferencesChange) {
-	const { data: kept, error } = await client().PATCH("/api/v1/me/preferences", {
+	const { data: kept, error } = await client().PATCH("/api/v1/profile/preferences", {
 		body: change,
 	});
 	if (error) {

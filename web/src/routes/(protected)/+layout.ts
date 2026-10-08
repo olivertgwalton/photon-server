@@ -8,7 +8,7 @@ import type { LayoutLoad } from "./$types";
 export const load: LayoutLoad = async ({ fetch }) => {
 	const api = client(fetch);
 	const [me, words] = await Promise.all([
-		need(api.GET("/api/v1/me")),
+		need(api.GET("/api/v1/profile")),
 		need(api.GET("/api/v1/words")),
 	]);
 	return { me, words };
