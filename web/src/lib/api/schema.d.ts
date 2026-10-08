@@ -3257,7 +3257,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sign a device in with a profile's password */
+        /** Sign a device in, by a profile's password or by a pairing a signed-in device approved */
         post: {
             parameters: {
                 query?: never;
@@ -3333,7 +3333,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start pairing a device by a code shown on it (RFC 8628) */
+        /** Start pairing a device by a code shown on it (RFC 8628); it signs in by the pairing once approved */
         post: {
             parameters: {
                 query?: never;
@@ -3395,47 +3395,6 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["Device"];
-                    };
-                };
-                default: components["responses"]["Problem"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/pairings/poll": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Ask whether a pairing is approved; until it is, the problem says why not */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["Poll"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["LoginResponse"];
                     };
                 };
                 default: components["responses"]["Problem"];
@@ -7007,11 +6966,13 @@ export interface components {
             languages: string[];
         };
         LoginRequest: {
-            client: string;
-            device: string;
+            client?: string;
+            device?: string;
+            device_code?: string;
             keep?: components["schemas"]["Keep"];
-            name: string;
-            password: string;
+            method: components["schemas"]["SignInMethod"];
+            name?: string;
+            password?: string;
         };
         LoginResponse: {
             profile: components["schemas"]["Profile"];
@@ -7452,9 +7413,6 @@ export interface components {
         PluginList: {
             items: components["schemas"]["Plugin"][];
         };
-        Poll: {
-            device_code: string;
-        };
         Position: {
             /** Format: int64 */
             position_ms: number;
@@ -7698,6 +7656,8 @@ export interface components {
             set: boolean;
             value?: string;
         };
+        /** @enum {string} */
+        SignInMethod: "password" | "pairing";
         SmartRule: {
             filter: components["schemas"]["WallFilter"];
             limit?: number;

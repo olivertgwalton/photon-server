@@ -147,11 +147,14 @@ func TestLogin(t *testing.T) {
 		want int
 		code problemCode
 	}{
-		{"right password", `{"name":"Oliver","password":"correct horse","device":"Living room","client":"Photon"}`, http.StatusOK, ""},
-		{"wrong password", `{"name":"Oliver","password":"guess","device":"Living room","client":"Photon"}`, http.StatusUnauthorized, codeInvalidCredentials},
-		{"an unknown field", `{"name":"Oliver","password":"correct horse","device":"d","client":"c","admin":true}`, http.StatusBadRequest, codeInvalidBody},
-		{"no device", `{"name":"Oliver","password":"correct horse"}`, http.StatusBadRequest, codeInvalidBody},
+		{"right password", `{"method":"password","name":"Oliver","password":"correct horse","device":"Living room","client":"Photon"}`, http.StatusOK, ""},
+		{"wrong password", `{"method":"password","name":"Oliver","password":"guess","device":"Living room","client":"Photon"}`, http.StatusUnauthorized, codeInvalidCredentials},
+		{"an unknown field", `{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c","admin":true}`, http.StatusBadRequest, codeInvalidBody},
+		{"no device", `{"method":"password","name":"Oliver","password":"correct horse"}`, http.StatusBadRequest, codeInvalidBody},
 		{"not json", `name=Oliver`, http.StatusBadRequest, codeInvalidBody},
+		{"no method", `{"name":"Oliver","password":"correct horse","device":"d","client":"c"}`, http.StatusBadRequest, codeInvalidBody},
+		{"an unknown method", `{"method":"magic","name":"Oliver"}`, http.StatusBadRequest, codeInvalidBody},
+		{"a pairing with no code", `{"method":"pairing"}`, http.StatusBadRequest, codeInvalidBody},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -194,7 +197,7 @@ func TestMeIsTheSessionsProfile(t *testing.T) {
 
 func TestPollingAnswersInRFC8628Terms(t *testing.T) {
 	for code, want := range map[string]problemCode{"BCDFGHJK.secret": codeAuthorizationPending, "guessed": codeExpiredToken} {
-		rec := serve(t, http.MethodPost, "/api/v1/auth/pairings/poll", "", `{"device_code":"`+code+`"}`)
+		rec := serve(t, http.MethodPost, "/api/v1/auth/login", "", `{"method":"pairing","device_code":"`+code+`"}`)
 		var p problem
 		if err := json.NewDecoder(rec.Body).Decode(&p); err != nil || rec.Code != http.StatusBadRequest || p.Code != want {
 			t.Errorf("poll %q: %d %q (err %v), want 400 %q", code, rec.Code, p.Code, err, want)
@@ -281,7 +284,7 @@ func TestABrowserKeepsItsSessionInACookie(t *testing.T) {
 	a := newAPI(nil)
 	rec := httptest.NewRecorder()
 	a.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(
-		`{"name":"Oliver","password":"correct horse","device":"Firefox on macOS","client":"Photon Web","keep":"cookie"}`)))
+		`{"method":"password","name":"Oliver","password":"correct horse","device":"Firefox on macOS","client":"Photon Web","keep":"cookie"}`)))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
@@ -315,7 +318,7 @@ func TestTheCookieIsSecureBehindAnHTTPSProxy(t *testing.T) {
 	a.svc.TrustedProxies, _ = peer.Parse("192.0.2.1")
 	for peer, want := range map[string]bool{"192.0.2.1:4000": true, "198.51.100.7:4000": false} {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(
-			`{"name":"Oliver","password":"correct horse","device":"d","client":"c","keep":"cookie"}`))
+			`{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c","keep":"cookie"}`))
 		req.RemoteAddr = peer
 		req.Header.Set("X-Forwarded-Proto", "https")
 		rec := httptest.NewRecorder()
@@ -367,7 +370,7 @@ func TestABodyIsRefusedAValueNoneOfItsEnums(t *testing.T) {
 	tests := []struct {
 		path, body, detail string
 	}{
-		{"/api/v1/auth/login", `{"name":"Oliver","password":"correct horse","device":"d","client":"c","keep":"forever"}`, "keep is one of token, cookie"},
+		{"/api/v1/auth/login", `{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c","keep":"forever"}`, "keep is one of token, cookie"},
 		{"/api/v1/titles/" + uuid.New().String() + "/play", `{"profile":{"containers":[],"video":[{"codec":"hevc","ranges":["sdr","hdr11"]}],"audio":[],"max_bitrate_kbps":0}}`, "profile.video.ranges is one of sdr, hlg, hdr10, hdr10plus, dv"},
 	}
 	for _, tt := range tests {

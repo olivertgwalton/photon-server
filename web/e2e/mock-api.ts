@@ -1041,7 +1041,11 @@ const server_ = Bun.serve({
 		}
 		if (route === "POST /api/v1/auth/login") {
 			const body = (await request.json()) as Schemas["LoginRequest"];
-			if (body.name !== "Ada" || body.password !== "correct horse") {
+			if (
+				body.method !== "password" ||
+				body.name !== "Ada" ||
+				body.password !== "correct horse"
+			) {
 				return problem(401, "invalid_credentials", "Unauthorized");
 			}
 			const issued = crypto.randomUUID();

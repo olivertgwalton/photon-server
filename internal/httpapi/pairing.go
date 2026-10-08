@@ -28,10 +28,6 @@ type approvalJSON struct {
 	UserCode string `json:"user_code"`
 }
 
-type pollJSON struct {
-	DeviceCode string `json:"device_code"`
-}
-
 func (a *API) startPairing(w http.ResponseWriter, r *http.Request) {
 	var req deviceJSON
 	if !a.decode(w, r, &req) {
@@ -74,9 +70,11 @@ func (a *API) approvePairing(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, deviceJSON{Device: d.Name, Client: d.Client})
 }
 
-func (a *API) pollPairing(w http.ResponseWriter, r *http.Request) {
-	var req pollJSON
-	if !a.decode(w, r, &req) {
+// signInByPairing signs in the device a pairing started for, once a signed-in device approved it;
+// until then the problem says why not, as RFC 8628's token endpoint does.
+func (a *API) signInByPairing(w http.ResponseWriter, r *http.Request, req loginRequest) {
+	if req.DeviceCode == "" {
+		writeProblem(w, a.logger, codeInvalidBody, "device_code is required")
 		return
 	}
 	state, token, profile, err := a.svc.Auth.PollPairing(r.Context(), req.DeviceCode)
@@ -86,7 +84,7 @@ func (a *API) pollPairing(w http.ResponseWriter, r *http.Request) {
 	}
 	switch state {
 	case kv.PairingApproved:
-		writeJSON(w, a.logger, "application/json", http.StatusOK, loginResponse{Token: token, Profile: profileOf(profile)})
+		a.signedIn(w, r, req.Keep, token, profile)
 	case kv.PairingPending:
 		writeProblem(w, a.logger, codeAuthorizationPending, "")
 	case kv.PairingSlowDown:
@@ -100,18 +98,13 @@ func (a *API) pairingRoutes() []route {
 	return []route{
 		{
 			pattern: "POST /api/v1/auth/pairings", access: public,
-			summary: "Start pairing a device by a code shown on it (RFC 8628)",
+			summary: "Start pairing a device by a code shown on it (RFC 8628); it signs in by the pairing once approved",
 			body:    deviceJSON{}, status: http.StatusOK, reply: pairingStartJSON{}, handle: a.startPairing,
 		},
 		{
 			pattern: "POST /api/v1/auth/pairings/approve", access: signedIn,
 			summary: "Approve a pairing by its code, signing that device in as this profile",
 			body:    approvalJSON{}, status: http.StatusOK, reply: deviceJSON{}, handle: a.approvePairing,
-		},
-		{
-			pattern: "POST /api/v1/auth/pairings/poll", access: public,
-			summary: "Ask whether a pairing is approved; until it is, the problem says why not",
-			body:    pollJSON{}, status: http.StatusOK, reply: loginResponse{}, handle: a.pollPairing,
 		},
 	}
 }

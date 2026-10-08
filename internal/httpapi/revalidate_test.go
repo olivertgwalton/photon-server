@@ -68,7 +68,7 @@ func TestAChangeGivesANewTag(t *testing.T) {
 }
 
 func TestAWriteIsNeverTagged(t *testing.T) {
-	rec := serve(t, http.MethodPost, "/api/v1/auth/login", "", `{"name":"Oliver","password":"correct horse","device":"Living room","client":"Photon"}`)
+	rec := serve(t, http.MethodPost, "/api/v1/auth/login", "", `{"method":"password","name":"Oliver","password":"correct horse","device":"Living room","client":"Photon"}`)
 	if rec.Code != http.StatusOK || rec.Header().Get("ETag") != "" {
 		t.Errorf("login: status %d, ETag %q: want no tag", rec.Code, rec.Header().Get("ETag"))
 	}

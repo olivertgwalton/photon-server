@@ -123,7 +123,7 @@ func TestSignInsAreTold(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Limits: &fakeLimiter{}, Events: told})
 	for _, password := range []string{"correct horse", "guess"} {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login",
-			strings.NewReader(`{"name":"Oliver","password":"`+password+`","device":"Living room","client":"Photon"}`))
+			strings.NewReader(`{"method":"password","name":"Oliver","password":"`+password+`","device":"Living room","client":"Photon"}`))
 		req.RemoteAddr = "203.0.113.9:5000"
 		api.ServeHTTP(httptest.NewRecorder(), req)
 	}
