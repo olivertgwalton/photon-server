@@ -41,6 +41,7 @@ type Services struct {
 	Proxies   peer.Proxies
 	Catalogue catalogue
 	Playlists playlists
+	Displays  displays
 	Pictures  pictureFiles
 	Playing   playing
 	Playbacks playbacks
@@ -117,6 +118,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	// device profile PlaybackInfo is sent, so none of it is kept.
 	a.handle(noContent, "POST /Sessions/Capabilities", "POST /Sessions/Capabilities/Full")
 	a.handle(a.displayPreferences, "GET /DisplayPreferences/{id}")
+	a.handle(a.setDisplayPreferences, "POST /DisplayPreferences/{id}")
 	// Browsing, under the routes Jellyfin 12.2 answers, and the /Users/{userId} forms apps still use.
 	a.handle(a.views, "GET /UserViews", "GET /Users/{userId}/Views")
 	a.handle(a.groupingOptions, "GET /UserViews/GroupingOptions")
