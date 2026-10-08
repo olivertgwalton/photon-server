@@ -1,10 +1,10 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import ArrowDownUpIcon from "@lucide/svelte/icons/arrow-down-up";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
-import { ratingSites } from "#lib/format.js";
-import type { WallQuery } from "#lib/wall.js";
+import { sorts, type WallQuery } from "#lib/wall.js";
 
 type Sort = components["schemas"]["WallSort"];
 type Order = components["schemas"]["Order"];
@@ -18,15 +18,7 @@ let {
 	sites: components["schemas"]["RatingSite"][];
 	onchange: (query: WallQuery) => void;
 } = $props();
-
-const sorts: Record<Sort, { name: string; asc: string; desc: string }> = {
-	title: { name: "Title", asc: "A to Z", desc: "Z to A" },
-	added: { name: "Date added", asc: "Oldest first", desc: "Newest first" },
-	released: { name: "Release date", asc: "Oldest first", desc: "Newest first" },
-	rating: { name: "Rating", asc: "Lowest first", desc: "Highest first" },
-	runtime: { name: "Runtime", asc: "Shortest first", desc: "Longest first" },
-	played: { name: "Last played", asc: "Longest ago", desc: "Most recent" },
-};
+const words = vocabulary();
 
 const sort = $derived(query.sort ?? "title");
 // As the server orders by default: titles from A, the rest newest first.
@@ -59,7 +51,9 @@ function sortBy(value: string) {
 				<ArrowDownUpIcon />
 				<span>
 					<span class="sr-only">Sort by</span>
-					{sorts[sort].name}{sort === "rating" ? ` (${ratingSites[site]})` : ""}
+					{words.sorts[sort].name}{sort === "rating"
+						? ` (${words.rating_sites[site]})`
+						: ""}
 				</span>
 			</Button>
 		{/snippet}
@@ -68,9 +62,11 @@ function sortBy(value: string) {
 		<DropdownMenu.Group>
 			<DropdownMenu.GroupHeading>Sort by</DropdownMenu.GroupHeading>
 			<DropdownMenu.RadioGroup value={sort} onValueChange={sortBy}>
-				{#each Object.entries(sorts) as [value, { name }] (value)}
+				{#each sorts as value (value)}
 					{#if value !== "rating" || sites.length}
-						<DropdownMenu.RadioItem {value}>{name}</DropdownMenu.RadioItem>
+						<DropdownMenu.RadioItem {value}>
+							{words.sorts[value].name}
+						</DropdownMenu.RadioItem>
 					{/if}
 				{/each}
 			</DropdownMenu.RadioGroup>
@@ -83,10 +79,10 @@ function sortBy(value: string) {
 				onValueChange={(value) => onchange({ ...query, order: value as Order })}
 			>
 				<DropdownMenu.RadioItem value="asc">
-					{sorts[sort].asc}
+					{words.sorts[sort].ascending}
 				</DropdownMenu.RadioItem>
 				<DropdownMenu.RadioItem value="desc">
-					{sorts[sort].desc}
+					{words.sorts[sort].descending}
 				</DropdownMenu.RadioItem>
 			</DropdownMenu.RadioGroup>
 		</DropdownMenu.Group>
@@ -104,7 +100,7 @@ function sortBy(value: string) {
 				>
 					{#each sites as value (value)}
 						<DropdownMenu.RadioItem {value}>
-							{ratingSites[value]}
+							{words.rating_sites[value]}
 						</DropdownMenu.RadioItem>
 					{/each}
 				</DropdownMenu.RadioGroup>

@@ -1,4 +1,5 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
@@ -14,6 +15,7 @@ import { Input } from "#lib/components/ui/input/index.js";
 type Provider = components["schemas"]["MetadataProvider"];
 
 let { data } = $props();
+const words = vocabulary();
 
 const api = client();
 
@@ -23,7 +25,6 @@ const capabilities = {
 	rate: "Ratings",
 	person: "People",
 } as const;
-const kinds: Record<string, string> = { movie: "Films", show: "Shows" };
 
 // A plugin's slug, from its source id plugin:<slug>.
 function slug(provider: unknown) {
@@ -81,7 +82,7 @@ async function register(event: SubmitEvent) {
 			<Card.Header>
 				<Card.Title><h2 class="heading">{provider.name}</h2></Card.Title>
 				<Card.Description>
-					{provider.kinds.map((k) => kinds[k] ?? k).join(" and ")}
+					{provider.kinds.map((k) => words.kinds[k] ?? k).join(" and ")}
 				</Card.Description>
 				<Card.Action>
 					<Badge variant={provider.ready ? "secondary" : "destructive"}>
@@ -162,7 +163,7 @@ async function register(event: SubmitEvent) {
 						<p class="text-ink-3 truncate font-mono text-xs">{plugin.url}</p>
 						<p class="text-ink-3 text-xs">
 							Protocol {plugin.protocol} ·
-							{plugin.kinds.map((k) => kinds[k] ?? k).join(" and ")}
+							{plugin.kinds.map((k) => words.kinds[k] ?? k).join(" and ")}
 							·
 							{plugin.capabilities.map((c) => capabilities[c]).join(", ")}
 						</p>

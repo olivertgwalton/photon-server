@@ -6540,6 +6540,10 @@ export interface components {
         Decision: "copy" | "transcode";
         /** @enum {string} */
         Delivery: "proxy" | "redirect";
+        Described: {
+            description: string;
+            name: string;
+        };
         Device: {
             client: string;
             device: string;
@@ -7707,6 +7711,11 @@ export interface components {
             scans: components["schemas"]["Scan"][];
             tasks: components["schemas"]["RunningTask"][];
         };
+        Sort: {
+            ascending: string;
+            descending: string;
+            name: string;
+        };
         StartImport: {
             credentials: components["schemas"]["Credentials"];
             /** Format: uuid */
@@ -7829,10 +7838,6 @@ export interface components {
         };
         /** @enum {string} */
         TaskResult: "succeeded" | "failed" | "cancelled";
-        TaskWords: {
-            description: string;
-            name: string;
-        };
         /** @enum {string} */
         ThemeLookup: "local" | "themerr" | "off";
         /** @enum {string} */
@@ -8002,14 +8007,83 @@ export interface components {
             ranges?: components["schemas"]["Range"][];
         };
         Vocabulary: {
+            accelerations: {
+                [key: string]: string;
+            };
+            calendar_filters: {
+                [key: string]: string;
+            };
+            download_states: {
+                [key: string]: string;
+            };
+            extras: {
+                [key: string]: string;
+            };
+            hookable: {
+                [key: string]: string;
+            };
+            import_misses: {
+                [key: string]: string;
+            };
+            import_sources: {
+                [key: string]: string;
+            };
+            job_states: {
+                [key: string]: string;
+            };
             jobs: {
+                [key: string]: string;
+            };
+            kinds: {
+                [key: string]: string;
+            };
+            library_kinds: {
+                [key: string]: string;
+            };
+            logged: {
+                [key: string]: string;
+            };
+            markers: {
+                [key: string]: string;
+            };
+            marks: {
+                [key: string]: string;
+            };
+            milestones: {
+                [key: string]: string;
+            };
+            node_roles: {
+                [key: string]: components["schemas"]["Described"];
+            };
+            play_methods: {
+                [key: string]: string;
+            };
+            ranges: {
+                [key: string]: string;
+            };
+            rating_sites: {
+                [key: string]: string;
+            };
+            reasons: {
+                [key: string]: components["schemas"]["Described"];
+            };
+            resolutions: {
+                [key: string]: string;
+            };
+            roles: {
                 [key: string]: string;
             };
             rows: {
                 [key: string]: string;
             };
+            sorts: {
+                [key: string]: components["schemas"]["Sort"];
+            };
+            stream_kinds: {
+                [key: string]: string;
+            };
             tasks: {
-                [key: string]: components["schemas"]["TaskWords"];
+                [key: string]: components["schemas"]["Described"];
             };
         };
         WallFilter: {

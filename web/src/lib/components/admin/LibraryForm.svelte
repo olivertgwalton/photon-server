@@ -1,4 +1,5 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import type { components } from "#lib/api/schema.js";
 import {
 	defaultSources,
@@ -7,7 +8,6 @@ import {
 	offeredSources,
 	serverLocale,
 } from "#lib/admin/library.js";
-import { extraKinds } from "#lib/admin/words.js";
 import { language } from "#lib/format.js";
 import { subtitleLanguages } from "#lib/player/words.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
@@ -34,6 +34,7 @@ let {
 	// The server's own metadata language, which a library asks in by default.
 	serverLanguage: string;
 } = $props();
+const words = vocabulary();
 
 // Languages and countries by name in the reader's own language, as Plex's and
 // Jellyfin's library settings list them.
@@ -130,10 +131,10 @@ const refreshOptions = $derived(
 				id="library-kind"
 				name="kind"
 				bind:value={kind}
-				options={[
-					{ value: "movies", label: "Films" },
-					{ value: "shows", label: "Shows" },
-				]}
+				options={Object.entries(words.library_kinds).map(([value, label]) => ({
+					value,
+					label,
+				}))}
 			/>
 		</Field.Field>
 		<Field.Field>
@@ -156,11 +157,14 @@ const refreshOptions = $derived(
 	{/if}
 
 	{#key kind}
-		{#each itemKinds(kind) as [item, items] (item)}
+		{#each itemKinds(kind) as item (item)}
 			{#each fetchers as { f, title, said } (f)}
 				{@const id = `sources-${item}-${f}`}
 				<Field.Set>
-					<Field.Legend id="{id}-legend">{title} ({items})</Field.Legend>
+					<Field.Legend id="{id}-legend"
+						>{title}
+						({words.kinds[item]})</Field.Legend
+					>
 					<Field.Description>{said}</Field.Description>
 					<SourceRanker
 						name={id}
@@ -179,7 +183,7 @@ const refreshOptions = $derived(
 	<Field.Set>
 		<Field.Legend>Videos to link from the providers</Field.Legend>
 		<div class="grid gap-2 sm:grid-cols-3">
-			{#each Object.entries(extraKinds) as [value, label] (value)}
+			{#each Object.entries(words.extras) as [value, label] (value)}
 				<div class="flex items-center gap-2">
 					<Checkbox
 						id="extra-{value}"

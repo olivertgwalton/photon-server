@@ -360,87 +360,329 @@ const feeds = new Set<ReadableStreamDefaultController<string>>();
 // The words the server names its values by, as it answers in English.
 const vocabulary: Schemas["Vocabulary"] = {
 	tasks: {
-		scan_libraries: {
-			name: "Scan libraries",
+		backfill_previews: {
+			name: "Make previews",
 			description:
-				"Reads every library's folders for what is new, changed or gone.",
-		},
-		sweep_jobs: {
-			name: "Requeue stalled jobs",
-			description: "Puts back the jobs a node stopped working on.",
+				"Makes the chapter images and seek previews libraries ask for, and clears unused ones.",
 		},
 		backup_database: {
 			name: "Back up the database",
 			description: "Dumps the database for pg_restore, keeping the newest few.",
-		},
-		refresh_metadata: {
-			name: "Refresh metadata",
-			description:
-				"Asks the providers again about titles whose libraries say it is time.",
-		},
-		sweep_artwork: {
-			name: "Clear old artwork",
-			description:
-				"Removes replaced pictures from the cache, takes the blur drawn while each loads where it has none, and fetches the pictures titles show that the cache lacks.",
 		},
 		detect_markers: {
 			name: "Detect intros and credits",
 			description:
 				"Compares the sound of each season's episodes to find what they share, and finds where each film's picture goes dark for its credits.",
 		},
-		backfill_previews: {
-			name: "Make previews",
+		fetch_subtitles: {
+			name: "Download missing subtitles",
 			description:
-				"Makes the chapter images and seek previews libraries ask for, and clears unused ones.",
-		},
-		sweep_downloads: {
-			name: "Clear old downloads",
-			description:
-				"Forgets downloads kept past their time, and conversions nothing needs.",
+				"Fetches subtitles in the languages libraries name for copies with none in them.",
 		},
 		prune_activity: {
 			name: "Prune the activity log",
 			description: "Forgets activity older than 30 days.",
-		},
-		sync_lists: {
-			name: "Sync list collections",
-			description:
-				"Reads each list collection's TMDB or MDBList list again and keeps the titles of it the library has.",
 		},
 		refresh_collections: {
 			name: "Refresh smart collections",
 			description:
 				"Finds what each smart collection's filters hold again, catching what was matched or edited since.",
 		},
-		fetch_subtitles: {
-			name: "Download missing subtitles",
+		refresh_metadata: {
+			name: "Refresh metadata",
 			description:
-				"Fetches subtitles in the languages libraries name for copies with none in them.",
+				"Asks the providers again about titles whose libraries say it is time.",
+		},
+		scan_libraries: {
+			name: "Scan libraries",
+			description:
+				"Reads every library's folders for what is new, changed or gone.",
+		},
+		sweep_artwork: {
+			name: "Clear old artwork",
+			description:
+				"Removes replaced pictures from the cache, takes the blur drawn while each loads where it has none, and fetches the pictures titles show that the cache lacks.",
+		},
+		sweep_downloads: {
+			name: "Clear old downloads",
+			description:
+				"Forgets downloads kept past their time, and conversions nothing needs.",
+		},
+		sweep_jobs: {
+			name: "Requeue stalled jobs",
+			description: "Puts back the jobs a node stopped working on.",
+		},
+		sync_lists: {
+			name: "Sync list collections",
+			description:
+				"Reads each list collection's TMDB or MDBList list again and keeps the titles of it the library has.",
 		},
 	},
 	jobs: {
-		keyframes: "Read keyframes",
-		keyframe_walk: "Walk files for keyframes",
-		identify: "Identify",
-		scan_library: "Scan a library",
-		markers: "Find intros and credits",
-		previews: "Make previews",
 		convert: "Convert for download",
 		deliver_webhook: "Send a webhook",
-		theme: "Fetch a theme tune",
-		probe: "Read media info",
+		identify: "Identify",
 		import_history: "Import watch history",
+		keyframe_walk: "Walk files for keyframes",
+		keyframes: "Read keyframes",
+		markers: "Find intros and credits",
+		previews: "Make previews",
+		probe: "Read media info",
+		scan_library: "Scan a library",
+		theme: "Fetch a theme tune",
 	},
 	rows: {
+		collection: "Collections",
 		continue_watching: "Continue Watching",
-		next_up: "Next Up",
-		watchlist: "Watchlist",
 		favourites: "Favourites",
+		next_up: "Next Up",
 		recently_added_films: "Recently Added Films",
 		recently_added_shows: "Recently Added Shows",
 		recently_released: "Recently Released",
 		top_rated_unwatched: "Top Rated",
+		watchlist: "Watchlist",
+	},
+	roles: {
+		admin: "Admin",
+		manager: "Manager",
+		user: "User",
+	},
+	markers: {
+		credits: "Credits",
+		intro: "Intro",
+		preview: "Preview",
+		recap: "Recap",
+	},
+	extras: {
+		behind_the_scenes: "Behind the scenes",
+		blooper: "Blooper",
+		clip: "Clip",
+		deleted_scene: "Deleted scene",
+		featurette: "Featurette",
+		interview: "Interview",
+		other: "Extra",
+		scene: "Scene",
+		short: "Short",
+		teaser: "Teaser",
+		theme_video: "Theme video",
+		trailer: "Trailer",
+	},
+	reasons: {
+		audio_channels_not_supported: {
+			name: "Audio channels",
+			description: "The audio has more channels than the player plays.",
+		},
+		audio_codec_not_supported: {
+			name: "Audio codec",
+			description: "The player doesn't play the audio's codec.",
+		},
+		bitrate_exceeds_limit: {
+			name: "Bitrate",
+			description: "The file is above the quality chosen.",
+		},
+		container_not_supported: {
+			name: "Container",
+			description: "The player doesn't open the file's container.",
+		},
+		parts_not_supported: {
+			name: "Several files",
+			description: "The title is in several files, played as one.",
+		},
+		subtitle_codec_not_supported: {
+			name: "Subtitles",
+			description: "The subtitles are pictures, drawn into the video.",
+		},
+		video_bit_depth_not_supported: {
+			name: "Bit depth",
+			description: "The video's bit depth is more than the player plays.",
+		},
+		video_codec_not_supported: {
+			name: "Video codec",
+			description: "The player doesn't play the video's codec.",
+		},
+		video_level_not_supported: {
+			name: "Video level",
+			description: "The video's level is higher than the player plays.",
+		},
+		video_profile_not_supported: {
+			name: "Video profile",
+			description: "The player doesn't play the video's profile.",
+		},
+		video_range_not_supported: {
+			name: "HDR",
+			description: "The screen doesn't show the video's HDR.",
+		},
+		video_resolution_not_supported: {
+			name: "Resolution",
+			description: "The picture is larger than the player plays.",
+		},
+	},
+	accelerations: {
+		nvenc: "NVENC",
+		qsv: "Quick Sync",
+		software: "Software",
+		vaapi: "VA-API",
+		videotoolbox: "VideoToolbox",
+	},
+	node_roles: {
+		all: {
+			name: "Serves and transcodes",
+			description: "As every server on its own does.",
+		},
+		serve: {
+			name: "Serves only",
+			description:
+				"Transcodes nothing, for playback or downloads, leaving that to the others.",
+		},
+		transcode: {
+			name: "Transcodes first",
+			description:
+				"Asked to transcode before any other, while it has room: the server with the GPU. It serves people too.",
+		},
+	},
+	import_sources: {
+		emby: "Emby",
+		jellyfin: "Jellyfin",
+		plex: "Plex",
+	},
+	import_misses: {
+		no_ids: "No TMDB, TheTVDB or IMDb id",
+		not_found: "Not in a library here",
+		undated: "No date watched",
+	},
+	play_methods: {
+		direct: "Direct play",
+		remux: "Direct stream",
+		transcode: "Transcode",
+	},
+	rating_sites: {
+		imdb: "IMDb",
+		rotten_tomatoes: "Rotten Tomatoes",
+		rotten_tomatoes_audience: "RT Audience",
+		tmdb: "TMDB",
+	},
+	ranges: {
+		dv: "Dolby Vision",
+		hdr10: "HDR10",
+		hdr10plus: "HDR10+",
+		hlg: "HLG",
+		sdr: "SDR",
+	},
+	resolutions: {
+		"1080p": "1080p",
+		"4k": "4K",
+		"720p": "720p",
+		sd: "SD",
+	},
+	kinds: {
 		collection: "Collections",
+		episode: "Episodes",
+		extra: "Extras",
+		movie: "Films",
+		season: "Seasons",
+		show: "Shows",
+	},
+	library_kinds: {
+		movies: "Films",
+		shows: "Shows",
+	},
+	stream_kinds: {
+		audio: "Audio",
+		subtitle: "Subtitle",
+		video: "Video",
+	},
+	marks: {
+		favourite: "Favourites",
+		in_progress: "In progress",
+		unwatched: "Unwatched",
+		watched: "Watched",
+		watchlist: "Watchlist",
+	},
+	milestones: {
+		season_finale: "Finale",
+		season_premiere: "Season premiere",
+		series_premiere: "Series premiere",
+	},
+	calendar_filters: {
+		all: "Everything",
+		favourites: "Favourites",
+		mine: "My titles",
+		watchlist: "Watchlist",
+	},
+	sorts: {
+		added: {
+			name: "Date added",
+			ascending: "Oldest first",
+			descending: "Newest first",
+		},
+		played: {
+			name: "Last played",
+			ascending: "Longest ago",
+			descending: "Most recent",
+		},
+		rating: {
+			name: "Rating",
+			ascending: "Lowest first",
+			descending: "Highest first",
+		},
+		released: {
+			name: "Release date",
+			ascending: "Oldest first",
+			descending: "Newest first",
+		},
+		runtime: {
+			name: "Runtime",
+			ascending: "Shortest first",
+			descending: "Longest first",
+		},
+		title: {
+			name: "Title",
+			ascending: "A to Z",
+			descending: "Z to A",
+		},
+	},
+	job_states: {
+		dead: "Gave up",
+		queued: "Queued",
+		rerun: "To run again",
+		running: "Running",
+	},
+	download_states: {
+		converting: "Converting",
+		failed: "Failed",
+		queued: "Waiting",
+		ready: "Ready",
+	},
+	logged: {
+		"auth.sign_in_refused": "Refused sign-ins",
+		"auth.signed_in": "Sign-ins",
+		"backup.made": "Backups",
+		"job.dead": "Dead jobs",
+		"library.added": "Libraries added",
+		"library.removed": "Libraries removed",
+		"library.scanned": "Scans",
+		"library.titles_added": "Titles added",
+		"playback.started": "Plays started",
+		"playback.stopped": "Plays stopped",
+		"profile.added": "Profiles added",
+		"profile.removed": "Profiles removed",
+		"task.failed": "Failed tasks",
+	},
+	hookable: {
+		"auth.sign_in_refused": "A sign-in is refused",
+		"auth.signed_in": "Someone signs in",
+		"backup.made": "A backup is made",
+		"library.added": "A library is added",
+		"library.removed": "A library is removed",
+		"library.scanned": "A library is scanned",
+		"library.titles_added": "Titles are added",
+		"playback.paused": "A play is paused",
+		"playback.resumed": "A play is resumed",
+		"playback.started": "A play starts",
+		"playback.stopped": "A play stops",
+		"profile.added": "A profile is added",
+		"profile.removed": "A profile is removed",
+		"task.failed": "A task fails",
 	},
 };
 

@@ -1,7 +1,7 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import { toast } from "svelte-sonner";
 import { refreshAll } from "$app/navigation";
-import { roles } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import AvatarPicker from "#lib/components/AvatarPicker.svelte";
@@ -13,6 +13,7 @@ import { Input } from "#lib/components/ui/input/index.js";
 import { fields } from "#lib/form.js";
 
 let { data } = $props();
+const words = vocabulary();
 // Why a change was refused, beside the card it was made in.
 let refused = $state<{ name?: string; pin?: string; password?: string }>({});
 
@@ -92,7 +93,7 @@ async function setPassword(event: SubmitEvent) {
 		<div class="grid gap-2">
 			<h1 class="title">{data.me.name}</h1>
 			<p class="text-ink-2 text-sm">
-				{roles[data.me.role]}.
+				{words.roles[data.me.role]}.
 				{#if data.me.role === "admin" || data.me.role === "manager"}
 					What each profile may see is changed under
 					<a href="/settings/profiles" class="text-ink underline">Profiles</a>.

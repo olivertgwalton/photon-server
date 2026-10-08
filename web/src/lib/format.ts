@@ -87,19 +87,6 @@ export function fullTitle(
 	return `${[show, at].filter(Boolean).join(" ")} · ${t.title}`;
 }
 
-export const playMethods: Record<Schemas["PlayMethod"], string> = {
-	direct: "Direct play",
-	remux: "Direct stream",
-	transcode: "Transcode",
-};
-
-export const ratingSites: Record<Schemas["RatingSite"], string> = {
-	imdb: "IMDb",
-	tmdb: "TMDB",
-	rotten_tomatoes: "Rotten Tomatoes",
-	rotten_tomatoes_audience: "RT Audience",
-};
-
 // The mark a score is drawn with, as the Photon apps draw it: Rotten Tomatoes'
 // fresh or rotten by its own line at 60%.
 export type RatingMark =
@@ -167,25 +154,6 @@ export function language(code: string | undefined): string {
 		return code;
 	}
 }
-
-const ranges: Record<Schemas["Range"], string> = {
-	sdr: "SDR",
-	hlg: "HLG",
-	hdr10: "HDR10",
-	hdr10plus: "HDR10+",
-	dv: "Dolby Vision",
-};
-
-export function rangeName(range: Schemas["Range"]): string {
-	return ranges[range];
-}
-
-export const resolutionNames: Record<Schemas["Resolution"], string> = {
-	sd: "SD",
-	"720p": "720p",
-	"1080p": "1080p",
-	"4k": "4K",
-};
 
 // The copy asked for by id, else the one the server plays when none is: the
 // first with its files on disk.

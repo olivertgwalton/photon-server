@@ -1,4 +1,5 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import ArrowLeftIcon from "@lucide/svelte/icons/arrow-left";
 import CaptionsIcon from "@lucide/svelte/icons/captions";
 import CaptionsOffIcon from "@lucide/svelte/icons/captions-off";
@@ -40,7 +41,7 @@ import {
 	wants,
 	webVTT,
 } from "#lib/player/subtitles.js";
-import { qualities, reasons, skips } from "#lib/player/words.js";
+import { qualities, skips } from "#lib/player/words.js";
 import PlaybackInfo from "./PlaybackInfo.svelte";
 import SeekBar from "./SeekBar.svelte";
 import UpNext from "./UpNext.svelte";
@@ -65,6 +66,7 @@ let {
 	audio?: number;
 	subtitle?: number | "off";
 } = $props();
+const words = vocabulary();
 
 const api = client();
 const step = 10;
@@ -624,7 +626,7 @@ onMount(() => {
 				{#if refusal.reasons.length}
 					<ul class="text-ink-2 list-disc text-left text-sm">
 						{#each refusal.reasons as reason (reason)}
-							<li>{reasons[reason]}</li>
+							<li>{words.reasons[reason].description}</li>
 						{/each}
 					</ul>
 				{/if}

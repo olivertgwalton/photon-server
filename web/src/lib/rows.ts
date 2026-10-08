@@ -87,22 +87,25 @@ export function rail(row: Row): { key: string; href: string } {
 	};
 }
 
-const kinds: [components["schemas"]["ItemKind"], string][] = [
-	["movie", "Films"],
-	["show", "Shows"],
-	["season", "Seasons"],
-	["episode", "Episodes"],
-	["collection", "Collections"],
-	["extra", "Extras"],
+const kinds: components["schemas"]["ItemKind"][] = [
+	"movie",
+	"show",
+	"season",
+	"episode",
+	"collection",
+	"extra",
 ];
 
-// A mixed list of titles as sections, one per kind, in the order above.
-export function byKind(cards: components["schemas"]["Card"][]) {
+// A mixed list of titles as sections, one per kind, in the order above, each
+// headed by its kind's name.
+export function byKind(
+	cards: components["schemas"]["Card"][],
+	names: components["schemas"]["Vocabulary"]["kinds"],
+) {
 	return kinds
-		.map(([kind, name]) => ({
+		.map((kind) => ({
 			kind,
-			name,
-			slug: name.toLowerCase(),
+			name: names[kind],
 			cards: cards.filter((c) => c.kind === kind),
 		}))
 		.filter((g) => g.cards.length);

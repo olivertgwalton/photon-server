@@ -1,4 +1,5 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
 import { roleOptions } from "#lib/admin/words.js";
@@ -19,12 +20,13 @@ import { Switch } from "#lib/components/ui/switch/index.js";
 type Change = components["schemas"]["ProfileChange"];
 
 let { data } = $props();
+const words = vocabulary();
 
 const api = client();
 const path = $derived({ params: { path: { id: data.profile.id } } });
 
 // A manager keeps users.
-const options = $derived(roleOptions(data.me.role));
+const options = $derived(roleOptions(data.me.role, words.roles));
 
 // The ages certificates are for, as the server reads them.
 const ages = [

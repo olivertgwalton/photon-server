@@ -1,9 +1,11 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import Pager from "#lib/components/Pager.svelte";
 import TitleRow from "#lib/components/TitleRow.svelte";
-import { playMethods, timecode } from "#lib/format.js";
+import { timecode } from "#lib/format.js";
 
 let { data } = $props();
+const words = vocabulary();
 
 const day = new Intl.DateTimeFormat(undefined, { dateStyle: "full" });
 const time = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
@@ -31,9 +33,8 @@ const { offset, total } = $derived(data.history);
 							card={play.title}
 							detail="{time.format(
 								new Date(play.started_at),
-							)} · stopped at {timecode(play.position_ms)} · {playMethods[
-								play.method
-							]}"
+							)} · stopped at {timecode(play.position_ms)} · {words
+								.play_methods[play.method]}"
 						/>
 					</li>
 				{/each}

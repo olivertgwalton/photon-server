@@ -1,4 +1,5 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import imdb from "#lib/assets/ratings/imdb.svg";
 import popcornSpilled from "#lib/assets/ratings/popcorn-spilled.svg";
 import popcornUpright from "#lib/assets/ratings/popcorn-upright.svg";
@@ -6,14 +7,10 @@ import tmdb from "#lib/assets/ratings/tmdb.svg";
 import tomatometerFresh from "#lib/assets/ratings/tomatometer-fresh.svg";
 import tomatometerRotten from "#lib/assets/ratings/tomatometer-rotten.svg";
 import type { components } from "#lib/api/schema.js";
-import {
-	type RatingMark,
-	ratingMark,
-	ratingSites,
-	score,
-} from "#lib/format.js";
+import { type RatingMark, ratingMark, score } from "#lib/format.js";
 
 let { rating }: { rating: components["schemas"]["RatingRef"] } = $props();
+const words = vocabulary();
 
 const marks: Record<RatingMark, string> = {
 	imdb,
@@ -35,7 +32,7 @@ const wordmark = $derived(mark === "imdb" || mark === "tmdb");
 >
 	<img
 		src={marks[mark]}
-		alt={ratingSites[rating.site]}
+		alt={words.rating_sites[rating.site]}
 		class={wordmark ? "h-3.5 w-auto" : "h-4 w-auto"}
 	>
 	<span class="text-ink font-semibold">{score(rating.site, rating.score)}</span>

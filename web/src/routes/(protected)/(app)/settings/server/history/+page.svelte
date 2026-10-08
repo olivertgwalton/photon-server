@@ -1,5 +1,6 @@
 <script lang="ts">
-import { fullTitle, playMethods } from "#lib/format.js";
+import { vocabulary } from "#lib/vocabulary.js";
+import { fullTitle } from "#lib/format.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { byName, when } from "#lib/admin/words.js";
 import Choice from "#lib/components/Choice.svelte";
@@ -9,6 +10,7 @@ import { Label } from "#lib/components/ui/label/index.js";
 import * as Table from "#lib/components/ui/table/index.js";
 
 let { data } = $props();
+const words = vocabulary();
 
 const names = $derived(byName(data.profiles));
 const everyone = $derived([
@@ -75,7 +77,7 @@ function reached(position: number, duration?: number) {
 					<Table.Cell
 						>{names.get(entry.profile_id) ?? "A removed profile"}</Table.Cell
 					>
-					<Table.Cell>{playMethods[entry.method]}</Table.Cell>
+					<Table.Cell>{words.play_methods[entry.method]}</Table.Cell>
 					<Table.Cell>{when.format(new Date(entry.started_at))}</Table.Cell>
 					<Table.Cell class="text-right font-mono">
 						{reached(entry.position_ms, entry.title.duration_ms)}

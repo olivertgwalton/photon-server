@@ -1,8 +1,9 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import type { components } from "#lib/api/schema.js";
 import * as Sheet from "#lib/components/ui/sheet/index.js";
-import { bitrate, playMethods, rangeName } from "#lib/format.js";
-import { channels, reasons } from "#lib/player/words.js";
+import { bitrate } from "#lib/format.js";
+import { channels } from "#lib/player/words.js";
 
 type Schemas = components["schemas"];
 
@@ -21,6 +22,7 @@ let {
 	quality: VideoPlaybackQuality | undefined;
 	portal: HTMLElement | undefined;
 } = $props();
+const words = vocabulary();
 
 const stream = (index: number | undefined) =>
 	version?.streams.find((s) => s.index === index);
@@ -33,7 +35,7 @@ const picture = (s: Schemas["StreamPage"] | undefined) =>
 				s.codec.toUpperCase(),
 				s.profile,
 				s.width && s.height ? `${s.width}×${s.height}` : "",
-				s.range && s.range !== "sdr" ? rangeName(s.range) : "",
+				s.range && s.range !== "sdr" ? words.ranges[s.range] : "",
 				s.bitrate_kbps ? bitrate(s.bitrate_kbps) : "",
 			]
 				.filter(Boolean)
@@ -77,7 +79,9 @@ const audioTarget = $derived.by(() => {
 	<Sheet.Content portalProps={{ to: portal }} class="overflow-y-auto">
 		<Sheet.Header>
 			<Sheet.Title>Playback info</Sheet.Title>
-			<Sheet.Description>{playMethods[playback.method]}</Sheet.Description>
+			<Sheet.Description
+				>{words.play_methods[playback.method]}</Sheet.Description
+			>
 		</Sheet.Header>
 		<dl class="grid gap-4 px-4 pb-6 text-sm">
 			{#if playback.reasons?.length}
@@ -86,7 +90,7 @@ const audioTarget = $derived.by(() => {
 					<dd>
 						<ul class="text-ink mt-1 list-disc pl-4">
 							{#each playback.reasons as reason (reason)}
-								<li>{reasons[reason]}</li>
+								<li>{words.reasons[reason].description}</li>
 							{/each}
 						</ul>
 					</dd>

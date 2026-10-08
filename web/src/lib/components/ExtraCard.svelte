@@ -1,14 +1,16 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import Artwork from "#lib/components/Artwork.svelte";
 import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
 import PlayIcon from "@lucide/svelte/icons/play";
-import { type Extra, extraKinds } from "#lib/extras.js";
+import type { Extra } from "#lib/extras.js";
 import { playHref, runtime } from "#lib/format.js";
 import { fadeIn } from "#lib/fade.js";
 
 // An extra by a still of its video, played here; or a video a provider links
 // to elsewhere, by its site's still served from this server, opened there.
 let { item, sizes }: { item: Extra; sizes: string } = $props();
+const words = vocabulary();
 
 const remote = $derived("video" in item);
 const image = $derived("extra" in item ? item.extra.image : undefined);
@@ -44,7 +46,7 @@ const thumb = $derived("video" in item ? item.video.thumb : undefined);
 			{item.video.name}
 		</span>
 		<span class="text-ink-3 block truncate text-xs">
-			{extraKinds[item.video.extra_kind]}
+			{words.extras[item.video.extra_kind]}
 			· {item.video.site}
 			<span class="sr-only">(opens in a new tab)</span>
 		</span>
@@ -54,7 +56,7 @@ const thumb = $derived("video" in item ? item.video.thumb : undefined);
 		</span>
 		<span class="text-ink-3 block truncate text-xs">
 			{[
-				extraKinds[item.extra.extra_kind],
+				words.extras[item.extra.extra_kind],
 				item.extra.duration_ms && runtime(item.extra.duration_ms),
 			]
 				.filter(Boolean)

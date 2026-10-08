@@ -1,4 +1,5 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import XIcon from "@lucide/svelte/icons/x";
 import { invalidate } from "$app/navigation";
@@ -10,6 +11,7 @@ import { Progress } from "#lib/components/ui/progress/index.js";
 import { bitrate, bytes } from "#lib/format.js";
 
 let { data } = $props();
+const words = vocabulary();
 
 function remove(id: string) {
 	act(
@@ -17,13 +19,6 @@ function remove(id: string) {
 		"Download removed.",
 	);
 }
-
-const states = {
-	queued: "Waiting",
-	converting: "Converting",
-	ready: "Ready",
-	failed: "Failed",
-};
 
 // A conversion says how far it has got only when asked, so the page asks
 // while one is under way.
@@ -70,7 +65,7 @@ $effect(() => {
 										]
 											.filter(Boolean)
 											.join(", "),
-								states[d.state],
+								words.download_states[d.state],
 								d.size_bytes && bytes(d.size_bytes),
 							]
 								.filter(Boolean)

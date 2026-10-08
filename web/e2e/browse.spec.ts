@@ -292,7 +292,7 @@ test("search finds titles and people", async ({ page }) => {
 	).toBeVisible();
 	await expectAccessible(page);
 	// A run of results narrowed to a library leads back to them so narrowed.
-	await page.goto("/search/films?q=quiet&library=l-films");
+	await page.goto("/search/movie?q=quiet&library=l-films");
 	await expect(page.getByRole("link", { name: /Results for/ })).toHaveAttribute(
 		"href",
 		"/search?q=quiet&library=l-films",

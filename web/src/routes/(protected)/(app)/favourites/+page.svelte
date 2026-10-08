@@ -1,10 +1,12 @@
 <script lang="ts">
+import { vocabulary } from "#lib/vocabulary.js";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import { byKind } from "#lib/rows.js";
 
 let { data } = $props();
+const words = vocabulary();
 
-const groups = $derived(byKind(data.cards));
+const groups = $derived(byKind(data.cards, words.kinds));
 </script>
 
 <svelte:head><title>Favourites · Photon</title></svelte:head>
