@@ -250,6 +250,17 @@ func TestTheNewestWatchWins(t *testing.T) {
 	if st := state(); st.WatchedAt != nil {
 		t.Errorf("marked watched from before it was marked unwatched = %+v, want it unwatched", st)
 	}
+
+	// State kept from before changes were timed, last played an hour ago.
+	if _, err := s.pool.Exec(ctx, `UPDATE watch_state SET changed_at = NULL, last_played_at = $1`, anHour); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkWatched(ctx, oliver.ID, film, yesterday); err != nil {
+		t.Fatal(err)
+	}
+	if st := state(); st.WatchedAt != nil || !st.LastPlayedAt.Equal(*anHour) {
+		t.Errorf("marked watched yesterday over state last played an hour ago = %+v, want it unwatched, last played an hour ago", st)
+	}
 }
 
 // Victorious in a Kids library and a Shows library, as symlinks to the same files, is one show:
