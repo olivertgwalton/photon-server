@@ -94,8 +94,6 @@ func run(logger *slog.Logger, args []string) error {
 		return serve(ctx, logger, databaseURL)
 	case len(args) == 1 && args[0] == "migrate":
 		return store.Migrate(ctx, databaseURL, logger)
-	case args[0] == "profile":
-		return profileCommand(ctx, logger, databaseURL, os.Stdout, args[1:])
 	case len(args) == 2 && args[0] == "restore":
 		valkeyURL, err := requiredEnv("PHOTON_VALKEY_URL")
 		if err != nil {
@@ -107,7 +105,7 @@ func run(logger *slog.Logger, args []string) error {
 		}
 		return r.Restore(ctx, args[1], os.Stdout)
 	}
-	return fmt.Errorf("usage: photon-server [migrate | profile | restore <dump> | openapi], got %q", args)
+	return fmt.Errorf("usage: photon-server [migrate | restore <dump> | openapi], got %q", args)
 }
 
 // writeDescription writes the API's OpenAPI description, so a client's types are generated
