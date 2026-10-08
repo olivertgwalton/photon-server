@@ -6,7 +6,6 @@ import {
 	keepFor,
 	type Point,
 	pollEvery,
-	quantile,
 	series,
 	total,
 } from "#lib/admin/metrics.js";
@@ -133,13 +132,6 @@ function speed(bytesPerSecond: number | undefined) {
 	return bytesPerSecond === undefined
 		? "—"
 		: bitrate(Math.round((bytesPerSecond * 8) / 1000));
-}
-
-function wait(seconds: number | undefined) {
-	if (seconds === undefined) return "—";
-	return seconds < 1
-		? `${Math.round(seconds * 1000)} ms`
-		: `${seconds.toFixed(1)} s`;
 }
 
 function ago(seconds: number, now: number) {
@@ -302,17 +294,6 @@ function ago(seconds: number, now: number) {
 										for downloads
 									</dd>
 								{/if}
-							</div>
-							<div class="grid content-start gap-1">
-								<dt class="label">Segment wait</dt>
-								<dd class="text-ink font-mono">
-									{wait(quantile(m.segment_wait, 0.5))}
-									<span class="text-ink-3 font-sans text-xs">median</span>
-								</dd>
-								<dd class="text-ink-3 text-xs">
-									{wait(quantile(m.segment_wait, 0.95))}
-									at the 95th percentile, since it started
-								</dd>
 							</div>
 						</dl>
 					{:else}
