@@ -2,14 +2,11 @@ package httpapi
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"math"
 	"net/http"
 	"os"
-	"path"
 	"strconv"
-	"strings"
 	"time"
 	"uuid"
 
@@ -19,15 +16,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 )
-
-// fileTypes are the types of the files a library holds, which Go's own table lacks.
-var fileTypes = map[string]string{
-	".mkv": "video/x-matroska", ".mk3d": "video/x-matroska", ".webm": "video/webm", ".mp4": "video/mp4",
-	".m4v": "video/x-m4v", ".mov": "video/quicktime", ".ts": "video/mp2t", ".m2ts": "video/mp2t",
-	".mts": "video/mp2t", ".avi": "video/x-msvideo", ".wmv": "video/x-ms-wmv", ".mpg": "video/mpeg",
-	".mpeg": "video/mpeg", ".ogv": "video/ogg", ".flv": "video/x-flv",
-	".srt": "application/x-subrip", ".vtt": "text/vtt", ".ass": "text/x-ssa", ".ssa": "text/x-ssa",
-}
 
 // partStream serves one file of a copy as it is, in byte ranges.
 func (a *API) partStream(w http.ResponseWriter, r *http.Request) {
@@ -133,20 +121,9 @@ func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where fun
 		return
 	}
 	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
+	if err := library.Serve(w, r, f, rel, limit); err != nil {
 		a.internal(w, r, err)
-		return
 	}
-	if t, ok := fileTypes[strings.ToLower(path.Ext(rel))]; ok {
-		w.Header().Set("Content-Type", t)
-	}
-	if limit >= info.Size() {
-		// The bare file keeps the copy in the kernel: sendfile takes only an *os.File.
-		http.ServeContent(w, r, rel, info.ModTime(), f)
-		return
-	}
-	http.ServeContent(w, r, rel, info.ModTime(), io.NewSectionReader(f, 0, limit))
 }
 
 // openLibraryFile opens the file of a library that where finds for an id.

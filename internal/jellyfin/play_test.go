@@ -186,8 +186,8 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	}
 
 	w := serve(api, http.MethodGet, "/Videos/"+guid(heat)+"/stream?MediaSourceId="+guid(copyID)+"&Static=true", infuse, "")
-	if w.Code != http.StatusOK || w.Body.String() != "0123456789" {
-		t.Errorf("the stream: %d %q", w.Code, w.Body)
+	if w.Code != http.StatusOK || w.Body.String() != "0123456789" || w.Header().Get("Content-Type") != "video/x-matroska" {
+		t.Errorf("the stream: %d %s %q", w.Code, w.Header().Get("Content-Type"), w.Body)
 	}
 	call(http.MethodGet, "/Videos/"+guid(heat)+"/stream?MediaSourceId=nonsense&Static=true", "", http.StatusBadRequest)
 	r := httptest.NewRequest(http.MethodGet, "/videos/"+guid(heat)+"/stream.mkv?static=true", nil)
