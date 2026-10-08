@@ -18,11 +18,39 @@ import (
 const (
 	pairingTTL   = 10 * time.Minute
 	PollInterval = 5 * time.Second
-	// userCodeAlphabet has no vowels, so a code never spells a word, and no characters easily
-	// confused when read off a screen. Eight of them are 34.5 bits.
-	userCodeAlphabet = "BCDFGHJKLMNPQRSTVWXZ"
-	userCodeLen      = 8
 )
+
+// CodeStyle is how a pairing's user code is written: photon's letters, or the six digits Jellyfin's
+// apps take and nothing else. Either is approved wherever a code is entered.
+type CodeStyle string
+
+const (
+	CodeLetters CodeStyle = "letters"
+	CodeDigits  CodeStyle = "digits"
+)
+
+// form is a style's alphabet and length. The letters have no vowels, so a code never spells a
+// word, and no characters easily confused when read off a screen: eight of them are 34.5 bits.
+// Six digits are 19.9 bits, which the approvals each profile may make keep out of reach.
+func (c CodeStyle) form() (alphabet string, length int) {
+	switch c {
+	case CodeLetters:
+		return "BCDFGHJKLMNPQRSTVWXZ", 8
+	case CodeDigits:
+		return "0123456789", 6
+	}
+	return "", 0
+}
+
+// shown is a user code as a television shows it: letters as XXXX-XXXX, digits as they are.
+func (c CodeStyle) shown(code string) string {
+	switch c {
+	case CodeLetters:
+		return code[:4] + "-" + code[4:]
+	case CodeDigits:
+	}
+	return code
+}
 
 var (
 	ErrPairingNotFound = errors.New("no pairing is waiting for that code")
@@ -35,30 +63,32 @@ type PairingStart struct {
 	ExpiresIn  time.Duration
 }
 
-func (s *Service) StartPairing(ctx context.Context, d Device) (PairingStart, error) {
+func (s *Service) StartPairing(ctx context.Context, d Device, style CodeStyle) (PairingStart, error) {
 	for range 5 {
-		code := newUserCode()
+		code := style.newCode()
 		secret := make([]byte, 32)
 		_, _ = rand.Read(secret)
 		deviceSecret := base64.RawURLEncoding.EncodeToString(secret)
-		err := s.kv.StartPairing(ctx, code, hashToken(deviceSecret), kv.Pairing{Device: d.Name, Client: d.Client}, pairingTTL)
+		err := s.kv.StartPairing(ctx, code, hashToken(deviceSecret), kv.Pairing{Device: d.Name, Client: d.Client, Style: string(style)}, pairingTTL)
 		if errors.Is(err, kv.ErrUserCodeTaken) {
 			continue
 		}
 		if err != nil {
 			return PairingStart{}, err
 		}
-		return PairingStart{DeviceCode: code + "." + deviceSecret, UserCode: code[:4] + "-" + code[4:], ExpiresIn: pairingTTL}, nil
+		return PairingStart{DeviceCode: code + "." + deviceSecret, UserCode: style.shown(code), ExpiresIn: pairingTTL}, nil
 	}
 	return PairingStart{}, errNoFreeCode
 }
 
-func newUserCode() string {
-	b := make([]byte, userCodeLen)
-	size := big.NewInt(int64(len(userCodeAlphabet)))
+// newCode draws each character uniformly from crypto/rand, so a digit code may lead with zeros.
+func (c CodeStyle) newCode() string {
+	alphabet, length := c.form()
+	b := make([]byte, length)
+	size := big.NewInt(int64(len(alphabet)))
 	for i := range b {
 		n, _ := rand.Int(rand.Reader, size)
-		b[i] = userCodeAlphabet[n.Int64()]
+		b[i] = alphabet[n.Int64()]
 	}
 	return string(b)
 }
@@ -74,6 +104,29 @@ func (s *Service) ApprovePairing(ctx context.Context, approver domain.Session, u
 		return Device{}, ErrPairingNotFound
 	}
 	return Device{Name: p.Device, Client: p.Client}, nil
+}
+
+// A Pairing is what waits on a code: the television that asked, the code it shows, and when.
+type Pairing struct {
+	Device   Device
+	UserCode string
+	Started  time.Time
+}
+
+// PairingStatus answers a television asking whether its code is approved yet, without handing out
+// its token.
+func (s *Service) PairingStatus(ctx context.Context, deviceCode string) (kv.PairingState, Pairing, error) {
+	code, secret, ok := strings.Cut(deviceCode, ".")
+	if !ok {
+		return kv.PairingExpired, Pairing{}, nil
+	}
+	state, p, remaining, err := s.kv.PairingStatus(ctx, code, hashToken(secret))
+	if err != nil || state == kv.PairingExpired {
+		return state, Pairing{}, err
+	}
+	return state, Pairing{
+		Device: Device{Name: p.Device, Client: p.Client}, UserCode: CodeStyle(p.Style).shown(code), Started: time.Now().Add(remaining - pairingTTL),
+	}, nil
 }
 
 // PollPairing answers a television asking after its code. Once approved it receives a device

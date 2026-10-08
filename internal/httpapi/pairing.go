@@ -41,10 +41,10 @@ func (a *API) startPairing(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "device and client are required")
 		return
 	}
-	if !a.allowed(w, r, pairingsPerAddress, a.addrKey(r, "pairing")) {
+	if !a.allowed(w, r, auth.PairingsPerAddress, auth.PairingKey(a.svc.TrustedProxies.Client(r))) {
 		return
 	}
-	start, err := a.svc.Auth.StartPairing(r.Context(), auth.Device{Name: req.Device, Client: req.Client})
+	start, err := a.svc.Auth.StartPairing(r.Context(), auth.Device{Name: req.Device, Client: req.Client}, auth.CodeLetters)
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -64,7 +64,7 @@ func (a *API) approvePairing(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if !a.allowed(w, r, approvalsPerProfile, "approve:profile:"+sessionOf(r).Profile.ID.String()) {
+	if !a.allowed(w, r, auth.ApprovalsPerProfile, auth.ApprovalKey(sessionOf(r).Profile.ID)) {
 		return
 	}
 	d, err := a.svc.Auth.ApprovePairing(r.Context(), sessionOf(r), req.UserCode)

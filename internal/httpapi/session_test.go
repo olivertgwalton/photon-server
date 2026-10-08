@@ -51,7 +51,7 @@ func (fakeAuth) Authenticate(_ context.Context, token string) (domain.Session, e
 
 func (fakeAuth) SignOut(context.Context, uuid.UUID) error { return nil }
 
-func (fakeAuth) StartPairing(context.Context, auth.Device) (auth.PairingStart, error) {
+func (fakeAuth) StartPairing(context.Context, auth.Device, auth.CodeStyle) (auth.PairingStart, error) {
 	return auth.PairingStart{DeviceCode: "BCDFGHJK.secret", UserCode: "BCDF-GHJK", ExpiresIn: 10 * time.Minute}, nil
 }
 

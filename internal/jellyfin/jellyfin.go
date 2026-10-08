@@ -31,6 +31,10 @@ type authenticator interface {
 	SignIn(ctx context.Context, name, password string, device auth.Device) (string, domain.Profile, error)
 	Authenticate(ctx context.Context, token string) (domain.Session, error)
 	SignOut(ctx context.Context, session uuid.UUID) error
+	StartPairing(ctx context.Context, d auth.Device, style auth.CodeStyle) (auth.PairingStart, error)
+	ApprovePairing(ctx context.Context, approver domain.Session, userCode string) (auth.Device, error)
+	PairingStatus(ctx context.Context, deviceCode string) (kv.PairingState, auth.Pairing, error)
+	PollPairing(ctx context.Context, deviceCode string) (kv.PairingState, string, domain.Profile, error)
 }
 
 type Services struct {
@@ -85,7 +89,11 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle("GET /Branding/Configuration", constant(`{"SplashscreenEnabled":false}`))
 	a.handle("GET /Branding/Css", css)
 	a.handle("GET /Branding/Css.css", css)
-	a.handle("GET /QuickConnect/Enabled", constant(`false`))
+	a.handle("GET /QuickConnect/Enabled", constant(`true`))
+	a.handle("POST /QuickConnect/Initiate", a.initiateQuickConnect)
+	a.handle("GET /QuickConnect/Connect", a.quickConnectState)
+	a.handle("POST /QuickConnect/Authorize", a.signedIn(a.authorizeQuickConnect))
+	a.handle("POST /Users/AuthenticateWithQuickConnect", a.authenticateWithQuickConnect)
 	// No profile is listed to whoever asks: an app shows its form for a name and password.
 	a.handle("GET /Users/Public", constant(`[]`))
 	a.handle("POST /Users/AuthenticateByName", a.authenticateByName)

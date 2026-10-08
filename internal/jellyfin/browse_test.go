@@ -5,6 +5,7 @@ package jellyfin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"testing"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
@@ -34,6 +36,22 @@ func (p profiles) Authenticate(_ context.Context, token string) (domain.Session,
 }
 
 func (profiles) SignOut(context.Context, uuid.UUID) error { return nil }
+
+func (profiles) StartPairing(context.Context, auth.Device, auth.CodeStyle) (auth.PairingStart, error) {
+	return auth.PairingStart{}, errors.ErrUnsupported
+}
+
+func (profiles) ApprovePairing(context.Context, domain.Session, string) (auth.Device, error) {
+	return auth.Device{}, auth.ErrPairingNotFound
+}
+
+func (profiles) PairingStatus(context.Context, string) (kv.PairingState, auth.Pairing, error) {
+	return kv.PairingExpired, auth.Pairing{}, nil
+}
+
+func (profiles) PollPairing(context.Context, string) (kv.PairingState, string, domain.Profile, error) {
+	return kv.PairingExpired, "", domain.Profile{}, nil
+}
 
 // Infuse's fields, which it sends on every list.
 const infuseFields = "DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,ProviderIds,SortName,RecursiveItemCount,ChildCount"
