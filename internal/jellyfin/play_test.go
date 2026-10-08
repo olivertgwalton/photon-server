@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -212,12 +213,12 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 
 	report := func(path string, ticks int64, session string) {
 		call(http.MethodPost, path, `{"ItemId":"`+guid(heat)+`","PlaySessionId":"`+session+`","PositionTicks":`+
-			jsonInt(ticks)+`,"PlayMethod":"DirectStream","IsPaused":false,"AudioStreamIndex":1,"SubtitleStreamIndex":-1}`, http.StatusNoContent)
+			strconv.FormatInt(ticks, 10)+`,"PlayMethod":"DirectStream","IsPaused":false,"AudioStreamIndex":1,"SubtitleStreamIndex":-1}`, http.StatusNoContent)
 	}
 	report("/Sessions/Playing", 0, info.PlaySessionID)
 	report("/Sessions/Playing/Progress", 10*60*1e7, info.PlaySessionID)
 	report("/Sessions/Playing/Stopped", 12*60*1e7, info.PlaySessionID)
-	session, _ := uuid.Parse(info.PlaySessionID)
+	session := uuidOf(t, info.PlaySessionID)
 	if card, ok := plays.started[session]; !ok || card.Profile.ID != ada.ID || card.Version.ID != copyID {
 		t.Errorf("playing started %v, want the session PlaybackInfo named, of the copy", plays.started)
 	}
@@ -246,11 +247,6 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	if err := json.Unmarshal(call(http.MethodDelete, "/UserFavoriteItems/"+guid(heat), "", http.StatusOK), &data); err != nil || data["IsFavorite"] != false {
 		t.Errorf("no longer a favourite: %v, %v", data, err)
 	}
-}
-
-func jsonInt(n int64) string {
-	b, _ := json.Marshal(n)
-	return string(b)
 }
 
 // fakeRemuxes are a node's remuxes: those opened, by playback, and the playlists each answers.
@@ -330,7 +326,7 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 		return rec
 	}
 	master := fetch(transcoding)
-	session, _ := uuid.Parse(info.PlaySessionID)
+	session := uuidOf(t, info.PlaySessionID)
 	if master.Code != http.StatusOK || len(remuxes.opened) != 1 || remuxes.opened[session].Encode != nil {
 		t.Fatalf("master: %d %s, opened %v: want H.264 copied out of the MKV", master.Code, master.Body, remuxes.opened)
 	}
@@ -399,7 +395,7 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 		}
 		transcoding, _ := info.MediaSources[0]["TranscodingUrl"].(string)
 		api.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, transcoding, nil))
-		session, _ := uuid.Parse(info.PlaySessionID)
+		session := uuidOf(t, info.PlaySessionID)
 		e := remuxes.opened[session].Encode
 		if tc.encoded != (e != nil) || e != nil && e.BitrateKbps > 2000 {
 			t.Errorf("from %s: encode %+v, want encoded %t within 2000 kbps", tc.from, e, tc.encoded)
@@ -425,7 +421,7 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 	}
 	transcoding, _ := info.MediaSources[0]["TranscodingUrl"].(string)
 	api.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, transcoding, nil))
-	session, _ := uuid.Parse(info.PlaySessionID)
+	session := uuidOf(t, info.PlaySessionID)
 	if e := remuxes.opened[session].Encode; e != nil {
 		t.Errorf("on a network set as local: encode %+v, want the video copied", e)
 	}
@@ -460,7 +456,7 @@ func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, transcoding, nil)
 	rec := httptest.NewRecorder()
 	api.ServeHTTP(rec, r)
-	session, _ := uuid.Parse(info.PlaySessionID)
+	session := uuidOf(t, info.PlaySessionID)
 	if rec.Code != http.StatusOK || remuxes.segments[session] != domain.SegmentsMPEGTS {
 		t.Errorf("master: %d, segments %s, want MPEG-TS", rec.Code, remuxes.segments[session])
 	}

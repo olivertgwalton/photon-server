@@ -213,7 +213,7 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 		t.Errorf("a show the kid may not see: %d", w.Code)
 	}
 
-	first, _ := uuid.Parse(episodes[0]["Id"].(string))
+	first := uuidOf(t, episodes[0]["Id"])
 	if err := st.MarkWatched(ctx, admin.ID, first, nil); err != nil {
 		t.Fatal(err)
 	}
