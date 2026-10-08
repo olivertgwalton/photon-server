@@ -110,8 +110,8 @@ func decisions() []decision {
 }
 
 type playJSON struct {
-	VersionID   string `json:"version_id,omitzero"`
-	AudioStream *int   `json:"audio_stream,omitzero"`
+	VersionID   uuid.UUID `json:"version_id,omitzero"`
+	AudioStream *int      `json:"audio_stream,omitzero"`
 	// SubtitleStream or SubtitleFile is a subtitle the client will show, a stream of the copy or a
 	// text file beside it; one that is a picture or styled is drawn into the video where the
 	// client cannot draw it.
@@ -149,7 +149,7 @@ type refusalJSON struct {
 // copied or encoded, at signed addresses a player fetches directly. It says what becomes of each
 // stream, and why the copy could not be played as it is.
 func (a *API) play(w http.ResponseWriter, r *http.Request) {
-	req, version, ok := a.playRequest(w, r)
+	req, ok := a.playRequest(w, r)
 	if !ok {
 		return
 	}
@@ -157,7 +157,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, version)
+	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.VersionID)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -199,23 +199,23 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 }
 
 // playRequest is a play's body, checked, with the parts and segments the client left out filled
-// in, and the copy it names.
-func (a *API) playRequest(w http.ResponseWriter, r *http.Request) (playJSON, uuid.UUID, bool) {
+// in.
+func (a *API) playRequest(w http.ResponseWriter, r *http.Request) (playJSON, bool) {
 	var req playJSON
 	if !a.decode(w, r, &req) {
-		return req, uuid.UUID{}, false
+		return req, false
 	}
 	if req.Profile == nil {
 		writeProblem(w, a.logger, codeInvalidBody, "profile says what the client plays")
-		return req, uuid.UUID{}, false
+		return req, false
 	}
 	if req.StartMS < 0 {
 		writeProblem(w, a.logger, codeInvalidBody, "start_ms is not negative")
-		return req, uuid.UUID{}, false
+		return req, false
 	}
 	if req.SubtitleStream != nil && req.SubtitleFile != nil {
 		writeProblem(w, a.logger, codeInvalidBody, "a subtitle is subtitle_stream or subtitle_file, not both")
-		return req, uuid.UUID{}, false
+		return req, false
 	}
 	if req.Profile.Parts == "" {
 		req.Profile.Parts = domain.PartsJoined
@@ -223,15 +223,7 @@ func (a *API) playRequest(w http.ResponseWriter, r *http.Request) (playJSON, uui
 	if req.Profile.Segments == "" {
 		req.Profile.Segments = domain.SegmentsFMP4
 	}
-	var version uuid.UUID
-	if req.VersionID != "" {
-		var err error
-		if version, err = uuid.Parse(req.VersionID); err != nil {
-			writeProblem(w, a.logger, codeInvalidBody, "version_id is not an id")
-			return req, uuid.UUID{}, false
-		}
-	}
-	return req, version, true
+	return req, true
 }
 
 // place decides how c is played and starts its playback. The node with the most transcode slots
@@ -380,12 +372,12 @@ func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
 		err = json.NewDecoder(r.Body).Decode(&o)
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeProblem(w, a.logger, codeInvalidBody, err.Error())
 		return
 	}
 	// A node set to serve only, or drained, since another placed this on it, takes nothing new.
 	if self := a.svc.Placer.Self(); !self.Role.Encodes() || !self.Availability.Takes() {
-		w.WriteHeader(http.StatusServiceUnavailable)
+		writeProblem(w, a.logger, codeTranscodeLimit, "this node encodes nothing new")
 		return
 	}
 	c, err := a.svc.Playing.Playable(r.Context(), o.Profile, o.Item, o.Version)
@@ -394,7 +386,7 @@ func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case errors.Is(err, hls.ErrTranscodeLimit):
-		w.WriteHeader(http.StatusServiceUnavailable)
+		writeProblem(w, a.logger, codeTranscodeLimit, err.Error())
 	case err != nil:
 		a.internal(w, r, err)
 	default:

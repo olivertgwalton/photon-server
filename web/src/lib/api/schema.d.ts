@@ -7320,6 +7320,7 @@ export interface components {
             /** Format: uuid */
             subtitle_file?: string | null;
             subtitle_stream?: number | null;
+            /** Format: uuid */
             version_id?: string;
         };
         /** @enum {string} */
