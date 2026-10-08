@@ -60,9 +60,9 @@ type said struct {
 
 // Event is what happened, as a sentence for the activity log: "Ada started Heat".
 func (w Words) Event(e domain.Event, names Names) string {
-	var d said
-	if raw, err := json.Marshal(e.Details); err == nil {
-		_ = json.Unmarshal(raw, &d)
+	d, err := saidOf(e.Details)
+	if err != nil {
+		return string(e.Kind)
 	}
 	profile := cmp.Or(name(names.Profile, e.Profile), "Someone")
 	library := cmp.Or(name(names.Library, e.Library), "A library")
@@ -143,6 +143,18 @@ func (w Words) Event(e domain.Event, names Names) string {
 		return "The database is being restored from " + d.Dump
 	}
 	return string(e.Kind)
+}
+
+// saidOf reads details through JSON, as a playback card raised a moment ago is a struct and one
+// read back from the activity log is a map.
+func saidOf(details map[string]any) (said, error) {
+	var d said
+	raw, err := json.Marshal(details)
+	if err != nil {
+		return d, err
+	}
+	err = json.Unmarshal(raw, &d)
+	return d, err
 }
 
 func name(of func(uuid.UUID) string, id uuid.UUID) string {
