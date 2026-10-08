@@ -88,7 +88,7 @@ linters:
             - pkg: github.com/stretchr/testify
               desc: plain testing and go-cmp
             - pkg: io/ioutil
-              desc: deprecated; use io and os
+              desc: use io and os
             - pkg: golang.org/x/exp/slices
               desc: use slices
             - pkg: golang.org/x/exp/maps
