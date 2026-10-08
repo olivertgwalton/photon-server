@@ -220,9 +220,10 @@
 		);
 	}
 
-	/* A mark over a picture, on a tinted pane of glass. */
+	/* A mark over a picture, on a tinted disc. Not blurred: a backdrop filter
+	   on every card of a wall repaints each one per frame of a scroll in Firefox. */
 	.glass-disc {
-		@apply text-ink grid size-6 place-items-center rounded-full bg-black/35 ring-1 ring-white/10 backdrop-blur-md;
+		@apply text-ink grid size-6 place-items-center rounded-full bg-black/60 ring-1 ring-white/10;
 	}
 }
 
