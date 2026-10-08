@@ -10,6 +10,8 @@ import (
 	"strings"
 	"uuid"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
@@ -200,9 +202,8 @@ type Services struct {
 	Setup    Setup
 	Postgres versioned
 	Valkey   cluster
-	// Metrics answers this node's metrics in Prometheus' text format, and Sent counts the media
-	// counted in them.
-	Metrics http.Handler
+	// Metrics are this node's, and Sent counts the media counted in them.
+	Metrics prometheus.Gatherer
 	Sent    *playback.Sent
 }
 
@@ -213,12 +214,14 @@ type API struct {
 	mux    *http.ServeMux
 	// handler is mux, behind what Secure asks of a plain request.
 	handler http.Handler
+	// scrape answers Metrics in Prometheus' text format.
+	scrape http.Handler
 	// description is the API's OpenAPI description, made once.
 	description []byte
 }
 
 func New(logger *slog.Logger, info domain.Info, svc Services) *API {
-	a := &API{logger: logger, info: info, svc: svc, mux: http.NewServeMux()}
+	a := &API{logger: logger, info: info, svc: svc, mux: http.NewServeMux(), scrape: scrapeHandler(svc.Metrics, logger)}
 	routes := a.routes()
 	var err error
 	if a.description, err = describe(info, routes); err != nil {
@@ -253,8 +256,10 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		}
 		a.mux.Handle(r.pattern, h)
 	}
-	// Another node asking this one to open a remux is no client's to call, and so in no description.
+	// Another node asking this one to open a remux, or for its metrics, is no client's to call, and
+	// so in no description.
 	a.mux.Handle("POST /api/v1/internal/playbacks/{id}/remux", a.svc.NodeKey.Verify(http.HandlerFunc(a.openRemote)))
+	a.mux.Handle("GET "+metricsPath, a.svc.NodeKey.Verify(http.HandlerFunc(a.nodeMetrics)))
 	a.mux.HandleFunc("/", a.unmatched)
 	a.handler = a.mux
 	if svc.Secure != nil {
@@ -829,6 +834,11 @@ func (a *API) routes() []route {
 			status:  http.StatusOK, reply: listJSON[knownNodeJSON]{}, handle: a.adminNodes,
 		},
 		{
+			pattern: "GET /api/v1/admin/metrics", access: admin,
+			summary: "What each node's metrics say now, and what the nodes share, for a dashboard; Prometheus scrapes /metrics for history",
+			status:  http.StatusOK, reply: metricsJSON{}, handle: a.adminMetrics,
+		},
+		{
 			pattern: "PATCH /api/v1/admin/nodes/{id}", access: admin,
 			summary: "Change a node's role or its limit on transcodes at once; it takes them up at once",
 			body:    nodeChangeJSON{}, status: http.StatusOK, reply: knownNodeJSON{}, handle: a.setNode,
@@ -1099,10 +1109,6 @@ func (a *API) readyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func (a *API) metrics(w http.ResponseWriter, r *http.Request) {
-	a.svc.Metrics.ServeHTTP(w, r)
 }
 
 func (a *API) requireLocalNetwork(next http.Handler) http.Handler {
