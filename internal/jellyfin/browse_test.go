@@ -225,6 +225,27 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	if w := serve(api, http.MethodGet, "/Shows/"+show+"/Episodes", `MediaBrowser Token="pst_kid"`, ""); w.Code != http.StatusNotFound {
 		t.Errorf("a show the kid may not see: %d", w.Code)
 	}
+	// Opened by id as an item, as Jellyfin's web app opens everything.
+	if opened, _ := get("pst_ada", "/Items/"+show).(map[string]any); opened["Type"] != "Series" || opened["ChildCount"] != 2.0 {
+		t.Errorf("a show by id: %v", opened)
+	}
+	if bySeason, _ := list("pst_ada", "/Items?parentId="+show); len(bySeason) != 2 || bySeason[0]["Type"] != "Season" {
+		t.Errorf("a show's children: %v, want its seasons", names(bySeason))
+	}
+	if every, total := list("pst_ada", "/Items?parentId="+show+"&includeItemTypes=Episode&startIndex=2"); total != 3 || len(every) != 1 {
+		t.Errorf("a show's episodes from the third: %v of %v", names(every), total)
+	}
+	if none, _ := list("pst_ada", "/Items?parentId="+film["Id"].(string)); len(none) != 0 {
+		t.Errorf("a film's children: %v, want none", names(none))
+	}
+	if none, _ := list("pst_kid", "/Items?parentId="+show); len(none) != 0 {
+		t.Errorf("the children of a show the kid may not see: %v, want none", names(none))
+	}
+	for _, id := range []string{show, guid(uuid.NewV7())} {
+		if w := serve(api, http.MethodGet, "/Items/"+id, `MediaBrowser Token="pst_kid"`, ""); w.Code != http.StatusNotFound {
+			t.Errorf("an item the kid may not see, or that is not there: %d", w.Code)
+		}
+	}
 
 	first := uuidOf(t, episodes[0]["Id"])
 	if err := st.MarkWatched(ctx, admin.ID, first, nil); err != nil {
