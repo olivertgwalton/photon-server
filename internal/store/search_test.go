@@ -36,6 +36,7 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 	add(films.ID, domain.ItemMovie, "Heat", "")
 	add(films.ID, domain.ItemMovie, "Theatre of Blood", "")
 	add(films.ID, domain.ItemMovie, "Heat Wave", "")
+	add(films.ID, domain.ItemMovie, "The Godfather", "")
 	add(tv.ID, domain.ItemShow, "The Heat", "")
 	// An episode comes after the films and shows matched as well, but before those matched worse.
 	add(tv.ID, domain.ItemEpisode, "Heat Seeker", "")
@@ -65,6 +66,12 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 		{"destin poul", uuid.UUID{}, nil, []string{"Amélie"}},
 		{"eat", uuid.UUID{}, nil, nil},
 		{"?!", uuid.UUID{}, nil, nil},
+		// A letter wrong still finds the title, once enough is typed to tell.
+		{"amalie", uuid.UUID{}, nil, []string{"Amélie"}},
+		{"godfater", uuid.UUID{}, nil, []string{"The Godfather"}},
+		{"godfater", tv.ID, nil, nil},
+		{"godfater", uuid.UUID{}, []domain.ItemKind{domain.ItemShow}, nil},
+		{"heta", uuid.UUID{}, nil, nil},
 	} {
 		if got := search(tc.text, tc.lib, tc.kinds...); !slices.Equal(got, tc.want) {
 			t.Errorf("search %q %v: %q, want %q", tc.text, tc.kinds, got, tc.want)
