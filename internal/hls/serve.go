@@ -2,6 +2,8 @@ package hls
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"os"
 	"path"
 	"slices"
@@ -207,7 +209,9 @@ func (r *Remuxer) Segment(ctx context.Context, playback uuid.UUID, n int) (*os.F
 	asked := time.Now()
 	s.mu.Lock()
 	s.furthest = max(s.furthest, n)
-	s.forget(n - behind)
+	if err := s.forget(n - behind); err != nil {
+		r.log.WarnContext(ctx, "segment not removed", slog.String("dir", s.dir), slog.Any("err", err))
+	}
 	wait := waiter(s.ready, n)
 	select {
 	case <-wait:
@@ -252,11 +256,13 @@ func waiter(waiting map[int]chan struct{}, n int) chan struct{} {
 
 // forget removes the segments made before segment n; the session's lock is held. One asked for
 // again is made again.
-func (s *session) forget(n int) {
+func (s *session) forget(n int) error {
+	var errs []error
 	for m, c := range s.ready {
 		if m < n && closed(c) && s.failed[m] == nil {
-			_ = s.root.Remove(segmentName(s.format, m))
+			errs = append(errs, s.root.Remove(segmentName(s.format, m)))
 			delete(s.ready, m)
 		}
 	}
+	return errors.Join(errs...)
 }

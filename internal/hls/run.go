@@ -101,37 +101,23 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 		}
 	}
 	// Each embedded subtitle is written to a pipe of its own, read as ffmpeg reaches its cues.
-	var streams []int
-	files := []*os.File{f}
-	var reads []*os.File
-	defer func() {
-		for _, p := range reads {
-			_ = p.Close()
-		}
-	}()
-	for _, sub := range s.subtitles {
-		if sub.Stream == nil {
-			continue
-		}
-		read, write, err := os.Pipe()
-		if err != nil {
-			return err
-		}
-		reads = append(reads, read)
-		files = append(files, write)
-		streams = append(streams, *sub.Stream)
+	reads, writes, streams, err := s.subtitlePipes()
+	if err != nil {
+		return err
 	}
+	files := append([]*os.File{f}, writes...)
 	cmd := media.NewCommand(ctx, media.Foreground, files, r.tools.FFmpeg.Path, args(r.hw, start, src.Video, src.Audio, layer, s.format, streams)...)
 	out, err := cmd.StdoutPipe()
 	if err == nil {
 		err = cmd.Start()
 	}
 	// ffmpeg holds the pipes' ends it writes to, and a reader learns they are closed once it ends.
-	for _, w := range files[1:] {
-		_ = w.Close()
+	if cerr := closeAll(writes); cerr != nil {
+		r.log.WarnContext(ctx, "subtitle pipe not closed", slog.String("dir", s.dir), slog.Any("err", cerr))
 	}
+	// The readers own the ends they read once ffmpeg runs, and none runs without it.
 	if err != nil {
-		return err
+		return errors.Join(err, closeAll(reads))
 	}
 	var readers errgroup.Group
 	k := 0
@@ -149,8 +135,7 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 				sub.add(c)
 			})
 			// What ffmpeg writes on is not read now, so it fails at once rather than blocking.
-			_ = read.Close()
-			return err
+			return errors.Join(err, read.Close())
 		})
 	}
 	err = r.cut(ctx, s, run, out)
@@ -159,9 +144,33 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	}
 	// Nothing reads what ffmpeg writes now, so a write it is blocked on fails at once rather than
 	// holding it past the grace a stop gives it.
-	_ = out.Close()
-	err = cmp.Or(err, cmd.Err(cmd.Wait()))
+	closeErr := out.Close()
+	err = cmp.Or(err, closeErr, cmd.Err(cmd.Wait()))
 	return cmp.Or(err, readers.Wait())
+}
+
+// subtitlePipes opens a pipe for each subtitle stream of the session: the ends read, the ends
+// ffmpeg writes to, and the streams written.
+func (s *session) subtitlePipes() (reads, writes []*os.File, streams []int, err error) {
+	for _, sub := range s.subtitles {
+		if sub.Stream == nil {
+			continue
+		}
+		read, write, err := os.Pipe()
+		if err != nil {
+			return nil, nil, nil, errors.Join(err, closeAll(reads), closeAll(writes))
+		}
+		reads, writes, streams = append(reads, read), append(writes, write), append(streams, *sub.Stream)
+	}
+	return reads, writes, streams, nil
+}
+
+func closeAll(files []*os.File) error {
+	var errs []error
+	for _, f := range files {
+		errs = append(errs, f.Close())
+	}
+	return errors.Join(errs...)
 }
 
 // fragments is ffmpeg's output read as fragments that each begin on a video keyframe.
@@ -173,7 +182,7 @@ type fragments interface {
 // cut reads ffmpeg's output and keeps the plan's segments of the run's part from run.at onwards.
 // ffmpeg's seek lands on the keyframe at or before the one asked for, so fragments before the
 // segment's start are dropped; every fragment starts on a keyframe, and so does every segment.
-func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) error {
+func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) (err error) {
 	st, err := s.fragments(run, out)
 	if err != nil {
 		return err
@@ -186,8 +195,7 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 	var segment *os.File
 	defer func() {
 		if segment != nil {
-			_ = segment.Close()
-			_ = s.root.Remove(segmentName(s.format, n) + ".part")
+			err = errors.Join(err, segment.Close(), s.root.Remove(segmentName(s.format, n)+".part"))
 		}
 	}()
 	finish := func() error {
