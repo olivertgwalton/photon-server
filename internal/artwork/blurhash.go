@@ -91,7 +91,7 @@ func encodeBlurhash(img *image.RGBA, cx, cy int) string {
 		for _, f := range factors[1:] {
 			largest = max(largest, math.Abs(f[0]), math.Abs(f[1]), math.Abs(f[2]))
 		}
-		q := int(math.Max(0, math.Min(82, math.Floor(largest*166-0.5))))
+		q := int(max(0, min(82, math.Floor(largest*166-0.5))))
 		maximum = float64(q+1) / 166
 		out = base83(q, 1, out)
 	} else {
@@ -102,7 +102,7 @@ func encodeBlurhash(img *image.RGBA, cx, cy int) string {
 	for _, f := range factors[1:] {
 		var v int
 		for _, c := range f {
-			v = v*19 + int(math.Max(0, math.Min(18, math.Floor(signPow(c/maximum, 0.5)*9+9.5))))
+			v = v*19 + int(max(0, min(18, math.Floor(signPow(c/maximum, 0.5)*9+9.5))))
 		}
 		out = base83(v, 2, out)
 	}
@@ -118,7 +118,7 @@ func toLinear(v uint8) float64 {
 }
 
 func toSRGB(v float64) int {
-	v = math.Max(0, math.Min(1, v))
+	v = max(0, min(1, v))
 	if v <= 0.0031308 {
 		return int(v*12.92*255 + 0.5)
 	}
