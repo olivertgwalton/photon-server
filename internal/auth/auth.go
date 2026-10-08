@@ -65,7 +65,9 @@ func (s *Service) SignIn(ctx context.Context, name, password string, device Devi
 	profile, hash, err := s.store.ProfileByName(ctx, name)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		_, _, _ = s.hasher.Verify(ctx, s.dummy, password)
+		if _, _, err := s.hasher.Verify(ctx, s.dummy, password); err != nil {
+			return "", domain.Profile{}, err
+		}
 		return "", domain.Profile{}, ErrInvalidCredentials
 	case err != nil:
 		return "", domain.Profile{}, err
@@ -78,8 +80,12 @@ func (s *Service) SignIn(ctx context.Context, name, password string, device Devi
 		return "", domain.Profile{}, ErrInvalidCredentials
 	}
 	if stale {
-		if fresh, err := s.hasher.Hash(ctx, password); err == nil {
-			_ = s.store.SetPasswordHash(ctx, profile.ID, fresh)
+		fresh, err := s.hasher.Hash(ctx, password)
+		if err == nil {
+			err = s.store.SetPasswordHash(ctx, profile.ID, fresh)
+		}
+		if err != nil {
+			return "", domain.Profile{}, err
 		}
 	}
 	token, err := s.startSession(ctx, profile, device)

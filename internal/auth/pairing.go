@@ -67,7 +67,7 @@ func (s *Service) StartPairing(ctx context.Context, d Device, style CodeStyle) (
 	for range 5 {
 		code := style.newCode()
 		secret := make([]byte, 32)
-		_, _ = rand.Read(secret)
+		rand.Read(secret)
 		deviceSecret := base64.RawURLEncoding.EncodeToString(secret)
 		err := s.kv.StartPairing(ctx, code, hashToken(deviceSecret), kv.Pairing{Device: d.Name, Client: d.Client, Style: string(style)}, pairingTTL)
 		if errors.Is(err, kv.ErrUserCodeTaken) {

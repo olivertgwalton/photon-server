@@ -12,7 +12,7 @@ const tokenPrefix = "pst_"
 // newToken mints a device token: 256 random bits. Only its hash is stored.
 func newToken() (token string, hash []byte) {
 	b := make([]byte, 32)
-	_, _ = rand.Read(b)
+	rand.Read(b)
 	token = tokenPrefix + base64.RawURLEncoding.EncodeToString(b)
 	return token, hashToken(token)
 }

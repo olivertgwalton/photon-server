@@ -47,7 +47,7 @@ func (h *hasher) key(ctx context.Context, password, salt []byte, t, m uint32, p 
 // later without invalidating stored hashes.
 func (h *hasher) Hash(ctx context.Context, password string) (string, error) {
 	salt := make([]byte, saltLen)
-	_, _ = rand.Read(salt)
+	rand.Read(salt)
 	key, err := h.key(ctx, []byte(password), salt, argonTime, argonMemory, argonThreads)
 	if err != nil {
 		return "", err
