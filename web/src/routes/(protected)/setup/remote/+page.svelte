@@ -1,7 +1,6 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
-import SetupSteps from "#lib/components/SetupSteps.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -35,7 +34,6 @@ function save(event: SubmitEvent) {
 
 <Card.Root class="w-full max-w-2xl">
 	<Card.Header>
-		<SetupSteps current={3} />
 		<Card.Title
 			><h1 class="heading text-xl">Watching away from home</h1></Card.Title
 		>

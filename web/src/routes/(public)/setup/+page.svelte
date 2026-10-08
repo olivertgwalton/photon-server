@@ -8,7 +8,6 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import SetupSteps from "#lib/components/SetupSteps.svelte";
 
 let { data } = $props();
 let pending = $state(false);
@@ -48,7 +47,6 @@ async function setUp(event: SubmitEvent) {
 
 <Card.Root class="w-full max-w-sm">
 	<Card.Header>
-		<SetupSteps current={0} />
 		<Card.Title>
 			<h1 class="heading text-xl">Set up {data.server.name}</h1>
 		</Card.Title>

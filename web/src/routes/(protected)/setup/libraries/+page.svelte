@@ -2,7 +2,6 @@
 import { refreshAll } from "$app/navigation";
 import { addLibrary } from "#lib/admin/add.js";
 import LibraryForm from "#lib/components/admin/LibraryForm.svelte";
-import SetupSteps from "#lib/components/SetupSteps.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import { fields } from "#lib/form.js";
@@ -27,7 +26,6 @@ async function add(event: SubmitEvent) {
 
 <Card.Root class="w-full max-w-3xl">
 	<Card.Header>
-		<SetupSteps current={2} />
 		<Card.Title><h1 class="heading text-xl">Add your libraries</h1></Card.Title>
 		<Card.Description>
 			A folder of films or of shows, at its path on the server. Each is scanned
@@ -53,10 +51,8 @@ async function add(event: SubmitEvent) {
 				serverCountry={data.server.certification_country}
 			/>
 			<div class="flex flex-wrap gap-2">
-				<Button type="submit" variant="outline" disabled={adding}>
-					Add and scan
-				</Button>
-				<Button href="/setup/remote">
+				<Button type="submit" disabled={adding}>Add and scan</Button>
+				<Button href="/setup/remote" variant="outline">
 					{data.libraries.length ? "Next" : "Skip for now"}
 				</Button>
 			</div>
