@@ -22,6 +22,11 @@ func Blurhash(r io.ReadSeeker) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return blurhashOf(src), nil
+}
+
+// blurhashOf is the BlurHash of a decoded picture.
+func blurhashOf(src image.Image) string {
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()
 	if w > h {
@@ -33,7 +38,7 @@ func Blurhash(r io.ReadSeeker) (string, error) {
 	draw.ApproxBiLinear.Scale(small, small.Bounds(), src, b, draw.Src, nil)
 	x := math.Sqrt(16 * float64(b.Dx()) / float64(b.Dy()))
 	y := x * float64(b.Dy()) / float64(b.Dx())
-	return encodeBlurhash(small, min(int(x)+1, 9), min(int(y)+1, 9)), nil
+	return encodeBlurhash(small, min(int(x)+1, 9), min(int(y)+1, 9))
 }
 
 // FileBlurhash answers the BlurHash of the library file at rel under root.
