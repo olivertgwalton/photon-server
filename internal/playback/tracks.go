@@ -8,6 +8,7 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // Track is a sound or subtitle track to choose from: one inside the copy by its stream index, or
@@ -41,6 +42,35 @@ func DefaultTracks(audio, subtitles []Track, p domain.Preferences, last domain.C
 		}
 	}
 	return out
+}
+
+// ChooseTracks says the tracks each copy plays with unasked for a profile, by DefaultTracks.
+func ChooseTracks(versions []store.VersionPage, p domain.Preferences, last domain.ChosenTracks) {
+	for i, v := range versions {
+		audio, subtitles := pageTracks(v)
+		d := DefaultTracks(audio, subtitles, p, last)
+		versions[i].DefaultAudioStream, versions[i].DefaultSubtitleStream, versions[i].DefaultSubtitleFile = d.Audio, d.Subtitle, d.SubtitleFile
+	}
+}
+
+// pageTracks are a copy's sound and subtitles as its page lists them.
+func pageTracks(v store.VersionPage) (audio, subtitles []Track) {
+	for _, s := range v.Streams {
+		l := language.Make(s.Language)
+		t := Track{Stream: s.Index, Language: l, Default: s.Default, Forced: s.Forced, Commentary: s.Commentary}
+		switch s.Kind {
+		case domain.StreamAudio:
+			audio = append(audio, t)
+		case domain.StreamSubtitle:
+			subtitles = append(subtitles, t)
+		case domain.StreamVideo:
+		}
+	}
+	for _, f := range v.Subtitles {
+		l := language.Make(f.Language)
+		subtitles = append(subtitles, Track{File: f.ID, Language: l, Default: f.Default, Forced: f.Forced})
+	}
+	return audio, subtitles
 }
 
 func defaultAudio(audio []Track, p domain.Preferences, last domain.ChosenTracks) *Track {
