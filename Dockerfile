@@ -34,7 +34,7 @@ ARG YTDLP_SHA256_arm64=b16e4dab368a816cd05d477d698a605a6ae87ccee1c8ffd38fa21d725
 # for subtitles libass draws into a transcode, found through fontconfig, whose configuration maps
 # the fonts styles name (Arial, Times New Roman) to Liberation's, which share their metrics. Its
 # cache is made as the fonts are installed, as the server's user can write none. pg_dump backs the
-# database up; it must be no older than the server it dumps.
+# database up, and pg_restore and psql put it back; pg_dump must be no older than the server it dumps.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl xz-utils mesa-va-drivers libvulkan1 mesa-vulkan-drivers \

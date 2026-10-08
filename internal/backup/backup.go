@@ -90,18 +90,13 @@ func (d Dumper) Dump(ctx context.Context, now time.Time) (string, error) {
 	if err := os.MkdirAll(d.Dir, 0o700); err != nil {
 		return "", err
 	}
-	u, err := url.Parse(d.URL)
+	dbURL, env, err := withoutPassword(d.URL)
 	if err != nil {
-		return "", fmt.Errorf("database url: %w", err)
-	}
-	env := os.Environ()
-	if pw, ok := u.User.Password(); ok {
-		env = append(env, "PGPASSWORD="+pw)
-		u.User = url.User(u.User.Username())
+		return "", err
 	}
 	name := filepath.Join(d.Dir, prefix+now.UTC().Format(stamp)+suffix)
 	part := name + ".part"
-	cmd := exec.CommandContext(ctx, d.PGDump, "--format=custom", "--no-owner", "--file="+part, "--dbname="+u.String()) //nolint:gosec // the configured pg_dump; every argument is built here
+	cmd := exec.CommandContext(ctx, d.PGDump, "--format=custom", "--no-owner", "--file="+part, "--dbname="+dbURL) //nolint:gosec // the configured pg_dump; every argument is built here
 	cmd.Env = env
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -113,6 +108,21 @@ func (d Dumper) Dump(ctx context.Context, now time.Time) (string, error) {
 		return "", err
 	}
 	return name, d.prune()
+}
+
+// withoutPassword answers the database URL without its password, and this process's environment
+// with it as PGPASSWORD, where anyone listing processes would not see it.
+func withoutPassword(databaseURL string) (string, []string, error) {
+	u, err := url.Parse(databaseURL)
+	if err != nil {
+		return "", nil, fmt.Errorf("database url: %w", err)
+	}
+	env := os.Environ()
+	if pw, ok := u.User.Password(); ok {
+		env = append(env, "PGPASSWORD="+pw)
+		u.User = url.User(u.User.Username())
+	}
+	return u.String(), env, nil
 }
 
 // prune removes all but the newest Keep dumps; their names sort by when they were made.
