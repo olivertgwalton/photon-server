@@ -294,6 +294,8 @@ export function describe(e: Schemas["Event"], names: Names): string {
 			return "Where artwork and previews are kept was changed";
 		case "nodes.changed":
 			return "What a server node does was changed";
+		case "restore.started":
+			return `The database is being restored from ${d.dump}`;
 	}
 }
 

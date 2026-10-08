@@ -10,11 +10,14 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -34,16 +37,9 @@ type Restorer struct {
 // else is connected to: a node running would write over what is restored. What it did is
 // written to out.
 func (r Restorer) Restore(ctx context.Context, file string, out io.Writer) error {
-	have, err := r.version(ctx, file)
+	have, want, err := r.check(ctx, file)
 	if err != nil {
 		return err
-	}
-	want, err := store.SchemaVersion()
-	if err != nil {
-		return err
-	}
-	if have > want {
-		return fmt.Errorf("%s is at schema version %d, newer than this photon-server's %d: restore it with the version that made it, or a newer one", file, have, want)
 	}
 	others, err := store.Connections(ctx, r.DatabaseURL)
 	if err != nil {
@@ -91,8 +87,29 @@ func (r Restorer) Restore(ctx context.Context, file string, out io.Writer) error
 		return fmt.Errorf("valkey: %w", err)
 	}
 	fmt.Fprintf(out, "Cleared %d of the server's keys in Valkey: playbacks, nodes, pairings and counts.\n", n)
+	err = cache.SaveRestoreOutcome(ctx, domain.RestoreOutcome{Dump: filepath.Base(file), At: time.Now().UTC(), Result: domain.RestoreSucceeded})
+	if err != nil {
+		return fmt.Errorf("valkey: %w", err)
+	}
 	fmt.Fprintln(out, "Cached artwork, previews and transcodes are left; each node's sweeps forget what the database no longer has.")
 	return nil
+}
+
+// ErrNewer is a dump made by a newer photon-server than this one, whose schema it does not know.
+var ErrNewer = errors.New("restore it with the version that made it, or a newer one")
+
+// check answers the schema version file was made at and this binary's, refusing a newer dump.
+func (r Restorer) check(ctx context.Context, file string) (have, want int64, err error) {
+	if have, err = r.version(ctx, file); err != nil {
+		return 0, 0, err
+	}
+	if want, err = store.SchemaVersion(); err != nil {
+		return 0, 0, err
+	}
+	if have > want {
+		return 0, 0, fmt.Errorf("%s is at schema version %d, newer than this photon-server's %d: %w", filepath.Base(file), have, want, ErrNewer)
+	}
+	return have, want, nil
 }
 
 // version reads the schema version a dump was made at from its goose_db_version table, the
