@@ -78,7 +78,7 @@ const name = $derived(titleWithShow(card));
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger
 		class={cn(
-			"bg-ground/80 text-ink hover:bg-ink hover:text-ground grid size-8 place-items-center rounded-full backdrop-blur",
+			"bg-ground/90 text-ink hover:bg-ink hover:text-ground grid size-8 place-items-center rounded-full",
 			className,
 		)}
 		aria-label="More for {name}"
