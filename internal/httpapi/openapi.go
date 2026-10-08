@@ -137,11 +137,17 @@ func operation(s *schemas, r route, path string) (map[string]any, error) {
 		"x-access": string(r.access),
 		"security": []any{},
 	}
-	if r.access == signedIn || r.access == admin {
+	switch r.access {
+	case signedIn, admin, manages:
 		op["security"] = []any{map[string]any{"session": []string{}}, map[string]any{"cookie": []string{}}}
+	case public, signedAddress, signedPath, localNetwork:
 	}
-	if r.access == admin {
+	switch r.access {
+	case admin:
 		op["description"] = "Admin only."
+	case manages:
+		op["description"] = "Admin, or a manager over the profiles it keeps."
+	case public, signedIn, signedAddress, signedPath, localNetwork:
 	}
 	if params != nil {
 		op["parameters"] = params

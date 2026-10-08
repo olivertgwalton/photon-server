@@ -27,6 +27,38 @@ func (a *API) requireAdmin(next http.Handler) http.Handler {
 	}))
 }
 
+// requireManager admits a signed-in admin or manager.
+func (a *API) requireManager(next http.Handler) http.Handler {
+	return a.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if keeper, ok := keeperOf(sessionOf(r)); ok {
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), keeperKey{}, keeper)))
+			return
+		}
+		writeProblem(w, a.logger, codeForbidden, "only an admin or a manager may")
+	}))
+}
+
+type keeperKey struct{}
+
+// keeperOf is whose profiles a session administers: an admin's, every one, nil; a manager's, the
+// ones it keeps. A user administers none.
+func keeperOf(s domain.Session) (*uuid.UUID, bool) {
+	switch s.Profile.Role {
+	case domain.RoleAdmin:
+		return nil, true
+	case domain.RoleManager:
+		return &s.Profile.ID, true
+	case domain.RoleUser:
+	}
+	return nil, false
+}
+
+// keeper is what requireManager found: the profiles the request may administer.
+func keeper(r *http.Request) *uuid.UUID {
+	k, _ := r.Context().Value(keeperKey{}).(*uuid.UUID)
+	return k
+}
+
 type libraryAdmin interface {
 	Libraries(ctx context.Context) ([]domain.Library, error)
 	Library(ctx context.Context, id uuid.UUID) (domain.Library, error)

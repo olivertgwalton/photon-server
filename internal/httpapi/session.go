@@ -115,10 +115,12 @@ type profileJSON struct {
 	Role domain.Role `json:"role"`
 	// Avatar is the profile's picture, at /api/v1/artwork/{id}.
 	Avatar uuid.UUID `json:"avatar,omitzero"`
+	// Manager is the manager that keeps it, absent for a profile the admin keeps.
+	Manager uuid.UUID `json:"manager,omitzero"`
 }
 
 func profileOf(p domain.Profile) profileJSON {
-	return profileJSON{ID: p.ID.String(), Name: p.Name, Role: p.Role, Avatar: p.Avatar}
+	return profileJSON{ID: p.ID.String(), Name: p.Name, Role: p.Role, Avatar: p.Avatar, Manager: p.Manager}
 }
 
 type loginRequest struct {

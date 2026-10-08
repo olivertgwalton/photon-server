@@ -24,11 +24,15 @@ import (
 )
 
 const (
-	goodToken   = "pst_good"
-	memberToken = "pst_member"
+	goodToken    = "pst_good"
+	memberToken  = "pst_member"
+	managerToken = "pst_manager"
 )
 
-var oliver = domain.Profile{ID: uuid.MustParse("0199b3c0-0000-7000-8000-000000000001"), Name: "Oliver", Role: domain.RoleAdmin}
+var (
+	oliver = domain.Profile{ID: uuid.MustParse("0199b3c0-0000-7000-8000-000000000001"), Name: "Oliver", Role: domain.RoleAdmin}
+	sam    = domain.Profile{ID: uuid.MustParse("0199b3c0-0000-7000-8000-000000000002"), Name: "Sam", Role: domain.RoleManager}
+)
 
 type fakeAuth struct{}
 
@@ -45,6 +49,8 @@ func (fakeAuth) Authenticate(_ context.Context, token string) (domain.Session, e
 		return domain.Session{ID: uuid.NewV7(), Profile: oliver, Device: "Living room", Client: "Photon Web 1.0"}, nil
 	case memberToken:
 		return domain.Session{ID: uuid.NewV7(), Profile: domain.Profile{ID: uuid.NewV7(), Name: "Kid", Role: domain.RoleUser}}, nil
+	case managerToken:
+		return domain.Session{ID: uuid.NewV7(), Profile: sam}, nil
 	}
 	return domain.Session{}, auth.ErrUnauthenticated
 }

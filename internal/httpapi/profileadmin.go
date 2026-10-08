@@ -35,7 +35,7 @@ func (a *API) profileAccess(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	access, err := a.svc.ProfileAdmin.Access(r.Context(), id, nil)
+	access, err := a.svc.ProfileAdmin.Access(r.Context(), id, keeper(r))
 	if a.answered(w, r, err) {
 		return
 	}
@@ -58,7 +58,7 @@ func (a *API) setProfileAccess(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "max_age is an age to 21 or null, and unrated is allow or block")
 		return
 	}
-	err := a.svc.ProfileAdmin.SetAccess(r.Context(), id, store.ProfileAccess(req), nil)
+	err := a.svc.ProfileAdmin.SetAccess(r.Context(), id, store.ProfileAccess(req), keeper(r))
 	if errors.Is(err, store.ErrNotFound) {
 		writeProblem(w, a.logger, codeNotFound, "no such profile, or one of its libraries")
 		return
@@ -76,7 +76,8 @@ type addProfileJSON struct {
 	Password string      `json:"password"`
 }
 
-// addProfile adds a profile of the household, as Jellyfin's dashboard adds a user.
+// addProfile adds a profile of the household, as Jellyfin's dashboard adds a user; a manager adds
+// one it keeps.
 func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	var req addProfileJSON
 	if !a.decode(w, r, &req) {
@@ -84,7 +85,7 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	name, ok := domain.ProfileName(req.Name)
 	if req.Role == "" || !ok {
-		writeProblem(w, a.logger, codeInvalidBody, badName+", and role is admin or user")
+		writeProblem(w, a.logger, codeInvalidBody, badName+", and role is admin, manager or user")
 		return
 	}
 	req.Name = name
@@ -92,7 +93,7 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	p, err := a.svc.ProfileAdmin.AddProfile(r.Context(), req.Name, req.Role, hash, nil)
+	p, err := a.svc.ProfileAdmin.AddProfile(r.Context(), req.Name, req.Role, hash, keeper(r))
 	if a.answered(w, r, err) {
 		return
 	}
@@ -133,7 +134,7 @@ func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), id, change, nil)
+	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), id, change, keeper(r))
 	if a.answered(w, r, err) {
 		return
 	}
@@ -146,7 +147,7 @@ func (a *API) removeProfile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name, err := a.svc.ProfileAdmin.RemoveProfile(r.Context(), id, nil)
+	name, err := a.svc.ProfileAdmin.RemoveProfile(r.Context(), id, keeper(r))
 	if a.answered(w, r, err) {
 		return
 	}

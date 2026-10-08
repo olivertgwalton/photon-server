@@ -19,7 +19,7 @@ import (
 )
 
 const profileUsage = `usage:
-  photon-server profile add -name NAME -role admin|user
+  photon-server profile add -name NAME -role admin|manager|user
 (the password is read from the terminal, or from the first line of standard input)`
 
 // profileCommand is how the first admin comes to exist: from the server's own command line, never
@@ -30,7 +30,7 @@ func profileCommand(ctx context.Context, logger *slog.Logger, databaseURL string
 	}
 	fs := flag.NewFlagSet("profile add", flag.ContinueOnError)
 	name := fs.String("name", "", "the profile's name")
-	role := fs.String("role", "", "admin or user")
+	role := fs.String("role", "", "admin, manager or user")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}

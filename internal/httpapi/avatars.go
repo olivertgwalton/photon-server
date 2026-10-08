@@ -24,29 +24,29 @@ var avatarTypes = asFile{"image/jpeg", "image/png", "image/gif", "image/webp"}
 
 // setOwnAvatar gives the profile a picture, as Jellyfin's user image is set from its profile page.
 func (a *API) setOwnAvatar(w http.ResponseWriter, r *http.Request) {
-	a.setAvatar(w, r, sessionOf(r).Profile.ID)
+	a.setAvatar(w, r, sessionOf(r).Profile.ID, nil)
 }
 
 func (a *API) clearOwnAvatar(w http.ResponseWriter, r *http.Request) {
-	a.clearAvatar(w, r, sessionOf(r).Profile.ID)
+	a.clearAvatar(w, r, sessionOf(r).Profile.ID, nil)
 }
 
 // setProfileAvatar is an admin giving any profile its picture.
 func (a *API) setProfileAvatar(w http.ResponseWriter, r *http.Request) {
 	if id, ok := a.pathID(w, r, "id"); ok {
-		a.setAvatar(w, r, id)
+		a.setAvatar(w, r, id, keeper(r))
 	}
 }
 
 func (a *API) clearProfileAvatar(w http.ResponseWriter, r *http.Request) {
 	if id, ok := a.pathID(w, r, "id"); ok {
-		a.clearAvatar(w, r, id)
+		a.clearAvatar(w, r, id, keeper(r))
 	}
 }
 
 // setAvatar keeps the picture in the body under a new id, so a client that keeps pictures for
 // good is shown the new one, and makes it the profile's.
-func (a *API) setAvatar(w http.ResponseWriter, r *http.Request, profile uuid.UUID) {
+func (a *API) setAvatar(w http.ResponseWriter, r *http.Request, profile uuid.UUID, by *uuid.UUID) {
 	rc := http.NewResponseController(w)
 	// Not every ResponseWriter has a connection to time: a test's recorder has none.
 	_ = rc.SetReadDeadline(time.Now().Add(avatarWithin))
@@ -61,14 +61,14 @@ func (a *API) setAvatar(w http.ResponseWriter, r *http.Request, profile uuid.UUI
 		a.internal(w, r, err)
 		return
 	}
-	p, err := a.svc.Avatars.SetAvatar(r.Context(), profile, picture, nil)
+	p, err := a.svc.Avatars.SetAvatar(r.Context(), profile, picture, by)
 	if !a.answered(w, r, err) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(p))
 	}
 }
 
-func (a *API) clearAvatar(w http.ResponseWriter, r *http.Request, profile uuid.UUID) {
-	if _, err := a.svc.Avatars.SetAvatar(r.Context(), profile, uuid.UUID{}, nil); !a.answered(w, r, err) {
+func (a *API) clearAvatar(w http.ResponseWriter, r *http.Request, profile uuid.UUID, by *uuid.UUID) {
+	if _, err := a.svc.Avatars.SetAvatar(r.Context(), profile, uuid.UUID{}, by); !a.answered(w, r, err) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
