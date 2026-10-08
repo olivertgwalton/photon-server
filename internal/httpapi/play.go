@@ -36,6 +36,7 @@ type playbacks interface {
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
 	End(ctx context.Context, id uuid.UUID) error
 	Abandon(ctx context.Context, id uuid.UUID) error
+	Opened(method domain.PlayMethod)
 	Serve(ctx context.Context, id uuid.UUID, cut func()) (done func(), err error)
 }
 
@@ -44,6 +45,7 @@ type placer interface {
 	Candidates(ctx context.Context, need playback.Need) ([]domain.Node, error)
 	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o playback.Opening) error
 	Self() domain.Node
+	Refuse(candidates []domain.Node) error
 }
 
 // owners say which node of the cluster serves a playback's HLS.
@@ -265,7 +267,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, hls.ErrTranscodeLimit) {
-		writeProblem(w, a.logger, codeTranscodeLimit, playback.Full(candidates).Error())
+		writeProblem(w, a.logger, codeTranscodeLimit, a.svc.Placer.Refuse(candidates).Error())
 		return
 	}
 	if a.answered(w, r, err) {
@@ -355,16 +357,19 @@ func (a *API) playbackCard(r *http.Request, node domain.Node, t domain.PlaybackT
 // directly; a node with every slot held refuses it (hls.ErrTranscodeLimit), and it is forgotten.
 func (a *API) start(r *http.Request, node domain.Node, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, tracks domain.ChosenTracks, o playback.Opening) (domain.Playback, error) {
 	session, err := a.svc.Playbacks.Start(r.Context(), uuid.NewV7(), d.Method, a.playbackCard(r, node, t, c, d, tracks), node.ID)
-	if err != nil || d.Method == domain.PlayDirect {
+	if err != nil {
 		return session, err
 	}
-	o.Video, o.Audio = *d.Video, d.Audio
-	if err := a.svc.Placer.Open(r.Context(), node, session.ID, c, o); err != nil {
-		if aerr := a.svc.Playbacks.Abandon(context.WithoutCancel(r.Context()), session.ID); aerr != nil {
-			return session, errors.Join(err, aerr)
+	if d.Method != domain.PlayDirect {
+		o.Video, o.Audio = *d.Video, d.Audio
+		if err := a.svc.Placer.Open(r.Context(), node, session.ID, c, o); err != nil {
+			if aerr := a.svc.Playbacks.Abandon(context.WithoutCancel(r.Context()), session.ID); aerr != nil {
+				return session, errors.Join(err, aerr)
+			}
+			return session, err
 		}
-		return session, err
 	}
+	a.svc.Playbacks.Opened(d.Method)
 	return session, nil
 }
 

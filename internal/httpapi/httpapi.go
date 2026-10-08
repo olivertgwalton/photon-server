@@ -80,6 +80,9 @@ type route struct {
 	again int
 	// refusals are problems with more to say than their code, by status.
 	refusals map[int]any
+	// delivery is how a route sends media, counted as it is sent by this node; none for one that
+	// sends none.
+	delivery playback.Delivery
 	handle   http.HandlerFunc
 }
 
@@ -195,8 +198,10 @@ type Services struct {
 	Setup    Setup
 	Postgres versioned
 	Valkey   cluster
-	// Metrics answers this node's metrics in Prometheus' text format.
+	// Metrics answers this node's metrics in Prometheus' text format, and Sent counts the media
+	// counted in them.
 	Metrics http.Handler
+	Sent    *playback.Sent
 }
 
 type API struct {
@@ -219,6 +224,10 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	}
 	for _, r := range routes {
 		h := a.checkQuery(r)
+		// Within routeToOwner, so a request handed to another node is counted there alone.
+		if r.delivery != "" {
+			h = a.svc.Sent.Counting(r.delivery, h)
+		}
 		switch r.access {
 		case public:
 		case signedIn:
@@ -634,7 +643,7 @@ func (a *API) routes() []route {
 				{"file", "", "main.m3u8, and what it names."},
 			},
 			status: http.StatusOK, reply: asFile{"application/vnd.apple.mpegurl", "text/vtt", "video/mp4", "video/iso.segment"},
-			handle: a.hlsFile,
+			delivery: playback.DeliverySegment, handle: a.hlsFile,
 		},
 		{
 			pattern: "POST /api/v1/downloads", access: signedIn,
@@ -659,17 +668,20 @@ func (a *API) routes() []route {
 		{
 			pattern: "GET /api/v1/downloads/{id}/file", access: signedAddress,
 			summary: "A download's conversion, in byte ranges, at the address the download answered",
-			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/mp4"}, handle: a.downloadFile,
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/mp4"}, delivery: playback.DeliveryFile,
+			handle: a.downloadFile,
 		},
 		{
 			pattern: "GET /api/v1/playbacks/{playback}/parts/{id}/stream", access: signedAddress,
 			summary: "A copy's file as it is, in byte ranges, at the address play answered, for as long as the playback lasts",
-			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, handle: a.playbackPartStream,
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, delivery: playback.DeliveryFile,
+			handle: a.playbackPartStream,
 		},
 		{
 			pattern: "GET /api/v1/parts/{id}/stream", access: signedAddress,
 			summary: "A copy's file as it is, in byte ranges, at the address a download answered",
-			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, handle: a.partStream,
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, delivery: playback.DeliveryFile,
+			handle: a.partStream,
 		},
 		{
 			pattern: "GET /api/v1/parts/{id}/subtitles/{stream}", access: signedAddress,

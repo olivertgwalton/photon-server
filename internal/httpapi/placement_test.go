@@ -14,6 +14,8 @@ import (
 	"testing"
 	"uuid"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -58,6 +60,7 @@ type peerNode struct {
 	id      uuid.UUID
 	role    atomic.Value
 	remuxer *hls.Remuxer
+	placer  *playback.Placer
 	srv     *httptest.Server
 }
 
@@ -81,10 +84,12 @@ func join(t *testing.T, c *sharedValkey, limit int) *peerNode {
 	}
 	n := &peerNode{id: uuid.NewV7(), remuxer: remuxer}
 	n.role.Store(domain.NodeAll)
+	n.placer = playback.NewPlacer(c, n.self, remuxOpener{remuxer}, clusterKey)
 	n.srv = httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Sent:    playback.NewSent(),
 		Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{},
 		Playbacks: playback.NewSessions(c.livePlaybacks, c.livePlaybacks, remuxer, func(context.Context, domain.Event) {}, n.id),
-		Placer:    playback.NewPlacer(c, n.self, remuxOpener{remuxer}, clusterKey), NodeKey: clusterKey,
+		Placer:    n.placer, NodeKey: clusterKey,
 		HLS: remuxer, Owners: playback.NewRouter(c, n.id), Signer: playback.NewSigner([]byte("key")),
 	}))
 	t.Cleanup(n.srv.Close)
@@ -222,6 +227,14 @@ func TestWithNoNodeTranscodingACopyThatNeedsItIsRefused(t *testing.T) {
 	}
 	if status, said := play(`{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000, "parts": "each"}}`); status != http.StatusServiceUnavailable || said != "transcode_limit" {
 		t.Errorf("a copy to encode: %d %s, want 503 transcode_limit", status, said)
+	}
+	refusals := `# HELP photon_transcode_refusals_total The playbacks this node refused for want of a node to encode them, by why.
+# TYPE photon_transcode_refusals_total counter
+photon_transcode_refusals_total{reason="full"} 0
+photon_transcode_refusals_total{reason="no_encoder"} 1
+`
+	if err := testutil.CollectAndCompare(only.placer, strings.NewReader(refusals)); err != nil {
+		t.Error(err)
 	}
 	if status, said := play(`{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "parts": "each"}}`); status != http.StatusOK || said == "transcode" {
 		t.Errorf("a copy played as it is: %d %s, want it played", status, said)

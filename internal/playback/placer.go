@@ -12,6 +12,8 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
@@ -33,16 +35,19 @@ type opener interface {
 // count of the cluster's transcodes: the node asked admits or refuses under its own lock, and
 // the next is asked, so the nodes' own counts are the only ones.
 type Placer struct {
-	adverts adverts
-	self    func() domain.Node
-	local   opener
-	key     nodecall.Key
-	client  *http.Client
+	adverts  adverts
+	self     func() domain.Node
+	local    opener
+	key      nodecall.Key
+	client   *http.Client
+	refusals *prometheus.CounterVec
 }
 
 // NewPlacer places on the nodes adverts tells of and on this one, as self says it is now.
 func NewPlacer(a adverts, self func() domain.Node, local opener, key nodecall.Key) *Placer {
-	return &Placer{adverts: a, self: self, local: local, key: key, client: &http.Client{Timeout: openWithin}}
+	return &Placer{
+		adverts: a, self: self, local: local, key: key, client: &http.Client{Timeout: openWithin}, refusals: newRefusals(),
+	}
 }
 
 // Need is what encoding a video asks of a node's encoder.
@@ -170,8 +175,13 @@ func RemotePath(playback uuid.UUID) string {
 	return "/api/v1/internal/playbacks/" + playback.String() + "/remux"
 }
 
-// Full is the refusal of a playback every one of candidates refused.
-func Full(candidates []domain.Node) error {
+// Refuse counts, and answers, the refusal of a playback every one of candidates refused.
+func (p *Placer) Refuse(candidates []domain.Node) error {
+	reason := refusedFull
+	if len(candidates) == 0 {
+		reason = refusedNoEncoder
+	}
+	p.refusals.WithLabelValues(string(reason)).Inc()
 	total := 0
 	for _, n := range candidates {
 		total += n.Limit

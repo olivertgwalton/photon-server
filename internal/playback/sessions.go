@@ -9,6 +9,8 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -60,6 +62,7 @@ type Sessions struct {
 	streams streams
 	raise   func(context.Context, domain.Event)
 	node    uuid.UUID
+	starts  *prometheus.CounterVec
 
 	mu sync.Mutex
 	// direct are the files this node streams of playbacks played as they are, each with what cuts
@@ -71,7 +74,10 @@ type Sessions struct {
 // those that end; raise says as one starts, pauses, resumes and stops, and as each profile's place
 // moves. Each playback started is node's to serve.
 func NewSessions(live sessionStore, saved progressStore, st streams, raise func(context.Context, domain.Event), node uuid.UUID) *Sessions {
-	return &Sessions{live: live, saved: saved, streams: st, raise: raise, node: node, direct: map[uuid.UUID]map[*func()]bool{}}
+	return &Sessions{
+		live: live, saved: saved, streams: st, raise: raise, node: node, starts: newStarts(),
+		direct: map[uuid.UUID]map[*func()]bool{},
+	}
 }
 
 // Start opens playback id, of the copy of a title its card names, by its card's profile, served by
