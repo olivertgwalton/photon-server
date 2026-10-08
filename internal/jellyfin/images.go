@@ -14,8 +14,10 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
+// pictureFiles are pictures, and the theme tunes fetched for titles, as artwork's cache keeps them.
 type pictureFiles interface {
 	Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (blob.Object, string, error)
+	Kept(ctx context.Context, id uuid.UUID) (blob.Object, error)
 }
 
 // image answers a picture by its tag, sized to fit what an app asks for. A tag is a picture's id,

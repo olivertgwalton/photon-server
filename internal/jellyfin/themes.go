@@ -1,13 +1,23 @@
 package jellyfin
 
 import (
+	"context"
+	"errors"
 	"net/http"
+	"os"
 	"strings"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
+
+type themes interface {
+	Theme(ctx context.Context, id uuid.UUID) (store.ThemeFile, error)
+}
 
 // themeMediaResult is Jellyfin's ThemeMediaResult: the theme songs or videos of OwnerId, the item
 // they are of. An app plays them on while its pages are of the same owner, as from a show to its
@@ -89,4 +99,40 @@ func (a *API) themeMedia(w http.ResponseWriter, r *http.Request) {
 		ThemeSongsResult      themeMediaResult `json:"ThemeSongsResult"`
 		SoundtrackSongsResult themeMediaResult `json:"SoundtrackSongsResult"`
 	}{none, songs, none})
+}
+
+// themeSongFile serves a theme song's file as it is, at the addresses Jellyfin's apps build for
+// audio: universal, which Jellyfin's web app plays a theme song at without asking for its
+// PlaybackInfo first, and stream. Nothing is made of it for the app: the tune is played as it is,
+// as photon's own apps play it, and is not counted as media sent, as theirs is not.
+func (a *API) themeSongFile(w http.ResponseWriter, r *http.Request) {
+	if name := strings.ToLower(r.PathValue("file")); name != "universal" && name != "stream" && !strings.HasPrefix(name, "stream.") {
+		a.refuse(w, http.StatusNotFound)
+		return
+	}
+	id, ok := a.itemID(w, r)
+	if !ok {
+		return
+	}
+	t, err := a.svc.Themes.Theme(r.Context(), id)
+	var o blob.Object
+	var kind string
+	if err == nil {
+		o, kind, err = artwork.OpenTheme(r.Context(), a.svc.Pictures, id, t.Source, t.Root, t.Path)
+	}
+	if isNotFound(err) || errors.Is(err, os.ErrNotExist) {
+		a.refuse(w, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	h := http.Header{"Cache-Control": {"public, max-age=31536000, immutable"}, "X-Content-Type-Options": {"nosniff"}}
+	if kind != "" {
+		h.Set("Content-Type", kind)
+	}
+	if err := blob.Serve(w, r, o, "", h); err != nil {
+		a.internal(w, r, err)
+	}
 }

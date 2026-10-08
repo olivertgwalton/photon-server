@@ -48,6 +48,7 @@ type Services struct {
 	// Previews are parts' trickplay sheets, which PreviewFiles keeps with their chapters' pictures.
 	Previews     previews
 	PreviewFiles previewFiles
+	Themes       themes
 	// HLS is this node's remuxes, which Placer opens on the node it chooses and Owners find on
 	// whichever node runs them; Signer signs a TranscodingUrl's plan and the addresses of another
 	// node's HLS.
@@ -143,6 +144,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle(a.themeSongsResult, "GET /Items/{itemId}/ThemeSongs")
 	a.handle(a.themeVideos, "GET /Items/{itemId}/ThemeVideos")
 	a.handle(a.themeMedia, "GET /Items/{itemId}/ThemeMedia")
+	a.handle(a.themeSongFile, "GET /Audio/{itemId}/{file}")
 	// Playing: a title's copies, its file as it is, and where the app has got to.
 	a.handle(a.playbackInfo, "GET /Items/{itemId}/PlaybackInfo", "POST /Items/{itemId}/PlaybackInfo")
 	a.handle(a.sending(playback.DeliveryFile, a.stream), "GET /Videos/{itemId}/stream")

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -106,5 +107,41 @@ func TestAnAppListsAShowsThemeSongs(t *testing.T) {
 	get("/Items/"+guid(show)+"/ThemeVideos", &songs)
 	if len(songs.Items) != 0 || songs.OwnerID != guid(show) {
 		t.Errorf("theme videos: %+v, want none", songs)
+	}
+}
+
+// An app plays a theme song where Jellyfin's apps play audio: Jellyfin's web app at its universal
+// address with the token in it, others at its stream, in ranges.
+func TestAnAppPlaysAThemeSong(t *testing.T) {
+	st, ada, show, _ := aShowWithATheme(t)
+	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Themes: st,
+	})
+	page, err := st.Title(t.Context(), ada.ID, show)
+	if err != nil || len(page.Themes) != 1 {
+		t.Fatal(page.Themes, err)
+	}
+	theme := guid(page.Themes[0])
+	w := serve(api, http.MethodGet, "/Audio/"+theme+"/universal?UserId="+guid(ada.ID)+"&DeviceId=TW96&MaxStreamingBitrate=140000000"+
+		"&Container=opus,webm|opus,mp3,aac,m4a|aac,m4b|aac,flac,webma,webm|webma,wav,ogg&TranscodingContainer=mp4&TranscodingProtocol=hls"+
+		"&AudioCodec=aac&ApiKey=pst_ada&PlaySessionId=1&StartTimeTicks=0&EnableRedirection=true&EnableRemoteMedia=false", "", "")
+	if w.Code != http.StatusOK || w.Body.String() != "way down in the hole" || w.Header().Get("Content-Type") != "audio/mpeg" {
+		t.Errorf("the universal address: %d %s %q", w.Code, w.Header().Get("Content-Type"), w.Body)
+	}
+	r := httptest.NewRequest(http.MethodGet, "/audio/"+theme+"/stream.mp3?static=true", nil)
+	r.Header.Set("Authorization", `MediaBrowser Token="pst_ada"`)
+	r.Header.Set("Range", "bytes=4-7")
+	rw := httptest.NewRecorder()
+	api.ServeHTTP(rw, r)
+	if rw.Code != http.StatusPartialContent || rw.Body.String() != "down" {
+		t.Errorf("a range of the stream: %d %q", rw.Code, rw.Body)
+	}
+	for _, target := range []string{"/Audio/" + theme + "/master.m3u8", "/Audio/" + guid(show) + "/stream", "/Audio/" + guid(uuid.NewV7()) + "/universal"} {
+		if w := serve(api, http.MethodGet, target, `MediaBrowser Token="pst_ada"`, ""); w.Code != http.StatusNotFound {
+			t.Errorf("%s: %d, want 404", target, w.Code)
+		}
+	}
+	if w := serve(api, http.MethodGet, "/Audio/"+theme+"/universal", "", ""); w.Code != http.StatusUnauthorized {
+		t.Errorf("without a token: %d, want 401", w.Code)
 	}
 }
