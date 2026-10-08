@@ -13,19 +13,21 @@ type Schemas = components["schemas"];
 
 const version: Schemas["VersionPage"] = {
 	id: "v",
+	display_title: "H.264",
 	container: "matroska,webm",
 	duration_ms: 1,
 	size_bytes: 1,
 	parts: 1,
 	files: [{ id: "p", index: 0, size_bytes: 1, duration_ms: 1, offset_ms: 0 }],
 	streams: [
-		{ index: 0, kind: "video", codec: "h264" },
+		{ index: 0, kind: "video", codec: "h264", display_title: "H.264" },
 		{
 			index: 2,
 			kind: "subtitle",
 			codec: "hdmv_pgs_subtitle",
 			subtitle_kind: "picture",
 			language: "en",
+			display_title: "English (PGS)",
 		},
 		{
 			index: 3,
@@ -34,6 +36,7 @@ const version: Schemas["VersionPage"] = {
 			subtitle_kind: "text",
 			language: "fr",
 			forced: true,
+			display_title: "French Forced (SRT)",
 		},
 		{
 			index: 4,
@@ -41,6 +44,7 @@ const version: Schemas["VersionPage"] = {
 			codec: "ass",
 			subtitle_kind: "styled",
 			title: "Songs",
+			display_title: "Songs (ASS)",
 		},
 	],
 	subtitles: [
@@ -50,9 +54,22 @@ const version: Schemas["VersionPage"] = {
 			kind: "text",
 			language: "en",
 			hearing_impaired: true,
+			display_title: "English SDH (SRT External)",
 		},
-		{ id: "s2", codec: "dvd_subtitle", kind: "picture", language: "de" },
-		{ id: "s3", codec: "ass", kind: "styled", title: "Signs" },
+		{
+			id: "s2",
+			codec: "dvd_subtitle",
+			kind: "picture",
+			language: "de",
+			display_title: "German (VobSub External)",
+		},
+		{
+			id: "s3",
+			codec: "ass",
+			kind: "styled",
+			title: "Signs",
+			display_title: "Signs (ASS External)",
+		},
 	],
 };
 
@@ -68,23 +85,29 @@ test("each subtitle is named and placed where HLS publishes it", () => {
 	expect(choices(version)).toEqual([
 		{
 			key: "s2",
-			label: "English",
+			label: "English (PGS)",
 			codec: "hdmv_pgs_subtitle",
 			kind: "picture",
 			stream: 2,
 		},
 		{
 			key: "s3",
-			label: "French (Forced)",
+			label: "French Forced (SRT)",
 			codec: "subrip",
 			kind: "text",
 			stream: 3,
 			rendition: 0,
 		},
-		{ key: "s4", label: "Songs", codec: "ass", kind: "styled", stream: 4 },
+		{
+			key: "s4",
+			label: "Songs (ASS)",
+			codec: "ass",
+			kind: "styled",
+			stream: 4,
+		},
 		{
 			key: "f0",
-			label: "English (SDH)",
+			label: "English SDH (SRT External)",
 			codec: "subrip",
 			kind: "text",
 			file: 0,
@@ -93,7 +116,7 @@ test("each subtitle is named and placed where HLS publishes it", () => {
 		},
 		{
 			key: "f2",
-			label: "Signs",
+			label: "Signs (ASS External)",
 			codec: "ass",
 			kind: "styled",
 			file: 2,

@@ -11,6 +11,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
 // ticksPerMS is Jellyfin's time unit, the tick of 100 ns, in a millisecond.
@@ -218,7 +219,7 @@ func (a *API) fromSeason(show store.TitleRef, s store.SeasonCard) item {
 }
 
 // fromTitle is a title's own page, all photon knows of it.
-func (a *API) fromTitle(p store.TitlePage) item {
+func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 	it := a.fromCard(store.Card{
 		ID: p.ID, Kind: p.Kind, Title: p.Title, Year: p.Year, ReleaseDate: time.Time(p.ReleaseDate), AddedAt: p.AddedAt,
 		Poster: first(p.Artwork[domain.ArtworkPoster]), Backdrop: first(p.Artwork[domain.ArtworkBackdrop]),
@@ -239,7 +240,7 @@ func (a *API) fromTitle(p store.TitlePage) item {
 		it.People = append(it.People, person{Name: c.Name, ID: guid(c.PersonID), Role: c.Role, Type: cmp.Or(personKinds[c.Kind], "Unknown")})
 	}
 	if len(p.Versions) > 0 {
-		it.sources(p.Versions, true)
+		it.sources(p.Versions, true, w)
 	}
 	if p.Kind == domain.ItemShow {
 		n := len(p.Seasons)
@@ -251,10 +252,10 @@ func (a *API) fromTitle(p store.TitlePage) item {
 // sources fills a playable item's copies, and its running time and container from the first; and
 // with streams its first copy's tracks beside them, which Jellyfin writes only when asked, as they
 // double what is written of the item.
-func (it *item) sources(versions []store.VersionPage, streams bool) {
+func (it *item) sources(versions []store.VersionPage, streams bool, w words.Words) {
 	it.MediaSources = make([]mediaSource, len(versions))
 	for n, v := range versions {
-		it.MediaSources[n] = sourceOf(v)
+		it.MediaSources[n] = sourceOf(v, w)
 	}
 	if streams {
 		it.MediaStreams = it.MediaSources[0].MediaStreams

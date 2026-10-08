@@ -19,6 +19,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
 type playing interface {
@@ -102,8 +103,9 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		MediaSources  []mediaSource `json:"MediaSources"`
 		PlaySessionID string        `json:"PlaySessionId"`
 	}{MediaSources: []mediaSource{}, PlaySessionID: guid(session)}
+	said := words.Negotiate(w, r)
 	for _, v := range versions[id] {
-		src := sourceOf(v)
+		src := sourceOf(v, said)
 		if v.ID == c.Version {
 			out.MediaSources = slices.Insert(out.MediaSources, 0, src)
 		} else {

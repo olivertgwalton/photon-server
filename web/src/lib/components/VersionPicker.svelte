@@ -7,7 +7,7 @@ import type { components } from "#lib/api/schema.js";
 import DownloadDialog from "#lib/components/DownloadDialog.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
-import { playHref, versionName } from "#lib/format.js";
+import { playHref } from "#lib/format.js";
 
 type Version = components["schemas"]["VersionPage"];
 
@@ -62,7 +62,7 @@ function choose(v: Version) {
 								class="w-full justify-start"
 								onclick={() => choose(v)}
 							>
-								{versionName(v)}
+								{v.display_title}
 							</Button>
 						</li>
 					{/each}

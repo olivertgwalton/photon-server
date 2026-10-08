@@ -187,15 +187,6 @@ export const resolutionNames: Record<Schemas["Resolution"], string> = {
 	"4k": "4K",
 };
 
-// "2160p HEVC Dolby Vision": what a copy's picture is, for choosing between copies.
-export function videoName(stream: Schemas["StreamPage"] | undefined): string {
-	if (!stream) return "";
-	const lines = stream.resolution ? resolutionNames[stream.resolution] : "";
-	const range =
-		stream.range && stream.range !== "sdr" ? rangeName(stream.range) : "";
-	return [lines, stream.codec.toUpperCase(), range].filter(Boolean).join(" ");
-}
-
 // The copy asked for by id, else the one the server plays when none is: the
 // first with its files on disk.
 export function onDisk(
@@ -206,37 +197,6 @@ export function onDisk(
 		versions?.find((v) => v.id === id) ??
 		versions?.find((v) => !v.missing_since)
 	);
-}
-
-// A copy as a choice names it: its label or edition and its picture, and
-// whether its files are gone.
-export function versionName(v: Schemas["VersionPage"]): string {
-	const picture = videoName(v.streams.find((s) => s.kind === "video"));
-	const name = v.label ?? v.edition ?? "";
-	// A label is often the picture's own name ("4K"), which says it once.
-	const said =
-		!name || picture.startsWith(name)
-			? picture
-			: [name, picture].filter(Boolean).join(" · ");
-	return `${said || "Version"}${v.missing_since ? " (missing)" : ""}`;
-}
-
-// "English · AC3 5.1 · Commentary": an audio or subtitle track in a menu.
-export function trackName(stream: Schemas["StreamPage"]): string {
-	const channels =
-		stream.channel_layout ??
-		(stream.channels ? `${stream.channels} ch` : undefined);
-	return [
-		language(stream.language) || stream.title || `Track ${stream.index}`,
-		stream.kind === "audio"
-			? [stream.codec.toUpperCase(), channels].filter(Boolean).join(" ")
-			: stream.codec.toUpperCase(),
-		stream.forced && "Forced",
-		stream.hearing_impaired && "SDH",
-		stream.commentary && "Commentary",
-	]
-		.filter(Boolean)
-		.join(" · ");
 }
 
 // Where a title is played. The player reads the copy, the tracks and where to

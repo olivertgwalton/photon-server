@@ -40,7 +40,7 @@ import {
 	wants,
 	webVTT,
 } from "#lib/player/subtitles.js";
-import { audioLabel, qualities, reasons, skips } from "#lib/player/words.js";
+import { qualities, reasons, skips } from "#lib/player/words.js";
 import PlaybackInfo from "./PlaybackInfo.svelte";
 import SeekBar from "./SeekBar.svelte";
 import UpNext from "./UpNext.svelte";
@@ -801,7 +801,7 @@ onMount(() => {
 										>
 											{#each audioStreams as s (s.index)}
 												<Menu.RadioItem value={String(s.index)}
-													>{audioLabel(s)}</Menu.RadioItem
+													>{s.display_title}</Menu.RadioItem
 												>
 											{/each}
 										</Menu.RadioGroup>

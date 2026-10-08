@@ -50,7 +50,7 @@ func (a *API) upcoming(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	l := listedOf(r)
+	l := listedOf(w, r)
 	from := min(l.start, len(cards))
 	to := from + min(l.limit, len(cards)-from)
 	items, err := a.list(r.Context(), cards[from:to], l)

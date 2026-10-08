@@ -184,6 +184,11 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	if video, _ := streams[0].(map[string]any); video["VideoRangeType"] != "DOVIWithHDR10" {
 		t.Errorf("a Dolby Vision profile 8 picture: %v", video)
 	}
+	// Named as photon's own API names them, so an app shows the same words whichever it reads.
+	if source["Name"] != "4K (HEVC Dolby Vision)" || streams[1].(map[string]any)["DisplayTitle"] != "English (Dolby Digital+ 5.1)" ||
+		streams[2].(map[string]any)["DisplayTitle"] != "English (SRT)" {
+		t.Errorf("names: copy %v, tracks %v and %v", source["Name"], streams[1].(map[string]any)["DisplayTitle"], streams[2].(map[string]any)["DisplayTitle"])
+	}
 	userData, _ := film["UserData"].(map[string]any)
 	requireKeys(t, "UserItemDataDto", userData, "PlaybackPositionTicks", "PlayCount", "IsFavorite", "Played", "Key", "ItemId")
 

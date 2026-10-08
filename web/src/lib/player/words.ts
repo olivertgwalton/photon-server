@@ -1,5 +1,4 @@
 import type { components } from "#lib/api/schema.js";
-import { language } from "#lib/format.js";
 
 type Schemas = components["schemas"];
 
@@ -77,15 +76,4 @@ const layouts: Record<number, string> = {
 
 export function channels(n: number | undefined): string {
 	return n ? (layouts[n] ?? `${n} ch`) : "";
-}
-
-export function audioLabel(s: Schemas["StreamPage"]): string {
-	return [
-		s.title || language(s.language) || "Unknown",
-		s.codec.toUpperCase(),
-		channels(s.channels),
-		s.commentary ? "Commentary" : "",
-	]
-		.filter(Boolean)
-		.join(" · ");
 }

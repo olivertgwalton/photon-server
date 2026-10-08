@@ -7,6 +7,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
 // subtitleKind is what a subtitle is made of, which decides how a player may show it: plain text,
@@ -86,7 +87,10 @@ type titleRefJSON struct {
 }
 
 type versionPageJSON struct {
-	ID           uuid.UUID         `json:"id"`
+	ID uuid.UUID `json:"id"`
+	// DisplayTitle names the copy by its label or edition and its picture, in the reader's
+	// language.
+	DisplayTitle string            `json:"display_title"`
 	Edition      string            `json:"edition,omitzero"`
 	Label        string            `json:"label,omitzero"`
 	Container    string            `json:"container"`
@@ -127,7 +131,9 @@ type partTrickplayJSON struct {
 }
 
 type streamPageJSON struct {
-	Index           int               `json:"index"`
+	Index int `json:"index"`
+	// DisplayTitle names the track as a menu lists it, in the reader's language.
+	DisplayTitle    string            `json:"display_title"`
 	Kind            domain.StreamKind `json:"kind"`
 	Codec           string            `json:"codec"`
 	Profile         string            `json:"profile,omitzero"`
@@ -156,6 +162,7 @@ type streamPageJSON struct {
 
 type subtitleRefJSON struct {
 	ID              uuid.UUID    `json:"id"`
+	DisplayTitle    string       `json:"display_title"`
 	Codec           string       `json:"codec"`
 	Kind            subtitleKind `json:"kind"`
 	Language        string       `json:"language,omitzero"`
@@ -261,7 +268,7 @@ type titleStateJSON struct {
 	Unwatched     int        `json:"unwatched,omitzero"`
 }
 
-func titlePageOf(p store.TitlePage) titlePageJSON {
+func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 	return titlePageJSON{
 		ID: p.ID, LibraryID: p.Library, Kind: p.Kind, Title: p.Title, OriginalTitle: p.OriginalTitle, Overview: p.Overview,
 		Tagline: p.Tagline, Certificate: p.Certificate, Year: p.Year, ReleaseDate: p.ReleaseDate,
@@ -273,7 +280,7 @@ func titlePageOf(p store.TitlePage) titlePageJSON {
 		MetadataLanguage: p.Locale.Language, CertificationCountry: p.Locale.Country, AddedAt: p.AddedAt, SeasonNumber: p.SeasonNumber,
 		EpisodeNumber: p.EpisodeNumber, EpisodeEnd: p.EpisodeEnd,
 		Show: (*titleRefJSON)(p.Show), Season: (*titleRefJSON)(p.Season),
-		Versions: each(p.Versions, versionPageOf),
+		Versions: each(p.Versions, func(v store.VersionPage) versionPageJSON { return versionPageOf(v, w) }),
 		Seasons: each(p.Seasons, func(s store.SeasonCard) seasonCardJSON {
 			return seasonCardJSON{
 				ID: s.ID, Number: s.Number, Title: s.Title, Overview: s.Overview, Year: s.Year, Aired: s.Aired,
@@ -295,14 +302,14 @@ func titlePageOf(p store.TitlePage) titlePageJSON {
 	}
 }
 
-func versionPageOf(v store.VersionPage) versionPageJSON {
+func versionPageOf(v store.VersionPage, w words.Words) versionPageJSON {
 	return versionPageJSON{
-		ID: v.ID, Edition: v.Edition, Label: v.Label, Container: domain.ContainerName(v.Container), DurationMS: v.DurationMS,
+		ID: v.ID, DisplayTitle: w.Version(v), Edition: v.Edition, Label: v.Label, Container: domain.ContainerName(v.Container), DurationMS: v.DurationMS,
 		SizeBytes: v.SizeBytes, BitrateKbps: v.BitrateKbps, Parts: v.Parts, MissingSince: v.MissingSince,
-		Streams: each(v.Streams, streamPageOf),
+		Streams: each(v.Streams, func(s store.StreamPage) streamPageJSON { return streamPageOf(s, w) }),
 		Subtitles: each(v.Subtitles, func(s store.SubtitleRef) subtitleRefJSON {
 			return subtitleRefJSON{
-				ID: s.ID, Codec: s.Codec, Kind: subtitleKindOf(s.Codec), Language: s.Language, Title: s.Title,
+				ID: s.ID, DisplayTitle: w.SubtitleFile(s), Codec: s.Codec, Kind: subtitleKindOf(s.Codec), Language: s.Language, Title: s.Title,
 				Default: s.Default, Forced: s.Forced, HearingImpaired: s.HearingImpaired,
 			}
 		}),
@@ -319,9 +326,9 @@ func versionPageOf(v store.VersionPage) versionPageJSON {
 	}
 }
 
-func streamPageOf(s store.StreamPage) streamPageJSON {
+func streamPageOf(s store.StreamPage, w words.Words) streamPageJSON {
 	out := streamPageJSON{
-		Index: s.Index, Kind: s.Kind, Codec: s.Codec, Profile: s.Profile, Language: s.Language, Title: s.Title,
+		Index: s.Index, DisplayTitle: w.Stream(s), Kind: s.Kind, Codec: s.Codec, Profile: s.Profile, Language: s.Language, Title: s.Title,
 		Default: s.Default, Forced: s.Forced, HearingImpaired: s.HearingImpaired, Commentary: s.Commentary,
 		Width: s.Width, Height: s.Height, FrameRate: s.FrameRate, BitDepth: s.BitDepth, Level: s.Level,
 		Range: s.Range, DVProfile: s.DVProfile, Channels: s.Channels, ChannelLayout: s.ChannelLayout,

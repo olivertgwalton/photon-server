@@ -2,7 +2,7 @@
 import type { components } from "#lib/api/schema.js";
 import * as Sheet from "#lib/components/ui/sheet/index.js";
 import { bitrate, playMethods, rangeName } from "#lib/format.js";
-import { audioLabel, channels, reasons } from "#lib/player/words.js";
+import { channels, reasons } from "#lib/player/words.js";
 
 type Schemas = components["schemas"];
 
@@ -112,7 +112,7 @@ const audioTarget = $derived.by(() => {
 			{#if playback.audio}
 				<div>
 					<dt class="label">Audio</dt>
-					<dd class="text-ink mt-1">{sound ? audioLabel(sound) : ""}</dd>
+					<dd class="text-ink mt-1">{sound?.display_title ?? ""}</dd>
 					<dd class="mt-0.5">{audioTarget}</dd>
 				</div>
 			{/if}
