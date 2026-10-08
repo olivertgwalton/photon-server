@@ -262,10 +262,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		switch r.reply.(type) {
 		case asFile, asStream:
 		default:
-			if strings.HasPrefix(r.pattern, http.MethodGet+" ") {
-				h = a.revalidate(h)
-			}
-			h = a.compressJSON(h)
+			h = a.revalidate(h)
 		}
 		a.mux.Handle(r.pattern, h)
 	}
