@@ -9,6 +9,7 @@ import (
 	"hash/fnv"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"slices"
 	"strconv"
@@ -264,13 +265,9 @@ func (a *API) serveFile(w http.ResponseWriter, r *http.Request, where func(conte
 		return
 	}
 	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
+	if err := library.Serve(w, r, f, rel, math.MaxInt64); err != nil {
 		a.internal(w, r, err)
-		return
 	}
-	// The bare file keeps the copy in the kernel: sendfile takes only an *os.File.
-	http.ServeContent(w, r, rel, info.ModTime(), f)
 }
 
 // subtitle serves a subtitle file beside a copy, by the index its media source gives it.
