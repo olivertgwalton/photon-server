@@ -279,6 +279,82 @@ func TestIdenticalCopiesAreOneVersionInTwoPlaces(t *testing.T) {
 	}
 }
 
+// episodes answers each episode as its number and the paths its copies are read from.
+func (f *fixture) episodes() string {
+	f.t.Helper()
+	return f.title(`SELECT coalesce(string_agg(e, '; ' ORDER BY e), '') FROM (
+		SELECT i.episode_number || ': ' || string_agg(pf.rel_path, ', ' ORDER BY pf.rel_path) AS e
+		FROM items i JOIN versions v ON v.item_id = i.id JOIN parts p ON p.version_id = v.id
+		JOIN part_files pf ON pf.part_id = p.id WHERE i.kind = 'episode' GROUP BY i.id) s`)
+}
+
+// riven shows a double-length episode once under each of its numbers. Each is an episode of its
+// own, read from its own path, as Jellyfin keeps an item per path.
+func TestTheSameBytesUnderTwoNumbersAreTwoEpisodes(t *testing.T) {
+	f := newFixture(t, domain.LibraryShows)
+	f.put("Friends (1994)/Season 01/s01e01.mkv", "pilot")
+	f.put("Friends (1994)/Season 01/s01e02.mkv", "pilot")
+	f.scan()
+	if got, want := f.episodes(), "1: Friends (1994)/Season 01/s01e01.mkv; 2: Friends (1994)/Season 01/s01e02.mkv"; got != want {
+		t.Errorf("episodes %q, want %q", got, want)
+	}
+	if n := f.count(`SELECT count(*) FROM (SELECT key FROM title_keys GROUP BY key HAVING count(*) > 1) s`); n != 0 {
+		t.Errorf("the two episodes share %d keys, want none: they are not one title", n)
+	}
+	if r := f.scan(); r.Probed != 0 || r.Unchanged != r.Folders {
+		t.Errorf("rescanning: %+v, want nothing read again", r)
+	}
+}
+
+// One episode holding both paths is how such a pair was kept before; the next scan splits it.
+func TestAnEpisodeHeldUnderTwoNumbersIsSplitKeepingItsID(t *testing.T) {
+	f := newFixture(t, domain.LibraryShows)
+	f.put("Friends (1994)/Season 09/s09e24.mkv", "barbados")
+	f.scan()
+	id := f.title(`SELECT id::text FROM items WHERE kind = 'episode'`)
+	f.put("Friends (1994)/Season 09/s09e23.mkv", "barbados")
+	info, err := os.Stat(filepath.Join(f.root, "Friends (1994)/Season 09/s09e23.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(t.Context(), `
+		INSERT INTO part_files (part_id, library_id, rel_path, size_bytes, mtime_ns)
+		SELECT part_id, library_id, 'Friends (1994)/Season 09/s09e23.mkv', $1, $2 FROM part_files`,
+		info.Size(), info.ModTime().UnixNano()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(t.Context(), `DELETE FROM jobs WHERE kind = 'identify'`); err != nil {
+		t.Fatal(err)
+	}
+	f.scan()
+	if got, want := f.episodes(), "23: Friends (1994)/Season 09/s09e23.mkv; 24: Friends (1994)/Season 09/s09e24.mkv"; got != want {
+		t.Errorf("episodes %q, want %q", got, want)
+	}
+	if got := f.title(`SELECT id::text FROM items WHERE kind = 'episode' AND episode_number = 24`); got != id {
+		t.Errorf("episode 24 is %s, want %s kept", got, id)
+	}
+	if n := f.count(`SELECT count(*) FROM jobs j JOIN items i ON i.id = j.subject WHERE j.kind = 'identify' AND i.kind = 'show'`); n != 1 {
+		t.Error("the show is not matched again to describe the episode split off")
+	}
+}
+
+func TestARenamedEpisodeKeepsItsItem(t *testing.T) {
+	f := newFixture(t, domain.LibraryShows)
+	f.put("Friends (1994)/Season 01/s01e01.mkv", "pilot")
+	f.scan()
+	id := f.title(`SELECT id::text FROM items WHERE kind = 'episode'`)
+	dir := filepath.Join(f.root, "Friends (1994)/Season 01")
+	if err := os.Rename(filepath.Join(dir, "s01e01.mkv"), filepath.Join(dir, "s01e02.mkv")); err != nil {
+		t.Fatal(err)
+	}
+	if r := f.scan(); r.Probed != 0 {
+		t.Errorf("a renamed file was probed again (%d probes)", r.Probed)
+	}
+	if got := f.title(`SELECT id::text || ' ' || episode_number FROM items WHERE kind = 'episode'`); got != id+" 2" {
+		t.Errorf("episodes %q, want %s numbered 2", got, id)
+	}
+}
+
 func TestOneFileInTwoLibrariesIsACopyInEach(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
