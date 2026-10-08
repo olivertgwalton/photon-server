@@ -74,20 +74,6 @@ type ownMetricsJSON struct {
 	SentBytes           map[string]float64            `json:"sent_bytes"`
 	CPUSeconds          float64                       `json:"cpu_seconds"`
 	ResidentMemoryBytes float64                       `json:"resident_memory_bytes"`
-	SegmentWait         histogramJSON                 `json:"segment_wait"`
-}
-
-// histogramJSON is a histogram's buckets, each counting the observations at most le, as
-// Prometheus' do, beside the count and sum of every one.
-type histogramJSON struct {
-	Buckets []histogramBucketJSON `json:"buckets"`
-	Count   uint64                `json:"count"`
-	Sum     float64               `json:"sum"`
-}
-
-type histogramBucketJSON struct {
-	LE    float64 `json:"le"`
-	Count uint64  `json:"count"`
 }
 
 // clusterMetricsJSON is what the nodes share, as node, holding the scheduler lease, said it:
@@ -128,7 +114,7 @@ func (a *API) gather(ctx context.Context) gatheredJSON {
 func shapeMetrics(families []*dto.MetricFamily, at time.Time) gatheredJSON {
 	own := ownMetricsJSON{
 		At: at, Playbacks: map[domain.PlayMethod]int{}, Transcodes: map[string]int{}, PlaybackStarts: map[domain.PlayMethod]float64{},
-		TranscodeRefusals: map[string]float64{}, SentBytes: map[string]float64{}, SegmentWait: histogramJSON{Buckets: []histogramBucketJSON{}},
+		TranscodeRefusals: map[string]float64{}, SentBytes: map[string]float64{},
 	}
 	var cluster *clusterMetricsJSON
 	shared := func() *clusterMetricsJSON {
@@ -162,12 +148,6 @@ func shapeMetrics(families []*dto.MetricFamily, at time.Time) gatheredJSON {
 				own.CPUSeconds = v
 			case "process_resident_memory_bytes":
 				own.ResidentMemoryBytes = v
-			case "photon_hls_segment_wait_seconds":
-				h := m.GetHistogram()
-				own.SegmentWait.Count, own.SegmentWait.Sum = h.GetSampleCount(), h.GetSampleSum()
-				for _, b := range h.GetBucket() {
-					own.SegmentWait.Buckets = append(own.SegmentWait.Buckets, histogramBucketJSON{LE: b.GetUpperBound(), Count: b.GetCumulativeCount()})
-				}
 			case "photon_jobs":
 				c := shared()
 				c.Jobs = append(c.Jobs, jobCountJSON{Kind: domain.JobKind(label(m, "kind")), State: domain.JobState(label(m, "state")), Count: int(v)})

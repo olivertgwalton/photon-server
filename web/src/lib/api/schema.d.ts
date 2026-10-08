@@ -6936,17 +6936,6 @@ export interface components {
         };
         /** @enum {string} */
         HiddenFolders: "hide" | "show";
-        Histogram: {
-            buckets: components["schemas"]["HistogramBucket"][];
-            /** Format: int64 */
-            count: number;
-            sum: number;
-        };
-        HistogramBucket: {
-            /** Format: int64 */
-            count: number;
-            le: number;
-        };
         HistoryEntry: {
             /** Format: uuid */
             id: string;
@@ -7356,7 +7345,6 @@ export interface components {
                 [key: string]: number;
             };
             resident_memory_bytes: number;
-            segment_wait: components["schemas"]["Histogram"];
             sent_bytes: {
                 [key: string]: number;
             };

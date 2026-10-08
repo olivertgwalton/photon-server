@@ -116,24 +116,26 @@ const attention = $derived(
 				class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2"
 			>
 				<h2 id="playing" class="heading">Now playing</h2>
-				<div class="flex min-w-56 items-center gap-3 text-sm">
-					<span class="text-ink-2 whitespace-nowrap">
-						{transcodes.active}
-						{transcodes.limit ? `of ${transcodes.limit}` : ""}
-						transcoding
-						{#if transcodes.conversions}
-							· {transcodes.conversions} for downloads
+				{#if transcodes.active || transcodes.conversions}
+					<div class="flex min-w-56 items-center gap-3 text-sm">
+						<span class="text-ink-2 whitespace-nowrap">
+							{transcodes.active}
+							{transcodes.limit ? `of ${transcodes.limit}` : ""}
+							transcoding
+							{#if transcodes.conversions}
+								· {transcodes.conversions} for downloads
+							{/if}
+						</span>
+						{#if transcodes.limit}
+							<Progress
+								value={transcodes.active}
+								max={transcodes.limit}
+								aria-label="Transcode slots in use"
+								class="w-24"
+							/>
 						{/if}
-					</span>
-					{#if transcodes.limit}
-						<Progress
-							value={transcodes.active}
-							max={transcodes.limit}
-							aria-label="Transcode slots in use"
-							class="w-24"
-						/>
-					{/if}
-				</div>
+					</div>
+				{/if}
 			</div>
 			{#if playbacks.length}
 				<div class="grid gap-4 sm:grid-cols-2">

@@ -49,24 +49,6 @@ export function series(answers: Schemas["Metrics"][]): Map<string, Point[]> {
 	return out;
 }
 
-// The q-quantile of a histogram, interpolated within the bucket it falls in, as
-// Prometheus' histogram_quantile does; past the last bucket, that bucket's
-// bound. Nothing observed has none.
-export function quantile(h: Schemas["Histogram"], q: number) {
-	if (!h.count) return undefined;
-	const rank = q * h.count;
-	let le = 0;
-	let below = 0;
-	for (const b of h.buckets) {
-		if (b.count >= rank) {
-			return le + (b.le - le) * ((rank - below) / (b.count - below));
-		}
-		le = b.le;
-		below = b.count;
-	}
-	return le;
-}
-
 // An SVG path through values, the last at the right edge of width, scaled so
 // the largest reaches the top. Time runs across `span` milliseconds to now.
 export function sparkPath(

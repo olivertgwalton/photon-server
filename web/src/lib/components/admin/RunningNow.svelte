@@ -80,6 +80,8 @@ const words = vocabulary();
 {/if}
 {#if !live.scans.length && !live.tasks.length && !jobs.length}
 	<p class="text-ink-3 text-sm">
-		{live.ready ? "The server is idle." : "Waiting for live updates…"}
+		{live.ready
+			? "No scans, tasks or jobs are running."
+			: "Waiting for live updates…"}
 	</p>
 {/if}

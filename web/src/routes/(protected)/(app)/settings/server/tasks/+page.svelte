@@ -85,6 +85,8 @@ function work(task: components["schemas"]["Task"]) {
 function took(started?: string, finished?: string) {
 	if (!started || !finished) return "";
 	const ms = Date.parse(finished) - Date.parse(started);
+	// A run of under a second says nothing worth a column's width.
+	if (ms < 1000) return "";
 	return ms < 60_000 ? `${Math.round(ms / 1000)} s` : runtime(ms);
 }
 </script>
@@ -195,14 +197,16 @@ function took(started?: string, finished?: string) {
 					{#if running}
 						<Badge>Running</Badge>
 					{:else if task.finished_at}
-						<p>
+						<p class="whitespace-nowrap">
 							<time
 								datetime={task.finished_at}
 								title={when.format(new Date(task.finished_at))}
 							>
 								{relative(task.finished_at, clock.now)}
 							</time>
-							· {took(task.started_at, task.finished_at)}
+							{#if took(task.started_at, task.finished_at)}
+								· {took(task.started_at, task.finished_at)}
+							{/if}
 						</p>
 						{#if task.result === "failed"}
 							<p class="text-destructive text-xs">Failed: {task.error}</p>
@@ -217,7 +221,7 @@ function took(started?: string, finished?: string) {
 						Next {relative(task.next_at, clock.now)}
 					</p>
 				</Table.Cell>
-				<Table.Cell class="hidden sm:table-cell">
+				<Table.Cell class="hidden whitespace-nowrap sm:table-cell">
 					<time
 						datetime={task.next_at}
 						title={when.format(new Date(task.next_at))}

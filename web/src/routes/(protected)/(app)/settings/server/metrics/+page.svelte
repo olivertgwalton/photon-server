@@ -6,7 +6,6 @@ import {
 	keepFor,
 	type Point,
 	pollEvery,
-	quantile,
 	series,
 	total,
 } from "#lib/admin/metrics.js";
@@ -123,6 +122,23 @@ const kinds = $derived(
 			cluster?.oldest_due_seconds[k] !== undefined,
 	),
 );
+// Each kind the libraries hold, as a word that counts it.
+const nouns: Record<Schemas["ItemKind"], string> = {
+	movie: "film",
+	show: "show",
+	season: "season",
+	episode: "episode",
+	extra: "extra",
+	collection: "collection",
+};
+const held = $derived(
+	(
+		Object.entries(cluster?.library_items ?? {}) as [
+			Schemas["ItemKind"],
+			number,
+		][]
+	).filter(([, n]) => n),
+);
 const finished = $derived(
 	[...(cluster?.tasks ?? [])].sort((a, b) =>
 		b.finished_at.localeCompare(a.finished_at),
@@ -133,13 +149,6 @@ function speed(bytesPerSecond: number | undefined) {
 	return bytesPerSecond === undefined
 		? "—"
 		: bitrate(Math.round((bytesPerSecond * 8) / 1000));
-}
-
-function wait(seconds: number | undefined) {
-	if (seconds === undefined) return "—";
-	return seconds < 1
-		? `${Math.round(seconds * 1000)} ms`
-		: `${seconds.toFixed(1)} s`;
 }
 
 function ago(seconds: number, now: number) {
@@ -207,15 +216,16 @@ function ago(seconds: number, now: number) {
 			<dt class="label">Library</dt>
 			{#if cluster}
 				<dd class="text-ink font-heading text-2xl font-bold">
-					{count(cluster.library_items.movie ?? 0, "film")}
-					<span class="text-ink-3 font-sans text-sm font-normal">
-						{bytes(cluster.library_bytes.movie ?? 0)}
-					</span>
+					{bytes(
+						Object.values(cluster.library_bytes).reduce((s, b) => s + b, 0),
+					)}
 				</dd>
-				<dd class="text-ink-3 text-xs">
-					{count(cluster.library_items.episode ?? 0, "episode")}
-					· {bytes(cluster.library_bytes.episode ?? 0)}
-				</dd>
+				{#each held as [kind, n] (kind)}
+					<dd class="text-ink-3 text-xs">
+						{count(n, nouns[kind])}
+						· {bytes(cluster.library_bytes[kind] ?? 0)}
+					</dd>
+				{/each}
 			{:else}
 				<dd class="text-ink-3 text-sm">Not known yet</dd>
 			{/if}
@@ -302,17 +312,6 @@ function ago(seconds: number, now: number) {
 										for downloads
 									</dd>
 								{/if}
-							</div>
-							<div class="grid content-start gap-1">
-								<dt class="label">Segment wait</dt>
-								<dd class="text-ink font-mono">
-									{wait(quantile(m.segment_wait, 0.5))}
-									<span class="text-ink-3 font-sans text-xs">median</span>
-								</dd>
-								<dd class="text-ink-3 text-xs">
-									{wait(quantile(m.segment_wait, 0.95))}
-									at the 95th percentile, since it started
-								</dd>
 							</div>
 						</dl>
 					{:else}
