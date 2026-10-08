@@ -34,8 +34,9 @@ var ErrSuperseded = errors.New("the title's state has changed since then")
 
 // newest keeps a write only if it happened no earlier than the state it replaces last changed.
 // Each write's time is at most the database's now, so a client clock running ahead holds off
-// nothing written after it.
-const newest = ` WHERE watch_state.changed_at IS NULL OR watch_state.changed_at <= excluded.changed_at`
+// nothing written after it. State from before changes were timed changed when it was last played
+// or watched.
+const newest = ` WHERE coalesce(watch_state.changed_at, greatest(watch_state.last_played_at, watch_state.watched_at), '-infinity') <= excluded.changed_at`
 
 // Length is how long a film or episode runs, as its progress is measured: its longest copy's.
 func (s *Store) Length(ctx context.Context, item uuid.UUID) (time.Duration, error) {
