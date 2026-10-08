@@ -2,8 +2,7 @@ import { isHttpError, isRedirect } from "@sveltejs/kit";
 import { goto } from "$app/navigation";
 
 // The latest answer to what a load streams rather than awaits: a page draws
-// what it has while the next answer is on its way, and a skeleton until the
-// first. A refusal is the page's to say, and a redirect is followed, as `need`
+// what it has while the next answer is on its way. A refusal is the page's to say, and a redirect is followed, as `need`
 // has them where a load is awaited.
 export function settled<T>(promise: () => Promise<T>) {
 	let value = $state<T>();
