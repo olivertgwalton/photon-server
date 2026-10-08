@@ -1,7 +1,6 @@
 <script lang="ts">
-import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
+import Artwork from "#lib/components/Artwork.svelte";
 import { blurStyle } from "#lib/blurhash.js";
-import { fadeIn } from "#lib/fade.js";
 
 // A person, by their photograph, or their initial where there is none.
 let {
@@ -25,16 +24,7 @@ let {
 		style={photo ? blurStyle(blurhashes?.[photo]) : undefined}
 	>
 		{#if photo}
-			<img
-				{@attach fadeIn}
-				src={artworkSrc(photo, "poster")}
-				srcset={artworkSrcset(photo, "poster")}
-				sizes="10rem"
-				alt=""
-				loading="lazy"
-				decoding="async"
-				class="card-picture"
-			>
+			<Artwork id={photo} shape="poster" sizes="10rem" class="card-picture" />
 		{:else}
 			<span
 				class="font-heading text-ink-3 grid size-full place-items-center pb-10 text-3xl font-bold"

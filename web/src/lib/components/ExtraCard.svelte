@@ -1,7 +1,7 @@
 <script lang="ts">
+import Artwork from "#lib/components/Artwork.svelte";
 import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
 import PlayIcon from "@lucide/svelte/icons/play";
-import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
 import { type Extra, extraKinds } from "#lib/extras.js";
 import { playHref, runtime } from "#lib/format.js";
 import { fadeIn } from "#lib/fade.js";
@@ -23,16 +23,7 @@ const thumb = $derived("video" in item ? item.video.thumb : undefined);
 >
 	<span class="card-frame grid aspect-video place-items-center">
 		{#if thumb}
-			<img
-				{@attach fadeIn}
-				src={artworkSrc(thumb, "still")}
-				srcset={artworkSrcset(thumb, "still")}
-				{sizes}
-				alt=""
-				loading="lazy"
-				decoding="async"
-				class="card-picture"
-			>
+			<Artwork id={thumb} shape="still" {sizes} class="card-picture" />
 		{:else if image}
 			<img
 				{@attach fadeIn}

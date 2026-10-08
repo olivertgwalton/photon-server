@@ -1,11 +1,11 @@
 <script lang="ts">
+import Artwork from "#lib/components/Artwork.svelte";
 import CheckIcon from "@lucide/svelte/icons/check";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import type { Snippet } from "svelte";
-import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
 import type { components } from "#lib/api/schema.js";
-import { episodeLabel, runtime } from "#lib/format.js";
+import { episodeLine, runtime } from "#lib/format.js";
 import TitleMenu from "./TitleMenu.svelte";
 
 type Card = components["schemas"]["Card"];
@@ -20,18 +20,7 @@ const name = $derived(card.show?.title ?? card.title);
 const line = $derived(
 	detail ??
 		[
-			card.kind === "episode"
-				? [
-						episodeLabel(
-							card.season_number,
-							card.episode_number,
-							card.episode_end,
-						),
-						card.title,
-					]
-						.filter(Boolean)
-						.join(" · ")
-				: card.year,
+			card.kind === "episode" ? episodeLine(card) : card.year,
 			card.duration_ms && runtime(card.duration_ms),
 		]
 			.filter(Boolean)
@@ -48,16 +37,13 @@ const line = $derived(
 			class="bg-raise group-focus-visible:ring-signal group-hover:ring-line-strong block aspect-[2/3] w-12 shrink-0 overflow-hidden rounded-md ring-2 ring-transparent"
 		>
 			{#if picture}
-				<img
-					src={artworkSrc(picture, "poster")}
-					srcset={artworkSrcset(picture, "poster")}
+				<Artwork
+					id={picture}
+					shape="poster"
 					sizes="3rem"
-					alt=""
-					loading="lazy"
-					decoding="async"
 					class="size-full object-cover"
 					style={blurStyle(card.blurhashes?.[picture])}
-				>
+				/>
 			{/if}
 		</span>
 		<span class="min-w-0">

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
+import Artwork from "#lib/components/Artwork.svelte";
 import { blurStyle } from "#lib/blurhash.js";
 import Prose from "#lib/components/Prose.svelte";
 import Rail from "#lib/components/Rail.svelte";
@@ -28,14 +28,14 @@ const life = $derived(
 <article class="grid gap-10">
 	<header class="flex flex-col gap-6 sm:flex-row sm:gap-8">
 		{#if p.photo}
-			<img
-				src={artworkSrc(p.photo, "poster")}
-				srcset={artworkSrcset(p.photo, "poster")}
+			<Artwork
+				id={p.photo}
+				shape="poster"
+				loading="eager"
 				sizes="200px"
-				alt=""
 				class="aspect-[2/3] w-40 shrink-0 self-start rounded-xl object-cover shadow-2xl sm:w-50"
 				style={blurStyle(p.blurhashes?.[p.photo])}
-			>
+			/>
 		{/if}
 		<div class="grid content-start gap-3">
 			<h1 class="title">{p.name}</h1>
