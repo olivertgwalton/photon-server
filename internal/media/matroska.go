@@ -39,27 +39,54 @@ const (
 // the SeekHead, wherever they are, or before the first Cluster. Every muxer writes a cue for each
 // video keyframe, at the block's own timestamp. Only the elements the index needs are read.
 func matroskaKeyframes(r *io.SectionReader) ([]int64, error) {
-	size := r.Size()
-	_, n, length, err := ebmlElement(r, 0)
+	start, end, err := matroskaSegment(r)
 	if err != nil {
 		return nil, err
 	}
+	found, err := matroskaElements(r, start, end)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range []uint32{idInfo, idTracks, idCues} {
+		if _, ok := found[id]; !ok {
+			return nil, fmt.Errorf("%w: no element %x before the first Cluster or in the SeekHead", ErrNoIndex, id)
+		}
+	}
+	scale, video, err := matroskaTrack(r, found[idInfo], found[idTracks])
+	if err != nil {
+		return nil, err
+	}
+	return matroskaCues(r, found[idCues], scale, video)
+}
+
+// matroskaSegment finds where the Segment's body starts and ends, past the EBML header.
+func matroskaSegment(r *io.SectionReader) (start, end int64, err error) {
+	_, n, length, err := ebmlElement(r, 0)
+	if err != nil {
+		return 0, 0, err
+	}
 	if length == unknownSize {
-		return nil, fmt.Errorf("%w: an EBML header of unknown size", ErrNoIndex)
+		return 0, 0, fmt.Errorf("%w: an EBML header of unknown size", ErrNoIndex)
 	}
 	segment := int64(n) + length
 	id, n, length, err := ebmlElement(r, segment)
 	if err != nil {
-		return nil, err
+		return 0, 0, err
 	}
 	if id != idSegment {
-		return nil, fmt.Errorf("%w: no Segment", ErrNoIndex)
+		return 0, 0, fmt.Errorf("%w: no Segment", ErrNoIndex)
 	}
-	start := segment + int64(n)
-	end := size
+	start = segment + int64(n)
+	end = r.Size()
 	if length != unknownSize {
-		end = min(size, start+length)
+		end = min(end, start+length)
 	}
+	return start, end, nil
+}
+
+// matroskaElements finds where each top-level element is: those before the first Cluster, and
+// those the SeekHeads point to.
+func matroskaElements(r *io.SectionReader, start, end int64) (map[uint32]int64, error) {
 	found := map[uint32]int64{}
 	seen := map[int64]bool{}
 	var seekHead func(at int64) error
@@ -125,21 +152,17 @@ func matroskaKeyframes(r *io.SectionReader) ([]int64, error) {
 		}
 		at += int64(n) + length
 	}
-	for _, id := range []uint32{idInfo, idTracks, idCues} {
-		if _, ok := found[id]; !ok {
-			return nil, fmt.Errorf("%w: no element %x before the first Cluster or in the SeekHead", ErrNoIndex, id)
-		}
-	}
-	scale, video, err := matroskaTrack(r, found[idInfo], found[idTracks])
-	if err != nil {
-		return nil, err
-	}
-	cues, err := ebmlBody(r, found[idCues])
+	return found, nil
+}
+
+// matroskaCues reads the times, in milliseconds, of the Cues' points for the video track.
+func matroskaCues(r *io.SectionReader, cues int64, scale, video uint64) ([]int64, error) {
+	body, err := ebmlBody(r, cues)
 	if err != nil {
 		return nil, err
 	}
 	var pts []int64
-	err = ebmlChildren(cues, func(id uint32, b []byte) error {
+	err = ebmlChildren(body, func(id uint32, b []byte) error {
 		if id != idCuePoint {
 			return nil
 		}
