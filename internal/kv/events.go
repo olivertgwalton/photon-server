@@ -26,7 +26,7 @@ func (k *KV) ReceiveEvents(ctx context.Context, fn func(message string)) error {
 
 // SaveScan keeps how far a library's scan has got, for ttl unless told again.
 func (k *KV) SaveScan(ctx context.Context, p domain.ScanProgress, ttl time.Duration) error {
-	return k.keep(ctx, scans, p.Library, p, ttl)
+	return keep(ctx, k, scans, p.Library, p, ttl)
 }
 
 func (k *KV) EndScan(ctx context.Context, lib uuid.UUID) error {

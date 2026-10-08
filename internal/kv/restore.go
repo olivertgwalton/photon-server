@@ -50,9 +50,7 @@ func (k *KV) KeepRestore(ctx context.Context, ttl time.Duration) error {
 
 // Restoring answers the restore under way, or false for none.
 func (k *KV) Restoring(ctx context.Context) (domain.Restore, bool, error) {
-	var r domain.Restore
-	ok, err := k.read(ctx, restoreKey, &r)
-	return r, ok, err
+	return read[domain.Restore](ctx, k, restoreKey)
 }
 
 func (k *KV) EndRestore(ctx context.Context) error {
@@ -70,18 +68,17 @@ func (k *KV) SaveRestoreOutcome(ctx context.Context, o domain.RestoreOutcome) er
 // LastRestore answers how the last restore ended, or false for none since the server's keys
 // were last cleared.
 func (k *KV) LastRestore(ctx context.Context) (domain.RestoreOutcome, bool, error) {
-	var o domain.RestoreOutcome
-	ok, err := k.read(ctx, restoredKey, &o)
-	return o, ok, err
+	return read[domain.RestoreOutcome](ctx, k, restoredKey)
 }
 
-func (k *KV) read(ctx context.Context, name string, v any) (bool, error) {
+func read[T any](ctx context.Context, k *KV, name string) (T, bool, error) {
+	var v T
 	b, err := k.client.Do(ctx, k.client.B().Get().Key(k.key(name)).Build()).AsBytes()
 	if valkey.IsValkeyNil(err) {
-		return false, nil
+		return v, false, nil
 	}
 	if err != nil {
-		return false, err
+		return v, false, err
 	}
-	return true, json.Unmarshal(b, v)
+	return v, true, json.Unmarshal(b, &v)
 }

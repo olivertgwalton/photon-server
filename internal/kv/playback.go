@@ -22,7 +22,7 @@ const (
 )
 
 // keep writes v as id's record in set, lapsing after ttl unless written again.
-func (k *KV) keep(ctx context.Context, set string, id uuid.UUID, v any, ttl time.Duration) error {
+func keep[T any](ctx context.Context, k *KV, set string, id uuid.UUID, v T, ttl time.Duration) error {
 	record, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -31,16 +31,17 @@ func (k *KV) keep(ctx context.Context, set string, id uuid.UUID, v any, ttl time
 		FieldValue().FieldValue(id.String(), string(record)).Build()).Error()
 }
 
-// kept reads id's record in set into v, answering false for none.
-func (k *KV) kept(ctx context.Context, set string, id uuid.UUID, v any) (bool, error) {
+// kept reads id's record in set, answering false for none.
+func kept[T any](ctx context.Context, k *KV, set string, id uuid.UUID) (T, bool, error) {
+	var v T
 	record, err := k.client.Do(ctx, k.client.B().Hget().Key(k.key(set)).Field(id.String()).Build()).AsBytes()
 	if valkey.IsValkeyNil(err) {
-		return false, nil
+		return v, false, nil
 	}
 	if err != nil {
-		return false, err
+		return v, false, err
 	}
-	return true, json.Unmarshal(record, v)
+	return v, true, json.Unmarshal(record, &v)
 }
 
 // forget deletes id's record in set, answering whether it was there: of two nodes forgetting one
@@ -79,14 +80,12 @@ func (k *KV) ClaimPlayback(ctx context.Context, p domain.Playback, ttl time.Dura
 
 // SavePlayback writes a playback session, which lapses after ttl unless written again.
 func (k *KV) SavePlayback(ctx context.Context, p domain.Playback, ttl time.Duration) error {
-	return k.keep(ctx, playbacks, p.ID, p, ttl)
+	return keep(ctx, k, playbacks, p.ID, p, ttl)
 }
 
 // Playback answers a playback session, or false for one that has ended or lapsed.
 func (k *KV) Playback(ctx context.Context, id uuid.UUID) (domain.Playback, bool, error) {
-	var p domain.Playback
-	ok, err := k.kept(ctx, playbacks, id, &p)
-	return p, ok, err
+	return kept[domain.Playback](ctx, k, playbacks, id)
 }
 
 // EndPlayback forgets a playback session, answering false where it had already ended or lapsed.
@@ -102,13 +101,12 @@ func (k *KV) Playbacks(ctx context.Context) ([]domain.Playback, error) {
 // SetNode tells the others of a server node, for ttl unless told again, as seen now.
 func (k *KV) SetNode(ctx context.Context, n domain.Node, ttl time.Duration) error {
 	n.Seen = time.Now()
-	return k.keep(ctx, nodes, n.ID, n, ttl)
+	return keep(ctx, k, nodes, n.ID, n, ttl)
 }
 
 // NodeAddress answers where a node answers its peers, or false for one that has gone quiet.
 func (k *KV) NodeAddress(ctx context.Context, id uuid.UUID) (string, bool, error) {
-	var n domain.Node
-	ok, err := k.kept(ctx, nodes, id, &n)
+	n, ok, err := kept[domain.Node](ctx, k, nodes, id)
 	return n.Address, ok, err
 }
 
