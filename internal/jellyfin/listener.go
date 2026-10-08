@@ -118,11 +118,15 @@ func (l *Listener) serve(ctx context.Context, port int) (*served, error) {
 	if err != nil {
 		return nil, fmt.Errorf("port %d: %w", port, err)
 	}
+	stopping := make(chan struct{})
+	base := context.WithValue(context.WithoutCancel(ctx), stoppingKey{}, (<-chan struct{})(stopping))
 	s := &served{port: port, done: make(chan struct{}), srv: &http.Server{
 		Handler: l.handler, TLSConfig: l.tlsConfig,
 		ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute,
-		ErrorLog: slog.NewLogLogger(l.log.Handler(), slog.LevelWarn),
+		ErrorLog:    slog.NewLogLogger(l.log.Handler(), slog.LevelWarn),
+		BaseContext: func(net.Listener) context.Context { return base },
 	}}
+	s.srv.RegisterOnShutdown(func() { close(stopping) })
 	go func() {
 		defer close(s.done)
 		if err := s.srv.Serve(l.secure(ln)); !errors.Is(err, http.ErrServerClosed) {
