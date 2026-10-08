@@ -8,12 +8,14 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
+// The question is answered while discovery is on, and not once an admin turns it off.
 func TestServeAnswersTheQuestion(t *testing.T) {
 	server, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
@@ -22,8 +24,10 @@ func TestServeAnswersTheQuestion(t *testing.T) {
 	info := domain.Info{ID: "0199d1b2-0000-7000-8000-000000000001", Name: "Lounge", Version: "1.2.3"}
 	done := make(chan error)
 	ctx, stop := context.WithCancel(t.Context())
+	var on atomic.Bool
+	on.Store(true)
 	go func() {
-		done <- Serve(ctx, server, info, func() string { return "https" }, slog.New(slog.DiscardHandler))
+		done <- Serve(ctx, server, info, on.Load, func() string { return "https" }, slog.New(slog.DiscardHandler))
 	}()
 
 	client, err := net.ListenPacket("udp", "127.0.0.1:0")
@@ -60,6 +64,10 @@ func TestServeAnswersTheQuestion(t *testing.T) {
 	want := "https://127.0.0.1:" + strconv.Itoa(port)
 	if a.ID != info.ID || a.Name != info.Name || a.Version != info.Version || a.Address != want {
 		t.Errorf("answer = %s, want %+v at %s", got, info, want)
+	}
+	on.Store(false)
+	if got, err := ask("WHO IS PHOTONSERVER?"); !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Errorf("answered with discovery off: %q, %v", got, err)
 	}
 
 	stop()

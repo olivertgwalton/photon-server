@@ -126,7 +126,7 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.DeviceProfile != nil && len(out.MediaSources) > 0 {
-		remote, err := playback.RemoteLimit(r.Context(), a.svc.Network, a.svc.Proxies.Client(r))
+		remote, err := playback.RemoteLimit(r.Context(), a.svc.Network, a.svc.Reach.Client(r))
 		if err != nil {
 			a.internal(w, r, err)
 			return
@@ -454,7 +454,7 @@ func (a *API) startDirect(r *http.Request, id uuid.UUID, rep report) error {
 	if sound != nil {
 		d.Audio = &domain.AudioPlan{Stream: sound.Index}
 	}
-	p, err := a.svc.Playbacks.Start(r.Context(), id, domain.PlayDirect, playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: sub}), a.svc.Placer.Self().ID)
+	p, err := a.svc.Playbacks.Start(r.Context(), id, domain.PlayDirect, playback.Card(s, a.svc.Reach.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: sub}), a.svc.Placer.Self().ID)
 	if err != nil {
 		return err
 	}

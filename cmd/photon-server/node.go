@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -32,10 +31,10 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/nodes"
-	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
 	"github.com/olivertgwalton/photon-server/internal/provider"
+	"github.com/olivertgwalton/photon-server/internal/reach"
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/secure"
 	"github.com/olivertgwalton/photon-server/internal/storage"
@@ -82,7 +81,7 @@ type node struct {
 	secured   *secure.Server
 	jellyfin  *jellyfin.Listener
 	finished  *jobs.Finished
-	discovery domain.Discovery
+	reach     *reach.Reach
 	srv       *http.Server
 }
 
@@ -175,18 +174,17 @@ func (n *node) wire(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	trusted, err := peer.Parse(os.Getenv("PHOTON_TRUSTED_PROXIES"))
-	if err != nil {
+	if n.reach, err = reach.New(ctx, st, n.hub.Subscribe, logger); err != nil {
 		return err
 	}
 	p := playing{
 		files: files, owners: playback.NewRouter(n.cache, n.id), signer: playback.NewSigner(signingKey), nodeKey: nodeKey,
 		placer: playback.NewPlacer(n.cache, n.self.Node, playback.NewRemuxes(files, n.remuxer), nodeKey),
-		sent:   playback.NewSent(), trusted: trusted, plugins: plugins, fetcher: fetcher,
+		sent:   playback.NewSent(), plugins: plugins, fetcher: fetcher,
 	}
 	n.secured = secure.New(st, n.hub.Subscribe, logger)
 	n.jellyfin, err = jellyfin.NewListener(st, n.hub.Subscribe, jellyfin.New(logger, n.info, jellyfin.Services{
-		Auth: n.auth, Limits: n.cache, Raise: n.hub.Raise, Proxies: trusted, Catalogue: st, Subscribe: n.hub.Subscribe, Audience: st, Displays: st, Preferences: st, Playlists: st,
+		Auth: n.auth, Limits: n.cache, Raise: n.hub.Raise, Reach: n.reach, Catalogue: st, Subscribe: n.hub.Subscribe, Audience: st, Displays: st, Preferences: st, Playlists: st,
 		Pictures: n.pictures, Playing: files, Playbacks: n.sessions, Watching: st, Themes: st, Previews: st, PreviewFiles: n.previews,
 		HLS: n.remuxer, Placer: p.placer, Owners: p.owners, Signer: p.signer,
 		Encoding: playback.Encoding{HEVC: n.hw.HEVC, Libass: n.tools.Libass}, Network: st, Sent: p.sent,
@@ -195,9 +193,6 @@ func (n *node) wire(ctx context.Context) error {
 		return err
 	}
 	n.finished = jobs.NewFinished()
-	if n.discovery, err = discoveryMode(); err != nil {
-		return err
-	}
 	n.srv, err = n.httpServer(p)
 	return err
 }
@@ -210,30 +205,25 @@ type playing struct {
 	nodeKey nodecall.Key
 	placer  *playback.Placer
 	sent    *playback.Sent
-	trusted peer.Proxies
 	plugins *plugin.Plugins
 	fetcher subtitles.Fetcher
 }
 
 // httpServer is the server of photon's own API and web app.
 func (n *node) httpServer(p playing) (*http.Server, error) {
-	public, err := httpapi.ParsePublicURL(os.Getenv("PHOTON_PUBLIC_URL"))
-	if err != nil {
-		return nil, err
-	}
 	web, err := webApp(n.stores.Origin)
 	if err != nil {
 		return nil, err
 	}
 	setup := httpapi.Setup{
-		Started: n.started, Node: n.id, Listen: n.listen, Tools: n.tools, Encoder: n.hw, Discovery: n.discovery,
-		MetadataLanguage: n.lang, CacheDir: n.cacheRoot, BackupDir: n.dumper.Dir, PublicURL: public,
+		Started: n.started, Node: n.id, Listen: n.listen, Tools: n.tools, Encoder: n.hw,
+		MetadataLanguage: n.lang, CacheDir: n.cacheRoot, BackupDir: n.dumper.Dir,
 	}
 	st, cache := n.st, n.cache
 	return &http.Server{
 		Addr: n.listen, TLSConfig: n.secured.TLSConfig(),
 		Handler: httpapi.New(n.logger, n.info, httpapi.Services{
-			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, TrustedProxies: p.trusted, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Postgres: st, Valkey: cache, Web: web,
 			Metrics: metrics(version, n.self, n.remuxer, n.sessions, p.placer, p.sent, n.finished, cluster{lead: n.scheduler, st: st, nodes: cache, self: p.placer}),
 			Sent:    p.sent,
 		}),
@@ -316,11 +306,8 @@ func (n *node) serve(ctx context.Context) error {
 			logger.WarnContext(ctx, "libraries are scanned on schedule only", slog.Any("err", err))
 		}
 	})
-	switch n.discovery {
-	case domain.DiscoveryBroadcast:
-		wg.Go(func() { answerDiscovery(background, n.srv.Addr, n.secured.Scheme, n.info, logger) })
-	case domain.DiscoveryOff:
-	}
+	wg.Go(func() { n.reach.Run(background) })
+	wg.Go(func() { answerDiscovery(background, n.srv.Addr, n.reach, n.secured.Scheme, n.info, logger) })
 	wg.Go(func() { n.secured.Run(background) })
 	wg.Go(func() {
 		n.stores.Run(background, storage.Cluster{Node: n.id, Subscribe: n.hub.Subscribe, Raise: n.hub.Raise, Nodes: nodeIDs(n.cache)})
@@ -341,13 +328,4 @@ func (n *node) serve(ctx context.Context) error {
 		return stopped
 	}
 	return err
-}
-
-// discoveryMode is how clients find the server, PHOTON_DISCOVERY: by broadcast unless it is off.
-func discoveryMode() (domain.Discovery, error) {
-	mode, err := domain.Parse("discovery", cmp.Or(os.Getenv("PHOTON_DISCOVERY"), string(domain.DiscoveryBroadcast)), domain.Discoveries())
-	if err != nil {
-		return "", fmt.Errorf("PHOTON_DISCOVERY: %w", err)
-	}
-	return mode, nil
 }

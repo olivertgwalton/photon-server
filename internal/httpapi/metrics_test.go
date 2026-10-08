@@ -26,7 +26,7 @@ import (
 // local address through a proxy not trusted, as though there were none.
 func TestMetricsAreAnsweredOnlyOnLocalNetworks(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Network: fakeNetwork{}, TrustedProxies: []netip.Prefix{netip.MustParsePrefix("10.0.0.2/32")},
+		Network: fakeNetwork{}, Reach: reaching(t, domain.Network{TrustedProxies: []netip.Prefix{netip.MustParsePrefix("10.0.0.2/32")}}),
 		Metrics: prometheus.NewRegistry(),
 	})
 	for _, tc := range []struct {

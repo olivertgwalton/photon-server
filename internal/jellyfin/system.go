@@ -19,7 +19,7 @@ type publicInfo struct {
 
 func (a *API) public(r *http.Request) publicInfo {
 	scheme := "http"
-	if a.svc.Proxies.HTTPS(r) {
+	if a.svc.Reach.HTTPS(r) {
 		scheme = "https"
 	}
 	return publicInfo{

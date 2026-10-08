@@ -112,7 +112,7 @@ func (w Words) Event(e domain.Event, names Names) string {
 	case domain.EventMaintenanceChanged:
 		return "The maintenance window was changed"
 	case domain.EventNetworkChanged:
-		return "Secure connections were changed"
+		return "How clients reach the server was changed"
 	case domain.EventStorageChanged:
 		return "Where artwork and previews are kept was changed"
 	case domain.EventNodesChanged:

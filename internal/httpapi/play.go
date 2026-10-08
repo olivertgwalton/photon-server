@@ -169,7 +169,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		audio, subtitles := copyTracks(c)
 		req.AudioStream = playback.DefaultTracks(audio, subtitles, prefs, last).Audio
 	}
-	limit, err := playback.RemoteLimit(r.Context(), a.svc.Network, a.svc.TrustedProxies.Client(r))
+	limit, err := playback.RemoteLimit(r.Context(), a.svc.Network, a.svc.Reach.Client(r))
 	if a.answered(w, r, err) {
 		return
 	}
@@ -336,7 +336,7 @@ func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayM
 
 // playbackCard is what the dashboard shows of a playback the request starts.
 func (a *API) playbackCard(r *http.Request, node domain.Node, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, tracks domain.ChosenTracks) domain.PlaybackCard {
-	card := playback.Card(auth.SessionOf(r.Context()), a.svc.TrustedProxies.Client(r).String(), t, c, d, tracks)
+	card := playback.Card(auth.SessionOf(r.Context()), a.svc.Reach.Client(r).String(), t, c, d, tracks)
 	if v := d.Video; v != nil && v.Encode != nil {
 		card.Acceleration = hls.EncodedOn(node.Encoder.Acceleration, *v)
 	}

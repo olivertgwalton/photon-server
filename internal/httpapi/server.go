@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"runtime"
 	"time"
 	"uuid"
@@ -22,12 +21,9 @@ type Setup struct {
 	Listen           string
 	Tools            media.Tools
 	Encoder          hls.Hardware
-	Discovery        domain.Discovery
 	MetadataLanguage string
 	CacheDir         string
 	BackupDir        string
-	// PublicURL is where readers reach the web app, where it is set.
-	PublicURL *url.URL
 }
 
 type versioned interface {
@@ -87,10 +83,7 @@ type serverJSON struct {
 	Role             domain.NodeRole    `json:"role"`
 	TranscodeLimit   int                `json:"transcode_limit,omitzero"`
 	LimitSource      domain.LimitSource `json:"transcode_limit_source"`
-	Discovery        domain.Discovery   `json:"discovery"`
 	Listen           string             `json:"listen"`
-	PublicURL        string             `json:"public_url,omitzero"`
-	TrustedProxies   []string           `json:"trusted_proxies"`
 	Folders          foldersJSON        `json:"folders"`
 	MetadataLanguage string             `json:"metadata_language"`
 	Postgres         backendJSON        `json:"postgres"`
@@ -108,18 +101,12 @@ func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
 		FFprobe:     toolJSON{s.Tools.FFprobe.Path, s.Tools.FFprobe.Version},
 		YTDLP:       toolJSON{s.Tools.YTDLP.Path, s.Tools.YTDLP.Version},
 		Chromaprint: s.Tools.Chromaprint, Libass: s.Tools.Libass, Encoder: encoderJSON{s.Encoder.Accel, s.Encoder.Device, s.Encoder.HEVC},
-		Transcodes: active, TranscodeLimit: limit, Discovery: s.Discovery, Listen: s.Listen, TrustedProxies: []string{},
+		Transcodes: active, TranscodeLimit: limit, Listen: s.Listen,
 		Folders:          foldersJSON{folder(s.CacheDir), folder(s.BackupDir)},
 		MetadataLanguage: s.MetadataLanguage,
 	}
 	self := a.svc.Placer.Self()
 	out.Role, out.LimitSource = self.Role, self.LimitSource
-	if s.PublicURL != nil {
-		out.PublicURL = s.PublicURL.String()
-	}
-	for _, p := range a.svc.TrustedProxies {
-		out.TrustedProxies = append(out.TrustedProxies, p.String())
-	}
 	out.Postgres = a.backend(r, "postgres", a.svc.Postgres)
 	out.Valkey = a.backend(r, "valkey", a.svc.Valkey)
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)

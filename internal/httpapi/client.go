@@ -12,17 +12,17 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/peer"
 )
 
-// requireHTTPS sends a plain request to its HTTPS address at PHOTON_PUBLIC_URL while secure
+// requireHTTPS sends a plain request to its HTTPS address at the public URL while secure
 // connections are required, as Plex's are, but one from this machine, which may be a health check.
 // A trusted proxy's forwarded HTTPS counts as HTTPS. Where the server has no HTTPS address of its
 // own the request is refused: the Host it was sent to is the client's word, not the server's.
 func (a *API) requireHTTPS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if a.svc.Secure.Mode() != domain.SecureRequired || a.svc.TrustedProxies.HTTPS(r) || peer.Direct(r).IsLoopback() {
+		if a.svc.Secure.Mode() != domain.SecureRequired || a.svc.Reach.HTTPS(r) || peer.Direct(r).IsLoopback() {
 			next.ServeHTTP(w, r)
 			return
 		}
-		public := a.svc.Setup.PublicURL
+		public := a.svc.Reach.PublicURL()
 		if public == nil || public.Scheme != "https" {
 			writeProblem(w, a.logger, codeForbidden, "this server takes secure connections only: reach it over https")
 			return
@@ -52,27 +52,27 @@ func onPublicURL(public, u *url.URL) string {
 	return target.String()
 }
 
-// ParsePublicURL reads PHOTON_PUBLIC_URL, the http or https address readers reach the server's
-// web app at; nil where it is not set.
-func ParsePublicURL(s string) (*url.URL, error) {
+// parsePublicURL reads a public URL, the http or https address readers reach the server's web app
+// at; nil where it is not set.
+func parsePublicURL(s string) (*url.URL, error) {
 	if s == "" {
 		return nil, nil
 	}
 	u, err := url.Parse(s)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return nil, errors.New("PHOTON_PUBLIC_URL is not an http or https address with a host, and no credentials, query or fragment")
+		return nil, errors.New("public_url is an http or https address with a host, and no credentials, query or fragment")
 	}
 	return u, nil
 }
 
-// publicURL is where a reader reaches the web app: PHOTON_PUBLIC_URL, else the address this
-// request came to, over HTTPS where it came that way.
+// publicURL is where a reader reaches the web app: the public URL, else the address this request
+// came to, over HTTPS where it came that way.
 func (a *API) publicURL(r *http.Request) *url.URL {
-	if u := a.svc.Setup.PublicURL; u != nil {
+	if u := a.svc.Reach.PublicURL(); u != nil {
 		return u
 	}
 	scheme := "http"
-	if a.svc.TrustedProxies.HTTPS(r) {
+	if a.svc.Reach.HTTPS(r) {
 		scheme = "https"
 	}
 	return &url.URL{Scheme: scheme, Host: r.Host}

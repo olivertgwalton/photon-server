@@ -13,16 +13,6 @@ import (
 // Proxies are the peers whose X-Forwarded-For names the client. None by default.
 type Proxies []netip.Prefix
 
-// Parse reads PHOTON_TRUSTED_PROXIES, a comma-separated list of addresses and prefixes:
-// "10.0.0.0/8,127.0.0.1".
-func Parse(list string) (Proxies, error) {
-	out, err := Prefixes(strings.Split(list, ","))
-	if err != nil {
-		return nil, fmt.Errorf("PHOTON_TRUSTED_PROXIES: %w", err)
-	}
-	return out, nil
-}
-
 // Prefixes reads networks, each a prefix or a single address, passing over blanks.
 func Prefixes(items []string) ([]netip.Prefix, error) {
 	var out []netip.Prefix
@@ -72,6 +62,13 @@ func (p Proxies) HTTPS(r *http.Request) bool {
 		return true
 	}
 	return p.trusts(Direct(r)) && r.Header.Get("X-Forwarded-Proto") == "https"
+}
+
+// Untrusted is whether a request names its client through a proxy that is not trusted, as a
+// reverse proxy in front of the server does before an admin trusts it.
+func (p Proxies) Untrusted(r *http.Request) bool {
+	forwarded := r.Header.Get("X-Forwarded-For") != "" || r.Header.Get("Forwarded") != "" || r.Header.Get("X-Real-Ip") != ""
+	return forwarded && !p.trusts(Direct(r))
 }
 
 // Local is whether an address is on this machine or one of its private networks, as Jellyfin's

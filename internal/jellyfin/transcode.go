@@ -197,7 +197,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 		Profile: s.Profile.ID, Item: item, Version: c.Version, Video: t.Video, Audio: t.Audio, Segments: t.Segments, StartMS: t.StartMS,
 	}
 	for _, node := range candidates {
-		card := playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: t.Subtitle})
+		card := playback.Card(s, a.svc.Reach.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: t.Subtitle})
 		card.Acceleration = hls.EncodedOn(node.Encoder.Acceleration, t.Video)
 		p, err := a.svc.Playbacks.Start(r.Context(), session, t.Method, card, node.ID)
 		if errors.Is(err, playback.ErrStarted) {
