@@ -51,10 +51,8 @@ async function add(event: SubmitEvent) {
 				serverCountry={data.server.certification_country}
 			/>
 			<div class="flex flex-wrap gap-2">
-				<Button type="submit" variant="outline" disabled={adding}>
-					Add and scan
-				</Button>
-				<Button href="/setup/remote">
+				<Button type="submit" disabled={adding}>Add and scan</Button>
+				<Button href="/setup/remote" variant="outline">
 					{data.libraries.length ? "Next" : "Skip for now"}
 				</Button>
 			</div>
