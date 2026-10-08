@@ -136,11 +136,7 @@ func Resolution(width int) string {
 	if width <= 0 {
 		return ""
 	}
-	return resolutions[domain.ResolutionOf(width)]
-}
-
-var resolutions = map[domain.Resolution]string{
-	domain.ResolutionSD: "SD", domain.ResolutionHD: "720p", domain.ResolutionFHD: "1080p", domain.ResolutionUHD: "4K",
+	return names[domain.ResolutionOf(width)]
 }
 
 // codecName is a codec as people say it: Dolby Digital, not ac3; SRT, not subrip.
@@ -158,13 +154,12 @@ var codecs = map[string]string{
 	"dvb_subtitle": "DVB",
 }
 
-func rangeName(r domain.Range) string {
-	return ranges[r]
-}
-
 // SDR is said by saying nothing.
-var ranges = map[domain.Range]string{
-	domain.RangeHDR10: "HDR10", domain.RangeHDR10Plus: "HDR10+", domain.RangeHLG: "HLG", domain.RangeDV: "Dolby Vision",
+func rangeName(r domain.Range) string {
+	if r == domain.RangeSDR {
+		return ""
+	}
+	return names[r]
 }
 
 // channels is a sound's channels as a listing says them: Stereo, 5.1, else its layout or count.

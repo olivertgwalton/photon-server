@@ -12,15 +12,11 @@ import (
 )
 
 // Task is a scheduled task's name, and what it does in a sentence.
-func (w Words) Task(k domain.TaskKey) (name, does string) {
-	t, ok := tasks[k]
-	if !ok {
-		return string(k), ""
-	}
-	return t[0], t[1]
+func (w Words) Task(k domain.TaskKey) Described {
+	return cmp.Or(tasks[k], Described{Name: string(k)})
 }
 
-var tasks = map[domain.TaskKey][2]string{
+var tasks = map[domain.TaskKey]Described{
 	domain.TaskScanLibraries:      {"Scan libraries", "Reads every library's folders for what is new, changed or gone."},
 	domain.TaskSweepJobs:          {"Requeue stalled jobs", "Puts back the jobs a node stopped working on."},
 	domain.TaskBackupDatabase:     {"Back up the database", "Dumps the database for pg_restore, keeping the newest few."},
@@ -33,18 +29,6 @@ var tasks = map[domain.TaskKey][2]string{
 	domain.TaskSyncLists:          {"Sync list collections", "Reads each list collection's TMDB or MDBList list again and keeps the titles of it the library has."},
 	domain.TaskRefreshCollections: {"Refresh smart collections", "Finds what each smart collection's filters hold again, catching what was matched or edited since."},
 	domain.TaskFetchSubtitles:     {"Download missing subtitles", "Fetches subtitles in the languages libraries name for copies with none in them."},
-}
-
-// Job is a kind of job's name.
-func (w Words) Job(k domain.JobKind) string {
-	return cmp.Or(jobs[k], string(k))
-}
-
-var jobs = map[domain.JobKind]string{
-	domain.JobKeyframes: "Read keyframes", domain.JobKeyframeWalk: "Walk files for keyframes", domain.JobIdentify: "Identify",
-	domain.JobScanLibrary: "Scan a library", domain.JobMarkers: "Find intros and credits", domain.JobPreviews: "Make previews",
-	domain.JobConvert: "Convert for download", domain.JobDeliverWebhook: "Send a webhook", domain.JobTheme: "Fetch a theme tune",
-	domain.JobProbe: "Read media info", domain.JobImportHistory: "Import watch history",
 }
 
 // Names are the names of what an event refers to by id: its profile and its library.
@@ -86,8 +70,8 @@ func (w Words) Event(e domain.Event, names Names) string {
 	if p := d.Playback; p != nil {
 		played, by = playedTitle(p.Title), cmp.Or(p.Profile.Name, profile)
 	}
-	task, _ := w.Task(d.Task)
-	job := w.Job(d.JobKind)
+	task := w.Task(d.Task).Name
+	job := w.Name(d.JobKind)
 	switch e.Kind {
 	case domain.EventPlaybackStarted:
 		return by + " started " + played
