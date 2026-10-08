@@ -1,8 +1,14 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
+	"encoding/json"
+	"fmt"
+	"maps"
 	"net/http"
+	"slices"
+	"sync"
 	"time"
 	"uuid"
 
@@ -105,6 +111,61 @@ func (a *API) online(ctx context.Context) (map[uuid.UUID]domain.Node, error) {
 	self := a.svc.Placer.Self()
 	out[self.ID] = self
 	return out, nil
+}
+
+// nodeAnswer is what a node answered when asked, or why it did not.
+type nodeAnswer[T any] struct {
+	Node   domain.Node
+	Answer T
+	Err    error
+}
+
+// fromEveryNode asks every node running at once what path, a route only a node may call, answers,
+// this one by local, the others each within; the nodes come by name.
+func fromEveryNode[T any](ctx context.Context, a *API, path string, within time.Duration, local func() T) ([]nodeAnswer[T], error) {
+	online, err := a.online(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nodes := slices.SortedFunc(maps.Values(online), func(x, y domain.Node) int {
+		return cmp.Or(cmp.Compare(x.Name, y.Name), x.ID.Compare(y.ID))
+	})
+	self := a.svc.Placer.Self().ID
+	out := make([]nodeAnswer[T], len(nodes))
+	var wg sync.WaitGroup
+	for i, n := range nodes {
+		out[i].Node = n
+		wg.Go(func() {
+			if n.ID == self {
+				out[i].Answer = local()
+				return
+			}
+			out[i].Answer, out[i].Err = askNode[T](ctx, a, n, path, within)
+		})
+	}
+	wg.Wait()
+	return out, nil
+}
+
+// askNode asks n, another node, what path answers.
+func askNode[T any](ctx context.Context, a *API, n domain.Node, path string, within time.Duration) (T, error) {
+	ctx, cancel := context.WithTimeout(ctx, within)
+	defer cancel()
+	var answer T
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, n.Address+path, nil)
+	if err != nil {
+		return answer, err
+	}
+	a.svc.NodeKey.Sign(req, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return answer, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return answer, fmt.Errorf("%s answered %s", n.Name, resp.Status)
+	}
+	return answer, json.NewDecoder(resp.Body).Decode(&answer)
 }
 
 // adminNodes lists every node there is or has been, the first to start first, and how busy each

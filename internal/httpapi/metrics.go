@@ -1,15 +1,9 @@
 package httpapi
 
 import (
-	"cmp"
 	"context"
-	"encoding/json"
-	"fmt"
 	"log/slog"
-	"maps"
 	"net/http"
-	"slices"
-	"sync"
 	"time"
 	"uuid"
 
@@ -210,66 +204,28 @@ func (a *API) nodeMetrics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, a.gather(r.Context()))
 }
 
-// adminMetrics answers what the metrics of every node running say now, asking the others at once,
-// and what the nodes share, from the node holding the scheduler lease. A node that does not answer
-// is listed unreachable.
+// adminMetrics answers what the metrics of every node running say now, and what the nodes share,
+// from the node holding the scheduler lease. A node that does not answer is listed unreachable.
 func (a *API) adminMetrics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	online, err := a.online(ctx)
+	answers, err := fromEveryNode(ctx, a, metricsPath, gatherWithin, func() gatheredJSON { return a.gather(ctx) })
 	if a.answered(w, r, err) {
 		return
 	}
-	nodes := slices.SortedFunc(maps.Values(online), func(x, y domain.Node) int {
-		return cmp.Or(cmp.Compare(x.Name, y.Name), x.ID.Compare(y.ID))
-	})
-	self := a.svc.Placer.Self().ID
-	gathered := make([]gatheredJSON, len(nodes))
-	errs := make([]error, len(nodes))
-	var wg sync.WaitGroup
-	for i, n := range nodes {
-		wg.Go(func() {
-			if n.ID == self {
-				gathered[i] = a.gather(ctx)
-				return
-			}
-			gathered[i], errs[i] = a.askMetrics(ctx, n)
-		})
-	}
-	wg.Wait()
-	out := metricsJSON{Nodes: make([]nodeMetricsJSON, len(nodes))}
-	for i, n := range nodes {
+	out := metricsJSON{Nodes: make([]nodeMetricsJSON, len(answers))}
+	for i, ans := range answers {
+		n := ans.Node
 		out.Nodes[i] = nodeMetricsJSON{ID: n.ID, Name: n.Name, Role: n.Role, Availability: n.Availability, Reach: reachAnswered}
-		if errs[i] != nil {
-			out.Nodes[i].Reach, out.Nodes[i].Error = reachUnreachable, errs[i].Error()
+		if ans.Err != nil {
+			out.Nodes[i].Reach, out.Nodes[i].Error = reachUnreachable, ans.Err.Error()
 			continue
 		}
-		out.Nodes[i].Metrics = &gathered[i].Own
+		out.Nodes[i].Metrics = &answers[i].Answer.Own
 		// While the lease passes, two nodes may say what is shared, or neither.
-		if c := gathered[i].Cluster; c != nil && out.Cluster == nil {
+		if c := ans.Answer.Cluster; c != nil && out.Cluster == nil {
 			c.Node = n.ID
 			out.Cluster = c
 		}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
-}
-
-// askMetrics asks n, another node, what its metrics say.
-func (a *API) askMetrics(ctx context.Context, n domain.Node) (gatheredJSON, error) {
-	ctx, cancel := context.WithTimeout(ctx, gatherWithin)
-	defer cancel()
-	var g gatheredJSON
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, n.Address+metricsPath, nil)
-	if err != nil {
-		return g, err
-	}
-	a.svc.NodeKey.Sign(req, nil)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return g, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return g, fmt.Errorf("%s answered %s", n.Name, resp.Status)
-	}
-	return g, json.NewDecoder(resp.Body).Decode(&g)
 }
