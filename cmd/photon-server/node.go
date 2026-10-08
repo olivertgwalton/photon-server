@@ -323,7 +323,7 @@ func (n *node) serve(ctx context.Context) error {
 	wg.Go(func() { n.jellyfin.Run(background) })
 	logger.InfoContext(ctx, "serving", slog.String("addr", n.srv.Addr), slog.String("version", n.info.Version))
 	err := listenUntilDone(ctx, n.srv, n.secured.Listen, func() {
-		if _, ok := errors.AsType[*stoppedForRestore](context.Cause(ctx)); ok {
+		if errors.As(context.Cause(ctx), new(*stoppedForRestore)) {
 			endStreams(n.self, n.remuxer)
 			return
 		}
