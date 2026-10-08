@@ -23,7 +23,7 @@ type Node struct {
 	LimitSource                    LimitSource
 }
 
-// NodeRole is what a node does for the cluster, as PHOTON_ROLE says.
+// NodeRole is what a node does for the cluster, as an admin sets it.
 type NodeRole string
 
 const (
@@ -107,6 +107,9 @@ type NodeSettings struct {
 	// Availability is whether it takes new work, and Note why, for other admins, where it does not.
 	Availability NodeAvailability
 	Note         string
+	// Address is where the other nodes reach it, such as http://10.0.0.5:8640; none is a node
+	// handed no one else's requests and not listed.
+	Address string
 }
 
 // NodeRecord is a node as the server keeps it, whether it is up or not.
