@@ -53,13 +53,11 @@ type Network struct {
 	Discovery      Discovery
 }
 
-var ErrNoCertificate = errors.New("secure connections need a certificate and its key")
-
 func (n Network) Check() error {
 	switch n.Secure {
 	case SecureRequired, SecurePreferred:
 		if n.Certificate == "" || n.Key == "" {
-			return ErrNoCertificate
+			return errors.New("secure connections need a certificate and its key")
 		}
 	case SecureDisabled:
 	}
