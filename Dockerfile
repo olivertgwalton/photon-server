@@ -61,7 +61,8 @@ COPY deploy/ffmpeg-NOTICE /usr/share/licenses/jellyfin-ffmpeg/NOTICE
 COPY --from=build /out/photon-server /usr/local/bin/photon-server
 COPY --from=web /web/build /usr/local/share/photon-server/web
 COPY LICENSE /usr/share/licenses/photon-server/LICENSE
-ENV PHOTON_CACHE_DIR=/var/cache/photon-server PHOTON_BACKUP_DIR=/var/lib/photon-server/backups
+# The server keeps its cache in the user's cache folder and its dumps in its config folder.
+ENV XDG_CACHE_HOME=/var/cache XDG_CONFIG_HOME=/var/lib
 RUN install -d -o 10001 -g 10001 /var/cache/photon-server /var/lib/photon-server/backups
 USER 10001:10001
 EXPOSE 8640

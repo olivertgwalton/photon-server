@@ -4,10 +4,10 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"uuid"
@@ -28,26 +28,22 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/tvdb"
 )
 
-// restorer restores dumps with the Postgres tools the environment names.
+// restorer restores dumps with the Postgres tools on the PATH.
 func restorer(databaseURL, valkeyURL string, logger *slog.Logger) (backup.Restorer, error) {
-	pgRestore, err := media.Look(cmp.Or(os.Getenv("PHOTON_PG_RESTORE"), "pg_restore"))
+	pgRestore, err := media.Look("pg_restore")
 	if err != nil {
 		return backup.Restorer{}, err
 	}
-	psql, err := media.Look(cmp.Or(os.Getenv("PHOTON_PSQL"), "psql"))
+	psql, err := media.Look("psql")
 	if err != nil {
 		return backup.Restorer{}, err
 	}
 	return backup.Restorer{PGRestore: pgRestore, PSQL: psql, DatabaseURL: databaseURL, ValkeyURL: valkeyURL, Log: logger}, nil
 }
 
-// mediaTools finds the media tools the environment names.
+// mediaTools finds the media tools on the PATH.
 func mediaTools(ctx context.Context) (media.Tools, error) {
-	return media.FindTools(ctx, media.ToolNames{
-		FFmpeg:  cmp.Or(os.Getenv("PHOTON_FFMPEG"), "ffmpeg"),
-		FFprobe: cmp.Or(os.Getenv("PHOTON_FFPROBE"), "ffprobe"),
-		YTDLP:   cmp.Or(os.Getenv("PHOTON_YTDLP"), "yt-dlp"),
-	})
+	return media.FindTools(ctx, media.ToolNames{FFmpeg: "ffmpeg", FFprobe: "ffprobe", YTDLP: "yt-dlp"})
 }
 
 func logTools(ctx context.Context, logger *slog.Logger, tools media.Tools) {
@@ -81,80 +77,73 @@ func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *
 	)
 }
 
-// defaultWebDir is where the image puts the web app's build.
-const defaultWebDir = "/usr/local/share/photon-server/web"
-
-// webApp is the web app's build in PHOTON_WEB_DIR, served when PHOTON_WEB is serve, as it is by
-// default wherever there is a build; nil when the server answers the API alone. Its pages may draw
-// from where objectOrigin says clients read artwork and previews.
+// webApp is the web app's build, beside the binary as an install lays it out
+// (/usr/local/share/photon-server/web for /usr/local/bin/photon-server), served wherever there is
+// one; nil where there is none, and the server answers the API alone. Its pages may draw from
+// where objectOrigin says clients read artwork and previews.
 func webApp(objectOrigin func() string) (*httpapi.Web, error) {
-	build := os.DirFS(cmp.Or(os.Getenv("PHOTON_WEB_DIR"), defaultWebDir))
-	mode := os.Getenv("PHOTON_WEB")
-	if mode == "" {
-		mode = string(domain.WebOff)
-		if _, err := fs.Stat(build, "index.html"); err == nil {
-			mode = string(domain.WebServe)
-		}
-	}
-	web, err := domain.Parse("web", mode, domain.Webs())
+	exe, err := os.Executable()
 	if err != nil {
-		return nil, fmt.Errorf("PHOTON_WEB: %w", err)
+		return nil, err
 	}
-	switch web {
-	case domain.WebServe:
-		app, err := httpapi.NewWeb(build, objectOrigin)
-		if err != nil {
-			return nil, fmt.Errorf("PHOTON_WEB is serve but PHOTON_WEB_DIR has no build: %w", err)
-		}
-		return app, nil
-	case domain.WebOff:
+	build := os.DirFS(filepath.Join(filepath.Dir(exe), "..", "share", "photon-server", "web"))
+	if _, err := fs.Stat(build, "index.html"); errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
 	}
-	return nil, nil
+	return httpapi.NewWeb(build, objectOrigin)
 }
 
-// hardware is the device PHOTON_HWACCEL names to encode on (software when unset), on
-// PHOTON_HWACCEL_DEVICE: a render node for VAAPI and QSV, a CUDA index for NVENC. A device that
-// will not encode is reported and passed over for software, as playing slowly beats not playing.
-// HEVC is encoded unless PHOTON_HEVC_ENCODING is deny, or the device, or software for a subtitle
-// drawn in, will not encode it, which is reported and H.264 encoded alone.
+// encoders are what a node may encode video on, in the order it tries them: VideoToolbox on a
+// Mac, NVENC on an NVIDIA card, then QSV and VAAPI on each render node (QSV is faster on Intel;
+// only VAAPI drives AMD).
+func encoders() ([]hls.Hardware, error) {
+	var out []hls.Hardware
+	if runtime.GOOS == "darwin" {
+		out = append(out, hls.Hardware{Accel: domain.AccelVideoToolbox})
+	}
+	out = append(out, hls.Hardware{Accel: domain.AccelNVENC, Device: "0"})
+	renderNodes, err := filepath.Glob("/dev/dri/renderD*")
+	if err != nil {
+		return nil, err
+	}
+	for _, accel := range []domain.Acceleration{domain.AccelQSV, domain.AccelVAAPI} {
+		for _, device := range renderNodes {
+			out = append(out, hls.Hardware{Accel: accel, Device: device})
+		}
+	}
+	return out, nil
+}
+
+// hardware is the first of the encoders that encodes a test picture, as the node starts, or
+// software where none does. HEVC is encoded too where the device, and software for a subtitle
+// drawn in, encode it; otherwise H.264 alone, which is reported.
 func hardware(ctx context.Context, ffmpeg string, logger *slog.Logger) (hls.Hardware, error) {
-	accel, err := domain.Parse("acceleration", cmp.Or(os.Getenv("PHOTON_HWACCEL"), string(domain.AccelSoftware)), domain.Accelerations())
+	tried, err := encoders()
 	if err != nil {
-		return hls.Hardware{}, fmt.Errorf("PHOTON_HWACCEL: %w", err)
+		return hls.Hardware{}, err
 	}
-	hevc, err := domain.Parse("HEVC encoding", cmp.Or(os.Getenv("PHOTON_HEVC_ENCODING"), string(domain.HEVCAllow)), domain.HEVCEncodings())
-	if err != nil {
-		return hls.Hardware{}, fmt.Errorf("PHOTON_HEVC_ENCODING: %w", err)
+	hw := hls.Hardware{Accel: domain.AccelSoftware}
+	for _, e := range tried {
+		if err := e.Check(ctx, ffmpeg, domain.VideoH264); err != nil {
+			logger.DebugContext(ctx, "not encoding on", slog.String("acceleration", string(e.Accel)), slog.String("device", e.Device), slog.Any("err", err))
+			continue
+		}
+		hw = e
+		break
 	}
-	device := os.Getenv("PHOTON_HWACCEL_DEVICE")
-	switch accel {
-	case domain.AccelVAAPI, domain.AccelQSV:
-		device = cmp.Or(device, "/dev/dri/renderD128")
-	case domain.AccelNVENC:
-		device = cmp.Or(device, "0")
-	case domain.AccelSoftware, domain.AccelVideoToolbox:
-	}
-	hw := hls.Hardware{Accel: accel, Device: device}
-	if err := hw.Check(ctx, ffmpeg, domain.VideoH264); err != nil {
-		if accel == domain.AccelSoftware {
+	if hw.Accel == domain.AccelSoftware {
+		if err := hw.Check(ctx, ffmpeg, domain.VideoH264); err != nil {
 			logger.ErrorContext(ctx, "transcoding will fail: ffmpeg would not encode a test picture", slog.Any("err", err))
-		} else {
-			logger.WarnContext(ctx, "encoding in software", slog.Any("err", err))
-			hw = hls.Hardware{Accel: domain.AccelSoftware}
 		}
 	}
-	hw.HEVC = hevc
-	switch hevc {
-	case domain.HEVCAllow:
-		err := hw.Check(ctx, ffmpeg, domain.VideoHEVC)
-		if err == nil && hw.Accel != domain.AccelSoftware {
-			err = hls.Hardware{Accel: domain.AccelSoftware}.Check(ctx, ffmpeg, domain.VideoHEVC)
-		}
-		if err != nil {
-			logger.WarnContext(ctx, "encoding H.264 alone", slog.Any("err", err))
-			hw.HEVC = domain.HEVCDeny
-		}
-	case domain.HEVCDeny:
+	hw.HEVC = domain.HEVCAllow
+	err = hw.Check(ctx, ffmpeg, domain.VideoHEVC)
+	if err == nil && hw.Accel != domain.AccelSoftware {
+		err = hls.Hardware{Accel: domain.AccelSoftware}.Check(ctx, ffmpeg, domain.VideoHEVC)
+	}
+	if err != nil {
+		logger.WarnContext(ctx, "encoding H.264 alone", slog.Any("err", err))
+		hw.HEVC = domain.HEVCDeny
 	}
 	logger.InfoContext(ctx, "encoding video", slog.String("on", string(hw.Accel)), slog.String("device", hw.Device), slog.String("hevc", string(hw.HEVC)))
 	return hw, nil

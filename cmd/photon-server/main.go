@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -27,7 +26,8 @@ import (
 var version = "(devel)"
 
 const (
-	defaultListen = ":8640"
+	// listen is where every node answers: a container maps it to any port the host likes.
+	listen        = ":8640"
 	shutdownGrace = 10 * time.Second
 	// drainFor is the longest a node stopping plays its streams to their end: a film's length.
 	drainFor = 2 * time.Hour
@@ -159,7 +159,6 @@ func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL 
 		return err
 	}
 	logTools(ctx, logger, tools)
-	listen := cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen)
 	underway := func(ctx context.Context) (bool, error) { return restoreUnderway(ctx, databaseURL, valkeyURL) }
 	if err := awaitRestore(ctx, listen, underway, logger); err != nil {
 		return err
@@ -182,7 +181,7 @@ func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL 
 	if err != nil {
 		return err
 	}
-	cacheRoot := cmp.Or(os.Getenv("PHOTON_CACHE_DIR"), filepath.Join(cacheDir, "photon-server"))
+	cacheRoot := filepath.Join(cacheDir, "photon-server")
 	stores, err := storage.Open(ctx, st, cacheRoot, logger)
 	if err != nil {
 		return err

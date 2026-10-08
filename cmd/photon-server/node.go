@@ -128,7 +128,7 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	}
 	n.pictures = artwork.New(&n.stores.Artwork, n.st.SetBlurhash)
 	n.previews = analysis.NewPreviews(&n.stores.Previews)
-	pgDump, err := media.Look(cmp.Or(os.Getenv("PHOTON_PG_DUMP"), "pg_dump"))
+	pgDump, err := media.Look("pg_dump")
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	}
 	n.dumper = backup.Dumper{
 		PGDump: pgDump, URL: databaseURL,
-		Dir: cmp.Or(os.Getenv("PHOTON_BACKUP_DIR"), filepath.Join(configDir, "photon-server", "backups")),
+		Dir: filepath.Join(configDir, "photon-server", "backups"),
 	}
 	n.hub = events.New(n.st, n.cache, events.Server{ID: n.server, Name: n.info.Name}, n.logger)
 	n.restores = backup.Restores{Restorer: rest, Dir: n.dumper.Dir, Node: n.id, KV: n.cache, Raise: n.hub.Raise}

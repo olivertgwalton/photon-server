@@ -1,8 +1,6 @@
 # NVIDIA: docker compose -f compose.yml -f compose.nvidia.yml up
 services:
   server:
-    environment:
-      PHOTON_HWACCEL: nvenc
     deploy:
       resources:
         reservations:

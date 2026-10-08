@@ -271,7 +271,7 @@ const origin = $derived(bucket?.probe ? new URL(bucket.probe).origin : "");
 				<Field.Legend>Credentials</Field.Legend>
 				<Field.Description>
 					Leave both empty to sign with the server's own AWS credentials: its
-					environment, shared credentials file, or instance role.
+					shared credentials file or instance role.
 				</Field.Description>
 				<div class="grid gap-4 sm:grid-cols-2">
 					<Field.Field>
