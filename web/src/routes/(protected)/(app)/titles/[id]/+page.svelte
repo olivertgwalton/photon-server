@@ -15,9 +15,8 @@ import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
 import { goto } from "$app/navigation";
 import { findSubtitles, pickPlaylist, setMark } from "#lib/actions.svelte.js";
-import { castOf } from "#lib/credits.js";
-import { type Extra, extrasOf } from "#lib/extras.js";
 import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
+import type { Extra } from "#lib/extras.js";
 import { blurStyle } from "#lib/blurhash.js";
 import { fadeIn } from "#lib/fade.js";
 import CardGrid from "#lib/components/CardGrid.svelte";
@@ -46,7 +45,7 @@ import {
 let { data } = $props();
 
 const t = $derived(data.title);
-const art = $derived((kind: string) => t.artwork?.[kind]?.[0]);
+const art = (kind: string) => t.artwork?.[kind]?.[0];
 const playable = $derived(
 	t.kind === "movie" || t.kind === "episode" || t.kind === "extra",
 );
@@ -70,13 +69,9 @@ const watched = $derived(!!t.state?.watched_at);
 const favourite = $derived(!!t.state?.favourite_at);
 const watchlisted = $derived(!!t.state?.watchlisted_at);
 
-// Drawn in the browser only, where the clock is the reader's.
-let now = $state<Date>();
-$effect(() => {
-	now = new Date();
-});
+const now = new Date();
 const endsAt = $derived(
-	now && duration && playable
+	duration && playable
 		? new Date(now.getTime() + duration - position).toLocaleTimeString(
 				undefined,
 				{ hour: "numeric", minute: "2-digit" },
@@ -96,8 +91,7 @@ const facts = $derived(
 	].filter(Boolean),
 );
 
-// One card per person, whatever they did on it.
-const credits = $derived(castOf(t.credits ?? []));
+const credits = $derived(data.cast);
 const directors = $derived(
 	credits.filter((c) =>
 		c.kinds.some((k) => k === "director" || k === "creator"),
@@ -106,13 +100,6 @@ const directors = $derived(
 const writers = $derived(credits.filter((c) => c.kinds.includes("writer")));
 
 const trailer = $derived(t.extras?.find((e) => e.extra_kind === "trailer"));
-const extras: Extra[] = $derived(extrasOf(t));
-const seasons = $derived(
-	(t.seasons ?? []).map((s) => ({ ...s, kind: "season" as const })),
-);
-const collections = $derived(
-	(t.collections ?? []).map((c) => ({ ...c, kind: "collection" as const })),
-);
 
 const links = $derived.by(() => {
 	const ids = t.ids ?? {};
@@ -452,8 +439,8 @@ const poster = $derived(art("poster"));
 	{#if t.seasons?.length}
 		<Rail
 			title="Seasons"
-			cards={seasons}
-			caption={(i: number) => count(seasons[i].episodes, "episode")}
+			cards={data.seasons}
+			caption={(i: number) => count(data.seasons[i].episodes, "episode")}
 			href="/titles/{t.id}/seasons"
 		/>
 	{/if}
@@ -575,11 +562,11 @@ const poster = $derived(art("poster"));
 		</Rail>
 	{/if}
 
-	{#if extras.length}
+	{#if data.extras.length}
 		<Rail
 			title="Extras"
 			shape="still"
-			items={extras}
+			items={data.extras}
 			href="/titles/{t.id}/extras"
 		>
 			{#snippet card(
@@ -594,7 +581,7 @@ const poster = $derived(art("poster"));
 	{#if t.collections?.length}
 		<Rail
 			title="Collections"
-			cards={collections}
+			cards={data.collections}
 			href="/titles/{t.id}/collections"
 		/>
 	{/if}
