@@ -120,9 +120,7 @@ func (a *API) setMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	err := a.svc.Collections.SetMembers(r.Context(), id, req.ItemIDs)
 	switch {
-	case errors.Is(err, store.ErrNotFound):
-		writeProblem(w, a.logger, codeNotFound, "the collection, or one of its titles, is not in its library")
-	case a.answered(w, r, err):
+	case a.answeredAs(w, r, err, "the collection, or one of its titles, is not in its library"):
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}

@@ -102,9 +102,7 @@ func (a *API) setLibraryOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	err := a.svc.Catalogue.SetLibraryOrder(r.Context(), auth.SessionOf(r.Context()).Profile.ID, req.LibraryIDs)
 	switch {
-	case errors.Is(err, store.ErrNotFound):
-		writeProblem(w, a.logger, codeNotFound, "a library is named twice, or is no library")
-	case a.answered(w, r, err):
+	case a.answeredAs(w, r, err, "a library is named twice, or is no library"):
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
