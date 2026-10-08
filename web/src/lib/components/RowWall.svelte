@@ -1,5 +1,6 @@
 <script lang="ts">
 import { client } from "#lib/api/client.js";
+import { vocabulary } from "#lib/vocabulary.js";
 import type { components } from "#lib/api/schema.js";
 import Wall from "#lib/components/Wall.svelte";
 import { homeRows } from "#lib/rows.js";
@@ -11,7 +12,9 @@ type Kind = components["schemas"]["HomeRowKind"];
 let { kind, page }: { kind: Kind; page: components["schemas"]["CardPage"] } =
 	$props();
 
+const words = vocabulary();
 const row = $derived(homeRows[kind]);
+const title = $derived(words.rows[kind]);
 
 async function fetchPage(offset: number) {
 	const { data } = await client().GET("/api/v1/home/{row}", {
@@ -21,9 +24,9 @@ async function fetchPage(offset: number) {
 }
 </script>
 
-<svelte:head><title>{row.title} · Photon</title></svelte:head>
+<svelte:head><title>{title} · Photon</title></svelte:head>
 
-<h1 class="title mb-6">{row.title}</h1>
+<h1 class="title mb-6">{title}</h1>
 {#if page.total}
 	<Wall
 		total={page.total}
@@ -31,7 +34,7 @@ async function fetchPage(offset: number) {
 		pageSize={wallPageSize}
 		{fetchPage}
 		view={row.shape}
-		label={row.title}
+		label={title}
 	/>
 {:else}
 	<p class="text-ink-3">{row.empty ?? "Nothing here now."}</p>

@@ -37,8 +37,13 @@ const blanks = Array.from({ length: 8 }, (_, n) => n);
 		{#each home.value.rows.map((row) => ({
 			row,
 			...rail(row),
-		})) as { row, key, title, href } (key)}
-			<Rail {title} cards={row.items} shape={homeRows[row.kind].shape} {href} />
+		})) as { row, key, href } (key)}
+			<Rail
+				title={row.title}
+				cards={row.items}
+				shape={homeRows[row.kind].shape}
+				{href}
+			/>
 		{/each}
 	</div>
 {:else}

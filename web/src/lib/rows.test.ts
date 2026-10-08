@@ -8,21 +8,18 @@ test("a row moves to where it is put, the rest keeping their order", () => {
 	expect(moved(["a", "b", "c"], 1, 9)).toEqual(["a", "c", "b"]);
 });
 
-test("a library's row is named for it and leads to its wall in the row's order", () => {
+test("a library's row leads to its wall in the row's order", () => {
 	const library = { id: "l-films", name: "Films" };
-	expect(
-		rail({ kind: "recently_added_films", title: "", library, items: [] }),
-	).toEqual({
+	const row = { title: "Recently Added in Films", library, items: [] };
+	expect(rail({ ...row, kind: "recently_added_films" })).toEqual({
 		key: "recently_added_films/l-films",
-		title: "Recently Added in Films",
 		href: "/libraries/l-films?sort=added",
 	});
-	expect(
-		rail({ kind: "top_rated_unwatched", title: "", library, items: [] }).href,
-	).toBe("/libraries/l-films?sort=rating&mark=unwatched");
-	expect(rail({ kind: "next_up", title: "", items: [] })).toEqual({
+	expect(rail({ ...row, kind: "top_rated_unwatched" }).href).toBe(
+		"/libraries/l-films?sort=rating&mark=unwatched",
+	);
+	expect(rail({ kind: "next_up", title: "Next Up", items: [] })).toEqual({
 		key: "next_up",
-		title: "Next Up",
 		href: "/home/next_up",
 	});
 });
