@@ -1,10 +1,10 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
+import { removeLibrary, scanLibrary } from "#lib/actions.svelte.js";
 import { fields } from "#lib/form.js";
 import { libraryChange } from "#lib/admin/library.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { client } from "#lib/api/client.js";
-import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import LibraryForm from "#lib/components/admin/LibraryForm.svelte";
 import LibraryRefresh from "#lib/components/admin/LibraryRefresh.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
@@ -17,9 +17,6 @@ const live = liveStream();
 const scan = $derived(
 	live.state.scans.find((s) => s.library_id === data.library.id),
 );
-
-const api = client();
-const path = $derived({ params: { path: { id: data.library.id } } });
 
 function save(event: SubmitEvent) {
 	const form = fields(event);
@@ -40,29 +37,18 @@ function save(event: SubmitEvent) {
 			variant="outline"
 			size="sm"
 			disabled={!!scan}
-			onclick={() =>
-				act(
-					api.POST("/api/v1/admin/libraries/{id}/scan", path),
-					`${data.library.name} is being scanned.`,
-				)}
+			onclick={() => scanLibrary(data.library.id, data.library.name)}
 		>
 			{scan ? "Scanning…" : "Scan now"}
 		</Button>
 		<LibraryRefresh id={data.library.id} name={data.library.name} />
-		<ConfirmButton
-			label="Remove"
-			title="Remove {data.library.name}?"
-			confirm="Remove library"
-			onconfirm={() =>
-				act(
-					api.DELETE("/api/v1/admin/libraries/{id}", path),
-					`${data.library.name} was removed.`,
-					"/settings/server/libraries",
-				)}
+		<Button
+			variant="outline"
+			size="sm"
+			onclick={() => removeLibrary(data.library.id, data.library.name)}
 		>
-			Its titles, and what everyone has watched of them, are forgotten. The
-			files on disk are not touched.
-		</ConfirmButton>
+			Remove <span class="sr-only">{data.library.name}</span>
+		</Button>
 	{/snippet}
 </PageHeader>
 

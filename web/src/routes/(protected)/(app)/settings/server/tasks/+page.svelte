@@ -1,5 +1,6 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
+import { runTask } from "#lib/actions.svelte.js";
 import { runtime } from "#lib/format.js";
 import PlayIcon from "@lucide/svelte/icons/play";
 import { ticking } from "#lib/admin/clock.svelte.js";
@@ -247,12 +248,7 @@ function took(started?: string, finished?: string) {
 						size="sm"
 						disabled={running}
 						onclick={() =>
-							act(
-								api.POST("/api/v1/admin/tasks/{key}/run", {
-									params: { path: { key: task.key } },
-								}),
-								`${tasks[task.key].name} is running.`,
-							)}
+							runTask(task.key, `${tasks[task.key].name} is running.`)}
 					>
 						<PlayIcon aria-hidden="true" />
 						<span class="max-sm:sr-only">Run now</span>

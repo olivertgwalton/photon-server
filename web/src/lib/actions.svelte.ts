@@ -5,6 +5,7 @@ import { client } from "./api/client.js";
 import type { components } from "./api/schema.js";
 
 type RefreshMode = components["schemas"]["RefreshMode"];
+type TaskKey = components["schemas"]["TaskKey"];
 
 const api = client();
 
@@ -215,16 +216,31 @@ export function refreshLibrary(id: string, name: string, mode: RefreshMode) {
 }
 
 export function removeLibrary(id: string, name: string) {
+	// The library's own pages are gone with it: its wall leads home, its
+	// settings to the list of libraries.
+	const here = page.url.pathname;
+	const to = here.startsWith(`/libraries/${id}`)
+		? "/"
+		: here.startsWith(`/settings/server/libraries/${id}`)
+			? "/settings/server/libraries"
+			: undefined;
 	confirmFirst(
 		`Remove ${name}?`,
 		"Its titles, and what everyone has watched of them, are forgotten. The files on disk are not touched.",
 		"Remove library",
-		// The library's own pages are gone with it.
 		() =>
 			act(
 				api.DELETE("/api/v1/admin/libraries/{id}", path(id)),
 				`${name} was removed.`,
-				page.url.pathname.includes(`/libraries/${id}`) ? "/" : undefined,
+				to,
 			),
+	);
+}
+
+// Runs a scheduled task now, as its Run now does.
+export function runTask(key: TaskKey, said: string) {
+	return act(
+		api.POST("/api/v1/admin/tasks/{key}/run", { params: { path: { key } } }),
+		said,
 	);
 }

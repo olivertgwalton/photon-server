@@ -1,5 +1,6 @@
 <script lang="ts">
 import { ticking } from "#lib/admin/clock.svelte.js";
+import { runTask } from "#lib/actions.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { byName, elapsed } from "#lib/admin/words.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
@@ -9,9 +10,7 @@ import ServerInfo from "#lib/components/admin/ServerInfo.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
-import { act } from "#lib/act.js";
 import { count } from "#lib/format.js";
-import { client } from "#lib/api/client.js";
 
 let { data } = $props();
 
@@ -86,13 +85,7 @@ const attention = $derived(
 	</div>
 	<Button
 		variant="outline"
-		onclick={() =>
-			act(
-				client().POST("/api/v1/admin/tasks/{key}/run", {
-					params: { path: { key: "scan_libraries" } },
-				}),
-				"Every library is being scanned.",
-			)}
+		onclick={() => runTask("scan_libraries", "Every library is being scanned.")}
 	>
 		Scan all libraries
 	</Button>

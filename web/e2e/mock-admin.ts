@@ -671,6 +671,9 @@ export async function admin(
 				201,
 			);
 		}
+		// Answered, but kept: the other tests read the films library.
+		case "DELETE /api/v1/admin/libraries/l-films":
+			return done();
 		case "DELETE /api/v1/admin/keys/k-1":
 			keys = [];
 			return done();
