@@ -154,12 +154,12 @@ func TestPairingATelevision(t *testing.T) {
 	}
 	approver := domain.Session{Profile: phone}
 
-	start, err := svc.StartPairing(t.Context(), tv)
+	start, err := svc.StartPairing(t.Context(), tv, CodeLetters)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(start.UserCode) != 9 || strings.Trim(strings.ReplaceAll(start.UserCode, "-", ""), userCodeAlphabet) != "" {
-		t.Errorf("user code %q is not XXXX-XXXX from %s", start.UserCode, userCodeAlphabet)
+	if letters, _ := CodeLetters.form(); len(start.UserCode) != 9 || strings.Trim(strings.ReplaceAll(start.UserCode, "-", ""), letters) != "" {
+		t.Errorf("user code %q is not XXXX-XXXX from %s", start.UserCode, letters)
 	}
 	if _, err := svc.ApprovePairing(t.Context(), approver, "ZZZZ-ZZZZ"); start.UserCode != "ZZZZ-ZZZZ" && !errors.Is(err, ErrPairingNotFound) {
 		t.Errorf("a code nobody was shown was approved (err %v)", err)
@@ -196,7 +196,7 @@ func TestPairingATelevision(t *testing.T) {
 func TestAPairingsStatusIsReadWithoutHandingItOut(t *testing.T) {
 	svc, st := newService(t)
 	oliver := addOliver(t, st)
-	start, err := svc.StartPairing(t.Context(), tv)
+	start, err := svc.StartPairing(t.Context(), tv, CodeLetters)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,9 +224,33 @@ func TestAPairingsStatusIsReadWithoutHandingItOut(t *testing.T) {
 	}
 }
 
+// A Jellyfin app's code is six digits, which its apps take and nothing else, and is approved and
+// handed out as any other.
+func TestPairingByDigits(t *testing.T) {
+	svc, st := newService(t)
+	oliver := addOliver(t, st)
+	start, err := svc.StartPairing(t.Context(), tv, CodeDigits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(start.UserCode) != 6 || strings.Trim(start.UserCode, "0123456789") != "" {
+		t.Errorf("user code %q is not six digits", start.UserCode)
+	}
+	if _, p, _ := svc.PairingStatus(t.Context(), start.DeviceCode); p.UserCode != start.UserCode {
+		t.Errorf("the status shows %q, want %q", p.UserCode, start.UserCode)
+	}
+	spaced := start.UserCode[:3] + " " + start.UserCode[3:]
+	if d, err := svc.ApprovePairing(t.Context(), domain.Session{Profile: oliver}, spaced); err != nil || d != tv {
+		t.Fatalf("approving %q: %+v, %v", spaced, d, err)
+	}
+	if state, _, profile, err := svc.PollPairing(t.Context(), start.DeviceCode); err != nil || state != kv.PairingApproved || profile.ID != oliver.ID {
+		t.Errorf("poll after approval: %q, %+v, %v", state, profile, err)
+	}
+}
+
 func TestPairingPollsAreRateLimited(t *testing.T) {
 	svc, _ := newService(t)
-	start, err := svc.StartPairing(t.Context(), tv)
+	start, err := svc.StartPairing(t.Context(), tv, CodeLetters)
 	if err != nil {
 		t.Fatal(err)
 	}

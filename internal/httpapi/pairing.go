@@ -44,7 +44,7 @@ func (a *API) startPairing(w http.ResponseWriter, r *http.Request) {
 	if !a.allowed(w, r, auth.PairingsPerAddress, auth.PairingKey(a.svc.TrustedProxies.Client(r))) {
 		return
 	}
-	start, err := a.svc.Auth.StartPairing(r.Context(), auth.Device{Name: req.Device, Client: req.Client})
+	start, err := a.svc.Auth.StartPairing(r.Context(), auth.Device{Name: req.Device, Client: req.Client}, auth.CodeLetters)
 	if err != nil {
 		a.internal(w, r, err)
 		return
