@@ -29,7 +29,7 @@ async function save(next: Section[], message: string) {
 	const before = kept;
 	kept = next;
 	const { data: saved, error } = await client().PATCH(
-		"/api/v1/me/preferences",
+		"/api/v1/profile/preferences",
 		{ body: { home: next } },
 	);
 	if (error) {

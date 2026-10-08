@@ -47,7 +47,7 @@ func (*fakePreferences) ChosenTracks(context.Context, uuid.UUID, uuid.UUID) (dom
 func TestAProfileKeepsHowItPlays(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Preferences: &fakePreferences{}})
 	call := func(method, body string) (int, string) {
-		req := httptest.NewRequest(method, "/api/v1/me/preferences", strings.NewReader(body))
+		req := httptest.NewRequest(method, "/api/v1/profile/preferences", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+goodToken)
 		rec := httptest.NewRecorder()
 		api.ServeHTTP(rec, req)

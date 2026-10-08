@@ -180,7 +180,7 @@ test("scrubbing shows the chapter and the thumbnail under the pointer", async ({
 
 test("the player follows how the profile plays", async ({ page }) => {
 	await logIn(page, "/");
-	const set = await page.request.patch("/api/v1/me/preferences", {
+	const set = await page.request.patch("/api/v1/profile/preferences", {
 		data: {
 			audio_language: "fr",
 			audio_track: "language",

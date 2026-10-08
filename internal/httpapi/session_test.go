@@ -182,7 +182,7 @@ func TestLogin(t *testing.T) {
 }
 
 func TestMeIsTheSessionsProfile(t *testing.T) {
-	rec := serve(t, http.MethodGet, "/api/v1/me", goodToken, "")
+	rec := serve(t, http.MethodGet, "/api/v1/profile", goodToken, "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
 	}
@@ -206,15 +206,14 @@ func TestPollingAnswersInRFC8628Terms(t *testing.T) {
 }
 
 func TestSwitchingNeedsTheLocksSecret(t *testing.T) {
-	body := `{"profile_id":"` + oliver.ID.String() + `","secret":"guess"}`
-	if rec := serve(t, http.MethodPut, "/api/v1/session/profile", goodToken, body); rec.Code != http.StatusForbidden {
+	target := "/api/v1/profiles/" + oliver.ID.String() + "/switch"
+	if rec := serve(t, http.MethodPost, target, goodToken, `{"secret":"guess"}`); rec.Code != http.StatusForbidden {
 		t.Errorf("a wrong secret: status %d, want 403", rec.Code)
 	}
-	body = `{"profile_id":"` + oliver.ID.String() + `","secret":"correct horse"}`
-	if rec := serve(t, http.MethodPut, "/api/v1/session/profile", goodToken, body); rec.Code != http.StatusOK {
+	if rec := serve(t, http.MethodPost, target, goodToken, `{"secret":"correct horse"}`); rec.Code != http.StatusOK {
 		t.Errorf("the right secret: status %d, want 200", rec.Code)
 	}
-	if rec := serve(t, http.MethodPut, "/api/v1/me/pin", goodToken, `{"pin":"12"}`); rec.Code != http.StatusBadRequest {
+	if rec := serve(t, http.MethodPut, "/api/v1/profile/pin", goodToken, `{"pin":"12"}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("a two-digit PIN: status %d, want 400", rec.Code)
 	}
 }
@@ -223,7 +222,7 @@ func TestChangingYourOwnPassword(t *testing.T) {
 	limits := &fakeLimiter{}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Limits: limits, Events: &fakeEvents{}})
 	change := func(token, body string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/me/password", strings.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/profile/password", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec := httptest.NewRecorder()
 		api.ServeHTTP(rec, req)
@@ -352,9 +351,9 @@ func TestTheCookieIsRefusedForAnotherSitesWrites(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			target, body := "/api/v1/me", ""
+			target, body := "/api/v1/profile", ""
 			if tt.method == http.MethodPut {
-				target, body = "/api/v1/me/pin", `{"pin":"2468"}`
+				target, body = "/api/v1/profile/pin", `{"pin":"2468"}`
 			}
 			req := httptest.NewRequest(tt.method, "http://photon.test"+target, strings.NewReader(body))
 			req.Header.Set("Origin", tt.origin)

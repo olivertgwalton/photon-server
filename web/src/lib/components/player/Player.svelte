@@ -429,7 +429,7 @@ function chooseQuality(kbps: number) {
 	quality = kbps;
 	// The quality chosen here is the profile's from now on, as Jellyfin's is.
 	api
-		.PATCH("/api/v1/me/preferences", { body: { max_bitrate_kbps: kbps } })
+		.PATCH("/api/v1/profile/preferences", { body: { max_bitrate_kbps: kbps } })
 		.catch(() => undefined);
 	reopen();
 }

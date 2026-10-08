@@ -190,7 +190,7 @@ export function deleteTitle(id: string, name: string) {
 // The profile's libraries in its own order, as its sidebar lists them.
 export function setLibraryOrder(ids: string[]) {
 	return act(
-		api.PUT("/api/v1/me/library-order", { body: { library_ids: ids } }),
+		api.PUT("/api/v1/profile/library-order", { body: { library_ids: ids } }),
 	);
 }
 

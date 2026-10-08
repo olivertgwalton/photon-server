@@ -500,7 +500,7 @@ func (a *API) paging(w http.ResponseWriter, r *http.Request, defaultLimit int) (
 func (a *API) catalogueRoutes() []route {
 	return []route{
 		{
-			pattern: "PUT /api/v1/me/library-order", access: signedIn,
+			pattern: "PUT /api/v1/profile/library-order", access: signedIn,
 			summary: "Put the profile's libraries in an order; those left out follow, by name",
 			body:    libraryOrderJSON{}, status: http.StatusNoContent, handle: a.setLibraryOrder,
 		},

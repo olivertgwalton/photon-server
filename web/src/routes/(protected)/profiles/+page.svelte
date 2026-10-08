@@ -18,10 +18,9 @@ async function choose(event: SubmitEvent) {
 	const form = fields(event);
 	const profileID = String(form.get("profile_id"));
 	const secret = form.get("secret");
-	const { error } = await client().PUT("/api/v1/session/profile", {
-		body: secret
-			? { profile_id: profileID, secret: String(secret) }
-			: { profile_id: profileID },
+	const { error } = await client().POST("/api/v1/profiles/{id}/switch", {
+		params: { path: { id: profileID } },
+		body: secret ? { secret: String(secret) } : undefined,
 	});
 	message = error ? problemMessage(error) : undefined;
 	if (!error) await goto(data.to, { refreshAll: true });

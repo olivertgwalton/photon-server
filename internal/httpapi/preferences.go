@@ -216,12 +216,12 @@ func copyTracks(c store.PlayCopy) (audio, subtitles []playback.Track) {
 func (a *API) preferencesRoutes() []route {
 	return []route{
 		{
-			pattern: "GET /api/v1/me/preferences", access: signedIn,
+			pattern: "GET /api/v1/profile/preferences", access: signedIn,
 			summary: "How the profile plays on every device: the server's defaults until it changes them",
 			status:  http.StatusOK, reply: preferencesJSON{}, handle: a.ownPreferences,
 		},
 		{
-			pattern: "PATCH /api/v1/me/preferences", access: signedIn,
+			pattern: "PATCH /api/v1/profile/preferences", access: signedIn,
 			summary: "Change how the profile plays on every device; what is left out stays",
 			body:    preferencesChangeJSON{}, status: http.StatusOK, reply: preferencesJSON{}, handle: a.setOwnPreferences,
 		},

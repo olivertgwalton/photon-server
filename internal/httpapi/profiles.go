@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"net/http"
-	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -15,7 +14,6 @@ type profileListingJSON struct {
 }
 
 type switchJSON struct {
-	ProfileID string `json:"profile_id"`
 	// Secret is the PIN or password the profile's lock asks for.
 	Secret string `json:"secret,omitzero"`
 }
@@ -39,12 +37,11 @@ func (a *API) profiles(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) switchProfile(w http.ResponseWriter, r *http.Request) {
 	var req switchJSON
-	if !a.decode(w, r, &req) {
+	if r.ContentLength != 0 && !a.decode(w, r, &req) {
 		return
 	}
-	target, err := uuid.Parse(req.ProfileID)
-	if err != nil {
-		writeProblem(w, a.logger, codeInvalidBody, "profile_id is not an id")
+	target, ok := a.pathID(w, r, "id")
+	if !ok {
 		return
 	}
 	if !a.allowed(w, r, switchesPerSession, "switch:session:"+auth.SessionOf(r.Context()).ID.String()) {
@@ -124,24 +121,24 @@ func (a *API) profilesRoutes() []route {
 			status: http.StatusOK, reply: listJSON[profileListingJSON]{}, handle: a.profiles,
 		},
 		{
-			pattern: "PUT /api/v1/session/profile", access: signedIn, summary: "Switch the profile this device watches as",
-			body: switchJSON{}, status: http.StatusOK, reply: profileJSON{}, handle: a.switchProfile,
+			pattern: "POST /api/v1/profiles/{id}/switch", access: signedIn, summary: "Switch the profile this device watches as",
+			body: optionalBody{switchJSON{}}, status: http.StatusOK, reply: profileJSON{}, handle: a.switchProfile,
 		},
 		{
-			pattern: "PATCH /api/v1/me", access: signedIn,
+			pattern: "PATCH /api/v1/profile", access: signedIn,
 			summary: "Rename the profile; names are unique, and every device shows the new one at once",
 			body:    nameJSON{}, status: http.StatusOK, reply: profileJSON{}, handle: a.renameSelf,
 		},
 		{
-			pattern: "PUT /api/v1/me/pin", access: signedIn, summary: "Set the profile's PIN",
+			pattern: "PUT /api/v1/profile/pin", access: signedIn, summary: "Set the profile's PIN",
 			body: pinJSON{}, status: http.StatusNoContent, handle: a.setPIN,
 		},
 		{
-			pattern: "DELETE /api/v1/me/pin", access: signedIn, summary: "Clear the profile's PIN",
+			pattern: "DELETE /api/v1/profile/pin", access: signedIn, summary: "Clear the profile's PIN",
 			status: http.StatusNoContent, handle: a.clearPIN,
 		},
 		{
-			pattern: "PUT /api/v1/me/password", access: signedIn,
+			pattern: "PUT /api/v1/profile/password", access: signedIn,
 			summary: "Change the profile's password, signing out its other devices",
 			body:    passwordChangeJSON{}, status: http.StatusNoContent, handle: a.changePassword,
 		},

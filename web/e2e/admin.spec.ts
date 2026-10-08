@@ -307,7 +307,7 @@ test("a member puts the libraries in their own order, and may do no more", async
 	const grip = nav.getByRole("button", { name: "Drag Films into place" });
 	const shows = await nav.getByRole("link", { name: "Shows" }).boundingBox();
 	if (!shows) throw new Error("Shows is not drawn");
-	const asked = page.waitForRequest("**/api/v1/me/library-order");
+	const asked = page.waitForRequest("**/api/v1/profile/library-order");
 	await grip.hover();
 	await page.mouse.down();
 	await page.mouse.move(shows.x + 10, shows.y + shows.height, { steps: 5 });
@@ -318,7 +318,7 @@ test("a member puts the libraries in their own order, and may do no more", async
 	await expect(names).toHaveText(["Shows", "Films"]);
 
 	// And moved back up, and down again, by the keyboard.
-	const back = page.waitForRequest("**/api/v1/me/library-order");
+	const back = page.waitForRequest("**/api/v1/profile/library-order");
 	await grip.focus();
 	await page.keyboard.press("ArrowUp");
 	expect((await back).postDataJSON()).toEqual({

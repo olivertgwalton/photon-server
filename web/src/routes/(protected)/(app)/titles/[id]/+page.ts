@@ -16,7 +16,7 @@ export const load: PageLoad = async ({ fetch, params, parent }) => {
 		// Asked only of a page with a tune to play.
 		title.themes?.length
 			? api
-					.GET("/api/v1/me/preferences")
+					.GET("/api/v1/profile/preferences")
 					.then(({ data }) => data?.theme_music === "play")
 			: false,
 	]);

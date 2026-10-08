@@ -13,7 +13,7 @@ export const load: PageLoad = async ({ fetch, params }) => {
 		need(
 			api.GET("/api/v1/titles/{id}", { params: { path: { id: params.id } } }),
 		),
-		need(api.GET("/api/v1/me/preferences")),
+		need(api.GET("/api/v1/profile/preferences")),
 	]);
 	return { title, prefs };
 };
