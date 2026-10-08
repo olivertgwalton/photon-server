@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -50,7 +49,7 @@ func (k Key) signUntil(r *http.Request, body []byte, until time.Time) {
 func (k Key) mac(method, path, exp string, body []byte) string {
 	sum := sha256.Sum256(body)
 	h := hmac.New(sha256.New, k.key)
-	_, _ = fmt.Fprintf(h, "%s\n%s\n%s\n%x", method, path, exp, sum)
+	h.Write([]byte(method + "\n" + path + "\n" + exp + "\n" + hex.EncodeToString(sum[:])))
 	return hex.EncodeToString(h.Sum(nil))
 }
 
