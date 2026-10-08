@@ -36,7 +36,7 @@ const wordmark = $derived(mark === "imdb" || mark === "tmdb");
 	<img
 		src={marks[mark]}
 		alt={ratingSites[rating.site]}
-		class={wordmark ? "h-3.5 w-auto" : "h-5 w-auto"}
+		class={wordmark ? "h-3.5 w-auto" : "h-4 w-auto"}
 	>
 	<span class="text-ink font-semibold">{score(rating.site, rating.score)}</span>
 </span>
