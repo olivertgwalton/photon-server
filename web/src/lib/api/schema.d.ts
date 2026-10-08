@@ -7711,6 +7711,7 @@ export interface components {
             level?: number;
             profile?: string;
             range?: components["schemas"]["Range"];
+            resolution?: components["schemas"]["Resolution"];
             sample_rate?: number;
             subtitle_kind?: components["schemas"]["SubtitleKind"];
             title?: string;

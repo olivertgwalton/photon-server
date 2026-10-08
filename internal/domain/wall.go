@@ -51,6 +51,16 @@ func Resolutions() []Resolution {
 	return []Resolution{ResolutionSD, ResolutionHD, ResolutionFHD, ResolutionUHD}
 }
 
+// ResolutionOf is the resolution a picture this wide is filed under, as a wall's filter files it.
+func ResolutionOf(width int) Resolution {
+	for _, r := range Resolutions() {
+		if from, to := r.Widths(); width >= from && (to == 0 || width < to) {
+			return r
+		}
+	}
+	return ResolutionSD
+}
+
 // Widths are the widths a resolution spans, the upper bound excluded and zero for none.
 func (r Resolution) Widths() (from, to int) {
 	switch r {
