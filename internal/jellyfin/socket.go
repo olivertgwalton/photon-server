@@ -10,6 +10,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/websocket"
 )
 
@@ -134,12 +135,17 @@ func (a *API) listen(ctx context.Context, c *websocket.Conn, heard chan<- messag
 }
 
 // told is the message an event is to a profile, and whether it is one: its own state of a title
-// changed, and what changed of the libraries and titles it sees.
+// or one of its playlists changed, and what changed of the libraries and titles it sees.
 func (a *API) told(ctx context.Context, profile uuid.UUID, e domain.Event) (message, bool, error) {
 	switch e.Kind {
 	case domain.EventUserDataChanged:
-		// A playlist changed is not told: no app is served one here.
-		if e.Profile != profile || e.Item == (uuid.UUID{}) {
+		if e.Profile != profile {
+			return message{}, false, nil
+		}
+		if d, _ := e.Details.(domain.UserDataDetails); d.PlaylistID != (uuid.UUID{}) {
+			return a.playlistTold(ctx, profile, d.PlaylistID)
+		}
+		if e.Item == (uuid.UUID{}) {
 			return message{}, false, nil
 		}
 		return a.userDataChanged(ctx, profile, e.Item)
@@ -187,6 +193,24 @@ func (a *API) userDataChanged(ctx context.Context, profile, title uuid.UUID) (me
 		list[n] = a.userData(id, p.State, length, p.Kind)
 	}
 	return message{MessageType: messageUserDataChanged, Data: userDataChanged{UserID: guid(profile), UserDataList: list}}, true, nil
+}
+
+// playlistTold is one of the profile's playlists changed, as Jellyfin tells a playlist item
+// changed: updated while the profile has it, else removed.
+func (a *API) playlistTold(ctx context.Context, profile, playlist uuid.UUID) (message, bool, error) {
+	u := libraryUpdate{
+		FoldersAddedTo: []string{}, FoldersRemovedFrom: []string{}, CollectionFolders: []string{},
+		ItemsAdded: []string{}, ItemsRemoved: []string{}, ItemsUpdated: []string{},
+	}
+	switch n, err := a.svc.Catalogue.Named(ctx, profile, playlist); {
+	case err == nil && n.Kind == store.NamedPlaylist:
+		u.ItemsUpdated = []string{guid(playlist)}
+	case err == nil || isNotFound(err):
+		u.ItemsRemoved = []string{guid(playlist)}
+	default:
+		return message{}, false, err
+	}
+	return message{MessageType: messageLibraryChanged, Data: u}, true, nil
 }
 
 // libraryChanged is what changed of a library's titles that the profile sees, the library itself

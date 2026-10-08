@@ -142,10 +142,17 @@ func TestASilentAppsSocketIsClosed(t *testing.T) {
 }
 
 // shelf is a household's titles as one profile, Ada, may see them: one library of hers, a title
-// she may not see, and a film listed twice.
+// she may not see, a film listed twice, and a playlist of hers.
 type shelf struct {
 	catalogue
-	library, hidden, film, twin uuid.UUID
+	library, hidden, film, twin, playlist uuid.UUID
+}
+
+func (s shelf) Named(_ context.Context, profile, id uuid.UUID) (store.Named, error) {
+	if profile == ada.ID && id == s.playlist {
+		return store.Named{Kind: store.NamedPlaylist}, nil
+	}
+	return store.Named{}, store.ErrNotFound
 }
 
 func (s shelf) HasLibrary(_ context.Context, profile, lib uuid.UUID) (bool, error) {
@@ -176,8 +183,8 @@ func (s shelf) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage, error
 // and removed. Another profile's state, a library it does not have and a title it may not see are
 // never told.
 func TestAnAppIsToldWhatChangesOfWhatItsProfileSees(t *testing.T) {
-	s := shelf{library: uuid.NewV7(), hidden: uuid.NewV7(), film: uuid.NewV7(), twin: uuid.NewV7()}
-	stranger, added, removed := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
+	s := shelf{library: uuid.NewV7(), hidden: uuid.NewV7(), film: uuid.NewV7(), twin: uuid.NewV7(), playlist: uuid.NewV7()}
+	stranger, added, removed, deleted := uuid.NewV7(), uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
 	events := make(chan domain.Event, 16)
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: serverID.String(), Name: "Den"}, Services{
 		Auth: fakeAuth{}, Catalogue: s, Audience: s,
@@ -190,7 +197,7 @@ func TestAnAppIsToldWhatChangesOfWhatItsProfileSees(t *testing.T) {
 
 	for _, e := range []domain.Event{
 		{Kind: domain.EventUserDataChanged, Profile: stranger, Item: s.film},
-		{Kind: domain.EventUserDataChanged, Profile: ada.ID, Details: domain.UserDataDetails{PlaylistID: uuid.NewV7()}},
+		{Kind: domain.EventUserDataChanged, Profile: stranger, Details: domain.UserDataDetails{PlaylistID: s.playlist}},
 		{Kind: domain.EventLibraryChanged, Library: uuid.NewV7(), Details: domain.LibraryChangedDetails{domain.TitleAdded: {added}}},
 		{Kind: domain.EventLibraryChanged, Library: s.library, Details: domain.LibraryChangedDetails{domain.TitleAdded: {s.hidden}}},
 		{Kind: domain.EventTitleUpdated, Item: s.hidden},
@@ -200,6 +207,8 @@ func TestAnAppIsToldWhatChangesOfWhatItsProfileSees(t *testing.T) {
 			domain.TitleAdded: {added, s.hidden}, domain.TitleRemoved: {removed}, domain.TitleUpdated: {},
 		}},
 		{Kind: domain.EventTitleUpdated, Item: s.film},
+		{Kind: domain.EventUserDataChanged, Profile: ada.ID, Details: domain.UserDataDetails{PlaylistID: s.playlist}},
+		{Kind: domain.EventUserDataChanged, Profile: ada.ID, Details: domain.UserDataDetails{PlaylistID: deleted}},
 	} {
 		events <- e
 	}
@@ -232,5 +241,15 @@ func TestAnAppIsToldWhatChangesOfWhatItsProfileSees(t *testing.T) {
 	data, _ = m["Data"].(map[string]any)
 	if m["MessageType"] != "LibraryChanged" || !reflect.DeepEqual(data["ItemsUpdated"], []any{guid(s.film)}) {
 		t.Errorf("a title described again: %v", m)
+	}
+	for _, want := range []struct {
+		field string
+		id    uuid.UUID
+	}{{"ItemsUpdated", s.playlist}, {"ItemsRemoved", deleted}} {
+		m = heard(t, c)
+		data, _ = m["Data"].(map[string]any)
+		if m["MessageType"] != "LibraryChanged" || !reflect.DeepEqual(data[want.field], []any{guid(want.id)}) {
+			t.Errorf("her playlist changed, want it in %s: %v", want.field, m)
+		}
 	}
 }
