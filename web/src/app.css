@@ -190,10 +190,9 @@
 		@apply font-heading text-ink text-lg font-bold tracking-tight;
 	}
 
-	/* The small line that names a block: mono, a label on the design rather
-	   than something to be read as prose. */
+	/* The small line that names a block. */
 	.label {
-		@apply text-ink-3 font-mono text-[0.6875rem] font-bold tracking-[0.16em] uppercase;
+		@apply text-ink-3 text-xs font-medium;
 	}
 
 	/* A card's picture, in the link (a `group`) it leads to: it lifts under the
