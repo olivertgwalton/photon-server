@@ -140,6 +140,9 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle(a.addToPlaylist, "POST /Playlists/{playlistId}/Items")
 	a.handle(a.removeFromPlaylist, "DELETE /Playlists/{playlistId}/Items")
 	a.handle(a.moveInPlaylist, "POST /Playlists/{playlistId}/Items/{itemId}/Move/{newIndex}")
+	a.handle(a.themeSongsResult, "GET /Items/{itemId}/ThemeSongs")
+	a.handle(a.themeVideos, "GET /Items/{itemId}/ThemeVideos")
+	a.handle(a.themeMedia, "GET /Items/{itemId}/ThemeMedia")
 	// Playing: a title's copies, its file as it is, and where the app has got to.
 	a.handle(a.playbackInfo, "GET /Items/{itemId}/PlaybackInfo", "POST /Items/{itemId}/PlaybackInfo")
 	a.handle(a.sending(playback.DeliveryFile, a.stream), "GET /Videos/{itemId}/stream")
