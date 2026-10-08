@@ -216,12 +216,11 @@ func (w *Worker) renew(ctx context.Context, log *slog.Logger, id int64, lose con
 }
 
 func event(kind domain.EventKind, job domain.Job, runErr error) domain.Event {
-	e := domain.Event{Kind: kind, Details: map[string]any{
-		"job_id": job.ID, "job_kind": job.Kind, "subject": job.Subject, "attempt": job.Attempts,
-	}}
-	e.Item, e.Library = job.About()
+	d := domain.JobDetails{JobID: job.ID, JobKind: job.Kind, Subject: job.Subject, Attempt: job.Attempts}
 	if runErr != nil {
-		e.Details["error"] = runErr.Error()
+		d.Error = runErr.Error()
 	}
+	e := domain.Event{Kind: kind, Details: d}
+	e.Item, e.Library = job.About()
 	return e
 }

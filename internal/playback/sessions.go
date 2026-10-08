@@ -212,14 +212,14 @@ func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Du
 	s.raise(ctx, domain.Event{Kind: domain.EventUserDataChanged, Profile: p.Profile, Item: p.Item})
 	stopped := event(domain.EventPlaybackStopped, p)
 	// How far it got says whether it was watched to the end, as Plex's media.scrobble does.
-	stopped.Details["reach"] = reach
+	stopped.Details = domain.PlaybackDetails{Playback: p.Showing(), Reach: reach}
 	s.raise(ctx, stopped)
 	return reach, nil
 }
 
 // event tells of a playback as the dashboard lists it.
 func event(kind domain.EventKind, p domain.Playback) domain.Event {
-	return domain.Event{Kind: kind, Profile: p.Profile, Item: p.Item, Details: map[string]any{"playback": p.Showing()}}
+	return domain.Event{Kind: kind, Profile: p.Profile, Item: p.Item, Details: domain.PlaybackDetails{Playback: p.Showing()}}
 }
 
 // Abandon ends a playback whose stream could not be opened, before any of it was watched.

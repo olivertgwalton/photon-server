@@ -74,15 +74,15 @@ func scanLibrary(st *store.Store, scanner *scan.Scanner, hub *events.Hub, logger
 		logger.InfoContext(ctx, "library scanned", slog.String("library", lib.Name),
 			slog.Int("folders", r.Folders), slog.Int("unchanged", r.Unchanged),
 			slog.Int("probed", r.Probed), slog.Int("left_out", r.Skipped))
-		hub.Raise(ctx, domain.Event{Kind: domain.EventLibraryScanned, Library: lib.ID, Details: map[string]any{
-			"folders": r.Folders, "unchanged": r.Unchanged, "probed": r.Probed, "left_out": r.Skipped,
+		hub.Raise(ctx, domain.Event{Kind: domain.EventLibraryScanned, Library: lib.ID, Details: domain.ScannedDetails{
+			Folders: r.Folders, Unchanged: r.Unchanged, Probed: r.Probed, LeftOut: r.Skipped,
 		}})
 		added, err := st.TitlesAddedSince(ctx, lib.ID, started)
 		if err != nil {
 			logger.WarnContext(ctx, "titles added not counted", slog.Any("err", err))
 		}
 		if added > 0 {
-			hub.Raise(ctx, domain.Event{Kind: domain.EventTitlesAdded, Library: lib.ID, Details: map[string]any{"titles": added}})
+			hub.Raise(ctx, domain.Event{Kind: domain.EventTitlesAdded, Library: lib.ID, Details: domain.TitlesAddedDetails{Titles: added}})
 		}
 		// New titles have their subtitles fetched now, as Jellyfin fetches a new item's, not at the
 		// next daily run.
@@ -121,7 +121,7 @@ func backupTask(d backup.Dumper, hub *events.Hub, logger *slog.Logger) task.Task
 			name, err := d.Dump(ctx, time.Now())
 			if err == nil {
 				logger.InfoContext(ctx, "database backed up", slog.String("file", name))
-				hub.Raise(ctx, domain.Event{Kind: domain.EventBackupMade, Details: map[string]any{"file": name}})
+				hub.Raise(ctx, domain.Event{Kind: domain.EventBackupMade, Details: domain.BackupDetails{File: name}})
 			}
 			return err
 		},

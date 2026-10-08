@@ -189,7 +189,7 @@ func (s *Scheduler) Request(ctx context.Context, key domain.TaskKey) error {
 func (s *Scheduler) run(ctx context.Context, task Task, start Start) {
 	log := s.log.With(slog.String("task", string(task.Key)))
 	log.InfoContext(ctx, "task started")
-	s.raise(ctx, domain.Event{Kind: domain.EventTaskStarted, Details: map[string]any{"task": task.Key}})
+	s.raise(ctx, domain.Event{Kind: domain.EventTaskStarted, Details: domain.TaskDetails{Task: task.Key}})
 	err := task.Run(ctx, start)
 	result, kind := domain.TaskSucceeded, domain.EventTaskFinished
 	switch {
@@ -204,9 +204,9 @@ func (s *Scheduler) run(ctx context.Context, task Task, start Start) {
 	if err := s.store.TaskFinished(ctx, task.Key, time.Now(), result, err); err != nil {
 		log.WarnContext(ctx, "task outcome not recorded", slog.Any("err", err))
 	}
-	finished := domain.Event{Kind: kind, Details: map[string]any{"task": task.Key, "result": result}}
+	d := domain.TaskDetails{Task: task.Key, Result: result}
 	if err != nil {
-		finished.Details["error"] = err.Error()
+		d.Error = err.Error()
 	}
-	s.raise(ctx, finished)
+	s.raise(ctx, domain.Event{Kind: kind, Details: d})
 }

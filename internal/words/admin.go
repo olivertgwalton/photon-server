@@ -2,7 +2,6 @@ package words
 
 import (
 	"cmp"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -37,41 +36,16 @@ type Names interface {
 	Library(id uuid.UUID) string
 }
 
-// said is what an event's details may say, read alike whether the event was raised a moment ago or
-// read back from the activity log.
-type said struct {
-	Name     string               `json:"name"`
-	Device   string               `json:"device"`
-	Client   string               `json:"client"`
-	Address  string               `json:"address"`
-	Error    string               `json:"error"`
-	File     string               `json:"file"`
-	Dump     string               `json:"dump"`
-	Reach    domain.Reach         `json:"reach"`
-	Task     domain.TaskKey       `json:"task"`
-	JobKind  domain.JobKind       `json:"job_kind"`
-	Attempt  int                  `json:"attempt"`
-	Left     int                  `json:"left"`
-	Folders  int                  `json:"folders"`
-	Probed   int                  `json:"probed"`
-	Titles   int                  `json:"titles"`
-	Playback *domain.PlaybackCard `json:"playback"`
-}
-
 // Event is what happened, as a sentence for the activity log: "Ada started Heat".
 func (w Words) Event(e domain.Event, names Names) string {
-	d, err := saidOf(e.Details)
-	if err != nil {
-		return string(e.Kind)
-	}
 	profile := cmp.Or(name(names.Profile, e.Profile), "Someone")
 	library := cmp.Or(name(names.Library, e.Library), "A library")
-	played, by := "a title", profile
-	if p := d.Playback; p != nil {
-		played, by = playedTitle(p.Title), cmp.Or(p.Profile.Name, profile)
-	}
-	task := w.Task(d.Task).Name
-	job := w.Name(d.JobKind)
+	play, _ := e.Details.(domain.PlaybackDetails)
+	played, by := playedTitle(play.Playback.Title), cmp.Or(play.Playback.Profile.Name, profile)
+	signIn, _ := e.Details.(domain.SignInDetails)
+	named, _ := e.Details.(domain.NameDetails)
+	task, _ := e.Details.(domain.TaskDetails)
+	job, _ := e.Details.(domain.JobDetails)
 	switch e.Kind {
 	case domain.EventPlaybackStarted:
 		return by + " started " + played
@@ -80,25 +54,27 @@ func (w Words) Event(e domain.Event, names Names) string {
 	case domain.EventPlaybackResumed:
 		return by + " resumed " + played
 	case domain.EventPlaybackStopped:
-		if d.Reach == domain.ReachEnd {
+		if play.Reach == domain.ReachEnd {
 			return by + " finished " + played
 		}
 		return by + " stopped " + played
 	case domain.EventSignedIn:
-		return fmt.Sprintf("%s signed in on %s (%s)", d.Name, d.Device, d.Client)
+		return fmt.Sprintf("%s signed in on %s (%s)", signIn.Name, signIn.Device, signIn.Client)
 	case domain.EventSignInRefused:
-		return fmt.Sprintf("A sign-in as %s from %s was refused", d.Name, d.Address)
+		return fmt.Sprintf("A sign-in as %s from %s was refused", signIn.Name, signIn.Address)
 	case domain.EventProfileAdded:
-		return "Profile " + d.Name + " was added"
+		return "Profile " + named.Name + " was added"
 	case domain.EventProfileRemoved:
-		return "Profile " + d.Name + " was removed"
+		return "Profile " + named.Name + " was removed"
 	case domain.EventLibraryAdded:
-		return "Library " + d.Name + " was added"
+		return "Library " + named.Name + " was added"
 	case domain.EventLibraryRemoved:
-		return "Library " + d.Name + " was removed"
+		return "Library " + named.Name + " was removed"
 	case domain.EventLibraryScanned:
+		d, _ := e.Details.(domain.ScannedDetails)
 		return fmt.Sprintf("%s was scanned: %d folders, %d read", library, d.Folders, d.Probed)
 	case domain.EventTitlesAdded:
+		d, _ := e.Details.(domain.TitlesAddedDetails)
 		if d.Titles == 1 {
 			return "1 title was added to " + library
 		}
@@ -112,23 +88,25 @@ func (w Words) Event(e domain.Event, names Names) string {
 	case domain.EventUserDataChanged:
 		return profile + "'s watching changed"
 	case domain.EventTaskStarted:
-		return task + " started"
+		return w.Task(task.Task).Name + " started"
 	case domain.EventTaskFinished:
-		return task + " finished"
+		return w.Task(task.Task).Name + " finished"
 	case domain.EventTaskFailed:
-		return task + " failed: " + d.Error
+		return w.Task(task.Task).Name + " failed: " + task.Error
 	case domain.EventBackupMade:
+		d, _ := e.Details.(domain.BackupDetails)
 		return "The database was backed up to " + d.File
 	case domain.EventJobStarted:
-		return job + " started"
+		return w.Name(job.JobKind) + " started"
 	case domain.EventJobFinished:
-		return job + " finished"
+		return w.Name(job.JobKind) + " finished"
 	case domain.EventJobFailed:
-		return job + " failed and will be tried again: " + d.Error
+		return w.Name(job.JobKind) + " failed and will be tried again: " + job.Error
 	case domain.EventJobDead:
-		return fmt.Sprintf("%s gave up after %d tries: %s", job, d.Attempt, d.Error)
+		return fmt.Sprintf("%s gave up after %d tries: %s", w.Name(job.JobKind), job.Attempt, job.Error)
 	case domain.EventJobsProgress:
-		return fmt.Sprintf("%s: %d left", job, d.Left)
+		d, _ := e.Details.(domain.BacklogDetails)
+		return fmt.Sprintf("%s: %d left", w.Name(d.JobKind), d.Left)
 	case domain.EventWebhookTest:
 		return "A webhook test was sent"
 	case domain.EventMaintenanceChanged:
@@ -140,21 +118,10 @@ func (w Words) Event(e domain.Event, names Names) string {
 	case domain.EventNodesChanged:
 		return "What a server node does was changed"
 	case domain.EventRestoreStarted:
+		d, _ := e.Details.(domain.RestoreDetails)
 		return "The database is being restored from " + d.Dump
 	}
 	return string(e.Kind)
-}
-
-// saidOf reads details through JSON, as a playback card raised a moment ago is a struct and one
-// read back from the activity log is a map.
-func saidOf(details map[string]any) (said, error) {
-	var d said
-	raw, err := json.Marshal(details)
-	if err != nil {
-		return d, err
-	}
-	err = json.Unmarshal(raw, &d)
-	return d, err
 }
 
 func name(of func(uuid.UUID) string, id uuid.UUID) string {

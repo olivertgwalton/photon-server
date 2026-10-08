@@ -127,16 +127,16 @@ func (h *Hub) payload(ctx context.Context, e domain.Event) ([]byte, error) {
 		return nil, err
 	}
 	body := struct {
-		Event   domain.EventKind `json:"event"`
-		At      time.Time        `json:"at"`
-		Server  Server           `json:"server"`
-		Profile *named           `json:"profile,omitzero"`
-		Title   *title           `json:"title,omitzero"`
-		Library *named           `json:"library,omitzero"`
-		Details map[string]any   `json:"details"`
+		Event   domain.EventKind    `json:"event"`
+		At      time.Time           `json:"at"`
+		Server  Server              `json:"server"`
+		Profile *named              `json:"profile,omitzero"`
+		Title   *title              `json:"title,omitzero"`
+		Library *named              `json:"library,omitzero"`
+		Details domain.EventDetails `json:"details"`
 	}{Event: e.Kind, At: e.At.UTC(), Server: h.server, Details: e.Details}
 	if body.Details == nil {
-		body.Details = map[string]any{}
+		body.Details = domain.NoDetails{}
 	}
 	if d.ProfileName != nil {
 		body.Profile = &named{ID: e.Profile, Name: *d.ProfileName}
@@ -230,8 +230,8 @@ func (h *Hub) Scanning(ctx context.Context) func(domain.ScanProgress) {
 		if err := h.kv.SaveScan(ctx, p, scanLife); err != nil {
 			h.log.WarnContext(ctx, "scan progress not kept", slog.Any("err", err))
 		}
-		h.Raise(ctx, domain.Event{Kind: domain.EventScanProgress, Library: p.Library, Details: map[string]any{
-			"phase": p.Phase, "done": p.Done, "known": p.Known, "folder": p.Folder,
+		h.Raise(ctx, domain.Event{Kind: domain.EventScanProgress, Library: p.Library, Details: domain.ScanProgressDetails{
+			Phase: p.Phase, Done: p.Done, Known: p.Known, Folder: p.Folder,
 		}})
 	}
 }
@@ -289,8 +289,8 @@ func (h *Hub) JobEnded(ctx context.Context, kind domain.JobKind) {
 			h.log.WarnContext(ctx, "backlog not ended", slog.String("kind", string(kind)), slog.Any("err", err))
 		}
 	}
-	h.Raise(ctx, domain.Event{Kind: domain.EventJobsProgress, Details: map[string]any{
-		"job_kind": kind, "left": left, "done": done,
+	h.Raise(ctx, domain.Event{Kind: domain.EventJobsProgress, Details: domain.BacklogDetails{
+		JobKind: kind, Left: left, Done: done,
 	}})
 }
 
@@ -300,9 +300,7 @@ func (h *Hub) BacklogStopped(ctx context.Context, kind domain.JobKind) error {
 	if err := h.kv.EndBacklog(ctx, kind); err != nil {
 		return err
 	}
-	h.Raise(ctx, domain.Event{Kind: domain.EventJobsProgress, Details: map[string]any{
-		"job_kind": kind, "left": 0, "done": 0,
-	}})
+	h.Raise(ctx, domain.Event{Kind: domain.EventJobsProgress, Details: domain.BacklogDetails{JobKind: kind}})
 	return nil
 }
 
@@ -343,7 +341,7 @@ func (h *Hub) tellChanged(ctx context.Context, lib uuid.UUID) {
 	h.mu.Unlock()
 	// A title is told once, under the change that says most of it.
 	told := map[uuid.UUID]bool{}
-	details := map[string]any{}
+	details := domain.LibraryChangedDetails{}
 	for _, change := range domain.TitleChanges() {
 		ids := []uuid.UUID{}
 		for _, id := range gathered[change] {
@@ -352,7 +350,7 @@ func (h *Hub) tellChanged(ctx context.Context, lib uuid.UUID) {
 				ids = append(ids, id)
 			}
 		}
-		details[string(change)] = ids
+		details[change] = ids
 	}
 	h.Raise(ctx, domain.Event{Kind: domain.EventLibraryChanged, Library: lib, Details: details})
 }

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -71,7 +72,7 @@ func (f *fakeActivity) Activity(_ context.Context, kind domain.EventKind, _, _ i
 	f.asked = append(f.asked, kind)
 	return []domain.Event{{
 		ID: uuid.NewV7(), Kind: domain.EventSignedIn, Profile: oliver.ID,
-		Details: map[string]any{"name": oliver.Name, "device": "Living room", "client": "Photon"},
+		Details: domain.SignInDetails{Name: oliver.Name, Device: "Living room", Client: "Photon"},
 	}}, 1, nil
 }
 
@@ -131,17 +132,15 @@ func TestSignInsAreTold(t *testing.T) {
 		t.Fatalf("told %v, want a sign-in and a refusal", told.kinds())
 	}
 	in, refused := told.raised[0], told.raised[1]
-	if in.Kind != domain.EventSignedIn || in.Profile != oliver.ID || in.Details["address"] != "203.0.113.9" || in.Details["device"] != "Living room" {
+	if d, _ := in.Details.(domain.SignInDetails); in.Kind != domain.EventSignedIn || in.Profile != oliver.ID || d.Address != "203.0.113.9" || d.Device != "Living room" {
 		t.Errorf("sign-in told as %+v", in)
 	}
-	if refused.Kind != domain.EventSignInRefused || refused.Details["name"] != "Oliver" {
+	if d, _ := refused.Details.(domain.SignInDetails); refused.Kind != domain.EventSignInRefused || d.Name != "Oliver" {
 		t.Errorf("refusal told as %+v", refused)
 	}
 	for _, e := range told.raised {
-		for _, v := range e.Details {
-			if v == "guess" || v == "correct horse" {
-				t.Errorf("%s carries the password", e.Kind)
-			}
+		if said, _ := json.Marshal(e.Details); strings.Contains(string(said), "guess") || strings.Contains(string(said), "correct horse") {
+			t.Errorf("%s carries the password", e.Kind)
 		}
 	}
 }
@@ -174,7 +173,7 @@ func TestAStreamNobodyReadsIsGivenUp(t *testing.T) {
 	if _, err := fmt.Fprintf(conn, "GET /api/v1/admin/events HTTP/1.1\r\nHost: photon\r\nAuthorization: Bearer %s\r\n\r\n", goodToken); err != nil {
 		t.Fatal(err)
 	}
-	big := domain.Event{Kind: domain.EventScanProgress, Details: map[string]any{"padding": strings.Repeat("x", 64<<10)}}
+	big := domain.Event{Kind: domain.EventScanProgress, Details: domain.ScanProgressDetails{Folder: strings.Repeat("x", 64<<10)}}
 	deadline := time.After(3 * sendWithin)
 	for {
 		select {

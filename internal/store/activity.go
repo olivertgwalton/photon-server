@@ -14,7 +14,7 @@ import (
 // library removed while the event was on its way is left out, as removing it later would.
 func (s *Store) AddActivity(ctx context.Context, e domain.Event) (uuid.UUID, error) {
 	details := []byte("{}")
-	if len(e.Details) > 0 {
+	if e.Details != nil {
 		var err error
 		if details, err = json.Marshal(e.Details); err != nil {
 			return uuid.UUID{}, err
@@ -50,7 +50,8 @@ func (s *Store) Activity(ctx context.Context, kind domain.EventKind, offset, lim
 			ID: r.ID, Kind: r.Kind, At: r.At,
 			Profile: deref(r.ProfileID), Item: deref(r.ItemID), Library: deref(r.LibraryID),
 		}
-		if err := json.Unmarshal(r.Details, &out[i].Details); err != nil {
+		var err error
+		if out[i].Details, err = domain.DetailsOf(r.Kind, r.Details); err != nil {
 			return nil, 0, err
 		}
 	}

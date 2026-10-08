@@ -308,6 +308,10 @@ func (s *schemas) of(t reflect.Type) jsonSchema {
 	case reflect.Float32, reflect.Float64:
 		return jsonSchema{Type: schemaType{name: "number"}}
 	case reflect.Interface:
+		if t == reflect.TypeFor[domain.EventDetails]() {
+			// An object whose keys the event's kind says.
+			return jsonSchema{Type: schemaType{name: "object"}, AdditionalProperties: &jsonSchema{}}
+		}
 		return jsonSchema{}
 	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
 		reflect.Pointer, reflect.UnsafePointer:

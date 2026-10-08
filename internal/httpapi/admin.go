@@ -219,7 +219,7 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventLibraryAdded, Library: lib.ID, Details: map[string]any{"name": lib.Name}})
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventLibraryAdded, Library: lib.ID, Details: domain.NameDetails{Name: lib.Name}})
 	if err := a.svc.Libraries.ScanFolders(r.Context(), lib.ID, []string{"."}, 0); err != nil {
 		a.internal(w, r, err)
 		return
@@ -365,7 +365,7 @@ func (a *API) removeLibrary(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) || a.answered(w, r, a.svc.Libraries.RemoveLibrary(r.Context(), id)) {
 		return
 	}
-	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventLibraryRemoved, Details: map[string]any{"name": lib.Name}})
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventLibraryRemoved, Details: domain.NameDetails{Name: lib.Name}})
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -37,13 +37,13 @@ type eventHub interface {
 
 // eventJSON is an event as the log lists it and the stream tells it; id is its activity entry's.
 type eventJSON struct {
-	ID        uuid.UUID        `json:"id,omitzero"`
-	Kind      domain.EventKind `json:"kind"`
-	At        time.Time        `json:"at"`
-	ProfileID uuid.UUID        `json:"profile_id,omitzero"`
-	TitleID   uuid.UUID        `json:"title_id,omitzero"`
-	LibraryID uuid.UUID        `json:"library_id,omitzero"`
-	Details   map[string]any   `json:"details"`
+	ID        uuid.UUID           `json:"id,omitzero"`
+	Kind      domain.EventKind    `json:"kind"`
+	At        time.Time           `json:"at"`
+	ProfileID uuid.UUID           `json:"profile_id,omitzero"`
+	TitleID   uuid.UUID           `json:"title_id,omitzero"`
+	LibraryID uuid.UUID           `json:"library_id,omitzero"`
+	Details   domain.EventDetails `json:"details"`
 	// Text is what happened as a sentence, in the reader's language, on the admin's log and stream.
 	Text string `json:"text,omitzero"`
 }
@@ -54,7 +54,7 @@ func eventOf(e domain.Event) eventJSON {
 		Details: e.Details,
 	}
 	if out.Details == nil {
-		out.Details = map[string]any{}
+		out.Details = domain.NoDetails{}
 	}
 	return out
 }

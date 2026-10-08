@@ -20,8 +20,8 @@ func TestTheActivityLogIsReadNewestFirstAndForgetsTheOld(t *testing.T) {
 	now := time.Now().Truncate(time.Microsecond)
 	for _, e := range []domain.Event{
 		{Kind: domain.EventSignedIn, At: now.Add(-40 * 24 * time.Hour), Profile: oliver.ID},
-		{Kind: domain.EventSignedIn, At: now.Add(-time.Hour), Profile: oliver.ID, Details: map[string]any{"device": "Living room"}},
-		{Kind: domain.EventSignInRefused, At: now.Add(-time.Minute), Details: map[string]any{"name": "Guest"}},
+		{Kind: domain.EventSignedIn, At: now.Add(-time.Hour), Profile: oliver.ID, Details: domain.SignInDetails{Device: "Living room"}},
+		{Kind: domain.EventSignInRefused, At: now.Add(-time.Minute), Details: domain.SignInDetails{Name: "Guest"}},
 		// A library removed as the event was on its way is left out, not refused.
 		{Kind: domain.EventLibraryScanned, At: now, Library: uuid.NewV7()},
 	} {
@@ -33,11 +33,11 @@ func TestTheActivityLogIsReadNewestFirstAndForgetsTheOld(t *testing.T) {
 	if err != nil || total != 4 || len(all) != 4 {
 		t.Fatalf("Activity = %d of %d, %v; want 4", len(all), total, err)
 	}
-	if all[0].Kind != domain.EventLibraryScanned || all[0].Library != (uuid.UUID{}) || all[1].Kind != domain.EventSignInRefused || all[1].Details["name"] != "Guest" {
+	if all[0].Kind != domain.EventLibraryScanned || all[0].Library != (uuid.UUID{}) || all[1].Kind != domain.EventSignInRefused || all[1].Details != (domain.SignInDetails{Name: "Guest"}) {
 		t.Errorf("newest first: %+v", all[:2])
 	}
 	ins, total, err := s.Activity(ctx, domain.EventSignedIn, 0, 1)
-	if err != nil || total != 2 || len(ins) != 1 || ins[0].Profile != oliver.ID || ins[0].Details["device"] != "Living room" {
+	if err != nil || total != 2 || len(ins) != 1 || ins[0].Profile != oliver.ID || ins[0].Details != (domain.SignInDetails{Device: "Living room"}) {
 		t.Errorf("sign-ins' first page = %+v of %d, %v; want the latest of 2", ins, total, err)
 	}
 

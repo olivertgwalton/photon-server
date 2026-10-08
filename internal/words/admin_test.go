@@ -29,15 +29,17 @@ func TestAnEventReadsAsASentence(t *testing.T) {
 		event domain.Event
 		want  string
 	}{
-		{domain.Event{Kind: domain.EventPlaybackStarted, Details: map[string]any{"playback": episode}}, "Ada started Small Show S1 E2–E3 · Second"},
-		{domain.Event{Kind: domain.EventPlaybackStopped, Details: map[string]any{
-			"playback": map[string]any{"profile": map[string]any{"name": "Ada"}, "title": map[string]any{"kind": "movie", "title": "Heat"}},
-			"reach":    "end",
+		{domain.Event{Kind: domain.EventPlaybackStarted, Details: domain.PlaybackDetails{Playback: domain.NowPlaying{PlaybackCard: episode}}}, "Ada started Small Show S1 E2–E3 · Second"},
+		{domain.Event{Kind: domain.EventPlaybackStopped, Details: domain.PlaybackDetails{
+			Playback: domain.NowPlaying{PlaybackCard: domain.PlaybackCard{
+				Profile: domain.PlaybackProfile{Name: "Ada"}, Title: domain.PlaybackTitle{Kind: domain.ItemMovie, Title: "Heat"},
+			}},
+			Reach: domain.ReachEnd,
 		}}, "Ada finished Heat"},
-		{domain.Event{Kind: domain.EventLibraryScanned, Library: films, Details: map[string]any{"folders": 12, "probed": 3}}, "Films was scanned: 12 folders, 3 read"},
-		{domain.Event{Kind: domain.EventTitlesAdded, Library: films, Details: map[string]any{"titles": 1}}, "1 title was added to Films"},
-		{domain.Event{Kind: domain.EventTaskFailed, Details: map[string]any{"task": domain.TaskBackupDatabase, "error": "disk full"}}, "Back up the database failed: disk full"},
-		{domain.Event{Kind: domain.EventJobDead, Details: map[string]any{"job_kind": "previews", "attempt": 5, "error": "no ffmpeg"}}, "Make previews gave up after 5 tries: no ffmpeg"},
+		{domain.Event{Kind: domain.EventLibraryScanned, Library: films, Details: domain.ScannedDetails{Folders: 12, Probed: 3}}, "Films was scanned: 12 folders, 3 read"},
+		{domain.Event{Kind: domain.EventTitlesAdded, Library: films, Details: domain.TitlesAddedDetails{Titles: 1}}, "1 title was added to Films"},
+		{domain.Event{Kind: domain.EventTaskFailed, Details: domain.TaskDetails{Task: domain.TaskBackupDatabase, Error: "disk full"}}, "Back up the database failed: disk full"},
+		{domain.Event{Kind: domain.EventJobDead, Details: domain.JobDetails{JobKind: domain.JobPreviews, Attempt: 5, Error: "no ffmpeg"}}, "Make previews gave up after 5 tries: no ffmpeg"},
 		{domain.Event{Kind: domain.EventLibraryChanged, Library: uuid.NewV7()}, "A library changed"},
 	} {
 		if got := w.Event(c.event, known); got != c.want {

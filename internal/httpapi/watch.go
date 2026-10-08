@@ -94,7 +94,7 @@ func (a *API) titleStateChanged(r *http.Request, id uuid.UUID) {
 func (a *API) playlistChanged(r *http.Request, id uuid.UUID) {
 	profile := auth.SessionOf(r.Context()).Profile.ID
 	a.svc.Events.Raise(r.Context(), domain.Event{
-		Kind: domain.EventUserDataChanged, Profile: profile, Details: map[string]any{"playlist_id": id},
+		Kind: domain.EventUserDataChanged, Profile: profile, Details: domain.UserDataDetails{PlaylistID: id},
 	})
 }
 

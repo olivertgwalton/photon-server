@@ -187,9 +187,9 @@ func (a *API) signInByPassword(w http.ResponseWriter, r *http.Request, req login
 	}
 	token, profile, err := a.svc.Auth.SignIn(r.Context(), req.Name, req.Password, auth.Device{Name: req.Device, Client: req.Client})
 	// Who tried, from where and on what, as Jellyfin logs a sign-in; never the password.
-	details := map[string]any{
-		"name": req.Name, "device": req.Device, "client": req.Client,
-		"address": a.svc.TrustedProxies.Client(r).String(),
+	details := domain.SignInDetails{
+		Name: req.Name, Device: req.Device, Client: req.Client,
+		Address: a.svc.TrustedProxies.Client(r).String(),
 	}
 	switch {
 	case errors.Is(err, auth.ErrInvalidCredentials):

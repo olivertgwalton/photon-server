@@ -98,7 +98,7 @@ func TestAWebhookIsToldWhatItAskedFor(t *testing.T) {
 		t.Fatalf("a kind it did not ask for queued %d deliveries", len(jobs))
 	}
 
-	hub.Raise(ctx, domain.Event{Kind: domain.EventPlaybackStarted, Profile: oliver.ID, Details: map[string]any{"method": "direct"}})
+	hub.Raise(ctx, domain.Event{Kind: domain.EventPlaybackStarted, Profile: oliver.ID, Details: domain.PlaybackDetails{Playback: domain.NowPlaying{Method: domain.PlayDirect}}})
 	jobs := claim()
 	if len(jobs) != 1 {
 		t.Fatalf("queued %d deliveries, want 1", len(jobs))
@@ -135,13 +135,17 @@ func TestAWebhookIsToldWhatItAskedFor(t *testing.T) {
 			ID   uuid.UUID `json:"id"`
 			Name string    `json:"name"`
 		} `json:"profile"`
-		Details map[string]any `json:"details"`
+		Details struct {
+			Playback struct {
+				Method domain.PlayMethod `json:"method"`
+			} `json:"playback"`
+		} `json:"details"`
 	}
 	if err := json.Unmarshal(got.body, &body); err != nil {
 		t.Fatal(err)
 	}
 	if body.Event != domain.EventPlaybackStarted || body.Server != server || body.Profile.Name != "Oliver" ||
-		body.Profile.ID != oliver.ID || body.Details["method"] != "direct" || time.Since(body.At) > time.Minute {
+		body.Profile.ID != oliver.ID || body.Details.Playback.Method != domain.PlayDirect || time.Since(body.At) > time.Minute {
 		t.Errorf("body %s", got.body)
 	}
 
