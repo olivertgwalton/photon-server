@@ -30,6 +30,11 @@ const (
 	RangeDV        Range = "dv"
 )
 
+// HDR is whether a picture is coded as more than SDR; an unknown range is taken as SDR.
+func (r Range) HDR() bool {
+	return r != "" && r != RangeSDR
+}
+
 func Ranges() []Range {
 	return []Range{RangeSDR, RangeHLG, RangeHDR10, RangeHDR10Plus, RangeDV}
 }
