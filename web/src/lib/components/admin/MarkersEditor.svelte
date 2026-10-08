@@ -1,6 +1,7 @@
 <script lang="ts">
 import PlusIcon from "@lucide/svelte/icons/plus";
 import XIcon from "@lucide/svelte/icons/x";
+import { untrack } from "svelte";
 import type { components } from "#lib/api/schema.js";
 import { markerKinds } from "#lib/admin/words.js";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -48,25 +49,26 @@ const kindOptions = Object.entries(markerKinds).map(([value, label]) => ({
 	label,
 }));
 
-let rows = $state<
-	{
-		key: number;
-		kind: Schemas["MarkerKind"];
-		start: string;
-		end: string;
-		source?: string;
-	}[]
->([]);
+type Row = {
+	key: number;
+	kind: Schemas["MarkerKind"];
+	start: string;
+	end: string;
+	source?: string;
+};
 let next = 0;
-$effect.pre(() => {
-	rows = (version.markers ?? []).map((m) => ({
-		key: next++,
-		kind: m.kind,
-		start: timecode(m.start_ms),
-		end: timecode(m.end_ms),
-		source: sources[m.source],
-	}));
-});
+// Drawn afresh for each version: the page keys it on the one it edits.
+let rows = $state<Row[]>(
+	untrack(() =>
+		(version.markers ?? []).map((m) => ({
+			key: next++,
+			kind: m.kind,
+			start: timecode(m.start_ms),
+			end: timecode(m.end_ms),
+			source: sources[m.source],
+		})),
+	),
+);
 
 const parts = $derived(Array.from({ length: version.parts }, (_, i) => i));
 </script>
