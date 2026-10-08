@@ -122,7 +122,7 @@ func (a *API) watchRoutes() []route {
 	return []route{
 		{
 			pattern: "PUT /api/v1/titles/{id}/progress", access: signedIn,
-			summary: "Record where the profile stopped a film or episode, and when: progress from before the title's state last changed is refused as a conflict",
+			summary: "Record where the profile stopped a film or episode it watched outside a playback, a download's say, and when: progress from before the title's state last changed is refused as a conflict",
 			body:    progressJSON{}, status: http.StatusOK, reply: reachedJSON{}, handle: a.progress,
 		},
 		{
