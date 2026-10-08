@@ -14,3 +14,5 @@ export function loginPath(from: URL): string {
 	const to = from.pathname + from.search;
 	return to === "/" ? LOGIN : `${LOGIN}?to=${encodeURIComponent(to)}`;
 }
+
+export const SETUP = "/setup";

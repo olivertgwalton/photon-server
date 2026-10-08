@@ -5395,6 +5395,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Say whether the server is still to be set up, and whether this client may set it up */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Setup"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        /** Set a new server up from its local network: add its first admin and sign this device in as it */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetupRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LoginResponse"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subtitles/{id}/file": {
         parameters: {
             query?: never;
@@ -7664,6 +7726,18 @@ export interface components {
             set: boolean;
             value?: string;
         };
+        Setup: {
+            state: components["schemas"]["SetupState"];
+        };
+        SetupRequest: {
+            client: string;
+            device: string;
+            keep?: components["schemas"]["Keep"];
+            name: string;
+            password: string;
+        };
+        /** @enum {string} */
+        SetupState: "done" | "open" | "local_only";
         /** @enum {string} */
         SignInMethod: "password" | "pairing";
         SmartRule: {

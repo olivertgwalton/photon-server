@@ -64,6 +64,38 @@ func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, p
 	return profile(row), nil
 }
 
+// ErrSetUp is setting up a server that has a profile already.
+var ErrSetUp = errors.New("the server is set up; an admin adds profiles")
+
+// HasProfiles is whether the server has a profile: one with none is still to be set up.
+func (s *Store) HasProfiles(ctx context.Context) (bool, error) {
+	var has bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM profiles)`).Scan(&has)
+	return has, err
+}
+
+// AddFirstAdmin adds the server's first profile, an admin, refusing once it has any.
+func (s *Store) AddFirstAdmin(ctx context.Context, name, passwordHash string) (domain.Profile, error) {
+	row := model.Profile{Name: name, Role: domain.RoleAdmin, PasswordHash: passwordHash}
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		// The lock conflicts with itself, so a second setup waits and then sees the first's admin.
+		if _, err := tx.Exec(ctx, `LOCK TABLE profiles IN SHARE ROW EXCLUSIVE MODE`); err != nil {
+			return err
+		}
+		err := tx.QueryRow(ctx, `
+			INSERT INTO profiles (name, role, password_hash) SELECT $1, $2, $3
+			WHERE NOT EXISTS (SELECT 1 FROM profiles) RETURNING id`, name, row.Role, passwordHash).Scan(&row.ID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrSetUp
+		}
+		return err
+	})
+	if err != nil {
+		return domain.Profile{}, err
+	}
+	return profile(row), nil
+}
+
 // ProfileByName returns a profile and its password hash, its name matched in any case.
 func (s *Store) ProfileByName(ctx context.Context, name string) (domain.Profile, string, error) {
 	row, err := readRow[model.Profile](ctx, s.pool, `SELECT `+profileColumns+` FROM profiles WHERE lower(name) = lower($1)`, name)

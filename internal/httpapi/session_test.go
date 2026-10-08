@@ -43,6 +43,14 @@ func (fakeAuth) SignIn(_ context.Context, name, password string, _ auth.Device) 
 	return "", domain.Profile{}, auth.ErrInvalidCredentials
 }
 
+// SetUp makes the first admin Oliver, under any name, refusing a short password.
+func (fakeAuth) SetUp(_ context.Context, _, password string, _ auth.Device) (string, domain.Profile, error) {
+	if len(password) < 8 {
+		return "", domain.Profile{}, auth.ErrPasswordTooShort
+	}
+	return goodToken, oliver, nil
+}
+
 func (fakeAuth) Authenticate(_ context.Context, token string) (domain.Session, error) {
 	switch token {
 	case goodToken:

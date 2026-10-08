@@ -5,6 +5,8 @@ package store
 import (
 	"errors"
 	"slices"
+	"strconv"
+	"sync"
 	"testing"
 	"uuid"
 
@@ -217,5 +219,35 @@ func TestAManagerKeepsTheProfilesItAdds(t *testing.T) {
 	}
 	if got, err := s.ProfileByID(ctx, kid.ID); err != nil || got.Manager != (uuid.UUID{}) {
 		t.Errorf("after its manager went: %+v, %v; want the admin's", got, err)
+	}
+}
+
+func TestOnlyTheFirstSetupAddsAnAdmin(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	if has, err := s.HasProfiles(ctx); err != nil || has {
+		t.Fatalf("a new server has profiles: %v, %v", has, err)
+	}
+	var wg sync.WaitGroup
+	errs := make([]error, 4)
+	for i := range errs {
+		wg.Go(func() { _, errs[i] = s.AddFirstAdmin(ctx, "Admin"+strconv.Itoa(i), "hash") })
+	}
+	wg.Wait()
+	added := 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			added++
+		case !errors.Is(err, ErrSetUp):
+			t.Fatal(err)
+		}
+	}
+	list, err := s.Profiles(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added != 1 || len(list) != 1 || list[0].Profile.Role != domain.RoleAdmin {
+		t.Errorf("%d setups succeeded, leaving %+v; want one admin", added, list)
 	}
 }

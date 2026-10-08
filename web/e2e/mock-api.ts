@@ -1021,6 +1021,8 @@ const server_ = Bun.serve({
 		const me = token ? sessions.get(token) : undefined;
 
 		if (route === "GET /api/v1/server") return Response.json(server);
+		// Set up already: e2e/setup.spec.ts answers for a new server itself.
+		if (route === "GET /api/v1/setup") return Response.json({ state: "done" });
 		// Not the API: how a test knows a page is listening, and makes the server
 		// announce a change.
 		if (route === "GET /mock/listening") return Response.json(feeds.size);

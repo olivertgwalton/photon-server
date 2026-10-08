@@ -18,11 +18,12 @@ PostgreSQL and Valkey:
 ```sh
 cd deploy && cp .env.example .env    # set the passwords and MEDIA_DIR
 docker compose up -d                 # add -f compose.intel.yml or -f compose.nvidia.yml for a GPU
-docker compose exec server photon-server profile add -name Admin -role admin
 ```
 
-Then open `http://<server>:8640`, log in, and add a library under Settings, Server, Libraries
-(`POST /api/v1/admin/libraries`).
+Then open `http://<server>:8640` from the server's local network to set it up: name its first admin
+and add a library (`POST /api/v1/setup`). As Plex's claiming is, setting up is open only while the
+server has no profile, and only to a client on its local networks; behind a reverse proxy, list the
+proxy in `PHOTON_TRUSTED_PROXIES` first, or every client would look local, as the proxy does.
 
 ### Backups
 
