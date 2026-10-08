@@ -65,9 +65,14 @@ func profileCommand(ctx context.Context, logger *slog.Logger, databaseURL string
 func readPassword(out io.Writer) (string, error) {
 	fd := int(os.Stdin.Fd())
 	if term.IsTerminal(fd) {
-		_, _ = fmt.Fprint(out, "Password: ")
+		if _, err := fmt.Fprint(out, "Password: "); err != nil {
+			return "", err
+		}
 		b, err := term.ReadPassword(fd)
-		_, _ = fmt.Fprintln(out)
+		if err != nil {
+			return "", err
+		}
+		_, err = fmt.Fprintln(out)
 		return string(b), err
 	}
 	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
