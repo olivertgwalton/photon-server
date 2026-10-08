@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -145,34 +146,54 @@ type servingAs domain.SecureConnections
 
 func (s servingAs) Mode() domain.SecureConnections { return domain.SecureConnections(s) }
 
-// Required sends a plain request to HTTPS, but one from this machine or forwarded as HTTPS by a
-// trusted proxy.
+func TestAPlainRequestIsSentToItsPlaceAtThePublicURL(t *testing.T) {
+	public, err := ParsePublicURL("https://photon.example.com/base")
+	if err != nil {
+		t.Fatal(err)
+	}
+	asked, err := url.Parse("http://evil.example//a%20b/c?x=2&x=1&b=%26")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := onPublicURL(public, asked), "https://photon.example.com/base/a%20b/c?b=%26&x=2&x=1"; got != want {
+		t.Errorf("sent to %q, want %q", got, want)
+	}
+}
+
+// Required sends a plain request to HTTPS at the server's public address, but one from this
+// machine or forwarded as HTTPS by a trusted proxy; with no public address of HTTPS it is refused,
+// whatever Host it names.
 func TestRequiredSecureConnectionsSendPlainRequestsToHTTPS(t *testing.T) {
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Ready: func(context.Context) error { return nil }, Secure: servingAs(domain.SecureRequired),
-		TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.168.86.81/32")},
-	})
 	for _, tc := range []struct {
-		peer, proto string
-		want        int
+		public, peer, proto string
+		want                int
+		location            string
 	}{
-		{"192.168.86.20:5000", "", http.StatusTemporaryRedirect},
-		{"192.168.86.20:5000", "https", http.StatusTemporaryRedirect},
-		{"127.0.0.1:5000", "", http.StatusNoContent},
-		{"192.168.86.81:5000", "https", http.StatusNoContent},
+		{"https://photon.example.com", "192.168.86.20:5000", "", http.StatusTemporaryRedirect, "https://photon.example.com/readyz"},
+		{"https://photon.example.com/base", "192.168.86.20:5000", "https", http.StatusTemporaryRedirect, "https://photon.example.com/base/readyz"},
+		{"", "192.168.86.20:5000", "", http.StatusForbidden, ""},
+		{"http://mini.local:8640", "192.168.86.20:5000", "", http.StatusForbidden, ""},
+		{"", "127.0.0.1:5000", "", http.StatusNoContent, ""},
+		{"", "192.168.86.81:5000", "https", http.StatusNoContent, ""},
 	} {
-		r := httptest.NewRequest(http.MethodGet, "http://mini.local:8640/readyz", nil)
+		public, err := ParsePublicURL(tc.public)
+		if err != nil {
+			t.Fatal(err)
+		}
+		api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+			Ready: func(context.Context) error { return nil }, Secure: servingAs(domain.SecureRequired),
+			TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.168.86.81/32")}, Setup: Setup{PublicURL: public},
+		})
+		r := httptest.NewRequest(http.MethodGet, "http://evil.example/readyz", nil)
 		r.RemoteAddr = tc.peer
 		if tc.proto != "" {
 			r.Header.Set("X-Forwarded-Proto", tc.proto)
 		}
 		rec := httptest.NewRecorder()
 		api.ServeHTTP(rec, r)
-		if rec.Code != tc.want {
-			t.Errorf("from %s, forwarded %q: status %d, want %d", tc.peer, tc.proto, rec.Code, tc.want)
-		}
-		if loc := rec.Header().Get("Location"); tc.want == http.StatusTemporaryRedirect && loc != "https://mini.local:8640/readyz" {
-			t.Errorf("from %s: sent to %q", tc.peer, loc)
+		if rec.Code != tc.want || rec.Header().Get("Location") != tc.location {
+			t.Errorf("at %q from %s, forwarded %q: %d to %q, want %d to %q",
+				tc.public, tc.peer, tc.proto, rec.Code, rec.Header().Get("Location"), tc.want, tc.location)
 		}
 	}
 }
