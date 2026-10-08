@@ -54,7 +54,7 @@ func profileCommand(ctx context.Context, logger *slog.Logger, databaseURL string
 	if err != nil {
 		return err
 	}
-	p, err := st.AddProfile(ctx, *name, r, hash)
+	p, err := st.AddProfile(ctx, *name, r, hash, nil)
 	if err != nil {
 		return err
 	}

@@ -116,7 +116,7 @@ func aFilm(t *testing.T) (*store.Store, domain.Profile, uuid.UUID, uuid.UUID) {
 	if _, err := st.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []store.Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash")
+	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

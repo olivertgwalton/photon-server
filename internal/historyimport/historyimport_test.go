@@ -76,7 +76,7 @@ func newHousehold(t *testing.T) household {
 	if _, err := st.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), show, eps, nil); err != nil {
 		t.Fatal(err)
 	}
-	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash")
+	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -88,7 +88,7 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin, err := st.AddProfile(t.Context(), "Admin", domain.RoleAdmin, "hash")
+	admin, err := st.AddProfile(t.Context(), "Admin", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

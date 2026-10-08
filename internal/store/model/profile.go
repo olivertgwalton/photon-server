@@ -14,6 +14,7 @@ type Profile struct {
 	PasswordHash string
 	PinHash      *string
 	AvatarID     *uuid.UUID
+	ManagedBy    *uuid.UUID
 }
 
 type Play struct {

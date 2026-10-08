@@ -83,16 +83,16 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	}}}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	oliver, err := st.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h")
+	oliver, err := st.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sam, err := st.AddProfile(ctx, "Sam", domain.RoleUser, "h")
+	sam, err := st.AddProfile(ctx, "Sam", domain.RoleUser, "h", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	twelve := 12
-	if err := st.SetAccess(ctx, sam.ID, store.ProfileAccess{MaxAge: &twelve, Libraries: []uuid.UUID{films.ID}}); err != nil {
+	if err := st.SetAccess(ctx, sam.ID, store.ProfileAccess{MaxAge: &twelve, Libraries: []uuid.UUID{films.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
 

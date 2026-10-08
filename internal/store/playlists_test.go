@@ -37,11 +37,11 @@ func TestAPlaylistKeepsItsOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	heat, show := oneItem(t, s, `kind = 'movie'`).ID, oneItem(t, s, `kind = 'show'`).ID
-	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -102,15 +102,15 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	if _, err := st.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), store.Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
 		t.Fatal(err)
 	}
-	admin, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash")
+	admin, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	kid, err := st.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
+	kid, err := st.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetAccess(ctx, kid.ID, store.ProfileAccess{Libraries: []uuid.UUID{films.ID}}); err != nil {
+	if err := st.SetAccess(ctx, kid.ID, store.ProfileAccess{Libraries: []uuid.UUID{films.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{

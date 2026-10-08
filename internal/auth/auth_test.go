@@ -48,7 +48,7 @@ func addOliver(t *testing.T, st *store.Store) domain.Profile {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := st.AddProfile(t.Context(), "Oliver", domain.RoleAdmin, hash)
+	p, err := st.AddProfile(t.Context(), "Oliver", domain.RoleAdmin, hash, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestWeakHashIsUpgradedAtSignIn(t *testing.T) {
 		t.Fatal(err)
 	}
 	old := "$argon2id$v=19$m=19456,t=1,p=1$" + b64(salt) + "$" + b64(key)
-	if _, err := st.AddProfile(t.Context(), "Oliver", domain.RoleAdmin, old); err != nil {
+	if _, err := st.AddProfile(t.Context(), "Oliver", domain.RoleAdmin, old, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv); err != nil {
@@ -269,11 +269,11 @@ func TestSwitchingProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sam, err := st.AddProfile(t.Context(), "Sam", domain.RoleUser, hash)
+	sam, err := st.AddProfile(t.Context(), "Sam", domain.RoleUser, hash, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	kid, err := st.AddProfile(t.Context(), "Kid", domain.RoleUser, hash)
+	kid, err := st.AddProfile(t.Context(), "Kid", domain.RoleUser, hash, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.AddProfile(t.Context(), "Sam", domain.RoleUser, hash); err != nil {
+	if _, err := st.AddProfile(t.Context(), "Sam", domain.RoleUser, hash, nil); err != nil {
 		t.Fatal(err)
 	}
 	signIn := func(name, password, device string) domain.Session {
@@ -398,7 +398,7 @@ func TestChangingAPasswordSignsOutTheProfilesOtherDevices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	guest, err := st.AddProfile(t.Context(), "Guest", domain.RoleUser, hash)
+	guest, err := st.AddProfile(t.Context(), "Guest", domain.RoleUser, hash, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -26,7 +26,7 @@ func TestAShowsEpisodesInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,11 +62,11 @@ func TestAShowsEpisodesInOrder(t *testing.T) {
 		t.Errorf("season 2's: %v, %v", titles(one), err)
 	}
 
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{films.ID}}); err != nil {
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{films.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Episodes(ctx, kid.ID, show); !errors.Is(err, ErrNotFound) {

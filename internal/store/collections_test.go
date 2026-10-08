@@ -130,7 +130,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if err != nil || len(members) != 2 || members[0].Title != "Heat" {
 		t.Errorf("an admin's set = %+v, %v; want Heat first, as put", members, err)
 	}
-	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleUser, "hash")
+	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestALibraryCountsTheCollectionsItLists(t *testing.T) {
 	if err := s.SaveIdentity(ctx, cards[0].ID, domain.SourceTMDB, m, nil); err != nil {
 		t.Fatal(err)
 	}
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,11 +270,11 @@ func TestALibraryCountsTheCollectionsItLists(t *testing.T) {
 	}
 	agree(uuid.UUID{}, map[uuid.UUID]int{films.ID: 1, empty.ID: 0})
 	twelve := 12
-	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedBlock}); err != nil {
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedBlock}, nil); err != nil {
 		t.Fatal(err)
 	}
 	agree(kid.ID, map[uuid.UUID]int{films.ID: 1, empty.ID: 0})
-	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{empty.ID}}); err != nil {
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{empty.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	agree(kid.ID, map[uuid.UUID]int{films.ID: 0, empty.ID: 0})
@@ -308,15 +308,15 @@ func TestACollectionOnTheHomePageIsARowOfItsTitles(t *testing.T) {
 	if err := s.SetMembers(ctx, set, []uuid.UUID{ids["Heat"], ids["Alien"]}); err != nil {
 		t.Fatal(err)
 	}
-	admin, err := s.AddProfile(ctx, "Admin", domain.RoleAdmin, "hash")
+	admin, err := s.AddProfile(ctx, "Admin", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{other.ID}}); err != nil {
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{other.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	row := func(profile uuid.UUID) []string {

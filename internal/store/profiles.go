@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 	"uuid"
 
@@ -20,12 +21,40 @@ var (
 )
 
 // profileColumns are model.Profile's, for a statement that reads whole profiles.
-const profileColumns = `id, name, role, password_hash, pin_hash, avatar_id`
+const profileColumns = `id, name, role, password_hash, pin_hash, avatar_id, managed_by`
 
-func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, passwordHash string) (domain.Profile, error) {
-	row := model.Profile{Name: name, Role: role, PasswordHash: passwordHash}
-	err := s.pool.QueryRow(ctx, `INSERT INTO profiles (name, role, password_hash) VALUES ($1, $2, $3) RETURNING id`,
-		row.Name, row.Role, row.PasswordHash).Scan(&row.ID)
+// ErrBeyondManager is a manager adding or making an admin or a manager, or granting a profile it
+// keeps more than it may see itself.
+var ErrBeyondManager = errors.New("a manager keeps users, granting them no more than it may see itself")
+
+// keptBy is the profiles a profile administers: every one for an admin, nil, or those a manager
+// added and keeps.
+const keptBy = `($2::uuid IS NULL OR managed_by = $2)`
+
+// AddProfile adds a profile the admin keeps, or, for a manager by, one the manager keeps, which
+// starts seeing what the manager sees.
+func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, passwordHash string, by *uuid.UUID) (domain.Profile, error) {
+	row := model.Profile{Name: name, Role: role, PasswordHash: passwordHash, ManagedBy: by}
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if by == nil {
+			return tx.QueryRow(ctx, `INSERT INTO profiles (name, role, password_hash) VALUES ($1, $2, $3) RETURNING id`,
+				name, role, passwordHash).Scan(&row.ID)
+		}
+		if role != domain.RoleUser {
+			return ErrBeyondManager
+		}
+		err := tx.QueryRow(ctx, `
+			INSERT INTO profiles (name, role, password_hash, managed_by, max_age, unrated)
+			SELECT $1, $2, $3, m.id, m.max_age, m.unrated FROM profiles m WHERE m.id = $4 RETURNING id`,
+			name, role, passwordHash, by).Scan(&row.ID)
+		if err != nil {
+			return found(err)
+		}
+		_, err = tx.Exec(ctx, `
+			INSERT INTO profile_libraries (profile_id, library_id)
+			SELECT $1, library_id FROM profile_libraries WHERE profile_id = $2`, row.ID, by)
+		return err
+	})
 	if violates(err, uniqueViolation) {
 		return domain.Profile{}, ErrProfileExists
 	}
@@ -116,7 +145,7 @@ func (s *Store) DeleteSession(ctx context.Context, id uuid.UUID) error {
 }
 
 func profile(r model.Profile) domain.Profile {
-	return domain.Profile{ID: r.ID, Name: r.Name, Role: r.Role, Avatar: deref(r.AvatarID)}
+	return domain.Profile{ID: r.ID, Name: r.Name, Role: r.Role, Avatar: deref(r.AvatarID), Manager: deref(r.ManagedBy)}
 }
 
 func (s *Store) ProfileByID(ctx context.Context, id uuid.UUID) (domain.Profile, error) {
@@ -231,13 +260,16 @@ type ProfileChange struct {
 }
 
 // SetProfile renames a profile, changes its role, and sets its password. The server keeps an
-// admin.
-func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange) (domain.Profile, error) {
+// admin. A manager by changes only a profile it keeps, and not into an admin or a manager.
+func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange, by *uuid.UUID) (domain.Profile, error) {
 	var out domain.Profile
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		row, err := readRow[model.Profile](ctx, tx, `SELECT `+profileColumns+` FROM profiles WHERE id = $1`, id)
+		row, err := readRow[model.Profile](ctx, tx, `SELECT `+profileColumns+` FROM profiles WHERE id = $1 AND `+keptBy, id, by)
 		if err != nil {
 			return err
+		}
+		if by != nil && c.Role != "" && c.Role != domain.RoleUser {
+			return ErrBeyondManager
 		}
 		if c.Role != "" && c.Role != domain.RoleAdmin && row.Role == domain.RoleAdmin {
 			if err := otherAdmin(ctx, tx, row.ID); err != nil {
@@ -260,12 +292,12 @@ func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange) (
 }
 
 // RemoveProfile forgets a profile, its devices and what it has watched, answering its name. The
-// server keeps an admin.
-func (s *Store) RemoveProfile(ctx context.Context, id uuid.UUID) (string, error) {
+// server keeps an admin, and a manager by removes only a profile it keeps.
+func (s *Store) RemoveProfile(ctx context.Context, id uuid.UUID, by *uuid.UUID) (string, error) {
 	var name string
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var role domain.Role
-		if err := tx.QueryRow(ctx, `SELECT name, role FROM profiles WHERE id = $1`, id).Scan(&name, &role); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT name, role FROM profiles WHERE id = $1 AND `+keptBy, id, by).Scan(&name, &role); err != nil {
 			return found(err)
 		}
 		if role == domain.RoleAdmin {
@@ -273,7 +305,7 @@ func (s *Store) RemoveProfile(ctx context.Context, id uuid.UUID) (string, error)
 				return err
 			}
 		}
-		_, err := tx.Exec(ctx, `DELETE FROM profiles WHERE id = $1`, id)
+		_, err := tx.Exec(ctx, `DELETE FROM profiles WHERE id = $1 AND `+keptBy, id, by)
 		return err
 	})
 	return name, err
@@ -302,13 +334,35 @@ type ProfileAccess struct {
 	Libraries []uuid.UUID
 }
 
-// Access answers what a profile may see.
-func (s *Store) Access(ctx context.Context, id uuid.UUID) (ProfileAccess, error) {
+// within is whether a grants no more than limit: libraries among limit's where limit names any,
+// an age no older than limit's where limit has one, and unrated titles blocked where limit blocks
+// them.
+func (a ProfileAccess) within(limit ProfileAccess) bool {
+	if len(limit.Libraries) > 0 && (len(a.Libraries) == 0 || slices.ContainsFunc(a.Libraries, func(l uuid.UUID) bool {
+		return !slices.Contains(limit.Libraries, l)
+	})) {
+		return false
+	}
+	if limit.MaxAge == nil {
+		return true
+	}
+	if a.MaxAge == nil || *a.MaxAge > *limit.MaxAge {
+		return false
+	}
+	return limit.Unrated != domain.UnratedBlock || a.Unrated == domain.UnratedBlock
+}
+
+// Access answers what a profile may see; to a manager by, only for a profile it keeps.
+func (s *Store) Access(ctx context.Context, id uuid.UUID, by *uuid.UUID) (ProfileAccess, error) {
+	return access(ctx, s.pool, id, by)
+}
+
+func access(ctx context.Context, db db, id uuid.UUID, by *uuid.UUID) (ProfileAccess, error) {
 	var out ProfileAccess
-	err := s.pool.QueryRow(ctx, `
+	err := db.QueryRow(ctx, `
 		SELECT p.max_age, p.unrated,
 			array(SELECT l.library_id FROM profile_libraries l WHERE l.profile_id = p.id)
-		FROM profiles p WHERE p.id = $1`, id).Scan(&out.MaxAge, &out.Unrated, &out.Libraries)
+		FROM profiles p WHERE p.id = $1 AND `+keptBy, id, by).Scan(&out.MaxAge, &out.Unrated, &out.Libraries)
 	if out.Libraries == nil {
 		out.Libraries = []uuid.UUID{}
 	}
@@ -316,10 +370,20 @@ func (s *Store) Access(ctx context.Context, id uuid.UUID) (ProfileAccess, error)
 }
 
 // SetAccess replaces what a profile may see. ErrNotFound for no profile, or a library there is not.
-func (s *Store) SetAccess(ctx context.Context, id uuid.UUID, a ProfileAccess) error {
+// A manager by sets only a profile it keeps, to no more than it sees itself.
+func (s *Store) SetAccess(ctx context.Context, id uuid.UUID, a ProfileAccess, by *uuid.UUID) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := affected(tx.Exec(ctx, `UPDATE profiles SET unrated = $2, max_age = $3 WHERE id = $1`,
-			id, cmp.Or(a.Unrated, domain.UnratedAllow), a.MaxAge)); err != nil {
+		if by != nil {
+			limit, err := access(ctx, tx, *by, nil)
+			if err != nil {
+				return err
+			}
+			if !a.within(limit) {
+				return ErrBeyondManager
+			}
+		}
+		if err := affected(tx.Exec(ctx, `UPDATE profiles SET unrated = $3, max_age = $4 WHERE id = $1 AND `+keptBy,
+			id, by, cmp.Or(a.Unrated, domain.UnratedAllow), a.MaxAge)); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM profile_libraries WHERE profile_id = $1`, id); err != nil {
@@ -336,8 +400,8 @@ func (s *Store) SetAccess(ctx context.Context, id uuid.UUID, a ProfileAccess) er
 
 // SetAvatar makes picture a profile's avatar, or with the zero id takes it away, answering the
 // profile as it is then. The picture it had is forgotten, and its file swept with the rest.
-func (s *Store) SetAvatar(ctx context.Context, id, picture uuid.UUID) (domain.Profile, error) {
-	if err := affected(s.pool.Exec(ctx, `UPDATE profiles SET avatar_id = $2 WHERE id = $1`, id, optional(picture))); err != nil {
+func (s *Store) SetAvatar(ctx context.Context, id, picture uuid.UUID, by *uuid.UUID) (domain.Profile, error) {
+	if err := affected(s.pool.Exec(ctx, `UPDATE profiles SET avatar_id = $3 WHERE id = $1 AND `+keptBy, id, by, optional(picture))); err != nil {
 		return domain.Profile{}, err
 	}
 	return s.ProfileByID(ctx, id)

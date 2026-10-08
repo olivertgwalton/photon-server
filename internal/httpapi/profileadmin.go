@@ -14,11 +14,11 @@ import (
 )
 
 type profileAdmin interface {
-	AddProfile(ctx context.Context, name string, role domain.Role, passwordHash string) (domain.Profile, error)
-	SetProfile(ctx context.Context, id uuid.UUID, c store.ProfileChange) (domain.Profile, error)
-	RemoveProfile(ctx context.Context, id uuid.UUID) (string, error)
-	Access(ctx context.Context, id uuid.UUID) (store.ProfileAccess, error)
-	SetAccess(ctx context.Context, id uuid.UUID, a store.ProfileAccess) error
+	AddProfile(ctx context.Context, name string, role domain.Role, passwordHash string, by *uuid.UUID) (domain.Profile, error)
+	SetProfile(ctx context.Context, id uuid.UUID, c store.ProfileChange, by *uuid.UUID) (domain.Profile, error)
+	RemoveProfile(ctx context.Context, id uuid.UUID, by *uuid.UUID) (string, error)
+	Access(ctx context.Context, id uuid.UUID, by *uuid.UUID) (store.ProfileAccess, error)
+	SetAccess(ctx context.Context, id uuid.UUID, a store.ProfileAccess, by *uuid.UUID) error
 }
 
 type accessJSON struct {
@@ -35,7 +35,7 @@ func (a *API) profileAccess(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	access, err := a.svc.ProfileAdmin.Access(r.Context(), id)
+	access, err := a.svc.ProfileAdmin.Access(r.Context(), id, nil)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -58,7 +58,7 @@ func (a *API) setProfileAccess(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "max_age is an age to 21 or null, and unrated is allow or block")
 		return
 	}
-	err := a.svc.ProfileAdmin.SetAccess(r.Context(), id, store.ProfileAccess(req))
+	err := a.svc.ProfileAdmin.SetAccess(r.Context(), id, store.ProfileAccess(req), nil)
 	if errors.Is(err, store.ErrNotFound) {
 		writeProblem(w, a.logger, codeNotFound, "no such profile, or one of its libraries")
 		return
@@ -92,7 +92,7 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	p, err := a.svc.ProfileAdmin.AddProfile(r.Context(), req.Name, req.Role, hash)
+	p, err := a.svc.ProfileAdmin.AddProfile(r.Context(), req.Name, req.Role, hash, nil)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -133,7 +133,7 @@ func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), id, change)
+	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), id, change, nil)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -146,7 +146,7 @@ func (a *API) removeProfile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name, err := a.svc.ProfileAdmin.RemoveProfile(r.Context(), id)
+	name, err := a.svc.ProfileAdmin.RemoveProfile(r.Context(), id, nil)
 	if a.answered(w, r, err) {
 		return
 	}

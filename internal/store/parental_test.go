@@ -56,7 +56,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 	}
 	counted(map[uuid.UUID]domain.TitleCounts{films.ID: {Movies: 3}, other.ID: {Movies: 1}, tv.ID: {Shows: 1, Seasons: 1, Episodes: 1}})
 	twelve := 12
-	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedBlock, Libraries: []uuid.UUID{films.ID, tv.ID}}); err != nil {
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedBlock, Libraries: []uuid.UUID{films.ID, tv.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := walls(); !slices.Equal(got, []string{"Paddington"}) {
@@ -138,18 +138,18 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 	if root, rel, err := s.VisiblePartFile(ctx, kid.ID, partOf(ids["Paddington"])); err != nil || root != "/srv/films" || rel != "Paddington.mkv" {
 		t.Errorf("timing the connection on Paddington: %q %q %v", root, rel, err)
 	}
-	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedAllow}); err != nil {
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedAllow}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := walls(); !slices.Equal(got, []string{"Home Movie", "Paddington", "Up"}) {
 		t.Errorf("12 and under, unrated allowed, every library: %q", got)
 	}
 	counted(map[uuid.UUID]domain.TitleCounts{films.ID: {Movies: 2}, other.ID: {Movies: 1}})
-	got, err := s.Access(ctx, kid.ID)
+	got, err := s.Access(ctx, kid.ID, nil)
 	if err != nil || got.MaxAge == nil || *got.MaxAge != 12 || got.Unrated != domain.UnratedAllow || len(got.Libraries) != 0 {
 		t.Errorf("access = %+v, %v", got, err)
 	}
-	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{uuid.NewV7()}}); !errors.Is(err, ErrNotFound) {
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{uuid.NewV7()}}, nil); !errors.Is(err, ErrNotFound) {
 		t.Errorf("a library there is not: %v, want ErrNotFound", err)
 	}
 }
@@ -197,12 +197,12 @@ func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
 	}
 	rate(ids["an episode rated TV-MA"], "TV-MA")
 
-	teen, err := s.AddProfile(ctx, "Teen", domain.RoleUser, "hash")
+	teen, err := s.AddProfile(ctx, "Teen", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fourteen := 14
-	if err := s.SetAccess(ctx, teen.ID, ProfileAccess{MaxAge: &fourteen, Unrated: domain.UnratedAllow}); err != nil {
+	if err := s.SetAccess(ctx, teen.ID, ProfileAccess{MaxAge: &fourteen, Unrated: domain.UnratedAllow}, nil); err != nil {
 		t.Fatal(err)
 	}
 	for name, want := range map[string]bool{

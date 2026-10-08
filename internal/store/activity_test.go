@@ -13,7 +13,7 @@ import (
 func TestTheActivityLogIsReadNewestFirstAndForgetsTheOld(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h")
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,10 +45,10 @@ func TestTheActivityLogIsReadNewestFirstAndForgetsTheOld(t *testing.T) {
 		t.Errorf("pruned %d, %v; want the one from 40 days ago", n, err)
 	}
 	// A profile removed leaves its entries, naming no one.
-	if _, err := s.AddProfile(ctx, "Spare", domain.RoleAdmin, "h"); err != nil {
+	if _, err := s.AddProfile(ctx, "Spare", domain.RoleAdmin, "h", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.RemoveProfile(ctx, oliver.ID); err != nil {
+	if _, err := s.RemoveProfile(ctx, oliver.ID, nil); err != nil {
 		t.Fatal(err)
 	}
 	ins, total, err = s.Activity(ctx, domain.EventSignedIn, 0, 10)

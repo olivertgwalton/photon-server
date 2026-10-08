@@ -21,7 +21,7 @@ type fakeProfiles struct {
 	access store.ProfileAccess
 }
 
-func (f *fakeProfiles) AddProfile(_ context.Context, name string, role domain.Role, hash string) (domain.Profile, error) {
+func (f *fakeProfiles) AddProfile(_ context.Context, name string, role domain.Role, hash string, _ *uuid.UUID) (domain.Profile, error) {
 	if name == oliver.Name {
 		return domain.Profile{}, store.ErrProfileExists
 	}
@@ -29,7 +29,7 @@ func (f *fakeProfiles) AddProfile(_ context.Context, name string, role domain.Ro
 	return domain.Profile{ID: uuid.NewV7(), Name: name, Role: role}, nil
 }
 
-func (f *fakeProfiles) SetProfile(_ context.Context, id uuid.UUID, c store.ProfileChange) (domain.Profile, error) {
+func (f *fakeProfiles) SetProfile(_ context.Context, id uuid.UUID, c store.ProfileChange, _ *uuid.UUID) (domain.Profile, error) {
 	if id != oliver.ID {
 		return domain.Profile{}, store.ErrNotFound
 	}
@@ -44,21 +44,21 @@ func (f *fakeProfiles) SetProfile(_ context.Context, id uuid.UUID, c store.Profi
 	return renamed, nil
 }
 
-func (f *fakeProfiles) RemoveProfile(_ context.Context, id uuid.UUID) (string, error) {
+func (f *fakeProfiles) RemoveProfile(_ context.Context, id uuid.UUID, _ *uuid.UUID) (string, error) {
 	if id == oliver.ID {
 		return "", store.ErrLastAdmin
 	}
 	return "", store.ErrNotFound
 }
 
-func (f *fakeProfiles) Access(_ context.Context, id uuid.UUID) (store.ProfileAccess, error) {
+func (f *fakeProfiles) Access(_ context.Context, id uuid.UUID, _ *uuid.UUID) (store.ProfileAccess, error) {
 	if id != oliver.ID {
 		return store.ProfileAccess{}, store.ErrNotFound
 	}
 	return f.access, nil
 }
 
-func (f *fakeProfiles) SetAccess(_ context.Context, id uuid.UUID, a store.ProfileAccess) error {
+func (f *fakeProfiles) SetAccess(_ context.Context, id uuid.UUID, a store.ProfileAccess, _ *uuid.UUID) error {
 	if id != oliver.ID {
 		return store.ErrNotFound
 	}

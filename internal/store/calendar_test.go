@@ -28,15 +28,15 @@ func TestCalendar(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	admin, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash")
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{films.ID, kidsTV.ID}}); err != nil {
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{films.ID, kidsTV.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	day := func(n int) time.Time { return time.Date(2026, time.October, n, 0, 0, 0, 0, time.UTC) }

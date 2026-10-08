@@ -214,15 +214,15 @@ func TestAProfileSeesItsLibrariesInItsOwnOrder(t *testing.T) {
 		libs[i] = lib
 	}
 	films, tv := libs[0], libs[1]
-	ada, err := s.AddProfile(ctx, "Ada", domain.RoleUser, "hash")
+	ada, err := s.AddProfile(ctx, "Ada", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	kids, err := s.AddProfile(ctx, "Kids", domain.RoleUser, "hash")
+	kids, err := s.AddProfile(ctx, "Kids", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetAccess(ctx, kids.ID, ProfileAccess{Libraries: []uuid.UUID{films.ID, tv.ID}}); err != nil {
+	if err := s.SetAccess(ctx, kids.ID, ProfileAccess{Libraries: []uuid.UUID{films.ID, tv.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	seen := func(profile uuid.UUID) []string {

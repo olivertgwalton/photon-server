@@ -31,11 +31,11 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	guest, err := s.AddProfile(ctx, "Guest", domain.RoleUser, "hash")
+	guest, err := s.AddProfile(ctx, "Guest", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestAPlaybackIsOnePlayHoweverOftenItReportsTheEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestTheNewestWatchWins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,15 +277,15 @@ func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sam, err := s.AddProfile(ctx, "Sam", domain.RoleUser, "hash")
+	sam, err := s.AddProfile(ctx, "Sam", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetAccess(ctx, sam.ID, ProfileAccess{Libraries: []uuid.UUID{shows.ID}}); err != nil {
+	if err := s.SetAccess(ctx, sam.ID, ProfileAccess{Libraries: []uuid.UUID{shows.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	// add scans and matches the show into a library, answering its episodes by number.
@@ -411,11 +411,11 @@ func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 func TestATitleMatchedByDifferentProvidersIsOneTitle(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sam, err := s.AddProfile(ctx, "Sam", domain.RoleUser, "hash")
+	sam, err := s.AddProfile(ctx, "Sam", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -451,7 +451,7 @@ func TestATitleMatchedByDifferentProvidersIsOneTitle(t *testing.T) {
 	}
 	_, inKids, kidsPilot := add("Kids", domain.SourceTMDB, map[domain.Provider]string{domain.ProviderTMDB: "36685", domain.ProviderTVDB: "175901"})
 	shows, inShows, showsPilot := add("Shows", domain.SourceTVDB, map[domain.Provider]string{domain.ProviderTVDB: "175901"})
-	if err := s.SetAccess(ctx, sam.ID, ProfileAccess{Libraries: []uuid.UUID{shows}}); err != nil {
+	if err := s.SetAccess(ctx, sam.ID, ProfileAccess{Libraries: []uuid.UUID{shows}}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -478,7 +478,7 @@ func TestATitleMatchedByDifferentProvidersIsOneTitle(t *testing.T) {
 func TestTitlesSharingAnIDThroughAnotherAreOneTitle(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash")
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -111,7 +111,7 @@ func (a *API) renameSelf(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, badName)
 		return
 	}
-	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), sessionOf(r).Profile.ID, store.ProfileChange{Name: name})
+	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), sessionOf(r).Profile.ID, store.ProfileChange{Name: name}, nil)
 	if !a.answered(w, r, err) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(p))
 	}

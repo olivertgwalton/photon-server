@@ -12,7 +12,7 @@ import (
 )
 
 type avatars interface {
-	SetAvatar(ctx context.Context, profile, picture uuid.UUID) (domain.Profile, error)
+	SetAvatar(ctx context.Context, profile, picture uuid.UUID, by *uuid.UUID) (domain.Profile, error)
 }
 
 // avatarWithin is how long a client has to send an avatar, the largest picture kept taking a
@@ -61,14 +61,14 @@ func (a *API) setAvatar(w http.ResponseWriter, r *http.Request, profile uuid.UUI
 		a.internal(w, r, err)
 		return
 	}
-	p, err := a.svc.Avatars.SetAvatar(r.Context(), profile, picture)
+	p, err := a.svc.Avatars.SetAvatar(r.Context(), profile, picture, nil)
 	if !a.answered(w, r, err) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(p))
 	}
 }
 
 func (a *API) clearAvatar(w http.ResponseWriter, r *http.Request, profile uuid.UUID) {
-	if _, err := a.svc.Avatars.SetAvatar(r.Context(), profile, uuid.UUID{}); !a.answered(w, r, err) {
+	if _, err := a.svc.Avatars.SetAvatar(r.Context(), profile, uuid.UUID{}, nil); !a.answered(w, r, err) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
