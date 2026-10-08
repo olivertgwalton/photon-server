@@ -31,13 +31,13 @@ var fileTypes = map[string]string{
 
 // partStream serves one file of a copy as it is, in byte ranges.
 func (a *API) partStream(w http.ResponseWriter, r *http.Request) {
-	a.serveLibraryFile(w, r, a.svc.Playing.PartFile, math.MaxInt64)
+	a.serveLibraryFile(w, r, "id", a.svc.Playing.PartFile, math.MaxInt64)
 }
 
 // playbackPartStream serves a copy's file as it is to its playback, for as long as the playback
 // lasts: its stop cuts off what is still being sent.
 func (a *API) playbackPartStream(w http.ResponseWriter, r *http.Request) {
-	playback, ok := a.pathID(w, r, "playback")
+	playback, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
 	}
@@ -54,7 +54,7 @@ func (a *API) playbackPartStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer done()
-	a.serveLibraryFile(w, r, a.svc.Playing.PartFile, math.MaxInt64)
+	a.serveLibraryFile(w, r, "part", a.svc.Playing.PartFile, math.MaxInt64)
 }
 
 // sampleBytes is as much of a part as a connection test may read: enough to time a fast link,
@@ -67,7 +67,7 @@ func (a *API) partSample(w http.ResponseWriter, r *http.Request) {
 	visible := func(ctx context.Context, part uuid.UUID) (string, string, error) {
 		return a.svc.Playing.VisiblePartFile(ctx, auth.SessionOf(ctx).Profile.ID, part)
 	}
-	a.serveLibraryFile(w, r, visible, sampleBytes)
+	a.serveLibraryFile(w, r, "id", visible, sampleBytes)
 }
 
 // subtitleFormat is how a subtitle file beside a copy is served.
@@ -89,7 +89,7 @@ func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
 	}
 	switch format {
 	case subtitleOriginal:
-		a.serveLibraryFile(w, r, a.svc.Playing.SubtitleFile, math.MaxInt64)
+		a.serveLibraryFile(w, r, "id", a.svc.Playing.SubtitleFile, math.MaxInt64)
 	case subtitleWebVTT:
 		a.subtitleVTT(w, r)
 	}
@@ -122,9 +122,9 @@ func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 }
 
 // serveLibraryFile serves the first limit bytes of the file of a library that where finds for the
-// id in the path: only a file the scanner recorded.
-func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, where func(context.Context, uuid.UUID) (string, string, error), limit int64) {
-	id, ok := a.pathID(w, r, "id")
+// id the path names by param: only a file the scanner recorded.
+func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, param string, where func(context.Context, uuid.UUID) (string, string, error), limit int64) {
+	id, ok := a.pathID(w, r, param)
 	if !ok {
 		return
 	}
@@ -174,7 +174,7 @@ func (a *API) requireSignature(next http.Handler) http.Handler {
 func (a *API) streamsRoutes() []route {
 	return []route{
 		{
-			pattern: "GET /api/v1/playbacks/{playback}/parts/{id}/stream", access: signedAddress,
+			pattern: "GET /api/v1/playbacks/{id}/parts/{part}/stream", access: signedAddress,
 			summary: "A copy's file as it is, in byte ranges, at the address play answered, for as long as the playback lasts",
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, delivery: playback.DeliveryFile,
 			handle: a.playbackPartStream,

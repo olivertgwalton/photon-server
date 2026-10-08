@@ -4826,6 +4826,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/playbacks/{id}/parts/{part}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A copy's file as it is, in byte ranges, at the address play answered, for as long as the playback lasts */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description When the address lapses, as the server signed it. */
+                    exp?: string;
+                    /** @description The server's signature of the path and exp. */
+                    sig?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                    part: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "video/*": unknown;
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/playbacks/{id}/progress": {
         parameters: {
             query?: never;
@@ -4906,51 +4951,6 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/playbacks/{playback}/parts/{id}/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** A copy's file as it is, in byte ranges, at the address play answered, for as long as the playback lasts */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description When the address lapses, as the server signed it. */
-                    exp?: string;
-                    /** @description The server's signature of the path and exp. */
-                    sig?: string;
-                };
-                header?: never;
-                path: {
-                    playback: string;
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "video/*": unknown;
-                    };
-                };
-                default: components["responses"]["Problem"];
-            };
-        };
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
