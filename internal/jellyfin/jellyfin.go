@@ -81,9 +81,9 @@ type API struct {
 	id   string
 	name string
 	mux  *http.ServeMux
-	// segments are the literal segments of the routes, by their lower case, for Jellyfin's routes
-	// are matched whatever their case and ServeMux's are not.
-	segments map[string]string
+	// routes are the paths of the routes by segment, a wildcard as "", for Jellyfin's routes are
+	// matched whatever their case and ServeMux's are not.
+	routes [][]string
 	// opening is held while a play session's HLS is started, so two fetches of its playlist start
 	// it once.
 	opening sync.Mutex
@@ -93,7 +93,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a := &API{
 		logger: logger, svc: svc, name: info.Name,
 		id:  strings.ReplaceAll(info.ID, "-", ""),
-		mux: http.NewServeMux(), segments: map[string]string{},
+		mux: http.NewServeMux(),
 	}
 	// Ping answers as Jellyfin does: its product's name, not the server's.
 	a.anyone(a.constant(`"`+product+`"`), "GET /System/Ping", "POST /System/Ping")
@@ -209,11 +209,13 @@ func (a *API) handle(h http.HandlerFunc, patterns ...string) {
 func (a *API) anyone(h http.HandlerFunc, patterns ...string) {
 	for _, pattern := range patterns {
 		_, path, _ := strings.Cut(pattern, " ")
-		for seg := range strings.SplitSeq(path, "/") {
-			if seg != "" && !strings.HasPrefix(seg, "{") {
-				a.segments[strings.ToLower(seg)] = seg
+		route := strings.Split(path, "/")
+		for i, seg := range route {
+			if strings.HasPrefix(seg, "{") {
+				route[i] = ""
 			}
 		}
+		a.routes = append(a.routes, route)
 		a.mux.HandleFunc(pattern, h)
 	}
 }
@@ -233,16 +235,43 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.mux.ServeHTTP(w, r)
 }
 
-// canonical writes each literal segment of a path as its route does, leaving the rest, an id or a
-// name, as it came, and drops a trailing slash.
+// canonical writes the literal segments of a path as the route it matches does, the most literal
+// of those it matches as ServeMux prefers it, leaving the rest, an id or a name, as it came, even
+// where another route has a segment of that name; and drops a trailing slash.
 func (a *API) canonical(path string) string {
 	segs := strings.Split(strings.TrimSuffix(path, "/"), "/")
-	for i, seg := range segs {
-		if c, ok := a.segments[strings.ToLower(seg)]; ok {
-			segs[i] = c
+	var best []string
+	most := -1
+	for _, route := range a.routes {
+		if n, ok := literals(route, segs); ok && n > most {
+			best, most = route, n
+		}
+	}
+	for i, seg := range best {
+		if seg != "" {
+			segs[i] = seg
 		}
 	}
 	return strings.Join(segs, "/")
+}
+
+// literals is how many literal segments route has, and whether path has each of them, whatever
+// their case.
+func literals(route, path []string) (int, bool) {
+	if len(route) != len(path) {
+		return 0, false
+	}
+	n := 0
+	for i, seg := range route {
+		if seg == "" {
+			continue
+		}
+		if !strings.EqualFold(seg, path[i]) {
+			return 0, false
+		}
+		n++
+	}
+	return n, true
 }
 
 // signedIn lets a request through with a token a profile holds. Only a missing or unknown token is
