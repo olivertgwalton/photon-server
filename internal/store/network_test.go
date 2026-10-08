@@ -27,3 +27,20 @@ func TestJellyfinIsOffUntilAnAdminTurnsItOn(t *testing.T) {
 		t.Errorf("kept %+v, %v; want %+v", got, err, n)
 	}
 }
+
+// An admin who clears the local networks saves none, which is the private networks.
+func TestNoLocalNetworksAreSaved(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	n, err := s.Network(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n.LocalNetworks = nil
+	if err := s.SetNetwork(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Network(ctx); err != nil || len(got.LocalNetworks) != 0 {
+		t.Errorf("kept %v, %v; want none", got.LocalNetworks, err)
+	}
+}
