@@ -507,3 +507,17 @@ func TestAnAppShowsAProfilesPicture(t *testing.T) {
 		}
 	}
 }
+
+// Jellyfin's web app asks for a title's intros before it plays it, and plays it once told there
+// are none.
+func TestAnAppIsToldATitleHasNoIntros(t *testing.T) {
+	api, _, _, _ := newAPI()
+	id := guid(uuid.NewV7())
+	for _, target := range []string{"/Items/" + id + "/Intros", "/Users/" + guid(ada.ID) + "/Items/" + id + "/Intros"} {
+		w := serve(api, http.MethodGet, target, kotlin+`, Token="pst_device"`, "")
+		m := object(t, w)
+		if items, ok := m["Items"].([]any); w.Code != http.StatusOK || !ok || len(items) != 0 || m["TotalRecordCount"] != 0.0 || m["StartIndex"] != 0.0 {
+			t.Errorf("%s: %d %s, want an empty query result", target, w.Code, w.Body)
+		}
+	}
+}
