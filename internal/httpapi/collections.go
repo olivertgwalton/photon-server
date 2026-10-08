@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -35,7 +36,7 @@ func (a *API) libraryCollections(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	cards, total, err := a.svc.Collections.Collections(r.Context(), lib, sessionOf(r).Profile.ID, offset, limit)
+	cards, total, err := a.svc.Collections.Collections(r.Context(), lib, auth.SessionOf(r.Context()).Profile.ID, offset, limit)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -48,7 +49,7 @@ func (a *API) members(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	cards, err := a.svc.Collections.Members(r.Context(), sessionOf(r).Profile.ID, id)
+	cards, err := a.svc.Collections.Members(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return
 	}

@@ -3,6 +3,8 @@ package httpapi
 import (
 	"net/http"
 	"time"
+
+	"github.com/olivertgwalton/photon-server/internal/auth"
 )
 
 type deviceListingJSON struct {
@@ -16,7 +18,7 @@ type deviceListingJSON struct {
 }
 
 func (a *API) devices(w http.ResponseWriter, r *http.Request) {
-	session := sessionOf(r)
+	session := auth.SessionOf(r.Context())
 	list, err := a.svc.Auth.Devices(r.Context(), session)
 	if err != nil {
 		a.internal(w, r, err)
@@ -37,7 +39,7 @@ func (a *API) signOutDevice(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !a.answered(w, r, a.svc.Auth.SignOutDevice(r.Context(), sessionOf(r), id)) {
+	if !a.answered(w, r, a.svc.Auth.SignOutDevice(r.Context(), auth.SessionOf(r.Context()), id)) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

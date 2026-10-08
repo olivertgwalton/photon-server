@@ -138,12 +138,12 @@ func (a *API) allowed(w http.ResponseWriter, r *http.Request, limit kv.Limit, ke
 }
 
 func (a *API) me(w http.ResponseWriter, r *http.Request) {
-	a.writeJSON(w, a.userOf(sessionOf(r).Profile))
+	a.writeJSON(w, a.userOf(auth.SessionOf(r.Context()).Profile))
 }
 
 // user answers the signed-in profile by its id, and no other, so no profile learns of another.
 func (a *API) user(w http.ResponseWriter, r *http.Request) {
-	p := sessionOf(r).Profile
+	p := auth.SessionOf(r.Context()).Profile
 	if id, err := uuid.Parse(r.PathValue("userId")); err != nil || id != p.ID {
 		a.refuse(w, http.StatusNotFound)
 		return
@@ -153,7 +153,7 @@ func (a *API) user(w http.ResponseWriter, r *http.Request) {
 
 // logout signs the device out. An API key is not a device and stays, revoked only by an admin.
 func (a *API) logout(w http.ResponseWriter, r *http.Request) {
-	s := sessionOf(r)
+	s := auth.SessionOf(r.Context())
 	switch s.Kind {
 	case domain.SessionDevice:
 		if err := a.svc.Auth.SignOut(r.Context(), s.ID); err != nil {

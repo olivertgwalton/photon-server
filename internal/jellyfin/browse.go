@@ -11,6 +11,7 @@ import (
 	"strings"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -129,7 +130,7 @@ func (a *API) writeList(w http.ResponseWriter, r *http.Request, cards []store.Ca
 
 // seenLibraries are the libraries the profile sees, by id.
 func (a *API) seenLibraries(r *http.Request) ([]*store.SeenLibrary, map[uuid.UUID]*store.SeenLibrary, error) {
-	libs, err := a.svc.Catalogue.LibrariesSeen(r.Context(), sessionOf(r).Profile.ID)
+	libs, err := a.svc.Catalogue.LibrariesSeen(r.Context(), auth.SessionOf(r.Context()).Profile.ID)
 	byID := map[uuid.UUID]*store.SeenLibrary{}
 	for _, l := range libs {
 		byID[l.ID] = l
@@ -247,7 +248,7 @@ var libraryKinds = map[domain.LibraryKind]string{domain.LibraryMovies: "Movie", 
 // items answers Jellyfin's /Items: a library's films or shows, a show's seasons or episodes, a
 // season's episodes, or what matches a search; every library at once where an app names none.
 func (a *API) items(w http.ResponseWriter, r *http.Request) {
-	profile, l := sessionOf(r).Profile.ID, listedOf(w, r)
+	profile, l := auth.SessionOf(r.Context()).Profile.ID, listedOf(w, r)
 	types := values(r, "includeItemTypes")
 	libs, seen, err := a.seenLibraries(r)
 	if err != nil {
@@ -283,7 +284,7 @@ func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Req
 		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
 		return
 	}
-	cards, total, err := a.svc.Catalogue.Wall(r.Context(), ids, wallPage(r, sessionOf(r).Profile.ID, l))
+	cards, total, err := a.svc.Catalogue.Wall(r.Context(), ids, wallPage(r, auth.SessionOf(r.Context()).Profile.ID, l))
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -297,7 +298,7 @@ var searchKinds = map[string]domain.ItemKind{
 }
 
 func (a *API) search(w http.ResponseWriter, r *http.Request, text string, library uuid.UUID, types []string, l listed) {
-	q := store.SearchQuery{Profile: sessionOf(r).Profile.ID, Text: text, Library: library, Offset: l.start, Limit: l.limit}
+	q := store.SearchQuery{Profile: auth.SessionOf(r.Context()).Profile.ID, Text: text, Library: library, Offset: l.start, Limit: l.limit}
 	for _, t := range types {
 		if k, ok := searchKinds[strings.ToLower(t)]; ok {
 			q.Kinds = append(q.Kinds, k)
@@ -344,7 +345,7 @@ func (a *API) writeSeasons(w http.ResponseWriter, r *http.Request, show uuid.UUI
 	out := queryResult{Items: make([]item, len(page)), TotalRecordCount: len(seasons), StartIndex: l.start}
 	name := ""
 	if len(page) > 0 {
-		if p, err := a.svc.Catalogue.Title(r.Context(), sessionOf(r).Profile.ID, show); err == nil {
+		if p, err := a.svc.Catalogue.Title(r.Context(), auth.SessionOf(r.Context()).Profile.ID, show); err == nil {
 			name = p.Title
 		}
 	}
@@ -371,7 +372,7 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, a.library(lib))
 		return
 	}
-	p, err := a.svc.Catalogue.Title(r.Context(), sessionOf(r).Profile.ID, id)
+	p, err := a.svc.Catalogue.Title(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if errors.Is(err, store.ErrNotFound) {
 		a.announcedItem(w, r, id)
 		return
@@ -391,7 +392,7 @@ func (a *API) seasons(w http.ResponseWriter, r *http.Request) {
 		a.refuse(w, http.StatusNotFound)
 		return
 	}
-	seasons, err := a.svc.Catalogue.Seasons(r.Context(), sessionOf(r).Profile.ID, show)
+	seasons, err := a.svc.Catalogue.Seasons(r.Context(), auth.SessionOf(r.Context()).Profile.ID, show)
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)
 		return
@@ -414,7 +415,7 @@ func (a *API) episodes(w http.ResponseWriter, r *http.Request) {
 	if season, err := uuid.Parse(query(r, "seasonId")); err == nil {
 		of = season
 	}
-	cards, err := a.svc.Catalogue.Episodes(r.Context(), sessionOf(r).Profile.ID, of)
+	cards, err := a.svc.Catalogue.Episodes(r.Context(), auth.SessionOf(r.Context()).Profile.ID, of)
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)
 		return
@@ -441,7 +442,7 @@ const (
 func (a *API) row(kind domain.HomeRow) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		l := listedOf(w, r)
-		cards, total, err := a.svc.Catalogue.RowPage(r.Context(), sessionOf(r).Profile.ID, kind, l.start, min(l.limit, rowLimit))
+		cards, total, err := a.svc.Catalogue.RowPage(r.Context(), auth.SessionOf(r.Context()).Profile.ID, kind, l.start, min(l.limit, rowLimit))
 		if err != nil {
 			a.internal(w, r, err)
 			return
@@ -458,7 +459,7 @@ func (a *API) nextUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var cards []store.Card
-	switch c, err := a.svc.Catalogue.Next(r.Context(), sessionOf(r).Profile.ID, show); {
+	switch c, err := a.svc.Catalogue.Next(r.Context(), auth.SessionOf(r.Context()).Profile.ID, show); {
 	case err == nil:
 		cards = []store.Card{c}
 	case errors.Is(err, store.ErrNotFound), errors.Is(err, store.ErrNoNext):
@@ -493,7 +494,7 @@ func (a *API) latest(w http.ResponseWriter, r *http.Request) {
 	}
 	var cards []store.Card
 	for _, lib := range libs {
-		got, err := a.svc.Catalogue.LibraryRow(r.Context(), sessionOf(r).Profile.ID, latestRows[lib.Kind], lib.ID, limit)
+		got, err := a.svc.Catalogue.LibraryRow(r.Context(), auth.SessionOf(r.Context()).Profile.ID, latestRows[lib.Kind], lib.ID, limit)
 		if err != nil {
 			a.internal(w, r, err)
 			return

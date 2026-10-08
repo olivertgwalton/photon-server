@@ -8,6 +8,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/artwork"
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
@@ -24,11 +25,11 @@ var avatarTypes = asFile{"image/jpeg", "image/png", "image/gif", "image/webp"}
 
 // setOwnAvatar gives the profile a picture, as Jellyfin's user image is set from its profile page.
 func (a *API) setOwnAvatar(w http.ResponseWriter, r *http.Request) {
-	a.setAvatar(w, r, sessionOf(r).Profile.ID, nil)
+	a.setAvatar(w, r, auth.SessionOf(r.Context()).Profile.ID, nil)
 }
 
 func (a *API) clearOwnAvatar(w http.ResponseWriter, r *http.Request) {
-	a.clearAvatar(w, r, sessionOf(r).Profile.ID, nil)
+	a.clearAvatar(w, r, auth.SessionOf(r.Context()).Profile.ID, nil)
 }
 
 // setProfileAvatar is an admin giving any profile its picture.

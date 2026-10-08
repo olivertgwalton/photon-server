@@ -7,6 +7,7 @@ import (
 
 	"golang.org/x/text/language"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
@@ -51,7 +52,7 @@ func (a *API) searchSubtitles(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	searched, found, err := a.svc.Subtitles.Search(r.Context(), sessionOf(r).Profile.ID, id, version, lang)
+	searched, found, err := a.svc.Subtitles.Search(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, version, lang)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -87,7 +88,7 @@ func (a *API) fetchSubtitle(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "language is a BCP 47 tag")
 		return
 	}
-	made, err := a.svc.Subtitles.Fetch(r.Context(), sessionOf(r).Profile.ID, id, req.VersionID, domain.FoundSubtitle{
+	made, err := a.svc.Subtitles.Fetch(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.VersionID, domain.FoundSubtitle{
 		Source: req.Source, ID: req.ID, Language: lang, Release: req.Release, HearingImpaired: req.HearingImpaired, Forced: req.Forced,
 	})
 	if a.answered(w, r, err) {

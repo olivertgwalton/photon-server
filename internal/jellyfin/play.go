@@ -15,6 +15,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/playback"
@@ -84,7 +85,7 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	req.MediaSourceID = cmp.Or(req.MediaSourceID, query(r, "mediaSourceId"))
 	version, _ := uuid.Parse(req.MediaSourceID)
-	c, err := a.svc.Playing.Playable(r.Context(), sessionOf(r).Profile.ID, id, version)
+	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, version)
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)
 		return
@@ -214,7 +215,7 @@ func (a *API) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	version, _ := uuid.Parse(query(r, "mediaSourceId"))
-	c, err := a.svc.Playing.Playable(r.Context(), sessionOf(r).Profile.ID, id, version)
+	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, version)
 	switch {
 	case errors.Is(err, store.ErrNotFound) || err == nil && len(c.Parts) == 0:
 		a.refuse(w, http.StatusNotFound)
@@ -267,7 +268,7 @@ func (a *API) subtitle(w http.ResponseWriter, r *http.Request) {
 		a.refuse(w, http.StatusNotFound)
 		return
 	}
-	if _, err := a.svc.Playing.Playable(r.Context(), sessionOf(r).Profile.ID, id, source); err != nil {
+	if _, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, source); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			a.refuse(w, http.StatusNotFound)
 			return
@@ -339,7 +340,7 @@ func (a *API) reported(kind reportKind) http.HandlerFunc {
 		if !a.readJSON(w, r, &rep) {
 			return
 		}
-		profile := sessionOf(r).Profile.ID
+		profile := auth.SessionOf(r.Context()).Profile.ID
 		position := time.Duration(rep.PositionTicks/ticksPerMS) * time.Millisecond
 		state := domain.StatePlaying
 		if rep.IsPaused {
@@ -349,7 +350,7 @@ func (a *API) reported(kind reportKind) http.HandlerFunc {
 		if rep.SubtitleStreamIndex != nil && *rep.SubtitleStreamIndex >= 0 {
 			tracks.Subtitle = rep.SubtitleStreamIndex
 		}
-		id := playID(cmp.Or(rep.PlaySessionID, guid(sessionOf(r).ID)+rep.ItemID))
+		id := playID(cmp.Or(rep.PlaySessionID, guid(auth.SessionOf(r.Context()).ID)+rep.ItemID))
 		progress := func(ctx context.Context) error {
 			_, err := a.svc.Playbacks.Progress(ctx, profile, id, position, state, tracks)
 			return err
@@ -388,7 +389,7 @@ func (a *API) startDirect(r *http.Request, id uuid.UUID, rep report) error {
 		return store.ErrNotFound
 	}
 	version, _ := uuid.Parse(rep.MediaSourceID)
-	s := sessionOf(r)
+	s := auth.SessionOf(r.Context())
 	c, err := a.svc.Playing.Playable(r.Context(), s.Profile.ID, item, version)
 	if err != nil {
 		return err
@@ -446,7 +447,7 @@ func (a *API) mark(set func(ctx context.Context, profile, item uuid.UUID) error)
 		if !ok {
 			return
 		}
-		profile := sessionOf(r).Profile.ID
+		profile := auth.SessionOf(r.Context()).Profile.ID
 		err := set(r.Context(), profile, id)
 		if isNotFound(err) {
 			a.refuse(w, http.StatusNotFound)
@@ -485,7 +486,7 @@ func (a *API) mediaSegments(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	c, err := a.svc.Playing.Playable(r.Context(), sessionOf(r).Profile.ID, id, uuid.UUID{})
+	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, uuid.UUID{})
 	if isNotFound(err) {
 		a.refuse(w, http.StatusNotFound)
 		return

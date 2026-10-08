@@ -6,6 +6,8 @@ import (
 	"time"
 	"unicode/utf8"
 	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/auth"
 )
 
 const maxKeyName = 64
@@ -53,7 +55,7 @@ func (a *API) createKey(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "name is 1 to 64 characters")
 		return
 	}
-	id, token, err := a.svc.Auth.CreateKey(r.Context(), sessionOf(r), name)
+	id, token, err := a.svc.Auth.CreateKey(r.Context(), auth.SessionOf(r.Context()), name)
 	if err != nil {
 		a.internal(w, r, err)
 		return

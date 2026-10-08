@@ -205,8 +205,6 @@ func (a *API) canonical(path string) string {
 	return strings.Join(segs, "/")
 }
 
-type sessionKey struct{}
-
 // signedIn lets a request through with a token a profile holds. Only a missing or unknown token is
 // answered 401, which some apps take to mean signed out.
 func (a *API) signedIn(next http.HandlerFunc) http.HandlerFunc {
@@ -225,13 +223,8 @@ func (a *API) signedIn(next http.HandlerFunc) http.HandlerFunc {
 			a.internal(w, r, err)
 			return
 		}
-		next(w, r.WithContext(context.WithValue(r.Context(), sessionKey{}, s)))
+		next(w, r.WithContext(auth.WithSession(r.Context(), s)))
 	}
-}
-
-func sessionOf(r *http.Request) domain.Session {
-	s, _ := r.Context().Value(sessionKey{}).(domain.Session)
-	return s
 }
 
 func (a *API) writeJSON(w http.ResponseWriter, v any) {

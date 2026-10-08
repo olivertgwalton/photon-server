@@ -64,10 +64,10 @@ func (a *API) approvePairing(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if !a.allowed(w, r, auth.ApprovalsPerProfile, auth.ApprovalKey(sessionOf(r).Profile.ID)) {
+	if !a.allowed(w, r, auth.ApprovalsPerProfile, auth.ApprovalKey(auth.SessionOf(r.Context()).Profile.ID)) {
 		return
 	}
-	d, err := a.svc.Auth.ApprovePairing(r.Context(), sessionOf(r), req.UserCode)
+	d, err := a.svc.Auth.ApprovePairing(r.Context(), auth.SessionOf(r.Context()), req.UserCode)
 	if a.answered(w, r, err) {
 		return
 	}

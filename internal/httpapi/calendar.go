@@ -7,6 +7,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -63,7 +64,7 @@ func (a *API) calendar(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidParameter, fmt.Sprintf("end is from start to %d days on", maxCalendarDays-1))
 		return
 	}
-	found, err := a.svc.Catalogue.Calendar(r.Context(), store.CalendarQuery{Profile: sessionOf(r).Profile.ID, Start: start, End: end, Filter: filter})
+	found, err := a.svc.Catalogue.Calendar(r.Context(), store.CalendarQuery{Profile: auth.SessionOf(r.Context()).Profile.ID, Start: start, End: end, Filter: filter})
 	if a.answered(w, r, err) {
 		return
 	}

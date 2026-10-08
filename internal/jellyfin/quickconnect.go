@@ -71,7 +71,7 @@ func (a *API) quickConnectState(w http.ResponseWriter, r *http.Request) {
 
 // authorizeQuickConnect approves a code for the signed-in profile, and no other.
 func (a *API) authorizeQuickConnect(w http.ResponseWriter, r *http.Request) {
-	s := sessionOf(r)
+	s := auth.SessionOf(r.Context())
 	if userID := query(r, "userId"); userID != "" {
 		if id, err := uuid.Parse(userID); err != nil || id != s.Profile.ID {
 			a.refuse(w, http.StatusForbidden)

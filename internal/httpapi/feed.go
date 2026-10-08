@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
@@ -37,7 +38,7 @@ func feedStream() asStream {
 // First a hello with the scans going on. Nothing is kept to resend, so a client that reconnects
 // asks again for what it shows.
 func (a *API) events(w http.ResponseWriter, r *http.Request) {
-	ctx, profile := r.Context(), sessionOf(r).Profile.ID
+	ctx, profile := r.Context(), auth.SessionOf(r.Context()).Profile.ID
 	events, stop := a.svc.Events.Subscribe()
 	defer stop()
 	scans, err := a.svc.Events.Scans(ctx)

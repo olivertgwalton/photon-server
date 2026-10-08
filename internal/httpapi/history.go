@@ -6,6 +6,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -26,7 +27,7 @@ type historyEntryJSON struct {
 
 // ownHistory answers the profile's plays, the latest first.
 func (a *API) ownHistory(w http.ResponseWriter, r *http.Request) {
-	a.history(w, r, sessionOf(r).Profile.ID)
+	a.history(w, r, auth.SessionOf(r.Context()).Profile.ID)
 }
 
 // adminHistory answers everyone's plays, or one profile's, the latest first, as Plex's dashboard

@@ -6,6 +6,7 @@ import (
 	"os"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -36,7 +37,7 @@ func (a *API) trickplay(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	t, err := a.svc.Previews.Trickplay(r.Context(), sessionOf(r).Profile.ID, id)
+	t, err := a.svc.Previews.Trickplay(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -52,7 +53,7 @@ func (a *API) trickplaySheet(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	t, err := a.svc.Previews.Trickplay(r.Context(), sessionOf(r).Profile.ID, id)
+	t, err := a.svc.Previews.Trickplay(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return
 	}

@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"cmp"
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -16,13 +15,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
-
-type sessionKey struct{}
-
-func sessionOf(r *http.Request) domain.Session {
-	s, _ := r.Context().Value(sessionKey{}).(domain.Session)
-	return s
-}
 
 // sessionCookie is where the web app keeps a browser's token (web/src/lib/server/session.ts), so
 // the browser calls the API itself.
@@ -58,7 +50,7 @@ func (a *API) requireSession(next http.Handler) http.Handler {
 			a.internal(w, r, err)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), sessionKey{}, session)))
+		next.ServeHTTP(w, r.WithContext(auth.WithSession(r.Context(), session)))
 	})
 }
 
@@ -204,7 +196,7 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) logout(w http.ResponseWriter, r *http.Request) {
-	if err := a.svc.Auth.SignOut(r.Context(), sessionOf(r).ID); err != nil {
+	if err := a.svc.Auth.SignOut(r.Context(), auth.SessionOf(r.Context()).ID); err != nil {
 		a.internal(w, r, err)
 		return
 	}
@@ -215,7 +207,7 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) me(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(sessionOf(r).Profile))
+	writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(auth.SessionOf(r.Context()).Profile))
 }
 
 func (a *API) sessionRoutes() []route {

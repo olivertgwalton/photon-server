@@ -13,6 +13,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/library"
@@ -64,7 +65,7 @@ const sampleBytes = 16 << 20
 // does, but of the file itself. It is no playback: nothing is recorded of it.
 func (a *API) partSample(w http.ResponseWriter, r *http.Request) {
 	visible := func(ctx context.Context, part uuid.UUID) (string, string, error) {
-		return a.svc.Playing.VisiblePartFile(ctx, sessionOf(r).Profile.ID, part)
+		return a.svc.Playing.VisiblePartFile(ctx, auth.SessionOf(ctx).Profile.ID, part)
 	}
 	a.serveLibraryFile(w, r, visible, sampleBytes)
 }
