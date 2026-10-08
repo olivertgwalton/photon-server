@@ -42,7 +42,7 @@ func TestRead(t *testing.T) {
 			}},
 		},
 		{
-			name: "series with a legacy id",
+			name: "series known by its bare id",
 			nfo:  `<tvshow><title>The Wire</title><year>2002</year><id>79126</id></tvshow>`,
 			want: File{Metadata: domain.Metadata{Title: "The Wire", Year: 2002, IDs: map[domain.Provider]string{domain.ProviderTVDB: "79126"}}},
 		},
