@@ -167,7 +167,7 @@ func (fakePlaybacks) End(_ context.Context, id uuid.UUID) error {
 
 func (fakePlaybacks) Abandon(context.Context, uuid.UUID) error { return nil }
 
-func (fakePlaybacks) Opened(domain.PlayMethod) {}
+func (fakePlaybacks) Opened(context.Context, domain.Playback) {}
 
 func (fakePlaybacks) Serve(context.Context, uuid.UUID, func()) (func(), error) { return func() {}, nil }
 

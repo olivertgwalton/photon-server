@@ -95,6 +95,7 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	s.Opened(ctx, p)
 	streams[p.ID] = true
 	if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePaused, domain.ChosenTracks{}); err != nil {
 		t.Fatal(err)

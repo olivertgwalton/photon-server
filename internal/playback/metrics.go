@@ -25,10 +25,6 @@ func newStarts() *prometheus.CounterVec {
 	return starts
 }
 
-// Opened counts a playback started whose stream opened, once it has: one a node refused, abandoned
-// for the next to be asked, is no start.
-func (s *Sessions) Opened(method domain.PlayMethod) { s.starts.WithLabelValues(string(method)).Inc() }
-
 func (s *Sessions) Describe(ch chan<- *prometheus.Desc) {
 	ch <- playbacksDesc
 	s.starts.Describe(ch)
