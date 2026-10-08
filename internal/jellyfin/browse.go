@@ -332,14 +332,21 @@ var searchKinds = map[string]domain.ItemKind{
 	"movie": domain.ItemMovie, "series": domain.ItemShow, "episode": domain.ItemEpisode, "boxset": domain.ItemCollection,
 }
 
-func (a *API) search(w http.ResponseWriter, r *http.Request, text string, library uuid.UUID, types []string, l listed) {
+// searchQuery is a search as an app asks for one, of the kinds of item it names; false where a
+// search finds none of them.
+func searchQuery(r *http.Request, text string, library uuid.UUID, types []string, l listed) (store.SearchQuery, bool) {
 	q := store.SearchQuery{Profile: auth.SessionOf(r.Context()).Profile.ID, Text: text, Library: library, Offset: l.start, Limit: l.limit}
 	for _, t := range types {
 		if k, ok := searchKinds[strings.ToLower(t)]; ok {
 			q.Kinds = append(q.Kinds, k)
 		}
 	}
-	if len(q.Kinds) == 0 && len(types) > 0 {
+	return q, len(q.Kinds) > 0 || len(types) == 0
+}
+
+func (a *API) search(w http.ResponseWriter, r *http.Request, text string, library uuid.UUID, types []string, l listed) {
+	q, ok := searchQuery(r, text, library, types, l)
+	if !ok {
 		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
 		return
 	}
