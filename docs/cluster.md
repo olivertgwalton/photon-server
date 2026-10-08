@@ -10,8 +10,10 @@ must be reachable by the others.
 | Variable | |
 |---|---|
 | `PHOTON_NODE_ADDRESS` | where the other nodes reach this one, such as `http://10.0.0.5:8640`. A node without one is never handed another node's requests and is not listed. |
-| `PHOTON_HWACCEL` | what it encodes video with: `software`, `nvenc`, `qsv`, `vaapi` or `videotoolbox` |
-| `PHOTON_HWACCEL_DEVICE` | the device to encode on, such as `/dev/dri/renderD128` |
+
+A node finds what it encodes video with as it starts: VideoToolbox on a Mac, NVENC, then QSV and
+VAAPI on each render node, the first that encodes a test picture, or software where none does.
+Its log says which, and Settings › Server shows it.
 
 A node is named by its host. In a container, give each machine's its own name: the deploy
 folder's compose file takes `PHOTON_HOSTNAME`, `photon` where it is unset.
