@@ -51,8 +51,9 @@ var configuration = json.RawMessage(`{"PlayDefaultAudioTrack":true,"SubtitleLang
 
 // policy is Jellyfin's UserPolicy, complete for the same reason. No profile is an administrator
 // here, even photon's admins: an app would offer Jellyfin's dashboard, which is not served, so
-// the server is run from photon's own app. What photon has no part of, Live TV, SyncPlay, sharing,
-// deleting and downloading through this API, is turned off so apps do not offer it.
+// the server is run from photon's own app. What photon has no part of, Live TV, SyncPlay, sharing
+// and deleting through this API, is turned off so apps do not offer it. Downloading is on: a
+// profile downloads a title's file as it is, of what it may play.
 var policy = json.RawMessage(`{"IsAdministrator":false,"IsHidden":true,"EnableCollectionManagement":false,` +
 	`"EnableSubtitleManagement":false,"EnableLyricManagement":false,"IsDisabled":false,"BlockedTags":[],` +
 	`"AllowedTags":[],"EnableUserPreferenceAccess":true,"AccessSchedules":[],"BlockUnratedItems":[],` +
@@ -60,7 +61,7 @@ var policy = json.RawMessage(`{"IsAdministrator":false,"IsHidden":true,"EnableCo
 	`"EnableLiveTvManagement":false,"EnableLiveTvAccess":false,"EnableMediaPlayback":true,` +
 	`"EnableAudioPlaybackTranscoding":true,"EnableVideoPlaybackTranscoding":true,"EnablePlaybackRemuxing":true,` +
 	`"ForceRemoteSourceTranscoding":false,"EnableContentDeletion":false,"EnableContentDeletionFromFolders":[],` +
-	`"EnableContentDownloading":false,"EnableSyncTranscoding":false,"EnableMediaConversion":false,` +
+	`"EnableContentDownloading":true,"EnableSyncTranscoding":false,"EnableMediaConversion":false,` +
 	`"EnabledDevices":[],"EnableAllDevices":true,"EnabledChannels":[],"EnableAllChannels":true,` +
 	`"EnabledFolders":[],"EnableAllFolders":true,"InvalidLoginAttemptCount":0,"LoginAttemptsBeforeLockout":-1,` +
 	`"MaxActiveSessions":0,"EnablePublicSharing":false,"BlockedMediaFolders":[],"BlockedChannels":[],` +

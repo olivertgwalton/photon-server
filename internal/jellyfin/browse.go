@@ -98,21 +98,22 @@ func has(vs []string, v string) bool {
 	return slices.ContainsFunc(vs, func(s string) bool { return strings.EqualFold(s, v) })
 }
 
-// list writes cards as items, with their copies and providers' ids where the app asked for them:
-// read for the whole page at once.
+// list writes cards as items, with their copies, whether each downloads, and providers' ids where
+// the app asked for them: read for the whole page at once.
 func (a *API) list(ctx context.Context, cards []store.Card, l listed) ([]item, error) {
 	out := make([]item, len(cards))
 	ids := make([]uuid.UUID, len(cards))
 	for n, c := range cards {
 		out[n], ids[n] = a.fromCard(c), c.ID
 	}
-	if l.fields["mediasources"] || l.fields["mediastreams"] {
+	if l.fields["mediasources"] || l.fields["mediastreams"] || l.fields["candownload"] {
 		versions, err := a.svc.Catalogue.Versions(ctx, ids)
 		if err != nil {
 			return nil, err
 		}
 		for n, id := range ids {
-			if v := versions[id]; len(v) > 0 {
+			out[n].CanDownload = downloadable(versions[id])
+			if v := versions[id]; len(v) > 0 && (l.fields["mediasources"] || l.fields["mediastreams"]) {
 				out[n].sources(v, l.words)
 				// Jellyfin writes the first copy's tracks beside it only when asked: they double
 				// what is written of the item.

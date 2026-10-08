@@ -27,7 +27,7 @@ type item struct {
 	Etag                    string              `json:"Etag,omitempty"`
 	DateCreated             *time.Time          `json:"DateCreated,omitempty"`
 	CanDelete               bool                `json:"CanDelete"`
-	CanDownload             bool                `json:"CanDownload"`
+	CanDownload             *bool               `json:"CanDownload,omitempty"`
 	Container               string              `json:"Container,omitempty"`
 	SortName                string              `json:"SortName,omitempty"`
 	PremiereDate            *time.Time          `json:"PremiereDate,omitempty"`
@@ -170,7 +170,7 @@ func (a *API) newItem(id uuid.UUID, kind domain.ItemKind, name string) item {
 	}
 	switch kind {
 	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
-		it.MediaType, it.VideoType, it.CanDownload = "Video", "VideoFile", true
+		it.MediaType, it.VideoType = "Video", "VideoFile"
 	case domain.ItemShow, domain.ItemSeason, domain.ItemCollection:
 		it.IsFolder = true
 	}
@@ -242,6 +242,7 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 	for _, c := range p.Credits {
 		it.People = append(it.People, person{Name: c.Name, ID: guid(c.PersonID), Role: c.Role, Type: cmp.Or(personKinds[c.Kind], "Unknown")})
 	}
+	it.CanDownload = downloadable(p.Versions)
 	if len(p.Versions) > 0 {
 		it.sources(p.Versions, w)
 		it.MediaStreams = it.MediaSources[0].MediaStreams
@@ -263,6 +264,13 @@ func (it *item) sources(versions []store.VersionPage, w words.Words) {
 	if it.RunTimeTicks == 0 {
 		it.RunTimeTicks = it.MediaSources[0].RunTimeTicks
 	}
+}
+
+// downloadable is whether /Items/{itemId}/Download serves a title's file: the copy it serves, the
+// one played unasked, is on disk in one file. Jellyfin says so only where it is asked.
+func downloadable(versions []store.VersionPage) *bool {
+	ok := len(versions) > 0 && versions[0].MissingSince == nil && versions[0].Parts == 1
+	return &ok
 }
 
 // providerIDs names each provider's id as Jellyfin's providers name theirs.
