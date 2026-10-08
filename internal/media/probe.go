@@ -100,7 +100,7 @@ func parseProbe(out []byte) (domain.Facts, error) {
 		if kind == domain.StreamVideo && s.Disposition["attached_pic"] == 1 {
 			continue
 		}
-		lang, _ := language.Parse(s.Tags["language"])
+		lang := language.Make(s.Tags["language"])
 		st := domain.Stream{
 			Index:           s.Index,
 			Kind:            kind,
@@ -195,8 +195,12 @@ func bitDepth(pixFmt string) int {
 	return cmp.Or(atoi(digits), 8)
 }
 
+// atoi is zero for a number ffprobe leaves out, or gives as "N/A".
 func atoi(s string) int {
-	n, _ := strconv.Atoi(s)
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
 	return n
 }
 

@@ -102,7 +102,11 @@ func releaseVersion(out []byte) (string, error) {
 	if m == nil {
 		return "", fmt.Errorf("not a release build: %q", line)
 	}
-	if major, _ := strconv.Atoi(string(m[2])); major < minimumMajor {
+	major, err := strconv.Atoi(string(m[2]))
+	if err != nil {
+		return "", fmt.Errorf("version %s: %w", m[1], err)
+	}
+	if major < minimumMajor {
 		return "", fmt.Errorf("version %s is older than %d", m[1], minimumMajor)
 	}
 	return string(m[1]), nil
