@@ -27,6 +27,12 @@ for behaviour; no client's or other server's vocabulary shapes the wire.
   for later, no stage meant to be rewritten, nothing deprecated. A known limit is a named constant
   or a refusal reason, not a gap.
 - **Enums over booleans.** A mode is a typed string constant set, switched on exhaustively.
+- **A route names nouns.** A POST to a collection makes one (`/imports`); an action that is no
+  state a client could PUT is a POST to a verb under its resource (`/libraries/{id}/scan`,
+  `/profiles/{id}/switch`); DELETE on a singleton cancels it (`/admin/storage/move`). The signed-in
+  profile is `/profile`, beside the household's `/profiles`. The first resource in a path is
+  `{id}`, and one under it is named for itself (`{part}`, `{entry}`). A password, PIN or
+  pairing code goes in a body, never in a path or query a log keeps.
 - **Standard library first.** A dependency earns its place in the PR that adds it.
 - **Tests test behaviour** a client or operator would notice. No test that only restates the code.
 - **Comments only where something is surprising.** No doc comment that repeats the name.
