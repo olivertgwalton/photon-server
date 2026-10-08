@@ -548,9 +548,19 @@ export async function admin(
 						error: "disk full",
 						next_at: "2026-10-09T19:00:00Z",
 					},
+					// Its previews are the backlog the event stream counts down.
+					{
+						key: "backfill_previews",
+						running: true,
+						started_at: "2026-10-06T19:00:00Z",
+						next_at: "2026-10-09T19:00:00Z",
+						jobs: ["previews"],
+					},
 				],
 			} satisfies Schemas["TaskList"]);
 		case "POST /api/v1/admin/tasks/backup_database/run":
+			return done(202);
+		case "POST /api/v1/admin/tasks/backfill_previews/stop":
 			return done(202);
 		case "GET /api/v1/admin/maintenance":
 			return json(maintenance);

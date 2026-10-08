@@ -376,6 +376,15 @@ test("tasks run, dead jobs are retried, and the logs read", async ({
 		page.getByText("Back up the database is running."),
 	).toBeVisible();
 
+	// Stopped, the question closes, though the task it was asked of stays.
+	await page.getByRole("button", { name: "Stop Make previews" }).click();
+	await page
+		.getByRole("alertdialog")
+		.getByRole("button", { name: "Stop" })
+		.click();
+	await expect(page.getByText("Make previews was stopped.")).toBeVisible();
+	await expect(page.getByRole("alertdialog")).toHaveCount(0);
+
 	// The window runs past midnight, kept as the page loads again.
 	await page.getByLabel("Until").click();
 	await page.getByRole("option", { name: "06:00" }).click();
