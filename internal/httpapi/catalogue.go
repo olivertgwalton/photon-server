@@ -15,6 +15,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
 const (
@@ -278,7 +279,7 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 	// cache keeps finding the picture under it.
 	until := time.Now().Truncate(24 * time.Hour).Add(48 * time.Hour)
 	page.SignChapterImages(func(path string) string { return a.svc.Signer.Sign(path, until) })
-	writeJSON(w, a.logger, "application/json", http.StatusOK, titlePageOf(page))
+	writeJSON(w, a.logger, "application/json", http.StatusOK, titlePageOf(page, words.Negotiate(w, r)))
 }
 
 const defaultHomeLimit = 20

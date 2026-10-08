@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -320,8 +321,50 @@ type matroskaCatalogue struct{ fakeCatalogue }
 func (matroskaCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage, error) {
 	return store.TitlePage{
 		ID: id, Kind: domain.ItemMovie, Title: "Heat",
-		Versions: []store.VersionPage{{ID: id, Container: "matroska,webm"}},
+		Versions: []store.VersionPage{{
+			ID: id, Container: "matroska,webm", Edition: "Director's Cut",
+			Streams: []store.StreamPage{
+				{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Range: domain.RangeDV},
+				{Index: 1, Kind: domain.StreamAudio, Codec: "eac3", Language: "en", Channels: 6},
+			},
+			Subtitles: []store.SubtitleRef{{ID: id, Codec: "subrip", Language: "de", Forced: true}},
+		}},
 	}, nil
+}
+
+// A client shows a copy and its tracks by the names the server gives, in its reader's language,
+// and the answer says which language that is so no cache serves it to another reader.
+func TestATitlesCopiesAndTracksAreNamedForTheReader(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Catalogue: matroskaCatalogue{}, Preferences: &fakePreferences{},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/titles/"+films.String(), nil)
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	req.Header.Set("Accept-Language", "fr-FR,fr;q=0.9,en;q=0.5")
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	var got struct {
+		Versions []struct {
+			DisplayTitle string `json:"display_title"`
+			Streams      []struct {
+				DisplayTitle string `json:"display_title"`
+			} `json:"streams"`
+			Subtitles []struct {
+				DisplayTitle string `json:"display_title"`
+			} `json:"subtitles"`
+		} `json:"versions"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || len(got.Versions) != 1 {
+		t.Fatalf("title page: %d %s", rec.Code, rec.Body)
+	}
+	v := got.Versions[0]
+	if v.DisplayTitle != "Director's Cut (4K HEVC Dolby Vision)" || v.Streams[1].DisplayTitle != "Anglais (Dolby Digital+ 5.1)" ||
+		v.Subtitles[0].DisplayTitle != "Allemand Forced (SRT External)" {
+		t.Errorf("names %+v", v)
+	}
+	if rec.Header().Get("Content-Language") != "fr" || !slices.Contains(rec.Header().Values("Vary"), "Accept-Language") {
+		t.Errorf("headers %v, want the answer marked French and varying by Accept-Language", rec.Header())
+	}
 }
 
 func TestACopysContainerIsNamedAsClientsNameIt(t *testing.T) {

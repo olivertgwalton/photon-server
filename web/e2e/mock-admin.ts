@@ -181,6 +181,7 @@ const film: Schemas["TitlePage"] = {
 	versions: [
 		{
 			id: "v-quiet",
+			display_title: "",
 			container: "matroska",
 			duration_ms: 6_000_000,
 			size_bytes: 4_000_000_000,

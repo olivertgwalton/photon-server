@@ -7702,6 +7702,7 @@ export interface components {
             codec: string;
             commentary?: boolean;
             default?: boolean;
+            display_title: string;
             dv_profile?: number;
             forced?: boolean;
             frame_rate?: number;
@@ -7746,6 +7747,7 @@ export interface components {
         SubtitleRef: {
             codec: string;
             default?: boolean;
+            display_title: string;
             forced?: boolean;
             hearing_impaired?: boolean;
             /** Format: uuid */
@@ -7901,6 +7903,7 @@ export interface components {
             /** Format: uuid */
             default_subtitle_file?: string | null;
             default_subtitle_stream?: number | null;
+            display_title: string;
             /** Format: int64 */
             duration_ms: number;
             edition?: string;

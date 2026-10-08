@@ -139,7 +139,13 @@ const stream = (
 	index: number,
 	kind: Schemas["StreamKind"],
 	extra: Partial<Schemas["StreamPage"]>,
-): Schemas["StreamPage"] => ({ index, kind, codec: "h264", ...extra });
+): Schemas["StreamPage"] => ({
+	index,
+	kind,
+	codec: "h264",
+	display_title: `Track ${index}`,
+	...extra,
+});
 
 function page(id: string): Schemas["TitlePage"] | undefined {
 	const c = byID(id);
@@ -201,6 +207,7 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 			versions: [
 				{
 					id: "v-4k",
+					display_title: "4K (HEVC Dolby Vision)",
 					label: "4K",
 					container: "mkv",
 					duration_ms: 6_720_000,
@@ -218,6 +225,7 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 					],
 					streams: [
 						stream(0, "video", {
+							display_title: "4K (HEVC Dolby Vision)",
 							codec: "hevc",
 							width: 3840,
 							height: 2160,
@@ -225,18 +233,24 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 							dv_profile: 8,
 						}),
 						stream(1, "audio", {
+							display_title: "English (Dolby TrueHD 7.1)",
 							codec: "truehd",
 							language: "eng",
 							channel_layout: "7.1",
 							default: true,
 						}),
 						stream(2, "audio", {
+							display_title: "English Commentary (Dolby Digital Stereo)",
 							codec: "ac3",
 							language: "eng",
 							channels: 2,
 							commentary: true,
 						}),
-						stream(3, "subtitle", { codec: "subrip", language: "fra" }),
+						stream(3, "subtitle", {
+							display_title: "French (SRT)",
+							codec: "subrip",
+							language: "fra",
+						}),
 					],
 					chapters: [
 						{ start_ms: 0, end_ms: 600_000, title: "Sign on" },
@@ -245,6 +259,7 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 				},
 				{
 					id: "v-hd",
+					display_title: "1080p (H.264)",
 					label: "1080p",
 					container: "mp4",
 					duration_ms: 6_720_000,
@@ -268,8 +283,17 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 						},
 					],
 					streams: [
-						stream(0, "video", { width: 1920, height: 1080 }),
-						stream(1, "audio", { codec: "aac", language: "eng", channels: 2 }),
+						stream(0, "video", {
+							display_title: "1080p (H.264)",
+							width: 1920,
+							height: 1080,
+						}),
+						stream(1, "audio", {
+							display_title: "English (AAC Stereo)",
+							codec: "aac",
+							language: "eng",
+							channels: 2,
+						}),
 					],
 				},
 			],
@@ -302,6 +326,7 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 		out.versions = [
 			{
 				id: `v-${id}`,
+				display_title: "H.264",
 				container: "mkv",
 				duration_ms: 1_800_000,
 				size_bytes: 1_000_000_000,
@@ -334,6 +359,7 @@ const none = () => new Response(null, { status: 204 });
 // A film and two episodes to play, each six seconds of e2e/fixtures/film.mp4.
 const version = (id: string): Schemas["VersionPage"] => ({
 	id,
+	display_title: "SD (H.264)",
 	container: "mov,mp4,m4a,3gp,3g2,mj2",
 	duration_ms: 6_000,
 	size_bytes: 152_341,
@@ -357,9 +383,24 @@ const version = (id: string): Schemas["VersionPage"] => ({
 			width: 320,
 			height: 180,
 			resolution: "sd",
+			display_title: "SD (H.264)",
 		},
-		{ index: 1, kind: "audio", codec: "aac", language: "en", channels: 2 },
-		{ index: 2, kind: "audio", codec: "aac", language: "fr", channels: 2 },
+		{
+			index: 1,
+			kind: "audio",
+			codec: "aac",
+			language: "en",
+			channels: 2,
+			display_title: "English (AAC Stereo)",
+		},
+		{
+			index: 2,
+			kind: "audio",
+			codec: "aac",
+			language: "fr",
+			channels: 2,
+			display_title: "French (AAC Stereo)",
+		},
 	],
 	subtitles: [
 		{
@@ -367,6 +408,7 @@ const version = (id: string): Schemas["VersionPage"] => ({
 			codec: "subrip",
 			kind: "text",
 			language: "en",
+			display_title: "English (SRT External)",
 		},
 	],
 	chapters: [
@@ -442,6 +484,7 @@ const titles: Record<string, Schemas["TitlePage"]> = {
 						codec: "ass",
 						subtitle_kind: "styled",
 						title: "Signs",
+						display_title: "Signs (ASS)",
 					},
 				],
 				subtitles: [],
