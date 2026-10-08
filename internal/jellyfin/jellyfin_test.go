@@ -3,6 +3,7 @@ package jellyfin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -61,7 +62,11 @@ var (
 	ada      = domain.Profile{ID: uuid.MustParse("8d2b4c1e-0f6a-4b7c-9e2d-1a3b5c7d9e0f"), Name: "Ada", Role: domain.RoleAdmin}
 )
 
-type fakeAuth struct{ signedOut *[]uuid.UUID }
+type fakeAuth struct {
+	signedOut *[]uuid.UUID
+	// pairing is the one pairing, under the code 042517 and the device code 042517.secret.
+	pairing *kv.PairingState
+}
 
 func (fakeAuth) SignIn(_ context.Context, name, password string, _ auth.Device) (string, domain.Profile, error) {
 	if name == "Ada" && password == "correct horse" {
@@ -85,6 +90,43 @@ func (f fakeAuth) SignOut(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// StartPairing refuses photon's letters: Swiftfin takes six digits and nothing else.
+func (f fakeAuth) StartPairing(_ context.Context, _ auth.Device, style auth.CodeStyle) (auth.PairingStart, error) {
+	if style != auth.CodeDigits {
+		return auth.PairingStart{}, errors.ErrUnsupported
+	}
+	*f.pairing = kv.PairingPending
+	return auth.PairingStart{DeviceCode: "042517.secret", UserCode: "042517", ExpiresIn: 10 * time.Minute}, nil
+}
+
+func (f fakeAuth) ApprovePairing(_ context.Context, _ domain.Session, userCode string) (auth.Device, error) {
+	if userCode != "042517" || *f.pairing != kv.PairingPending {
+		return auth.Device{}, auth.ErrPairingNotFound
+	}
+	*f.pairing = kv.PairingApproved
+	return auth.Device{Name: "Living room", Client: "Jellyfin Android TV"}, nil
+}
+
+func (f fakeAuth) PairingStatus(_ context.Context, deviceCode string) (kv.PairingState, auth.Pairing, error) {
+	if deviceCode != "042517.secret" || *f.pairing == "" {
+		return kv.PairingExpired, auth.Pairing{}, nil
+	}
+	return *f.pairing, auth.Pairing{
+		Device: auth.Device{Name: "Living room", Client: "Jellyfin Android TV"}, UserCode: "042517", Started: time.Now(),
+	}, nil
+}
+
+func (f fakeAuth) PollPairing(_ context.Context, deviceCode string) (kv.PairingState, string, domain.Profile, error) {
+	if deviceCode != "042517.secret" || *f.pairing == "" {
+		return kv.PairingExpired, "", domain.Profile{}, nil
+	}
+	if *f.pairing != kv.PairingApproved {
+		return *f.pairing, "", domain.Profile{}, nil
+	}
+	*f.pairing = kv.PairingExpired
+	return kv.PairingApproved, "pst_device", ada, nil
+}
+
 type fakeLimits struct{ spent bool }
 
 func (f *fakeLimits) Allow(context.Context, string, kv.Limit) (time.Duration, error) {
@@ -97,7 +139,7 @@ func (f *fakeLimits) Allow(context.Context, string, kv.Limit) (time.Duration, er
 func newAPI() (*API, *[]uuid.UUID, *fakeLimits, *[]domain.EventKind) {
 	signedOut, limits, raised := &[]uuid.UUID{}, &fakeLimits{}, &[]domain.EventKind{}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: serverID.String(), Name: "Den"}, Services{
-		Auth: fakeAuth{signedOut}, Limits: limits,
+		Auth: fakeAuth{signedOut: signedOut, pairing: new(kv.PairingState)}, Limits: limits,
 		Raise: func(_ context.Context, e domain.Event) { *raised = append(*raised, e.Kind) },
 	})
 	return api, signedOut, limits, raised
@@ -155,7 +197,7 @@ func TestAnAppFindsAJellyfinServer(t *testing.T) {
 		}
 	}
 	for path, want := range map[string]string{
-		"/System/Ping": `"Jellyfin Server"`, "/QuickConnect/Enabled": "false", "/Users/Public": "[]",
+		"/System/Ping": `"Jellyfin Server"`, "/QuickConnect/Enabled": "true", "/Users/Public": "[]",
 		"/Branding/Configuration": `{"SplashscreenEnabled":false}`, "/Branding/Css.css": "",
 	} {
 		if w := serve(api, http.MethodGet, path, "", ""); w.Code != http.StatusOK || w.Body.String() != want {
@@ -303,5 +345,80 @@ func TestAWebAppElsewhereMayAsk(t *testing.T) {
 	if w.Code != http.StatusNoContent || w.Header().Get("Access-Control-Allow-Origin") != "*" ||
 		w.Header().Get("Access-Control-Allow-Headers") != "authorization,content-type" {
 		t.Errorf("preflight: %d %v", w.Code, w.Header())
+	}
+}
+
+// An app signs in by Quick Connect: it shows a code, asks after it every few seconds while a
+// signed-in app approves it, and then takes its token, once.
+func TestAnAppSignsInByQuickConnect(t *testing.T) {
+	api, _, _, _ := newAPI()
+	signedIn := `MediaBrowser Client="Jellyfin Web", Device="Firefox", DeviceId="TW96", Version="12.2.0", Token="pst_device"`
+	connect := func() *httptest.ResponseRecorder {
+		return serve(api, http.MethodGet, "/QuickConnect/Connect?secret=042517.secret", kotlin, "")
+	}
+	authenticate := func() *httptest.ResponseRecorder {
+		return serve(api, http.MethodPost, "/Users/AuthenticateWithQuickConnect", kotlin, `{"Secret":"042517.secret"}`)
+	}
+
+	if w := serve(api, http.MethodPost, "/QuickConnect/Initiate", `MediaBrowser Client="Jellyfin Web"`, ""); w.Code != http.StatusBadRequest {
+		t.Errorf("initiating without its device: %d, want 400", w.Code)
+	}
+	w := serve(api, http.MethodPost, "/QuickConnect/Initiate", kotlin, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("initiating: %d %q", w.Code, w.Body)
+	}
+	started := object(t, w)
+	requireKeys(t, "QuickConnectResult", started, "Authenticated", "Secret", "Code", "DeviceId", "DeviceName",
+		"AppName", "AppVersion", "DateAdded")
+	if started["Authenticated"] != false || started["Secret"] != "042517.secret" || started["Code"] != "042517" ||
+		started["DeviceId"] != "ZDk1" || started["DeviceName"] != "Living room" || started["AppName"] != "Jellyfin Android TV" {
+		t.Errorf("initiated %v", started)
+	}
+
+	if w := serve(api, http.MethodGet, "/QuickConnect/Connect?secret=nobody.secret", kotlin, ""); w.Code != http.StatusNotFound {
+		t.Errorf("an unknown secret: %d, want 404", w.Code)
+	}
+	if w := connect(); w.Code != http.StatusOK || object(t, w)["Authenticated"] != false {
+		t.Errorf("before approval: %d %q", w.Code, w.Body)
+	}
+	if w := authenticate(); w.Code != http.StatusNotFound {
+		t.Errorf("authenticating before approval: %d, want 404", w.Code)
+	}
+
+	authorize := func(query, header string) *httptest.ResponseRecorder {
+		return serve(api, http.MethodPost, "/QuickConnect/Authorize?"+query, header, "")
+	}
+	if w := authorize("code=042517", ""); w.Code != http.StatusUnauthorized {
+		t.Errorf("approving signed out: %d, want 401", w.Code)
+	}
+	if w := authorize("code=042517&userId="+guid(uuid.NewV7()), signedIn); w.Code != http.StatusForbidden {
+		t.Errorf("approving for another profile: %d, want 403", w.Code)
+	}
+	if w := authorize("code=999999", signedIn); w.Code != http.StatusNotFound {
+		t.Errorf("approving a code nobody was shown: %d, want 404", w.Code)
+	}
+	if w := authorize("code=042517&userId="+guid(ada.ID), signedIn); w.Code != http.StatusOK || w.Body.String() != "true\n" {
+		t.Fatalf("approving: %d %q", w.Code, w.Body)
+	}
+
+	for range 3 {
+		if w := connect(); w.Code != http.StatusOK || object(t, w)["Authenticated"] != true {
+			t.Errorf("after approval: %d %q", w.Code, w.Body)
+		}
+	}
+	w = authenticate()
+	if w.Code != http.StatusOK {
+		t.Fatalf("authenticating: %d %q", w.Code, w.Body)
+	}
+	result := object(t, w)
+	token, _ := result["AccessToken"].(string)
+	if u, _ := result["User"].(map[string]any); u["Id"] != guid(ada.ID) {
+		t.Errorf("signed in as %v", result)
+	}
+	if w := serve(api, http.MethodGet, "/Users/Me", kotlin+`, Token="`+token+`"`, ""); w.Code != http.StatusOK {
+		t.Errorf("the token: %d, want it to sign the app in", w.Code)
+	}
+	if w := authenticate(); w.Code != http.StatusNotFound {
+		t.Errorf("authenticating twice: %d, want 404", w.Code)
 	}
 }
