@@ -17,7 +17,7 @@ import (
 // An operator's metrics say what the node is set to, and that it drains as it stops.
 func TestANodesMetricsSayItsRoleAndWhetherItTakesWork(t *testing.T) {
 	settings := &kept{set: domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}}
-	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", "http://gpu-1", domain.Encoder{}, 8, &slots{}, slog.New(slog.DiscardHandler))
+	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", domain.Encoder{}, 8, &slots{}, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,12 +73,13 @@ func (s *slots) SetLimit(limit int) {
 }
 
 // A node takes up what an admin sets of it as it is told: its role, which says whether it
-// encodes, its limit, its encoder's own where none is set, and whether it is drained.
+// encodes, its limit, its encoder's own where none is set, where the others reach it, and whether
+// it is drained.
 func TestANodeTakesUpWhatIsSetOfItAsItIsTold(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		settings := &kept{set: domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}}
 		t8 := &slots{}
-		self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", "http://gpu-1", domain.Encoder{}, 8, t8, slog.New(slog.DiscardHandler))
+		self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", domain.Encoder{}, 8, t8, slog.New(slog.DiscardHandler))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -92,11 +93,13 @@ func TestANodeTakesUpWhatIsSetOfItAsItIsTold(t *testing.T) {
 			defer close(done)
 			self.Run(ctx, func() (<-chan domain.Event, func()) { return events, func() {} })
 		}()
-		settings.change(domain.NodeSettings{Role: domain.NodeServe, LimitSource: domain.LimitSet, Limit: 3, Availability: domain.NodeActive})
+		settings.change(domain.NodeSettings{
+			Role: domain.NodeServe, LimitSource: domain.LimitSet, Limit: 3, Availability: domain.NodeActive, Address: "http://10.0.0.5:8640",
+		})
 		events <- domain.Event{Kind: domain.EventNodesChanged}
 		synctest.Wait()
-		if n := self.Node(); self.TakesTranscodes() || n.Limit != 3 || n.Role != domain.NodeServe || n.LimitSource != domain.LimitSet {
-			t.Errorf("after the change: %+v, encodes %v; want serve, set to 3, encoding nothing", n, self.TakesTranscodes())
+		if n := self.Node(); self.TakesTranscodes() || n.Limit != 3 || n.Role != domain.NodeServe || n.LimitSource != domain.LimitSet || n.Address != "http://10.0.0.5:8640" {
+			t.Errorf("after the change: %+v, encodes %v; want serve, set to 3, encoding nothing, at its address", n, self.TakesTranscodes())
 		}
 		<-self.Changes()
 		// Drained, it takes nothing new, and tells the others so at once.
@@ -120,7 +123,7 @@ func TestANodeTakesUpWhatIsSetOfItAsItIsTold(t *testing.T) {
 // is draining, at once.
 func TestANodeStoppingTellsTheOthersItIsDraining(t *testing.T) {
 	settings := &kept{set: domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}}
-	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", "http://gpu-1", domain.Encoder{}, 8, &slots{}, slog.New(slog.DiscardHandler))
+	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", domain.Encoder{}, 8, &slots{}, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

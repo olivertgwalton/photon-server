@@ -110,15 +110,18 @@ func answerDiscovery(ctx context.Context, addr string, scheme func() string, inf
 // times that, quiet.
 const advertiseEvery = 15 * time.Second
 
-// advertise tells the others where this node's peers reach it, PHOTON_NODE_ADDRESS, so a request
+// advertise tells the others where this node's peers reach it, as an admin sets it, so a request
 // for HLS one of its playbacks makes is handed to it whichever node it lands on, and how many
-// videos it encodes, said again as soon as that changes.
+// videos it encodes, said again as soon as either changes. A node with no address says nothing,
+// and is forgotten by the others.
 func advertise(ctx context.Context, cache *kv.KV, self func() domain.Node, slots, settings <-chan struct{}, logger *slog.Logger) {
 	t := time.NewTicker(advertiseEvery)
 	defer t.Stop()
 	for {
-		if err := cache.SetNode(ctx, self(), 3*advertiseEvery); err != nil && ctx.Err() == nil {
-			logger.WarnContext(ctx, "node not advertised", slog.Any("err", err))
+		if n := self(); n.Address != "" {
+			if err := cache.SetNode(ctx, n, 3*advertiseEvery); err != nil && ctx.Err() == nil {
+				logger.WarnContext(ctx, "node not advertised", slog.Any("err", err))
+			}
 		}
 		select {
 		case <-ctx.Done():
