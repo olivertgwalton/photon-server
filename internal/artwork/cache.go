@@ -169,8 +169,8 @@ func (c *Cache) hashAndSize(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	defer o.Close()
 	src, err := decode(o)
-	_ = o.Close()
 	if err != nil {
 		return nil
 	}
