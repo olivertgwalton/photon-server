@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -221,6 +222,28 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	}
 	if one, _ := list("pst_ada", "/Items?parentId="+seasons[1]["Id"].(string)); len(one) != 1 {
 		t.Errorf("season 2's episodes: %v", names(one))
+	}
+	// An episode's neighbours are of the whole list asked for, across a season's end, before it is
+	// paged; an item not in it has none.
+	ep := func(n int) string { return episodes[n]["Id"].(string) }
+	for _, c := range []struct {
+		target string
+		want   []map[string]any
+		total  int
+	}{
+		{"/Shows/" + show + "/Episodes?adjacentTo=" + ep(0), episodes[:2], 2},
+		{"/Shows/" + show + "/Episodes?adjacentTo=" + ep(1), episodes, 3},
+		{"/Shows/" + show + "/Episodes?adjacentTo=" + ep(2), episodes[1:], 2},
+		{"/Shows/" + show + "/Episodes?adjacentTo=" + ep(1) + "&startIndex=2", episodes[2:], 3},
+		{"/Shows/" + show + "/Episodes?adjacentTo=" + guid(films.ID), nil, 0},
+		{"/Items?parentId=" + seasons[0]["Id"].(string) + "&adjacentTo=" + ep(1), episodes[:2], 2},
+		{"/Items?parentId=" + show + "&includeItemTypes=Episode&adjacentTo=" + ep(2), episodes[1:], 2},
+		{"/Shows/" + show + "/Seasons?adjacentTo=" + seasons[1]["Id"].(string), seasons, 2},
+	} {
+		got, total := list("pst_ada", c.target)
+		if !slices.EqualFunc(got, c.want, func(a, b map[string]any) bool { return a["Id"] == b["Id"] }) || int(total) != c.total {
+			t.Errorf("%s: %v of %v, want %v of %d", c.target, names(got), total, names(c.want), c.total)
+		}
 	}
 	if w := serve(api, http.MethodGet, "/Shows/"+show+"/Episodes", `MediaBrowser Token="pst_kid"`, ""); w.Code != http.StatusNotFound {
 		t.Errorf("a show the kid may not see: %d", w.Code)
