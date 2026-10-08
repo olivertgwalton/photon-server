@@ -27,13 +27,12 @@ const keySetting = "api_key"
 var limit = kv.Limit{Every: 200 * time.Millisecond, Burst: 5}
 
 type Client struct {
-	base     string
 	settings provider.Settings
 	api      provider.Client
 }
 
 func New(settings provider.Settings, limits kv.Limiter) *Client {
-	return &Client{base: baseURL, settings: settings, api: provider.Client{Name: "mdblist", Limits: limits, Limit: limit}}
+	return &Client{settings: settings, api: provider.Client{Name: "mdblist", Base: baseURL, Limits: limits, Limit: limit}}
 }
 
 func (c *Client) Info() provider.Info {
@@ -76,10 +75,6 @@ func (c *Client) Ratings(ctx context.Context, kind domain.ItemKind, ids map[doma
 }
 
 func (c *Client) ratings(ctx context.Context, key, path string) ([]domain.Rating, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/"+path+"?"+url.Values{"apikey": {key}}.Encode(), nil)
-	if err != nil {
-		return nil, err
-	}
 	var body struct {
 		Ratings []struct {
 			Source string   `json:"source"`
@@ -87,7 +82,7 @@ func (c *Client) ratings(ctx context.Context, key, path string) ([]domain.Rating
 			Votes  *int     `json:"votes"`
 		} `json:"ratings"`
 	}
-	if err := c.api.Do(req, &body); err != nil {
+	if err := c.api.Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: url.Values{"apikey": {key}}}, &body); err != nil {
 		return nil, err
 	}
 	var out []domain.Rating
@@ -133,15 +128,11 @@ func (c *Client) List(ctx context.Context, id string) ([]domain.Listed, error) {
 	var all []ranked
 	for offset := 0; ; offset += listPage {
 		q := url.Values{"apikey": {key}, "limit": {strconv.Itoa(listPage)}, "offset": {strconv.Itoa(offset)}}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/lists/"+id+"/items?"+q.Encode(), nil)
-		if err != nil {
-			return nil, err
-		}
 		var body struct {
 			Movies []item `json:"movies"`
 			Shows  []item `json:"shows"`
 		}
-		if err := c.api.Do(req, &body); err != nil {
+		if err := c.api.Do(ctx, provider.Request{Method: http.MethodGet, Path: "/lists/" + id + "/items", Query: q}, &body); err != nil {
 			return nil, err
 		}
 		for kind, items := range map[domain.ItemKind][]item{domain.ItemMovie: body.Movies, domain.ItemShow: body.Shows} {

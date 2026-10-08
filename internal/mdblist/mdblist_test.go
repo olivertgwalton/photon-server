@@ -49,7 +49,7 @@ func client(t *testing.T, key string) *Client {
 	}))
 	t.Cleanup(srv.Close)
 	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": key}, nil }, unlimited{})
-	c.base = srv.URL
+	c.api.Base = srv.URL
 	return c
 }
 
@@ -79,7 +79,7 @@ func TestAKeyIsNeededAndNeverLogged(t *testing.T) {
 		t.Errorf("with a wrong key: %v, want an error that does not carry the key", err)
 	}
 	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": "secret"}, nil }, unlimited{})
-	c.base = "http://127.0.0.1:1"
+	c.api.Base = "http://127.0.0.1:1"
 	_, err = c.Ratings(t.Context(), domain.ItemMovie, map[domain.Provider]string{domain.ProviderTMDB: "578"})
 	if err == nil || strings.Contains(err.Error(), "secret") {
 		t.Errorf("unreachable: %v, want an error that does not carry the key", err)
@@ -103,7 +103,7 @@ func TestAListIsItsTitlesInRankOrder(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": "secret"}, nil }, unlimited{})
-	c.base = srv.URL
+	c.api.Base = srv.URL
 	got, err := c.List(t.Context(), "garycrawfordgc/top-horror")
 	if err != nil {
 		t.Fatal(err)

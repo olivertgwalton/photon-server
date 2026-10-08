@@ -79,7 +79,7 @@ func fake(t *testing.T) (*Client, *int) {
 	}))
 	t.Cleanup(srv.Close)
 	c := New("key", "", unlimited{})
-	c.base = srv.URL
+	c.api.Base = srv.URL
 	return c, &logins
 }
 
@@ -182,7 +182,7 @@ func TestSearchSaysWhatEachShowIsAboutInTheClientsLanguage(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	c := New("key", "", unlimited{})
-	c.base = srv.URL
+	c.api.Base = srv.URL
 	got, err := c.Search(t.Context(), gb, "The Wire", 0)
 	if err != nil {
 		t.Fatal(err)
@@ -218,7 +218,7 @@ func TestAShowsPicturesAreRankedByTheLanguageAskedIn(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	c := New("key", "", unlimited{})
-	c.base = srv.URL
+	c.api.Base = srv.URL
 	got, err := c.Details(t.Context(), domain.LocaleOf("de-DE"), 79126)
 	if err != nil {
 		t.Fatal(err)

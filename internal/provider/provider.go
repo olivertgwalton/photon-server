@@ -5,6 +5,7 @@
 package provider
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -47,14 +48,28 @@ const maxAnswer = 8 << 20
 var builtinHTTP = &http.Client{Timeout: 30 * time.Second}
 
 // Client asks a provider for JSON, as every provider is asked: after its share of Limit where
-// Limits is set, again after a 429 as the provider says (send), and reading at most maxAnswer. An
-// error names Name and the address's path, never the address, which may carry a key.
+// Limits is set, again after a 429 as the provider says (send), and reading at most maxAnswer. A
+// request goes to Base and nowhere else: what a caller names is a path under it. An error names
+// Name and the path, never the address, which may carry a key.
 type Client struct {
 	Name string
+	// Base is the provider's http or https address: a built-in provider's own, or the one an
+	// admin registered for a plugin or a server to import from.
+	Base string
 	// HTTP is nil for a built-in provider's.
 	HTTP   *http.Client
 	Limits kv.Limiter
 	Limit  kv.Limit
+}
+
+// Request is what a provider is asked: a path under its Client's Base, already escaped, and what
+// goes with it. Body, where it is not nil, is sent as JSON.
+type Request struct {
+	Method string
+	Path   string
+	Query  url.Values
+	Header http.Header
+	Body   any
 }
 
 // Refusal is a provider's answer other than 200: its status, and its body for what it says.
@@ -70,23 +85,31 @@ func (r *Refusal) Is(target error) bool {
 	return target == ErrNotFound && r.Code == http.StatusNotFound
 }
 
-// Do sends req and decodes a 200's JSON into out; any other status is a *Refusal.
-func (c Client) Do(req *http.Request, out any) error {
-	req.Header.Set("Accept", "application/json")
-	data, err := c.Bytes(req)
+// Do sends r and decodes a 200's JSON into out; any other status is a *Refusal.
+func (c Client) Do(ctx context.Context, r Request, out any) error {
+	r.Header = r.Header.Clone()
+	if r.Header == nil {
+		r.Header = http.Header{}
+	}
+	r.Header.Set("Accept", "application/json")
+	data, err := c.Bytes(ctx, r)
 	if err != nil {
 		return err
 	}
 	if err := json.Unmarshal(data, out); err != nil {
-		return fmt.Errorf("%s %s: %w", c.Name, req.URL.Path, err)
+		return fmt.Errorf("%s %s: %w", c.Name, r.Path, err)
 	}
 	return nil
 }
 
-// Bytes sends req and answers a 200's body as it is; any other status is a *Refusal.
-func (c Client) Bytes(req *http.Request) ([]byte, error) {
+// Bytes sends r and answers a 200's body as it is; any other status is a *Refusal.
+func (c Client) Bytes(ctx context.Context, r Request) ([]byte, error) {
+	req, err := c.request(ctx, r)
+	if err != nil {
+		return nil, err
+	}
 	if c.Limits != nil {
-		if err := kv.Wait(req.Context(), c.Limits, c.Name, c.Limit); err != nil {
+		if err := kv.Wait(ctx, c.Limits, c.Name, c.Limit); err != nil {
 			return nil, err
 		}
 	}
@@ -95,19 +118,52 @@ func (c Client) Bytes(req *http.Request) ([]byte, error) {
 		if ue, ok := errors.AsType[*url.Error](err); ok {
 			err = ue.Err
 		}
-		return nil, fmt.Errorf("%s %s: %w: %w", c.Name, req.URL.Path, ErrUnreached, err)
+		return nil, fmt.Errorf("%s %s: %w: %w", c.Name, r.Path, ErrUnreached, err)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxAnswer+1))
 	switch {
 	case err != nil:
-		return nil, fmt.Errorf("%s %s: %w: %w", c.Name, req.URL.Path, ErrUnreached, err)
+		return nil, fmt.Errorf("%s %s: %w: %w", c.Name, r.Path, ErrUnreached, err)
 	case len(data) > maxAnswer:
-		return nil, fmt.Errorf("%s %s: answered more than %d bytes", c.Name, req.URL.Path, maxAnswer)
+		return nil, fmt.Errorf("%s %s: answered more than %d bytes", c.Name, r.Path, maxAnswer)
 	case resp.StatusCode != http.StatusOK:
-		return nil, fmt.Errorf("%s %s: %w", c.Name, req.URL.Path, &Refusal{Code: resp.StatusCode, Status: resp.Status, Body: data})
+		return nil, fmt.Errorf("%s %s: %w", c.Name, r.Path, &Refusal{Code: resp.StatusCode, Status: resp.Status, Body: data})
 	}
 	return data, nil
+}
+
+// request makes r an HTTP request to Base, refusing a Base that is not an http or https address
+// of a host, which no request is sent to.
+func (c Client) request(ctx context.Context, r Request) (*http.Request, error) {
+	base, err := url.Parse(c.Base)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", c.Name, err)
+	}
+	if base.Scheme != "http" && base.Scheme != "https" || base.Host == "" || base.User != nil {
+		return nil, fmt.Errorf("%s: %w: its address is not http or https of a host", c.Name, ErrNotConfigured)
+	}
+	target := base.JoinPath(r.Path)
+	target.RawQuery = r.Query.Encode()
+	var body io.Reader
+	if r.Body != nil {
+		b, err := json.Marshal(r.Body)
+		if err != nil {
+			return nil, err
+		}
+		body = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, r.Method, target.String(), body)
+	if err != nil {
+		return nil, err
+	}
+	if r.Header != nil {
+		req.Header = r.Header.Clone()
+	}
+	if r.Body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return req, nil
 }
 
 // maxRetryAfter is the longest a provider's asking to be given time is waited out within one
@@ -119,7 +175,7 @@ const maxRetryAfter = 30 * time.Second
 func send(hc *http.Client, req *http.Request) (*http.Response, error) {
 	var waited time.Duration
 	for {
-		resp, err := hc.Do(req) //nolint:gosec // a built-in provider's own address, or a plugin's an admin registered
+		resp, err := hc.Do(req)
 		if err != nil || resp.StatusCode != http.StatusTooManyRequests {
 			return resp, err
 		}

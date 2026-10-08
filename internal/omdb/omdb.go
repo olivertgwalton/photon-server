@@ -28,13 +28,12 @@ const keySetting = "api_key"
 var limit = kv.Limit{Every: 200 * time.Millisecond, Burst: 5}
 
 type Client struct {
-	base     string
 	settings provider.Settings
 	api      provider.Client
 }
 
 func New(settings provider.Settings, limits kv.Limiter) *Client {
-	return &Client{base: baseURL, settings: settings, api: provider.Client{Name: "omdb", Limits: limits, Limit: limit}}
+	return &Client{settings: settings, api: provider.Client{Name: "omdb", Base: baseURL, Limits: limits, Limit: limit}}
 }
 
 func (c *Client) Info() provider.Info {
@@ -186,12 +185,8 @@ type answer struct {
 // its other sources until the key is mended or the day is out.
 func (c *Client) get(ctx context.Context, key string, q url.Values, into any) (bool, error) {
 	q.Set("apikey", key)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"?"+q.Encode(), nil)
-	if err != nil {
-		return false, err
-	}
 	var raw json.RawMessage
-	if err := c.api.Do(req, &raw); err != nil {
+	if err := c.api.Do(ctx, provider.Request{Method: http.MethodGet, Query: q}, &raw); err != nil {
 		if r, ok := errors.AsType[*provider.Refusal](err); ok && r.Code == http.StatusUnauthorized {
 			var a answer
 			if json.Unmarshal(r.Body, &a) != nil || a.Error == "" {

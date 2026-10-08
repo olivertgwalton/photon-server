@@ -62,7 +62,7 @@ func post[Out, In any](ctx context.Context, c *client, path string, body func(pl
 			secrets = append(secrets, v)
 		}
 	}
-	err = call(ctx, c.http, "plugin "+c.manifest.ID, http.MethodPost, c.base+path, body(sent), &out, secrets)
+	err = call(ctx, c.http, "plugin "+c.manifest.ID, http.MethodPost, c.base, path, body(sent), &out, secrets)
 	return out, err
 }
 
