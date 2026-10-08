@@ -33,6 +33,7 @@ type user struct {
 	Name                      string          `json:"Name"`
 	ServerID                  string          `json:"ServerId"`
 	ID                        string          `json:"Id"`
+	PrimaryImageTag           string          `json:"PrimaryImageTag,omitempty"`
 	HasPassword               bool            `json:"HasPassword"`
 	HasConfiguredPassword     bool            `json:"HasConfiguredPassword"`
 	HasConfiguredEasyPassword bool            `json:"HasConfiguredEasyPassword"`
@@ -72,7 +73,7 @@ var policy = json.RawMessage(`{"IsAdministrator":false,"IsHidden":true,"EnableCo
 
 func (a *API) userOf(p domain.Profile) user {
 	return user{
-		Name: p.Name, ServerID: a.id, ID: guid(p.ID),
+		Name: p.Name, ServerID: a.id, ID: guid(p.ID), PrimaryImageTag: tag(p.Avatar),
 		HasPassword: true, HasConfiguredPassword: true,
 		Configuration: configuration, Policy: policy,
 	}

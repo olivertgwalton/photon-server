@@ -63,7 +63,10 @@ func TestTheAuthorizationHeaderIsReadAsEachAppWritesIt(t *testing.T) {
 
 var (
 	serverID = uuid.MustParse("3f2504e0-4f89-41d3-9a0c-0305e82c3301")
-	ada      = domain.Profile{ID: uuid.MustParse("8d2b4c1e-0f6a-4b7c-9e2d-1a3b5c7d9e0f"), Name: "Ada", Role: domain.RoleAdmin}
+	ada      = domain.Profile{
+		ID: uuid.MustParse("8d2b4c1e-0f6a-4b7c-9e2d-1a3b5c7d9e0f"), Name: "Ada", Role: domain.RoleAdmin,
+		Avatar: uuid.MustParse("0199b3c0-0000-7000-8000-00000000a7a2"),
+	}
 )
 
 type fakeAuth struct {
@@ -470,19 +473,29 @@ func (p onePicture) Open(context.Context, uuid.UUID, domain.Picture, int, int) (
 	return o, "avatar.png", err
 }
 
-// An app shows a profile's picture by its tag, under either route, as a page shows one: without a
-// token.
+// Kept finds no theme tune: the server holds a picture alone.
+func (onePicture) Kept(context.Context, uuid.UUID) (blob.Object, error) {
+	return blob.Object{}, os.ErrNotExist
+}
+
+// An app shows its profile's picture by the tag its user carries, under either route, as a page
+// shows one: without a token.
 func TestAnAppShowsAProfilesPicture(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "avatar.png")
 	if err := os.WriteFile(file, []byte("\x89PNG\r\n\x1a\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	avatar := uuid.NewV7()
-	pictures := onePicture{id: avatar, file: file}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: serverID.String(), Name: "Den"}, Services{Catalogue: pictures, Pictures: pictures})
+	pictures := onePicture{id: ada.Avatar, file: file}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: serverID.String(), Name: "Den"}, Services{
+		Auth: fakeAuth{}, Catalogue: pictures, Pictures: pictures,
+	})
+	tag, _ := object(t, serve(api, http.MethodGet, "/Users/Me", kotlin+`, Token="pst_device"`, ""))["PrimaryImageTag"].(string)
+	if tag != guid(ada.Avatar) {
+		t.Fatalf("PrimaryImageTag %q, want the picture's", tag)
+	}
 	for _, target := range []string{
-		"/Users/" + guid(ada.ID) + "/Images/Primary?tag=" + guid(avatar) + "&maxWidth=96",
-		"/UserImage?userId=" + guid(ada.ID) + "&tag=" + guid(avatar),
+		"/Users/" + guid(ada.ID) + "/Images/Primary?tag=" + tag + "&maxWidth=96",
+		"/UserImage?userId=" + guid(ada.ID) + "&tag=" + tag,
 	} {
 		if w := serve(api, http.MethodGet, target, "", ""); w.Code != http.StatusOK || w.Header().Get("Content-Type") != "image/png" {
 			t.Errorf("%s: %d %s, want the PNG", target, w.Code, w.Header().Get("Content-Type"))
