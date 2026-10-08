@@ -87,8 +87,7 @@ func (c *Client) Describe(ctx context.Context, _ domain.Locale, kind domain.Item
 		return domain.Metadata{}, nil, provider.ErrNotConfigured
 	}
 	said := map[int]domain.SeasonMetadata{}
-	var t title
-	found, err := c.get(ctx, key, url.Values{"i": {id}, "plot": {"full"}}, &t)
+	t, found, err := get[title](ctx, c, key, url.Values{"i": {id}, "plot": {"full"}})
 	if err != nil || !found {
 		return domain.Metadata{}, said, err
 	}
@@ -103,8 +102,7 @@ func (c *Client) Describe(ctx context.Context, _ domain.Locale, kind domain.Item
 		return m, said, nil
 	}
 	for _, number := range seasons.Numbers {
-		var s season
-		found, err := c.get(ctx, key, url.Values{"i": {id}, "Season": {strconv.Itoa(number)}}, &s)
+		s, found, err := get[season](ctx, c, key, url.Values{"i": {id}, "Season": {strconv.Itoa(number)}})
 		if err != nil {
 			return domain.Metadata{}, nil, err
 		}
@@ -121,8 +119,7 @@ func (c *Client) Describe(ctx context.Context, _ domain.Locale, kind domain.Item
 			episode := domain.Metadata{Title: value(e.Title), ReleaseDate: aired, Year: provider.Year(aired)}
 			// A season lists no plots: each episode is asked for its own, as Jellyfin asks.
 			if value(e.IMDbID) != "" {
-				var full title
-				found, err := c.get(ctx, key, url.Values{"i": {e.IMDbID}, "plot": {"full"}}, &full)
+				full, found, err := get[title](ctx, c, key, url.Values{"i": {e.IMDbID}, "plot": {"full"}})
 				if err != nil {
 					return domain.Metadata{}, nil, err
 				}
@@ -180,30 +177,31 @@ type answer struct {
 	Error    string `json:"Error"`
 }
 
-// get asks OMDb for one answer into into, answering false for a title it does not know. A key it
+// get asks OMDb for one answer, answering false for a title it does not know. A key it
 // refuses or one past its daily allowance is provider.ErrUnavailable, so the title is described by
 // its other sources until the key is mended or the day is out.
-func (c *Client) get(ctx context.Context, key string, q url.Values, into any) (bool, error) {
+func get[T any](ctx context.Context, c *Client, key string, q url.Values) (T, bool, error) {
+	var into T
 	q.Set("apikey", key)
 	var raw json.RawMessage
 	if err := c.api.Do(ctx, provider.Request{Method: http.MethodGet, Query: q}, &raw); err != nil {
 		if r, ok := errors.AsType[*provider.Refusal](err); ok && r.Code == http.StatusUnauthorized {
 			var a answer
 			if json.Unmarshal(r.Body, &a) != nil || a.Error == "" {
-				return false, fmt.Errorf("%w: %w", provider.ErrUnavailable, err)
+				return into, false, fmt.Errorf("%w: %w", provider.ErrUnavailable, err)
 			}
-			return false, fmt.Errorf("%w: %s: %w", provider.ErrUnavailable, a.Error, err)
+			return into, false, fmt.Errorf("%w: %s: %w", provider.ErrUnavailable, a.Error, err)
 		}
-		return false, err
+		return into, false, err
 	}
 	var a answer
 	if err := json.Unmarshal(raw, &a); err != nil {
-		return false, err
+		return into, false, err
 	}
 	if a.Response == "False" {
-		return false, nil
+		return into, false, nil
 	}
-	return true, json.Unmarshal(raw, into)
+	return into, true, json.Unmarshal(raw, &into)
 }
 
 func value(s string) string {
