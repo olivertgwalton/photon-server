@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -83,6 +84,12 @@ func connect(ctx context.Context, url string, log *slog.Logger) (*Store, error) 
 		// conversions and tasks), and as many again for requests. pgx's own default, one a CPU, let
 		// a small machine's long scan or match queue every request behind it.
 		cfg.MaxConns = int32(runtime.NumCPU() + 48)
+	}
+	if _, ok := cfg.ConnConfig.RuntimeParams["application_name"]; !ok {
+		// So a node still running is named by its host where Postgres lists who is connected, as a
+		// restore does when it refuses.
+		host, _ := os.Hostname()
+		cfg.ConnConfig.RuntimeParams["application_name"] = strings.TrimSpace("photon-server " + host)
 	}
 	cfg.ConnConfig.Tracer = queryLog{log}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
@@ -179,13 +186,44 @@ func (s *Store) migrator() (*goose.Provider, error) {
 
 var errSchema = errors.New("schema version mismatch")
 
+// SchemaVersion is the version of the newest migration this binary has.
+func SchemaVersion() (int64, error) {
+	entries, err := fs.ReadDir(migrations, "migrations")
+	if err != nil {
+		return 0, err
+	}
+	return goose.NumericComponent(entries[len(entries)-1].Name())
+}
+
+// Connections answers who else is connected to url's database, as the application each names
+// itself and where it is, with how many connections.
+func Connections(ctx context.Context, url string) ([]string, error) {
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close(context.WithoutCancel(ctx))
+	rows, err := conn.Query(ctx, `
+		SELECT format('%s from %s (%s)', coalesce(nullif(application_name, ''), 'an unnamed client'),
+			coalesce(host(client_addr), 'a local socket'), count(*))
+		FROM pg_stat_activity
+		WHERE datname = current_database() AND pid <> pg_backend_pid() AND backend_type = 'client backend'
+		GROUP BY application_name, client_addr ORDER BY 1`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
 func (s *Store) checkSchema(ctx context.Context) error {
 	p, err := s.migrator()
 	if err != nil {
 		return err
 	}
-	sources := p.ListSources()
-	want := sources[len(sources)-1].Version
+	want, err := SchemaVersion()
+	if err != nil {
+		return err
+	}
 	have, err := p.GetDBVersion(ctx)
 	if err != nil {
 		return err
