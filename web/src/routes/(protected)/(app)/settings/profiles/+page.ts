@@ -1,9 +1,10 @@
 import { client, need } from "#lib/api/client.js";
+import { keys } from "#lib/changes.js";
 import type { PageLoad } from "./$types";
 
 // An admin sees every profile; a manager, the ones it keeps.
 export const load: PageLoad = async ({ fetch, depends, parent }) => {
-	depends("admin:profiles");
+	depends(keys.admin.profiles);
 	const api = client(fetch);
 	const [{ me }, profiles, devices] = await Promise.all([
 		parent(),

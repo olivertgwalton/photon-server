@@ -1,11 +1,13 @@
 import type { components } from "#lib/api/schema.js";
 import { loggedKinds } from "#lib/admin/words.js";
 import { client, need } from "#lib/api/client.js";
+import { keys } from "#lib/changes.js";
 import type { PageLoad } from "./$types";
 
 const limit = 50;
 
-export const load: PageLoad = async ({ fetch, url }) => {
+export const load: PageLoad = async ({ fetch, url, depends }) => {
+	depends(keys.admin.profiles, keys.admin.libraries);
 	const api = client(fetch);
 	const asked = url.searchParams.get("kind") ?? "";
 	const kind =

@@ -1,8 +1,9 @@
 import { client, need } from "#lib/api/client.js";
+import { keys } from "#lib/changes.js";
 import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ fetch, depends }) => {
-	depends("photon:downloads");
+	depends(keys.downloads);
 	const api = client(fetch);
 	const { items } = await need(api.GET("/api/v1/downloads"));
 	// A download names its title by id; the page names it by its title.

@@ -1,9 +1,11 @@
 import { client, need } from "#lib/api/client.js";
+import { keys } from "#lib/changes.js";
 import type { PageLoad } from "./$types";
 
 const limit = 50;
 
-export const load: PageLoad = async ({ fetch, url }) => {
+export const load: PageLoad = async ({ fetch, url, depends }) => {
+	depends(keys.admin.profiles);
 	const api = client(fetch);
 	const asked = url.searchParams.get("profile");
 	const profile = asked && asked !== "all" ? asked : undefined;
