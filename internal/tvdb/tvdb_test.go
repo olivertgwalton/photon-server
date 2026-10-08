@@ -3,6 +3,7 @@ package tvdb
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -39,7 +40,7 @@ func fake(t *testing.T) (*Client, *int) {
 				return
 			}
 			logins++
-			_, _ = w.Write([]byte(`{"data":{"token":"t` + string(rune('0'+logins)) + `"}}`))
+			reply(t, w, `{"data":{"token":"t`+string(rune('0'+logins))+`"}}`)
 			return
 		}
 		if r.Header.Get("Authorization") != "Bearer t2" {
@@ -48,7 +49,7 @@ func fake(t *testing.T) (*Client, *int) {
 		}
 		switch r.URL.Path + "?" + r.URL.RawQuery {
 		case "/series/79126/extended?meta=translations":
-			_, _ = w.Write([]byte(`{"data":{"name":"The Wire","firstAired":"2002-06-02","originalLanguage":"eng",
+			reply(t, w, `{"data":{"name":"The Wire","firstAired":"2002-06-02","originalLanguage":"eng",
 				"characters":[
 					{"name":"Jimmy McNulty","personName":"Dominic West","peopleId":289,"peopleType":"Actor","sort":2,"personImgURL":"https://artworks.thetvdb.com/banners/person/289/a.jpg"},
 					{"name":"Cedric Daniels","personName":"Lance Reddick","peopleId":290,"peopleType":"Actor","sort":3,"personImgURL":"https://artworks.thetvdb.com/banners/"},
@@ -59,19 +60,19 @@ func fake(t *testing.T) (*Client, *int) {
 				"contentRatings":[{"name":"TV-MA","country":"usa"},{"name":"18","country":"gbr"}],
 				"remoteIds":[{"id":"tt0306414","sourceName":"IMDB"},{"id":"1438-the-wire","sourceName":"TheMovieDB.com"}],
 				"translations":{"nameTranslations":[{"language":"eng","name":"The Wire (2002)","isAlias":true},{"language":"eng","name":"The Wire"}],
-				"overviewTranslations":[{"language":"fra","overview":"Baltimore, en français."},{"language":"eng","overview":"Baltimore."}]}}}`))
+				"overviewTranslations":[{"language":"fra","overview":"Baltimore, en français."},{"language":"eng","overview":"Baltimore."}]}}}`)
 		case "/series/79126/episodes/default/eng?page=0":
-			_, _ = w.Write([]byte(`{"data":{"episodes":[{"id":101,"seasonNumber":1,"number":1,"name":"The Target","aired":"2002-06-02","image":"https://artworks.thetvdb.com/banners/"},
-				{"id":201,"seasonNumber":2,"number":1,"name":"Ebb Tide"}]},"links":{"next":"` + srv.URL + `/series/79126/episodes/default/eng?page=1"}}`))
+			reply(t, w, `{"data":{"episodes":[{"id":101,"seasonNumber":1,"number":1,"name":"The Target","aired":"2002-06-02","image":"https://artworks.thetvdb.com/banners/"},
+				{"id":201,"seasonNumber":2,"number":1,"name":"Ebb Tide"}]},"links":{"next":"`+srv.URL+`/series/79126/episodes/default/eng?page=1"}}`)
 		case "/episodes/101/extended?":
-			_, _ = w.Write([]byte(`{"data":{"characters":[
+			reply(t, w, `{"data":{"characters":[
 				{"name":"Writer","personName":"David Simon","peopleId":300,"peopleType":"Writer","sort":1},
-				{"name":"Bunk","personName":"Wendell Pierce","peopleId":301,"peopleType":"Guest Star","sort":2}]}}`))
+				{"name":"Bunk","personName":"Wendell Pierce","peopleId":301,"peopleType":"Guest Star","sort":2}]}}`)
 		case "/series/79126/episodes/dvd/eng?page=0":
-			_, _ = w.Write([]byte(`{"data":{"episodes":[{"seasonNumber":1,"number":1,"name":"The Detail"}]},"links":{"next":null}}`))
+			reply(t, w, `{"data":{"episodes":[{"seasonNumber":1,"number":1,"name":"The Detail"}]},"links":{"next":null}}`)
 		case "/series/79126/episodes/default/eng?page=1":
-			_, _ = w.Write([]byte(`{"data":{"episodes":[{"id":102,"seasonNumber":1,"number":2,"name":"The Detail"},
-				{"id":601,"seasonNumber":6,"number":1,"name":"Coming","aired":"2100-01-04"}]},"links":{"next":null}}`))
+			reply(t, w, `{"data":{"episodes":[{"id":102,"seasonNumber":1,"number":2,"name":"The Detail"},
+				{"id":601,"seasonNumber":6,"number":1,"name":"Coming","aired":"2100-01-04"}]},"links":{"next":null}}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -171,13 +172,13 @@ func TestAnEpisodeCreditsItsGuestsAndCrew(t *testing.T) {
 func TestSearchSaysWhatEachShowIsAboutInTheClientsLanguage(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/login" {
-			_, _ = w.Write([]byte(`{"data":{"token":"t"}}`))
+			reply(t, w, `{"data":{"token":"t"}}`)
 			return
 		}
-		_, _ = w.Write([]byte(`{"data":[
+		reply(t, w, `{"data":[
 			{"tvdb_id":"79126","name":"The Wire","year":"2002","overview":"Baltimore, as TVDB has it.",
 				"overviews":{"fra":"Baltimore, en français.","eng":"Baltimore."}},
-			{"tvdb_id":"1","name":"Wired","overview":"Only in its own words."}]}`))
+			{"tvdb_id":"1","name":"Wired","overview":"Only in its own words."}]}`)
 	}))
 	t.Cleanup(srv.Close)
 	c := New("key", "", unlimited{})
@@ -202,10 +203,10 @@ func TestItHasItsCapabilities(t *testing.T) {
 func TestAShowsPicturesAreRankedByTheLanguageAskedIn(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/login" {
-			_, _ = w.Write([]byte(`{"data":{"token":"t"}}`))
+			reply(t, w, `{"data":{"token":"t"}}`)
 			return
 		}
-		_, _ = w.Write([]byte(`{"data":{"name":"The Wire","image":"https://artworks.thetvdb.com/banners/p.jpg","artworks":[
+		reply(t, w, `{"data":{"name":"The Wire","image":"https://artworks.thetvdb.com/banners/p.jpg","artworks":[
 			{"type":2,"image":"/en.jpg","language":"eng","score":90,"width":680,"height":1000},
 			{"type":2,"image":"/de-low.jpg","language":"deu","score":10},
 			{"type":2,"image":"/de.jpg","language":"deu","score":50},
@@ -213,7 +214,7 @@ func TestAShowsPicturesAreRankedByTheLanguageAskedIn(t *testing.T) {
 			{"type":3,"image":"/bg-en.jpg","language":"eng","score":99},
 			{"type":3,"image":"/bg.jpg","score":1},
 			{"type":23,"image":"/logo-en.png","language":"eng"},
-			{"type":7,"image":"/season.jpg","language":"deu"}]}}`))
+			{"type":7,"image":"/season.jpg","language":"deu"}]}}`)
 	}))
 	t.Cleanup(srv.Close)
 	c := New("key", "", unlimited{})
@@ -236,5 +237,12 @@ func TestAShowsPicturesAreRankedByTheLanguageAskedIn(t *testing.T) {
 	}
 	if !slices.Equal(order, want) {
 		t.Errorf("pictures:\n%v\nwant German before English before none, a backdrop with no words first, a season's left out:\n%v", order, want)
+	}
+}
+
+func reply(t *testing.T, w io.Writer, body string) {
+	t.Helper()
+	if _, err := io.WriteString(w, body); err != nil {
+		t.Error(err)
 	}
 }
