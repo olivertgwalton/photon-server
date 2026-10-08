@@ -122,6 +122,23 @@ const kinds = $derived(
 			cluster?.oldest_due_seconds[k] !== undefined,
 	),
 );
+// Each kind the libraries hold, as a word that counts it.
+const nouns: Record<Schemas["ItemKind"], string> = {
+	movie: "film",
+	show: "show",
+	season: "season",
+	episode: "episode",
+	extra: "extra",
+	collection: "collection",
+};
+const held = $derived(
+	(
+		Object.entries(cluster?.library_items ?? {}) as [
+			Schemas["ItemKind"],
+			number,
+		][]
+	).filter(([, n]) => n),
+);
 const finished = $derived(
 	[...(cluster?.tasks ?? [])].sort((a, b) =>
 		b.finished_at.localeCompare(a.finished_at),
@@ -199,15 +216,16 @@ function ago(seconds: number, now: number) {
 			<dt class="label">Library</dt>
 			{#if cluster}
 				<dd class="text-ink font-heading text-2xl font-bold">
-					{count(cluster.library_items.movie ?? 0, "film")}
-					<span class="text-ink-3 font-sans text-sm font-normal">
-						{bytes(cluster.library_bytes.movie ?? 0)}
-					</span>
+					{bytes(
+						Object.values(cluster.library_bytes).reduce((s, b) => s + b, 0),
+					)}
 				</dd>
-				<dd class="text-ink-3 text-xs">
-					{count(cluster.library_items.episode ?? 0, "episode")}
-					· {bytes(cluster.library_bytes.episode ?? 0)}
-				</dd>
+				{#each held as [kind, n] (kind)}
+					<dd class="text-ink-3 text-xs">
+						{count(n, nouns[kind])}
+						· {bytes(cluster.library_bytes[kind] ?? 0)}
+					</dd>
+				{/each}
 			{:else}
 				<dd class="text-ink-3 text-sm">Not known yet</dd>
 			{/if}
