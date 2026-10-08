@@ -82,79 +82,64 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		id:  strings.ReplaceAll(info.ID, "-", ""),
 		mux: http.NewServeMux(), segments: map[string]string{},
 	}
-	a.handle("GET /System/Info/Public", a.publicInfo)
 	// Ping answers as Jellyfin does: its product's name, not the server's.
-	ping := a.constant(`"` + product + `"`)
-	a.handle("GET /System/Ping", ping)
-	a.handle("POST /System/Ping", ping)
-	a.handle("GET /Branding/Configuration", a.constant(`{"SplashscreenEnabled":false}`))
-	a.handle("GET /Branding/Css", css)
-	a.handle("GET /Branding/Css.css", css)
-	a.handle("GET /QuickConnect/Enabled", a.constant(`true`))
-	a.handle("POST /QuickConnect/Initiate", a.initiateQuickConnect)
-	a.handle("GET /QuickConnect/Connect", a.quickConnectState)
-	a.handle("POST /QuickConnect/Authorize", a.signedIn(a.authorizeQuickConnect))
-	a.handle("POST /Users/AuthenticateWithQuickConnect", a.authenticateWithQuickConnect)
+	a.anyone(a.constant(`"`+product+`"`), "GET /System/Ping", "POST /System/Ping")
+	a.anyone(a.publicInfo, "GET /System/Info/Public")
+	a.anyone(a.constant(`{"SplashscreenEnabled":false}`), "GET /Branding/Configuration")
+	a.anyone(css, "GET /Branding/Css", "GET /Branding/Css.css")
+	a.anyone(a.constant(`true`), "GET /QuickConnect/Enabled")
+	a.anyone(a.initiateQuickConnect, "POST /QuickConnect/Initiate")
+	a.anyone(a.quickConnectState, "GET /QuickConnect/Connect")
+	a.anyone(a.authenticateWithQuickConnect, "POST /Users/AuthenticateWithQuickConnect")
 	// No profile is listed to whoever asks: an app shows its form for a name and password.
-	a.handle("GET /Users/Public", a.constant(`[]`))
-	a.handle("POST /Users/AuthenticateByName", a.authenticateByName)
-	a.handle("GET /System/Info", a.signedIn(a.systemInfo))
-	a.handle("GET /Users/Me", a.signedIn(a.me))
-	a.handle("GET /Users/{userId}", a.signedIn(a.user))
-	a.handle("POST /Sessions/Logout", a.signedIn(a.logout))
-	a.handle("GET /DisplayPreferences/{id}", a.signedIn(a.displayPreferences))
+	a.anyone(a.constant(`[]`), "GET /Users/Public")
+	a.anyone(a.authenticateByName, "POST /Users/AuthenticateByName")
+	a.anyone(a.image, "GET /Items/{itemId}/Images/{imageType}", "GET /Items/{itemId}/Images/{imageType}/{imageIndex}")
+	a.handle(a.authorizeQuickConnect, "POST /QuickConnect/Authorize")
+	a.handle(a.systemInfo, "GET /System/Info")
+	a.handle(a.me, "GET /Users/Me")
+	a.handle(a.user, "GET /Users/{userId}")
+	a.handle(a.logout, "POST /Sessions/Logout")
+	a.handle(a.displayPreferences, "GET /DisplayPreferences/{id}")
 	// Browsing, under the routes Jellyfin 12.2 answers, and the /Users/{userId} forms apps still use.
-	a.handle("GET /UserViews", a.signedIn(a.views))
-	a.handle("GET /Users/{userId}/Views", a.signedIn(a.views))
-	a.handle("GET /UserViews/GroupingOptions", a.signedIn(a.groupingOptions))
-	a.handle("GET /Library/VirtualFolders", a.signedIn(a.virtualFolders))
-	a.handle("GET /Items", a.signedIn(a.items))
-	a.handle("GET /Users/{userId}/Items", a.signedIn(a.items))
-	a.handle("GET /Items/{itemId}", a.signedIn(a.item))
-	a.handle("GET /Users/{userId}/Items/{itemId}", a.signedIn(a.item))
-	a.handle("GET /Shows/{seriesId}/Seasons", a.signedIn(a.seasons))
-	a.handle("GET /Shows/{seriesId}/Episodes", a.signedIn(a.episodes))
-	a.handle("GET /UserItems/Resume", a.signedIn(a.row(domain.RowContinueWatching)))
-	a.handle("GET /Users/{userId}/Items/Resume", a.signedIn(a.row(domain.RowContinueWatching)))
-	a.handle("GET /Shows/NextUp", a.signedIn(a.nextUp))
-	a.handle("GET /Shows/Upcoming", a.signedIn(a.upcoming))
-	a.handle("GET /Items/Latest", a.signedIn(a.latest))
-	a.handle("GET /Users/{userId}/Items/Latest", a.signedIn(a.latest))
-	a.handle("GET /Items/{itemId}/LocalTrailers", a.signedIn(a.none))
-	a.handle("GET /Users/{userId}/Items/{itemId}/LocalTrailers", a.signedIn(a.none))
-	a.handle("GET /Items/{itemId}/SpecialFeatures", a.signedIn(a.none))
-	a.handle("GET /Users/{userId}/Items/{itemId}/SpecialFeatures", a.signedIn(a.none))
-	a.handle("GET /Items/{itemId}/Images/{imageType}", a.image)
-	a.handle("GET /Items/{itemId}/Images/{imageType}/{imageIndex}", a.image)
+	a.handle(a.views, "GET /UserViews", "GET /Users/{userId}/Views")
+	a.handle(a.groupingOptions, "GET /UserViews/GroupingOptions")
+	a.handle(a.virtualFolders, "GET /Library/VirtualFolders")
+	a.handle(a.items, "GET /Items", "GET /Users/{userId}/Items")
+	a.handle(a.item, "GET /Items/{itemId}", "GET /Users/{userId}/Items/{itemId}")
+	a.handle(a.seasons, "GET /Shows/{seriesId}/Seasons")
+	a.handle(a.episodes, "GET /Shows/{seriesId}/Episodes")
+	a.handle(a.row(domain.RowContinueWatching), "GET /UserItems/Resume", "GET /Users/{userId}/Items/Resume")
+	a.handle(a.nextUp, "GET /Shows/NextUp")
+	a.handle(a.upcoming, "GET /Shows/Upcoming")
+	a.handle(a.latest, "GET /Items/Latest", "GET /Users/{userId}/Items/Latest")
+	a.handle(a.none,
+		"GET /Items/{itemId}/LocalTrailers", "GET /Users/{userId}/Items/{itemId}/LocalTrailers",
+		"GET /Items/{itemId}/SpecialFeatures", "GET /Users/{userId}/Items/{itemId}/SpecialFeatures")
 	// Playing: a title's copies, its file as it is, and where the app has got to.
-	a.handle("GET /Items/{itemId}/PlaybackInfo", a.signedIn(a.playbackInfo))
-	a.handle("POST /Items/{itemId}/PlaybackInfo", a.signedIn(a.playbackInfo))
-	a.handle("GET /Videos/{itemId}/stream", a.signedIn(a.sending(playback.DeliveryFile, a.stream)))
-	a.handle("GET /Videos/{itemId}/{file}", a.signedIn(a.video))
-	a.handle("DELETE /Videos/ActiveEncodings", a.signedIn(a.endEncoding))
-	a.handle("GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{file}", a.signedIn(a.subtitle))
-	a.handle("GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{start}/{file}", a.signedIn(a.subtitle))
-	a.handle("GET /MediaSegments/{itemId}", a.signedIn(a.mediaSegments))
-	a.handle("POST /Sessions/Playing", a.signedIn(a.reported(reportProgress)))
-	a.handle("POST /Sessions/Playing/Progress", a.signedIn(a.reported(reportProgress)))
-	a.handle("POST /Sessions/Playing/Stopped", a.signedIn(a.reported(reportStopped)))
-	a.handle("POST /Sessions/Playing/Ping", a.signedIn(noContent))
-	for _, prefix := range []string{"/UserPlayedItems/", "/Users/{userId}/PlayedItems/"} {
-		a.handle("POST "+prefix+"{itemId}", a.signedIn(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
-			return a.svc.Watching.MarkWatched(ctx, profile, item, nil)
-		})))
-		a.handle("DELETE "+prefix+"{itemId}", a.signedIn(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
-			return a.svc.Watching.MarkUnwatched(ctx, profile, item)
-		})))
-	}
-	for _, prefix := range []string{"/UserFavoriteItems/", "/Users/{userId}/FavoriteItems/"} {
-		a.handle("POST "+prefix+"{itemId}", a.signedIn(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
-			return a.svc.Watching.Favourite(ctx, profile, item)
-		})))
-		a.handle("DELETE "+prefix+"{itemId}", a.signedIn(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
-			return a.svc.Watching.Unfavourite(ctx, profile, item)
-		})))
-	}
+	a.handle(a.playbackInfo, "GET /Items/{itemId}/PlaybackInfo", "POST /Items/{itemId}/PlaybackInfo")
+	a.handle(a.sending(playback.DeliveryFile, a.stream), "GET /Videos/{itemId}/stream")
+	a.handle(a.video, "GET /Videos/{itemId}/{file}")
+	a.handle(a.endEncoding, "DELETE /Videos/ActiveEncodings")
+	a.handle(a.subtitle,
+		"GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{file}",
+		"GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{start}/{file}")
+	a.handle(a.mediaSegments, "GET /MediaSegments/{itemId}")
+	a.handle(a.reported(reportProgress), "POST /Sessions/Playing", "POST /Sessions/Playing/Progress")
+	a.handle(a.reported(reportStopped), "POST /Sessions/Playing/Stopped")
+	a.handle(noContent, "POST /Sessions/Playing/Ping")
+	a.handle(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
+		return a.svc.Watching.MarkWatched(ctx, profile, item, nil)
+	}), "POST /UserPlayedItems/{itemId}", "POST /Users/{userId}/PlayedItems/{itemId}")
+	a.handle(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
+		return a.svc.Watching.MarkUnwatched(ctx, profile, item)
+	}), "DELETE /UserPlayedItems/{itemId}", "DELETE /Users/{userId}/PlayedItems/{itemId}")
+	a.handle(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
+		return a.svc.Watching.Favourite(ctx, profile, item)
+	}), "POST /UserFavoriteItems/{itemId}", "POST /Users/{userId}/FavoriteItems/{itemId}")
+	a.handle(a.mark(func(ctx context.Context, profile, item uuid.UUID) error {
+		return a.svc.Watching.Unfavourite(ctx, profile, item)
+	}), "DELETE /UserFavoriteItems/{itemId}", "DELETE /Users/{userId}/FavoriteItems/{itemId}")
 	return a
 }
 
@@ -163,14 +148,22 @@ func (a *API) sending(d playback.Delivery, h http.HandlerFunc) http.HandlerFunc 
 	return a.svc.Sent.Counting(d, h).ServeHTTP
 }
 
-func (a *API) handle(pattern string, h http.HandlerFunc) {
-	_, path, _ := strings.Cut(pattern, " ")
-	for seg := range strings.SplitSeq(path, "/") {
-		if seg != "" && !strings.HasPrefix(seg, "{") {
-			a.segments[strings.ToLower(seg)] = seg
+// handle answers the patterns with h for a signed-in profile alone; anyone answers them for
+// anyone.
+func (a *API) handle(h http.HandlerFunc, patterns ...string) {
+	a.anyone(a.signedIn(h), patterns...)
+}
+
+func (a *API) anyone(h http.HandlerFunc, patterns ...string) {
+	for _, pattern := range patterns {
+		_, path, _ := strings.Cut(pattern, " ")
+		for seg := range strings.SplitSeq(path, "/") {
+			if seg != "" && !strings.HasPrefix(seg, "{") {
+				a.segments[strings.ToLower(seg)] = seg
+			}
 		}
+		a.mux.HandleFunc(pattern, h)
 	}
-	a.mux.HandleFunc(pattern, h)
 }
 
 // ServeHTTP answers any origin, as Jellyfin does, so a Jellyfin web app served elsewhere can sign
