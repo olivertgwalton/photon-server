@@ -21,6 +21,7 @@ type catalogue interface {
 	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
+	Named(ctx context.Context, profile, id uuid.UUID) (store.Named, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Seasons(ctx context.Context, profile, show uuid.UUID) ([]store.SeasonCard, error)
 	Episodes(ctx context.Context, profile, of uuid.UUID) ([]store.Card, error)
@@ -369,25 +370,47 @@ func (a *API) search(w http.ResponseWriter, r *http.Request, text string, librar
 // children answers what is in a show or a season: a show's seasons, or its episodes where an app
 // asks for them; a season's episodes. Anything else holds nothing an app can ask for here.
 func (a *API) children(w http.ResponseWriter, r *http.Request, profile, parent uuid.UUID, types []string, l listed) {
-	seasons, err := a.svc.Catalogue.Seasons(r.Context(), profile, parent)
+	none := queryResult{Items: []item{}, StartIndex: l.start}
+	named, err := a.svc.Catalogue.Named(r.Context(), profile, parent)
 	if errors.Is(err, store.ErrNotFound) {
+		a.writeJSON(w, none)
+		return
+	}
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	switch named.Kind {
+	case store.NamedTitle:
+		a.titleChildren(w, r, profile, parent, named.Title, types, l)
+	case store.NamedAnnounced:
+		a.writeJSON(w, none)
+	}
+}
+
+func (a *API) titleChildren(w http.ResponseWriter, r *http.Request, profile, parent uuid.UUID, kind domain.ItemKind, types []string, l listed) {
+	switch kind {
+	case domain.ItemShow:
+		seasons, err := a.svc.Catalogue.Seasons(r.Context(), profile, parent)
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		if len(seasons) > 0 && !has(types, "Episode") {
+			a.writeSeasons(w, r, parent, seasons, l)
+			return
+		}
+		fallthrough
+	case domain.ItemSeason:
+		cards, err := a.svc.Catalogue.Episodes(r.Context(), profile, parent)
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		a.writeList(w, r, cards[min(l.start, len(cards)):min(l.start+l.limit, len(cards))], len(cards), l.start, l)
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection:
 		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
-		return
 	}
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	if len(seasons) > 0 && !has(types, "Episode") {
-		a.writeSeasons(w, r, parent, seasons, l)
-		return
-	}
-	cards, err := a.svc.Catalogue.Episodes(r.Context(), profile, parent)
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	a.writeList(w, r, cards[min(l.start, len(cards)):min(l.start+l.limit, len(cards))], len(cards), l.start, l)
 }
 
 func (a *API) writeSeasons(w http.ResponseWriter, r *http.Request, show uuid.UUID, seasons []store.SeasonCard, l listed) {
@@ -406,7 +429,7 @@ func (a *API) writeSeasons(w http.ResponseWriter, r *http.Request, show uuid.UUI
 	a.writeJSON(w, out)
 }
 
-// item answers one item: a library, or a title with all photon knows of it.
+// item answers one item: a library, a title with all photon knows of it, or an episode announced.
 func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("itemId"))
 	if err != nil {
@@ -422,9 +445,27 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, a.library(lib))
 		return
 	}
+	named, err := a.svc.Catalogue.Named(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
+	if errors.Is(err, store.ErrNotFound) {
+		a.refuse(w, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	switch named.Kind {
+	case store.NamedTitle:
+		a.titleItem(w, r, id)
+	case store.NamedAnnounced:
+		a.announcedItem(w, r, id)
+	}
+}
+
+func (a *API) titleItem(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
 	p, err := a.svc.Catalogue.Title(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if errors.Is(err, store.ErrNotFound) {
-		a.announcedItem(w, r, id)
+		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	if err != nil {
