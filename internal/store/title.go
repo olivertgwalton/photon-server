@@ -19,6 +19,7 @@ import (
 // show's seasons, a season's episodes, and whatever extras and videos the title has.
 type TitlePage struct {
 	ID            uuid.UUID
+	Library       uuid.UUID
 	Kind          domain.ItemKind
 	Title         string
 	OriginalTitle string
@@ -248,7 +249,7 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		return TitlePage{}, cmp.Or(err, ErrNotFound)
 	}
 	p := TitlePage{
-		ID: id, Kind: item.Kind, Title: item.Title, OriginalTitle: deref(item.OriginalTitle),
+		ID: id, Library: item.LibraryID, Kind: item.Kind, Title: item.Title, OriginalTitle: deref(item.OriginalTitle),
 		Overview: deref(item.Overview), Tagline: deref(item.Tagline), Certificate: deref(item.Certificate),
 		Year: deref(item.Year), ReleaseDate: domain.Date(deref(item.ReleaseDate)), Genres: item.Genres, Studios: item.Studios,
 		AddedAt: item.AddedAt, SeasonNumber: item.SeasonNumber, EpisodeNumber: item.EpisodeNumber,

@@ -170,6 +170,7 @@ const activity: Schemas["Event"][] = [
 
 const film: Schemas["TitlePage"] = {
 	id: "t-quiet",
+	library_id: "l-films",
 	kind: "movie",
 	title: "Quiet Hours",
 	year: 2018,
@@ -208,6 +209,7 @@ const film: Schemas["TitlePage"] = {
 
 const collection: Schemas["TitlePage"] = {
 	id: "t-box",
+	library_id: "l-films",
 	kind: "collection",
 	title: "Lighthouse Films",
 	added_at: "2026-10-01T20:00:00Z",
@@ -734,6 +736,7 @@ export async function admin(
 			const asked = (await request.json()) as Schemas["AddCollection"];
 			smart = {
 				id: "t-smart",
+				library_id: asked.library_id,
 				kind: "collection",
 				title: asked.title,
 				added_at: film.added_at,

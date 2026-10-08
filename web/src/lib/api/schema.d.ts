@@ -7823,6 +7823,8 @@ export interface components {
                 [key: string]: string;
             };
             kind: components["schemas"]["ItemKind"];
+            /** Format: uuid */
+            library_id: string;
             list?: components["schemas"]["ListRef"] | null;
             metadata_language?: string;
             origin?: components["schemas"]["CollectionOrigin"];
