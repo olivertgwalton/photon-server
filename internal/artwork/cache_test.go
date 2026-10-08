@@ -274,8 +274,10 @@ func (zeros) Read(p []byte) (int, error) {
 }
 
 func TestAProvidersPictureIsResizedWhenEveryPlaceIsTaken(t *testing.T) {
+	// Wider than every width kept ahead, so each is a resize; no larger, since the fetch resizes and
+	// hashes it under the race detector before the one place is free.
 	var poster bytes.Buffer
-	if err := png.Encode(&poster, gradient(1000, 1500)); err != nil {
+	if err := png.Encode(&poster, gradient(500, 750)); err != nil {
 		t.Fatal(err)
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -286,7 +288,8 @@ func TestAProvidersPictureIsResizedWhenEveryPlaceIsTaken(t *testing.T) {
 	c := newCache(t, t.TempDir(), func(context.Context, uuid.UUID, string) error { return nil })
 	c.resizing = make(chan struct{}, 1)
 
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	// Long enough that only a fetch waiting on the place it holds runs out of it.
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	f, _, err := c.Open(ctx, uuid.NewV7(), domain.Picture{URL: srv.URL + "/poster.png"}, 240, 0)
 	if err != nil {
