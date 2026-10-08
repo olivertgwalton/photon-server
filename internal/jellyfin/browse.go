@@ -21,6 +21,9 @@ type catalogue interface {
 	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
+	Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
+	HasCollections(ctx context.Context, profile uuid.UUID) (bool, error)
+	Members(ctx context.Context, profile, collection uuid.UUID) ([]store.Card, error)
 	Named(ctx context.Context, profile, id uuid.UUID) (store.Named, error)
 	SearchPeople(ctx context.Context, text string, offset, limit int) ([]store.PersonRef, int64, error)
 	Person(ctx context.Context, id uuid.UUID) (store.PersonPage, error)
@@ -141,8 +144,8 @@ func (a *API) seenLibraries(r *http.Request) ([]*store.SeenLibrary, map[uuid.UUI
 	return libs, byID, err
 }
 
-// views are the libraries as Jellyfin's apps open them, in the profile's order, then the view of
-// its playlists where it has any.
+// views are the libraries as Jellyfin's apps open them, in the profile's order, then the views of
+// its collections and its playlists where it has any.
 func (a *API) views(w http.ResponseWriter, r *http.Request) {
 	libs, _, err := a.seenLibraries(r)
 	if err != nil {
@@ -153,7 +156,16 @@ func (a *API) views(w http.ResponseWriter, r *http.Request) {
 	for n, l := range libs {
 		out[n] = a.library(l)
 	}
-	playlists, err := a.svc.Playlists.Playlists(r.Context(), auth.SessionOf(r.Context()).Profile.ID)
+	profile := auth.SessionOf(r.Context()).Profile.ID
+	collections, err := a.svc.Catalogue.HasCollections(r.Context(), profile)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	if collections {
+		out = append(out, a.collectionsFolder())
+	}
+	playlists, err := a.svc.Playlists.Playlists(r.Context(), profile)
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -263,8 +275,9 @@ func wallPage(r *http.Request, profile uuid.UUID, l listed) store.WallPage {
 var libraryKinds = map[domain.LibraryKind]string{domain.LibraryMovies: "Movie", domain.LibraryShows: "Series"}
 
 // items answers Jellyfin's /Items: the items an app names, a library's films or shows, a show's
-// seasons or episodes, a season's episodes, or what matches a search; every library at once where
-// an app names none, and the profile's playlists where it asks for those alone or opens their view.
+// seasons or episodes, a season's episodes, every collection, or what matches a search; every
+// library at once where an app names none, and the profile's playlists where it asks for those
+// alone or opens their view.
 func (a *API) items(w http.ResponseWriter, r *http.Request) {
 	profile, l := auth.SessionOf(r.Context()).Profile.ID, listedOf(w, r)
 	types := values(r, "includeItemTypes")
@@ -289,6 +302,8 @@ func (a *API) items(w http.ResponseWriter, r *http.Request) {
 	switch lib, ok := seen[parent]; {
 	case ok:
 		a.wall([]*store.SeenLibrary{lib}, w, r, types, l)
+	case parent == a.viewID(collectionsView):
+		a.collections(libs, w, r, l)
 	case parent == a.viewID(playlistsView), parent == uuid.UUID{} && len(types) == 1 && strings.EqualFold(types[0], "Playlist"):
 		a.playlists(w, r, l)
 	case parent == uuid.UUID{} && len(types) == 0 && !strings.EqualFold(query(r, "recursive"), "true"):
@@ -341,8 +356,13 @@ func (a *API) byID(w http.ResponseWriter, r *http.Request, names []string, seen 
 	a.writeJSON(w, queryResult{Items: out[min(l.start, len(out)):min(l.start+l.limit, len(out))], TotalRecordCount: len(out), StartIndex: l.start})
 }
 
-// wall answers the titles of libraries, those of several sorted together, of the kinds asked for.
+// wall answers the titles of libraries, those of several sorted together, of the kinds asked for;
+// or their collections, where an app asks for box sets alone.
 func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Request, types []string, l listed) {
+	if len(types) == 1 && strings.EqualFold(types[0], "BoxSet") {
+		a.collections(libs, w, r, l)
+		return
+	}
 	var ids []uuid.UUID
 	for _, lib := range libs {
 		if len(types) == 0 || has(types, libraryKinds[lib.Kind]) {
@@ -385,8 +405,9 @@ func (a *API) search(w http.ResponseWriter, r *http.Request, text string, librar
 	a.writeList(w, r, cards, int(total), l.start, l)
 }
 
-// children answers what is in a show or a season: a show's seasons, or its episodes where an app
-// asks for them; a season's episodes. Anything else holds nothing an app can ask for here.
+// children answers what is in a collection, a show or a season: a collection's titles; a show's
+// seasons, or its episodes where an app asks for them; a season's episodes. Anything else holds
+// nothing an app can ask for here.
 func (a *API) children(w http.ResponseWriter, r *http.Request, profile, parent uuid.UUID, types []string, l listed) {
 	none := queryResult{Items: []item{}, StartIndex: l.start}
 	named, err := a.svc.Catalogue.Named(r.Context(), profile, parent)
@@ -426,7 +447,14 @@ func (a *API) titleChildren(w http.ResponseWriter, r *http.Request, profile, par
 			return
 		}
 		a.writeList(w, r, cards[min(l.start, len(cards)):min(l.start+l.limit, len(cards))], len(cards), l.start, l)
-	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection:
+	case domain.ItemCollection:
+		members, err := a.svc.Catalogue.Members(r.Context(), profile, parent)
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		a.writeList(w, r, members[min(l.start, len(members)):min(l.start+l.limit, len(members))], len(members), l.start, l)
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
 		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
 	}
 }
@@ -447,8 +475,9 @@ func (a *API) writeSeasons(w http.ResponseWriter, r *http.Request, show uuid.UUI
 	a.writeJSON(w, out)
 }
 
-// item answers one item: a library or the view of playlists, a title with all photon knows of it,
-// an episode announced, someone credited on a title, or one of the profile's playlists.
+// item answers one item: a library or the view of collections or playlists, a title with all
+// photon knows of it, an episode announced, someone credited on a title, or one of the profile's
+// playlists.
 func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("itemId"))
 	if err != nil {
@@ -462,6 +491,10 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	}
 	if lib, ok := seen[id]; ok {
 		a.writeJSON(w, a.library(lib))
+		return
+	}
+	if id == a.viewID(collectionsView) {
+		a.writeJSON(w, a.collectionsFolder())
 		return
 	}
 	if id == a.viewID(playlistsView) {
@@ -500,6 +533,15 @@ func (a *API) titleItem(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
 		return
 	}
 	it := a.fromTitle(p, words.Negotiate(w, r))
+	if p.Kind == domain.ItemCollection {
+		members, err := a.svc.Catalogue.Members(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		n := len(members)
+		it.ChildCount = &n
+	}
 	it.Etag = etag(it)
 	a.writeJSON(w, it)
 }
