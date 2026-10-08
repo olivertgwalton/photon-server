@@ -378,3 +378,45 @@ func TestACopysContainerIsNamedAsClientsNameIt(t *testing.T) {
 		t.Errorf("a Matroska copy: %d %s, want its container named mkv", rec.Code, rec.Body)
 	}
 }
+
+// ratedCatalogue has films rated in the US's system, which is not the server's.
+type ratedCatalogue struct{ fakeCatalogue }
+
+func (ratedCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage, error) {
+	return store.TitlePage{ID: id, Kind: domain.ItemMovie, Title: "Heat", Certificate: "US:R"}, nil
+}
+
+func (ratedCatalogue) Wall(context.Context, []uuid.UUID, store.WallPage) ([]store.Card, int64, error) {
+	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat", Certificate: "US:R"}}, 1, nil
+}
+
+func (ratedCatalogue) Facets(context.Context, uuid.UUID, uuid.UUID) (store.Facets, error) {
+	return store.Facets{Certificates: []string{"15", "US:R"}}, nil
+}
+
+// A viewer sees a certificate from another country as its country gives it, as Plex shows de/12 as
+// 12; an edit and a filter still name its country, so parental controls read it in its system.
+func TestACertificateIsShownWithoutItsCountry(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Catalogue: ratedCatalogue{}, Preferences: &fakePreferences{},
+	})
+	get := func(path string) string {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec.Body.String()
+	}
+	if page := get("/api/v1/titles/" + films.String()); !strings.Contains(page, `"certificate":"R"`) ||
+		!strings.Contains(page, `"qualified_certificate":"US:R"`) {
+		t.Errorf("title page: %s, want R shown and US:R to edit", page)
+	}
+	if wall := get("/api/v1/libraries/" + films.String() + "/titles"); !strings.Contains(wall, `"certificate":"R"`) {
+		t.Errorf("wall: %s, want the card rated R", wall)
+	}
+	if facets := get("/api/v1/libraries/" + films.String() + "/facets"); !strings.Contains(facets,
+		`"certificates":[{"name":"15","value":"15"},{"name":"R","value":"US:R"}]`) {
+		t.Errorf("facets: %s, want R shown and US:R filtered by", facets)
+	}
+}

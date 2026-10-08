@@ -26,6 +26,11 @@ let {
 } = $props();
 const words = vocabulary();
 
+// A certificate is filtered by with its country (GB:PG) and shown as a viewer reads it.
+const certificates = $derived(
+	new Map(facets.certificates.map((c) => [c.value, c.name])),
+);
+
 // Each list a library has values for, as the server named them.
 const groups = $derived(
 	(
@@ -33,7 +38,12 @@ const groups = $derived(
 			["Status", "mark", facets.marks, (v) => words.marks[v]],
 			["Genre", "genre", facets.genres],
 			["Year", "year", facets.years],
-			["Certificate", "certificate", facets.certificates],
+			[
+				"Certificate",
+				"certificate",
+				[...certificates.keys()],
+				(v) => certificates.get(String(v)) ?? String(v),
+			],
 			["Studio", "studio", facets.studios],
 			[
 				"Resolution",

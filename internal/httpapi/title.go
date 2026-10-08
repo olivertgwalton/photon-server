@@ -59,8 +59,11 @@ type titlePageJSON struct {
 	EpisodeOrder domain.EpisodeOrder `json:"episode_order,omitzero"`
 	// MetadataLanguage and CertificationCountry are a film's or show's own, over its library's;
 	// absent where it takes its library's.
-	MetadataLanguage     string            `json:"metadata_language,omitzero"`
-	CertificationCountry string            `json:"certification_country,omitzero"`
+	MetadataLanguage     string `json:"metadata_language,omitzero"`
+	CertificationCountry string `json:"certification_country,omitzero"`
+	// QualifiedCertificate is Certificate with the country whose system rates it, where that is not
+	// the server's (GB:PG), as parental controls read it and an edit takes it.
+	QualifiedCertificate string            `json:"qualified_certificate,omitzero"`
 	AddedAt              time.Time         `json:"added_at"`
 	SeasonNumber         *int              `json:"season_number,omitzero"`
 	EpisodeNumber        *int              `json:"episode_number,omitzero"`
@@ -271,7 +274,7 @@ type titleStateJSON struct {
 func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 	return titlePageJSON{
 		ID: p.ID, LibraryID: p.Library, Kind: p.Kind, Title: p.Title, OriginalTitle: p.OriginalTitle, Overview: p.Overview,
-		Tagline: p.Tagline, Certificate: p.Certificate, Year: p.Year, ReleaseDate: p.ReleaseDate,
+		Tagline: p.Tagline, Certificate: domain.Bare(p.Certificate), QualifiedCertificate: p.Certificate, Year: p.Year, ReleaseDate: p.ReleaseDate,
 		Genres: p.Genres, Studios: p.Studios, IDs: p.IDs,
 		Ratings:     each(p.Ratings, func(r domain.Rating) ratingRefJSON { return ratingRefJSON(r) }),
 		Collections: each(p.Collections, func(c store.CollectionCard) collectionCardJSON { return collectionCardJSON(c) }),

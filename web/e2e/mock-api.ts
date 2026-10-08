@@ -131,7 +131,10 @@ function home(arranged: Schemas["HomeSection"][], limit = 20): Schemas["Home"] {
 const facets: Schemas["Facets"] = {
 	genres: ["Comedy", "Drama"],
 	years: [2018, 2019],
-	certificates: ["12A", "15"],
+	certificates: [
+		{ name: "12A", value: "12A" },
+		{ name: "15", value: "15" },
+	],
 	studios: ["Ealing"],
 	resolutions: ["1080p", "4k"],
 	ranges: ["sdr", "dv"],
@@ -166,6 +169,7 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 			overview: "A night shift at a radio station.",
 			tagline: "Nobody is listening.",
 			certificate: "15",
+			qualified_certificate: "15",
 			genres: ["Drama"],
 			studios: ["Ealing"],
 			ids: { imdb: "tt0000001", tmdb: "1" },
