@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { timecode } from "../format";
-import { describe, parseClock } from "./words";
+import { describe, elapsed, parseClock } from "./words";
 
 test("a marker's time reads and writes as a clock", () => {
 	expect(timecode(83_000)).toBe("1:23");
@@ -51,4 +51,18 @@ test("an event reads as who did what", () => {
 			names,
 		),
 	).toBe("1 title was added to Films");
+});
+
+// The dashboard says how long the server has been up in words of their own,
+// not a relative time with its "ago" cut off, which only English ends with.
+test("how long something has run reads in its largest whole unit", () => {
+	const unit = (n: number, u: "day" | "hour" | "minute" | "second") =>
+		new Intl.NumberFormat(undefined, {
+			style: "unit",
+			unit: u,
+			unitDisplay: "long",
+		}).format(n);
+	expect(elapsed(3 * 86_400_000 + 5 * 3_600_000)).toBe(unit(3, "day"));
+	expect(elapsed(90 * 60_000)).toBe(unit(1, "hour"));
+	expect(elapsed(42_000)).toBe(unit(42, "second"));
 });

@@ -1,8 +1,8 @@
 <script lang="ts">
 import type { components } from "#lib/api/schema.js";
+import { bytes } from "#lib/format.js";
 import {
 	accelerations,
-	bytes,
 	limitSources,
 	nodeAvailability,
 	nodeRoles,
@@ -111,9 +111,7 @@ const folders = $derived<[string, components["schemas"]["Folder"]][]>([
 		<dd class="text-ink-2 min-w-0 wrap-break-word">
 			{folder.path}
 			{#if folder.free_bytes != null}
-				<span class="text-ink-3"
-					>· {bytes.format(folder.free_bytes / 1e9)} free</span
-				>
+				<span class="text-ink-3">· {bytes(folder.free_bytes)} free</span>
 			{/if}
 		</dd>
 	{/each}

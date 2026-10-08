@@ -1,7 +1,7 @@
 <script lang="ts">
 import { fullTitle, playMethods } from "#lib/format.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { when } from "#lib/admin/words.js";
+import { byName, when } from "#lib/admin/words.js";
 import Choice from "#lib/components/admin/Choice.svelte";
 import Pager from "#lib/components/Pager.svelte";
 import { narrow } from "#lib/admin/narrow.js";
@@ -10,9 +10,7 @@ import * as Table from "#lib/components/ui/table/index.js";
 
 let { data } = $props();
 
-const names = $derived(
-	new Map(data.profiles.map((p) => [p.id, p.name] as const)),
-);
+const names = $derived(byName(data.profiles));
 const everyone = $derived([
 	{ value: "all", label: "Everyone" },
 	...data.profiles.map((p) => ({ value: p.id, label: p.name })),

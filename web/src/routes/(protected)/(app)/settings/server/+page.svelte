@@ -1,7 +1,7 @@
 <script lang="ts">
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
-import { relative } from "#lib/admin/words.js";
+import { byName, elapsed } from "#lib/admin/words.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
 import NowPlayingCard from "#lib/components/admin/NowPlayingCard.svelte";
 import RunningNow from "#lib/components/admin/RunningNow.svelte";
@@ -24,12 +24,8 @@ const playbacks = $derived(
 );
 const transcodes = $derived(data.playbacks.transcodes);
 
-const libraries = $derived(
-	new Map(data.libraries.map((l) => [l.id, l.name] as const)),
-);
-const profiles = $derived(
-	new Map(data.profiles.map((p) => [p.id, p.name] as const)),
-);
+const libraries = $derived(byName(data.libraries));
+const profiles = $derived(byName(data.profiles));
 const activity = $derived(
 	[
 		...live.state.arrived.filter(
@@ -82,7 +78,7 @@ const attention = $derived(
 		<h1 class="title">{data.server.name}</h1>
 		<p class="text-ink-3 mt-1 text-sm">
 			{data.server.version}
-			· up {relative(data.server.started_at, clock.now).replace(/ ago$/, "")}
+			· up {elapsed(clock.now - Date.parse(data.server.started_at))}
 			{#if !live.connected}
 				· <span role="status">reconnecting to live updates…</span>
 			{/if}

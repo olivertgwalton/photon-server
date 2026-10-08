@@ -1,5 +1,6 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
+import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { act } from "#lib/act.js";
 import { logOut } from "#lib/logout.js";
@@ -7,11 +8,6 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 
 let { data } = $props();
-
-const when = new Intl.DateTimeFormat(undefined, {
-	dateStyle: "medium",
-	timeStyle: "short",
-});
 
 const signOut = (id: string) =>
 	act(

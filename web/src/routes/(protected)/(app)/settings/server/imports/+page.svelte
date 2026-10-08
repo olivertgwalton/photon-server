@@ -3,7 +3,7 @@ import PageHeader from "#lib/components/PageHeader.svelte";
 import { toast } from "svelte-sonner";
 import { refreshAll } from "$app/navigation";
 import { fields } from "#lib/form.js";
-import { importMisses, importSources, when } from "#lib/admin/words.js";
+import { byName, importMisses, importSources, when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
@@ -23,9 +23,7 @@ let starting = $state(false);
 let source = $state<Source>("plex");
 let busy = $state(false);
 
-const names = $derived(
-	new Map(data.profiles.map((p) => [p.id, p.name] as const)),
-);
+const names = $derived(byName(data.profiles));
 const sources = Object.entries(importSources).map(([value, label]) => ({
 	value: value as Source,
 	label,

@@ -2,7 +2,7 @@
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
-import { loggedKinds } from "#lib/admin/words.js";
+import { byName, loggedKinds } from "#lib/admin/words.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
 import Choice from "#lib/components/admin/Choice.svelte";
 import Pager from "#lib/components/Pager.svelte";
@@ -32,12 +32,8 @@ const events = $derived(
 			]
 		: data.page.items,
 );
-const profiles = $derived(
-	new Map(data.profiles.map((p) => [p.id, p.name] as const)),
-);
-const libraries = $derived(
-	new Map(data.libraries.map((l) => [l.id, l.name] as const)),
-);
+const profiles = $derived(byName(data.profiles));
+const libraries = $derived(byName(data.libraries));
 </script>
 
 <PageHeader

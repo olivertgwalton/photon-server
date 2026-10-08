@@ -151,7 +151,7 @@ function wait(seconds: number | undefined) {
 }
 
 function ago(seconds: number, now: number) {
-	return relative(new Date(now - seconds * 1000).toISOString(), now);
+	return relative(now - seconds * 1000, now);
 }
 </script>
 

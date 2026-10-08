@@ -3,7 +3,7 @@ import PageHeader from "#lib/components/PageHeader.svelte";
 import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
 import { ticking } from "#lib/admin/clock.svelte.js";
-import { relative, roles } from "#lib/admin/words.js";
+import { relative, roleOptions, roles } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import Choice from "#lib/components/admin/Choice.svelte";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
@@ -17,9 +17,7 @@ let { data } = $props();
 
 const locks = { pin: "PIN", password: "Password" } as const;
 // A manager adds users.
-const roleOptions = Object.entries(roles)
-	.filter(([value]) => data.me.role === "admin" || value === "user")
-	.map(([value, label]) => ({ value: value as keyof typeof roles, label }));
+const options = $derived(roleOptions(data.me.role));
 
 let adding = $state(false);
 let role = $state<keyof typeof roles>("user");
@@ -71,14 +69,14 @@ async function add(event: SubmitEvent) {
 								autocomplete="off"
 							/>
 						</Field.Field>
-						{#if roleOptions.length > 1}
+						{#if options.length > 1}
 							<Field.Field>
 								<Field.Label for="profile-role">Role</Field.Label>
 								<Choice
 									id="profile-role"
 									name="role"
 									bind:value={role}
-									options={roleOptions}
+									{options}
 								/>
 								<Field.Description>
 									A user sees only what its access allows, set once it is added.
