@@ -218,10 +218,15 @@ type API struct {
 	scrape http.Handler
 	// description is the API's OpenAPI description, made once.
 	description []byte
+	// reads are this node's reads of library roots, for checks of them.
+	reads *rootReads
 }
 
 func New(logger *slog.Logger, info domain.Info, svc Services) *API {
-	a := &API{logger: logger, info: info, svc: svc, mux: http.NewServeMux(), scrape: scrapeHandler(svc.Metrics, logger)}
+	a := &API{
+		logger: logger, info: info, svc: svc, mux: http.NewServeMux(), scrape: scrapeHandler(svc.Metrics, logger),
+		reads: &rootReads{read: readRoot},
+	}
 	routes := a.routes()
 	var err error
 	if a.description, err = describe(info, routes); err != nil {
@@ -256,10 +261,11 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		}
 		a.mux.Handle(r.pattern, h)
 	}
-	// Another node asking this one to open a remux, or for its metrics, is no client's to call, and
-	// so in no description.
+	// Another node asking this one to open a remux, for its metrics, or whether it can read a
+	// library's root, is no client's to call, and so in no description.
 	a.mux.Handle("POST /api/v1/internal/playbacks/{id}/remux", a.svc.NodeKey.Verify(http.HandlerFunc(a.openRemote)))
 	a.mux.Handle("GET "+metricsPath, a.svc.NodeKey.Verify(http.HandlerFunc(a.nodeMetrics)))
+	a.mux.Handle("GET "+libraryCheckPath, a.svc.NodeKey.Verify(http.HandlerFunc(a.nodeCheckLibrary)))
 	a.mux.HandleFunc("/", a.unmatched)
 	a.handler = a.mux
 	if svc.Secure != nil {
@@ -769,6 +775,11 @@ func (a *API) routes() []route {
 			pattern: "POST /api/v1/admin/libraries/{id}/refresh", access: admin,
 			summary: "Ask the providers about a library's films and shows again: those not yet described, or all",
 			body:    refreshJSON{}, status: http.StatusAccepted, handle: a.refreshLibrary,
+		},
+		{
+			pattern: "POST /api/v1/admin/libraries/{id}/check", access: admin,
+			summary: "Check that every node running can reach and read a library's root, as any may scan or play from it",
+			status:  http.StatusOK, reply: libraryCheckJSON{}, handle: a.checkLibrary,
 		},
 		{
 			pattern: "GET /api/v1/subtitles/{id}/file", access: signedAddress,
