@@ -65,7 +65,10 @@ type downloadJSON struct {
 	// DeviceID is the device that asked for it, as the signed-in devices list it.
 	DeviceID uuid.UUID `json:"device_id"`
 	TitleID  uuid.UUID `json:"title_id"`
-	PartID   uuid.UUID `json:"part_id"`
+	// Title is the title downloaded, and Show an episode's show.
+	Title  string    `json:"title"`
+	Show   string    `json:"show,omitzero"`
+	PartID uuid.UUID `json:"part_id"`
 	// PartIndex is which of its copy's Parts files it is, from 0: a copy in several is
 	// downloaded a file at a time.
 	PartIndex int `json:"part_index"`
@@ -89,7 +92,7 @@ type downloadJSON struct {
 
 func (a *API) downloadJSON(d store.Download) downloadJSON {
 	out := downloadJSON{
-		ID: d.ID, DeviceID: d.Device, TitleID: d.Item, PartID: d.Part, PartIndex: d.PartIndex, Parts: d.Parts, Method: domain.PlayDirect, State: d.State,
+		ID: d.ID, DeviceID: d.Device, TitleID: d.Item, Title: d.Title, Show: d.Show, PartID: d.Part, PartIndex: d.PartIndex, Parts: d.Parts, Method: domain.PlayDirect, State: d.State,
 		Progress: d.Progress, SizeBytes: d.SizeBytes, Error: d.Error, CreatedAt: d.Created,
 	}
 	path := "/api/v1/parts/" + d.Part.String() + "/stream"

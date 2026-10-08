@@ -937,9 +937,12 @@ const server_ = Bun.serve({
 						{ status: 400 },
 					);
 				}
+				const of = byID(body.title_id);
 				const d: Schemas["Download"] = {
 					id: `d-${downloads.length + 1}`,
 					title_id: body.title_id,
+					title: of?.title ?? "",
+					show: of?.show?.title,
 					part_id: body.part_id ?? "part-1",
 					part_index: body.part_id === "p-hd2" ? 1 : 0,
 					parts: body.version_id === "v-hd" ? 2 : 1,
