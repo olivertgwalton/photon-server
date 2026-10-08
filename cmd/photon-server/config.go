@@ -29,11 +29,25 @@ import (
 )
 
 // restorer restores dumps with the Postgres tools the environment names.
-func restorer(databaseURL, valkeyURL string, logger *slog.Logger) backup.Restorer {
-	return backup.Restorer{
-		PGRestore: cmp.Or(os.Getenv("PHOTON_PG_RESTORE"), "pg_restore"), PSQL: cmp.Or(os.Getenv("PHOTON_PSQL"), "psql"),
-		DatabaseURL: databaseURL, ValkeyURL: valkeyURL, Log: logger,
+func restorer(databaseURL, valkeyURL string, logger *slog.Logger) (backup.Restorer, error) {
+	pgRestore, err := media.Look(cmp.Or(os.Getenv("PHOTON_PG_RESTORE"), "pg_restore"))
+	if err != nil {
+		return backup.Restorer{}, err
 	}
+	psql, err := media.Look(cmp.Or(os.Getenv("PHOTON_PSQL"), "psql"))
+	if err != nil {
+		return backup.Restorer{}, err
+	}
+	return backup.Restorer{PGRestore: pgRestore, PSQL: psql, DatabaseURL: databaseURL, ValkeyURL: valkeyURL, Log: logger}, nil
+}
+
+// mediaTools finds the media tools the environment names.
+func mediaTools(ctx context.Context) (media.Tools, error) {
+	return media.FindTools(ctx, media.ToolNames{
+		FFmpeg:  cmp.Or(os.Getenv("PHOTON_FFMPEG"), "ffmpeg"),
+		FFprobe: cmp.Or(os.Getenv("PHOTON_FFPROBE"), "ffprobe"),
+		YTDLP:   cmp.Or(os.Getenv("PHOTON_YTDLP"), "yt-dlp"),
+	})
 }
 
 func logTools(ctx context.Context, logger *slog.Logger, tools media.Tools) {

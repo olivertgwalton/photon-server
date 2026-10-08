@@ -9,7 +9,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -19,10 +18,12 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// Restorer puts the database back as a dump has it, with every node stopped.
+// Restorer puts the database back as a dump has it, with every node stopped, with pg_restore and
+// psql found by media.Look.
 type Restorer struct {
 	PGRestore   string
 	PSQL        string
@@ -37,6 +38,11 @@ type Restorer struct {
 // else is connected to: a node running would write over what is restored. What it did is
 // written to out.
 func (r Restorer) Restore(ctx context.Context, file string, out io.Writer) error {
+	// Absolute, so pg_restore never reads the name as an option.
+	file, err := filepath.Abs(file)
+	if err != nil {
+		return err
+	}
 	have, want, err := r.check(ctx, file)
 	if err != nil {
 		return err
@@ -115,13 +121,12 @@ func (r Restorer) check(ctx context.Context, file string) (have, want int64, err
 // version reads the schema version a dump was made at from its goose_db_version table, the
 // newest migration applied there, before anything is restored.
 func (r Restorer) version(ctx context.Context, file string) (int64, error) {
-	cmd := exec.CommandContext(ctx, r.PGRestore, "--data-only", "--table=goose_db_version", "--file=-", file) //nolint:gosec // the configured pg_restore; the file is the operator's
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
-		return 0, fmt.Errorf("pg_restore: %w: %s", err, bytes.TrimSpace(stderr.Bytes()))
+	cmd := media.NewCommand(ctx, media.Foreground, nil, r.PGRestore, "--data-only", "--table=goose_db_version", "--file=-", file)
+	stdout, err := cmd.Output()
+	if err != nil {
+		return 0, cmd.Err(err)
 	}
-	return appliedVersion(&stdout)
+	return appliedVersion(bytes.NewReader(stdout))
 }
 
 // appliedVersion reads the newest version applied from the COPY of goose_db_version in a script
@@ -182,14 +187,13 @@ func (r Restorer) replace(ctx context.Context, file string) error {
 		return err
 	}
 	defer write.Close()
-	var psqlErr, dumpErr bytes.Buffer
-	psql := exec.CommandContext(ctx, r.PSQL, "--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1", "--dbname="+dbURL) //nolint:gosec // the configured psql; every argument is built here
-	psql.Env, psql.Stdin, psql.Stderr = env, read, &psqlErr
+	psql := media.NewCommand(ctx, media.Foreground, nil, r.PSQL, "--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1", "--dbname="+dbURL)
+	psql.Env, psql.Stdin = env, read
 	if err := errors.Join(psql.Start(), read.Close()); err != nil {
-		return fmt.Errorf("psql: %w", err)
+		return psql.Err(err)
 	}
-	dump := exec.CommandContext(ctx, r.PGRestore, "--no-owner", "--no-privileges", "--file=-", file) //nolint:gosec // the configured pg_restore; the file is the operator's
-	dump.Stdout, dump.Stderr = write, &dumpErr
+	dump := media.NewCommand(ctx, media.Foreground, nil, r.PGRestore, "--no-owner", "--no-privileges", "--file=-", file)
+	dump.Stdout = write
 	_, err = io.WriteString(write, "BEGIN;\nSET client_min_messages = warning;\nDROP SCHEMA IF EXISTS public CASCADE;\nCREATE SCHEMA public;\n")
 	if err == nil {
 		err = dump.Run()
@@ -200,10 +204,7 @@ func (r Restorer) replace(ctx context.Context, file string) error {
 	// Without COMMIT, psql reaches the end of its input and Postgres rolls the transaction back.
 	err = errors.Join(err, write.Close())
 	if waitErr := psql.Wait(); waitErr != nil {
-		return fmt.Errorf("psql: %w: %s", waitErr, bytes.TrimSpace(psqlErr.Bytes()))
+		return psql.Err(waitErr)
 	}
-	if err != nil {
-		return fmt.Errorf("pg_restore: %w: %s", err, bytes.TrimSpace(dumpErr.Bytes()))
-	}
-	return nil
+	return dump.Err(err)
 }

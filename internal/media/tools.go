@@ -2,7 +2,6 @@ package media
 
 import (
 	"bytes"
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -37,16 +36,23 @@ type Tool struct {
 	Version string
 }
 
-func FindTools(ctx context.Context) (Tools, error) {
-	ffmpeg, err := findTool(ctx, cmp.Or(os.Getenv("PHOTON_FFMPEG"), "ffmpeg"))
+// ToolNames are what the tools are named by: each a path, or a command found on PATH.
+type ToolNames struct {
+	FFmpeg, FFprobe, YTDLP string
+}
+
+// FindTools finds the tools names names, each an executable file it answers by its absolute path,
+// and checks each is one the server can run: FFmpeg's a release no older than minimumMajor.
+func FindTools(ctx context.Context, names ToolNames) (Tools, error) {
+	ffmpeg, err := findTool(ctx, names.FFmpeg)
 	if err != nil {
 		return Tools{}, err
 	}
-	ffprobe, err := findTool(ctx, cmp.Or(os.Getenv("PHOTON_FFPROBE"), "ffprobe"))
+	ffprobe, err := findTool(ctx, names.FFprobe)
 	if err != nil {
 		return Tools{}, err
 	}
-	ytdlp, err := findYTDLP(ctx, cmp.Or(os.Getenv("PHOTON_YTDLP"), "yt-dlp"))
+	ytdlp, err := findYTDLP(ctx, names.YTDLP)
 	if err != nil {
 		return Tools{}, err
 	}
@@ -62,7 +68,7 @@ func hasLibass(ctx context.Context, ffmpeg string) bool {
 // findYTDLP answers yt-dlp where it is installed, and nothing where it is not; one that will not
 // say its version is broken.
 func findYTDLP(ctx context.Context, name string) (Tool, error) {
-	path, err := exec.LookPath(name)
+	path, err := Look(name)
 	if errors.Is(err, exec.ErrNotFound) || errors.Is(err, fs.ErrNotExist) {
 		return Tool{}, nil
 	}
@@ -76,8 +82,18 @@ func findYTDLP(ctx context.Context, name string) (Tool, error) {
 	return Tool{Path: path, Version: string(bytes.TrimSpace(out))}, nil
 }
 
-func findTool(ctx context.Context, name string) (Tool, error) {
+// Look answers the executable file name names, a path or a command found on PATH, by its absolute
+// path, so what runs is what was found however the working directory changes.
+func Look(name string) (string, error) {
 	path, err := exec.LookPath(name)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(path)
+}
+
+func findTool(ctx context.Context, name string) (Tool, error) {
+	path, err := Look(name)
 	if err != nil {
 		return Tool{}, err
 	}
@@ -167,7 +183,7 @@ type Command struct {
 }
 
 func NewCommand(ctx context.Context, priority Priority, files []*os.File, path string, args ...string) *Command {
-	cmd := exec.CommandContext(ctx, path, args...) //nolint:gosec // path is the operator's configured tool; its callers build every argument
+	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.ExtraFiles = files
 	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 	cmd.WaitDelay = stopGrace

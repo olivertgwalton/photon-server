@@ -19,7 +19,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
 	"github.com/olivertgwalton/photon-server/internal/kv"
-	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/storage"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -102,7 +101,11 @@ func run(logger *slog.Logger, args []string) error {
 		if err != nil {
 			return err
 		}
-		return restorer(databaseURL, valkeyURL, logger).Restore(ctx, args[1], os.Stdout)
+		r, err := restorer(databaseURL, valkeyURL, logger)
+		if err != nil {
+			return err
+		}
+		return r.Restore(ctx, args[1], os.Stdout)
 	}
 	return fmt.Errorf("usage: photon-server [migrate | profile | restore <dump> | openapi], got %q", args)
 }
@@ -138,7 +141,11 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 		return err
 	}
 	if stopped.leads {
-		if err := lead(ctx, logger, restorer(databaseURL, valkeyURL, logger), stopped.file, stopped.server, stopped.restore); err != nil {
+		r, err := restorer(databaseURL, valkeyURL, logger)
+		if err != nil {
+			return err
+		}
+		if err := lead(ctx, logger, r, stopped.file, stopped.server, stopped.restore); err != nil {
 			return err
 		}
 	}
@@ -149,7 +156,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 // until it is told to stop.
 func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL string) error {
 	started := time.Now()
-	tools, err := media.FindTools(ctx)
+	tools, err := mediaTools(ctx)
 	if err != nil {
 		return err
 	}

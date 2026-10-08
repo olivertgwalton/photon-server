@@ -3,18 +3,18 @@
 package backup
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // Keep is how many dumps are kept, the newest.
@@ -76,7 +76,7 @@ func Open(dir, name string) (*os.File, error) {
 	return os.Open(filepath.Join(dir, name))
 }
 
-// Dumper writes dumps of a database into a folder with pg_dump.
+// Dumper writes dumps of a database into a folder with pg_dump, found by media.Look.
 type Dumper struct {
 	PGDump string
 	URL    string
@@ -96,13 +96,11 @@ func (d Dumper) Dump(ctx context.Context, now time.Time) (string, error) {
 	}
 	name := filepath.Join(d.Dir, prefix+now.UTC().Format(stamp)+suffix)
 	part := name + ".part"
-	cmd := exec.CommandContext(ctx, d.PGDump, "--format=custom", "--no-owner", "--file="+part, "--dbname="+dbURL) //nolint:gosec // the configured pg_dump; every argument is built here
+	cmd := media.NewCommand(ctx, media.Background, nil, d.PGDump, "--format=custom", "--no-owner", "--file="+part, "--dbname="+dbURL)
 	cmd.Env = env
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		// RemoveAll, as pg_dump may have failed before writing anything.
-		return "", errors.Join(fmt.Errorf("pg_dump: %w: %s", err, bytes.TrimSpace(stderr.Bytes())), os.RemoveAll(part))
+		return "", errors.Join(cmd.Err(err), os.RemoveAll(part))
 	}
 	if err := os.Rename(part, name); err != nil {
 		return "", err
