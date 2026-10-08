@@ -3,6 +3,7 @@ package mdblist
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -42,7 +43,9 @@ func client(t *testing.T, key string) *Client {
 			http.NotFound(w, r)
 			return
 		}
-		_, _ = w.Write([]byte(jaws))
+		if _, err := io.WriteString(w, jaws); err != nil {
+			t.Error(err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": key}, nil }, unlimited{})
@@ -91,10 +94,12 @@ func TestAListIsItsTitlesInRankOrder(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		_, _ = w.Write([]byte(`{
+		if _, err := io.WriteString(w, `{
 			"movies": [{"rank": 1, "ids": {"tmdb": 694, "imdb": "tt0081505"}}, {"rank": 3, "ids": {"tmdb": 0, "imdb": "tt0078748"}}],
 			"shows": [{"rank": 2, "ids": {"tmdb": 46648, "imdb": "tt2149175"}}]
-		}`))
+		}`); err != nil {
+			t.Error(err)
+		}
 	}))
 	t.Cleanup(srv.Close)
 	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": "secret"}, nil }, unlimited{})
