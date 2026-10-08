@@ -55,7 +55,10 @@ type queryResult struct {
 // says none, as Jellyfin answers), and the optional fields it wants.
 type listed struct {
 	start, limit int
-	fields       map[string]bool
+	// adjacentTo names an item to answer alongside those either side of it, as apps find an
+	// episode's previous and next: of a show's seasons or episodes, which photon reads whole.
+	adjacentTo uuid.UUID
+	fields     map[string]bool
 	// words names its copies and tracks in the reader's language.
 	words words.Words
 }
@@ -68,11 +71,29 @@ func listedOf(w http.ResponseWriter, r *http.Request) listed {
 	if n, err := strconv.Atoi(query(r, "limit")); err == nil && n >= 0 {
 		l.limit = n
 	}
+	if id, err := uuid.Parse(query(r, "adjacentTo")); err == nil {
+		l.adjacentTo = id
+	}
 	for _, f := range values(r, "fields") {
 		l.fields[strings.ToLower(f)] = true
 	}
 	return l
 }
+
+// paged is the page of a list an app asks for, and how many the list has before paging. An item
+// not in the list has nothing either side of it, so Jellyfin answers nothing for it.
+func paged[T any](list []T, id func(T) uuid.UUID, l listed) ([]T, int) {
+	if l.adjacentTo != (uuid.UUID{}) {
+		n := slices.IndexFunc(list, func(t T) bool { return id(t) == l.adjacentTo })
+		if n < 0 {
+			return nil, 0
+		}
+		list = list[max(n-1, 0):min(n+2, len(list))]
+	}
+	return list[min(l.start, len(list)):min(l.start+l.limit, len(list))], len(list)
+}
+
+func cardID(c store.Card) uuid.UUID { return c.ID }
 
 // values are a list parameter's values, sent comma-joined as Jellyfin's apps send them.
 func values(r *http.Request, name string) []string {
@@ -410,22 +431,24 @@ func (a *API) titleChildren(w http.ResponseWriter, r *http.Request, profile, par
 			a.internal(w, r, err)
 			return
 		}
-		a.writeList(w, r, cards[min(l.start, len(cards)):min(l.start+l.limit, len(cards))], len(cards), l.start, l)
+		page, total := paged(cards, cardID, l)
+		a.writeList(w, r, page, total, l.start, l)
 	case domain.ItemCollection:
 		members, err := a.svc.Catalogue.Members(r.Context(), profile, parent)
 		if err != nil {
 			a.internal(w, r, err)
 			return
 		}
-		a.writeList(w, r, members[min(l.start, len(members)):min(l.start+l.limit, len(members))], len(members), l.start, l)
+		page, total := paged(members, cardID, l)
+		a.writeList(w, r, page, total, l.start, l)
 	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
 		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
 	}
 }
 
 func (a *API) writeSeasons(w http.ResponseWriter, r *http.Request, show uuid.UUID, seasons []store.SeasonCard, l listed) {
-	page := seasons[min(l.start, len(seasons)):min(l.start+l.limit, len(seasons))]
-	out := queryResult{Items: make([]item, len(page)), TotalRecordCount: len(seasons), StartIndex: l.start}
+	page, total := paged(seasons, func(s store.SeasonCard) uuid.UUID { return s.ID }, l)
+	out := queryResult{Items: make([]item, len(page)), TotalRecordCount: total, StartIndex: l.start}
 	name := ""
 	if len(page) > 0 {
 		if p, err := a.svc.Catalogue.Title(r.Context(), auth.SessionOf(r.Context()).Profile.ID, show); err == nil {
@@ -555,8 +578,15 @@ func (a *API) episodes(w http.ResponseWriter, r *http.Request) {
 	if n, err := strconv.Atoi(query(r, "season")); err == nil {
 		cards = slices.DeleteFunc(cards, func(c store.Card) bool { return c.SeasonNumber == nil || *c.SeasonNumber != n })
 	}
+	// Jellyfin's web app queues a show from the episode it plays on: none, where that is not here.
+	if start, err := uuid.Parse(query(r, "startItemId")); err == nil {
+		for len(cards) > 0 && cards[0].ID != start {
+			cards = cards[1:]
+		}
+	}
 	l := listedOf(w, r)
-	a.writeList(w, r, cards[min(l.start, len(cards)):min(l.start+l.limit, len(cards))], len(cards), l.start, l)
+	page, total := paged(cards, cardID, l)
+	a.writeList(w, r, page, total, l.start, l)
 }
 
 // none answers a list photon has nothing for yet, as an empty one: Infuse asks for every title's
