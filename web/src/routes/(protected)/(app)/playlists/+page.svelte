@@ -7,16 +7,15 @@ import { problemMessage } from "#lib/api/problem.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
+import { fields } from "#lib/form.js";
 import { count, runtime } from "#lib/format.js";
 
 let { data } = $props();
 
-let name = $state("");
-
 async function create(event: SubmitEvent) {
-	event.preventDefault();
+	const form = fields(event);
 	const { data: made, error } = await client().POST("/api/v1/playlists", {
-		body: { name: name.trim() },
+		body: { name: String(form.get("name")).trim() },
 	});
 	if (error) toast.error(problemMessage(error));
 	else goto(`/playlists/${made.id}`);

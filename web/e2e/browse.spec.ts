@@ -344,6 +344,21 @@ test("a playlist is made, filled, reordered and deleted", async ({ page }) => {
 	await expect(page.getByLabel("New playlist")).toBeFocused();
 });
 
+test("a playlist made on the playlists page is named as it was typed", async ({
+	page,
+}) => {
+	await logIn(page, "/playlists");
+	await page.getByLabel("New playlist").fill("Rainy days");
+	await page.getByRole("button", { name: "Create" }).click();
+	await expect(page.getByRole("heading", { name: "Rainy days" })).toBeVisible();
+	await page.getByRole("button", { name: "Delete" }).click();
+	await page
+		.getByRole("alertdialog")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	await expect(page.getByText("No playlists yet.")).toBeVisible();
+});
+
 test("a title put on the watchlist is on its home row and its page", async ({
 	page,
 }) => {
