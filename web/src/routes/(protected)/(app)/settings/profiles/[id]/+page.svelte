@@ -231,10 +231,8 @@ function remove() {
 			label="Remove this profile"
 			title="Remove {data.profile.name}?"
 			confirm="Remove profile"
-		>
-			Its devices are signed out, and what it has watched is forgotten. The last
-			admin cannot be removed.
-		</ConfirmButton>
+			body={"Its devices are signed out, and what it has watched is forgotten. The last admin cannot be removed."}
+		/>
 		<Button href="/settings/profiles" variant="ghost">Back to profiles</Button>
 	</div>
 </div>

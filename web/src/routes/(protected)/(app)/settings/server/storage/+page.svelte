@@ -191,10 +191,8 @@ const origin = $derived(bucket?.probe ? new URL(bucket.probe).origin : "");
 						client().DELETE("/api/v1/admin/storage/move"),
 						"Cancelled. Things stay where they were kept.",
 					)}
-			>
-				Every server keeps things where they are kept now. What was copied stays
-				where it was copied to.
-			</ConfirmButton>
+				body={"Every server keeps things where they are kept now. What was copied stays where it was copied to."}
+			/>
 		</div>
 	</Card.Root>
 {:else}

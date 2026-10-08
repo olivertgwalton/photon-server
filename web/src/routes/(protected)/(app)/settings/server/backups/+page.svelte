@@ -93,11 +93,8 @@ async function restore(name: string) {
 							title="Restore this backup?"
 							confirm="Restore and restart"
 							onconfirm={() => restore(dump.name)}
-						>
-							The database goes back to {dump.name}, made {made}: whatever
-							changed since is lost. Every stream stops, and every server stops
-							and starts again, which takes a minute or two.
-						</ConfirmButton>
+							body={`The database goes back to ${dump.name}, made ${made}: whatever changed since is lost. Every stream stops, and every server stops and starts again, which takes a minute or two.`}
+						/>
 					</div>
 				</li>
 			{/each}

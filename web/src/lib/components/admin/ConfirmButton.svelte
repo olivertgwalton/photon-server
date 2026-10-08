@@ -1,69 +1,33 @@
 <script lang="ts">
-import type { Component, Snippet } from "svelte";
-import IconButton from "#lib/components/IconButton.svelte";
-import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
-import { buttonVariants } from "#lib/components/ui/button/index.js";
+import { confirmFirst } from "#lib/actions.svelte.js";
+import { Button } from "#lib/components/ui/button/index.js";
 
-// A button for something that cannot be undone, which asks first; with an
-// icon, shown as it.
+// A button for something that cannot be undone, which asks first.
 let {
 	label,
 	hidden = "",
-	icon,
 	title,
+	body,
 	confirm,
 	onconfirm,
-	children,
 }: {
 	label: string;
 	// Said to a screen reader after the label, to tell one row's button from the next.
 	hidden?: string;
-	icon?: Component;
 	title: string;
+	body: string;
 	confirm: string;
 	onconfirm: () => unknown;
-	children: Snippet;
 } = $props();
-
-let open = $state(false);
 </script>
 
-<!-- bits-ui's Action does not close its dialog: the answer does, then acts. -->
-<AlertDialog.Root bind:open>
-	{#if icon}
-		<AlertDialog.Trigger>
-			{#snippet child({
-				props,
-			})}
-				<IconButton {...props} {label} {hidden} {icon} tone="destructive" />
-			{/snippet}
-		</AlertDialog.Trigger>
-	{:else}
-		<AlertDialog.Trigger
-			class={buttonVariants({ variant: "outline", size: "sm" })}
-		>
-			{label}
-			{#if hidden}
-				<span class="sr-only">{hidden}</span>
-			{/if}
-		</AlertDialog.Trigger>
+<Button
+	variant="outline"
+	size="sm"
+	onclick={() => confirmFirst(title, body, confirm, onconfirm)}
+>
+	{label}
+	{#if hidden}
+		<span class="sr-only">{hidden}</span>
 	{/if}
-	<AlertDialog.Content>
-		<AlertDialog.Header>
-			<AlertDialog.Title>{title}</AlertDialog.Title>
-			<AlertDialog.Description>{@render children()}</AlertDialog.Description>
-		</AlertDialog.Header>
-		<AlertDialog.Footer>
-			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action
-				class={buttonVariants({ variant: "destructive" })}
-				onclick={() => {
-					open = false;
-					return onconfirm();
-				}}
-			>
-				{confirm}
-			</AlertDialog.Action>
-		</AlertDialog.Footer>
-	</AlertDialog.Content>
-</AlertDialog.Root>
+</Button>

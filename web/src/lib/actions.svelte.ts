@@ -142,8 +142,8 @@ export function unmatchTitle(id: string, name: string) {
 	);
 }
 
-// The one question before something an admin cannot take back from a menu,
-// drawn by the shell: what it is, what follows, and the word that does it.
+// The one question before something that cannot be taken back, drawn by the
+// shell: what it is, what follows, and the word that does it.
 export const confirming = $state({
 	open: false,
 	title: "",

@@ -225,9 +225,8 @@ function caption(card: Card) {
 				label="Remove this collection"
 				title="Remove {data.collection.title}?"
 				confirm="Remove collection"
-			>
-				Its titles stay in the library.
-			</ConfirmButton>
+				body={"Its titles stay in the library."}
+			/>
 		</div>
 	{/if}
 </div>
