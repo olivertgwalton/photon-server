@@ -24,7 +24,7 @@ type household struct {
 	profile uuid.UUID
 }
 
-// newHousehold has The Matrix and an Alien no source knows by its ids, and The Wire's first two
+// newHousehold has The Matrix, Alien and Heat, and The Wire's first two
 // episodes, each an hour long.
 func newHousehold(t *testing.T) household {
 	t.Helper()
@@ -57,6 +57,7 @@ func newHousehold(t *testing.T) household {
 	for _, f := range []store.Film{
 		{Title: "The Matrix", Folder: "Matrix", IDs: map[domain.Provider]string{domain.ProviderTMDB: "603"}, Copies: copies("Matrix/m.mkv")},
 		{Title: "Alien", Folder: "Alien", IDs: map[domain.Provider]string{domain.ProviderTMDB: "348"}, Copies: copies("Alien/a.mkv")},
+		{Title: "Heat", Folder: "Heat", IDs: map[domain.Provider]string{domain.ProviderTMDB: "949"}, Copies: copies("Heat/h.mkv")},
 	} {
 		if _, err := st.SaveFolder(ctx, films.ID, f.Folder, []byte("v"), []store.Film{f}, nil); err != nil {
 			t.Fatal(err)
@@ -137,16 +138,20 @@ func (h household) run(t *testing.T, kind domain.ImportSource, base string, c Cr
 func TestAPlexHistoryIsImportedWhereItIsNewer(t *testing.T) {
 	h := newHousehold(t)
 	ctx := t.Context()
-	matrix, first, second := h.item(t, "The Matrix", 0), h.item(t, "", 1), h.item(t, "", 2)
-	// Ada has since started the second episode here.
-	if _, err := h.st.SaveProgress(ctx, h.profile, second, 10*time.Minute, time.Hour, domain.ReachStart, nil); err != nil {
-		t.Fatal(err)
+	matrix, alien, first, second := h.item(t, "The Matrix", 0), h.item(t, "Alien", 0), h.item(t, "", 1), h.item(t, "", 2)
+	// Ada has since started the second episode here, and Alien, which Plex says she watched but
+	// not when.
+	for _, started := range []uuid.UUID{second, alien} {
+		if _, err := h.st.SaveProgress(ctx, h.profile, started, 10*time.Minute, time.Hour, domain.ReachStart, nil); err != nil {
+			t.Fatal(err)
+		}
 	}
 	f := plexLibrary()
 	f.films = append(f.films,
 		object{"ratingKey": "12", "title": "Solaris", "viewCount": 1, "lastViewedAt": watchedAt.Unix(), "Guid": []object{{"id": "tmdb://593"}}},
 		object{"ratingKey": "13", "title": "Home Video", "viewCount": 1, "lastViewedAt": watchedAt.Unix()},
 		object{"ratingKey": "14", "title": "Alien", "viewCount": 1, "Guid": []object{{"id": "tmdb://348"}}},
+		object{"ratingKey": "15", "title": "Heat", "viewCount": 1, "Guid": []object{{"id": "tmdb://949"}}},
 	)
 	f.episodes = append(f.episodes, object{
 		"ratingKey": "22", "grandparentTitle": "The Wire", "grandparentRatingKey": "20",
@@ -163,8 +168,8 @@ func TestAPlexHistoryIsImportedWhereItIsNewer(t *testing.T) {
 	}
 
 	run := h.run(t, domain.ImportPlex, base, Credentials{Token: f.token})
-	if run.Status != domain.ImportDone || run.Matched != 4 || run.Imported != 2 || run.Skipped != 2 || run.Unmatched != 2 {
-		t.Errorf("run = %+v; want done, 4 matched, 2 imported, 2 skipped (one newer here, one undated), 2 unmatched", run)
+	if run.Status != domain.ImportDone || run.Matched != 5 || run.Imported != 3 || run.Skipped != 2 || run.Unmatched != 2 {
+		t.Errorf("run = %+v; want done, 5 matched, 3 imported, 2 skipped (one newer here, one undated), 2 unmatched", run)
 	}
 	wantMisses := []domain.Missed{
 		{Title: "Solaris", Reason: domain.MissNotFound},
@@ -182,6 +187,12 @@ func TestAPlexHistoryIsImportedWhereItIsNewer(t *testing.T) {
 	}
 	if s := h.state(t, second); s.positionMS != 10*60_000 || s.watchedAt != nil {
 		t.Errorf("S01E02 = %+v, want where Ada stopped here since, not Plex's older watch", s)
+	}
+	if s := h.state(t, alien); s.positionMS != 10*60_000 || s.watchedAt != nil {
+		t.Errorf("Alien = %+v, want where Ada stopped here, not Plex's undated watch", s)
+	}
+	if s := h.state(t, h.item(t, "Heat", 0)); s.plays != 1 || s.watchedAt == nil {
+		t.Errorf("Heat = %+v, want Plex's undated watch, with nothing of it here", s)
 	}
 	if _, _, err := h.st.StartImport(ctx, run.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("starting a finished import again: err = %v, want its token forgotten", err)

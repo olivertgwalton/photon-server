@@ -42,8 +42,8 @@ const (
 	MissNoIDs ImportMiss = "no_ids"
 	// MissNotFound is a title none here has the ids of, or an episode its show here lacks.
 	MissNotFound ImportMiss = "not_found"
-	// MissUndated is a title the source says was watched but not when, so it cannot be told newer
-	// than what is here.
+	// MissUndated is a title the source says was watched but not when, left as it is here as it
+	// cannot be told newer than the profile's state of it.
 	MissUndated ImportMiss = "undated"
 )
 
@@ -59,7 +59,7 @@ type Missed struct {
 
 // HistoryImport is one import of a source server's watch history into a profile. Matched titles
 // were found here; of those, Imported changed the profile's state and Skipped did not, as what is
-// here is newer or the source gave no date. Misses lists some of the titles not imported.
+// here is newer or cannot be told older. Misses lists some of the titles not imported.
 type HistoryImport struct {
 	ID         uuid.UUID
 	Source     ImportSource

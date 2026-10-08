@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -100,18 +101,16 @@ func (i *Imports) apply(ctx context.Context, h *domain.HistoryImport, entries []
 			return err
 		}
 		h.Matched++
-		if e.at.IsZero() {
+		wrote, err := i.write(ctx, h.Profile, item, e)
+		switch {
+		case err != nil:
+			return err
+		case wrote:
+			h.Imported++
+		case e.at.IsZero():
 			h.Skipped++
 			miss(e, domain.MissUndated)
-			continue
-		}
-		wrote, err := i.write(ctx, h.Profile, item, e)
-		if err != nil {
-			return err
-		}
-		if wrote {
-			h.Imported++
-		} else {
+		default:
 			h.Skipped++
 		}
 	}
@@ -119,24 +118,30 @@ func (i *Imports) apply(ctx context.Context, h *domain.HistoryImport, entries []
 }
 
 // write marks a title watched, as often as the source played it, then where it was stopped, each
-// unless the profile's state of it changed after the source's did.
+// unless the profile's state of it changed after the source's did. Without a date, as Jellyfin
+// has none for a title marked played by hand, it is only marked watched, now, and only where the
+// profile has no state of it.
 func (i *Imports) write(ctx context.Context, profile, item uuid.UUID, e entry) (bool, error) {
+	var at *time.Time
+	if !e.at.IsZero() {
+		at = &e.at
+	}
 	wrote := false
 	if e.plays > 0 {
-		err := i.st.ImportWatched(ctx, profile, item, e.plays, e.at)
+		err := i.st.ImportWatched(ctx, profile, item, e.plays, at)
 		if err != nil && !errors.Is(err, store.ErrSuperseded) {
 			return false, err
 		}
 		wrote = err == nil
 	}
-	if e.position > 0 {
+	if e.position > 0 && at != nil {
 		length, err := i.st.Length(ctx, item)
 		if err != nil {
 			return false, err
 		}
 		// As if it had already reached the end, so a position near it marks it watched without
 		// counting another play.
-		_, err = i.st.SaveProgress(ctx, profile, item, e.position, length, domain.ReachEnd, &e.at)
+		_, err = i.st.SaveProgress(ctx, profile, item, e.position, length, domain.ReachEnd, at)
 		if err != nil && !errors.Is(err, store.ErrSuperseded) {
 			return false, err
 		}
