@@ -67,6 +67,15 @@ func (l Locale) Qualified(certificate string, def Locale) string {
 	return l.Country + ":" + certificate
 }
 
+// Bare is a certificate as every client is shown it: without the country the server keeps one from
+// elsewhere with (IN:A is A), which only parental controls read it by.
+func Bare(certificate string) string {
+	if country, bare, ok := strings.Cut(certificate, ":"); ok && len(country) == 2 {
+		return bare
+	}
+	return certificate
+}
+
 // MetadataLanguages are the languages a library may ask its metadata in: those TMDB has
 // translations in, as its configuration lists them.
 func MetadataLanguages() []string {
