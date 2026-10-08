@@ -136,6 +136,42 @@ func TestAnAppListsItsPlaylists(t *testing.T) {
 	}
 }
 
+// Jellyfin's web app and Streamyfin find playlists only as a view, after the libraries, of the
+// profile's own; a profile with none has no such view.
+func TestAnAppFindsPlaylistsInTheirView(t *testing.T) {
+	h := newHousehold(t)
+	if _, err := h.st.AddPlaylist(t.Context(), h.ada.ID, "Night", []uuid.UUID{h.films["Heat"]}); err != nil {
+		t.Fatal(err)
+	}
+	var views struct {
+		Items []struct{ ID, Name, Type, CollectionType string }
+	}
+	h.read(t, "pst_ada", "/UserViews", &views)
+	if len(views.Items) != 2 || views.Items[1].Name != "Playlists" || views.Items[1].Type != "ManualPlaylistsFolder" || views.Items[1].CollectionType != "playlists" {
+		t.Fatalf("Ada's views = %+v, want the films, then the playlists", views.Items)
+	}
+	view := views.Items[1].ID
+	var opened struct{ ID, CollectionType string }
+	if code := h.read(t, "pst_ada", "/Items/"+view, &opened); code != http.StatusOK || opened.ID != view || opened.CollectionType != "playlists" {
+		t.Errorf("the view of playlists by id = %d %+v", code, opened)
+	}
+	var inView playlistResult
+	h.read(t, "pst_ada", "/Items?parentId="+view+"&includeItemTypes=Playlist&recursive=true", &inView)
+	if got := inView.names(); len(got) != 1 || got[0] != "Night" {
+		t.Errorf("the view of playlists holds %v, want Night", got)
+	}
+	var bobs struct{ Items []struct{ Name string } }
+	h.read(t, "pst_bob", "/Users/"+guid(h.bob.ID)+"/Views", &bobs)
+	if len(bobs.Items) != 1 {
+		t.Errorf("Bob's views = %+v, want the films alone: he has no playlist", bobs.Items)
+	}
+	var inBobs playlistResult
+	h.read(t, "pst_bob", "/Items?parentId="+view, &inBobs)
+	if len(inBobs.Items) != 0 {
+		t.Errorf("Bob opens the view of playlists: %v, want none: Night is Ada's", inBobs.names())
+	}
+}
+
 // An app reads a playlist's items in its order, a page at a time, each with the entry's own id;
 // no profile reads another's.
 func TestAnAppReadsAPlaylist(t *testing.T) {

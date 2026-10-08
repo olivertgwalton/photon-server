@@ -22,6 +22,14 @@ type playlists interface {
 	RenamePlaylist(ctx context.Context, profile, playlist uuid.UUID, name string) error
 }
 
+// playlistsView is the name of the view of the profile's playlists, which Jellyfin's apps find
+// them by.
+const playlistsView = "Playlists"
+
+func (a *API) playlistsFolder() item {
+	return a.view(playlistsView, "ManualPlaylistsFolder", "playlists")
+}
+
 // fromPlaylist is one of the profile's playlists, as Jellyfin's apps list one: a folder of video.
 func (a *API) fromPlaylist(p store.PlaylistSummary) item {
 	it := item{

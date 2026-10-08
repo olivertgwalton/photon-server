@@ -141,18 +141,27 @@ func (a *API) seenLibraries(r *http.Request) ([]*store.SeenLibrary, map[uuid.UUI
 	return libs, byID, err
 }
 
-// views are the libraries as Jellyfin's apps open them, in the profile's order.
+// views are the libraries as Jellyfin's apps open them, in the profile's order, then the view of
+// its playlists where it has any.
 func (a *API) views(w http.ResponseWriter, r *http.Request) {
 	libs, _, err := a.seenLibraries(r)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	out := queryResult{Items: make([]item, len(libs)), TotalRecordCount: len(libs)}
+	out := make([]item, len(libs))
 	for n, l := range libs {
-		out.Items[n] = a.library(l)
+		out[n] = a.library(l)
 	}
-	a.writeJSON(w, out)
+	playlists, err := a.svc.Playlists.Playlists(r.Context(), auth.SessionOf(r.Context()).Profile.ID)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	if len(playlists) > 0 {
+		out = append(out, a.playlistsFolder())
+	}
+	a.writeJSON(w, queryResult{Items: out, TotalRecordCount: len(out)})
 }
 
 // groupingOptions are the libraries a view may be grouped by, as Jellyfin's SpecialViewOptionDto.
@@ -255,7 +264,7 @@ var libraryKinds = map[domain.LibraryKind]string{domain.LibraryMovies: "Movie", 
 
 // items answers Jellyfin's /Items: the items an app names, a library's films or shows, a show's
 // seasons or episodes, a season's episodes, or what matches a search; every library at once where
-// an app names none, and the profile's playlists where it asks for those alone.
+// an app names none, and the profile's playlists where it asks for those alone or opens their view.
 func (a *API) items(w http.ResponseWriter, r *http.Request) {
 	profile, l := auth.SessionOf(r.Context()).Profile.ID, listedOf(w, r)
 	types := values(r, "includeItemTypes")
@@ -280,7 +289,7 @@ func (a *API) items(w http.ResponseWriter, r *http.Request) {
 	switch lib, ok := seen[parent]; {
 	case ok:
 		a.wall([]*store.SeenLibrary{lib}, w, r, types, l)
-	case parent == uuid.UUID{} && len(types) == 1 && strings.EqualFold(types[0], "Playlist"):
+	case parent == a.viewID(playlistsView), parent == uuid.UUID{} && len(types) == 1 && strings.EqualFold(types[0], "Playlist"):
 		a.playlists(w, r, l)
 	case parent == uuid.UUID{} && len(types) == 0 && !strings.EqualFold(query(r, "recursive"), "true"):
 		a.views(w, r)
@@ -438,8 +447,8 @@ func (a *API) writeSeasons(w http.ResponseWriter, r *http.Request, show uuid.UUI
 	a.writeJSON(w, out)
 }
 
-// item answers one item: a library, a title with all photon knows of it, an episode announced,
-// someone credited on a title, or one of the profile's playlists.
+// item answers one item: a library or the view of playlists, a title with all photon knows of it,
+// an episode announced, someone credited on a title, or one of the profile's playlists.
 func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("itemId"))
 	if err != nil {
@@ -453,6 +462,10 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	}
 	if lib, ok := seen[id]; ok {
 		a.writeJSON(w, a.library(lib))
+		return
+	}
+	if id == a.viewID(playlistsView) {
+		a.writeJSON(w, a.playlistsFolder())
 		return
 	}
 	named, err := a.svc.Catalogue.Named(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
