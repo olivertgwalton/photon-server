@@ -30,13 +30,8 @@ const (
 )
 
 type authenticator interface {
-	SignIn(ctx context.Context, name, password string, device auth.Device) (string, domain.Profile, error)
-	Authenticate(ctx context.Context, token string) (domain.Session, error)
-	SignOut(ctx context.Context, session uuid.UUID) error
-	StartPairing(ctx context.Context, d auth.Device, style auth.CodeStyle) (auth.PairingStart, error)
-	ApprovePairing(ctx context.Context, approver domain.Session, userCode string) (auth.Device, error)
+	auth.Authenticator
 	PairingStatus(ctx context.Context, deviceCode string) (kv.PairingState, auth.Pairing, error)
-	PollPairing(ctx context.Context, deviceCode string) (kv.PairingState, string, domain.Profile, error)
 }
 
 type Services struct {
