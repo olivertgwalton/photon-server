@@ -24,9 +24,10 @@ import (
 
 const baseURL = "https://api4.thetvdb.com/v4"
 
-// DefaultKey is the project's own API key, shipped in the source as Jellyfin's plugin ships its
-// key. TVDB's terms make it free for a project under its revenue threshold, with attribution.
-const DefaultKey = "cdff72c4-d3d6-4ae5-99e6-cae67aff0646"
+// defaultKey is the project's own API key, shipped in the source as Jellyfin's plugin ships its
+// key. TVDB's terms make it free for a project under its revenue threshold, with attribution. An
+// admin's own key, and a subscriber's PIN, replace it.
+const defaultKey = "cdff72c4-d3d6-4ae5-99e6-cae67aff0646"
 
 // TVDB publishes no rate limit; this keeps every node together well within reason.
 var limit = kv.Limit{Every: 50 * time.Millisecond, Burst: 20}
@@ -34,18 +35,27 @@ var limit = kv.Limit{Every: 50 * time.Millisecond, Burst: 20}
 // A token lasts a month; it is renewed a few days early.
 const tokenLife = 25 * 24 * time.Hour
 
-type Client struct {
-	login login
-	api   provider.Client
+// keySetting and pinSetting are the project key and, for a key subscribers pay for, the
+// subscriber's PIN, an admin sets.
+const (
+	keySetting = "key"
+	pinSetting = "pin"
+)
 
-	mu      sync.Mutex
+type Client struct {
+	settings provider.Settings
+	api      provider.Client
+
+	mu sync.Mutex
+	// token is the one signed in with as, until expires.
 	token   string
+	as      login
 	expires time.Time
 }
 
-// New makes a client for a project key and, for a key subscribers pay for, a subscriber's PIN.
-func New(key, pin string, limits kv.Limiter) *Client {
-	return &Client{login: login{key: key, pin: pin}, api: provider.Client{Name: "tvdb", Base: baseURL, Limits: limits, Limit: limit}}
+// New makes a client signed in as settings say.
+func New(settings provider.Settings, limits kv.Limiter) *Client {
+	return &Client{settings: settings, api: provider.Client{Name: "tvdb", Base: baseURL, Limits: limits, Limit: limit}}
 }
 
 // languageOf is a locale's language as TVDB names it, ISO 639-2.
@@ -65,10 +75,17 @@ func (l login) MarshalJSON() ([]byte, error) {
 	}{l.key, l.pin})
 }
 
+// signIn answers a token signed in as settings say now: the one held, unless it has lapsed or an
+// admin has changed the key or PIN since.
 func (c *Client) signIn(ctx context.Context) (string, error) {
+	set, err := c.settings(ctx)
+	if err != nil {
+		return "", err
+	}
+	as := login{key: cmp.Or(set[keySetting], defaultKey), pin: set[pinSetting]}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.token != "" && time.Now().Before(c.expires) {
+	if c.token != "" && c.as == as && time.Now().Before(c.expires) {
 		return c.token, nil
 	}
 	var out struct {
@@ -76,10 +93,10 @@ func (c *Client) signIn(ctx context.Context) (string, error) {
 			Token string `json:"token"`
 		} `json:"data"`
 	}
-	if err := c.api.Do(ctx, provider.Request{Method: http.MethodPost, Path: "/login", Body: c.login}, &out); err != nil {
+	if err := c.api.Do(ctx, provider.Request{Method: http.MethodPost, Path: "/login", Body: as}, &out); err != nil {
 		return "", fmt.Errorf("tvdb login: %w", err)
 	}
-	c.token, c.expires = out.Data.Token, time.Now().Add(tokenLife)
+	c.token, c.as, c.expires = out.Data.Token, as, time.Now().Add(tokenLife)
 	return c.token, nil
 }
 

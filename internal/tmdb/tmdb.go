@@ -25,9 +25,9 @@ const (
 	candidateURL = "https://image.tmdb.org/t/p/w342"
 )
 
-// DefaultToken is the project's own API read access token, shipped in the source as Jellyfin
-// ships its key, so matching works without an account. An operator's own token replaces it.
-const DefaultToken = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJkYzYwYTNmZmYyZTRlOWQyZmU3ZTliYzgzYWI1ODNhYSIsIm5iZiI6MTc2MTg2OTQzNi41NDEsInN1YiI6IjY5MDNmZTdjMDIyZTUxOWZlMTJmZGI1YyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.H6Hra5soywDrjrzesbmH2wzHscr1Vx5ZwfhPTa5nN1Y" //nolint:gosec // public by design
+// defaultToken is the project's own API read access token, shipped in the source as Jellyfin
+// ships its key, so matching works without an account. An admin's own token replaces it.
+const defaultToken = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJkYzYwYTNmZmYyZTRlOWQyZmU3ZTliYzgzYWI1ODNhYSIsIm5iZiI6MTc2MTg2OTQzNi41NDEsInN1YiI6IjY5MDNmZTdjMDIyZTUxOWZlMTJmZGI1YyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.H6Hra5soywDrjrzesbmH2wzHscr1Vx5ZwfhPTa5nN1Y" //nolint:gosec // public by design
 
 // limit keeps every node together well under TMDB's rate limit of about 50 requests a second.
 var limit = kv.Limit{Every: 50 * time.Millisecond, Burst: 20}
@@ -39,15 +39,18 @@ const (
 	Show  Kind = "tv"
 )
 
+// tokenSetting is the API read access token an admin sets, the project's where none is.
+const tokenSetting = "token"
+
 type Client struct {
-	token string
-	api   provider.Client
+	settings provider.Settings
+	api      provider.Client
 }
 
-// New makes a client that authenticates with an API read access token. Each request is asked in a
-// locale: its language the words', its country the certificates'.
-func New(token string, limits kv.Limiter) *Client {
-	return &Client{token: token, api: provider.Client{Name: "tmdb", Base: baseURL, Limits: limits, Limit: limit}}
+// New makes a client that authenticates with the API read access token settings hold. Each
+// request is asked in a locale: its language the words', its country the certificates'.
+func New(settings provider.Settings, limits kv.Limiter) *Client {
+	return &Client{settings: settings, api: provider.Client{Name: "tmdb", Base: baseURL, Limits: limits, Limit: limit}}
 }
 
 func (c *Client) get(ctx context.Context, loc domain.Locale, path string, query url.Values, into any) error {
@@ -55,7 +58,11 @@ func (c *Client) get(ctx context.Context, loc domain.Locale, path string, query 
 		query = url.Values{}
 	}
 	query.Set("language", loc.Language)
-	header := http.Header{"Authorization": {"Bearer " + c.token}}
+	set, err := c.settings(ctx)
+	if err != nil {
+		return err
+	}
+	header := http.Header{"Authorization": {"Bearer " + cmp.Or(set[tokenSetting], defaultToken)}}
 	return c.api.Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: query, Header: header}, into)
 }
 

@@ -9,7 +9,13 @@ import (
 )
 
 func (c *Client) Info() provider.Info {
-	return provider.Info{ID: domain.SourceTVDB, Name: "TheTVDB", Kinds: []domain.ItemKind{domain.ItemShow}}
+	return provider.Info{
+		ID: domain.SourceTVDB, Name: "TheTVDB", Kinds: []domain.ItemKind{domain.ItemShow},
+		Settings: []provider.Setting{
+			{Key: keySetting, Name: "API key", Secret: true},
+			{Key: pinSetting, Name: "Subscriber PIN", Secret: true},
+		},
+	}
 }
 
 // Match finds a show on TheTVDB by its TVDB id, else the show an IMDb or TMDB id names, else a
