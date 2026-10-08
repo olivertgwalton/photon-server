@@ -277,11 +277,16 @@ func TestALibraryCountsTheCollectionsItLists(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		total := 0
 		for lib, n := range want {
 			_, listed, err := s.Collections(ctx, lib, profile, 0, 10)
 			if err != nil || counts[lib].Collections != n || listed != int64(n) {
 				t.Errorf("library %s counts %d collections and lists %d, %v; want %d", lib, counts[lib].Collections, listed, err, n)
 			}
+			total += n
+		}
+		if has, err := s.HasCollections(ctx, profile); err != nil || has != (total > 0) {
+			t.Errorf("has collections: %v, %v; want %v", has, err, total > 0)
 		}
 	}
 	agree(uuid.UUID{}, map[uuid.UUID]int{films.ID: 1, empty.ID: 0})

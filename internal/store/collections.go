@@ -139,6 +139,13 @@ func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset,
 	return cards, total, err
 }
 
+// HasCollections reports whether a profile finds any collection listed in its libraries.
+func (s *Store) HasCollections(ctx context.Context, profile uuid.UUID) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM items, viewer($1) v WHERE `+listedCollection+`)`, profile).Scan(&ok)
+	return ok, err
+}
+
 // memberOrder is a collection's titles' order, with its row as c and theirs as m and items: an
 // admin's in the order they were put or its rule found them, a provider's from the first released.
 const memberOrder = `CASE WHEN c.origin IN ` + madeHere + ` THEN m.position END, items.released_asc, items.sort_title, items.id`
