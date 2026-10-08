@@ -1,5 +1,7 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
+import { page } from "$app/state";
+import { withQuery } from "#lib/address.js";
 import Rail from "#lib/components/Rail.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
 import * as Select from "#lib/components/ui/select/index.js";
@@ -8,20 +10,12 @@ import { byKind } from "#lib/rows.js";
 let { data } = $props();
 
 const groups = $derived(byKind(data.results?.items ?? []));
-// What a run's whole is asked with.
-const query = $derived(
-	new URLSearchParams(
-		data.library ? { q: data.q, library: data.library } : { q: data.q },
-	).toString(),
-);
 const nothing = $derived(
 	data.results && !data.results.items.length && !data.results.people.length,
 );
 
 function scope(library: string) {
-	const query = new URLSearchParams({ q: data.q });
-	if (library) query.set("library", library);
-	goto(`/search?${query}`, { replace: true, reset: false });
+	goto(withQuery(page.url, { library }), { replace: true, reset: false });
 }
 </script>
 
@@ -69,7 +63,7 @@ function scope(library: string) {
 			title={group.name}
 			cards={group.cards}
 			shape={group.kind === "episode" ? "still" : "poster"}
-			href="/search/{group.slug}?{query}"
+			href="/search/{group.slug}{page.url.search}"
 		/>
 	{/each}
 
@@ -78,7 +72,7 @@ function scope(library: string) {
 			title="People"
 			items={data.results.people}
 			total={data.results.people_total}
-			href="/search/people?{query}"
+			href="/search/people{page.url.search}"
 		>
 			{#snippet card(
 				person: (typeof data.results.people)[number],
