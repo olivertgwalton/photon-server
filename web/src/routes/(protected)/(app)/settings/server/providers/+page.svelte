@@ -189,10 +189,8 @@ async function register(event: SubmitEvent) {
 								api.DELETE("/api/v1/admin/plugins/{slug}", path),
 								`${plugin.name} was removed.`,
 							)}
-					>
-						What it has said about titles stands until another source says
-						otherwise.
-					</ConfirmButton>
+						body={"What it has said about titles stands until another source says otherwise."}
+					/>
 				</li>
 			{/each}
 		</ul>

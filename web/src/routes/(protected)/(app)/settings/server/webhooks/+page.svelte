@@ -139,11 +139,8 @@ async function add(event: SubmitEvent) {
 								api.DELETE("/api/v1/admin/webhooks/{id}", path),
 								"The webhook was removed.",
 							)}
-					>
-						{hook.url}
-						is told of nothing more, and what was waiting to be sent to it is
-						dropped.
-					</ConfirmButton>
+						body={`${hook.url} is told of nothing more, and what was waiting to be sent to it is dropped.`}
+					/>
 				</div>
 			</li>
 		{/each}

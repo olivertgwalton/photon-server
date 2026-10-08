@@ -103,9 +103,8 @@ async function add(event: SubmitEvent) {
 							}),
 							"The key was revoked.",
 						)}
-				>
-					Whatever uses the {key.name} key is refused from now on.
-				</ConfirmButton>
+					body={`Whatever uses the ${key.name} key is refused from now on.`}
+				/>
 			</li>
 		{/each}
 	</ul>

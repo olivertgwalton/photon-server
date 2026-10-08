@@ -239,11 +239,8 @@ function took(started?: string, finished?: string) {
 									}),
 									`${words.tasks[task.key].name} was stopped.`,
 								)}
-						>
-							The {w.left.toLocaleString()} left are taken off the queue, and
-							one running stops within a few minutes. What is done is kept: the
-							task's next run, or Run now, takes up the rest.
-						</ConfirmButton>
+							body={`The ${w.left.toLocaleString()} left are taken off the queue, and one running stops within a few minutes. What is done is kept: the task's next run, or Run now, takes up the rest.`}
+						/>
 					{/if}
 					<Button
 						variant="outline"

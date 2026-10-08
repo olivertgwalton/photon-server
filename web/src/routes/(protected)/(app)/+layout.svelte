@@ -86,7 +86,7 @@ $effect(() => {
 <ShareDialog />
 <SubtitleSearch />
 <VersionPicker />
+<ConfirmDialog />
 {#if data.me.role === "admin"}
 	<TitleEditor />
-	<ConfirmDialog />
 {/if}
