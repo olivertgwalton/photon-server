@@ -536,3 +536,36 @@ func TestAnAPIKeyActsAsItsAdminUntilRevoked(t *testing.T) {
 		t.Errorf("revoking it again: err = %v, want %v", err, ErrKeyNotFound)
 	}
 }
+
+// A forgotten password is reset by a code, once, signing out every device on the profile.
+func TestAForgottenPasswordIsResetByItsCodeOnce(t *testing.T) {
+	svc, st := newService(t)
+	ctx := t.Context()
+	oliver := addOliver(t, st)
+	token, _, err := svc.SignIn(ctx, "Oliver", "correct horse", tv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, err := svc.StartReset(ctx, "nobody"); err != nil || code != "" {
+		t.Fatalf("a reset for no profile: %q, %v", code, err)
+	}
+	code, err := svc.StartReset(ctx, "oliver")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RedeemReset(ctx, code, "short"); !errors.Is(err, ErrPasswordTooShort) {
+		t.Fatalf("a short password: %v", err)
+	}
+	if got, err := svc.RedeemReset(ctx, strings.ToLower(code), "battery staple"); err != nil || got != oliver.ID {
+		t.Fatalf("redeeming: %v, %v", got, err)
+	}
+	if _, err := svc.RedeemReset(ctx, code, "another staple"); !errors.Is(err, ErrResetNotFound) {
+		t.Errorf("a code used twice: %v", err)
+	}
+	if _, err := svc.Authenticate(ctx, token); !errors.Is(err, ErrUnauthenticated) {
+		t.Errorf("a device stayed signed in: %v", err)
+	}
+	if _, _, err := svc.SignIn(ctx, "Oliver", "battery staple", tv); err != nil {
+		t.Errorf("signing in with the new password: %v", err)
+	}
+}
