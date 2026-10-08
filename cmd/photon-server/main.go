@@ -6,14 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -21,13 +18,11 @@ import (
 
 	// The image has no zoneinfo, and the maintenance window is kept in a zone named by an admin.
 	_ "time/tzdata"
-	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/analysis"
 	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/backup"
-	"github.com/olivertgwalton/photon-server/internal/discovery"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/events"
 	"github.com/olivertgwalton/photon-server/internal/historyimport"
@@ -37,16 +32,12 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/jellyfin"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/kv"
-	"github.com/olivertgwalton/photon-server/internal/mdblist"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/nodes"
-	"github.com/olivertgwalton/photon-server/internal/omdb"
-	"github.com/olivertgwalton/photon-server/internal/opensubtitles"
 	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
-	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/secure"
 	"github.com/olivertgwalton/photon-server/internal/storage"
@@ -54,8 +45,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/subtitles"
 	"github.com/olivertgwalton/photon-server/internal/task"
 	"github.com/olivertgwalton/photon-server/internal/themerr"
-	"github.com/olivertgwalton/photon-server/internal/tmdb"
-	"github.com/olivertgwalton/photon-server/internal/tvdb"
 	"github.com/olivertgwalton/photon-server/internal/watch"
 	"github.com/olivertgwalton/photon-server/internal/webhook"
 )
@@ -152,14 +141,6 @@ func writeDescription(w io.Writer) error {
 	}
 	_, err = w.Write(append(doc, '\n'))
 	return err
-}
-
-// restorer restores dumps with the Postgres tools the environment names.
-func restorer(databaseURL, valkeyURL string, logger *slog.Logger) backup.Restorer {
-	return backup.Restorer{
-		PGRestore: cmp.Or(os.Getenv("PHOTON_PG_RESTORE"), "pg_restore"), PSQL: cmp.Or(os.Getenv("PHOTON_PSQL"), "psql"),
-		DatabaseURL: databaseURL, ValkeyURL: valkeyURL, Log: logger,
-	}
 }
 
 func requiredEnv(name string) (string, error) {
@@ -442,323 +423,4 @@ func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL 
 		return stopped
 	}
 	return err
-}
-
-// drain stops this node taking new work and plays its streams to their end, for limit at most,
-// before it stops serving: another node takes new streams meanwhile. A signal on again stops it
-// at once.
-func drain(ctx context.Context, self interface{ Stop() }, streams interface{ Playbacks() []uuid.UUID }, again <-chan os.Signal, limit time.Duration, logger *slog.Logger) {
-	self.Stop()
-	t := time.NewTicker(drainPoll)
-	defer t.Stop()
-	until := time.After(limit)
-	said := -1
-	for {
-		left := len(streams.Playbacks())
-		if left == 0 {
-			return
-		}
-		if left != said {
-			logger.InfoContext(ctx, "draining: playing streams to their end; stop again to stop at once", slog.Int("streams", left))
-			said = left
-		}
-		select {
-		case <-t.C:
-		case <-until:
-			return
-		case <-again:
-			return
-		}
-	}
-}
-
-// listenUntilDone serves until ctx ends and drain returns, then gives open requests shutdownGrace
-// to finish.
-func listenUntilDone(ctx context.Context, srv *http.Server, either func(net.Listener) net.Listener, drain func()) error {
-	served := make(chan error, 1)
-	go func() {
-		l, err := new(net.ListenConfig).Listen(ctx, "tcp", srv.Addr)
-		if err != nil {
-			served <- err
-			return
-		}
-		served <- srv.Serve(either(l))
-	}()
-	select {
-	case err := <-served:
-		return err
-	case <-ctx.Done():
-	}
-	drain()
-	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownGrace)
-	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return err
-	}
-	if err := <-served; !errors.Is(err, http.ErrServerClosed) {
-		return err
-	}
-	return nil
-}
-
-func logTools(ctx context.Context, logger *slog.Logger, tools media.Tools) {
-	logger.InfoContext(ctx, "media tools",
-		slog.String("ffmpeg", tools.FFmpeg.Path), slog.String("ffmpeg_version", tools.FFmpeg.Version),
-		slog.String("ffprobe", tools.FFprobe.Path), slog.String("ffprobe_version", tools.FFprobe.Version),
-		slog.String("yt_dlp", tools.YTDLP.Path), slog.String("yt_dlp_version", tools.YTDLP.Version))
-	if !tools.Chromaprint {
-		logger.WarnContext(ctx, "intros and credits are found from chapters only: ffmpeg has no chromaprint muxer")
-	}
-	if !tools.Libass {
-		logger.WarnContext(ctx, "styled subtitles play only on clients that draw them: ffmpeg has no libass")
-	}
-}
-
-// metadataProviders runs TMDB before TheTVDB and OMDb, as its match may give them an id to find a
-// title by.
-func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *provider.Registry {
-	return provider.NewRegistry(plugins.Load,
-		tmdb.New(cmp.Or(os.Getenv("PHOTON_TMDB_TOKEN"), tmdb.DefaultToken), cache),
-		tvdb.New(cmp.Or(os.Getenv("PHOTON_TVDB_KEY"), tvdb.DefaultKey), os.Getenv("PHOTON_TVDB_PIN"), cache),
-		mdblist.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceMDBList)
-		}, cache),
-		omdb.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceOMDb)
-		}, cache),
-		opensubtitles.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceOpenSubtitles)
-		}, cache),
-	)
-}
-
-// defaultWebDir is where the image puts the web app's build.
-const defaultWebDir = "/usr/local/share/photon-server/web"
-
-// webApp is the web app's build in PHOTON_WEB_DIR, served when PHOTON_WEB is serve, as it is by
-// default wherever there is a build; nil when the server answers the API alone. Its pages may draw
-// from where objectOrigin says clients read artwork and previews.
-func webApp(objectOrigin func() string) (*httpapi.Web, error) {
-	build := os.DirFS(cmp.Or(os.Getenv("PHOTON_WEB_DIR"), defaultWebDir))
-	mode := os.Getenv("PHOTON_WEB")
-	if mode == "" {
-		mode = string(domain.WebOff)
-		if _, err := fs.Stat(build, "index.html"); err == nil {
-			mode = string(domain.WebServe)
-		}
-	}
-	web, err := domain.Parse("web", mode, domain.Webs())
-	if err != nil {
-		return nil, fmt.Errorf("PHOTON_WEB: %w", err)
-	}
-	switch web {
-	case domain.WebServe:
-		app, err := httpapi.NewWeb(build, objectOrigin)
-		if err != nil {
-			return nil, fmt.Errorf("PHOTON_WEB is serve but PHOTON_WEB_DIR has no build: %w", err)
-		}
-		return app, nil
-	case domain.WebOff:
-	}
-	return nil, nil
-}
-
-// ready reports what keeps this node from taking new clients: a backend it cannot reach, or its
-// stopping, so a balancer sends new clients to the others while it drains.
-func ready(st *store.Store, cache *kv.KV, self interface{ Stopping() bool }) func(context.Context) error {
-	return func(ctx context.Context) error {
-		if self.Stopping() {
-			return domain.ErrStopping
-		}
-		var errs []error
-		if err := st.Ping(ctx); err != nil {
-			errs = append(errs, fmt.Errorf("postgres: %w", err))
-		}
-		if err := cache.Ping(ctx); err != nil {
-			errs = append(errs, fmt.Errorf("valkey: %w", err))
-		}
-		return errors.Join(errs...)
-	}
-}
-
-// answerDiscovery answers clients looking for the server on UDP at the HTTP listener's port.
-// Clients can still be given the address, so a port it cannot have is only a warning.
-func answerDiscovery(ctx context.Context, addr string, scheme func() string, info domain.Info, logger *slog.Logger) {
-	conn, err := new(net.ListenConfig).ListenPacket(ctx, "udp", addr)
-	if err == nil {
-		err = discovery.Serve(ctx, conn, info, scheme, logger)
-	}
-	if err != nil {
-		logger.WarnContext(ctx, "clients must be given the server's address", slog.Any("err", err))
-	}
-}
-
-// hardware is the device PHOTON_HWACCEL names to encode on (software when unset), on
-// PHOTON_HWACCEL_DEVICE: a render node for VAAPI and QSV, a CUDA index for NVENC. A device that
-// will not encode is reported and passed over for software, as playing slowly beats not playing.
-// HEVC is encoded unless PHOTON_HEVC_ENCODING is deny, or the device, or software for a subtitle
-// drawn in, will not encode it, which is reported and H.264 encoded alone.
-func hardware(ctx context.Context, ffmpeg string, logger *slog.Logger) (hls.Hardware, error) {
-	accel, err := domain.Parse("acceleration", cmp.Or(os.Getenv("PHOTON_HWACCEL"), string(domain.AccelSoftware)), domain.Accelerations())
-	if err != nil {
-		return hls.Hardware{}, fmt.Errorf("PHOTON_HWACCEL: %w", err)
-	}
-	hevc, err := domain.Parse("HEVC encoding", cmp.Or(os.Getenv("PHOTON_HEVC_ENCODING"), string(domain.HEVCAllow)), domain.HEVCEncodings())
-	if err != nil {
-		return hls.Hardware{}, fmt.Errorf("PHOTON_HEVC_ENCODING: %w", err)
-	}
-	device := os.Getenv("PHOTON_HWACCEL_DEVICE")
-	switch accel {
-	case domain.AccelVAAPI, domain.AccelQSV:
-		device = cmp.Or(device, "/dev/dri/renderD128")
-	case domain.AccelNVENC:
-		device = cmp.Or(device, "0")
-	case domain.AccelSoftware, domain.AccelVideoToolbox:
-	}
-	hw := hls.Hardware{Accel: accel, Device: device}
-	if err := hw.Check(ctx, ffmpeg, domain.VideoH264); err != nil {
-		if accel == domain.AccelSoftware {
-			logger.ErrorContext(ctx, "transcoding will fail: ffmpeg would not encode a test picture", slog.Any("err", err))
-		} else {
-			logger.WarnContext(ctx, "encoding in software", slog.Any("err", err))
-			hw = hls.Hardware{Accel: domain.AccelSoftware}
-		}
-	}
-	hw.HEVC = hevc
-	switch hevc {
-	case domain.HEVCAllow:
-		err := hw.Check(ctx, ffmpeg, domain.VideoHEVC)
-		if err == nil && hw.Accel != domain.AccelSoftware {
-			err = hls.Hardware{Accel: domain.AccelSoftware}.Check(ctx, ffmpeg, domain.VideoHEVC)
-		}
-		if err != nil {
-			logger.WarnContext(ctx, "encoding H.264 alone", slog.Any("err", err))
-			hw.HEVC = domain.HEVCDeny
-		}
-	case domain.HEVCDeny:
-	}
-	logger.InfoContext(ctx, "encoding video", slog.String("on", string(hw.Accel)), slog.String("device", hw.Device), slog.String("hevc", string(hw.HEVC)))
-	return hw, nil
-}
-
-const (
-	// cpusPerTranscode is the logical CPUs one software transcode is given: x264 at veryfast takes
-	// about two cores, four hyperthreads, to encode 1080p in real time, and more from a 4K or tone
-	// mapped source.
-	cpusPerTranscode = 4
-	// hardwareTranscodes is the NVENC sessions a GeForce card's driver allowed at once before
-	// 591.44 (December 2025), which allows 12 per machine: older drivers still stop at 8, and the
-	// other encoders, bound by their throughput rather than a count, reach it at about 1080p too.
-	hardwareTranscodes = 8
-)
-
-// automaticTranscodes is how many videos a node encodes at once where an admin sets no limit: what
-// the device it encodes on keeps up with.
-func automaticTranscodes(accel domain.Acceleration) int {
-	switch accel {
-	case domain.AccelSoftware:
-		return max(runtime.NumCPU()/cpusPerTranscode, 1)
-	case domain.AccelVideoToolbox, domain.AccelVAAPI, domain.AccelQSV, domain.AccelNVENC:
-	}
-	return hardwareTranscodes
-}
-
-// advertiseEvery is how often a node says where its peers reach it; it is forgotten after three
-// times that, quiet.
-const advertiseEvery = 15 * time.Second
-
-// advertise tells the others where this node's peers reach it, PHOTON_NODE_ADDRESS, so a request
-// for HLS one of its playbacks makes is handed to it whichever node it lands on, and how many
-// videos it encodes, said again as soon as that changes.
-func advertise(ctx context.Context, cache *kv.KV, self func() domain.Node, slots, settings <-chan struct{}, logger *slog.Logger) {
-	t := time.NewTicker(advertiseEvery)
-	defer t.Stop()
-	for {
-		if err := cache.SetNode(ctx, self(), 3*advertiseEvery); err != nil && ctx.Err() == nil {
-			logger.WarnContext(ctx, "node not advertised", slog.Any("err", err))
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		case <-slots:
-		case <-settings:
-		}
-	}
-}
-
-// sweepEvery is how often a node ends the playbacks of players that went away without stopping,
-// closes its streams of playbacks that have ended, and forgets subtitles no one has read lately.
-const sweepEvery = 30 * time.Second
-
-func sweepPlaybacks(ctx context.Context, s *playback.Sessions, r *hls.Remuxer, logger *slog.Logger) {
-	t := time.NewTicker(sweepEvery)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-		r.SweepSubtitles()
-		if err := s.Sweep(ctx); err != nil && ctx.Err() == nil {
-			logger.WarnContext(ctx, "playbacks not swept", slog.Any("err", err))
-		}
-	}
-}
-
-// nodeIDs answers the ids of the nodes that say where their peers reach them.
-func nodeIDs(cache *kv.KV) func(ctx context.Context) ([]uuid.UUID, error) {
-	return func(ctx context.Context) ([]uuid.UUID, error) {
-		adverts, err := cache.Nodes(ctx)
-		ids := make([]uuid.UUID, len(adverts))
-		for i, n := range adverts {
-			ids[i] = n.ID
-		}
-		return ids, err
-	}
-}
-
-// nodeID is this node's id among the cluster's, kept in its cache folder beside what is filed
-// under it: the conversions it holds and the playbacks it serves. It lasts as long as that folder
-// does, so a restart keeps them, and a node given an empty folder is a new node.
-func nodeID(dir string) (uuid.UUID, error) {
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return uuid.UUID{}, err
-	}
-	defer root.Close()
-	b, err := root.ReadFile("node")
-	if err == nil {
-		return uuid.Parse(strings.TrimSpace(string(b)))
-	}
-	if !errors.Is(err, fs.ErrNotExist) {
-		return uuid.UUID{}, err
-	}
-	id := uuid.NewV7()
-	// Written whole before it is read: a node stopped halfway must not lose its id to half a file.
-	if err := root.WriteFile("node.part", []byte(id.String()+"\n"), 0o600); err != nil {
-		return uuid.UUID{}, err
-	}
-	return id, root.Rename("node.part", "node")
-}
-
-// pruneEvery is how often a node removes the converted files no download needs any more.
-const pruneEvery = 10 * time.Minute
-
-// pruneConversions prunes at start, which clears what a node stopped mid-conversion left, and
-// every pruneEvery after.
-func pruneConversions(ctx context.Context, c *playback.Conversions, logger *slog.Logger) {
-	t := time.NewTicker(pruneEvery)
-	defer t.Stop()
-	for {
-		if err := c.Prune(ctx); err != nil && ctx.Err() == nil {
-			logger.WarnContext(ctx, "converted files not pruned", slog.Any("err", err))
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-	}
 }
