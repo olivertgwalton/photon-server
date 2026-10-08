@@ -50,7 +50,7 @@ type source interface {
 	connect(ctx context.Context, c Credentials) (store.ImportLogin, error)
 	entries(ctx context.Context) ([]entry, error)
 	// signOut ends the session connect made, where it made one.
-	signOut(ctx context.Context)
+	signOut(ctx context.Context) error
 }
 
 func open(kind domain.ImportSource, base string, login store.ImportLogin) source {

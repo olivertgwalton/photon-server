@@ -313,7 +313,7 @@ func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL 
 		return err
 	}
 	sessions := playback.NewSessions(cache, st, remuxer, hub.Raise, node)
-	imports := historyimport.New(st)
+	imports := historyimport.New(st, logger)
 	setup := httpapi.Setup{
 		Started: started, Node: node, Listen: listen, Tools: tools, Encoder: hw, Discovery: discoveryMode,
 		MetadataLanguage: lang, CacheDir: cacheRoot, BackupDir: dumper.Dir, PublicURL: public,

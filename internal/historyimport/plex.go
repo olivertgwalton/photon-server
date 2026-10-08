@@ -93,7 +93,7 @@ func (p plex) connect(ctx context.Context, c Credentials) (store.ImportLogin, er
 	return store.ImportLogin{Token: c.Token}, err
 }
 
-func (plex) signOut(context.Context) {}
+func (plex) signOut(context.Context) error { return nil }
 
 func (p plex) sections(ctx context.Context) ([]plexSection, error) {
 	var c plexContainer

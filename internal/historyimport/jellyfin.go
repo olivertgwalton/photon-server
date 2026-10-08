@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -103,9 +104,13 @@ func (j jellyfin) connect(ctx context.Context, c Credentials) (store.ImportLogin
 }
 
 // signOut ends the session signing in began, so it does not linger among the source's devices.
-// One that fails is left for the source's admin to end.
-func (j jellyfin) signOut(ctx context.Context) {
-	_ = j.send(ctx, http.MethodPost, "/Sessions/Logout", nil, nil, nil)
+// The server answers 204 No Content.
+func (j jellyfin) signOut(ctx context.Context) error {
+	err := j.send(ctx, http.MethodPost, "/Sessions/Logout", nil, nil, nil)
+	if r, ok := errors.AsType[*provider.Refusal](err); ok && r.Code == http.StatusNoContent {
+		return nil
+	}
+	return err
 }
 
 // all lists every item a query finds, a page at a time.

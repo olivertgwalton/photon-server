@@ -104,7 +104,9 @@ func TestAJellyfinOrEmbyUsersWatchedTitlesAreRead(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			src.signOut(t.Context())
+			if err := src.signOut(t.Context()); err != nil {
+				t.Errorf("signing out: %v", err)
+			}
 			if len(got) != 2 {
 				t.Fatalf("entries = %+v, want the film and the episode, once each", got)
 			}

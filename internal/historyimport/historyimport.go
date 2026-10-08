@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
 	"time"
@@ -17,11 +18,12 @@ import (
 const maxMisses = 200
 
 type Imports struct {
-	st *store.Store
+	st     *store.Store
+	logger *slog.Logger
 }
 
-func New(st *store.Store) *Imports {
-	return &Imports{st: st}
+func New(st *store.Store, logger *slog.Logger) *Imports {
+	return &Imports{st: st, logger: logger}
 }
 
 // Start signs in to a source and queues the import of its user's history into a profile,
@@ -37,7 +39,7 @@ func (i *Imports) Start(ctx context.Context, kind domain.ImportSource, address s
 	}
 	id, err := i.st.AddImport(ctx, kind, base, profile, login)
 	if err != nil {
-		open(kind, base, login).signOut(ctx)
+		i.signOut(ctx, open(kind, base, login))
 	}
 	if errors.Is(err, store.ErrNotFound) {
 		return id, fmt.Errorf("%w: profile is not one of the household's", ErrRefused)
@@ -63,12 +65,20 @@ func (i *Imports) Run(ctx context.Context, id uuid.UUID) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	src.signOut(ctx)
+	i.signOut(ctx, src)
 	h.Status = domain.ImportDone
 	if err != nil {
 		h.Status, h.Error = domain.ImportFailed, err.Error()
 	}
 	return i.st.FinishImport(ctx, h)
+}
+
+// signOut ends the session src signed in with. One that fails is left for the source's admin to
+// end.
+func (i *Imports) signOut(ctx context.Context, src source) {
+	if err := src.signOut(ctx); err != nil {
+		i.logger.WarnContext(ctx, "could not sign out of a history import's source", slog.Any("err", err))
+	}
 }
 
 // apply writes what each entry says of the profile's state of the title it matches, where the
