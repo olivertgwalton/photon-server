@@ -34,7 +34,6 @@ import { ProgressReporter, type Report } from "#lib/player/progress.js";
 import {
 	beside,
 	choices,
-	isStyled,
 	needsReplay,
 	wants,
 	webVTT,
@@ -349,9 +348,10 @@ function seek(seconds: number) {
 async function showSubtitle() {
 	if (!playback || !video) return;
 	const given = beside(subtitle, playback);
-	void showStyled(given && isStyled(given.codec) ? given : undefined);
+	const styledText = given?.kind === "styled";
+	void showStyled(styledText ? given : undefined);
 	if (playback.method === "direct") {
-		const file = given && !isStyled(given.codec) ? given : undefined;
+		const file = styledText ? undefined : given;
 		if (file?.id === trackFile) return;
 		if (trackSrc?.startsWith("blob:")) URL.revokeObjectURL(trackSrc);
 		trackSrc = undefined;

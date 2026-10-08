@@ -82,16 +82,17 @@ type partJSON struct {
 // file beside the copy, by its id, or a styled stream of it read out as it is, by its index, with
 // the address of the fonts the file carries for it.
 type subtitleJSON struct {
-	ID              uuid.UUID `json:"id,omitzero"`
-	Stream          *int      `json:"stream,omitzero"`
-	Codec           string    `json:"codec"`
-	Language        string    `json:"language,omitzero"`
-	Title           string    `json:"title,omitzero"`
-	Default         bool      `json:"default,omitzero"`
-	Forced          bool      `json:"forced,omitzero"`
-	HearingImpaired bool      `json:"hearing_impaired,omitzero"`
-	URL             string    `json:"url"`
-	Fonts           string    `json:"fonts,omitzero"`
+	ID              uuid.UUID    `json:"id,omitzero"`
+	Stream          *int         `json:"stream,omitzero"`
+	Codec           string       `json:"codec"`
+	Kind            subtitleKind `json:"kind"`
+	Language        string       `json:"language,omitzero"`
+	Title           string       `json:"title,omitzero"`
+	Default         bool         `json:"default,omitzero"`
+	Forced          bool         `json:"forced,omitzero"`
+	HearingImpaired bool         `json:"hearing_impaired,omitzero"`
+	URL             string       `json:"url"`
+	Fonts           string       `json:"fonts,omitzero"`
 }
 
 type videoJSON struct {
@@ -326,7 +327,7 @@ func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayM
 		}
 		part := "/api/v1/parts/" + c.Parts[0].ID.String()
 		out = append(out, subtitleJSON{
-			Stream: &s.Index, Codec: s.Codec, Language: domain.TagOf(s.Language), Title: s.Title, Default: s.Default,
+			Stream: &s.Index, Codec: s.Codec, Kind: subtitleKindOf(s.Codec), Language: domain.TagOf(s.Language), Title: s.Title, Default: s.Default,
 			Forced: s.Forced, HearingImpaired: s.HearingImpaired,
 			URL:   a.svc.Signer.Sign(part+"/subtitles/"+strconv.Itoa(s.Index), until),
 			Fonts: a.svc.Signer.Sign(part+"/fonts", until),
@@ -337,7 +338,7 @@ func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayM
 			continue
 		}
 		out = append(out, subtitleJSON{
-			ID: f.ID, Codec: f.Codec, Language: domain.TagOf(f.Language), Title: f.Title, Default: f.Default, Forced: f.Forced,
+			ID: f.ID, Codec: f.Codec, Kind: subtitleKindOf(f.Codec), Language: domain.TagOf(f.Language), Title: f.Title, Default: f.Default, Forced: f.Forced,
 			HearingImpaired: f.HearingImpaired, URL: a.svc.Signer.Sign("/api/v1/subtitles/"+f.ID.String()+"/file", until),
 		})
 	}

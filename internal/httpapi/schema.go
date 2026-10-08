@@ -109,6 +109,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[rootAccess]():                 values(rootAccesses()),
 	reflect.TypeFor[nodeReach]():                  values(nodeReaches()),
 	reflect.TypeFor[subtitleFormat]():             values(subtitleFormats()),
+	reflect.TypeFor[subtitleKind]():               values(subtitleKinds()),
 }
 
 // open are the enums that take, beside their own values, any matching a pattern: a registered

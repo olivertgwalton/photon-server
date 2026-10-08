@@ -361,6 +361,7 @@ const version = (id: string): Schemas["VersionPage"] => ({
 		{
 			id: "0199b3c0-0000-7000-8000-0000000000d1",
 			codec: "subrip",
+			kind: "text",
 			language: "en",
 		},
 	],
@@ -427,7 +428,13 @@ const titles: Record<string, Schemas["TitlePage"]> = {
 				...version("v-anime"),
 				streams: [
 					...version("v-anime").streams,
-					{ index: 3, kind: "subtitle", codec: "ass", title: "Signs" },
+					{
+						index: 3,
+						kind: "subtitle",
+						codec: "ass",
+						subtitle_kind: "styled",
+						title: "Signs",
+					},
 				],
 				subtitles: [],
 			},
@@ -515,6 +522,7 @@ function play(id: string, body: Schemas["Play"]): Response {
 						{
 							stream: 3,
 							codec: "ass",
+							kind: "styled",
 							title: "Signs",
 							url: "/api/v1/parts/part-1/subtitles/3?exp=1&sig=s",
 							fonts: "/api/v1/parts/part-1/fonts?exp=1&sig=s",
@@ -524,6 +532,7 @@ function play(id: string, body: Schemas["Play"]): Response {
 						{
 							id: "0199b3c0-0000-7000-8000-0000000000d1",
 							codec: "subrip",
+							kind: "text",
 							language: "en",
 							url: "/api/v1/subtitles/sub-1/file?exp=1&sig=s",
 						},

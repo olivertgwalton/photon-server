@@ -7712,6 +7712,7 @@ export interface components {
             profile?: string;
             range?: components["schemas"]["Range"];
             sample_rate?: number;
+            subtitle_kind?: components["schemas"]["SubtitleKind"];
             title?: string;
             width?: number;
         };
@@ -7723,6 +7724,7 @@ export interface components {
             hearing_impaired?: boolean;
             /** Format: uuid */
             id?: string;
+            kind: components["schemas"]["SubtitleKind"];
             language?: string;
             stream?: number | null;
             title?: string;
@@ -7732,6 +7734,8 @@ export interface components {
         SubtitleDelivery: "embedded" | "sidecar";
         /** @enum {string} */
         SubtitleFormat: "original" | "webvtt";
+        /** @enum {string} */
+        SubtitleKind: "text" | "styled" | "picture";
         /** @enum {string} */
         SubtitleMatch: "release" | "any";
         /** @enum {string} */
@@ -7743,6 +7747,7 @@ export interface components {
             hearing_impaired?: boolean;
             /** Format: uuid */
             id: string;
+            kind: components["schemas"]["SubtitleKind"];
             language?: string;
             title?: string;
         };

@@ -13,20 +13,39 @@ const version: Schemas["VersionPage"] = {
 	files: [{ id: "p", index: 0, size_bytes: 1, duration_ms: 1, offset_ms: 0 }],
 	streams: [
 		{ index: 0, kind: "video", codec: "h264" },
-		{ index: 2, kind: "subtitle", codec: "hdmv_pgs_subtitle", language: "en" },
+		{
+			index: 2,
+			kind: "subtitle",
+			codec: "hdmv_pgs_subtitle",
+			subtitle_kind: "picture",
+			language: "en",
+		},
 		{
 			index: 3,
 			kind: "subtitle",
 			codec: "subrip",
+			subtitle_kind: "text",
 			language: "fr",
 			forced: true,
 		},
-		{ index: 4, kind: "subtitle", codec: "ass", title: "Songs" },
+		{
+			index: 4,
+			kind: "subtitle",
+			codec: "ass",
+			subtitle_kind: "styled",
+			title: "Songs",
+		},
 	],
 	subtitles: [
-		{ id: "s1", codec: "subrip", language: "en", hearing_impaired: true },
-		{ id: "s2", codec: "dvd_subtitle", language: "de" },
-		{ id: "s3", codec: "ass", title: "Signs" },
+		{
+			id: "s1",
+			codec: "subrip",
+			kind: "text",
+			language: "en",
+			hearing_impaired: true,
+		},
+		{ id: "s2", codec: "dvd_subtitle", kind: "picture", language: "de" },
+		{ id: "s3", codec: "ass", kind: "styled", title: "Signs" },
 	],
 };
 
@@ -44,29 +63,35 @@ test("each subtitle is named and placed where HLS publishes it", () => {
 			key: "s2",
 			label: "English",
 			codec: "hdmv_pgs_subtitle",
+			kind: "picture",
 			stream: 2,
-			language: "en",
 		},
 		{
 			key: "s3",
 			label: "French (Forced)",
 			codec: "subrip",
+			kind: "text",
 			stream: 3,
 			rendition: 0,
-			language: "fr",
-			forced: true,
 		},
-		{ key: "s4", label: "Songs", codec: "ass", stream: 4 },
+		{ key: "s4", label: "Songs", codec: "ass", kind: "styled", stream: 4 },
 		{
 			key: "f0",
 			label: "English (SDH)",
 			codec: "subrip",
+			kind: "text",
 			file: 0,
 			id: "s1",
 			rendition: 1,
-			language: "en",
 		},
-		{ key: "f2", label: "Signs", codec: "ass", file: 2, id: "s3" },
+		{
+			key: "f2",
+			label: "Signs",
+			codec: "ass",
+			kind: "styled",
+			file: 2,
+			id: "s3",
+		},
 	]);
 });
 
@@ -123,8 +148,14 @@ test("styled text handed beside the video shows without a new playback", () => {
 	const handed = {
 		...remux,
 		subtitles: [
-			{ stream: 4, codec: "ass", url: "/songs", fonts: "/fonts" },
-			{ id: "s3", codec: "ass", url: "/signs" },
+			{
+				stream: 4,
+				codec: "ass",
+				kind: "styled" as const,
+				url: "/songs",
+				fonts: "/fonts",
+			},
+			{ id: "s3", codec: "ass", kind: "styled" as const, url: "/signs" },
 		],
 	};
 	expect(beside(songs, handed)?.url).toBe("/songs");
