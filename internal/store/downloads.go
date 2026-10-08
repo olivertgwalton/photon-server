@@ -17,7 +17,10 @@ type Download struct {
 	// Device is the session of the device that asked for it.
 	Device uuid.UUID
 	Item   uuid.UUID
-	Part   uuid.UUID
+	// Title is the title downloaded, and Show an episode's show.
+	Title string
+	Show  string
+	Part  uuid.UUID
 	// PartIndex is which of its copy's Parts files it is, for a copy in several.
 	PartIndex  int
 	Parts      int
@@ -76,6 +79,8 @@ type downloadRow struct {
 	ID             uuid.UUID
 	SessionID      uuid.UUID
 	ItemID         uuid.UUID
+	Title          string
+	Show           string
 	PartID         uuid.UUID
 	PartIndex      int16
 	Parts          int
@@ -95,7 +100,7 @@ type downloadRow struct {
 // the one with an id where id is.
 func (s *Store) downloads(ctx context.Context, profile uuid.UUID, device, id *uuid.UUID) ([]Download, error) {
 	sql := `
-		SELECT d.id, d.session_id, d.item_id, d.part_id, p.idx AS part_index,
+		SELECT d.id, d.session_id, d.item_id, i.title, coalesce(show.title, '') AS show, d.part_id, p.idx AS part_index,
 			(SELECT count(*) FROM parts q WHERE q.version_id = p.version_id) AS parts, d.created_at, d.conversion_id,
 			coalesce(c.max_bitrate_kbps, 0) AS max_bitrate_kbps, coalesce(c.max_width, 0) AS max_width,
 			coalesce(c.video_codec, '') AS video_codec, coalesce(c.video_range, '') AS video_range,
@@ -103,6 +108,9 @@ func (s *Store) downloads(ctx context.Context, profile uuid.UUID, device, id *uu
 			coalesce(c.size_bytes, CASE WHEN c.id IS NULL THEN p.size_bytes END, 0) AS size_bytes,
 			coalesce(c.error, '') AS error
 		FROM downloads d JOIN parts p ON p.id = d.part_id LEFT JOIN conversions c ON c.id = d.conversion_id
+		JOIN items i ON i.id = d.item_id
+		LEFT JOIN items season ON season.id = i.parent_id AND i.kind = 'episode'
+		LEFT JOIN items show ON show.id = season.parent_id
 		WHERE d.profile_id = $1 AND ($2::uuid IS NULL OR d.session_id = $2) AND ($3::uuid IS NULL OR d.id = $3)
 		ORDER BY d.created_at DESC, d.id`
 	rows, err := queryStructs[downloadRow](ctx, s.pool, sql, profile, device, id)
@@ -112,7 +120,7 @@ func (s *Store) downloads(ctx context.Context, profile uuid.UUID, device, id *uu
 	out := make([]Download, len(rows))
 	for n, r := range rows {
 		out[n] = Download{
-			ID: r.ID, Device: r.SessionID, Item: r.ItemID, Part: r.PartID, PartIndex: int(r.PartIndex), Parts: r.Parts, State: r.State,
+			ID: r.ID, Device: r.SessionID, Item: r.ItemID, Title: r.Title, Show: r.Show, Part: r.PartID, PartIndex: int(r.PartIndex), Parts: r.Parts, State: r.State,
 			Progress: r.Progress, SizeBytes: r.SizeBytes, Error: r.Error, Created: r.CreatedAt,
 		}
 		if r.ConversionID != nil {

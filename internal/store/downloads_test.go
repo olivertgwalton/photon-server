@@ -4,6 +4,7 @@ package store
 
 import (
 	"errors"
+	"maps"
 	"testing"
 	"time"
 	"uuid"
@@ -262,5 +263,45 @@ func TestADownloadSaysWhichOfItsCopysFilesItIs(t *testing.T) {
 	}
 	if d.PartIndex != 1 || d.Parts != 2 {
 		t.Errorf("the second disc's download: part %d of %d, want 1 of 2", d.PartIndex, d.Parts)
+	}
+}
+
+// A download names what it is of, an episode by its show too, so a list of them reads without
+// asking for each title.
+func TestADownloadNamesItsTitle(t *testing.T) {
+	s, film, part, profiles := downloadable(t)
+	ctx := t.Context()
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	episode := Episode{
+		Season: 1, Episodes: []int{1}, Title: "The Target", Folder: "Wire", ByNumber: true,
+		Copies: []Copy{{ContentKey: []byte("e1"), Parts: []Part{{RelPath: "Wire/e1.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
+	}
+	if _, err := s.SaveShowFolder(ctx, shows.ID, "Wire", []byte("v1"), Show{Title: "The Wire", Folder: "Wire"}, []Episode{episode}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var ep, epPart uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT i.id, p.id FROM items i JOIN versions v ON v.item_id = i.id JOIN parts p ON p.version_id = v.id
+		WHERE i.kind = 'episode'`).Scan(&ep, &epPart); err != nil {
+		t.Fatal(err)
+	}
+	device := s.signIn(t, profiles[0])
+	for _, asked := range [][2]uuid.UUID{{film, part}, {ep, epPart}} {
+		if _, _, err := s.AddDownload(ctx, profiles[0], device, asked[0], asked[1], nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.Downloads(ctx, profiles[0], nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]string{}
+	for _, d := range got {
+		names[d.Title] = d.Show
+	}
+	if want := map[string]string{"Lawrence": "", "The Target": "The Wire"}; !maps.Equal(names, want) {
+		t.Errorf("downloads name %v, want %v", names, want)
 	}
 }

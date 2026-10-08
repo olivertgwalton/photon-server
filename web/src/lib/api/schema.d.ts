@@ -6541,9 +6541,11 @@ export interface components {
             part_index: number;
             parts: number;
             progress: number;
+            show?: string;
             /** Format: int64 */
             size_bytes?: number;
             state: components["schemas"]["DownloadState"];
+            title: string;
             /** Format: uuid */
             title_id: string;
             url?: string;
