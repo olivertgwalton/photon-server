@@ -24,9 +24,12 @@ let {
 	onconfirm: () => unknown;
 	children: Snippet;
 } = $props();
+
+let open = $state(false);
 </script>
 
-<AlertDialog.Root>
+<!-- bits-ui's Action does not close its dialog: the answer does, then acts. -->
+<AlertDialog.Root bind:open>
 	{#if icon}
 		<AlertDialog.Trigger>
 			{#snippet child({
@@ -54,7 +57,10 @@ let {
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
 			<AlertDialog.Action
 				class={buttonVariants({ variant: "destructive" })}
-				onclick={onconfirm}
+				onclick={() => {
+					open = false;
+					return onconfirm();
+				}}
 			>
 				{confirm}
 			</AlertDialog.Action>

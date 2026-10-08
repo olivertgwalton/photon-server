@@ -336,8 +336,12 @@ test("a playlist is made, filled, reordered and deleted", async ({ page }) => {
 		.getByRole("alertdialog")
 		.getByRole("button", { name: "Delete" })
 		.click();
+	// Answered, the question closes, and the page it leads to can be used.
+	await expect(page.getByRole("alertdialog")).toHaveCount(0);
 	await expect(page).toHaveURL("/playlists");
 	await expect(page.getByText("No playlists yet.")).toBeVisible();
+	await page.getByLabel("New playlist").click();
+	await expect(page.getByLabel("New playlist")).toBeFocused();
 });
 
 test("a title put on the watchlist is on its home row and its page", async ({

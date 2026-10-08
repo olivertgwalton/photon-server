@@ -4,6 +4,7 @@ import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
 import { buttonVariants } from "#lib/components/ui/button/index.js";
 </script>
 
+<!-- bits-ui's Action does not close its dialog: the answer does, then acts. -->
 <AlertDialog.Root bind:open={confirming.open}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
@@ -14,7 +15,10 @@ import { buttonVariants } from "#lib/components/ui/button/index.js";
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
 			<AlertDialog.Action
 				class={buttonVariants({ variant: "destructive" })}
-				onclick={() => confirming.run()}
+				onclick={() => {
+					confirming.open = false;
+					return confirming.run();
+				}}
 			>
 				{confirming.act}
 			</AlertDialog.Action>
