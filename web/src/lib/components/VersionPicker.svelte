@@ -9,36 +9,31 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import { playHref, versionName } from "#lib/format.js";
 
-// Which copy to play or keep, asked of a title's copies on disk. One alone is
-// no choice: it plays, or its download is asked about, at once.
-let onDisk = $state<components["schemas"]["VersionPage"][]>();
-let failed = $state("");
+type Version = components["schemas"]["VersionPage"];
+
+// Which copy to play or keep, asked of a title's copies on disk.
 let downloading = $state(false);
-let version = $state<string>();
+let copy = $state<Version>();
 
-$effect(() => {
-	if (!asked.open) return;
-	onDisk = undefined;
-	failed = "";
-	client()
-		.GET("/api/v1/titles/{id}", { params: { path: { id: asked.id } } })
-		.then(({ data, error }) => {
-			if (!data) {
-				failed = problemMessage(error);
-				return;
-			}
-			onDisk = (data.versions ?? []).filter((v) => !v.missing_since);
-			if (onDisk.length === 1) choose(onDisk[0].id);
-		});
-});
+// Its copies on disk, asked each time it opens. One alone is no choice: it
+// plays, or its download is asked about, at once.
+async function onDisk(): Promise<{ versions?: Version[]; failed?: string }> {
+	const { data, error } = await client().GET("/api/v1/titles/{id}", {
+		params: { path: { id: asked.id } },
+	});
+	if (!data) return { failed: problemMessage(error) };
+	const versions = (data.versions ?? []).filter((v) => !v.missing_since);
+	if (versions.length === 1) choose(versions[0]);
+	return { versions };
+}
 
-function choose(id: string) {
+function choose(v: Version) {
 	asked.open = false;
 	if (asked.use === "play") {
-		goto(playHref(asked.id, { version: id }));
+		goto(playHref(asked.id, { version: v.id }));
 		return;
 	}
-	version = id;
+	copy = v;
 	downloading = true;
 }
 </script>
@@ -51,27 +46,29 @@ function choose(id: string) {
 			</Dialog.Title>
 			<Dialog.Description>{asked.title}</Dialog.Description>
 		</Dialog.Header>
-		{#if failed}
-			<p role="alert" class="text-destructive">{failed}</p>
-		{:else if !onDisk}
+		{#await onDisk()}
 			<p class="text-ink-3">Loading versions…</p>
-		{:else if !onDisk.length}
-			<p class="text-ink-3">None of its copies is on disk.</p>
-		{:else}
-			<ul class="-mx-2 grid">
-				{#each onDisk as v (v.id)}
-					<li>
-						<Button
-							variant="ghost"
-							class="w-full justify-start"
-							onclick={() => choose(v.id)}
-						>
-							{versionName(v)}
-						</Button>
-					</li>
-				{/each}
-			</ul>
-		{/if}
+		{:then { versions, failed }}
+			{#if failed}
+				<p role="alert" class="text-destructive">{failed}</p>
+			{:else if !versions?.length}
+				<p class="text-ink-3">None of its copies is on disk.</p>
+			{:else}
+				<ul class="-mx-2 grid">
+					{#each versions as v (v.id)}
+						<li>
+							<Button
+								variant="ghost"
+								class="w-full justify-start"
+								onclick={() => choose(v)}
+							>
+								{versionName(v)}
+							</Button>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		{/await}
 	</Dialog.Content>
 </Dialog.Root>
 
@@ -79,5 +76,5 @@ function choose(id: string) {
 	bind:open={downloading}
 	id={asked.id}
 	title={asked.title}
-	{version}
+	version={copy}
 />

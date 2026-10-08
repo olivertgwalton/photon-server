@@ -5,6 +5,7 @@ import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
+import { fields } from "#lib/form.js";
 import { runtime } from "#lib/format.js";
 
 // Asks the server for a copy to keep, as Plex's Download asks: the file as it
@@ -17,7 +18,12 @@ let {
 	id,
 	title,
 	version,
-}: { open?: boolean; id: string; title: string; version?: string } = $props();
+}: {
+	open?: boolean;
+	id: string;
+	title: string;
+	version?: components["schemas"]["VersionPage"];
+} = $props();
 
 // The most the picture may be. Original is any size at all.
 const qualities = [
@@ -27,28 +33,9 @@ const qualities = [
 	{ name: "720p", detail: "4 Mbps", kbps: 4000, width: 1280 },
 	{ name: "480p", detail: "1.5 Mbps", kbps: 1500, width: 854 },
 ];
-let chosen = $state(0);
 
-// The copy asked for, or the one the server plays when none is: the first on
-// disk, as a title's page lists them.
-let copy = $state<components["schemas"]["VersionPage"]>();
+const files = $derived(version?.files ?? []);
 // Which of its files: "all", or one's id.
-let file = $state("all");
-
-$effect(() => {
-	if (!open) return;
-	file = "all";
-	client()
-		.GET("/api/v1/titles/{id}", { params: { path: { id } } })
-		.then(({ data }) => {
-			const versions = data?.versions ?? [];
-			copy =
-				versions.find((v) => v.id === version) ??
-				versions.find((v) => !v.missing_since);
-		});
-});
-
-const files = $derived(copy?.files ?? []);
 const fileChoices = $derived([
 	{ id: "all", label: `All ${files.length} files` },
 	...files.map((f) => ({
@@ -58,8 +45,9 @@ const fileChoices = $derived([
 ]);
 
 async function request(event: SubmitEvent) {
-	event.preventDefault();
-	const { kbps, width } = qualities[chosen];
+	const form = fields(event);
+	const { kbps, width } = qualities[Number(form.get("quality"))];
+	const file = form.get("file") ?? "all";
 	const parts =
 		files.length > 1
 			? files.filter((f) => file === "all" || f.id === file)
@@ -69,7 +57,7 @@ async function request(event: SubmitEvent) {
 			client().POST("/api/v1/downloads", {
 				body: {
 					title_id: id,
-					version_id: copy?.id ?? version,
+					version_id: version?.id,
 					part_id: part?.id,
 					max_bitrate_kbps: kbps,
 					max_width: width,
@@ -108,7 +96,7 @@ async function request(event: SubmitEvent) {
 									type="radio"
 									name="file"
 									value={option.id}
-									bind:group={file}
+									checked={option.id === "all"}
 									class="accent-ink"
 								>
 								<span class="text-ink font-semibold">{option.label}</span>
@@ -128,7 +116,7 @@ async function request(event: SubmitEvent) {
 								type="radio"
 								name="quality"
 								value={i}
-								bind:group={chosen}
+								checked={i === 0}
 								class="accent-ink"
 							>
 							<span class="text-ink font-semibold">{quality.name}</span>
