@@ -102,7 +102,7 @@ func (a *API) pairingRoutes() []route {
 			body:    deviceJSON{}, status: http.StatusOK, reply: pairingStartJSON{}, handle: a.startPairing,
 		},
 		{
-			pattern: "POST /api/v1/auth/pairings/approve", access: signedIn,
+			pattern: "POST /api/v1/auth/pairings/approvals", access: signedIn,
 			summary: "Approve a pairing by its code, signing that device in as this profile",
 			body:    approvalJSON{}, status: http.StatusOK, reply: deviceJSON{}, handle: a.approvePairing,
 		},

@@ -3365,7 +3365,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/pairings/approve": {
+    "/api/v1/auth/pairings/approvals": {
         parameters: {
             query?: never;
             header?: never;
