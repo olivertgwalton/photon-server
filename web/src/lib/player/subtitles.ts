@@ -9,6 +9,7 @@ type Choice = {
 	key: string;
 	label: string;
 	codec: string;
+	kind?: Schemas["SubtitleKind"];
 	stream?: number;
 	file?: number;
 	// A file's id, which a play names it by.
@@ -17,30 +18,10 @@ type Choice = {
 	// inside the copy, then every plain text file beside it. A picture or
 	// styled text has none.
 	rendition?: number;
-	language?: string;
-	forced?: boolean;
-	default?: boolean;
 };
-
-// FFmpeg's plain text subtitle codecs, which HLS carries as WebVTT; the
-// server's hls.TextSubtitle.
-const text = new Set([
-	"subrip",
-	"webvtt",
-	"mov_text",
-	"text",
-	"sami",
-	"microdvd",
-	"subviewer",
-	"realtext",
-]);
 
 // What a browser reads from a file played as it is.
 const drawnBeside = new Set(["subrip", "webvtt"]);
-
-// Styled text, which WebVTT would lose the look of; the server's
-// hls.StyledSubtitle.
-const styled = new Set(["ass", "ssa"]);
 
 function name(s: {
 	title?: string;
@@ -64,26 +45,22 @@ export function choices(version: Schemas["VersionPage"]): Choice[] {
 			key: `s${s.index}`,
 			label: name(s),
 			codec: s.codec,
+			kind: s.subtitle_kind,
 			stream: s.index,
-			rendition: text.has(s.codec) ? rendition++ : undefined,
-			language: s.language,
-			forced: s.forced,
-			default: s.default,
+			rendition: s.subtitle_kind === "text" ? rendition++ : undefined,
 		});
 	}
 	// A picture beside the copy is never drawn: only a track inside it is.
 	(version.subtitles ?? []).forEach((f, i) => {
-		if (!text.has(f.codec) && !styled.has(f.codec)) return;
+		if (f.kind === "picture") return;
 		out.push({
 			key: `f${i}`,
 			label: name(f),
 			codec: f.codec,
+			kind: f.kind,
 			file: i,
 			id: f.id,
-			rendition: text.has(f.codec) ? rendition++ : undefined,
-			language: f.language,
-			forced: f.forced,
-			default: f.default,
+			rendition: f.kind === "text" ? rendition++ : undefined,
 		});
 	});
 	return out;
@@ -116,9 +93,6 @@ export function beside(
 		choice.id === undefined ? s.stream === choice.stream : s.id === choice.id,
 	);
 }
-
-// Whether a codec is styled text, which JASSUB draws.
-export const isStyled = (codec: string) => styled.has(codec);
 
 // Whether showing a choice needs a new playback, rather than a track switched
 // on in the one playing.
