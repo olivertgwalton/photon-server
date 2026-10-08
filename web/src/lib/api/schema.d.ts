@@ -134,6 +134,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/backups/{name}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore a database dump this node keeps: every node stops, and every stream with it, and starts again once it is restored
+         * @description Admin only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The dump's file name, as the list gives it. */
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Accepted */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/collections": {
         parameters: {
             query?: never;
@@ -6075,9 +6116,11 @@ export interface components {
         Backups: {
             folder: string;
             items: components["schemas"]["Backup"][];
+            last_restore?: components["schemas"]["RestoreOutcome"] | null;
             /** Format: uuid */
             node_id: string;
             node_name: string;
+            restoring?: components["schemas"]["Restore"] | null;
         };
         BrowsedFolder: {
             name: string;
@@ -6452,7 +6495,7 @@ export interface components {
             title_id?: string;
         };
         /** @enum {string} */
-        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed" | "nodes.changed";
+        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed" | "nodes.changed" | "restore.started";
         EventPage: {
             items: components["schemas"]["Event"][];
             offset: number;
@@ -7241,6 +7284,25 @@ export interface components {
         };
         /** @enum {string} */
         Resolution: "sd" | "720p" | "1080p" | "4k";
+        Restore: {
+            dump: string;
+            /** Format: uuid */
+            node_id: string;
+            phase: components["schemas"]["RestorePhase"];
+            /** Format: date-time */
+            started_at: string;
+        };
+        RestoreOutcome: {
+            /** Format: date-time */
+            at: string;
+            dump: string;
+            reason?: string;
+            result: components["schemas"]["RestoreResult"];
+        };
+        /** @enum {string} */
+        RestorePhase: "stopping" | "restoring";
+        /** @enum {string} */
+        RestoreResult: "succeeded" | "failed";
         /** @enum {string} */
         Role: "admin" | "member" | "restricted";
         /** @enum {string} */

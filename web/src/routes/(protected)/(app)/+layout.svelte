@@ -15,6 +15,7 @@ import { onMount } from "svelte";
 import { invalidate } from "$app/navigation";
 import { LiveStream, setLiveStream } from "#lib/admin/stream.svelte.js";
 import { connectLive } from "#lib/live.svelte.js";
+import RestoringScreen from "#lib/components/RestoringScreen.svelte";
 
 let { data, children } = $props();
 
@@ -112,6 +113,7 @@ onMount(() => {
 </Sidebar.Provider>
 
 <PlaylistPicker />
+<RestoringScreen />
 <ShareDialog />
 <SubtitleSearch />
 <VersionPicker />

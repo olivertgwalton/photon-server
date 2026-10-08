@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/backup"
 	"github.com/olivertgwalton/photon-server/internal/historyimport"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/playback"
@@ -126,6 +127,8 @@ var problems = []struct {
 	{err: auth.ErrPINNotDigits, code: codeInvalidBody, ownWords: true},
 	{err: auth.ErrPasswordTooShort, code: codeInvalidBody, ownWords: true},
 	{err: task.ErrNoTask, code: codeNotFound},
+	{err: backup.ErrNewer, code: codeConflict, ownWords: true},
+	{err: backup.ErrRestoring, code: codeConflict, ownWords: true},
 	{err: playback.ErrNoPlayback, code: codeNotFound, detail: "the playback has stopped, or lapsed"},
 	{err: hls.ErrNoRemux, code: codeNotFound, detail: "the playback has stopped, or lapsed"},
 	{err: playback.ErrNoSuchAudio, code: codeInvalidBody, detail: "audio_stream is not one of the copy's audio streams"},

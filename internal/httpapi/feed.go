@@ -24,7 +24,7 @@ func feedStream() asStream {
 	out := asStream{"hello": helloJSON{}}
 	for _, k := range []domain.EventKind{
 		domain.EventLibraryChanged, domain.EventTitleUpdated, domain.EventUserDataChanged, domain.EventScanProgress,
-		domain.EventLibraryScanned, domain.EventPlaybackStopped,
+		domain.EventLibraryScanned, domain.EventPlaybackStopped, domain.EventRestoreStarted,
 	} {
 		out[string(k)] = eventJSON{}
 	}
@@ -82,6 +82,8 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (ev
 	case domain.EventTitleUpdated:
 		seen, err := a.svc.Audience.Visible(ctx, profile, []uuid.UUID{e.Item})
 		return eventOf(e), len(seen) == 1, err
+	case domain.EventRestoreStarted:
+		return eventOf(e), true, nil
 	case domain.EventScanProgress, domain.EventLibraryScanned:
 		ok, err := a.svc.Audience.HasLibrary(ctx, profile, e.Library)
 		return eventOf(e), ok, err
