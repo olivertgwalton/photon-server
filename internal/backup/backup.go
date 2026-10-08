@@ -101,8 +101,8 @@ func (d Dumper) Dump(ctx context.Context, now time.Time) (string, error) {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		_ = os.Remove(part)
-		return "", fmt.Errorf("pg_dump: %w: %s", err, bytes.TrimSpace(stderr.Bytes()))
+		// RemoveAll, as pg_dump may have failed before writing anything.
+		return "", errors.Join(fmt.Errorf("pg_dump: %w: %s", err, bytes.TrimSpace(stderr.Bytes())), os.RemoveAll(part))
 	}
 	if err := os.Rename(part, name); err != nil {
 		return "", err
