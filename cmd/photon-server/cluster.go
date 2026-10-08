@@ -15,7 +15,8 @@ import (
 // scrapeWithin bounds reading what a scrape reports from Postgres and Valkey.
 const scrapeWithin = 5 * time.Second
 
-// libraryKinds are the titles counted in photon_library_items: what is played, not what holds it.
+// libraryKinds are the titles counted in photon_library_items and photon_library_bytes: what is
+// played, not what holds it.
 var libraryKinds = []domain.ItemKind{domain.ItemMovie, domain.ItemEpisode}
 
 var (
@@ -27,6 +28,8 @@ var (
 	nodesDesc = prometheus.NewDesc("photon_nodes",
 		"The nodes running, by whether each takes new work.", []string{"state"}, nil)
 	itemsDesc = prometheus.NewDesc("photon_library_items", "The films and episodes in the libraries.", []string{"kind"}, nil)
+	bytesDesc = prometheus.NewDesc("photon_library_bytes",
+		"The bytes the films and episodes in the libraries hold on disk, each file once.", []string{"kind"}, nil)
 )
 
 type leader interface {
@@ -37,6 +40,7 @@ type leader interface {
 type clusterStore interface {
 	JobLoads(ctx context.Context) ([]store.JobLoad, error)
 	ItemCounts(ctx context.Context, kinds []domain.ItemKind) (map[domain.ItemKind]int, error)
+	ItemBytes(ctx context.Context, kinds []domain.ItemKind) (map[domain.ItemKind]int64, error)
 }
 
 type adverts interface {
@@ -57,7 +61,7 @@ type cluster struct {
 }
 
 func (c cluster) Describe(ch chan<- *prometheus.Desc) {
-	for _, d := range []*prometheus.Desc{jobsDesc, dueDesc, taskDesc, nodesDesc, itemsDesc} {
+	for _, d := range []*prometheus.Desc{jobsDesc, dueDesc, taskDesc, nodesDesc, itemsDesc, bytesDesc} {
 		ch <- d
 	}
 }
@@ -111,6 +115,13 @@ func (c cluster) Collect(ch chan<- prometheus.Metric) {
 	} else {
 		for _, k := range libraryKinds {
 			ch <- prometheus.MustNewConstMetric(itemsDesc, prometheus.GaugeValue, float64(counts[k]), string(k))
+		}
+	}
+	if bytes, err := c.st.ItemBytes(ctx, libraryKinds); err != nil {
+		ch <- prometheus.NewInvalidMetric(bytesDesc, err)
+	} else {
+		for _, k := range libraryKinds {
+			ch <- prometheus.MustNewConstMetric(bytesDesc, prometheus.GaugeValue, float64(bytes[k]), string(k))
 		}
 	}
 }

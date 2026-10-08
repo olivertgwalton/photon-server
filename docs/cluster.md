@@ -125,6 +125,7 @@ the one running scheduled tasks; the others leave it out, so it is never counted
 | `photon_task_last_finished_timestamp_seconds{task, result}` | when each task's last run ended, `succeeded`, `failed` or `cancelled`; absent while it runs again |
 | `photon_nodes{state}` | the nodes running, `active` or `draining`, the leader among them whether or not it has an address |
 | `photon_library_items{kind}` | the films (`movie`) and episodes in the libraries |
+| `photon_library_bytes{kind}` | the bytes those films and episodes hold on disk: each file once however many paths or episode numbers read it, and every copy, hd or ultra hd, of a title; a missing file holds none |
 
 The lease passes to another node within 20 seconds of its holder stopping, so for a moment either
 or neither says them. Query them across instances with `max without(instance)`, as
