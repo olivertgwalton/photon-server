@@ -26,6 +26,7 @@ const (
 	messageKeepAlive       messageType = "KeepAlive"
 	messageUserDataChanged messageType = "UserDataChanged"
 	messageLibraryChanged  messageType = "LibraryChanged"
+	messagePlaystate       messageType = "Playstate"
 )
 
 // message is Jellyfin's WebSocketMessage.
@@ -53,6 +54,11 @@ type libraryUpdate struct {
 	IsEmpty            bool     `json:"IsEmpty"`
 }
 
+// playstateStop is Jellyfin's PlaystateRequest that stops what a session plays.
+type playstateStop struct {
+	Command string `json:"Command"`
+}
+
 // audience says what of the libraries and titles a profile may be told of.
 type audience interface {
 	HasLibrary(ctx context.Context, profile, lib uuid.UUID) (bool, error)
@@ -68,7 +74,7 @@ type stoppingKey struct{}
 // changes of what the profile sees, on every node. What the app sends that is not a KeepAlive,
 // such as SessionsStart, is let pass: none of it is served.
 func (a *API) socket(w http.ResponseWriter, r *http.Request) {
-	ctx, profile := r.Context(), auth.SessionOf(r.Context()).Profile.ID
+	ctx, session := r.Context(), auth.SessionOf(r.Context())
 	stopping, _ := ctx.Value(stoppingKey{}).(<-chan struct{})
 	c, err := websocket.Accept(w, r)
 	if err != nil {
@@ -99,7 +105,7 @@ func (a *API) socket(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
-			m, told, err := a.told(ctx, profile, e)
+			m, told, err := a.told(ctx, session, e)
 			if err != nil {
 				// The app opens it again, and reads again what it shows.
 				a.logger.WarnContext(ctx, "jellyfin socket ended", slog.Any("err", err))
@@ -134,10 +140,20 @@ func (a *API) listen(ctx context.Context, c *websocket.Conn, heard chan<- messag
 	}
 }
 
-// told is the message an event is to a profile, and whether it is one: its own state of a title
-// or one of its playlists changed, and what changed of the libraries and titles it sees.
-func (a *API) told(ctx context.Context, profile uuid.UUID, e domain.Event) (message, bool, error) {
+// told is the message an event is to a session, and whether it is one: its profile's own state of
+// a title or one of its playlists changed, what changed of the libraries and titles it sees, and
+// its playback stopped by other than its player.
+func (a *API) told(ctx context.Context, session domain.Session, e domain.Event) (message, bool, error) {
+	profile := session.Profile.ID
 	switch e.Kind {
+	case domain.EventPlaybackStopped:
+		// Jellyfin sends a stop to the session whose playback its dashboard or its idle sweep ends,
+		// and the app closes its player rather than play out what it has buffered.
+		d, _ := e.Details.(domain.PlaybackDetails)
+		if d.StoppedBy == domain.StoppedByPlayer || d.Playback.Device.ID != session.ID {
+			return message{}, false, nil
+		}
+		return message{MessageType: messagePlaystate, Data: playstateStop{Command: "Stop"}}, true, nil
 	case domain.EventUserDataChanged:
 		if e.Profile != profile {
 			return message{}, false, nil
@@ -159,7 +175,7 @@ func (a *API) told(ctx context.Context, profile uuid.UUID, e domain.Event) (mess
 	case domain.EventTitleUpdated:
 		return a.libraryChanged(ctx, profile, uuid.UUID{}, domain.LibraryChangedDetails{domain.TitleUpdated: {e.Item}})
 	case domain.EventPlaybackStarted, domain.EventPlaybackPaused, domain.EventPlaybackResumed,
-		domain.EventPlaybackStopped, domain.EventSignedIn, domain.EventSignInRefused,
+		domain.EventSignedIn, domain.EventSignInRefused,
 		domain.EventProfileAdded, domain.EventProfileRemoved, domain.EventLibraryAdded,
 		domain.EventLibraryRemoved, domain.EventLibraryScanned, domain.EventTitlesAdded, domain.EventScanProgress,
 		domain.EventTaskStarted, domain.EventTaskFinished, domain.EventTaskFailed, domain.EventBackupMade,

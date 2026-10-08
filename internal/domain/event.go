@@ -211,6 +211,8 @@ type PlaybackDetails struct {
 	Playback NowPlaying `json:"playback"`
 	// Reach is how far a stopped playback got.
 	Reach Reach `json:"reach,omitzero"`
+	// StoppedBy is what ended a stopped playback.
+	StoppedBy StoppedBy `json:"stopped_by,omitzero"`
 }
 
 // PlaybackClosedDetails is what a profile's own player is told of its playback stopped.

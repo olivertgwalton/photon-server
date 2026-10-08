@@ -194,6 +194,12 @@ func TestAnAppIsToldWhatChangesOfWhatItsProfileSees(t *testing.T) {
 	defer srv.Close()
 	c := openSocket(t, srv.URL+"/socket?ApiKey=pst_device", nil)
 	heard(t, c)
+	stopped := func(device uuid.UUID, by domain.StoppedBy) domain.Event {
+		return domain.Event{Kind: domain.EventPlaybackStopped, Profile: ada.ID, Details: domain.PlaybackDetails{
+			Playback: domain.NowPlaying{PlaybackCard: domain.PlaybackCard{Device: domain.PlaybackDevice{ID: device}}}, StoppedBy: by,
+		}}
+	}
+	thisDevice := uuid.MustParse("00000000-0000-0000-0000-00000000000d")
 
 	for _, e := range []domain.Event{
 		{Kind: domain.EventUserDataChanged, Profile: stranger, Item: s.film},
@@ -201,7 +207,8 @@ func TestAnAppIsToldWhatChangesOfWhatItsProfileSees(t *testing.T) {
 		{Kind: domain.EventLibraryChanged, Library: uuid.NewV7(), Details: domain.LibraryChangedDetails{domain.TitleAdded: {added}}},
 		{Kind: domain.EventLibraryChanged, Library: s.library, Details: domain.LibraryChangedDetails{domain.TitleAdded: {s.hidden}}},
 		{Kind: domain.EventTitleUpdated, Item: s.hidden},
-		{Kind: domain.EventPlaybackStopped, Profile: ada.ID},
+		stopped(thisDevice, domain.StoppedByPlayer),
+		stopped(uuid.NewV7(), domain.StoppedByAdmin),
 		{Kind: domain.EventUserDataChanged, Profile: ada.ID, Item: s.film},
 		{Kind: domain.EventLibraryChanged, Library: s.library, Details: domain.LibraryChangedDetails{
 			domain.TitleAdded: {added, s.hidden}, domain.TitleRemoved: {removed}, domain.TitleUpdated: {},
@@ -209,6 +216,7 @@ func TestAnAppIsToldWhatChangesOfWhatItsProfileSees(t *testing.T) {
 		{Kind: domain.EventTitleUpdated, Item: s.film},
 		{Kind: domain.EventUserDataChanged, Profile: ada.ID, Details: domain.UserDataDetails{PlaylistID: s.playlist}},
 		{Kind: domain.EventUserDataChanged, Profile: ada.ID, Details: domain.UserDataDetails{PlaylistID: deleted}},
+		stopped(thisDevice, domain.StoppedByAdmin),
 	} {
 		events <- e
 	}
@@ -251,5 +259,10 @@ func TestAnAppIsToldWhatChangesOfWhatItsProfileSees(t *testing.T) {
 		if m["MessageType"] != "LibraryChanged" || !reflect.DeepEqual(data[want.field], []any{guid(want.id)}) {
 			t.Errorf("her playlist changed, want it in %s: %v", want.field, m)
 		}
+	}
+	// Only the stop an admin made of this device's own playback closes its player.
+	m = heard(t, c)
+	if m["MessageType"] != "Playstate" || !reflect.DeepEqual(m["Data"], map[string]any{"Command": "Stop"}) {
+		t.Errorf("an admin stopped its playback: %v", m)
 	}
 }
