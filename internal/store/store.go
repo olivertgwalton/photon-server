@@ -195,8 +195,49 @@ func SchemaVersion() (int64, error) {
 	return goose.NumericComponent(entries[len(entries)-1].Name())
 }
 
+// waiting names the connection of a node asking, before it starts, whether a restore is under way:
+// a moment's, which a restore does not wait for.
+const waiting = "photon-server waiting"
+
+// holdWait is how long a node asking waits on a restore's locks before taking them as held.
+const holdWait = 2 * time.Second
+
+// ErrHeld is the database held by a restore under way.
+var ErrHeld = errors.New("a restore holds the database")
+
+// lockNotAvailable is the SQLSTATE of a statement that waited lock_timeout for its locks.
+const lockNotAvailable = "55P03"
+
+// WaitingServerID answers the server's id, for a node to ask Valkey whether a restore is under
+// way before it opens the database: ErrHeld while a restore holds it, and the zero id for one not
+// yet migrated, which there is no restore of.
+func WaitingServerID(ctx context.Context, url string) (uuid.UUID, error) {
+	cfg, err := pgx.ParseConfig(url)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	cfg.RuntimeParams["application_name"] = waiting
+	cfg.RuntimeParams["lock_timeout"] = strconv.Itoa(int(holdWait.Milliseconds()))
+	conn, err := pgx.ConnectConfig(ctx, cfg)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	defer conn.Close(context.WithoutCancel(ctx))
+	var migrated bool
+	if err := conn.QueryRow(ctx, "SELECT to_regclass('server') IS NOT NULL").Scan(&migrated); err != nil || !migrated {
+		return uuid.UUID{}, err
+	}
+	var id uuid.UUID
+	err = conn.QueryRow(ctx, "SELECT id FROM server").Scan(&id)
+	if pg, ok := errors.AsType[*pgconn.PgError](err); ok && pg.Code == lockNotAvailable {
+		return uuid.UUID{}, ErrHeld
+	}
+	return id, err
+}
+
 // Connections answers who else is connected to url's database, as the application each names
-// itself and where it is, with how many connections.
+// itself and where it is, with how many connections; a node asking whether a restore is under
+// way is not counted.
 func Connections(ctx context.Context, url string) ([]string, error) {
 	conn, err := pgx.Connect(ctx, url)
 	if err != nil {
@@ -208,7 +249,8 @@ func Connections(ctx context.Context, url string) ([]string, error) {
 			coalesce(host(client_addr), 'a local socket'), count(*))
 		FROM pg_stat_activity
 		WHERE datname = current_database() AND pid <> pg_backend_pid() AND backend_type = 'client backend'
-		GROUP BY application_name, client_addr ORDER BY 1`)
+			AND application_name <> $1
+		GROUP BY application_name, client_addr ORDER BY 1`, waiting)
 	if err != nil {
 		return nil, err
 	}

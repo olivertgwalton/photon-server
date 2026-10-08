@@ -3,6 +3,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"os"
@@ -79,6 +80,42 @@ func TestARunningNodeIsListedAmongTheDatabasesConnections(t *testing.T) {
 	others, err := Connections(t.Context(), db)
 	if err != nil || len(others) != 1 || !strings.HasPrefix(others[0], "photon-server "+host+" from ") {
 		t.Errorf("with a node running: %q, %v; want it, named by its host", others, err)
+	}
+}
+
+// A node starting asks for the server's id before it opens the database, to ask Valkey whether a
+// restore is under way, and is not held up by one holding the database.
+func TestANodeStartingIsToldTheDatabaseIsHeldByARestore(t *testing.T) {
+	db := storetest.FreshDatabase(t)
+	if id, err := WaitingServerID(t.Context(), db); err != nil || id != (uuid.UUID{}) {
+		t.Fatalf("a database not yet migrated: %v %v, want no id", id, err)
+	}
+	log := slog.New(slog.DiscardHandler)
+	if err := Migrate(t.Context(), db, log); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(t.Context(), db, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := s.ServerID(t.Context())
+	s.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id, err := WaitingServerID(t.Context(), db); err != nil || id != want {
+		t.Errorf("a migrated database: %v %v, want %v", id, err, want)
+	}
+	restore, err := pgx.Connect(t.Context(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restore.Close(context.Background())
+	if _, err := restore.Exec(t.Context(), "BEGIN; LOCK TABLE server IN ACCESS EXCLUSIVE MODE"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := WaitingServerID(t.Context(), db); !errors.Is(err, ErrHeld) {
+		t.Errorf("while a restore holds it: %v, want ErrHeld", err)
 	}
 }
 
