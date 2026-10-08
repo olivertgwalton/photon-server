@@ -34,6 +34,7 @@ type playbacks interface {
 	Stop(ctx context.Context, profile, id uuid.UUID, position time.Duration) (domain.Reach, error)
 	Finish(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error)
 	Abandon(ctx context.Context, id uuid.UUID) error
+	Opened(method domain.PlayMethod)
 }
 
 type watching interface {
@@ -403,8 +404,11 @@ func (a *API) startDirect(r *http.Request, id uuid.UUID, rep report) error {
 	if sound != nil {
 		d.Audio = &domain.AudioPlan{Stream: sound.Index}
 	}
-	_, err = a.svc.Playbacks.Start(r.Context(), id, domain.PlayDirect, playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: sub}), a.svc.Placer.Self().ID)
-	return err
+	if _, err := a.svc.Playbacks.Start(r.Context(), id, domain.PlayDirect, playback.Card(s, a.svc.Proxies.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: sub}), a.svc.Placer.Self().ID); err != nil {
+		return err
+	}
+	a.svc.Playbacks.Opened(domain.PlayDirect)
+	return nil
 }
 
 func isNotFound(err error) bool { return errors.Is(err, store.ErrNotFound) }

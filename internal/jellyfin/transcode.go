@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -31,6 +32,7 @@ type placer interface {
 	Candidates(ctx context.Context, need playback.Need) ([]domain.Node, error)
 	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o playback.Opening) error
 	Self() domain.Node
+	Refuse(candidates []domain.Node) error
 }
 
 // owners say which node of the cluster runs a playback's HLS.
@@ -76,7 +78,7 @@ func (a *API) transcodingURL(r *http.Request, item, session uuid.UUID, t transco
 func (a *API) video(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("file")
 	if lower := strings.ToLower(name); lower == "stream" || strings.HasPrefix(lower, "stream.") {
-		a.stream(w, r)
+		a.sending(playback.DeliveryFile, a.stream)(w, r)
 		return
 	}
 	a.hls(w, r, name)
@@ -106,6 +108,11 @@ func (a *API) hls(w http.ResponseWriter, r *http.Request, name string) {
 		a.fromOwner(w, r, session, name)
 		return
 	}
+	a.sending(playback.DeliverySegment, func(w http.ResponseWriter, r *http.Request) { a.serveHLS(w, r, session, name) })(w, r)
+}
+
+// serveHLS serves a file of a play session this node runs.
+func (a *API) serveHLS(w http.ResponseWriter, r *http.Request, session uuid.UUID, name string) {
 	res, err := a.svc.HLS.Resource(r.Context(), session, name)
 	if errors.Is(err, hls.ErrNoRemux) {
 		refuse(w, http.StatusNotFound)
@@ -197,6 +204,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 		}
 		err = a.svc.Placer.Open(r.Context(), node, session, c, o)
 		if err == nil {
+			a.svc.Playbacks.Opened(t.Method)
 			// Here, the request is answered; elsewhere, handed on to the node that runs it.
 			return false
 		}
@@ -209,6 +217,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 			return true
 		}
 	}
+	a.logger.InfoContext(r.Context(), "jellyfin transcode refused", slog.Any("err", a.svc.Placer.Refuse(candidates)))
 	w.Header().Set("Retry-After", "30")
 	refuse(w, http.StatusServiceUnavailable)
 	return true

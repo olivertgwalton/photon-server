@@ -3,13 +3,36 @@ package nodes
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
 	"uuid"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
+
+// An operator's metrics say what the node is set to, and that it drains as it stops.
+func TestANodesMetricsSayItsRoleAndWhetherItTakesWork(t *testing.T) {
+	settings := &kept{set: domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}}
+	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", "http://gpu-1", domain.Encoder{}, 8, &slots{}, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := func(state string) *strings.Reader {
+		return strings.NewReader("# HELP photon_node_info This node: its name, its role, and whether it takes new work.\n" +
+			"# TYPE photon_node_info gauge\n" + `photon_node_info{node="gpu-1",role="transcode",state="` + state + "\"} 1\n")
+	}
+	if err := testutil.CollectAndCompare(self, want("active")); err != nil {
+		t.Error(err)
+	}
+	self.Stop()
+	if err := testutil.CollectAndCompare(self, want("draining")); err != nil {
+		t.Error(err)
+	}
+}
 
 type kept struct {
 	mu  sync.Mutex

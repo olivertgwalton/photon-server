@@ -61,6 +61,9 @@ func TestTheDescriptionHasEveryRoute(t *testing.T) {
 		t.Errorf("openapi = %q", doc.OpenAPI)
 	}
 	for _, r := range a.routes() {
+		if r.access == localNetwork {
+			continue
+		}
 		method, path, _ := strings.Cut(r.pattern, " ")
 		op, ok := doc.Paths[path][strings.ToLower(method)]
 		if !ok {

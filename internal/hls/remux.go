@@ -19,6 +19,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -84,6 +85,8 @@ type Remuxer struct {
 	limit     int
 	idle      time.Duration
 	log       *slog.Logger
+	// segmentWait is how long each request for a segment waits for it to be made.
+	segmentWait prometheus.Histogram
 
 	mu          sync.Mutex
 	sessions    map[uuid.UUID]*session
@@ -117,7 +120,7 @@ func NewRemuxer(tools media.Tools, dir, subtitles string, hw Hardware, limit int
 	return &Remuxer{
 		tools: tools, dir: dir, subtitles: subtitles, hw: hw, limit: limit, idle: idleRun, log: log,
 		sessions: map[uuid.UUID]*session{}, conversions: map[*conversion]struct{}{}, extractions: map[uuid.UUID]*extraction{},
-		changed: make(chan struct{}, 1),
+		changed: make(chan struct{}, 1), segmentWait: newSegmentWait(),
 	}, nil
 }
 
@@ -585,6 +588,7 @@ func (r *Remuxer) Segment(ctx context.Context, playback uuid.UUID, n int) (*os.F
 	if n < 0 || n >= len(s.plan) {
 		return nil, ErrNoRemux
 	}
+	asked := time.Now()
 	s.mu.Lock()
 	s.furthest = max(s.furthest, n)
 	s.forget(n - behind)
@@ -608,6 +612,7 @@ func (r *Remuxer) Segment(ctx context.Context, playback uuid.UUID, n int) (*os.F
 		return nil, ctx.Err()
 	case <-wait:
 	}
+	r.segmentWait.Observe(time.Since(asked).Seconds())
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.failed[n]; err != nil {

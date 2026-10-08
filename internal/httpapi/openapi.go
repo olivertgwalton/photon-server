@@ -59,6 +59,9 @@ func describe(info domain.Info, routes []route) ([]byte, error) {
 	problemRef := s.of(reflect.TypeFor[problem]())
 	paths := map[string]map[string]any{}
 	for _, r := range routes {
+		if r.access == localNetwork {
+			continue
+		}
 		method, path, _ := strings.Cut(r.pattern, " ")
 		op, err := operation(s, r, path)
 		if err != nil {

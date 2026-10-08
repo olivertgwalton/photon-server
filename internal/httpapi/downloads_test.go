@@ -65,6 +65,7 @@ func TestADownloadIsTheFileOrAConversionServedInRanges(t *testing.T) {
 	}
 	signer := playback.NewSigner([]byte("key"))
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Sent: playback.NewSent(),
 		Auth: fakeAuth{}, Playing: fakePlaying{}, Downloads: fakeDownloads{},
 		Conversions: fakeConversions{path: converted}, Signer: signer, Setup: Setup{Encoder: hls.Hardware{HEVC: domain.HEVCAllow}},
 	})

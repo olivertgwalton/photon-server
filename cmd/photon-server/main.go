@@ -276,15 +276,19 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	placer := playback.NewPlacer(cache, self.Node, remuxes, nodeKey)
 	secured := secure.New(st, hub.Subscribe, logger)
+	sent := playback.NewSent()
 	jellyfinAPI := jellyfin.NewListener(st, hub.Subscribe, jellyfin.New(logger, info, jellyfin.Services{
 		Auth: authService, Limits: cache, Raise: hub.Raise, Proxies: trusted, Catalogue: st, Pictures: pictureCache,
 		Playing: files, Playbacks: sessions, Watching: st, HLS: remuxer, Placer: placer, Owners: owners,
-		Signer: signer, Encoding: playback.Encoding{HEVC: hw.HEVC, Libass: tools.Libass}, Network: st,
+		Signer: signer, Encoding: playback.Encoding{HEVC: hw.HEVC, Libass: tools.Libass}, Network: st, Sent: sent,
 	}), listen, secured.Listen, secured.TLSConfig(), logger)
+	finished := jobs.NewFinished()
 	srv := &http.Server{
 		Addr: listen, TLSConfig: secured.TLSConfig(),
 		Handler: httpapi.New(logger, info, httpapi.Services{
 			Ready: ready(st, cache, self), Auth: authService, Profiles: st, Catalogue: st, Libraries: st, Tasks: scheduler, Jobs: st, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: providers, ProviderSettings: st, Plugins: plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: files, Subtitles: fetcher, Playbacks: sessions, Owners: owners, Placer: placer, NodeKey: nodeKey, HLS: remuxer, Signer: signer, Artwork: pictureCache, Previews: st, PreviewFiles: previews, Downloads: st, Conversions: conversions, Limits: cache, Activity: st, Events: hub, Audience: st, Webhooks: st, Importer: imports, HistoryImports: st, TrustedProxies: trusted, Network: st, Storage: st, Stores: stores, Nodes: st, Secure: secured, Jellyfin: jellyfinAPI, Setup: setup, Postgres: st, Valkey: cache, Web: web,
+			Metrics: metricsHandler(metrics(version, self, remuxer, sessions, placer, sent, finished, cluster{lead: scheduler, st: st, nodes: cache}), logger),
+			Sent:    sent,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -295,7 +299,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	// matching and a scan never waits behind either.
 	scanner := jobs.NewWorker(st, logger, node, scanSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobScanLibrary: scanLibrary(st, scan.New(st, tools, logger), hub, logger),
-	}, hub, nil)
+	}, hub, nil, finished)
 	matching := map[domain.JobKind]jobs.Handler{
 		domain.JobIdentify: identify.Handler(st, providers, pictureCache, domain.LocaleOf(lang), hub.Raise, logger),
 	}
@@ -303,17 +307,17 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	if tools.YTDLP.Path != "" {
 		matching[domain.JobTheme] = themerr.Fetch(st, pictureCache, cache, themerr.DB, tools.YTDLP.Path, tools.FFmpeg.Path, logger)
 	}
-	matcher := jobs.NewWorker(st, logger, node, identifySlots, matching, hub, nil)
+	matcher := jobs.NewWorker(st, logger, node, identifySlots, matching, hub, nil, finished)
 	notifier := jobs.NewWorker(st, logger, node, webhookSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobDeliverWebhook: webhook.Deliver(st),
-	}, hub, nil)
+	}, hub, nil, finished)
 	importer := jobs.NewWorker(st, logger, node, importSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobImportHistory: imports.Run,
-	}, hub, nil)
+	}, hub, nil, finished)
 	// Each kind of job that reads media has a worker of its own, so however many of one are queued,
 	// the others keep their slot, and each gives way to playback and keeps to its timing's hours.
 	reader := func(kind domain.JobKind, h jobs.Handler) *jobs.Worker {
-		return jobs.NewWorker(st, logger, node, mediaSlots, map[domain.JobKind]jobs.Handler{kind: h}, hub, gate)
+		return jobs.NewWorker(st, logger, node, mediaSlots, map[domain.JobKind]jobs.Handler{kind: h}, hub, gate, finished)
 	}
 	workers := []*jobs.Worker{
 		scanner, matcher, notifier, importer,
@@ -330,7 +334,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	// leaves them to one that does.
 	workers = append(workers, jobs.NewWorker(st, logger, node, playback.MaxConversions, map[domain.JobKind]jobs.Handler{
 		domain.JobConvert: conversions.Convert,
-	}, hub, jobs.When(self.TakesTranscodes)))
+	}, hub, jobs.When(self.TakesTranscodes), finished))
 	watcher := watch.New(st, logger)
 	// What keeps streams playing (serving, telling the others where this node is, ending what has
 	// stopped) outlives the signal, as the node drains; what begins new work stops at it.

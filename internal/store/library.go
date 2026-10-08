@@ -422,3 +422,9 @@ func (s *Store) SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []u
 		return nil
 	})
 }
+
+// ItemCounts answers how many titles of each of kinds the libraries hold, leaving out a kind of
+// which they hold none.
+func (s *Store) ItemCounts(ctx context.Context, kinds []domain.ItemKind) (map[domain.ItemKind]int, error) {
+	return queryMap[domain.ItemKind, int](ctx, s.pool, `SELECT kind, count(*) FROM items WHERE kind = ANY($1) GROUP BY kind`, kinds)
+}

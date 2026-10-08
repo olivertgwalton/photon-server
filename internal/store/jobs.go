@@ -347,6 +347,31 @@ func (s *Store) JobQueue(ctx context.Context) ([]JobCount, []DeadJob, error) {
 	return counts, dead, err
 }
 
+// JobLoad is how many jobs of a kind are in a state and, of those queued and due now, when the one
+// waiting longest fell due: zero for none. One held for the maintenance window is due in it, not
+// now, and one put off is not due until its run_after.
+type JobLoad struct {
+	JobCount
+	Due time.Time
+}
+
+// JobLoads answers the load of each kind of job in each state it has jobs in.
+func (s *Store) JobLoads(ctx context.Context) ([]JobLoad, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT kind, state, count(*), min(run_after) FILTER (WHERE state = 'queued' AND due = 'now' AND run_after <= now())
+		FROM jobs GROUP BY kind, state`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (JobLoad, error) {
+		var l JobLoad
+		var due *time.Time
+		err := r.Scan(&l.Kind, &l.State, &l.Count, &due)
+		l.Due = deref(due)
+		return l, err
+	})
+}
+
 // RetryJob gives a dead job a fresh set of attempts now. ErrNotFound for no dead job of that id.
 func (s *Store) RetryJob(ctx context.Context, id int64) error {
 	return affected(s.pool.Exec(ctx, `

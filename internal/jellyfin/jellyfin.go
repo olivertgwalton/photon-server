@@ -59,6 +59,8 @@ type Services struct {
 	Encoding playback.Encoding
 	// Network is how the server is reached, of which its limit on a remote stream's bitrate.
 	Network settings
+	// Sent counts the media this node sends.
+	Sent *playback.Sent
 }
 
 type API struct {
@@ -127,7 +129,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	// Playing: a title's copies, its file as it is, and where the app has got to.
 	a.handle("GET /Items/{itemId}/PlaybackInfo", a.signedIn(a.playbackInfo))
 	a.handle("POST /Items/{itemId}/PlaybackInfo", a.signedIn(a.playbackInfo))
-	a.handle("GET /Videos/{itemId}/stream", a.signedIn(a.stream))
+	a.handle("GET /Videos/{itemId}/stream", a.signedIn(a.sending(playback.DeliveryFile, a.stream)))
 	a.handle("GET /Videos/{itemId}/{file}", a.signedIn(a.video))
 	a.handle("DELETE /Videos/ActiveEncodings", a.signedIn(a.endEncoding))
 	a.handle("GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{file}", a.signedIn(a.subtitle))
@@ -154,6 +156,11 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		})))
 	}
 	return a
+}
+
+// sending counts what h sends as media delivered as d.
+func (a *API) sending(d playback.Delivery, h http.HandlerFunc) http.HandlerFunc {
+	return a.svc.Sent.Counting(d, h).ServeHTTP
 }
 
 func (a *API) handle(pattern string, h http.HandlerFunc) {

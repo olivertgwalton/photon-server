@@ -66,6 +66,8 @@ func (f *fakePlaybacks) Finish(_ context.Context, _, id uuid.UUID) (domain.Reach
 	return domain.ReachResumable, nil
 }
 
+func (f *fakePlaybacks) Opened(domain.PlayMethod) {}
+
 func (f *fakePlaybacks) Abandon(_ context.Context, id uuid.UUID) error {
 	delete(f.started, id)
 	return nil
@@ -144,6 +146,7 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	plays := newFakePlaybacks()
 	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st, Placer: alone(nil),
 	})
@@ -294,6 +297,7 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	st, ada, heat, copyID := aFilm(t)
 	plays, remuxes := newFakePlaybacks(), newFakeRemuxes()
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st,
 		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
@@ -370,6 +374,7 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 	}
 	remuxes := newFakeRemuxes()
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st,
 		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
@@ -430,6 +435,7 @@ func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
 	remuxes := newFakeRemuxes()
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
+		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st,
 		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},

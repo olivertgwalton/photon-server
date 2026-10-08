@@ -21,6 +21,7 @@ import (
 	"uuid"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -166,6 +167,8 @@ func (fakePlaybacks) End(_ context.Context, id uuid.UUID) error {
 
 func (fakePlaybacks) Abandon(context.Context, uuid.UUID) error { return nil }
 
+func (fakePlaybacks) Opened(domain.PlayMethod) {}
+
 func (fakePlaybacks) Serve(context.Context, uuid.UUID, func()) (func(), error) { return func() {}, nil }
 
 func TestAPlaybackReportsWhereItIs(t *testing.T) {
@@ -201,6 +204,7 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{}, HLS: fakeHLS{}, Placer: alone(fakeHLS{}, false),
 		Signer: playback.NewSigner([]byte("key")),
@@ -304,6 +308,7 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{},
 		Placer: alone(remuxOpener{remuxer}, true), HLS: remuxer, Signer: playback.NewSigner([]byte("key")),
@@ -442,6 +447,7 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 	}
 	h := fakeHLS{dir: dir}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: dir}, Playbacks: fakePlaybacks{}, Placer: alone(h, false), HLS: h,
 		Signer: playback.NewSigner([]byte("key")),
@@ -498,6 +504,7 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 // limit kept where lower; one on them, the file as it is.
 func TestARemoteClientIsKeptWithinTheServersLimit(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Sent:    playback.NewSent(),
 		Network: fakeNetwork{remoteKbps: 2000}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{},
 		Playbacks: fakePlaybacks{}, Placer: alone(fakeHLS{}, false), HLS: fakeHLS{}, Signer: playback.NewSigner([]byte("key")),
 	})
@@ -584,12 +591,14 @@ func TestHLSIsServedByTheNodeRunningIt(t *testing.T) {
 	}
 	signer := playback.NewSigner([]byte("key"))
 	running := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Sent: playback.NewSent(),
 		Auth: fakeAuth{}, HLS: fakeHLS{dir: dir}, Signer: signer, Playbacks: fakePlaybacks{},
 	}))
 	defer running.Close()
 	// The front node keeps no playbacks, so one it ended itself would answer 404.
 	none := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
 	front := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Sent: playback.NewSent(),
 		Auth: fakeAuth{}, HLS: noHLS{}, Owners: owner(running.URL), Signer: signer,
 		Playbacks: playback.NewSessions(none, none, noHLS{}, func(context.Context, domain.Event) {}, uuid.NewV7()),
 	})
@@ -722,6 +731,7 @@ func TestAPlayerIsGivenTheSegmentsItAsksFor(t *testing.T) {
 	}
 	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7()),
 		Placer: alone(remuxOpener{remuxer}, false), HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
@@ -752,10 +762,12 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
+	placer := alone(remuxOpener{remuxer}, false)
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7()),
-		Placer: alone(remuxOpener{remuxer}, false), HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
+		Placer: placer, HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
@@ -803,6 +815,13 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 		refused.Code != codeTranscodeLimit || !strings.HasSuffix(refused.Detail, ": 1") {
 		t.Errorf("a second transcode: %d %+v, want 503 transcode_limit naming the limit", rec.Code, refused)
 	}
+	if err := testutil.CollectAndCompare(placer, strings.NewReader(`# HELP photon_transcode_refusals_total The playbacks this node refused for want of a node to encode them, by why.
+# TYPE photon_transcode_refusals_total counter
+photon_transcode_refusals_total{reason="full"} 1
+photon_transcode_refusals_total{reason="no_encoder"} 0
+`)); err != nil {
+		t.Error(err)
+	}
 	if rec := do(playRequest(`"mp4"`)); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"method":"remux"`) {
 		t.Errorf("a remux at the limit: %d %s, want it played", rec.Code, rec.Body)
 	}
@@ -836,6 +855,7 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 	var told []domain.Event
 	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, raise, uuid.NewV7()),
 		Placer: alone(remuxOpener{remuxer}, false), HLS: remuxer, NowPlaying: live, Signer: playback.NewSigner([]byte("key")),

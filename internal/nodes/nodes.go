@@ -9,6 +9,8 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/follow"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -150,3 +152,13 @@ func (s *Self) Stop() {
 
 // Changes is told as what is set of this node changes, once for any number since it was read.
 func (s *Self) Changes() <-chan struct{} { return s.changed }
+
+var nodeInfo = prometheus.NewDesc("photon_node_info", "This node: its name, its role, and whether it takes new work.",
+	[]string{"node", "role", "state"}, nil)
+
+func (s *Self) Describe(ch chan<- *prometheus.Desc) { ch <- nodeInfo }
+
+func (s *Self) Collect(ch chan<- prometheus.Metric) {
+	n := s.Node()
+	ch <- prometheus.MustNewConstMetric(nodeInfo, prometheus.GaugeValue, 1, n.Name, string(n.Role), string(n.Availability))
+}

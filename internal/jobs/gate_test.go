@@ -66,7 +66,7 @@ func (c *cluster) play(node *uuid.UUID) {
 func runReader(t *testing.T, q *memoryQueue, c *cluster, h Handler) func() {
 	t.Helper()
 	gate := NewGate(c, c, c.subscribe, slog.New(slog.DiscardHandler))
-	w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobPreviews: h}, ignore{}, gate)
+	w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobPreviews: h}, ignore{}, gate, NewFinished())
 	ctx, cancel := context.WithCancel(t.Context())
 	var wg sync.WaitGroup
 	wg.Go(func() { gate.Run(ctx) })

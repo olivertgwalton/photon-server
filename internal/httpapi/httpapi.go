@@ -59,6 +59,9 @@ const (
 	// signedPath is an HLS route whose path carries its playback's signature.
 	signedPath access = "signed_path"
 	admin      access = "admin"
+	// localNetwork is a route answered only to a client on the server's local networks, and to
+	// any other as though it were not there. It is an operator's, and in no description.
+	localNetwork access = "local_network"
 )
 
 // route is a route and what the API's description says of it. A body, reply or refusal is a value
@@ -77,6 +80,9 @@ type route struct {
 	again int
 	// refusals are problems with more to say than their code, by status.
 	refusals map[int]any
+	// delivery is how a route sends media, counted as it is sent by this node; none for one that
+	// sends none.
+	delivery playback.Delivery
 	handle   http.HandlerFunc
 }
 
@@ -192,6 +198,10 @@ type Services struct {
 	Setup    Setup
 	Postgres versioned
 	Valkey   cluster
+	// Metrics answers this node's metrics in Prometheus' text format, and Sent counts the media
+	// counted in them.
+	Metrics http.Handler
+	Sent    *playback.Sent
 }
 
 type API struct {
@@ -214,6 +224,10 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	}
 	for _, r := range routes {
 		h := a.checkQuery(r)
+		// Within routeToOwner, so a request handed to another node is counted there alone.
+		if r.delivery != "" {
+			h = a.svc.Sent.Counting(r.delivery, h)
+		}
 		switch r.access {
 		case public:
 		case signedIn:
@@ -224,6 +238,8 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 			h = a.requireSignedPath(a.routeToOwner("playback", h))
 		case admin:
 			h = a.requireAdmin(h)
+		case localNetwork:
+			h = a.requireLocalNetwork(h)
 		}
 		switch r.reply.(type) {
 		case asFile, asStream:
@@ -258,6 +274,10 @@ func (a *API) routes() []route {
 		{
 			pattern: "GET /readyz", access: public, summary: "Say whether Postgres and Valkey are reachable",
 			status: http.StatusNoContent, handle: a.readyz,
+		},
+		{
+			pattern: "GET /metrics", access: localNetwork, summary: "This node's metrics, for Prometheus",
+			status: http.StatusOK, reply: asFile{"text/plain"}, handle: a.metrics,
 		},
 		{
 			pattern: "POST /api/v1/auth/login", access: public, summary: "Sign a device in with a profile's password",
@@ -623,7 +643,7 @@ func (a *API) routes() []route {
 				{"file", "", "main.m3u8, and what it names."},
 			},
 			status: http.StatusOK, reply: asFile{"application/vnd.apple.mpegurl", "text/vtt", "video/mp4", "video/iso.segment"},
-			handle: a.hlsFile,
+			delivery: playback.DeliverySegment, handle: a.hlsFile,
 		},
 		{
 			pattern: "POST /api/v1/downloads", access: signedIn,
@@ -648,17 +668,20 @@ func (a *API) routes() []route {
 		{
 			pattern: "GET /api/v1/downloads/{id}/file", access: signedAddress,
 			summary: "A download's conversion, in byte ranges, at the address the download answered",
-			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/mp4"}, handle: a.downloadFile,
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/mp4"}, delivery: playback.DeliveryFile,
+			handle: a.downloadFile,
 		},
 		{
 			pattern: "GET /api/v1/playbacks/{playback}/parts/{id}/stream", access: signedAddress,
 			summary: "A copy's file as it is, in byte ranges, at the address play answered, for as long as the playback lasts",
-			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, handle: a.playbackPartStream,
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, delivery: playback.DeliveryFile,
+			handle: a.playbackPartStream,
 		},
 		{
 			pattern: "GET /api/v1/parts/{id}/stream", access: signedAddress,
 			summary: "A copy's file as it is, in byte ranges, at the address a download answered",
-			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, handle: a.partStream,
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, delivery: playback.DeliveryFile,
+			handle: a.partStream,
 		},
 		{
 			pattern: "GET /api/v1/parts/{id}/subtitles/{stream}", access: signedAddress,
@@ -1050,4 +1073,23 @@ func (a *API) readyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) metrics(w http.ResponseWriter, r *http.Request) {
+	a.svc.Metrics.ServeHTTP(w, r)
+}
+
+func (a *API) requireLocalNetwork(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n, err := a.svc.Network.Network(r.Context())
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		if !peer.LocalIn(n.LocalNetworks, a.svc.TrustedProxies.Client(r)) {
+			writeProblem(w, a.logger, codeNotFound, "")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

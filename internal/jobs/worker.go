@@ -62,12 +62,16 @@ type Worker struct {
 	handlers map[domain.JobKind]Handler
 	tell     teller
 	gate     gate
+	finished *Finished
 }
 
-// NewWorker runs jobs with handlers, telling tell as each starts and ends; gate is nil for jobs
-// that never give way.
-func NewWorker(q queue, log *slog.Logger, node uuid.UUID, slots int, handlers map[domain.JobKind]Handler, tell teller, g gate) *Worker {
-	return &Worker{queue: q, log: log, node: node, slots: slots, handlers: handlers, tell: tell, gate: g}
+// NewWorker runs jobs with handlers, telling tell as each starts and ends, and counting in finished
+// each run that ends; gate is nil for jobs that never give way.
+func NewWorker(q queue, log *slog.Logger, node uuid.UUID, slots int, handlers map[domain.JobKind]Handler, tell teller, g gate, finished *Finished) *Worker {
+	for kind := range handlers {
+		finished.start(kind)
+	}
+	return &Worker{queue: q, log: log, node: node, slots: slots, handlers: handlers, tell: tell, gate: g, finished: finished}
 }
 
 func (w *Worker) Run(ctx context.Context) {
@@ -130,6 +134,7 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	defer cancel()
 	var err error
 	ended := false
+	var out outcome
 	switch {
 	case runErr != nil && ctx.Err() != nil:
 		// Cut short by shutdown, which is no fault of its subject's: any node takes it now.
@@ -139,6 +144,7 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	case runErr != nil:
 		log.WarnContext(ctx, "job failed", slog.Int("attempt", job.Attempts), slog.Any("err", runErr))
 		ended, err = w.queue.FailJob(record, job, runErr)
+		out = outcomeFailed
 		kind := domain.EventJobFailed
 		if ended {
 			kind = domain.EventJobDead
@@ -146,12 +152,15 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 		w.tell.Raise(ctx, event(kind, job, runErr))
 	default:
 		err = w.queue.CompleteJob(record, job.ID)
-		ended = true
+		ended, out = true, outcomeDone
 		w.tell.Raise(ctx, event(domain.EventJobFinished, job, nil))
 	}
 	if err != nil {
 		log.WarnContext(ctx, "job outcome not recorded", slog.Any("err", err))
 		return
+	}
+	if out != "" {
+		w.finished.runs.WithLabelValues(string(job.Kind), string(out)).Inc()
 	}
 	if ended {
 		w.tell.JobEnded(record, job.Kind)
