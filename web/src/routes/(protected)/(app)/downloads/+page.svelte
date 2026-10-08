@@ -46,23 +46,19 @@ $effect(() => {
 			{#each data.downloads as d (d.id)}
 				<!-- A copy in several files is downloaded a file at a time: each says which. -->
 				{@const name = [
-					d.name ?? "A title no longer here",
+					d.show ? `${d.show}: ${d.title}` : d.title,
 					d.parts > 1 && `part ${d.part_index + 1} of ${d.parts}`,
 				]
 					.filter(Boolean)
 					.join(", ")}
 				<li class="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
 					<div class="grid min-w-0 flex-1 gap-1">
-						{#if d.name}
-							<a
-								href="/titles/{d.title_id}"
-								class="text-ink truncate font-semibold hover:underline"
-							>
-								{name}
-							</a>
-						{:else}
-							<p class="text-ink-3 truncate font-semibold">{name}</p>
-						{/if}
+						<a
+							href="/titles/{d.title_id}"
+							class="text-ink truncate font-semibold hover:underline"
+						>
+							{name}
+						</a>
 						<p class="text-ink-3 text-sm">
 							{[
 								d.method === "direct"
