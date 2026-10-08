@@ -40,6 +40,7 @@ type Services struct {
 	Raise     func(ctx context.Context, e domain.Event)
 	Proxies   peer.Proxies
 	Catalogue catalogue
+	Playlists playlists
 	Pictures  pictureFiles
 	Playing   playing
 	Playbacks playbacks
@@ -119,6 +120,13 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle(a.none,
 		"GET /Items/{itemId}/LocalTrailers", "GET /Users/{userId}/Items/{itemId}/LocalTrailers",
 		"GET /Items/{itemId}/SpecialFeatures", "GET /Users/{userId}/Items/{itemId}/SpecialFeatures")
+	a.handle(a.createPlaylist, "POST /Playlists")
+	a.handle(a.playlist, "GET /Playlists/{playlistId}")
+	a.handle(a.updatePlaylist, "POST /Playlists/{playlistId}")
+	a.handle(a.playlistItems, "GET /Playlists/{playlistId}/Items")
+	a.handle(a.addToPlaylist, "POST /Playlists/{playlistId}/Items")
+	a.handle(a.removeFromPlaylist, "DELETE /Playlists/{playlistId}/Items")
+	a.handle(a.moveInPlaylist, "POST /Playlists/{playlistId}/Items/{itemId}/Move/{newIndex}")
 	// Playing: a title's copies, its file as it is, and where the app has got to.
 	a.handle(a.playbackInfo, "GET /Items/{itemId}/PlaybackInfo", "POST /Items/{itemId}/PlaybackInfo")
 	a.handle(a.sending(playback.DeliveryFile, a.stream), "GET /Videos/{itemId}/stream")

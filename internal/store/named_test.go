@@ -11,8 +11,8 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// An id is told for what it names, a title and its kind or an episode announced, only to a profile
-// that may open it; someone credited, to anyone.
+// An id is told for what it names, a title and its kind, an episode announced or a playlist, only to
+// a profile that may open it; someone credited, to anyone.
 func TestAnIDIsToldForWhatItNames(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
@@ -64,6 +64,10 @@ func TestAnIDIsToldForWhatItNames(t *testing.T) {
 			t.Errorf("someone credited names %+v, %v; want a person", got, err)
 		}
 	}
+	playlist, err := s.AddPlaylist(ctx, admin.ID, "Weekend", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for _, c := range []struct {
 		id   uuid.UUID
@@ -72,6 +76,7 @@ func TestAnIDIsToldForWhatItNames(t *testing.T) {
 		{show, Named{Kind: NamedTitle, Title: domain.ItemShow}},
 		{season, Named{Kind: NamedTitle, Title: domain.ItemSeason}},
 		{announced, Named{Kind: NamedAnnounced}},
+		{playlist, Named{Kind: NamedPlaylist}},
 	} {
 		if got, err := s.Named(ctx, admin.ID, c.id); err != nil || got != c.want {
 			t.Errorf("%v names %+v, %v; want %+v", c.id, got, err, c.want)

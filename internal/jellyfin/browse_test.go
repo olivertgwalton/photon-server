@@ -114,7 +114,7 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
-		Auth: profiles{"pst_ada": admin, "pst_kid": kid}, Catalogue: st,
+		Auth: profiles{"pst_ada": admin, "pst_kid": kid}, Catalogue: st, Playlists: st,
 	})
 	get := func(token, target string) any {
 		t.Helper()

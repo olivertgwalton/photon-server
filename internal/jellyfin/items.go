@@ -72,6 +72,7 @@ type item struct {
 	ImageBlurHashes         map[string]blurhash `json:"ImageBlurHashes"`
 	LocationType            string              `json:"LocationType"`
 	MediaType               string              `json:"MediaType"`
+	PlaylistItemID          string              `json:"PlaylistItemId,omitempty"`
 }
 
 // blurhash is the BlurHashes of an item's pictures of one kind, by tag.

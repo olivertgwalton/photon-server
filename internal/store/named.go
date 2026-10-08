@@ -16,6 +16,7 @@ const (
 	NamedTitle     NamedKind = "title"
 	NamedAnnounced NamedKind = "announced"
 	NamedPerson    NamedKind = "person"
+	NamedPlaylist  NamedKind = "playlist"
 )
 
 // Named is what an id names, and of a title, its kind.
@@ -25,8 +26,8 @@ type Named struct {
 }
 
 // Named answers what an id names that a profile may open, as reading it would find it: a title it
-// sees, an episode announced with no file of a show it sees, or someone credited. ErrNotFound for
-// nothing.
+// sees, an episode announced with no file of a show it sees, someone credited, or a playlist of its
+// own. ErrNotFound for nothing.
 func (s *Store) Named(ctx context.Context, profile, id uuid.UUID) (Named, error) {
 	var n Named
 	err := s.pool.QueryRow(ctx, `
@@ -36,6 +37,8 @@ func (s *Store) Named(ctx context.Context, profile, id uuid.UUID) (Named, error)
 		WHERE a.id = @id AND `+unfiled+` AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, show))
 		UNION ALL
 		SELECT 'person', '' FROM people WHERE id = @id
+		UNION ALL
+		SELECT 'playlist', '' FROM playlists WHERE id = @id AND profile_id = @profile
 		LIMIT 1`, pgx.NamedArgs{"id": id, "profile": profile}).Scan(&n.Kind, &n.Title)
 	return n, found(err)
 }
