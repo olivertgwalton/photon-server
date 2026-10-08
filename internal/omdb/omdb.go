@@ -191,7 +191,9 @@ func (c *Client) get(ctx context.Context, key string, q url.Values, into any) (b
 	if err := c.api.Do(req, &raw); err != nil {
 		if r, ok := errors.AsType[*provider.Refusal](err); ok && r.Code == http.StatusUnauthorized {
 			var a answer
-			_ = json.Unmarshal(r.Body, &a)
+			if json.Unmarshal(r.Body, &a) != nil || a.Error == "" {
+				return false, fmt.Errorf("%w: %w", provider.ErrUnavailable, err)
+			}
 			return false, fmt.Errorf("%w: %s: %w", provider.ErrUnavailable, a.Error, err)
 		}
 		return false, err
