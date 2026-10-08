@@ -1,4 +1,5 @@
 import { createContext } from "svelte";
+import { retryAfter } from "#lib/live.svelte.js";
 import { apply, type EventKind, idle, type Live } from "./live.js";
 
 // Every name the stream sends an event by: an EventSource hears only the names
@@ -30,10 +31,6 @@ const names = [
 	"webhook.test",
 	"maintenance.changed",
 ] as const satisfies readonly ("snapshot" | EventKind)[];
-
-// A refused or dropped stream is not retried by the browser once it has
-// closed, so it is opened again after this long.
-const retryAfter = 5_000;
 
 // The admin event stream, as the dashboard's pages read it.
 export class LiveStream {
