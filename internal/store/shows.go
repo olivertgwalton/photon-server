@@ -63,6 +63,10 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 				return err
 			}
 			seasons := map[int]uuid.UUID{}
+			var saving []string
+			for _, e := range episodes {
+				saving = append(saving, partPathsOf(e.Copies)...)
+			}
 			for _, e := range episodes {
 				seasonID, ok := seasons[e.Season]
 				if !ok {
@@ -82,7 +86,7 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 					}
 					seasons[e.Season] = seasonID
 				}
-				if err := saveEpisode(ctx, tx, lib, settings, showID, seasonID, e, saved.Titles); err != nil {
+				if err := saveEpisode(ctx, tx, lib, settings, showID, seasonID, e, saving, saved.Titles); err != nil {
 					return fmt.Errorf("%s season %d %v: %w", show.Title, e.Season, e.Episodes, err)
 				}
 			}
@@ -180,7 +184,7 @@ func seasonOf(ctx context.Context, tx db, showID uuid.UUID, number int) (uuid.UU
 	return id, err
 }
 
-func saveEpisode(ctx context.Context, tx db, lib uuid.UUID, settings analysis, showID, seasonID uuid.UUID, e Episode, changed Changed) error {
+func saveEpisode(ctx context.Context, tx db, lib uuid.UUID, settings analysis, showID, seasonID uuid.UUID, e Episode, saving []string, changed Changed) error {
 	row := model.Item{
 		LibraryID: lib, Kind: domain.ItemEpisode, ParentID: &seasonID, SeasonNumber: &e.Season,
 		ScanTitle: e.Title, Title: e.Title, SortTitle: sortTitle(e.Title), Folder: e.Folder,
@@ -196,7 +200,7 @@ func saveEpisode(ctx context.Context, tx db, lib uuid.UUID, settings analysis, s
 		row.AirDate = &e.AirDate
 	}
 	var err error
-	row.ID, err = episodeItem(ctx, tx, lib, e, row)
+	row.ID, err = episodeItem(ctx, tx, lib, e, row, saving)
 	if err != nil {
 		return err
 	}
@@ -235,10 +239,30 @@ func saveEpisode(ctx context.Context, tx db, lib uuid.UUID, settings analysis, s
 	return nil
 }
 
-// episodeItem is the episode a copy belongs to: the episode of a copy already known, else, for an
-// episode read from a canonical form, the episode of its season with the same numbers or date.
-func episodeItem(ctx context.Context, tx db, lib uuid.UUID, e Episode, row model.Item) (uuid.UUID, error) {
-	if id, ok, err := knownItem(ctx, tx, lib, domain.ItemEpisode, e.Copies); err != nil || ok {
+// episodeItem is the episode a copy belongs to: the episode read from one of its paths, else the
+// episode of the same bytes moved or renamed from elsewhere, else, for an episode read from a
+// canonical form, the episode of its season with the same numbers or date. An episode under other
+// numbers is taken only when none of its other paths is among saving, the paths of the folder
+// being saved: the same bytes under two numbers at once are two episodes, as Jellyfin's items are
+// one per path.
+func episodeItem(ctx context.Context, tx db, lib uuid.UUID, e Episode, row model.Item, saving []string) (uuid.UUID, error) {
+	keys := make([][]byte, len(e.Copies))
+	for i, c := range e.Copies {
+		keys[i] = c.ContentKey
+	}
+	own := partPathsOf(e.Copies)
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `
+		SELECT i.id FROM items i JOIN versions v ON v.item_id = i.id
+		LEFT JOIN parts p ON p.version_id = v.id LEFT JOIN part_files f ON f.part_id = p.id AND f.rel_path = ANY($2)
+		WHERE v.library_id = $1 AND i.kind = 'episode' AND v.split_at IS NULL AND (f.rel_path IS NOT NULL OR v.fingerprint = ANY($3))
+			AND ((i.season_number, i.episode_number, i.episode_end) IS NOT DISTINCT FROM ($4::int, $5::int, $6::int)
+				OR NOT EXISTS (SELECT 1 FROM versions ov JOIN parts op ON op.version_id = ov.id JOIN part_files o ON o.part_id = op.id
+					WHERE ov.item_id = i.id AND o.rel_path = ANY($7) AND o.rel_path <> ALL($2)))
+		ORDER BY f.rel_path IS NOT NULL DESC,
+			(i.season_number, i.episode_number, i.episode_end) IS NOT DISTINCT FROM ($4::int, $5::int, $6::int) DESC
+		LIMIT 1`, lib, own, keys, row.SeasonNumber, row.EpisodeNumber, row.EpisodeEnd, saving).Scan(&id)
+	if err == nil || !errors.Is(err, pgx.ErrNoRows) {
 		return id, err
 	}
 	if !e.ByNumber {
@@ -253,8 +277,7 @@ func episodeItem(ctx context.Context, tx db, lib uuid.UUID, e Episode, row model
 		sql += `episode_number IS NULL AND air_date = $2`
 		args = append(args, *row.AirDate)
 	}
-	var id uuid.UUID
-	err := tx.QueryRow(ctx, sql+` LIMIT 1`, args...).Scan(&id)
+	err = tx.QueryRow(ctx, sql+` LIMIT 1`, args...).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return uuid.UUID{}, nil
 	}
@@ -285,4 +308,14 @@ func saveSeasonArtwork(ctx context.Context, tx db, showID uuid.UUID, folder stri
 		}
 	}
 	return nil
+}
+
+func partPathsOf(copies []Copy) []string {
+	var paths []string
+	for _, c := range copies {
+		for _, p := range c.Parts {
+			paths = append(paths, p.RelPath)
+		}
+	}
+	return paths
 }

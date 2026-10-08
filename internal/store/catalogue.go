@@ -269,8 +269,15 @@ func knownItem(ctx context.Context, tx db, lib uuid.UUID, kind domain.ItemKind, 
 func saveCopy(ctx context.Context, tx db, lib uuid.UUID, settings analysis, itemID uuid.UUID, c Copy) error {
 	edition, label := optional(c.Edition), optional(c.Label)
 	var known uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT id FROM versions WHERE library_id = $1 AND fingerprint = $2 LIMIT 1`,
-		lib, c.ContentKey).Scan(&known)
+	var anotherEpisodes bool
+	err := tx.QueryRow(ctx, `
+		SELECT v.id, v.item_id <> $3 AND v.split_at IS NULL AND i.kind = 'episode' AND (SELECT kind FROM items WHERE id = $3) = 'episode'
+		FROM versions v JOIN items i ON i.id = v.item_id
+		WHERE v.library_id = $1 AND v.fingerprint = $2 ORDER BY v.item_id = $3 DESC LIMIT 1`,
+		lib, c.ContentKey, itemID).Scan(&known, &anotherEpisodes)
+	if err == nil && anotherEpisodes {
+		return copyVersion(ctx, tx, lib, settings, known, itemID, c)
+	}
 	if err == nil {
 		// A copy an admin split off stays on its own title.
 		_, err := tx.Exec(ctx, `
@@ -317,7 +324,6 @@ func saveCopy(ctx context.Context, tx db, lib uuid.UUID, settings analysis, item
 	if err != nil {
 		return err
 	}
-	previews := settings.Previews != domain.PreviewsOff
 	for idx, part := range c.Parts {
 		row := model.Part{
 			VersionID: version.ID, Idx: int16(idx), SizeBytes: part.Size,
@@ -337,19 +343,73 @@ func saveCopy(ctx context.Context, tx db, lib uuid.UUID, settings analysis, item
 			return err
 		}
 		if firstVideo(part.Facts) != nil {
-			if settings.Keyframes != domain.KeyframesOff {
-				if err := insertJob(ctx, tx, domain.JobKeyframes, row.ID, 0, indexPriority, domain.JobDueNow); err != nil {
-					return err
-				}
-			}
-			if previews {
-				if err := insertJob(ctx, tx, domain.JobPreviews, row.ID, 0, 0, settings.PreviewsDue); err != nil {
-					return err
-				}
+			if err := indexVideo(ctx, tx, settings, row.ID); err != nil {
+				return err
 			}
 		}
 	}
 	return saveSubtitles(ctx, tx, lib, version.ID, c.Subtitles)
+}
+
+// indexVideo queues what a library asks to be made of a new part holding video.
+func indexVideo(ctx context.Context, tx db, settings analysis, part uuid.UUID) error {
+	if settings.Keyframes != domain.KeyframesOff {
+		if err := insertJob(ctx, tx, domain.JobKeyframes, part, 0, indexPriority, domain.JobDueNow); err != nil {
+			return err
+		}
+	}
+	if settings.Previews != domain.PreviewsOff {
+		return insertJob(ctx, tx, domain.JobPreviews, part, 0, 0, settings.PreviewsDue)
+	}
+	return nil
+}
+
+// copyVersion gives an episode a version of its own of bytes another episode already holds, with
+// what was read of them: the same bytes under two numbers are two episodes, each read from its own
+// path, as Jellyfin keeps an item per path.
+func copyVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, from, itemID uuid.UUID, c Copy) error {
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `
+		INSERT INTO versions (item_id, library_id, fingerprint, edition, label, container, width, height,
+			video_codec, video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms)
+		SELECT $2, library_id, fingerprint, $3, $4, container, width, height,
+			video_codec, video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms
+		FROM versions WHERE id = $1 RETURNING id`, from, itemID, optional(c.Edition), optional(c.Label)).Scan(&id)
+	if err != nil {
+		return err
+	}
+	stream := strings.TrimPrefix(streamColumns, "part_id, ")
+	chapter := strings.TrimPrefix(chapterColumns, "part_id, ")
+	for idx, part := range c.Parts {
+		var source, copied uuid.UUID
+		var video bool
+		err := tx.QueryRow(ctx, `
+			INSERT INTO parts (version_id, idx, size_bytes, duration_ms, offset_ms)
+			SELECT $2, idx, size_bytes, duration_ms, offset_ms FROM parts WHERE version_id = $1 AND idx = $3
+			RETURNING (SELECT id FROM parts WHERE version_id = $1 AND idx = $3), id,
+				EXISTS (SELECT 1 FROM streams s JOIN parts p ON p.id = s.part_id WHERE p.version_id = $1 AND p.idx = $3 AND s.kind = 'video')`,
+			from, id, int16(idx)).Scan(&source, &copied, &video)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO streams (part_id, `+stream+`) SELECT $2, `+stream+` FROM streams WHERE part_id = $1`,
+			source, copied); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO chapters (part_id, `+chapter+`) SELECT $2, `+chapter+` FROM chapters WHERE part_id = $1`,
+			source, copied); err != nil {
+			return err
+		}
+		if err := locate(ctx, tx, lib, copied, part); err != nil {
+			return err
+		}
+		if video {
+			if err := indexVideo(ctx, tx, settings, copied); err != nil {
+				return err
+			}
+		}
+	}
+	return saveSubtitles(ctx, tx, lib, id, c.Subtitles)
 }
 
 // addPlaces records where a known copy's parts and subtitles are found this time.
