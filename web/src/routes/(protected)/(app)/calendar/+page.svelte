@@ -1,4 +1,5 @@
 <script lang="ts">
+import Artwork from "#lib/components/Artwork.svelte";
 import CheckIcon from "@lucide/svelte/icons/check";
 import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
 import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
@@ -6,7 +7,6 @@ import FilmIcon from "@lucide/svelte/icons/film";
 import TvIcon from "@lucide/svelte/icons/tv";
 import { page } from "$app/state";
 import type { components } from "#lib/api/schema.js";
-import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
 import { dayLabel, monthKey, shift, today } from "#lib/calendar.js";
 import { Badge } from "#lib/components/ui/badge/index.js";
@@ -113,19 +113,16 @@ const absence = (e: Entry, day: string) =>
 			class="bg-raise group-hover:ring-line-strong block aspect-[2/3] w-12 shrink-0 overflow-hidden rounded-md ring-2 ring-transparent"
 		>
 			{#if e.poster}
-				<img
-					src={artworkSrc(e.poster, "poster")}
-					srcset={artworkSrcset(e.poster, "poster")}
+				<Artwork
+					id={e.poster}
+					shape="poster"
 					sizes="3rem"
-					alt=""
-					loading="lazy"
-					decoding="async"
 					class={[
 						"size-full object-cover",
 						e.availability === "announced" && "grayscale",
 					]}
 					style={blurStyle(e.blurhashes?.[e.poster])}
-				>
+				/>
 			{/if}
 		</span>
 		<span class="grid min-w-0 flex-1 gap-1">

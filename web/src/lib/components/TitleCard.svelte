@@ -7,13 +7,13 @@ export type CardLike = Pick<Card, "id" | "kind" | "title"> & Partial<Card>;
 </script>
 
 <script lang="ts">
+import Artwork from "#lib/components/Artwork.svelte";
 import CheckIcon from "@lucide/svelte/icons/check";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import PlayIcon from "@lucide/svelte/icons/play";
-import { artworkSrc, artworkSrcset, type Shape } from "#lib/artwork.js";
+import type { Shape } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
-import { fadeIn } from "#lib/fade.js";
-import { episodeLabel } from "#lib/format.js";
+import { episodeLine } from "#lib/format.js";
 import TitleMenu from "./TitleMenu.svelte";
 
 // A title on a wall or a rail: a poster, or for an episode or a row about
@@ -42,12 +42,7 @@ const name = $derived(card.show?.title ?? card.title);
 const caption = $derived.by(() => {
 	if (given !== undefined) return given;
 	if (card.kind !== "episode") return card.year ? String(card.year) : "";
-	const at = episodeLabel(
-		card.season_number,
-		card.episode_number,
-		card.episode_end,
-	);
-	return [at, card.title].filter(Boolean).join(" · ");
+	return episodeLine(card);
 });
 
 const progress = $derived(
@@ -73,16 +68,7 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 			style={picture ? blurStyle(card.blurhashes?.[picture]) : undefined}
 		>
 			{#if picture}
-				<img
-					{@attach fadeIn}
-					src={artworkSrc(picture, shape)}
-					srcset={artworkSrcset(picture, shape)}
-					{sizes}
-					alt=""
-					loading="lazy"
-					decoding="async"
-					class="card-picture"
-				>
+				<Artwork id={picture} {shape} {sizes} class="card-picture" />
 			{/if}
 			<div class="absolute top-2 left-2 flex gap-1">
 				{#if watched}

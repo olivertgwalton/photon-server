@@ -60,6 +60,17 @@ export function titleWithShow(t: {
 	return t.show ? `${t.show.title}: ${t.title}` : t.title;
 }
 
+// "S1 E2 · Second": an episode by where it is in its show, and its name.
+export function episodeLine(t: {
+	title: string;
+	season_number?: number | null;
+	episode_number?: number | null;
+	episode_end?: number | null;
+}): string {
+	const at = episodeLabel(t.season_number, t.episode_number, t.episode_end);
+	return [at, t.title].filter(Boolean).join(" · ");
+}
+
 // "Small Show S1 E2 · Second": an episode as one line, by its show and place
 // in it; anything else by its own title.
 export function fullTitle(

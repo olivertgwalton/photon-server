@@ -1,7 +1,7 @@
 <script lang="ts">
+import Artwork from "#lib/components/Artwork.svelte";
 import { episodeLabel } from "#lib/format.js";
 import { onDestroy } from "svelte";
-import { artworkSrc } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -48,12 +48,13 @@ const where = $derived(episodeLabel(card.season_number, card.episode_number));
 		class="bg-ground aspect-video w-28 shrink-0 self-start overflow-hidden rounded-md"
 	>
 		{#if picture}
-			<img
-				src={artworkSrc(picture, "still")}
-				alt=""
+			<Artwork
+				id={picture}
+				shape="still"
+				loading="eager"
 				class="size-full object-cover"
 				style={blurStyle(card.blurhashes?.[picture])}
-			>
+			/>
 		{/if}
 	</div>
 	<div class="flex min-w-0 flex-col gap-2">

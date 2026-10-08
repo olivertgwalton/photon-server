@@ -1,4 +1,5 @@
 <script lang="ts">
+import Artwork from "#lib/components/Artwork.svelte";
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 import CaptionsIcon from "@lucide/svelte/icons/captions";
 import CheckIcon from "@lucide/svelte/icons/check";
@@ -15,10 +16,8 @@ import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
 import { goto } from "$app/navigation";
 import { findSubtitles, pickPlaylist, setMark } from "#lib/actions.svelte.js";
-import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
 import type { Extra } from "#lib/extras.js";
 import { blurStyle } from "#lib/blurhash.js";
-import { fadeIn } from "#lib/fade.js";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import Prose from "#lib/components/Prose.svelte";
 import DownloadDialog from "#lib/components/DownloadDialog.svelte";
@@ -158,15 +157,14 @@ const poster = $derived(art("poster"));
 				<!-- A new element for each title, so the old picture goes at once and the
 					new one fades in over its blur. -->
 				{#key backdrop}
-					<img
-						{@attach fadeIn}
-						src={artworkSrc(backdrop, "backdrop")}
-						srcset={artworkSrcset(backdrop, "backdrop")}
+					<Artwork
+						id={backdrop}
+						shape="backdrop"
+						loading="eager"
 						sizes="100vw"
-						alt=""
 						fetchpriority="high"
 						class="size-full object-cover object-top transition-opacity duration-700 data-loading:opacity-0"
-					>
+					/>
 				{/key}
 				<div
 					class="from-ground via-ground/70 absolute inset-0 bg-linear-to-t to-transparent"
@@ -205,26 +203,26 @@ const poster = $derived(art("poster"));
 			{/if}
 			<div class="flex items-end gap-6">
 				{#if poster && !backdrop}
-					<img
-						src={artworkSrc(poster, "poster")}
-						srcset={artworkSrcset(poster, "poster")}
+					<Artwork
+						id={poster}
+						shape="poster"
+						loading="eager"
 						sizes="12rem"
-						alt=""
 						class="hidden aspect-[2/3] w-48 rounded-lg object-cover sm:block"
 						style={blurStyle(t.blurhashes?.[poster])}
-					>
+					/>
 				{/if}
 				<h1 class="max-w-3xl">
 					{#if logo}
 						{#key logo}
-							<img
-								{@attach fadeIn}
-								src={artworkSrc(logo, "still")}
-								srcset={artworkSrcset(logo, "still")}
+							<Artwork
+								id={logo}
+								shape="still"
+								loading="eager"
 								sizes="24rem"
 								alt={t.title}
 								class="max-h-36 w-auto max-w-[min(24rem,80vw)] object-contain object-left transition-opacity duration-500 data-loading:opacity-0"
-							>
+							/>
 						{/key}
 					{:else}
 						<span class="title block text-3xl md:text-5xl">{t.title}</span>
@@ -459,15 +457,12 @@ const poster = $derived(art("poster"));
 									: undefined}
 							>
 								{#if episode.thumb}
-									<img
-										{@attach fadeIn}
-										src={artworkSrc(episode.thumb, "still")}
-										srcset={artworkSrcset(episode.thumb, "still")}
+									<Artwork
+										id={episode.thumb}
+										shape="still"
 										sizes="(min-width: 640px) 14rem, 100vw"
-										alt=""
-										loading="lazy"
 										class="card-picture"
-									>
+									/>
 								{/if}
 								{#if progress}
 									<span

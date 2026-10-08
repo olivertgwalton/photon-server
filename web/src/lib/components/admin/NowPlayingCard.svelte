@@ -1,9 +1,9 @@
 <script lang="ts">
+import Artwork from "#lib/components/Artwork.svelte";
 import { act } from "#lib/act.js";
 import { confirmFirst } from "#lib/actions.svelte.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import { artworkSrc, artworkSrcset } from "#lib/artwork.js";
 import { bitrate, playMethods, timecode } from "#lib/format.js";
 import { positionAt } from "#lib/admin/live.js";
 import { accelerations, playedTitle, reasons } from "#lib/admin/words.js";
@@ -71,14 +71,12 @@ function stop() {
 <article class="bg-raise grid overflow-hidden rounded-xl">
 	<div class="bg-ground relative aspect-video">
 		{#if picture}
-			<img
-				src={artworkSrc(picture, "still")}
-				srcset={artworkSrcset(picture, "still")}
+			<Artwork
+				id={picture}
+				shape="still"
 				sizes="(min-width: 1024px) 24rem, 100vw"
-				alt=""
-				loading="lazy"
 				class="size-full object-cover opacity-70"
-			>
+			/>
 		{/if}
 		<div
 			class="absolute inset-x-0 bottom-0 grid gap-1 bg-linear-to-t from-black/90 to-transparent p-4 pt-10"

@@ -8,15 +8,16 @@ const widths = {
 };
 
 export type Shape = "poster" | "still";
+export type ArtworkShape = keyof typeof widths;
 
 export function artworkURL(id: string, width: number): string {
 	return `/api/v1/artwork/${id}?width=${width}`;
 }
 
-export function artworkSrcset(id: string, shape: keyof typeof widths): string {
+export function artworkSrcset(id: string, shape: ArtworkShape): string {
 	return widths[shape].map((w) => `${artworkURL(id, w)} ${w}w`).join(", ");
 }
 
-export function artworkSrc(id: string, shape: keyof typeof widths): string {
+export function artworkSrc(id: string, shape: ArtworkShape): string {
 	return artworkURL(id, widths[shape][1]);
 }
