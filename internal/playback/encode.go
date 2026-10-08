@@ -17,6 +17,31 @@ const downmixBoost = 2
 // writes.
 var encoders = map[string]int{"aac": 8, "eac3": 6, "ac3": 6}
 
+// hlsAudio chooses how audio goes in HLS sent by method: copied, as nil, where the client takes it,
+// HLS carries it and it fits its share of the client's limit, else encoded; false where the client
+// takes nothing it can be encoded to.
+func (p Profile) hlsAudio(sound domain.Stream, reasons []domain.TranscodeReason, carried []string, method domain.PlayMethod) (*domain.AudioEncode, bool) {
+	// Encoded video shares the client's limit with the audio, and audio has a share of it; a copy
+	// whose video is copied fits it whole already.
+	budget := 0
+	if method == domain.PlayTranscode {
+		budget = p.audioBudget()
+	}
+	// Under a limit, audio of a bitrate nobody knows may be lossless, and is not risked.
+	if len(reasons) == 0 && slices.Contains(carried, sound.Codec) &&
+		(budget == 0 || (sound.BitrateKbps > 0 && sound.BitrateKbps <= budget)) {
+		return nil, true
+	}
+	enc, ok := p.audioEncode(sound)
+	if !ok {
+		return nil, false
+	}
+	if budget > 0 {
+		enc.BitrateKbps = min(enc.BitrateKbps, budget)
+	}
+	return &enc, true
+}
+
 // audioEncode chooses what a stream the client cannot take is encoded to: the first codec in the
 // client's list the server encodes, as Jellyfin takes a transcoding profile's codecs in order,
 // keeping as many of its channels as both allow, at Jellyfin's bitrates.

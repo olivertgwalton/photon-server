@@ -228,25 +228,11 @@ func Decide(p Profile, c Copy, tracks domain.ChosenTracks, enc Encoding) (Decisi
 		d.Method, d.Video.Encode, d.Video.DolbyVision = domain.PlayTranscode, &e, domain.DolbyVisionNone
 	}
 	if sound != nil {
-		// Encoded video shares the client's limit with the audio, and audio has a share of it; a
-		// copy whose video is copied fits it whole already.
-		budget := 0
-		if d.Video.Encode != nil {
-			budget = p.audioBudget()
+		enc, ok := p.hlsAudio(*sound, audioReasons, carriedAudio, d.Method)
+		if !ok {
+			return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
 		}
-		// Under a limit, audio of a bitrate nobody knows may be lossless, and is not risked.
-		copied := len(audioReasons) == 0 && slices.Contains(carriedAudio, sound.Codec) &&
-			(budget == 0 || (sound.BitrateKbps > 0 && sound.BitrateKbps <= budget))
-		if !copied {
-			enc, ok := p.audioEncode(*sound)
-			if !ok {
-				return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
-			}
-			if budget > 0 {
-				enc.BitrateKbps = min(enc.BitrateKbps, budget)
-			}
-			d.Audio.Encode = &enc
-		}
+		d.Audio.Encode = enc
 	}
 	if e := d.Video.Encode; e != nil && p.MaxBitrateKbps > 0 {
 		e.BitrateKbps = max(min(e.BitrateKbps, p.MaxBitrateKbps-d.audioKbps(sound)), 64)
