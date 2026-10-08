@@ -2,14 +2,21 @@ package jellyfin
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
 	"testing"
 	"testing/synctest"
 	"time"
+	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/websocket/websockettest"
 )
 
@@ -132,4 +139,98 @@ func TestASilentAppsSocketIsClosed(t *testing.T) {
 		}
 		<-served
 	})
+}
+
+// shelf is a household's titles as one profile, Ada, may see them: one library of hers, a title
+// she may not see, and a film listed twice.
+type shelf struct {
+	catalogue
+	library, hidden, film, twin uuid.UUID
+}
+
+func (s shelf) HasLibrary(_ context.Context, profile, lib uuid.UUID) (bool, error) {
+	return profile == ada.ID && lib == s.library, nil
+}
+
+func (s shelf) Visible(_ context.Context, _ uuid.UUID, titles []uuid.UUID) ([]uuid.UUID, error) {
+	return slices.DeleteFunc(slices.Clone(titles), func(id uuid.UUID) bool { return id == s.hidden }), nil
+}
+
+func (s shelf) SameTitles(_ context.Context, _, title uuid.UUID) ([]uuid.UUID, error) {
+	if title == s.film {
+		return []uuid.UUID{s.film, s.twin}, nil
+	}
+	return []uuid.UUID{title}, nil
+}
+
+func (s shelf) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage, error) {
+	watched := time.Date(2026, 10, 1, 20, 0, 0, 0, time.UTC)
+	return store.TitlePage{
+		ID: id, Kind: domain.ItemMovie, Versions: []store.VersionPage{{DurationMS: 7_200_000}},
+		State: store.TitleState{PositionMS: 1_800_000, Plays: 1, WatchedAt: &watched, LastPlayedAt: &watched, FavouriteAt: &watched},
+	}, nil
+}
+
+// An app's socket is told what changes of what its profile sees, in Jellyfin's words: its own
+// state of a title, wherever the title is listed, and the titles of its libraries added, changed
+// and removed. Another profile's state, a library it does not have and a title it may not see are
+// never told.
+func TestAnAppIsToldWhatChangesOfWhatItsProfileSees(t *testing.T) {
+	s := shelf{library: uuid.NewV7(), hidden: uuid.NewV7(), film: uuid.NewV7(), twin: uuid.NewV7()}
+	stranger, added, removed := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
+	events := make(chan domain.Event, 16)
+	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: serverID.String(), Name: "Den"}, Services{
+		Auth: fakeAuth{}, Catalogue: s, Audience: s,
+		Subscribe: func() (<-chan domain.Event, func()) { return events, func() {} },
+	})
+	srv := httptest.NewServer(api)
+	defer srv.Close()
+	c := openSocket(t, srv.URL+"/socket?ApiKey=pst_device", nil)
+	heard(t, c)
+
+	for _, e := range []domain.Event{
+		{Kind: domain.EventUserDataChanged, Profile: stranger, Item: s.film},
+		{Kind: domain.EventUserDataChanged, Profile: ada.ID, Details: domain.UserDataDetails{PlaylistID: uuid.NewV7()}},
+		{Kind: domain.EventLibraryChanged, Library: uuid.NewV7(), Details: domain.LibraryChangedDetails{domain.TitleAdded: {added}}},
+		{Kind: domain.EventLibraryChanged, Library: s.library, Details: domain.LibraryChangedDetails{domain.TitleAdded: {s.hidden}}},
+		{Kind: domain.EventTitleUpdated, Item: s.hidden},
+		{Kind: domain.EventPlaybackStopped, Profile: ada.ID},
+		{Kind: domain.EventUserDataChanged, Profile: ada.ID, Item: s.film},
+		{Kind: domain.EventLibraryChanged, Library: s.library, Details: domain.LibraryChangedDetails{
+			domain.TitleAdded: {added, s.hidden}, domain.TitleRemoved: {removed}, domain.TitleUpdated: {},
+		}},
+		{Kind: domain.EventTitleUpdated, Item: s.film},
+	} {
+		events <- e
+	}
+
+	m := heard(t, c)
+	data, _ := m["Data"].(map[string]any)
+	list, _ := data["UserDataList"].([]any)
+	if m["MessageType"] != "UserDataChanged" || data["UserId"] != guid(ada.ID) || len(list) != 2 {
+		t.Fatalf("first told %v, want Ada's state of the film, and nothing of what she may not see", m)
+	}
+	for n, id := range []uuid.UUID{s.film, s.twin} {
+		u, _ := list[n].(map[string]any)
+		requireKeys(t, "UserItemDataDto", u, "PlaybackPositionTicks", "PlayCount", "IsFavorite", "Played", "Key", "ItemId")
+		if u["ItemId"] != guid(id) || u["Played"] != true || u["IsFavorite"] != true ||
+			u["PlaybackPositionTicks"] != float64(18_000_000_000) || u["PlayedPercentage"] != float64(25) {
+			t.Errorf("UserData %d: %v", n, u)
+		}
+	}
+
+	m = heard(t, c)
+	data, _ = m["Data"].(map[string]any)
+	lib := []any{guid(s.library)}
+	if m["MessageType"] != "LibraryChanged" || !reflect.DeepEqual(data, map[string]any{
+		"ItemsAdded": []any{guid(added)}, "ItemsRemoved": []any{guid(removed)}, "ItemsUpdated": []any{},
+		"FoldersAddedTo": lib, "FoldersRemovedFrom": lib, "CollectionFolders": lib, "IsEmpty": false,
+	}) {
+		t.Errorf("a library's titles changed: %v", m)
+	}
+	m = heard(t, c)
+	data, _ = m["Data"].(map[string]any)
+	if m["MessageType"] != "LibraryChanged" || !reflect.DeepEqual(data["ItemsUpdated"], []any{guid(s.film)}) {
+		t.Errorf("a title described again: %v", m)
+	}
 }

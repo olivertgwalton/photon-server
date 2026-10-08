@@ -35,9 +35,13 @@ type authenticator interface {
 }
 
 type Services struct {
-	Auth      authenticator
-	Limits    kv.Limiter
-	Raise     func(ctx context.Context, e domain.Event)
+	Auth   authenticator
+	Limits kv.Limiter
+	Raise  func(ctx context.Context, e domain.Event)
+	// Subscribe is what happens on every node, which an app's socket is told as its profile may
+	// see it.
+	Subscribe func() (<-chan domain.Event, func())
+	Audience  audience
 	Proxies   peer.Proxies
 	Catalogue catalogue
 	Playlists playlists
