@@ -133,3 +133,5 @@ or neither says them. Query them across instances with `max without(instance)`, 
 An admin is answered what every node's metrics say now, and what the nodes share, at
 `GET /api/v1/admin/metrics`: the node asked asks each other at `GET /api/v1/internal/metrics`,
 signed as a remux is, and lists one that does not answer within 2 seconds as unreachable.
+Settings › Server › Metrics shows it, asked every 5 seconds while the page is in view, with the
+last ten minutes drawn beside it; history longer than that is Prometheus'.

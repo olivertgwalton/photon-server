@@ -2,6 +2,7 @@
 import ActivityIcon from "@lucide/svelte/icons/activity";
 import ArchiveIcon from "@lucide/svelte/icons/archive";
 import CalendarClockIcon from "@lucide/svelte/icons/calendar-clock";
+import ChartLineIcon from "@lucide/svelte/icons/chart-line";
 import DatabaseIcon from "@lucide/svelte/icons/database";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
 import HardDriveIcon from "@lucide/svelte/icons/hard-drive";
@@ -35,6 +36,7 @@ const you: [string, string, Component][] = [
 ];
 const server: [string, string, Component][] = [
 	["/settings/server", "Dashboard", GaugeIcon],
+	["/settings/server/metrics", "Metrics", ChartLineIcon],
 	["/settings/server/libraries", "Libraries", LibraryIcon],
 	["/settings/server/profiles", "Profiles", UsersIcon],
 	["/settings/server/providers", "Metadata", DatabaseIcon],
