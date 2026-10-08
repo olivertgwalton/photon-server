@@ -30,13 +30,8 @@ const (
 )
 
 type authenticator interface {
-	SignIn(ctx context.Context, name, password string, device auth.Device) (string, domain.Profile, error)
-	Authenticate(ctx context.Context, token string) (domain.Session, error)
-	SignOut(ctx context.Context, session uuid.UUID) error
-	StartPairing(ctx context.Context, d auth.Device, style auth.CodeStyle) (auth.PairingStart, error)
-	ApprovePairing(ctx context.Context, approver domain.Session, userCode string) (auth.Device, error)
+	auth.Authenticator
 	PairingStatus(ctx context.Context, deviceCode string) (kv.PairingState, auth.Pairing, error)
-	PollPairing(ctx context.Context, deviceCode string) (kv.PairingState, string, domain.Profile, error)
 }
 
 type Services struct {
@@ -205,8 +200,6 @@ func (a *API) canonical(path string) string {
 	return strings.Join(segs, "/")
 }
 
-type sessionKey struct{}
-
 // signedIn lets a request through with a token a profile holds. Only a missing or unknown token is
 // answered 401, which some apps take to mean signed out.
 func (a *API) signedIn(next http.HandlerFunc) http.HandlerFunc {
@@ -225,13 +218,8 @@ func (a *API) signedIn(next http.HandlerFunc) http.HandlerFunc {
 			a.internal(w, r, err)
 			return
 		}
-		next(w, r.WithContext(context.WithValue(r.Context(), sessionKey{}, s)))
+		next(w, r.WithContext(auth.WithSession(r.Context(), s)))
 	}
-}
-
-func sessionOf(r *http.Request) domain.Session {
-	s, _ := r.Context().Value(sessionKey{}).(domain.Session)
-	return s
 }
 
 func (a *API) writeJSON(w http.ResponseWriter, v any) {

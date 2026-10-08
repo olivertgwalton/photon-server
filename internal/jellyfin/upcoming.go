@@ -6,6 +6,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -21,7 +22,7 @@ const upcomingDays = 42
 func (a *API) upcoming(w http.ResponseWriter, r *http.Request) {
 	yesterday := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -1)
 	q := store.CalendarQuery{
-		Profile: sessionOf(r).Profile.ID, Start: yesterday, End: yesterday.AddDate(0, 0, upcomingDays-1), Filter: domain.CalendarAll,
+		Profile: auth.SessionOf(r.Context()).Profile.ID, Start: yesterday, End: yesterday.AddDate(0, 0, upcomingDays-1), Filter: domain.CalendarAll,
 	}
 	_, seen, err := a.seenLibraries(r)
 	if err != nil {
@@ -68,7 +69,7 @@ func (a *API) upcoming(w http.ResponseWriter, r *http.Request) {
 
 // announcedItem answers an episode announced with no file, as an app opens one from upcoming.
 func (a *API) announcedItem(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
-	c, err := a.svc.Catalogue.AnnouncedEpisode(r.Context(), sessionOf(r).Profile.ID, id)
+	c, err := a.svc.Catalogue.AnnouncedEpisode(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)
 		return

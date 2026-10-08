@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/text/language"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -19,7 +20,7 @@ import (
 // requireAdmin admits a signed-in admin.
 func (a *API) requireAdmin(next http.Handler) http.Handler {
 	return a.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if sessionOf(r).Profile.Role != domain.RoleAdmin {
+		if auth.SessionOf(r.Context()).Profile.Role != domain.RoleAdmin {
 			writeProblem(w, a.logger, codeForbidden, "only an admin may")
 			return
 		}
@@ -30,7 +31,7 @@ func (a *API) requireAdmin(next http.Handler) http.Handler {
 // requireManager admits a signed-in admin or manager.
 func (a *API) requireManager(next http.Handler) http.Handler {
 	return a.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if keeper, ok := keeperOf(sessionOf(r)); ok {
+		if keeper, ok := keeperOf(auth.SessionOf(r.Context())); ok {
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), keeperKey{}, keeper)))
 			return
 		}

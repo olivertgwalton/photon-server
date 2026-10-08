@@ -6,6 +6,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -49,7 +50,7 @@ type moveJSON struct {
 
 // playlistsOf answers the profile's playlists, by name.
 func (a *API) playlistsOf(w http.ResponseWriter, r *http.Request) {
-	all, err := a.svc.Playlists.Playlists(r.Context(), sessionOf(r).Profile.ID)
+	all, err := a.svc.Playlists.Playlists(r.Context(), auth.SessionOf(r.Context()).Profile.ID)
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -71,7 +72,7 @@ func (a *API) addPlaylist(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "name is set")
 		return
 	}
-	id, err := a.svc.Playlists.AddPlaylist(r.Context(), sessionOf(r).Profile.ID, req.Name, req.ItemIDs)
+	id, err := a.svc.Playlists.AddPlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, req.Name, req.ItemIDs)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -90,7 +91,7 @@ func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	entries, total, err := a.svc.Playlists.PlaylistEntries(r.Context(), sessionOf(r).Profile.ID, id, offset, limit)
+	entries, total, err := a.svc.Playlists.PlaylistEntries(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, offset, limit)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -112,7 +113,7 @@ func (a *API) addToPlaylist(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if a.answered(w, r, a.svc.Playlists.AddToPlaylist(r.Context(), sessionOf(r).Profile.ID, id, req.ItemIDs)) {
+	if a.answered(w, r, a.svc.Playlists.AddToPlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.ItemIDs)) {
 		return
 	}
 	a.playlistChanged(r, id)
@@ -133,7 +134,7 @@ func (a *API) setPlaylist(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "name is set")
 		return
 	}
-	if a.answered(w, r, a.svc.Playlists.RenamePlaylist(r.Context(), sessionOf(r).Profile.ID, id, req.Name)) {
+	if a.answered(w, r, a.svc.Playlists.RenamePlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.Name)) {
 		return
 	}
 	a.playlistChanged(r, id)
@@ -145,7 +146,7 @@ func (a *API) removePlaylist(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if a.answered(w, r, a.svc.Playlists.RemovePlaylist(r.Context(), sessionOf(r).Profile.ID, id)) {
+	if a.answered(w, r, a.svc.Playlists.RemovePlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)) {
 		return
 	}
 	a.playlistChanged(r, id)
@@ -166,7 +167,7 @@ func (a *API) moveEntry(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if a.answered(w, r, a.svc.Playlists.MovePlaylistEntry(r.Context(), sessionOf(r).Profile.ID, id, entry, req.Position)) {
+	if a.answered(w, r, a.svc.Playlists.MovePlaylistEntry(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, entry, req.Position)) {
 		return
 	}
 	a.playlistChanged(r, id)
@@ -182,7 +183,7 @@ func (a *API) removeEntry(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if a.answered(w, r, a.svc.Playlists.RemoveFromPlaylist(r.Context(), sessionOf(r).Profile.ID, id, entry)) {
+	if a.answered(w, r, a.svc.Playlists.RemoveFromPlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, entry)) {
 		return
 	}
 	a.playlistChanged(r, id)

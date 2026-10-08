@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/text/language"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -84,7 +85,7 @@ func preferencesOf(p domain.Preferences) preferencesJSON {
 
 // ownPreferences answers how the profile plays, as Jellyfin's user configuration.
 func (a *API) ownPreferences(w http.ResponseWriter, r *http.Request) {
-	p, err := a.svc.Preferences.Preferences(r.Context(), sessionOf(r).Profile.ID)
+	p, err := a.svc.Preferences.Preferences(r.Context(), auth.SessionOf(r.Context()).Profile.ID)
 	if !a.answered(w, r, err) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, preferencesOf(p))
 	}
@@ -96,7 +97,7 @@ func (a *API) setOwnPreferences(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	profile := sessionOf(r).Profile.ID
+	profile := auth.SessionOf(r.Context()).Profile.ID
 	p, err := a.svc.Preferences.Preferences(r.Context(), profile)
 	if a.answered(w, r, err) {
 		return

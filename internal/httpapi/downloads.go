@@ -11,6 +11,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -121,7 +122,7 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "max_bitrate_kbps is above 0, and max_width 0 or at least "+strconv.Itoa(narrowest))
 		return
 	}
-	profile := sessionOf(r).Profile.ID
+	profile := auth.SessionOf(r.Context()).Profile.ID
 	c, err := a.svc.Playing.Playable(r.Context(), profile, req.TitleID, req.VersionID)
 	if a.answered(w, r, err) {
 		return
@@ -157,7 +158,7 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 		q.Codec, q.Range = d.Video.Encode.Codec, d.Video.Encode.Range
 		convert = &q
 	}
-	d, created, err := a.svc.Downloads.AddDownload(r.Context(), profile, sessionOf(r).ID, req.TitleID, part.ID, convert)
+	d, created, err := a.svc.Downloads.AddDownload(r.Context(), profile, auth.SessionOf(r.Context()).ID, req.TitleID, part.ID, convert)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -175,7 +176,7 @@ func (a *API) ownDownloads(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	session := sessionOf(r)
+	session := auth.SessionOf(r.Context())
 	var device *uuid.UUID
 	switch scope {
 	case scopeDevice:
@@ -200,7 +201,7 @@ func (a *API) download(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	d, err := a.svc.Downloads.Download(r.Context(), sessionOf(r).Profile.ID, id)
+	d, err := a.svc.Downloads.Download(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -214,7 +215,7 @@ func (a *API) removeDownload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if a.answered(w, r, a.svc.Conversions.Remove(r.Context(), sessionOf(r).Profile.ID, id)) {
+	if a.answered(w, r, a.svc.Conversions.Remove(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

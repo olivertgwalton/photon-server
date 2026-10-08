@@ -14,6 +14,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/words"
@@ -77,7 +78,7 @@ type cardJSON struct {
 }
 
 func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
-	libs, err := a.svc.Catalogue.LibrariesSeen(r.Context(), sessionOf(r).Profile.ID)
+	libs, err := a.svc.Catalogue.LibrariesSeen(r.Context(), auth.SessionOf(r.Context()).Profile.ID)
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -99,7 +100,7 @@ func (a *API) setLibraryOrder(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	err := a.svc.Catalogue.SetLibraryOrder(r.Context(), sessionOf(r).Profile.ID, req.LibraryIDs)
+	err := a.svc.Catalogue.SetLibraryOrder(r.Context(), auth.SessionOf(r.Context()).Profile.ID, req.LibraryIDs)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeProblem(w, a.logger, codeNotFound, "a library is named twice, or is no library")
@@ -115,7 +116,7 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	page := store.WallPage{Profile: sessionOf(r).Profile.ID}
+	page := store.WallPage{Profile: auth.SessionOf(r.Context()).Profile.ID}
 	if page.Sort, ok = queryEnum(a, w, r, "sort", domain.SortTitle, domain.WallSorts()); !ok {
 		return
 	}
@@ -150,7 +151,7 @@ func (a *API) letters(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
 	}
-	letters, err := a.svc.Catalogue.Letters(r.Context(), lib, sessionOf(r).Profile.ID, f)
+	letters, err := a.svc.Catalogue.Letters(r.Context(), lib, auth.SessionOf(r.Context()).Profile.ID, f)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -208,7 +209,7 @@ type searchJSON struct {
 
 func (a *API) search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	query := store.SearchQuery{Profile: sessionOf(r).Profile.ID, Text: q.Get("q")}
+	query := store.SearchQuery{Profile: auth.SessionOf(r.Context()).Profile.ID, Text: q.Get("q")}
 	if query.Text == "" {
 		writeProblem(w, a.logger, codeInvalidParameter, "q is what to search for")
 		return
@@ -268,7 +269,7 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	profile := sessionOf(r).Profile.ID
+	profile := auth.SessionOf(r.Context()).Profile.ID
 	page, err := a.svc.Catalogue.Title(r.Context(), profile, id)
 	if a.answered(w, r, err) {
 		return
@@ -313,7 +314,7 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := a.svc.Catalogue.Home(r.Context(), sessionOf(r).Profile.ID, limit)
+	rows, err := a.svc.Catalogue.Home(r.Context(), auth.SessionOf(r.Context()).Profile.ID, limit)
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -343,7 +344,7 @@ func (a *API) homeRow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row := domain.HomeRow(r.PathValue("row"))
-	cards, total, err := a.svc.Catalogue.RowPage(r.Context(), sessionOf(r).Profile.ID, row, offset, limit)
+	cards, total, err := a.svc.Catalogue.RowPage(r.Context(), auth.SessionOf(r.Context()).Profile.ID, row, offset, limit)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -442,7 +443,7 @@ func (a *API) facets(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	f, err := a.svc.Catalogue.Facets(r.Context(), lib, sessionOf(r).Profile.ID)
+	f, err := a.svc.Catalogue.Facets(r.Context(), lib, auth.SessionOf(r.Context()).Profile.ID)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -458,7 +459,7 @@ func (a *API) similar(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	cards, err := a.svc.Catalogue.Similar(r.Context(), sessionOf(r).Profile.ID, id)
+	cards, err := a.svc.Catalogue.Similar(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -472,7 +473,7 @@ func (a *API) next(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	card, err := a.svc.Catalogue.Next(r.Context(), sessionOf(r).Profile.ID, id)
+	card, err := a.svc.Catalogue.Next(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return
 	}

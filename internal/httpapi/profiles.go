@@ -47,10 +47,10 @@ func (a *API) switchProfile(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "profile_id is not an id")
 		return
 	}
-	if !a.allowed(w, r, switchesPerSession, "switch:session:"+sessionOf(r).ID.String()) {
+	if !a.allowed(w, r, switchesPerSession, "switch:session:"+auth.SessionOf(r.Context()).ID.String()) {
 		return
 	}
-	profile, err := a.svc.Auth.SwitchProfile(r.Context(), sessionOf(r), target, req.Secret)
+	profile, err := a.svc.Auth.SwitchProfile(r.Context(), auth.SessionOf(r.Context()), target, req.Secret)
 	if !a.answered(w, r, err) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(profile))
 	}
@@ -73,7 +73,7 @@ func (a *API) clearPIN(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) writePIN(w http.ResponseWriter, r *http.Request, pin string) {
-	if !a.answered(w, r, a.svc.Auth.SetPIN(r.Context(), sessionOf(r).Profile.ID, pin)) {
+	if !a.answered(w, r, a.svc.Auth.SetPIN(r.Context(), auth.SessionOf(r.Context()).Profile.ID, pin)) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -90,7 +90,7 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	session := sessionOf(r)
+	session := auth.SessionOf(r.Context())
 	if !a.allowed(w, r, auth.SignInsPerAddress, a.addrKey(r, "password")) ||
 		!a.allowed(w, r, auth.SignInsPerName, "password:profile:"+session.Profile.ID.String()) {
 		return
@@ -111,7 +111,7 @@ func (a *API) renameSelf(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, badName)
 		return
 	}
-	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), sessionOf(r).Profile.ID, store.ProfileChange{Name: name}, nil)
+	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), auth.SessionOf(r.Context()).Profile.ID, store.ProfileChange{Name: name}, nil)
 	if !a.answered(w, r, err) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(p))
 	}

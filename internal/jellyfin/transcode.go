@@ -16,6 +16,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/playback"
@@ -164,7 +165,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 		a.refuse(w, http.StatusBadRequest)
 		return true
 	}
-	s := sessionOf(r)
+	s := auth.SessionOf(r.Context())
 	c, err := a.svc.Playing.Playable(r.Context(), s.Profile.ID, item, t.Version)
 	if isNotFound(err) {
 		a.refuse(w, http.StatusNotFound)
@@ -297,7 +298,7 @@ func carryQuery(playlist, query, name string) string {
 // stream of the title.
 func (a *API) endEncoding(w http.ResponseWriter, r *http.Request) {
 	id := playID(query(r, "playSessionId"))
-	_, err := a.svc.Playbacks.Finish(r.Context(), sessionOf(r).Profile.ID, id)
+	_, err := a.svc.Playbacks.Finish(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if err != nil && !errors.Is(err, playback.ErrNoPlayback) {
 		a.internal(w, r, err)
 		return

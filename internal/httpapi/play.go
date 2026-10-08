@@ -9,6 +9,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/playback"
@@ -156,12 +157,12 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	c, err := a.svc.Playing.Playable(r.Context(), sessionOf(r).Profile.ID, id, version)
+	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, version)
 	if a.answered(w, r, err) {
 		return
 	}
 	if req.AudioStream == nil {
-		prefs, last, err := a.playingAs(r.Context(), sessionOf(r).Profile.ID, id)
+		prefs, last, err := a.playingAs(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 		if a.answered(w, r, err) {
 			return
 		}
@@ -259,7 +260,7 @@ func (a *API) place(r *http.Request, req playJSON, id uuid.UUID, c store.PlayCop
 			break
 		}
 		session, err = a.start(r, node, title, c, d, tracks, playback.Opening{
-			Profile: sessionOf(r).Profile.ID, Item: id, Version: c.Version, Segments: req.Profile.Segments, StartMS: req.StartMS,
+			Profile: auth.SessionOf(r.Context()).Profile.ID, Item: id, Version: c.Version, Segments: req.Profile.Segments, StartMS: req.StartMS,
 		})
 		if !errors.Is(err, hls.ErrTranscodeLimit) {
 			break
@@ -343,7 +344,7 @@ func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayM
 
 // playbackCard is what the dashboard shows of a playback the request starts.
 func (a *API) playbackCard(r *http.Request, node domain.Node, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, tracks domain.ChosenTracks) domain.PlaybackCard {
-	card := playback.Card(sessionOf(r), a.svc.TrustedProxies.Client(r).String(), t, c, d, tracks)
+	card := playback.Card(auth.SessionOf(r.Context()), a.svc.TrustedProxies.Client(r).String(), t, c, d, tracks)
 	if v := d.Video; v != nil && v.Encode != nil {
 		card.Acceleration = hls.EncodedOn(node.Encoder.Acceleration, *v)
 	}
@@ -452,7 +453,7 @@ func (a *API) reportPlayback(w http.ResponseWriter, r *http.Request, report func
 	if !ok {
 		return
 	}
-	reach, err := report(r.Context(), sessionOf(r).Profile.ID, id)
+	reach, err := report(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if !a.answered(w, r, err) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, reachedJSON{Reach: reach})
 	}

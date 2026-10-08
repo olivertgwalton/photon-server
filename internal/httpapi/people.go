@@ -8,6 +8,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -69,7 +70,7 @@ func (a *API) person(w http.ResponseWriter, r *http.Request) {
 			a.logger.WarnContext(r.Context(), "person not described", slog.Any("err", err))
 		}
 	}
-	credits, err := a.svc.People.PersonCredits(r.Context(), sessionOf(r).Profile.ID, id)
+	credits, err := a.svc.People.PersonCredits(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if err != nil {
 		a.internal(w, r, err)
 		return
