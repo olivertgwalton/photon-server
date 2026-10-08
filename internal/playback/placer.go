@@ -6,9 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand/v2"
 	"net/http"
 	"slices"
+	"sync"
 	"time"
 	"uuid"
 
@@ -33,7 +33,8 @@ type opener interface {
 
 // Placer chooses the node that encodes a playback's video, and opens its remux there. It keeps no
 // count of the cluster's transcodes: the node asked admits or refuses under its own lock, and
-// the next is asked, so the nodes' own counts are the only ones.
+// the next is asked, so the nodes' own counts are the only ones. It keeps only when it last opened
+// a remux on each node, to take turns between nodes otherwise equal.
 type Placer struct {
 	adverts  adverts
 	self     func() domain.Node
@@ -41,12 +42,16 @@ type Placer struct {
 	key      nodecall.Key
 	client   *http.Client
 	refusals *prometheus.CounterVec
+
+	mu     sync.Mutex
+	opened map[uuid.UUID]time.Time
 }
 
 // NewPlacer places on the nodes adverts tells of and on this one, as self says it is now.
 func NewPlacer(a adverts, self func() domain.Node, local opener, key nodecall.Key) *Placer {
 	return &Placer{
 		adverts: a, self: self, local: local, key: key, client: &http.Client{Timeout: openWithin}, refusals: newRefusals(),
+		opened: map[uuid.UUID]time.Time{},
 	}
 }
 
@@ -72,7 +77,8 @@ func (p *Placer) Self() domain.Node { return p.self() }
 
 // Candidates are the nodes that could encode what need asks, this one among them: those with a
 // slot free first, of them those set to transcode, then those with no limit, then those with
-// more of their slots free; ties in no set order. A full one is still listed, as it may have a
+// more of their slots free; of nodes otherwise equal, the one this node opened a remux on least
+// recently, so they take turns. A full one is still listed, as it may have a
 // slot by the time it is asked; a node that never encodes is not.
 func (p *Placer) Candidates(ctx context.Context, need Need) ([]domain.Node, error) {
 	self := p.self()
@@ -85,13 +91,15 @@ func (p *Placer) Candidates(ctx context.Context, need Need) ([]domain.Node, erro
 	nodes = slices.DeleteFunc(nodes, func(n domain.Node) bool {
 		return !n.Role.Encodes() || !n.Availability.Takes() || need.HEVC && n.Encoder.HEVC != domain.HEVCAllow || need.Libass && !n.Encoder.Libass
 	})
-	rand.Shuffle(len(nodes), func(i, j int) { nodes[i], nodes[j] = nodes[j], nodes[i] }) //nolint:gosec // breaks ties between nodes equally free; nothing secret
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	slices.SortStableFunc(nodes, func(a, b domain.Node) int {
 		return cmp.Or(
 			cmp.Compare(rank(b, roomy), rank(a, roomy)),
 			cmp.Compare(rank(b, transcoding), rank(a, transcoding)),
 			cmp.Compare(rank(b, unlimited), rank(a, unlimited)),
 			cmp.Compare(free(b), free(a)),
+			p.opened[a.ID].Compare(p.opened[b.ID]),
 		)
 	})
 	return nodes, nil
@@ -144,7 +152,11 @@ type Opening struct {
 // that has every slot held answers hls.ErrTranscodeLimit.
 func (p *Placer) Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o Opening) error {
 	if node.ID == p.self().ID {
-		return p.local.Open(ctx, playback, c, o.Video, o.Audio, o.Segments, time.Duration(o.StartMS)*time.Millisecond)
+		if err := p.local.Open(ctx, playback, c, o.Video, o.Audio, o.Segments, time.Duration(o.StartMS)*time.Millisecond); err != nil {
+			return err
+		}
+		p.chose(node)
+		return nil
 	}
 	body, err := json.Marshal(o)
 	if err != nil {
@@ -163,11 +175,18 @@ func (p *Placer) Open(ctx context.Context, node domain.Node, playback uuid.UUID,
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusNoContent:
+		p.chose(node)
 		return nil
 	case http.StatusServiceUnavailable:
 		return hls.ErrTranscodeLimit
 	}
 	return fmt.Errorf("node %s answered %s", node.Name, resp.Status)
+}
+
+func (p *Placer) chose(node domain.Node) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.opened[node.ID] = time.Now()
 }
 
 // RemotePath is where a node is asked to open a playback's remux.

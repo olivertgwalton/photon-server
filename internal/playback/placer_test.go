@@ -2,6 +2,8 @@ package playback
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"testing"
 	"uuid"
@@ -9,6 +11,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 type told []domain.Node
@@ -57,5 +60,34 @@ func TestTheNodeWithTheMostSlotsFreeIsAskedFirst(t *testing.T) {
 	}
 	if got := names(Need{Libass: true}); !slices.Equal(got, want) {
 		t.Errorf("for styled subtitles drawn in: %v, want only the nodes with libass, %v", got, want)
+	}
+}
+
+// Of nodes otherwise equal, the one a remux was opened on is asked after the others next time,
+// so they take turns.
+func TestNodesOtherwiseEqualTakeTurns(t *testing.T) {
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	defer remote.Close()
+	enc := domain.Encoder{Acceleration: domain.AccelSoftware, HEVC: domain.HEVCDeny}
+	self := domain.Node{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "self", Encoder: enc, Limit: hls.Unlimited}
+	other := domain.Node{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "other", Address: remote.URL, Encoder: enc, Limit: hls.Unlimited}
+	p := NewPlacer(told{other}, func() domain.Node { return self }, nil, nodecall.Key{})
+	first := func() string {
+		t.Helper()
+		got, err := p.Candidates(t.Context(), Need{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got[0].Name
+	}
+	n := first()
+	if n != "other" {
+		t.Fatalf("first asked %s, want other, before any were opened, in the order told", n)
+	}
+	if err := p.Open(t.Context(), other, uuid.NewV7(), store.PlayCopy{}, Opening{}); err != nil {
+		t.Fatal(err)
+	}
+	if n := first(); n != "self" {
+		t.Errorf("after opening on other, first asked %s, want self", n)
 	}
 }
