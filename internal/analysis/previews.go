@@ -168,8 +168,7 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 			return err
 		}
 		defer os.RemoveAll(made)
-		toneMap := src.Range != "" && src.Range != domain.RangeSDR
-		chapters, err := chapterImages(ctx, tools, f, src.Chapters, src.Length, toneMap, filepath.Join(made, "chapters"), log)
+		chapters, err := chapterImages(ctx, tools, f, src.Chapters, src.Length, src.Range, filepath.Join(made, "chapters"), log)
 		if err != nil {
 			return err
 		}
@@ -180,7 +179,7 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 			if err := os.Mkdir(dir, 0o750); err != nil {
 				return err
 			}
-			th, err := tools.Trickplay(ctx, f, dir, trickplay, toneMap)
+			th, err := tools.Trickplay(ctx, f, dir, trickplay, src.Range)
 			if err != nil {
 				return err
 			}
@@ -207,7 +206,7 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 // of those pictured. As Jellyfin does, it stops at the first chapter starting past the end, and at
 // the first whose picture cannot be made, keeping those made before it: on a mount that has
 // stopped answering, each chapter tried would cost its limit twice over.
-func chapterImages(ctx context.Context, tools media.Tools, f *os.File, chapters []store.ChapterSpan, length time.Duration, toneMap bool, dir string, log *slog.Logger) ([]int, error) {
+func chapterImages(ctx context.Context, tools media.Tools, f *os.File, chapters []store.ChapterSpan, length time.Duration, source domain.Range, dir string, log *slog.Logger) ([]int, error) {
 	if err := os.Mkdir(dir, 0o750); err != nil {
 		return nil, err
 	}
@@ -220,7 +219,7 @@ func chapterImages(ctx context.Context, tools media.Tools, f *os.File, chapters 
 		if at == 0 {
 			at = min(openingChapterAt, c.End/2)
 		}
-		err := still(ctx, tools, f, at, toneMap, filepath.Join(dir, strconv.Itoa(c.Idx)+".jpg"))
+		err := still(ctx, tools, f, at, source, filepath.Join(dir, strconv.Itoa(c.Idx)+".jpg"))
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -235,15 +234,15 @@ func chapterImages(ctx context.Context, tools media.Tools, f *os.File, chapters 
 
 // still pictures a chapter from keyframes alone or, failing that, from every frame, as Jellyfin's
 // keyframe-only extraction does, each try within stillLimit.
-func still(ctx context.Context, tools media.Tools, f *os.File, at time.Duration, toneMap bool, path string) error {
+func still(ctx context.Context, tools media.Tools, f *os.File, at time.Duration, source domain.Range, path string) error {
 	limit := stillLimit
-	if toneMap {
+	if source.HDR() {
 		limit *= 2
 	}
 	var err error
 	for _, decode := range []media.Decode{media.DecodeKeyframes, media.DecodeEvery} {
 		try, cancel := context.WithTimeout(ctx, limit)
-		err = tools.Still(try, f, decode, at, chapterWidth, toneMap, path)
+		err = tools.Still(try, f, decode, at, chapterWidth, source, path)
 		cancel()
 		if err == nil || ctx.Err() != nil {
 			return err

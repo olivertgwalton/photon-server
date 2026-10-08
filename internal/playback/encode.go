@@ -109,7 +109,7 @@ func (p Profile) videoEncode(s domain.Stream, copyKbps int, hevc domain.HEVCEnco
 		}
 		return domain.VideoEncode{
 			Codec: codec, Width: width, Height: height, BitrateKbps: kbps, Range: r,
-			ToneMap: s.Range != "" && s.Range != domain.RangeSDR && r == domain.RangeSDR, Deinterlace: s.Interlaced,
+			ToneMap: s.Range.HDR() && r == domain.RangeSDR, Deinterlace: s.Interlaced,
 		}, true
 	}
 	return domain.VideoEncode{}, false

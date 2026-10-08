@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // ToneMap maps an HDR picture to SDR in software: jellyfin-ffmpeg's tonemapx, as Jellyfin's
@@ -36,10 +38,10 @@ type Thumbnails struct {
 const jpegQuality = "3"
 
 // fitted scales a picture to width, keeping its displayed shape and an even height, with square
-// pixels, then maps HDR to SDR.
-func fitted(width int, toneMap bool) string {
+// pixels, then maps a source's HDR to SDR.
+func fitted(width int, source domain.Range) string {
 	f := "scale=" + strconv.Itoa(width) + ":trunc(ow/dar/2)*2,setsar=1"
-	if toneMap {
+	if source.HDR() {
 		f += "," + ToneMap
 	}
 	// JPEG is full range. Stated, an encoder opened with no frame (a time past the last one)
@@ -55,12 +57,12 @@ const trickplayThreads = 1
 // Trickplay writes a video's thumbnail sheets into dir as 0.jpg, 1.jpg… in one run, decoding
 // keyframes only, as Jellyfin's keyframe-only extraction and Plex's index do: each thumbnail is the
 // keyframe nearest its time. A second output lists the thumbnails, which is how many there are.
-func (t Tools) Trickplay(ctx context.Context, f *os.File, dir string, g Grid, toneMap bool) (Thumbnails, error) {
+func (t Tools) Trickplay(ctx context.Context, f *os.File, dir string, g Grid, source domain.Range) (Thumbnails, error) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return Thumbnails{}, err
 	}
 	graph := fmt.Sprintf("[0:v:0]fps=1000/%d,%s,split[s][n];[s]tile=%dx%d[t]",
-		g.Interval.Milliseconds(), fitted(g.Width, toneMap), g.Columns, g.Rows)
+		g.Interval.Milliseconds(), fitted(g.Width, source), g.Columns, g.Rows)
 	out, err := output(ctx, Background, WholeRun(f), []*os.File{f}, t.FFmpeg.Path,
 		"-hide_banner", "-loglevel", "error", "-nostdin", "-skip_frame", "nokey", "-threads", strconv.Itoa(trickplayThreads),
 		"-protocol_whitelist", "fd", "-fd", "3", "-i", "fd:", "-an", "-sn", "-dn",
@@ -110,7 +112,7 @@ const (
 
 // Still writes the frame at a time in a video, taken as decode says, to path as a JPEG, width
 // pixels wide.
-func (t Tools) Still(ctx context.Context, f *os.File, decode Decode, at time.Duration, width int, toneMap bool, path string) error {
+func (t Tools) Still(ctx context.Context, f *os.File, decode Decode, at time.Duration, width int, source domain.Range, path string) error {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
@@ -123,7 +125,7 @@ func (t Tools) Still(ctx context.Context, f *os.File, decode Decode, at time.Dur
 	_, err := output(ctx, Background, PartRun, []*os.File{f}, t.FFmpeg.Path, append(args,
 		"-ss", strconv.FormatFloat(at.Seconds(), 'f', 3, 64),
 		"-protocol_whitelist", "fd", "-fd", "3", "-i", "fd:", "-an", "-sn", "-dn", "-frames:v", "1",
-		"-vf", fitted(width, toneMap), "-c:v", "mjpeg", "-q:v", jpegQuality, "-f", "image2", "-update", "1", path)...)
+		"-vf", fitted(width, source), "-c:v", "mjpeg", "-q:v", jpegQuality, "-f", "image2", "-update", "1", path)...)
 	if err != nil {
 		return fmt.Errorf("ffmpeg: %w", err)
 	}
