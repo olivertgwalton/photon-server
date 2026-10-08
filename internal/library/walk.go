@@ -140,7 +140,7 @@ func walk(root, dir string, above []fs.FileInfo, ign ignoreFile, yield func(Fold
 		case info.IsDir():
 			folder.Folders = append(folder.Folders, name)
 			below = append(below, info)
-			_, _ = fmt.Fprintf(h, "d\x00%s\n", name)
+			h.Write(fmt.Appendf(nil, "d\x00%s\n", name))
 		default:
 			folder.list(h, name, info)
 		}
@@ -173,7 +173,7 @@ func (f *Folder) list(h hash.Hash, name string, info fs.FileInfo) {
 		return
 	}
 	f.Files = append(f.Files, File{Name: name, Size: info.Size(), ModTime: info.ModTime()})
-	_, _ = fmt.Fprintf(h, "f\x00%s\x00%d\x00%d\n", name, info.Size(), info.ModTime().UnixNano())
+	h.Write(fmt.Appendf(nil, "f\x00%s\x00%d\x00%d\n", name, info.Size(), info.ModTime().UnixNano()))
 }
 
 // Remove deletes a file of the library at root, as Open opens one, then each folder it leaves

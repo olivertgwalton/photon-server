@@ -129,7 +129,10 @@ func (w *Watcher) sync(ctx context.Context, n *fsnotify.Watcher) {
 		if want[id] != root {
 			for _, p := range n.WatchList() {
 				if within(p, root) {
-					_ = n.Remove(p)
+					// One gone since is no longer watched anyway.
+					if err := n.Remove(p); err != nil && !errors.Is(err, fsnotify.ErrNonExistentWatch) {
+						w.log.WarnContext(ctx, "folder still watched", slog.String("folder", p), slog.Any("err", err))
+					}
 				}
 			}
 			delete(w.roots, id)

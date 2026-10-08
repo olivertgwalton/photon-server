@@ -33,6 +33,7 @@ var migrations embed.FS
 type Store struct {
 	pool *pgxpool.Pool
 	sql  *sql.DB
+	log  *slog.Logger
 }
 
 // db is what a statement runs on: the pool, or a transaction begun on it.
@@ -97,7 +98,7 @@ func connect(ctx context.Context, url string, log *slog.Logger) (*Store, error) 
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{pool: pool, sql: stdlib.OpenDBFromPool(pool)}
+	s := &Store{pool: pool, sql: stdlib.OpenDBFromPool(pool), log: log}
 	if err := s.checkPostgres(ctx); err != nil {
 		s.Close()
 		return nil, err
@@ -162,7 +163,9 @@ func (l queryLog) TraceBatchEnd(ctx context.Context, _ *pgx.Conn, _ pgx.TraceBat
 }
 
 func (s *Store) Close() {
-	_ = s.sql.Close()
+	if err := s.sql.Close(); err != nil {
+		s.log.Warn("database not closed cleanly", slog.Any("err", err))
+	}
 	s.pool.Close()
 }
 

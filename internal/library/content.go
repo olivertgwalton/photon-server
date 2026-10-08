@@ -24,8 +24,8 @@ func ContentKey(root string, parts []string) ([]byte, error) {
 		return nil, err
 	}
 	h := sha256.New()
-	_ = binary.Write(h, binary.BigEndian, int64(len(parts)))
-	_ = binary.Write(h, binary.BigEndian, info.Size())
+	h.Write(binary.BigEndian.AppendUint64(nil, uint64(len(parts))))
+	h.Write(binary.BigEndian.AppendUint64(nil, uint64(info.Size())))
 	if _, err := io.CopyN(h, f, min(contentSample, info.Size())); err != nil {
 		return nil, err
 	}
