@@ -14,6 +14,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
 type catalogue interface {
@@ -50,10 +51,12 @@ type queryResult struct {
 type listed struct {
 	start, limit int
 	fields       map[string]bool
+	// words names its copies and tracks in the reader's language.
+	words words.Words
 }
 
-func listedOf(r *http.Request) listed {
-	l := listed{limit: math.MaxInt32, fields: map[string]bool{}}
+func listedOf(w http.ResponseWriter, r *http.Request) listed {
+	l := listed{limit: math.MaxInt32, fields: map[string]bool{}, words: words.Negotiate(w, r)}
 	if n, err := strconv.Atoi(query(r, "startIndex")); err == nil && n > 0 {
 		l.start = n
 	}
@@ -96,7 +99,7 @@ func (a *API) list(ctx context.Context, cards []store.Card, l listed) ([]item, e
 		}
 		for n, id := range ids {
 			if v := versions[id]; len(v) > 0 {
-				out[n].sources(v, l.fields["mediastreams"])
+				out[n].sources(v, l.fields["mediastreams"], l.words)
 			}
 		}
 	}
@@ -244,7 +247,7 @@ var libraryKinds = map[domain.LibraryKind]string{domain.LibraryMovies: "Movie", 
 // items answers Jellyfin's /Items: a library's films or shows, a show's seasons or episodes, a
 // season's episodes, or what matches a search; every library at once where an app names none.
 func (a *API) items(w http.ResponseWriter, r *http.Request) {
-	profile, l := sessionOf(r).Profile.ID, listedOf(r)
+	profile, l := sessionOf(r).Profile.ID, listedOf(w, r)
 	types := values(r, "includeItemTypes")
 	libs, seen, err := a.seenLibraries(r)
 	if err != nil {
@@ -377,7 +380,7 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	it := a.fromTitle(p)
+	it := a.fromTitle(p, words.Negotiate(w, r))
 	it.Etag = etag(it)
 	writeJSON(w, it)
 }
@@ -397,7 +400,7 @@ func (a *API) seasons(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	a.writeSeasons(w, r, show, seasons, listedOf(r))
+	a.writeSeasons(w, r, show, seasons, listedOf(w, r))
 }
 
 // episodes answers a show's episodes, every season's unless an app names one: Infuse asks for all
@@ -423,7 +426,7 @@ func (a *API) episodes(w http.ResponseWriter, r *http.Request) {
 	if n, err := strconv.Atoi(query(r, "season")); err == nil {
 		cards = slices.DeleteFunc(cards, func(c store.Card) bool { return c.SeasonNumber == nil || *c.SeasonNumber != n })
 	}
-	l := listedOf(r)
+	l := listedOf(w, r)
 	a.writeList(w, r, cards[min(l.start, len(cards)):min(l.start+l.limit, len(cards))], len(cards), l.start, l)
 }
 
@@ -437,7 +440,7 @@ const (
 // row answers a page of one of the profile's rows, such as Continue Watching, as a list.
 func (a *API) row(kind domain.HomeRow) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		l := listedOf(r)
+		l := listedOf(w, r)
 		cards, total, err := a.svc.Catalogue.RowPage(r.Context(), sessionOf(r).Profile.ID, kind, l.start, min(l.limit, rowLimit))
 		if err != nil {
 			a.internal(w, r, err)
@@ -463,7 +466,7 @@ func (a *API) nextUp(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	a.writeList(w, r, cards, len(cards), 0, listedOf(r))
+	a.writeList(w, r, cards, len(cards), 0, listedOf(w, r))
 }
 
 // latestRows are the rows of what was added last to each kind of library.
@@ -483,7 +486,7 @@ func (a *API) latest(w http.ResponseWriter, r *http.Request) {
 			libs = []*store.SeenLibrary{lib}
 		}
 	}
-	l := listedOf(r)
+	l := listedOf(w, r)
 	limit := latestLimit
 	if query(r, "limit") != "" {
 		limit = min(l.limit, rowLimit)

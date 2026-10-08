@@ -2,15 +2,13 @@ package jellyfin
 
 import (
 	"cmp"
-	"path"
-	"slices"
-	"strconv"
-	"strings"
 
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
 // mediaSource is Jellyfin's MediaSourceInfo: one copy of a title. Every field the Kotlin SDK keeps
@@ -96,19 +94,22 @@ var ranges = map[domain.Range][2]string{
 	domain.RangeHDR10Plus: {"HDR", "HDR10Plus"}, domain.RangeDV: {"HDR", "DOVI"},
 }
 
-// textSubtitles are the subtitle codecs that are text, which an app can draw itself.
-var textSubtitles = map[string]bool{"subrip": true, "srt": true, "ass": true, "ssa": true, "webvtt": true, "mov_text": true, "text": true}
+// textual reports whether a subtitle is what Jellyfin calls text: one an app draws itself, plain or
+// styled, not pictures.
+func textual(codec string) bool {
+	return hls.TextSubtitle(codec) || hls.StyledSubtitle(codec)
+}
 
 // sourceOf is a copy as a media source. Its Path is its file's name alone, as Infuse reads one,
 // never where it is on the server.
-func sourceOf(v store.VersionPage) mediaSource {
+func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 	file := ""
 	if len(v.Files) > 0 {
 		file = v.Files[0].File
 	}
 	s := mediaSource{
 		Protocol: "File", ID: guid(v.ID), Path: file, Type: "Default", Container: domain.ContainerName(v.Container), Size: v.SizeBytes,
-		Name: cmp.Or(v.Label, v.Edition, strings.TrimSuffix(file, path.Ext(file)), domain.ContainerName(v.Container)), ETag: guid(v.ID),
+		Name: w.Version(v), ETag: guid(v.ID),
 		RunTimeTicks:         v.DurationMS * ticksPerMS,
 		SupportsDirectStream: true, SupportsDirectPlay: true, VideoType: "VideoFile",
 		MediaStreams: make([]mediaStream, 0, len(v.Streams)), MediaAttachments: []struct{}{}, Formats: []string{},
@@ -116,7 +117,7 @@ func sourceOf(v store.VersionPage) mediaSource {
 		DefaultAudioStreamIndex: v.DefaultAudioStream, DefaultSubtitleStreamIndex: v.DefaultSubtitleStream,
 	}
 	for _, t := range v.Streams {
-		s.MediaStreams = append(s.MediaStreams, streamOf(t))
+		s.MediaStreams = append(s.MediaStreams, streamOf(t, w))
 		if t.Kind == domain.StreamAudio && s.DefaultAudioStreamIndex == nil {
 			s.DefaultAudioStreamIndex = &t.Index
 		}
@@ -128,18 +129,19 @@ func sourceOf(v store.VersionPage) mediaSource {
 		m := mediaStream{
 			Codec: f.Codec, Language: iso639(f.Language), Title: f.Title, IsDefault: f.Default, IsForced: f.Forced,
 			IsHearingImpaired: f.HearingImpaired, Type: "Subtitle", Index: base + n, IsExternal: true,
-			IsTextSubtitleStream: textSubtitles[f.Codec], SupportsExternalStream: true, DeliveryMethod: "External",
+			IsTextSubtitleStream: textual(f.Codec), SupportsExternalStream: true, DeliveryMethod: "External",
+			DisplayTitle: w.SubtitleFile(f),
 		}
-		m.DisplayTitle = strings.Join(nonEmpty(cmp.Or(f.Title, strings.ToUpper(m.Language)), strings.ToUpper(f.Codec)), " - ")
 		s.MediaStreams = append(s.MediaStreams, m)
 	}
 	s.HasSegments = len(v.Markers) > 0
 	return s
 }
 
-func streamOf(t store.StreamPage) mediaStream {
+func streamOf(t store.StreamPage, w words.Words) mediaStream {
 	m := mediaStream{
-		Codec: t.Codec, Language: iso639(t.Language), Title: t.Title, IsDefault: t.Default, IsForced: t.Forced,
+		DisplayTitle: w.Stream(t),
+		Codec:        t.Codec, Language: iso639(t.Language), Title: t.Title, IsDefault: t.Default, IsForced: t.Forced,
 		IsHearingImpaired: t.HearingImpaired, Type: streamTypes[t.Kind], Index: t.Index, Profile: t.Profile,
 		Level: t.Level, BitRate: t.BitrateKbps * 1000,
 	}
@@ -154,13 +156,10 @@ func streamOf(t store.StreamPage) mediaStream {
 				m.VideoRangeType = "DOVIWithHDR10"
 			}
 		}
-		m.DisplayTitle = strings.Join(nonEmpty(resolution(t.Width, t.Height), strings.ToUpper(t.Codec), m.VideoRangeType), " ")
 	case domain.StreamAudio:
 		m.Channels, m.ChannelLayout, m.SampleRate = t.Channels, t.ChannelLayout, t.SampleRate
-		m.DisplayTitle = strings.Join(nonEmpty(cmp.Or(t.Title, strings.ToUpper(m.Language)), strings.ToUpper(t.Codec), t.ChannelLayout), " - ")
 	case domain.StreamSubtitle:
-		m.IsTextSubtitleStream = textSubtitles[t.Codec]
-		m.DisplayTitle = strings.Join(nonEmpty(cmp.Or(t.Title, strings.ToUpper(m.Language)), strings.ToUpper(t.Codec)), " - ")
+		m.IsTextSubtitleStream = textual(t.Codec)
 	}
 	return m
 }
@@ -185,19 +184,4 @@ func iso639(tag string) string {
 	}
 	base, _ := t.Base()
 	return base.ISO3()
-}
-
-// resolution is how a picture's size is spoken of: 2160p for 4K, say.
-func resolution(width, height int) string {
-	switch {
-	case width >= 3200 || height >= 2000:
-		return "4K"
-	case height > 0:
-		return strconv.Itoa(height) + "p"
-	}
-	return ""
-}
-
-func nonEmpty(s ...string) []string {
-	return slices.DeleteFunc(s, func(v string) bool { return v == "" })
 }
