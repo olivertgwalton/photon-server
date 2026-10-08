@@ -65,11 +65,14 @@ type PairingStart struct {
 
 func (s *Service) StartPairing(ctx context.Context, d Device, style CodeStyle) (PairingStart, error) {
 	for range 5 {
-		code := style.newCode()
+		code, err := style.newCode()
+		if err != nil {
+			return PairingStart{}, err
+		}
 		secret := make([]byte, 32)
 		rand.Read(secret)
 		deviceSecret := base64.RawURLEncoding.EncodeToString(secret)
-		err := s.kv.StartPairing(ctx, code, hashToken(deviceSecret), kv.Pairing{Device: d.Name, Client: d.Client, Style: string(style)}, pairingTTL)
+		err = s.kv.StartPairing(ctx, code, hashToken(deviceSecret), kv.Pairing{Device: d.Name, Client: d.Client, Style: string(style)}, pairingTTL)
 		if errors.Is(err, kv.ErrUserCodeTaken) {
 			continue
 		}
@@ -82,15 +85,18 @@ func (s *Service) StartPairing(ctx context.Context, d Device, style CodeStyle) (
 }
 
 // newCode draws each character uniformly from crypto/rand, so a digit code may lead with zeros.
-func (c CodeStyle) newCode() string {
+func (c CodeStyle) newCode() (string, error) {
 	alphabet, length := c.form()
 	b := make([]byte, length)
 	size := big.NewInt(int64(len(alphabet)))
 	for i := range b {
-		n, _ := rand.Int(rand.Reader, size)
+		n, err := rand.Int(rand.Reader, size)
+		if err != nil {
+			return "", err
+		}
 		b[i] = alphabet[n.Int64()]
 	}
-	return string(b)
+	return string(b), nil
 }
 
 // ApprovePairing gives the waiting television to the approving session's profile.
