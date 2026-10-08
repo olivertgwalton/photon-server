@@ -15,9 +15,11 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/blob"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 func TestAPictureIsFetchedOnceAndHashed(t *testing.T) {
@@ -222,4 +224,26 @@ type zeros struct{}
 func (zeros) Read(p []byte) (int, error) {
 	clear(p)
 	return len(p), nil
+}
+
+func TestAProvidersPictureIsResizedWhenEveryPlaceIsTaken(t *testing.T) {
+	var poster bytes.Buffer
+	if err := png.Encode(&poster, gradient(1000, 1500)); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(poster.Bytes())
+	}))
+	t.Cleanup(srv.Close)
+	c := newCache(t, t.TempDir(), func(context.Context, uuid.UUID, string) error { return nil })
+	c.resizing = make(chan struct{}, 1)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	f, _, err := c.Open(ctx, uuid.NewV7(), domain.Picture{URL: srv.URL + "/poster.png"}, 240, 0)
+	if err != nil {
+		t.Fatalf("resizing a picture not yet fetched: %v", err)
+	}
+	_ = f.Close()
 }
