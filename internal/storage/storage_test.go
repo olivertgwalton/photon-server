@@ -213,13 +213,21 @@ func TestWhatIsPutDuringAMoveIsKeptInBothAndACancelledMoveLeavesThingsBe(t *test
 		defer n.stores.mu.Unlock()
 		return n.stores.to == nil
 	})
-	if now, _ := st.Storage(ctx); now.Kind != domain.StorageDisk {
+	now, err := st.Storage(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if now.Kind != domain.StorageDisk {
 		t.Errorf("after the move was cancelled things are kept %+v, want on disk", now)
 	}
 	if err := n.stores.Artwork.Put(ctx, "after", strings.NewReader("poster")); err != nil {
 		t.Fatal(err)
 	}
-	if ok, _ := bucket.Exists(ctx, "after"); ok {
+	ok, err := bucket.Exists(ctx, "after")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
 		t.Error("a poster put after the move was cancelled was put in the bucket")
 	}
 	if _, err := n.stores.Artwork.Open(ctx, "missing"); !errors.Is(err, fs.ErrNotExist) {
