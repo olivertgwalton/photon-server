@@ -158,12 +158,32 @@ func (newPreferences) Preferences(context.Context, uuid.UUID) (domain.Preference
 	return domain.DefaultPreferences(), nil
 }
 
+// fakeDisplays keeps display preferences by profile, client and view, but none of the view "overflow",
+// as if the profile's apps kept as many as they may.
+type fakeDisplays map[[3]string]json.RawMessage
+
+func (f fakeDisplays) DisplayPreferences(_ context.Context, profile uuid.UUID, client, view string) (json.RawMessage, error) {
+	if p, ok := f[[3]string{profile.String(), client, view}]; ok {
+		return p, nil
+	}
+	return nil, store.ErrNotFound
+}
+
+func (f fakeDisplays) SetDisplayPreferences(_ context.Context, profile uuid.UUID, client, view string, prefs json.RawMessage) error {
+	if view == "overflow" {
+		return store.ErrTooManyViews
+	}
+	f[[3]string{profile.String(), client, view}] = prefs
+	return nil
+}
+
 func newAPI() (*API, *[]uuid.UUID, *fakeLimits, *[]domain.EventKind) {
 	signedOut, limits, raised := &[]uuid.UUID{}, &fakeLimits{}, &[]domain.EventKind{}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: serverID.String(), Name: "Den"}, Services{
 		Auth: fakeAuth{signedOut: signedOut, pairing: new(kv.PairingState)}, Limits: limits,
 		Catalogue: noLibraries{}, Preferences: newPreferences{},
-		Raise: func(_ context.Context, e domain.Event) { *raised = append(*raised, e.Kind) },
+		Raise:    func(_ context.Context, e domain.Event) { *raised = append(*raised, e.Kind) },
+		Displays: fakeDisplays{},
 	})
 	return api, signedOut, limits, raised
 }
@@ -358,6 +378,39 @@ func TestAnAppSaysWhatItCanDo(t *testing.T) {
 		}
 		if w := serve(api, http.MethodPost, tc.target, kotlin, tc.body); w.Code != http.StatusUnauthorized {
 			t.Errorf("%s signed out: %d, want 401", tc.target, w.Code)
+		}
+	}
+}
+
+// Jellyfin's web app keeps how it lays out a view, its home's sections among them, on the server,
+// and reads back what it saved; another app's are its own.
+func TestAnAppKeepsHowItLaysOutAView(t *testing.T) {
+	api, _, _, _ := newAPI()
+	header := kotlin + `, Token="pst_device"`
+	target := "/DisplayPreferences/usersettings?userId=" + guid(ada.ID) + "&client=emby"
+	sent := `{"Id":"usersettings","SortBy":"DateCreated","SortOrder":"Descending","CustomPrefs":{"homesection0":"resume","homesection1":"nextup"},` +
+		`"ScrollDirection":"Vertical","ShowBackdrop":false,"Client":"someone else"}`
+	if w := serve(api, http.MethodPost, target, header, sent); w.Code != http.StatusNoContent {
+		t.Fatalf("saving: %d %s", w.Code, w.Body)
+	}
+	w := serve(api, http.MethodGet, target, header, "")
+	got := object(t, w)
+	prefs, _ := got["CustomPrefs"].(map[string]any)
+	if got["Id"] != "usersettings" || got["Client"] != "emby" || got["SortBy"] != "DateCreated" || got["SortOrder"] != "Descending" ||
+		got["ScrollDirection"] != "Vertical" || got["ShowBackdrop"] != false || prefs["homesection1"] != "nextup" {
+		t.Errorf("read back %v", got)
+	}
+	if other := object(t, serve(api, http.MethodGet, "/DisplayPreferences/usersettings?client=Swiftfin", header, "")); other["SortBy"] != "SortName" {
+		t.Errorf("another app's: %v, want the defaults", other)
+	}
+	for name, tc := range map[string]struct{ target, body string }{
+		"without its client": {"/DisplayPreferences/usersettings", sent},
+		"not JSON":           {target, "sortby=name"},
+		"beyond those kept":  {"/DisplayPreferences/overflow?client=emby", sent},
+		"too large":          {target, `{"CustomPrefs":{"x":"` + strings.Repeat("x", maxDisplayPreferences) + `"}}`},
+	} {
+		if w := serve(api, http.MethodPost, tc.target, header, tc.body); w.Code != http.StatusBadRequest {
+			t.Errorf("saving %s: %d, want 400", name, w.Code)
 		}
 	}
 }

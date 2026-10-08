@@ -14,6 +14,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 const (
@@ -174,10 +175,23 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// displayPreferences is Jellyfin's DisplayPreferencesDto as Jellyfin answers one never saved,
-// which is every one here. Jellyfin's web app finishes signing in only once it has one.
+type displays interface {
+	DisplayPreferences(ctx context.Context, profile uuid.UUID, client, view string) (json.RawMessage, error)
+	SetDisplayPreferences(ctx context.Context, profile uuid.UUID, client, view string, prefs json.RawMessage) error
+}
+
+// maxDisplayPreferences is the most a view's display preferences may be. Jellyfin's web app keeps
+// its home's sections and other settings in their CustomPrefs, which come to a few kilobytes.
+const maxDisplayPreferences = 64 << 10
+
+// displayPreferences is Jellyfin's DisplayPreferencesDto: how an app lays out a view, which it
+// keeps on the server per profile and per app. Jellyfin's web app finishes signing in only once it
+// has one.
 type displayPreferences struct {
+	ID                 string            `json:"Id"`
+	ViewType           string            `json:"ViewType,omitempty"`
 	SortBy             string            `json:"SortBy"`
+	IndexBy            string            `json:"IndexBy,omitempty"`
 	RememberIndexing   bool              `json:"RememberIndexing"`
 	PrimaryImageHeight int               `json:"PrimaryImageHeight"`
 	PrimaryImageWidth  int               `json:"PrimaryImageWidth"`
@@ -190,9 +204,50 @@ type displayPreferences struct {
 	Client             string            `json:"Client"`
 }
 
+// displayPreferences answers a view's display preferences as the app last saved them, else as
+// Jellyfin answers ones never saved.
 func (a *API) displayPreferences(w http.ResponseWriter, r *http.Request) {
-	a.writeJSON(w, displayPreferences{
+	out := displayPreferences{
 		SortBy: "SortName", PrimaryImageHeight: 250, PrimaryImageWidth: 250, CustomPrefs: map[string]string{},
-		ScrollDirection: "Horizontal", ShowBackdrop: true, SortOrder: "Ascending", Client: query(r, "client"),
-	})
+		ScrollDirection: "Horizontal", ShowBackdrop: true, SortOrder: "Ascending",
+	}
+	saved, err := a.svc.Displays.DisplayPreferences(r.Context(), auth.SessionOf(r.Context()).Profile.ID, query(r, "client"), r.PathValue("id"))
+	switch {
+	case err == nil:
+		if err := json.Unmarshal(saved, &out); err != nil {
+			a.internal(w, r, err)
+			return
+		}
+	case !isNotFound(err):
+		a.internal(w, r, err)
+		return
+	}
+	out.ID, out.Client = r.PathValue("id"), query(r, "client")
+	a.writeJSON(w, out)
+}
+
+// setDisplayPreferences keeps a view's display preferences for the profile and the app it names,
+// as Jellyfin keys them: by the client in the query, not the one in the body.
+func (a *API) setDisplayPreferences(w http.ResponseWriter, r *http.Request) {
+	client := query(r, "client")
+	var prefs displayPreferences
+	a.readWithin(w)
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDisplayPreferences)).Decode(&prefs); err != nil || client == "" {
+		a.refuse(w, http.StatusBadRequest)
+		return
+	}
+	prefs.ID, prefs.Client = r.PathValue("id"), client
+	saved, err := json.Marshal(prefs)
+	if err == nil {
+		err = a.svc.Displays.SetDisplayPreferences(r.Context(), auth.SessionOf(r.Context()).Profile.ID, client, prefs.ID, saved)
+	}
+	switch {
+	case errors.Is(err, store.ErrTooManyViews):
+		a.refuse(w, http.StatusBadRequest)
+		return
+	case err != nil:
+		a.internal(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
