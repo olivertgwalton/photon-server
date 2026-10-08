@@ -25,6 +25,25 @@ var gb = domain.LocaleOf("en-GB")
 
 func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
 
+// withKey is settings with a project key and no PIN.
+func withKey(context.Context) (map[string]string, error) {
+	return map[string]string{keySetting: "key"}, nil
+}
+
+// A key an admin changes is signed in with from the next request, not the token the old one got.
+func TestAChangedKeySignsInAgain(t *testing.T) {
+	c, _ := fake(t)
+	key := "key"
+	c.settings = func(context.Context) (map[string]string, error) { return map[string]string{keySetting: key}, nil }
+	if _, err := c.Details(t.Context(), gb, 79126); err != nil {
+		t.Fatal(err)
+	}
+	key = "revoked"
+	if _, err := c.Details(t.Context(), gb, 79126); err == nil {
+		t.Error("asked on with the old key's token after the key changed")
+	}
+}
+
 // fake serves a show, refuses its first token once, and pages its episodes two to a page.
 func fake(t *testing.T) (*Client, *int) {
 	t.Helper()
@@ -78,7 +97,7 @@ func fake(t *testing.T) (*Client, *int) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	c := New("key", "", unlimited{})
+	c := New(withKey, unlimited{})
 	c.api.Base = srv.URL
 	return c, &logins
 }
@@ -181,7 +200,7 @@ func TestSearchSaysWhatEachShowIsAboutInTheClientsLanguage(t *testing.T) {
 			{"tvdb_id":"1","name":"Wired","overview":"Only in its own words."}]}`)
 	}))
 	t.Cleanup(srv.Close)
-	c := New("key", "", unlimited{})
+	c := New(withKey, unlimited{})
 	c.api.Base = srv.URL
 	got, err := c.Search(t.Context(), gb, "The Wire", 0)
 	if err != nil {
@@ -194,7 +213,7 @@ func TestSearchSaysWhatEachShowIsAboutInTheClientsLanguage(t *testing.T) {
 
 // A provider is found able to do what it does only while its methods are the capabilities' own.
 func TestItHasItsCapabilities(t *testing.T) {
-	got := provider.Capabilities(New("key", "", unlimited{}))
+	got := provider.Capabilities(New(withKey, unlimited{}))
 	if want := []domain.Capability{domain.CapabilityDescribe, domain.CapabilitySearch}; !slices.Equal(got, want) {
 		t.Errorf("capabilities %v, want %v", got, want)
 	}
@@ -217,7 +236,7 @@ func TestAShowsPicturesAreRankedByTheLanguageAskedIn(t *testing.T) {
 			{"type":7,"image":"/season.jpg","language":"deu"}]}}`)
 	}))
 	t.Cleanup(srv.Close)
-	c := New("key", "", unlimited{})
+	c := New(withKey, unlimited{})
 	c.api.Base = srv.URL
 	got, err := c.Details(t.Context(), domain.LocaleOf("de-DE"), 79126)
 	if err != nil {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"io/fs"
@@ -63,8 +62,12 @@ func logTools(ctx context.Context, logger *slog.Logger, tools media.Tools) {
 // title by.
 func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *provider.Registry {
 	return provider.NewRegistry(plugins.Load,
-		tmdb.New(cmp.Or(os.Getenv("PHOTON_TMDB_TOKEN"), tmdb.DefaultToken), cache),
-		tvdb.New(cmp.Or(os.Getenv("PHOTON_TVDB_KEY"), tvdb.DefaultKey), os.Getenv("PHOTON_TVDB_PIN"), cache),
+		tmdb.New(func(ctx context.Context) (map[string]string, error) {
+			return st.ProviderSettings(ctx, domain.SourceTMDB)
+		}, cache),
+		tvdb.New(func(ctx context.Context) (map[string]string, error) {
+			return st.ProviderSettings(ctx, domain.SourceTVDB)
+		}, cache),
 		mdblist.New(func(ctx context.Context) (map[string]string, error) {
 			return st.ProviderSettings(ctx, domain.SourceMDBList)
 		}, cache),

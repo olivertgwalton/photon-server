@@ -14,7 +14,10 @@ import (
 var kinds = map[domain.ItemKind]Kind{domain.ItemMovie: Movie, domain.ItemShow: Show}
 
 func (c *Client) Info() provider.Info {
-	return provider.Info{ID: domain.SourceTMDB, Name: "TMDB", Kinds: []domain.ItemKind{domain.ItemMovie, domain.ItemShow}}
+	return provider.Info{
+		ID: domain.SourceTMDB, Name: "TMDB", Kinds: []domain.ItemKind{domain.ItemMovie, domain.ItemShow},
+		Settings: []provider.Setting{{Key: tokenSetting, Name: "API read access token", Secret: true}},
+	}
 }
 
 // Match finds a title on TMDB by its TMDB id, else the title an IMDb or TVDB id names, else a

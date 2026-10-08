@@ -23,6 +23,11 @@ type unlimited struct{}
 
 func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
 
+// withToken is settings with an API read access token.
+func withToken(context.Context) (map[string]string, error) {
+	return map[string]string{tokenSetting: "token"}, nil
+}
+
 // gb is what the tests ask in, as a server set to en-GB asks.
 var gb = domain.LocaleOf("en-GB")
 
@@ -46,7 +51,7 @@ func serveIn(t *testing.T, language string, routes map[string]string) *Client {
 		reply(t, w, body)
 	}))
 	t.Cleanup(srv.Close)
-	c := New("token", unlimited{})
+	c := New(withToken, unlimited{})
 	c.api.Base = srv.URL
 	return c
 }
@@ -197,7 +202,7 @@ func TestARequestTMDBAsksToSlowIsSentAgain(t *testing.T) {
 		reply(t, w, `{"results":[{"id":348,"title":"Alien","release_date":"1979-05-25"}]}`)
 	}))
 	t.Cleanup(srv.Close)
-	c := New("token", unlimited{})
+	c := New(withToken, unlimited{})
 	c.api.Base = srv.URL
 	got, err := c.Search(t.Context(), gb, Movie, "Alien", 0)
 	if err != nil || len(got) != 1 || asked != 2 {
@@ -225,7 +230,7 @@ func TestAnEpisodeIsRatedByItsVotesAlone(t *testing.T) {
 
 // A provider is found able to do what it does only while its methods are the capabilities' own.
 func TestItHasItsCapabilities(t *testing.T) {
-	got := provider.Capabilities(New("token", unlimited{}))
+	got := provider.Capabilities(New(withToken, unlimited{}))
 	if want := []domain.Capability{domain.CapabilityDescribe, domain.CapabilitySearch, domain.CapabilityPerson}; !slices.Equal(got, want) {
 		t.Errorf("capabilities %v, want %v", got, want)
 	}
@@ -288,7 +293,7 @@ func TestAListIsReadInItsOrder(t *testing.T) {
 		reply(t, w, body)
 	}))
 	t.Cleanup(srv.Close)
-	c := New("token", unlimited{})
+	c := New(withToken, unlimited{})
 	c.api.Base = srv.URL
 	got, err := c.List(t.Context(), "8136")
 	if err != nil {
