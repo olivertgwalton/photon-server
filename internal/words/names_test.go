@@ -11,34 +11,26 @@ import (
 // A client never shows one of the API's values by what it is sent as.
 func TestEveryValueAClientShowsHasAName(t *testing.T) {
 	w := In(language.English)
-	for _, list := range [][]any{
-		each(domain.Roles()),
-		each(domain.MarkerKinds()),
-		each(domain.ExtraKinds()),
-		each(domain.ImportSources()),
-		each(domain.ImportMisses()),
-		each(domain.PlayMethods()),
-		each(domain.RatingSites()),
-		each(domain.Ranges()),
-		each(domain.Resolutions()),
-		each(domain.ItemKinds()),
-		each(domain.LibraryKinds()),
-		each(domain.StreamKinds()),
-		each(domain.Marks()),
-		each(domain.Milestones()),
-		each(domain.CalendarFilters()),
-		each(domain.JobStates()),
-		each(domain.DownloadStates()),
-		each(domain.Accelerations()),
-		each(domain.HomeRows()),
-		each(domain.JobKinds()),
-	} {
-		for _, v := range list {
-			if _, ok := names[v]; !ok {
-				t.Errorf("%T %v has no name", v, v)
-			}
-		}
-	}
+	hasNames(t, roles, domain.Roles())
+	hasNames(t, markerKinds, domain.MarkerKinds())
+	hasNames(t, extraKinds, domain.ExtraKinds())
+	hasNames(t, importSources, domain.ImportSources())
+	hasNames(t, importMisses, domain.ImportMisses())
+	hasNames(t, playMethods, domain.PlayMethods())
+	hasNames(t, ratingSites, domain.RatingSites())
+	hasNames(t, ranges, domain.Ranges())
+	hasNames(t, resolutions, domain.Resolutions())
+	hasNames(t, itemKinds, domain.ItemKinds())
+	hasNames(t, libraryKinds, domain.LibraryKinds())
+	hasNames(t, streamKinds, domain.StreamKinds())
+	hasNames(t, marks, domain.Marks())
+	hasNames(t, milestones, domain.Milestones())
+	hasNames(t, calendarFilters, domain.CalendarFilters())
+	hasNames(t, jobStates, domain.JobStates())
+	hasNames(t, downloadStates, domain.DownloadStates())
+	hasNames(t, accelerations, domain.Accelerations())
+	hasNames(t, rows, domain.HomeRows())
+	hasNames(t, jobKinds, domain.JobKinds())
 	for _, k := range domain.TaskKeys() {
 		if d := w.Task(k); d.Name == string(k) || d.Description == "" {
 			t.Errorf("task %s is named %+v", k, d)
@@ -71,10 +63,11 @@ func TestEveryValueAClientShowsHasAName(t *testing.T) {
 	}
 }
 
-func each[T any](values []T) []any {
-	out := make([]any, len(values))
-	for i, v := range values {
-		out[i] = v
+func hasNames[T ~string](t *testing.T, names map[T]string, values []T) {
+	t.Helper()
+	for _, v := range values {
+		if _, ok := names[v]; !ok {
+			t.Errorf("%T %v has no name", v, v)
+		}
 	}
-	return out
 }

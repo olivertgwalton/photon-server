@@ -140,7 +140,7 @@ func Resolution(width int) string {
 	if width <= 0 {
 		return ""
 	}
-	return names[domain.ResolutionOf(width)]
+	return resolutions[domain.ResolutionOf(width)]
 }
 
 // codecName is a codec as people say it: Dolby Digital, not ac3; SRT, not subrip.
@@ -163,7 +163,7 @@ func rangeName(r domain.Range) string {
 	if r == domain.RangeSDR {
 		return ""
 	}
-	return names[r]
+	return ranges[r]
 }
 
 // channels is a sound's channels as a listing says them: Stereo, 5.1, else its layout or count.

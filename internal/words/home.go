@@ -13,7 +13,7 @@ func (w Words) HomeRow(k domain.HomeRow, library, collection string) string {
 	if of, ok := libraryRows[k]; ok && library != "" {
 		return of + " in " + library
 	}
-	return w.Name(k)
+	return label(rows, k)
 }
 
 // What a row of one library's titles holds, before the library's name.

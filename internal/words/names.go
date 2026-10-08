@@ -1,78 +1,145 @@
 package words
 
 import (
-	"fmt"
-
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// Name is what one of the API's values is called, whatever its type: a role, a kind of extra, a
-// range. A value with no name is said as it is sent.
-func (w Words) Name(v any) string {
+// Each value's name, by its type, so "watchlist" the mark and "watchlist" the calendar filter are
+// two names. A value with no name is said as it is sent.
+func (w Words) Role(v domain.Role) string                     { return label(roles, v) }
+func (w Words) MarkerKind(v domain.MarkerKind) string         { return label(markerKinds, v) }
+func (w Words) ExtraKind(v domain.ExtraKind) string           { return label(extraKinds, v) }
+func (w Words) ImportSource(v domain.ImportSource) string     { return label(importSources, v) }
+func (w Words) ImportMiss(v domain.ImportMiss) string         { return label(importMisses, v) }
+func (w Words) PlayMethod(v domain.PlayMethod) string         { return label(playMethods, v) }
+func (w Words) RatingSite(v domain.RatingSite) string         { return label(ratingSites, v) }
+func (w Words) Range(v domain.Range) string                   { return label(ranges, v) }
+func (w Words) Resolution(v domain.Resolution) string         { return label(resolutions, v) }
+func (w Words) ItemKind(v domain.ItemKind) string             { return label(itemKinds, v) }
+func (w Words) LibraryKind(v domain.LibraryKind) string       { return label(libraryKinds, v) }
+func (w Words) Mark(v domain.Mark) string                     { return label(marks, v) }
+func (w Words) Milestone(v domain.Milestone) string           { return label(milestones, v) }
+func (w Words) CalendarFilter(v domain.CalendarFilter) string { return label(calendarFilters, v) }
+func (w Words) DownloadState(v domain.DownloadState) string   { return label(downloadStates, v) }
+func (w Words) StreamKind(v domain.StreamKind) string         { return label(streamKinds, v) }
+func (w Words) JobState(v domain.JobState) string             { return label(jobStates, v) }
+func (w Words) Acceleration(v domain.Acceleration) string     { return label(accelerations, v) }
+func (w Words) JobKind(v domain.JobKind) string               { return label(jobKinds, v) }
+
+func label[T ~string](names map[T]string, v T) string {
 	if n, ok := names[v]; ok {
 		return n
 	}
-	return fmt.Sprint(v)
+	return string(v)
 }
 
-// names are the values' names, each keyed by its typed value, so "watchlist" the mark and
-// "watchlist" the calendar filter are two names.
-var names = map[any]string{
+var roles = map[domain.Role]string{
 	domain.RoleAdmin: "Admin", domain.RoleManager: "Manager", domain.RoleUser: "User",
+}
 
-	domain.MarkerIntro: "Intro", domain.MarkerCredits: "Credits", domain.MarkerRecap: "Recap", domain.MarkerPreview: "Preview",
+var markerKinds = map[domain.MarkerKind]string{
+	domain.MarkerIntro: "Intro", domain.MarkerCredits: "Credits", domain.MarkerRecap: "Recap",
+	domain.MarkerPreview: "Preview",
+}
 
-	domain.ExtraTrailer: "Trailer", domain.ExtraTeaser: "Teaser", domain.ExtraFeaturette: "Featurette",
-	domain.ExtraBehindTheScenes: "Behind the scenes", domain.ExtraDeletedScene: "Deleted scene", domain.ExtraInterview: "Interview",
-	domain.ExtraScene: "Scene", domain.ExtraShort: "Short", domain.ExtraClip: "Clip", domain.ExtraBlooper: "Blooper",
-	domain.ExtraThemeVideo: "Theme video", domain.ExtraOther: "Extra",
+var extraKinds = map[domain.ExtraKind]string{
+	domain.ExtraTrailer: "Trailer", domain.ExtraTeaser: "Teaser",
+	domain.ExtraFeaturette: "Featurette", domain.ExtraBehindTheScenes: "Behind the scenes",
+	domain.ExtraDeletedScene: "Deleted scene", domain.ExtraInterview: "Interview",
+	domain.ExtraScene: "Scene", domain.ExtraShort: "Short", domain.ExtraClip: "Clip",
+	domain.ExtraBlooper: "Blooper", domain.ExtraThemeVideo: "Theme video",
+	domain.ExtraOther: "Extra",
+}
 
+var importSources = map[domain.ImportSource]string{
 	domain.ImportPlex: "Plex", domain.ImportJellyfin: "Jellyfin", domain.ImportEmby: "Emby",
-	domain.MissNoIDs: "No TMDB, TheTVDB or IMDb id", domain.MissNotFound: "Not in a library here", domain.MissUndated: "No date watched",
+}
 
-	domain.PlayDirect: "Direct play", domain.PlayRemux: "Direct stream", domain.PlayTranscode: "Transcode",
+var importMisses = map[domain.ImportMiss]string{
+	domain.MissNoIDs: "No TMDB, TheTVDB or IMDb id", domain.MissNotFound: "Not in a library here",
+	domain.MissUndated: "No date watched",
+}
 
+var playMethods = map[domain.PlayMethod]string{
+	domain.PlayDirect: "Direct play", domain.PlayRemux: "Direct stream",
+	domain.PlayTranscode: "Transcode",
+}
+
+var ratingSites = map[domain.RatingSite]string{
 	domain.SiteIMDb: "IMDb", domain.SiteTMDB: "TMDB", domain.SiteRottenTomatoes: "Rotten Tomatoes",
 	domain.SiteRottenTomatoesAudience: "RT Audience",
+}
 
-	domain.RangeSDR: "SDR", domain.RangeHLG: "HLG", domain.RangeHDR10: "HDR10", domain.RangeHDR10Plus: "HDR10+",
-	domain.RangeDV: "Dolby Vision",
+var ranges = map[domain.Range]string{
+	domain.RangeSDR: "SDR", domain.RangeHLG: "HLG", domain.RangeHDR10: "HDR10",
+	domain.RangeHDR10Plus: "HDR10+", domain.RangeDV: "Dolby Vision",
+}
 
-	domain.ResolutionSD: "SD", domain.ResolutionHD: "720p", domain.ResolutionFHD: "1080p", domain.ResolutionUHD: "4K",
+var resolutions = map[domain.Resolution]string{
+	domain.ResolutionSD: "SD", domain.ResolutionHD: "720p", domain.ResolutionFHD: "1080p",
+	domain.ResolutionUHD: "4K",
+}
 
-	domain.ItemMovie: "Films", domain.ItemShow: "Shows", domain.ItemSeason: "Seasons", domain.ItemEpisode: "Episodes",
-	domain.ItemExtra: "Extras", domain.ItemCollection: "Collections",
+var itemKinds = map[domain.ItemKind]string{
+	domain.ItemMovie: "Films", domain.ItemShow: "Shows", domain.ItemSeason: "Seasons",
+	domain.ItemEpisode: "Episodes", domain.ItemExtra: "Extras",
+	domain.ItemCollection: "Collections",
+}
 
+var libraryKinds = map[domain.LibraryKind]string{
 	domain.LibraryMovies: "Films", domain.LibraryShows: "Shows",
+}
 
-	domain.MarkWatched: "Watched", domain.MarkUnwatched: "Unwatched", domain.MarkInProgress: "In progress",
-	domain.MarkFavourite: "Favourites", domain.MarkWatchlist: "Watchlist",
+var marks = map[domain.Mark]string{
+	domain.MarkWatched: "Watched", domain.MarkUnwatched: "Unwatched",
+	domain.MarkInProgress: "In progress", domain.MarkFavourite: "Favourites",
+	domain.MarkWatchlist: "Watchlist",
+}
 
-	domain.MilestoneSeriesPremiere: "Series premiere", domain.MilestoneSeasonPremiere: "Season premiere",
-	domain.MilestoneSeasonFinale: "Finale",
+var milestones = map[domain.Milestone]string{
+	domain.MilestoneSeriesPremiere: "Series premiere",
+	domain.MilestoneSeasonPremiere: "Season premiere", domain.MilestoneSeasonFinale: "Finale",
+}
 
-	domain.CalendarMine: "My titles", domain.CalendarWatchlist: "Watchlist", domain.CalendarFavourites: "Favourites",
-	domain.CalendarAll: "Everything",
+var calendarFilters = map[domain.CalendarFilter]string{
+	domain.CalendarMine: "My titles", domain.CalendarWatchlist: "Watchlist",
+	domain.CalendarFavourites: "Favourites", domain.CalendarAll: "Everything",
+}
 
-	domain.DownloadQueued: "Waiting", domain.DownloadConverting: "Converting", domain.DownloadReady: "Ready",
-	domain.DownloadFailed: "Failed",
+var downloadStates = map[domain.DownloadState]string{
+	domain.DownloadQueued: "Waiting", domain.DownloadConverting: "Converting",
+	domain.DownloadReady: "Ready", domain.DownloadFailed: "Failed",
+}
 
+var streamKinds = map[domain.StreamKind]string{
 	domain.StreamVideo: "Video", domain.StreamAudio: "Audio", domain.StreamSubtitle: "Subtitle",
+}
 
-	domain.JobQueued: "Queued", domain.JobRunning: "Running", domain.JobRerun: "To run again", domain.JobDead: "Gave up",
+var jobStates = map[domain.JobState]string{
+	domain.JobQueued: "Queued", domain.JobRunning: "Running", domain.JobRerun: "To run again",
+	domain.JobDead: "Gave up",
+}
 
-	domain.AccelSoftware: "Software", domain.AccelVideoToolbox: "VideoToolbox", domain.AccelVAAPI: "VA-API",
-	domain.AccelQSV: "Quick Sync", domain.AccelNVENC: "NVENC",
+var accelerations = map[domain.Acceleration]string{
+	domain.AccelSoftware: "Software", domain.AccelVideoToolbox: "VideoToolbox",
+	domain.AccelVAAPI: "VA-API", domain.AccelQSV: "Quick Sync", domain.AccelNVENC: "NVENC",
+}
 
-	domain.RowContinueWatching: "Continue Watching", domain.RowNextUp: "Next Up", domain.RowWatchlist: "Watchlist",
-	domain.RowFavourites: "Favourites", domain.RowRecentFilms: "Recently Added Films",
-	domain.RowRecentShows: "Recently Added Shows", domain.RowRecentlyReleased: "Recently Released",
-	domain.RowTopRatedUnwatched: "Top Rated", domain.RowCollection: "Collections",
+var rows = map[domain.HomeRow]string{
+	domain.RowContinueWatching: "Continue Watching", domain.RowNextUp: "Next Up",
+	domain.RowWatchlist: "Watchlist", domain.RowFavourites: "Favourites",
+	domain.RowRecentFilms: "Recently Added Films", domain.RowRecentShows: "Recently Added Shows",
+	domain.RowRecentlyReleased: "Recently Released", domain.RowTopRatedUnwatched: "Top Rated",
+	domain.RowCollection: "Collections",
+}
 
-	domain.JobKeyframes: "Read keyframes", domain.JobKeyframeWalk: "Walk files for keyframes", domain.JobIdentify: "Identify",
-	domain.JobScanLibrary: "Scan a library", domain.JobMarkers: "Find intros and credits", domain.JobPreviews: "Make previews",
-	domain.JobConvert: "Convert for download", domain.JobDeliverWebhook: "Send a webhook", domain.JobTheme: "Fetch a theme tune",
-	domain.JobProbe: "Read media info", domain.JobImportHistory: "Import watch history",
+var jobKinds = map[domain.JobKind]string{
+	domain.JobKeyframes: "Read keyframes", domain.JobKeyframeWalk: "Walk files for keyframes",
+	domain.JobIdentify: "Identify", domain.JobScanLibrary: "Scan a library",
+	domain.JobMarkers: "Find intros and credits", domain.JobPreviews: "Make previews",
+	domain.JobConvert: "Convert for download", domain.JobDeliverWebhook: "Send a webhook",
+	domain.JobTheme: "Fetch a theme tune", domain.JobProbe: "Read media info",
+	domain.JobImportHistory: "Import watch history",
 }
 
 // Kept is how the activity log's filter names a kind of event it keeps: "Plays started".
