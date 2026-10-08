@@ -158,6 +158,7 @@ const activity: Schemas["Event"][] = [
 		kind: "task.failed",
 		at: "2026-10-06T19:00:00Z",
 		details: { task: "backup_database", error: "disk full" },
+		text: "Back up the database failed: disk full",
 	},
 	{
 		id: "e-1",
@@ -165,6 +166,7 @@ const activity: Schemas["Event"][] = [
 		at: "2026-10-06T18:00:00Z",
 		library_id: "l-films",
 		details: { name: "Films" },
+		text: "Library Films was added",
 	},
 ];
 

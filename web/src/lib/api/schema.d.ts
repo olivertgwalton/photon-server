@@ -6058,6 +6058,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/words": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Say what the API's values are called, in the reader's language */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Vocabulary"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/readyz": {
         parameters: {
             query?: never;
@@ -6668,6 +6705,7 @@ export interface components {
             library_id?: string;
             /** Format: uuid */
             profile_id?: string;
+            text?: string;
             /** Format: uuid */
             title_id?: string;
         };
@@ -7790,6 +7828,10 @@ export interface components {
         };
         /** @enum {string} */
         TaskResult: "succeeded" | "failed" | "cancelled";
+        TaskWords: {
+            description: string;
+            name: string;
+        };
         /** @enum {string} */
         ThemeLookup: "local" | "themerr" | "off";
         /** @enum {string} */
@@ -7957,6 +7999,14 @@ export interface components {
             max_width?: number;
             profiles?: string[];
             ranges?: components["schemas"]["Range"][];
+        };
+        Vocabulary: {
+            jobs: {
+                [key: string]: string;
+            };
+            tasks: {
+                [key: string]: components["schemas"]["TaskWords"];
+            };
         };
         WallFilter: {
             certificates?: string[];
