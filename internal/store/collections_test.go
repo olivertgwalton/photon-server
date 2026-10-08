@@ -428,6 +428,10 @@ func TestASmartCollectionIsWhatItsRuleFinds(t *testing.T) {
 	if page, err := s.Title(ctx, uuid.UUID{}, set); err != nil || page.Origin != domain.CollectionSmart || page.Rule == nil || page.Rule.Limit != 1 {
 		t.Errorf("its page: %+v, %v; want it smart, with its rule", page.Rule, err)
 	}
+	// Its page names its library, whose wall its rule is changed on.
+	if page, err := s.Title(ctx, uuid.UUID{}, set); err != nil || page.Library != lib.ID {
+		t.Errorf("its library: %v, %v; want %v", page.Library, err, lib.ID)
+	}
 
 	// Finding nothing, it is shown still, and a scan keeps it.
 	if err := s.SetRule(ctx, set, SmartRule{Filter: WallFilter{Genres: []string{"Western"}}}); err != nil {

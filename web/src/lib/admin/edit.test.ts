@@ -4,6 +4,7 @@ import { editOf, markersOf } from "./edit";
 
 const film: components["schemas"]["TitlePage"] = {
 	id: "t-film",
+	library_id: "l-films",
 	kind: "movie",
 	title: "Quiet Hours",
 	added_at: "2026-10-01T20:00:00Z",

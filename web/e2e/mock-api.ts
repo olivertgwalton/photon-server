@@ -146,6 +146,9 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 	if (!c) return;
 	const out: Schemas["TitlePage"] = {
 		...card(c),
+		library_id: ["show", "season", "episode"].includes(c.kind)
+			? "l-shows"
+			: "l-films",
 		artwork: c.poster ? { poster: [art], backdrop: [art] } : {},
 	};
 	if (id === "t-film") {
@@ -392,6 +395,7 @@ const version = (id: string): Schemas["VersionPage"] => ({
 const titles: Record<string, Schemas["TitlePage"]> = {
 	"p-film": {
 		id: "p-film",
+		library_id: "l-films",
 		kind: "movie",
 		title: "Quiet Hours",
 		added_at: "2026-10-01T20:00:00Z",
@@ -400,6 +404,7 @@ const titles: Record<string, Schemas["TitlePage"]> = {
 	},
 	"p-ep": {
 		id: "p-ep",
+		library_id: "l-shows",
 		kind: "episode",
 		title: "Pilot",
 		added_at: "2026-10-01T20:00:00Z",
@@ -410,6 +415,7 @@ const titles: Record<string, Schemas["TitlePage"]> = {
 	},
 	"p-ep2": {
 		id: "p-ep2",
+		library_id: "l-shows",
 		kind: "episode",
 		title: "Second",
 		added_at: "2026-10-01T20:00:00Z",
@@ -421,6 +427,7 @@ const titles: Record<string, Schemas["TitlePage"]> = {
 	// Signs in ASS inside the file, and a font of its own.
 	"p-anime": {
 		id: "p-anime",
+		library_id: "l-films",
 		kind: "movie",
 		title: "Bakery Street",
 		added_at: "2026-10-01T20:00:00Z",
@@ -443,6 +450,7 @@ const titles: Record<string, Schemas["TitlePage"]> = {
 	},
 	"t-busy": {
 		id: "t-busy",
+		library_id: "l-films",
 		kind: "movie",
 		title: "Busy Night",
 		added_at: "2026-10-01T20:00:00Z",
@@ -450,6 +458,7 @@ const titles: Record<string, Schemas["TitlePage"]> = {
 	},
 	"t-odd": {
 		id: "t-odd",
+		library_id: "l-films",
 		kind: "movie",
 		title: "Odd Format",
 		added_at: "2026-10-01T20:00:00Z",

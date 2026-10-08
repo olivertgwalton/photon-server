@@ -35,6 +35,7 @@ func subtitleKindOf(codec string) subtitleKind {
 
 type titlePageJSON struct {
 	ID            uuid.UUID                  `json:"id"`
+	LibraryID     uuid.UUID                  `json:"library_id"`
 	Kind          domain.ItemKind            `json:"kind"`
 	Title         string                     `json:"title"`
 	OriginalTitle string                     `json:"original_title,omitzero"`
@@ -262,7 +263,7 @@ type titleStateJSON struct {
 
 func titlePageOf(p store.TitlePage) titlePageJSON {
 	return titlePageJSON{
-		ID: p.ID, Kind: p.Kind, Title: p.Title, OriginalTitle: p.OriginalTitle, Overview: p.Overview,
+		ID: p.ID, LibraryID: p.Library, Kind: p.Kind, Title: p.Title, OriginalTitle: p.OriginalTitle, Overview: p.Overview,
 		Tagline: p.Tagline, Certificate: p.Certificate, Year: p.Year, ReleaseDate: p.ReleaseDate,
 		Genres: p.Genres, Studios: p.Studios, IDs: p.IDs,
 		Ratings:     each(p.Ratings, func(r domain.Rating) ratingRefJSON { return ratingRefJSON(r) }),
