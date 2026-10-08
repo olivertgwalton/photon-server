@@ -2,15 +2,60 @@ package hls
 
 import (
 	"log/slog"
+	"os"
 	"strings"
 	"testing"
+	"time"
 	"uuid"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
 )
+
+// Each segment served is timed, from its asking to its being made.
+func TestEachSegmentServedIsTimed(t *testing.T) {
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keyframes []time.Duration
+	for k := range 15 {
+		keyframes = append(keyframes, time.Duration(2*k)*time.Second)
+	}
+	playback := uuid.NewV7()
+	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
+		Open: func() (*os.File, error) { return os.Open("testdata/fragments.mp4") }, Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
+		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close(playback)
+	for _, n := range []int{0, 1} {
+		f, err := r.Segment(t.Context(), playback, n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = f.Close()
+	}
+	reg := prometheus.NewPedanticRegistry()
+	reg.MustRegister(r)
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range families {
+		if f.GetName() == "photon_hls_segment_wait_seconds" {
+			if got := f.GetMetric()[0].GetHistogram().GetSampleCount(); got != 2 {
+				t.Errorf("%d segments timed, want 2", got)
+			}
+			return
+		}
+	}
+	t.Error("no photon_hls_segment_wait_seconds")
+}
 
 // An operator sees what a node encodes, a playback's apart from a download's, of how many at once
 // it may; a node with no limit says none.
