@@ -72,13 +72,15 @@ func (m plexMetadata) ids() map[domain.Provider]string {
 	return providerIDs(all)
 }
 
-func (p plex) get(ctx context.Context, path string, query url.Values, out any) error {
+func (p plex) get(ctx context.Context, path string, query url.Values) (plexContainer, error) {
+	var c plexContainer
 	header := http.Header{
 		"X-Plex-Token": {p.token}, "X-Plex-Client-Identifier": {"photon-server-history-import"},
 		"X-Plex-Product": {"photon-server"}, "X-Plex-Version": {"1"},
 	}
-	return provider.Client{Name: string(domain.ImportPlex), Base: p.base, HTTP: client}.
-		Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: query, Header: header}, out)
+	err := provider.Client{Name: string(domain.ImportPlex), Base: p.base, HTTP: client}.
+		Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: query, Header: header}, &c)
+	return c, err
 }
 
 func (p plex) connect(ctx context.Context, c Credentials) (store.ImportLogin, error) {
@@ -93,8 +95,7 @@ func (p plex) connect(ctx context.Context, c Credentials) (store.ImportLogin, er
 func (plex) signOut(context.Context) error { return nil }
 
 func (p plex) sections(ctx context.Context) ([]plexSection, error) {
-	var c plexContainer
-	err := p.get(ctx, "/library/sections", nil, &c)
+	c, err := p.get(ctx, "/library/sections", nil)
 	return c.MediaContainer.Directory, err
 }
 
@@ -102,11 +103,10 @@ func (p plex) sections(ctx context.Context) ([]plexSection, error) {
 func (p plex) all(ctx context.Context, section string, kind int) ([]plexMetadata, error) {
 	var out []plexMetadata
 	for {
-		var c plexContainer
-		err := p.get(ctx, "/library/sections/"+url.PathEscape(section)+"/all", url.Values{
+		c, err := p.get(ctx, "/library/sections/"+url.PathEscape(section)+"/all", url.Values{
 			"type": {strconv.Itoa(kind)}, "includeGuids": {"1"},
 			"X-Plex-Container-Start": {strconv.Itoa(len(out))}, "X-Plex-Container-Size": {strconv.Itoa(plexPage)},
-		}, &c)
+		})
 		if err != nil {
 			return nil, err
 		}

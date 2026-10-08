@@ -60,36 +60,32 @@ func (a *API) vocabulary(w http.ResponseWriter, r *http.Request) {
 	said := words.Negotiate(w, r)
 	writeJSON(w, a.logger, "application/json", http.StatusOK, vocabularyJSON{
 		Tasks:           wordsFor(domain.TaskKeys(), func(k domain.TaskKey) describedJSON { return describedJSON(said.Task(k)) }),
-		Jobs:            namesOf(said, domain.JobKinds()),
-		Rows:            namesOf(said, domain.HomeRows()),
-		Roles:           namesOf(said, domain.Roles()),
-		Markers:         namesOf(said, domain.MarkerKinds()),
-		Extras:          namesOf(said, domain.ExtraKinds()),
+		Jobs:            wordsFor(domain.JobKinds(), said.JobKind),
+		Rows:            wordsFor(domain.HomeRows(), func(k domain.HomeRow) string { return said.HomeRow(k, "", "") }),
+		Roles:           wordsFor(domain.Roles(), said.Role),
+		Markers:         wordsFor(domain.MarkerKinds(), said.MarkerKind),
+		Extras:          wordsFor(domain.ExtraKinds(), said.ExtraKind),
 		Reasons:         wordsFor(domain.TranscodeReasons(), func(r domain.TranscodeReason) describedJSON { return describedJSON(said.TranscodeReason(r)) }),
-		Accelerations:   namesOf(said, domain.Accelerations()),
+		Accelerations:   wordsFor(domain.Accelerations(), said.Acceleration),
 		NodeRoles:       wordsFor(domain.NodeRoles(), func(r domain.NodeRole) describedJSON { return describedJSON(said.NodeRole(r)) }),
-		ImportSources:   namesOf(said, domain.ImportSources()),
-		ImportMisses:    namesOf(said, domain.ImportMisses()),
-		PlayMethods:     namesOf(said, domain.PlayMethods()),
-		RatingSites:     namesOf(said, domain.RatingSites()),
-		Ranges:          namesOf(said, domain.Ranges()),
-		Resolutions:     namesOf(said, domain.Resolutions()),
-		Kinds:           namesOf(said, domain.ItemKinds()),
-		LibraryKinds:    namesOf(said, domain.LibraryKinds()),
-		StreamKinds:     namesOf(said, domain.StreamKinds()),
-		Marks:           namesOf(said, domain.Marks()),
-		Milestones:      namesOf(said, domain.Milestones()),
-		CalendarFilters: namesOf(said, domain.CalendarFilters()),
+		ImportSources:   wordsFor(domain.ImportSources(), said.ImportSource),
+		ImportMisses:    wordsFor(domain.ImportMisses(), said.ImportMiss),
+		PlayMethods:     wordsFor(domain.PlayMethods(), said.PlayMethod),
+		RatingSites:     wordsFor(domain.RatingSites(), said.RatingSite),
+		Ranges:          wordsFor(domain.Ranges(), said.Range),
+		Resolutions:     wordsFor(domain.Resolutions(), said.Resolution),
+		Kinds:           wordsFor(domain.ItemKinds(), said.ItemKind),
+		LibraryKinds:    wordsFor(domain.LibraryKinds(), said.LibraryKind),
+		StreamKinds:     wordsFor(domain.StreamKinds(), said.StreamKind),
+		Marks:           wordsFor(domain.Marks(), said.Mark),
+		Milestones:      wordsFor(domain.Milestones(), said.Milestone),
+		CalendarFilters: wordsFor(domain.CalendarFilters(), said.CalendarFilter),
 		Sorts:           wordsFor(domain.WallSorts(), func(s domain.WallSort) sortJSON { return sortJSON(said.Sort(s)) }),
-		JobStates:       namesOf(said, domain.JobStates()),
-		DownloadStates:  namesOf(said, domain.DownloadStates()),
+		JobStates:       wordsFor(domain.JobStates(), said.JobState),
+		DownloadStates:  wordsFor(domain.DownloadStates(), said.DownloadState),
 		Logged:          wordsFor(domain.LoggedEventKinds(), said.Kept),
 		Hookable:        wordsFor(domain.HookableEventKinds(), said.Told),
 	})
-}
-
-func namesOf[T comparable](said words.Words, values []T) map[T]string {
-	return wordsFor(values, func(v T) string { return said.Name(v) })
 }
 
 func wordsFor[T comparable, W any](values []T, word func(T) W) map[T]W {

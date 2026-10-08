@@ -148,8 +148,8 @@ func baseURL(address string) (string, error) {
 }
 
 func (p *Plugins) manifest(ctx context.Context, base string) (pluginv1.Manifest, error) {
-	var m pluginv1.Manifest
-	if err := call(ctx, p.http, "plugin at "+base, http.MethodGet, base, "/manifest", nil, &m, nil); err != nil {
+	m, err := call[struct{}, pluginv1.Manifest](ctx, p.http, "plugin at "+base, http.MethodGet, base, "/manifest", nil, nil)
+	if err != nil {
 		return m, err
 	}
 	return m, valid(m)
@@ -189,25 +189,30 @@ func valid(m pluginv1.Manifest) error {
 	return nil
 }
 
-// call sends body as JSON, where there is one, and decodes the answer into out. A plugin that
+// call sends body as JSON, where there is one, and decodes the answer. A plugin that
 // cannot be reached or fails on its side is provider.ErrUnavailable. An error names the plugin
 // and never carries a secret setting, even one the plugin repeats.
-func call(ctx context.Context, hc *http.Client, name, method, base, path string, body, out any, secrets []string) error {
-	err := provider.Client{Name: name, Base: base, HTTP: hc}.Do(ctx, provider.Request{Method: method, Path: path, Body: body}, out)
+func call[Req, Reply any](ctx context.Context, hc *http.Client, name, method, base, path string, body *Req, secrets []string) (Reply, error) {
+	var reply Reply
+	sent := provider.Request{Method: method, Path: path}
+	if body != nil {
+		sent.Body = body
+	}
+	err := provider.Client{Name: name, Base: base, HTTP: hc}.Do(ctx, sent, &reply)
 	refusal, refused := errors.AsType[*provider.Refusal](err)
 	switch {
 	case err == nil:
-		return nil
+		return reply, nil
 	case ctx.Err() != nil:
-		return ctx.Err()
+		return reply, ctx.Err()
 	case errors.Is(err, provider.ErrUnreached):
-		return fmt.Errorf("%w: %w", provider.ErrUnavailable, err)
+		return reply, fmt.Errorf("%w: %w", provider.ErrUnavailable, err)
 	case refused && refusal.Code >= http.StatusInternalServerError:
-		return fmt.Errorf("%s %s: %w: %s", name, path, provider.ErrUnavailable, said(refusal, secrets))
+		return reply, fmt.Errorf("%s %s: %w: %s", name, path, provider.ErrUnavailable, said(refusal, secrets))
 	case refused:
-		return fmt.Errorf("%s %s: %s", name, path, said(refusal, secrets))
+		return reply, fmt.Errorf("%s %s: %s", name, path, said(refusal, secrets))
 	}
-	return err
+	return reply, err
 }
 
 // said is a plugin's error: its status, and the title and detail of the problem it answered.

@@ -97,16 +97,16 @@ func (w Words) Event(e domain.Event, names Names) string {
 		d, _ := e.Details.(domain.BackupDetails)
 		return "The database was backed up to " + d.File
 	case domain.EventJobStarted:
-		return w.Name(job.JobKind) + " started"
+		return w.JobKind(job.JobKind) + " started"
 	case domain.EventJobFinished:
-		return w.Name(job.JobKind) + " finished"
+		return w.JobKind(job.JobKind) + " finished"
 	case domain.EventJobFailed:
-		return w.Name(job.JobKind) + " failed and will be tried again: " + job.Error
+		return w.JobKind(job.JobKind) + " failed and will be tried again: " + job.Error
 	case domain.EventJobDead:
-		return fmt.Sprintf("%s gave up after %d tries: %s", w.Name(job.JobKind), job.Attempt, job.Error)
+		return fmt.Sprintf("%s gave up after %d tries: %s", w.JobKind(job.JobKind), job.Attempt, job.Error)
 	case domain.EventJobsProgress:
 		d, _ := e.Details.(domain.BacklogDetails)
-		return fmt.Sprintf("%s: %d left", w.Name(d.JobKind), d.Left)
+		return fmt.Sprintf("%s: %d left", w.JobKind(d.JobKind), d.Left)
 	case domain.EventWebhookTest:
 		return "A webhook test was sent"
 	case domain.EventMaintenanceChanged:
