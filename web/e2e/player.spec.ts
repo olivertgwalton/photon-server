@@ -178,34 +178,25 @@ test("scrubbing shows the chapter and the thumbnail under the pointer", async ({
 	expect((await sheet).ok()).toBe(true);
 });
 
-test("what this browser kept moves up to the profile once, and the player follows it", async ({
-	page,
-}) => {
-	// Kept before the server kept them, and only once: what goes up is gone.
-	await page.addInitScript(() => {
-		if (sessionStorage.getItem("seeded")) return;
-		sessionStorage.setItem("seeded", "1");
-		localStorage.setItem(
-			"photon.playback",
-			JSON.stringify({ audioLanguage: "fr", skipIntro: "auto" }),
-		);
+test("the player follows how the profile plays", async ({ page }) => {
+	await logIn(page, "/");
+	const set = await page.request.patch("/api/v1/me/preferences", {
+		data: {
+			audio_language: "fr",
+			audio_track: "language",
+			intro_action: "skip",
+		},
 	});
+	expect(set.ok()).toBe(true);
 	const asked = page.waitForRequest("**/api/v1/titles/p-film/play");
-	await logIn(page, "/play/p-film?t=0");
+	await page.goto("/play/p-film?t=0");
 	expect((await asked).postDataJSON().audio_stream).toBe(2);
+	// A page loaded afresh may not play by itself until the reader asks it to.
+	await page.getByRole("button", { name: "Play", exact: true }).click();
 	// The intro, 0.5 to 3 s, goes by itself, sooner than playing through it
 	// would take, and offers no button.
 	await expect
 		.poll(() => time(page), { timeout: 2_000 })
 		.toBeGreaterThanOrEqual(3);
 	await expect(page.getByRole("button", { name: "Skip Intro" })).toHaveCount(0);
-	expect(
-		await page.evaluate(() => localStorage.getItem("photon.playback")),
-	).toBeNull();
-	const kept = await page.request.get("/api/v1/me/preferences");
-	expect(await kept.json()).toMatchObject({
-		audio_language: "fr",
-		audio_track: "language",
-		intro_action: "skip",
-	});
 });
