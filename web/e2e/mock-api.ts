@@ -353,6 +353,7 @@ const version = (id: string): Schemas["VersionPage"] => ({
 			profile: "High",
 			width: 320,
 			height: 180,
+			resolution: "sd",
 		},
 		{ index: 1, kind: "audio", codec: "aac", language: "en", channels: 2 },
 		{ index: 2, kind: "audio", codec: "aac", language: "fr", channels: 2 },

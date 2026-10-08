@@ -142,6 +142,8 @@ type streamPageJSON struct {
 	BitDepth        int16             `json:"bit_depth,omitzero"`
 	Level           int               `json:"level,omitzero"`
 	Range           domain.Range      `json:"range,omitzero"`
+	// Resolution is a video's, as a wall's filter files it.
+	Resolution domain.Resolution `json:"resolution,omitzero"`
 	// SubtitleKind is a subtitle's.
 	SubtitleKind  subtitleKind `json:"subtitle_kind,omitzero"`
 	DVProfile     int16        `json:"dv_profile,omitzero"`
@@ -324,8 +326,14 @@ func streamPageOf(s store.StreamPage) streamPageJSON {
 		Range: s.Range, DVProfile: s.DVProfile, Channels: s.Channels, ChannelLayout: s.ChannelLayout,
 		SampleRate: s.SampleRate, BitrateKbps: s.BitrateKbps,
 	}
-	if s.Kind == domain.StreamSubtitle {
+	switch s.Kind {
+	case domain.StreamVideo:
+		if s.Width > 0 {
+			out.Resolution = domain.ResolutionOf(s.Width)
+		}
+	case domain.StreamSubtitle:
 		out.SubtitleKind = subtitleKindOf(s.Codec)
+	case domain.StreamAudio:
 	}
 	return out
 }
