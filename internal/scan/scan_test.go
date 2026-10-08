@@ -660,8 +660,8 @@ func TestTitlePagesShowWhatTheScanFound(t *testing.T) {
 	if long.Label != "2160p" || long.Parts != 2 || long.DurationMS != 4*3600*1000 {
 		t.Errorf("first version = %q in %d parts, %d ms; want the two-part 2160p copy, longest first", long.Label, long.Parts, long.DurationMS)
 	}
-	if len(long.Chapters) != 2 || long.Chapters[1].StartMS != 2*3600*1000 {
-		t.Errorf("chapters = %+v, want one per part on one timeline", long.Chapters)
+	if len(long.Chapters) != 2 || long.Chapters[1].StartMS != 2*3600*1000 || long.Chapters[1].Part != long.Files[1].ID || long.Chapters[1].Idx != 0 {
+		t.Errorf("chapters = %+v, want one per part on one timeline, each the first of its own part", long.Chapters)
 	}
 	if len(long.Streams) != 2 || long.Streams[0].Range != domain.RangeHDR10 {
 		t.Errorf("streams = %+v, want the first part's HDR10 video and its audio", long.Streams)

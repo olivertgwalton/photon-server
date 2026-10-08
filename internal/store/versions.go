@@ -98,9 +98,11 @@ type SubtitleRef struct {
 	HearingImpaired bool
 }
 
-// ChapterRef is a chapter on the copy's whole timeline, across its parts. Image is the address of
-// its picture, for those that have one.
+// ChapterRef is a chapter on the copy's whole timeline, across its parts: the Idx'th of Part's own.
+// Image is the address of its picture, for those that have one.
 type ChapterRef struct {
+	Part    uuid.UUID
+	Idx     int
 	StartMS int64
 	EndMS   int64
 	Title   string
@@ -219,7 +221,7 @@ func (in versionRows) page(r *model.Version) VersionPage {
 		for _, c := range in.chapters {
 			if c.PartID == p.ID {
 				own = append(own, c)
-				ref := ChapterRef{StartMS: p.OffsetMS + c.StartMS, EndMS: p.OffsetMS + c.EndMS, Title: deref(c.Title)}
+				ref := ChapterRef{Part: p.ID, Idx: c.Idx, StartMS: p.OffsetMS + c.StartMS, EndMS: p.OffsetMS + c.EndMS, Title: deref(c.Title)}
 				if slices.Contains(in.pictured[p.ID], c.Idx) {
 					ref.Image = fmt.Sprintf("/api/v1/parts/%s/chapters/%d/image", p.ID, c.Idx)
 				}
