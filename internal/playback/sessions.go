@@ -212,34 +212,14 @@ func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Du
 	s.raise(ctx, domain.Event{Kind: domain.EventUserDataChanged, Profile: p.Profile, Item: p.Item})
 	stopped := event(domain.EventPlaybackStopped, p)
 	// How far it got says whether it was watched to the end, as Plex's media.scrobble does.
-	stopped.Details["reach"] = reach
+	stopped.Details = domain.PlaybackDetails{Playback: p.Showing(), Reach: reach}
 	s.raise(ctx, stopped)
 	return reach, nil
 }
 
 // event tells of a playback as the dashboard lists it.
 func event(kind domain.EventKind, p domain.Playback) domain.Event {
-	return domain.Event{Kind: kind, Profile: p.Profile, Item: p.Item, Details: map[string]any{"playback": Showing(p)}}
-}
-
-// NowPlaying is a playback as an admin's dashboard shows it, in the list of playbacks, the event
-// stream's snapshot and each playback event alike.
-type NowPlaying struct {
-	ID uuid.UUID `json:"id"`
-	domain.PlaybackCard
-	Method     domain.PlayMethod `json:"method"`
-	State      domain.PlayState  `json:"state"`
-	PositionMS int64             `json:"position_ms"`
-	StartedAt  time.Time         `json:"started_at"`
-	UpdatedAt  time.Time         `json:"updated_at"`
-	NodeID     uuid.UUID         `json:"node_id"`
-}
-
-func Showing(p domain.Playback) NowPlaying {
-	return NowPlaying{
-		ID: p.ID, PlaybackCard: p.Card, Method: p.Method, State: p.State, PositionMS: p.Position.Milliseconds(),
-		StartedAt: p.Started.UTC(), UpdatedAt: p.Updated.UTC(), NodeID: p.Node,
-	}
+	return domain.Event{Kind: kind, Profile: p.Profile, Item: p.Item, Details: domain.PlaybackDetails{Playback: p.Showing()}}
 }
 
 // Abandon ends a playback whose stream could not be opened, before any of it was watched.

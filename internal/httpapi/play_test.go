@@ -890,7 +890,7 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 		return playing.Items
 	}
 	items := list()
-	var shown playback.NowPlaying
+	var shown domain.NowPlaying
 	if len(items) != 1 || json.Unmarshal(items[0], &shown) != nil {
 		t.Fatalf("admin playbacks = %s, want the one playing", items)
 	}
@@ -911,7 +911,8 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 	if shown.ID != started.PlaybackID || shown.Method != domain.PlayTranscode || !cmp.Equal(shown.PlaybackCard, want) {
 		t.Errorf("the playback shown: %s; want %+v", items[0], want)
 	}
-	if got, _ := json.Marshal(told[0].Details["playback"]); told[0].Kind != domain.EventPlaybackStarted || string(got) != string(items[0]) {
+	d, _ := told[0].Details.(domain.PlaybackDetails)
+	if got, _ := json.Marshal(d.Playback); told[0].Kind != domain.EventPlaybackStarted || string(got) != string(items[0]) {
 		t.Errorf("told %v %s; want it started, shown as the list shows it", told[0].Kind, got)
 	}
 

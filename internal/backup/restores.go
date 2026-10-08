@@ -50,7 +50,7 @@ func (s Restores) Begin(ctx context.Context, name string) error {
 	if !ok {
 		return ErrRestoring
 	}
-	s.Raise(ctx, domain.Event{Kind: domain.EventRestoreStarted, Details: map[string]any{"dump": name}})
+	s.Raise(ctx, domain.Event{Kind: domain.EventRestoreStarted, Details: domain.RestoreDetails{Dump: name}})
 	return nil
 }
 

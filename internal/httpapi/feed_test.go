@@ -17,7 +17,6 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
@@ -36,9 +35,11 @@ func (a tokenAuth) Authenticate(_ context.Context, token string) (domain.Session
 	return domain.Session{ID: uuid.NewV7(), Profile: p}, nil
 }
 
+// told is an event as a stream sends it, its details as a client reads them.
 type told struct {
 	name string
 	eventJSON
+	Details map[string]any `json:"details"`
 }
 
 func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
@@ -122,7 +123,7 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 			defer close(out)
 			for e := range stream(bufio.NewReader(res.Body)) {
 				var got told
-				if err := json.Unmarshal([]byte(e.data), &got.eventJSON); err != nil {
+				if err := json.Unmarshal([]byte(e.data), &got); err != nil {
 					return
 				}
 				got.name = e.name
@@ -192,7 +193,7 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	stopped := uuid.NewV7()
 	hub.Raise(ctx, domain.Event{
 		Kind: domain.EventPlaybackStopped, Profile: sam.ID, Item: title["Paddington"],
-		Details: map[string]any{"playback": playback.NowPlaying{ID: stopped}},
+		Details: domain.PlaybackDetails{Playback: domain.NowPlaying{ID: stopped}},
 	})
 
 	// Oliver sees every library: once both changes reach him, Sam's stream has been handed them too.

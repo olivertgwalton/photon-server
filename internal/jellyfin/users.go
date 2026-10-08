@@ -107,7 +107,7 @@ func (a *API) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token, profile, err := a.svc.Auth.SignIn(r.Context(), req.Username, req.Pw, auth.Device{Name: app.Device, Client: app.Client})
-	details := map[string]any{"name": req.Username, "device": app.Device, "client": app.Client, "address": addr.String()}
+	details := domain.SignInDetails{Name: req.Username, Device: app.Device, Client: app.Client, Address: addr.String()}
 	switch {
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		a.svc.Raise(r.Context(), domain.Event{Kind: domain.EventSignInRefused, Details: details})

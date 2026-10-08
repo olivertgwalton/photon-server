@@ -107,9 +107,9 @@ func TestAnAdminsStreamTellsWhatHappensOnEveryNode(t *testing.T) {
 	if res.Header.Get("Content-Type") != "text/event-stream" {
 		t.Fatalf("Content-Type %q", res.Header.Get("Content-Type"))
 	}
-	told := stream(bufio.NewReader(res.Body))
+	sent := stream(bufio.NewReader(res.Body))
 
-	first := <-told
+	first := <-sent
 	var now snapshotJSON
 	if err := json.Unmarshal([]byte(first.data), &now); err != nil || first.name != "snapshot" {
 		t.Fatalf("first event %q %s, %v; want the snapshot", first.name, first.data, err)
@@ -121,18 +121,18 @@ func TestAnAdminsStreamTellsWhatHappensOnEveryNode(t *testing.T) {
 
 	// Told from the other node until this one, subscribing as the stream opened, hears it.
 	lib := uuid.NewV7()
-	await := func(kind domain.EventKind, raise func()) eventJSON {
+	await := func(kind domain.EventKind, raise func()) told {
 		t.Helper()
 		again := time.NewTicker(100 * time.Millisecond)
 		defer again.Stop()
 		deadline := time.After(10 * time.Second)
 		for raise(); ; {
 			select {
-			case e, ok := <-told:
+			case e, ok := <-sent:
 				if !ok {
 					t.Fatalf("the stream ended waiting for %s", kind)
 				}
-				var got eventJSON
+				var got told
 				if err := json.Unmarshal([]byte(e.data), &got); err != nil {
 					t.Fatal(err)
 				}
@@ -147,7 +147,7 @@ func TestAnAdminsStreamTellsWhatHappensOnEveryNode(t *testing.T) {
 		}
 	}
 	finished := await(domain.EventTaskFinished, func() {
-		there.Raise(t.Context(), domain.Event{Kind: domain.EventTaskFinished, Details: map[string]any{"task": domain.TaskSweepJobs, "result": domain.TaskSucceeded}})
+		there.Raise(t.Context(), domain.Event{Kind: domain.EventTaskFinished, Details: domain.TaskDetails{Task: domain.TaskSweepJobs, Result: domain.TaskSucceeded}})
 	})
 	if finished.Details["task"] != string(domain.TaskSweepJobs) || finished.ID != (uuid.UUID{}) {
 		t.Errorf("task finished as %+v; want sweep_jobs's, kept nowhere", finished)
@@ -183,7 +183,7 @@ func TestAnAdminsStreamTellsWhatHappensOnEveryNode(t *testing.T) {
 	deadline := time.After(10 * time.Second)
 	for {
 		select {
-		case _, ok := <-told:
+		case _, ok := <-sent:
 			if !ok {
 				return
 			}

@@ -97,7 +97,7 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileAdded, Profile: p.ID, Details: map[string]any{"name": p.Name}})
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileAdded, Profile: p.ID, Details: domain.NameDetails{Name: p.Name}})
 	writeJSON(w, a.logger, "application/json", http.StatusCreated, profileOf(p))
 }
 
@@ -151,7 +151,7 @@ func (a *API) removeProfile(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileRemoved, Details: map[string]any{"name": name}})
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileRemoved, Details: domain.NameDetails{Name: name}})
 	w.WriteHeader(http.StatusNoContent)
 }
 

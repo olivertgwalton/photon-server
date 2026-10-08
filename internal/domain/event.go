@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"slices"
 	"time"
 	"uuid"
@@ -131,8 +132,175 @@ type Event struct {
 	Profile uuid.UUID
 	Item    uuid.UUID
 	Library uuid.UUID
-	Details map[string]any
+	Details EventDetails
 }
+
+// UnmarshalJSON reads an event told by another node, its details as its kind has them.
+func (e *Event) UnmarshalJSON(b []byte) error {
+	type plain Event
+	var read struct {
+		plain
+		Details json.RawMessage
+	}
+	if err := json.Unmarshal(b, &read); err != nil {
+		return err
+	}
+	*e = Event(read.plain)
+	if string(read.Details) == "null" {
+		return nil
+	}
+	var err error
+	e.Details, err = DetailsOf(e.Kind, read.Details)
+	return err
+}
+
+// EventDetails is what an event says beyond the profile, title and library it was about: one of
+// the types below, each written as a JSON object, and none, written {}, for a kind that says no
+// more. Their fields are in the order of their keys, as the maps they replace were written.
+type EventDetails interface{ eventDetails() }
+
+// DetailsOf reads the details of an event of kind k from JSON.
+func DetailsOf(k EventKind, raw []byte) (EventDetails, error) {
+	switch k {
+	case EventPlaybackStarted, EventPlaybackPaused, EventPlaybackResumed, EventPlaybackStopped:
+		return detailsOf[PlaybackDetails](raw)
+	case EventSignedIn, EventSignInRefused:
+		return detailsOf[SignInDetails](raw)
+	case EventProfileAdded, EventProfileRemoved, EventLibraryAdded, EventLibraryRemoved:
+		return detailsOf[NameDetails](raw)
+	case EventLibraryScanned:
+		return detailsOf[ScannedDetails](raw)
+	case EventLibraryChanged:
+		return detailsOf[LibraryChangedDetails](raw)
+	case EventUserDataChanged:
+		return detailsOf[UserDataDetails](raw)
+	case EventTitlesAdded:
+		return detailsOf[TitlesAddedDetails](raw)
+	case EventScanProgress:
+		return detailsOf[ScanProgressDetails](raw)
+	case EventTaskStarted, EventTaskFinished, EventTaskFailed:
+		return detailsOf[TaskDetails](raw)
+	case EventBackupMade:
+		return detailsOf[BackupDetails](raw)
+	case EventRestoreStarted:
+		return detailsOf[RestoreDetails](raw)
+	case EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead:
+		return detailsOf[JobDetails](raw)
+	case EventJobsProgress:
+		return detailsOf[BacklogDetails](raw)
+	case EventTitleUpdated, EventWebhookTest, EventMaintenanceChanged, EventNetworkChanged,
+		EventStorageChanged, EventNodesChanged:
+	}
+	return nil, nil
+}
+
+func detailsOf[T EventDetails](raw []byte) (EventDetails, error) {
+	var d T
+	err := json.Unmarshal(raw, &d)
+	return d, err
+}
+
+// NoDetails is the details of an event that says no more.
+type NoDetails struct{}
+
+type PlaybackDetails struct {
+	Playback NowPlaying `json:"playback"`
+	// Reach is how far a stopped playback got.
+	Reach Reach `json:"reach,omitzero"`
+}
+
+// PlaybackClosedDetails is what a profile's own player is told of its playback stopped.
+type PlaybackClosedDetails struct {
+	PlaybackID uuid.UUID `json:"playback_id"`
+}
+
+// SignInDetails is who tried to sign in, from where and on what; never the password.
+type SignInDetails struct {
+	Address string `json:"address"`
+	Client  string `json:"client"`
+	Device  string `json:"device"`
+	Name    string `json:"name"`
+}
+
+// NameDetails is the name of a profile or library added or removed.
+type NameDetails struct {
+	Name string `json:"name"`
+}
+
+type ScannedDetails struct {
+	Folders   int `json:"folders"`
+	LeftOut   int `json:"left_out"`
+	Probed    int `json:"probed"`
+	Unchanged int `json:"unchanged"`
+}
+
+// LibraryChangedDetails are the ids under each TitleChange, every one present.
+type LibraryChangedDetails map[TitleChange][]uuid.UUID
+
+// UserDataDetails is the playlist changed; a title's state changed is the event's Item, told to
+// its profile as the titles listed with it.
+type UserDataDetails struct {
+	PlaylistID uuid.UUID   `json:"playlist_id,omitzero"`
+	TitleIDs   []uuid.UUID `json:"title_ids,omitzero"`
+}
+
+type TitlesAddedDetails struct {
+	Titles int64 `json:"titles"`
+}
+
+type ScanProgressDetails struct {
+	Done   int       `json:"done"`
+	Folder string    `json:"folder"`
+	Known  int       `json:"known"`
+	Phase  ScanPhase `json:"phase"`
+}
+
+// TaskDetails is the task, and once it ends how it did, with the error it failed with.
+type TaskDetails struct {
+	Error  string     `json:"error,omitzero"`
+	Result TaskResult `json:"result,omitzero"`
+	Task   TaskKey    `json:"task"`
+}
+
+type BackupDetails struct {
+	File string `json:"file"`
+}
+
+type RestoreDetails struct {
+	Dump string `json:"dump"`
+}
+
+// JobDetails is the job, with the error an attempt failed with.
+type JobDetails struct {
+	Attempt int       `json:"attempt"`
+	Error   string    `json:"error,omitzero"`
+	JobID   int64     `json:"job_id"`
+	JobKind JobKind   `json:"job_kind"`
+	Subject uuid.UUID `json:"subject"`
+}
+
+// BacklogDetails is how far a kind's backlog has got.
+type BacklogDetails struct {
+	Done    int     `json:"done"`
+	JobKind JobKind `json:"job_kind"`
+	Left    int     `json:"left"`
+}
+
+func (NoDetails) eventDetails()             {}
+func (PlaybackDetails) eventDetails()       {}
+func (PlaybackClosedDetails) eventDetails() {}
+func (SignInDetails) eventDetails()         {}
+func (NameDetails) eventDetails()           {}
+func (ScannedDetails) eventDetails()        {}
+func (LibraryChangedDetails) eventDetails() {}
+func (UserDataDetails) eventDetails()       {}
+func (TitlesAddedDetails) eventDetails()    {}
+func (ScanProgressDetails) eventDetails()   {}
+func (TaskDetails) eventDetails()           {}
+func (BackupDetails) eventDetails()         {}
+func (RestoreDetails) eventDetails()        {}
+func (JobDetails) eventDetails()            {}
+func (BacklogDetails) eventDetails()        {}
 
 // TitleChange is what happened to a library's titles.
 type TitleChange string

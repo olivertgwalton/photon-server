@@ -77,7 +77,7 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (ev
 			if err != nil {
 				return eventJSON{}, false, err
 			}
-			e.Details = map[string]any{"title_ids": nonNil(same)}
+			e.Details = domain.UserDataDetails{TitleIDs: nonNil(same)}
 		}
 		return eventOf(e), true, nil
 	case domain.EventTitleUpdated:
@@ -93,16 +93,17 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (ev
 		if err != nil || !ok {
 			return eventJSON{}, false, err
 		}
-		details, told := map[string]any{}, false
+		gathered, _ := e.Details.(domain.LibraryChangedDetails)
+		details, told := domain.LibraryChangedDetails{}, false
 		for _, change := range domain.TitleChanges() {
-			ids := idsIn(e.Details[string(change)])
+			ids := gathered[change]
 			// A title removed is no longer there to ask of; its id says nothing of it.
 			if change != domain.TitleRemoved {
 				if ids, err = a.svc.Audience.Visible(ctx, profile, ids); err != nil {
 					return eventJSON{}, false, err
 				}
 			}
-			details[string(change)] = nonNil(ids)
+			details[change] = nonNil(ids)
 			told = told || len(ids) > 0
 		}
 		e.Details = details
@@ -114,8 +115,8 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (ev
 		if e.Profile != profile {
 			return eventJSON{}, false, nil
 		}
-		shown, _ := e.Details["playback"].(map[string]any)
-		e.Details = map[string]any{"playback_id": shown["id"]}
+		shown, _ := e.Details.(domain.PlaybackDetails)
+		e.Details = domain.PlaybackClosedDetails{PlaybackID: shown.Playback.ID}
 		return eventOf(e), true, nil
 	case domain.EventPlaybackStarted, domain.EventPlaybackPaused, domain.EventPlaybackResumed,
 		domain.EventSignedIn, domain.EventSignInRefused,
@@ -127,19 +128,6 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (ev
 		domain.EventNetworkChanged, domain.EventStorageChanged, domain.EventNodesChanged:
 	}
 	return eventJSON{}, false, nil
-}
-
-// idsIn reads the ids of a list in an event's details, which arrives from another node as JSON.
-func idsIn(v any) []uuid.UUID {
-	list, _ := v.([]any)
-	var out []uuid.UUID
-	for _, item := range list {
-		s, _ := item.(string)
-		if id, err := uuid.Parse(s); err == nil {
-			out = append(out, id)
-		}
-	}
-	return out
 }
 
 func (a *API) feedRoutes() []route {

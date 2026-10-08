@@ -43,9 +43,9 @@ func TestTheLogKeepsWhatAnAdminReadsLater(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hub.Raise(ctx, domain.Event{Kind: domain.EventSignedIn, Profile: oliver.ID, Details: map[string]any{"device": "Living room"}})
-	hub.Raise(ctx, domain.Event{Kind: domain.EventTaskStarted, Details: map[string]any{"task": domain.TaskSweepJobs}})
-	hub.Raise(ctx, domain.Event{Kind: domain.EventSignInRefused, Details: map[string]any{"name": "Oliver"}})
+	hub.Raise(ctx, domain.Event{Kind: domain.EventSignedIn, Profile: oliver.ID, Details: domain.SignInDetails{Device: "Living room"}})
+	hub.Raise(ctx, domain.Event{Kind: domain.EventTaskStarted, Details: domain.TaskDetails{Task: domain.TaskSweepJobs}})
+	hub.Raise(ctx, domain.Event{Kind: domain.EventSignInRefused, Details: domain.SignInDetails{Name: "Oliver"}})
 	got, total, err := st.Activity(ctx, "", 0, 10)
 	if err != nil || total != 2 {
 		t.Fatalf("Activity = %+v of %d, %v; want the sign-in and the refusal, not the task starting", got, total, err)
@@ -102,8 +102,8 @@ func TestAScansChangesAreToldAFewAtATime(t *testing.T) {
 		t.Fatalf("told %d library.changed events, want the 601 changes as one", len(events))
 	}
 	count := func(change domain.TitleChange) int {
-		ids, _ := events[0].Details[string(change)].([]any)
-		return len(ids)
+		told, _ := events[0].Details.(domain.LibraryChangedDetails)
+		return len(told[change])
 	}
 	if count(domain.TitleAdded) != 299 || count(domain.TitleUpdated) != 0 || count(domain.TitleRemoved) != 1 {
 		t.Errorf("told %v; want 299 added, the one removed removed, and nothing as only updated", events[0].Details)
@@ -168,8 +168,9 @@ func TestABacklogCountsDownAndStartsAgainOnceDrained(t *testing.T) {
 	for drained := false; !drained; {
 		select {
 		case e := <-told:
-			drained = e.Kind == domain.EventJobsProgress && e.Details["left"] == 0.0
-			if drained && (e.Details["done"] != 3.0 || e.Details["job_kind"] != string(domain.JobKeyframes)) {
+			d, _ := e.Details.(domain.BacklogDetails)
+			drained = e.Kind == domain.EventJobsProgress && d.Left == 0
+			if drained && d != (domain.BacklogDetails{JobKind: domain.JobKeyframes, Done: 3}) {
 				t.Errorf("drained as %v; want the keyframes' 3 done", e.Details)
 			}
 		case <-deadline:

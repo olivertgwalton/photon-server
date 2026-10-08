@@ -8,7 +8,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/task"
 )
@@ -147,8 +146,8 @@ type transcodesJSON struct {
 }
 
 type nowPlayingListJSON struct {
-	Items      []playback.NowPlaying `json:"items"`
-	Transcodes transcodesJSON        `json:"transcodes"`
+	Items      []domain.NowPlaying `json:"items"`
+	Transcodes transcodesJSON      `json:"transcodes"`
 }
 
 // adminPlaybacks answers who is playing what, how, on which node, and where they have got to, and
@@ -163,10 +162,10 @@ func (a *API) adminPlaybacks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, nowPlayingListJSON{playbacksJSON(all), transcodesJSON{active, conversions, limit}})
 }
 
-func playbacksJSON(all []domain.Playback) []playback.NowPlaying {
-	out := make([]playback.NowPlaying, len(all))
+func playbacksJSON(all []domain.Playback) []domain.NowPlaying {
+	out := make([]domain.NowPlaying, len(all))
 	for i, p := range all {
-		out[i] = playback.Showing(p)
+		out[i] = p.Showing()
 	}
 	return out
 }
