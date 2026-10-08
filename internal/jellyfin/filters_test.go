@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"slices"
 	"testing"
 	"time"
@@ -16,9 +17,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
-// An app lists the genres, studios, ratings and years a library's titles have, as Jellyfin's web
-// app and Findroid do.
-func TestAnAppListsWhatALibrarysTitlesHave(t *testing.T) {
+// An app lists the genres, studios, ratings and years a library's titles have, and narrows the
+// library to one by the name or the id it was given, as Jellyfin's web app and Findroid do.
+func TestAnAppNarrowsALibraryByWhatItsTitlesHave(t *testing.T) {
 	ctx := t.Context()
 	db := storetest.FreshDatabase(t)
 	log := slog.New(slog.DiscardHandler)
@@ -117,5 +118,24 @@ func TestAnAppListsWhatALibrarysTitlesHave(t *testing.T) {
 	get("/Items/Filters2?"+lib, &filters)
 	if len(filters.Genres) != 4 || filters.Tags == nil || filters.Genres[3].Name != "Science Fiction" || filters.Genres[3].ID != items[3].ID {
 		t.Errorf("filters2: %+v, want the genres by the ids /Genres gave", filters)
+	}
+
+	walled := func(narrowed string) []string {
+		t.Helper()
+		names, _ := list("/Items?" + lib + "&recursive=true&includeItemTypes=Movie&sortBy=SortName&" + narrowed)
+		return names
+	}
+	for narrowed, want := range map[string][]string{
+		"genreIds=" + filters.Genres[3].ID:                    {"Alien", "Brazil"},
+		"genres=" + url.QueryEscape("Crime, Thriller|Comedy"): {"Brazil", "Heat"},
+		"studios=Embassy": {"Brazil"},
+		"studioIds=" + guid(nameID("Studio", "Brandywine")): {"Alien"},
+		"officialRatings=A|18":                              {"Alien", "Heat"},
+		"genreIds=" + guid(uuid.NewV7()):                    nil,
+		"officialRatings=U":                                 nil,
+	} {
+		if got := walled(narrowed); !slices.Equal(got, want) {
+			t.Errorf("%s: %v, want %v", narrowed, got, want)
+		}
 	}
 }

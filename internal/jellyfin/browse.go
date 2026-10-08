@@ -74,8 +74,18 @@ func listedOf(w http.ResponseWriter, r *http.Request) listed {
 
 // values are a list parameter's values, sent comma-joined as Jellyfin's apps send them.
 func values(r *http.Request, name string) []string {
+	return split(query(r, name), ",")
+}
+
+// piped are a list parameter's names, which Jellyfin splits on "|" alone, as a name may hold a
+// comma.
+func piped(r *http.Request, name string) []string {
+	return split(query(r, name), "|")
+}
+
+func split(s, sep string) []string {
 	var out []string
-	for v := range strings.SplitSeq(query(r, name), ",") {
+	for v := range strings.SplitSeq(s, sep) {
 		if v = strings.TrimSpace(v); v != "" {
 			out = append(out, v)
 		}
@@ -184,7 +194,7 @@ func wallPage(r *http.Request, profile uuid.UUID, l listed) store.WallPage {
 			p.Filter.Marks = append(p.Filter.Marks, marks[flag[1]])
 		}
 	}
-	p.Filter.Genres = values(r, "genres")
+	p.Filter.Genres, p.Filter.Studios = piped(r, "genres"), piped(r, "studios")
 	// An id that is none names no one, so narrows to nothing rather than letting everything through.
 	for _, v := range values(r, "personIds") {
 		id, _ := parseID(v)
@@ -294,16 +304,22 @@ func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Req
 		return
 	}
 	var ids []uuid.UUID
+	var shown []*store.SeenLibrary
 	for _, lib := range libs {
 		if len(types) == 0 || has(types, libraryKinds[lib.Kind]) {
-			ids = append(ids, lib.ID)
+			ids, shown = append(ids, lib.ID), append(shown, lib)
 		}
 	}
 	if len(ids) == 0 {
 		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
 		return
 	}
-	cards, total, err := a.svc.Catalogue.Wall(r.Context(), ids, wallPage(r, auth.SessionOf(r.Context()).Profile.ID, l))
+	p := wallPage(r, auth.SessionOf(r.Context()).Profile.ID, l)
+	if err := a.narrow(r, shown, &p.Filter); err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	cards, total, err := a.svc.Catalogue.Wall(r.Context(), ids, p)
 	if err != nil {
 		a.internal(w, r, err)
 		return

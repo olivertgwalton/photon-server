@@ -144,6 +144,48 @@ func (a *API) filters2(w http.ResponseWriter, r *http.Request) {
 	}{genres, []struct{}{}})
 }
 
+// narrow adds to a filter the names of the genres and studios an app names by id, and the
+// certificates it names bare, of those the libraries have.
+func (a *API) narrow(r *http.Request, libs []*store.SeenLibrary, f *store.WallFilter) error {
+	genres, studios, ratings := values(r, "genreIds"), values(r, "studioIds"), piped(r, "officialRatings")
+	if len(genres)+len(studios)+len(ratings) == 0 {
+		return nil
+	}
+	have, err := a.facets(r.Context(), auth.SessionOf(r.Context()).Profile.ID, libs)
+	if err != nil {
+		return err
+	}
+	// Each starts from a name no title has, so what none of the libraries has narrows to nothing
+	// rather than letting everything through.
+	matching := func(names []string, match func(string) bool) []string {
+		out := []string{""}
+		for _, name := range names {
+			if match(name) {
+				out = append(out, name)
+			}
+		}
+		return out
+	}
+	byID := func(kind string, ids []string) func(string) bool {
+		want := map[uuid.UUID]bool{}
+		for _, s := range ids {
+			id, _ := parseID(s)
+			want[id] = true
+		}
+		return func(name string) bool { return want[nameID(kind, name)] }
+	}
+	if len(genres) > 0 {
+		f.Genres = append(f.Genres, matching(have.Genres, byID("Genre", genres))...)
+	}
+	if len(studios) > 0 {
+		f.Studios = append(f.Studios, matching(have.Studios, byID("Studio", studios))...)
+	}
+	if len(ratings) > 0 {
+		f.Certificates = append(f.Certificates, matching(have.Certificates, func(c string) bool { return has(ratings, domain.Bare(c)) })...)
+	}
+	return nil
+}
+
 func nonNil[T any](s []T) []T {
 	if s == nil {
 		return []T{}
