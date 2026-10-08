@@ -45,8 +45,7 @@ func (f Files) SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string
 	}
 	defer os.Remove(tmp.Name())
 	if _, err := tmp.Write(body); err != nil {
-		_ = tmp.Close()
-		return "", "", err
+		return "", "", errors.Join(err, tmp.Close())
 	}
 	if err := tmp.Close(); err != nil {
 		return "", "", err
