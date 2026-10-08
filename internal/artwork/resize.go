@@ -106,15 +106,18 @@ func roundUp(n int) int {
 }
 
 func (c *Cache) resize(ctx context.Context, name string, width, height int, open func(context.Context) (blob.Object, error)) error {
+	// Opened before taking a place: a provider's picture is fetched and hashed on first open, and
+	// hashing takes a place of its own, so resizes holding every place would wait on it for good.
+	f, err := open(ctx)
+	if err != nil {
+		return err
+	}
 	select {
 	case c.resizing <- struct{}{}:
 		defer func() { <-c.resizing }()
 	case <-ctx.Done():
+		_ = f.Close()
 		return ctx.Err()
-	}
-	f, err := open(ctx)
-	if err != nil {
-		return err
 	}
 	src, err := decode(f)
 	_ = f.Close()
