@@ -64,7 +64,7 @@ func newHousehold(t *testing.T) household {
 		t.Fatal(err)
 	}
 	h.api = New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
-		Auth: profiles{"pst_ada": h.ada, "pst_bob": h.bob}, Catalogue: st, Playlists: st,
+		Auth: profiles{"pst_ada": h.ada, "pst_bob": h.bob}, Catalogue: st, Preferences: st, Playlists: st,
 		Raise: func(_ context.Context, e domain.Event) { *h.raised = append(*h.raised, e) },
 	})
 	return h

@@ -267,7 +267,7 @@ func TestAnAppReadsAndChangesItsUserData(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{
-		Auth: profiles{"pst_ada": ada}, Catalogue: st, Watching: st,
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Watching: st,
 		Raise: func(context.Context, domain.Event) {},
 	})
 	const header = `MediaBrowser Token="pst_ada"`

@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -38,17 +39,9 @@ type user struct {
 	HasConfiguredPassword     bool            `json:"HasConfiguredPassword"`
 	HasConfiguredEasyPassword bool            `json:"HasConfiguredEasyPassword"`
 	EnableAutoLogin           bool            `json:"EnableAutoLogin"`
-	Configuration             json.RawMessage `json:"Configuration"`
+	Configuration             configuration   `json:"Configuration"`
 	Policy                    json.RawMessage `json:"Policy"`
 }
-
-// configuration is Jellyfin's UserConfiguration as a new user has it. An app that decodes one
-// needs every field: the Kotlin SDK refuses one short of any.
-var configuration = json.RawMessage(`{"PlayDefaultAudioTrack":true,"SubtitleLanguagePreference":"",` +
-	`"DisplayMissingEpisodes":false,"GroupedFolders":[],"SubtitleMode":"Default","DisplayCollectionsView":false,` +
-	`"EnableLocalPassword":false,"OrderedViews":[],"LatestItemsExcludes":[],"MyMediaExcludes":[],` +
-	`"HidePlayedInLatest":true,"RememberAudioSelections":true,"RememberSubtitleSelections":true,` +
-	`"EnableNextEpisodeAutoPlay":true,"CastReceiverId":"F007D354"}`)
 
 // policy is Jellyfin's UserPolicy, complete for the same reason. No profile is an administrator
 // here, even photon's admins: an app would offer Jellyfin's dashboard, which is not served, so
@@ -71,12 +64,13 @@ var policy = json.RawMessage(`{"IsAdministrator":false,"IsHidden":true,"EnableCo
 	`"PasswordResetProviderId":"Jellyfin.Server.Implementations.Users.DefaultPasswordResetProvider",` +
 	`"SyncPlayAccess":"None"}`)
 
-func (a *API) userOf(p domain.Profile) user {
+func (a *API) userOf(ctx context.Context, p domain.Profile) (user, error) {
+	prefs, libs, err := a.configured(ctx, p.ID)
 	return user{
 		Name: p.Name, ServerID: a.id, ID: guid(p.ID), PrimaryImageTag: tag(p.Avatar),
 		HasPassword: true, HasConfiguredPassword: true,
-		Configuration: configuration, Policy: policy,
-	}
+		Configuration: configurationOf(prefs, libs), Policy: policy,
+	}, err
 }
 
 // authenticationResult is Jellyfin's, but its SessionInfo, which no app reads.
@@ -120,7 +114,7 @@ func (a *API) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.svc.Raise(r.Context(), domain.Event{Kind: domain.EventSignedIn, Profile: profile.ID, Details: details})
-	a.writeJSON(w, authenticationResult{User: a.userOf(profile), AccessToken: token, ServerID: a.id})
+	a.writeUser(w, r, profile, token)
 }
 
 // allowed spends one attempt from key's allowance, answering 429 with Retry-After when it is
@@ -139,8 +133,21 @@ func (a *API) allowed(w http.ResponseWriter, r *http.Request, limit kv.Limit, ke
 	return true
 }
 
+// writeUser answers a profile as Jellyfin's user, and as signed in by token where there is one.
+func (a *API) writeUser(w http.ResponseWriter, r *http.Request, p domain.Profile, token string) {
+	u, err := a.userOf(r.Context(), p)
+	switch {
+	case err != nil:
+		a.internal(w, r, err)
+	case token != "":
+		a.writeJSON(w, authenticationResult{User: u, AccessToken: token, ServerID: a.id})
+	default:
+		a.writeJSON(w, u)
+	}
+}
+
 func (a *API) me(w http.ResponseWriter, r *http.Request) {
-	a.writeJSON(w, a.userOf(auth.SessionOf(r.Context()).Profile))
+	a.writeUser(w, r, auth.SessionOf(r.Context()).Profile, "")
 }
 
 // user answers the signed-in profile by its id, and no other, so no profile learns of another.
@@ -150,7 +157,7 @@ func (a *API) user(w http.ResponseWriter, r *http.Request) {
 		a.refuse(w, http.StatusNotFound)
 		return
 	}
-	a.writeJSON(w, a.userOf(p))
+	a.writeUser(w, r, p, "")
 }
 
 // logout signs the device out. An API key is not a device and stays, revoked only by an admin.

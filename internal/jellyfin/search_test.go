@@ -53,7 +53,7 @@ func TestAnAppSearchesByHints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{Auth: profiles{"pst_ada": ada}, Catalogue: st})
+	api := New(log, domain.Info{ID: uuid.NewV7().String(), Name: "Den"}, Services{Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
 	type hint struct {
 		ItemID, ID, Name, Type, MediaType, Series string
 		IndexNumber                               int

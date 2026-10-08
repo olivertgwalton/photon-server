@@ -49,7 +49,8 @@ type Services struct {
 	Previews     previews
 	PreviewFiles previewFiles
 	Themes       themes
-	// Preferences are how each profile plays, which its media sources' default tracks follow.
+	// Preferences are how each profile plays, which its user's configuration and its media
+	// sources' default tracks follow.
 	Preferences preferences
 	// HLS is this node's remuxes, which Placer opens on the node it chooses and Owners find on
 	// whichever node runs them; Signer signs a TranscodingUrl's plan and the addresses of another
@@ -109,6 +110,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle(a.systemInfo, "GET /System/Info")
 	a.handle(a.me, "GET /Users/Me")
 	a.handle(a.user, "GET /Users/{userId}")
+	a.handle(a.setConfiguration, "POST /Users/Configuration", "POST /Users/{userId}/Configuration")
 	a.handle(a.logout, "POST /Sessions/Logout")
 	// What an app says it can do, sent as it signs in: the media it plays and the commands it
 	// takes from another app. Photon sends no app commands, and chooses how a copy plays from the

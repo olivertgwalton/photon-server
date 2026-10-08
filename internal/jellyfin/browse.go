@@ -40,6 +40,7 @@ type catalogue interface {
 	Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID][]store.VersionPage, error)
 	ExternalIDs(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]map[domain.Provider]string, error)
 	Picture(ctx context.Context, id uuid.UUID) (domain.Picture, error)
+	SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error
 }
 
 // queryResult is Jellyfin's BaseItemDtoQueryResult. TotalRecordCount is of every match, not the
