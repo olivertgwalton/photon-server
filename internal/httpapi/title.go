@@ -5,8 +5,33 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
+
+// subtitleKind is what a subtitle is made of, which decides how a player may show it: plain text,
+// which HLS carries as WebVTT; styled text, whose look WebVTT would lose; or pictures.
+type subtitleKind string
+
+const (
+	subtitleText    subtitleKind = "text"
+	subtitleStyled  subtitleKind = "styled"
+	subtitlePicture subtitleKind = "picture"
+)
+
+func subtitleKinds() []subtitleKind {
+	return []subtitleKind{subtitleText, subtitleStyled, subtitlePicture}
+}
+
+func subtitleKindOf(codec string) subtitleKind {
+	switch {
+	case hls.TextSubtitle(codec):
+		return subtitleText
+	case hls.StyledSubtitle(codec):
+		return subtitleStyled
+	}
+	return subtitlePicture
+}
 
 type titlePageJSON struct {
 	ID            uuid.UUID                  `json:"id"`
@@ -117,21 +142,24 @@ type streamPageJSON struct {
 	BitDepth        int16             `json:"bit_depth,omitzero"`
 	Level           int               `json:"level,omitzero"`
 	Range           domain.Range      `json:"range,omitzero"`
-	DVProfile       int16             `json:"dv_profile,omitzero"`
-	Channels        int               `json:"channels,omitzero"`
-	ChannelLayout   string            `json:"channel_layout,omitzero"`
-	SampleRate      int               `json:"sample_rate,omitzero"`
-	BitrateKbps     int               `json:"bitrate_kbps,omitzero"`
+	// SubtitleKind is a subtitle's.
+	SubtitleKind  subtitleKind `json:"subtitle_kind,omitzero"`
+	DVProfile     int16        `json:"dv_profile,omitzero"`
+	Channels      int          `json:"channels,omitzero"`
+	ChannelLayout string       `json:"channel_layout,omitzero"`
+	SampleRate    int          `json:"sample_rate,omitzero"`
+	BitrateKbps   int          `json:"bitrate_kbps,omitzero"`
 }
 
 type subtitleRefJSON struct {
-	ID              uuid.UUID `json:"id"`
-	Codec           string    `json:"codec"`
-	Language        string    `json:"language,omitzero"`
-	Title           string    `json:"title,omitzero"`
-	Default         bool      `json:"default,omitzero"`
-	Forced          bool      `json:"forced,omitzero"`
-	HearingImpaired bool      `json:"hearing_impaired,omitzero"`
+	ID              uuid.UUID    `json:"id"`
+	Codec           string       `json:"codec"`
+	Kind            subtitleKind `json:"kind"`
+	Language        string       `json:"language,omitzero"`
+	Title           string       `json:"title,omitzero"`
+	Default         bool         `json:"default,omitzero"`
+	Forced          bool         `json:"forced,omitzero"`
+	HearingImpaired bool         `json:"hearing_impaired,omitzero"`
 }
 
 type ratingRefJSON struct {
@@ -268,10 +296,15 @@ func versionPageOf(v store.VersionPage) versionPageJSON {
 	return versionPageJSON{
 		ID: v.ID, Edition: v.Edition, Label: v.Label, Container: domain.ContainerName(v.Container), DurationMS: v.DurationMS,
 		SizeBytes: v.SizeBytes, BitrateKbps: v.BitrateKbps, Parts: v.Parts, MissingSince: v.MissingSince,
-		Streams:   each(v.Streams, func(s store.StreamPage) streamPageJSON { return streamPageJSON(s) }),
-		Subtitles: each(v.Subtitles, func(s store.SubtitleRef) subtitleRefJSON { return subtitleRefJSON(s) }),
-		Chapters:  each(v.Chapters, func(c store.ChapterRef) chapterRefJSON { return chapterRefJSON(c) }),
-		Markers:   each(v.Markers, func(m store.MarkerRef) markerRefJSON { return markerRefJSON(m) }),
+		Streams: each(v.Streams, streamPageOf),
+		Subtitles: each(v.Subtitles, func(s store.SubtitleRef) subtitleRefJSON {
+			return subtitleRefJSON{
+				ID: s.ID, Codec: s.Codec, Kind: subtitleKindOf(s.Codec), Language: s.Language, Title: s.Title,
+				Default: s.Default, Forced: s.Forced, HearingImpaired: s.HearingImpaired,
+			}
+		}),
+		Chapters: each(v.Chapters, func(c store.ChapterRef) chapterRefJSON { return chapterRefJSON(c) }),
+		Markers:  each(v.Markers, func(m store.MarkerRef) markerRefJSON { return markerRefJSON(m) }),
 		Files: each(v.Files, func(f store.PartRef) partRefJSON {
 			return partRefJSON{ID: f.ID, Index: f.Index, SizeBytes: f.SizeBytes, DurationMS: f.DurationMS, OffsetMS: f.OffsetMS}
 		}),
@@ -281,6 +314,20 @@ func versionPageOf(v store.VersionPage) versionPageJSON {
 		DefaultAudioStream: v.DefaultAudioStream, DefaultSubtitleStream: v.DefaultSubtitleStream,
 		DefaultSubtitleFile: v.DefaultSubtitleFile,
 	}
+}
+
+func streamPageOf(s store.StreamPage) streamPageJSON {
+	out := streamPageJSON{
+		Index: s.Index, Kind: s.Kind, Codec: s.Codec, Profile: s.Profile, Language: s.Language, Title: s.Title,
+		Default: s.Default, Forced: s.Forced, HearingImpaired: s.HearingImpaired, Commentary: s.Commentary,
+		Width: s.Width, Height: s.Height, FrameRate: s.FrameRate, BitDepth: s.BitDepth, Level: s.Level,
+		Range: s.Range, DVProfile: s.DVProfile, Channels: s.Channels, ChannelLayout: s.ChannelLayout,
+		SampleRate: s.SampleRate, BitrateKbps: s.BitrateKbps,
+	}
+	if s.Kind == domain.StreamSubtitle {
+		out.SubtitleKind = subtitleKindOf(s.Codec)
+	}
+	return out
 }
 
 // each converts every element of in, leaving nil as nil so an omitted list stays omitted.

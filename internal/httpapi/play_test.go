@@ -340,6 +340,11 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 		browser.Subtitles[1].ID != signsID || browser.Subtitles[2].ID != subtitleID {
 		t.Fatalf("a browser's play = %+v, want the file as it is, its ASS stream and both files beside it", browser)
 	}
+	// The player is told which it draws as styled text and which as plain.
+	kinds := []subtitleKind{browser.Subtitles[0].Kind, browser.Subtitles[1].Kind, browser.Subtitles[2].Kind}
+	if want := []subtitleKind{subtitleStyled, subtitleStyled, subtitleText}; !slices.Equal(kinds, want) {
+		t.Errorf("subtitle kinds = %v, want %v", kinds, want)
+	}
 	stream := browser.Subtitles[0]
 	if rec := do(httptest.NewRequest(http.MethodGet, stream.URL, nil)); rec.Code != http.StatusOK ||
 		!strings.Contains(rec.Body.String(), "Style: Sign,Shop Sans,24") || !strings.Contains(rec.Body.String(), `{\pos(160,40)}Bakery`) ||
