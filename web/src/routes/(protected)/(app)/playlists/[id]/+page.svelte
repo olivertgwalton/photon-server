@@ -13,7 +13,7 @@ import TitleRow from "#lib/components/TitleRow.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import { count, playHref, runtime } from "#lib/format.js";
+import { count, titleWithShow, playHref, runtime } from "#lib/format.js";
 
 let { data } = $props();
 
@@ -65,8 +65,6 @@ function drop(entry: string) {
 }
 
 const first = $derived(data.entries[0]);
-const name = (e: (typeof data.entries)[number]) =>
-	e.show ? `${e.show.title}: ${e.title}` : e.title;
 </script>
 
 <svelte:head><title>{data.playlist.name} · Photon</title></svelte:head>
@@ -126,7 +124,7 @@ const name = (e: (typeof data.entries)[number]) =>
 								variant="ghost"
 								size="icon-sm"
 								disabled={i === 0}
-								aria-label="Move {name(entry)} up"
+								aria-label="Move {titleWithShow(entry)} up"
 								onclick={() => move(entry.entry_id, i - 1)}
 							>
 								<ArrowUpIcon />
@@ -135,7 +133,7 @@ const name = (e: (typeof data.entries)[number]) =>
 								variant="ghost"
 								size="icon-sm"
 								disabled={i === data.entries.length - 1}
-								aria-label="Move {name(entry)} down"
+								aria-label="Move {titleWithShow(entry)} down"
 								onclick={() => move(entry.entry_id, i + 1)}
 							>
 								<ArrowDownIcon />
@@ -143,7 +141,7 @@ const name = (e: (typeof data.entries)[number]) =>
 							<Button
 								variant="ghost"
 								size="icon-sm"
-								aria-label="Remove {name(entry)}"
+								aria-label="Remove {titleWithShow(entry)}"
 								onclick={() => drop(entry.entry_id)}
 							>
 								<XIcon />

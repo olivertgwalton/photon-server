@@ -1,5 +1,6 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
+import { runtime } from "#lib/format.js";
 import PlayIcon from "@lucide/svelte/icons/play";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
@@ -80,8 +81,8 @@ function work(task: components["schemas"]["Task"]) {
 
 function took(started?: string, finished?: string) {
 	if (!started || !finished) return "";
-	const s = Math.round((Date.parse(finished) - Date.parse(started)) / 1000);
-	return s < 60 ? `${s} s` : `${Math.round(s / 60)} min`;
+	const ms = Date.parse(finished) - Date.parse(started);
+	return ms < 60_000 ? `${Math.round(ms / 1000)} s` : runtime(ms);
 }
 </script>
 

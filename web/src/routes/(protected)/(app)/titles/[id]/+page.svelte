@@ -35,11 +35,12 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
 import {
 	count,
-	episodeLabel,
-	onDisk,
-	playHref,
-	runtime,
 	timecode,
+	episodeLabel,
+	titleWithShow,
+	playHref,
+	onDisk,
+	runtime,
 } from "#lib/format.js";
 
 let { data } = $props();
@@ -144,7 +145,7 @@ const poster = $derived(art("poster"));
 </script>
 
 <svelte:head>
-	<title>{t.show ? `${t.show.title}: ${t.title}` : t.title} · Photon</title>
+	<title>{titleWithShow(t)} · Photon</title>
 </svelte:head>
 
 <article class="grid gap-10">
@@ -261,7 +262,7 @@ const poster = $derived(art("poster"));
 				<Prose
 					text={t.overview}
 					lines={3}
-					title={t.show ? `${t.show.title}: ${t.title}` : t.title}
+					title={titleWithShow(t)}
 					class="text-ink-2 max-w-2xl"
 				/>
 			{/if}
@@ -364,11 +365,7 @@ const poster = $derived(art("poster"));
 					<DropdownMenu.Content align="start" class="w-56">
 						{#if t.kind !== "extra"}
 							<DropdownMenu.Item
-								onSelect={() =>
-									pickPlaylist(
-										[t.id],
-										t.show ? `${t.show.title}: ${t.title}` : t.title,
-									)}
+								onSelect={() => pickPlaylist([t.id], titleWithShow(t))}
 							>
 								<ListPlusIcon />Add to playlist…
 							</DropdownMenu.Item>
@@ -380,11 +377,7 @@ const poster = $derived(art("poster"));
 						{/if}
 						{#if chosen && (t.kind === "movie" || t.kind === "episode")}
 							<DropdownMenu.Item
-								onSelect={() =>
-									findSubtitles(
-										t.id,
-										t.show ? `${t.show.title}: ${t.title}` : t.title,
-									)}
+								onSelect={() => findSubtitles(t.id, titleWithShow(t))}
 							>
 								<CaptionsIcon />Find subtitles…
 							</DropdownMenu.Item>

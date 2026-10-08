@@ -141,6 +141,20 @@ export const roles: Record<Schemas["Role"], string> = {
 	user: "User",
 };
 
+// The roles a profile of this role may give: an admin any, a manager users.
+export function roleOptions(giver: Schemas["Role"]) {
+	return Object.entries(roles)
+		.filter(([value]) => giver === "admin" || value === "user")
+		.map(([value, label]) => ({ value: value as Schemas["Role"], label }));
+}
+
+// Each item's name by its id, for lists that name what an event was about.
+export function byName(
+	items: readonly { id: string; name: string }[],
+): Map<string, string> {
+	return new Map(items.map((i) => [i.id, i.name]));
+}
+
 export const extraKinds: Record<Schemas["ExtraKind"], string> = {
 	trailer: "Trailers",
 	teaser: "Teasers",
@@ -318,26 +332,40 @@ export function parseClock(text: string): number | undefined {
 	return Math.round((Number(h) * 3600 + Number(m) * 60 + Number(s)) * 1000);
 }
 
-export const bytes = new Intl.NumberFormat(undefined, {
-	style: "unit",
-	unit: "gigabyte",
-	maximumFractionDigits: 1,
-});
+const units: [
+	Intl.RelativeTimeFormatUnit & ("day" | "hour" | "minute"),
+	number,
+][] = [
+	["day", 86_400],
+	["hour", 3_600],
+	["minute", 60],
+];
 
 // How long ago, or how far ahead, a moment is, in its largest whole unit.
-export function relative(at: string, now: number): string {
-	const seconds = Math.round((Date.parse(at) - now) / 1000);
-	const units: [Intl.RelativeTimeFormatUnit, number][] = [
-		["day", 86_400],
-		["hour", 3_600],
-		["minute", 60],
-	];
+export function relative(at: string | number, now: number): string {
+	const seconds = Math.round(
+		((typeof at === "number" ? at : Date.parse(at)) - now) / 1000,
+	);
 	const format = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 	for (const [unit, size] of units) {
 		if (Math.abs(seconds) >= size)
 			return format.format(Math.trunc(seconds / size), unit);
 	}
 	return format.format(seconds, "second");
+}
+
+// How long something has run, in its largest whole unit: "3 days", "5 minutes".
+export function elapsed(ms: number): string {
+	const seconds = Math.max(0, Math.round(ms / 1000));
+	const [unit, size] = units.find(([, size]) => seconds >= size) ?? [
+		"second",
+		1,
+	];
+	return new Intl.NumberFormat(undefined, {
+		style: "unit",
+		unit,
+		unitDisplay: "long",
+	}).format(Math.trunc(seconds / size));
 }
 
 export const when = new Intl.DateTimeFormat(undefined, {

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
-import { roles } from "#lib/admin/words.js";
+import { roleOptions } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/admin/Choice.svelte";
@@ -24,9 +24,7 @@ const api = client();
 const path = $derived({ params: { path: { id: data.profile.id } } });
 
 // A manager keeps users.
-const roleOptions = Object.entries(roles)
-	.filter(([value]) => data.me.role === "admin" || value === "user")
-	.map(([value, label]) => ({ value: value as keyof typeof roles, label }));
+const options = $derived(roleOptions(data.me.role));
 
 // The ages certificates are for, as the server reads them.
 const ages = [
@@ -133,12 +131,7 @@ function remove() {
 					</Field.Field>
 					<Field.Field>
 						<Field.Label for="role">Role</Field.Label>
-						<Choice
-							id="role"
-							name="role"
-							value={data.profile.role}
-							options={roleOptions}
-						/>
+						<Choice id="role" name="role" value={data.profile.role} {options} />
 						<Field.Description>
 							The last admin cannot stop being one.
 						</Field.Description>

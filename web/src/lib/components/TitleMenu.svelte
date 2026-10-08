@@ -42,7 +42,7 @@ import {
 } from "#lib/actions.svelte.js";
 import type { components } from "#lib/api/schema.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
-import { playHref } from "#lib/format.js";
+import { titleWithShow, playHref } from "#lib/format.js";
 import { cn } from "#lib/utils.js";
 
 type Card = components["schemas"]["Card"];
@@ -72,9 +72,7 @@ const admin = $derived(page.data.me?.role === "admin");
 // film or show is matched, and all but a collection or an extra refreshed.
 const matched = $derived(card.kind === "movie" || card.kind === "show");
 const refreshes = $derived(card.kind !== "collection" && card.kind !== "extra");
-const name = $derived(
-	card.show ? `${card.show.title}: ${card.title}` : card.title,
-);
+const name = $derived(titleWithShow(card));
 </script>
 
 <DropdownMenu.Root>

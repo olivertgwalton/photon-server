@@ -51,6 +51,15 @@ export function episodeLabel(
 	return season == null ? span : `S${season} ${span}`;
 }
 
+// "Small Show: Second": a title named with its show, where it has one, as a
+// menu or a dialog names what it acts on.
+export function titleWithShow(t: {
+	title: string;
+	show?: { title: string } | null;
+}): string {
+	return t.show ? `${t.show.title}: ${t.title}` : t.title;
+}
+
 // "Small Show S1 E2 · Second": an episode as one line, by its show and place
 // in it; anything else by its own title.
 export function fullTitle(
