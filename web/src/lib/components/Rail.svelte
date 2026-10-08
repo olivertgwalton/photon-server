@@ -60,12 +60,6 @@ function page(direction: 1 | -1) {
 	list?.scrollBy({ left: direction * list.clientWidth * 0.9 });
 }
 
-// Cards fade in one after another, the first screenful only, rising a little
-// into the places already kept for them.
-const arrive =
-	"animate-in fade-in slide-in-from-bottom-2 fill-mode-both shrink-0 snap-start duration-500 ease-out-expo";
-const stagger = (i: number) => `animation-delay: ${Math.min(i, 8) * 35}ms`;
-
 const sizes = $derived(
 	shape === "poster"
 		? "(min-width: 1536px) 12rem, (min-width: 1024px) 10rem, 9rem"
@@ -107,13 +101,13 @@ const sizes = $derived(
 			class="relative -mx-3 flex scroll-smooth snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
 		>
 			{#each cards.slice(0, railLimit) as c, i (c.id)}
-				<li class="{arrive} {width}" style={stagger(i)}>
+				<li class="shrink-0 snap-start {width}">
 					<TitleCard card={c} {shape} {sizes} caption={caption?.(i)} />
 				</li>
 			{/each}
 			{#if card}
-				{#each items.slice(0, railLimit) as item, i (item.id)}
-					<li class="{arrive} {width}" style={stagger(i)}>
+				{#each items.slice(0, railLimit) as item (item.id)}
+					<li class="shrink-0 snap-start {width}">
 						{@render card(item, sizes)}
 					</li>
 				{/each}
