@@ -121,6 +121,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.handle(a.studios, "GET /Studios")
 	a.handle(a.filters, "GET /Items/Filters")
 	a.handle(a.filters2, "GET /Items/Filters2")
+	a.handle(a.searchHints, "GET /Search/Hints")
 	a.handle(a.none,
 		"GET /Items/{itemId}/LocalTrailers", "GET /Users/{userId}/Items/{itemId}/LocalTrailers",
 		"GET /Items/{itemId}/SpecialFeatures", "GET /Users/{userId}/Items/{itemId}/SpecialFeatures")
