@@ -344,7 +344,7 @@ func (s *Store) Network(ctx context.Context) (domain.Network, error) {
 func (s *Store) SetNetwork(ctx context.Context, n domain.Network) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE server SET secure_connections = $1, tls_certificate = $2, tls_key = $3, jellyfin = $4, jellyfin_port = $5,
-			local_networks = $6, remote_max_bitrate_kbps = $7`,
+			local_networks = coalesce($6, '{}'::cidr[]), remote_max_bitrate_kbps = $7`,
 		n.Secure, optional(n.Certificate), optional(n.Key), n.Jellyfin, n.JellyfinPort, n.LocalNetworks, n.RemoteMaxBitrateKbps)
 	return err
 }
