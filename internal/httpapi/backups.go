@@ -2,7 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 	"uuid"
 
@@ -101,4 +104,28 @@ func (a *API) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// restoringPage is what a browser is shown by a node waiting for a restore to finish; it asks
+// again until the node serves the web app.
+const restoringPage = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="5">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Restoring · Photon</title></head>
+<body style="font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 90vh; margin: 0 16px">
+<main><h1>Restoring…</h1><p>The server is restoring its database and will be back shortly.</p></main></body></html>
+`
+
+// Restoring answers every request while a restore is under way and the node waits to start: not
+// ready, as /readyz says to a balancer and the API to a client, and a page a browser shows.
+func Restoring(logger *slog.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "5")
+		if r.URL.Path == "/readyz" || strings.HasPrefix(r.URL.Path, "/api/") {
+			writeProblem(w, logger, codeNotReady, "the server is restoring its database")
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = io.WriteString(w, restoringPage)
+	})
 }

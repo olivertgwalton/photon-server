@@ -95,9 +95,21 @@ const (
 	mediaSlots = 1
 )
 
+// exitRestart is the exit code of a node stopped for a restore, which its restart policy starts
+// again: EX_TEMPFAIL, a failure, so a policy that restarts on failure alone does too.
+const exitRestart = 75
+
+// errRestart is a node stopped for a restore, to be started again.
+var errRestart = errors.New("stopped for a restore; to be started again")
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	if err := run(logger, os.Args[1:]); err != nil {
+	err := run(logger, os.Args[1:])
+	switch {
+	case errors.Is(err, errRestart):
+		logger.Info("photon-server stopped for a restore; its restart policy starts it again", slog.Int("exit", exitRestart))
+		os.Exit(exitRestart)
+	case err != nil:
 		logger.Error("photon-server stopped", slog.Any("err", err))
 		os.Exit(1)
 	}
@@ -157,17 +169,38 @@ func requiredEnv(name string) (string, error) {
 	return "", fmt.Errorf("%s is not set", name)
 }
 
+// serve runs the node until it is told to stop; stopped for a restore, it restores the dump
+// where it keeps it, and answers errRestart, for the restart policy to start it again.
 func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
-	started := time.Now()
 	valkeyURL, err := requiredEnv("PHOTON_VALKEY_URL")
 	if err != nil {
 		return err
 	}
+	err = serveNode(ctx, logger, databaseURL, valkeyURL)
+	stopped, ok := errors.AsType[*stoppedForRestore](err)
+	if !ok {
+		return err
+	}
+	if stopped.leads {
+		if err := lead(ctx, logger, restorer(databaseURL, valkeyURL, logger), stopped.file, stopped.server, stopped.restore); err != nil {
+			return err
+		}
+	}
+	return errRestart
+}
+
+func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL string) error {
+	started := time.Now()
 	tools, err := media.FindTools(ctx)
 	if err != nil {
 		return err
 	}
 	logTools(ctx, logger, tools)
+	listen := cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen)
+	underway := func(ctx context.Context) (bool, error) { return restoreUnderway(ctx, databaseURL, valkeyURL) }
+	if err := awaitRestore(ctx, listen, underway, logger); err != nil {
+		return err
+	}
 	st, err := store.Open(ctx, databaseURL, logger)
 	if err != nil {
 		return err
@@ -261,6 +294,13 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	hub := events.New(st, cache, events.Server{ID: id, Name: info.Name}, logger)
 	restores := backup.Restores{Restorer: restorer(databaseURL, valkeyURL, logger), Dir: dumper.Dir, Node: node, KV: cache, Raise: hub.Raise}
+	// A restore under way stops the node as a signal does, but for its streams, which it ends;
+	// the watch outlives what it stops, to keep the restore while this node goes on to restore it.
+	ctx, stopFor := context.WithCancelCause(ctx)
+	defer stopFor(nil)
+	watched := make(chan struct{})
+	defer close(watched)
+	go watchRestore(context.WithoutCancel(ctx), cache, id, node, dumper.Dir, stopFor, watched, logger)
 	gate := jobs.NewGate(cache, st, hub.Subscribe, logger)
 	window := task.Trigger{Kind: task.TriggerWindow, Opens: gate.Opens}
 	plugins := plugin.New(st)
@@ -274,7 +314,6 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	}
 	sessions := playback.NewSessions(cache, st, remuxer, hub.Raise, node)
 	imports := historyimport.New(st)
-	listen := cmp.Or(os.Getenv("PHOTON_LISTEN"), defaultListen)
 	setup := httpapi.Setup{
 		Started: started, Node: node, Listen: listen, Tools: tools, Encoder: hw, Discovery: discoveryMode,
 		MetadataLanguage: lang, CacheDir: cacheRoot, BackupDir: dumper.Dir, PublicURL: public,
@@ -389,12 +428,20 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 	})
 	wg.Go(func() { jellyfinAPI.Run(background) })
 	logger.InfoContext(ctx, "serving", slog.String("addr", srv.Addr), slog.String("version", info.Version))
-	return listenUntilDone(ctx, srv, secured.Listen, func() {
+	err = listenUntilDone(ctx, srv, secured.Listen, func() {
+		if _, ok := errors.AsType[*stoppedForRestore](context.Cause(ctx)); ok {
+			endStreams(self, remuxer)
+			return
+		}
 		again := make(chan os.Signal, 1)
 		signal.Notify(again, os.Interrupt, syscall.SIGTERM)
 		defer signal.Stop(again)
 		drain(context.WithoutCancel(ctx), self, remuxer, again, drainFor, logger)
 	})
+	if stopped, ok := errors.AsType[*stoppedForRestore](context.Cause(ctx)); ok && err == nil {
+		return stopped
+	}
+	return err
 }
 
 // drain stops this node taking new work and plays its streams to their end, for limit at most,
