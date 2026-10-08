@@ -21,6 +21,7 @@ type previews interface {
 
 type previewFiles interface {
 	Sheet(ctx context.Context, part uuid.UUID, n int) (blob.Object, error)
+	ChapterImage(ctx context.Context, part uuid.UUID, idx int) (blob.Object, error)
 }
 
 // trickplayInfo is Jellyfin's TrickplayInfoDto. Its Bandwidth, the most a player fetching the

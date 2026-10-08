@@ -75,8 +75,8 @@ func (f *fakePlaybacks) Abandon(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// aFilm is a household's film, Heat: one copy, an MKV of H.264 and AAC with an intro marked and a
-// subtitle file beside it; and Ada, who may play it.
+// aFilm is a household's film, Heat: one copy, an MKV of H.264 and AAC in two chapters, the second
+// untitled, with an intro marked and a subtitle file beside it; and Ada, who may play it.
 func aFilm(t *testing.T) (*store.Store, domain.Profile, uuid.UUID, uuid.UUID) {
 	t.Helper()
 	ctx := t.Context()
@@ -111,6 +111,7 @@ func aFilm(t *testing.T) (*store.Store, domain.Profile, uuid.UUID, uuid.UUID) {
 			{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Width: 1920, Height: 1080, Range: domain.RangeSDR},
 			{Index: 1, Kind: domain.StreamAudio, Codec: "aac", Channels: 2, Language: language.English},
 		},
+		Chapters: []domain.Chapter{{End: 40 * time.Minute, Title: "The Bank"}, {Start: 40 * time.Minute, End: time.Hour}},
 	}}
 	film := store.Film{Title: "Heat", Folder: "Heat", Copies: []store.Copy{{ContentKey: []byte("heat"), Parts: []store.Part{part}, Subtitles: []store.Subtitle{
 		{RelPath: "Heat/Heat.en.srt", Size: 1, ModTime: time.Unix(0, 0), Codec: "subrip", Language: language.English},

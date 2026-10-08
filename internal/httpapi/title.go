@@ -316,8 +316,10 @@ func versionPageOf(v store.VersionPage, w words.Words) versionPageJSON {
 				Default: s.Default, Forced: s.Forced, HearingImpaired: s.HearingImpaired,
 			}
 		}),
-		Chapters: each(v.Chapters, func(c store.ChapterRef) chapterRefJSON { return chapterRefJSON(c) }),
-		Markers:  each(v.Markers, func(m store.MarkerRef) markerRefJSON { return markerRefJSON(m) }),
+		Chapters: each(v.Chapters, func(c store.ChapterRef) chapterRefJSON {
+			return chapterRefJSON{StartMS: c.StartMS, EndMS: c.EndMS, Title: c.Title, Image: c.Image}
+		}),
+		Markers: each(v.Markers, func(m store.MarkerRef) markerRefJSON { return markerRefJSON(m) }),
 		Files: each(v.Files, func(f store.PartRef) partRefJSON {
 			return partRefJSON{ID: f.ID, Index: f.Index, SizeBytes: f.SizeBytes, DurationMS: f.DurationMS, OffsetMS: f.OffsetMS}
 		}),

@@ -45,7 +45,7 @@ type Services struct {
 	Playing   playing
 	Playbacks playbacks
 	Watching  watching
-	// Previews are parts' trickplay sheets, which PreviewFiles keeps.
+	// Previews are parts' trickplay sheets, which PreviewFiles keeps with their chapters' pictures.
 	Previews     previews
 	PreviewFiles previewFiles
 	// HLS is this node's remuxes, which Placer opens on the node it chooses and Owners find on
