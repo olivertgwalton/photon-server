@@ -428,3 +428,15 @@ func (s *Store) SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []u
 func (s *Store) ItemCounts(ctx context.Context, kinds []domain.ItemKind) (map[domain.ItemKind]int, error) {
 	return queryMap[domain.ItemKind, int](ctx, s.pool, `SELECT kind, count(*) FROM items WHERE kind = ANY($1) GROUP BY kind`, kinds)
 }
+
+// ItemBytes answers how many bytes of each of kinds the libraries hold on disk, leaving out a kind
+// of which they hold none. Bytes are counted once however many paths or titles hold them: riven
+// shows one file under two names, and two episode numbers.
+func (s *Store) ItemBytes(ctx context.Context, kinds []domain.ItemKind) (map[domain.ItemKind]int64, error) {
+	return queryMap[domain.ItemKind, int64](ctx, s.pool, `
+		SELECT kind, sum(size_bytes)::bigint FROM (
+			SELECT DISTINCT ON (i.kind, v.library_id, v.fingerprint) i.kind, v.size_bytes
+			FROM versions v JOIN items i ON i.id = v.item_id
+			WHERE i.kind = ANY($1) AND v.missing_since IS NULL
+		) GROUP BY kind`, kinds)
+}
