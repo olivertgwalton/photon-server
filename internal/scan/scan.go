@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
 
@@ -204,7 +205,7 @@ func (s *Scanner) folder(ctx context.Context, r *run, folder library.Folder, err
 		r.count(func(rep *Report) { rep.Unchanged++ })
 		return nil
 	}
-	rd := reading{run: r, dir: folder.Path}
+	rd := reading{run: r, dir: folder.Path, unread: new(atomic.Bool)}
 	if rd.known, err = s.store.KnownFiles(ctx, r.lib.ID, videosIn(folder)); err != nil {
 		return err
 	}
@@ -233,6 +234,22 @@ type reading struct {
 	run   *run
 	dir   string
 	known map[string]store.KnownFile
+	// unread is set by a file that could not be read, a mount's passing failure as often as not.
+	unread *atomic.Bool
+}
+
+// fingerprint is the folder's to remember, or nil to have the next scan read it again for a file
+// that could not be read now, as Plex and Jellyfin try a file again at their next scan.
+func (r reading) fingerprint(f library.Folder) []byte {
+	if r.unread.Load() {
+		return nil
+	}
+	return f.Fingerprint[:]
+}
+
+func (s *Scanner) unreadable(ctx context.Context, r reading, rel string, err error) {
+	r.unread.Store(true)
+	s.skip(ctx, r.run, rel, err)
 }
 
 func videosIn(f library.Folder) []string {
@@ -287,7 +304,7 @@ func (s *Scanner) saveFilms(ctx context.Context, r reading, folder library.Folde
 	}
 	r.run.saving.Lock()
 	defer r.run.saving.Unlock()
-	return s.store.SaveFolder(ctx, lib.ID, folder.Path, folder.Fingerprint[:], films, extras)
+	return s.store.SaveFolder(ctx, lib.ID, folder.Path, r.fingerprint(folder), films, extras)
 }
 
 // filmNamed is the title of the film an extra's name gives: the folder's only film, else the one
@@ -412,7 +429,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Fo
 	}
 	r.run.saving.Lock()
 	defer r.run.saving.Unlock()
-	return s.store.SaveShowFolder(ctx, lib.ID, folder.Path, folder.Fingerprint[:], show, episodes, extras)
+	return s.store.SaveShowFolder(ctx, lib.ID, folder.Path, r.fingerprint(folder), show, episodes, extras)
 }
 
 var errNoEpisode = errors.New("its name says no season or episode")
@@ -455,7 +472,7 @@ func (s *Scanner) readCopies(ctx context.Context, r reading, titles [][]copyPlan
 				defer done()
 				key, err := library.ContentKey(r.run.lib.Root, partPaths(c))
 				if err != nil {
-					s.skip(gctx, r.run, c.Parts[0].RelPath, err)
+					s.unreadable(gctx, r, c.Parts[0].RelPath, err)
 					return nil
 				}
 				c.ContentKey = key
@@ -546,7 +563,7 @@ func (s *Scanner) probeParts(ctx context.Context, r reading, c store.Copy) (bool
 		done()
 		r.run.count(func(rep *Report) { rep.Probed++ })
 		if err != nil {
-			s.skip(ctx, r.run, p.RelPath, err)
+			s.unreadable(ctx, r, p.RelPath, err)
 			return false, nil
 		}
 		c.Parts[i].Facts = &facts
