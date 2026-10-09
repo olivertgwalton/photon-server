@@ -105,7 +105,7 @@ func TestAPluginDescribesTheTitlesOfALibraryThatTakesIt(t *testing.T) {
 	}
 	defer st.Close()
 	ctx := t.Context()
-	plugins := plugin.New(st)
+	plugins := plugin.New(st, nil)
 	providers := provider.NewRegistry(plugins.Load)
 	blobs, err := blob.OpenDir(t.TempDir())
 	if err != nil {

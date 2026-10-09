@@ -129,7 +129,7 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	if n.identity, err = identity.New(ctx, n.st, hostname, n.logger); err != nil {
 		return err
 	}
-	n.plugins = plugin.New(n.st)
+	n.plugins = plugin.New(n.st, n.cache)
 	n.providers = metadataProviders(n.st, n.plugins, n.cache)
 	offers := remote.New(n.providers)
 	n.parts = library.Parts{Places: n.st, Streams: offers}

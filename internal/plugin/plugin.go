@@ -34,8 +34,9 @@ var ErrRefused = errors.New("plugin refused")
 
 // Plugins are the plugins an admin registered.
 type Plugins struct {
-	st   *store.Store
-	http *http.Client
+	st     *store.Store
+	http   *http.Client
+	visits visits
 }
 
 // calls follows no redirect, as a plugin is registered by the address it answers at: one would
@@ -45,8 +46,9 @@ var calls = &http.Client{
 	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 }
 
-func New(st *store.Store) *Plugins {
-	return &Plugins{st: st, http: calls}
+// New answers the plugins st keeps, whose pages' visits are kept by visits.
+func New(st *store.Store, visits visits) *Plugins {
+	return &Plugins{st: st, http: calls, visits: visits}
 }
 
 // Registered is a plugin as it last answered: what it speaks and is, and where it answers.
@@ -61,6 +63,7 @@ type Registered struct {
 	Version      int
 	Kinds        []domain.ItemKind
 	Capabilities []domain.Capability
+	Pages        []Page
 }
 
 // List answers every registered plugin, by its id.
@@ -121,6 +124,7 @@ func (p *Plugins) read(row store.Plugin) (Registered, provider.Provider, error) 
 		r.Kinds = append(r.Kinds, domain.ItemKind(k))
 	}
 	r.Capabilities = provider.Capabilities(c)
+	r.Pages = pagesOf(m, row.URL)
 	return r, c, nil
 }
 

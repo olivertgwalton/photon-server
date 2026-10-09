@@ -333,8 +333,9 @@ func Capabilities(p Provider) []domain.Capability {
 			_, ok = As[Subtitler](p, c)
 		case domain.CapabilitySegments:
 			_, ok = As[Segmenter](p, c)
-		case domain.CapabilityEvents:
-			// Events are sent through the webhook queue, not asked for, so only a plugin hears them.
+		case domain.CapabilityEvents, domain.CapabilityPages:
+			// Events are sent through the webhook queue, and pages are visited, not asked for: only a
+			// plugin has them.
 			part, partial := p.(Partial)
 			ok = partial && part.Answers(c)
 		}

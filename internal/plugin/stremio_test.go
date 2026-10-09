@@ -30,7 +30,7 @@ func plugins(t *testing.T) *Plugins {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	return New(st)
+	return New(st, nil)
 }
 
 // AIOStreams' manifest under its configuration, which carries a password, and Riven's, which has

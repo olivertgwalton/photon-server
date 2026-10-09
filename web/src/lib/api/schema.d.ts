@@ -5295,6 +5295,129 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plugin-pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the plugins' pages the profile may visit */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PluginPageList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plugins/{slug}/pages/{page}/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Visit a plugin's page: the address to open it at, with a code the plugin claims */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The plugin's id, as its manifest gives it. */
+                    slug: string;
+                    /** @description The page's id, as the plugin's manifest gives it. */
+                    page: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Visit"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plugins/{slug}/visits/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claim a visit to a plugin's page by its code, once, for who visits */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The plugin's id, as its manifest gives it. */
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Claim"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Visitor"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profile": {
         parameters: {
             query?: never;
@@ -7027,7 +7150,7 @@ export interface components {
             items: components["schemas"]["Candidate"][];
         };
         /** @enum {string} */
-        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream" | "subtitles" | "events" | "segments";
+        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream" | "subtitles" | "events" | "segments" | "pages";
         Card: {
             /** Format: date-time */
             added_at: string;
@@ -7088,6 +7211,9 @@ export interface components {
         ChooseArtwork: {
             /** Format: uuid */
             id: string;
+        };
+        Claim: {
+            code: string;
         };
         ClientProfile: {
             audio: components["schemas"]["AudioSupport"][];
@@ -7904,6 +8030,8 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** @enum {string} */
+        PageAccess: "admin" | "everyone";
         PairingStart: {
             device_code: string;
             /** Format: int64 */
@@ -8140,6 +8268,15 @@ export interface components {
         };
         PluginList: {
             items: components["schemas"]["Plugin"][];
+        };
+        PluginPage: {
+            access: components["schemas"]["PageAccess"];
+            id: string;
+            name: string;
+            plugin: string;
+        };
+        PluginPageList: {
+            items: components["schemas"]["PluginPage"][];
         };
         /** @enum {string} */
         PluginProtocol: "photon" | "stremio";
@@ -8792,6 +8929,13 @@ export interface components {
             max_width?: number;
             profiles?: string[];
             ranges?: components["schemas"]["Range"][];
+        };
+        Visit: {
+            url: string;
+        };
+        Visitor: {
+            page: string;
+            profile: components["schemas"]["Profile"];
         };
         Vocabulary: {
             accelerations: {
