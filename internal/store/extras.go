@@ -3,9 +3,11 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -120,4 +122,70 @@ func saveExtra(ctx context.Context, tx db, lib uuid.UUID, settings analysis, own
 		return err
 	}
 	return saveCopy(ctx, tx, lib, settings, row.ID, e.Copy)
+}
+
+// ExtraCard is a trailer or other extra, pictured by a still of its video where its previews are
+// made.
+type ExtraCard struct {
+	ID         uuid.UUID
+	Kind       domain.ExtraKind
+	Title      string
+	DurationMS int64
+	Image      string
+}
+
+func (s *Store) extras(ctx context.Context, owner uuid.UUID) ([]ExtraCard, error) {
+	rows, err := queryRows[model.Item](ctx, s.pool, `
+		SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind = 'extra' ORDER BY extra_kind, sort_title`, owner)
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	var lengths map[uuid.UUID]onDisk
+	var stills map[uuid.UUID]still
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		lengths, err = s.durations(gctx, ids(rows))
+		return err
+	})
+	g.Go(func() (err error) {
+		stills, err = s.stills(gctx, rows)
+		return err
+	})
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	out := make([]ExtraCard, len(rows))
+	for n, r := range rows {
+		out[n] = ExtraCard{ID: r.ID, Kind: deref(r.ExtraKind), Title: r.Title, DurationMS: lengths[r.ID].ms}
+		if at, ok := stills[r.ID]; ok {
+			out[n].Image = fmt.Sprintf("/api/v1/parts/%s/chapters/%d/image", at.part, at.idx)
+		}
+	}
+	return out, nil
+}
+
+// still is a chapter's picture: its part, and the chapter's idx in it.
+type still struct {
+	part uuid.UUID
+	idx  int
+}
+
+// stills answers each title's first chapter picture: of its first copy's first part pictured.
+func (s *Store) stills(ctx context.Context, items []*model.Item) (map[uuid.UUID]still, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (v.item_id) v.item_id, p.id, (SELECT min(x) FROM unnest(pv.chapter_images) x)
+		FROM versions v JOIN parts p ON p.version_id = v.id JOIN previews pv ON pv.part_id = p.id
+		WHERE v.item_id = ANY($1) AND v.missing_since IS NULL AND cardinality(pv.chapter_images) > 0
+		ORDER BY v.item_id, v.id, p.idx`, ids(items))
+	if err != nil {
+		return nil, err
+	}
+	out := map[uuid.UUID]still{}
+	var item uuid.UUID
+	var at still
+	_, err = pgx.ForEachRow(rows, []any{&item, &at.part, &at.idx}, func() error {
+		out[item] = at
+		return nil
+	})
+	return out, err
 }

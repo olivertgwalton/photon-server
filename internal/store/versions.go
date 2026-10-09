@@ -10,6 +10,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -130,39 +131,54 @@ func (s *Store) versionsIn(ctx context.Context, versions []*model.Version) (vers
 		vids[n] = r.ID
 	}
 	in := versionRows{byVersion: map[uuid.UUID][]*model.Part{}}
-	parts, err := queryRows[model.Part](ctx, s.pool, `
-		SELECT `+partColumns+` FROM parts WHERE version_id = ANY($1) ORDER BY version_id, idx`, vids)
-	if err != nil {
-		return in, err
-	}
-	var pids []uuid.UUID
-	for _, p := range parts {
-		in.byVersion[p.VersionID] = append(in.byVersion[p.VersionID], p)
-		pids = append(pids, p.ID)
-	}
-	if in.streams, err = queryRows[model.Stream](ctx, s.pool, `
-		SELECT `+streamColumns+` FROM streams WHERE part_id = ANY($1) ORDER BY part_id, idx`, pids); err != nil {
-		return in, err
-	}
-	if in.chapters, err = queryRows[model.Chapter](ctx, s.pool, `
-		SELECT `+chapterColumns+` FROM chapters WHERE part_id = ANY($1) ORDER BY part_id, idx`, pids); err != nil {
-		return in, err
-	}
-	if in.markers, err = queryRows[model.Marker](ctx, s.pool, `SELECT `+markerColumns+` FROM markers WHERE part_id = ANY($1)`, pids); err != nil {
-		return in, err
-	}
-	if in.subs, err = queryRows[model.SubtitleFile](ctx, s.pool, `
-		SELECT `+subtitleFileColumns+` FROM subtitle_files WHERE version_id = ANY($1) ORDER BY rel_path`, vids); err != nil {
-		return in, err
-	}
-	if in.files, err = s.partFiles(ctx, pids); err != nil {
-		return in, err
-	}
-	if in.pictured, in.sheets, err = s.partPreviews(ctx, parts); err != nil {
-		return in, err
-	}
-	in.detection, err = s.markerDetection(ctx, versions)
-	return in, err
+	// Each read waits only on those it needs, so the copies cost two round trips rather than eight.
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		in.subs, err = queryRows[model.SubtitleFile](gctx, s.pool, `
+			SELECT `+subtitleFileColumns+` FROM subtitle_files WHERE version_id = ANY($1) ORDER BY rel_path`, vids)
+		return err
+	})
+	g.Go(func() (err error) {
+		in.detection, err = s.markerDetection(gctx, versions)
+		return err
+	})
+	g.Go(func() error {
+		parts, err := queryRows[model.Part](gctx, s.pool, `
+			SELECT `+partColumns+` FROM parts WHERE version_id = ANY($1) ORDER BY version_id, idx`, vids)
+		if err != nil {
+			return err
+		}
+		var pids []uuid.UUID
+		for _, p := range parts {
+			in.byVersion[p.VersionID] = append(in.byVersion[p.VersionID], p)
+			pids = append(pids, p.ID)
+		}
+		of, pctx := errgroup.WithContext(gctx)
+		of.Go(func() (err error) {
+			in.streams, err = queryRows[model.Stream](pctx, s.pool, `
+				SELECT `+streamColumns+` FROM streams WHERE part_id = ANY($1) ORDER BY part_id, idx`, pids)
+			return err
+		})
+		of.Go(func() (err error) {
+			in.chapters, err = queryRows[model.Chapter](pctx, s.pool, `
+				SELECT `+chapterColumns+` FROM chapters WHERE part_id = ANY($1) ORDER BY part_id, idx`, pids)
+			return err
+		})
+		of.Go(func() (err error) {
+			in.markers, err = queryRows[model.Marker](pctx, s.pool, `SELECT `+markerColumns+` FROM markers WHERE part_id = ANY($1)`, pids)
+			return err
+		})
+		of.Go(func() (err error) {
+			in.files, err = s.partFiles(pctx, pids)
+			return err
+		})
+		of.Go(func() (err error) {
+			in.pictured, in.sheets, err = s.partPreviews(pctx, parts)
+			return err
+		})
+		return of.Wait()
+	})
+	return in, g.Wait()
 }
 
 // partFiles answers the name of each part's first file, without the folders it is in.

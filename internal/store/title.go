@@ -3,11 +3,11 @@ package store
 import (
 	"cmp"
 	"context"
-	"fmt"
 	"time"
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -116,16 +116,6 @@ type EpisodeCard struct {
 	Blurhashes Blurhashes
 }
 
-// ExtraCard is a trailer or other extra, pictured by a still of its video where its previews are
-// made.
-type ExtraCard struct {
-	ID         uuid.UUID
-	Kind       domain.ExtraKind
-	Title      string
-	DurationMS int64
-	Image      string
-}
-
 type CollectionCard struct {
 	ID         uuid.UUID
 	Title      string
@@ -145,13 +135,21 @@ type VideoLink struct {
 	Thumb     uuid.UUID
 }
 
-// Title answers a title's page for a profile, or ErrNotFound.
+// Title answers a title's page for a profile, or ErrNotFound. Its parts are read at once, each
+// waiting only on the reads it needs: a page is a few round trips, not one a part.
 func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, error) {
-	item, err := readItem(ctx, s.pool, id)
-	if err != nil {
-		return TitlePage{}, err
-	}
-	if ok, err := s.visible(ctx, profile, id); err != nil || !ok {
+	var item *model.Item
+	var seen bool
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		item, err = readItem(gctx, s.pool, id)
+		return err
+	})
+	g.Go(func() (err error) {
+		seen, err = s.visible(gctx, profile, id)
+		return err
+	})
+	if err := g.Wait(); err != nil || !seen {
 		return TitlePage{}, cmp.Or(err, ErrNotFound)
 	}
 	p := TitlePage{
@@ -161,58 +159,83 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		AddedAt: item.AddedAt, SeasonNumber: item.SeasonNumber, EpisodeNumber: item.EpisodeNumber,
 		EpisodeEnd: item.EpisodeEnd,
 	}
-	if p.IDs, err = s.externalIDs(ctx, item.ID); err != nil {
-		return TitlePage{}, err
-	}
-	if err := s.parents(ctx, item, &p); err != nil {
-		return TitlePage{}, err
-	}
-	ratings, err := s.ratings(ctx, []*model.Item{item})
-	if err != nil {
-		return TitlePage{}, err
-	}
-	p.Ratings = ratings[item.ID]
-	if p.Collections, err = s.collectionsOf(ctx, item.ID); err != nil {
-		return TitlePage{}, err
-	}
-	if p.Credits, err = s.credits(ctx, item.ID); err != nil {
-		return TitlePage{}, err
-	}
-	if p.Show != nil {
-		show, err := s.credits(ctx, p.Show.ID)
-		if err != nil {
-			return TitlePage{}, err
-		}
-		p.Credits = billed(show, p.Credits)
-	}
-	if err := s.ofKind(ctx, profile, item, &p); err != nil {
-		return TitlePage{}, err
-	}
-	if p.Extras, err = s.extras(ctx, item.ID); err != nil {
-		return TitlePage{}, err
-	}
-	if p.Videos, err = s.videos(ctx, item.ID); err != nil {
-		return TitlePage{}, err
-	}
-	if err := s.dress(ctx, item, &p); err != nil {
-		return TitlePage{}, err
-	}
-	states, err := s.states(ctx, profile, []*model.Item{item})
-	p.State = states[item.ID]
-	return p, err
-}
-
-// ofKind fills in what only a title of item's kind has: a film's or show's locale, a show's
-// seasons, a season's episodes, a film's or episode's copies, a collection's rule and list.
-func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item, p *TitlePage) error {
-	if item.Kind == domain.ItemMovie || item.Kind == domain.ItemShow {
-		err := s.pool.QueryRow(ctx, `
-			SELECT coalesce(metadata_language, ''), coalesce(certification_country, '') FROM items WHERE id = $1`, item.ID).
-			Scan(&p.Locale.Language, &p.Locale.Country)
-		if err != nil {
+	var credits, showCredits []CreditRef
+	g, gctx = errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		p.IDs, err = s.externalIDs(gctx, item.ID)
+		return err
+	})
+	// A season's and an episode's show is known only from their parents: its cast is billed over
+	// theirs, and its themes are theirs.
+	g.Go(func() (err error) {
+		if err := s.parents(gctx, item, &p); err != nil {
 			return err
 		}
+		owner := item.ID
+		if p.Show != nil {
+			owner = p.Show.ID
+			if showCredits, err = s.credits(gctx, p.Show.ID); err != nil {
+				return err
+			}
+		}
+		themes, err := s.themes(gctx, owner)
+		if len(themes) > 0 {
+			p.Themes = themes
+		}
+		return err
+	})
+	g.Go(func() error {
+		ratings, err := s.ratings(gctx, []*model.Item{item})
+		p.Ratings = ratings[item.ID]
+		return err
+	})
+	g.Go(func() (err error) {
+		p.Collections, err = s.collectionsOf(gctx, item.ID)
+		return err
+	})
+	g.Go(func() (err error) {
+		credits, err = s.credits(gctx, item.ID)
+		return err
+	})
+	g.Go(func() error { return s.locale(gctx, item, &p) })
+	g.Go(func() error { return s.ofKind(gctx, profile, item, &p) })
+	g.Go(func() (err error) {
+		p.Extras, err = s.extras(gctx, item.ID)
+		return err
+	})
+	g.Go(func() (err error) {
+		p.Videos, err = s.videos(gctx, item.ID)
+		return err
+	})
+	g.Go(func() error { return s.dress(gctx, item, &p) })
+	g.Go(func() error {
+		states, err := s.states(gctx, profile, []*model.Item{item})
+		p.State = states[item.ID]
+		return err
+	})
+	if err := g.Wait(); err != nil {
+		return TitlePage{}, err
 	}
+	p.Credits = credits
+	if p.Show != nil {
+		p.Credits = billed(showCredits, credits)
+	}
+	return p, nil
+}
+
+// locale reads a film's or show's own metadata language and certification country.
+func (s *Store) locale(ctx context.Context, item *model.Item, p *TitlePage) error {
+	if item.Kind != domain.ItemMovie && item.Kind != domain.ItemShow {
+		return nil
+	}
+	return s.pool.QueryRow(ctx, `
+		SELECT coalesce(metadata_language, ''), coalesce(certification_country, '') FROM items WHERE id = $1`, item.ID).
+		Scan(&p.Locale.Language, &p.Locale.Country)
+}
+
+// ofKind fills in what only a title of item's kind has: a show's seasons, a season's episodes, a
+// film's or episode's copies, a collection's rule and list.
+func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item, p *TitlePage) error {
 	var err error
 	switch item.Kind {
 	case domain.ItemShow:
@@ -236,8 +259,7 @@ func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item,
 	return err
 }
 
-// dress fills in the pictures item wears, their blurhashes, and its themes, which an episode or
-// season takes from its show.
+// dress fills in the pictures item wears and their blurhashes.
 func (s *Store) dress(ctx context.Context, item *model.Item, p *TitlePage) error {
 	shows, err := s.showsOf(ctx, []*model.Item{item})
 	if err != nil {
@@ -253,15 +275,7 @@ func (s *Store) dress(ctx context.Context, item *model.Item, p *TitlePage) error
 		shown = append(shown, of...)
 	}
 	p.Blurhashes = blurhashesOf(hashes, shown...)
-	owner := item.ID
-	if p.Show != nil {
-		owner = p.Show.ID
-	}
-	themes, err := s.themes(ctx, owner)
-	if len(themes) > 0 {
-		p.Themes = themes
-	}
-	return err
+	return nil
 }
 
 // readItem answers a title's row, or ErrNotFound.
@@ -411,18 +425,26 @@ func (s *Store) seasons(ctx context.Context, profile, show uuid.UUID) ([]SeasonC
 	if err != nil {
 		return nil, err
 	}
-	episodes, err := queryMap[uuid.UUID, int](ctx, s.pool, `
-		SELECT parent_id, count(*) FROM items WHERE parent_id = ANY($1) AND kind = 'episode' GROUP BY parent_id`,
-		ids(rows))
-	if err != nil {
-		return nil, err
-	}
-	pictures, hashes, err := s.pictureOrder(ctx, rows)
-	if err != nil {
-		return nil, err
-	}
-	states, err := s.states(ctx, profile, rows)
-	if err != nil {
+	var episodes map[uuid.UUID]int
+	var pictures map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID
+	var hashes map[uuid.UUID]string
+	var states map[uuid.UUID]TitleState
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		episodes, err = queryMap[uuid.UUID, int](gctx, s.pool, `
+			SELECT parent_id, count(*) FROM items WHERE parent_id = ANY($1) AND kind = 'episode' GROUP BY parent_id`,
+			ids(rows))
+		return err
+	})
+	g.Go(func() (err error) {
+		pictures, hashes, err = s.pictureOrder(gctx, rows)
+		return err
+	})
+	g.Go(func() (err error) {
+		states, err = s.states(gctx, profile, rows)
+		return err
+	})
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 	out := make([]SeasonCard, len(rows))
@@ -444,16 +466,24 @@ func (s *Store) episodes(ctx context.Context, profile, season uuid.UUID) ([]Epis
 	if err != nil {
 		return nil, err
 	}
-	lengths, err := s.durations(ctx, ids(rows))
-	if err != nil {
-		return nil, err
-	}
-	pictures, hashes, err := s.pictureOrder(ctx, rows)
-	if err != nil {
-		return nil, err
-	}
-	states, err := s.states(ctx, profile, rows)
-	if err != nil {
+	var lengths map[uuid.UUID]onDisk
+	var pictures map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID
+	var hashes map[uuid.UUID]string
+	var states map[uuid.UUID]TitleState
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		lengths, err = s.durations(gctx, ids(rows))
+		return err
+	})
+	g.Go(func() (err error) {
+		pictures, hashes, err = s.pictureOrder(gctx, rows)
+		return err
+	})
+	g.Go(func() (err error) {
+		states, err = s.states(gctx, profile, rows)
+		return err
+	})
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 	out := make([]EpisodeCard, len(rows))
@@ -470,56 +500,6 @@ func (s *Store) episodes(ctx context.Context, profile, season uuid.UUID) ([]Epis
 		out[n].Blurhashes = blurhashesOf(hashes, out[n].Thumb)
 	}
 	return out, nil
-}
-
-func (s *Store) extras(ctx context.Context, owner uuid.UUID) ([]ExtraCard, error) {
-	rows, err := queryRows[model.Item](ctx, s.pool, `
-		SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind = 'extra' ORDER BY extra_kind, sort_title`, owner)
-	if err != nil || len(rows) == 0 {
-		return nil, err
-	}
-	lengths, err := s.durations(ctx, ids(rows))
-	if err != nil {
-		return nil, err
-	}
-	stills, err := s.stills(ctx, rows)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]ExtraCard, len(rows))
-	for n, r := range rows {
-		out[n] = ExtraCard{ID: r.ID, Kind: deref(r.ExtraKind), Title: r.Title, DurationMS: lengths[r.ID].ms}
-		if at, ok := stills[r.ID]; ok {
-			out[n].Image = fmt.Sprintf("/api/v1/parts/%s/chapters/%d/image", at.part, at.idx)
-		}
-	}
-	return out, nil
-}
-
-// still is a chapter's picture: its part, and the chapter's idx in it.
-type still struct {
-	part uuid.UUID
-	idx  int
-}
-
-// stills answers each title's first chapter picture: of its first copy's first part pictured.
-func (s *Store) stills(ctx context.Context, items []*model.Item) (map[uuid.UUID]still, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT ON (v.item_id) v.item_id, p.id, (SELECT min(x) FROM unnest(pv.chapter_images) x)
-		FROM versions v JOIN parts p ON p.version_id = v.id JOIN previews pv ON pv.part_id = p.id
-		WHERE v.item_id = ANY($1) AND v.missing_since IS NULL AND cardinality(pv.chapter_images) > 0
-		ORDER BY v.item_id, v.id, p.idx`, ids(items))
-	if err != nil {
-		return nil, err
-	}
-	out := map[uuid.UUID]still{}
-	var item uuid.UUID
-	var at still
-	_, err = pgx.ForEachRow(rows, []any{&item, &at.part, &at.idx}, func() error {
-		out[item] = at
-		return nil
-	})
-	return out, err
 }
 
 // onDisk is what of a title is on disk: how long its longest copy runs, and how many copies.
