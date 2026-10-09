@@ -45,9 +45,10 @@ type Report struct {
 }
 
 // readsAtOnce is how many files a scan reads at once. Reading a file is a few requests in turn,
-// each waiting on the disk or, on a network or debrid mount, on the network; four at once keep such
-// a mount busy without asking more of it than it answers at once.
-const readsAtOnce = 4
+// each waiting on the disk or, on a network or debrid mount, on the network. On riven over
+// Real-Debrid, probing new films took 243 ms each four at once, 182 ms eight at once and no less
+// sixteen at once; and a read the mount never answers holds its slot until the probe times out.
+const readsAtOnce = 8
 
 // foldersAtOnce is how many folders a scan is in at once: listing one, or waiting on its files'
 // reads or its save. Riven answers a mount's requests on four threads, and NFS and SMB more.
