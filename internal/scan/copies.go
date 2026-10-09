@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -67,8 +68,8 @@ func (s *Scanner) readCopies(ctx context.Context, r reading, titles [][]copyPlan
 
 // readCopy reads a new or changed copy's content key and, unless the library holds a copy of those
 // bytes, probes its parts, the first through the file its key was read from: on a debrid mount the
-// file's start is still at hand, where read later it would be fetched again. It reports whether
-// the copy could be read.
+// file's start is still at hand, where read later it would be fetched again. A .strm's key is of
+// the .strm, and its media is probed where it names. It reports whether the copy could be read.
 func (s *Scanner) readCopy(ctx context.Context, r reading, c *store.Copy) (bool, error) {
 	root := r.run.lib.Root
 	first, err := library.Open(root, c.Parts[0].RelPath)
@@ -86,18 +87,20 @@ func (s *Scanner) readCopy(ctx context.Context, r reading, c *store.Copy) (bool,
 		return err == nil, err
 	}
 	for i, p := range c.Parts {
-		in := media.Input{File: first}
-		if i > 0 {
-			if in, err = library.OpenMedia(root, p.RelPath); err != nil {
-				s.unreadable(ctx, r, p.RelPath, err)
-				return false, nil
+		var in media.Input
+		if i == 0 {
+			in, err = library.Media(p.RelPath, first)
+		} else {
+			in, err = library.OpenMedia(root, p.RelPath)
+		}
+		var facts domain.Facts
+		if err == nil {
+			facts, err = s.prober.Probe(ctx, in)
+			if i > 0 {
+				in.Close()
 			}
+			r.run.count(func(rep *Report) { rep.Probed++ })
 		}
-		facts, err := s.prober.Probe(ctx, in)
-		if i > 0 {
-			in.Close()
-		}
-		r.run.count(func(rep *Report) { rep.Probed++ })
 		switch {
 		case errors.Is(err, media.ErrNotMedia):
 			s.skip(ctx, r.run, p.RelPath, err)

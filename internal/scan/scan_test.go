@@ -429,6 +429,41 @@ func TestAFileThatIsNotMediaIsNotProbedAgainUntilItChanges(t *testing.T) {
 	}
 }
 
+// fetching probes only what a .strm names, as ffprobe fetches it, and answers where it was.
+type fetching struct {
+	fakeProber
+	mu      sync.Mutex
+	fetched []string
+}
+
+func (p *fetching) Probe(ctx context.Context, in media.Input) (domain.Facts, error) {
+	if in.URL == nil {
+		return domain.Facts{}, media.ErrNotMedia
+	}
+	p.mu.Lock()
+	p.fetched = append(p.fetched, in.URL.String())
+	p.mu.Unlock()
+	return p.fakeProber.Probe(ctx, in)
+}
+
+func TestAStrmIsAFilmWhoseMediaIsWhereItNames(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	p := &fetching{}
+	f.scanner = New(f.st, p, slog.New(slog.DiscardHandler))
+	f.write("Heat (1995).strm", "https://debrid.example/heat.mkv\n")
+	f.write("Alien (1979).strm", "/media/Alien.mkv\n")
+	if r := f.scan(); r.Probed != 1 || r.Skipped != 1 {
+		t.Errorf("scanned %+v, want the http .strm probed and the one naming a path left out", r)
+	}
+	if want := []string{"https://debrid.example/heat.mkv"}; !slices.Equal(p.fetched, want) {
+		t.Errorf("probed %q, want %q", p.fetched, want)
+	}
+	if n := f.count(`SELECT count(*) FROM items i JOIN versions v ON v.item_id = i.id JOIN parts p ON p.version_id = v.id
+		WHERE i.kind = 'movie' AND i.title = 'Heat' AND p.duration_ms = 7200000`); n != 1 {
+		t.Error("the .strm is not a film with its media's length")
+	}
+}
+
 func TestOneFileInTwoLibrariesIsACopyInEach(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
