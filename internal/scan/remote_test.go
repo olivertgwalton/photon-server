@@ -23,7 +23,7 @@ func alien() domain.Listed {
 // remote makes the fixture's library a remote one holding whatever list l holds when it is read.
 func (f *fixture) remote(l *lists) {
 	f.t.Helper()
-	lib, err := f.st.AddRemoteLibrary(f.t.Context(), "Popular", domain.LibraryMovies, domain.PluginSource("aio"), "movie/top", domain.PluginSource("aio"))
+	lib, err := f.st.AddRemoteLibrary(f.t.Context(), "Popular", domain.LibraryMovies, store.Remote{ListSource: domain.PluginSource("aio"), ListID: "movie/top", StreamSource: domain.PluginSource("aio")})
 	if err != nil {
 		f.t.Fatal(err)
 	}

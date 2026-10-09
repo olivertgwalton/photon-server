@@ -16,7 +16,7 @@ import (
 func TestARemoteShowsEpisodesAreThoseAired(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddRemoteLibrary(ctx, "Popular", domain.LibraryShows, domain.PluginSource("aio"), "series/top", domain.PluginSource("aio"))
+	lib, err := s.AddRemoteLibrary(ctx, "Popular", domain.LibraryShows, Remote{ListSource: domain.PluginSource("aio"), ListID: "series/top", StreamSource: domain.PluginSource("aio")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestARemoteShowsEpisodesAreThoseAired(t *testing.T) {
 func TestARemoteTitlesPicturesAreItsProviders(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddRemoteLibrary(ctx, "Popular", domain.LibraryMovies, domain.PluginSource("aio"), "movie/top", domain.PluginSource("aio"))
+	lib, err := s.AddRemoteLibrary(ctx, "Popular", domain.LibraryMovies, Remote{ListSource: domain.PluginSource("aio"), ListID: "movie/top", StreamSource: domain.PluginSource("aio")})
 	if err != nil {
 		t.Fatal(err)
 	}

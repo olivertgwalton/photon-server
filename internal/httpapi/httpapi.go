@@ -175,6 +175,7 @@ type Services struct {
 	Playing  playing
 	Parts    parts
 	Copies   copies
+	Discover discover
 	// Subtitles are the subtitles fetched from providers for copies.
 	Subtitles fetchedSubtitles
 	Playbacks playbacks

@@ -241,6 +241,16 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		wg.Go(func() {
 			var cards []store.Card
 			cards, out.Titles.Total, titlesErr = a.svc.Catalogue.Search(ctx, query)
+			// A search of every library shows first, in its first page, what its remote libraries'
+			// providers find that they do not hold yet, which becomes theirs as it is opened.
+			if titlesErr == nil && query.Offset == 0 && query.Library == (uuid.UUID{}) {
+				var found []store.Discovery
+				found, titlesErr = a.svc.Discover.Find(ctx, query.Profile, query.Text, query.Kinds)
+				for _, d := range found {
+					cards = append(cards, d.Card())
+				}
+				out.Titles.Total += int64(len(found))
+			}
 			out.Titles.Items = cardsJSON(cards)
 		})
 	}

@@ -57,10 +57,10 @@ func (f *fakeLibraries) AddLibrary(_ context.Context, name string, kind domain.L
 	return l, nil
 }
 
-func (f *fakeLibraries) AddRemoteLibrary(_ context.Context, name string, kind domain.LibraryKind, listSource domain.FieldSource, listID string, streamSource domain.FieldSource) (domain.Library, error) {
+func (f *fakeLibraries) AddRemoteLibrary(_ context.Context, name string, kind domain.LibraryKind, r store.Remote) (domain.Library, error) {
 	l := domain.Library{
-		ID: uuid.NewV7(), Name: name, Kind: kind, Media: domain.MediaRemote, ListSource: listSource, ListID: listID,
-		StreamSource: streamSource, Sources: domain.DefaultSources(kind), Monitor: domain.MonitorOff,
+		ID: uuid.NewV7(), Name: name, Kind: kind, Media: domain.MediaRemote, ListSource: r.ListSource, ListID: r.ListID,
+		DiscoverSource: r.DiscoverSource, StreamSource: r.StreamSource, Sources: domain.DefaultSources(kind), Monitor: domain.MonitorOff,
 	}
 	f.libs = append(f.libs, l)
 	return l, nil
@@ -127,6 +127,10 @@ func (addon) List(context.Context, string) ([]domain.Listed, error) { return nil
 
 func (addon) Streams(context.Context, domain.Streamed) ([]domain.Offer, error) { return nil, nil }
 
+func (addon) Candidates(context.Context, domain.Locale, domain.ItemKind, string, int) ([]domain.Candidate, error) {
+	return nil, nil
+}
+
 // A remote library holds a list a provider keeps, streamed by a provider that streams, and has no
 // root to check or watch.
 func TestAnAdminAddsARemoteLibrary(t *testing.T) {
@@ -158,10 +162,17 @@ func TestAnAdminAddsARemoteLibrary(t *testing.T) {
 		`{"name": "D", "kind": "movies", "media": "remote", "list": {"source": "plugin:aio", "id": "movie/top"}, "streams": "tmdb"}`,
 		`{"name": "E", "kind": "movies", "media": "remote", "root": "/srv", "list": {"source": "plugin:aio", "id": "movie/top"}, "streams": "plugin:aio"}`,
 		`{"name": "F", "kind": "movies", "media": "cloud"}`,
+		`{"name": "G", "kind": "movies", "media": "remote", "discover": "omdb", "streams": "plugin:aio"}`,
+		`{"name": "H", "kind": "movies", "media": "remote", "discover": "tmdb", "streams": "plugin:aio"}`,
 	} {
 		if rec := do(http.MethodPost, "/api/v1/admin/libraries", body); rec.Code != http.StatusBadRequest {
 			t.Errorf("%s: %d, want 400: %s", body, rec.Code, rec.Body)
 		}
+	}
+	rec = do(http.MethodPost, "/api/v1/admin/libraries", `{"name": "Found", "kind": "movies", "media": "remote", "discover": "plugin:aio", "streams": "plugin:aio"}`)
+	var found adminLibraryJSON
+	if err := json.NewDecoder(rec.Body).Decode(&found); err != nil || rec.Code != http.StatusCreated || found.List != nil || found.Discover != domain.PluginSource("aio") {
+		t.Errorf("adding one of what a search finds alone: %d %+v %v", rec.Code, found, err)
 	}
 	if rec := do(http.MethodPost, "/api/v1/admin/libraries/"+added.ID.String()+"/check", ""); rec.Code != http.StatusConflict {
 		t.Errorf("checking its root: %d, want 409", rec.Code)

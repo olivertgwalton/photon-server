@@ -68,12 +68,18 @@ export function libraryChange(
 		.map(String) as Schemas["ExtraKind"][];
 	const change: Schemas["LibraryChange"] = {
 		name: String(form.get("name") ?? ""),
-		monitor: String(form.get("monitor")) as Schemas["Monitor"],
+		// A remote library has no folder to watch or delete from, and the form asks
+		// neither of one.
+		monitor: (form.get("monitor") ?? undefined) as
+			| Schemas["Monitor"]
+			| undefined,
 		previews: String(form.get("previews")) as Schemas["PreviewLevel"],
 		markers: String(form.get("markers")) as Schemas["MarkerDetection"],
 		keyframes: String(form.get("keyframes")) as Schemas["KeyframeMode"],
 		themes: String(form.get("themes")) as Schemas["ThemeLookup"],
-		deletion: String(form.get("deletion")) as Schemas["MediaDeletion"],
+		deletion: (form.get("deletion") ?? undefined) as
+			| Schemas["MediaDeletion"]
+			| undefined,
 		metadata_language: localeChoice(form.get("metadata_language")),
 		certification_country: localeChoice(form.get("certification_country")),
 		artwork_language: String(
