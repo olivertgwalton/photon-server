@@ -39,8 +39,15 @@ type Plugins struct {
 	http *http.Client
 }
 
+// calls follows no redirect, as a plugin is registered by the address it answers at: one would
+// have the server ask another host, its own network's included, with the plugin's settings.
+var calls = &http.Client{
+	Timeout:       callTimeout,
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+}
+
 func New(st *store.Store) *Plugins {
-	return &Plugins{st: st, http: &http.Client{Timeout: callTimeout}}
+	return &Plugins{st: st, http: calls}
 }
 
 // Registered is a plugin as it last answered: what it speaks and is, and where it answers.

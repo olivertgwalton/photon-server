@@ -63,7 +63,8 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
   as it does a provider whose key is not set. A `4xx` from `/match` or `/describe` fails the
   title's job, which an admin sees and can retry; from `/ratings` or `/person` it is logged and
   the title or person goes without.
-- **Limits.** Each call has 20 seconds and may answer at most 8 MiB.
+- **Limits.** Each call has 20 seconds and may answer at most 8 MiB. A redirect is not followed:
+  it is answered as a refusal, as the server asks only the address the plugin was registered at.
 - Anything the server has no name for (a kind of picture, a rating site, a credit kind) is left
   out, as is a field left out of the answer. A picture is a `http` or `https` URL the server
   fetches and caches itself, as it does TMDB's.
