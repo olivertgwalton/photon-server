@@ -2099,6 +2099,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/sign-in-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the OpenID Connect providers the server is registered on, and the redirect URI to register at each
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminSignInProviderList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sign-in-providers/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Register the server on an OpenID Connect provider, or change how; the provider must answer at its issuer
+         * @description Admin only.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The provider's slug, which names it in the address it sends browsers back to. */
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SignInProviderChange"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminSignInProvider"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        /**
+         * Remove a provider, and every account profiles linked there, signing out the devices they signed in
+         * @description Admin only.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The provider's slug, which names it in the address it sends browsers back to. */
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/storage": {
         parameters: {
             query?: never;
@@ -3591,6 +3703,87 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sign-in-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the providers the household signs in through, for the login page */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignInProviderList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sign-in-providers/{slug}/sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a browser to sign in at a provider, from the server's public address; it comes back signed in, in the session's cookie */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The provider's slug, which names it in the address it sends browsers back to. */
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SignInStart"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignInRedirect"];
+                    };
                 };
                 default: components["responses"]["Problem"];
             };
@@ -5274,7 +5467,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Change the profile's password, signing out its other devices */
+        /** Change the profile's password, or set its first, signing out its other devices */
         put: {
             parameters: {
                 query?: never;
@@ -5423,6 +5616,125 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
+        trace?: never;
+    };
+    "/api/v1/profile/sign-in-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The providers the household signs in through, and the account the profile linked at each */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProfileSignInProviderList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profile/sign-in-providers/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink the profile's account at a provider, signing out the devices it signed in, but not one the profile has no other way in than */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The provider's slug, which names it in the address it sends browsers back to. */
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profile/sign-in-providers/{slug}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send the browser to a provider to link the profile's account there, in place of any before */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The provider's slug, which names it in the address it sends browsers back to. */
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["LinkStart"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignInRedirect"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/profile/trackers": {
@@ -6561,6 +6873,21 @@ export interface components {
         AdminLibraryListingList: {
             items: components["schemas"]["AdminLibraryListing"][];
         };
+        AdminSignInProvider: {
+            access: components["schemas"]["Access"];
+            callback_url?: string;
+            client_id: string;
+            client_secret_set: boolean;
+            group?: string;
+            issuer: string;
+            name: string;
+            provisioning: components["schemas"]["Provisioning"];
+            recheck: components["schemas"]["Recheck"];
+            slug: string;
+        };
+        AdminSignInProviderList: {
+            items: components["schemas"]["AdminSignInProvider"][];
+        };
         Approval: {
             user_code: string;
         };
@@ -7324,6 +7651,9 @@ export interface components {
         };
         /** @enum {string} */
         LimitSource: "automatic" | "set";
+        LinkStart: {
+            to?: string;
+        };
         ListRef: {
             id: string;
             missing?: number;
@@ -7604,7 +7934,7 @@ export interface components {
             width: number;
         };
         PasswordChange: {
-            current: string;
+            current?: string;
             new: string;
         };
         Person: {
@@ -7867,6 +8197,14 @@ export interface components {
         };
         /** @enum {string} */
         ProfileLock: "pin" | "password";
+        ProfileSignInProvider: {
+            account?: components["schemas"]["SignInAccount"] | null;
+            name: string;
+            slug: string;
+        };
+        ProfileSignInProviderList: {
+            items: components["schemas"]["ProfileSignInProvider"][];
+        };
         ProfileTracker: {
             code?: components["schemas"]["TrackerCode"] | null;
             /** Format: date-time */
@@ -7891,6 +8229,8 @@ export interface components {
             };
         };
         /** @enum {string} */
+        Provisioning: "link" | "create";
+        /** @enum {string} */
         Range: "sdr" | "hlg" | "hdr10" | "hdr10plus" | "dv";
         RankedSource: {
             enabled: boolean;
@@ -7908,6 +8248,8 @@ export interface components {
         Reached: {
             reach: components["schemas"]["Reach"];
         };
+        /** @enum {string} */
+        Recheck: "hourly" | "at_sign_in";
         Redemption: {
             code: string;
             password: string;
@@ -8070,8 +8412,38 @@ export interface components {
         };
         /** @enum {string} */
         SetupState: "done" | "open" | "local_only";
+        SignInAccount: {
+            /** Format: date-time */
+            linked_at: string;
+            username: string;
+        };
         /** @enum {string} */
         SignInMethod: "password" | "pairing";
+        SignInProvider: {
+            name: string;
+            slug: string;
+        };
+        SignInProviderChange: {
+            access?: components["schemas"]["Access"];
+            client_id: string;
+            client_secret?: string;
+            group?: string;
+            issuer: string;
+            name: string;
+            provisioning: components["schemas"]["Provisioning"];
+            recheck?: components["schemas"]["Recheck"];
+        };
+        SignInProviderList: {
+            items: components["schemas"]["SignInProvider"][];
+        };
+        SignInRedirect: {
+            url: string;
+        };
+        SignInStart: {
+            client: string;
+            device: string;
+            to?: string;
+        };
         SmartRule: {
             filter: components["schemas"]["WallFilter"];
             limit?: number;
