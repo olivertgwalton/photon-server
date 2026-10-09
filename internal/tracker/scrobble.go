@@ -98,10 +98,18 @@ func (l *Links) scrobble(ctx context.Context, e domain.Event) error {
 		return err
 	}
 	for _, g := range grants {
-		if clients[g.Tracker] == "" {
+		clientID := clients[g.Tracker]
+		if clientID == "" {
 			continue
 		}
-		if err := l.tell(ctx, e.Profile, g, clients[g.Tracker], a, p); err != nil {
+		err := l.authorised(ctx, e.Profile, g, clientID, func(access string) error {
+			return l.services[g.Tracker].scrobble(ctx, clientID, access, a, p)
+		})
+		// A play told watched is no longer the history push's to tell, which would tell it twice.
+		if err == nil && a == actionStop && p.Progress == 100 {
+			err = l.st.ForgetTrackerWatched(ctx, e.Profile, g.Tracker, e.Item)
+		}
+		if err != nil {
 			l.log.WarnContext(ctx, "could not tell a tracker of a play", slog.String("tracker", string(g.Tracker)),
 				slog.String("action", string(a)), slog.Any("err", err))
 		}
@@ -142,19 +150,7 @@ func (l *Links) play(ctx context.Context, d domain.PlaybackDetails) (play, bool,
 	if err != nil {
 		return play{}, false, err
 	}
-	known := map[string]any{}
-	for _, provider := range []domain.Provider{domain.ProviderTMDB, domain.ProviderTVDB, domain.ProviderIMDb} {
-		v, ok := ids[by][provider]
-		if !ok {
-			continue
-		}
-		// TMDB's and TheTVDB's ids are numbers to both trackers; IMDb's are not.
-		if n, err := strconv.Atoi(v); err == nil {
-			known[string(provider)] = n
-		} else {
-			known[string(provider)] = v
-		}
-	}
+	known := trackerIDs(ids[by])
 	if len(known) == 0 {
 		return play{}, false, nil
 	}
@@ -166,17 +162,34 @@ func (l *Links) play(ctx context.Context, d domain.PlaybackDetails) (play, bool,
 	return p, true, nil
 }
 
-// tell tells one tracker of a play. An access token the tracker refuses before it was due to
-// expire is refreshed, and the play told once more.
-func (l *Links) tell(ctx context.Context, profile uuid.UUID, g store.TrackerGrant, clientID string, a action, p play) error {
-	svc := l.services[g.Tracker]
+// trackerIDs are the ids of a title both trackers match by.
+func trackerIDs(ids map[domain.Provider]string) map[string]any {
+	out := map[string]any{}
+	for _, provider := range []domain.Provider{domain.ProviderTMDB, domain.ProviderTVDB, domain.ProviderIMDb} {
+		v, ok := ids[provider]
+		if !ok {
+			continue
+		}
+		// TMDB's and TheTVDB's ids are numbers to both trackers; IMDb's are not.
+		if n, err := strconv.Atoi(v); err == nil {
+			out[string(provider)] = n
+		} else {
+			out[string(provider)] = v
+		}
+	}
+	return out
+}
+
+// authorised calls do with an account's access token. One the tracker refuses before it was due
+// to expire is refreshed, and do called once more.
+func (l *Links) authorised(ctx context.Context, profile uuid.UUID, g store.TrackerGrant, clientID string, do func(access string) error) error {
 	stale := time.Now().Add(refreshBefore)
 	for range 2 {
 		access, err := l.access(ctx, profile, g, clientID, stale)
 		if err != nil {
 			return err
 		}
-		err = svc.scrobble(ctx, clientID, access, a, p)
+		err = do(access)
 		refusal, refused := errors.AsType[*provider.Refusal](err)
 		if !refused || refusal.Code != http.StatusUnauthorized {
 			return err

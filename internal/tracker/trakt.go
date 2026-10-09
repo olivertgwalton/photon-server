@@ -115,3 +115,10 @@ func (c trakt) scrobble(ctx context.Context, clientID, access string, a action, 
 	}
 	return err
 }
+
+func (c trakt) history(ctx context.Context, clientID, access string, w historyWrite, h history) error {
+	header := c.header(clientID)
+	header.Set("Authorization", "Bearer "+access)
+	_, err := c.api.Bytes(ctx, provider.Request{Method: http.MethodPost, Path: string(w), Header: header, Body: h})
+	return err
+}

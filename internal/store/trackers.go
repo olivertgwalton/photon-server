@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"slices"
 	"time"
 	"uuid"
 
@@ -116,4 +117,93 @@ func (s *Store) RefreshTracker(ctx context.Context, profile uuid.UUID, t domain.
 		return err
 	})
 	return tok, found(err)
+}
+
+// TrackerChange is a film or episode a profile marked watched, or unwatched, as trackers know it:
+// a film by its ids, an episode by its show's and its numbers.
+type TrackerChange struct {
+	Kind domain.ItemKind
+	// IDs are the film's, or the episode's show's.
+	IDs             map[domain.Provider]string
+	Season, Episode int
+	// WatchedAt is when it was watched; nil is unwatched.
+	WatchedAt *time.Time
+}
+
+// TrackerChanges are what one account is yet to tell its tracker, oldest first, and the outbox's
+// rows they are.
+type TrackerChanges struct {
+	Profile uuid.UUID
+	Tracker domain.Tracker
+	Rows    []int64
+	Changes []TrackerChange
+}
+
+// ClaimTrackerChanges claims up to limit changes queued before settled and not claimed by another
+// node, for lease, and answers them by account.
+func (s *Store) ClaimTrackerChanges(ctx context.Context, settled time.Time, lease time.Duration, limit int) ([]TrackerChanges, error) {
+	rows, err := s.pool.Query(ctx, `
+		WITH claimed AS (
+			UPDATE tracker_outbox SET claimed_until = now() + $2::interval
+			WHERE id IN (
+				SELECT id FROM tracker_outbox
+				WHERE queued_at < $1 AND (claimed_until IS NULL OR claimed_until < now())
+				ORDER BY id LIMIT $3 FOR UPDATE SKIP LOCKED)
+			RETURNING id, profile_id, tracker, item_id, watched_at)
+		SELECT c.id, c.profile_id, c.tracker, c.watched_at, i.kind,
+			CASE WHEN i.kind = 'episode' THEN CASE WHEN p.kind = 'season' THEN p.parent_id ELSE p.id END ELSE i.id END,
+			coalesce(i.season_number, 0), coalesce(i.episode_number, 0)
+		FROM claimed c JOIN items i ON i.id = c.item_id LEFT JOIN items p ON p.id = i.parent_id
+		ORDER BY c.id`, settled, lease, limit)
+	if err != nil {
+		return nil, err
+	}
+	type claimedRow struct {
+		id      int64
+		account TrackerChanges
+		owner   uuid.UUID
+		change  TrackerChange
+	}
+	claimed, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (claimedRow, error) {
+		var r claimedRow
+		return r, row.Scan(&r.id, &r.account.Profile, &r.account.Tracker, &r.change.WatchedAt, &r.change.Kind,
+			&r.owner, &r.change.Season, &r.change.Episode)
+	})
+	if err != nil || len(claimed) == 0 {
+		return nil, err
+	}
+	owners := make([]uuid.UUID, len(claimed))
+	for i, r := range claimed {
+		owners[i] = r.owner
+	}
+	ids, err := s.ExternalIDs(ctx, owners)
+	if err != nil {
+		return nil, err
+	}
+	var out []TrackerChanges
+	for _, r := range claimed {
+		r.change.IDs = ids[r.owner]
+		i := slices.IndexFunc(out, func(a TrackerChanges) bool { return a.Profile == r.account.Profile && a.Tracker == r.account.Tracker })
+		if i < 0 {
+			out, i = append(out, r.account), len(out)
+		}
+		out[i].Rows = append(out[i].Rows, r.id)
+		out[i].Changes = append(out[i].Changes, r.change)
+	}
+	return out, nil
+}
+
+// ForgetTrackerChanges forgets changes told.
+func (s *Store) ForgetTrackerChanges(ctx context.Context, rows []int64) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM tracker_outbox WHERE id = ANY($1)`, rows)
+	return err
+}
+
+// ForgetTrackerWatched forgets that a profile's account is yet to tell its tracker a title was
+// watched, as the play's scrobble told it.
+func (s *Store) ForgetTrackerWatched(ctx context.Context, profile uuid.UUID, t domain.Tracker, item uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `
+		DELETE FROM tracker_outbox WHERE profile_id = $1 AND tracker = $2 AND watched_at IS NOT NULL
+			AND item_id IN (SELECT same_title($3))`, profile, t, item)
+	return err
 }
