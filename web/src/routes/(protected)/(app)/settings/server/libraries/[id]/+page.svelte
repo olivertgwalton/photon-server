@@ -34,7 +34,7 @@ function save(event: SubmitEvent) {
 <PageHeader
 	title={data.library.name}
 	description={data.library.media === "remote"
-		? `Streamed, the titles of ${data.library.list?.id}`
+		? `Streamed, the titles of ${data.library.list?.id ?? "what a search finds"}`
 		: data.library.root}
 >
 	{#snippet actions()}

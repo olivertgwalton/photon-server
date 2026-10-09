@@ -21,6 +21,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/reach"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // version is the Jellyfin the server answers as. Apps compare it as three numbers, and the
@@ -44,6 +45,11 @@ type parts interface {
 // opened or played.
 type copies interface {
 	Ensure(ctx context.Context, item uuid.UUID) error
+}
+
+// discover finds remote libraries titles they do not hold yet.
+type discover interface {
+	Find(ctx context.Context, profile uuid.UUID, text string, kinds []domain.ItemKind) ([]store.Discovery, error)
 }
 
 // ensureCopies gives a remote film or episode the copies its provider offers as an app opens or
@@ -71,6 +77,7 @@ type Services struct {
 	Playing   playing
 	Parts     parts
 	Copies    copies
+	Discover  discover
 	Playbacks playbacks
 	Watching  watching
 	// Previews are parts' trickplay sheets, which PreviewFiles keeps with their chapters' pictures.

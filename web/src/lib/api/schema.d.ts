@@ -6794,6 +6794,7 @@ export interface components {
             title: string;
         };
         AddLibrary: {
+            discover?: components["schemas"]["FieldSource"];
             kind: components["schemas"]["LibraryKind"];
             list?: components["schemas"]["ListRef"] | null;
             media?: components["schemas"]["LibraryMedia"];
@@ -6833,6 +6834,7 @@ export interface components {
             certification_country?: string;
             collection_mode: components["schemas"]["CollectionMode"];
             deletion: components["schemas"]["MediaDeletion"];
+            discover?: components["schemas"]["FieldSource"];
             /** Format: uuid */
             id: string;
             keyframes: components["schemas"]["KeyframeMode"];
@@ -6860,6 +6862,7 @@ export interface components {
             collection_mode: components["schemas"]["CollectionMode"];
             counts: components["schemas"]["Counts"];
             deletion: components["schemas"]["MediaDeletion"];
+            discover?: components["schemas"]["FieldSource"];
             /** Format: uuid */
             id: string;
             keyframes: components["schemas"]["KeyframeMode"];

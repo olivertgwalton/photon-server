@@ -51,7 +51,7 @@ func TestLibraries(t *testing.T) {
 // so none is watched or deleted from, nor read whole for previews and markers unless an admin asks.
 func TestARemoteLibraryHasNoFolder(t *testing.T) {
 	s := migrated(t)
-	lib, err := s.AddRemoteLibrary(t.Context(), "Popular", domain.LibraryMovies, domain.PluginSource("aio"), "movie/top", domain.PluginSource("aio"))
+	lib, err := s.AddRemoteLibrary(t.Context(), "Popular", domain.LibraryMovies, Remote{ListSource: domain.PluginSource("aio"), ListID: "movie/top", StreamSource: domain.PluginSource("aio")})
 	if err != nil {
 		t.Fatal(err)
 	}

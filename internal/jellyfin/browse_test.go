@@ -115,8 +115,8 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{},
-		Auth:   profiles{"pst_ada": admin, "pst_kid": kid}, Catalogue: st, Playlists: st, Preferences: st,
+		Copies: noCopies{}, Discover: noDiscoveries{},
+		Auth: profiles{"pst_ada": admin, "pst_kid": kid}, Catalogue: st, Playlists: st, Preferences: st,
 	})
 	get := func(token, target string) any {
 		t.Helper()

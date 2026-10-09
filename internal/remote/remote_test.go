@@ -17,14 +17,14 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// provider offers whatever it is set to, once let, counting how often it is asked.
-type provider struct {
+// offerer offers whatever it is set to, once let, counting how often it is asked.
+type offerer struct {
 	asked  atomic.Int32
 	offers []domain.Offer
 	let    chan struct{}
 }
 
-func (p *provider) Streams(context.Context, domain.FieldSource, domain.Streamed) ([]domain.Offer, error) {
+func (p *offerer) Streams(context.Context, domain.FieldSource, domain.Streamed) ([]domain.Offer, error) {
 	p.asked.Add(1)
 	if p.let != nil {
 		<-p.let
@@ -41,7 +41,7 @@ var (
 // on, it is asked again, as a link it gave may have expired.
 func TestAProviderIsAskedOnceAMinute(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		p := &provider{let: make(chan struct{})}
+		p := &offerer{let: make(chan struct{})}
 		o := New(p)
 		var wg sync.WaitGroup
 		for range 5 {
@@ -83,7 +83,7 @@ func TestAPartIsOpenedWhereItsCopyIsOfferedNow(t *testing.T) {
 	from := strings.TrimPrefix(srv.URL, "http://")
 	uhd := domain.Offer{Key: "torrent:abc:0", Name: "Heat.2160p.mkv", URL: at("/uhd"), From: from}
 	hd := domain.Offer{Key: "torrent:abc:1", Name: "Heat.1080p.mkv", URL: at("/hd"), From: from}
-	p := &provider{offers: []domain.Offer{uhd, hd}}
+	p := &offerer{offers: []domain.Offer{uhd, hd}}
 	o := New(p)
 	in, err := o.Open(t.Context(), domain.Place{Media: domain.MediaRemote, Rel: Rel(aio, hd), Source: aio, Title: heat})
 	if err != nil {

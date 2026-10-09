@@ -3,9 +3,11 @@
 package jellyfin
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -53,7 +55,7 @@ func TestAnAppSearchesByHints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Copies: noCopies{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
 	type hint struct {
 		ItemID, ID, Name, Type, MediaType, Series string
 		IndexNumber                               int
@@ -101,5 +103,76 @@ func TestAnAppSearchesByHints(t *testing.T) {
 	}
 	if w := serve(api, http.MethodGet, "/Search/Hints", `MediaBrowser Token="pst_ada"`, ""); w.Code != http.StatusBadRequest {
 		t.Errorf("without a searchTerm: %d, want 400", w.Code)
+	}
+}
+
+// found finds one film in a remote library a search of every library is shown, and a film alone.
+type found struct{ d store.Discovery }
+
+func (f found) Find(_ context.Context, _ uuid.UUID, _ string, kinds []domain.ItemKind) ([]store.Discovery, error) {
+	if len(kinds) > 0 && !slices.Contains(kinds, domain.ItemMovie) {
+		return nil, nil
+	}
+	return []store.Discovery{f.d}, nil
+}
+
+// An app's search of every library is shown, after what they hold, the films a remote library's
+// search finds that it does not hold, as titles an app opens as any other; a page past the first,
+// or a search of one library, is not.
+func TestAnAppsSearchFindsWhatARemoteLibraryDoesNotHoldYet(t *testing.T) {
+	ctx := t.Context()
+	db := storetest.FreshDatabase(t)
+	log := slog.New(slog.DiscardHandler)
+	if err := store.Migrate(ctx, db, log); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(ctx, db, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(st.Close)
+	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	copies := []store.Copy{{ContentKey: []byte("n"), Parts: []store.Part{{RelPath: "n.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
+	if _, err := st.SaveFolder(ctx, films.ID, "N", []byte("v"), []store.Film{{Title: "Night Moves", Folder: "N", Copies: copies}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nightOf := store.Discovery{ID: uuid.NewV7(), Kind: domain.ItemMovie, Title: "The Night Of", Year: 2016}
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Copies: noCopies{}, Discover: found{nightOf}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
+	items := func(params string) ([]string, int) {
+		t.Helper()
+		w := serve(api, http.MethodGet, "/Items?recursive=true&"+params, `MediaBrowser Token="pst_ada"`, "")
+		var result struct {
+			Items []struct {
+				ID, Name, Type string
+			}
+			TotalRecordCount int
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		var names []string
+		for _, i := range result.Items {
+			names = append(names, i.Type+" "+i.Name)
+		}
+		return names, result.TotalRecordCount
+	}
+	if got, total := items("searchTerm=night"); !slices.Equal(got, []string{"Movie Night Moves", "Movie The Night Of"}) || total != 2 {
+		t.Errorf("night: %q of %d, want Night Moves, then The Night Of found", got, total)
+	}
+	if got, _ := items("searchTerm=night&startIndex=1"); len(got) != 0 {
+		t.Errorf("past the first page: %q, want none found shown again", got)
+	}
+	if got, _ := items("searchTerm=night&parentId=" + guid(films.ID)); !slices.Equal(got, []string{"Movie Night Moves"}) {
+		t.Errorf("in Films: %q, want what it holds alone", got)
+	}
+	if got, _ := items("searchTerm=night&includeItemTypes=Series"); len(got) != 0 {
+		t.Errorf("shows: %q, want no film found", got)
 	}
 }

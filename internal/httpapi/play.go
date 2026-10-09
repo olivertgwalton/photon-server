@@ -53,6 +53,11 @@ type copies interface {
 	Ensure(ctx context.Context, item uuid.UUID) error
 }
 
+// discover finds remote libraries titles they do not hold yet.
+type discover interface {
+	Find(ctx context.Context, profile uuid.UUID, text string, kinds []domain.ItemKind) ([]store.Discovery, error)
+}
+
 // parts opens the parts of copies for tools to read and players to fetch.
 type parts interface {
 	Open(ctx context.Context, part uuid.UUID) (media.Input, error)

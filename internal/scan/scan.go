@@ -138,9 +138,14 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, asked []string, 
 func (s *Scanner) list(ctx context.Context, lib domain.Library, progress func(domain.ScanProgress), changed func(store.Changed)) (Report, error) {
 	told := domain.ScanProgress{Library: lib.ID, Phase: domain.ScanReading, Known: 1}
 	progress(told)
-	listed, err := s.lists.List(ctx, lib.ListSource, lib.ListID)
-	if err != nil {
-		return Report{}, err
+	// A library of what a search finds alone keeps only what a profile played, favourited or
+	// watchlisted of it.
+	var listed []domain.Listed
+	var err error
+	if lib.ListSource != "" {
+		if listed, err = s.lists.List(ctx, lib.ListSource, lib.ListID); err != nil {
+			return Report{}, err
+		}
 	}
 	titles, err := s.store.SaveListed(ctx, lib.ID, lib.Kind.ItemKinds()[0], listed)
 	if err != nil {

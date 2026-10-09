@@ -108,6 +108,13 @@ The list and the streams may come from different providers: an MDBList list stre
 Scanning a remote library reads its list; a title it no longer lists goes, unless a profile has
 played, favourited or watchlisted it. A show's episodes are those its providers say have aired.
 
+A remote library may also, or instead, hold what a search finds: with `"discover": "tmdb"` (or any
+provider that searches and files titles under ids of its own), a search of the server, in the web
+app or any Jellyfin app, shows what TMDB finds by the name that the library does not hold yet, as
+its titles, under ids kept a day. Opening one makes it the library's: it is matched there and then,
+and given a copy as any remote title is. A profile held to an age is shown none, as a title found
+has no certificate until it is matched.
+
 A film or an episode has no copy until it is opened or played. Then its provider is asked what it
 offers, and the best offer that can be read is probed and kept as a version, known by what its
 bytes are, so it is the same version however often it is offered; one no longer offered is
