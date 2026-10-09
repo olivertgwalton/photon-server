@@ -45,11 +45,14 @@ type fakeProvider struct {
 	accounts map[string]map[string]any
 	// disabled accounts are refused a refresh; down answers every request 503, secret is the client
 	// secret it takes, and noRefresh refuses the client the refresh grant, as Authelia does a client
-	// registered without it.
+	// registered without it. proxied answers a refresh 400 from a proxy before it, with no OAuth
+	// error, and forged signs refreshed ID tokens with a key it never published.
 	disabled  map[string]bool
 	down      bool
 	secret    string
 	noRefresh bool
+	proxied   bool
+	forged    bool
 	// nonce, when set, is the nonce its ID tokens carry in place of the one asked for.
 	nonce   string
 	codes   map[string]authorization
@@ -162,6 +165,10 @@ func (f *fakeProvider) token(w http.ResponseWriter, r *http.Request) {
 		}
 		subject, nonce, offline = a.subject, cmpOr(f.nonce, a.nonce), a.offline
 	case "refresh_token":
+		if f.proxied {
+			http.Error(w, "<html>Bad Request</html>", http.StatusBadRequest)
+			return
+		}
 		if f.noRefresh {
 			f.reply(w, http.StatusBadRequest, map[string]any{"error": "unauthorized_client"})
 			return
@@ -186,9 +193,15 @@ func (f *fakeProvider) token(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		f.t.Error(err)
 	}
+	key := f.key
+	if f.forged && nonce == "" {
+		if key, err = rsa.GenerateKey(rand.Reader, 2048); err != nil {
+			f.t.Error(err)
+		}
+	}
 	answer := map[string]any{
 		"access_token": "access", "token_type": "Bearer", "expires_in": 3600,
-		"id_token": oidctest.SignIDToken(f.key, "key", "RS256", string(b)),
+		"id_token": oidctest.SignIDToken(key, "key", "RS256", string(b)),
 	}
 	if offline {
 		refresh := rand.Text()
@@ -489,12 +502,15 @@ func TestAProviderThatRechecksSignsOutWhomItNoLongerLetsIn(t *testing.T) {
 		{"while the provider is down", func() { f.down = true }},
 		{"while the provider refuses the client", func() { f.secret = "rotated" }},
 		{"while the provider refuses the client the refresh grant", func() { f.noRefresh = true }},
+		{"while a proxy before the provider answers 400", func() { f.proxied = true }},
+		// The refresh is spent, so the next is asked by the token it rotated to.
+		{"while the provider's refreshed ID tokens fail verification", func() { f.forged = true }},
 		// The provider rotates its refresh tokens, each used once, so this is asked by the last.
 		{"once the provider is back", func() {}},
 	} {
 		f.set(c.while)
 		recheck()
-		f.set(func() { f.down, f.secret, f.noRefresh = false, "secret", false })
+		f.set(func() { f.down, f.secret, f.noRefresh, f.proxied, f.forged = false, "secret", false, false, false })
 		if !alive() {
 			t.Fatalf("signed out %s", c.name)
 		}

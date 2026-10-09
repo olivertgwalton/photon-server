@@ -62,7 +62,8 @@ type adminSignInProviderJSON struct {
 }
 
 // signInProviderChangeJSON registers the server on a provider. The client secret is kept as it is
-// when left out for the same client id; a public client has none. Provisioning link signs in only
+// when left out for the same issuer and client id, so no provider is sent another's; a public
+// client has none. Provisioning link signs in only
 // accounts profiles linked, create gives each new account in Group a user profile of its own,
 // seeing what Access says: every library, when left out. Group, required to create, is the group
 // an account must be in at the provider, read from its groups claim as it signs in. Recheck hourly,
@@ -204,7 +205,7 @@ func (a *API) setSignInProvider(w http.ResponseWriter, r *http.Request) {
 		if !errors.Is(err, store.ErrNotFound) && a.answered(w, r, err) {
 			return
 		}
-		if err == nil && now.ClientID == p.ClientID {
+		if err == nil && now.ClientID == p.ClientID && now.Issuer == p.Issuer {
 			p.ClientSecret = now.ClientSecret
 		}
 	}

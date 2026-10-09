@@ -56,5 +56,8 @@ func (k *KV) TakeSignIn(ctx context.Context, stateHash []byte) (f SignInFlow, ok
 	if err != nil {
 		return SignInFlow{}, false, err
 	}
-	return f, true, json.Unmarshal(b, &f)
+	if err := json.Unmarshal(b, &f); err != nil {
+		return SignInFlow{}, false, err
+	}
+	return f, true, nil
 }

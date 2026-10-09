@@ -77,6 +77,12 @@ func (s *Service) recheck(ctx context.Context, c store.SignInCheck) error {
 	if err != nil {
 		return err
 	}
+	// Kept before anything else is asked of the answer: a provider that rotates its refresh tokens
+	// has spent the one asked by.
+	if err := s.st.RenewSignInToken(ctx, c, tok.RefreshToken); err != nil {
+		return err
+	}
+	c.Token = tok.RefreshToken
 	if p.Group != "" {
 		// The provider answers the account's claims as they are now: Keycloak, authentik, Kanidm and
 		// Pocket ID in a new ID token (OIDC Core §12.2), Authelia only by its userinfo.
@@ -97,23 +103,24 @@ func (s *Service) recheck(ctx context.Context, c store.SignInCheck) error {
 			return s.signOut(ctx, c, fmt.Errorf("not in %q", p.Group))
 		}
 	}
-	return s.st.RenewSignInToken(ctx, c, tok.RefreshToken)
+	return nil
 }
 
-// accountRefused is whether a provider turned a refresh token down for its account's sake: a 400 for a
-// grant that is invalid, expired or revoked (RFC 6749 §5.2), or as Zitadel and Pocket ID say it of
-// an account disabled or out of a client's groups. A provider that turns down the client an admin
-// registered, fails, or is not reached has said nothing of the account.
+// accountRefused is whether a provider turned a refresh token down for its account's sake: a 400
+// saying the grant is invalid, expired or revoked (RFC 6749 §5.2), or as Pocket ID says it of an
+// account out of a client's groups, and Zitadel, which answers invalid_request for every refusal,
+// of a disabled one. Turning down the client an admin registered, failing, a 400 that is no OAuth
+// answer, or not answering says nothing of the account.
 func accountRefused(err error) bool {
 	re, ok := errors.AsType[*oauth2.RetrieveError](err)
 	if !ok || re.Response == nil || re.Response.StatusCode != http.StatusBadRequest {
 		return false
 	}
 	switch re.ErrorCode {
-	case "invalid_client", "unauthorized_client", "unsupported_grant_type", "invalid_scope":
-		return false
+	case "invalid_grant", "access_denied", "invalid_request":
+		return true
 	}
-	return true
+	return false
 }
 
 // signOut signs out the devices an account signed in, for why.
