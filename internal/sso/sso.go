@@ -71,10 +71,6 @@ const (
 	RefusalLinkedElsewhere Refusal = "linked_elsewhere"
 )
 
-func Refusals() []Refusal {
-	return []Refusal{RefusalExpired, RefusalDenied, RefusalFailed, RefusalNotLinked, RefusalNotInGroup, RefusalLinkedElsewhere}
-}
-
 // Refused is a sign-in refused for Reason, by the account the provider called Account when it got
 // that far.
 type Refused struct {
