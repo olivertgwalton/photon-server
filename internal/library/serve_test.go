@@ -52,3 +52,31 @@ func TestAStrmIsServedAsTheMediaItNames(t *testing.T) {
 		t.Errorf("a sample of 16 bytes answered %q, want the media's first 16", got)
 	}
 }
+
+// A server that answers more of the media than was asked has only the sample's limit passed on.
+func TestASampleOfAStrmIsHeldToItsLimit(t *testing.T) {
+	body := strings.Repeat("0123456789", 100)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Range", "bytes 0-999/1000")
+		w.Header().Set("Content-Length", "1000")
+		w.WriteHeader(http.StatusPartialContent)
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	write(t, dir, map[string]string{"Heat (1995).strm": srv.URL + "/heat.mkv\n"})
+	f, err := Open(dir, "Heat (1995).strm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	w := httptest.NewRecorder()
+	if err := Serve(w, httptest.NewRequest(http.MethodGet, "/sample", nil), f, "Heat (1995).strm", 16); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.Body.String(); got != body[:16] || w.Header().Get("Content-Length") != "" {
+		t.Errorf("a sample of 16 bytes sent %d bytes with Content-Length %q, want the first 16 and no length", len(got), w.Header().Get("Content-Length"))
+	}
+}
