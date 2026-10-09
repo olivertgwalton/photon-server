@@ -312,6 +312,8 @@ func Capabilities(p Provider) []domain.Capability {
 			_, ok = As[Rater](p, c)
 		case domain.CapabilityPerson:
 			_, ok = As[PersonDescriber](p, c)
+		case domain.CapabilityList:
+			_, ok = As[Lister](p, c)
 		}
 		if ok {
 			out = append(out, c)
@@ -388,7 +390,7 @@ func (r *Registry) List(ctx context.Context, source domain.FieldSource, id strin
 	if err != nil {
 		return nil, err
 	}
-	lister, isLister := p.(Lister)
+	lister, isLister := As[Lister](p, domain.CapabilityList)
 	if !ok || !isLister {
 		return nil, ErrNoLister
 	}

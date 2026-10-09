@@ -15,12 +15,20 @@ let { data } = $props();
 
 // Where a collection's titles come from: put in by hand, or a list kept on a
 // provider, as Kometa's list builders read one.
-const sources = [
+const sources = $derived([
 	{ value: "hand", label: "By hand" },
 	{ value: "tmdb", label: "A TMDB list" },
 	{ value: "mdblist", label: "An MDBList list" },
-] as const;
-let source = $state<(typeof sources)[number]["value"]>("hand");
+	...data.listers.map((p) => ({
+		value: String(p.provider),
+		label: `A ${p.name} catalog`,
+	})),
+]);
+let source = $state("hand");
+const placeholders: Record<string, string> = {
+	tmdb: "8136",
+	mdblist: "user/list, or its id",
+};
 
 async function add(event: SubmitEvent) {
 	const form = fields(event);
@@ -101,7 +109,7 @@ const libraries = $derived(
 							id="collection-list"
 							name="list"
 							required
-							placeholder={source === "tmdb" ? "8136" : "user/list, or its id"}
+							placeholder={placeholders[source] ?? "movie/top"}
 							class="font-mono"
 						/>
 					</Field.Field>

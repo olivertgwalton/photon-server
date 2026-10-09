@@ -1543,7 +1543,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the registered metadata plugins
+         * List the registered plugins
          * @description Admin only.
          */
         get: {
@@ -1569,7 +1569,7 @@ export interface paths {
         };
         put?: never;
         /**
-         * Register the metadata plugin at an address, once its manifest is read
+         * Register the plugin or Stremio addon at an address, once its manifest is read
          * @description Admin only.
          */
         post: {
@@ -6803,6 +6803,8 @@ export interface components {
             name: string;
         };
         AddPlugin: {
+            id?: string;
+            protocol?: components["schemas"]["PluginProtocol"];
             url: string;
         };
         AddProfile: {
@@ -7013,7 +7015,7 @@ export interface components {
             items: components["schemas"]["Candidate"][];
         };
         /** @enum {string} */
-        Capability: "describe" | "search" | "rate" | "person";
+        Capability: "describe" | "search" | "rate" | "person" | "list";
         Card: {
             /** Format: date-time */
             added_at: string;
@@ -8117,13 +8119,16 @@ export interface components {
             id: string;
             kinds: components["schemas"]["ItemKind"][];
             name: string;
-            protocol: number;
+            protocol: components["schemas"]["PluginProtocol"];
             provider: components["schemas"]["FieldSource"];
             url: string;
+            version?: number;
         };
         PluginList: {
             items: components["schemas"]["Plugin"][];
         };
+        /** @enum {string} */
+        PluginProtocol: "photon" | "stremio";
         Position: {
             /** Format: int64 */
             position_ms: number;

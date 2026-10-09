@@ -30,6 +30,9 @@ type Setting struct {
 	Required bool `json:"required,omitempty"`
 }
 
+// Capabilities are those a plugin speaking this protocol may answer.
+var Capabilities = []string{"describe", "search", "rate", "person"}
+
 // Settings is in every request: what an admin set for the plugin, by key.
 type Settings map[string]string
 

@@ -17,30 +17,32 @@ var (
 	ErrUnknownPlugin = errors.New("no plugin registered has that id")
 )
 
-// Plugin is a metadata plugin an admin registered: where it answers, and the manifest it last
-// answered there, as the plugin package encoded it.
+// Plugin is a plugin an admin registered: what it speaks, where it answers, and the manifest it
+// last answered there, as it answered it.
 type Plugin struct {
 	Slug     string
+	Protocol domain.PluginProtocol
 	URL      string
 	Manifest []byte
 }
 
 // Plugins answers every registered plugin, by slug.
 func (s *Store) Plugins(ctx context.Context) ([]Plugin, error) {
-	return queryStructs[Plugin](ctx, s.pool, `SELECT slug, url, manifest FROM plugins ORDER BY slug`)
+	return queryStructs[Plugin](ctx, s.pool, `SELECT slug, protocol, url, manifest FROM plugins ORDER BY slug`)
 }
 
 // Plugin answers a registered plugin, or ErrNotFound.
 func (s *Store) Plugin(ctx context.Context, slug string) (Plugin, error) {
 	var p Plugin
-	err := s.pool.QueryRow(ctx, `SELECT slug, url, manifest FROM plugins WHERE slug = $1`, slug).Scan(&p.Slug, &p.URL, &p.Manifest)
+	err := s.pool.QueryRow(ctx, `SELECT slug, protocol, url, manifest FROM plugins WHERE slug = $1`, slug).
+		Scan(&p.Slug, &p.Protocol, &p.URL, &p.Manifest)
 	return p, found(err)
 }
 
 // AddPlugin registers a plugin, or answers ErrPluginExists for a slug in use.
 func (s *Store) AddPlugin(ctx context.Context, plugin Plugin) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO plugins (slug, url, manifest) VALUES ($1, $2, $3)`,
-		plugin.Slug, plugin.URL, plugin.Manifest)
+	_, err := s.pool.Exec(ctx, `INSERT INTO plugins (slug, protocol, url, manifest) VALUES ($1, $2, $3, $4)`,
+		plugin.Slug, plugin.Protocol, plugin.URL, plugin.Manifest)
 	if violates(err, uniqueViolation) {
 		return ErrPluginExists
 	}

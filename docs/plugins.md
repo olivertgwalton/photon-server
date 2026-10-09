@@ -1,4 +1,4 @@
-# Metadata plugins
+# Plugins
 
 A metadata plugin is a web service that tells photon-server about films and shows. It can be
 written in any language and run anywhere the server can reach over HTTP. An admin registers it by
@@ -242,3 +242,24 @@ speak one it does. Within a version the server may add optional fields to what i
 plugin ignores fields it does not know, and a plugin may leave out any optional field. Anything a
 plugin could notice otherwise (a field renamed, removed or newly required, a changed meaning) is a
 new version.
+
+## Stremio addons
+
+A [Stremio addon](https://github.com/Stremio/stremio-addon-sdk/tree/master/docs) is a plugin too,
+registered by the address of its `manifest.json`, as Stremio installs one:
+
+```sh
+curl -X POST https://photon.example/api/v1/admin/plugins \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"url": "https://aiostreams.example/stremio/…/manifest.json", "protocol": "stremio"}'
+```
+
+Its id is its manifest's, made lower case letters, digits and hyphens
+(`com.stremio.torrentio.addon` is `plugin:com-stremio-torrentio-addon`), unless `id` names it: two
+installs of one addon, configured apart, need ids of their own. An addon's configuration is in its
+address, a debrid service's key among it, so the address is kept as a secret is: nothing shows it
+past its host, and no error names it.
+
+Each of its catalogs of films (`movie`) or shows (`series`) is a list, named as `{type}/{id}` as the
+manifest lists it: `movie/top`. A list collection can hold a catalog's titles, as it does an
+MDBList list's. A catalog is read a page at a time, by `skip`, to 500 titles.

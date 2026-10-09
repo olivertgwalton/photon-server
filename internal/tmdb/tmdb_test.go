@@ -231,7 +231,7 @@ func TestAnEpisodeIsRatedByItsVotesAlone(t *testing.T) {
 // A provider is found able to do what it does only while its methods are the capabilities' own.
 func TestItHasItsCapabilities(t *testing.T) {
 	got := provider.Capabilities(New(withToken, unlimited{}))
-	if want := []domain.Capability{domain.CapabilityDescribe, domain.CapabilitySearch, domain.CapabilityPerson}; !slices.Equal(got, want) {
+	if want := []domain.Capability{domain.CapabilityDescribe, domain.CapabilitySearch, domain.CapabilityPerson, domain.CapabilityList}; !slices.Equal(got, want) {
 		t.Errorf("capabilities %v, want %v", got, want)
 	}
 }

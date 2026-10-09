@@ -85,6 +85,9 @@ func Providers() []Provider {
 type Listed struct {
 	Kind ItemKind
 	IDs  map[Provider]string
+	// Title and Year are what the list calls it, where it says.
+	Title string
+	Year  int
 }
 
 // IDSource is where a title's provider id came from, so a later source knows what it may replace.
