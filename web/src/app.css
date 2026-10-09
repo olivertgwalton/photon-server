@@ -219,6 +219,14 @@
 		);
 	}
 
+	/* Dark lettering lit from behind, so a black logo is not lost on a dark
+	   backdrop: a thin stroke throws too little light for one glow to outline
+	   it, so a tight one holds its edges and a wide one spreads them. */
+	.lettering-glow {
+		filter: drop-shadow(0 0 3px oklch(1 0 0 / 60%))
+			drop-shadow(0 0 7px oklch(1 0 0 / 60%));
+	}
+
 	/* A mark over a picture, on a tinted disc. Not blurred: a backdrop filter
 	   on every card of a wall repaints each one per frame of a scroll in Firefox. */
 	.glass-disc {
