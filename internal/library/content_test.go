@@ -17,7 +17,12 @@ func TestContentKey(t *testing.T) {
 	})
 	key := func(parts ...string) string {
 		t.Helper()
-		k, err := ContentKey(dir, parts)
+		f, err := Open(dir, parts[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		k, err := ContentKey(f, len(parts))
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -26,9 +27,13 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
+// fakeProber describes every file alike, once it is sure ffprobe would read it from its start.
 type fakeProber struct{}
 
-func (fakeProber) Probe(context.Context, *os.File) (domain.Facts, error) {
+func (fakeProber) Probe(_ context.Context, f *os.File) (domain.Facts, error) {
+	if at, err := f.Seek(0, io.SeekCurrent); err != nil || at != 0 {
+		return domain.Facts{}, fmt.Errorf("probing %s from byte %d: %w", f.Name(), at, err)
+	}
 	return domain.Facts{
 		Container: "matroska,webm",
 		Duration:  2 * time.Hour,
