@@ -15,8 +15,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/naming"
@@ -46,11 +44,14 @@ type Report struct {
 	Skipped   int
 }
 
-// readsAtOnce is how many files a scan reads at once, and how many of the library's top-level
-// folders it is in at once. Reading a file is a few requests in turn, each waiting on the disk or,
-// on a network or debrid mount, on the network; four at once keep such a mount busy without asking
-// more of it than it answers at once.
+// readsAtOnce is how many files a scan reads at once. Reading a file is a few requests in turn,
+// each waiting on the disk or, on a network or debrid mount, on the network; four at once keep such
+// a mount busy without asking more of it than it answers at once.
 const readsAtOnce = 4
+
+// foldersAtOnce is how many folders a scan is in at once: listing one, or waiting on its files'
+// reads or its save. Riven answers a mount's requests on four threads, and NFS and SMB more.
+const foldersAtOnce = 8
 
 // run is one scan of a library, shared by the folders it reads at once.
 type run struct {
@@ -114,9 +115,8 @@ func scopes(asked []string) []string {
 }
 
 // Scan reads folders of a library again with everything under them, "." being the whole
-// library, telling progress after each, and what each changed of the library's titles. Its
-// top-level folders, or the folders asked for, are walked and read several at once, the folders
-// under each one after another, parents first, so a show's seasons follow the show.
+// library, telling progress after each, and what each changed of the library's titles. Folders are
+// read several at once, parents first, so a show's seasons follow the show.
 func (s *Scanner) Scan(ctx context.Context, lib domain.Library, asked []string, progress func(domain.ScanProgress), changed func(store.Changed)) (Report, error) {
 	scoped := scopes(asked)
 	r := &run{
@@ -129,42 +129,17 @@ func (s *Scanner) Scan(ctx context.Context, lib domain.Library, asked []string, 
 	if r.fingerprints, err = s.store.FolderFingerprints(ctx, lib.ID); err != nil {
 		return r.report, err
 	}
-	dirs := scoped
-	if slices.Equal(scoped, []string{"."}) {
-		var root library.Folder
-		for folder, err := range library.Walk(lib.Root, ".") {
-			// A root that cannot be read is a mount that is down, not a library emptied.
-			if err != nil {
-				return r.report, err
-			}
-			root = folder
-			break
+	err = library.Walk(ctx, lib.Root, scoped, foldersAtOnce, func(ctx context.Context, folder library.Folder, err error) error {
+		// A root that cannot be read is a mount that is down, not a library emptied.
+		if err != nil && folder.Path == "." {
+			return err
 		}
-		r.told.Known += len(root.Folders)
-		if err := s.folder(ctx, r, root, nil); err != nil {
-			return r.report, err
-		}
-		dirs = root.Folders
-	}
-	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(readsAtOnce)
-	for _, dir := range dirs {
-		g.Go(func() error {
-			for folder, err := range library.Walk(lib.Root, dir) {
-				if err != nil && folder.Path == "." {
-					return err
-				}
-				r.mu.Lock()
-				r.told.Known += len(folder.Folders)
-				r.mu.Unlock()
-				if err := s.folder(gctx, r, folder, err); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	}
-	if err := g.Wait(); err != nil {
+		r.mu.Lock()
+		r.told.Known += len(folder.Folders)
+		r.mu.Unlock()
+		return s.folder(ctx, r, folder, err)
+	})
+	if err != nil {
 		return r.report, err
 	}
 	if err := ctx.Err(); err != nil {

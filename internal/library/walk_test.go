@@ -1,12 +1,15 @@
 package library
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,16 +29,29 @@ func write(t *testing.T, dir string, files map[string]string) {
 	}
 }
 
-func walkAll(t *testing.T, dir string) map[string]Folder {
+// walkFrom walks folders of the library at root, answering every folder read.
+func walkFrom(t *testing.T, root string, dirs ...string) map[string]Folder {
 	t.Helper()
+	var mu sync.Mutex
 	got := map[string]Folder{}
-	for f, err := range Walk(dir, ".") {
+	err := Walk(t.Context(), root, dirs, 4, func(_ context.Context, f Folder, err error) error {
 		if err != nil {
-			t.Fatal(err)
+			return err
 		}
+		mu.Lock()
+		defer mu.Unlock()
 		got[f.Path] = f
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	return got
+}
+
+func walkAll(t *testing.T, dir string) map[string]Folder {
+	t.Helper()
+	return walkFrom(t, dir, ".")
 }
 
 func fileNames(f Folder) []string {
@@ -232,13 +248,7 @@ func TestWalkingAFolderWalksWhatTheWholeWalkFindsThere(t *testing.T) {
 		"Private/Diary/Home Video.mkv":     "v",
 	})
 	whole := walkAll(t, dir)
-	part := map[string]Folder{}
-	for f, err := range Walk(dir, "The Wire/Season 1") {
-		if err != nil {
-			t.Fatal(err)
-		}
-		part[f.Path] = f
-	}
+	part := walkFrom(t, dir, "The Wire/Season 1")
 	if diff := cmp.Diff([]string{"The Wire/Season 1", "The Wire/Season 1/Extras"}, slices.Sorted(maps.Keys(part))); diff != "" {
 		t.Errorf("folders (-want +got):\n%s", diff)
 	}
@@ -247,8 +257,8 @@ func TestWalkingAFolderWalksWhatTheWholeWalkFindsThere(t *testing.T) {
 	}
 	// A .ignore above the folder still hides it.
 	for _, hidden := range []string{"The Wire/Season 2", "Private/Diary"} {
-		for f := range Walk(dir, hidden) {
-			t.Errorf("walking %s yielded %s", hidden, f.Path)
+		for f := range walkFrom(t, dir, hidden) {
+			t.Errorf("walking %s read %s", hidden, f)
 		}
 	}
 }
@@ -292,5 +302,71 @@ func TestRemoveTakesAFileAndTheFoldersItEmpties(t *testing.T) {
 	}
 	if err := Remove(root, "../outside.mkv"); !errors.Is(err, errNotInside) {
 		t.Errorf("removing outside the library: %v, want %v", err, errNotInside)
+	}
+}
+
+func TestAShowsSeasonsAreReadTogether(t *testing.T) {
+	dir := t.TempDir()
+	const seasons = 4
+	for n := range seasons {
+		write(t, dir, map[string]string{fmt.Sprintf("The Wire/Season %d/E01.mkv", n+1): "v"})
+	}
+	// Each season waits for the others to be read with it, and fails one read alone.
+	var mu sync.Mutex
+	in, all := 0, make(chan struct{})
+	err := Walk(t.Context(), dir, []string{"."}, seasons, func(_ context.Context, f Folder, err error) error {
+		if err != nil || len(f.Files) == 0 {
+			return err
+		}
+		mu.Lock()
+		if in++; in == seasons {
+			close(all)
+		}
+		mu.Unlock()
+		select {
+		case <-all:
+			return nil
+		case <-time.After(5 * time.Second):
+			return fmt.Errorf("%s was read alone", f.Path)
+		}
+	})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestAFolderIsReadBeforeTheFoldersInIt(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, map[string]string{
+		"The Wire/Season 1/E01.mkv": "v", "The Wire/Season 2/E01.mkv": "v", "Heat (1995)/Heat.mkv": "v",
+	})
+	var mu sync.Mutex
+	seen := map[string]bool{}
+	err := Walk(t.Context(), dir, []string{"."}, 4, func(_ context.Context, f Folder, err error) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if parent := filepath.Dir(f.Path); f.Path != "." && !seen[parent] {
+			return fmt.Errorf("%s read before %s", f.Path, parent)
+		}
+		seen[f.Path] = true
+		return err
+	})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestAWalkEndsAtTheFirstErrorItIsGiven(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, map[string]string{"A/1/x.mkv": "v", "B/2/y.mkv": "v", "C/3/z.mkv": "v"})
+	stop := errors.New("stop")
+	err := Walk(t.Context(), dir, []string{"."}, 2, func(_ context.Context, f Folder, _ error) error {
+		if f.Path == "B" {
+			return stop
+		}
+		return nil
+	})
+	if !errors.Is(err, stop) {
+		t.Errorf("walk answered %v, want the error it was given", err)
 	}
 }
