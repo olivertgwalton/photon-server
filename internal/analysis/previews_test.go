@@ -21,6 +21,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
@@ -102,7 +103,7 @@ func newFixture(t *testing.T) *fixture {
 	tools := media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}
 	return &fixture{
 		t: t, st: st, db: db, root: root, lib: lib, admin: admin, previews: previews, dir: dir,
-		make: MakePreviews(st, tools, previews, log),
+		make: MakePreviews(st, library.Parts{Places: st}, tools, previews, log),
 	}
 }
 

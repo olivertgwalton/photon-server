@@ -141,7 +141,7 @@ func createMarkers(ctx context.Context, tx db, rows []*model.Marker) error {
 	return tx.SendBatch(ctx, b).Close()
 }
 
-// SeasonPart is a part of an episode in a season, with somewhere to read it and sound to compare.
+// SeasonPart is a part of an episode in a season, somewhere to be read, with sound to compare.
 type SeasonPart struct {
 	ID      uuid.UUID
 	Episode uuid.UUID
@@ -149,8 +149,6 @@ type SeasonPart struct {
 	Idx     int
 	// Duration is the part's own length.
 	Duration time.Duration
-	Root     string
-	RelPath  string
 	// Fingerprinted is whether its sound has been compared with its season's.
 	Fingerprinted bool
 }
@@ -161,7 +159,7 @@ func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart
 	return queryStructs[SeasonPart](ctx, s.pool, `
 		SELECT * FROM (
 			SELECT DISTINCT ON (p.id) p.id, e.id AS episode, v.id AS version, p.idx,
-				p.duration_ms * interval '1 millisecond' AS duration, l.root, f.rel_path,
+				p.duration_ms * interval '1 millisecond' AS duration,
 				p.fingerprinted_at IS NOT NULL AS fingerprinted
 			FROM items e
 			JOIN versions v ON v.item_id = e.id AND v.missing_since IS NULL
@@ -177,17 +175,16 @@ func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart
 
 // FilmEnd is the last part of a copy of a film, where its credits are.
 type FilmEnd struct {
-	ID            uuid.UUID
-	Duration      time.Duration
-	Root, RelPath string
-	Read          bool
+	ID       uuid.UUID
+	Duration time.Duration
+	Read     bool
 }
 
 // FilmEnds answers the last part of each copy of a film on disk, in a library that reads its files
 // for markers, with a picture: none for anything but a film.
 func (s *Store) FilmEnds(ctx context.Context, film uuid.UUID) ([]FilmEnd, error) {
 	return queryStructs[FilmEnd](ctx, s.pool, `
-		SELECT DISTINCT ON (p.id) p.id, p.duration_ms * interval '1 millisecond' AS duration, l.root, f.rel_path,
+		SELECT DISTINCT ON (p.id) p.id, p.duration_ms * interval '1 millisecond' AS duration,
 			p.fingerprinted_at IS NOT NULL AS read
 		FROM items i
 		JOIN versions v ON v.item_id = i.id AND v.missing_since IS NULL

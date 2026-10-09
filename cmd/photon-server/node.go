@@ -27,6 +27,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/jellyfin"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/nodes"
@@ -66,6 +67,7 @@ type node struct {
 	hw          hls.Hardware
 	remuxer     *hls.Remuxer
 	conversions *playback.Conversions
+	parts       library.Parts
 	auth        *auth.Service
 	pictures    *artwork.Cache
 	previews    *analysis.Previews
@@ -122,7 +124,8 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	if n.identity, err = identity.New(ctx, n.st, hostname, n.logger); err != nil {
 		return err
 	}
-	n.conversions, err = playback.NewConversions(n.st, n.cache, n.remuxer, n.tools.FFmpeg.Path, hw, filepath.Join(n.cacheRoot, "downloads"), n.id)
+	n.parts = library.Parts{Places: n.st}
+	n.conversions, err = playback.NewConversions(n.st, n.parts, n.cache, n.remuxer, n.tools.FFmpeg.Path, hw, filepath.Join(n.cacheRoot, "downloads"), n.id)
 	if err != nil {
 		return err
 	}
@@ -156,7 +159,7 @@ func (n *node) wire(ctx context.Context) error {
 	window := task.Trigger{Kind: task.TriggerWindow, Opens: n.gate.Opens}
 	plugins := plugin.New(st)
 	n.providers = metadataProviders(st, plugins, n.cache)
-	fetcher := subtitles.NewFetcher(st, n.providers)
+	fetcher := subtitles.NewFetcher(st, n.parts, n.providers)
 	n.scheduler = task.NewScheduler(st, logger, n.id, n.hub.Raise, scanTask(st), sweepTask(st, logger), backupTask(n.dumper, n.hub, logger),
 		refreshTask(st, logger), sweepArtworkTask(st, n.pictures, logger), markersTask(st, n.tools, window, logger),
 		previewsTask(st, n.previews, window, logger), sweepDownloadsTask(st, logger), pruneActivityTask(st, logger),
@@ -187,13 +190,13 @@ func (n *node) wire(ctx context.Context) error {
 	n.signIns = sso.New(st, n.cache, n.reach.PublicURL, logger)
 	p := playing{
 		files: files, owners: playback.NewRouter(n.cache, n.id), signer: playback.NewSigner(signingKey), nodeKey: nodeKey,
-		placer: playback.NewPlacer(n.cache, n.self.Node, playback.NewRemuxes(files, n.remuxer), nodeKey),
+		placer: playback.NewPlacer(n.cache, n.self.Node, playback.NewRemuxes(files, n.parts, n.remuxer), nodeKey),
 		sent:   playback.NewSent(), plugins: plugins, fetcher: fetcher,
 	}
 	n.secured = secure.New(st, n.hub.Subscribe, logger)
 	n.jellyfin, err = jellyfin.NewListener(st, n.hub.Subscribe, jellyfin.New(logger, n.info.ID, n.identity.Name, jellyfin.Services{
 		Auth: n.auth, Limits: n.cache, Raise: n.hub.Raise, Reach: n.reach, Catalogue: st, Subscribe: n.hub.Subscribe, Audience: st, Displays: st, Preferences: st, Playlists: st,
-		Pictures: n.pictures, Playing: files, Playbacks: n.sessions, Watching: st, Themes: st, Previews: st, PreviewFiles: n.previews,
+		Pictures: n.pictures, Playing: files, Parts: n.parts, Playbacks: n.sessions, Watching: st, Themes: st, Previews: st, PreviewFiles: n.previews,
 		HLS: n.remuxer, Placer: p.placer, Owners: p.owners, Signer: p.signer,
 		Network: st, Sent: p.sent,
 	}), n.listen, n.secured.Listen, n.secured.TLSConfig(), logger)
@@ -231,7 +234,7 @@ func (n *node) httpServer(p playing) (*http.Server, error) {
 	return &http.Server{
 		Addr: n.listen, TLSConfig: n.secured.TLSConfig(),
 		Handler: httpapi.New(n.logger, n.info, httpapi.Services{
-			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, SignIns: n.signIns, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Parts: n.parts, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, SignIns: n.signIns, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Postgres: st, Valkey: cache, Web: web,
 			Metrics: metrics(version, n.self, n.remuxer, n.sessions, p.placer, p.sent, n.finished, cluster{lead: n.scheduler, st: st, nodes: cache, self: p.placer}),
 			Sent:    p.sent,
 		}),
@@ -277,11 +280,11 @@ func (n *node) workers() []*jobs.Worker {
 	}, hub, jobs.When(n.self.TakesTranscodes), n.finished)
 	return []*jobs.Worker{
 		scanner, matcher, notifier, importer,
-		reader(domain.JobKeyframes, analysis.Keyframes(st)),
-		reader(domain.JobKeyframeWalk, analysis.WalkKeyframes(st, n.tools)),
-		reader(domain.JobMarkers, analysis.Markers(st, n.tools.Fingerprint, n.tools.Shades)),
-		reader(domain.JobPreviews, analysis.MakePreviews(st, n.tools, n.previews, logger)),
-		reader(domain.JobProbe, analysis.Probe(st, n.tools)),
+		reader(domain.JobKeyframes, analysis.Keyframes(st, n.parts)),
+		reader(domain.JobKeyframeWalk, analysis.WalkKeyframes(st, n.parts, n.tools)),
+		reader(domain.JobMarkers, analysis.Markers(st, n.parts, n.tools.Fingerprint, n.tools.Shades)),
+		reader(domain.JobPreviews, analysis.MakePreviews(st, n.parts, n.tools, n.previews, logger)),
+		reader(domain.JobProbe, analysis.Probe(st, n.parts, n.tools)),
 		converter,
 	}
 }

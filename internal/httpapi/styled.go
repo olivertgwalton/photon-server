@@ -42,7 +42,7 @@ func (a *API) partSubtitles(ctx context.Context, part uuid.UUID) (hls.SubtitleSo
 		return hls.SubtitleSource{}, err
 	}
 	opening := context.WithoutCancel(ctx)
-	open := func() (media.Input, error) { return openMedia(opening, a.svc.Playing.PartFile, part) }
+	open := func() (media.Input, error) { return a.svc.Parts.Open(opening, part) }
 	return hls.SubtitleSource{Open: open, Part: part, Streams: streams}, nil
 }
 

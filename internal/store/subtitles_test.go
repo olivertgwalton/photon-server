@@ -33,7 +33,7 @@ func TestAFetchedSubtitleOutlivesAScanAndIsServedFromPostgres(t *testing.T) {
 	}
 	search, err := s.SubtitleSearchOf(ctx, uuid.UUID{}, item, uuid.UUID{})
 	if err != nil || search.Query.Kind != domain.ItemMovie || search.Query.IDs[domain.ProviderIMDb] != "tt0113277" ||
-		search.Root != "/srv/films" || search.RelPath != "H/heat.mkv" || search.Parts != 1 {
+		search.Part == (uuid.UUID{}) || search.Parts != 1 {
 		t.Fatalf("SubtitleSearchOf = %+v, %v; want the film's IMDb id and its one file", search, err)
 	}
 	id, err := s.SaveFetchedSubtitle(ctx, search.Version, FetchedSubtitleFile{Language: language.French, Body: []byte("1\n")})

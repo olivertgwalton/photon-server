@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -72,7 +73,7 @@ func (f *fixture) stored(part uuid.UUID) ([]int64, bool) {
 // index runs the part's keyframes job and, as the worker would, finishes it.
 func (f *fixture) index(part uuid.UUID) {
 	f.t.Helper()
-	if err := Keyframes(f.st)(f.t.Context(), part); err != nil {
+	if err := Keyframes(f.st, library.Parts{Places: f.st})(f.t.Context(), part); err != nil {
 		f.t.Fatal(err)
 	}
 	if _, err := f.db.Exec(f.t.Context(), `DELETE FROM jobs WHERE kind = 'keyframes' AND subject = $1`, part.String()); err != nil {
@@ -134,7 +135,7 @@ func TestAFullLibraryWalksAFileWithNoIndex(t *testing.T) {
 	if err := f.db.QueryRow(t.Context(), `SELECT count(*) FROM jobs WHERE kind = 'keyframe_walk' AND subject = $1 AND due = 'window'`, ts.String()).Scan(&walks); err != nil || walks != 1 {
 		t.Fatalf("%d walks queued (%v), want one due in the window", walks, err)
 	}
-	if err := WalkKeyframes(f.st, tools)(t.Context(), ts); err != nil {
+	if err := WalkKeyframes(f.st, library.Parts{Places: f.st}, tools)(t.Context(), ts); err != nil {
 		t.Fatal(err)
 	}
 	want := []int64{1483, 2818, 3485, 6196, 6614, 8741}

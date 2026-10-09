@@ -12,6 +12,7 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -40,7 +41,7 @@ func TestASubtitleIsSearchedForByItsFileAndKeptBesideIt(t *testing.T) {
 	st, _, item := heat(t)
 	ctx := t.Context()
 	var asked []domain.SubtitleQuery
-	f := NewFetcher(st, provider.NewRegistry(nil, subtitler{asked: &asked}))
+	f := NewFetcher(st, library.Parts{Places: st}, provider.NewRegistry(nil, subtitler{asked: &asked}))
 	version, found, err := f.Search(ctx, uuid.UUID{}, item, uuid.UUID{}, language.French)
 	if err != nil || len(found) != 1 || !found[0].ForRelease {
 		t.Fatalf("Search = %v, %v; want the one made for the file", found, err)
@@ -83,7 +84,7 @@ func TestALibraryFetchesTheSubtitlesItsCopiesLack(t *testing.T) {
 				t.Fatal(err)
 			}
 			var asked []domain.SubtitleQuery
-			f := NewFetcher(st, provider.NewRegistry(nil, subtitler{&asked, tc.err}))
+			f := NewFetcher(st, library.Parts{Places: st}, provider.NewRegistry(nil, subtitler{&asked, tc.err}))
 			if n, err := f.FetchMissing(ctx); err != nil || n != len(tc.fetched) {
 				t.Fatalf("FetchMissing = %d, %v; want %d", n, err, len(tc.fetched))
 			}

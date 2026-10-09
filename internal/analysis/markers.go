@@ -9,7 +9,6 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
-	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -24,22 +23,22 @@ type shader func(ctx context.Context, in media.Input, from time.Duration) ([]med
 // Plex's intro detection and Jellyfin's Intro Skipper do: each copy's first part for the intro,
 // its last for the credits. A season with nothing not yet compared is passed over. A film, which
 // has no other episode to compare with, has its credits found by its picture (see filmCredits).
-func Markers(st *store.Store, fingerprint fingerprinter, shades shader) jobs.Handler {
+func Markers(st *store.Store, parts opener, fingerprint fingerprinter, shades shader) jobs.Handler {
 	return func(ctx context.Context, season uuid.UUID) error {
 		ends, err := st.FilmEnds(ctx, season)
 		if err != nil {
 			return err
 		}
 		if len(ends) > 0 {
-			return filmMarkers(ctx, st, shades, ends)
+			return filmMarkers(ctx, st, parts, shades, ends)
 		}
-		parts, err := st.SeasonParts(ctx, season)
-		if err != nil || !slices.ContainsFunc(parts, func(p store.SeasonPart) bool { return !p.Fingerprinted }) {
+		read, err := st.SeasonParts(ctx, season)
+		if err != nil || !slices.ContainsFunc(read, func(p store.SeasonPart) bool { return !p.Fingerprinted }) {
 			return err
 		}
 		var intros, credits []sound
 		var introParts, creditParts, compared []uuid.UUID
-		for rest := parts; len(rest) > 0; {
+		for rest := read; len(rest) > 0; {
 			n := 1
 			for n < len(rest) && rest[n].Version == rest[0].Version {
 				n++
@@ -47,7 +46,7 @@ func Markers(st *store.Store, fingerprint fingerprinter, shades shader) jobs.Han
 			copyParts := rest[:n]
 			rest = rest[n:]
 			first, last := copyParts[0], copyParts[n-1]
-			p, err := take(ctx, fingerprint, first, domain.MarkerIntro)
+			p, err := take(ctx, parts, fingerprint, first, domain.MarkerIntro)
 			// What is not compared is compared once the server has an FFmpeg that can.
 			if errors.Is(err, media.ErrNoChromaprint) {
 				return nil
@@ -56,7 +55,7 @@ func Markers(st *store.Store, fingerprint fingerprinter, shades shader) jobs.Han
 				return err
 			}
 			intros, introParts = append(intros, p), append(introParts, first.ID)
-			if p, err = take(ctx, fingerprint, last, domain.MarkerCredits); err != nil {
+			if p, err = take(ctx, parts, fingerprint, last, domain.MarkerCredits); err != nil {
 				return err
 			}
 			credits, creditParts = append(credits, p), append(creditParts, last.ID)
@@ -80,8 +79,8 @@ func Markers(st *store.Store, fingerprint fingerprinter, shades shader) jobs.Han
 }
 
 // take fingerprints the window of a part where kind would be.
-func take(ctx context.Context, fingerprint fingerprinter, part store.SeasonPart, kind domain.MarkerKind) (sound, error) {
-	in, err := library.OpenMedia(part.Root, part.RelPath)
+func take(ctx context.Context, parts opener, fingerprint fingerprinter, part store.SeasonPart, kind domain.MarkerKind) (sound, error) {
+	in, err := parts.Open(ctx, part.ID)
 	if err != nil {
 		return sound{}, err
 	}
@@ -92,14 +91,14 @@ func take(ctx context.Context, fingerprint fingerprinter, part store.SeasonPart,
 }
 
 // filmMarkers finds the credits at the end of each copy of a film not yet read.
-func filmMarkers(ctx context.Context, st *store.Store, shades shader, ends []store.FilmEnd) error {
+func filmMarkers(ctx context.Context, st *store.Store, parts opener, shades shader, ends []store.FilmEnd) error {
 	found := map[uuid.UUID][]domain.Marker{}
 	var read []uuid.UUID
 	for _, end := range ends {
 		if end.Read {
 			continue
 		}
-		in, err := library.OpenMedia(end.Root, end.RelPath)
+		in, err := parts.Open(ctx, end.ID)
 		if err != nil {
 			return err
 		}

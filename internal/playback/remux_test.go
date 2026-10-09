@@ -13,6 +13,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -109,7 +110,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			hlsOf := opened{}
 			playback := uuid.NewV7()
-			if err := NewRemuxes(indexed{}, hlsOf).Open(t.Context(), playback, copyOf(tc.copy), tc.video, tc.audio, domain.SegmentsFMP4, 0); err != nil {
+			if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf).Open(t.Context(), playback, copyOf(tc.copy), tc.video, tc.audio, domain.SegmentsFMP4, 0); err != nil {
 				t.Fatal(err)
 			}
 			got := hlsOf[playback]
@@ -157,7 +158,7 @@ func TestStyledTextDrawnInReachesEachPart(t *testing.T) {
 	} {
 		hlsOf := opened{}
 		playback := uuid.NewV7()
-		if err := NewRemuxes(indexed{}, hlsOf).Open(t.Context(), playback, c, tc.video, nil, domain.SegmentsFMP4, 0); err != nil {
+		if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf).Open(t.Context(), playback, c, tc.video, nil, domain.SegmentsFMP4, 0); err != nil {
 			t.Fatal(err)
 		}
 		for i, src := range hlsOf[playback].Parts {
@@ -213,7 +214,7 @@ func TestACopyIsCutAtTheKeyframesItsLibraryFound(t *testing.T) {
 			parts := &knownKeyframes{known: c.known}
 			hlsOf, playback := opened{}, uuid.NewV7()
 			copied := store.PlayCopy{Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: duration.Milliseconds()}}}
-			if err := NewRemuxes(parts, hlsOf).Open(t.Context(), playback, copied, domain.VideoPlan{Codec: "h264"}, nil, domain.SegmentsFMP4, 0); err != nil {
+			if err := NewRemuxes(parts, library.Parts{Places: parts}, hlsOf).Open(t.Context(), playback, copied, domain.VideoPlan{Codec: "h264"}, nil, domain.SegmentsFMP4, 0); err != nil {
 				t.Fatal(err)
 			}
 			if diff := cmp.Diff(c.want, hlsOf[playback].Parts[0].Part.Keyframes); diff != "" {

@@ -17,6 +17,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -84,7 +85,7 @@ func TestADirectPlaysRangeIsCountedSent(t *testing.T) {
 	}
 	sent := playback.NewSent()
 	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root},
+		Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Parts: library.Parts{Places: fakePlaying{root: root}},
 		Playbacks: fakePlaybacks{}, HLS: fakeHLS{}, Placer: alone(fakeHLS{}, false), Signer: playback.NewSigner([]byte("key")), Sent: sent,
 	}))
 	defer srv.Close()

@@ -10,12 +10,17 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
+// opener opens a part for a tool to read.
+type opener interface {
+	Open(ctx context.Context, part uuid.UUID) (media.Input, error)
+}
+
 // Probe reads a part's file again for its streams, chapters and length, as an admin's Analyse
 // asks, and saves them over what it was read to hold when it was added. A part gone since is
 // passed over.
-func Probe(st *store.Store, tools media.Tools) jobs.Handler {
+func Probe(st *store.Store, parts opener, tools media.Tools) jobs.Handler {
 	return func(ctx context.Context, part uuid.UUID) error {
-		in, err := openPart(ctx, st, part)
+		in, err := parts.Open(ctx, part)
 		if errors.Is(err, store.ErrNotFound) {
 			return nil
 		}

@@ -48,6 +48,7 @@ type Services struct {
 	Displays  displays
 	Pictures  pictureFiles
 	Playing   playing
+	Parts     parts
 	Playbacks playbacks
 	Watching  watching
 	// Previews are parts' trickplay sheets, which PreviewFiles keeps with their chapters' pictures.

@@ -15,6 +15,8 @@ type Input struct {
 	File *os.File
 	// URL is where the media is; nil for a file that is its own media.
 	URL *url.URL
+	// Name is the media's file name, as a player is told it.
+	Name string
 }
 
 const (
