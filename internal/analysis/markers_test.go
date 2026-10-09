@@ -7,12 +7,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
@@ -95,7 +95,7 @@ func TestASeasonsSharedIntroIsFound(t *testing.T) {
 	if err != nil || len(parts) != 3 {
 		t.Fatalf("season parts %+v, %v", parts, err)
 	}
-	if err := Markers(st, fake, nil)(ctx, season); err != nil {
+	if err := Markers(st, library.Parts{Places: st}, fake, nil)(ctx, season); err != nil {
 		t.Fatal(err)
 	}
 	for _, p := range parts {
@@ -104,7 +104,7 @@ func TestASeasonsSharedIntroIsFound(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := page.Versions[0].Markers
-		if strings.HasSuffix(p.RelPath, "3.mkv") {
+		if page.EpisodeNumber != nil && *page.EpisodeNumber == 3 {
 			if len(got) != 0 {
 				t.Errorf("the episode without the theme: %+v, want no markers", got)
 			}
@@ -112,13 +112,13 @@ func TestASeasonsSharedIntroIsFound(t *testing.T) {
 		}
 		if len(got) != 1 || got[0].Kind != domain.MarkerIntro || got[0].Source != domain.MarkerByFingerprint ||
 			!near(got[0].StartMS, 30*time.Second) || !near(got[0].EndMS, 80*time.Second) {
-			t.Errorf("%s: %+v, want the theme from 0:30 to 1:20", p.RelPath, got)
+			t.Errorf("episode %d: %+v, want the theme from 0:30 to 1:20", *page.EpisodeNumber, got)
 		}
 	}
 
 	// Asked again with nothing new, the season is passed over.
 	asked = 0
-	if err := Markers(st, fake, nil)(ctx, season); err != nil || asked != 0 {
+	if err := Markers(st, library.Parts{Places: st}, fake, nil)(ctx, season); err != nil || asked != 0 {
 		t.Errorf("again: %d fingerprints taken, %v; want none", asked, err)
 	}
 	if n, err := st.QueueSeasonMarkers(ctx, domain.JobDueWindow); err != nil || n != 0 {
@@ -152,7 +152,7 @@ func TestALibraryOnChaptersReadsNoSound(t *testing.T) {
 		asked++
 		return points(uint64(asked), at(time.Minute)), nil
 	}
-	if err := Markers(st, fake, nil)(ctx, season); err != nil || asked != 0 {
+	if err := Markers(st, library.Parts{Places: st}, fake, nil)(ctx, season); err != nil || asked != 0 {
 		t.Errorf("a comparison already queued took %d fingerprints (%v), want none", asked, err)
 	}
 	page, err := st.Title(ctx, uuid.UUID{}, season)
@@ -184,7 +184,7 @@ func TestALibraryOnChaptersReadsNoSound(t *testing.T) {
 	if n, err := st.QueueSeasonMarkers(ctx, domain.JobDueWindow); err != nil || n != 1 {
 		t.Errorf("set to compare sound, the daily task queued %d (%v), want the season", n, err)
 	}
-	if err := Markers(st, fake, nil)(ctx, season); err != nil || asked != 6 {
+	if err := Markers(st, library.Parts{Places: st}, fake, nil)(ctx, season); err != nil || asked != 6 {
 		t.Errorf("compared: %d fingerprints taken (%v), want each episode's start and end", asked, err)
 	}
 	if got := markers(); len(got) != 1 || got[0] != opening {
@@ -251,7 +251,7 @@ func TestAFilmsCreditsAreFoundByItsPicture(t *testing.T) {
 		read++
 		return shadesOf(from, 2*time.Hour, 0, func(at time.Duration) look { return pick(at >= crawl, letters, picture) }), nil
 	}
-	if err := Markers(st, nil, fake)(ctx, jobs[0].Subject); err != nil || read != 1 {
+	if err := Markers(st, library.Parts{Places: st}, nil, fake)(ctx, jobs[0].Subject); err != nil || read != 1 {
 		t.Fatalf("read %d, %v", read, err)
 	}
 	page, err := st.Title(ctx, uuid.UUID{}, jobs[0].Subject)
@@ -263,7 +263,7 @@ func TestAFilmsCreditsAreFoundByItsPicture(t *testing.T) {
 		got[0].StartMS != crawl.Milliseconds() || got[0].EndMS != (2*time.Hour).Milliseconds() {
 		t.Errorf("markers %+v, want the credits from 1:52:00 found by black frames", got)
 	}
-	if err := Markers(st, nil, fake)(ctx, jobs[0].Subject); err != nil || read != 1 {
+	if err := Markers(st, library.Parts{Places: st}, nil, fake)(ctx, jobs[0].Subject); err != nil || read != 1 {
 		t.Errorf("asked again: read %d, %v; want the film passed over", read, err)
 	}
 	if n, err := st.QueueFilmMarkers(ctx, domain.JobDueWindow); err != nil || n != 0 {

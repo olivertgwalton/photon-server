@@ -18,10 +18,14 @@ import (
 )
 
 type partStore interface {
-	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
 	Keyframes(ctx context.Context, part uuid.UUID) (store.PartKeyframes, error)
 	AskKeyframes(ctx context.Context, part uuid.UUID) error
+}
+
+// partOpener opens a part for a tool to read.
+type partOpener interface {
+	Open(ctx context.Context, part uuid.UUID) (media.Input, error)
 }
 
 type remuxer interface {
@@ -33,12 +37,13 @@ type remuxer interface {
 // every SegmentLength where it is encoded or none are known, as Jellyfin cuts a file it has no
 // keyframes for. A play never waits on a file being read for them.
 type Remuxes struct {
-	parts partStore
+	store partStore
+	parts partOpener
 	hls   remuxer
 }
 
-func NewRemuxes(parts partStore, h remuxer) *Remuxes {
-	return &Remuxes{parts: parts, hls: h}
+func NewRemuxes(st partStore, parts partOpener, h remuxer) *Remuxes {
+	return &Remuxes{store: st, parts: parts, hls: h}
 }
 
 // Open starts a playback's HLS of a copy at start, in segments of the format asked for, carrying
@@ -49,7 +54,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 	opening := context.WithoutCancel(ctx)
 	sources := make([]hls.Source, len(c.Parts))
 	for i, p := range c.Parts {
-		open := func() (media.Input, error) { return openFile(opening, r.parts.PartFile, p.ID) }
+		open := func() (media.Input, error) { return r.parts.Open(opening, p.ID) }
 		duration := time.Duration(p.DurationMS) * time.Millisecond
 		keyframes := hls.Forced(duration)
 		if video.Encode == nil {
@@ -109,7 +114,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 
 // file is a subtitle file beside a copy, in its language.
 func (r *Remuxes) file(ctx context.Context, c store.PlayCopy, id uuid.UUID) *hls.SubtitleSource {
-	src := &hls.SubtitleSource{Open: func() (media.Input, error) { return openFile(ctx, r.parts.SubtitleFile, id) }}
+	src := &hls.SubtitleSource{Open: func() (media.Input, error) { return openFile(ctx, r.store.SubtitleFile, id) }}
 	if i := slices.IndexFunc(c.Subtitles, func(f store.PlaySubtitle) bool { return f.ID == id }); i >= 0 && c.Subtitles[i].Language != language.Und {
 		src.Language = c.Subtitles[i].Language.String()
 	}
@@ -137,12 +142,12 @@ func subtitle(title string, lang language.Tag, def, forced, sdh bool) hls.Subtit
 // keyframes answers a part's keyframes where they are known. One its library finds but has not
 // reached yet has its job moved to the front, so the next play is cut at them.
 func (r *Remuxes) keyframes(ctx context.Context, part uuid.UUID) ([]time.Duration, error) {
-	known, err := r.parts.Keyframes(ctx, part)
+	known, err := r.store.Keyframes(ctx, part)
 	if err != nil {
 		return nil, err
 	}
 	if known.PtsMS == nil && known.Mode != domain.KeyframesOff {
-		if err := r.parts.AskKeyframes(ctx, part); err != nil {
+		if err := r.store.AskKeyframes(ctx, part); err != nil {
 			return nil, err
 		}
 	}
@@ -153,7 +158,7 @@ func (r *Remuxes) keyframes(ctx context.Context, part uuid.UUID) ([]time.Duratio
 	return keyframes, nil
 }
 
-// openFile opens a file of a library the scanner recorded.
+// openFile opens a subtitle file beside a copy.
 func openFile(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (media.Input, error) {
 	root, rel, err := where(ctx, id)
 	if err != nil {

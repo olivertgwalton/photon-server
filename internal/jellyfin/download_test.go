@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
@@ -40,7 +41,7 @@ func TestAnAppDownloadsAFilm(t *testing.T) {
 	}
 	sent := playback.NewSent()
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Auth: profiles{"pst_ada": ada, "pst_kid": kid}, Catalogue: st, Preferences: st, Playing: st, Sent: sent,
+		Auth: profiles{"pst_ada": ada, "pst_kid": kid}, Catalogue: st, Preferences: st, Playing: st, Parts: library.Parts{Places: st}, Sent: sent,
 	})
 	w := serve(api, http.MethodGet, "/Items/"+guid(heat)+"/Download?ApiKey=pst_ada", "", "")
 	if w.Code != http.StatusOK || w.Body.String() != "0123456789" || w.Header().Get("Content-Type") != "video/x-matroska" ||
@@ -92,7 +93,7 @@ func TestAnAppOffersToDownloadOnlyWhatDownloads(t *testing.T) {
 	}
 	shoah := cards[0].ID
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Sent: playback.NewSent(),
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Parts: library.Parts{Places: st}, Sent: playback.NewSent(),
 	})
 	const header = `MediaBrowser Token="pst_ada"`
 	for id, want := range map[uuid.UUID]bool{heat: true, shoah: false} {
@@ -161,7 +162,7 @@ func TestAnAppDownloadsAStrmAsItsMedia(t *testing.T) {
 		t.Fatal(cards, err)
 	}
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Sent: playback.NewSent(),
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Parts: library.Parts{Places: st}, Sent: playback.NewSent(),
 	})
 	w := serve(api, http.MethodGet, "/Items/"+guid(cards[0].ID)+"/Download?ApiKey=pst_ada", "", "")
 	if w.Code != http.StatusOK || w.Body.String() != "0123456789" ||

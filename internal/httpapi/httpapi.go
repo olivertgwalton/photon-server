@@ -173,6 +173,7 @@ type Services struct {
 	Themes   themes
 	Watching watching
 	Playing  playing
+	Parts    parts
 	// Subtitles are the subtitles fetched from providers for copies.
 	Subtitles fetchedSubtitles
 	Playbacks playbacks

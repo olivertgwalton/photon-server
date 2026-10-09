@@ -24,6 +24,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -156,7 +157,7 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 		Raise:   func(_ context.Context, e domain.Event) { told = append(told, e) },
 		Sent:    playback.NewSent(),
 		Network: st,
-		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st, Preferences: st, Placer: alone(nil),
+		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: plays, Watching: st, Preferences: st, Placer: alone(nil),
 	})
 	const infuse = `MediaBrowser Client="Infuse-Direct", Device="Apple TV", DeviceId="E0BE", Version="8.5.6", Token="pst_ada"`
 	call := func(method, target, body string, want int) []byte {
@@ -366,7 +367,7 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Sent:    playback.NewSent(),
 		Network: st,
-		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st, Preferences: st,
+		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: plays, Watching: st, Preferences: st,
 		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
 	})
 	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
@@ -443,7 +444,7 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Sent:    playback.NewSent(),
 		Network: st,
-		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
+		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
 		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
 	})
 	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
@@ -525,7 +526,7 @@ func TestAnAppsVideoIsEncodedAsTheNodeEncodingItCan(t *testing.T) {
 		api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 			Sent:    playback.NewSent(),
 			Network: st,
-			Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
+			Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
 			HLS: remuxes, Placer: playback.NewPlacer(someNodes(tc.others), func() domain.Node { return self }, remuxes, nodecall.Key{}),
 			Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
 		})
@@ -575,7 +576,7 @@ func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Sent:    playback.NewSent(),
 		Network: st,
-		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
+		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
 		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
 	})
 	const infuse = `MediaBrowser Client="Infuse-Direct", Device="Apple TV", DeviceId="E0BE", Version="8.5.6", Token="pst_ada"`

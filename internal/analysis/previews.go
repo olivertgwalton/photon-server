@@ -3,7 +3,6 @@ package analysis
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"iter"
@@ -21,7 +20,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
-	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -143,7 +141,7 @@ func (p *Previews) keep(ctx context.Context, part uuid.UUID, made string) (map[s
 
 // MakePreviews makes a part's previews as its library asks, replacing any it had, or removes them
 // where it asks for none.
-func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Logger) jobs.Handler {
+func MakePreviews(st *store.Store, parts opener, tools media.Tools, p *Previews, log *slog.Logger) jobs.Handler {
 	return func(ctx context.Context, part uuid.UUID) error {
 		src, err := st.PreviewSource(ctx, part)
 		if errors.Is(err, store.ErrNotFound) {
@@ -158,7 +156,7 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 			}
 			return p.remove(ctx, part, nil)
 		}
-		in, err := openPart(ctx, st, part)
+		in, err := parts.Open(ctx, part)
 		if err != nil {
 			return err
 		}
@@ -249,17 +247,4 @@ func still(ctx context.Context, tools media.Tools, in media.Input, at time.Durat
 		}
 	}
 	return err
-}
-
-// openPart opens a place a part's bytes are.
-func openPart(ctx context.Context, st *store.Store, part uuid.UUID) (media.Input, error) {
-	root, rel, err := st.PartFile(ctx, part)
-	if err != nil {
-		return media.Input{}, err
-	}
-	in, err := library.OpenMedia(root, rel)
-	if err != nil {
-		return media.Input{}, fmt.Errorf("part %s: %w", part, err)
-	}
-	return in, nil
 }

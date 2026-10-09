@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -25,6 +26,7 @@ func OpenMedia(root, rel string) (media.Input, error) {
 	if err != nil || in.File == nil {
 		f.Close()
 	}
+	in.Name = path.Base(rel)
 	return in, err
 }
 

@@ -18,11 +18,12 @@ import (
 // Fetcher is the store, with subtitles for its copies found and fetched from the providers.
 type Fetcher struct {
 	*store.Store
+	parts     library.Parts
 	providers *provider.Registry
 }
 
-func NewFetcher(st *store.Store, providers *provider.Registry) Fetcher {
-	return Fetcher{Store: st, providers: providers}
+func NewFetcher(st *store.Store, parts library.Parts, providers *provider.Registry) Fetcher {
+	return Fetcher{Store: st, parts: parts, providers: providers}
 }
 
 // Search answers the copy of a film or an episode searched, the one asked for else its longest,
@@ -32,25 +33,28 @@ func (f Fetcher) Search(ctx context.Context, profile, item, version uuid.UUID, l
 	if err != nil {
 		return uuid.UUID{}, nil, err
 	}
-	found, err := f.providers.SearchSubtitles(ctx, query(s, lang))
+	found, err := f.providers.SearchSubtitles(ctx, f.query(ctx, s, lang))
 	return s.Version, found, err
 }
 
 // query is what a copy's subtitles are searched by in a language: its release is hashed where it
-// is one file, as one file of several is no release on its own. A file that cannot be read is
-// searched for without its hash.
-func query(s store.SubtitleSearch, lang language.Tag) domain.SubtitleQuery {
+// is one file, as one file of several is no release on its own. A file that cannot be read, or
+// media at an address, is searched for without its hash.
+func (f Fetcher) query(ctx context.Context, s store.SubtitleSearch, lang language.Tag) domain.SubtitleQuery {
 	q := s.Query
 	q.Language = lang
 	if s.Parts != 1 {
 		return q
 	}
-	file, err := library.Open(s.Root, s.RelPath)
+	in, err := f.parts.Open(ctx, s.Part)
 	if err != nil {
 		return q
 	}
-	defer file.Close()
-	if hash, err := library.MovieHash(file); err == nil {
+	defer in.Close()
+	if in.File == nil {
+		return q
+	}
+	if hash, err := library.MovieHash(in.File); err == nil {
 		q.Hash = hash
 	}
 	return q

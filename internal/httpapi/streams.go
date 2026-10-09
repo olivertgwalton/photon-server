@@ -19,7 +19,7 @@ import (
 
 // partStream serves one file of a copy as it is, in byte ranges.
 func (a *API) partStream(w http.ResponseWriter, r *http.Request) {
-	a.serveLibraryFile(w, r, "id", a.svc.Playing.PartFile, math.MaxInt64)
+	a.serveLibraryFile(w, r, "id", a.svc.Parts.Open, math.MaxInt64)
 }
 
 // playbackPartStream serves a copy's file as it is to its playback, for as long as the playback
@@ -42,7 +42,7 @@ func (a *API) playbackPartStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer done()
-	a.serveLibraryFile(w, r, "part", a.svc.Playing.PartFile, math.MaxInt64)
+	a.serveLibraryFile(w, r, "part", a.svc.Parts.Open, math.MaxInt64)
 }
 
 // sampleBytes is as much of a part as a connection test may read: enough to time a fast link,
@@ -52,8 +52,11 @@ const sampleBytes = 16 << 20
 // partSample serves the start of a part's file to time the connection, as Jellyfin's bitrate test
 // does, but of the file itself. It is no playback: nothing is recorded of it.
 func (a *API) partSample(w http.ResponseWriter, r *http.Request) {
-	visible := func(ctx context.Context, part uuid.UUID) (string, string, error) {
-		return a.svc.Playing.VisiblePartFile(ctx, auth.SessionOf(ctx).Profile.ID, part)
+	visible := func(ctx context.Context, part uuid.UUID) (media.Input, error) {
+		if err := a.svc.Playing.SeesPart(ctx, auth.SessionOf(ctx).Profile.ID, part); err != nil {
+			return media.Input{}, err
+		}
+		return a.svc.Parts.Open(ctx, part)
 	}
 	a.serveLibraryFile(w, r, "id", visible, sampleBytes)
 }
@@ -77,7 +80,7 @@ func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
 	}
 	switch format {
 	case subtitleOriginal:
-		a.serveLibraryFile(w, r, "id", a.svc.Playing.SubtitleFile, math.MaxInt64)
+		a.serveLibraryFile(w, r, "id", a.openSubtitleFile, math.MaxInt64)
 	case subtitleWebVTT:
 		a.subtitleVTT(w, r)
 	}
@@ -97,7 +100,7 @@ func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	open := func() (media.Input, error) { return openMedia(ctx, a.svc.Playing.SubtitleFile, id) }
+	open := func() (media.Input, error) { return a.openSubtitleFile(ctx, id) }
 	vtt, err := a.svc.HLS.WebVTT(ctx, open, domain.TagOf(sub.Language))
 	if a.answered(w, r, err) {
 		return
@@ -106,30 +109,26 @@ func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 	writeBody(w, a.logger, []byte(vtt))
 }
 
-// serveLibraryFile serves the first limit bytes of the file of a library that where finds for the
-// id the path names by param: only a file the scanner recorded.
-func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, param string, where func(context.Context, uuid.UUID) (string, string, error), limit int64) {
+// serveLibraryFile serves the first limit bytes of what open opens for the id the path names by
+// param: only media the scanner recorded.
+func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, param string, open func(context.Context, uuid.UUID) (media.Input, error), limit int64) {
 	id, ok := a.pathID(w, r, param)
 	if !ok {
 		return
 	}
-	root, rel, err := where(r.Context(), id)
-	if a.answered(w, r, err) {
-		return
-	}
-	in, err := library.OpenMedia(root, rel)
+	in, err := open(r.Context(), id)
 	if a.answered(w, r, err) {
 		return
 	}
 	defer in.Close()
-	if err := library.Serve(w, r, in, rel, limit); err != nil {
+	if err := library.Serve(w, r, in, limit); err != nil {
 		a.internal(w, r, err)
 	}
 }
 
-// openMedia opens the file of a library that where finds for an id, for a tool to read.
-func openMedia(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (media.Input, error) {
-	root, rel, err := where(ctx, id)
+// openSubtitleFile opens a subtitle file beside a copy.
+func (a *API) openSubtitleFile(ctx context.Context, id uuid.UUID) (media.Input, error) {
+	root, rel, err := a.svc.Playing.SubtitleFile(ctx, id)
 	if err != nil {
 		return media.Input{}, err
 	}
