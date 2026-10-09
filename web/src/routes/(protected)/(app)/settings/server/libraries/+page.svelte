@@ -61,7 +61,11 @@ const live = liveStream();
 						<p class="text-ink-2 text-sm">
 							{holding(library.kind, library.counts)}
 						</p>
-						<p class="text-ink-3 truncate font-mono text-xs">{library.root}</p>
+						<p class="text-ink-3 truncate font-mono text-xs">
+							{library.media === "remote"
+								? `Streamed: ${library.list?.id}`
+								: library.root}
+						</p>
 						{#if scan}
 							<ScanProgress {scan} name={library.name} />
 						{/if}
@@ -81,7 +85,10 @@ const live = liveStream();
 						name={library.name}
 						icon={DatabaseBackupIcon}
 					/>
-					<LibraryCheck id={library.id} name={library.name} />
+					<!-- A remote library has no root for a node to read. -->
+					{#if library.media === "folder"}
+						<LibraryCheck id={library.id} name={library.name} />
+					{/if}
 					<IconButton
 						label="Edit"
 						hidden={library.name}

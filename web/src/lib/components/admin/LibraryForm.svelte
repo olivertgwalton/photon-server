@@ -77,6 +77,20 @@ const defaults = {
 const kindOf = () => library?.kind ?? "movies";
 let kind = $state<Schemas["LibraryKind"]>(kindOf());
 
+// Where its media is: files under a folder, or what a provider streams of the
+// titles of a list, as a remote library plays; fixed once it is made.
+const mediaOf = () => library?.media ?? "folder";
+let media = $state<Schemas["LibraryMedia"]>(mediaOf());
+const remote = $derived(media === "remote");
+const able = (c: Schemas["Capability"]) =>
+	providers
+		.filter((p) => p.capabilities.includes(c))
+		.map((p) => ({ value: String(p.id), label: p.name }));
+const listers = $derived(able("list"));
+const streamers = $derived(able("stream"));
+const nameOf = (id: unknown) =>
+	providers.find((p) => p.id === id)?.name ?? String(id);
+
 const fetchers = [
 	{
 		f: "metadata",
@@ -140,11 +154,85 @@ const refreshOptions = $derived(
 			/>
 		</Field.Field>
 		<Field.Field>
-			<Field.Label for="library-root">Folder</Field.Label>
-			<FolderPicker id="library-root" name="root" />
-			<Field.Description>
-				A folder on the server. Everything under it is scanned.
-			</Field.Description>
+			<Field.Label for="library-media">Its media</Field.Label>
+			<Choice
+				id="library-media"
+				name="media"
+				bind:value={media}
+				options={[
+					{ value: "folder", label: "Files in a folder" },
+					{
+						value: "remote",
+						label: "Streamed by a provider",
+						disabled: !streamers.length,
+					},
+				]}
+			/>
+			{#if !streamers.length}
+				<Field.Description>
+					Streaming needs a provider that streams, such as a Stremio addon
+					registered under Providers.
+				</Field.Description>
+			{/if}
+		</Field.Field>
+		{#if remote}
+			<div class="grid gap-4 sm:grid-cols-[auto_1fr]">
+				<Field.Field>
+					<Field.Label for="library-list-source">Titles from</Field.Label>
+					<Choice
+						id="library-list-source"
+						name="list_source"
+						value={listers[0]?.value}
+						options={listers}
+						class="w-48"
+					/>
+				</Field.Field>
+				<Field.Field>
+					<Field.Label for="library-list">List</Field.Label>
+					<Input
+						id="library-list"
+						name="list_id"
+						required
+						placeholder="movie/top"
+						class="font-mono"
+					/>
+				</Field.Field>
+			</div>
+			<Field.Field>
+				<Field.Label for="library-streams">Streamed by</Field.Label>
+				<Choice
+					id="library-streams"
+					name="streams"
+					value={streamers[0]?.value}
+					options={streamers}
+				/>
+				<Field.Description>
+					A title's streams are asked for as it is opened, and the best one that
+					plays is read and kept as its copy.
+				</Field.Description>
+			</Field.Field>
+		{:else}
+			<Field.Field>
+				<Field.Label for="library-root">Folder</Field.Label>
+				<FolderPicker id="library-root" name="root" />
+				<Field.Description>
+					A folder on the server. Everything under it is scanned.
+				</Field.Description>
+			</Field.Field>
+		{/if}
+	{:else if library.media === "remote"}
+		<Field.Field>
+			<Field.Label for="library-list">Titles from</Field.Label>
+			<Input
+				id="library-list"
+				value="{nameOf(library.list?.source)}: {library.list?.id}"
+				readonly
+				class="font-mono"
+			/>
+		</Field.Field>
+		<Field.Field>
+			<Field.Label for="library-streams">Streamed by</Field.Label>
+			<Input id="library-streams" value={nameOf(library.streams)} readonly />
 		</Field.Field>
 	{:else}
 		<Field.Field>
@@ -244,18 +332,20 @@ const refreshOptions = $derived(
 			</Field.Set>
 
 			<div class="grid gap-4 sm:grid-cols-2">
-				<Field.Field>
-					<Field.Label for="library-monitor">Watch for changes</Field.Label>
-					<Choice
-						id="library-monitor"
-						name="monitor"
-						value={library?.monitor ?? defaults.monitor}
-						options={[
-							{ value: "realtime", label: "As they happen" },
-							{ value: "off", label: "Only when scanned" },
-						]}
-					/>
-				</Field.Field>
+				{#if !remote}
+					<Field.Field>
+						<Field.Label for="library-monitor">Watch for changes</Field.Label>
+						<Choice
+							id="library-monitor"
+							name="monitor"
+							value={library?.monitor ?? defaults.monitor}
+							options={[
+								{ value: "realtime", label: "As they happen" },
+								{ value: "off", label: "Only when scanned" },
+							]}
+						/>
+					</Field.Field>
+				{/if}
 				<Field.Field>
 					<Field.Label for="library-refresh">Refresh metadata</Field.Label>
 					<Choice
@@ -270,7 +360,7 @@ const refreshOptions = $derived(
 					<Choice
 						id="library-previews"
 						name="previews"
-						value={library?.previews ?? defaults.previews}
+						value={library?.previews ?? (remote ? "off" : defaults.previews)}
 						options={[
 							{ value: "all", label: "Chapters and seeking" },
 							{ value: "chapters", label: "Chapter images only" },
@@ -283,7 +373,7 @@ const refreshOptions = $derived(
 					<Choice
 						id="library-markers"
 						name="markers"
-						value={library?.markers ?? defaults.markers}
+						value={library?.markers ?? (remote ? "off" : defaults.markers)}
 						options={[
 							{ value: "all", label: "From chapters, sound and picture" },
 							{ value: "chapters", label: "From chapters only" },
@@ -407,23 +497,25 @@ const refreshOptions = $derived(
 						by. Automatic is its language's country, else the server's.
 					</Field.Description>
 				</Field.Field>
-				<Field.Field>
-					<Field.Label for="library-deletion">Media deletion</Field.Label>
-					<Choice
-						id="library-deletion"
-						name="deletion"
-						value={library?.deletion ?? defaults.deletion}
-						options={[
-							{ value: "off", label: "Not allowed" },
-							{ value: "files", label: "Allowed, files and all" },
-						]}
-					/>
-					<Field.Description>
-						Allowed, an admin's Delete removes a title's files from the disk,
-						which the server must be able to write to. They cannot be brought
-						back.
-					</Field.Description>
-				</Field.Field>
+				{#if !remote}
+					<Field.Field>
+						<Field.Label for="library-deletion">Media deletion</Field.Label>
+						<Choice
+							id="library-deletion"
+							name="deletion"
+							value={library?.deletion ?? defaults.deletion}
+							options={[
+								{ value: "off", label: "Not allowed" },
+								{ value: "files", label: "Allowed, files and all" },
+							]}
+						/>
+						<Field.Description>
+							Allowed, an admin's Delete removes a title's files from the disk,
+							which the server must be able to write to. They cannot be brought
+							back.
+						</Field.Description>
+					</Field.Field>
+				{/if}
 			</div>
 		</Field.Group>
 	</details>
