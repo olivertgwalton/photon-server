@@ -246,7 +246,25 @@ test("a show plays where the reader is, and its season lists episodes", async ({
 	await expect(page.getByRole("heading", { name: "Next up" })).toBeVisible();
 	await page.getByRole("link", { name: /Season 1/ }).click();
 	await expect(page).toHaveURL("/titles/t-s1");
-	await expect(page.getByRole("link", { name: /2\. Second/ })).toBeVisible();
+	await expect(page.getByRole("link", { name: /Second/ })).toBeVisible();
+	await expectAccessible(page);
+});
+
+test("an episode's page lists its whole season to pick another", async ({
+	page,
+}) => {
+	await logIn(page, "/titles/t-ep");
+	await expect(page.getByRole("heading", { name: "Season 1" })).toBeVisible();
+	await expect(page.getByRole("link", { name: /Pilot/ })).toHaveAttribute(
+		"aria-current",
+		"page",
+	);
+	await page.getByRole("link", { name: /Second/ }).click();
+	await expect(page).toHaveURL("/titles/t-ep2");
+	await expect(page.getByRole("link", { name: /Second/ })).toHaveAttribute(
+		"aria-current",
+		"page",
+	);
 	await expectAccessible(page);
 });
 

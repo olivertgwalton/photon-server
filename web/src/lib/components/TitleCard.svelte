@@ -24,11 +24,14 @@ let {
 	shape = "poster",
 	sizes,
 	caption: given,
+	current = false,
 }: {
 	card: CardLike;
 	shape?: Shape;
 	sizes: string;
 	caption?: string;
+	// The page's own title, outlined among the rest of its set.
+	current?: boolean;
 } = $props();
 
 const picture = $derived(
@@ -59,10 +62,15 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 	<!-- The words sit over the picture, as the app's cards have them, so a row
 		is the height of its pictures. The blur is the frame's, under a picture
 		that fades in over it. -->
-	<a href="/titles/{card.id}" class="group block outline-none">
+	<a
+		href="/titles/{card.id}"
+		aria-current={current ? "page" : undefined}
+		class="group block outline-none"
+	>
 		<div
 			class={[
 				"card-frame",
+				current && "ring-ink ring-2",
 				shape === "poster" ? "aspect-[2/3]" : "aspect-video",
 			]}
 			style={picture ? blurStyle(card.blurhashes?.[picture]) : undefined}
