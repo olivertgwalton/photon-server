@@ -6227,7 +6227,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/titles/{id}/subtitles/search": {
+    "/api/v1/titles/{id}/subtitles/candidates": {
         parameters: {
             query?: never;
             header?: never;

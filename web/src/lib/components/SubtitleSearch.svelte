@@ -32,7 +32,7 @@ const options = (lang: string) =>
 		.sort((a, b) => a.label.localeCompare(b.label));
 
 function search(lang: string) {
-	return client().GET("/api/v1/titles/{id}/subtitles/search", {
+	return client().GET("/api/v1/titles/{id}/subtitles/candidates", {
 		params: { path: { id: subtitleSearch.id }, query: { language: lang } },
 	});
 }

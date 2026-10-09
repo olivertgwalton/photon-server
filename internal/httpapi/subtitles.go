@@ -35,10 +35,10 @@ type foundSubtitlesJSON struct {
 	Items     []foundSubtitleJSON `json:"items"`
 }
 
-// searchSubtitles answers the subtitles providers have in a language for a copy of a film or an
+// subtitleCandidates answers the subtitles providers have in a language for a copy of a film or an
 // episode, the one asked for else its longest, as Plex's and Jellyfin's subtitle search: those
 // made for its very file first, found by its hash, then the most fetched.
-func (a *API) searchSubtitles(w http.ResponseWriter, r *http.Request) {
+func (a *API) subtitleCandidates(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r, "id")
 	if !ok {
 		return
@@ -119,13 +119,13 @@ func tag(t language.Tag) string {
 func (a *API) subtitlesRoutes() []route {
 	return []route{
 		{
-			pattern: "GET /api/v1/titles/{id}/subtitles/search", access: signedIn,
+			pattern: "GET /api/v1/titles/{id}/subtitles/candidates", access: signedIn,
 			summary: "Find the subtitles providers have in a language for a copy of a film or episode, those made for its very file first",
 			query: []param{
 				{"language", "", "The language, a BCP 47 tag."},
 				{"version_id", uuid.UUID{}, "The copy; the title's longest where none is named."},
 			},
-			status: http.StatusOK, reply: foundSubtitlesJSON{}, handle: a.searchSubtitles,
+			status: http.StatusOK, reply: foundSubtitlesJSON{}, handle: a.subtitleCandidates,
 		},
 		{
 			pattern: "POST /api/v1/titles/{id}/subtitles", access: signedIn,

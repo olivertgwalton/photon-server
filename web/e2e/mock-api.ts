@@ -1157,7 +1157,7 @@ const server_ = Bun.serve({
 		const hls = url.pathname.match(/^\/api\/v1\/hls\/pb\/1\/sig\/([\w.]+)$/);
 		if (hls) return fixture(`hls/${hls[1]}`);
 		switch (route) {
-			case "GET /api/v1/titles/t-film/subtitles/search":
+			case "GET /api/v1/titles/t-film/subtitles/candidates":
 				return Response.json({
 					version_id: "v-4k",
 					items: [
