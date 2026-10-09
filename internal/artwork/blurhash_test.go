@@ -2,6 +2,7 @@ package artwork
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/png"
 	"strings"
@@ -59,5 +60,34 @@ func TestBlurhashFollowsThePictureShape(t *testing.T) {
 	}
 	if _, err := Blurhash(strings.NewReader("<svg/>")); err == nil {
 		t.Error("an SVG was hashed")
+	}
+}
+
+// A logo is letters on nothing: its hash is the colour of the letters, however much of it is clear.
+func TestALogosHashIsTheColourOfItsLetters(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		pixel [4]uint8 // as image.RGBA holds it, multiplied by alpha
+		want  string   // the hash's average colour, its digits after the first two
+	}{
+		{"white", [4]uint8{255, 255, 255, 255}, "ffffff"},
+		{"white, half clear", [4]uint8{128, 128, 128, 128}, "ffffff"},
+		{"black", [4]uint8{0, 0, 0, 255}, "000000"},
+		{"red", [4]uint8{200, 0, 0, 255}, "c80000"},
+	} {
+		img := image.NewRGBA(image.Rect(0, 0, 64, 24))
+		for y := 8; y < 16; y++ {
+			for x := 8; x < 56; x++ {
+				copy(img.Pix[y*img.Stride+x*4:], c.pixel[:])
+			}
+		}
+		hash := encodeBlurhash(img, 9, 2)
+		v := 0
+		for _, d := range hash[2:6] {
+			v = v*83 + strings.IndexRune(digits83, d)
+		}
+		if got := fmt.Sprintf("%06x", v); got != c.want {
+			t.Errorf("%s letters: average %s, want %s", c.name, got, c.want)
+		}
 	}
 }
