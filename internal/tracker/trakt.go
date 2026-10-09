@@ -84,3 +84,34 @@ func (c trakt) revoke(ctx context.Context, clientID string, tok store.TrackerTok
 	})
 	return err
 }
+
+// deviceRedirect is the redirect address a refresh names for a grant made by device code, which
+// redirected nowhere: Trakt requires one, and takes the out-of-band address.
+const deviceRedirect = "urn:ietf:wg:oauth:2.0:oob"
+
+func (c trakt) refresh(ctx context.Context, clientID string, old store.TrackerTokens) (store.TrackerTokens, error) {
+	var body grant
+	err := c.auth.Do(ctx, provider.Request{
+		Method: http.MethodPost, Path: "/oauth/token", Header: c.header(clientID),
+		Body: map[string]string{
+			"refresh_token": old.Refresh, "client_id": clientID, "redirect_uri": deviceRedirect, "grant_type": "refresh_token",
+		},
+	}, &body)
+	if refusal, ok := errors.AsType[*provider.Refusal](err); ok &&
+		(refusal.Code == http.StatusUnauthorized || refusal.Code == http.StatusBadRequest && oauthError(refusal) == "invalid_grant") {
+		return store.TrackerTokens{}, errGrantGone
+	}
+	return body.tokens(), err
+}
+
+func (c trakt) scrobble(ctx context.Context, clientID, access string, a action, p play) error {
+	h := c.header(clientID)
+	h.Set("Authorization", "Bearer "+access)
+	_, err := c.api.Bytes(ctx, provider.Request{Method: http.MethodPost, Path: "/scrobble/" + string(a), Header: h, Body: p})
+	// Scrobbled within the hour already, or under 1% in.
+	if refusal, ok := errors.AsType[*provider.Refusal](err); ok &&
+		(refusal.Code == http.StatusConflict || refusal.Code == http.StatusUnprocessableEntity) {
+		return nil
+	}
+	return err
+}

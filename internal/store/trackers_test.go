@@ -3,8 +3,12 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"maps"
+	"slices"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"uuid"
@@ -69,9 +73,58 @@ func TestAProfileLinksAnAccountOnEachTracker(t *testing.T) {
 		t.Errorf("unlinking again: %v, want ErrNotFound", err)
 	}
 	for profile, want := range map[uuid.UUID]string{oliver.ID: "simkl oliver", ada.ID: "trakt ada"} {
-		got, err := s.TrackerAccounts(ctx, profile)
+		got, err := s.TrackerGrants(ctx, profile)
 		if err != nil || len(got) != 1 || string(got[0].Tracker)+" "+got[0].Username != want || got[0].LinkedAt.IsZero() {
 			t.Errorf("%v's accounts: %+v, %v; want only %s", profile, got, err, want)
 		}
+	}
+}
+
+// Nodes refreshing an account at once refresh it once; each is answered the new tokens, and a
+// refresh that fails keeps the old.
+func TestAnAccountIsRefreshedOnceWhoeverAsks(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	soon := time.Now().Add(time.Hour).Truncate(time.Microsecond)
+	if err := s.LinkTracker(ctx, oliver.ID, domain.TrackerTrakt, "oliver", TrackerTokens{"old", "once", soon}); err != nil {
+		t.Fatal(err)
+	}
+	stale := time.Now().Add(24 * time.Hour)
+	refused := errors.New("invalid_grant")
+	if _, err := s.RefreshTracker(ctx, oliver.ID, domain.TrackerTrakt, stale, func(context.Context, TrackerTokens) (TrackerTokens, error) {
+		return TrackerTokens{}, refused
+	}); !errors.Is(err, refused) {
+		t.Errorf("a refused refresh: %v", err)
+	}
+	later := time.Now().Add(7 * 24 * time.Hour).Truncate(time.Microsecond)
+	var calls atomic.Int32
+	var wg sync.WaitGroup
+	got := make([]TrackerTokens, 4)
+	errs := make([]error, len(got))
+	for i := range got {
+		wg.Go(func() {
+			got[i], errs[i] = s.RefreshTracker(ctx, oliver.ID, domain.TrackerTrakt, stale, func(_ context.Context, old TrackerTokens) (TrackerTokens, error) {
+				calls.Add(1)
+				if old.Refresh != "once" {
+					t.Errorf("refreshed with %q, a refresh token already used", old.Refresh)
+				}
+				return TrackerTokens{"new", "next", later}, nil
+			})
+		})
+	}
+	wg.Wait()
+	if err := errors.Join(errs...); err != nil {
+		t.Fatal(err)
+	}
+	want := TrackerTokens{"new", "next", later}
+	if calls.Load() != 1 || slices.ContainsFunc(got, func(tok TrackerTokens) bool { return tok != want }) {
+		t.Errorf("refreshed %d times, answering %+v; want once, each answered %+v", calls.Load(), got, want)
+	}
+	if _, err := s.RefreshTracker(ctx, oliver.ID, domain.TrackerSimkl, stale, nil); !errors.Is(err, ErrNotFound) {
+		t.Errorf("no account: %v, want ErrNotFound", err)
 	}
 }

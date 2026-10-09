@@ -2,9 +2,11 @@ package tracker
 
 import (
 	"cmp"
+	"encoding/json"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -44,4 +46,15 @@ func (g grant) tokens() store.TrackerTokens {
 	return store.TrackerTokens{
 		Access: g.AccessToken, Refresh: g.RefreshToken, Expires: time.Now().Add(time.Duration(g.ExpiresIn) * time.Second),
 	}
+}
+
+// oauthError is the error an OAuth refusal names, as RFC 6749 has it: "invalid_grant", for one.
+func oauthError(r *provider.Refusal) string {
+	var body struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(r.Body, &body) != nil {
+		return ""
+	}
+	return body.Error
 }

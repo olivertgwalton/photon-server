@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -24,7 +25,8 @@ import (
 )
 
 // fakeTracker is Trakt or Simkl, as each answers a device signing in through the app clientID:
-// its code is pending until entered, or gone once expired.
+// its code is pending until entered, or gone once expired. It grants access, refreshed by refresh,
+// and keeps what it is told of plays.
 type fakeTracker struct {
 	t        *testing.T
 	tracker  domain.Tracker
@@ -33,6 +35,18 @@ type fakeTracker struct {
 	mu               sync.Mutex
 	entered, expired bool
 	revoked          []string
+	access, refresh  string
+	refreshes        int
+	scrobbled        []scrobbled
+}
+
+type scrobbled struct {
+	action string
+	body   map[string]any
+}
+
+func newFake(t *testing.T, tracker domain.Tracker, clientID string) *fakeTracker {
+	return &fakeTracker{t: t, tracker: tracker, clientID: clientID, access: "access", refresh: "refresh"}
 }
 
 func (f *fakeTracker) set(change func()) {
@@ -45,7 +59,7 @@ func (f *fakeTracker) serve() string {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
-		var body map[string]string
+		var body map[string]any
 		if r.Method == http.MethodPost {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				f.t.Errorf("%s %s: %v", f.tracker, r.URL.Path, err)
@@ -70,7 +84,16 @@ func (f *fakeTracker) serve() string {
 				f.t.Error(err)
 			}
 		}
-		granted := map[string]any{"access_token": "access", "refresh_token": "refresh", "expires_in": 604800}
+		granted := map[string]any{"access_token": f.access, "refresh_token": f.refresh, "expires_in": 604800}
+		if action, ok := strings.CutPrefix(r.URL.Path, "/scrobble/"); ok {
+			if r.Header.Get("Authorization") != "Bearer "+f.access {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			f.scrobbled = append(f.scrobbled, scrobbled{action, body})
+			answer(http.StatusCreated, map[string]any{"action": action})
+			return
+		}
 		switch string(f.tracker) + " " + r.Method + " " + r.URL.Path {
 		case "trakt POST /oauth/device/code":
 			answer(http.StatusOK, map[string]any{
@@ -87,15 +110,24 @@ func (f *fakeTracker) serve() string {
 				answer(http.StatusOK, granted)
 			}
 		case "trakt GET /users/settings", "simkl GET /users/settings":
-			if r.Header.Get("Authorization") != "Bearer access" {
+			if r.Header.Get("Authorization") != "Bearer "+f.access {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
 			answer(http.StatusOK, map[string]any{"user": map[string]string{"username": "oliver", "name": "oliver"}})
 		case "trakt POST /oauth/revoke":
-			f.revoked = append(f.revoked, body["token"])
+			f.revoked = append(f.revoked, fmt.Sprint(body["token"]))
+		case "trakt POST /oauth/token":
+			// Trakt's refresh tokens are each used once.
+			if body["refresh_token"] != f.refresh || body["grant_type"] != "refresh_token" || body["redirect_uri"] != deviceRedirect {
+				answer(http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
+				return
+			}
+			f.refreshes++
+			f.access, f.refresh = "refreshed", "refresh-again"
+			answer(http.StatusOK, map[string]any{"access_token": f.access, "refresh_token": f.refresh, "expires_in": 604800})
 		case "simkl POST /oauth2/device":
-			if !strings.Contains(body["scope"], "media:write") {
+			if !strings.Contains(fmt.Sprint(body["scope"]), "media:write") {
 				f.t.Errorf("simkl asked for %q, which writes nothing", body["scope"])
 			}
 			answer(http.StatusOK, map[string]any{
@@ -104,6 +136,13 @@ func (f *fakeTracker) serve() string {
 			})
 		case "simkl POST /oauth2/token":
 			switch {
+			case body["grant_type"] == "refresh_token" && body["refresh_token"] == f.refresh:
+				// Simkl's refresh token stays, and its answer may leave it out.
+				f.refreshes++
+				f.access = "refreshed"
+				answer(http.StatusOK, map[string]any{"access_token": f.access, "expires_in": 604800})
+			case body["grant_type"] == "refresh_token":
+				answer(http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
 			case body["device_code"] != "device" || f.expired:
 				answer(http.StatusBadRequest, map[string]string{"error": "expired_token"})
 			case !f.entered:
@@ -112,7 +151,7 @@ func (f *fakeTracker) serve() string {
 				answer(http.StatusOK, granted)
 			}
 		case "simkl POST /oauth2/revoke":
-			f.revoked = append(f.revoked, body["token"])
+			f.revoked = append(f.revoked, fmt.Sprint(body["token"]))
 		default:
 			f.t.Errorf("%s was asked %s %s", f.tracker, r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
@@ -160,8 +199,8 @@ func TestAProfileLinksItsAccountOnEachTrackerByACode(t *testing.T) {
 		told = nil
 		return was
 	}
-	trakt := &fakeTracker{t: t, tracker: domain.TrackerTrakt, clientID: "trakt-app"}
-	simkl := &fakeTracker{t: t, tracker: domain.TrackerSimkl, clientID: "simkl-app"}
+	trakt := newFake(t, domain.TrackerTrakt, "trakt-app")
+	simkl := newFake(t, domain.TrackerSimkl, "simkl-app")
 	links.services[domain.TrackerTrakt] = trakt.at(trakt.serve())
 	links.services[domain.TrackerSimkl] = simkl.at(simkl.serve())
 

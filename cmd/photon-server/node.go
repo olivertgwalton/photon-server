@@ -159,9 +159,13 @@ func (n *node) wire(ctx context.Context) error {
 		refreshTask(st, logger), sweepArtworkTask(st, n.pictures, logger), markersTask(st, n.tools, window, logger),
 		previewsTask(st, n.previews, window, logger), sweepDownloadsTask(st, logger), pruneActivityTask(st, logger),
 		refreshCollectionsTask(st), syncListsTask(st, n.providers), fetchSubtitlesTask(fetcher, logger))
-	n.sessions = playback.NewSessions(n.cache, st, n.remuxer, n.hub.Raise, n.id)
-	n.imports = historyimport.New(st, n.logger)
 	n.trackers = tracker.New(st, n.cache, n.hub.Raise, version, n.logger)
+	// Trackers are told of a play by the node it is raised on, not by every node it reaches.
+	n.sessions = playback.NewSessions(n.cache, st, n.remuxer, func(ctx context.Context, e domain.Event) {
+		n.hub.Raise(ctx, e)
+		n.trackers.Played(e)
+	}, n.id)
+	n.imports = historyimport.New(st, n.logger)
 	// Fetched subtitles are written from Postgres into each node's cache as it opens them.
 	files, err := subtitles.NewFiles(st, filepath.Join(n.cacheRoot, "fetched-subtitles"))
 	if err != nil {

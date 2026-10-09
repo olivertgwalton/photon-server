@@ -2,10 +2,10 @@ package tracker
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
@@ -49,12 +49,9 @@ func (c simkl) token(ctx context.Context, clientID, deviceCode string) (store.Tr
 			"grant_type": "urn:ietf:params:oauth:grant-type:device_code", "client_id": clientID, "device_code": deviceCode,
 		},
 	}), &body)
-	var oauth struct {
-		Error string `json:"error"`
-	}
-	if refusal, ok := errors.AsType[*provider.Refusal](err); ok && refusal.Code == http.StatusBadRequest && json.Unmarshal(refusal.Body, &oauth) == nil {
+	if refusal, ok := errors.AsType[*provider.Refusal](err); ok && refusal.Code == http.StatusBadRequest {
 		// Simkl never says a code was denied: one is pending until it expires.
-		switch oauth.Error {
+		switch oauthError(refusal) {
 		case "authorization_pending":
 			return store.TrackerTokens{}, errPending
 		case "slow_down":
@@ -84,5 +81,37 @@ func (c simkl) revoke(ctx context.Context, clientID string, tok store.TrackerTok
 		Method: http.MethodPost, Path: "/oauth2/revoke",
 		Body: map[string]string{"client_id": clientID, "token": tok.Refresh},
 	}))
+	return err
+}
+
+func (c simkl) refresh(ctx context.Context, clientID string, old store.TrackerTokens) (store.TrackerTokens, error) {
+	var body grant
+	err := c.api.Do(ctx, c.request(clientID, provider.Request{
+		Method: http.MethodPost, Path: "/oauth2/token",
+		Body: map[string]string{"grant_type": "refresh_token", "client_id": clientID, "refresh_token": old.Refresh},
+	}), &body)
+	// A 401 is the app's client id refused, which is the admin's to set right; the grant stands.
+	if refusal, ok := errors.AsType[*provider.Refusal](err); ok && refusal.Code == http.StatusBadRequest && oauthError(refusal) == "invalid_grant" {
+		return store.TrackerTokens{}, errGrantGone
+	}
+	return body.tokens(), err
+}
+
+func (c simkl) scrobble(ctx context.Context, clientID, access string, a action, p play) error {
+	r := c.request(clientID, provider.Request{Method: http.MethodPost, Path: "/scrobble/" + string(a), Body: p})
+	r.Header.Set("Authorization", "Bearer "+access)
+	_, err := c.api.Bytes(ctx, r)
+	refusal, ok := errors.AsType[*provider.Refusal](err)
+	switch {
+	case !ok:
+		return err
+	// Stopped within the hour already.
+	case refusal.Code == http.StatusConflict:
+		return nil
+	// Simkl takes one scrobble a user at a time, refusing another within 20 seconds as a
+	// player firing twice: the next the player does is told.
+	case refusal.Code == http.StatusBadRequest && strings.Contains(string(refusal.Body), "RATE_LIMIT"):
+		return nil
+	}
 	return err
 }

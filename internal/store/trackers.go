@@ -46,19 +46,6 @@ func (s *Store) SetTrackerClient(ctx context.Context, t domain.Tracker, clientID
 	return err
 }
 
-// TrackerAccounts answers the accounts a profile linked, in no order.
-func (s *Store) TrackerAccounts(ctx context.Context, profile uuid.UUID) ([]domain.TrackerAccount, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT tracker, username, linked_at FROM tracker_accounts WHERE profile_id = $1`, profile)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.TrackerAccount, error) {
-		var a domain.TrackerAccount
-		return a, row.Scan(&a.Tracker, &a.Username, &a.LinkedAt)
-	})
-}
-
 // LinkTracker keeps the account a profile linked on a tracker, in place of any it linked before.
 // ErrNotFound for no such profile.
 func (s *Store) LinkTracker(ctx context.Context, profile uuid.UUID, t domain.Tracker, username string, tok TrackerTokens) error {
@@ -82,5 +69,51 @@ func (s *Store) UnlinkTracker(ctx context.Context, profile uuid.UUID, t domain.T
 	err := s.pool.QueryRow(ctx, `
 		DELETE FROM tracker_accounts WHERE profile_id = $1 AND tracker = $2
 		RETURNING access_token, refresh_token, expires_at`, profile, t).Scan(&tok.Access, &tok.Refresh, &tok.Expires)
+	return tok, found(err)
+}
+
+// TrackerGrant is an account a profile linked, and what its tracker granted it.
+type TrackerGrant struct {
+	domain.TrackerAccount
+	TrackerTokens
+}
+
+// TrackerGrants answers the accounts a profile linked, in no order.
+func (s *Store) TrackerGrants(ctx context.Context, profile uuid.UUID) ([]TrackerGrant, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT tracker, username, linked_at, access_token, refresh_token, expires_at
+		FROM tracker_accounts WHERE profile_id = $1`, profile)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (TrackerGrant, error) {
+		var g TrackerGrant
+		return g, row.Scan(&g.Tracker, &g.Username, &g.LinkedAt, &g.Access, &g.Refresh, &g.Expires)
+	})
+}
+
+// RefreshTracker keeps what refresh answers for a profile's account on a tracker whose access
+// token expires before stale, holding the account while it asks, so one node refreshes it: Trakt's
+// refresh tokens are used once, and each of Simkl's refreshes ends the access token before. An
+// account another node refreshed meanwhile is answered as it now is. ErrNotFound for none.
+func (s *Store) RefreshTracker(ctx context.Context, profile uuid.UUID, t domain.Tracker, stale time.Time,
+	refresh func(context.Context, TrackerTokens) (TrackerTokens, error),
+) (TrackerTokens, error) {
+	var tok TrackerTokens
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `
+			SELECT access_token, refresh_token, expires_at FROM tracker_accounts
+			WHERE profile_id = $1 AND tracker = $2 FOR UPDATE`, profile, t).Scan(&tok.Access, &tok.Refresh, &tok.Expires)
+		if err != nil || !tok.Expires.Before(stale) {
+			return err
+		}
+		if tok, err = refresh(ctx, tok); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
+			UPDATE tracker_accounts SET access_token = $3, refresh_token = $4, expires_at = $5
+			WHERE profile_id = $1 AND tracker = $2`, profile, t, tok.Access, tok.Refresh, tok.Expires)
+		return err
+	})
 	return tok, found(err)
 }

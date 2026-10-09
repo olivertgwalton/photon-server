@@ -47,6 +47,11 @@ type service interface {
 	token(ctx context.Context, clientID, deviceCode string) (store.TrackerTokens, error)
 	username(ctx context.Context, clientID, access string) (string, error)
 	revoke(ctx context.Context, clientID string, tok store.TrackerTokens) error
+	// refresh answers new tokens for old, or errGrantGone for a grant the tracker no longer has.
+	refresh(ctx context.Context, clientID string, old store.TrackerTokens) (store.TrackerTokens, error)
+	// scrobble tells the tracker what a player did. A play it has counted already, or that has
+	// hardly begun, is no fault.
+	scrobble(ctx context.Context, clientID, access string, a action, p play) error
 }
 
 type Links struct {
@@ -55,13 +60,15 @@ type Links struct {
 	raise    func(context.Context, domain.Event)
 	log      *slog.Logger
 	services map[domain.Tracker]service
+	plays    chan domain.Event
 }
 
 // New names the server to each tracker as version of Photon.
 func New(st *store.Store, k *kv.KV, raise func(context.Context, domain.Event), version string, log *slog.Logger) *Links {
-	return &Links{st: st, kv: k, raise: raise, log: log, services: map[domain.Tracker]service{
-		domain.TrackerTrakt: newTrakt(version), domain.TrackerSimkl: newSimkl(version),
-	}}
+	return &Links{
+		st: st, kv: k, raise: raise, log: log, plays: make(chan domain.Event, playsHeld),
+		services: map[domain.Tracker]service{domain.TrackerTrakt: newTrakt(version), domain.TrackerSimkl: newSimkl(version)},
+	}
 }
 
 // State is how far a profile is from an account on a tracker.
@@ -96,13 +103,13 @@ func (l *Links) Trackers(ctx context.Context, profile uuid.UUID) ([]Status, erro
 	if err != nil {
 		return nil, err
 	}
-	accounts, err := l.st.TrackerAccounts(ctx, profile)
+	grants, err := l.st.TrackerGrants(ctx, profile)
 	if err != nil {
 		return nil, err
 	}
 	linked := map[domain.Tracker]domain.TrackerAccount{}
-	for _, a := range accounts {
-		linked[a.Tracker] = a
+	for _, g := range grants {
+		linked[g.Tracker] = g.TrackerAccount
 	}
 	out := make([]Status, 0, len(domain.Trackers()))
 	for _, t := range domain.Trackers() {
@@ -128,11 +135,11 @@ func (l *Links) Link(ctx context.Context, profile uuid.UUID, t domain.Tracker) (
 	if err != nil {
 		return kv.TrackerLink{}, err
 	}
-	accounts, err := l.st.TrackerAccounts(ctx, profile)
+	grants, err := l.st.TrackerGrants(ctx, profile)
 	if err != nil {
 		return kv.TrackerLink{}, err
 	}
-	for _, a := range accounts {
+	for _, a := range grants {
 		if a.Tracker == t {
 			return kv.TrackerLink{}, fmt.Errorf("%w: the profile has linked %s already, as %s: unlink it first", ErrRefused, t, a.Username)
 		}
@@ -172,7 +179,8 @@ func (l *Links) Unlink(ctx context.Context, profile uuid.UUID, t domain.Tracker)
 	return nil
 }
 
-// Run asks trackers after the codes profiles are entering, on every node, until ctx ends.
+// Run asks trackers after the codes profiles are entering, and tells them of the plays this node
+// took, until ctx ends. Plays still held then are not told.
 func (l *Links) Run(ctx context.Context) {
 	tick := time.NewTicker(followEvery)
 	defer tick.Stop()
@@ -181,9 +189,13 @@ func (l *Links) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
-		}
-		if err := l.follow(ctx); err != nil && ctx.Err() == nil {
-			l.log.WarnContext(ctx, "codes entered on trackers not asked after", slog.Any("err", err))
+			if err := l.follow(ctx); err != nil && ctx.Err() == nil {
+				l.log.WarnContext(ctx, "codes entered on trackers not asked after", slog.Any("err", err))
+			}
+		case e := <-l.plays:
+			if err := l.scrobble(ctx, e); err != nil && ctx.Err() == nil {
+				l.log.WarnContext(ctx, "a play not told to trackers", slog.Any("err", err))
+			}
 		}
 	}
 }
