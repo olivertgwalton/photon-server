@@ -22,6 +22,7 @@ import (
 func newAPI(readiness error) *API {
 	info := domain.Info{ID: "0199b3c0-0000-7000-8000-000000000000", Version: "v0.1.0"}
 	return New(slog.New(slog.DiscardHandler), info, Services{
+		Copies:    noCopies{},
 		Identity:  den(),
 		Ready:     func(context.Context) error { return readiness },
 		Auth:      fakeAuth{},

@@ -276,13 +276,7 @@ func (s *Store) PartPlace(ctx context.Context, part uuid.UUID) (domain.Place, er
 	switch p.Media {
 	case domain.MediaRemote:
 		p.Source = deref(source)
-		p.Title = domain.Streamed{Kind: domain.ItemMovie}
-		if kind == domain.ItemEpisode && show != nil {
-			item = *show
-			p.Title = domain.Streamed{Kind: domain.ItemShow, Season: deref(season), Episode: deref(episode)}
-		}
-		ids, err := s.ExternalIDs(ctx, []uuid.UUID{item})
-		p.Title.IDs = ids[item]
+		p.Title, err = s.streamed(ctx, item, kind, season, episode, show)
 		return p, err
 	case domain.MediaFolder:
 	}

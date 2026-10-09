@@ -337,7 +337,8 @@ func (matroskaCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitleP
 // and the answer says which language that is so no cache serves it to another reader.
 func TestATitlesCopiesAndTracksAreNamedForTheReader(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Auth: fakeAuth{}, Catalogue: matroskaCatalogue{}, Preferences: &fakePreferences{},
+		Copies: noCopies{},
+		Auth:   fakeAuth{}, Catalogue: matroskaCatalogue{}, Preferences: &fakePreferences{},
 	})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/titles/"+films.String(), nil)
 	req.Header.Set("Authorization", "Bearer "+goodToken)
@@ -370,7 +371,8 @@ func TestATitlesCopiesAndTracksAreNamedForTheReader(t *testing.T) {
 
 func TestACopysContainerIsNamedAsClientsNameIt(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Auth: fakeAuth{}, Catalogue: matroskaCatalogue{}, Preferences: &fakePreferences{},
+		Copies: noCopies{},
+		Auth:   fakeAuth{}, Catalogue: matroskaCatalogue{}, Preferences: &fakePreferences{},
 	})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/titles/"+films.String(), nil)
 	req.Header.Set("Authorization", "Bearer "+goodToken)
@@ -400,7 +402,8 @@ func (ratedCatalogue) Facets(context.Context, uuid.UUID, uuid.UUID) (store.Facet
 // 12; an edit and a filter still name its country, so parental controls read it in its system.
 func TestACertificateIsShownWithoutItsCountry(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Auth: fakeAuth{}, Catalogue: ratedCatalogue{}, Preferences: &fakePreferences{},
+		Copies: noCopies{},
+		Auth:   fakeAuth{}, Catalogue: ratedCatalogue{}, Preferences: &fakePreferences{},
 	})
 	get := func(path string) string {
 		t.Helper()

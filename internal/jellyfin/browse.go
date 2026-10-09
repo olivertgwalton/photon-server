@@ -511,6 +511,7 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) titleItem(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
 	profile := auth.SessionOf(r.Context()).Profile.ID
+	a.ensureCopies(r.Context(), id)
 	p, err := a.svc.Catalogue.Title(r.Context(), profile, id)
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)
