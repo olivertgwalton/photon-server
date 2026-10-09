@@ -188,7 +188,7 @@ async function save(event: SubmitEvent) {
 			/>
 			<Field.Description>
 				{provider?.client_secret_set
-					? "Leave it empty to keep the secret kept, unless the client id changes."
+					? "Leave it empty to keep the secret kept, unless the issuer or client id changes."
 					: "Leave it empty for a public client, which has none."}
 			</Field.Description>
 		</Field.Field>
