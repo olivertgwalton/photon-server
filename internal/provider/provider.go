@@ -72,7 +72,7 @@ type Request struct {
 	Body   any
 }
 
-// Refusal is a provider's answer other than 200: its status, and its body for what it says.
+// Refusal is a provider's answer other than a 2xx: its status, and its body for what it says.
 type Refusal struct {
 	Code   int
 	Status string
@@ -85,7 +85,7 @@ func (r *Refusal) Is(target error) bool {
 	return target == ErrNotFound && r.Code == http.StatusNotFound
 }
 
-// Do sends r and decodes a 200's JSON into out; any other status is a *Refusal.
+// Do sends r and decodes a 2xx's JSON into out; any other status is a *Refusal.
 func (c Client) Do(ctx context.Context, r Request, out any) error {
 	r.Header = r.Header.Clone()
 	if r.Header == nil {
@@ -102,7 +102,8 @@ func (c Client) Do(ctx context.Context, r Request, out any) error {
 	return nil
 }
 
-// Bytes sends r and answers a 200's body as it is; any other status is a *Refusal.
+// Bytes sends r and answers a 2xx's body as it is, as a write is answered 201 Created; any other
+// status is a *Refusal.
 func (c Client) Bytes(ctx context.Context, r Request) ([]byte, error) {
 	req, err := c.request(ctx, r)
 	if err != nil {
@@ -127,7 +128,7 @@ func (c Client) Bytes(ctx context.Context, r Request) ([]byte, error) {
 		return nil, fmt.Errorf("%s %s: %w: %w", c.Name, r.Path, ErrUnreached, err)
 	case len(data) > maxAnswer:
 		return nil, fmt.Errorf("%s %s: answered more than %d bytes", c.Name, r.Path, maxAnswer)
-	case resp.StatusCode != http.StatusOK:
+	case resp.StatusCode < 200 || resp.StatusCode > 299:
 		return nil, fmt.Errorf("%s %s: %w", c.Name, r.Path, &Refusal{Code: resp.StatusCode, Status: resp.Status, Body: data})
 	}
 	return data, nil
