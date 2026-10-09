@@ -327,7 +327,7 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (domain.Picture, erro
 	var source domain.FieldSource
 	var place, root string
 	err := s.pool.QueryRow(ctx, `
-		SELECT a.source, a.place, l.root FROM artwork a
+		SELECT a.source, a.place, coalesce(l.root, '') FROM artwork a
 		JOIN items i ON i.id = a.item_id JOIN libraries l ON l.id = i.library_id
 		WHERE a.id = $1`, id).Scan(&source, &place, &root)
 	if errors.Is(err, pgx.ErrNoRows) {

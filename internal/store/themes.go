@@ -99,7 +99,7 @@ func (s *Store) Theme(ctx context.Context, id uuid.UUID) (ThemeFile, error) {
 	var f ThemeFile
 	var place string
 	err := s.pool.QueryRow(ctx, `
-		SELECT t.source, t.place, l.root FROM themes t
+		SELECT t.source, t.place, coalesce(l.root, '') FROM themes t
 		JOIN items i ON i.id = t.item_id JOIN libraries l ON l.id = i.library_id
 		WHERE t.id = $1`, id).Scan(&f.Source, &place, &f.Root)
 	if errors.Is(err, pgx.ErrNoRows) {

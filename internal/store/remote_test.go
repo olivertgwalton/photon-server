@@ -5,6 +5,7 @@ package store
 import (
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
@@ -65,5 +66,33 @@ func TestARemoteShowsEpisodesAreThoseAired(t *testing.T) {
 	}
 	if n := countRows(t, s, `SELECT count(*) FROM items WHERE kind = 'episode'`); n != 2 {
 		t.Errorf("matched again, %d episodes, want the same two", n)
+	}
+}
+
+// A remote title's pictures are its providers', fetched as a folder title's are: a library with no
+// root has none of its own to read.
+func TestARemoteTitlesPicturesAreItsProviders(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddRemoteLibrary(ctx, "Popular", domain.LibraryMovies, domain.PluginSource("aio"), "movie/top", domain.PluginSource("aio"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := domain.Listed{Kind: domain.ItemMovie, IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0113277"}, Title: "Heat"}
+	if _, err := s.SaveListed(ctx, lib.ID, domain.ItemMovie, []domain.Listed{listed}); err != nil {
+		t.Fatal(err)
+	}
+	film := oneItem(t, s, "kind = 'movie'")
+	poster := "https://image.tmdb.org/t/p/original/heat.jpg"
+	if err := s.SaveIdentity(ctx, film.ID, domain.SourceTMDB, domain.Metadata{Title: "Heat", Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, URL: poster}}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var id uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM artwork WHERE item_id = $1 AND kind = 'poster'`, film.ID).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	pic, err := s.Picture(ctx, id)
+	if err != nil || pic.URL != poster {
+		t.Errorf("its poster is %+v, %v; want TMDB's", pic, err)
 	}
 }
