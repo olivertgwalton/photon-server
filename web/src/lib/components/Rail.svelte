@@ -113,11 +113,11 @@ const sizes = $derived(
 	reader) scrolls with it rather than past the page's edge. It scrolls sideways
 	only and draws no scrollbar, even where scroll bars are always shown: a
 	trackpad, a swipe, Tab from card to card and the arrows move it, and its
-	padding holds a card's focus ring. -->
-<section
-	aria-labelledby={id}
-	class="min-w-0 [contain-intrinsic-size:auto_20rem] [content-visibility:auto]"
->
+	padding holds a card's focus ring. The list, not the row, skips drawing
+	while it is off screen: content-visibility clips to the box it is on, and
+	the list's own box holds every card and its ring, where the row's would cut
+	off what the list draws past it to the page's edges. -->
+<section aria-labelledby={id} class="min-w-0">
 	<!-- A row's name is quieter than its cards', as the app has it: the cards
 		are what is read. Its arrows sit together at the other end of the line,
 		over the row rather than on its cards. -->
@@ -148,7 +148,7 @@ const sizes = $derived(
 			bind:this={list}
 			{@attach resized}
 			onscroll={measure}
-			class="relative -mx-3 flex scroll-smooth snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
+			class="relative -mx-3 flex [contain-intrinsic-size:auto_16rem] [content-visibility:auto] scroll-smooth snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
 		>
 			{#each shown as c, i (c.id)}
 				<li class="shrink-0 snap-start {width}">
