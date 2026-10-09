@@ -198,7 +198,7 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) e
 		if err != nil {
 			return err
 		}
-		if _, err := in.File.Seek(0, io.SeekStart); err != nil {
+		if err := in.Rewind(); err != nil {
 			return err
 		}
 		for _, font := range carried {

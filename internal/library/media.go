@@ -22,14 +22,14 @@ func OpenMedia(root, rel string) (media.Input, error) {
 		return media.Input{}, err
 	}
 	in, err := Media(rel, f)
-	if err != nil {
+	if err != nil || in.File == nil {
 		f.Close()
 	}
 	return in, err
 }
 
 // Media is what a tool reads of f, a file of a library opened from rel: the file, or the address
-// a .strm names, which closing the input closes f all the same.
+// a .strm names, an input f is not part of and stays the caller's to close.
 func Media(rel string, f *os.File) (media.Input, error) {
 	if !naming.IsShortcut(rel) {
 		return media.Input{File: f}, nil
@@ -38,7 +38,7 @@ func Media(rel string, f *os.File) (media.Input, error) {
 	if err != nil {
 		return media.Input{}, fmt.Errorf("%s: %w", rel, err)
 	}
-	return media.Input{File: f, URL: u}, nil
+	return media.Input{URL: u}, nil
 }
 
 // shortcutURL reads the address a .strm names: its first line neither blank nor a # comment, as

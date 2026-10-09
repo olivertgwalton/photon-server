@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 	"uuid"
@@ -114,24 +113,18 @@ func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, param str
 	if !ok {
 		return
 	}
-	f, rel, err := openLibraryFile(r.Context(), where, id)
+	root, rel, err := where(r.Context(), id)
 	if a.answered(w, r, err) {
 		return
 	}
-	defer f.Close()
-	if err := library.Serve(w, r, f, rel, limit); err != nil {
+	in, err := library.OpenMedia(root, rel)
+	if a.answered(w, r, err) {
+		return
+	}
+	defer in.Close()
+	if err := library.Serve(w, r, in, rel, limit); err != nil {
 		a.internal(w, r, err)
 	}
-}
-
-// openLibraryFile opens the file of a library that where finds for an id.
-func openLibraryFile(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (*os.File, string, error) {
-	root, rel, err := where(ctx, id)
-	if err != nil {
-		return nil, "", err
-	}
-	f, err := library.Open(root, rel)
-	return f, rel, err
 }
 
 // openMedia opens the file of a library that where finds for an id, for a tool to read.

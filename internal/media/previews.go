@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -59,7 +58,7 @@ const trickplayThreads = 1
 // keyframes only, as Jellyfin's keyframe-only extraction and Plex's index do: each thumbnail is the
 // keyframe nearest its time. A second output lists the thumbnails, which is how many there are.
 func (t Tools) Trickplay(ctx context.Context, in Input, dir string, g Grid, source domain.Range) (Thumbnails, error) {
-	if _, err := in.File.Seek(0, io.SeekStart); err != nil {
+	if err := in.Rewind(); err != nil {
 		return Thumbnails{}, err
 	}
 	graph := fmt.Sprintf("[0:v:0]fps=1000/%d,%s,split[s][n];[s]tile=%dx%d[t]",
@@ -115,7 +114,7 @@ const (
 // Still writes the frame at a time in a video, taken as decode says, to path as a JPEG, width
 // pixels wide.
 func (t Tools) Still(ctx context.Context, in Input, decode Decode, at time.Duration, width int, source domain.Range, path string) error {
-	if _, err := in.File.Seek(0, io.SeekStart); err != nil {
+	if err := in.Rewind(); err != nil {
 		return err
 	}
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin"}

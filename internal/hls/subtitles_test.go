@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -305,6 +308,13 @@ func TestEmbeddedSubtitlesComeWithTheVideo(t *testing.T) {
 	if out, err := made.CombinedOutput(); err != nil {
 		t.Fatalf("making the film: %v: %s", err, out)
 	}
+	srv := httptest.NewServer(http.FileServer(http.Dir(dir)))
+	defer srv.Close()
+	address, err := url.Parse(srv.URL + "/film.mkv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fetched := func() (media.Input, error) { return media.Input{URL: address}, nil }
 	runs := filepath.Join(dir, "runs")
 	counting := filepath.Join(dir, "ffmpeg")
 	if err := os.WriteFile(counting, []byte("#!/bin/sh\necho >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n"), 0o755); err != nil {
@@ -312,12 +322,14 @@ func TestEmbeddedSubtitlesComeWithTheVideo(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name  string
+		open  func() (media.Input, error)
 		start time.Duration
 		asked []int
 		want  map[int]string
 	}{
-		{"from the start", 0, []int{0, 1, 3, 4}, map[int]string{0: "00:00:01.000 --> 00:00:03.000\n<i>Hello.</i>\n", 1: "Bonjour.", 3: "00:00:19.000 --> 00:00:20.000\nHalfway.\n", 4: "Goodbye."}},
-		{"from a seek", 18 * time.Second, []int{3, 4}, map[int]string{3: "00:00:19.000 --> 00:00:20.000\nHalfway.\n", 4: "Goodbye."}},
+		{"from the start", opening(film), 0, []int{0, 1, 3, 4}, map[int]string{0: "00:00:01.000 --> 00:00:03.000\n<i>Hello.</i>\n", 1: "Bonjour.", 3: "00:00:19.000 --> 00:00:20.000\nHalfway.\n", 4: "Goodbye."}},
+		{"from a seek", opening(film), 18 * time.Second, []int{3, 4}, map[int]string{3: "00:00:19.000 --> 00:00:20.000\nHalfway.\n", 4: "Goodbye."}},
+		{"from an address", fetched, 0, []int{0, 1, 4}, map[int]string{0: "<i>Hello.</i>", 1: "Bonjour.", 4: "Goodbye."}},
 	} {
 		_ = os.Remove(runs)
 		extracted := t.TempDir()
@@ -328,7 +340,7 @@ func TestEmbeddedSubtitlesComeWithTheVideo(t *testing.T) {
 		english, french := 1, 2
 		playback := uuid.NewV7()
 		if err := r.Open(t.Context(), playback, Copy{
-			Parts:     []Source{{Open: opening(film), Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)}, Video: domain.VideoPlan{Codec: "h264"}}},
+			Parts:     []Source{{Open: tc.open, Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)}, Video: domain.VideoPlan{Codec: "h264"}}},
 			Subtitles: []Subtitle{{Name: "English", Stream: &english}, {Name: "French", Stream: &french}},
 			Start:     tc.start,
 		}); err != nil {
