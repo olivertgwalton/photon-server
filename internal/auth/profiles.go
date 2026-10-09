@@ -29,7 +29,7 @@ func (s *Service) SwitchProfile(ctx context.Context, session domain.Session, tar
 		case domain.LockPassword:
 			hash = secrets.Password
 		}
-		match, _, err := s.hasher.Verify(ctx, hash, secret)
+		match, _, err := s.verify(ctx, hash, secret)
 		if err != nil {
 			return domain.Profile{}, err
 		}
@@ -55,19 +55,21 @@ func (s *Service) SetPIN(ctx context.Context, profile uuid.UUID, pin string) err
 	return s.store.SetPINHash(ctx, profile, hash)
 }
 
-// ChangePassword sets the session's profile a new password, if current is its password now, and
-// signs out the profile's other devices.
+// ChangePassword sets the session's profile a new password, if current is its password now, or
+// empty for a profile with none yet, and signs out the profile's other devices.
 func (s *Service) ChangePassword(ctx context.Context, session domain.Session, current, password string) error {
 	_, secrets, err := s.store.ProfileSecrets(ctx, session.Profile.ID)
 	if err != nil {
 		return err
 	}
-	match, _, err := s.hasher.Verify(ctx, secrets.Password, current)
-	if err != nil {
-		return err
-	}
-	if !match {
-		return ErrWrongSecret
+	if secrets.Password != "" || current != "" {
+		match, _, err := s.verify(ctx, secrets.Password, current)
+		if err != nil {
+			return err
+		}
+		if !match {
+			return ErrWrongSecret
+		}
 	}
 	hash, err := HashPassword(ctx, password)
 	if err != nil {

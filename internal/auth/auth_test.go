@@ -569,3 +569,110 @@ func TestAForgottenPasswordIsResetByItsCodeOnce(t *testing.T) {
 		t.Errorf("signing in with the new password: %v", err)
 	}
 }
+
+// A profile a provider's account was given has no password: none signs in as it, not even an empty
+// one, until it sets its first, which asks for no current password.
+func TestAProfileWithNoPasswordSetsItsFirst(t *testing.T) {
+	svc, st := newService(t)
+	addOliver(t, st)
+	ctx := t.Context()
+	err := st.SetSignInProvider(ctx, domain.SignInProvider{
+		Slug: "id", Name: "ID", Issuer: "https://id.example.com", ClientID: "photon", Provisioning: domain.ProvisionCreate,
+		Group: "photon", Recheck: domain.RecheckHourly,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ada, err := st.AddSignInProfile(ctx, "Ada", "id", "sub-ada", "ada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, password := range []string{"", "anything"} {
+		if _, _, err := svc.SignIn(ctx, "Ada", password, tv); !errors.Is(err, ErrInvalidCredentials) {
+			t.Errorf("signing in with %q: %v; want %v", password, err, ErrInvalidCredentials)
+		}
+	}
+	token, _, err := svc.SignIn(ctx, "Oliver", "correct horse", tv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oliver, err := svc.Authenticate(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SwitchProfile(ctx, oliver, ada.ID, ""); !errors.Is(err, ErrWrongSecret) {
+		t.Errorf("switching to Ada with no password: %v; want %v", err, ErrWrongSecret)
+	}
+
+	token, err = svc.SignInAs(ctx, ada, domain.SignInIdentity{Provider: "id", Subject: "sub-ada"}, tv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := svc.Authenticate(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ChangePassword(ctx, session, "guess", "battery staple"); !errors.Is(err, ErrWrongSecret) {
+		t.Errorf("setting a first password, giving a current one: %v; want %v", err, ErrWrongSecret)
+	}
+	if err := svc.ChangePassword(ctx, session, "", "battery staple"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.SignIn(ctx, "Ada", "battery staple", tv); err != nil {
+		t.Errorf("the first password does not sign in: %v", err)
+	}
+	if err := svc.ChangePassword(ctx, session, "", "correct horse"); !errors.Is(err, ErrWrongSecret) {
+		t.Errorf("changing it with no current password: %v; want %v", err, ErrWrongSecret)
+	}
+}
+
+// A television paired from a session an account signed in goes with that account: unlinking it
+// signs the television out too, and the session that approved it.
+func TestATelevisionPairedBySignInGoesWithTheAccount(t *testing.T) {
+	svc, st := newService(t)
+	addOliver(t, st)
+	ctx := t.Context()
+	err := st.SetSignInProvider(ctx, domain.SignInProvider{
+		Slug: "id", Name: "ID", Issuer: "https://id.example.com", ClientID: "photon", Provisioning: domain.ProvisionLink, Recheck: domain.RecheckAtSignIn,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ada, err := st.AddProfile(ctx, "Ada", domain.RoleUser, "h", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.LinkSignIn(ctx, ada.ID, "id", "sub-ada", "ada"); err != nil {
+		t.Fatal(err)
+	}
+	phoneToken, err := svc.SignInAs(ctx, ada, domain.SignInIdentity{Provider: "id", Subject: "sub-ada"}, Device{Name: "Phone", Client: "Photon Web"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	phone, err := svc.Authenticate(ctx, phoneToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start, err := svc.StartPairing(ctx, tv, CodeLetters)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ApprovePairing(ctx, phone, start.UserCode); err != nil {
+		t.Fatal(err)
+	}
+	_, tvToken, _, err := svc.PollPairing(ctx, start.DeviceCode)
+	if err != nil || tvToken == "" {
+		t.Fatalf("polling: %q, %v", tvToken, err)
+	}
+	if s, err := svc.Authenticate(ctx, tvToken); err != nil || s.Identity != phone.Identity {
+		t.Fatalf("the television's session is %+v, %v; want the account's", s.Identity, err)
+	}
+	if err := st.UnlinkSignIn(ctx, ada.ID, "id"); err != nil {
+		t.Fatal(err)
+	}
+	for name, token := range map[string]string{"television": tvToken, "phone": phoneToken} {
+		if _, err := svc.Authenticate(ctx, token); !errors.Is(err, ErrUnauthenticated) {
+			t.Errorf("the %s is still signed in: %v", name, err)
+		}
+	}
+}
