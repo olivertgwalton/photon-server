@@ -151,13 +151,17 @@ func (s *Store) ScanAnswered(ctx context.Context, lib uuid.UUID, folders []strin
 // never receive the same job: each row is taken by one transaction and skipped by the others. The
 // rows are picked once, in a materialized CTE: as `id IN (SELECT … SKIP LOCKED LIMIT n)` the
 // planner may run the subquery again for each row it scans, each run skipping what the last
-// locked, and lease far more than n.
+// locked, and lease far more than n. Each kind's jobs of each due are read apart, down their own
+// index, and the best of them taken: read as one, the queue is walked past every other kind's.
 func (s *Store) ClaimJobs(ctx context.Context, kinds, nowOnly []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error) {
 	return queryStructs[domain.Job](ctx, s.pool, `
 		WITH picked AS MATERIALIZED (
-			SELECT id FROM jobs WHERE state = 'queued' AND run_after <= now() AND kind = ANY($1)
-				AND (due = 'now' OR NOT kind = ANY(coalesce($5::text[], '{}')))
-			ORDER BY priority DESC, id FOR UPDATE SKIP LOCKED LIMIT $4)
+			SELECT j.id FROM unnest($1::text[]) k (kind)
+			CROSS JOIN unnest(CASE WHEN k.kind = ANY(coalesce($5::text[], '{}')) THEN '{now}'::text[] ELSE '{now,window}' END) d (due)
+			CROSS JOIN LATERAL (
+				SELECT id, priority FROM jobs WHERE state = 'queued' AND kind = k.kind AND due = d.due AND run_after <= now()
+				ORDER BY priority DESC, id FOR UPDATE SKIP LOCKED LIMIT $4) j
+			ORDER BY j.priority DESC, j.id LIMIT $4)
 		UPDATE jobs SET state = 'running', lease_until = now() + $2, attempts = attempts + 1, node_id = $3
 		FROM picked WHERE jobs.id = picked.id
 		RETURNING jobs.id, jobs.kind, jobs.subject, jobs.attempts, jobs.due`, kinds, lease, node, limit, nowOnly)
