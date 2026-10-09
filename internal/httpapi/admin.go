@@ -65,7 +65,7 @@ type libraryAdmin interface {
 	Libraries(ctx context.Context) ([]domain.Library, error)
 	Library(ctx context.Context, id uuid.UUID) (domain.Library, error)
 	AddLibrary(ctx context.Context, name string, kind domain.LibraryKind, root string) (domain.Library, error)
-	AddRemoteLibrary(ctx context.Context, name string, kind domain.LibraryKind, listSource domain.FieldSource, listID string, streamSource domain.FieldSource) (domain.Library, error)
+	AddRemoteLibrary(ctx context.Context, name string, kind domain.LibraryKind, r store.Remote) (domain.Library, error)
 	SetLibrary(ctx context.Context, id uuid.UUID, change store.LibraryChange) error
 	RemoveLibrary(ctx context.Context, id uuid.UUID) error
 	ScanFolders(ctx context.Context, lib uuid.UUID, folders []string, delay time.Duration) error
@@ -100,6 +100,7 @@ type adminLibraryJSON struct {
 	Root         string                 `json:"root,omitzero"`
 	List         *store.ListRef         `json:"list,omitzero"`
 	Streams      domain.FieldSource     `json:"streams,omitzero"`
+	Discover     domain.FieldSource     `json:"discover,omitzero"`
 	Sources      []kindSourcesJSON      `json:"sources"`
 	RemoteExtras []domain.ExtraKind     `json:"remote_extras"`
 	Monitor      domain.Monitor         `json:"monitor"`
@@ -145,7 +146,8 @@ type rankedSourceJSON struct {
 
 func adminLibrary(l domain.Library) adminLibraryJSON {
 	j := adminLibraryJSON{
-		ID: l.ID, Name: l.Name, Kind: l.Kind, Media: l.Media, Root: l.Root, Streams: l.StreamSource, Sources: []kindSourcesJSON{},
+		ID: l.ID, Name: l.Name, Kind: l.Kind, Media: l.Media, Root: l.Root, Streams: l.StreamSource, Discover: l.DiscoverSource,
+		Sources:      []kindSourcesJSON{},
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
 		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes, Deletion: l.Deletion,
 		MetadataLanguage: l.Locale.Language, CertificationCountry: l.Locale.Country, ArtworkLanguage: l.Locale.Artwork,
@@ -155,7 +157,7 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 	for i, t := range l.SubtitleLanguages {
 		j.SubtitleLanguages[i] = t.String()
 	}
-	if l.Media == domain.MediaRemote {
+	if l.ListSource != "" {
 		j.List = &store.ListRef{Source: l.ListSource, ID: l.ListID}
 	}
 	ranked := func(list []domain.RankedSource) []rankedSourceJSON {
@@ -207,8 +209,11 @@ type addLibraryJSON struct {
 	Root string `json:"root,omitzero"`
 	// List is the list a remote library holds the titles of: one kept on a provider that keeps
 	// lists, by its id there, as a list collection names one.
-	List    *store.ListRef     `json:"list,omitzero"`
-	Streams domain.FieldSource `json:"streams,omitzero"`
+	List *store.ListRef `json:"list,omitzero"`
+	// Discover is a provider that searches, whose finds a search of the server shows as titles of
+	// a remote library, which become its own as they are opened.
+	Discover domain.FieldSource `json:"discover,omitzero"`
+	Streams  domain.FieldSource `json:"streams,omitzero"`
 }
 
 // addLibrary adds a library of a folder on the server, or of a list's titles a provider streams,
@@ -230,7 +235,11 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 			writeProblem(w, a.logger, codeInvalidBody, why)
 			return
 		}
-		lib, err = a.svc.Libraries.AddRemoteLibrary(r.Context(), req.Name, req.Kind, req.List.Source, req.List.ID, req.Streams)
+		remote := store.Remote{DiscoverSource: req.Discover, StreamSource: req.Streams}
+		if req.List != nil {
+			remote.ListSource, remote.ListID = req.List.Source, req.List.ID
+		}
+		lib, err = a.svc.Libraries.AddRemoteLibrary(r.Context(), req.Name, req.Kind, remote)
 	case domain.MediaFolder, "":
 		if !filepath.IsAbs(req.Root) {
 			writeProblem(w, a.logger, codeInvalidBody, "root is an absolute path")
@@ -255,23 +264,43 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 }
 
 // remoteRefused is why a remote library cannot be made as asked, or "" where it can: it holds the
-// titles of a list kept on a provider that keeps lists, and plays those a provider that streams
-// offers of them.
+// titles of a list kept on a provider that keeps lists, those a provider that searches finds, or
+// both, and plays those a provider that streams offers of them.
 func (a *API) remoteRefused(ctx context.Context, req addLibraryJSON) string {
 	if req.Root != "" {
 		return "a remote library has no root"
 	}
-	if req.List == nil || req.List.ID == "" || req.Streams == "" {
-		return "a remote library names its list, {source, id}, and streams, the provider that streams it"
+	if req.List == nil && req.Discover == "" || req.Streams == "" {
+		return "a remote library names its list, {source, id}, or discover, a provider that searches, or both, and streams, the provider that streams it"
 	}
-	if err := req.List.Check(); err != nil {
-		return err.Error()
+	if req.List != nil {
+		if err := req.List.Check(); err != nil {
+			return err.Error()
+		}
+		if p, ok, err := a.svc.Providers.Get(ctx, req.List.Source); err != nil || !ok || !answers[provider.Lister](p, domain.CapabilityList) {
+			return string(req.List.Source) + " keeps no lists"
+		}
 	}
-	if p, ok, err := a.svc.Providers.Get(ctx, req.List.Source); err != nil || !ok || !answers[provider.Lister](p, domain.CapabilityList) {
-		return string(req.List.Source) + " keeps no lists"
+	if req.Discover != "" {
+		if why := a.discoverRefused(ctx, req.Discover); why != "" {
+			return why
+		}
 	}
 	if p, ok, err := a.svc.Providers.Get(ctx, req.Streams); err != nil || !ok || !answers[provider.Streamer](p, domain.CapabilityStream) {
 		return string(req.Streams) + " streams nothing"
+	}
+	return ""
+}
+
+// discoverRefused is why a provider cannot find a remote library titles, or "" where it can: it
+// searches, and files titles under ids of its own, which a title found is kept by.
+func (a *API) discoverRefused(ctx context.Context, source domain.FieldSource) string {
+	_, plugin := source.Plugin()
+	if !plugin && !slices.Contains(domain.Providers(), domain.Provider(source)) {
+		return string(source) + " files no titles under ids of its own"
+	}
+	if p, ok, err := a.svc.Providers.Get(ctx, source); err != nil || !ok || !answers[provider.Searcher](p, domain.CapabilitySearch) {
+		return string(source) + " searches nothing"
 	}
 	return ""
 }

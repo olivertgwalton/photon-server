@@ -63,7 +63,7 @@ const live = liveStream();
 						</p>
 						<p class="text-ink-3 truncate font-mono text-xs">
 							{library.media === "remote"
-								? `Streamed: ${library.list?.id}`
+								? `Streamed: ${library.list?.id ?? "what a search finds"}`
 								: library.root}
 						</p>
 						{#if scan}

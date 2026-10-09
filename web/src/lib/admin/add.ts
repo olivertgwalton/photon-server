@@ -18,10 +18,13 @@ export async function addLibrary(
 						name: String(form.get("name") ?? ""),
 						kind: form.get("kind") === "shows" ? "shows" : "movies",
 						media: "remote",
-						list: {
-							source: String(form.get("list_source") ?? ""),
-							id: String(form.get("list_id") ?? "").trim(),
-						},
+						list: form.get("list_source")
+							? {
+									source: String(form.get("list_source")),
+									id: String(form.get("list_id") ?? "").trim(),
+								}
+							: undefined,
+						discover: String(form.get("discover") ?? "") || undefined,
 						streams: String(form.get("streams") ?? ""),
 					}
 				: {

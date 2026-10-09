@@ -68,6 +68,9 @@ func open(t *testing.T) *store.Store {
 	return st
 }
 
+// unmatched matches nothing: the titles here carry the ids their streams are found by.
+func unmatched(context.Context, uuid.UUID) error { return nil }
+
 // offering offers what it is set to.
 type offering struct{ offers []domain.Offer }
 
@@ -82,7 +85,7 @@ func TestARemoteFilmIsGivenTheCopyItsProviderOffers(t *testing.T) {
 	srv := film(t)
 	st := open(t)
 	ctx := t.Context()
-	lib, err := st.AddRemoteLibrary(ctx, "Popular", domain.LibraryMovies, aio, "movie/top", aio)
+	lib, err := st.AddRemoteLibrary(ctx, "Popular", domain.LibraryMovies, store.Remote{ListSource: aio, ListID: "movie/top", StreamSource: aio})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +110,7 @@ func TestARemoteFilmIsGivenTheCopyItsProviderOffers(t *testing.T) {
 	uhd := domain.Offer{Key: "torrent:abc:0", Name: "Heat.2160p.mkv", URL: at("/heat.mkv"), From: from}
 	provider := &offering{offers: []domain.Offer{dead, uhd}}
 	tools := media.Tools{FFprobe: media.Tool{Path: tool(t, "ffprobe", "PHOTON_FFPROBE")}}
-	copies := NewCopies(st, New(provider), tools)
+	copies := NewCopies(st, New(provider), tools, unmatched)
 
 	if err := copies.Ensure(ctx, item); err != nil {
 		t.Fatal(err)
@@ -139,7 +142,7 @@ func TestARemoteFilmIsGivenTheCopyItsProviderOffers(t *testing.T) {
 	// Offered no more, the copy is missing and its part gone; another offered is read.
 	hd := domain.Offer{Key: "torrent:abc:1", Name: "Heat.1080p.mkv", URL: at("/heat-hd.mkv"), From: from}
 	provider.offers = []domain.Offer{hd}
-	copies = NewCopies(st, New(provider), tools)
+	copies = NewCopies(st, New(provider), tools, unmatched)
 	if err := copies.Ensure(ctx, item); err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +164,41 @@ func TestARemoteFilmIsGivenTheCopyItsProviderOffers(t *testing.T) {
 	}
 
 	provider.offers = nil
-	if err := NewCopies(st, New(provider), tools).Ensure(ctx, item); !errors.Is(err, ErrNoCopy) {
+	if err := NewCopies(st, New(provider), tools, unmatched).Ensure(ctx, item); !errors.Is(err, ErrNoCopy) {
 		t.Errorf("with nothing offered: %v, want ErrNoCopy", err)
+	}
+}
+
+// A title a search found becomes its library's as it is opened, is matched there and then, and
+// is given the copy its provider offers, as a title its list held is.
+func TestAFoundTitleIsHeldMatchedAndGivenACopyAsItIsOpened(t *testing.T) {
+	srv := film(t)
+	st := open(t)
+	ctx := t.Context()
+	lib, err := st.AddRemoteLibrary(ctx, "Found", domain.LibraryMovies, store.Remote{DiscoverSource: domain.SourceTMDB, StreamSource: aio})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found, err := st.SaveDiscoveries(ctx, lib.ID, domain.ItemMovie, domain.ProviderTMDB, []domain.Candidate{{ID: "949", Title: "Heat", Year: 1995}})
+	if err != nil || len(found) != 1 {
+		t.Fatalf("found %+v, %v", found, err)
+	}
+	u, err := url.Parse(srv.URL + "/heat.mkv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	offers := &offering{offers: []domain.Offer{{Key: "torrent:abc:0", Name: "Heat.mkv", URL: u, From: strings.TrimPrefix(srv.URL, "http://")}}}
+	var matched []uuid.UUID
+	match := func(_ context.Context, id uuid.UUID) error {
+		matched = append(matched, id)
+		return nil
+	}
+	tools := media.Tools{FFprobe: media.Tool{Path: tool(t, "ffprobe", "PHOTON_FFPROBE")}}
+	if err := NewCopies(st, New(offers), tools, match).Ensure(ctx, found[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	page, err := st.Title(ctx, uuid.UUID{}, found[0].ID)
+	if err != nil || page.Title != "Heat" || len(page.Versions) != 1 || len(matched) != 1 {
+		t.Errorf("opened, it is %q with %d copies, matched %d times, %v", page.Title, len(page.Versions), len(matched), err)
 	}
 }

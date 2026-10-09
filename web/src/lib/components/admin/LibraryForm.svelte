@@ -86,8 +86,17 @@ const able = (c: Schemas["Capability"]) =>
 	providers
 		.filter((p) => p.capabilities.includes(c))
 		.map((p) => ({ value: String(p.id), label: p.name }));
-const listers = $derived(able("list"));
+// A remote library holds a list's titles, what a search finds, or both: those
+// a provider files under ids of its own, which a title found is kept by.
+const listers = $derived([{ value: "", label: "No list" }, ...able("list")]);
 const streamers = $derived(able("stream"));
+const searchers = $derived([
+	{ value: "", label: "Nothing" },
+	...able("search").filter(
+		(p) => p.value.startsWith("plugin:") || ["tmdb", "tvdb"].includes(p.value),
+	),
+]);
+let listSource = $state("");
 const nameOf = (id: unknown) =>
 	providers.find((p) => p.id === id)?.name ?? String(id);
 
@@ -182,22 +191,39 @@ const refreshOptions = $derived(
 					<Choice
 						id="library-list-source"
 						name="list_source"
-						value={listers[0]?.value}
+						bind:value={listSource}
 						options={listers}
 						class="w-48"
 					/>
 				</Field.Field>
-				<Field.Field>
-					<Field.Label for="library-list">List</Field.Label>
-					<Input
-						id="library-list"
-						name="list_id"
-						required
-						placeholder="movie/top"
-						class="font-mono"
-					/>
-				</Field.Field>
+				{#if listSource}
+					<Field.Field>
+						<Field.Label for="library-list">List</Field.Label>
+						<Input
+							id="library-list"
+							name="list_id"
+							required
+							placeholder="movie/top"
+							class="font-mono"
+						/>
+					</Field.Field>
+				{/if}
 			</div>
+			<Field.Field>
+				<Field.Label for="library-discover"
+					>Search finds titles from</Field.Label
+				>
+				<Choice
+					id="library-discover"
+					name="discover"
+					value={searchers[1]?.value ?? ""}
+					options={searchers}
+				/>
+				<Field.Description>
+					A search of the server shows what this finds that the library does not
+					hold yet; opened, a title becomes the library's.
+				</Field.Description>
+			</Field.Field>
 			<Field.Field>
 				<Field.Label for="library-streams">Streamed by</Field.Label>
 				<Choice
@@ -221,15 +247,29 @@ const refreshOptions = $derived(
 			</Field.Field>
 		{/if}
 	{:else if library.media === "remote"}
-		<Field.Field>
-			<Field.Label for="library-list">Titles from</Field.Label>
-			<Input
-				id="library-list"
-				value="{nameOf(library.list?.source)}: {library.list?.id}"
-				readonly
-				class="font-mono"
-			/>
-		</Field.Field>
+		{#if library.list}
+			<Field.Field>
+				<Field.Label for="library-list">Titles from</Field.Label>
+				<Input
+					id="library-list"
+					value="{nameOf(library.list.source)}: {library.list.id}"
+					readonly
+					class="font-mono"
+				/>
+			</Field.Field>
+		{/if}
+		{#if library.discover}
+			<Field.Field>
+				<Field.Label for="library-discover"
+					>Search finds titles from</Field.Label
+				>
+				<Input
+					id="library-discover"
+					value={nameOf(library.discover)}
+					readonly
+				/>
+			</Field.Field>
+		{/if}
 		<Field.Field>
 			<Field.Label for="library-streams">Streamed by</Field.Label>
 			<Input id="library-streams" value={nameOf(library.streams)} readonly />

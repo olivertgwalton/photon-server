@@ -382,12 +382,12 @@ func (a *API) search(w http.ResponseWriter, r *http.Request, text string, librar
 		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
 		return
 	}
-	cards, total, err := a.svc.Catalogue.Search(r.Context(), q)
+	cards, total, err := a.searched(r.Context(), q)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	a.writeList(w, r, cards, int(total), l.start, l)
+	a.writeList(w, r, cards, total, l.start, l)
 }
 
 // children answers what is in a collection, a show or a season: a collection's titles; a show's
@@ -488,6 +488,9 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, a.playlistsFolder())
 		return
 	}
+	// A title a search found becomes its library's as an app opens it, and a remote film or
+	// episode is given a copy, as the app chooses its copy from the item's media sources.
+	a.ensureCopies(r.Context(), id)
 	named, err := a.svc.Catalogue.Named(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)
@@ -511,7 +514,6 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) titleItem(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
 	profile := auth.SessionOf(r.Context()).Profile.ID
-	a.ensureCopies(r.Context(), id)
 	p, err := a.svc.Catalogue.Title(r.Context(), profile, id)
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)

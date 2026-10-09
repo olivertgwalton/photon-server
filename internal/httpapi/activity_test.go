@@ -168,8 +168,8 @@ func TestAStreamNobodyReadsIsGivenUp(t *testing.T) {
 	work := &fakeWork{}
 	told := streamingEvents{fakeEvents: &fakeEvents{}, events: make(chan domain.Event), gone: make(chan struct{})}
 	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Copies: noCopies{},
-		Auth:   fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: told, Profiles: listedProfiles{oliver}, Libraries: &fakeLibraries{},
+		Copies: noCopies{}, Discover: noDiscoveries{},
+		Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: told, Profiles: listedProfiles{oliver}, Libraries: &fakeLibraries{},
 	}))
 	defer srv.Close()
 	conn, err := net.Dial("tcp", srv.Listener.Addr().String())

@@ -23,7 +23,7 @@ var (
 // libraryColumns and librarySourceColumns are model.Library's and model.LibrarySource's, for a
 // statement that reads whole rows.
 const (
-	libraryColumns = `id, name, kind, media, root, list_source, list_id, stream_source, monitor, refresh_days, previews, markers, keyframes, themes, deletion,
+	libraryColumns = `id, name, kind, media, root, list_source, list_id, stream_source, discover_source, monitor, refresh_days, previews, markers, keyframes, themes, deletion,
 		metadata_language, certification_country, artwork_language, title_language, collection_mode, subtitle_languages, subtitle_match`
 	librarySourceColumns = `library_id, item_kind, fetcher, source, position, enabled`
 )
@@ -39,13 +39,23 @@ func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.Library
 	return s.addLibrary(ctx, kind, `INSERT INTO libraries (name, kind, root) VALUES ($1, $2, $3) RETURNING `+libraryColumns, name, kind, root)
 }
 
-// AddRemoteLibrary adds a library of the titles of a list on a provider, played from the streams
-// another offers. It has no folder to watch, delete from or read whole for previews and markers.
-func (s *Store) AddRemoteLibrary(ctx context.Context, name string, kind domain.LibraryKind, listSource domain.FieldSource, listID string, streamSource domain.FieldSource) (domain.Library, error) {
+// Remote is where a remote library's titles come from and are played from: the titles of a list
+// kept on a provider, and those a provider's search finds, either or both, and the streams a
+// provider offers of them.
+type Remote struct {
+	ListSource     domain.FieldSource
+	ListID         string
+	DiscoverSource domain.FieldSource
+	StreamSource   domain.FieldSource
+}
+
+// AddRemoteLibrary adds a library of titles a provider streams. It has no folder to watch, delete
+// from or read whole for previews and markers.
+func (s *Store) AddRemoteLibrary(ctx context.Context, name string, kind domain.LibraryKind, r Remote) (domain.Library, error) {
 	return s.addLibrary(ctx, kind, `
-		INSERT INTO libraries (name, kind, media, list_source, list_id, stream_source, monitor, previews, markers)
-		VALUES ($1, $2, 'remote', $3, $4, $5, 'off', 'off', 'off') RETURNING `+libraryColumns,
-		name, kind, listSource, listID, streamSource)
+		INSERT INTO libraries (name, kind, media, list_source, list_id, discover_source, stream_source, monitor, previews, markers)
+		VALUES ($1, $2, 'remote', nullif($3, ''), nullif($4, ''), nullif($5, ''), $6, 'off', 'off', 'off') RETURNING `+libraryColumns,
+		name, kind, r.ListSource, r.ListID, r.DiscoverSource, r.StreamSource)
 }
 
 func (s *Store) addLibrary(ctx context.Context, kind domain.LibraryKind, insert string, args ...any) (domain.Library, error) {
@@ -413,7 +423,8 @@ func saveSources(ctx context.Context, tx db, lib uuid.UUID, sources []domain.Kin
 func library(r model.Library, sources []domain.KindSources, extras []domain.ExtraKind) domain.Library {
 	return domain.Library{
 		ID: r.ID, Name: r.Name, Kind: r.Kind, Media: r.Media, Root: deref(r.Root), ListSource: deref(r.ListSource),
-		ListID: deref(r.ListID), StreamSource: deref(r.StreamSource), Sources: sources, RemoteExtras: extras,
+		ListID: deref(r.ListID), StreamSource: deref(r.StreamSource), DiscoverSource: deref(r.DiscoverSource),
+		Sources: sources, RemoteExtras: extras,
 		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews, Markers: r.Markers,
 		Keyframes: r.Keyframes, Themes: r.Themes, Deletion: r.Deletion,
 		Locale: domain.Locale{Language: deref(r.MetadataLanguage), Country: deref(r.CertificationCountry), Artwork: r.ArtworkLanguage},

@@ -28,6 +28,7 @@ const (
 var ErrNoCopy = errors.New("remote: nothing the provider offers of the title could be read")
 
 type copyStore interface {
+	HoldDiscovered(ctx context.Context, id uuid.UUID) (bool, error)
 	RemoteTitleOf(ctx context.Context, item uuid.UUID) (store.RemoteTitle, bool, error)
 	Offered(ctx context.Context, item uuid.UUID, offered [][]byte) ([][]byte, error)
 	SaveCopy(ctx context.Context, lib, item uuid.UUID, c store.Copy) error
@@ -43,22 +44,35 @@ type Copies struct {
 	store  copyStore
 	offers *Offers
 	prober prober
-	group  singleflight.Group
+	// identify matches a title, as its job does: a title a search found is matched as it is
+	// opened, so its page has what its provider says of it, and its streams its other ids.
+	identify func(ctx context.Context, id uuid.UUID) error
+	group    singleflight.Group
 }
 
-func NewCopies(st copyStore, offers *Offers, p prober) *Copies {
-	return &Copies{store: st, offers: offers, prober: p}
+func NewCopies(st copyStore, offers *Offers, p prober, identify func(ctx context.Context, id uuid.UUID) error) *Copies {
+	return &Copies{store: st, offers: offers, prober: p, identify: identify}
 }
 
 // Ensure has a remote film or episode hold the copies its provider offers now: a copy no longer
 // offered is missing, and, where none it holds is offered, the best offer that can be read is
-// read for what it is and kept as a version. Anything else is left as it is.
+// read for what it is and kept as a version. A title a search found is made one of its library's
+// first, and matched. Anything else is left as it is.
 func (c *Copies) Ensure(ctx context.Context, item uuid.UUID) error {
 	_, err, _ := c.group.Do(item.String(), func() (any, error) { return nil, c.ensure(context.WithoutCancel(ctx), item) })
 	return err
 }
 
 func (c *Copies) ensure(ctx context.Context, item uuid.UUID) error {
+	held, err := c.store.HoldDiscovered(ctx, item)
+	if err != nil {
+		return err
+	}
+	if held {
+		if err := c.identify(ctx, item); err != nil {
+			return err
+		}
+	}
 	t, ok, err := c.store.RemoteTitleOf(ctx, item)
 	if err != nil || !ok {
 		return err
