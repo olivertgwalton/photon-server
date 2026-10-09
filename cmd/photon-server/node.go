@@ -41,6 +41,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/subtitles"
 	"github.com/olivertgwalton/photon-server/internal/task"
 	"github.com/olivertgwalton/photon-server/internal/themerr"
+	"github.com/olivertgwalton/photon-server/internal/tracker"
 	"github.com/olivertgwalton/photon-server/internal/watch"
 	"github.com/olivertgwalton/photon-server/internal/webhook"
 )
@@ -76,6 +77,7 @@ type node struct {
 	scheduler *task.Scheduler
 	sessions  *playback.Sessions
 	imports   *historyimport.Imports
+	trackers  *tracker.Links
 	identity  *identity.Server
 	secured   *secure.Server
 	jellyfin  *jellyfin.Listener
@@ -159,6 +161,7 @@ func (n *node) wire(ctx context.Context) error {
 		refreshCollectionsTask(st), syncListsTask(st, n.providers), fetchSubtitlesTask(fetcher, logger))
 	n.sessions = playback.NewSessions(n.cache, st, n.remuxer, n.hub.Raise, n.id)
 	n.imports = historyimport.New(st, n.logger)
+	n.trackers = tracker.New(st, n.cache, n.hub.Raise, version, n.logger)
 	// Fetched subtitles are written from Postgres into each node's cache as it opens them.
 	files, err := subtitles.NewFiles(st, filepath.Join(n.cacheRoot, "fetched-subtitles"))
 	if err != nil {
@@ -221,7 +224,7 @@ func (n *node) httpServer(p playing) (*http.Server, error) {
 	return &http.Server{
 		Addr: n.listen, TLSConfig: n.secured.TLSConfig(),
 		Handler: httpapi.New(n.logger, n.info, httpapi.Services{
-			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Postgres: st, Valkey: cache, Web: web,
 			Metrics: metrics(version, n.self, n.remuxer, n.sessions, p.placer, p.sent, n.finished, cluster{lead: n.scheduler, st: st, nodes: cache, self: p.placer}),
 			Sent:    p.sent,
 		}),
@@ -312,6 +315,7 @@ func (n *node) serve(ctx context.Context) error {
 		n.stores.Run(background, storage.Cluster{Node: n.id, Subscribe: n.hub.Subscribe, Raise: n.hub.Raise, Nodes: nodeIDs(n.cache)})
 	})
 	wg.Go(func() { n.jellyfin.Run(background) })
+	wg.Go(func() { n.trackers.Run(ctx) })
 	logger.InfoContext(ctx, "serving", slog.String("addr", n.srv.Addr), slog.String("version", n.info.Version))
 	err := listenUntilDone(ctx, n.srv, n.secured.Listen, func() {
 		if errors.As(context.Cause(ctx), new(*stoppedForRestore)) {

@@ -16,6 +16,7 @@ func TestEveryValueAClientShowsHasAName(t *testing.T) {
 	hasNames(t, extraKinds, domain.ExtraKinds())
 	hasNames(t, importSources, domain.ImportSources())
 	hasNames(t, importMisses, domain.ImportMisses())
+	hasNames(t, trackers, domain.Trackers())
 	hasNames(t, playMethods, domain.PlayMethods())
 	hasNames(t, ratingSites, domain.RatingSites())
 	hasNames(t, ranges, domain.Ranges())

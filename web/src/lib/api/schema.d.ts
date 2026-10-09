@@ -2966,6 +2966,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/trackers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the trackers profiles may link accounts on, and the client id of the app registered on each
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackerClientList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/trackers/{tracker}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the client id of the app registered on a tracker, which profiles link their accounts through; empty, none can
+         * @description Admin only.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The tracker. */
+                    tracker: components["schemas"]["Tracker"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrackerClientChange"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackerClient"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/versions/{id}/markers": {
         parameters: {
             query?: never;
@@ -3743,7 +3830,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Stream what changes of the libraries, titles and state the profile sees, and its playbacks stopping, as Server-Sent Events */
+        /** Stream what changes of the libraries, titles and state the profile sees, its playbacks stopping and its trackers linking, as Server-Sent Events */
         get: {
             parameters: {
                 query?: never;
@@ -5338,6 +5425,121 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/v1/profile/trackers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The profile's account on each tracker, or the code it is entering to link one */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProfileTrackerList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profile/trackers/{tracker}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink the profile's account on a tracker, or stop linking one, and have the tracker forget what it granted */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The tracker. */
+                    tracker: components["schemas"]["Tracker"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profile/trackers/{tracker}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask a tracker for a code for the profile to enter there, in place of any before; tracker.changed says when it is linked or expires */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The tracker. */
+                    tracker: components["schemas"]["Tracker"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackerCode"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profiles": {
         parameters: {
             query?: never;
@@ -6849,7 +7051,7 @@ export interface components {
             title_id?: string;
         };
         /** @enum {string} */
-        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed" | "nodes.changed" | "server.changed" | "restore.started";
+        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed" | "nodes.changed" | "server.changed" | "restore.started" | "tracker.changed";
         EventPage: {
             items: components["schemas"]["Event"][];
             offset: number;
@@ -7665,6 +7867,17 @@ export interface components {
         };
         /** @enum {string} */
         ProfileLock: "pin" | "password";
+        ProfileTracker: {
+            code?: components["schemas"]["TrackerCode"] | null;
+            /** Format: date-time */
+            linked_at?: string;
+            state: components["schemas"]["TrackerState"];
+            tracker: components["schemas"]["Tracker"];
+            username?: string;
+        };
+        ProfileTrackerList: {
+            items: components["schemas"]["ProfileTracker"][];
+        };
         Progress: {
             /** Format: date-time */
             at?: string | null;
@@ -8087,6 +8300,27 @@ export interface components {
         /** @enum {string} */
         TrackMemory: "remember" | "forget";
         /** @enum {string} */
+        Tracker: "trakt" | "simkl";
+        TrackerClient: {
+            client_id: string;
+            tracker: components["schemas"]["Tracker"];
+        };
+        TrackerClientChange: {
+            client_id: string;
+        };
+        TrackerClientList: {
+            items: components["schemas"]["TrackerClient"][];
+        };
+        TrackerCode: {
+            /** Format: int64 */
+            expires_in_ms: number;
+            user_code: string;
+            verification_uri: string;
+            verification_uri_complete: string;
+        };
+        /** @enum {string} */
+        TrackerState: "unavailable" | "unlinked" | "linking" | "linked";
+        /** @enum {string} */
         TranscodeReason: "container_not_supported" | "video_codec_not_supported" | "video_profile_not_supported" | "video_level_not_supported" | "video_resolution_not_supported" | "video_bit_depth_not_supported" | "video_range_not_supported" | "audio_codec_not_supported" | "audio_channels_not_supported" | "bitrate_exceeds_limit" | "subtitle_codec_not_supported" | "parts_not_supported";
         Transcodes: {
             active: number;
@@ -8245,6 +8479,9 @@ export interface components {
             };
             tasks: {
                 [key: string]: components["schemas"]["Described"];
+            };
+            trackers: {
+                [key: string]: string;
             };
         };
         WallFilter: {

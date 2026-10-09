@@ -25,7 +25,7 @@ func feedStream() asStream {
 	out := asStream{"hello": helloJSON{}}
 	for _, k := range []domain.EventKind{
 		domain.EventLibraryChanged, domain.EventTitleUpdated, domain.EventUserDataChanged, domain.EventScanProgress,
-		domain.EventLibraryScanned, domain.EventPlaybackStopped, domain.EventRestoreStarted,
+		domain.EventLibraryScanned, domain.EventPlaybackStopped, domain.EventRestoreStarted, domain.EventTrackerChanged,
 	} {
 		out[string(k)] = eventJSON{}
 	}
@@ -34,7 +34,8 @@ func feedStream() asStream {
 
 // events streams what changes of what the profile sees, from every node, as Server-Sent Events,
 // so a client's pages stay right without asking again: as Jellyfin's LibraryChanged and
-// UserDataChanged, and Plex's notifications; and its own playbacks stopping, so a player closes.
+// UserDataChanged, and Plex's notifications; its own playbacks stopping, so a player closes; and
+// what came of a code it was entering on a tracker.
 // First a hello with the scans going on. Nothing is kept to resend, so a client that reconnects
 // asks again for what it shows.
 func (a *API) events(w http.ResponseWriter, r *http.Request) {
@@ -85,6 +86,8 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (ev
 		return eventOf(e), len(seen) == 1, err
 	case domain.EventRestoreStarted:
 		return eventOf(e), true, nil
+	case domain.EventTrackerChanged:
+		return eventOf(e), e.Profile == profile, nil
 	case domain.EventScanProgress, domain.EventLibraryScanned:
 		ok, err := a.svc.Audience.HasLibrary(ctx, profile, e.Library)
 		return eventOf(e), ok, err
@@ -134,7 +137,7 @@ func (a *API) feedRoutes() []route {
 	return []route{
 		{
 			pattern: "GET /api/v1/events", access: signedIn,
-			summary: "Stream what changes of the libraries, titles and state the profile sees, and its playbacks stopping, as Server-Sent Events",
+			summary: "Stream what changes of the libraries, titles and state the profile sees, its playbacks stopping and its trackers linking, as Server-Sent Events",
 			status:  http.StatusOK, reply: feedStream(), handle: a.events,
 		},
 	}

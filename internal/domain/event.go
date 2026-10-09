@@ -67,6 +67,9 @@ const (
 	// EventRestoreStarted is a restore asked for: every node stops until it is done, so every
 	// client is told, to say the server will be back.
 	EventRestoreStarted EventKind = "restore.started"
+	// EventTrackerChanged is a profile's account on a tracker linked, or the code it was entering
+	// ended unentered, told to the profile so a page showing the code shows what came of it.
+	EventTrackerChanged EventKind = "tracker.changed"
 )
 
 func EventKinds() []EventKind {
@@ -77,7 +80,7 @@ func EventKinds() []EventKind {
 		EventUserDataChanged, EventTitlesAdded, EventScanProgress, EventTaskStarted, EventTaskFinished, EventTaskFailed, EventBackupMade,
 		EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead, EventJobsProgress, EventWebhookTest,
 		EventMaintenanceChanged, EventNetworkChanged, EventStorageChanged, EventNodesChanged, EventServerChanged,
-		EventRestoreStarted,
+		EventRestoreStarted, EventTrackerChanged,
 	}
 }
 
@@ -92,7 +95,8 @@ func (k EventKind) Logged() bool {
 	case EventPlaybackPaused, EventPlaybackResumed, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventScanProgress, EventTaskStarted, EventTaskFinished, EventJobStarted,
 		EventJobFinished, EventJobFailed, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged,
-		EventNetworkChanged, EventStorageChanged, EventNodesChanged, EventServerChanged, EventRestoreStarted:
+		EventNetworkChanged, EventStorageChanged, EventNodesChanged, EventServerChanged, EventRestoreStarted,
+		EventTrackerChanged:
 		return false
 	}
 	return false
@@ -111,7 +115,7 @@ func (k EventKind) Hookable() bool {
 	case EventLibraryChanged, EventTitleUpdated, EventUserDataChanged, EventScanProgress,
 		EventTaskStarted, EventTaskFinished, EventJobStarted, EventJobFinished, EventJobFailed,
 		EventJobDead, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged, EventNetworkChanged,
-		EventStorageChanged, EventNodesChanged, EventServerChanged, EventRestoreStarted:
+		EventStorageChanged, EventNodesChanged, EventServerChanged, EventRestoreStarted, EventTrackerChanged:
 		return false
 	}
 	return false
@@ -192,6 +196,8 @@ func DetailsOf(k EventKind, raw []byte) (EventDetails, error) {
 		return detailsOf[JobDetails](raw)
 	case EventJobsProgress:
 		return detailsOf[BacklogDetails](raw)
+	case EventTrackerChanged:
+		return detailsOf[TrackerDetails](raw)
 	case EventTitleUpdated, EventWebhookTest, EventMaintenanceChanged, EventNetworkChanged,
 		EventStorageChanged, EventNodesChanged, EventServerChanged:
 	}
@@ -292,6 +298,11 @@ type BacklogDetails struct {
 	Left    int     `json:"left"`
 }
 
+// TrackerDetails is the tracker a profile's account is on.
+type TrackerDetails struct {
+	Tracker Tracker `json:"tracker"`
+}
+
 func (NoDetails) eventDetails()             {}
 func (PlaybackDetails) eventDetails()       {}
 func (PlaybackClosedDetails) eventDetails() {}
@@ -307,6 +318,7 @@ func (BackupDetails) eventDetails()         {}
 func (RestoreDetails) eventDetails()        {}
 func (JobDetails) eventDetails()            {}
 func (BacklogDetails) eventDetails()        {}
+func (TrackerDetails) eventDetails()        {}
 
 // TitleChange is what happened to a library's titles.
 type TitleChange string

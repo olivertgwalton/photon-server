@@ -17,6 +17,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/playback"
+	"github.com/olivertgwalton/photon-server/internal/tracker"
 )
 
 // enums are the values of each typed string the API sends or takes.
@@ -54,6 +55,8 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.ImportSource]():        values(domain.ImportSources()),
 	reflect.TypeFor[domain.ImportStatus]():        values(domain.ImportStatuses()),
 	reflect.TypeFor[domain.ImportMiss]():          values(domain.ImportMisses()),
+	reflect.TypeFor[domain.Tracker]():             values(domain.Trackers()),
+	reflect.TypeFor[tracker.State]():              values(tracker.States()),
 	reflect.TypeFor[domain.JobKind]():             values(domain.JobKinds()),
 	reflect.TypeFor[domain.JobState]():            values(domain.JobStates()),
 	reflect.TypeFor[domain.KeyframeMode]():        values(domain.KeyframeModes()),
@@ -241,6 +244,7 @@ var formats = map[reflect.Type]jsonSchema{
 var renamed = map[reflect.Type]string{
 	reflect.TypeFor[playback.Profile](): "ClientProfile",
 	reflect.TypeFor[domain.HomeRow]():   "HomeRowKind",
+	reflect.TypeFor[tracker.State]():    "TrackerState",
 }
 
 var (

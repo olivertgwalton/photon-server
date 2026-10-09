@@ -157,6 +157,10 @@ type Services struct {
 	// Importer starts imports of other servers' watch history, and HistoryImports are how each went.
 	Importer       importer
 	HistoryImports importList
+	// Trackers are the profiles' accounts on Trakt and Simkl, linked through the apps an admin
+	// registered there, which TrackerClients are.
+	Trackers       trackerLinks
+	TrackerClients trackerClients
 	// NowPlaying is every playback going on, across the cluster.
 	NowPlaying nowPlaying
 	Pictures   pictures
@@ -326,6 +330,7 @@ func (a *API) routes() []route {
 		a.feedRoutes(),
 		a.webhooksRoutes(),
 		a.importsRoutes(),
+		a.trackersRoutes(),
 		a.calendarRoutes(),
 		a.artworkRoutes(),
 		a.themesRoutes(),

@@ -11,6 +11,7 @@ func (w Words) MarkerKind(v domain.MarkerKind) string         { return label(mar
 func (w Words) ExtraKind(v domain.ExtraKind) string           { return label(extraKinds, v) }
 func (w Words) ImportSource(v domain.ImportSource) string     { return label(importSources, v) }
 func (w Words) ImportMiss(v domain.ImportMiss) string         { return label(importMisses, v) }
+func (w Words) Tracker(v domain.Tracker) string               { return label(trackers, v) }
 func (w Words) PlayMethod(v domain.PlayMethod) string         { return label(playMethods, v) }
 func (w Words) RatingSite(v domain.RatingSite) string         { return label(ratingSites, v) }
 func (w Words) Range(v domain.Range) string                   { return label(ranges, v) }
@@ -54,6 +55,8 @@ var extraKinds = map[domain.ExtraKind]string{
 var importSources = map[domain.ImportSource]string{
 	domain.ImportPlex: "Plex", domain.ImportJellyfin: "Jellyfin", domain.ImportEmby: "Emby",
 }
+
+var trackers = map[domain.Tracker]string{domain.TrackerTrakt: "Trakt", domain.TrackerSimkl: "Simkl"}
 
 var importMisses = map[domain.ImportMiss]string{
 	domain.MissNoIDs: "No TMDB, TheTVDB or IMDb id", domain.MissNotFound: "Not in a library here",
