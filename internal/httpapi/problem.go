@@ -151,6 +151,7 @@ var problems = []struct {
 	{err: store.ErrLastWayIn, code: codeConflict, ownWords: true},
 	{err: provider.ErrUnavailable, code: codeProviderUnavailable, ownWords: true},
 	{err: remote.ErrNoCopy, code: codeProviderUnavailable, ownWords: true},
+	{err: remote.ErrFetching, code: codeProviderUnavailable, ownWords: true},
 	{err: remote.ErrGone, code: codeNotFound, ownWords: true},
 	{err: provider.ErrUnreached, code: codeProviderUnavailable, detail: "the provider did not answer"},
 	{err: provider.ErrNoSubtitler, code: codeConflict, detail: "no provider finds subtitles: an admin sets OpenSubtitles up under Providers"},

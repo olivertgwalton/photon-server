@@ -161,8 +161,9 @@ func TestAnAddonIsRegisteredByItsManifestsAddress(t *testing.T) {
 }
 
 // An addon's streams of a film or an episode, in its order, each keyed by what its bytes are: a
-// torrent's file, else a file by name and size, else an address without the query a debrid link
-// signs afresh. A stream with no address of its own, or that needs headers sent, is left out.
+// torrent's file, else a file by name and size, else the release it names, as AltMount's differ only
+// in their query, else an address without the query a debrid link signs afresh. A stream with no
+// address of its own, or that needs headers sent, is left out.
 func TestAnAddonsStreamsAreOffersKeyedByTheirBytes(t *testing.T) {
 	asked := ""
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -172,6 +173,9 @@ func TestAnAddonsStreamsAreOffersKeyedByTheirBytes(t *testing.T) {
 				"infoHash": "ABC123", "fileIdx": 2, "behaviorHints": {"filename": "Heat.1995.2160p.mkv", "videoSize": 62000000000}},
 			{"name": "Riven", "url": "http://riven:8080/stremio/media/7?token=t", "behaviorHints": {"filename": "Heat (1995).mkv", "videoSize": 9000}},
 			{"title": "Heat 1080p\nmore", "url": "https://cdn.example/play/heat.mkv?exp=2"},
+			{"name": "⚡ Cached · AltMount", "title": "Heat.1995.Remux-GRP", "url": "https://altmount.example/stremio/k/play?release=a"},
+			{"name": "AltMount", "title": "Heat.1995.WEB-GRP", "url": "https://altmount.example/stremio/k/play?release=b"},
+			{"name": "Addon", "url": "https://cdn.example/play/alien.mkv?exp=3"},
 			{"infoHash": "DEF456"},
 			{"ytId": "abc"},
 			{"url": "https://cdn.example/needs-referer.mkv", "behaviorHints": {"proxyHeaders": {"request": {"Referer": "x"}}}}
@@ -187,10 +191,13 @@ func TestAnAddonsStreamsAreOffersKeyedByTheirBytes(t *testing.T) {
 	for _, o := range got {
 		keys, names = append(keys, o.Key), append(names, o.Name)
 	}
-	if want := []string{"torrent:abc123:2", "file:Heat (1995).mkv:9000", "url:cdn.example/play/heat.mkv"}; !slices.Equal(keys, want) {
+	if want := []string{
+		"torrent:abc123:2", "file:Heat (1995).mkv:9000", "release:Heat 1080p", "release:Heat.1995.Remux-GRP",
+		"release:Heat.1995.WEB-GRP", "url:cdn.example/play/alien.mkv",
+	}; !slices.Equal(keys, want) {
 		t.Errorf("keys %q, want %q", keys, want)
 	}
-	if want := []string{"Heat.1995.2160p.mkv", "Heat (1995).mkv", "Heat 1080p"}; !slices.Equal(names, want) {
+	if want := []string{"Heat.1995.2160p.mkv", "Heat (1995).mkv", "Heat 1080p", "Heat.1995.Remux-GRP", "Heat.1995.WEB-GRP", "Addon"}; !slices.Equal(names, want) {
 		t.Errorf("names %q, want %q", names, want)
 	}
 	if asked != "/stream/movie/tt0113277.json" {

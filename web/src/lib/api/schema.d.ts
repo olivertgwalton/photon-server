@@ -8632,6 +8632,7 @@ export interface components {
             episode_order?: components["schemas"]["EpisodeOrder"];
             episodes?: components["schemas"]["EpisodeCard"][];
             extras?: components["schemas"]["ExtraCard"][];
+            fetching?: boolean;
             genres?: string[];
             /** Format: uuid */
             id: string;

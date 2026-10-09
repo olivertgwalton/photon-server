@@ -15,7 +15,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -200,5 +202,62 @@ func TestAFoundTitleIsHeldMatchedAndGivenACopyAsItIsOpened(t *testing.T) {
 	page, err := st.Title(ctx, uuid.UUID{}, found[0].ID)
 	if err != nil || page.Title != "Heat" || len(page.Versions) != 1 || len(matched) != 1 {
 		t.Errorf("opened, it is %q with %d copies, matched %d times, %v", page.Title, len(page.Versions), len(matched), err)
+	}
+}
+
+// A stream that does not answer in time is being fetched: the title says so, and the streams
+// after it are left alone, so opening a title fetches one at most. One that fails is dead, and
+// the next is read in its place.
+func TestAStreamBeingFetchedIsWaitedForAndADeadOnePassedOver(t *testing.T) {
+	srv := film(t)
+	var asked atomic.Int32
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked.Add(1)
+		<-r.Context().Done()
+	}))
+	t.Cleanup(slow.Close)
+	st := open(t)
+	ctx := t.Context()
+	lib, err := st.AddRemoteLibrary(ctx, "Popular", domain.LibraryMovies, store.Remote{ListSource: aio, ListID: "movie/top", StreamSource: aio})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SaveListed(ctx, lib.ID, domain.ItemMovie, []domain.Listed{{Kind: domain.ItemMovie, IDs: heat.IDs, Title: "Heat"}}); err != nil {
+		t.Fatal(err)
+	}
+	titles, _, err := st.Search(ctx, store.SearchQuery{Text: "heat", Limit: 1})
+	if err != nil || len(titles) != 1 {
+		t.Fatalf("searching: %+v, %v", titles, err)
+	}
+	item := titles[0].ID
+	at := func(base, path string) *url.URL {
+		u, err := url.Parse(base + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u
+	}
+	fetching := domain.Offer{Key: "release:Heat.Remux", Name: "Heat.Remux", URL: at(slow.URL, "/play?release=a"), From: strings.TrimPrefix(slow.URL, "http://")}
+	from := strings.TrimPrefix(srv.URL, "http://")
+	dead := domain.Offer{Key: "release:Heat.Dead", Name: "Heat.Dead", URL: at(srv.URL, "/gone.mkv"), From: from}
+	ready := domain.Offer{Key: "release:Heat.WEB", Name: "Heat.WEB", URL: at(srv.URL, "/heat.mkv"), From: from}
+	tools := media.Tools{FFprobe: media.Tool{Path: tool(t, "ffprobe", "PHOTON_FFPROBE")}}
+	copies := func(offers ...domain.Offer) *Copies {
+		c := NewCopies(st, New(&offering{offers: offers}), tools, unmatched)
+		c.readyWithin = 200 * time.Millisecond
+		return c
+	}
+
+	if err := copies(fetching, ready).Ensure(ctx, item); !errors.Is(err, ErrFetching) || asked.Load() != 1 {
+		t.Errorf("first the one being fetched: %v, asked %d times; want ErrFetching, asked once", err, asked.Load())
+	}
+	if page, err := st.Title(ctx, uuid.UUID{}, item); err != nil || len(page.Versions) != 0 {
+		t.Errorf("while it is fetched, %d copies, %v; want none, the ready one after it left alone", len(page.Versions), err)
+	}
+	if err := copies(dead, ready).Ensure(ctx, item); err != nil {
+		t.Fatal(err)
+	}
+	if page, err := st.Title(ctx, uuid.UUID{}, item); err != nil || len(page.Versions) != 1 {
+		t.Errorf("first a dead one, %d copies, %v; want the ready one after it", len(page.Versions), err)
 	}
 }

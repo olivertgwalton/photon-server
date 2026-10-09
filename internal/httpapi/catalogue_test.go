@@ -17,6 +17,7 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/remote"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -380,6 +381,34 @@ func TestACopysContainerIsNamedAsClientsNameIt(t *testing.T) {
 	api.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"container":"mkv"`) {
 		t.Errorf("a Matroska copy: %d %s, want its container named mkv", rec.Code, rec.Body)
+	}
+}
+
+// fetchingCopies is a remote library whose provider is fetching every title's copy.
+type fetchingCopies struct{}
+
+func (fetchingCopies) Ensure(context.Context, uuid.UUID) error { return remote.ErrFetching }
+
+// A remote title whose provider is fetching its copy says so on its page, which a client shows in
+// place of Play, and playing it says why it cannot yet.
+func TestATitleBeingFetchedSaysSo(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies: fetchingCopies{}, Discover: noDiscoveries{},
+		Auth: fakeAuth{}, Catalogue: ratedCatalogue{}, Preferences: &fakePreferences{},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/titles/"+films.String(), nil)
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"fetching":true`) {
+		t.Errorf("its page: %d %s, want it marked fetching", rec.Code, rec.Body)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(`{"profile": {"containers": ["mp4"]}}`))
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	rec = httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), `"code":"provider_unavailable"`) || !strings.Contains(rec.Body.String(), "fetching") {
+		t.Errorf("playing it: %d %s, want the provider unavailable, saying it is fetching", rec.Code, rec.Body)
 	}
 }
 
