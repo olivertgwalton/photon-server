@@ -237,17 +237,11 @@
 /*
  * Motion. A page arrives by the browser's own View Transitions, started in the
  * root layout. The shell's main is the `page`, so it alone fades in while the
- * sidebar and header, unchanged, hold still.
+ * sidebar and header, unchanged, hold still. They are left in the root's
+ * picture: Safari does not draw the header as a group of its own.
  */
 ::view-transition-group(page) {
 	animation-duration: 0s;
-}
-
-/* The header stays over the page while it fades, as it is over it when still:
-   the page's picture covers the header's ground once the page is scrolled, and
-   Safari, unlike Chrome, draws the page's over the header's unless told. */
-::view-transition-group(header) {
-	z-index: 1;
 }
 
 ::view-transition-old(page) {
