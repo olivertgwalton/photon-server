@@ -222,6 +222,10 @@ const collection: Schemas["TitlePage"] = {
 let smart: Schemas["TitlePage"] | undefined;
 
 let webhooks: Schemas["Webhook"][] = [];
+const trackerClients: Schemas["TrackerClient"][] = [
+	{ tracker: "trakt", client_id: "" },
+	{ tracker: "simkl", client_id: "" },
+];
 let keys: Schemas["KeyListing"][] = [];
 let chosenPoster = "a-1";
 let maintenance: Schemas["Maintenance"] = {
@@ -650,6 +654,17 @@ export async function admin(
 		case "POST /api/v1/admin/jobs/41/retry":
 			deadJobs.length = 0;
 			return done(202);
+		case "GET /api/v1/admin/trackers":
+			return json({ items: trackerClients });
+		case "PUT /api/v1/admin/trackers/simkl": {
+			const body = (await request.json()) as Schemas["TrackerClientChange"];
+			const simkl = {
+				tracker: "simkl",
+				client_id: body.client_id.trim(),
+			} as const;
+			trackerClients[1] = simkl;
+			return json(simkl);
+		}
 		case "GET /api/v1/admin/webhooks":
 			return json({ items: webhooks });
 		case "POST /api/v1/admin/webhooks": {

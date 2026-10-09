@@ -360,6 +360,27 @@ const downloads: Schemas["Download"][] = [];
 
 // The change feed's open streams, and a way for a test to speak on them.
 const feeds = new Set<ReadableStreamDefaultController<string>>();
+const tell = (event: string, data: object) => {
+	for (const feed of feeds) {
+		feed.enqueue(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+	}
+};
+
+// Trakt is set up and Simkl is not; a code asked for is entered once a test
+// says so.
+const trakt: Schemas["ProfileTracker"] = {
+	tracker: "trakt",
+	state: "unlinked",
+};
+const trackers = (): Schemas["ProfileTrackerList"] => ({
+	items: [trakt, { tracker: "simkl", state: "unavailable" }],
+});
+const traktCode: Schemas["TrackerCode"] = {
+	user_code: "TRAKT123",
+	verification_uri: "https://trakt.tv/activate",
+	verification_uri_complete: "https://trakt.tv/activate/TRAKT123",
+	expires_in_ms: 600_000,
+};
 
 // The words the server names its values by, as it answers in English.
 const vocabulary: Schemas["Vocabulary"] = {
@@ -1037,9 +1058,20 @@ const server_ = Bun.serve({
 				add?: string;
 			};
 			if (add) films.unshift(base(`t-new${films.length}`, "movie", add));
-			for (const feed of feeds) {
-				feed.enqueue(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-			}
+			tell(event, data);
+			return none();
+		}
+		if (route === "POST /mock/tracker-entered") {
+			Object.assign(trakt, {
+				state: "linked",
+				username: "ada",
+				linked_at: "2026-10-09T09:00:00Z",
+				code: undefined,
+			});
+			tell("tracker.changed", {
+				kind: "tracker.changed",
+				details: { tracker: "trakt" },
+			});
 			return none();
 		}
 		if (
@@ -1427,6 +1459,21 @@ const server_ = Bun.serve({
 				} satisfies Schemas["DeviceListingList"]);
 			case "DELETE /api/v1/auth/devices/d-tv":
 				return new Response(null, { status: 204 });
+			case "GET /api/v1/profile/trackers":
+				return Response.json(
+					trackers() satisfies Schemas["ProfileTrackerList"],
+				);
+			case "POST /api/v1/profile/trackers/trakt/link":
+				Object.assign(trakt, { state: "linking", code: traktCode });
+				return Response.json(traktCode);
+			case "DELETE /api/v1/profile/trackers/trakt":
+				Object.assign(trakt, {
+					state: "unlinked",
+					code: undefined,
+					username: undefined,
+					linked_at: undefined,
+				});
+				return none();
 			case "POST /api/v1/auth/pairings/approvals": {
 				const body = (await request.json()) as Schemas["Approval"];
 				if (body.user_code.replace(/[- ]/g, "").toUpperCase() !== "BCDFGHJK") {

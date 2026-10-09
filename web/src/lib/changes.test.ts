@@ -22,6 +22,10 @@ test("the profile's own marks reload every list that draws them", () => {
 	]);
 });
 
+test("a code entered on a tracker reloads the profile's trackers alone", () => {
+	expect(affected({ kind: "tracker.changed" })).toEqual([keys.trackers]);
+});
+
 test("a scan's progress reloads nothing: the page draws it as it comes", () => {
 	expect(affected({ kind: "scan.progress", library_id: "l-1" })).toEqual([]);
 });

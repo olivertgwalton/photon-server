@@ -123,6 +123,49 @@ test("a TV is linked by the code it shows", async ({ page }) => {
 	);
 });
 
+test("a profile links its Trakt account by the code Trakt gives it", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/trackers");
+	await expect(page.getByText(/Simkl is not set up yet/)).toBeVisible();
+	await expectAccessible(page);
+	await expect
+		.poll(async () => (await page.request.get("/mock/listening")).json())
+		.toBeGreaterThan(0);
+
+	await page.getByRole("button", { name: "Link Trakt", exact: true }).click();
+	await expect(page.getByText("TRAKT123")).toBeVisible();
+	await expect(page.getByText(/Expires in \d+:\d\d/)).toBeVisible();
+	await expect(page.getByRole("link", { name: "Open Trakt" })).toHaveAttribute(
+		"href",
+		"https://trakt.tv/activate/TRAKT123",
+	);
+	await expectAccessible(page);
+
+	// Trakt is entered on another device, and the server tells the page.
+	await page.request.post("/mock/tracker-entered");
+	await expect(page.getByText(/Linked as ada/)).toBeVisible();
+
+	await page.getByRole("button", { name: "Unlink Trakt" }).click();
+	await page
+		.getByRole("alertdialog")
+		.getByRole("button", { name: "Unlink" })
+		.click();
+	await expect(page.getByText("Trakt is unlinked.")).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Link Trakt", exact: true }),
+	).toBeVisible();
+});
+
+test("an admin sets up a tracker by its app's client id", async ({ page }) => {
+	await logIn(page, "/settings/server/trackers");
+	await expectAccessible(page);
+	await page.getByLabel("Client id").nth(1).fill(" simkl-app ");
+	await page.getByRole("button", { name: "Save Simkl" }).click();
+	await expect(page.getByText("Simkl was saved.")).toBeVisible();
+	await expect(page.getByLabel("Client id").nth(1)).toHaveValue("simkl-app");
+});
+
 test("the address a TV shows fills in its code", async ({ page }) => {
 	await logIn(page, "/link?code=BCDF-GHJK");
 	await expect(page).toHaveURL("/settings/link?code=BCDF-GHJK");
