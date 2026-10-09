@@ -39,19 +39,31 @@ func (s *Store) Plugin(ctx context.Context, slug string) (Plugin, error) {
 	return p, found(err)
 }
 
-// AddPlugin registers a plugin, or answers ErrPluginExists for a slug in use.
-func (s *Store) AddPlugin(ctx context.Context, plugin Plugin) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO plugins (slug, protocol, url, manifest) VALUES ($1, $2, $3, $4)`,
-		plugin.Slug, plugin.Protocol, plugin.URL, plugin.Manifest)
+// AddPlugin registers a plugin and the events it hears, or answers ErrPluginExists for a slug in
+// use.
+func (s *Store) AddPlugin(ctx context.Context, plugin Plugin, hears Hearing) error {
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO plugins (slug, protocol, url, manifest) VALUES ($1, $2, $3, $4)`,
+			plugin.Slug, plugin.Protocol, plugin.URL, plugin.Manifest)
+		if err != nil {
+			return err
+		}
+		return hear(ctx, tx, plugin.Slug, hears)
+	})
 	if violates(err, uniqueViolation) {
 		return ErrPluginExists
 	}
 	return err
 }
 
-// SetPluginManifest keeps the manifest a plugin answers now.
-func (s *Store) SetPluginManifest(ctx context.Context, slug string, manifest []byte) error {
-	return affected(s.pool.Exec(ctx, `UPDATE plugins SET manifest = $2 WHERE slug = $1`, slug, manifest))
+// SetPluginManifest keeps the manifest a plugin answers now, and the events it hears.
+func (s *Store) SetPluginManifest(ctx context.Context, slug string, manifest []byte, hears Hearing) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := affected(tx.Exec(ctx, `UPDATE plugins SET manifest = $2 WHERE slug = $1`, slug, manifest)); err != nil {
+			return err
+		}
+		return hear(ctx, tx, slug, hears)
+	})
 }
 
 // RemovePlugin forgets a plugin, its settings, and its place in each library's sources. What it

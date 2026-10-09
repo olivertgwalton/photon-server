@@ -180,7 +180,7 @@ func (p *Plugins) add(ctx context.Context, row store.Plugin, manifest any) (Regi
 	if row.Manifest, err = json.Marshal(manifest); err != nil {
 		return Registered{}, err
 	}
-	if err := p.st.AddPlugin(ctx, row); err != nil {
+	if err := p.st.AddPlugin(ctx, row, hears(row, manifest)); err != nil {
 		return Registered{}, err
 	}
 	r, _, err := p.read(row)
@@ -213,11 +213,19 @@ func (p *Plugins) Refresh(ctx context.Context, slug string) (Registered, error) 
 	if row.Manifest, err = json.Marshal(manifest); err != nil {
 		return Registered{}, err
 	}
-	if err := p.st.SetPluginManifest(ctx, slug, row.Manifest); err != nil {
+	if err := p.st.SetPluginManifest(ctx, slug, row.Manifest, hears(row, manifest)); err != nil {
 		return Registered{}, err
 	}
 	r, _, err := p.read(row)
 	return r, err
+}
+
+// hears is the events a plugin is told of: none, of an addon.
+func hears(row store.Plugin, manifest any) store.Hearing {
+	if m, ok := manifest.(pluginv1.Manifest); ok {
+		return hearing(m, row.URL)
+	}
+	return store.Hearing{}
 }
 
 // addonManifest reads an addon's manifest, as manifest reads a plugin's.

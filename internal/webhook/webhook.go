@@ -7,6 +7,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,7 +15,9 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
+	"github.com/olivertgwalton/photon-server/internal/plugin/pluginv1"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -36,6 +39,16 @@ func Deliver(st *store.Store) jobs.Handler {
 		}
 		if err != nil {
 			return err
+		}
+		if d.Plugin != nil {
+			// A plugin is sent its settings as they are now, which a delivery never keeps.
+			set, err := st.ProviderSettings(ctx, domain.PluginSource(*d.Plugin))
+			if err != nil {
+				return err
+			}
+			if d.Body, err = json.Marshal(pluginv1.EventRequest{Settings: set, Event: d.Body}); err != nil {
+				return err
+			}
 		}
 		sending, cancel := context.WithTimeout(ctx, deliveryTimeout)
 		defer cancel()

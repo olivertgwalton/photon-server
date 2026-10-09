@@ -331,6 +331,10 @@ func Capabilities(p Provider) []domain.Capability {
 			_, ok = As[Streamer](p, c)
 		case domain.CapabilitySubtitles:
 			_, ok = As[Subtitler](p, c)
+		case domain.CapabilityEvents:
+			// Events are sent through the webhook queue, not asked for, so only a plugin hears them.
+			part, partial := p.(Partial)
+			ok = partial && part.Answers(c)
 		}
 		if ok {
 			out = append(out, c)

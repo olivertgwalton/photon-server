@@ -252,3 +252,85 @@ func TestAnEpisodesEventNamesItsShowAndNumbers(t *testing.T) {
 		t.Errorf("title = %s", rx.got[0].body)
 	}
 }
+
+// A plugin that hears an event is sent it with its settings as they are when it is sent; its
+// webhook is no admin's to list or remove, and goes with the plugin.
+func TestAPluginIsToldOfTheEventsItHears(t *testing.T) {
+	url := storetest.FreshDatabase(t)
+	log := slog.New(slog.DiscardHandler)
+	if err := store.Migrate(t.Context(), url, log); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(t.Context(), url, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(st.Close)
+	k, err := kv.Open(os.Getenv("TEST_VALKEY_URL"), uuid.NewV7())
+	if err != nil {
+		t.Fatalf("TEST_VALKEY_URL: %v", err)
+	}
+	t.Cleanup(k.Close)
+	hub := events.New(st, k, uuid.NewV7(), func() string { return "den" }, log)
+	ctx := t.Context()
+	node := uuid.NewV7()
+	claim := func() []domain.Job {
+		t.Helper()
+		jobs, err := st.ClaimJobs(ctx, []domain.JobKind{domain.JobDeliverWebhook}, nil, node, time.Minute, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return jobs
+	}
+
+	rx := &receiver{t: t}
+	srv := httptest.NewServer(rx)
+	defer srv.Close()
+	plugin := store.Plugin{Slug: "scrobbler", Protocol: domain.PluginPhoton, URL: srv.URL, Manifest: []byte("{}")}
+	hears := store.Hearing{URL: srv.URL + "/events/v1/event", Kinds: []domain.EventKind{domain.EventPlaybackStarted}}
+	if err := st.AddPlugin(ctx, plugin, hears); err != nil {
+		t.Fatal(err)
+	}
+	if hooks, err := st.Webhooks(ctx); err != nil || len(hooks) != 0 {
+		t.Errorf("an admin's webhooks = %v %v, want none of a plugin's", hooks, err)
+	}
+	if err := st.SetProviderSettings(ctx, domain.PluginSource("scrobbler"), map[string]string{"token": "first"}); err != nil {
+		t.Fatal(err)
+	}
+
+	hub.Raise(ctx, domain.Event{Kind: domain.EventPlaybackStarted})
+	jobs := claim()
+	if len(jobs) != 1 {
+		t.Fatalf("queued %d deliveries, want 1", len(jobs))
+	}
+	// The setting changes while the event waits: the plugin is sent it as it is now.
+	if err := st.SetProviderSettings(ctx, domain.PluginSource("scrobbler"), map[string]string{"token": "second"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Deliver(st)(ctx, jobs[0].Subject); err != nil {
+		t.Fatal(err)
+	}
+	var sent struct {
+		Settings map[string]string `json:"settings"`
+		Event    struct {
+			Event domain.EventKind `json:"event"`
+		} `json:"event"`
+	}
+	if len(rx.got) != 1 || json.Unmarshal(rx.got[0].body, &sent) != nil || sent.Settings["token"] != "second" ||
+		sent.Event.Event != domain.EventPlaybackStarted {
+		t.Fatalf("sent %d: %s", len(rx.got), rx.got[0].body)
+	}
+
+	hub.Raise(ctx, domain.Event{Kind: domain.EventPlaybackStarted})
+	if err := st.RemovePlugin(ctx, "scrobbler"); err != nil {
+		t.Fatal(err)
+	}
+	for _, j := range claim() {
+		if err := Deliver(st)(ctx, j.Subject); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(rx.got) != 1 {
+		t.Errorf("a removed plugin was sent %d events, want what waited for it forgotten", len(rx.got)-1)
+	}
+}
