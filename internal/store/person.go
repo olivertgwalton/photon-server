@@ -34,10 +34,11 @@ type creditRow struct {
 
 // credits answers a title's cast and crew as the highest-ranked source with any gives them.
 func (s *Store) credits(ctx context.Context, item uuid.UUID) ([]CreditRef, error) {
-	ranked, err := ranks(ctx, s.pool, item)
+	f, err := fieldsOf(ctx, s.pool, item)
 	if err != nil {
 		return nil, err
 	}
+	ranked := f.ranked
 	rows, err := queryStructs[creditRow](ctx, s.pool, `
 		SELECT c.source, c.person_id, p.name, c.kind, c.role, p.photo_id, p.photo_blurhash AS blurhash FROM credits c
 		JOIN people p ON p.id = c.person_id WHERE c.item_id = $1 ORDER BY c.position`, item)
