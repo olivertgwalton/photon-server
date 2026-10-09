@@ -64,7 +64,7 @@ func trackerCodeOf(l kv.TrackerLink) trackerCodeJSON {
 	}
 }
 
-// maxClientID is the longest client id taken: Trakt's and Simkl's are 64 characters.
+// maxClientID is the longest client id taken: Trakt's and Simkl's are 64 characters, MDBList's 40.
 const maxClientID = 200
 
 func (a *API) adminTrackers(w http.ResponseWriter, r *http.Request) {

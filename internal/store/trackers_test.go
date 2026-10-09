@@ -168,7 +168,7 @@ func TestATrackerIsToldWhatAProfileWatches(t *testing.T) {
 	if err := s.MarkUnwatched(ctx, ada.ID, episode); err != nil {
 		t.Fatal(err)
 	}
-	for _, tr := range domain.Trackers() {
+	for _, tr := range []domain.Tracker{domain.TrackerTrakt, domain.TrackerSimkl} {
 		if err := s.LinkTracker(ctx, ada.ID, tr, "ada", TrackerTokens{"a", "r", time.Now().Add(time.Hour)}); err != nil {
 			t.Fatal(err)
 		}

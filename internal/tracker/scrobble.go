@@ -139,7 +139,7 @@ func (l *Links) play(ctx context.Context, d domain.PlaybackDetails) (play, bool,
 	case t.Kind == domain.ItemMovie:
 		p.Movie = &titled{Title: t.Title, Year: t.Year}
 	case t.Kind == domain.ItemEpisode && t.SeasonNumber != nil && t.EpisodeNumber != nil:
-		// An episode is told by its show's ids and its number, which both trackers match.
+		// An episode is told by its show's ids and its number, which every tracker matches.
 		by = t.ShowID
 		p.Show = &titled{Title: t.Show}
 		p.Episode = &numbered{Season: *t.SeasonNumber, Number: *t.EpisodeNumber}
@@ -162,7 +162,7 @@ func (l *Links) play(ctx context.Context, d domain.PlaybackDetails) (play, bool,
 	return p, true, nil
 }
 
-// trackerIDs are the ids of a title both trackers match by.
+// trackerIDs are the ids of a title every tracker matches by.
 func trackerIDs(ids map[domain.Provider]string) map[string]any {
 	out := map[string]any{}
 	for _, provider := range []domain.Provider{domain.ProviderTMDB, domain.ProviderTVDB, domain.ProviderIMDb} {
@@ -170,7 +170,7 @@ func trackerIDs(ids map[domain.Provider]string) map[string]any {
 		if !ok {
 			continue
 		}
-		// TMDB's and TheTVDB's ids are numbers to both trackers; IMDb's are not.
+		// TMDB's and TheTVDB's ids are numbers to every tracker; IMDb's are not.
 		if n, err := strconv.Atoi(v); err == nil {
 			out[string(provider)] = n
 		} else {

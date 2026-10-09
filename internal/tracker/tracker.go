@@ -1,6 +1,6 @@
-// Package tracker links a profile's accounts on Trakt and Simkl, each through the app an admin
-// registered on it, by the device flow both offer (RFC 8628): the profile is shown a code to enter
-// on the tracker's site, and the server asks the tracker after it until it is entered.
+// Package tracker links a profile's accounts on Trakt, Simkl and MDBList, each through the app an
+// admin registered on it, by the device flow each offers (RFC 8628): the profile is shown a code to
+// enter on the tracker's site, and the server asks the tracker after it until it is entered.
 package tracker
 
 import (
@@ -37,6 +37,9 @@ var (
 	errSlowDown = errors.New("the tracker was asked too often")
 	// errGone is a code that will never be entered now: expired, denied or used already.
 	errGone = errors.New("the code is expired, denied or used")
+	// errUnknownClient is a tracker that does not know the app's client id, as one may say it
+	// otherwise than by 401 or 403.
+	errUnknownClient = errors.New("the tracker does not know the client id")
 )
 
 // service is how a tracker is asked, through the app registered as clientID.
@@ -68,7 +71,9 @@ type Links struct {
 func New(st *store.Store, k *kv.KV, raise func(context.Context, domain.Event), version string, log *slog.Logger) *Links {
 	return &Links{
 		st: st, kv: k, raise: raise, log: log, plays: make(chan domain.Event, playsHeld),
-		services: map[domain.Tracker]service{domain.TrackerTrakt: newTrakt(version), domain.TrackerSimkl: newSimkl(version)},
+		services: map[domain.Tracker]service{
+			domain.TrackerTrakt: newTrakt(version), domain.TrackerSimkl: newSimkl(version), domain.TrackerMDBList: newMDBList(version),
+		},
 	}
 }
 
@@ -146,7 +151,8 @@ func (l *Links) Link(ctx context.Context, profile uuid.UUID, t domain.Tracker) (
 		}
 	}
 	link, err := l.services[t].code(ctx, clientID)
-	if refusal, ok := errors.AsType[*provider.Refusal](err); ok && (refusal.Code == http.StatusUnauthorized || refusal.Code == http.StatusForbidden) {
+	refusal, refused := errors.AsType[*provider.Refusal](err)
+	if errors.Is(err, errUnknownClient) || refused && (refusal.Code == http.StatusUnauthorized || refusal.Code == http.StatusForbidden) {
 		return kv.TrackerLink{}, fmt.Errorf("%w: %s refused the client id: an admin checks it is the id of an app registered there", ErrRefused, t)
 	}
 	if err != nil {
