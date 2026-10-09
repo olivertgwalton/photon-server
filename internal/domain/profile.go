@@ -53,6 +53,8 @@ type Session struct {
 	// Device and Client are what the device called itself and its app when it signed in.
 	Device string
 	Client string
+	// Identity is the account at a sign-in provider behind the session, if any.
+	Identity SignInIdentity
 }
 
 // ProfileLock is what switching to a profile asks for.

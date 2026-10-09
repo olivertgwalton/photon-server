@@ -34,7 +34,7 @@ const keptBy = `($2::uuid IS NULL OR (managed_by = $2 AND role = 'user'))`
 // AddProfile adds a profile the admin keeps, or, for a manager by, one the manager keeps, which
 // starts seeing what the manager sees.
 func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, passwordHash string, by *uuid.UUID) (domain.Profile, error) {
-	row := model.Profile{Name: name, Role: role, PasswordHash: passwordHash, ManagedBy: by}
+	row := model.Profile{Name: name, Role: role, PasswordHash: &passwordHash, ManagedBy: by}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if by == nil {
 			return tx.QueryRow(ctx, `INSERT INTO profiles (name, role, password_hash) VALUES ($1, $2, $3) RETURNING id`,
@@ -76,7 +76,7 @@ func (s *Store) HasProfiles(ctx context.Context) (bool, error) {
 
 // AddFirstAdmin adds the server's first profile, an admin, refusing once it has any.
 func (s *Store) AddFirstAdmin(ctx context.Context, name, passwordHash string) (domain.Profile, error) {
-	row := model.Profile{Name: name, Role: domain.RoleAdmin, PasswordHash: passwordHash}
+	row := model.Profile{Name: name, Role: domain.RoleAdmin, PasswordHash: &passwordHash}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		// The lock conflicts with itself, so a second setup waits and then sees the first's admin.
 		if _, err := tx.Exec(ctx, `LOCK TABLE profiles IN SHARE ROW EXCLUSIVE MODE`); err != nil {
@@ -96,13 +96,14 @@ func (s *Store) AddFirstAdmin(ctx context.Context, name, passwordHash string) (d
 	return profile(row), nil
 }
 
-// ProfileByName returns a profile and its password hash, its name matched in any case.
+// ProfileByName returns a profile and its password hash, its name matched in any case; the hash is
+// empty for a profile with no password.
 func (s *Store) ProfileByName(ctx context.Context, name string) (domain.Profile, string, error) {
 	row, err := readRow[model.Profile](ctx, s.pool, `SELECT `+profileColumns+` FROM profiles WHERE lower(name) = lower($1)`, name)
 	if err != nil {
 		return domain.Profile{}, "", err
 	}
-	return profile(row), row.PasswordHash, nil
+	return profile(row), deref(row.PasswordHash), nil
 }
 
 // SetPasswordHash replaces a profile's stored hash, to raise its parameters on a successful
@@ -133,36 +134,47 @@ type NewSession struct {
 	Client     string
 	// ExpiresAt is nil for a key.
 	ExpiresAt *time.Time
+	Identity  domain.SignInIdentity
 }
 
+// CreateSession starts a session. ErrNotFound for an identity whose account is no longer linked.
 func (s *Store) CreateSession(ctx context.Context, n NewSession) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO device_sessions (kind, token_hash, profile_id, device_name, client, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-		n.Kind, n.TokenHash, n.ProfileID, n.DeviceName, n.Client, n.ExpiresAt).Scan(&id)
+		INSERT INTO device_sessions (kind, token_hash, profile_id, device_name, client, expires_at, sign_in_provider, sign_in_subject)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+		n.Kind, n.TokenHash, n.ProfileID, n.DeviceName, n.Client, n.ExpiresAt,
+		optional(n.Identity.Provider), optional(n.Identity.Subject)).Scan(&id)
+	if violates(err, foreignKeyViolation) {
+		return uuid.UUID{}, ErrNotFound
+	}
 	return id, err
 }
 
 // SessionByToken finds the unexpired session holding a token, with when it was last seen.
 func (s *Store) SessionByToken(ctx context.Context, tokenHash []byte, now time.Time) (domain.Session, time.Time, error) {
 	var (
-		id         uuid.UUID
-		kind       domain.SessionKind
-		p          model.Profile
-		device     string
-		client     string
-		lastSeenAt time.Time
+		id                uuid.UUID
+		kind              domain.SessionKind
+		p                 model.Profile
+		device            string
+		client            string
+		lastSeenAt        time.Time
+		provider, subject *string
 	)
 	err := s.pool.QueryRow(ctx, `
-		SELECT d.id, d.kind, d.profile_id, p.name, p.role, p.avatar_id, d.device_name, d.client, d.last_seen_at
+		SELECT d.id, d.kind, d.profile_id, p.name, p.role, p.avatar_id, d.device_name, d.client, d.last_seen_at,
+			d.sign_in_provider, d.sign_in_subject
 		FROM device_sessions d JOIN profiles p ON p.id = d.profile_id
 		WHERE d.token_hash = $1 AND (d.expires_at IS NULL OR d.expires_at > $2)`, tokenHash, now).
-		Scan(&id, &kind, &p.ID, &p.Name, &p.Role, &p.AvatarID, &device, &client, &lastSeenAt)
+		Scan(&id, &kind, &p.ID, &p.Name, &p.Role, &p.AvatarID, &device, &client, &lastSeenAt, &provider, &subject)
 	if err != nil {
 		return domain.Session{}, time.Time{}, found(err)
 	}
-	return domain.Session{ID: id, Kind: kind, Profile: profile(p), Device: device, Client: client}, lastSeenAt, nil
+	return domain.Session{
+		ID: id, Kind: kind, Profile: profile(p), Device: device, Client: client,
+		Identity: domain.SignInIdentity{Provider: deref(provider), Subject: deref(subject)},
+	}, lastSeenAt, nil
 }
 
 // TouchSession records a session's use and slides its expiry, which a key has none of.
@@ -188,7 +200,7 @@ func (s *Store) ProfileByID(ctx context.Context, id uuid.UUID) (domain.Profile, 
 	return profile(row), nil
 }
 
-// Secrets are a profile's stored hashes, the PIN's empty where unset.
+// Secrets are a profile's stored hashes, each empty where unset.
 type Secrets struct {
 	Password string
 	PIN      string
@@ -215,7 +227,7 @@ func (s *Store) ProfileSecrets(ctx context.Context, id uuid.UUID) (domain.Profil
 	if err != nil {
 		return domain.Profile{}, Secrets{}, err
 	}
-	return profile(row), Secrets{Password: row.PasswordHash, PIN: deref(row.PinHash)}, nil
+	return profile(row), Secrets{Password: deref(row.PasswordHash), PIN: deref(row.PinHash)}, nil
 }
 
 // SetPINHash sets a profile's PIN, or clears it when hash is empty.
@@ -309,7 +321,9 @@ func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange, b
 			}
 		}
 		row.Name, row.Role = cmp.Or(c.Name, row.Name), cmp.Or(c.Role, row.Role)
-		row.PasswordHash = cmp.Or(c.PasswordHash, row.PasswordHash)
+		if c.PasswordHash != "" {
+			row.PasswordHash = &c.PasswordHash
+		}
 		if _, err := tx.Exec(ctx, `UPDATE profiles SET name = $2, role = $3, password_hash = $4 WHERE id = $1`,
 			row.ID, row.Name, row.Role, row.PasswordHash); err != nil {
 			return err
