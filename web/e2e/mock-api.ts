@@ -554,6 +554,10 @@ const vocabulary: Schemas["Vocabulary"] = {
 		not_found: "Not in a library here",
 		undated: "No date watched",
 	},
+	trackers: {
+		simkl: "Simkl",
+		trakt: "Trakt",
+	},
 	play_methods: {
 		direct: "Direct play",
 		remux: "Direct stream",

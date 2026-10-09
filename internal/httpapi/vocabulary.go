@@ -25,6 +25,7 @@ type vocabularyJSON struct {
 	NodeRoles     map[domain.NodeRole]describedJSON        `json:"node_roles"`
 	ImportSources map[domain.ImportSource]string           `json:"import_sources"`
 	ImportMisses  map[domain.ImportMiss]string             `json:"import_misses"`
+	Trackers      map[domain.Tracker]string                `json:"trackers"`
 	PlayMethods   map[domain.PlayMethod]string             `json:"play_methods"`
 	RatingSites   map[domain.RatingSite]string             `json:"rating_sites"`
 	Ranges        map[domain.Range]string                  `json:"ranges"`
@@ -70,6 +71,7 @@ func (a *API) vocabulary(w http.ResponseWriter, r *http.Request) {
 		NodeRoles:       wordsFor(domain.NodeRoles(), func(r domain.NodeRole) describedJSON { return describedJSON(said.NodeRole(r)) }),
 		ImportSources:   wordsFor(domain.ImportSources(), said.ImportSource),
 		ImportMisses:    wordsFor(domain.ImportMisses(), said.ImportMiss),
+		Trackers:        wordsFor(domain.Trackers(), said.Tracker),
 		PlayMethods:     wordsFor(domain.PlayMethods(), said.PlayMethod),
 		RatingSites:     wordsFor(domain.RatingSites(), said.RatingSite),
 		Ranges:          wordsFor(domain.Ranges(), said.Range),

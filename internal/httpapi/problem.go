@@ -18,6 +18,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/task"
+	"github.com/olivertgwalton/photon-server/internal/tracker"
 )
 
 type problemCode string
@@ -140,6 +141,7 @@ var problems = []struct {
 	{err: playback.ErrNoSuchSubtitleFile, code: codeInvalidBody, detail: "subtitle_file is not one of the text subtitle files beside the copy"},
 	{err: plugin.ErrRefused, code: codeInvalidBody, ownWords: true},
 	{err: historyimport.ErrRefused, code: codeInvalidBody, ownWords: true},
+	{err: tracker.ErrRefused, code: codeConflict, ownWords: true},
 	{err: provider.ErrUnavailable, code: codeProviderUnavailable, ownWords: true},
 	{err: provider.ErrUnreached, code: codeProviderUnavailable, detail: "the provider did not answer"},
 	{err: provider.ErrNoSubtitler, code: codeConflict, detail: "no provider finds subtitles: an admin sets OpenSubtitles up under Providers"},
