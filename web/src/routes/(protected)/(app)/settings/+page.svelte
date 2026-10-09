@@ -67,7 +67,7 @@ async function setPassword(event: SubmitEvent) {
 		return;
 	}
 	const asked = client().PUT("/api/v1/profile/password", {
-		body: { current: String(values.get("current")), new: next },
+		body: { current: String(values.get("current")) || undefined, new: next },
 	});
 	if (
 		await change(
@@ -145,7 +145,9 @@ async function setPassword(event: SubmitEvent) {
 		<Card.Header>
 			<Card.Title><h2 class="heading">Password</h2></Card.Title>
 			<Card.Description>
-				Changing it signs out every other device signed in as you.
+				Changing it signs out every other device signed in as you. A profile
+				made by logging in with a sign-in provider has none until you set one
+				here, leaving the current password empty.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
@@ -159,7 +161,6 @@ async function setPassword(event: SubmitEvent) {
 							type="password"
 							autocomplete="current-password"
 							class="max-w-sm"
-							required
 						/>
 					</Field.Field>
 					<Field.Field>

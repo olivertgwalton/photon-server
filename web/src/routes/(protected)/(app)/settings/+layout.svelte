@@ -13,10 +13,12 @@ import KeyRoundIcon from "@lucide/svelte/icons/key-round";
 import LayersIcon from "@lucide/svelte/icons/layers";
 import LibraryIcon from "@lucide/svelte/icons/library";
 import LinkIcon from "@lucide/svelte/icons/link";
+import LogInIcon from "@lucide/svelte/icons/log-in";
 import ListChecksIcon from "@lucide/svelte/icons/list-checks";
 import MonitorSmartphoneIcon from "@lucide/svelte/icons/monitor-smartphone";
 import NetworkIcon from "@lucide/svelte/icons/network";
 import SettingsIcon from "@lucide/svelte/icons/settings";
+import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
 import SlidersHorizontalIcon from "@lucide/svelte/icons/sliders-horizontal";
 import TvIcon from "@lucide/svelte/icons/tv";
 import UserIcon from "@lucide/svelte/icons/user";
@@ -33,6 +35,7 @@ const you: [string, string, Component][] = [
 	["/settings", "Profile", UserIcon],
 	["/settings/playback", "Playback", SlidersHorizontalIcon],
 	["/settings/home", "Home", HouseIcon],
+	["/settings/sign-in", "Sign-in", LogInIcon],
 	["/settings/devices", "Devices", MonitorSmartphoneIcon],
 	["/settings/link", "Link a device", TvIcon],
 	["/settings/trackers", "Trackers", LinkIcon],
@@ -43,6 +46,7 @@ const server: [string, string, Component][] = [
 	["/settings/server/metrics", "Metrics", ChartLineIcon],
 	["/settings/server/libraries", "Libraries", LibraryIcon],
 	["/settings/profiles", "Profiles", UsersIcon],
+	["/settings/server/sign-in", "Sign-in", ShieldCheckIcon],
 	["/settings/server/providers", "Metadata", DatabaseIcon],
 	["/settings/server/network", "Network", NetworkIcon],
 	["/settings/server/storage", "Storage", HardDriveIcon],

@@ -382,6 +382,23 @@ const traktCode: Schemas["TrackerCode"] = {
 	expires_in_ms: 600_000,
 };
 
+// The household signs in through Pocket ID too. Its sign-in page is
+// /mock/provider, which sends the browser straight back, signed in as Ada's
+// account there: linked to her profile once she links it.
+const pocketID: Schemas["ProfileSignInProvider"] = {
+	slug: "pocket-id",
+	name: "Pocket ID",
+};
+// Where the browser that last left for Pocket ID goes back to, and whether it
+// left to link Ada's account rather than to sign in.
+let leftFor = { to: "/", linking: false };
+const toProvider = (body: { to?: string }, linking: boolean) => {
+	leftFor = { to: body.to ?? "/", linking };
+	return Response.json({
+		url: "/mock/provider",
+	} satisfies Schemas["SignInRedirect"]);
+};
+
 // The words the server names its values by, as it answers in English.
 const vocabulary: Schemas["Vocabulary"] = {
 	tasks: {
@@ -1081,6 +1098,52 @@ const server_ = Bun.serve({
 		) {
 			return new Response(pixel, { headers: { "content-type": "image/png" } });
 		}
+		if (route === "GET /api/v1/auth/sign-in-providers") {
+			return Response.json({
+				items: [{ slug: pocketID.slug, name: pocketID.name }],
+			} satisfies Schemas["SignInProviderList"]);
+		}
+		if (route === "POST /api/v1/auth/sign-in-providers/pocket-id/sign-in") {
+			return toProvider(
+				(await request.json()) as Schemas["SignInStart"],
+				false,
+			);
+		}
+		if (route === "GET /mock/provider") {
+			return new Response(null, {
+				status: 303,
+				headers: {
+					location:
+						"/api/v1/auth/sign-in-providers/pocket-id/callback?code=c&state=s",
+				},
+			});
+		}
+		if (route === "GET /api/v1/auth/sign-in-providers/pocket-id/callback") {
+			const back = (to: string, headers: HeadersInit = {}) =>
+				new Response(null, {
+					status: 303,
+					headers: { location: to, ...headers },
+				});
+			if (leftFor.linking) {
+				pocketID.account = {
+					username: "ada",
+					linked_at: "2026-10-09T09:00:00Z",
+				};
+				return back(leftFor.to);
+			}
+			if (!pocketID.account) {
+				const q = new URLSearchParams({
+					refused: "not_linked",
+					to: leftFor.to,
+				});
+				return back(`/auth/login?${q}`);
+			}
+			const issued = crypto.randomUUID();
+			sessions.set(issued, ada);
+			return back(leftFor.to, {
+				"set-cookie": `${cookie}=${issued}; Path=/; HttpOnly; SameSite=Lax`,
+			});
+		}
 		if (route === "POST /api/v1/auth/login") {
 			const body = (await request.json()) as Schemas["LoginRequest"];
 			if (
@@ -1473,6 +1536,15 @@ const server_ = Bun.serve({
 					username: undefined,
 					linked_at: undefined,
 				});
+				return none();
+			case "GET /api/v1/profile/sign-in-providers":
+				return Response.json({
+					items: [pocketID],
+				} satisfies Schemas["ProfileSignInProviderList"]);
+			case "POST /api/v1/profile/sign-in-providers/pocket-id/link":
+				return toProvider((await request.json()) as Schemas["LinkStart"], true);
+			case "DELETE /api/v1/profile/sign-in-providers/pocket-id":
+				pocketID.account = undefined;
 				return none();
 			case "POST /api/v1/auth/pairings/approvals": {
 				const body = (await request.json()) as Schemas["Approval"];
