@@ -88,7 +88,9 @@ func TestWhatAProfileWatchesIsPushedToItsTrackers(t *testing.T) {
 	links := New(st, nil, func(context.Context, domain.Event) {}, "1.2.3", log)
 	links.services[domain.TrackerTrakt] = trakt.at(trakt.serve())
 	links.services[domain.TrackerSimkl] = simkl.at(simkl.serve())
-	for _, tr := range []*fakeTracker{trakt, simkl} {
+	mdblist := newFake(t, domain.TrackerMDBList, "mdblist-app")
+	links.services[domain.TrackerMDBList] = mdblist.at(mdblist.serve())
+	for _, tr := range []*fakeTracker{trakt, simkl, mdblist} {
 		if err := st.SetTrackerClient(ctx, tr.tracker, tr.clientID); err != nil {
 			t.Fatal(err)
 		}
@@ -131,8 +133,8 @@ func TestWhatAProfileWatchesIsPushedToItsTrackers(t *testing.T) {
 		}
 	}
 	push()
-	if len(trakt.synced)+len(simkl.synced) != 0 {
-		t.Fatalf("pushed before the changes settled: %v %v", trakt.synced, simkl.synced)
+	if len(trakt.synced)+len(simkl.synced)+len(mdblist.synced) != 0 {
+		t.Fatalf("pushed before the changes settled: %v %v %v", trakt.synced, simkl.synced, mdblist.synced)
 	}
 	if _, err := db.Exec(ctx, `UPDATE tracker_outbox SET queued_at = queued_at - interval '1 hour'`); err != nil {
 		t.Fatal(err)
@@ -154,6 +156,11 @@ func TestWhatAProfileWatchesIsPushedToItsTrackers(t *testing.T) {
 	wantAdded := `{"movies":[{"ids":{"tmdb":949},"watched_at":` + at + `}],"shows":[{"ids":{"tvdb":79126},"seasons":[{"episodes":[{"number":1,"watched_at":`
 	if got := asJSON(trakt.synced[1].body); trakt.synced[1].action != "/sync/history" || len(got) < len(wantAdded) || got[:len(wantAdded)] != wantAdded {
 		t.Errorf("Trakt was pushed %s, want Heat and the first episode added, and Alien left to its scrobble", got)
+	}
+	// MDBList takes the same, at its own paths.
+	if len(mdblist.synced) != 2 || mdblist.synced[0].action != "/sync/watched/remove" || asJSON(mdblist.synced[0].body) != wantRemoved ||
+		mdblist.synced[1].action != "/sync/watched" || asJSON(mdblist.synced[1].body) != asJSON(trakt.synced[1].body) {
+		t.Errorf("MDBList was pushed %v, want what Trakt was", mdblist.synced)
 	}
 	var left int
 	if err := db.QueryRow(ctx, `SELECT count(*) FROM tracker_outbox`).Scan(&left); err != nil || left != 4 {

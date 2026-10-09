@@ -26,10 +26,13 @@ type deviceCode struct {
 	Interval                int    `json:"interval"`
 }
 
+// link is the code to enter. One whose tracker answers no address with the code in, which RFC 8628
+// leaves optional, is entered at the address without it.
 func (d deviceCode) link() kv.TrackerLink {
+	uri := cmp.Or(d.VerificationURI, d.VerificationURL)
 	return kv.TrackerLink{
 		DeviceCode: d.DeviceCode, UserCode: d.UserCode,
-		VerificationURI: cmp.Or(d.VerificationURI, d.VerificationURL), VerificationURIComplete: d.VerificationURIComplete,
+		VerificationURI: uri, VerificationURIComplete: cmp.Or(d.VerificationURIComplete, uri),
 		Interval: time.Duration(d.Interval) * time.Second,
 		Expires:  time.Now().Add(time.Duration(d.ExpiresIn) * time.Second),
 	}

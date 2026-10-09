@@ -89,7 +89,9 @@ func TestAProfilesPlaysAreToldToItsTrackers(t *testing.T) {
 	links := New(st, nil, func(_ context.Context, e domain.Event) { told = append(told, e) }, "1.2.3", log)
 	links.services[domain.TrackerTrakt] = trakt.at(trakt.serve())
 	links.services[domain.TrackerSimkl] = simkl.at(simkl.serve())
-	for tr, expires := range map[*fakeTracker]time.Duration{trakt: time.Hour, simkl: 7 * 24 * time.Hour} {
+	mdblist := newFake(t, domain.TrackerMDBList, "mdblist-app")
+	links.services[domain.TrackerMDBList] = mdblist.at(mdblist.serve())
+	for tr, expires := range map[*fakeTracker]time.Duration{trakt: time.Hour, simkl: 7 * 24 * time.Hour, mdblist: 30 * 24 * time.Hour} {
 		if err := st.SetTrackerClient(ctx, tr.tracker, tr.clientID); err != nil {
 			t.Fatal(err)
 		}
@@ -116,7 +118,7 @@ func TestAProfilesPlaysAreToldToItsTrackers(t *testing.T) {
 	play(domain.EventPlaybackStopped, film, 50*time.Minute, domain.ReachEnd)
 	play(domain.EventPlaybackStarted, episode, 6*time.Minute, "")
 
-	for _, tr := range []*fakeTracker{trakt, simkl} {
+	for _, tr := range []*fakeTracker{trakt, simkl, mdblist} {
 		var got []string
 		for _, s := range tr.scrobbled {
 			got = append(got, s.action)
@@ -137,12 +139,19 @@ func TestAProfilesPlaysAreToldToItsTrackers(t *testing.T) {
 		show, _ := tr.scrobbled[4].body["show"].(map[string]any)
 		showIDs, _ := show["ids"].(map[string]any)
 		ep, _ := tr.scrobbled[4].body["episode"].(map[string]any)
+		// MDBList takes the episode within its season, within its show.
+		if tr == mdblist {
+			season, _ := show["season"].(map[string]any)
+			ep, _ = season["episode"].(map[string]any)
+			ep = map[string]any{"season": season["number"], "number": ep["number"]}
+		}
 		if showIDs["tvdb"] != 79126.0 || ep["season"] != 1.0 || ep["number"] != 1.0 || tr.scrobbled[4].body["movie"] != nil {
 			t.Errorf("%s was told the episode as %v", tr.tracker, tr.scrobbled[4].body)
 		}
 	}
-	if trakt.refreshes != 1 || simkl.refreshes != 0 {
-		t.Errorf("refreshed Trakt %d times and Simkl %d, want Trakt's token, a day from expiry, once", trakt.refreshes, simkl.refreshes)
+	if trakt.refreshes != 1 || simkl.refreshes != 0 || mdblist.refreshes != 0 {
+		t.Errorf("refreshed Trakt %d times, Simkl %d and MDBList %d, want Trakt's token, a day from expiry, once",
+			trakt.refreshes, simkl.refreshes, mdblist.refreshes)
 	}
 
 	// Trakt ends the access token early, so it is refreshed and the play told again; Simkl's user
@@ -154,8 +163,8 @@ func TestAProfilesPlaysAreToldToItsTrackers(t *testing.T) {
 		t.Errorf("Trakt, its token ended early: refreshed %d times, told %d plays; want the play told after a refresh", trakt.refreshes, len(trakt.scrobbled))
 	}
 	accounts, err := st.TrackerGrants(ctx, ada.ID)
-	if err != nil || len(accounts) != 1 || accounts[0].Tracker != domain.TrackerTrakt {
-		t.Errorf("accounts once Simkl's grant is gone: %+v, %v; want Trakt's alone", accounts, err)
+	if err != nil || len(accounts) != 2 || slices.ContainsFunc(accounts, func(g store.TrackerGrant) bool { return g.Tracker == domain.TrackerSimkl }) {
+		t.Errorf("accounts once Simkl's grant is gone: %+v, %v; want Trakt's and MDBList's", accounts, err)
 	}
 	if len(told) != 1 || told[0].Details != (domain.TrackerDetails{Tracker: domain.TrackerSimkl}) || told[0].Profile != ada.ID {
 		t.Errorf("told %+v, want Ada told of Simkl", told)

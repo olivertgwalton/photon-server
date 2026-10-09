@@ -117,7 +117,7 @@ func (c simkl) scrobble(ctx context.Context, clientID, access string, a action, 
 }
 
 func (c simkl) history(ctx context.Context, clientID, access string, w historyWrite, h history) error {
-	r := c.request(clientID, provider.Request{Method: http.MethodPost, Path: string(w), Body: h})
+	r := c.request(clientID, provider.Request{Method: http.MethodPost, Path: syncHistory[w], Body: h})
 	r.Header.Set("Authorization", "Bearer "+access)
 	_, err := c.api.Bytes(ctx, r)
 	return err

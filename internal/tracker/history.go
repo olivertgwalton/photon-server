@@ -23,15 +23,18 @@ const (
 	pushBatch = 500
 )
 
-// historyWrite is how a tracker's history is changed, by its path, the same on both.
+// historyWrite is how a tracker's history is changed.
 type historyWrite string
 
 const (
-	historyAdd    historyWrite = "/sync/history"
-	historyRemove historyWrite = "/sync/history/remove"
+	historyAdd    historyWrite = "add"
+	historyRemove historyWrite = "remove"
 )
 
-// history is films and episodes as both trackers take them into a history and out of one: an
+// syncHistory is the path of each historyWrite on Trakt and Simkl, the same on both.
+var syncHistory = map[historyWrite]string{historyAdd: "/sync/history", historyRemove: "/sync/history/remove"}
+
+// history is films and episodes as every tracker takes them into a history and out of one: an
 // episode under its show and season, and when each was watched, which a removal leaves out.
 type history struct {
 	Movies []watchedTitle `json:"movies,omitzero"`

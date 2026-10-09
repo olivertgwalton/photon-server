@@ -56,7 +56,9 @@ var importSources = map[domain.ImportSource]string{
 	domain.ImportPlex: "Plex", domain.ImportJellyfin: "Jellyfin", domain.ImportEmby: "Emby",
 }
 
-var trackers = map[domain.Tracker]string{domain.TrackerTrakt: "Trakt", domain.TrackerSimkl: "Simkl"}
+var trackers = map[domain.Tracker]string{
+	domain.TrackerTrakt: "Trakt", domain.TrackerSimkl: "Simkl", domain.TrackerMDBList: "MDBList",
+}
 
 var importMisses = map[domain.ImportMiss]string{
 	domain.MissNoIDs: "No TMDB, TheTVDB or IMDb id", domain.MissNotFound: "Not in a library here",

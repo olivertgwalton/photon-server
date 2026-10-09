@@ -24,7 +24,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
-// fakeTracker is Trakt or Simkl, as each answers a device signing in through the app clientID:
+// fakeTracker is Trakt, Simkl or MDBList, as each answers a device signing in through the app clientID:
 // its code is pending until entered, or gone once expired. It grants access, refreshed by refresh,
 // and keeps what it is told of plays.
 type fakeTracker struct {
@@ -62,24 +62,6 @@ func (f *fakeTracker) serve() string {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
-		var body map[string]any
-		if r.Method == http.MethodPost {
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				f.t.Errorf("%s %s: %v", f.tracker, r.URL.Path, err)
-			}
-		}
-		app := r.Header.Get("trakt-api-key")
-		if f.tracker == domain.TrackerSimkl {
-			app = r.URL.Query().Get("client_id")
-		}
-		named := r.Header.Get("User-Agent") == "Photon/1.2.3"
-		if f.tracker == domain.TrackerSimkl {
-			named = named && r.URL.Query().Get("app-name") == "Photon" && r.URL.Query().Get("app-version") == "1.2.3"
-		}
-		if app != f.clientID || !named {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
 		answer := func(code int, v any) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(code)
@@ -87,8 +69,52 @@ func (f *fakeTracker) serve() string {
 				f.t.Error(err)
 			}
 		}
+		// MDBList's OAuth takes forms alone, at paths ending in a slash.
+		oauth := f.tracker == domain.TrackerMDBList && strings.HasPrefix(r.URL.Path, "/oauth/")
+		var body map[string]any
+		switch {
+		case oauth:
+			if r.Header.Get("Content-Type") != "application/x-www-form-urlencoded" || !strings.HasSuffix(r.URL.Path, "/") || r.ParseForm() != nil {
+				answer(http.StatusBadRequest, map[string]string{"error": "invalid_request"})
+				return
+			}
+			body = map[string]any{}
+			for k := range r.PostForm {
+				body[k] = r.PostForm.Get(k)
+			}
+		case r.Method == http.MethodPost:
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				f.t.Errorf("%s %s: %v", f.tracker, r.URL.Path, err)
+			}
+		}
+		var app string
+		switch f.tracker {
+		case domain.TrackerTrakt:
+			app = r.Header.Get("trakt-api-key")
+		case domain.TrackerSimkl:
+			app = r.URL.Query().Get("client_id")
+		// MDBList's app is named by its OAuth requests alone.
+		case domain.TrackerMDBList:
+			app = f.clientID
+			if oauth {
+				app = fmt.Sprint(body["client_id"])
+			}
+		}
+		named := r.Header.Get("User-Agent") == "Photon/1.2.3"
+		if f.tracker == domain.TrackerSimkl {
+			named = named && r.URL.Query().Get("app-name") == "Photon" && r.URL.Query().Get("app-version") == "1.2.3"
+		}
+		switch {
+		// MDBList answers a client id it does not know as a request it cannot read.
+		case app != f.clientID && oauth:
+			answer(http.StatusBadRequest, map[string]string{"error": "invalid_request"})
+			return
+		case app != f.clientID || !named:
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 		granted := map[string]any{"access_token": f.access, "refresh_token": f.refresh, "expires_in": 604800}
-		if strings.HasPrefix(r.URL.Path, "/sync/history") {
+		if strings.HasPrefix(r.URL.Path, "/sync/") {
 			switch {
 			case r.Header.Get("Authorization") != "Bearer "+f.access:
 				w.WriteHeader(http.StatusUnauthorized)
@@ -167,6 +193,40 @@ func (f *fakeTracker) serve() string {
 			}
 		case "simkl POST /oauth2/revoke":
 			f.revoked = append(f.revoked, fmt.Sprint(body["token"]))
+		case "mdblist POST /oauth/device-authorization/":
+			if !strings.Contains(fmt.Sprint(body["scope"]), "write") {
+				f.t.Errorf("mdblist asked for %q, which writes nothing", body["scope"])
+			}
+			answer(http.StatusOK, map[string]any{
+				"device_code": "device", "user_code": "MDBL1234", "verification_uri": "https://mdblist.com/oauth/device/",
+				"expires_in": 600, "interval": 0,
+			})
+		case "mdblist POST /oauth/token/":
+			switch {
+			// MDBList's refresh tokens are each used once.
+			case body["grant_type"] == "refresh_token" && body["refresh_token"] == f.refresh:
+				f.refreshes++
+				f.access, f.refresh = "refreshed", "refresh-again"
+				answer(http.StatusOK, map[string]any{"access_token": f.access, "refresh_token": f.refresh, "expires_in": 2592000})
+			case body["grant_type"] == "refresh_token":
+				answer(http.StatusBadRequest, map[string]string{"error": "invalid_grant"})
+			case body["device_code"] != "device":
+				answer(http.StatusNotFound, map[string]string{"error": "device_not_found"})
+			case f.expired:
+				answer(http.StatusBadRequest, map[string]string{"error": "expired_token"})
+			case !f.entered:
+				answer(http.StatusBadRequest, map[string]string{"error": "authorization_pending"})
+			default:
+				answer(http.StatusOK, granted)
+			}
+		case "mdblist GET /user":
+			if r.Header.Get("Authorization") != "Bearer "+f.access {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			answer(http.StatusOK, map[string]any{"user_id": 3, "username": "oliver"})
+		case "mdblist POST /oauth/revoke_token/":
+			f.revoked = append(f.revoked, fmt.Sprint(body["token"]))
 		default:
 			f.t.Errorf("%s was asked %s %s", f.tracker, r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
@@ -218,6 +278,8 @@ func TestAProfileLinksItsAccountOnEachTrackerByACode(t *testing.T) {
 	simkl := newFake(t, domain.TrackerSimkl, "simkl-app")
 	links.services[domain.TrackerTrakt] = trakt.at(trakt.serve())
 	links.services[domain.TrackerSimkl] = simkl.at(simkl.serve())
+	mdblist := newFake(t, domain.TrackerMDBList, "mdblist-app")
+	links.services[domain.TrackerMDBList] = mdblist.at(mdblist.serve())
 
 	for _, tc := range []struct {
 		fake         *fakeTracker
@@ -226,6 +288,8 @@ func TestAProfileLinksItsAccountOnEachTrackerByACode(t *testing.T) {
 	}{
 		{trakt, "TRAKT123", "https://trakt.tv/activate/TRAKT123", "access"},
 		{simkl, "BDWP-HQPK", "https://simkl.com/pin?user_code=BDWP-HQPK", "refresh"},
+		// MDBList answers no address with the code in.
+		{mdblist, "MDBL1234", "https://mdblist.com/oauth/device/", "refresh"},
 	} {
 		tr := tc.fake.tracker
 		state := func() Status {
@@ -308,8 +372,13 @@ func TestAProfileLinksItsAccountOnEachTrackerByACode(t *testing.T) {
 
 // at is the fake's tracker as the server asks it, at base.
 func (f *fakeTracker) at(base string) service {
-	if f.tracker == domain.TrackerSimkl {
+	switch f.tracker {
+	case domain.TrackerTrakt:
+		return trakt{api: provider.Client{Name: "trakt", Base: base}, auth: provider.Client{Name: "trakt", Base: base}, version: "1.2.3"}
+	case domain.TrackerSimkl:
 		return simkl{api: provider.Client{Name: "simkl", Base: base}, version: "1.2.3"}
+	case domain.TrackerMDBList:
+		return mdblist{api: provider.Client{Name: "mdblist", Base: base}, version: "1.2.3"}
 	}
-	return trakt{api: provider.Client{Name: "trakt", Base: base}, auth: provider.Client{Name: "trakt", Base: base}, version: "1.2.3"}
+	panic(f.tracker)
 }

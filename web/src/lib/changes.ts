@@ -5,7 +5,7 @@ export const keys = {
 	userdata: "photon:userdata",
 	playlists: "photon:playlists",
 	downloads: "photon:downloads",
-	// The profile's accounts on Trakt and Simkl, and the codes it is entering.
+	// The profile's accounts on its trackers, and the codes it is entering.
 	trackers: "photon:trackers",
 	library: (id: string) => `photon:library:${id}` as const,
 	title: (id: string) => `photon:title:${id}` as const,
