@@ -40,8 +40,8 @@ let listed = $state.raw(ask("poster"));
 
 async function choose(id: string) {
 	const chosen = await act(
-		api.PUT("/api/v1/admin/titles/{id}/artwork/{kind}", {
-			params: { path: { id: title.id, kind } },
+		api.PUT("/api/v1/admin/titles/{id}/artwork/{artwork}", {
+			params: { path: { id: title.id, artwork: kind } },
 			body: { id },
 		}),
 		"Chosen.",
@@ -51,8 +51,8 @@ async function choose(id: string) {
 
 const giveBack = () =>
 	act(
-		api.DELETE("/api/v1/admin/titles/{id}/artwork/{kind}", {
-			params: { path: { id: title.id, kind } },
+		api.DELETE("/api/v1/admin/titles/{id}/artwork/{artwork}", {
+			params: { path: { id: title.id, artwork: kind } },
 		}),
 		"Given back to the sources.",
 	);

@@ -110,7 +110,7 @@ type versionPageJSON struct {
 	// /api/v1/parts/{id} routes take.
 	Files []partRefJSON `json:"files"`
 	// Trickplay is the thumbnail sheets of each part that has them; a part's sheets are at
-	// /api/v1/parts/{id}/trickplay/{n}.
+	// /api/v1/parts/{id}/trickplay/{sheet}.
 	Trickplay []partTrickplayJSON `json:"trickplay,omitzero"`
 	// DefaultAudioStream and DefaultSubtitleStream or DefaultSubtitleFile are the tracks it plays
 	// with unasked, for the profile asking: none where no subtitle comes on.

@@ -49,7 +49,7 @@ func (a *API) trickplaySheet(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	n, ok := a.pathNumber(w, r, "n")
+	n, ok := a.pathNumber(w, r, "sheet")
 	if !ok {
 		return
 	}
@@ -71,11 +71,13 @@ func (a *API) chapterImage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	idx, ok := a.pathNumber(w, r, "idx")
+	chapter, ok := a.pathNumber(w, r, "chapter")
 	if !ok {
 		return
 	}
-	a.servePreview(w, r, func(ctx context.Context) (blob.Object, error) { return a.svc.PreviewFiles.ChapterImage(ctx, part, idx) })
+	a.servePreview(w, r, func(ctx context.Context) (blob.Object, error) {
+		return a.svc.PreviewFiles.ChapterImage(ctx, part, chapter)
+	})
 }
 
 // servePreview serves a preview's JPEG. A part's previews are made again only from the same bytes,
@@ -117,14 +119,14 @@ func (a *API) previewsRoutes() []route {
 			status:  http.StatusOK, reply: trickplayJSON{}, handle: a.trickplay,
 		},
 		{
-			pattern: "GET /api/v1/parts/{id}/trickplay/{n}", access: signedIn, summary: "A part's trickplay sheet",
-			path:   []param{{"n", 0, "The sheet, counted from 0."}},
+			pattern: "GET /api/v1/parts/{id}/trickplay/{sheet}", access: signedIn, summary: "A part's trickplay sheet",
+			path:   []param{{"sheet", 0, "The sheet, counted from 0."}},
 			status: http.StatusOK, reply: asFile{"image/jpeg"}, handle: a.trickplaySheet,
 		},
 		{
-			pattern: "GET /api/v1/parts/{id}/chapters/{idx}/image", access: signedAddress,
+			pattern: "GET /api/v1/parts/{id}/chapters/{chapter}/image", access: signedAddress,
 			summary: "A picture of a chapter, at the signed address the title's page gives",
-			path:    []param{{"idx", 0, "The chapter, counted from 0 in its part."}},
+			path:    []param{{"chapter", 0, "The chapter, counted from 0 in its part."}},
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"image/jpeg"}, handle: a.chapterImage,
 		},
 	}

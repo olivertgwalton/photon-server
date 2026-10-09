@@ -36,7 +36,7 @@ type VersionPage struct {
 	// /api/v1/parts/{id} routes take.
 	Files []PartRef
 	// Trickplay is the thumbnail sheets of each part that has them; a part's sheets are at
-	// /api/v1/parts/{part_id}/trickplay/{n}.
+	// /api/v1/parts/{id}/trickplay/{sheet}.
 	Trickplay []PartTrickplay
 	// DefaultAudioStream and DefaultSubtitleStream or DefaultSubtitleFile are the tracks it plays
 	// with unasked, for the profile asking: none where no subtitle comes on.
