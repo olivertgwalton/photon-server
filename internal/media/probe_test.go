@@ -1,6 +1,7 @@
 package media
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -133,5 +134,33 @@ func TestProbeLeavesAChapterNamedByItsTimeUnnamed(t *testing.T) {
 	}
 	if want := []string{"", "", "Act 3"}; !slices.Equal(titles, want) {
 		t.Errorf("titles = %q, want %q", titles, want)
+	}
+}
+
+func TestAFileWithNoMediaInIsNotMediaAndOneUnreadIsNot(t *testing.T) {
+	ffprobe, err := Look("ffprobe")
+	if err != nil {
+		t.Skip(err)
+	}
+	dir := t.TempDir()
+	junk := filepath.Join(dir, "Movie (2010).mkv")
+	if err := os.WriteFile(junk, []byte("<html>link expired</html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(junk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := (Tools{FFprobe: Tool{Path: ffprobe}}).Probe(t.Context(), f); !errors.Is(err, ErrNotMedia) {
+		t.Errorf("probing a page of HTML: %v, want ErrNotMedia", err)
+	}
+
+	failing := filepath.Join(dir, "ffprobe")
+	if err := os.WriteFile(failing, []byte("#!/bin/sh\necho 'fd:: Input/output error' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (Tools{FFprobe: Tool{Path: failing}}).Probe(t.Context(), f); err == nil || errors.Is(err, ErrNotMedia) {
+		t.Errorf("a read that failed: %v, want an error that is not ErrNotMedia", err)
 	}
 }

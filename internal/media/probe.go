@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -27,10 +28,17 @@ func (t Tools) Probe(ctx context.Context, f *os.File) (domain.Facts, error) {
 		"-print_format", "json", "-show_format", "-show_streams", "-show_chapters",
 		"-show_frames", "-read_intervals", "%+#1", "-i", "fd:")
 	if err != nil {
+		// A file ffprobe reads to the end of its header and finds no media in is the same file
+		// next time; one it could not read, or ran out of time on, may not be.
+		if strings.Contains(err.Error(), "Invalid data found when processing input") {
+			return domain.Facts{}, fmt.Errorf("ffprobe: %w: %w", ErrNotMedia, err)
+		}
 		return domain.Facts{}, fmt.Errorf("ffprobe: %w", err)
 	}
 	return parseProbe(out)
 }
+
+var ErrNotMedia = errors.New("not media ffprobe can read")
 
 type probeOutput struct {
 	Format struct {

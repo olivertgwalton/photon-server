@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
@@ -389,6 +390,37 @@ func TestAFileThatFailedToReadIsTriedAgainAtTheNextScan(t *testing.T) {
 	}
 	if r := f.scan(); r.Probed != 0 || r.Unchanged != r.Folders {
 		t.Errorf("a scan after the file was read: %+v, want every folder unchanged", r)
+	}
+}
+
+// notMedia finds no media in the files named, as ffprobe finds none in a file cut short.
+type notMedia struct {
+	fakeProber
+	names map[string]bool
+}
+
+func (p *notMedia) Probe(ctx context.Context, f *os.File) (domain.Facts, error) {
+	if p.names[filepath.Base(f.Name())] {
+		return domain.Facts{}, media.ErrNotMedia
+	}
+	return p.fakeProber.Probe(ctx, f)
+}
+
+func TestAFileThatIsNotMediaIsNotProbedAgainUntilItChanges(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	p := &notMedia{names: map[string]bool{"Heat (1995).mkv": true}}
+	f.scanner = New(f.st, p, slog.New(slog.DiscardHandler))
+	f.put("Heat (1995)/Heat (1995).mkv", "heat")
+	if r := f.scan(); r.Skipped != 1 {
+		t.Errorf("left out %d files, want the one that is not media", r.Skipped)
+	}
+	if r := f.scan(); r.Probed != 0 || r.Unchanged != r.Folders {
+		t.Errorf("the next scan: %+v, want the file not probed again", r)
+	}
+	f.put("Heat (1995)/Heat (1995).mkv", "heat, whole")
+	delete(p.names, "Heat (1995).mkv")
+	if r := f.scan(); r.Probed != 1 || r.Skipped != 0 {
+		t.Errorf("after the file changed: %+v, want it probed", r)
 	}
 }
 
