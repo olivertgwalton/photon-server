@@ -43,11 +43,14 @@ func filmsPlugin(t *testing.T, protocol int, id string) (*httptest.Server, func(
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /manifest", func(w http.ResponseWriter, _ *http.Request) {
 		answer(w, pluginv1.Manifest{
-			Protocol: protocol, ID: id, Name: "Films", Kinds: []string{"movie"}, Capabilities: []string{"describe", "rate"},
-			Settings: []pluginv1.Setting{{Key: "api_key", Name: "API key", Secret: true, Required: true}},
+			Protocol: protocol, ID: id, Name: "Films", Kinds: []string{"movie"},
+			// It answers capabilities, and a version of one, that this server does not speak, as one written
+			// for a newer server would; those are passed over.
+			Capabilities: []pluginv1.Capability{{Name: "describe", Version: 1}, {Name: "rate", Version: 1}, {Name: "search", Version: 2}, {Name: "subtitles", Version: 1}},
+			Settings:     []pluginv1.Setting{{Key: "api_key", Name: "API key", Secret: true, Required: true}},
 		})
 	})
-	mux.HandleFunc("POST /match", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /describe/v1/match", func(w http.ResponseWriter, r *http.Request) {
 		var req pluginv1.MatchRequest
 		read(r, &req)
 		mu.Lock()
@@ -59,7 +62,7 @@ func filmsPlugin(t *testing.T, protocol int, id string) (*httptest.Server, func(
 		}
 		answer(w, pluginv1.MatchResponse{})
 	})
-	mux.HandleFunc("POST /describe", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /describe/v1/describe", func(w http.ResponseWriter, r *http.Request) {
 		var req pluginv1.DescribeRequest
 		read(r, &req)
 		if req.ID != "jaws-1" {
@@ -72,7 +75,7 @@ func filmsPlugin(t *testing.T, protocol int, id string) (*httptest.Server, func(
 			Artwork: []pluginv1.Artwork{{Kind: "poster", URL: "https://pictures.example/jaws.jpg"}},
 		})
 	})
-	mux.HandleFunc("POST /ratings", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /rate/v1/ratings", func(w http.ResponseWriter, r *http.Request) {
 		var req pluginv1.RatingsRequest
 		read(r, &req)
 		if req.IDs["imdb"] != "tt0073195" || req.Settings["api_key"] == "" {

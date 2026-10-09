@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"slices"
@@ -12,9 +13,10 @@ import (
 )
 
 // client is a registered plugin as a provider. It implements every capability, and answers the
-// ones its manifest names.
+// ones its manifest names at the version the server speaks.
 type client struct {
 	manifest pluginv1.Manifest
+	speaks   map[domain.Capability]int
 	base     string
 	http     *http.Client
 	settings provider.Settings
@@ -36,12 +38,24 @@ func (c *client) Info() provider.Info {
 }
 
 func (c *client) Answers(capability domain.Capability) bool {
-	return slices.Contains(c.manifest.Capabilities, string(capability))
+	_, ok := c.speaks[capability]
+	return ok
 }
 
-// post asks the plugin at path, with the settings an admin set for it in the body, or answers
-// provider.ErrNotConfigured where one it requires is not set.
-func post[Out, In any](ctx context.Context, c *client, path string, body func(pluginv1.Settings) In) (Out, error) {
+// spoken is the version of each capability in m that the server speaks.
+func spoken(m pluginv1.Manifest) map[domain.Capability]int {
+	out := map[domain.Capability]int{}
+	for _, c := range m.Capabilities {
+		if v, ok := pluginv1.Speaks[c.Name]; ok && c.Version == v {
+			out[domain.Capability(c.Name)] = v
+		}
+	}
+	return out
+}
+
+// post makes one of a capability's calls, verb, with the settings an admin set for the plugin in
+// the body, or answers provider.ErrNotConfigured where one it requires is not set.
+func post[Out, In any](ctx context.Context, c *client, capability domain.Capability, verb string, body func(pluginv1.Settings) In) (Out, error) {
 	var out Out
 	set, err := c.settings(ctx)
 	if err != nil {
@@ -63,6 +77,7 @@ func post[Out, In any](ctx context.Context, c *client, path string, body func(pl
 		}
 	}
 	in := body(sent)
+	path := fmt.Sprintf("/%s/v%d/%s", capability, c.speaks[capability], verb)
 	return call[In, Out](ctx, c.http, "plugin "+c.manifest.ID, http.MethodPost, c.base, path, &in, secrets)
 }
 
@@ -71,14 +86,14 @@ func sentLocale(loc domain.Locale) pluginv1.Locale {
 }
 
 func (c *client) Match(ctx context.Context, loc domain.Locale, kind domain.ItemKind, h provider.Hints) (string, error) {
-	out, err := post[pluginv1.MatchResponse](ctx, c, "/match", func(s pluginv1.Settings) pluginv1.MatchRequest {
+	out, err := post[pluginv1.MatchResponse](ctx, c, domain.CapabilityDescribe, "match", func(s pluginv1.Settings) pluginv1.MatchRequest {
 		return pluginv1.MatchRequest{Settings: s, Locale: sentLocale(loc), Kind: string(kind), Title: h.Title, Year: h.Year, IDs: sentIDs(h.IDs)}
 	})
 	return out.ID, err
 }
 
 func (c *client) Describe(ctx context.Context, loc domain.Locale, kind domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
-	out, err := post[pluginv1.DescribeResponse](ctx, c, "/describe", func(s pluginv1.Settings) pluginv1.DescribeRequest {
+	out, err := post[pluginv1.DescribeResponse](ctx, c, domain.CapabilityDescribe, "describe", func(s pluginv1.Settings) pluginv1.DescribeRequest {
 		return pluginv1.DescribeRequest{Settings: s, Locale: sentLocale(loc), Kind: string(kind), ID: id, Seasons: seasons.Numbers, Order: string(seasons.Order), SeasonScope: string(seasons.Scope)}
 	})
 	if err != nil {
@@ -96,7 +111,7 @@ func (c *client) Describe(ctx context.Context, loc domain.Locale, kind domain.It
 }
 
 func (c *client) Candidates(ctx context.Context, loc domain.Locale, kind domain.ItemKind, title string, year int) ([]domain.Candidate, error) {
-	out, err := post[pluginv1.SearchResponse](ctx, c, "/search", func(s pluginv1.Settings) pluginv1.SearchRequest {
+	out, err := post[pluginv1.SearchResponse](ctx, c, domain.CapabilitySearch, "search", func(s pluginv1.Settings) pluginv1.SearchRequest {
 		return pluginv1.SearchRequest{Settings: s, Locale: sentLocale(loc), Kind: string(kind), Title: title, Year: year}
 	})
 	found := make([]domain.Candidate, 0, len(out.Results))
@@ -109,7 +124,7 @@ func (c *client) Candidates(ctx context.Context, loc domain.Locale, kind domain.
 }
 
 func (c *client) Ratings(ctx context.Context, kind domain.ItemKind, ids map[domain.Provider]string) ([]domain.Rating, error) {
-	out, err := post[pluginv1.RatingsResponse](ctx, c, "/ratings", func(s pluginv1.Settings) pluginv1.RatingsRequest {
+	out, err := post[pluginv1.RatingsResponse](ctx, c, domain.CapabilityRate, "ratings", func(s pluginv1.Settings) pluginv1.RatingsRequest {
 		return pluginv1.RatingsRequest{Settings: s, Kind: string(kind), IDs: sentIDs(ids)}
 	})
 	var ratings []domain.Rating
@@ -122,7 +137,7 @@ func (c *client) Ratings(ctx context.Context, kind domain.ItemKind, ids map[doma
 }
 
 func (c *client) DescribePerson(ctx context.Context, loc domain.Locale, ids map[domain.Provider]string) (domain.Person, error) {
-	out, err := post[pluginv1.PersonResponse](ctx, c, "/person", func(s pluginv1.Settings) pluginv1.PersonRequest {
+	out, err := post[pluginv1.PersonResponse](ctx, c, domain.CapabilityPerson, "person", func(s pluginv1.Settings) pluginv1.PersonRequest {
 		return pluginv1.PersonRequest{Settings: s, Locale: sentLocale(loc), IDs: sentIDs(ids)}
 	})
 	return domain.Person{
