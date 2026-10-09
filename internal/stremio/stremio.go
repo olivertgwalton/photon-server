@@ -215,8 +215,10 @@ func (a *Addon) Streams(ctx context.Context, t domain.Streamed) ([]domain.Offer,
 }
 
 // offerOf is a stream as an offer, keyed by what its bytes are as Remux keys them: a torrent's file
-// by its hash and index, else a file by its name and size, else its address without the query,
-// which a debrid link signs afresh each time it is offered.
+// by its hash and index, else a file by its name and size, else the release it names, else its
+// address without the query, which a debrid link signs afresh each time it is offered. An addon
+// whose addresses differ only in their query, as AltMount's /play?release= do, is told apart by
+// the release. The stream's own name is no key: an addon renames a stream as it is cached.
 func offerOf(s stream, from string) (domain.Offer, bool) {
 	u, err := url.Parse(s.URL)
 	headers := len(s.Hints.ProxyHeaders) > 0 && string(s.Hints.ProxyHeaders) != "null"
@@ -224,12 +226,15 @@ func offerOf(s stream, from string) (domain.Offer, bool) {
 		return domain.Offer{}, false
 	}
 	o := domain.Offer{Filename: s.Hints.Filename, Size: s.Hints.VideoSize, URL: u, From: from}
-	o.Name = cmp.Or(s.Hints.Filename, firstLine(s.Title), firstLine(s.Description), s.Name)
+	release := cmp.Or(s.Hints.Filename, firstLine(s.Title), firstLine(s.Description))
+	o.Name = cmp.Or(release, s.Name)
 	switch {
 	case s.InfoHash != "":
 		o.Key = "torrent:" + strings.ToLower(s.InfoHash) + ":" + strconv.Itoa(deref(s.FileIdx))
 	case s.Hints.Filename != "" && s.Hints.VideoSize > 0:
 		o.Key = "file:" + s.Hints.Filename + ":" + strconv.FormatInt(s.Hints.VideoSize, 10)
+	case release != "":
+		o.Key = "release:" + release
 	default:
 		o.Key = "url:" + u.Host + u.EscapedPath()
 	}
