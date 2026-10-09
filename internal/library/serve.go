@@ -5,7 +5,6 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -22,34 +21,30 @@ var fileTypes = map[string]string{
 	".srt": "application/x-subrip", ".vtt": "text/vtt", ".ass": "text/x-ssa", ".ssa": "text/x-ssa",
 }
 
-// Serve sends the first limit bytes of a library file opened from rel, in byte ranges: a .strm's
-// media fetched from where it names. Its error, from reading the file's size or fetching the
-// media, comes before anything is written.
-func Serve(w http.ResponseWriter, r *http.Request, f *os.File, rel string, limit int64) error {
-	in, err := Media(rel, f)
-	if err != nil {
-		return err
-	}
+// Serve sends the first limit bytes of media named name, in byte ranges: a file's, or those
+// fetched from its address. Its error, from reading the file's size or fetching the media, comes
+// before anything is written.
+func Serve(w http.ResponseWriter, r *http.Request, in media.Input, name string, limit int64) error {
 	if in.URL != nil {
 		return serveRemote(w, r, in.URL, limit)
 	}
-	info, err := f.Stat()
+	info, err := in.File.Stat()
 	if err != nil {
 		return err
 	}
-	if t, ok := fileTypes[strings.ToLower(path.Ext(rel))]; ok {
+	if t, ok := fileTypes[strings.ToLower(path.Ext(name))]; ok {
 		w.Header().Set("Content-Type", t)
 	}
 	if limit >= info.Size() {
 		// The bare file keeps the copy in the kernel: sendfile takes only an *os.File.
-		http.ServeContent(w, r, rel, info.ModTime(), f)
+		http.ServeContent(w, r, name, info.ModTime(), in.File)
 		return nil
 	}
-	http.ServeContent(w, r, rel, info.ModTime(), io.NewSectionReader(f, 0, limit))
+	http.ServeContent(w, r, name, info.ModTime(), io.NewSectionReader(in.File, 0, limit))
 	return nil
 }
 
-// remoteHeaders are the headers of a .strm's media, as its server answers it, that are passed on:
+// remoteHeaders are the headers of media at an address, as its server answers it, that are passed on:
 // what says which bytes they are. A cookie or a redirect is the server's own, not the player's.
 var remoteHeaders = []string{"Accept-Ranges", "Content-Length", "Content-Range", "Content-Type", "ETag", "Last-Modified"}
 

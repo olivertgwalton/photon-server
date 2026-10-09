@@ -23,15 +23,15 @@ func TestAStrmIsServedAsTheMediaItNames(t *testing.T) {
 
 	serve := func(limit int64, header http.Header) (*httptest.ResponseRecorder, string) {
 		t.Helper()
-		f, err := Open(dir, "Heat (1995).strm")
+		in, err := OpenMedia(dir, "Heat (1995).strm")
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer f.Close()
+		defer in.Close()
 		r := httptest.NewRequest(http.MethodGet, "/stream", nil)
 		r.Header = header
 		w := httptest.NewRecorder()
-		if err := Serve(w, r, f, "Heat (1995).strm", limit); err != nil {
+		if err := Serve(w, r, in, "Heat (1995).mkv", limit); err != nil {
 			t.Fatal(err)
 		}
 		return w, w.Body.String()
@@ -67,13 +67,13 @@ func TestASampleOfAStrmIsHeldToItsLimit(t *testing.T) {
 	defer srv.Close()
 	dir := t.TempDir()
 	write(t, dir, map[string]string{"Heat (1995).strm": srv.URL + "/heat.mkv\n"})
-	f, err := Open(dir, "Heat (1995).strm")
+	in, err := OpenMedia(dir, "Heat (1995).strm")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer in.Close()
 	w := httptest.NewRecorder()
-	if err := Serve(w, httptest.NewRequest(http.MethodGet, "/sample", nil), f, "Heat (1995).strm", 16); err != nil {
+	if err := Serve(w, httptest.NewRequest(http.MethodGet, "/sample", nil), in, "Heat (1995).mkv", 16); err != nil {
 		t.Fatal(err)
 	}
 	if got := w.Body.String(); got != body[:16] || w.Header().Get("Content-Length") != "" {

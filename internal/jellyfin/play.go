@@ -309,13 +309,13 @@ func (a *API) serveFile(w http.ResponseWriter, r *http.Request, where func(conte
 		a.internal(w, r, err)
 		return
 	}
-	f, err := library.Open(root, rel)
+	in, err := library.OpenMedia(root, rel)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	defer f.Close()
-	if err := library.Serve(w, r, f, rel, math.MaxInt64); err != nil {
+	defer in.Close()
+	if err := library.Serve(w, r, in, rel, math.MaxInt64); err != nil {
 		a.internal(w, r, err)
 	}
 }
