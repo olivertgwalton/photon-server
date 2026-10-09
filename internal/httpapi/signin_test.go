@@ -188,9 +188,9 @@ func TestASignInLeavesOnlyFromThePublicAddressForThisServer(t *testing.T) {
 	}
 }
 
-// An admin's change that leaves the client secret out keeps the one kept for the same client, and
-// the secret is never answered.
-func TestAnAdminKeepsAProvidersSecretUnlessTheClientChanges(t *testing.T) {
+// An admin's change that leaves the client secret out keeps the one kept for the same issuer and
+// client, and the secret is never answered.
+func TestAnAdminKeepsAProvidersSecretOnlyForTheSameIssuerAndClient(t *testing.T) {
 	a, f, _ := signInAPI(t)
 	put := func(body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/sign-in-providers/pocket-id", strings.NewReader(body))
@@ -207,6 +207,10 @@ func TestAnAdminKeepsAProvidersSecretUnlessTheClientChanges(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"callback_url":"https://photon.example.com/api/v1/auth/sign-in-providers/pocket-id/callback"`) {
 		t.Errorf("no redirect URI to register: %s", rec.Body)
 	}
+	if rec := put(`{"name":"Pocket ID","issuer":"https://elsewhere.example.com","client_id":"photon","provisioning":"create"}`); rec.Code != http.StatusOK || f.provider.ClientSecret != "" {
+		t.Errorf("a new issuer was given the old one's secret: %+v", f.provider)
+	}
+	f.provider.Issuer, f.provider.ClientSecret = "https://id.example.com", "secret"
 	if rec := put(`{"name":"Pocket ID","issuer":"https://id.example.com","client_id":"another","provisioning":"link"}`); rec.Code != http.StatusOK || f.provider.ClientSecret != "" {
 		t.Errorf("a new client kept the old one's secret: %+v", f.provider)
 	}
