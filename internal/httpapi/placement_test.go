@@ -91,6 +91,7 @@ func join(t *testing.T, c *sharedValkey, limit int) *peerNode {
 	n.role.Store(domain.NodeAll)
 	n.placer = playback.NewPlacer(c, n.self, remuxOpener{remuxer}, clusterKey)
 	n.srv = httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies:  noCopies{},
 		Sent:    playback.NewSent(),
 		Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{},
 		Playbacks: playback.NewSessions(c.livePlaybacks, c.livePlaybacks, remuxer, func(_ context.Context, e domain.Event) {

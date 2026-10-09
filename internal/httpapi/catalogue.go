@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/url"
@@ -267,6 +268,11 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
+	// A remote film or episode is given a copy as its page opens, as a player chooses its copy
+	// from the page before it plays; one its provider cannot give is a page with none.
+	if err := a.svc.Copies.Ensure(r.Context(), id); err != nil {
+		a.logger.WarnContext(r.Context(), "no copy of a remote title", slog.Any("err", err))
+	}
 	page, err := a.svc.Catalogue.Title(r.Context(), profile, id)
 	if a.answered(w, r, err) {
 		return

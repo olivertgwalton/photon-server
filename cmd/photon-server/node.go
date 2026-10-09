@@ -70,6 +70,7 @@ type node struct {
 	conversions *playback.Conversions
 	parts       library.Parts
 	plugins     *plugin.Plugins
+	copies      *remote.Copies
 	auth        *auth.Service
 	pictures    *artwork.Cache
 	previews    *analysis.Previews
@@ -128,7 +129,9 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	}
 	n.plugins = plugin.New(n.st)
 	n.providers = metadataProviders(n.st, n.plugins, n.cache)
-	n.parts = library.Parts{Places: n.st, Streams: remote.New(n.providers)}
+	offers := remote.New(n.providers)
+	n.parts = library.Parts{Places: n.st, Streams: offers}
+	n.copies = remote.NewCopies(n.st, offers, n.tools)
 	n.conversions, err = playback.NewConversions(n.st, n.parts, n.cache, n.remuxer, n.tools.FFmpeg.Path, hw, filepath.Join(n.cacheRoot, "downloads"), n.id)
 	if err != nil {
 		return err
@@ -198,7 +201,7 @@ func (n *node) wire(ctx context.Context) error {
 	n.secured = secure.New(st, n.hub.Subscribe, logger)
 	n.jellyfin, err = jellyfin.NewListener(st, n.hub.Subscribe, jellyfin.New(logger, n.info.ID, n.identity.Name, jellyfin.Services{
 		Auth: n.auth, Limits: n.cache, Raise: n.hub.Raise, Reach: n.reach, Catalogue: st, Subscribe: n.hub.Subscribe, Audience: st, Displays: st, Preferences: st, Playlists: st,
-		Pictures: n.pictures, Playing: files, Parts: n.parts, Playbacks: n.sessions, Watching: st, Themes: st, Previews: st, PreviewFiles: n.previews,
+		Pictures: n.pictures, Playing: files, Parts: n.parts, Copies: n.copies, Playbacks: n.sessions, Watching: st, Themes: st, Previews: st, PreviewFiles: n.previews,
 		HLS: n.remuxer, Placer: p.placer, Owners: p.owners, Signer: p.signer,
 		Network: st, Sent: p.sent,
 	}), n.listen, n.secured.Listen, n.secured.TLSConfig(), logger)
@@ -236,7 +239,7 @@ func (n *node) httpServer(p playing) (*http.Server, error) {
 	return &http.Server{
 		Addr: n.listen, TLSConfig: n.secured.TLSConfig(),
 		Handler: httpapi.New(n.logger, n.info, httpapi.Services{
-			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Parts: n.parts, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, SignIns: n.signIns, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Parts: n.parts, Copies: n.copies, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, SignIns: n.signIns, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Postgres: st, Valkey: cache, Web: web,
 			Metrics: metrics(version, n.self, n.remuxer, n.sessions, p.placer, p.sent, n.finished, cluster{lead: n.scheduler, st: st, nodes: cache, self: p.placer}),
 			Sent:    p.sent,
 		}),

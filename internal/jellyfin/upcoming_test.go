@@ -59,7 +59,7 @@ func TestAnAppListsUpcomingEpisodes(t *testing.T) {
 	}}}); err != nil {
 		t.Fatal(err)
 	}
-	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playlists: st})
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Copies: noCopies{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playlists: st})
 	get := func(target string, into any) int {
 		t.Helper()
 		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Jellyfin Web", Token="pst_ada"`, "")

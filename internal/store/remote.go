@@ -133,3 +133,70 @@ func addAired(ctx context.Context, tx db, show uuid.UUID, number int, episodes m
 	}
 	return nil
 }
+
+// RemoteTitle is a film or an episode of a remote library, as its provider is asked for its
+// streams.
+type RemoteTitle struct {
+	Library uuid.UUID
+	Source  domain.FieldSource
+	Title   domain.Streamed
+}
+
+// RemoteTitleOf answers what a remote library's film or episode is asked for by; false for
+// anything else.
+func (s *Store) RemoteTitleOf(ctx context.Context, item uuid.UUID) (RemoteTitle, bool, error) {
+	var r RemoteTitle
+	var kind domain.ItemKind
+	var season, episode *int
+	var show *uuid.UUID
+	err := s.pool.QueryRow(ctx, `
+		SELECT i.library_id, l.stream_source, i.kind, i.season_number, i.episode_number, se.parent_id
+		FROM items i JOIN libraries l ON l.id = i.library_id LEFT JOIN items se ON se.id = i.parent_id
+		WHERE i.id = $1 AND l.media = 'remote' AND i.kind IN ('movie', 'episode')`, item).
+		Scan(&r.Library, &r.Source, &kind, &season, &episode, &show)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return r, false, nil
+	}
+	if err != nil {
+		return r, false, err
+	}
+	r.Title, err = s.streamed(ctx, item, kind, season, episode, show)
+	return r, err == nil, err
+}
+
+// streamed is a film, or an episode of a show in a season, as a provider is asked for its streams.
+func (s *Store) streamed(ctx context.Context, item uuid.UUID, kind domain.ItemKind, season, episode *int, show *uuid.UUID) (domain.Streamed, error) {
+	t := domain.Streamed{Kind: domain.ItemMovie}
+	if kind == domain.ItemEpisode && show != nil {
+		item = *show
+		t = domain.Streamed{Kind: domain.ItemShow, Season: deref(season), Episode: deref(episode)}
+	}
+	ids, err := s.ExternalIDs(ctx, []uuid.UUID{item})
+	t.IDs = ids[item]
+	return t, err
+}
+
+// Offered marks missing a remote title's copies its provider no longer offers, and not missing
+// those it offers again, the fingerprints of which are offered, as a scan marks a folder's copies
+// by the files it finds. It answers the fingerprints of the title's copies that are offered.
+func (s *Store) Offered(ctx context.Context, item uuid.UUID, offered [][]byte) ([][]byte, error) {
+	return queryColumn[[]byte](ctx, s.pool, `
+		WITH marked AS (
+			UPDATE versions v SET missing_since = CASE WHEN v.fingerprint = ANY($2) THEN NULL ELSE coalesce(v.missing_since, now()) END
+			WHERE v.item_id = $1 RETURNING v.fingerprint, v.missing_since IS NULL AS live)
+		SELECT fingerprint FROM marked WHERE live`, item, offered)
+}
+
+// SaveCopy keeps a copy of a title no scan finds: a remote library's, read as it is played.
+func (s *Store) SaveCopy(ctx context.Context, lib, item uuid.UUID, c Copy) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		settings, err := analysisOf(ctx, tx, lib)
+		if err != nil {
+			return err
+		}
+		if err := saveCopy(ctx, tx, lib, settings, item, c); err != nil {
+			return err
+		}
+		return keyTitle(ctx, tx, item)
+	})
+}

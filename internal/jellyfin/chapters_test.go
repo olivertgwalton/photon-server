@@ -38,7 +38,8 @@ func TestAnAppReadsAFilmsChapters(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, PreviewFiles: analysis.NewPreviews(dir),
+		Copies: noCopies{},
+		Auth:   profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, PreviewFiles: analysis.NewPreviews(dir),
 	})
 	chapters := func(target string) []map[string]any {
 		t.Helper()
