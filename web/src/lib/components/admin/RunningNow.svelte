@@ -15,14 +15,10 @@ let { live, libraries }: { live: Live; libraries: Map<string, string> } =
 
 const clock = ticking();
 const running = $derived(Object.groupBy(live.jobs, (j) => j.kind));
-// A job running before its backlog is first told still has a line.
+// A backlog with no job running is only queued (waiting for its window, say),
+// so it has no line.
 const jobs = $derived(
-	[
-		...new Set([
-			...live.backlogs.map((b) => b.kind),
-			...live.jobs.map((j) => j.kind),
-		]),
-	].map((kind) => {
+	[...new Set(live.jobs.map((j) => j.kind))].map((kind) => {
 		const backlog = live.backlogs.find((b) => b.kind === kind);
 		return {
 			kind,
