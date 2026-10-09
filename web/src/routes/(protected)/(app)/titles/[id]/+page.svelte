@@ -213,9 +213,6 @@ const poster = $derived(art("poster"));
 				backdrop ? "pt-[28svh]" : "pt-6",
 			]}
 		>
-			{#if t.show}
-				<p class="text-ink-2 text-sm">{t.show.title}</p>
-			{/if}
 			<div class="flex items-end gap-6">
 				{#if poster && !backdrop}
 					<Artwork
