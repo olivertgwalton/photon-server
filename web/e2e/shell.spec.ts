@@ -67,7 +67,7 @@ test("rows scroll sideways inside the page, which never does", async ({
 	}
 });
 
-test("a row's arrows page through it, each shown only where there is more", async ({
+test("a row's arrows, above it, page through it, each working only where there is more", async ({
 	page,
 	isMobile,
 }) => {
@@ -76,14 +76,13 @@ test("a row's arrows page through it, each shown only where there is more", asyn
 	const row = page.getByRole("region", { name: /Recently Added in Films/ });
 	const previous = row.getByRole("button", { name: /Previous in/ });
 	const next = row.getByRole("button", { name: /Next in/ });
-	await expect(previous).toHaveCount(0);
-	await row.hover();
-	await expect(next).toBeVisible();
+	await expect(previous).toBeDisabled();
+	await expect(next).toBeEnabled();
 	await next.click();
 	await expect
 		.poll(() => row.locator("ul").evaluate((ul) => ul.scrollLeft))
 		.toBeGreaterThan(0);
-	await expect(previous).toBeVisible();
+	await expect(previous).toBeEnabled();
 	await expectAccessible(page);
 });
 
