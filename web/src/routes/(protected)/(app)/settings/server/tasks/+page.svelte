@@ -1,9 +1,10 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { vocabulary } from "#lib/vocabulary.js";
-import { runTask } from "#lib/actions.svelte.js";
+import { confirmFirst, runTask } from "#lib/actions.svelte.js";
 import { runtime } from "#lib/format.js";
 import PlayIcon from "@lucide/svelte/icons/play";
+import SquareIcon from "@lucide/svelte/icons/square";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { relative, when } from "#lib/admin/words.js";
@@ -14,7 +15,6 @@ import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/Choice.svelte";
-import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import { Progress } from "#lib/components/ui/progress/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { fields } from "#lib/form.js";
@@ -233,24 +233,30 @@ function took(started?: string, finished?: string) {
 						{relative(task.next_at, clock.now)}
 					</time>
 				</Table.Cell>
-				<Table.Cell>
-					<div class="flex items-center justify-end gap-2">
-						{#if w.running}
-							<ConfirmButton
-								label="Stop"
-								hidden={words.tasks[task.key].name}
-								title="Stop {words.tasks[task.key].name.toLowerCase()}?"
-								confirm="Stop"
-								onconfirm={() =>
-									act(
-										api.POST("/api/v1/admin/tasks/{key}/stop", {
-											params: { path: { key: task.key } },
-										}),
-										`${words.tasks[task.key].name} was stopped.`,
-									)}
-								body={`The ${w.left.toLocaleString()} left are taken off the queue, and one running stops within a few minutes. What is done is kept: the task's next run, or Run now, takes up the rest.`}
-							/>
-						{/if}
+				<Table.Cell class="text-right">
+					{#if w.running}
+						<Button
+							variant="outline"
+							size="sm"
+							onclick={() =>
+								confirmFirst(
+									`Stop ${words.tasks[task.key].name.toLowerCase()}?`,
+									`The ${w.left.toLocaleString()} left are taken off the queue, and one running stops within a few minutes. What is done is kept: the task's next run, or Run now, takes up the rest.`,
+									"Stop",
+									() =>
+										act(
+											api.POST("/api/v1/admin/tasks/{key}/stop", {
+												params: { path: { key: task.key } },
+											}),
+											`${words.tasks[task.key].name} was stopped.`,
+										),
+								)}
+						>
+							<SquareIcon aria-hidden="true" />
+							<span class="max-sm:sr-only">Stop</span>
+							<span class="sr-only">{words.tasks[task.key].name}</span>
+						</Button>
+					{:else}
 						<Button
 							variant="outline"
 							size="sm"
@@ -262,7 +268,7 @@ function took(started?: string, finished?: string) {
 							<span class="max-sm:sr-only">Run now</span>
 							<span class="sr-only">{words.tasks[task.key].name}</span>
 						</Button>
-					</div>
+					{/if}
 				</Table.Cell>
 			</Table.Row>
 		{/each}
