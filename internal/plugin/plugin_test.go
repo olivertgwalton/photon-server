@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/text/language"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/plugin/pluginv1"
 	"github.com/olivertgwalton/photon-server/internal/provider"
@@ -78,7 +80,7 @@ func TestAPluginsRedirectIsNotFollowed(t *testing.T) {
 func TestAPluginIsRefusedWhereItAnswersNoCapabilityTheServerSpeaks(t *testing.T) {
 	m := pluginv1.Manifest{
 		Protocol: pluginv1.Version, ID: "films", Name: "Films", Kinds: []string{"movie"},
-		Capabilities: []pluginv1.Capability{{Name: "subtitles", Version: 1}, {Name: "rate", Version: 2}},
+		Capabilities: []pluginv1.Capability{{Name: "unheard-of", Version: 1}, {Name: "rate", Version: 2}},
 	}
 	if err := valid(m); !errors.Is(err, ErrRefused) {
 		t.Errorf("answering nothing spoken: %v, want refused", err)
@@ -142,5 +144,47 @@ func writeJSON(t *testing.T, w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		t.Error(err)
+	}
+}
+
+// A plugin finds subtitles in the language asked for and fetches one as SubRip; one it names in no
+// language, or answers empty, is not taken, and none is made for a release with no hash.
+func TestAPluginFindsAndFetchesSubtitles(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /subtitles/v1/search", func(w http.ResponseWriter, r *http.Request) {
+		var req pluginv1.SubtitlesRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Language != "pt-BR" || req.IDs["imdb"] != "tt0113277" {
+			writeJSON(t, w, pluginv1.SubtitlesResponse{})
+			return
+		}
+		writeJSON(t, w, pluginv1.SubtitlesResponse{Subtitles: []pluginv1.Subtitle{
+			{ID: "7", Language: "pt-BR", Release: "Heat.1995.1080p", ForRelease: true, Downloads: 12},
+			{ID: "8", Language: "not a language"},
+		}})
+	})
+	mux.HandleFunc("POST /subtitles/v1/fetch", func(w http.ResponseWriter, r *http.Request) {
+		var req pluginv1.FetchRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ID != "7" {
+			writeJSON(t, w, pluginv1.FetchResponse{})
+			return
+		}
+		writeJSON(t, w, pluginv1.FetchResponse{SubRip: "1\n00:00:01,000 --> 00:00:02,000\nOlá\n"})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	m := pluginv1.Manifest{ID: "subs", Kinds: []string{"movie"}, Capabilities: []pluginv1.Capability{{Name: "subtitles", Version: 1}}}
+	c := &client{manifest: m, speaks: spoken(m), base: srv.URL, http: srv.Client(), settings: func(context.Context) (map[string]string, error) { return nil, nil }}
+
+	found, err := c.SearchSubtitles(t.Context(), domain.SubtitleQuery{
+		Kind: domain.ItemMovie, IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0113277"}, Language: language.MustParse("pt-BR"),
+	})
+	if err != nil || len(found) != 1 || found[0].Source != "plugin:subs" || found[0].ID != "7" || found[0].Language != language.MustParse("pt-BR") || found[0].ForRelease {
+		t.Errorf("found = %+v %v, want subtitle 7 alone, not for a release unhashed", found, err)
+	}
+	if body, err := c.FetchSubtitle(t.Context(), "7"); err != nil || !strings.Contains(string(body), "Olá") {
+		t.Errorf("fetched %q %v", body, err)
+	}
+	if _, err := c.FetchSubtitle(t.Context(), "8"); !errors.Is(err, provider.ErrNotFound) {
+		t.Errorf("an empty subtitle: %v, want not found", err)
 	}
 }

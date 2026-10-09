@@ -40,8 +40,8 @@ type Setting struct {
 
 // Speaks is the version of each capability this server speaks, and its calls: "describe" is
 // match and describe, "search" is search, "rate" is ratings, "person" is person, "list" is list,
-// "stream" is streams.
-var Speaks = map[string]int{"describe": 1, "search": 1, "rate": 1, "person": 1, "list": 1, "stream": 1}
+// "stream" is streams, "subtitles" is search and fetch.
+var Speaks = map[string]int{"describe": 1, "search": 1, "rate": 1, "person": 1, "list": 1, "stream": 1, "subtitles": 1}
 
 // Settings is in every request: what an admin set for the plugin, by key.
 type Settings map[string]string
@@ -254,6 +254,46 @@ type Stream struct {
 	Name     string `json:"name,omitempty"`
 	Filename string `json:"filename,omitempty"`
 	Size     int64  `json:"size,omitempty"`
+}
+
+// SubtitlesRequest asks for the subtitles of a film by its ids, or of an episode by its show's ids
+// and its numbers, in a language.
+type SubtitlesRequest struct {
+	Settings Settings          `json:"settings"`
+	Kind     string            `json:"kind"`
+	IDs      map[string]string `json:"ids"`
+	Season   int               `json:"season,omitempty"`
+	Episode  int               `json:"episode,omitempty"`
+	// Hash is the file's OpenSubtitles hash, where the copy is one file the server can read.
+	Hash string `json:"hash,omitempty"`
+	// Language is an IETF tag, such as en or pt-BR.
+	Language string `json:"language"`
+}
+
+type SubtitlesResponse struct {
+	Subtitles []Subtitle `json:"subtitles"`
+}
+
+// Subtitle is one the plugin has: its id there, fetched by it, and what it is.
+type Subtitle struct {
+	ID              string `json:"id"`
+	Language        string `json:"language"`
+	Release         string `json:"release,omitempty"`
+	HearingImpaired bool   `json:"hearing_impaired,omitempty"`
+	Forced          bool   `json:"forced,omitempty"`
+	// ForRelease is a subtitle made for the very file the hash is of.
+	ForRelease bool `json:"for_release,omitempty"`
+	Downloads  int  `json:"downloads,omitempty"`
+}
+
+type FetchRequest struct {
+	Settings Settings `json:"settings"`
+	ID       string   `json:"id"`
+}
+
+// FetchResponse is a subtitle as SubRip.
+type FetchResponse struct {
+	SubRip string `json:"subrip"`
 }
 
 // Problem is an error a plugin answers, as RFC 9457 shapes it, with a 4xx or 5xx status.
