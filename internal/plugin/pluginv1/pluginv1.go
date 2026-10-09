@@ -1,7 +1,8 @@
 // Package pluginv1 is version 1 of the protocol a metadata plugin speaks: the JSON it answers at
-// GET {base}/manifest, and takes and answers at POST {base}/match, /describe, /search, /ratings
-// and /person. Anything a plugin written against it could notice changing is a new version, in a
-// package of its own; adding an optional field is not. docs/plugins.md is its reference.
+// GET {base}/manifest, and takes and answers at POST {base}/{capability}/v{version}/{call} for each
+// capability its manifest names. Anything a plugin written against it could notice changing is a
+// new version, in a package of its own; adding an optional field, a capability or a version of
+// one is not. docs/plugins.md is its reference.
 package pluginv1
 
 import "time"
@@ -16,10 +17,17 @@ type Manifest struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	// Kinds are "movie", "show" or both.
-	Kinds []string `json:"kinds"`
-	// Capabilities are "describe" (match and describe), "search", "rate" and "person".
-	Capabilities []string  `json:"capabilities"`
-	Settings     []Setting `json:"settings,omitempty"`
+	Kinds        []string     `json:"kinds"`
+	Capabilities []Capability `json:"capabilities"`
+	Settings     []Setting    `json:"settings,omitempty"`
+}
+
+// Capability is a family of calls a plugin answers, at a version of it. A plugin may name one at
+// several versions, and the server calls the one it speaks; one it does not speak, by name or
+// version, is passed over, so a plugin can answer a capability a newer server speaks.
+type Capability struct {
+	Name    string `json:"name"`
+	Version int    `json:"version"`
 }
 
 type Setting struct {
@@ -30,8 +38,9 @@ type Setting struct {
 	Required bool `json:"required,omitempty"`
 }
 
-// Capabilities are those a plugin speaking this protocol may answer.
-var Capabilities = []string{"describe", "search", "rate", "person"}
+// Speaks is the version of each capability this server speaks, and its calls: "describe" is
+// match and describe, "search" is search, "rate" is ratings, "person" is person.
+var Speaks = map[string]int{"describe": 1, "search": 1, "rate": 1, "person": 1}
 
 // Settings is in every request: what an admin set for the plugin, by key.
 type Settings map[string]string

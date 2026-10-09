@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"time"
 
@@ -114,16 +113,14 @@ func (p *Plugins) read(row store.Plugin) (Registered, provider.Provider, error) 
 		return Registered{}, nil, fmt.Errorf("plugin %s: %w", row.Slug, err)
 	}
 	c := &client{
-		manifest: m, base: row.URL, http: p.http,
+		manifest: m, speaks: spoken(m), base: row.URL, http: p.http,
 		settings: func(ctx context.Context) (map[string]string, error) { return p.st.ProviderSettings(ctx, source) },
 	}
 	r := Registered{ID: m.ID, Protocol: row.Protocol, URL: row.URL, Name: m.Name, Version: m.Protocol}
 	for _, k := range m.Kinds {
 		r.Kinds = append(r.Kinds, domain.ItemKind(k))
 	}
-	for _, c := range m.Capabilities {
-		r.Capabilities = append(r.Capabilities, domain.Capability(c))
-	}
+	r.Capabilities = provider.Capabilities(c)
 	return r, c, nil
 }
 
@@ -276,17 +273,15 @@ func valid(m pluginv1.Manifest) error {
 	if m.Name == "" {
 		return fmt.Errorf("%w: it has no name", ErrRefused)
 	}
-	if len(m.Kinds) == 0 || len(m.Capabilities) == 0 {
-		return fmt.Errorf("%w: it names no kinds or no capabilities", ErrRefused)
+	if len(m.Kinds) == 0 {
+		return fmt.Errorf("%w: it names no kinds", ErrRefused)
+	}
+	if len(spoken(m)) == 0 {
+		return fmt.Errorf("%w: it answers no capability at a version this server speaks, of %v", ErrRefused, pluginv1.Speaks)
 	}
 	for _, k := range m.Kinds {
 		if k := domain.ItemKind(k); k != domain.ItemMovie && k != domain.ItemShow {
 			return fmt.Errorf("%w: kind %q is not movie or show", ErrRefused, k)
-		}
-	}
-	for _, c := range m.Capabilities {
-		if !slices.Contains(pluginv1.Capabilities, c) {
-			return fmt.Errorf("%w: capability %q is not one of %v", ErrRefused, c, pluginv1.Capabilities)
 		}
 	}
 	keys := map[string]bool{}

@@ -28,14 +28,14 @@ func TestAPluginsErrorNamesItAndNeverItsKey(t *testing.T) {
 	defer srv.Close()
 	c := &client{
 		manifest: pluginv1.Manifest{
-			ID: "films", Capabilities: []string{"rate"},
+			ID: "films", Capabilities: []pluginv1.Capability{{Name: "rate", Version: 1}},
 			Settings: []pluginv1.Setting{{Key: "api_key", Name: "API key", Secret: true, Required: true}},
 		},
-		base: srv.URL, http: srv.Client(),
+		speaks: map[domain.Capability]int{domain.CapabilityRate: 1}, base: srv.URL, http: srv.Client(),
 		settings: func(context.Context) (map[string]string, error) { return map[string]string{"api_key": "s3cret"}, nil },
 	}
 	_, err := c.Ratings(t.Context(), domain.ItemMovie, nil)
-	if err == nil || !strings.Contains(err.Error(), "plugin films /ratings: 401 Unauthorized: Bad key") ||
+	if err == nil || !strings.Contains(err.Error(), "plugin films /rate/v1/ratings: 401 Unauthorized: Bad key") ||
 		strings.Contains(err.Error(), "s3cret") || errors.Is(err, provider.ErrUnavailable) {
 		t.Errorf("refused: %v", err)
 	}
@@ -57,10 +57,10 @@ func TestAPluginsRedirectIsNotFollowed(t *testing.T) {
 	defer srv.Close()
 	c := &client{
 		manifest: pluginv1.Manifest{
-			ID: "films", Capabilities: []string{"rate"},
+			ID: "films", Capabilities: []pluginv1.Capability{{Name: "rate", Version: 1}},
 			Settings: []pluginv1.Setting{{Key: "api_key", Name: "API key", Secret: true}},
 		},
-		base: srv.URL, http: calls,
+		speaks: map[domain.Capability]int{domain.CapabilityRate: 1}, base: srv.URL, http: calls,
 		settings: func(context.Context) (map[string]string, error) { return map[string]string{"api_key": "s3cret"}, nil },
 	}
 	if _, err := c.Ratings(t.Context(), domain.ItemMovie, nil); err == nil || !strings.Contains(err.Error(), "307") {
@@ -68,5 +68,21 @@ func TestAPluginsRedirectIsNotFollowed(t *testing.T) {
 	}
 	if asked {
 		t.Error("the host redirected to was asked")
+	}
+}
+
+// A plugin is refused where it answers nothing this server speaks, and registered for what it does
+// where it answers more besides.
+func TestAPluginIsRefusedWhereItAnswersNoCapabilityTheServerSpeaks(t *testing.T) {
+	m := pluginv1.Manifest{
+		Protocol: pluginv1.Version, ID: "films", Name: "Films", Kinds: []string{"movie"},
+		Capabilities: []pluginv1.Capability{{Name: "subtitles", Version: 1}, {Name: "rate", Version: 2}},
+	}
+	if err := valid(m); !errors.Is(err, ErrRefused) {
+		t.Errorf("answering nothing spoken: %v, want refused", err)
+	}
+	m.Capabilities = append(m.Capabilities, pluginv1.Capability{Name: "rate", Version: 1})
+	if err := valid(m); err != nil {
+		t.Errorf("answering rate at version 1 besides: %v", err)
 	}
 }

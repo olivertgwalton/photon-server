@@ -60,8 +60,8 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
 - **Errors.** Answer a `4xx` or `5xx` status, with an RFC 9457 problem (`application/problem+json`,
   `{"title": "…", "detail": "…"}`) where there is something to say. A `5xx`, a timeout or no
   answer at all is a plugin that is down: the server passes over it to the library's next source,
-  as it does a provider whose key is not set. A `4xx` from `/match` or `/describe` fails the
-  title's job, which an admin sees and can retry; from `/ratings` or `/person` it is logged and
+  as it does a provider whose key is not set. A `4xx` from a `describe` call fails the
+  title's job, which an admin sees and can retry; from a `rate` or `person` call it is logged and
   the title or person goes without.
 - **Limits.** Each call has 20 seconds and may answer at most 8 MiB. A redirect is not followed:
   it is answered as a refusal, as the server asks only the address the plugin was registered at.
@@ -77,7 +77,12 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
   "id": "films",
   "name": "Films Database",
   "kinds": ["movie", "show"],
-  "capabilities": ["describe", "search", "rate", "person"],
+  "capabilities": [
+    {"name": "describe", "version": 1},
+    {"name": "search", "version": 1},
+    {"name": "rate", "version": 1},
+    {"name": "person", "version": 1}
+  ],
   "settings": [
     {"key": "api_key", "name": "API key", "secret": true, "required": true},
     {"key": "region", "name": "Region"}
@@ -87,11 +92,14 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
 
 - `id` is the plugin's slug: lower case letters, digits and hyphens, starting with a letter or
   digit, at most 63 characters. It may not change between manifests.
-- `capabilities` are what the plugin answers: `describe` is `/match` and `/describe` together,
-  `search` is `/search`, `rate` is `/ratings`, `person` is `/person`. Leave out an endpoint's
-  capability and it is never called.
+- `capabilities` are what the plugin answers, each at a version of it. A capability's calls are
+  `POST /{name}/v{version}/{call}`: `describe` is `match` and `describe`, `search` is `search`,
+  `rate` is `ratings`, `person` is `person`. Leave a capability out and it is never called.
+- A capability the server does not speak, by name or at that version, is passed over, and a
+  plugin that answers none it speaks is refused. So a plugin can name one at two versions, or one
+  only a newer server speaks, and be registered by any server for what that server speaks.
 
-### `POST /match` (describe)
+### `POST /describe/v1/match`
 
 Find the title the server has. Where `ids` carries the plugin's own id, given before or pinned by
 an admin, answer it. Answer an empty `id` when there is no confident match: a wrong match is worse
@@ -113,7 +121,7 @@ than none.
 {"id": "jaws-1"}
 ```
 
-### `POST /describe` (describe)
+### `POST /describe/v1/describe`
 
 Say what is known of the title matched. For a show, `seasons` are the seasons the server wants,
 numbered in `order` (`aired`, `dvd` or `absolute`); describe those you have. A `season_scope` of
@@ -185,7 +193,7 @@ besides `number`; of them the server keeps the fields and pictures, and an episo
   from any source, are one person, who gains the ids each brings. A credit with no ids is not kept.
 - `ids` are kept on the title, so the next match is handed them; give your own as `plugin:{id}`.
 
-### `POST /search` (search)
+### `POST /search/v1/search`
 
 List titles by a name, for an admin choosing a match by hand. The admin's choice is pinned as the
 plugin's own id, and the title matched again with it.
@@ -203,7 +211,7 @@ plugin's own id, and the title matched again with it.
 }
 ```
 
-### `POST /ratings` (rate)
+### `POST /rate/v1/ratings`
 
 Say what sites' readers and critics make of a title, found by its ids. Scores are out of 100,
 whatever scale the site uses (IMDb's 8.1 is 81). Sites: `imdb`, `tmdb`, `rotten_tomatoes`,
@@ -217,7 +225,7 @@ whatever scale the site uses (IMDb's 8.1 is 81). Sites: `imdb`, `tmdb`, `rotten_
 {"ratings": [{"site": "imdb", "score": 81, "votes": 640000}, {"site": "rotten_tomatoes", "score": 97}]}
 ```
 
-### `POST /person` (person)
+### `POST /person/v1/person`
 
 Say what is known of someone a title credits, found by their ids. Answer `404` for someone the
 plugin does not know.
@@ -270,11 +278,14 @@ whose profile has no password signs in by pairing.
 
 ## Versions
 
-The manifest's `protocol` is the version a plugin speaks; the server registers only plugins that
-speak one it does. Within a version the server may add optional fields to what it sends, so a
-plugin ignores fields it does not know, and a plugin may leave out any optional field. Anything a
-plugin could notice otherwise (a field renamed, removed or newly required, a changed meaning) is a
-new version.
+The manifest's `protocol` is the version of the manifest and of what every call shares (settings,
+locale, ids, errors); the server registers only plugins that speak one it does. Each capability has
+a version of its own: a change to one capability's calls is a new version of it, and changes
+nothing for a plugin that does not answer it. A new capability is no new version of anything.
+
+Within a version the server may add optional fields to what it sends, so a plugin ignores fields
+it does not know, and a plugin may leave out any optional field. Anything a plugin could notice
+otherwise (a field renamed, removed or newly required, a changed meaning) is a new version.
 
 ## Stremio addons
 
