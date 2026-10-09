@@ -7,6 +7,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -139,12 +140,18 @@ func (s *Store) extras(ctx context.Context, owner uuid.UUID) ([]ExtraCard, error
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}
-	lengths, err := s.durations(ctx, ids(rows))
-	if err != nil {
-		return nil, err
-	}
-	stills, err := s.stills(ctx, rows)
-	if err != nil {
+	var lengths map[uuid.UUID]onDisk
+	var stills map[uuid.UUID]still
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) {
+		lengths, err = s.durations(gctx, ids(rows))
+		return err
+	})
+	g.Go(func() (err error) {
+		stills, err = s.stills(gctx, rows)
+		return err
+	})
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 	out := make([]ExtraCard, len(rows))
