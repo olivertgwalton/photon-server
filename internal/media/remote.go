@@ -24,7 +24,6 @@ var errNoRanges = errors.New("its server does not answer byte ranges")
 // longer read as it is asked.
 type remoteMedia struct {
 	ctx    context.Context
-	client *http.Client
 	u      *url.URL
 	blocks map[int64][]byte
 }
@@ -32,7 +31,7 @@ type remoteMedia struct {
 // openRemote reads the media at u by byte ranges, answering it with its size: the start of it is
 // fetched to learn that.
 func openRemote(ctx context.Context, u *url.URL) (*io.SectionReader, error) {
-	m := &remoteMedia{ctx: ctx, client: &http.Client{Timeout: remoteStall}, u: u, blocks: map[int64][]byte{}}
+	m := &remoteMedia{ctx: ctx, u: u, blocks: map[int64][]byte{}}
 	b, size, err := m.fetch(0, rangeBlock)
 	if err != nil {
 		return nil, err
@@ -75,12 +74,8 @@ func (m *remoteMedia) ReadAt(p []byte, off int64) (int, error) {
 
 // fetch asks for length bytes from off, answering those the server sends and the media's size.
 func (m *remoteMedia) fetch(off, length int64) ([]byte, int64, error) {
-	req, err := http.NewRequestWithContext(m.ctx, http.MethodGet, m.u.String(), nil)
-	if err != nil {
-		return nil, 0, err
-	}
-	req.Header.Set("Range", "bytes="+strconv.FormatInt(off, 10)+"-"+strconv.FormatInt(off+length-1, 10))
-	resp, err := m.client.Do(req)
+	header := http.Header{"Range": {"bytes=" + strconv.FormatInt(off, 10) + "-" + strconv.FormatInt(off+length-1, 10)}}
+	resp, err := Fetch(m.ctx, http.MethodGet, m.u, header)
 	if err != nil {
 		return nil, 0, err
 	}

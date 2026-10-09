@@ -9,6 +9,8 @@ import (
 	"path"
 	"strconv"
 	"strings"
+
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // fileTypes are the types of the files a library holds, which Go's own table lacks.
@@ -55,21 +57,18 @@ var remoteHeaders = []string{"Accept-Ranges", "Content-Length", "Content-Range",
 // u's server, which answers whether it has it, as the address itself is not given to the player.
 // Of a limit, the first limit bytes are asked for whatever range the player asked.
 func serveRemote(w http.ResponseWriter, r *http.Request, u *url.URL, limit int64) error {
-	req, err := http.NewRequestWithContext(r.Context(), r.Method, u.String(), nil)
-	if err != nil {
-		return err
-	}
+	header := http.Header{}
 	limited := limit < math.MaxInt64
 	switch {
 	case limited:
-		req.Header.Set("Range", "bytes=0-"+strconv.FormatInt(limit-1, 10))
+		header.Set("Range", "bytes=0-"+strconv.FormatInt(limit-1, 10))
 	case r.Header.Get("Range") != "":
-		req.Header.Set("Range", r.Header.Get("Range"))
+		header.Set("Range", r.Header.Get("Range"))
 		if v := r.Header.Get("If-Range"); v != "" {
-			req.Header.Set("If-Range", v)
+			header.Set("If-Range", v)
 		}
 	}
-	resp, err := http.DefaultClient.Do(req) //nolint:gosec // fetching where a .strm names is its point, and only an admin adds a library
+	resp, err := media.Fetch(r.Context(), r.Method, u, header)
 	if err != nil {
 		return err
 	}
