@@ -236,17 +236,29 @@ test("a film's page plays the copy and tracks chosen", async ({ page }) => {
 	await expectAccessible(page);
 });
 
-test("a show plays where the reader is, and its season lists episodes", async ({
+test("a show and a season open on the episode the reader is at", async ({
 	page,
 }) => {
 	await logIn(page, "/titles/t-show");
-	await expect(
-		page.getByRole("link", { name: "Resume S1 E1" }),
-	).toHaveAttribute("href", "/play/t-ep");
-	await expect(page.getByRole("heading", { name: "Next up" })).toBeVisible();
-	await page.getByRole("link", { name: /Season 1/ }).click();
-	await expect(page).toHaveURL("/titles/t-s1");
-	await expect(page.getByRole("link", { name: /Second/ })).toBeVisible();
+	await expect(page).toHaveURL("/titles/t-ep");
+	await expect(page.getByRole("heading", { name: "Pilot" })).toBeVisible();
+	await page.goto("/titles/t-s2");
+	await expect(page).toHaveURL("/titles/t-ep3");
+	await expectAccessible(page);
+});
+
+test("an episode's season row picks another season's episodes", async ({
+	page,
+}) => {
+	await logIn(page, "/titles/t-ep");
+	const row = page.getByRole("region", { name: /Season 1/ });
+	await expect(row.getByRole("link", { name: /Second/ })).toBeVisible();
+	await row.getByRole("button", { name: "Season 1" }).click();
+	await page.getByRole("option", { name: "Season 2" }).click();
+	const picked = page.getByRole("region", { name: /Season 2/ });
+	await expect(picked.getByRole("link", { name: /Return/ })).toBeVisible();
+	await expect(picked.getByRole("link", { name: /Second/ })).toHaveCount(0);
+	await expect(page).toHaveURL("/titles/t-ep");
 	await expectAccessible(page);
 });
 
@@ -520,7 +532,9 @@ test("a title's link is copied to share, or shown where it cannot be", async ({
 	await expectAccessible(page);
 });
 
-test("an episode's card leads to its season", async ({ page }) => {
+test("an episode's card leads to its season, which opens on an episode", async ({
+	page,
+}) => {
 	await logIn(page, "/titles/t-ep");
 	await page.getByRole("button", { name: "Favourite" }).click();
 	await page.goto("/");
@@ -529,7 +543,7 @@ test("an episode's card leads to its season", async ({ page }) => {
 		.getByRole("button", { name: "More for Small Show: Pilot" })
 		.click();
 	await page.getByRole("menuitem", { name: "Go to Season 1" }).click();
-	await expect(page).toHaveURL("/titles/t-s1");
+	await expect(page).toHaveURL("/titles/t-ep");
 	// The server is the other tests' too: the episode is as it was.
 	await page.request.delete("/api/v1/titles/t-ep/favourite");
 });

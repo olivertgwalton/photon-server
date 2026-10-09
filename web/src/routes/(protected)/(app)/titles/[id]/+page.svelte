@@ -3,7 +3,6 @@ import Artwork from "#lib/components/Artwork.svelte";
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 import CaptionsIcon from "@lucide/svelte/icons/captions";
 import CheckIcon from "@lucide/svelte/icons/check";
-import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
@@ -27,9 +26,10 @@ import PersonCard from "#lib/components/PersonCard.svelte";
 import PlayChoices from "#lib/components/PlayChoices.svelte";
 import RatingScore from "#lib/components/RatingScore.svelte";
 import Rail from "#lib/components/Rail.svelte";
-import TitleCard from "#lib/components/TitleCard.svelte";
+import Choice from "#lib/components/Choice.svelte";
+import { client } from "#lib/api/client.js";
+import { episodesOf } from "#lib/seasons.js";
 import ThemeTune from "#lib/components/ThemeTune.svelte";
-import TitleMenu from "#lib/components/TitleMenu.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
 import {
@@ -86,10 +86,30 @@ const facts = $derived(
 		t.year,
 		t.certificate,
 		duration && runtime(duration),
-		t.kind === "season" && t.episodes && count(t.episodes.length, "episode"),
-		t.kind === "show" && t.seasons && count(t.seasons.length, "season"),
 	].filter(Boolean),
 );
+
+// The season the row shows, where the reader picked another than the page's:
+// kept with the page it was picked on, so the next page shows its own.
+let chosenSeason = $state<{
+	on: string;
+	season: { id: string; title: string; number: number };
+	episodes: NonNullable<typeof data.seasonEpisodes>;
+}>();
+const picked = $derived(
+	chosenSeason?.on === t.id ? chosenSeason.season : undefined,
+);
+const episodes = $derived(
+	chosenSeason?.on === t.id ? chosenSeason.episodes : data.seasonEpisodes,
+);
+async function pick(id: string) {
+	const season = data.seasons?.find((s) => s.id === id);
+	if (!season) return;
+	const on = t.id;
+	const shown =
+		id === t.season?.id ? data.seasonEpisodes : await episodesOf(client(), id);
+	chosenSeason = { on, season, episodes: shown ?? [] };
+}
 
 const credits = $derived(data.cast);
 const directors = $derived(
@@ -104,20 +124,14 @@ const trailer = $derived(t.extras?.find((e) => e.extra_kind === "trailer"));
 const links = $derived.by(() => {
 	const ids = t.ids ?? {};
 	const out: { name: string; href: string }[] = [];
-	if (t.kind !== "movie" && t.kind !== "show") return out;
+	if (t.kind !== "movie") return out;
 	if (ids.imdb) {
 		out.push({ name: "IMDb", href: `https://www.imdb.com/title/${ids.imdb}/` });
 	}
 	if (ids.tmdb) {
 		out.push({
 			name: "TMDB",
-			href: `https://www.themoviedb.org/${t.kind === "show" ? "tv" : "movie"}/${ids.tmdb}`,
-		});
-	}
-	if (ids.tvdb && t.kind === "show") {
-		out.push({
-			name: "TheTVDB",
-			href: `https://thetvdb.com/dereferrer/series/${ids.tvdb}`,
+			href: `https://www.themoviedb.org/movie/${ids.tmdb}`,
 		});
 	}
 	return out;
@@ -182,25 +196,7 @@ const poster = $derived(art("poster"));
 			]}
 		>
 			{#if t.show}
-				<nav aria-label="Breadcrumb">
-					<ol class="text-ink-2 flex flex-wrap items-center gap-1 text-sm">
-						<li>
-							<a href="/titles/{t.show.id}" class="hover:underline">
-								{t.show.title}
-							</a>
-						</li>
-						{#if t.season && t.kind === "episode"}
-							<li aria-hidden="true">
-								<ChevronRightIcon class="size-4" />
-							</li>
-							<li>
-								<a href="/titles/{t.season.id}" class="hover:underline">
-									{t.season.title}
-								</a>
-							</li>
-						{/if}
-					</ol>
-				</nav>
+				<p class="text-ink-2 text-sm">{t.show.title}</p>
 			{/if}
 			<div class="flex items-end gap-6">
 				{#if poster && !backdrop}
@@ -294,17 +290,6 @@ const poster = $derived(art("poster"));
 						Being fetched. It plays once its provider has it; look again in a
 						few minutes.
 					</p>
-				{:else if data.next}
-					{@const next = data.next}
-					<Button href={playHref(next.id)} size="lg" class="rounded-full px-5">
-						<PlayIcon class="fill-current" />
-						{next.state?.position_ms ? "Resume" : "Play"}
-						{episodeLabel(
-							next.season_number,
-							next.episode_number,
-							next.episode_end,
-						)}
-					</Button>
 				{/if}
 				{#if trailer}
 					<Button
@@ -406,6 +391,15 @@ const poster = $derived(art("poster"));
 										<WrenchIcon />{name}
 									</DropdownMenu.Item>
 								{/each}
+								{#if t.show}
+									<!-- A show has no page of its own to manage it from. -->
+									<DropdownMenu.Item
+										onSelect={() =>
+											goto(`/settings/server/titles/${t.show?.id}`)}
+									>
+										<WrenchIcon />Manage show
+									</DropdownMenu.Item>
+								{/if}
 							</DropdownMenu.Group>
 						{/if}
 					</DropdownMenu.Content>
@@ -429,125 +423,34 @@ const poster = $derived(art("poster"));
 		</div>
 	</header>
 
-	{#if data.next && t.kind === "show"}
-		<section aria-labelledby="next-up" class="max-w-sm">
-			<h2 id="next-up" class="heading mb-3">Next up</h2>
-			<TitleCard card={data.next} shape="still" sizes="24rem" />
-		</section>
-	{/if}
-
-	{#if t.seasons?.length}
+	{#if t.season &&
+		episodes &&
+		(episodes.length > 1 || (data.seasons?.length ?? 0) > 1)}
 		<Rail
-			title="Seasons"
-			cards={data.seasons}
-			caption={(i: number) => count(data.seasons[i].episodes, "episode")}
-			href="/titles/{t.id}/seasons"
-		/>
-	{/if}
-
-	{#if t.season && data.seasonEpisodes && data.seasonEpisodes.length > 1}
-		{@const episodes = data.seasonEpisodes}
-		<Rail
-			title={t.season.title}
+			title={picked?.title ?? t.season.title}
 			cards={episodes}
 			shape="still"
 			current={t.id}
 			caption={(i: number) =>
 				episodeLabel(
-					t.season_number,
+					picked?.number ?? t.season_number,
 					episodes[i].episode_number,
 					episodes[i].episode_end,
 				)}
-		/>
-	{/if}
-
-	{#if t.episodes?.length}
-		<section aria-labelledby="episodes">
-			<h2 id="episodes" class="heading mb-3">Episodes</h2>
-			<ol class="grid gap-4">
-				{#each t.episodes as episode (episode.id)}
-					{@const progress =
-						episode.state?.position_ms && episode.duration_ms
-							? episode.state.position_ms / episode.duration_ms
-							: 0}
-					<li class="flex gap-4">
-						<a
-							href="/titles/{episode.id}"
-							class="group flex min-w-0 flex-1 flex-col gap-3 outline-none sm:flex-row"
-						>
-							<span
-								class="card-frame block aspect-video w-full shrink-0 self-start sm:w-56"
-								style={episode.thumb
-									? blurStyle(episode.blurhashes?.[episode.thumb])
-									: undefined}
-							>
-								{#if episode.thumb}
-									<Artwork
-										id={episode.thumb}
-										shape="still"
-										sizes="(min-width: 640px) 14rem, 100vw"
-										class="card-picture"
-									/>
-								{/if}
-								{#if progress}
-									<span
-										class="absolute inset-x-2 bottom-2 block h-1 rounded-full bg-black/60"
-									>
-										<span
-											class="bg-ink block h-full rounded-full"
-											style="width: {Math.min(progress, 1) * 100}%"
-										></span>
-									</span>
-								{/if}
-							</span>
-							<span class="grid min-w-0 content-start gap-1">
-								<span class="text-ink font-semibold group-hover:underline">
-									{episode.episode_number != null
-										? `${episode.episode_number}${episode.episode_end ? `–${episode.episode_end}` : ""}. `
-										: ""}{episode.title}
-									{#if episode.state?.watched_at}
-										<CheckIcon
-											class="text-ink-3 inline size-4"
-											aria-hidden="true"
-										/>
-										<span class="sr-only">(watched)</span>
-									{/if}
-								</span>
-								<span class="text-ink-3 text-sm">
-									{[
-										episode.duration_ms && runtime(episode.duration_ms),
-										episode.release_date &&
-											new Date(episode.release_date).toLocaleDateString(
-												undefined,
-												{
-													dateStyle: "medium",
-													timeZone: "UTC",
-												},
-											),
-									]
-										.filter(Boolean)
-										.join(" · ")}
-								</span>
-								{#if episode.overview}
-									<span class="text-ink-2 line-clamp-3 text-sm">
-										{episode.overview}
-									</span>
-								{/if}
-							</span>
-						</a>
-						<TitleMenu
-							card={{
-								id: episode.id,
-								kind: "episode",
-								title: episode.title,
-								state: episode.state,
-							}}
-							class="shrink-0"
-						/>
-					</li>
-				{/each}
-			</ol>
-		</section>
+		>
+			{#snippet heading()}
+				{#if data.seasons && data.seasons.length > 1}
+					<Choice
+						options={data.seasons.map((s) => ({ value: s.id, label: s.title }))}
+						value={picked?.id ?? t.season?.id}
+						onchange={pick}
+						class="h-8 w-auto gap-2 rounded-full border-none bg-white/6 pr-2 pl-3 font-semibold hover:bg-white/12"
+					/>
+				{:else}
+					{t.season?.title}
+				{/if}
+			{/snippet}
+		</Rail>
 	{/if}
 
 	{#if data.members}

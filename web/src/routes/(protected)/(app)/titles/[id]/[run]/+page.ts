@@ -3,7 +3,6 @@ import { client, need } from "#lib/api/client.js";
 import type { PageLoad } from "./$types";
 
 const runs = {
-	seasons: "Seasons",
 	cast: "Cast & crew",
 	extras: "Extras",
 	collections: "Collections",

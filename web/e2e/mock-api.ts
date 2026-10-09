@@ -79,15 +79,17 @@ const byTitle = (cards: Schemas["Card"][]) =>
 	[...cards].sort((a, b) => a.title.localeCompare(b.title));
 
 const shows = [base("t-show", "show", "Small Show", { year: 2020 })];
-const episode = (id: string, n: number, title: string) =>
+const episode = (id: string, n: number, title: string, s = 1) =>
 	base(id, "episode", title, {
 		duration_ms: 1_800_000,
 		show: { id: "t-show", title: "Small Show" },
-		season: { id: "t-s1", title: "Season 1" },
-		season_number: 1,
+		season: { id: `t-s${s}`, title: `Season ${s}` },
+		season_number: s,
 		episode_number: n,
 	});
 const episodes = [episode("t-ep", 1, "Pilot"), episode("t-ep2", 2, "Second")];
+// A second season, of one episode, to pick from an episode's page.
+const later = episode("t-ep3", 1, "Return", 2);
 const collection = base("c-set", "collection", "Quiet Collection", {
 	origin: "tmdb",
 });
@@ -99,7 +101,18 @@ const card = (c: Schemas["Card"]): Schemas["Card"] => {
 const season = base("t-s1", "season", "Season 1", {
 	show: { id: "t-show", title: "Small Show" },
 });
-const everything = () => [...films, ...shows, season, ...episodes, collection];
+const season2 = base("t-s2", "season", "Season 2", {
+	show: { id: "t-show", title: "Small Show" },
+});
+const everything = () => [
+	...films,
+	...shows,
+	season,
+	season2,
+	...episodes,
+	later,
+	collection,
+];
 const byID = (id: string) => everything().find((c) => c.id === id);
 
 const homeRows = (): Schemas["HomeRow"][] => [
@@ -327,20 +340,25 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 				episodes: 2,
 				state: { unwatched: 2 },
 			},
+			{ id: "t-s2", number: 2, title: "Season 2", episodes: 1 },
 		];
 	}
-	if (id === "t-s1") {
+	if (id === "t-s1" || id === "t-s2") {
 		out.show = { id: "t-show", title: "Small Show" };
-		out.episodes = episodes.map((e) => ({
-			id: e.id,
-			title: e.title,
-			episode_number: e.episode_number,
-			duration_ms: e.duration_ms,
-			state: states.get(e.id),
-		}));
+		out.episodes = [...episodes, later]
+			.filter((e) => e.season?.id === id)
+			.map((e) => ({
+				id: e.id,
+				title: e.title,
+				episode_number: e.episode_number,
+				duration_ms: e.duration_ms,
+				state: states.get(e.id),
+			}));
 	}
 	if (c.kind === "episode") {
-		out.season = { id: "t-s1", title: "Season 1" };
+		out.season = c.season;
+		// As the server gives it, an episode's tune is its show's.
+		out.themes = ["th-small-show"];
 		out.versions = [
 			{
 				id: `v-${id}`,
@@ -1649,7 +1667,11 @@ const server_ = Bun.serve({
 			case "GET titles/similar":
 				return Response.json({ items: films.slice(1, 26).map(card) });
 			case "GET titles/next":
-				return Response.json(card(episodes[0]));
+				// The show and its first season are at their first episode; the
+				// second season is not started.
+				return id === "t-s2"
+					? problem(404, "not_found", "Not Found")
+					: Response.json(card(episodes[0]));
 			case "PUT titles/watched":
 			case "DELETE titles/watched":
 			case "PUT titles/favourite":
