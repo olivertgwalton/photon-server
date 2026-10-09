@@ -10,27 +10,22 @@ import (
 
 const contentSample = 64 << 10
 
-// ContentKey identifies a copy by its bytes rather than its path: the part count, then the first
-// part's size and its first and last 64 KiB. A rename or a move keeps the key; replacing the file
-// changes it.
-func ContentKey(root string, parts []string) ([]byte, error) {
-	f, err := Open(root, parts[0])
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	info, err := f.Stat()
+// ContentKey identifies a copy of parts parts by its bytes rather than its path: the part count,
+// then its first part's size and first and last 64 KiB, first being that part open. A rename or a
+// move keeps the key; replacing the file changes it. It reads without moving the file's offset.
+func ContentKey(first *os.File, parts int) ([]byte, error) {
+	info, err := first.Stat()
 	if err != nil {
 		return nil, err
 	}
 	h := sha256.New()
-	h.Write(binary.BigEndian.AppendUint64(nil, uint64(len(parts))))
+	h.Write(binary.BigEndian.AppendUint64(nil, uint64(parts)))
 	h.Write(binary.BigEndian.AppendUint64(nil, uint64(info.Size())))
-	if _, err := io.CopyN(h, f, min(contentSample, info.Size())); err != nil {
+	if _, err := io.Copy(h, io.NewSectionReader(first, 0, min(contentSample, info.Size()))); err != nil {
 		return nil, err
 	}
 	if tail := info.Size() - contentSample; tail > contentSample {
-		if _, err := io.Copy(h, io.NewSectionReader(f, tail, contentSample)); err != nil {
+		if _, err := io.Copy(h, io.NewSectionReader(first, tail, contentSample)); err != nil {
 			return nil, err
 		}
 	}
