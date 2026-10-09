@@ -5,26 +5,39 @@ import (
 	"fmt"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
-// Places finds where a part's bytes are: the root of its library and the path inside it.
+// Places finds where a part's bytes are.
 type Places interface {
-	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
+	PartPlace(ctx context.Context, part uuid.UUID) (domain.Place, error)
 }
 
-// Parts opens the parts of the copies the scanner recorded, for a tool to read or a player to
-// fetch.
+// Streams opens a copy a provider streams, as its offers say where it is now.
+type Streams interface {
+	Open(ctx context.Context, p domain.Place) (media.Input, error)
+}
+
+// Parts opens the parts of the copies the catalogue holds, for a tool to read or a player to
+// fetch: a file under a folder library's root, or a copy a remote library's provider streams.
 type Parts struct {
-	Places Places
+	Places  Places
+	Streams Streams
 }
 
 func (p Parts) Open(ctx context.Context, part uuid.UUID) (media.Input, error) {
-	root, rel, err := p.Places.PartFile(ctx, part)
+	place, err := p.Places.PartPlace(ctx, part)
 	if err != nil {
 		return media.Input{}, err
 	}
-	in, err := OpenMedia(root, rel)
+	var in media.Input
+	switch place.Media {
+	case domain.MediaRemote:
+		in, err = p.Streams.Open(ctx, place)
+	case domain.MediaFolder:
+		in, err = OpenMedia(place.Root, place.Rel)
+	}
 	if err != nil {
 		return media.Input{}, fmt.Errorf("part %s: %w", part, err)
 	}

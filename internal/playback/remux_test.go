@@ -20,8 +20,8 @@ import (
 // indexed is a catalogue whose every part has its keyframes indexed.
 type indexed struct{}
 
-func (indexed) PartFile(context.Context, uuid.UUID) (string, string, error) {
-	return "", "", os.ErrNotExist
+func (indexed) PartPlace(context.Context, uuid.UUID) (domain.Place, error) {
+	return domain.Place{}, os.ErrNotExist
 }
 
 func (indexed) SubtitleFile(context.Context, uuid.UUID) (string, string, error) {
@@ -177,8 +177,8 @@ type knownKeyframes struct {
 	asked bool
 }
 
-func (k *knownKeyframes) PartFile(context.Context, uuid.UUID) (string, string, error) {
-	return "", "", store.ErrNotFound
+func (k *knownKeyframes) PartPlace(context.Context, uuid.UUID) (domain.Place, error) {
+	return domain.Place{}, store.ErrNotFound
 }
 
 func (k *knownKeyframes) SubtitleFile(context.Context, uuid.UUID) (string, string, error) {

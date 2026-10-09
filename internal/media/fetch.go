@@ -23,12 +23,16 @@ var fetchClient = &http.Client{Transport: &http.Transport{
 // Fetch asks for a .strm's media at u, by method with header, as FFmpeg is held to fetching it:
 // given up on once its server goes remoteStall without sending.
 func Fetch(ctx context.Context, method string, u *url.URL, header http.Header) (*http.Response, error) {
+	return fetch(ctx, fetchClient, method, u, header)
+}
+
+func fetch(ctx context.Context, client *http.Client, method string, u *url.URL, header http.Header) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header = header
-	resp, err := fetchClient.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // G704: an address an admin wrote in a .strm, or one the relay's guarded client fetches
 	if err != nil {
 		return nil, err
 	}
