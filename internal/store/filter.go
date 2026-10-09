@@ -110,8 +110,11 @@ func (f WallFilter) where(args pgx.NamedArgs) string {
 		and("EXISTS ("+versionOf+" AND v.video_range = ANY(@ranges))", "ranges", f.Ranges)
 	}
 	if len(f.People) > 0 {
-		and(`EXISTS (SELECT 1 FROM credits c WHERE c.person_id = ANY(@people) AND (c.item_id = items.id
-			OR c.item_id IN (SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id WHERE s.parent_id = items.id)))`,
+		// Read from the people's credits up, as one set: asked of each title, the OR across its own
+		// credits and its episodes' is a scan of the credits for every title.
+		and(`items.id IN (SELECT c.item_id FROM credits c WHERE c.person_id = ANY(@people)
+			UNION ALL SELECT s.parent_id FROM credits c JOIN items e ON e.id = c.item_id JOIN items s ON s.id = e.parent_id
+			WHERE c.person_id = ANY(@people))`,
 			"people", f.People)
 	}
 	if f.MinRating > 0 {
