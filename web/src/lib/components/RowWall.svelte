@@ -26,16 +26,18 @@ async function fetchPage(offset: number) {
 
 <svelte:head><title>{title} · Photon</title></svelte:head>
 
-<h1 class="title mb-6">{title}</h1>
-{#if page.total}
-	<Wall
-		total={page.total}
-		first={page.items}
-		pageSize={wallPageSize}
-		{fetchPage}
-		view={row.shape}
-		label={title}
-	/>
-{:else}
-	<p class="text-ink-3">{row.empty ?? "Nothing here now."}</p>
-{/if}
+<div class="grid gap-8">
+	<h1 class="title">{title}</h1>
+	{#if page.total}
+		<Wall
+			total={page.total}
+			first={page.items}
+			pageSize={wallPageSize}
+			{fetchPage}
+			view={row.shape}
+			label={title}
+		/>
+	{:else}
+		<p class="text-ink-3">{row.empty ?? "Nothing here now."}</p>
+	{/if}
+</div>
