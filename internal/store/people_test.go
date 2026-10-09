@@ -236,6 +236,62 @@ func TestTwoSourcesCreditingOneShowNameOneCast(t *testing.T) {
 	}
 }
 
+func TestSomeoneOnTMDBKeepsTheirTMDBPicture(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLibrary(ctx, shows.ID, LibraryChange{Sources: metadataFrom(domain.LibraryShows, domain.SourceTVDB, domain.SourceTMDB)}); err != nil {
+		t.Fatal(err)
+	}
+	copies := []Copy{{ContentKey: []byte("e1"), Parts: []Part{{RelPath: "e1.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}}
+	episode := Episode{Season: 1, Episodes: []int{1}, Title: "Lucifer", Folder: "Lucifer/Season 1", ByNumber: true, Copies: copies}
+	if _, err := s.SaveShowFolder(ctx, shows.ID, "Lucifer/Season 1", []byte("v1"), Show{Title: "Lucifer", Folder: "Lucifer"}, []Episode{episode}, nil); err != nil {
+		t.Fatal(err)
+	}
+	show := oneItem(t, s, "kind = 'show'")
+	const tvdbEllis, tmdbEllis, tvdbGerman = "https://artworks.thetvdb.com/te.jpg", "https://image.tmdb.org/t/p/original/te.jpg", "https://artworks.thetvdb.com/lg.jpg"
+	fromTVDB := domain.Metadata{Title: "Lucifer", Credits: []domain.Credit{
+		{Name: "Tom Ellis", IDs: map[domain.Provider]string{domain.ProviderTVDB: "400436"}, Photo: tvdbEllis, Kind: domain.CreditActor},
+		{Name: "Lauren German", IDs: map[domain.Provider]string{domain.ProviderTVDB: "371248"}, Photo: tvdbGerman, Kind: domain.CreditActor},
+	}}
+	fromTMDB := domain.Metadata{Title: "Lucifer", Credits: []domain.Credit{
+		{Name: "Tom Ellis", IDs: map[domain.Provider]string{domain.ProviderTMDB: "1"}, Photo: tmdbEllis, Kind: domain.CreditActor},
+	}}
+	photos := func() map[string]string {
+		page, err := s.Title(ctx, uuid.UUID{}, show.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for _, c := range page.Credits {
+			pic, err := s.Picture(ctx, c.Photo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out[c.Name] = pic.URL
+		}
+		return out
+	}
+	// TVDB is asked again after TMDB, as a refresh of the show asks it.
+	for n, step := range []struct {
+		source domain.FieldSource
+		said   domain.Metadata
+	}{{domain.SourceTVDB, fromTVDB}, {domain.SourceTMDB, fromTMDB}, {domain.SourceTVDB, fromTVDB}} {
+		if err := s.SaveIdentity(ctx, show.ID, step.source, step.said, nil); err != nil {
+			t.Fatal(err)
+		}
+		if n == 0 {
+			continue
+		}
+		if got := photos(); got["Tom Ellis"] != tmdbEllis || got["Lauren German"] != tvdbGerman {
+			t.Errorf("after %s: pictures = %v, want TMDB's for him and TVDB's for her, whom TMDB does not know", step.source, got)
+		}
+	}
+}
+
 func TestAPersonIsKnownByAnyProvidersID(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
