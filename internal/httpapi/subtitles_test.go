@@ -50,15 +50,15 @@ func TestAViewerFindsAndFetchesSubtitlesForTheirCopy(t *testing.T) {
 		return rec
 	}
 	base := "/api/v1/titles/" + films.String() + "/subtitles"
-	rec := do(memberToken, http.MethodGet, base+"/search?language=fr", "")
+	rec := do(memberToken, http.MethodGet, base+"/candidates?language=fr", "")
 	if body := rec.Body.String(); rec.Code != http.StatusOK ||
 		!strings.Contains(body, `"items":[{"source":"opensubtitles","id":"2","language":"fr","release":"Heat.1995.BluRay","for_release":true`) {
 		t.Errorf("search: %d %s; want the one made for the file, in French", rec.Code, body)
 	}
-	if rec := do(memberToken, http.MethodGet, base+"/search?language=Klingon!", ""); rec.Code != http.StatusBadRequest {
+	if rec := do(memberToken, http.MethodGet, base+"/candidates?language=Klingon!", ""); rec.Code != http.StatusBadRequest {
 		t.Errorf("a language that is no tag: %d, want 400", rec.Code)
 	}
-	if rec := do(memberToken, http.MethodGet, "/api/v1/titles/"+uuid.NewV7().String()+"/subtitles/search?language=fr", ""); rec.Code != http.StatusNotFound {
+	if rec := do(memberToken, http.MethodGet, "/api/v1/titles/"+uuid.NewV7().String()+"/subtitles/candidates?language=fr", ""); rec.Code != http.StatusNotFound {
 		t.Errorf("no such title: %d, want 404", rec.Code)
 	}
 	rec = do(memberToken, http.MethodPost, base, `{"version_id": "`+films.String()+`", "source": "opensubtitles", "id": "2", "language": "fr", "release": "Heat.1995.BluRay", "forced": true}`)
