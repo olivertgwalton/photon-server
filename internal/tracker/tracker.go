@@ -52,6 +52,7 @@ type service interface {
 	// scrobble tells the tracker what a player did. A play it has counted already, or that has
 	// hardly begun, is no fault.
 	scrobble(ctx context.Context, clientID, access string, a action, p play) error
+	history(ctx context.Context, clientID, access string, w historyWrite, h history) error
 }
 
 type Links struct {
@@ -179,15 +180,22 @@ func (l *Links) Unlink(ctx context.Context, profile uuid.UUID, t domain.Tracker)
 	return nil
 }
 
-// Run asks trackers after the codes profiles are entering, and tells them of the plays this node
-// took, until ctx ends. Plays still held then are not told.
+// Run asks trackers after the codes profiles are entering, tells them of the plays this node took
+// and pushes what profiles marked watched or unwatched, until ctx ends. Plays still held then are
+// not told; a play that ended watched is pushed all the same.
 func (l *Links) Run(ctx context.Context) {
 	tick := time.NewTicker(followEvery)
 	defer tick.Stop()
+	pushes := time.NewTicker(pushEvery)
+	defer pushes.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-pushes.C:
+			if err := l.push(ctx); err != nil && ctx.Err() == nil {
+				l.log.WarnContext(ctx, "what profiles watched not pushed to trackers", slog.Any("err", err))
+			}
 		case <-tick.C:
 			if err := l.follow(ctx); err != nil && ctx.Err() == nil {
 				l.log.WarnContext(ctx, "codes entered on trackers not asked after", slog.Any("err", err))

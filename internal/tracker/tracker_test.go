@@ -38,6 +38,9 @@ type fakeTracker struct {
 	access, refresh  string
 	refreshes        int
 	scrobbled        []scrobbled
+	// synced are the changes to its history it took, and failing answers them 503.
+	synced  []scrobbled
+	failing bool
 }
 
 type scrobbled struct {
@@ -85,6 +88,18 @@ func (f *fakeTracker) serve() string {
 			}
 		}
 		granted := map[string]any{"access_token": f.access, "refresh_token": f.refresh, "expires_in": 604800}
+		if strings.HasPrefix(r.URL.Path, "/sync/history") {
+			switch {
+			case r.Header.Get("Authorization") != "Bearer "+f.access:
+				w.WriteHeader(http.StatusUnauthorized)
+			case f.failing:
+				w.WriteHeader(http.StatusServiceUnavailable)
+			default:
+				f.synced = append(f.synced, scrobbled{r.URL.Path, body})
+				answer(http.StatusCreated, map[string]any{})
+			}
+			return
+		}
 		if action, ok := strings.CutPrefix(r.URL.Path, "/scrobble/"); ok {
 			if r.Header.Get("Authorization") != "Bearer "+f.access {
 				w.WriteHeader(http.StatusUnauthorized)
