@@ -17,6 +17,8 @@ type Input struct {
 	URL *url.URL
 	// Name is the media's file name, as a player is told it.
 	Name string
+	// release ends what reading URL holds, as a relayed input's place at the relay.
+	release func()
 }
 
 const (
@@ -50,6 +52,9 @@ func (in Input) Files() []*os.File {
 }
 
 func (in Input) Close() error {
+	if in.release != nil {
+		in.release()
+	}
 	if in.File == nil {
 		return nil
 	}

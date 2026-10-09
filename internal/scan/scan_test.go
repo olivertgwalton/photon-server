@@ -27,6 +27,16 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
+// lists is a provider keeping one list of titles, or none: a list that cannot be read.
+type lists []domain.Listed
+
+func (l lists) List(context.Context, domain.FieldSource, string) ([]domain.Listed, error) {
+	if l == nil {
+		return nil, errors.New("the list is not there")
+	}
+	return l, nil
+}
+
 // fakeProber describes every file alike, once it is sure ffprobe would read it from its start.
 type fakeProber struct{}
 
@@ -85,7 +95,7 @@ func newFixture(t *testing.T, kind domain.LibraryKind) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &fixture{t: t, root: root, lib: lib, db: db, st: st, scanner: New(st, fakeProber{}, log)}
+	return &fixture{t: t, root: root, lib: lib, db: db, st: st, scanner: New(st, fakeProber{}, lists(nil), log)}
 }
 
 // put writes a file whose bytes are its seed repeated, so different seeds are different copies.
@@ -389,7 +399,7 @@ func (p *failingOnce) Probe(ctx context.Context, in media.Input) (domain.Facts, 
 
 func TestAFileThatFailedToReadIsTriedAgainAtTheNextScan(t *testing.T) {
 	f := newFixture(t, domain.LibraryShows)
-	f.scanner = New(f.st, &failingOnce{names: map[string]bool{"Desperate Housewives - s03e18.mkv": true}}, slog.New(slog.DiscardHandler))
+	f.scanner = New(f.st, &failingOnce{names: map[string]bool{"Desperate Housewives - s03e18.mkv": true}}, lists(nil), slog.New(slog.DiscardHandler))
 	for _, e := range []string{"17", "18", "19"} {
 		f.put("Desperate Housewives (2004)/Season 03/Desperate Housewives - s03e"+e+".mkv", "e"+e)
 	}
@@ -423,7 +433,7 @@ func (p *notMedia) Probe(ctx context.Context, in media.Input) (domain.Facts, err
 func TestAFileThatIsNotMediaIsNotProbedAgainUntilItChanges(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
 	p := &notMedia{names: map[string]bool{"Heat (1995).mkv": true}}
-	f.scanner = New(f.st, p, slog.New(slog.DiscardHandler))
+	f.scanner = New(f.st, p, lists(nil), slog.New(slog.DiscardHandler))
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
 	if r := f.scan(); r.Skipped != 1 {
 		t.Errorf("left out %d files, want the one that is not media", r.Skipped)
@@ -460,7 +470,7 @@ func (p *fetching) Probe(ctx context.Context, in media.Input) (domain.Facts, err
 func TestAStrmIsAFilmWhoseMediaIsWhereItNames(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
 	p := &fetching{}
-	f.scanner = New(f.st, p, slog.New(slog.DiscardHandler))
+	f.scanner = New(f.st, p, lists(nil), slog.New(slog.DiscardHandler))
 	f.write("Heat (1995).strm", "https://debrid.example/heat.mkv\n")
 	f.write("Alien (1979).strm", "/media/Alien.mkv\n")
 	if r := f.scan(); r.Probed != 1 || r.Skipped != 1 {
@@ -998,7 +1008,7 @@ func (p *gatheringProber) Probe(ctx context.Context, in media.Input) (domain.Fac
 
 func TestAScanReadsSeveralFilesAtOnce(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
-	f.scanner = New(f.st, &gatheringProber{all: make(chan struct{})}, slog.New(slog.DiscardHandler))
+	f.scanner = New(f.st, &gatheringProber{all: make(chan struct{})}, lists(nil), slog.New(slog.DiscardHandler))
 	for i := range readsAtOnce {
 		name := fmt.Sprintf("Film %d (2000)", i)
 		f.put(name+"/"+name+".mkv", name)

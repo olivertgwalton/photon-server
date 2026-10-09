@@ -419,6 +419,12 @@ func violates(err error, v violation) bool {
 	return ok && violation(pg.Code) == v
 }
 
+// refusedBy reports whether a write was refused for breaking the named constraint.
+func refusedBy(err error, constraint string) bool {
+	pg, ok := errors.AsType[*pgconn.PgError](err)
+	return ok && pg.ConstraintName == constraint
+}
+
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
 
 // Version answers the Postgres server's version.

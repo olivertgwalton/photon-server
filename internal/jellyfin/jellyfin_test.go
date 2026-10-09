@@ -180,6 +180,7 @@ func (f fakeDisplays) SetDisplayPreferences(_ context.Context, profile uuid.UUID
 func newAPI() (*API, *[]uuid.UUID, *fakeLimits, *[]domain.EventKind) {
 	signedOut, limits, raised := &[]uuid.UUID{}, &fakeLimits{}, &[]domain.EventKind{}
 	api := New(slog.New(slog.DiscardHandler), serverID.String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Auth: fakeAuth{signedOut: signedOut, pairing: new(kv.PairingState)}, Limits: limits,
 		Catalogue: noLibraries{}, Preferences: newPreferences{},
 		Raise:    func(_ context.Context, e domain.Event) { *raised = append(*raised, e.Kind) },
@@ -574,6 +575,7 @@ func TestAnAppShowsAProfilesPicture(t *testing.T) {
 	}
 	pictures := onePicture{id: ada.Avatar, file: file}
 	api := New(slog.New(slog.DiscardHandler), serverID.String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Auth: fakeAuth{}, Catalogue: pictures, Pictures: pictures, Preferences: newPreferences{},
 	})
 	tag, _ := object(t, serve(api, http.MethodGet, "/Users/Me", kotlin+`, Token="pst_device"`, ""))["PrimaryImageTag"].(string)

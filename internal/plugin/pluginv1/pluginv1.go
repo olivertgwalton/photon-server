@@ -30,6 +30,9 @@ type Setting struct {
 	Required bool `json:"required,omitempty"`
 }
 
+// Capabilities are those a plugin speaking this protocol may answer.
+var Capabilities = []string{"describe", "search", "rate", "person"}
+
 // Settings is in every request: what an admin set for the plugin, by key.
 type Settings map[string]string
 
@@ -68,6 +71,8 @@ type DescribeRequest struct {
 	// "dvd" or "absolute".
 	Seasons []int  `json:"seasons,omitempty"`
 	Order   string `json:"order,omitempty"`
+	// SeasonScope is "every" for every season the plugin has, else "numbered", for Seasons.
+	SeasonScope string `json:"season_scope,omitempty"`
 }
 
 type DescribeResponse struct {

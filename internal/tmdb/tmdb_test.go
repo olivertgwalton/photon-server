@@ -231,7 +231,7 @@ func TestAnEpisodeIsRatedByItsVotesAlone(t *testing.T) {
 // A provider is found able to do what it does only while its methods are the capabilities' own.
 func TestItHasItsCapabilities(t *testing.T) {
 	got := provider.Capabilities(New(withToken, unlimited{}))
-	if want := []domain.Capability{domain.CapabilityDescribe, domain.CapabilitySearch, domain.CapabilityPerson}; !slices.Equal(got, want) {
+	if want := []domain.Capability{domain.CapabilityDescribe, domain.CapabilitySearch, domain.CapabilityPerson, domain.CapabilityList}; !slices.Equal(got, want) {
 		t.Errorf("capabilities %v, want %v", got, want)
 	}
 }
@@ -324,6 +324,23 @@ func TestAShowStillAiringIsDescribedWithItsComingSeason(t *testing.T) {
 	got := seasons[2].Episodes[3]
 	if got.Title != "Who Is Alive?" || !got.ReleaseDate.Equal(time.Date(2025, 1, 31, 0, 0, 0, 0, time.UTC)) || len(seasons) != 1 {
 		t.Errorf("seasons = %+v, want the season of the next episode to air, though no file of it was asked about", seasons)
+	}
+}
+
+// A show with no files to number its seasons by is described with every season TMDB has.
+func TestAShowAskedForEverySeasonIsDescribedWithThemAll(t *testing.T) {
+	c := serve(t, map[string]string{
+		"/tv/1438?append_to_response=content_ratings%2Cexternal_ids%2Cvideos%2Cimages%2Caggregate_credits&include_image_language=en%2Cnull&include_video_language=en%2Cnull&language=en-GB": `{
+			"id":1438,"name":"The Wire","seasons":[{"season_number":1},{"season_number":2}]}`,
+		"/tv/1438/season/1?language=en-GB": `{"episodes":[{"episode_number":1,"name":"The Target","air_date":"2002-06-02"}]}`,
+		"/tv/1438/season/2?language=en-GB": `{"episodes":[{"episode_number":1,"name":"Ebb Tide","air_date":"2003-06-01"}]}`,
+	})
+	_, seasons, err := c.Describe(t.Context(), gb, domain.ItemShow, "1438", domain.SeasonRequest{Scope: domain.SeasonsEvery, Order: domain.OrderAired})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seasons[1].Episodes[1].Title != "The Target" || seasons[2].Episodes[1].Title != "Ebb Tide" {
+		t.Errorf("seasons = %+v, want both", seasons)
 	}
 }
 

@@ -12,11 +12,26 @@ export async function addLibrary(
 ): Promise<components["schemas"]["AdminLibrary"] | undefined> {
 	const api = client();
 	const added = await api.POST("/api/v1/admin/libraries", {
-		body: {
-			name: String(form.get("name") ?? ""),
-			kind: form.get("kind") === "shows" ? "shows" : "movies",
-			root: String(form.get("root") ?? ""),
-		},
+		body:
+			form.get("media") === "remote"
+				? {
+						name: String(form.get("name") ?? ""),
+						kind: form.get("kind") === "shows" ? "shows" : "movies",
+						media: "remote",
+						list: form.get("list_source")
+							? {
+									source: String(form.get("list_source")),
+									id: String(form.get("list_id") ?? "").trim(),
+								}
+							: undefined,
+						discover: String(form.get("discover") ?? "") || undefined,
+						streams: String(form.get("streams") ?? ""),
+					}
+				: {
+						name: String(form.get("name") ?? ""),
+						kind: form.get("kind") === "shows" ? "shows" : "movies",
+						root: String(form.get("root") ?? ""),
+					},
 	});
 	if (added.error) {
 		toast.error(problemMessage(added.error));

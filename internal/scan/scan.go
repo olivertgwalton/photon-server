@@ -26,14 +26,20 @@ type prober interface {
 	Probe(ctx context.Context, in media.Input) (domain.Facts, error)
 }
 
+// lister reads the list a remote library holds the titles of.
+type lister interface {
+	List(ctx context.Context, source domain.FieldSource, id string) ([]domain.Listed, error)
+}
+
 type Scanner struct {
 	store  *store.Store
 	prober prober
+	lists  lister
 	log    *slog.Logger
 }
 
-func New(st *store.Store, p prober, log *slog.Logger) *Scanner {
-	return &Scanner{store: st, prober: p, log: log}
+func New(st *store.Store, p prober, lists lister, log *slog.Logger) *Scanner {
+	return &Scanner{store: st, prober: p, lists: lists, log: log}
 }
 
 // Report counts what a scan did; Probed is zero for a library nothing in has changed.
@@ -115,10 +121,45 @@ func scopes(asked []string) []string {
 	return out
 }
 
-// Scan reads folders of a library again with everything under them, "." being the whole
-// library, telling progress after each, and what each changed of the library's titles. Folders are
-// read several at once, parents first, so a show's seasons follow the show.
+// Scan reads a library again: a folder library's folders asked for, with everything under them,
+// "." being the whole library; a remote library's list. It tells progress as it goes, and what it
+// changed of the library's titles.
 func (s *Scanner) Scan(ctx context.Context, lib domain.Library, asked []string, progress func(domain.ScanProgress), changed func(store.Changed)) (Report, error) {
+	switch lib.Media {
+	case domain.MediaRemote:
+		return s.list(ctx, lib, progress, changed)
+	case domain.MediaFolder:
+	}
+	return s.walk(ctx, lib, asked, progress, changed)
+}
+
+// list makes a remote library hold the titles its list holds now. A list that cannot be read
+// fails the scan rather than emptying the library, as a root that cannot be read does.
+func (s *Scanner) list(ctx context.Context, lib domain.Library, progress func(domain.ScanProgress), changed func(store.Changed)) (Report, error) {
+	told := domain.ScanProgress{Library: lib.ID, Phase: domain.ScanReading, Known: 1}
+	progress(told)
+	// A library of what a search finds alone keeps only what a profile played, favourited or
+	// watchlisted of it.
+	var listed []domain.Listed
+	var err error
+	if lib.ListSource != "" {
+		if listed, err = s.lists.List(ctx, lib.ListSource, lib.ListID); err != nil {
+			return Report{}, err
+		}
+	}
+	titles, err := s.store.SaveListed(ctx, lib.ID, lib.Kind.ItemKinds()[0], listed)
+	if err != nil {
+		return Report{}, err
+	}
+	changed(titles)
+	told.Done = 1
+	progress(told)
+	return Report{Folders: 1}, nil
+}
+
+// walk reads folders of a folder library again with everything under them. Folders are read
+// several at once, parents first, so a show's seasons follow the show.
+func (s *Scanner) walk(ctx context.Context, lib domain.Library, asked []string, progress func(domain.ScanProgress), changed func(store.Changed)) (Report, error) {
 	scoped := scopes(asked)
 	r := &run{
 		lib: lib, reads: make(chan struct{}, readsAtOnce), progress: progress, changed: changed,

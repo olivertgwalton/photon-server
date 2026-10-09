@@ -73,6 +73,7 @@ func TestAnAdminSeesAPlaybackStartedInTheMetrics(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(sessions, placer, sent, remuxer)
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{},
 		Playbacks: sessions, Placer: placer, HLS: remuxer, Signer: playback.NewSigner([]byte("key")), Sent: sent, Metrics: reg,
 	})

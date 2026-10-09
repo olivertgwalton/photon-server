@@ -90,6 +90,40 @@ The server gzips its own JSON answers for a client that takes gzip, and serves t
 precompressed; media, artwork and event streams go out as they are. A reverse proxy in front of it
 need not compress again.
 
+### Remote libraries
+
+A library's media is the files under a folder, or, of a remote library, the streams a provider
+offers for the titles of a list, as [Remux](https://github.com/lostb1t/remux) plays a Stremio
+addon's. A Stremio addon is registered as a plugin by its manifest's address
+([docs/plugins.md](docs/plugins.md#stremio-addons)); its catalogs are lists, and its streams what a
+remote library plays:
+
+```sh
+curl -X POST https://photon.example/api/v1/admin/libraries -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"name": "Popular", "kind": "movies", "media": "remote",
+       "list": {"source": "plugin:aiostreams", "id": "movie/top"}, "streams": "plugin:aiostreams"}'
+```
+
+The list and the streams may come from different providers: an MDBList list streamed by Riven, say.
+Scanning a remote library reads its list; a title it no longer lists goes, unless a profile has
+played, favourited or watchlisted it. A show's episodes are those its providers say have aired.
+
+A remote library may also, or instead, hold what a search finds: with `"discover": "tmdb"` (or any
+provider that searches and files titles under ids of its own), a search of the server, in the web
+app or any Jellyfin app, shows what TMDB finds by the name that the library does not hold yet, as
+its titles, under ids kept a day. Opening one makes it the library's: it is matched there and then,
+and given a copy as any remote title is. A profile held to an age is shown none, as a title found
+has no certificate until it is matched.
+
+A film or an episode has no copy until it is opened or played. Then its provider is asked what it
+offers, and the best offer that can be read is probed and kept as a version, known by what its
+bytes are, so it is the same version however often it is offered; one no longer offered is
+missing, as a file is that is not found. What a provider offers is kept a minute on each node, so a
+link that expires is asked for again. A provider's media is read through a relay on the node's own
+loopback: no tool sees its address, which may carry a key, and it is fetched only from public
+addresses or the provider's own host. The server sends every byte, so a debrid service sees the one
+address it is played from, as Real-Debrid's terms ask: a server at home, not a hosted one.
+
 ## Develop
 
 Needs PostgreSQL 18, Valkey 9 and FFmpeg 8 or newer (`ffmpeg` and `ffprobe` on the `PATH`). Without libass in its FFmpeg, as Homebrew's lacks, a server

@@ -41,6 +41,7 @@ func TestAnAppDownloadsAFilm(t *testing.T) {
 	}
 	sent := playback.NewSent()
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada, "pst_kid": kid}, Catalogue: st, Preferences: st, Playing: st, Parts: library.Parts{Places: st}, Sent: sent,
 	})
 	w := serve(api, http.MethodGet, "/Items/"+guid(heat)+"/Download?ApiKey=pst_ada", "", "")
@@ -93,6 +94,7 @@ func TestAnAppOffersToDownloadOnlyWhatDownloads(t *testing.T) {
 	}
 	shoah := cards[0].ID
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Parts: library.Parts{Places: st}, Sent: playback.NewSent(),
 	})
 	const header = `MediaBrowser Token="pst_ada"`
@@ -162,6 +164,7 @@ func TestAnAppDownloadsAStrmAsItsMedia(t *testing.T) {
 		t.Fatal(cards, err)
 	}
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Parts: library.Parts{Places: st}, Sent: playback.NewSent(),
 	})
 	w := serve(api, http.MethodGet, "/Items/"+guid(cards[0].ID)+"/Download?ApiKey=pst_ada", "", "")

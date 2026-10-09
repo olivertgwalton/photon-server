@@ -35,11 +35,6 @@ type playing interface {
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
 }
 
-// parts opens the parts of copies for players to fetch.
-type parts interface {
-	Open(ctx context.Context, part uuid.UUID) (media.Input, error)
-}
-
 type playbacks interface {
 	Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard, start time.Duration, node uuid.UUID) (domain.Playback, error)
 	Progress(ctx context.Context, profile, id uuid.UUID, position time.Duration, state domain.PlayState, tracks domain.ChosenTracks) (domain.Reach, error)
@@ -101,6 +96,7 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
+	a.ensureCopies(r.Context(), id)
 	c, err := a.svc.Playing.Playable(r.Context(), profile, id, version)
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)

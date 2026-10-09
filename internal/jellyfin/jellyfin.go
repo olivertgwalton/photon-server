@@ -18,8 +18,10 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/reach"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // version is the Jellyfin the server answers as. Apps compare it as three numbers, and the
@@ -32,6 +34,31 @@ const (
 type authenticator interface {
 	auth.Authenticator
 	PairingStatus(ctx context.Context, deviceCode string) (kv.PairingState, auth.Pairing, error)
+}
+
+// parts opens the parts of copies for players to fetch.
+type parts interface {
+	Open(ctx context.Context, part uuid.UUID) (media.Input, error)
+}
+
+// copies give a remote library's films and episodes the copies their provider offers, as one is
+// opened or played.
+type copies interface {
+	Ensure(ctx context.Context, item uuid.UUID) error
+}
+
+// discover finds remote libraries titles they do not hold yet.
+type discover interface {
+	Find(ctx context.Context, profile uuid.UUID, text string, kinds []domain.ItemKind) ([]store.Discovery, error)
+}
+
+// ensureCopies gives a remote film or episode the copies its provider offers as an app opens or
+// plays it, as the app chooses its copy from the item's media sources first; one its provider
+// cannot give is an item with none.
+func (a *API) ensureCopies(ctx context.Context, id uuid.UUID) {
+	if err := a.svc.Copies.Ensure(ctx, id); err != nil {
+		a.logger.WarnContext(ctx, "no copy of a remote title", slog.Any("err", err))
+	}
 }
 
 type Services struct {
@@ -49,6 +76,8 @@ type Services struct {
 	Pictures  pictureFiles
 	Playing   playing
 	Parts     parts
+	Copies    copies
+	Discover  discover
 	Playbacks playbacks
 	Watching  watching
 	// Previews are parts' trickplay sheets, which PreviewFiles keeps with their chapters' pictures.

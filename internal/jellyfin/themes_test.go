@@ -76,6 +76,7 @@ type themeResult struct {
 func TestAnAppListsAShowsThemeSongs(t *testing.T) {
 	st, ada, show, episode := aShowWithATheme(t)
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st,
 	})
 	get := func(target string, v any) {
@@ -115,6 +116,7 @@ func TestAnAppListsAShowsThemeSongs(t *testing.T) {
 func TestAnAppPlaysAThemeSong(t *testing.T) {
 	st, ada, show, _ := aShowWithATheme(t)
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Themes: st,
 	})
 	page, err := st.Title(t.Context(), ada.ID, show)

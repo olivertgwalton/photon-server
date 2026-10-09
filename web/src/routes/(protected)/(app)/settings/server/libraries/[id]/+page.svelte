@@ -31,7 +31,12 @@ function save(event: SubmitEvent) {
 </script>
 
 <!-- What can be done to the library is here too, not only on the list. -->
-<PageHeader title={data.library.name} description={data.library.root}>
+<PageHeader
+	title={data.library.name}
+	description={data.library.media === "remote"
+		? `Streamed, the titles of ${data.library.list?.id ?? "what a search finds"}`
+		: data.library.root}
+>
 	{#snippet actions()}
 		<Button
 			variant="outline"

@@ -275,6 +275,12 @@ type Lister interface {
 	List(ctx context.Context, id string) ([]domain.Listed, error)
 }
 
+// Streamer streams films and episodes: the copies it offers of one, best first.
+type Streamer interface {
+	Provider
+	Streams(ctx context.Context, title domain.Streamed) ([]domain.Offer, error)
+}
+
 // Subtitler finds subtitles for a title, and fetches one as SubRip, as Plex's and Jellyfin's
 // subtitle search do.
 type Subtitler interface {
@@ -312,6 +318,10 @@ func Capabilities(p Provider) []domain.Capability {
 			_, ok = As[Rater](p, c)
 		case domain.CapabilityPerson:
 			_, ok = As[PersonDescriber](p, c)
+		case domain.CapabilityList:
+			_, ok = As[Lister](p, c)
+		case domain.CapabilityStream:
+			_, ok = As[Streamer](p, c)
 		}
 		if ok {
 			out = append(out, c)
@@ -388,11 +398,27 @@ func (r *Registry) List(ctx context.Context, source domain.FieldSource, id strin
 	if err != nil {
 		return nil, err
 	}
-	lister, isLister := p.(Lister)
+	lister, isLister := As[Lister](p, domain.CapabilityList)
 	if !ok || !isLister {
 		return nil, ErrNoLister
 	}
 	return lister.List(ctx, id)
+}
+
+// ErrNoStreamer is a provider that streams nothing, or no such provider.
+var ErrNoStreamer = errors.New("the provider streams nothing")
+
+// Streams asks the provider source for the copies it offers of a film or an episode, best first.
+func (r *Registry) Streams(ctx context.Context, source domain.FieldSource, title domain.Streamed) ([]domain.Offer, error) {
+	p, ok, err := r.Get(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	streamer, isStreamer := As[Streamer](p, domain.CapabilityStream)
+	if !ok || !isStreamer {
+		return nil, ErrNoStreamer
+	}
+	return streamer.Streams(ctx, title)
 }
 
 // SearchSubtitles asks every provider that finds subtitles for those of a title, those made for

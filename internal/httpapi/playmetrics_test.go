@@ -39,6 +39,7 @@ func TestARefusedPlayIsNoStart(t *testing.T) {
 	sessions := playback.NewSessions(live, live, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7())
 	placer := alone(remuxOpener{remuxer}, false)
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{},
 		Playbacks: sessions, Placer: placer, HLS: remuxer, Signer: playback.NewSigner([]byte("key")), Sent: playback.NewSent(),
 	})
@@ -85,6 +86,7 @@ func TestADirectPlaysRangeIsCountedSent(t *testing.T) {
 	}
 	sent := playback.NewSent()
 	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Parts: library.Parts{Places: fakePlaying{root: root}},
 		Playbacks: fakePlaybacks{}, HLS: fakeHLS{}, Placer: alone(fakeHLS{}, false), Signer: playback.NewSigner([]byte("key")), Sent: sent,
 	}))

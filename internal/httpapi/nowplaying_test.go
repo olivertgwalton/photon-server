@@ -45,7 +45,7 @@ func TestTheDashboardShowsNoLapsedPlayback(t *testing.T) {
 		_, there, err := k.Playback(ctx, heat.ID)
 		lapsed = !there && err == nil
 	}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, NowPlaying: k, HLS: fakeHLS{}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, NowPlaying: k, HLS: fakeHLS{}})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/playbacks", nil)
 	req.Header.Set("Authorization", "Bearer "+goodToken)
 	rec := httptest.NewRecorder()

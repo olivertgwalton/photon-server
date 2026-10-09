@@ -47,6 +47,17 @@ type playing interface {
 	PartStreams(ctx context.Context, part uuid.UUID) ([]domain.Stream, error)
 }
 
+// copies give a remote library's films and episodes the copies their provider offers, as one is
+// opened or played.
+type copies interface {
+	Ensure(ctx context.Context, item uuid.UUID) error
+}
+
+// discover finds remote libraries titles they do not hold yet.
+type discover interface {
+	Find(ctx context.Context, profile uuid.UUID, text string, kinds []domain.ItemKind) ([]store.Discovery, error)
+}
+
 // parts opens the parts of copies for tools to read and players to fetch.
 type parts interface {
 	Open(ctx context.Context, part uuid.UUID) (media.Input, error)
@@ -160,6 +171,9 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	}
 	id, ok := a.pathID(w, r, "id")
 	if !ok {
+		return
+	}
+	if a.answered(w, r, a.svc.Copies.Ensure(r.Context(), id)) {
 		return
 	}
 	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.VersionID)

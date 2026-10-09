@@ -1543,7 +1543,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the registered metadata plugins
+         * List the registered plugins
          * @description Admin only.
          */
         get: {
@@ -1569,7 +1569,7 @@ export interface paths {
         };
         put?: never;
         /**
-         * Register the metadata plugin at an address, once its manifest is read
+         * Register the plugin or Stremio addon at an address, once its manifest is read
          * @description Admin only.
          */
         post: {
@@ -6794,15 +6794,21 @@ export interface components {
             title: string;
         };
         AddLibrary: {
+            discover?: components["schemas"]["FieldSource"];
             kind: components["schemas"]["LibraryKind"];
+            list?: components["schemas"]["ListRef"] | null;
+            media?: components["schemas"]["LibraryMedia"];
             name: string;
-            root: string;
+            root?: string;
+            streams?: components["schemas"]["FieldSource"];
         };
         AddPlaylist: {
             item_ids?: string[];
             name: string;
         };
         AddPlugin: {
+            id?: string;
+            protocol?: components["schemas"]["PluginProtocol"];
             url: string;
         };
         AddProfile: {
@@ -6828,19 +6834,23 @@ export interface components {
             certification_country?: string;
             collection_mode: components["schemas"]["CollectionMode"];
             deletion: components["schemas"]["MediaDeletion"];
+            discover?: components["schemas"]["FieldSource"];
             /** Format: uuid */
             id: string;
             keyframes: components["schemas"]["KeyframeMode"];
             kind: components["schemas"]["LibraryKind"];
+            list?: components["schemas"]["ListRef"] | null;
             markers: components["schemas"]["MarkerDetection"];
+            media: components["schemas"]["LibraryMedia"];
             metadata_language?: string;
             monitor: components["schemas"]["Monitor"];
             name: string;
             previews: components["schemas"]["PreviewLevel"];
             refresh_days: number;
             remote_extras: components["schemas"]["ExtraKind"][];
-            root: string;
+            root?: string;
             sources: components["schemas"]["KindSources"][];
+            streams?: components["schemas"]["FieldSource"];
             subtitle_languages: string[];
             subtitle_match: components["schemas"]["SubtitleMatch"];
             themes: components["schemas"]["ThemeLookup"];
@@ -6852,19 +6862,23 @@ export interface components {
             collection_mode: components["schemas"]["CollectionMode"];
             counts: components["schemas"]["Counts"];
             deletion: components["schemas"]["MediaDeletion"];
+            discover?: components["schemas"]["FieldSource"];
             /** Format: uuid */
             id: string;
             keyframes: components["schemas"]["KeyframeMode"];
             kind: components["schemas"]["LibraryKind"];
+            list?: components["schemas"]["ListRef"] | null;
             markers: components["schemas"]["MarkerDetection"];
+            media: components["schemas"]["LibraryMedia"];
             metadata_language?: string;
             monitor: components["schemas"]["Monitor"];
             name: string;
             previews: components["schemas"]["PreviewLevel"];
             refresh_days: number;
             remote_extras: components["schemas"]["ExtraKind"][];
-            root: string;
+            root?: string;
             sources: components["schemas"]["KindSources"][];
+            streams?: components["schemas"]["FieldSource"];
             subtitle_languages: string[];
             subtitle_match: components["schemas"]["SubtitleMatch"];
             themes: components["schemas"]["ThemeLookup"];
@@ -7013,7 +7027,7 @@ export interface components {
             items: components["schemas"]["Candidate"][];
         };
         /** @enum {string} */
-        Capability: "describe" | "search" | "rate" | "person";
+        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream";
         Card: {
             /** Format: date-time */
             added_at: string;
@@ -7641,6 +7655,8 @@ export interface components {
         LibraryList: {
             items: components["schemas"]["Library"][];
         };
+        /** @enum {string} */
+        LibraryMedia: "folder" | "remote";
         LibraryOrder: {
             library_ids: string[];
         };
@@ -8117,13 +8133,16 @@ export interface components {
             id: string;
             kinds: components["schemas"]["ItemKind"][];
             name: string;
-            protocol: number;
+            protocol: components["schemas"]["PluginProtocol"];
             provider: components["schemas"]["FieldSource"];
             url: string;
+            version?: number;
         };
         PluginList: {
             items: components["schemas"]["Plugin"][];
         };
+        /** @enum {string} */
+        PluginProtocol: "photon" | "stremio";
         Position: {
             /** Format: int64 */
             position_ms: number;

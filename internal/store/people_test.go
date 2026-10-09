@@ -243,7 +243,7 @@ func TestAPersonIsKnownByAnyProvidersID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddPlugin(ctx, Plugin{Slug: "films", URL: "http://films.test", Manifest: []byte("{}")}); err != nil {
+	if err := s.AddPlugin(ctx, Plugin{Slug: "films", Protocol: domain.PluginPhoton, URL: "http://films.test", Manifest: []byte("{}")}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Sources: metadataFrom(domain.LibraryMovies, domain.SourceTMDB, domain.PluginSource("films"))}); err != nil {

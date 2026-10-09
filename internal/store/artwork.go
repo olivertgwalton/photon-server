@@ -327,7 +327,7 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (domain.Picture, erro
 	var source domain.FieldSource
 	var place, root string
 	err := s.pool.QueryRow(ctx, `
-		SELECT a.source, a.place, l.root FROM artwork a
+		SELECT a.source, a.place, coalesce(l.root, '') FROM artwork a
 		JOIN items i ON i.id = a.item_id JOIN libraries l ON l.id = i.library_id
 		WHERE a.id = $1`, id).Scan(&source, &place, &root)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -348,10 +348,16 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (domain.Picture, erro
 		// Or a video's still.
 		var site, key string
 		err = s.pool.QueryRow(ctx, `SELECT site, key FROM remote_videos WHERE thumb_id = $1 LIMIT 1`, id).Scan(&site, &key)
-		if err != nil {
-			return domain.Picture{}, found(err)
+		if err == nil {
+			return domain.Picture{URL: videoStill(site, key)}, nil
 		}
-		return domain.Picture{URL: videoStill(site, key)}, nil
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return domain.Picture{}, err
+		}
+		// Or the poster of a title a search found.
+		var poster *string
+		err = s.pool.QueryRow(ctx, `SELECT poster_url FROM discoveries WHERE poster_id = $1`, id).Scan(&poster)
+		return domain.Picture{URL: deref(poster)}, found(err)
 	}
 	if err != nil {
 		return domain.Picture{}, err

@@ -253,13 +253,35 @@ func (s *Store) SweepJobs(ctx context.Context) (int64, error) {
 	return info.RowsAffected(), err
 }
 
-// PartFile is a place a part's bytes are: its library's root and the path inside it. Of several
-// identical copies, any will do.
-func (s *Store) PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error) {
-	err = s.pool.QueryRow(ctx, `
-		SELECT l.root, f.rel_path FROM part_files f JOIN libraries l ON l.id = f.library_id
-		WHERE f.part_id = $1 ORDER BY f.rel_path LIMIT 1`, part).Scan(&root, &rel)
-	return root, rel, found(err)
+// PartPlace is where a part's bytes are: under its library's root, or, of a remote library, a
+// copy its provider streams of its film or episode. Of several identical copies, any will do.
+func (s *Store) PartPlace(ctx context.Context, part uuid.UUID) (domain.Place, error) {
+	var p domain.Place
+	var root *string
+	var source *domain.FieldSource
+	var kind domain.ItemKind
+	var item uuid.UUID
+	var show *uuid.UUID
+	var season, episode *int
+	err := s.pool.QueryRow(ctx, `
+		SELECT l.media, l.root, f.rel_path, l.stream_source, i.id, i.kind, i.season_number, i.episode_number, se.parent_id
+		FROM part_files f JOIN libraries l ON l.id = f.library_id
+			JOIN parts p ON p.id = f.part_id JOIN versions v ON v.id = p.version_id JOIN items i ON i.id = v.item_id
+			LEFT JOIN items se ON se.id = i.parent_id
+		WHERE f.part_id = $1 ORDER BY f.rel_path LIMIT 1`, part).
+		Scan(&p.Media, &root, &p.Rel, &source, &item, &kind, &season, &episode, &show)
+	if err != nil {
+		return p, found(err)
+	}
+	switch p.Media {
+	case domain.MediaRemote:
+		p.Source = deref(source)
+		p.Title, err = s.streamed(ctx, item, kind, season, episode, show)
+		return p, err
+	case domain.MediaFolder:
+	}
+	p.Root = deref(root)
+	return p, nil
 }
 
 // SaveKeyframes records a part's keyframe times, none where it has none known. pgx writes them as

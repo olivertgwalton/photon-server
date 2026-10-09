@@ -42,6 +42,7 @@ func defaultSubtitle(t *testing.T, api http.Handler, item uuid.UUID) any {
 func TestAnAppsSubtitlesFollowTheProfilesPreferences(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Sent: playback.NewSent(), Network: st,
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Watching: st, Preferences: st,
 	})
@@ -73,6 +74,7 @@ func TestAnAppSavesItsUsersConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Sent: playback.NewSent(), Network: st,
 		Auth: profiles{"pst_ada": ada, "pst_bea": bea}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Watching: st, Preferences: st,
 	})

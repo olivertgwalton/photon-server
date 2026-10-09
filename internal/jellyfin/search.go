@@ -1,7 +1,11 @@
 package jellyfin
 
 import (
+	"context"
 	"net/http"
+	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // searchHint is Jellyfin's SearchHint, as much of it as a title has. ItemId is Id under the name
@@ -66,7 +70,7 @@ func (a *API) searchHints(w http.ResponseWriter, r *http.Request) {
 		a.writeJSON(w, out)
 		return
 	}
-	cards, total, err := a.svc.Catalogue.Search(r.Context(), q)
+	cards, total, err := a.searched(r.Context(), q)
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -74,6 +78,24 @@ func (a *API) searchHints(w http.ResponseWriter, r *http.Request) {
 	for _, c := range cards {
 		out.SearchHints = append(out.SearchHints, hintOf(a.fromCard(c)))
 	}
-	out.TotalRecordCount = int(total)
+	out.TotalRecordCount = total
 	a.writeJSON(w, out)
+}
+
+// searched is what a search of every library finds: its titles, and, first in its first page, the
+// titles its remote libraries' providers find that they do not hold yet, which become theirs as
+// an app opens one.
+func (a *API) searched(ctx context.Context, q store.SearchQuery) ([]store.Card, int, error) {
+	cards, total, err := a.svc.Catalogue.Search(ctx, q)
+	if err != nil || q.Offset > 0 || q.Library != (uuid.UUID{}) {
+		return cards, int(total), err
+	}
+	found, err := a.svc.Discover.Find(ctx, q.Profile, q.Text, q.Kinds)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, d := range found {
+		cards = append(cards, d.Card())
+	}
+	return cards, int(total) + len(found), nil
 }

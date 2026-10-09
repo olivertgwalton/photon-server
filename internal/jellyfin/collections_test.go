@@ -90,6 +90,7 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada, "pst_kid": kid, "pst_guest": guest}, Catalogue: st, Preferences: st, Playlists: st,
 	})
 	type result struct {

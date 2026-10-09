@@ -323,9 +323,11 @@ func (c *Client) Details(ctx context.Context, loc domain.Locale, id int) (domain
 // seasonTypes are TheTVDB's names for its episode orders.
 var seasonTypes = map[domain.EpisodeOrder]string{domain.OrderAired: "default", domain.OrderDVD: "dvd", domain.OrderAbsolute: "absolute"}
 
-// Seasons answers what TVDB says about the episodes of the given seasons, numbered in order, and
-// about every episode yet to air.
-func (c *Client) Seasons(ctx context.Context, loc domain.Locale, id int, seasons []int, order domain.EpisodeOrder) (map[int]domain.SeasonMetadata, error) {
+// Seasons answers what TVDB says about the episodes of the seasons asked about, numbered in the
+// order asked, and about every episode yet to air. Of every season, those not numbered are
+// described without their guests and crew, which are an episode's own request each.
+func (c *Client) Seasons(ctx context.Context, loc domain.Locale, id int, asked domain.SeasonRequest) (map[int]domain.SeasonMetadata, error) {
+	seasons, order := asked.Numbers, asked.Order
 	lang := languageOf(loc)
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	out := map[int]domain.SeasonMetadata{}
@@ -367,8 +369,9 @@ func (c *Client) Seasons(ctx context.Context, loc domain.Locale, id int, seasons
 				if err != nil && !errors.Is(err, provider.ErrNotFound) {
 					return nil, err
 				}
-			case !aired.Before(today):
-				// So it is known what is coming; it has no guests or crew to ask for yet.
+			case asked.Scope == domain.SeasonsEvery || !aired.Before(today):
+				// So it is known what there is, or what is coming, which has no guests or crew to ask
+				// for yet.
 				if !ok {
 					s = domain.SeasonMetadata{Episodes: map[int]domain.Metadata{}}
 					out[e.Season] = s

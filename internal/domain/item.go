@@ -1,5 +1,10 @@
 package domain
 
+import (
+	"crypto/sha256"
+	"net/url"
+)
+
 type ItemKind string
 
 const (
@@ -85,6 +90,49 @@ func Providers() []Provider {
 type Listed struct {
 	Kind ItemKind
 	IDs  map[Provider]string
+	// Title and Year are what the list calls it, where it says: a remote library's name for a
+	// title it adds, until the title is matched.
+	Title string
+	Year  int
+}
+
+// Streamed is a film, or an episode of a show, as a provider is asked for its streams: of kind
+// movie by the film's ids, or of kind show by the show's and the episode's numbers.
+type Streamed struct {
+	Kind            ItemKind
+	IDs             map[Provider]string
+	Season, Episode int
+}
+
+// Offer is a copy of a film or an episode a provider streams. Key is which bytes it is, the same
+// each time it is offered; URL is where they are now, which may stop being, so it is never kept.
+type Offer struct {
+	Key      string
+	Name     string
+	Filename string
+	Size     int64
+	URL      *url.URL
+	// From is the host:port the provider answers at, which URL may name though it is not public.
+	From string
+}
+
+// Fingerprint is what the copy an offer is is known by among a library's, of the provider source
+// that offers it.
+func (o Offer) Fingerprint(source FieldSource) []byte {
+	sum := sha256.Sum256([]byte(string(source) + "\x00" + o.Key))
+	return sum[:]
+}
+
+// Place is where a part's bytes are: a file under a folder library's root, or a copy a provider
+// streams of a remote library's film or episode.
+type Place struct {
+	Media LibraryMedia
+	Root  string
+	// Rel is the file's path under Root; of a copy streamed, its fingerprint's hex and its name,
+	// as {hex}/{name}.
+	Rel    string
+	Source FieldSource
+	Title  Streamed
 }
 
 // IDSource is where a title's provider id came from, so a later source knows what it may replace.
@@ -151,9 +199,19 @@ func RefreshModes() []RefreshMode {
 	return []RefreshMode{RefreshMissing, RefreshAll}
 }
 
+// SeasonScope is which of a show's seasons a provider is asked about: those numbered, or every
+// season it knows, as a remote show, which has no files to number them, is described.
+type SeasonScope string
+
+const (
+	SeasonsNumbered SeasonScope = "numbered"
+	SeasonsEvery    SeasonScope = "every"
+)
+
 // SeasonRequest is which of a show's seasons a provider is asked about, in the order its files are
 // numbered in.
 type SeasonRequest struct {
+	Scope   SeasonScope
 	Numbers []int
 	Order   EpisodeOrder
 }

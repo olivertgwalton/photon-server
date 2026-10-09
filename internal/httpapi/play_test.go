@@ -121,14 +121,14 @@ func playRequest(containers string) *http.Request {
 	return req
 }
 
-func (f fakePlaying) PartFile(_ context.Context, part uuid.UUID) (string, string, error) {
+func (f fakePlaying) PartPlace(_ context.Context, part uuid.UUID) (domain.Place, error) {
 	switch part {
 	case partOne:
-		return f.root, "Lawrence/Lawrence cd1.mkv", nil
+		return domain.Place{Media: domain.MediaFolder, Root: f.root, Rel: "Lawrence/Lawrence cd1.mkv"}, nil
 	case animePart:
-		return f.root, "Anime/Anime.mkv", nil
+		return domain.Place{Media: domain.MediaFolder, Root: f.root, Rel: "Anime/Anime.mkv"}, nil
 	}
-	return "", "", store.ErrNotFound
+	return domain.Place{}, store.ErrNotFound
 }
 
 // SeesPart hides every part from everyone but Oliver.
@@ -205,6 +205,7 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Parts: library.Parts{Places: fakePlaying{root: root}}, Playbacks: fakePlaybacks{}, HLS: fakeHLS{}, Placer: alone(fakeHLS{}, false),
@@ -309,6 +310,7 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Parts: library.Parts{Places: fakePlaying{root: root}}, Playbacks: fakePlaybacks{},
@@ -453,6 +455,7 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 	}
 	h := fakeHLS{dir: dir}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: dir}, Parts: library.Parts{Places: fakePlaying{root: dir}}, Playbacks: fakePlaybacks{}, Placer: alone(h, false), HLS: h,
@@ -510,6 +513,7 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 // limit kept where lower; one on them, the file as it is.
 func TestARemoteClientIsKeptWithinTheServersLimit(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Sent:    playback.NewSent(),
 		Network: fakeNetwork{remoteKbps: 2000}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{},
 		Playbacks: fakePlaybacks{}, Placer: alone(fakeHLS{}, false), HLS: fakeHLS{}, Signer: playback.NewSigner([]byte("key")),
@@ -542,7 +546,7 @@ func TestARemoteClientIsKeptWithinTheServersLimit(t *testing.T) {
 }
 
 func TestAClientIsToldWhyNothingPlays(t *testing.T) {
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: fakePlaybacks{}, Placer: alone(fakeHLS{}, false)})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: fakePlaybacks{}, Placer: alone(fakeHLS{}, false)})
 	for _, tc := range []struct {
 		body        string
 		wantStatus  int
@@ -739,6 +743,7 @@ func TestAPlayerIsGivenTheSegmentsItAsksFor(t *testing.T) {
 	}
 	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7()),
@@ -772,6 +777,7 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
 	placer := alone(remuxOpener{remuxer}, false)
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7()),
@@ -863,6 +869,7 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 	var told []domain.Event
 	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
 		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
 		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{}, Playbacks: playback.NewSessions(live, live, remuxer, raise, uuid.NewV7()),
@@ -957,7 +964,7 @@ func TestAConnectionIsTimedOnAPartsFirstBytesWithoutPlaying(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "Lawrence", "Lawrence cd1.mkv"), film, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Parts: library.Parts{Places: fakePlaying{root: root}}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Parts: library.Parts{Places: fakePlaying{root: root}}})
 	sample := func(token, ranges string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/parts/"+partOne.String()+"/sample", nil)
 		req.Header.Set("Authorization", "Bearer "+token)

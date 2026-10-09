@@ -79,7 +79,7 @@ func TestAnAppOpensSomeoneAndTheirWork(t *testing.T) {
 	if err := st.DescribePerson(ctx, her, domain.Person{Name: "Sigourney Weaver", Biography: "An actor.", Born: born, Birthplace: "New York City"}); err != nil {
 		t.Fatal(err)
 	}
-	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Auth: profiles{"pst_ada": ada, "pst_kid": kid}, Catalogue: st, Preferences: st})
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada, "pst_kid": kid}, Catalogue: st, Preferences: st})
 	get := func(token, target string, into any) int {
 		t.Helper()
 		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Jellyfin Web", Token="`+token+`"`, "")

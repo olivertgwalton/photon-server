@@ -16,6 +16,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
 	"github.com/olivertgwalton/photon-server/internal/provider"
+	"github.com/olivertgwalton/photon-server/internal/remote"
 	"github.com/olivertgwalton/photon-server/internal/sso"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/task"
@@ -109,6 +110,7 @@ var problems = []struct {
 	{err: fs.ErrNotExist, code: codeNotFound},
 	{err: store.ErrNoNext, code: codeNotFound, ownWords: true},
 	{err: store.ErrLibraryExists, code: codeConflict, ownWords: true},
+	{err: store.ErrRemoteUntouched, code: codeConflict, ownWords: true},
 	{err: store.ErrProfileExists, code: codeConflict, ownWords: true},
 	{err: store.ErrPluginExists, code: codeConflict, ownWords: true},
 	{err: store.ErrNotUserCollection, code: codeConflict, ownWords: true},
@@ -148,6 +150,8 @@ var problems = []struct {
 	{err: store.ErrAccountLinked, code: codeConflict, ownWords: true},
 	{err: store.ErrLastWayIn, code: codeConflict, ownWords: true},
 	{err: provider.ErrUnavailable, code: codeProviderUnavailable, ownWords: true},
+	{err: remote.ErrNoCopy, code: codeProviderUnavailable, ownWords: true},
+	{err: remote.ErrGone, code: codeNotFound, ownWords: true},
 	{err: provider.ErrUnreached, code: codeProviderUnavailable, detail: "the provider did not answer"},
 	{err: provider.ErrNoSubtitler, code: codeConflict, detail: "no provider finds subtitles: an admin sets OpenSubtitles up under Providers"},
 	{err: provider.ErrNotConfigured, code: codeConflict, detail: "the provider is not set up: an admin sets it up under Providers"},

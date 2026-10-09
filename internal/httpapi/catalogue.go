@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/url"
@@ -240,6 +241,16 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		wg.Go(func() {
 			var cards []store.Card
 			cards, out.Titles.Total, titlesErr = a.svc.Catalogue.Search(ctx, query)
+			// A search of every library shows first, in its first page, what its remote libraries'
+			// providers find that they do not hold yet, which becomes theirs as it is opened.
+			if titlesErr == nil && query.Offset == 0 && query.Library == (uuid.UUID{}) {
+				var found []store.Discovery
+				found, titlesErr = a.svc.Discover.Find(ctx, query.Profile, query.Text, query.Kinds)
+				for _, d := range found {
+					cards = append(cards, d.Card())
+				}
+				out.Titles.Total += int64(len(found))
+			}
 			out.Titles.Items = cardsJSON(cards)
 		})
 	}
@@ -267,6 +278,11 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
+	// A remote film or episode is given a copy as its page opens, as a player chooses its copy
+	// from the page before it plays; one its provider cannot give is a page with none.
+	if err := a.svc.Copies.Ensure(r.Context(), id); err != nil {
+		a.logger.WarnContext(r.Context(), "no copy of a remote title", slog.Any("err", err))
+	}
 	page, err := a.svc.Catalogue.Title(r.Context(), profile, id)
 	if a.answered(w, r, err) {
 		return
