@@ -172,6 +172,34 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 	if diff := cmp.Diff(want, facets); diff != "" {
 		t.Errorf("facets (-want +got):\n%s", diff)
 	}
+	// A profile kept to 15 and under is offered nothing only Alien has: not its 4K, its HDR or its
+	// certificate.
+	teen, err := s.AddProfile(ctx, "Teen", domain.RoleUser, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAccess(ctx, teen.ID, ProfileAccess{MaxAge: new(15), Unrated: domain.UnratedAllow}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if facets, err = s.Facets(ctx, lib.ID, teen.ID); err != nil {
+		t.Fatal(err)
+	}
+	want = Facets{
+		Genres: []string{"Comedy", "Drama", "Science Fiction"}, Years: []int{2001, 1985},
+		Certificates: []string{"15", "PG"}, Studios: []string{"Studio Brazil", "Studio Émile"},
+		Resolutions: []domain.Resolution{domain.ResolutionSD, domain.ResolutionFHD},
+		Ranges:      []domain.Range{domain.RangeSDR}, RatingSites: []domain.RatingSite{domain.SiteIMDb},
+	}
+	if diff := cmp.Diff(want, facets); diff != "" {
+		t.Errorf("facets of a profile kept to 15 (-want +got):\n%s", diff)
+	}
+	// A show's copies are its episodes'.
+	if facets, err = s.Facets(ctx, shows.ID, oliver.ID); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(facets.Resolutions, []domain.Resolution{domain.ResolutionFHD}) || !slices.Equal(facets.Ranges, []domain.Range{domain.RangeSDR}) {
+		t.Errorf("a shows library's copies: %v %v, want its episodes' 1080p SDR", facets.Resolutions, facets.Ranges)
+	}
 	letters, err := s.Letters(ctx, lib.ID, oliver.ID, WallFilter{Marks: []domain.Mark{domain.MarkUnwatched}})
 	if err != nil || !slices.Equal(letters, []Letter{{"B", 1}, {"E", 1}}) {
 		t.Errorf("letters of the unwatched = %v, %v", letters, err)
