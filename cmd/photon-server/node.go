@@ -35,6 +35,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/plugin"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/reach"
+	"github.com/olivertgwalton/photon-server/internal/remote"
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/secure"
 	"github.com/olivertgwalton/photon-server/internal/sso"
@@ -68,6 +69,7 @@ type node struct {
 	remuxer     *hls.Remuxer
 	conversions *playback.Conversions
 	parts       library.Parts
+	plugins     *plugin.Plugins
 	auth        *auth.Service
 	pictures    *artwork.Cache
 	previews    *analysis.Previews
@@ -124,7 +126,9 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	if n.identity, err = identity.New(ctx, n.st, hostname, n.logger); err != nil {
 		return err
 	}
-	n.parts = library.Parts{Places: n.st}
+	n.plugins = plugin.New(n.st)
+	n.providers = metadataProviders(n.st, n.plugins, n.cache)
+	n.parts = library.Parts{Places: n.st, Streams: remote.New(n.providers)}
 	n.conversions, err = playback.NewConversions(n.st, n.parts, n.cache, n.remuxer, n.tools.FFmpeg.Path, hw, filepath.Join(n.cacheRoot, "downloads"), n.id)
 	if err != nil {
 		return err
@@ -157,8 +161,6 @@ func (n *node) wire(ctx context.Context) error {
 	st, logger := n.st, n.logger
 	n.gate = jobs.NewGate(n.cache, st, n.hub.Subscribe, logger)
 	window := task.Trigger{Kind: task.TriggerWindow, Opens: n.gate.Opens}
-	plugins := plugin.New(st)
-	n.providers = metadataProviders(st, plugins, n.cache)
 	fetcher := subtitles.NewFetcher(st, n.parts, n.providers)
 	n.scheduler = task.NewScheduler(st, logger, n.id, n.hub.Raise, scanTask(st), sweepTask(st, logger), backupTask(n.dumper, n.hub, logger),
 		refreshTask(st, logger), sweepArtworkTask(st, n.pictures, logger), markersTask(st, n.tools, window, logger),
@@ -191,7 +193,7 @@ func (n *node) wire(ctx context.Context) error {
 	p := playing{
 		files: files, owners: playback.NewRouter(n.cache, n.id), signer: playback.NewSigner(signingKey), nodeKey: nodeKey,
 		placer: playback.NewPlacer(n.cache, n.self.Node, playback.NewRemuxes(files, n.parts, n.remuxer), nodeKey),
-		sent:   playback.NewSent(), plugins: plugins, fetcher: fetcher,
+		sent:   playback.NewSent(), plugins: n.plugins, fetcher: fetcher,
 	}
 	n.secured = secure.New(st, n.hub.Subscribe, logger)
 	n.jellyfin, err = jellyfin.NewListener(st, n.hub.Subscribe, jellyfin.New(logger, n.info.ID, n.identity.Name, jellyfin.Services{

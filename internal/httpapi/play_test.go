@@ -121,14 +121,14 @@ func playRequest(containers string) *http.Request {
 	return req
 }
 
-func (f fakePlaying) PartFile(_ context.Context, part uuid.UUID) (string, string, error) {
+func (f fakePlaying) PartPlace(_ context.Context, part uuid.UUID) (domain.Place, error) {
 	switch part {
 	case partOne:
-		return f.root, "Lawrence/Lawrence cd1.mkv", nil
+		return domain.Place{Media: domain.MediaFolder, Root: f.root, Rel: "Lawrence/Lawrence cd1.mkv"}, nil
 	case animePart:
-		return f.root, "Anime/Anime.mkv", nil
+		return domain.Place{Media: domain.MediaFolder, Root: f.root, Rel: "Anime/Anime.mkv"}, nil
 	}
-	return "", "", store.ErrNotFound
+	return domain.Place{}, store.ErrNotFound
 }
 
 // SeesPart hides every part from everyone but Oliver.

@@ -1,6 +1,9 @@
 package domain
 
-import "net/url"
+import (
+	"crypto/sha256"
+	"net/url"
+)
 
 type ItemKind string
 
@@ -109,6 +112,27 @@ type Offer struct {
 	Filename string
 	Size     int64
 	URL      *url.URL
+	// From is the host:port the provider answers at, which URL may name though it is not public.
+	From string
+}
+
+// Fingerprint is what the copy an offer is is known by among a library's, of the provider source
+// that offers it.
+func (o Offer) Fingerprint(source FieldSource) []byte {
+	sum := sha256.Sum256([]byte(string(source) + "\x00" + o.Key))
+	return sum[:]
+}
+
+// Place is where a part's bytes are: a file under a folder library's root, or a copy a provider
+// streams of a remote library's film or episode.
+type Place struct {
+	Media LibraryMedia
+	Root  string
+	// Rel is the file's path under Root; of a copy streamed, its fingerprint's hex and its name,
+	// as {hex}/{name}.
+	Rel    string
+	Source FieldSource
+	Title  Streamed
 }
 
 // IDSource is where a title's provider id came from, so a later source knows what it may replace.

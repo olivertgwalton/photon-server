@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -129,10 +130,18 @@ type Addon struct {
 	id       domain.FieldSource
 	manifest Manifest
 	api      provider.Client
+	// host is the addon's, as host:port, which its streams may name though it is not public:
+	// Riven's, on the household's network, is.
+	host string
 }
 
 func New(id domain.FieldSource, base string, m Manifest, hc *http.Client) *Addon {
-	return &Addon{id: id, manifest: m, api: api(base, hc)}
+	a := &Addon{id: id, manifest: m, api: api(base, hc)}
+	if u, err := url.Parse(base); err == nil {
+		port := cmp.Or(u.Port(), map[string]string{"http": "80", "https": "443"}[u.Scheme])
+		a.host = net.JoinHostPort(u.Hostname(), port)
+	}
+	return a
 }
 
 func (a *Addon) Info() provider.Info {
@@ -198,7 +207,7 @@ func (a *Addon) Streams(ctx context.Context, t domain.Streamed) ([]domain.Offer,
 	}
 	var out []domain.Offer
 	for _, s := range answer.Streams {
-		if o, ok := offerOf(s); ok {
+		if o, ok := offerOf(s, a.host); ok {
 			out = append(out, o)
 		}
 	}
@@ -208,13 +217,13 @@ func (a *Addon) Streams(ctx context.Context, t domain.Streamed) ([]domain.Offer,
 // offerOf is a stream as an offer, keyed by what its bytes are as Remux keys them: a torrent's file
 // by its hash and index, else a file by its name and size, else its address without the query,
 // which a debrid link signs afresh each time it is offered.
-func offerOf(s stream) (domain.Offer, bool) {
+func offerOf(s stream, from string) (domain.Offer, bool) {
 	u, err := url.Parse(s.URL)
 	headers := len(s.Hints.ProxyHeaders) > 0 && string(s.Hints.ProxyHeaders) != "null"
 	if s.URL == "" || err != nil || u.Scheme != "http" && u.Scheme != "https" || u.Host == "" || headers {
 		return domain.Offer{}, false
 	}
-	o := domain.Offer{Filename: s.Hints.Filename, Size: s.Hints.VideoSize, URL: u}
+	o := domain.Offer{Filename: s.Hints.Filename, Size: s.Hints.VideoSize, URL: u, From: from}
 	o.Name = cmp.Or(s.Hints.Filename, firstLine(s.Title), firstLine(s.Description), s.Name)
 	switch {
 	case s.InfoHash != "":
