@@ -5,6 +5,8 @@ export const keys = {
 	userdata: "photon:userdata",
 	playlists: "photon:playlists",
 	downloads: "photon:downloads",
+	// The profile's accounts on Trakt and Simkl, and the codes it is entering.
+	trackers: "photon:trackers",
 	library: (id: string) => `photon:library:${id}` as const,
 	title: (id: string) => `photon:title:${id}` as const,
 	// What the dashboard's pages load, as the admin stream tells of it.
@@ -38,6 +40,7 @@ export const changeKinds = [
 	"title.updated",
 	"userdata.changed",
 	"scan.progress",
+	"tracker.changed",
 ] as const;
 
 // The data a change makes stale.
@@ -60,6 +63,9 @@ export function affected(change: Change): `photon:${string}`[] {
 			out.add(keys.home);
 			out.add(keys.userdata);
 			if (title) out.add(keys.title(title));
+			break;
+		case "tracker.changed":
+			out.add(keys.trackers);
 			break;
 	}
 	return [...out];

@@ -12,6 +12,7 @@ import HouseIcon from "@lucide/svelte/icons/house";
 import KeyRoundIcon from "@lucide/svelte/icons/key-round";
 import LayersIcon from "@lucide/svelte/icons/layers";
 import LibraryIcon from "@lucide/svelte/icons/library";
+import LinkIcon from "@lucide/svelte/icons/link";
 import ListChecksIcon from "@lucide/svelte/icons/list-checks";
 import MonitorSmartphoneIcon from "@lucide/svelte/icons/monitor-smartphone";
 import NetworkIcon from "@lucide/svelte/icons/network";
@@ -34,6 +35,7 @@ const you: [string, string, Component][] = [
 	["/settings/home", "Home", HouseIcon],
 	["/settings/devices", "Devices", MonitorSmartphoneIcon],
 	["/settings/link", "Link a device", TvIcon],
+	["/settings/trackers", "Trackers", LinkIcon],
 ];
 const server: [string, string, Component][] = [
 	["/settings/server", "Dashboard", GaugeIcon],
@@ -50,6 +52,7 @@ const server: [string, string, Component][] = [
 	["/settings/server/activity", "Activity", ActivityIcon],
 	["/settings/server/history", "Play history", RotateCcwClockIcon],
 	["/settings/server/imports", "Import history", ImportIcon],
+	["/settings/server/trackers", "Trackers", LinkIcon],
 	["/settings/server/webhooks", "Webhooks", WebhookIcon],
 	["/settings/server/backups", "Backups", ArchiveIcon],
 	["/settings/server/keys", "API keys", KeyRoundIcon],
