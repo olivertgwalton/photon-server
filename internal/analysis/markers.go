@@ -3,7 +3,6 @@ package analysis
 import (
 	"context"
 	"errors"
-	"os"
 	"slices"
 	"time"
 	"uuid"
@@ -16,10 +15,10 @@ import (
 )
 
 // fingerprinter is media.Tools.Fingerprint, or a test's stand-in.
-type fingerprinter func(ctx context.Context, f *os.File, from, length time.Duration) ([]uint32, error)
+type fingerprinter func(ctx context.Context, in media.Input, from, length time.Duration) ([]uint32, error)
 
 // shader is media.Tools.Shades, or a test's stand-in.
-type shader func(ctx context.Context, f *os.File, from time.Duration) ([]media.Shade, error)
+type shader func(ctx context.Context, in media.Input, from time.Duration) ([]media.Shade, error)
 
 // Markers finds the intro and credits a season's episodes share by comparing their sound, as
 // Plex's intro detection and Jellyfin's Intro Skipper do: each copy's first part for the intro,
@@ -82,13 +81,13 @@ func Markers(st *store.Store, fingerprint fingerprinter, shades shader) jobs.Han
 
 // take fingerprints the window of a part where kind would be.
 func take(ctx context.Context, fingerprint fingerprinter, part store.SeasonPart, kind domain.MarkerKind) (sound, error) {
-	f, err := library.Open(part.Root, part.RelPath)
+	in, err := library.OpenMedia(part.Root, part.RelPath)
 	if err != nil {
 		return sound{}, err
 	}
-	defer f.Close()
+	defer in.Close()
 	from, span := window(kind, part.Duration)
-	points, err := fingerprint(ctx, f, from, span)
+	points, err := fingerprint(ctx, in, from, span)
 	return sound{episode: part.Episode, from: from, length: part.Duration, points: points}, err
 }
 
@@ -100,12 +99,12 @@ func filmMarkers(ctx context.Context, st *store.Store, shades shader, ends []sto
 		if end.Read {
 			continue
 		}
-		f, err := library.Open(end.Root, end.RelPath)
+		in, err := library.OpenMedia(end.Root, end.RelPath)
 		if err != nil {
 			return err
 		}
-		got, err := shades(ctx, f, max(end.Duration-domain.MarkerCredits.Longest(), 0))
-		err = errors.Join(err, f.Close())
+		got, err := shades(ctx, in, max(end.Duration-domain.MarkerCredits.Longest(), 0))
+		err = errors.Join(err, in.Close())
 		if err != nil {
 			return err
 		}

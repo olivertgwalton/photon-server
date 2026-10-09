@@ -16,6 +16,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // fontTypes are the types of the fonts a file carries for its styled subtitles.
@@ -41,10 +42,7 @@ func (a *API) partSubtitles(ctx context.Context, part uuid.UUID) (hls.SubtitleSo
 		return hls.SubtitleSource{}, err
 	}
 	opening := context.WithoutCancel(ctx)
-	open := func() (*os.File, error) {
-		f, _, err := openLibraryFile(opening, a.svc.Playing.PartFile, part)
-		return f, err
-	}
+	open := func() (media.Input, error) { return openMedia(opening, a.svc.Playing.PartFile, part) }
 	return hls.SubtitleSource{Open: open, Part: part, Streams: streams}, nil
 }
 

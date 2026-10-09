@@ -295,7 +295,7 @@ func TestAPausedPlayerThatKeepsReportingKeepsItsStream(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := remuxer.Open(ctx, p.ID, hls.Copy{Parts: []hls.Source{{Open: func() (*os.File, error) { return nil, os.ErrNotExist }, Part: hls.Part{Duration: time.Hour, Keyframes: hls.Forced(time.Hour)}}}}); err != nil {
+		if err := remuxer.Open(ctx, p.ID, hls.Copy{Parts: []hls.Source{{Open: func() (media.Input, error) { return media.Input{}, os.ErrNotExist }, Part: hls.Part{Duration: time.Hour, Keyframes: hls.Forced(time.Hour)}}}}); err != nil {
 			t.Fatal(err)
 		}
 		// Paused for five minutes, saying so every ten seconds, with every node sweeping.

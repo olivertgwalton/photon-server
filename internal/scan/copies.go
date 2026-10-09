@@ -86,16 +86,16 @@ func (s *Scanner) readCopy(ctx context.Context, r reading, c *store.Copy) (bool,
 		return err == nil, err
 	}
 	for i, p := range c.Parts {
-		f := first
+		in := media.Input{File: first}
 		if i > 0 {
-			if f, err = library.Open(root, p.RelPath); err != nil {
+			if in, err = library.OpenMedia(root, p.RelPath); err != nil {
 				s.unreadable(ctx, r, p.RelPath, err)
 				return false, nil
 			}
 		}
-		facts, err := s.prober.Probe(ctx, f)
+		facts, err := s.prober.Probe(ctx, in)
 		if i > 0 {
-			f.Close()
+			in.Close()
 		}
 		r.run.count(func(rep *Report) { rep.Probed++ })
 		switch {

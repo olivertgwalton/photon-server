@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -17,20 +16,20 @@ import (
 // IndexedKeyframes lists the presentation times, in milliseconds, of the first video stream's
 // keyframes that a Matroska or MP4 file lists in its own index, as Jellyfin reads a Matroska file's
 // Cues: a few reads however large the file. ErrNoIndex for a file that keeps none.
-func IndexedKeyframes(f *os.File) ([]int64, error) {
-	info, err := f.Stat()
+func IndexedKeyframes(in Input) ([]int64, error) {
+	info, err := in.File.Stat()
 	if err != nil {
 		return nil, err
 	}
-	return indexedKeyframes(io.NewSectionReader(f, 0, info.Size()))
+	return indexedKeyframes(io.NewSectionReader(in.File, 0, info.Size()))
 }
 
 // WalkKeyframes reads every packet's flags with ffprobe, without decoding: the whole file. A file
 // it finds none in answers an empty list.
-func (t Tools) WalkKeyframes(ctx context.Context, f *os.File) ([]int64, error) {
-	out, err := output(ctx, Background, WholeRun(f), []*os.File{f}, t.FFprobe.Path,
-		"-hide_banner", "-v", "error", "-protocol_whitelist", "fd", "-fd", "3",
-		"-select_streams", "v:0", "-show_entries", "packet=pts_time,flags", "-of", "csv=p=0", "-i", "fd:")
+func (t Tools) WalkKeyframes(ctx context.Context, in Input) ([]int64, error) {
+	out, err := output(ctx, Background, in.WholeRun(), in.Files(), t.FFprobe.Path, append([]string{
+		"-hide_banner", "-v", "error", "-select_streams", "v:0", "-show_entries", "packet=pts_time,flags", "-of", "csv=p=0",
+	}, in.Args()...)...)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe: %w", err)
 	}

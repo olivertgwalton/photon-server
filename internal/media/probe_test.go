@@ -111,7 +111,7 @@ func TestProbeReadsTheOpenFile(t *testing.T) {
 	}
 	defer f.Close()
 
-	facts, err := Tools{FFprobe: Tool{Path: ffprobe}}.Probe(t.Context(), f)
+	facts, err := Tools{FFprobe: Tool{Path: ffprobe}}.Probe(t.Context(), Input{File: f})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestAFileWithNoMediaInIsNotMediaAndOneUnreadIsNot(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	if _, err := (Tools{FFprobe: Tool{Path: ffprobe}}).Probe(t.Context(), f); !errors.Is(err, ErrNotMedia) {
+	if _, err := (Tools{FFprobe: Tool{Path: ffprobe}}).Probe(t.Context(), Input{File: f}); !errors.Is(err, ErrNotMedia) {
 		t.Errorf("probing a page of HTML: %v, want ErrNotMedia", err)
 	}
 
@@ -160,7 +160,7 @@ func TestAFileWithNoMediaInIsNotMediaAndOneUnreadIsNot(t *testing.T) {
 	if err := os.WriteFile(failing, []byte("#!/bin/sh\necho 'fd:: Input/output error' >&2\nexit 1\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := (Tools{FFprobe: Tool{Path: failing}}).Probe(t.Context(), f); err == nil || errors.Is(err, ErrNotMedia) {
+	if _, err := (Tools{FFprobe: Tool{Path: failing}}).Probe(t.Context(), Input{File: f}); err == nil || errors.Is(err, ErrNotMedia) {
 		t.Errorf("a read that failed: %v, want an error that is not ErrNotMedia", err)
 	}
 }

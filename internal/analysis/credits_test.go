@@ -107,7 +107,7 @@ func TestAFilmsCreditsAreFoundInItsFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	shades, err := media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}.Shades(t.Context(), f, 0)
+	shades, err := media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}.Shades(t.Context(), media.Input{File: f}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

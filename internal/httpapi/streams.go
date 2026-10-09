@@ -14,6 +14,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/library"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 )
 
@@ -97,10 +98,7 @@ func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	open := func() (*os.File, error) {
-		f, _, err := openLibraryFile(ctx, a.svc.Playing.SubtitleFile, id)
-		return f, err
-	}
+	open := func() (media.Input, error) { return openMedia(ctx, a.svc.Playing.SubtitleFile, id) }
 	vtt, err := a.svc.HLS.WebVTT(ctx, open, domain.TagOf(sub.Language))
 	if a.answered(w, r, err) {
 		return
@@ -134,6 +132,15 @@ func openLibraryFile(ctx context.Context, where func(context.Context, uuid.UUID)
 	}
 	f, err := library.Open(root, rel)
 	return f, rel, err
+}
+
+// openMedia opens the file of a library that where finds for an id, for a tool to read.
+func openMedia(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (media.Input, error) {
+	root, rel, err := where(ctx, id)
+	if err != nil {
+		return media.Input{}, err
+	}
+	return library.OpenMedia(root, rel)
 }
 
 // requireSignature admits a request whose address the server signed and which has not lapsed.

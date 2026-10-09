@@ -59,7 +59,7 @@ const Unlimited = 0
 // Source is one file of a copy to remux: how to open it, its plan input, its video, and its audio
 // if it has any.
 type Source struct {
-	Open  func() (*os.File, error)
+	Open  func() (media.Input, error)
 	Part  Part
 	Video domain.VideoPlan
 	Audio *domain.AudioPlan

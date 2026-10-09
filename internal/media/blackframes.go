@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -26,12 +26,12 @@ type Shade struct {
 // is measured. A pixel is black at most a luma of 28, as Intro Skipper's. A file with a keyframe
 // every second is most of its bytes to read over a network mount, so it may take a whole file's
 // time.
-func (t Tools) Shades(ctx context.Context, f *os.File, from time.Duration) ([]Shade, error) {
-	out, err := output(ctx, Background, WholeRun(f), []*os.File{f}, t.FFmpeg.Path,
-		"-hide_banner", "-v", "error", "-protocol_whitelist", "fd", "-fd", "3",
-		"-skip_frame", "nokey", "-ss", strconv.FormatFloat(from.Seconds(), 'f', 3, 64), "-copyts", "-i", "fd:",
+func (t Tools) Shades(ctx context.Context, in Input, from time.Duration) ([]Shade, error) {
+	args := []string{"-hide_banner", "-v", "error", "-skip_frame", "nokey", "-ss", strconv.FormatFloat(from.Seconds(), 'f', 3, 64), "-copyts"}
+	out, err := output(ctx, Background, in.WholeRun(), in.Files(), t.FFmpeg.Path, slices.Concat(args, in.Args(), []string{
 		"-map", "0:v:0", "-vf", "scale=320:-2,blackframe=amount=0:threshold=28,signalstats,metadata=print:file=-",
-		"-f", "null", "-")
+		"-f", "null", "-",
+	})...)
 	if err != nil {
 		return nil, fmt.Errorf("ffmpeg shades: %w", err)
 	}

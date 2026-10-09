@@ -463,7 +463,7 @@ func pictured(t *testing.T, ffmpeg string, chapters []store.ChapterSpan, length 
 		t.Fatal(err)
 	}
 	defer f.Close()
-	made, err := chapterImages(t.Context(), media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, f, chapters, length, domain.RangeSDR,
+	made, err := chapterImages(t.Context(), media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, media.Input{File: f}, chapters, length, domain.RangeSDR,
 		filepath.Join(t.TempDir(), "chapters"), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)

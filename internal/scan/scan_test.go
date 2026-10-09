@@ -30,9 +30,9 @@ import (
 // fakeProber describes every file alike, once it is sure ffprobe would read it from its start.
 type fakeProber struct{}
 
-func (fakeProber) Probe(_ context.Context, f *os.File) (domain.Facts, error) {
-	if at, err := f.Seek(0, io.SeekCurrent); err != nil || at != 0 {
-		return domain.Facts{}, fmt.Errorf("probing %s from byte %d: %w", f.Name(), at, err)
+func (fakeProber) Probe(_ context.Context, in media.Input) (domain.Facts, error) {
+	if at, err := in.File.Seek(0, io.SeekCurrent); err != nil || at != 0 {
+		return domain.Facts{}, fmt.Errorf("probing %s from byte %d: %w", in.File.Name(), at, err)
 	}
 	return domain.Facts{
 		Container: "matroska,webm",
@@ -368,14 +368,14 @@ type failingOnce struct {
 	names map[string]bool
 }
 
-func (p *failingOnce) Probe(ctx context.Context, f *os.File) (domain.Facts, error) {
+func (p *failingOnce) Probe(ctx context.Context, in media.Input) (domain.Facts, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if name := filepath.Base(f.Name()); p.names[name] {
+	if name := filepath.Base(in.File.Name()); p.names[name] {
 		delete(p.names, name)
 		return domain.Facts{}, errors.New("input/output error")
 	}
-	return p.fakeProber.Probe(ctx, f)
+	return p.fakeProber.Probe(ctx, in)
 }
 
 func TestAFileThatFailedToReadIsTriedAgainAtTheNextScan(t *testing.T) {
@@ -404,11 +404,11 @@ type notMedia struct {
 	names map[string]bool
 }
 
-func (p *notMedia) Probe(ctx context.Context, f *os.File) (domain.Facts, error) {
-	if p.names[filepath.Base(f.Name())] {
+func (p *notMedia) Probe(ctx context.Context, in media.Input) (domain.Facts, error) {
+	if p.names[filepath.Base(in.File.Name())] {
 		return domain.Facts{}, media.ErrNotMedia
 	}
-	return p.fakeProber.Probe(ctx, f)
+	return p.fakeProber.Probe(ctx, in)
 }
 
 func TestAFileThatIsNotMediaIsNotProbedAgainUntilItChanges(t *testing.T) {
@@ -932,7 +932,7 @@ type gatheringProber struct {
 	all     chan struct{}
 }
 
-func (p *gatheringProber) Probe(ctx context.Context, f *os.File) (domain.Facts, error) {
+func (p *gatheringProber) Probe(ctx context.Context, in media.Input) (domain.Facts, error) {
 	p.mu.Lock()
 	if p.waiting++; p.waiting == readsAtOnce {
 		close(p.all)
@@ -940,7 +940,7 @@ func (p *gatheringProber) Probe(ctx context.Context, f *os.File) (domain.Facts, 
 	p.mu.Unlock()
 	select {
 	case <-p.all:
-		return fakeProber{}.Probe(ctx, f)
+		return fakeProber{}.Probe(ctx, in)
 	case <-time.After(5 * time.Second):
 		return domain.Facts{}, errors.New("probed alone")
 	}

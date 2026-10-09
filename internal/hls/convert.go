@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -22,17 +21,17 @@ const convertStall = 5 * time.Minute
 // Convert writes a file's video and audio, as planned, into one MP4 at dst for downloading, its
 // index at the front so a player starts it before it has all of it. It reports how far it has got,
 // from 0 to 1 of duration, as ffmpeg goes; an error from progress stops it.
-func (h Hardware) Convert(ctx context.Context, ffmpeg string, src *os.File, video domain.VideoPlan, audio *domain.AudioPlan, duration time.Duration, dst string, progress func(float64) error) error {
+func (h Hardware) Convert(ctx context.Context, ffmpeg string, src media.Input, video domain.VideoPlan, audio *domain.AudioPlan, duration time.Duration, dst string, progress func(float64) error) error {
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
-	a := fdInput()
+	a := quiet()
 	if video.Encode != nil {
 		a = append(a, h.inputArgs(video.Codec, *video.Encode)...)
 	}
-	a = append(a, "-i", "fd:")
+	a = append(a, src.Args()...)
 	a = append(a, streamArgs(h, video, audio, nil)...)
 	a = append(a, "-f", "mp4", "-movflags", "+faststart", "-progress", "pipe:1", "-nostats", "-y", dst)
-	cmd := media.NewCommand(ctx, media.Background, []*os.File{src}, ffmpeg, a...)
+	cmd := media.NewCommand(ctx, media.Background, src.Files(), ffmpeg, a...)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return err

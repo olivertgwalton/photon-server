@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 )
 
@@ -23,7 +23,7 @@ type hlsFiles interface {
 	Has(playback uuid.UUID) bool
 	Resource(ctx context.Context, playback uuid.UUID, name string) (hls.Resource, error)
 	Transcodes() (active, conversions, limit int)
-	WebVTT(ctx context.Context, open func() (*os.File, error), language string) (string, error)
+	WebVTT(ctx context.Context, open func() (media.Input, error), language string) (string, error)
 	Extracted(ctx context.Context, src hls.SubtitleSource, want string) (string, error)
 }
 

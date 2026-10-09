@@ -22,12 +22,12 @@ func Keyframes(st *store.Store) jobs.Handler {
 		if err != nil || known.Mode == domain.KeyframesOff {
 			return err
 		}
-		f, err := openPart(ctx, st, part)
+		in, err := openPart(ctx, st, part)
 		if err != nil {
 			return err
 		}
-		defer f.Close()
-		pts, err := media.IndexedKeyframes(f)
+		defer in.Close()
+		pts, err := media.IndexedKeyframes(in)
 		switch {
 		case err == nil:
 			return st.SaveKeyframes(ctx, part, pts)
@@ -51,12 +51,12 @@ func WalkKeyframes(st *store.Store, tools media.Tools) jobs.Handler {
 		if err != nil || known.Mode != domain.KeyframesFull || known.PtsMS != nil {
 			return err
 		}
-		f, err := openPart(ctx, st, part)
+		in, err := openPart(ctx, st, part)
 		if err != nil {
 			return err
 		}
-		defer f.Close()
-		pts, err := tools.WalkKeyframes(ctx, f)
+		defer in.Close()
+		pts, err := tools.WalkKeyframes(ctx, in)
 		if err != nil {
 			return err
 		}

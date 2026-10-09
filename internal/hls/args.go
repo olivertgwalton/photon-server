@@ -5,11 +5,12 @@ import (
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
-// fdInput starts an ffmpeg run that reads the file media.NewCommand passes it as descriptor 3.
-func fdInput() []string {
-	return []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "fd", "-fd", "3"}
+// quiet starts an ffmpeg run that says only what went wrong and reads nothing from stdin.
+func quiet() []string {
+	return []string{"-hide_banner", "-loglevel", "error", "-nostdin"}
 }
 
 // args copies or encodes a file's video and its audio into fragmented MP4 or MPEG-TS on stdout,
@@ -18,13 +19,14 @@ func fdInput() []string {
 // drawn in where there is a layer of it. Each of the subtitle streams is written to descriptors 4
 // onwards, a cue at a time, on the file's clock: as SubRip, whose muxer ends a cue as it writes
 // it, where WebVTT's ends one only as it begins the next.
-func args(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer, f domain.SegmentFormat, subtitles []int) []string {
-	a := fdInput()
+func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer, f domain.SegmentFormat, subtitles []int) []string {
+	a := quiet()
 	hw = hw.encoding(video)
 	if video.Encode != nil {
 		a = append(a, hw.inputArgs(video.Codec, *video.Encode)...)
 	}
-	a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts", "-i", "fd:")
+	a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts")
+	a = append(a, in.Args()...)
 	a = append(a, streamArgs(hw, video, audio, layer)...)
 	// The MP4 muxer writes a file's chapters as a text track, which Apple's players refuse a
 	// segment for.

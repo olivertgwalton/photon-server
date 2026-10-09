@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"regexp"
 	"slices"
 	"strconv"
@@ -19,14 +18,14 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// Probe describes an open file. ffprobe reads it through the descriptor, never a path, and reads
+// Probe describes media. ffprobe reads a file through its descriptor, never a path, and reads
 // the first frame of each stream: FFmpeg 9 leaves a stream's colour unknown until a frame is
 // decoded, and HDR10+ metadata is only ever on frames.
-func (t Tools) Probe(ctx context.Context, f *os.File) (domain.Facts, error) {
-	out, err := output(ctx, Background, PartRun, []*os.File{f}, t.FFprobe.Path,
-		"-hide_banner", "-v", "error", "-protocol_whitelist", "fd", "-fd", "3",
-		"-print_format", "json", "-show_format", "-show_streams", "-show_chapters",
-		"-show_frames", "-read_intervals", "%+#1", "-i", "fd:")
+func (t Tools) Probe(ctx context.Context, in Input) (domain.Facts, error) {
+	out, err := output(ctx, Background, PartRun, in.Files(), t.FFprobe.Path, append([]string{
+		"-hide_banner", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters",
+		"-show_frames", "-read_intervals", "%+#1",
+	}, in.Args()...)...)
 	if err != nil {
 		// A file ffprobe reads to the end of its header and finds no media in is the same file
 		// next time; one it could not read, or ran out of time on, may not be.

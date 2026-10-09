@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
-	"os"
 	"path"
 	"slices"
 	"strings"
@@ -17,13 +16,14 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/naming"
 	"github.com/olivertgwalton/photon-server/internal/nfo"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 type prober interface {
-	Probe(ctx context.Context, f *os.File) (domain.Facts, error)
+	Probe(ctx context.Context, in media.Input) (domain.Facts, error)
 }
 
 type Scanner struct {

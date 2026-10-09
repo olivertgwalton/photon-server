@@ -139,15 +139,6 @@ const (
 	slowestRead = 8 << 20
 )
 
-// WholeRun is how long a tool reading all of f may run.
-func WholeRun(f *os.File) time.Duration {
-	info, err := f.Stat()
-	if err != nil {
-		return PartRun
-	}
-	return PartRun + time.Duration(info.Size()/slowestRead)*time.Second
-}
-
 // Within is ctx ending once the tool at path has run for limit, saying so.
 func Within(ctx context.Context, path string, limit time.Duration) (context.Context, context.CancelFunc) {
 	return context.WithTimeoutCause(ctx, limit, fmt.Errorf("%s still running after %s", filepath.Base(path), limit))

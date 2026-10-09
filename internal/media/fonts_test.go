@@ -39,7 +39,7 @@ func TestFontsAreFoundByKindOrName(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	got, err := tools.Fonts(t.Context(), f)
+	got, err := tools.Fonts(t.Context(), Input{File: f})
 	if err != nil {
 		t.Fatal(err)
 	}

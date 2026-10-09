@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // tool finds a real ffmpeg or ffprobe, which CI does not have.
@@ -47,7 +48,7 @@ func TestAConversionIsAPlayableMP4AtTheBitrateAsked(t *testing.T) {
 	var last float64
 	video := domain.VideoPlan{Stream: 0, Codec: "h264", Encode: &domain.VideoEncode{Codec: "h264", Width: 640, Height: 360, BitrateKbps: 500}}
 	audio := &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 2, BitrateKbps: 128}}
-	if err := (Hardware{Accel: domain.AccelSoftware}).Convert(t.Context(), ffmpeg, f, video, audio, 4*time.Second, dst,
+	if err := (Hardware{Accel: domain.AccelSoftware}).Convert(t.Context(), ffmpeg, media.Input{File: f}, video, audio, 4*time.Second, dst,
 		func(p float64) error { last = p; return nil }); err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +125,7 @@ func TestHDR10KeptInHEVCIsStillHDR10(t *testing.T) {
 	video := domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
 		Codec: domain.VideoHEVC, Width: 1280, Height: 720, BitrateKbps: 2000, Range: domain.RangeHDR10,
 	}}
-	if err := (Hardware{Accel: domain.AccelSoftware}).Convert(t.Context(), ffmpeg, f, video, nil, 2*time.Second, dst,
+	if err := (Hardware{Accel: domain.AccelSoftware}).Convert(t.Context(), ffmpeg, media.Input{File: f}, video, nil, 2*time.Second, dst,
 		func(float64) error { return nil }); err != nil {
 		t.Fatal(err)
 	}

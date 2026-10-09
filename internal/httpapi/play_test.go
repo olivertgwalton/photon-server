@@ -401,13 +401,13 @@ func (f fakeHLS) Extracted(context.Context, hls.SubtitleSource, string) (string,
 }
 
 // WebVTT answers the file's text under a WebVTT header naming its language.
-func (fakeHLS) WebVTT(_ context.Context, open func() (*os.File, error), language string) (string, error) {
-	f, err := open()
+func (fakeHLS) WebVTT(_ context.Context, open func() (media.Input, error), language string) (string, error) {
+	in, err := open()
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
-	b, err := io.ReadAll(f)
+	defer in.Close()
+	b, err := io.ReadAll(in.File)
 	return "WEBVTT " + language + "\n\n" + string(b), err
 }
 
@@ -726,7 +726,7 @@ type remuxOpener struct{ *hls.Remuxer }
 
 func (r remuxOpener) Open(ctx context.Context, id uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error {
 	d := time.Duration(c.Parts[0].DurationMS) * time.Millisecond
-	return r.Remuxer.Open(ctx, id, hls.Copy{Parts: []hls.Source{{Open: func() (*os.File, error) { return nil, os.ErrNotExist }, Part: hls.Part{Duration: d, Keyframes: hls.Forced(d)}, Video: video, Audio: audio}}, Start: start, Segments: segments})
+	return r.Remuxer.Open(ctx, id, hls.Copy{Parts: []hls.Source{{Open: func() (media.Input, error) { return media.Input{}, os.ErrNotExist }, Part: hls.Part{Duration: d, Keyframes: hls.Forced(d)}, Video: video, Audio: audio}}, Start: start, Segments: segments})
 }
 
 // A player that takes MPEG-TS alone is given a playlist of it; one that does not say, of
