@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/http"
@@ -144,6 +145,33 @@ func (c *client) DescribePerson(ctx context.Context, loc domain.Locale, ids map[
 		Name: out.Name, Biography: out.Biography, Born: provider.Date(out.Born), Died: provider.Date(out.Died),
 		Birthplace: out.Birthplace, Photo: web(out.Photo),
 	}, err
+}
+
+func (c *client) List(ctx context.Context, id string) ([]domain.Listed, error) {
+	out, err := post[pluginv1.ListResponse](ctx, c, domain.CapabilityList, "list", func(s pluginv1.Settings) pluginv1.ListRequest {
+		return pluginv1.ListRequest{Settings: s, ID: id}
+	})
+	var listed []domain.Listed
+	for _, t := range out.Titles {
+		kind := domain.ItemKind(t.Kind)
+		if ids := c.ids(t.IDs); len(ids) > 0 && slices.Contains(c.Info().Kinds, kind) {
+			listed = append(listed, domain.Listed{Kind: kind, IDs: ids, Title: t.Title, Year: t.Year})
+		}
+	}
+	return listed, err
+}
+
+func (c *client) Streams(ctx context.Context, t domain.Streamed) ([]domain.Offer, error) {
+	out, err := post[pluginv1.StreamsResponse](ctx, c, domain.CapabilityStream, "streams", func(s pluginv1.Settings) pluginv1.StreamsRequest {
+		return pluginv1.StreamsRequest{Settings: s, Kind: string(t.Kind), IDs: sentIDs(t.IDs), Season: t.Season, Episode: t.Episode}
+	})
+	var offers []domain.Offer
+	for _, s := range out.Streams {
+		if u, err := url.Parse(web(s.URL)); err == nil && u.Host != "" && s.Key != "" {
+			offers = append(offers, domain.Offer{Key: s.Key, Name: cmp.Or(s.Name, s.Filename), Filename: s.Filename, Size: max(s.Size, 0), URL: u, From: domain.OfferedFrom(c.base)})
+		}
+	}
+	return offers, err
 }
 
 // metadata is what the plugin said in the server's terms. Anything the server has no name for (a

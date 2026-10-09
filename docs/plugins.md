@@ -1,10 +1,11 @@
 # Plugins
 
-A metadata plugin is a web service that tells photon-server about films and shows. It can be
-written in any language and run anywhere the server can reach over HTTP. An admin registers it by
-its address; from then on it is a provider like the built-in TMDB, TheTVDB and MDBList: it is
-listed among the providers, takes settings such as an API key, and a library can take metadata
-from it, ranked where the admin puts it.
+A plugin is a web service that tells photon-server about films and shows, keeps lists of them, or
+streams them. It can be written in any language and run anywhere the server can reach over HTTP.
+An admin registers it by its address; from then on it is a provider like the built-in TMDB,
+TheTVDB and MDBList: it is listed among the providers, takes settings such as an API key, and a
+library can take metadata from it, ranked where the admin puts it, or play the streams it offers
+for the titles of a list.
 
 This is protocol version **1**.
 
@@ -81,7 +82,9 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
     {"name": "describe", "version": 1},
     {"name": "search", "version": 1},
     {"name": "rate", "version": 1},
-    {"name": "person", "version": 1}
+    {"name": "person", "version": 1},
+    {"name": "list", "version": 1},
+    {"name": "stream", "version": 1}
   ],
   "settings": [
     {"key": "api_key", "name": "API key", "secret": true, "required": true},
@@ -94,7 +97,8 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
   digit, at most 63 characters. It may not change between manifests.
 - `capabilities` are what the plugin answers, each at a version of it. A capability's calls are
   `POST /{name}/v{version}/{call}`: `describe` is `match` and `describe`, `search` is `search`,
-  `rate` is `ratings`, `person` is `person`. Leave a capability out and it is never called.
+  `rate` is `ratings`, `person` is `person`, `list` is `list`, `stream` is `streams`. Leave a
+  capability out and it is never called.
 - A capability the server does not speak, by name or at that version, is passed over, and a
   plugin that answers none it speaks is refused. So a plugin can name one at two versions, or one
   only a newer server speaks, and be registered by any server for what that server speaks.
@@ -245,6 +249,42 @@ plugin does not know.
 ```
 
 `died` is a date like `born`, where there is one.
+
+### `POST /list/v1/list`
+
+Answer a list's films or shows, in its order: the titles a collection holds, or a remote library
+plays. A list is named as the plugin names its lists; an admin gives that name as the list's id.
+Answer `404` for a list the plugin does not have. A title of a kind the manifest does not name, or
+with no ids, is left out.
+
+```json
+{"settings": {"api_key": "…"}, "id": "best-of-1995"}
+```
+
+```json
+{"titles": [{"kind": "movie", "ids": {"imdb": "tt0113277"}, "title": "Heat", "year": 1995}]}
+```
+
+### `POST /stream/v1/streams`
+
+Answer the copies the plugin streams of a film, by its ids, or of an episode, by its show's ids and
+its `season` and `episode`, best first; a remote library plays them. `url` is where the bytes are
+now, `http` or `https`, which may be the plugin's own host though it is not public; it may change
+each time, and is never kept. `key` is which bytes they are, the same each time they are offered,
+as a file's name and size: a stream with no key, or no web address, is left out.
+
+```json
+{"settings": {"api_key": "…"}, "kind": "show", "ids": {"imdb": "tt0306414"}, "season": 1, "episode": 1}
+```
+
+```json
+{
+  "streams": [
+    {"key": "file:The.Wire.S01E01.mkv:1503238553", "url": "http://films-plugin.local:9000/play/abc",
+     "name": "The Wire S01E01 1080p", "filename": "The.Wire.S01E01.mkv", "size": 1503238553}
+  ]
+}
+```
 
 ## Calling the server
 

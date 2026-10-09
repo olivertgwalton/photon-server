@@ -1,4 +1,4 @@
-// Package pluginv1 is version 1 of the protocol a metadata plugin speaks: the JSON it answers at
+// Package pluginv1 is version 1 of the protocol a plugin speaks: the JSON it answers at
 // GET {base}/manifest, and takes and answers at POST {base}/{capability}/v{version}/{call} for each
 // capability its manifest names. Anything a plugin written against it could notice changing is a
 // new version, in a package of its own; adding an optional field, a capability or a version of
@@ -39,8 +39,9 @@ type Setting struct {
 }
 
 // Speaks is the version of each capability this server speaks, and its calls: "describe" is
-// match and describe, "search" is search, "rate" is ratings, "person" is person.
-var Speaks = map[string]int{"describe": 1, "search": 1, "rate": 1, "person": 1}
+// match and describe, "search" is search, "rate" is ratings, "person" is person, "list" is list,
+// "stream" is streams.
+var Speaks = map[string]int{"describe": 1, "search": 1, "rate": 1, "person": 1, "list": 1, "stream": 1}
 
 // Settings is in every request: what an admin set for the plugin, by key.
 type Settings map[string]string
@@ -208,6 +209,51 @@ type PersonResponse struct {
 	Died       string `json:"died,omitempty"`
 	Birthplace string `json:"birthplace,omitempty"`
 	Photo      string `json:"photo,omitempty"`
+}
+
+type ListRequest struct {
+	Settings Settings `json:"settings"`
+	// ID is the list's, as the plugin names its lists and an admin gives it.
+	ID string `json:"id"`
+}
+
+// ListResponse is a list's titles in its order; a list the plugin does not have is answered 404.
+type ListResponse struct {
+	Titles []Listed `json:"titles"`
+}
+
+// Listed is a film or a show a list holds. One with no ids is left out.
+type Listed struct {
+	Kind  string            `json:"kind"`
+	IDs   map[string]string `json:"ids"`
+	Title string            `json:"title,omitempty"`
+	Year  int               `json:"year,omitempty"`
+}
+
+// StreamsRequest asks for the streams of a film by its ids, or of an episode by its show's ids
+// and its numbers.
+type StreamsRequest struct {
+	Settings Settings          `json:"settings"`
+	Kind     string            `json:"kind"`
+	IDs      map[string]string `json:"ids"`
+	Season   int               `json:"season,omitempty"`
+	Episode  int               `json:"episode,omitempty"`
+}
+
+// StreamsResponse is the streams the plugin offers, best first; none is no stream.
+type StreamsResponse struct {
+	Streams []Stream `json:"streams"`
+}
+
+// Stream is a copy the server plays from URL, http or https, which may be the plugin's own host.
+type Stream struct {
+	// Key is which bytes the stream is, the same each time it is offered though its URL changes:
+	// a file's name and size, or a torrent's hash and file. One with none is left out.
+	Key      string `json:"key"`
+	URL      string `json:"url"`
+	Name     string `json:"name,omitempty"`
+	Filename string `json:"filename,omitempty"`
+	Size     int64  `json:"size,omitempty"`
 }
 
 // Problem is an error a plugin answers, as RFC 9457 shapes it, with a 4xx or 5xx status.
