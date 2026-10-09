@@ -173,7 +173,21 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	if picked != nil && picked.delivery == domain.SubtitleSidecar {
 		chosen.SubtitleFile = &picked.file
 	}
-	d, err := playback.Decide(p.hlsProfile(t, segments, c, limit), playback.CopyOf(c), chosen, a.svc.Encoding)
+	// Video is encoded on the node the transcode will be placed on, so it decides by what that
+	// node encodes; where no node encodes, this one decides, and a copy it would encode is refused.
+	candidates, err := a.svc.Placer.Candidates(r.Context(), playback.Need{})
+	if err != nil {
+		a.logger.ErrorContext(r.Context(), "jellyfin transcode not placed", slog.Any("err", err))
+		return
+	}
+	encoder := a.svc.Placer.Self()
+	if len(candidates) > 0 {
+		encoder = candidates[0]
+	}
+	d, err := playback.Decide(p.hlsProfile(t, segments, c, limit), playback.CopyOf(c), chosen, playback.EncodingOf(encoder))
+	if err == nil && d.Video != nil && d.Video.Encode != nil && len(candidates) == 0 {
+		err = a.svc.Placer.Refuse(candidates)
+	}
 	if err != nil {
 		a.logger.InfoContext(r.Context(), "jellyfin transcode refused", slog.Any("reasons", d.Reasons), slog.Any("err", err))
 		return
