@@ -17,7 +17,7 @@ import WrenchIcon from "@lucide/svelte/icons/wrench";
 import { goto } from "$app/navigation";
 import { findSubtitles, pickPlaylist, setMark } from "#lib/actions.svelte.js";
 import type { Extra } from "#lib/extras.js";
-import { blurStyle } from "#lib/blurhash.js";
+import { blurStyle, isDark } from "#lib/blurhash.js";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import Prose from "#lib/components/Prose.svelte";
 import DownloadDialog from "#lib/components/DownloadDialog.svelte";
@@ -140,6 +140,7 @@ const glass =
 
 const backdrop = $derived(art("backdrop"));
 const logo = $derived(art("logo"));
+const darkLogo = $derived(logo ? isDark(t.blurhashes?.[logo]) : false);
 const poster = $derived(art("poster"));
 </script>
 
@@ -221,7 +222,9 @@ const poster = $derived(art("poster"));
 								loading="eager"
 								sizes="24rem"
 								alt={t.title}
-								class="max-h-36 w-auto max-w-[min(24rem,80vw)] object-contain object-left transition-opacity duration-500 data-loading:opacity-0"
+								class="max-h-36 w-auto max-w-[min(24rem,80vw)] object-contain object-left transition-opacity duration-500 data-loading:opacity-0 {darkLogo
+									? "lettering-glow"
+									: ""}"
 							/>
 						{/key}
 					{:else}

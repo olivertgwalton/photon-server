@@ -66,6 +66,19 @@ export function decodeBlurhash(hash: string, width: number, height: number) {
 	return pixels;
 }
 
+// Whether a hash's picture is dark: its average colour, the hash's first, under
+// the luma at which dark lettering is lost on a dark page (navy, maroon and
+// black are, a mid grey is not). The server hashes a logo by its letters alone,
+// so a logo's hash says whether its letters are dark.
+export function isDark(hash: string | undefined): boolean {
+	if (!hash || hash.length < 6) return false;
+	const v = base83(hash.slice(2, 6));
+	const [r, g, b] = [v >> 16, (v >> 8) & 255, v & 255].map((c) => c / 255);
+	return 0.2126 * r + 0.7152 * g + 0.0722 * b < darkLuma;
+}
+
+const darkLuma = 0.3;
+
 // The blur is drawn this small and stretched: it has no detail to lose.
 const drawn = 32;
 
