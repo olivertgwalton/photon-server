@@ -168,3 +168,87 @@ func TestAWebhookIsToldWhatItAskedFor(t *testing.T) {
 		t.Errorf("testing no webhook: %v, want ErrNotFound", err)
 	}
 }
+
+// An event about an episode names its ids, its numbers and its show, as a scrobbler finds it by.
+func TestAnEpisodesEventNamesItsShowAndNumbers(t *testing.T) {
+	url := storetest.FreshDatabase(t)
+	log := slog.New(slog.DiscardHandler)
+	if err := store.Migrate(t.Context(), url, log); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(t.Context(), url, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(st.Close)
+	k, err := kv.Open(os.Getenv("TEST_VALKEY_URL"), uuid.NewV7())
+	if err != nil {
+		t.Fatalf("TEST_VALKEY_URL: %v", err)
+	}
+	t.Cleanup(k.Close)
+	hub := events.New(st, k, uuid.NewV7(), func() string { return "den" }, log)
+	ctx := t.Context()
+
+	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ep := store.Episode{
+		Season: 1, Episodes: []int{2}, Title: "S01E02.mkv", Folder: "Severance", ByNumber: true,
+		IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt11650328"}, Copies: []store.Copy{{
+			ContentKey: []byte("1"), Parts: []store.Part{{RelPath: "S01E02.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
+		}},
+	}
+	show := store.Show{Title: "Severance", Year: 2022, Folder: "Severance", IDs: map[domain.Provider]string{domain.ProviderTVDB: "371980"}}
+	if _, err := st.SaveShowFolder(ctx, tv.ID, "Severance", []byte("v"), show, []store.Episode{ep}, nil); err != nil {
+		t.Fatal(err)
+	}
+	shows, _, err := st.Wall(ctx, []uuid.UUID{tv.ID}, store.WallPage{Sort: domain.SortTitle, Limit: 1})
+	if err != nil || len(shows) != 1 {
+		t.Fatal(shows, err)
+	}
+	seasons, err := st.Seasons(ctx, uuid.UUID{}, shows[0].ID)
+	if err != nil || len(seasons) != 1 {
+		t.Fatal(seasons, err)
+	}
+	episodes, err := st.Episodes(ctx, uuid.UUID{}, seasons[0].ID)
+	if err != nil || len(episodes) != 1 {
+		t.Fatal(episodes, err)
+	}
+
+	rx := &receiver{t: t}
+	srv := httptest.NewServer(rx)
+	defer srv.Close()
+	if _, err := st.AddWebhook(ctx, srv.URL, []domain.EventKind{domain.EventPlaybackStarted}, "s"); err != nil {
+		t.Fatal(err)
+	}
+	hub.Raise(ctx, domain.Event{Kind: domain.EventPlaybackStarted, Item: episodes[0].ID, Library: tv.ID})
+	jobs, err := st.ClaimJobs(ctx, []domain.JobKind{domain.JobDeliverWebhook}, nil, uuid.NewV7(), time.Minute, 10)
+	if err != nil || len(jobs) != 1 {
+		t.Fatal(jobs, err)
+	}
+	if err := Deliver(st)(ctx, jobs[0].Subject); err != nil {
+		t.Fatal(err)
+	}
+	var body struct {
+		Title struct {
+			Kind    domain.ItemKind            `json:"kind"`
+			IDs     map[domain.Provider]string `json:"ids"`
+			Season  int                        `json:"season"`
+			Episode int                        `json:"episode"`
+			Show    struct {
+				ID    uuid.UUID                  `json:"id"`
+				Title string                     `json:"title"`
+				Year  int                        `json:"year"`
+				IDs   map[domain.Provider]string `json:"ids"`
+			} `json:"show"`
+		} `json:"title"`
+	}
+	if err := json.Unmarshal(rx.got[0].body, &body); err != nil {
+		t.Fatal(err)
+	}
+	if got := body.Title; got.Kind != domain.ItemEpisode || got.IDs[domain.ProviderIMDb] != "tt11650328" || got.Season != 1 || got.Episode != 2 ||
+		got.Show.ID != shows[0].ID || got.Show.Title != "Severance" || got.Show.Year != 2022 || got.Show.IDs[domain.ProviderTVDB] != "371980" {
+		t.Errorf("title = %s", rx.got[0].body)
+	}
+}
