@@ -51,7 +51,7 @@ type Episode struct {
 // nil for none, in one transaction.
 func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, show Show, episodes []Episode, extras []Extra) (Saved, error) {
 	saved := Saved{Titles: Changed{}}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := s.pipelined(ctx, func(tx db) error {
 		settings, err := analysisOf(ctx, tx, lib)
 		if err != nil {
 			return err

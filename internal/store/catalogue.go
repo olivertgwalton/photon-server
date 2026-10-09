@@ -99,7 +99,7 @@ type Saved struct {
 // none, in one transaction.
 func (s *Store) SaveFolder(ctx context.Context, lib uuid.UUID, path string, fingerprint []byte, films []Film, extras []Extra) (Saved, error) {
 	saved := Saved{Titles: Changed{}}
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := s.pipelined(ctx, func(tx db) error {
 		settings, err := analysisOf(ctx, tx, lib)
 		if err != nil {
 			return err
