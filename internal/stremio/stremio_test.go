@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -155,6 +156,62 @@ func TestAnAddonIsRegisteredByItsManifestsAddress(t *testing.T) {
 	} {
 		if got := Slug(id); got != want {
 			t.Errorf("Slug(%q) = %q, want %q", id, got, want)
+		}
+	}
+}
+
+// An addon's streams of a film or an episode, in its order, each keyed by what its bytes are: a
+// torrent's file, else a file by name and size, else an address without the query a debrid link
+// signs afresh. A stream with no address of its own, or that needs headers sent, is left out.
+func TestAnAddonsStreamsAreOffersKeyedByTheirBytes(t *testing.T) {
+	asked := ""
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked = r.URL.Path
+		fmt.Fprint(w, `{"streams": [
+			{"name": "AIO", "description": "Heat.1995.2160p.mkv\n58 GB", "url": "https://debrid.example/dl/abc?sig=1",
+				"infoHash": "ABC123", "fileIdx": 2, "behaviorHints": {"filename": "Heat.1995.2160p.mkv", "videoSize": 62000000000}},
+			{"name": "Riven", "url": "http://riven:8080/stremio/media/7?token=t", "behaviorHints": {"filename": "Heat (1995).mkv", "videoSize": 9000}},
+			{"title": "Heat 1080p\nmore", "url": "https://cdn.example/play/heat.mkv?exp=2"},
+			{"infoHash": "DEF456"},
+			{"ytId": "abc"},
+			{"url": "https://cdn.example/needs-referer.mkv", "behaviorHints": {"proxyHeaders": {"request": {"Referer": "x"}}}}
+		]}`)
+	}))
+	defer srv.Close()
+	a := New(domain.PluginSource("addon"), srv.URL, Manifest{Types: []string{"movie", "series"}}, srv.Client())
+	got, err := a.Streams(t.Context(), domain.Streamed{Kind: domain.ItemMovie, IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0113277"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys, names []string
+	for _, o := range got {
+		keys, names = append(keys, o.Key), append(names, o.Name)
+	}
+	if want := []string{"torrent:abc123:2", "file:Heat (1995).mkv:9000", "url:cdn.example/play/heat.mkv"}; !slices.Equal(keys, want) {
+		t.Errorf("keys %q, want %q", keys, want)
+	}
+	if want := []string{"Heat.1995.2160p.mkv", "Heat (1995).mkv", "Heat 1080p"}; !slices.Equal(names, want) {
+		t.Errorf("names %q, want %q", names, want)
+	}
+	if asked != "/stream/movie/tt0113277.json" {
+		t.Errorf("asked %s", asked)
+	}
+	if _, err := a.Streams(t.Context(), domain.Streamed{Kind: domain.ItemShow, IDs: map[domain.Provider]string{domain.ProviderTMDB: "1438"}, Season: 1, Episode: 2}); err != nil || asked != "/stream/series/tmdb:1438:1:2.json" {
+		t.Errorf("an episode known by its show's TMDB id asked %s, %v", asked, err)
+	}
+	if got, err := a.Streams(t.Context(), domain.Streamed{Kind: domain.ItemMovie}); got != nil || err != nil {
+		t.Errorf("a film with no id: %v, %v; want nothing asked", got, err)
+	}
+}
+
+func TestAnAddonStreamsWhereItSaysItDoes(t *testing.T) {
+	for resources, want := range map[string]bool{`["stream"]`: true, `[{"name": "stream", "types": ["movie"]}]`: true, `["catalog", "meta"]`: false} {
+		var m Manifest
+		if err := json.Unmarshal([]byte(`{"types": ["movie"], "resources": `+resources+`}`), &m); err != nil {
+			t.Fatal(err)
+		}
+		if got := New(domain.PluginSource("addon"), "http://addon", m, nil).Answers(domain.CapabilityStream); got != want {
+			t.Errorf("resources %s stream: %v, want %v", resources, got, want)
 		}
 	}
 }

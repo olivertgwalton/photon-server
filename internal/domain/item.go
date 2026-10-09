@@ -1,5 +1,7 @@
 package domain
 
+import "net/url"
+
 type ItemKind string
 
 const (
@@ -89,6 +91,24 @@ type Listed struct {
 	// title it adds, until the title is matched.
 	Title string
 	Year  int
+}
+
+// Streamed is a film, or an episode of a show, as a provider is asked for its streams: of kind
+// movie by the film's ids, or of kind show by the show's and the episode's numbers.
+type Streamed struct {
+	Kind            ItemKind
+	IDs             map[Provider]string
+	Season, Episode int
+}
+
+// Offer is a copy of a film or an episode a provider streams. Key is which bytes it is, the same
+// each time it is offered; URL is where they are now, which may stop being, so it is never kept.
+type Offer struct {
+	Key      string
+	Name     string
+	Filename string
+	Size     int64
+	URL      *url.URL
 }
 
 // IDSource is where a title's provider id came from, so a later source knows what it may replace.

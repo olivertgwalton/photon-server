@@ -1,11 +1,13 @@
 // Package stremio speaks to a Stremio addon, which an admin registers as a plugin by the address of
 // its manifest, as Stremio installs one: its catalogs are lists a library's collections or titles
-// are made of. Its configuration, a debrid service's key among it, is in its address, which no
+// are made of, and its streams the copies a remote library plays. Its configuration, a debrid service's key among it, is in its address, which no
 // error or answer names.
 package stremio
 
 import (
+	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -42,6 +44,8 @@ type Manifest struct {
 	Name     string    `json:"name"`
 	Types    []string  `json:"types"`
 	Catalogs []Catalog `json:"catalogs"`
+	// Resources are what the addon answers: a name, or an object naming one.
+	Resources []json.RawMessage `json:"resources"`
 }
 
 type Catalog struct {
@@ -59,6 +63,23 @@ func (m Manifest) Kinds() []domain.ItemKind {
 		}
 	}
 	return out
+}
+
+// Streams reports whether the addon answers streams.
+func (m Manifest) Streams() bool {
+	return slices.ContainsFunc(m.Resources, func(raw json.RawMessage) bool {
+		var name string
+		if json.Unmarshal(raw, &name) != nil {
+			var named struct {
+				Name string `json:"name"`
+			}
+			if json.Unmarshal(raw, &named) != nil {
+				return false
+			}
+			name = named.Name
+		}
+		return name == "stream"
+	})
 }
 
 // Lists reports whether the addon has a catalog of films or shows.
@@ -118,9 +139,104 @@ func (a *Addon) Info() provider.Info {
 	return provider.Info{ID: a.id, Name: a.manifest.Name, Kinds: a.manifest.Kinds()}
 }
 
-// Answers lists where the addon has a catalog to list.
+// Answers lists where the addon has a catalog to list, and streams where it answers streams.
 func (a *Addon) Answers(c domain.Capability) bool {
-	return c == domain.CapabilityList && a.manifest.Lists()
+	switch c {
+	case domain.CapabilityList:
+		return a.manifest.Lists()
+	case domain.CapabilityStream:
+		return a.manifest.Streams()
+	case domain.CapabilityDescribe, domain.CapabilitySearch, domain.CapabilityRate, domain.CapabilityPerson:
+	}
+	return false
+}
+
+// stream is a stream as an addon answers it.
+type stream struct {
+	URL         string `json:"url"`
+	Name        string `json:"name"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	InfoHash    string `json:"infoHash"`
+	FileIdx     *int   `json:"fileIdx"`
+	Hints       struct {
+		Filename  string `json:"filename"`
+		VideoSize int64  `json:"videoSize"`
+		// ProxyHeaders are headers its URL is fetched with, which the server does not send.
+		ProxyHeaders json.RawMessage `json:"proxyHeaders"`
+	} `json:"behaviorHints"`
+}
+
+// Streams answers the streams the addon offers of a film or an episode, in its order, by the
+// title's IMDb id, else its TMDB id; none for a title it is known by neither. A stream with no
+// address of its own (a torrent alone, a YouTube video) or that needs headers sent with it is left
+// out.
+func (a *Addon) Streams(ctx context.Context, t domain.Streamed) ([]domain.Offer, error) {
+	typ := "movie"
+	if t.Kind == domain.ItemShow {
+		typ = "series"
+	}
+	id := t.IDs[domain.ProviderIMDb]
+	if id == "" && t.IDs[domain.ProviderTMDB] != "" {
+		id = "tmdb:" + t.IDs[domain.ProviderTMDB]
+	}
+	if id == "" {
+		return nil, nil
+	}
+	if t.Kind == domain.ItemShow {
+		id += fmt.Sprintf(":%d:%d", t.Season, t.Episode)
+	}
+	var answer struct {
+		Streams []stream `json:"streams"`
+	}
+	err := a.api.Do(ctx, provider.Request{Method: http.MethodGet, Path: "/stream/" + typ + "/" + url.PathEscape(id) + ".json"}, &answer)
+	if errors.Is(err, provider.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", a.manifest.Name, err)
+	}
+	var out []domain.Offer
+	for _, s := range answer.Streams {
+		if o, ok := offerOf(s); ok {
+			out = append(out, o)
+		}
+	}
+	return out, nil
+}
+
+// offerOf is a stream as an offer, keyed by what its bytes are as Remux keys them: a torrent's file
+// by its hash and index, else a file by its name and size, else its address without the query,
+// which a debrid link signs afresh each time it is offered.
+func offerOf(s stream) (domain.Offer, bool) {
+	u, err := url.Parse(s.URL)
+	headers := len(s.Hints.ProxyHeaders) > 0 && string(s.Hints.ProxyHeaders) != "null"
+	if s.URL == "" || err != nil || u.Scheme != "http" && u.Scheme != "https" || u.Host == "" || headers {
+		return domain.Offer{}, false
+	}
+	o := domain.Offer{Filename: s.Hints.Filename, Size: s.Hints.VideoSize, URL: u}
+	o.Name = cmp.Or(s.Hints.Filename, firstLine(s.Title), firstLine(s.Description), s.Name)
+	switch {
+	case s.InfoHash != "":
+		o.Key = "torrent:" + strings.ToLower(s.InfoHash) + ":" + strconv.Itoa(deref(s.FileIdx))
+	case s.Hints.Filename != "" && s.Hints.VideoSize > 0:
+		o.Key = "file:" + s.Hints.Filename + ":" + strconv.FormatInt(s.Hints.VideoSize, 10)
+	default:
+		o.Key = "url:" + u.Host + u.EscapedPath()
+	}
+	return o, true
+}
+
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(s, "\n")
+	return strings.TrimSpace(line)
+}
+
+func deref(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
 }
 
 // List answers a catalog's films or shows in its order, named as type/catalog: movie/top. A

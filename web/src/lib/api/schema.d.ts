@@ -7015,7 +7015,7 @@ export interface components {
             items: components["schemas"]["Candidate"][];
         };
         /** @enum {string} */
-        Capability: "describe" | "search" | "rate" | "person" | "list";
+        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream";
         Card: {
             /** Format: date-time */
             added_at: string;
