@@ -238,6 +238,36 @@ plugin does not know.
 
 `died` is a date like `born`, where there is one.
 
+## Calling the server
+
+A plugin that acts on the server, rather than only answering it (one that scans a folder a
+download landed in, or sets an episode's markers), calls its API as any client does, with an API
+key: declare the server's address and a key as settings, the key `secret`, and the admin makes one
+under **Settings → API keys** and sets both.
+
+```json
+"settings": [
+  {"key": "photon_url", "name": "photon-server address", "required": true},
+  {"key": "photon_key", "name": "photon-server API key", "secret": true, "required": true}
+]
+```
+
+```sh
+# scan the folder of a library a download landed in
+curl -X POST "$PHOTON_URL/api/v1/admin/libraries/$LIBRARY_ID/scan?path=/srv/films/Heat%20(1995)" \
+  -H "Authorization: Bearer $PHOTON_KEY"
+```
+
+A key acts as the admin who made it, as Jellyfin's and Emby's do, and stands until it is revoked
+there; revoke it when the plugin is removed. The API is described at `GET /api/v1/openapi.json`.
+
+A plugin is a service that runs on its own, so it keeps its own schedule: the server runs no task
+of a plugin's, as Jellyfin does for its plugins, which have no process of their own.
+
+Nor does a plugin check passwords, as Jellyfin's LDAP plugin does: a directory signs the household
+in through OpenID Connect, by Authentik, Keycloak or Authelia in front of it, and a Jellyfin app
+whose profile has no password signs in by pairing.
+
 ## Versions
 
 The manifest's `protocol` is the version a plugin speaks; the server registers only plugins that
