@@ -34,8 +34,13 @@ func (fakeProber) Probe(_ context.Context, in media.Input) (domain.Facts, error)
 	if at, err := in.File.Seek(0, io.SeekCurrent); err != nil || at != 0 {
 		return domain.Facts{}, fmt.Errorf("probing %s from byte %d: %w", in.File.Name(), at, err)
 	}
+	info, err := in.File.Stat()
+	if err != nil {
+		return domain.Facts{}, err
+	}
 	return domain.Facts{
 		Container: "matroska,webm",
+		Size:      info.Size(),
 		Duration:  2 * time.Hour,
 		Streams: []domain.Stream{
 			{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Height: 2160, Range: domain.RangeHDR10},
@@ -443,7 +448,9 @@ func (p *fetching) Probe(ctx context.Context, in media.Input) (domain.Facts, err
 	p.mu.Lock()
 	p.fetched = append(p.fetched, in.URL.String())
 	p.mu.Unlock()
-	return p.fakeProber.Probe(ctx, in)
+	facts, err := p.fakeProber.Probe(ctx, in)
+	facts.Size = 9_000_000_000
+	return facts, err
 }
 
 func TestAStrmIsAFilmWhoseMediaIsWhereItNames(t *testing.T) {
@@ -459,8 +466,12 @@ func TestAStrmIsAFilmWhoseMediaIsWhereItNames(t *testing.T) {
 		t.Errorf("probed %q, want %q", p.fetched, want)
 	}
 	if n := f.count(`SELECT count(*) FROM items i JOIN versions v ON v.item_id = i.id JOIN parts p ON p.version_id = v.id
-		WHERE i.kind = 'movie' AND i.title = 'Heat' AND p.duration_ms = 7200000`); n != 1 {
-		t.Error("the .strm is not a film with its media's length")
+		WHERE i.kind = 'movie' AND i.title = 'Heat' AND p.duration_ms = 7200000
+			AND p.size_bytes = 9000000000 AND v.size_bytes = 9000000000 AND v.bitrate_kbps = 10000`); n != 1 {
+		t.Error("the .strm is not a film with its media's length, size and bitrate")
+	}
+	if r := f.scan(); r.Probed != 0 {
+		t.Errorf("the next scan probed %d, want the .strm, its own size unchanged, left alone", r.Probed)
 	}
 }
 

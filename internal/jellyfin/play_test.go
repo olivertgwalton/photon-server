@@ -106,6 +106,7 @@ func aFilm(t *testing.T) (*store.Store, domain.Profile, uuid.UUID, uuid.UUID) {
 	}
 	// Its size is an hour at 8 Mbps, as the scan read it; its bytes here are fewer.
 	part := store.Part{RelPath: "Heat/Heat.mkv", Size: 3_600_000_000, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+		Size:     3_600_000_000,
 		Duration: time.Hour, Container: "matroska,webm",
 		Streams: []domain.Stream{
 			{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Width: 1920, Height: 1080, Range: domain.RangeSDR},

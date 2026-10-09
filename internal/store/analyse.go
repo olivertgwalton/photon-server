@@ -72,7 +72,7 @@ func (s *Store) SaveProbe(ctx context.Context, part uuid.UUID, f domain.Facts) e
 		if err := saveFacts(ctx, tx, part, &f); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE parts SET duration_ms = $2 WHERE id = $1`, part, f.Duration.Milliseconds()); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE parts SET duration_ms = $2, size_bytes = $3 WHERE id = $1`, part, f.Duration.Milliseconds(), f.Size); err != nil {
 			return err
 		}
 		// A part's length moves every later part's place on the copy's timeline, and the copy's own.
@@ -80,8 +80,8 @@ func (s *Store) SaveProbe(ctx context.Context, part uuid.UUID, f domain.Facts) e
 			`UPDATE parts p SET offset_ms = coalesce((
 				SELECT sum(q.duration_ms) FROM parts q WHERE q.version_id = p.version_id AND q.idx < p.idx), 0)
 			WHERE p.version_id = $1`,
-			`UPDATE versions v SET duration_ms = t.ms, bitrate_kbps = CASE WHEN t.ms > 0 THEN v.size_bytes * 8 / t.ms ELSE 0 END
-			FROM (SELECT sum(duration_ms) AS ms FROM parts WHERE version_id = $1) t WHERE v.id = $1`,
+			`UPDATE versions v SET duration_ms = t.ms, size_bytes = t.size, bitrate_kbps = CASE WHEN t.ms > 0 THEN t.size * 8 / t.ms ELSE 0 END
+			FROM (SELECT sum(duration_ms) AS ms, sum(size_bytes) AS size FROM parts WHERE version_id = $1) t WHERE v.id = $1`,
 		} {
 			if _, err := tx.Exec(ctx, stmt, version); err != nil {
 				return err

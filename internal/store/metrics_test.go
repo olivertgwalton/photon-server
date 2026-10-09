@@ -82,7 +82,7 @@ func TestItemBytesCountSharedBytesOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	copyOf := func(key, rel string, size int64) Copy {
-		return Copy{ContentKey: []byte(key), Parts: []Part{{RelPath: rel, Size: size, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Container: "mkv"}}}}
+		return Copy{ContentKey: []byte(key), Parts: []Part{{RelPath: rel, Size: size, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Container: "mkv", Size: size}}}}
 	}
 	const hd, ultraHD, episode = 8_000_000_000, 60_000_000_000, 2_000_000_000
 	heat := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{copyOf("heat-hd", "Heat/Heat.1080p.mkv", hd), copyOf("heat-uhd", "Heat/Heat.2160p.mkv", ultraHD)}}

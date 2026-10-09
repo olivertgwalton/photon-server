@@ -43,6 +43,7 @@ type probeOutput struct {
 	Format struct {
 		FormatName string `json:"format_name"`
 		Duration   string `json:"duration"`
+		Size       string `json:"size"`
 		BitRate    string `json:"bit_rate"`
 	} `json:"format"`
 	Streams  []probeStream `json:"streams"`
@@ -94,6 +95,7 @@ func parseProbe(out []byte) (domain.Facts, error) {
 	}
 	facts := domain.Facts{
 		Container:   p.Format.FormatName,
+		Size:        int64(atoi(p.Format.Size)),
 		Duration:    seconds(p.Format.Duration),
 		BitrateKbps: kbps(p.Format.BitRate),
 	}

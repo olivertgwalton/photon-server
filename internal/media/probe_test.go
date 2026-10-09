@@ -35,6 +35,7 @@ func TestProbeHDR10Matroska(t *testing.T) {
 	got := probeFixture(t, "hdr10.json")
 	want := domain.Facts{
 		Container:   "matroska,webm",
+		Size:        265560,
 		Duration:    2023 * time.Millisecond,
 		BitrateKbps: 1050,
 		Streams: []domain.Stream{
