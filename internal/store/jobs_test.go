@@ -523,3 +523,27 @@ func TestStoppingAKindTakesItsWorkOffTheQueue(t *testing.T) {
 		t.Errorf("renewing the running job's lease: %v, want ErrLeaseLost", err)
 	}
 }
+
+// A worker of several kinds is given the most pressing of all of them, whichever kind and timing
+// each is: a match asked for by someone waiting before the backfill of either kind.
+func TestAClaimTakesTheMostPressingJobOfItsKinds(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	low, windowed, asked := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
+	if _, err := s.pool.Exec(ctx, `INSERT INTO jobs (kind, subject, priority, due) VALUES
+		('theme', $1, -1, 'now'), ('identify', $2, 0, 'window'), ('identify', $3, 1, 'now')`, low, windowed, asked); err != nil {
+		t.Fatal(err)
+	}
+	kinds := []domain.JobKind{domain.JobTheme, domain.JobIdentify}
+	var got []uuid.UUID
+	for range 3 {
+		claimed, err := s.ClaimJobs(ctx, kinds, nil, uuid.NewV7(), time.Minute, 1)
+		if err != nil || len(claimed) != 1 {
+			t.Fatalf("claimed %+v, %v", claimed, err)
+		}
+		got = append(got, claimed[0].Subject)
+	}
+	if want := []uuid.UUID{asked, windowed, low}; !slices.Equal(got, want) {
+		t.Errorf("claimed in order %v, want %v", got, want)
+	}
+}
