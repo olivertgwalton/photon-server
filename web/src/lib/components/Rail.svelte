@@ -88,6 +88,26 @@ const sizes = $derived(
 );
 </script>
 
+{#snippet arrow(
+	direction: 1 | -1,
+	label: string,
+	enabled: boolean,
+)}
+	<button
+		type="button"
+		onclick={() => page(direction)}
+		disabled={!enabled}
+		class="text-ink ring-line-strong hover:bg-raise focus-visible:outline-signal grid size-8 place-items-center rounded-full bg-white/6 ring-1 transition-[background-color,opacity] duration-200 disabled:opacity-35 disabled:hover:bg-white/6"
+	>
+		{#if direction < 0}
+			<ChevronLeftIcon class="size-4" aria-hidden="true" />
+		{:else}
+			<ChevronRightIcon class="size-4" aria-hidden="true" />
+		{/if}
+		<span class="sr-only">{label} {title}</span>
+	</button>
+{/snippet}
+
 <!-- min-w-0: in a grid or flex row, the cards would otherwise widen the page.
 	The list is relative so what a card places absolutely (words for a screen
 	reader) scrolls with it rather than past the page's edge. It scrolls sideways
@@ -99,22 +119,31 @@ const sizes = $derived(
 	class="min-w-0 [contain-intrinsic-size:auto_20rem] [content-visibility:auto]"
 >
 	<!-- A row's name is quieter than its cards', as the app has it: the cards
-		are what is read. -->
-	<h2 {id} class="text-ink-2 mb-3 font-sans text-[0.9375rem] font-semibold">
-		{#if more}
-			<a
-				href={more}
-				class="hover:text-ink inline-flex items-center gap-1 rounded-full bg-white/6 py-1 pr-2 pl-3 transition-colors duration-200 hover:bg-white/12"
-			>
+		are what is read. Its arrows sit together at the other end of the line,
+		over the row rather than on its cards. -->
+	<div class="mb-3 flex items-center justify-between gap-3">
+		<h2 {id} class="text-ink-2 font-sans text-[0.9375rem] font-semibold">
+			{#if more}
+				<a
+					href={more}
+					class="hover:text-ink inline-flex items-center gap-1 rounded-full bg-white/6 py-1 pr-2 pl-3 transition-colors duration-200 hover:bg-white/12"
+				>
+					{title}
+					<ChevronRightIcon class="size-4" aria-hidden="true" />
+					<span class="sr-only">View all</span>
+				</a>
+			{:else}
 				{title}
-				<ChevronRightIcon class="size-4" aria-hidden="true" />
-				<span class="sr-only">View all</span>
-			</a>
-		{:else}
-			{title}
+			{/if}
+		</h2>
+		{#if back || on}
+			<div class="hidden gap-2 pointer-fine:flex">
+				{@render arrow(-1, "Previous in", back)}
+				{@render arrow(1, "Next in", on)}
+			</div>
 		{/if}
-	</h2>
-	<div class="group/rail relative">
+	</div>
+	<div class="relative">
 		<ul
 			bind:this={list}
 			{@attach resized}
@@ -140,31 +169,5 @@ const sizes = $derived(
 				{/each}
 			{/if}
 		</ul>
-		{#snippet arrow(
-			direction: 1 | -1,
-			label: string,
-		)}
-			<button
-				type="button"
-				onclick={() => page(direction)}
-				class={[
-					"bg-ground/85 text-ink ring-line-strong hover:bg-raise focus-visible:outline-signal absolute top-1/2 z-10 hidden size-10 -translate-y-1/2 place-items-center rounded-full opacity-0 shadow-lg ring-1 backdrop-blur transition-opacity group-hover/rail:opacity-100 focus-visible:opacity-100 pointer-fine:grid",
-					direction < 0 ? "-left-1 sm:-left-3" : "-right-1 sm:-right-3",
-				]}
-			>
-				{#if direction < 0}
-					<ChevronLeftIcon class="size-5" aria-hidden="true" />
-				{:else}
-					<ChevronRightIcon class="size-5" aria-hidden="true" />
-				{/if}
-				<span class="sr-only">{label} {title}</span>
-			</button>
-		{/snippet}
-		{#if back}
-			{@render arrow(-1, "Previous in")}
-		{/if}
-		{#if on}
-			{@render arrow(1, "Next in")}
-		{/if}
 	</div>
 </section>
