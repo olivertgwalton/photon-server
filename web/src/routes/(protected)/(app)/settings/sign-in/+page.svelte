@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onMount } from "svelte";
 import { toast } from "svelte-sonner";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
@@ -16,16 +17,17 @@ let { data } = $props();
 const api = client();
 const here = "/settings/sign-in";
 
-// A provider sends the reader back here, with `linked` naming the provider
-// they left for, and `refused` saying why when it didn't link.
-$effect(() => {
+// A provider sends the reader back here, by a full page load, with `linked`
+// naming the provider they left for and `refused` saying why it didn't link:
+// said once, then taken off the address without loading the page again.
+onMount(() => {
 	const params = page.url.searchParams;
 	const linked = data.providers.find((p) => p.slug === params.get("linked"));
 	const refused = refusalMessage(params.get("refused"));
 	if (!linked && !refused) return;
 	if (refused) toast.error(refused);
 	else if (linked) toast.success(`Your ${linked.name} account is linked.`);
-	goto(here, { replace: true, reset: false });
+	goto(here, { replace: true, shallow: true });
 });
 
 async function link(slug: string) {

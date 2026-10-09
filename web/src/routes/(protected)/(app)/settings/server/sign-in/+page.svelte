@@ -68,7 +68,7 @@ const remove = (slug: string, name: string) =>
 			<Card.Root>
 				<Card.Header>
 					<Card.Title><h2 class="heading">{p.name}</h2></Card.Title>
-					<Card.Description class="font-mono [overflow-wrap:anywhere]">
+					<Card.Description class="font-mono wrap-anywhere">
 						{p.issuer}
 					</Card.Description>
 					<Card.Action>
@@ -82,14 +82,14 @@ const remove = (slug: string, name: string) =>
 						class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm"
 					>
 						<dt class="text-ink-3">Client id</dt>
-						<dd class="font-mono [overflow-wrap:anywhere]">{p.client_id}</dd>
+						<dd class="font-mono wrap-anywhere">{p.client_id}</dd>
 						<dt class="text-ink-3">Client secret</dt>
 						<dd>{p.client_secret_set ? "Kept" : "None: a public client"}</dd>
 						<dt class="text-ink-3">Checks back</dt>
 						<dd>{p.recheck === "hourly" ? "Every hour" : "Only at sign-in"}</dd>
 						{#if p.group}
 							<dt class="text-ink-3">Required group</dt>
-							<dd class="[overflow-wrap:anywhere]">{p.group}</dd>
+							<dd class="wrap-anywhere">{p.group}</dd>
 						{/if}
 						{#if p.provisioning === "create"}
 							<dt class="text-ink-3">Profiles it makes see</dt>
@@ -106,7 +106,7 @@ const remove = (slug: string, name: string) =>
 						{/if}
 						{#if p.callback_url}
 							<dt class="text-ink-3">Redirect URI</dt>
-							<dd class="font-mono [overflow-wrap:anywhere]">
+							<dd class="font-mono wrap-anywhere">
 								{p.callback_url}
 							</dd>
 						{/if}

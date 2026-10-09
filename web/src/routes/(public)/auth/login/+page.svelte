@@ -88,27 +88,28 @@ async function continueWith(slug: string) {
 			{/if}
 		</Card.Description>
 	</Card.Header>
-	<Card.Content class="grid gap-6">
-		{#if data.providers.length}
-			<div class="grid gap-2">
-				{#each data.providers as provider (provider.slug)}
-					<Button
-						variant="outline"
-						disabled={pending}
-						onclick={() => continueWith(provider.slug)}
-					>
-						Continue with {provider.name}
-					</Button>
-				{/each}
-			</div>
-			<p
-				class="text-ink-3 flex items-center gap-3 text-xs before:h-px before:flex-1 before:bg-current/20 after:h-px after:flex-1 after:bg-current/20"
-			>
-				or
-			</p>
-		{/if}
+	<Card.Content>
 		<form onsubmit={login}>
 			<Field.Group>
+				{#if data.providers.length}
+					<Field.Field>
+						{#each data.providers as provider (provider.slug)}
+							<Button
+								type="button"
+								variant="outline"
+								disabled={pending}
+								onclick={() => continueWith(provider.slug)}
+							>
+								Continue with {provider.name}
+							</Button>
+						{/each}
+					</Field.Field>
+					<Field.Separator
+						class="*:data-[slot=field-separator-content]:bg-card"
+					>
+						or
+					</Field.Separator>
+				{/if}
 				<Field.Field>
 					<Field.Label for="name">Name</Field.Label>
 					<Input id="name" name="name" autocomplete="username" required />
