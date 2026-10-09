@@ -273,15 +273,19 @@ func TestALibraryCountsTheCollectionsItLists(t *testing.T) {
 	}
 	agree := func(profile uuid.UUID, want map[uuid.UUID]int) {
 		t.Helper()
-		counts, err := s.LibraryCounts(ctx, profile)
+		counts, err := s.LibraryCounts(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
 		total := 0
 		for lib, n := range want {
 			_, listed, err := s.Collections(ctx, lib, profile, 0, 10)
-			if err != nil || counts[lib].Collections != n || listed != int64(n) {
-				t.Errorf("library %s counts %d collections and lists %d, %v; want %d", lib, counts[lib].Collections, listed, err, n)
+			if err != nil || listed != int64(n) {
+				t.Errorf("library %s lists %d collections, %v; want %d", lib, listed, err, n)
+			}
+			// The server's count is of every collection it lists to anyone.
+			if profile == (uuid.UUID{}) && counts[lib].Collections != n {
+				t.Errorf("library %s counts %d collections, lists %d", lib, counts[lib].Collections, n)
 			}
 			total += n
 		}
