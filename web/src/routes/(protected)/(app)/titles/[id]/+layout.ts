@@ -17,10 +17,6 @@ export const load: LayoutLoad = async ({ fetch, params, depends }) => {
 		// One card per person, whatever they did on it.
 		cast: castOf(title.credits ?? []),
 		extras: extrasOf(title),
-		seasons: (title.seasons ?? []).map((s) => ({
-			...s,
-			kind: "season" as const,
-		})),
 		collections: (title.collections ?? []).map((c) => ({
 			...c,
 			kind: "collection" as const,

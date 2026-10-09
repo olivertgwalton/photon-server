@@ -23,6 +23,7 @@ let {
 	total,
 	caption,
 	current,
+	heading,
 }: {
 	title: string;
 	cards?: CardLike[];
@@ -33,6 +34,8 @@ let {
 	total?: number;
 	caption?: (index: number) => string | undefined;
 	current?: string;
+	// What the row's name is drawn as, where it is more than its words.
+	heading?: Snippet;
 } = $props();
 
 const shown = $derived(current ? cards : cards.slice(0, railLimit));
@@ -132,6 +135,8 @@ const sizes = $derived(
 					<ChevronRightIcon class="size-4" aria-hidden="true" />
 					<span class="sr-only">View all</span>
 				</a>
+			{:else if heading}
+				{@render heading()}
 			{:else}
 				{title}
 			{/if}
