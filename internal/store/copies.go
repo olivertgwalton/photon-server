@@ -95,25 +95,27 @@ func saveCopy(ctx context.Context, tx db, lib uuid.UUID, settings analysis, item
 	if version.DurationMS > 0 {
 		version.BitrateKbps = int(version.SizeBytes * 8 / version.DurationMS)
 	}
-	err = tx.QueryRow(ctx, `
-		INSERT INTO versions (item_id, library_id, fingerprint, edition, label, container, width, height,
+	// Its ids are chosen here, as a title's are, so its writes wait on nothing.
+	version.ID = uuid.NewV7()
+	_, err = tx.Exec(ctx, `
+		INSERT INTO versions (id, item_id, library_id, fingerprint, edition, label, container, width, height,
 			video_codec, video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
-		version.ItemID, version.LibraryID, version.Fingerprint, version.Edition, version.Label, version.Container,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+		version.ID, version.ItemID, version.LibraryID, version.Fingerprint, version.Edition, version.Label, version.Container,
 		version.Width, version.Height, version.VideoCodec, version.VideoRange, version.DVProfile,
-		version.BitrateKbps, version.SizeBytes, version.DurationMS).Scan(&version.ID)
+		version.BitrateKbps, version.SizeBytes, version.DurationMS)
 	if err != nil {
 		return err
 	}
 	for idx, part := range c.Parts {
 		row := model.Part{
-			VersionID: version.ID, Idx: int16(idx), SizeBytes: part.Facts.Size,
+			ID: uuid.NewV7(), VersionID: version.ID, Idx: int16(idx), SizeBytes: part.Facts.Size,
 			DurationMS: part.Facts.Duration.Milliseconds(), OffsetMS: offset,
 		}
 		offset += row.DurationMS
-		err := tx.QueryRow(ctx, `
-			INSERT INTO parts (version_id, idx, size_bytes, duration_ms, offset_ms) VALUES ($1, $2, $3, $4, $5)
-			RETURNING id`, row.VersionID, row.Idx, row.SizeBytes, row.DurationMS, row.OffsetMS).Scan(&row.ID)
+		_, err := tx.Exec(ctx, `
+			INSERT INTO parts (id, version_id, idx, size_bytes, duration_ms, offset_ms) VALUES ($1, $2, $3, $4, $5, $6)`,
+			row.ID, row.VersionID, row.Idx, row.SizeBytes, row.DurationMS, row.OffsetMS)
 		if err != nil {
 			return err
 		}

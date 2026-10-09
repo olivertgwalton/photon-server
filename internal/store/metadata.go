@@ -19,32 +19,77 @@ import (
 // library does not take writes nothing. A list is replaced whole, never merged, so two providers'
 // genres never stand side by side.
 func applyMetadata(ctx context.Context, tx db, item uuid.UUID, source domain.FieldSource, m domain.Metadata) error {
-	type itemField struct {
-		Field  domain.Field
-		Source domain.FieldSource
-	}
-	fields, err := queryStructs[itemField](ctx, tx, `SELECT field, source FROM item_fields WHERE item_id = $1`, item)
+	f, err := fieldsOf(ctx, tx, item)
 	if err != nil {
 		return err
 	}
-	ranked, err := ranks(ctx, tx, item)
+	return f.apply(ctx, tx, source, m)
+}
+
+// fields is what decides which of a title's fields and ids a source may write: the source of each,
+// and how its library ranks the sources of its metadata.
+type fields struct {
+	item    uuid.UUID
+	sources map[domain.Field]domain.FieldSource
+	ranked  map[domain.FieldSource]int
+	ids     map[domain.Provider]domain.IDSource
+}
+
+// fieldsOf reads a title's fields, in one statement however many sources then write them.
+func fieldsOf(ctx context.Context, tx db, item uuid.UUID) (*fields, error) {
+	var kind domain.ItemKind
+	var library domain.LibraryKind
+	var named []domain.Field
+	var by []domain.FieldSource
+	var providers []domain.Provider
+	var from []domain.IDSource
+	var kinds []domain.ItemKind
+	var taken []domain.FieldSource
+	err := tx.QueryRow(ctx, `
+		SELECT i.kind, l.kind,
+			ARRAY(SELECT field FROM item_fields WHERE item_id = i.id ORDER BY field),
+			ARRAY(SELECT source FROM item_fields WHERE item_id = i.id ORDER BY field),
+			ARRAY(SELECT provider FROM external_ids WHERE item_id = i.id ORDER BY provider),
+			ARRAY(SELECT source FROM external_ids WHERE item_id = i.id ORDER BY provider),
+			ARRAY(SELECT item_kind FROM library_sources WHERE library_id = l.id AND fetcher = $2 AND enabled
+				ORDER BY position, item_kind, source),
+			ARRAY(SELECT source FROM library_sources WHERE library_id = l.id AND fetcher = $2 AND enabled
+				ORDER BY position, item_kind, source)
+		FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.id = $1`, item, domain.FetcherMetadata).
+		Scan(&kind, &library, &named, &by, &providers, &from, &kinds, &taken)
 	if err != nil {
-		return err
+		return nil, found(err)
 	}
-	rank, taken := ranked[source]
+	f := &fields{item: item, sources: map[domain.Field]domain.FieldSource{}, ids: map[domain.Provider]domain.IDSource{}}
+	for n, field := range named {
+		f.sources[field] = by[n]
+	}
+	for n, provider := range providers {
+		f.ids[provider] = from[n]
+	}
+	var asked []domain.FieldSource
+	for n, k := range kinds {
+		if k == library.RankedAs(kind) {
+			asked = append(asked, taken[n])
+		}
+	}
+	f.ranked = rankOf(asked)
+	return f, nil
+}
+
+// apply is applyMetadata over fields already read, which it keeps up to date.
+func (f *fields) apply(ctx context.Context, tx db, source domain.FieldSource, m domain.Metadata) error {
+	rank, taken := f.ranked[source]
 	if !taken {
 		return nil
 	}
-	current := make(map[domain.Field]int, len(fields))
-	for _, r := range fields {
-		current[r.Field] = ranked[r.Source]
-	}
 	var assigns []string
-	args := []any{item}
+	args := []any{f.item}
 	var written []domain.Field
 	// A field is named as the column it is written to.
 	set := func(name domain.Field, said bool, value any) {
-		if cur, ok := current[name]; (said || slices.Contains(m.Locked, name)) && (!ok || rank >= cur) {
+		from, ok := f.sources[name]
+		if (said || slices.Contains(m.Locked, name)) && (!ok || rank >= f.ranked[from]) {
 			if said {
 				args = append(args, value)
 				assigns = append(assigns, fmt.Sprintf("%s = $%d", name, len(args)))
@@ -66,6 +111,9 @@ func applyMetadata(ctx context.Context, tx db, item uuid.UUID, source domain.Fie
 	if len(written) == 0 {
 		return nil
 	}
+	for _, name := range written {
+		f.sources[name] = source
+	}
 	b := &pgx.Batch{}
 	if len(assigns) > 0 {
 		b.Queue(`UPDATE items SET `+strings.Join(assigns, ", ")+` WHERE id = $1`, args...)
@@ -73,24 +121,8 @@ func applyMetadata(ctx context.Context, tx db, item uuid.UUID, source domain.Fie
 	b.Queue(`
 		INSERT INTO item_fields (item_id, field, source) SELECT $1, unnest($2::text[]), $3
 		ON CONFLICT (item_id, field) DO UPDATE SET source = excluded.source, updated_at = now()`,
-		item, written, source)
+		f.item, written, source)
 	return tx.SendBatch(ctx, b).Close()
-}
-
-// ranks orders the sources that may write an item's fields: what files say lowest, a reader's own
-// edit highest, and those its library asks for the metadata of its kind between, in the library's
-// order. A source not asked is absent, and a value it once wrote ranks below everything.
-func ranks(ctx context.Context, tx db, item uuid.UUID) (map[domain.FieldSource]int, error) {
-	row := &model.Item{ID: item}
-	err := tx.QueryRow(ctx, `SELECT library_id, kind FROM items WHERE id = $1`, item).Scan(&row.LibraryID, &row.Kind)
-	if err != nil {
-		return nil, found(err)
-	}
-	taken, err := rankings(ctx, tx, []*model.Item{row}, domain.FetcherMetadata)
-	if err != nil {
-		return nil, err
-	}
-	return rankOf(taken[item]), nil
 }
 
 // rankOf is how highly a library that asks these sources, most trusted first, ranks each, higher
@@ -182,19 +214,23 @@ func (a asked) of(kind domain.ItemKind, m domain.Metadata) domain.Metadata {
 
 // describe writes what a title's file and folder names say about it, then its NFO, if it has one.
 func describe(ctx context.Context, tx db, item uuid.UUID, title string, year int, ids map[domain.Provider]string, nfo *domain.Metadata) error {
-	if err := applyMetadata(ctx, tx, item, domain.SourceFile, domain.Metadata{Title: title, Year: year}); err != nil {
+	f, err := fieldsOf(ctx, tx, item)
+	if err != nil {
 		return err
 	}
-	if err := saveIDs(ctx, tx, item, domain.IDFromPath, ids); err != nil {
+	if err := f.apply(ctx, tx, domain.SourceFile, domain.Metadata{Title: title, Year: year}); err != nil {
+		return err
+	}
+	if err := f.saveIDs(ctx, tx, domain.IDFromPath, ids); err != nil {
 		return err
 	}
 	if nfo == nil {
 		return nil
 	}
-	if err := applyMetadata(ctx, tx, item, domain.SourceNFO, *nfo); err != nil {
+	if err := f.apply(ctx, tx, domain.SourceNFO, *nfo); err != nil {
 		return err
 	}
-	return saveIDs(ctx, tx, item, domain.IDFromNFO, nfo.IDs)
+	return f.saveIDs(ctx, tx, domain.IDFromNFO, nfo.IDs)
 }
 
 // saveIDs records a title's provider ids, each unless a higher-ranking source already gave one.
@@ -202,22 +238,27 @@ func saveIDs(ctx context.Context, tx db, item uuid.UUID, source domain.IDSource,
 	if len(ids) == 0 {
 		return nil
 	}
-	known, err := queryMap[domain.Provider, domain.IDSource](ctx, tx,
-		`SELECT provider, source FROM external_ids WHERE item_id = $1`, item)
+	f, err := fieldsOf(ctx, tx, item)
 	if err != nil {
 		return err
 	}
+	return f.saveIDs(ctx, tx, source, ids)
+}
+
+// saveIDs is saveIDs over fields already read, which it keeps up to date.
+func (f *fields) saveIDs(ctx context.Context, tx db, source domain.IDSource, ids map[domain.Provider]string) error {
 	for provider, value := range ids {
-		if from, ok := known[provider]; ok && from.Rank() > source.Rank() {
+		if from, ok := f.ids[provider]; ok && from.Rank() > source.Rank() {
 			continue
 		}
 		_, err := tx.Exec(ctx, `
 			INSERT INTO external_ids (item_id, provider, value, source) VALUES ($1, $2, $3, $4)
 			ON CONFLICT (item_id, provider) DO UPDATE SET value = excluded.value, source = excluded.source`,
-			item, provider, value, source)
+			f.item, provider, value, source)
 		if err != nil {
 			return err
 		}
+		f.ids[provider] = source
 	}
 	return nil
 }
