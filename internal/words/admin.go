@@ -122,6 +122,9 @@ func (w Words) Event(e domain.Event, names Names) string {
 	case domain.EventRestoreStarted:
 		d, _ := e.Details.(domain.RestoreDetails)
 		return "The database is being restored from " + d.Dump
+	case domain.EventTrackerChanged:
+		d, _ := e.Details.(domain.TrackerDetails)
+		return profile + "'s " + w.Tracker(d.Tracker) + " account changed"
 	}
 	return string(e.Kind)
 }

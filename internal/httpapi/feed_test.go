@@ -201,6 +201,7 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 		Kind: domain.EventPlaybackStopped, Profile: sam.ID, Item: title["Paddington"],
 		Details: domain.PlaybackDetails{Playback: domain.NowPlaying{ID: stopped}},
 	})
+	hub.Raise(ctx, domain.Event{Kind: domain.EventTrackerChanged, Profile: sam.ID, Details: domain.TrackerDetails{Tracker: domain.TrackerTrakt}})
 
 	// Oliver sees every library: once both changes reach him, Sam's stream has been handed them too.
 	libraries := map[uuid.UUID]told{}
@@ -218,13 +219,14 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 		t.Error("Oliver was not told of Other's scan")
 	}
 	if slices.ContainsFunc(oliverSaw, func(e told) bool {
-		return e.name == string(domain.EventUserDataChanged) || e.name == string(domain.EventPlaybackStopped)
+		return e.name == string(domain.EventUserDataChanged) || e.name == string(domain.EventPlaybackStopped) ||
+			e.name == string(domain.EventTrackerChanged)
 	}) {
-		t.Errorf("Oliver was told of Sam's progress or playback: %+v", oliverSaw)
+		t.Errorf("Oliver was told of Sam's progress, playback or trackers: %+v", oliverSaw)
 	}
 
 	samSaw := settle(samTold, sam)
-	var changed, progress, scanned, stops []told
+	var changed, progress, scanned, stops, trackers []told
 	for _, e := range samSaw {
 		switch {
 		case e.LibraryID == other.ID || e.TitleID == title["Heat"] || e.TitleID == title["Up"]:
@@ -237,6 +239,8 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 			scanned = append(scanned, e)
 		case e.name == string(domain.EventPlaybackStopped):
 			stops = append(stops, e)
+		case e.name == string(domain.EventTrackerChanged):
+			trackers = append(trackers, e)
 		}
 	}
 	if len(scanned) != 1 || scanned[0].LibraryID != films.ID {
@@ -256,5 +260,8 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	}
 	if len(stops) != 1 || len(stops[0].Details) != 1 || stops[0].Details["playback_id"] != stopped.String() {
 		t.Errorf("Sam was told of stops %+v, want the one playback's id alone, for its player to close", stops)
+	}
+	if len(trackers) != 1 || trackers[0].Details["tracker"] != string(domain.TrackerTrakt) {
+		t.Errorf("Sam was told of trackers %+v, want Trakt's link", trackers)
 	}
 }
