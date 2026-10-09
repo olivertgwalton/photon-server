@@ -96,13 +96,13 @@ func (l *Links) Trackers(ctx context.Context, profile uuid.UUID) ([]Status, erro
 	if err != nil {
 		return nil, err
 	}
-	accounts, err := l.st.TrackerAccounts(ctx, profile)
+	grants, err := l.st.TrackerGrants(ctx, profile)
 	if err != nil {
 		return nil, err
 	}
 	linked := map[domain.Tracker]domain.TrackerAccount{}
-	for _, a := range accounts {
-		linked[a.Tracker] = a
+	for _, g := range grants {
+		linked[g.Tracker] = g.TrackerAccount
 	}
 	out := make([]Status, 0, len(domain.Trackers()))
 	for _, t := range domain.Trackers() {
@@ -128,11 +128,11 @@ func (l *Links) Link(ctx context.Context, profile uuid.UUID, t domain.Tracker) (
 	if err != nil {
 		return kv.TrackerLink{}, err
 	}
-	accounts, err := l.st.TrackerAccounts(ctx, profile)
+	grants, err := l.st.TrackerGrants(ctx, profile)
 	if err != nil {
 		return kv.TrackerLink{}, err
 	}
-	for _, a := range accounts {
+	for _, a := range grants {
 		if a.Tracker == t {
 			return kv.TrackerLink{}, fmt.Errorf("%w: the profile has linked %s already, as %s: unlink it first", ErrRefused, t, a.Username)
 		}
