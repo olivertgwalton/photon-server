@@ -347,7 +347,7 @@ test("a member puts the libraries in their own order, and may do no more", async
 	await expect(names).toHaveText(["Shows", "Films"]);
 });
 
-test("a profile is added, and what another may see is set", async ({
+test("a profile is added seeing one library, and what another may see is set", async ({
 	page,
 }) => {
 	await logIn(page, "/settings/profiles");
@@ -355,7 +355,16 @@ test("a profile is added, and what another may see is set", async ({
 	await page.getByRole("button", { name: "Add a profile" }).click();
 	await page.getByRole("textbox", { name: "Name" }).fill("Guest");
 	await page.getByLabel("Password").fill("battery staple");
+	await page.getByLabel("Every library, including ones added later").click();
+	await page.getByRole("checkbox", { name: "Films" }).check();
+	await expectAccessible(page);
+	const limited = page.waitForRequest("**/api/v1/admin/profiles/p-new/access");
 	await page.getByRole("button", { name: "Add profile" }).click();
+	expect((await limited).postDataJSON()).toEqual({
+		max_age: null,
+		unrated: "allow",
+		libraries: ["l-films"],
+	});
 	await expect(page.getByText("Guest was added.")).toBeVisible();
 
 	await page.getByRole("link", { name: "Kids" }).click();

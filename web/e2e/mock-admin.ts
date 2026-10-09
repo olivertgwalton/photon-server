@@ -555,6 +555,7 @@ export async function admin(
 				libraries: [],
 			} satisfies Schemas["Access"]);
 		case "PUT /api/v1/admin/profiles/p-kids/access":
+		case "PUT /api/v1/admin/profiles/p-new/access":
 			return done();
 		case "GET /api/v1/admin/tasks":
 			return json({
