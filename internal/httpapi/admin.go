@@ -70,7 +70,7 @@ type libraryAdmin interface {
 	RemoveLibrary(ctx context.Context, id uuid.UUID) error
 	ScanFolders(ctx context.Context, lib uuid.UUID, folders []string, delay time.Duration) error
 	RefreshLibrary(ctx context.Context, lib uuid.UUID, mode domain.RefreshMode) error
-	LibraryCounts(ctx context.Context, profile uuid.UUID) (map[uuid.UUID]domain.TitleCounts, error)
+	LibraryCounts(ctx context.Context) (map[uuid.UUID]domain.TitleCounts, error)
 	CertificateCountries(ctx context.Context) ([]string, error)
 }
 
@@ -186,8 +186,8 @@ func (a *API) adminLibraries(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	// Counted as the server sees them, whatever the admin's own profile may.
-	counts, err := a.svc.Libraries.LibraryCounts(r.Context(), uuid.UUID{})
+	// Counted as the server holds them, whatever the admin's own profile may see.
+	counts, err := a.svc.Libraries.LibraryCounts(r.Context())
 	if err != nil {
 		a.internal(w, r, err)
 		return
