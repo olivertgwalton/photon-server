@@ -8,12 +8,16 @@ import type { PageLoad } from "./$types";
 // page.
 export const load: PageLoad = async ({ fetch, url }) => {
 	const api = client(fetch);
-	const [me, server, setup] = await Promise.all([
+	const [me, server, setup, providers] = await Promise.all([
 		api.GET("/api/v1/profile").catch(() => null),
 		api.GET("/api/v1/server").catch(() => null),
 		api.GET("/api/v1/setup").catch(() => null),
+		api.GET("/api/v1/auth/sign-in-providers").catch(() => null),
 	]);
 	if (me?.data) redirect(303, returnPath(url));
 	if (setup?.data && setup.data.state !== "done") redirect(303, SETUP);
-	return { server: server?.data ?? null };
+	return {
+		server: server?.data ?? null,
+		providers: providers?.data?.items ?? [],
+	};
 };

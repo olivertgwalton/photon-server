@@ -5,6 +5,7 @@ import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import { CLIENT, deviceName } from "#lib/device.js";
 import { returnPath } from "#lib/session.js";
+import { leaveFor, refusalMessage } from "#lib/signin.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -13,7 +14,8 @@ import { fields } from "#lib/form.js";
 
 let { data } = $props();
 let pending = $state(false);
-let message = $state<string>();
+// A provider that sent the reader back refused says why.
+let message = $state(refusalMessage(page.url.searchParams.get("refused")));
 
 async function login(event: SubmitEvent) {
 	const form = fields(event);
@@ -47,6 +49,23 @@ async function login(event: SubmitEvent) {
 		{ refreshAll: true },
 	);
 }
+
+// The provider signs the reader in as their own profile, so they come back
+// signed in to where they were going.
+async function continueWith(slug: string) {
+	pending = true;
+	message = await leaveFor(
+		client().POST("/api/v1/auth/sign-in-providers/{slug}/sign-in", {
+			params: { path: { slug } },
+			body: {
+				device: deviceName(navigator.userAgent),
+				client: CLIENT,
+				to: returnPath(page.url),
+			},
+		}),
+	);
+	pending = !message;
+}
 </script>
 
 <svelte:head><title>Log in · Photon</title></svelte:head>
@@ -59,14 +78,38 @@ async function login(event: SubmitEvent) {
 			</h1>
 		</Card.Title>
 		<Card.Description>
-			{data.server
-				? "Use your profile's name and password."
-				: "The server isn't answering. You can log in once it's back."}
+			{#if !data.server}
+				The server isn't answering. You can log in once it's back.
+			{:else if data.providers.length}
+				Continue with your account elsewhere, or use your profile's name and
+				password.
+			{:else}
+				Use your profile's name and password.
+			{/if}
 		</Card.Description>
 	</Card.Header>
 	<Card.Content>
 		<form onsubmit={login}>
 			<Field.Group>
+				{#if data.providers.length}
+					<Field.Field>
+						{#each data.providers as provider (provider.slug)}
+							<Button
+								type="button"
+								variant="outline"
+								disabled={pending}
+								onclick={() => continueWith(provider.slug)}
+							>
+								Continue with {provider.name}
+							</Button>
+						{/each}
+					</Field.Field>
+					<Field.Separator
+						class="*:data-[slot=field-separator-content]:bg-card"
+					>
+						or
+					</Field.Separator>
+				{/if}
 				<Field.Field>
 					<Field.Label for="name">Name</Field.Label>
 					<Input id="name" name="name" autocomplete="username" required />

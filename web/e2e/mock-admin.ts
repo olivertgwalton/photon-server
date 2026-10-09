@@ -321,6 +321,8 @@ let network: Schemas["NetworkStatus"] = {
 	trusted_proxies: [],
 	discovery: "broadcast",
 };
+let signInProviders: Schemas["AdminSignInProvider"][] = [];
+
 const deadJobs: Schemas["DeadJob"][] = [
 	{
 		id: 41,
@@ -410,6 +412,48 @@ export async function admin(
 			},
 			{ status: 403, headers: { "content-type": "application/problem+json" } },
 		);
+	}
+	const provider = url.pathname.match(
+		/^\/api\/v1\/admin\/sign-in-providers\/([^/]+)$/,
+	)?.[1];
+	if (request.method === "PUT" && provider) {
+		const body = (await request.json()) as Schemas["SignInProviderChange"];
+		if (!body.issuer.startsWith("https://")) {
+			return json(
+				{
+					title: "Conflict",
+					status: 409,
+					code: "conflict",
+					detail:
+						"sign-in provider refused: the issuer is reached over https, so its tokens and the client secret are not sent in the clear",
+				} satisfies Schemas["Problem"],
+				409,
+			);
+		}
+		const now = signInProviders.find((p) => p.slug === provider);
+		const saved: Schemas["AdminSignInProvider"] = {
+			slug: provider,
+			name: body.name,
+			issuer: body.issuer,
+			client_id: body.client_id,
+			client_secret_set:
+				!!body.client_secret ||
+				(!!now?.client_secret_set && now.client_id === body.client_id),
+			provisioning: body.provisioning,
+			group: body.group,
+			recheck: body.recheck ?? "hourly",
+			access: body.access ?? { max_age: null, unrated: "allow", libraries: [] },
+			callback_url: `${network.public_url}/api/v1/auth/sign-in-providers/${provider}/callback`,
+		};
+		signInProviders = [
+			...signInProviders.filter((p) => p.slug !== provider),
+			saved,
+		];
+		return json(saved);
+	}
+	if (request.method === "DELETE" && provider) {
+		signInProviders = signInProviders.filter((p) => p.slug !== provider);
+		return done();
 	}
 	const node = url.pathname.match(/^\/api\/v1\/admin\/nodes\/([^/]+)$/)?.[1];
 	if (request.method === "DELETE" && node) {
@@ -655,6 +699,8 @@ export async function admin(
 		case "POST /api/v1/admin/jobs/41/retry":
 			deadJobs.length = 0;
 			return done(202);
+		case "GET /api/v1/admin/sign-in-providers":
+			return json({ items: signInProviders });
 		case "GET /api/v1/admin/trackers":
 			return json({ items: trackerClients });
 		case "PUT /api/v1/admin/trackers/simkl": {
