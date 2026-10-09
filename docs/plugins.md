@@ -260,6 +260,9 @@ curl -X POST "$PHOTON_URL/api/v1/admin/libraries/$LIBRARY_ID/scan?path=/srv/film
 A key acts as the admin who made it, as Jellyfin's and Emby's do, and stands until it is revoked
 there; revoke it when the plugin is removed. The API is described at `GET /api/v1/openapi.json`.
 
+A plugin is a service that runs on its own, so it keeps its own schedule: the server runs no task
+of a plugin's, as Jellyfin does for its plugins, which have no process of their own.
+
 ## Versions
 
 The manifest's `protocol` is the version a plugin speaks; the server registers only plugins that
