@@ -17,6 +17,19 @@ func LibraryKinds() []LibraryKind {
 	return []LibraryKind{LibraryMovies, LibraryShows}
 }
 
+// LibraryMedia is where a library's media is: files under a folder, or, of a remote library,
+// streams a provider offers for the titles of a list, found by their ids as one is played.
+type LibraryMedia string
+
+const (
+	MediaFolder LibraryMedia = "folder"
+	MediaRemote LibraryMedia = "remote"
+)
+
+func LibraryMedias() []LibraryMedia {
+	return []LibraryMedia{MediaFolder, MediaRemote}
+}
+
 // Monitor is whether a library is scanned as its files change, or only on the scan schedule.
 type Monitor string
 
@@ -129,10 +142,17 @@ func MediaDeletions() []MediaDeletion {
 }
 
 type Library struct {
-	ID   uuid.UUID
-	Name string
-	Kind LibraryKind
+	ID    uuid.UUID
+	Name  string
+	Kind  LibraryKind
+	Media LibraryMedia
+	// Root is a folder library's folder.
 	Root string
+	// ListSource and ListID are the list a remote library holds the titles of, and StreamSource
+	// the provider whose streams it plays.
+	ListSource   FieldSource
+	ListID       string
+	StreamSource FieldSource
 	// Sources rank where each kind of item it holds takes its metadata and pictures from.
 	Sources []KindSources
 	// RemoteExtras are the kinds of video it keeps links to from its providers.
