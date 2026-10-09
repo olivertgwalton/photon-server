@@ -86,11 +86,11 @@ func closed(c chan struct{}) bool {
 // segments and keeps each as it is finished.
 func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	src := s.sources[run.part]
-	f, err := src.Open()
+	in, err := src.Open()
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer in.Close()
 	start := s.plan[run.at].Start
 	ctx, stop := context.WithCancelCause(ctx)
 	defer stop(nil)
@@ -105,8 +105,8 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	if err != nil {
 		return err
 	}
-	files := append([]*os.File{f}, writes...)
-	cmd := media.NewCommand(ctx, media.Foreground, files, r.tools.FFmpeg.Path, args(r.hw, start, src.Video, src.Audio, layer, s.format, streams)...)
+	files := append(in.Files(), writes...)
+	cmd := media.NewCommand(ctx, media.Foreground, files, r.tools.FFmpeg.Path, args(in, r.hw, start, src.Video, src.Audio, layer, s.format, streams)...)
 	out, err := cmd.StdoutPipe()
 	if err == nil {
 		err = cmd.Start()

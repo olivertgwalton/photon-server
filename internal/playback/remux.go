@@ -3,7 +3,6 @@ package playback
 import (
 	"cmp"
 	"context"
-	"os"
 	"slices"
 	"time"
 	"uuid"
@@ -14,6 +13,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/library"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -49,7 +49,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 	opening := context.WithoutCancel(ctx)
 	sources := make([]hls.Source, len(c.Parts))
 	for i, p := range c.Parts {
-		open := func() (*os.File, error) { return openFile(opening, r.parts.PartFile, p.ID) }
+		open := func() (media.Input, error) { return openFile(opening, r.parts.PartFile, p.ID) }
 		duration := time.Duration(p.DurationMS) * time.Millisecond
 		keyframes := hls.Forced(duration)
 		if video.Encode == nil {
@@ -109,7 +109,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 
 // file is a subtitle file beside a copy, in its language.
 func (r *Remuxes) file(ctx context.Context, c store.PlayCopy, id uuid.UUID) *hls.SubtitleSource {
-	src := &hls.SubtitleSource{Open: func() (*os.File, error) { return openFile(ctx, r.parts.SubtitleFile, id) }}
+	src := &hls.SubtitleSource{Open: func() (media.Input, error) { return openFile(ctx, r.parts.SubtitleFile, id) }}
 	if i := slices.IndexFunc(c.Subtitles, func(f store.PlaySubtitle) bool { return f.ID == id }); i >= 0 && c.Subtitles[i].Language != language.Und {
 		src.Language = c.Subtitles[i].Language.String()
 	}
@@ -154,10 +154,10 @@ func (r *Remuxes) keyframes(ctx context.Context, part uuid.UUID) ([]time.Duratio
 }
 
 // openFile opens a file of a library the scanner recorded.
-func openFile(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (*os.File, error) {
+func openFile(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (media.Input, error) {
 	root, rel, err := where(ctx, id)
 	if err != nil {
-		return nil, err
+		return media.Input{}, err
 	}
-	return library.Open(root, rel)
+	return library.OpenMedia(root, rel)
 }

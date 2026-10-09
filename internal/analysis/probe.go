@@ -15,15 +15,15 @@ import (
 // passed over.
 func Probe(st *store.Store, tools media.Tools) jobs.Handler {
 	return func(ctx context.Context, part uuid.UUID) error {
-		f, err := openPart(ctx, st, part)
+		in, err := openPart(ctx, st, part)
 		if errors.Is(err, store.ErrNotFound) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		defer f.Close()
-		facts, err := tools.Probe(ctx, f)
+		defer in.Close()
+		facts, err := tools.Probe(ctx, in)
 		if err != nil {
 			return err
 		}

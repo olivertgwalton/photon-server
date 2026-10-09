@@ -22,6 +22,7 @@ func downloadable(t *testing.T) (s *Store, film, part uuid.UUID, profiles [2]uui
 		t.Fatal(err)
 	}
 	p := Part{RelPath: "L/L.mkv", Size: 6_000_000_000, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+		Size:      6_000_000_000,
 		Container: "matroska,webm", Duration: 2 * time.Hour, BitrateKbps: 8000,
 		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 1920, Height: 1080, Range: domain.RangeSDR}},
 	}}

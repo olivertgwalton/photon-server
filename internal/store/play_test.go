@@ -22,7 +22,7 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 		t.Fatal(err)
 	}
 	part := func(rel string, d time.Duration) Part {
-		return Part{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: d}}
+		return Part{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Size: 1, Duration: d}}
 	}
 	theatricalPart := part("L/theatrical.mkv", 3*time.Hour)
 	theatricalPart.Facts.Container = "matroska,webm"

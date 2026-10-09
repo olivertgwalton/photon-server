@@ -158,17 +158,17 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 			}
 			return p.remove(ctx, part, nil)
 		}
-		f, err := openPart(ctx, st, part)
+		in, err := openPart(ctx, st, part)
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer in.Close()
 		made, err := os.MkdirTemp("", "previews-")
 		if err != nil {
 			return err
 		}
 		defer os.RemoveAll(made)
-		chapters, err := chapterImages(ctx, tools, f, src.Chapters, src.Length, src.Range, filepath.Join(made, "chapters"), log)
+		chapters, err := chapterImages(ctx, tools, in, src.Chapters, src.Length, src.Range, filepath.Join(made, "chapters"), log)
 		if err != nil {
 			return err
 		}
@@ -179,7 +179,7 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 			if err := os.Mkdir(dir, 0o750); err != nil {
 				return err
 			}
-			th, err := tools.Trickplay(ctx, f, dir, trickplay, src.Range)
+			th, err := tools.Trickplay(ctx, in, dir, trickplay, src.Range)
 			if err != nil {
 				return err
 			}
@@ -206,7 +206,7 @@ func MakePreviews(st *store.Store, tools media.Tools, p *Previews, log *slog.Log
 // of those pictured. As Jellyfin does, it stops at the first chapter starting past the end, and at
 // the first whose picture cannot be made, keeping those made before it: on a mount that has
 // stopped answering, each chapter tried would cost its limit twice over.
-func chapterImages(ctx context.Context, tools media.Tools, f *os.File, chapters []store.ChapterSpan, length time.Duration, source domain.Range, dir string, log *slog.Logger) ([]int, error) {
+func chapterImages(ctx context.Context, tools media.Tools, in media.Input, chapters []store.ChapterSpan, length time.Duration, source domain.Range, dir string, log *slog.Logger) ([]int, error) {
 	if err := os.Mkdir(dir, 0o750); err != nil {
 		return nil, err
 	}
@@ -219,7 +219,7 @@ func chapterImages(ctx context.Context, tools media.Tools, f *os.File, chapters 
 		if at == 0 {
 			at = min(openingChapterAt, c.End/2)
 		}
-		err := still(ctx, tools, f, at, source, filepath.Join(dir, strconv.Itoa(c.Idx)+".jpg"))
+		err := still(ctx, tools, in, at, source, filepath.Join(dir, strconv.Itoa(c.Idx)+".jpg"))
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -234,7 +234,7 @@ func chapterImages(ctx context.Context, tools media.Tools, f *os.File, chapters 
 
 // still pictures a chapter from keyframes alone or, failing that, from every frame, as Jellyfin's
 // keyframe-only extraction does, each try within stillLimit.
-func still(ctx context.Context, tools media.Tools, f *os.File, at time.Duration, source domain.Range, path string) error {
+func still(ctx context.Context, tools media.Tools, in media.Input, at time.Duration, source domain.Range, path string) error {
 	limit := stillLimit
 	if source.HDR() {
 		limit *= 2
@@ -242,7 +242,7 @@ func still(ctx context.Context, tools media.Tools, f *os.File, at time.Duration,
 	var err error
 	for _, decode := range []media.Decode{media.DecodeKeyframes, media.DecodeEvery} {
 		try, cancel := context.WithTimeout(ctx, limit)
-		err = tools.Still(try, f, decode, at, chapterWidth, source, path)
+		err = tools.Still(try, in, decode, at, chapterWidth, source, path)
 		cancel()
 		if err == nil || ctx.Err() != nil {
 			return err
@@ -252,14 +252,14 @@ func still(ctx context.Context, tools media.Tools, f *os.File, at time.Duration,
 }
 
 // openPart opens a place a part's bytes are.
-func openPart(ctx context.Context, st *store.Store, part uuid.UUID) (*os.File, error) {
+func openPart(ctx context.Context, st *store.Store, part uuid.UUID) (media.Input, error) {
 	root, rel, err := st.PartFile(ctx, part)
 	if err != nil {
-		return nil, err
+		return media.Input{}, err
 	}
-	f, err := library.Open(root, rel)
+	in, err := library.OpenMedia(root, rel)
 	if err != nil {
-		return nil, fmt.Errorf("part %s: %w", part, err)
+		return media.Input{}, fmt.Errorf("part %s: %w", part, err)
 	}
-	return f, nil
+	return in, nil
 }

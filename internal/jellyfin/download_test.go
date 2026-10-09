@@ -7,6 +7,8 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
 // An app downloads a film as it is, to keep on the device: the file under its own name, in ranges
@@ -112,5 +115,57 @@ func TestAnAppOffersToDownloadOnlyWhatDownloads(t *testing.T) {
 		if !maps.Equal(got, want) {
 			t.Errorf("a list asking for %s: %v, want %v", fields, got, want)
 		}
+	}
+}
+
+// A .strm downloads as the media it names, under its name and its media's container, not as a
+// line of text.
+func TestAnAppDownloadsAStrmAsItsMedia(t *testing.T) {
+	media := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "heat.mkv", time.Unix(0, 0), strings.NewReader("0123456789"))
+	}))
+	defer media.Close()
+	ctx := t.Context()
+	db := storetest.FreshDatabase(t)
+	log := slog.New(slog.DiscardHandler)
+	if err := store.Migrate(ctx, db, log); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(ctx, db, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "Heat (1995).strm"), []byte(media.URL+"/heat\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	part := store.Part{RelPath: "Heat (1995).strm", Size: 40, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+		Container: "matroska,webm", Size: 10, Duration: time.Hour,
+		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Width: 1920, Height: 1080, Range: domain.RangeSDR}},
+	}}
+	film := store.Film{Title: "Heat", Copies: []store.Copy{{ContentKey: []byte("heat"), Parts: []store.Part{part}}}}
+	if _, err := st.SaveFolder(ctx, films.ID, ".", []byte("v"), []store.Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cards, _, err := st.Wall(ctx, []uuid.UUID{films.ID}, store.WallPage{Profile: ada.ID, Sort: domain.SortTitle, Limit: 1})
+	if err != nil || len(cards) != 1 {
+		t.Fatal(cards, err)
+	}
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Sent: playback.NewSent(),
+	})
+	w := serve(api, http.MethodGet, "/Items/"+guid(cards[0].ID)+"/Download?ApiKey=pst_ada", "", "")
+	if w.Code != http.StatusOK || w.Body.String() != "0123456789" ||
+		w.Header().Get("Content-Disposition") != `attachment; filename="Heat (1995).mkv"` {
+		t.Errorf("the download: %d %v %q", w.Code, w.Header(), w.Body)
 	}
 }

@@ -56,7 +56,9 @@ func ContainerName(format string) string {
 
 // Facts are what ffprobe says of a file.
 type Facts struct {
-	Container   string
+	Container string
+	// Size is the media's, in bytes: a .strm's is of what it names, not of itself.
+	Size        int64
 	Duration    time.Duration
 	BitrateKbps int
 	Streams     []Stream

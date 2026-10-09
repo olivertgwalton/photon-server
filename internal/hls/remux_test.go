@@ -88,7 +88,7 @@ func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
 	for k := range 15 {
 		keyframes = append(keyframes, time.Duration(2*k)*time.Second)
 	}
-	open := func() (*os.File, error) { return os.Open("testdata/fragments.mp4") }
+	open := opening("testdata/fragments.mp4")
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
 		Open: open, Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
@@ -151,7 +151,7 @@ func TestSegmentsFarBehindThePlayerAreRemoved(t *testing.T) {
 		keyframes = append(keyframes, time.Duration(2*k)*time.Second)
 	}
 	part := Source{
-		Open:  func() (*os.File, error) { return os.Open("testdata/fragments.mp4") },
+		Open:  opening("testdata/fragments.mp4"),
 		Part:  Part{Duration: 30 * time.Second, Keyframes: keyframes},
 		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
 	}
@@ -225,7 +225,7 @@ func TestASegmentPastAShortFilesEndFails(t *testing.T) {
 	}
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
-		Open:  func() (*os.File, error) { return os.Open("testdata/fragments.mp4") },
+		Open:  opening("testdata/fragments.mp4"),
 		Part:  Part{Duration: time.Minute, Keyframes: keyframes},
 		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
 	}}}); err != nil {
@@ -308,7 +308,7 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 			[]string{"-map 0:1 -af volume=2 -c:a aac -ac 2 -b:a 256k"},
 		},
 	} {
-		got := strings.Join(args(Hardware{Accel: domain.AccelSoftware}, 12*time.Second, tc.video, tc.audio, tc.layer, domain.SegmentsFMP4, nil), " ")
+		got := strings.Join(args(media.Input{}, Hardware{Accel: domain.AccelSoftware}, 12*time.Second, tc.video, tc.audio, tc.layer, domain.SegmentsFMP4, nil), " ")
 		for _, w := range tc.want {
 			if !strings.Contains(got, w) {
 				t.Errorf("%s: %q lacks %q", tc.name, got, w)
@@ -321,7 +321,15 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 }
 
 // unplayed is a file a test never plays: the run its remux starts with ends at once.
-func unplayed() (*os.File, error) { return nil, os.ErrNotExist }
+func unplayed() (media.Input, error) { return media.Input{}, os.ErrNotExist }
+
+// opening opens a file as a part to read.
+func opening(name string) func() (media.Input, error) {
+	return func() (media.Input, error) {
+		f, err := os.Open(name)
+		return media.Input{File: f}, err
+	}
+}
 
 // transcode is a minute of video encoded to H.264.
 var transcode = Copy{Parts: []Source{{
@@ -477,7 +485,7 @@ func TestARemuxWaitsAheadOfAPlayerThatSeeksBack(t *testing.T) {
 	}
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
-		Open: func() (*os.File, error) { return os.Open(src) }, Part: Part{Duration: 240 * time.Second, Keyframes: keyframes},
+		Open: opening(src), Part: Part{Duration: 240 * time.Second, Keyframes: keyframes},
 		Video: domain.VideoPlan{Codec: "h264"},
 	}}}); err != nil {
 		t.Fatal(err)
@@ -533,7 +541,7 @@ func TestAnInitIsAnsweredBeforeAnySegmentIsMade(t *testing.T) {
 	}
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
-		Open: func() (*os.File, error) { return os.Open(fixture) }, Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)},
+		Open: opening(fixture), Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)},
 		Video: domain.VideoPlan{Codec: "h264"},
 	}}}); err != nil {
 		t.Fatal(err)
@@ -565,7 +573,7 @@ func TestARemuxIsUnderWayWhereThePlayerStarts(t *testing.T) {
 	}
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Copy{Start: 13 * time.Second, Parts: []Source{{
-		Open: func() (*os.File, error) { return os.Open("testdata/fragments.mp4") }, Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
+		Open: opening("testdata/fragments.mp4"), Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
 		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
 	}}}); err != nil {
 		t.Fatal(err)
@@ -609,7 +617,7 @@ func TestARunNobodyAsksOfStopsUntilAskedAgain(t *testing.T) {
 	}
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
-		Open: func() (*os.File, error) { return os.Open(src) }, Part: Part{Duration: 240 * time.Second, Keyframes: keyframes},
+		Open: opening(src), Part: Part{Duration: 240 * time.Second, Keyframes: keyframes},
 		Video: domain.VideoPlan{Codec: "h264"},
 	}}}); err != nil {
 		t.Fatal(err)
@@ -690,7 +698,7 @@ func TestMPEGTSSegmentsAreExactlyWhatThePlaylistSays(t *testing.T) {
 	}
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Copy{Segments: domain.SegmentsMPEGTS, Subtitles: []Subtitle{{Language: "en"}}, Parts: []Source{{
-		Open: func() (*os.File, error) { return os.Open("testdata/segments.ts") }, Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
+		Open: opening("testdata/segments.ts"), Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
 		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
 	}}}); err != nil {
 		t.Fatal(err)
@@ -756,7 +764,7 @@ func TestMPEGTSSegmentsEachPlayAlone(t *testing.T) {
 	}
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Copy{Segments: domain.SegmentsMPEGTS, Parts: []Source{{
-		Open: func() (*os.File, error) { return os.Open(src) }, Part: Part{Duration: 20 * time.Second, Keyframes: keyframes},
+		Open: opening(src), Part: Part{Duration: 20 * time.Second, Keyframes: keyframes},
 		Video: domain.VideoPlan{Codec: "h264"},
 		Audio: &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 1, BitrateKbps: 64}},
 	}}}); err != nil {

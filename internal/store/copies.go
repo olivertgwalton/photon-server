@@ -38,6 +38,8 @@ type Subtitle struct {
 	HearingImpaired bool
 }
 
+// Part is a file of a copy. Its Size and ModTime are the file's, which say whether it changed;
+// its media's size is its Facts', which a .strm's differs from.
 type Part struct {
 	RelPath string
 	Size    int64
@@ -77,7 +79,7 @@ func saveCopy(ctx context.Context, tx db, lib uuid.UUID, settings analysis, item
 	}
 	var offset int64
 	for _, part := range c.Parts {
-		version.SizeBytes += part.Size
+		version.SizeBytes += part.Facts.Size
 		version.DurationMS += part.Facts.Duration.Milliseconds()
 	}
 	first := c.Parts[0].Facts
@@ -105,7 +107,7 @@ func saveCopy(ctx context.Context, tx db, lib uuid.UUID, settings analysis, item
 	}
 	for idx, part := range c.Parts {
 		row := model.Part{
-			VersionID: version.ID, Idx: int16(idx), SizeBytes: part.Size,
+			VersionID: version.ID, Idx: int16(idx), SizeBytes: part.Facts.Size,
 			DurationMS: part.Facts.Duration.Milliseconds(), OffsetMS: offset,
 		}
 		offset += row.DurationMS

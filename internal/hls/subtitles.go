@@ -36,7 +36,7 @@ type Subtitle struct {
 // SubtitleSource is a file holding a subtitle: an external file, or a stream of one of a copy's
 // parts.
 type SubtitleSource struct {
-	Open func() (*os.File, error)
+	Open func() (media.Input, error)
 	// Stream is the file's stream to read, by its index; nil for a subtitle file.
 	Stream *int
 	// Part is the part a stream is read from, and Streams every stream it has: its subtitles are
@@ -107,25 +107,26 @@ func (r *Remuxer) convert(ctx context.Context, src SubtitleSource) ([]Cue, error
 
 // WebVTT reads a text subtitle file as WebVTT, in what its byte order mark says it is written in,
 // else UTF-8, else the codepage of its language.
-func (r *Remuxer) WebVTT(ctx context.Context, open func() (*os.File, error), language string) (string, error) {
-	f, err := open()
+func (r *Remuxer) WebVTT(ctx context.Context, open func() (media.Input, error), language string) (string, error) {
+	in, err := open()
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
-	a := fdInput()
-	charset, err := subtitleCharset(f, language)
+	defer in.Close()
+	a := quiet()
+	charset, err := subtitleCharset(in.File, language)
 	if err != nil {
 		return "", err
 	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
+	if _, err := in.File.Seek(0, io.SeekStart); err != nil {
 		return "", err
 	}
 	if charset != "" {
 		a = append(a, "-sub_charenc", charset)
 	}
-	a = append(a, "-i", "fd:", "-map", "0:s:0", "-c:s", "webvtt", "-f", "webvtt", "-")
-	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.tools.FFmpeg.Path, a...)
+	a = append(a, in.Args()...)
+	a = append(a, "-map", "0:s:0", "-c:s", "webvtt", "-f", "webvtt", "-")
+	cmd := media.NewCommand(ctx, media.Foreground, in.Files(), r.tools.FFmpeg.Path, a...)
 	out, err := cmd.Output()
 	return string(out), cmd.Err(err)
 }
@@ -175,12 +176,12 @@ func (r *Remuxer) Extracted(ctx context.Context, src SubtitleSource, want string
 // the fonts its header lists, each named by its stream: FFmpeg refuses to write one under the name
 // the file gives it unless that is plain ASCII with no spaces.
 func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) error {
-	f, err := src.Open()
+	in, err := src.Open()
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	ctx, cancel := media.Within(ctx, r.tools.FFmpeg.Path, media.WholeRun(f))
+	defer in.Close()
+	ctx, cancel := media.Within(ctx, r.tools.FFmpeg.Path, in.WholeRun())
 	defer cancel()
 	made, err := os.MkdirTemp(r.subtitles, extracting)
 	if err != nil {
@@ -191,13 +192,13 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) e
 	if err := os.Mkdir(fonts, 0o750); err != nil {
 		return err
 	}
-	a := append(fdInput(), "-y")
+	a := append(quiet(), "-y")
 	if slices.ContainsFunc(src.Streams, func(s domain.Stream) bool { return StyledSubtitle(s.Codec) }) {
-		carried, err := r.tools.Fonts(ctx, f)
+		carried, err := r.tools.Fonts(ctx, in)
 		if err != nil {
 			return err
 		}
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
+		if _, err := in.File.Seek(0, io.SeekStart); err != nil {
 			return err
 		}
 		for _, font := range carried {
@@ -205,14 +206,14 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) e
 			a = append(a, "-dump_attachment:"+n, filepath.Join(fonts, n+font.Ext))
 		}
 	}
-	a = append(a, "-i", "fd:")
+	a = append(a, in.Args()...)
 	for _, s := range src.Streams {
 		n := strconv.Itoa(s.Index)
 		if s.Kind == domain.StreamSubtitle && StyledSubtitle(s.Codec) {
 			a = append(a, "-map", "0:"+n, "-c:s", "copy", "-f", "ass", filepath.Join(made, StyledName(s.Index)))
 		}
 	}
-	cmd := media.NewCommand(ctx, media.Foreground, []*os.File{f}, r.tools.FFmpeg.Path, a...)
+	cmd := media.NewCommand(ctx, media.Foreground, in.Files(), r.tools.FFmpeg.Path, a...)
 	if err := cmd.Run(); err != nil {
 		return cmd.Err(err)
 	}
@@ -244,12 +245,12 @@ func (r *Remuxer) styled(ctx context.Context, s *session, src SubtitleSource, of
 		}
 		return &styledLayer{file: filepath.Join(dir, StyledName(*src.Stream)), fonts: filepath.Join(dir, FontsDir)}, nil
 	}
-	f, err := src.Open()
+	in, err := src.Open()
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, 16<<20))
+	defer in.Close()
+	b, err := io.ReadAll(io.LimitReader(in.File, 16<<20))
 	if err != nil {
 		return nil, err
 	}

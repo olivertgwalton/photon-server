@@ -51,7 +51,7 @@ func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	open := func() (*os.File, error) { return os.Open("testdata/fragments.mp4") }
+	open := opening("testdata/fragments.mp4")
 	part := func(d time.Duration) Source {
 		return Source{Open: open, Part: Part{Duration: d, Keyframes: Forced(d)}}
 	}
@@ -160,7 +160,7 @@ func TestStyledSubtitlesAreReadOutOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	open := func() (*os.File, error) { return os.Open(film) }
+	open := opening(film)
 	part := uuid.NewV7()
 	english, french, signs := 1, 2, 3
 	streams := []domain.Stream{
@@ -226,7 +226,7 @@ func TestAPartReadOutWithoutAStreamIsReadAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := SubtitleSource{
-		Open: func() (*os.File, error) { return os.Open(film) }, Stream: &signs, Part: part,
+		Open: opening(film), Stream: &signs, Part: part,
 		Streams: []domain.Stream{{Index: signs, Kind: domain.StreamSubtitle, Codec: "ass"}},
 	}
 	out, err := r.Extracted(t.Context(), src, StyledName(signs))
@@ -277,7 +277,7 @@ func TestASubtitleFileReadsAsWebVTT(t *testing.T) {
 		if err := os.WriteFile(path, []byte(tc.file), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		vtt, err := r.WebVTT(t.Context(), func() (*os.File, error) { return os.Open(path) }, tc.lang)
+		vtt, err := r.WebVTT(t.Context(), opening(path), tc.lang)
 		if err != nil || !strings.HasPrefix(vtt, "WEBVTT") || !strings.Contains(vtt, tc.want) {
 			t.Errorf("%s: %q, %v; want WebVTT holding %q", tc.name, vtt, err, tc.want)
 		}
@@ -328,7 +328,7 @@ func TestEmbeddedSubtitlesComeWithTheVideo(t *testing.T) {
 		english, french := 1, 2
 		playback := uuid.NewV7()
 		if err := r.Open(t.Context(), playback, Copy{
-			Parts:     []Source{{Open: func() (*os.File, error) { return os.Open(film) }, Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)}, Video: domain.VideoPlan{Codec: "h264"}}},
+			Parts:     []Source{{Open: opening(film), Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)}, Video: domain.VideoPlan{Codec: "h264"}}},
 			Subtitles: []Subtitle{{Name: "English", Stream: &english}, {Name: "French", Stream: &french}},
 			Start:     tc.start,
 		}); err != nil {

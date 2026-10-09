@@ -30,12 +30,17 @@ import (
 // fakeProber describes every file alike, once it is sure ffprobe would read it from its start.
 type fakeProber struct{}
 
-func (fakeProber) Probe(_ context.Context, f *os.File) (domain.Facts, error) {
-	if at, err := f.Seek(0, io.SeekCurrent); err != nil || at != 0 {
-		return domain.Facts{}, fmt.Errorf("probing %s from byte %d: %w", f.Name(), at, err)
+func (fakeProber) Probe(_ context.Context, in media.Input) (domain.Facts, error) {
+	if at, err := in.File.Seek(0, io.SeekCurrent); err != nil || at != 0 {
+		return domain.Facts{}, fmt.Errorf("probing %s from byte %d: %w", in.File.Name(), at, err)
+	}
+	info, err := in.File.Stat()
+	if err != nil {
+		return domain.Facts{}, err
 	}
 	return domain.Facts{
 		Container: "matroska,webm",
+		Size:      info.Size(),
 		Duration:  2 * time.Hour,
 		Streams: []domain.Stream{
 			{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Height: 2160, Range: domain.RangeHDR10},
@@ -368,14 +373,14 @@ type failingOnce struct {
 	names map[string]bool
 }
 
-func (p *failingOnce) Probe(ctx context.Context, f *os.File) (domain.Facts, error) {
+func (p *failingOnce) Probe(ctx context.Context, in media.Input) (domain.Facts, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if name := filepath.Base(f.Name()); p.names[name] {
+	if name := filepath.Base(in.File.Name()); p.names[name] {
 		delete(p.names, name)
 		return domain.Facts{}, errors.New("input/output error")
 	}
-	return p.fakeProber.Probe(ctx, f)
+	return p.fakeProber.Probe(ctx, in)
 }
 
 func TestAFileThatFailedToReadIsTriedAgainAtTheNextScan(t *testing.T) {
@@ -404,11 +409,11 @@ type notMedia struct {
 	names map[string]bool
 }
 
-func (p *notMedia) Probe(ctx context.Context, f *os.File) (domain.Facts, error) {
-	if p.names[filepath.Base(f.Name())] {
+func (p *notMedia) Probe(ctx context.Context, in media.Input) (domain.Facts, error) {
+	if p.names[filepath.Base(in.File.Name())] {
 		return domain.Facts{}, media.ErrNotMedia
 	}
-	return p.fakeProber.Probe(ctx, f)
+	return p.fakeProber.Probe(ctx, in)
 }
 
 func TestAFileThatIsNotMediaIsNotProbedAgainUntilItChanges(t *testing.T) {
@@ -426,6 +431,47 @@ func TestAFileThatIsNotMediaIsNotProbedAgainUntilItChanges(t *testing.T) {
 	delete(p.names, "Heat (1995).mkv")
 	if r := f.scan(); r.Probed != 1 || r.Skipped != 0 {
 		t.Errorf("after the file changed: %+v, want it probed", r)
+	}
+}
+
+// fetching probes only what a .strm names, as ffprobe fetches it, and answers where it was.
+type fetching struct {
+	fakeProber
+	mu      sync.Mutex
+	fetched []string
+}
+
+func (p *fetching) Probe(ctx context.Context, in media.Input) (domain.Facts, error) {
+	if in.URL == nil {
+		return domain.Facts{}, media.ErrNotMedia
+	}
+	p.mu.Lock()
+	p.fetched = append(p.fetched, in.URL.String())
+	p.mu.Unlock()
+	facts, err := p.fakeProber.Probe(ctx, in)
+	facts.Size = 9_000_000_000
+	return facts, err
+}
+
+func TestAStrmIsAFilmWhoseMediaIsWhereItNames(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	p := &fetching{}
+	f.scanner = New(f.st, p, slog.New(slog.DiscardHandler))
+	f.write("Heat (1995).strm", "https://debrid.example/heat.mkv\n")
+	f.write("Alien (1979).strm", "/media/Alien.mkv\n")
+	if r := f.scan(); r.Probed != 1 || r.Skipped != 1 {
+		t.Errorf("scanned %+v, want the http .strm probed and the one naming a path left out", r)
+	}
+	if want := []string{"https://debrid.example/heat.mkv"}; !slices.Equal(p.fetched, want) {
+		t.Errorf("probed %q, want %q", p.fetched, want)
+	}
+	if n := f.count(`SELECT count(*) FROM items i JOIN versions v ON v.item_id = i.id JOIN parts p ON p.version_id = v.id
+		WHERE i.kind = 'movie' AND i.title = 'Heat' AND p.duration_ms = 7200000
+			AND p.size_bytes = 9000000000 AND v.size_bytes = 9000000000 AND v.bitrate_kbps = 10000`); n != 1 {
+		t.Error("the .strm is not a film with its media's length, size and bitrate")
+	}
+	if r := f.scan(); r.Probed != 0 {
+		t.Errorf("the next scan probed %d, want the .strm, its own size unchanged, left alone", r.Probed)
 	}
 }
 
@@ -932,7 +978,7 @@ type gatheringProber struct {
 	all     chan struct{}
 }
 
-func (p *gatheringProber) Probe(ctx context.Context, f *os.File) (domain.Facts, error) {
+func (p *gatheringProber) Probe(ctx context.Context, in media.Input) (domain.Facts, error) {
 	p.mu.Lock()
 	if p.waiting++; p.waiting == readsAtOnce {
 		close(p.all)
@@ -940,7 +986,7 @@ func (p *gatheringProber) Probe(ctx context.Context, f *os.File) (domain.Facts, 
 	p.mu.Unlock()
 	select {
 	case <-p.all:
-		return fakeProber{}.Probe(ctx, f)
+		return fakeProber{}.Probe(ctx, in)
 	case <-time.After(5 * time.Second):
 		return domain.Facts{}, errors.New("probed alone")
 	}

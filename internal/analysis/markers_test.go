@@ -81,9 +81,9 @@ func TestASeasonsSharedIntroIsFound(t *testing.T) {
 	// differently.
 	theme := points(1, at(50*time.Second))
 	asked := 0
-	fake := func(_ context.Context, f *os.File, from, span time.Duration) ([]uint32, error) {
+	fake := func(_ context.Context, in media.Input, from, span time.Duration) ([]uint32, error) {
 		asked++
-		episode := uint64(f.Name()[len(f.Name())-5] - '0')
+		episode := uint64(in.File.Name()[len(in.File.Name())-5] - '0')
 		rest := points(10*episode+uint64(from/time.Minute), at(span))
 		if from == 0 && episode < 3 {
 			return join(points(episode, at(30*time.Second)), theme, rest), nil
@@ -148,7 +148,7 @@ func TestALibraryOnChaptersReadsNoSound(t *testing.T) {
 	}
 	season := seasonOf(t, st, lib)
 	asked := 0
-	fake := func(context.Context, *os.File, time.Duration, time.Duration) ([]uint32, error) {
+	fake := func(context.Context, media.Input, time.Duration, time.Duration) ([]uint32, error) {
 		asked++
 		return points(uint64(asked), at(time.Minute)), nil
 	}
@@ -247,7 +247,7 @@ func TestAFilmsCreditsAreFoundByItsPicture(t *testing.T) {
 	}
 	crawl := 2*time.Hour - 8*time.Minute
 	read := 0
-	fake := func(_ context.Context, _ *os.File, from time.Duration) ([]media.Shade, error) {
+	fake := func(_ context.Context, _ media.Input, from time.Duration) ([]media.Shade, error) {
 		read++
 		return shadesOf(from, 2*time.Hour, 0, func(at time.Duration) look { return pick(at >= crawl, letters, picture) }), nil
 	}

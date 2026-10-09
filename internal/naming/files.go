@@ -9,8 +9,8 @@ import (
 var videoExtensions = []string{
 	".3g2", ".3gp", ".amv", ".asf", ".avi", ".divx", ".dv", ".dvr-ms", ".f4v", ".flv", ".img",
 	".iso", ".m2t", ".m2ts", ".m2v", ".m4v", ".mk3d", ".mkv", ".mov", ".mp4", ".mpe", ".mpeg",
-	".mpg", ".mts", ".mxf", ".nsv", ".nuv", ".ogm", ".ogv", ".qt", ".rm", ".rmvb", ".tp", ".ts",
-	".vob", ".webm", ".wmv", ".wtv", ".xvid",
+	".mpg", ".mts", ".mxf", ".nsv", ".nuv", ".ogm", ".ogv", ".qt", ".rm", ".rmvb", ".strm", ".tp",
+	".ts", ".vob", ".webm", ".wmv", ".wtv", ".xvid",
 }
 
 var subtitleExtensions = []string{".ass", ".idx", ".mks", ".sami", ".smi", ".srt", ".ssa", ".sub", ".sup", ".vtt"}
@@ -43,6 +43,10 @@ func Theme(name string) bool {
 func IsVideo(name string) bool { return hasExt(videoExtensions, name) }
 
 func IsSubtitle(name string) bool { return hasExt(subtitleExtensions, name) }
+
+// IsShortcut reports whether a video file is a .strm, as Kodi, Jellyfin and Emby read one: a text
+// file naming the address its media is at.
+func IsShortcut(name string) bool { return strings.EqualFold(path.Ext(name), ".strm") }
 
 func hasExt(list []string, name string) bool {
 	return slices.Contains(list, strings.ToLower(path.Ext(name)))
