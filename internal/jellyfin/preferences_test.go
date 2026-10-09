@@ -9,6 +9,8 @@ import (
 	"testing"
 	"uuid"
 
+	"golang.org/x/text/language"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 )
@@ -42,16 +44,17 @@ func TestAnAppsSubtitlesFollowTheProfilesPreferences(t *testing.T) {
 		Sent: playback.NewSent(), Network: st,
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Watching: st, Preferences: st,
 	})
-	if got := defaultSubtitle(t, api, heat); got != 2.0 {
-		t.Errorf("by default: subtitle %v, want 2, the file beside it", got)
+	// A file beside the copy is not the file's say, as a track marked default or forced is.
+	if got := defaultSubtitle(t, api, heat); got != nil {
+		t.Errorf("by default: subtitle %v, want none", got)
 	}
 	p := domain.DefaultPreferences()
-	p.SubtitleMode = domain.SubtitlesNone
+	p.SubtitleMode, p.SubtitleLanguage = domain.SubtitlesAlways, language.English
 	if _, err := st.SetPreferences(t.Context(), ada.ID, p); err != nil {
 		t.Fatal(err)
 	}
-	if got := defaultSubtitle(t, api, heat); got != nil {
-		t.Errorf("with subtitles off: subtitle %v, want none", got)
+	if got := defaultSubtitle(t, api, heat); got != 2.0 {
+		t.Errorf("always, in English: subtitle %v, want 2, the English file beside it", got)
 	}
 }
 
