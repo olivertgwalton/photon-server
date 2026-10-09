@@ -1,9 +1,10 @@
-// Package plugin calls metadata providers that run as web services of their own and speak the
-// protocol in pluginv1, so anyone can add one, in any language, without rebuilding the server. An
-// admin registers a plugin by its address; it is then a provider like the built-in ones.
+// Package plugin calls providers that run as web services of their own, so anyone can add one, in
+// any language, without rebuilding the server: those speaking the protocol in pluginv1, and Stremio
+// addons. An admin registers a plugin by its address; it is then a provider like the built-in ones.
 package plugin
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/plugin/pluginv1"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/stremio"
 )
 
 const (
@@ -31,7 +33,7 @@ const (
 // it does not speak.
 var ErrRefused = errors.New("plugin refused")
 
-// Plugins are the metadata plugins an admin registered.
+// Plugins are the plugins an admin registered.
 type Plugins struct {
 	st   *store.Store
 	http *http.Client
@@ -41,10 +43,18 @@ func New(st *store.Store) *Plugins {
 	return &Plugins{st: st, http: &http.Client{Timeout: callTimeout}}
 }
 
-// Registered is a plugin, where it answers and the manifest it answered there.
+// Registered is a plugin as it last answered: what it speaks and is, and where it answers.
 type Registered struct {
-	URL      string
-	Manifest pluginv1.Manifest
+	ID       string
+	Protocol domain.PluginProtocol
+	// URL is where it answers: of a Stremio addon, the host alone, as the rest of its address is
+	// its configuration.
+	URL  string
+	Name string
+	// Version is the version of photon's protocol it speaks; none for an addon.
+	Version      int
+	Kinds        []domain.ItemKind
+	Capabilities []domain.Capability
 }
 
 // List answers every registered plugin, by its id.
@@ -55,9 +65,8 @@ func (p *Plugins) List(ctx context.Context) ([]Registered, error) {
 	}
 	out := make([]Registered, len(rows))
 	for n, row := range rows {
-		out[n].URL = row.URL
-		if err := json.Unmarshal(row.Manifest, &out[n].Manifest); err != nil {
-			return nil, fmt.Errorf("plugin %s: %w", row.Slug, err)
+		if out[n], _, err = p.read(row); err != nil {
+			return nil, err
 		}
 	}
 	return out, nil
@@ -65,24 +74,75 @@ func (p *Plugins) List(ctx context.Context) ([]Registered, error) {
 
 // Load answers a provider for each registered plugin, for the registry.
 func (p *Plugins) Load(ctx context.Context) ([]provider.Provider, error) {
-	all, err := p.List(ctx)
+	rows, err := p.st.Plugins(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]provider.Provider, len(all))
-	for n, r := range all {
-		source := domain.PluginSource(r.Manifest.ID)
-		out[n] = &client{
-			manifest: r.Manifest, base: r.URL, http: p.http,
-			settings: func(ctx context.Context) (map[string]string, error) { return p.st.ProviderSettings(ctx, source) },
+	out := make([]provider.Provider, len(rows))
+	for n, row := range rows {
+		if _, out[n], err = p.read(row); err != nil {
+			return nil, err
 		}
 	}
 	return out, nil
 }
 
+// read is a registered plugin, and it as a provider, from its manifest as it answered it.
+func (p *Plugins) read(row store.Plugin) (Registered, provider.Provider, error) {
+	source := domain.PluginSource(row.Slug)
+	switch row.Protocol {
+	case domain.PluginStremio:
+		var m stremio.Manifest
+		if err := json.Unmarshal(row.Manifest, &m); err != nil {
+			return Registered{}, nil, fmt.Errorf("plugin %s: %w", row.Slug, err)
+		}
+		addon := stremio.New(source, row.URL, m, p.http)
+		r := Registered{ID: row.Slug, Protocol: row.Protocol, URL: origin(row.URL), Name: m.Name, Kinds: m.Kinds()}
+		r.Capabilities = provider.Capabilities(addon)
+		return r, addon, nil
+	case domain.PluginPhoton:
+	}
+	var m pluginv1.Manifest
+	if err := json.Unmarshal(row.Manifest, &m); err != nil {
+		return Registered{}, nil, fmt.Errorf("plugin %s: %w", row.Slug, err)
+	}
+	c := &client{
+		manifest: m, base: row.URL, http: p.http,
+		settings: func(ctx context.Context) (map[string]string, error) { return p.st.ProviderSettings(ctx, source) },
+	}
+	r := Registered{ID: m.ID, Protocol: row.Protocol, URL: row.URL, Name: m.Name, Version: m.Protocol}
+	for _, k := range m.Kinds {
+		r.Kinds = append(r.Kinds, domain.ItemKind(k))
+	}
+	for _, c := range m.Capabilities {
+		r.Capabilities = append(r.Capabilities, domain.Capability(c))
+	}
+	return r, c, nil
+}
+
+// origin is an address's scheme and host alone.
+func origin(address string) string {
+	u, err := url.Parse(address)
+	if err != nil {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
 // Register reads the manifest a plugin answers at address and keeps it, or answers ErrRefused,
-// provider.ErrUnavailable for a plugin that did not answer, or store.ErrPluginExists.
-func (p *Plugins) Register(ctx context.Context, address string) (Registered, error) {
+// provider.ErrUnavailable for a plugin that did not answer, or store.ErrPluginExists. A plugin
+// speaking photon's protocol is registered by the address its paths are under, and is the id its
+// manifest gives; a Stremio addon by the address of its manifest.json, and is the id given, else
+// its own made a plugin id, as two installs of one addon, configured apart, need ids of their own.
+func (p *Plugins) Register(ctx context.Context, address string, protocol domain.PluginProtocol, id string) (Registered, error) {
+	switch protocol {
+	case domain.PluginStremio:
+		return p.registerAddon(ctx, address, id)
+	case domain.PluginPhoton:
+	}
+	if id != "" {
+		return Registered{}, fmt.Errorf("%w: a plugin is the id its manifest gives", ErrRefused)
+	}
 	base, err := baseURL(address)
 	if err != nil {
 		return Registered{}, err
@@ -91,38 +151,81 @@ func (p *Plugins) Register(ctx context.Context, address string) (Registered, err
 	if err != nil {
 		return Registered{}, err
 	}
-	raw, err := json.Marshal(m)
+	return p.add(ctx, store.Plugin{Slug: m.ID, Protocol: protocol, URL: base}, m)
+}
+
+func (p *Plugins) registerAddon(ctx context.Context, address, id string) (Registered, error) {
+	base, err := stremio.Base(address)
+	if err != nil {
+		return Registered{}, fmt.Errorf("%w: %w", ErrRefused, err)
+	}
+	m, err := p.addonManifest(ctx, base)
 	if err != nil {
 		return Registered{}, err
 	}
-	if err := p.st.AddPlugin(ctx, store.Plugin{Slug: m.ID, URL: base, Manifest: raw}); err != nil {
+	slug := cmp.Or(id, stremio.Slug(m.ID))
+	if _, ok := domain.PluginSource(slug).Plugin(); !ok {
+		return Registered{}, fmt.Errorf("%w: its id %q is not lower case letters, digits and hyphens", ErrRefused, slug)
+	}
+	return p.add(ctx, store.Plugin{Slug: slug, Protocol: domain.PluginStremio, URL: base}, m)
+}
+
+// add keeps a plugin and the manifest it answered.
+func (p *Plugins) add(ctx context.Context, row store.Plugin, manifest any) (Registered, error) {
+	var err error
+	if row.Manifest, err = json.Marshal(manifest); err != nil {
 		return Registered{}, err
 	}
-	return Registered{URL: base, Manifest: m}, nil
+	if err := p.st.AddPlugin(ctx, row); err != nil {
+		return Registered{}, err
+	}
+	r, _, err := p.read(row)
+	return r, err
 }
 
 // Refresh reads a plugin's manifest again, as one that has learnt a capability or a setting
-// answers a new one; its id may not change.
+// answers a new one; a plugin's id may not change, and an addon's is what it was registered as.
 func (p *Plugins) Refresh(ctx context.Context, slug string) (Registered, error) {
 	row, err := p.st.Plugin(ctx, slug)
 	if err != nil {
 		return Registered{}, err
 	}
-	m, err := p.manifest(ctx, row.URL)
-	if err != nil {
+	var manifest any
+	switch row.Protocol {
+	case domain.PluginStremio:
+		if manifest, err = p.addonManifest(ctx, row.URL); err != nil {
+			return Registered{}, err
+		}
+	case domain.PluginPhoton:
+		m, err := p.manifest(ctx, row.URL)
+		if err != nil {
+			return Registered{}, err
+		}
+		if m.ID != slug {
+			return Registered{}, fmt.Errorf("%w: it was registered as %q and now calls itself %q", ErrRefused, slug, m.ID)
+		}
+		manifest = m
+	}
+	if row.Manifest, err = json.Marshal(manifest); err != nil {
 		return Registered{}, err
 	}
-	if m.ID != slug {
-		return Registered{}, fmt.Errorf("%w: it was registered as %q and now calls itself %q", ErrRefused, slug, m.ID)
-	}
-	raw, err := json.Marshal(m)
-	if err != nil {
+	if err := p.st.SetPluginManifest(ctx, slug, row.Manifest); err != nil {
 		return Registered{}, err
 	}
-	if err := p.st.SetPluginManifest(ctx, slug, raw); err != nil {
-		return Registered{}, err
+	r, _, err := p.read(row)
+	return r, err
+}
+
+// addonManifest reads an addon's manifest, as manifest reads a plugin's.
+func (p *Plugins) addonManifest(ctx context.Context, base string) (stremio.Manifest, error) {
+	m, err := stremio.Read(ctx, p.http, base)
+	switch {
+	case err == nil:
+		return m, nil
+	case errors.Is(err, provider.ErrUnreached):
+		return m, fmt.Errorf("%w: %w", provider.ErrUnavailable, err)
 	}
-	return Registered{URL: row.URL, Manifest: m}, nil
+	return m, fmt.Errorf("%w: %w", ErrRefused, err)
 }
 
 // Remove forgets a plugin; what it said about titles stands.
@@ -175,8 +278,8 @@ func valid(m pluginv1.Manifest) error {
 		}
 	}
 	for _, c := range m.Capabilities {
-		if !slices.Contains(domain.Capabilities(), domain.Capability(c)) {
-			return fmt.Errorf("%w: capability %q is not one of %v", ErrRefused, c, domain.Capabilities())
+		if !slices.Contains(pluginv1.Capabilities, c) {
+			return fmt.Errorf("%w: capability %q is not one of %v", ErrRefused, c, pluginv1.Capabilities)
 		}
 	}
 	keys := map[string]bool{}

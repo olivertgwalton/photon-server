@@ -27,6 +27,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 	plugins := func(values []string) []string { return append(values, domain.PluginPattern) }
 	for constraint, want := range map[string][]string{
 		"library_kind":             names(domain.LibraryKinds()),
+		"plugin_protocol":          names(domain.PluginProtocols()),
 		"monitor":                  names(domain.Monitors()),
 		"preview_level":            names(domain.PreviewLevels()),
 		"marker_detection":         names(domain.MarkerDetections()),

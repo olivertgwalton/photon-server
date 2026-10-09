@@ -105,7 +105,8 @@ function caption(card: Card) {
 				>.
 			{:else if list}
 				Holds the titles of
-				{listSources[String(list.source)] ?? list.source}
+				{listSources[String(list.source)] ??
+					String(list.source).replace(/^plugin:/, "")}
 				list
 				<span class="font-mono">{list.id}</span>
 				the library has, read again daily.

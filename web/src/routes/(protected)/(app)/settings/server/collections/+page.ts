@@ -5,7 +5,10 @@ import type { PageLoad } from "./$types";
 export const load: PageLoad = async ({ fetch, depends }) => {
 	depends(keys.admin.libraries);
 	const api = client(fetch);
-	const { items } = await need(api.GET("/api/v1/admin/libraries"));
+	const [{ items }, plugins] = await Promise.all([
+		need(api.GET("/api/v1/admin/libraries")),
+		need(api.GET("/api/v1/admin/plugins")),
+	]);
 	const shelves = await Promise.all(
 		items.map(async (library) => ({
 			library,
@@ -21,5 +24,7 @@ export const load: PageLoad = async ({ fetch, depends }) => {
 				: [],
 		})),
 	);
-	return { shelves };
+	// A plugin that keeps lists, as a Stremio addon's catalogs are, is a source of them too.
+	const listers = plugins.items.filter((p) => p.capabilities.includes("list"));
+	return { shelves, listers };
 };

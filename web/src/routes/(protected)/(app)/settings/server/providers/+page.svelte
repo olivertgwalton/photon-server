@@ -6,6 +6,7 @@ import { fields } from "#lib/form.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
+import Choice from "#lib/components/Choice.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
@@ -24,6 +25,7 @@ const capabilities = {
 	search: "Searches, to fix a match",
 	rate: "Ratings",
 	person: "People",
+	list: "Lists",
 } as const;
 
 // A plugin's slug, from its source id plugin:<slug>.
@@ -56,16 +58,26 @@ async function save(event: SubmitEvent, provider: Provider) {
 	}
 }
 
+// What a plugin speaks: photon's own protocol, or Stremio's, as an addon is
+// installed by its manifest's address.
+const protocols = [
+	{ value: "photon", label: "Photon plugin" },
+	{ value: "stremio", label: "Stremio addon" },
+] as const;
+let protocol = $state<(typeof protocols)[number]["value"]>("photon");
+
 async function register(event: SubmitEvent) {
-	const url = String(fields(event).get("url") ?? "");
-	const form = event.currentTarget as HTMLFormElement;
+	const form = fields(event);
+	const url = String(form.get("url") ?? "");
+	const id = String(form.get("id") ?? "").trim() || undefined;
+	const element = event.currentTarget as HTMLFormElement;
 	if (
 		await act(
-			api.POST("/api/v1/admin/plugins", { body: { url } }),
+			api.POST("/api/v1/admin/plugins", { body: { url, protocol, id } }),
 			"The plugin was registered.",
 		)
 	) {
-		form.reset();
+		element.reset();
 	}
 }
 </script>
@@ -149,7 +161,9 @@ async function register(event: SubmitEvent) {
 	<h2 id="plugins" class="heading">Plugins</h2>
 	<p class="max-w-2xl text-sm">
 		A plugin is a web service that describes titles, registered by the address
-		its manifest is under. Once registered it is a provider like the ones above.
+		its manifest is under, or a Stremio addon, registered by its manifest's
+		address as Stremio installs it, whose catalogs are lists. Once registered it
+		is a provider like the ones above.
 	</p>
 	{#if data.plugins.length}
 		<ul class="grid gap-3">
@@ -162,7 +176,10 @@ async function register(event: SubmitEvent) {
 						<p class="text-ink font-semibold">{plugin.name}</p>
 						<p class="text-ink-3 truncate font-mono text-xs">{plugin.url}</p>
 						<p class="text-ink-3 text-xs">
-							Protocol {plugin.protocol} ·
+							{plugin.protocol === "stremio"
+								? "Stremio addon"
+								: `Protocol ${plugin.version}`}
+							·
 							{plugin.kinds.map((k) => words.kinds[k] ?? k).join(" and ")}
 							·
 							{plugin.capabilities.map((c) => capabilities[c]).join(", ")}
@@ -198,14 +215,31 @@ async function register(event: SubmitEvent) {
 	<form onsubmit={register} class="max-w-2xl">
 		<Field.Field>
 			<Field.Label for="plugin-url">Register a plugin</Field.Label>
-			<div class="flex gap-2">
+			<div class="flex flex-wrap gap-2">
+				<Choice
+					aria-label="It speaks"
+					bind:value={protocol}
+					options={protocols}
+					class="w-40"
+				/>
 				<Input
 					id="plugin-url"
 					name="url"
 					type="url"
 					required
-					placeholder="http://plugin:8080"
+					class="min-w-60 flex-1"
+					placeholder={protocol === "stremio"
+						? "https://addon.example/manifest.json"
+						: "http://plugin:8080"}
 				/>
+				{#if protocol === "stremio"}
+					<Input
+						name="id"
+						aria-label="Its id, where another install of it has its own"
+						placeholder="id (optional)"
+						class="w-40 font-mono"
+					/>
+				{/if}
 				<Button type="submit">Register</Button>
 			</div>
 		</Field.Field>

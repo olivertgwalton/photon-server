@@ -130,8 +130,22 @@ const (
 	CapabilityRate   Capability = "rate"
 	// CapabilityPerson is saying what is known of someone a title credits.
 	CapabilityPerson Capability = "person"
+	// CapabilityList is keeping lists of titles, which a library's collections are made of.
+	CapabilityList Capability = "list"
 )
 
 func Capabilities() []Capability {
-	return []Capability{CapabilityDescribe, CapabilitySearch, CapabilityRate, CapabilityPerson}
+	return []Capability{CapabilityDescribe, CapabilitySearch, CapabilityRate, CapabilityPerson, CapabilityList}
+}
+
+// PluginProtocol is what a plugin speaks: photon's own protocol, or a Stremio addon's.
+type PluginProtocol string
+
+const (
+	PluginPhoton  PluginProtocol = "photon"
+	PluginStremio PluginProtocol = "stremio"
+)
+
+func PluginProtocols() []PluginProtocol {
+	return []PluginProtocol{PluginPhoton, PluginStremio}
 }
