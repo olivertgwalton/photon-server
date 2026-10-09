@@ -436,6 +436,22 @@ const poster = $derived(art("poster"));
 		/>
 	{/if}
 
+	{#if t.season && data.seasonEpisodes && data.seasonEpisodes.length > 1}
+		{@const episodes = data.seasonEpisodes}
+		<Rail
+			title={t.season.title}
+			cards={episodes}
+			shape="still"
+			current={t.id}
+			caption={(i: number) =>
+				episodeLabel(
+					t.season_number,
+					episodes[i].episode_number,
+					episodes[i].episode_end,
+				)}
+		/>
+	{/if}
+
 	{#if t.episodes?.length}
 		<section aria-labelledby="episodes">
 			<h2 id="episodes" class="heading mb-3">Episodes</h2>
