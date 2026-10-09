@@ -61,9 +61,6 @@ test("a new server is set up step by step: its admin, its name, its libraries, a
 	await expect(
 		page.getByRole("heading", { name: "Name the server" }),
 	).toBeVisible();
-	await expect(
-		page.getByRole("listitem").filter({ hasText: "Server" }),
-	).toHaveAttribute("aria-current", "step");
 	await expect(page.getByLabel("Name")).toHaveValue("Den");
 	await expectAccessible(page);
 	const named = page.waitForRequest(

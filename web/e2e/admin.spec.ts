@@ -166,9 +166,11 @@ test("a library is added from a folder found by browsing the server", async ({
 	await expect(page.getByRole("textbox", { name: "Folder" })).toHaveValue(
 		"/media/films",
 	);
-	// A shows library ranks its sources for shows, seasons and episodes.
+	// A shows library ranks its sources for shows, seasons and episodes, under its settings a
+	// new library leaves to their defaults.
 	await page.getByRole("button", { name: "Holds" }).click();
 	await page.getByRole("option", { name: "Shows" }).click();
+	await page.getByText("More settings").click();
 	for (const items of ["Shows", "Seasons", "Episodes"]) {
 		await expect(
 			page.getByRole("list", { name: `Metadata downloaders (${items})` }),
