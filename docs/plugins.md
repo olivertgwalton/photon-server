@@ -85,7 +85,8 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
     {"name": "person", "version": 1},
     {"name": "list", "version": 1},
     {"name": "stream", "version": 1},
-    {"name": "subtitles", "version": 1}
+    {"name": "subtitles", "version": 1},
+    {"name": "events", "version": 1, "events": ["playback.started", "playback.stopped"]}
   ],
   "settings": [
     {"key": "api_key", "name": "API key", "secret": true, "required": true},
@@ -99,7 +100,8 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
 - `capabilities` are what the plugin answers, each at a version of it. A capability's calls are
   `POST /{name}/v{version}/{call}`: `describe` is `match` and `describe`, `search` is `search`,
   `rate` is `ratings`, `person` is `person`, `list` is `list`, `stream` is `streams`,
-  `subtitles` is `search` and `fetch`. Leave a capability out and it is never called.
+  `subtitles` is `search` and `fetch`, `events` is `event`. Leave a capability out and it is
+  never called.
 - A capability the server does not speak, by name or at that version, is passed over, and a
   plugin that answers none it speaks is refused. So a plugin can name one at two versions, or one
   only a newer server speaks, and be registered by any server for what that server speaks.
@@ -320,6 +322,36 @@ Answer a subtitle `search` found, by its `id`, as SubRip.
 ```json
 {"subrip": "1\n00:00:01,000 --> 00:00:04,000\nWhat are you, a cop?\n"}
 ```
+
+### `POST /events/v1/event`
+
+Be told of what happens on the server, as a webhook is: `events` names the kinds the plugin hears,
+of `playback.started`, `playback.paused`, `playback.resumed`, `playback.stopped`,
+`auth.signed_in`, `auth.sign_in_refused`, `profile.added`, `profile.removed`, `library.added`,
+`library.removed`, `library.scanned`, `library.titles_added`, `task.failed` and `backup.made`; any
+other is passed over. An event is queued as it happens and sent once, with the plugin's settings as
+they are when it is sent. Answer `2xx`, for an event the plugin acted on or ignored alike: anything
+else, or no answer in 10 seconds, is tried again later, waiting longer each time, five times in
+all.
+A redirect is not followed.
+
+```json
+{
+  "settings": {"token": "…"},
+  "event": {
+    "event": "playback.started",
+    "at": "2026-10-09T20:15:00Z",
+    "server": {"id": "0199c6f2-…", "name": "Den"},
+    "profile": {"id": "0199c6f2-…", "name": "Oliver"},
+    "title": {"id": "0199c6f2-…", "kind": "movie", "title": "Heat", "year": 1995, "ids": {"imdb": "tt0113277"}},
+    "details": {"playback": {"method": "direct"}}
+  }
+}
+```
+
+`profile`, `title` and `library` are there where the event is about one that still is. A title
+carries its IMDb, TMDB and TheTVDB `ids`, and an episode its `season`, `episode` and `show`, as a
+scrobbler finds it by. `details` are the event's own, as the webhook of its kind is sent them.
 
 ## Calling the server
 

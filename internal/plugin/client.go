@@ -13,6 +13,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/plugin/pluginv1"
 	"github.com/olivertgwalton/photon-server/internal/provider"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // client is a registered plugin as a provider. It implements every capability, and answers the
@@ -54,6 +55,22 @@ func spoken(m pluginv1.Manifest) map[domain.Capability]int {
 		}
 	}
 	return out
+}
+
+// hearing is the events m hears and where the plugin at base is told of them.
+func hearing(m pluginv1.Manifest, base string) store.Hearing {
+	h := store.Hearing{URL: base + fmt.Sprintf("/%s/v%d/event", domain.CapabilityEvents, pluginv1.Speaks[string(domain.CapabilityEvents)])}
+	for _, c := range m.Capabilities {
+		if c.Name != string(domain.CapabilityEvents) || c.Version != pluginv1.Speaks[c.Name] {
+			continue
+		}
+		for _, e := range c.Events {
+			if k := domain.EventKind(e); k.Hookable() && !slices.Contains(h.Kinds, k) {
+				h.Kinds = append(h.Kinds, k)
+			}
+		}
+	}
+	return h
 }
 
 // post makes one of a capability's calls, verb, with the settings an admin set for the plugin in

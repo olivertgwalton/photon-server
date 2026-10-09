@@ -7027,7 +7027,7 @@ export interface components {
             items: components["schemas"]["Candidate"][];
         };
         /** @enum {string} */
-        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream" | "subtitles";
+        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream" | "subtitles" | "events";
         Card: {
             /** Format: date-time */
             added_at: string;

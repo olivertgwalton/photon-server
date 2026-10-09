@@ -188,3 +188,19 @@ func TestAPluginFindsAndFetchesSubtitles(t *testing.T) {
 		t.Errorf("an empty subtitle: %v, want not found", err)
 	}
 }
+
+// A plugin hears the events it names at the version of events the server speaks, each once; one
+// the server does not raise to webhooks is passed over.
+func TestAPluginHearsTheEventsItNames(t *testing.T) {
+	m := pluginv1.Manifest{Capabilities: []pluginv1.Capability{
+		{Name: "events", Version: 1, Events: []string{"playback.started", "playback.started", "webhook.test", "unheard-of"}},
+		{Name: "events", Version: 2, Events: []string{"playback.stopped"}},
+	}}
+	h := hearing(m, "http://scrobbler.test")
+	if h.URL != "http://scrobbler.test/events/v1/event" || !slices.Equal(h.Kinds, []domain.EventKind{domain.EventPlaybackStarted}) {
+		t.Errorf("hearing = %+v", h)
+	}
+	if h := hearing(pluginv1.Manifest{}, "http://films.test"); len(h.Kinds) != 0 {
+		t.Errorf("a plugin naming no events hears %v", h.Kinds)
+	}
+}

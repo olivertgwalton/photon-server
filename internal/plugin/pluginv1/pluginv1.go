@@ -5,7 +5,10 @@
 // one is not. docs/plugins.md is its reference.
 package pluginv1
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Version is the protocol version this package is.
 const Version = 1
@@ -28,6 +31,9 @@ type Manifest struct {
 type Capability struct {
 	Name    string `json:"name"`
 	Version int    `json:"version"`
+	// Events are, of "events", the kinds of event the plugin is told of; one the server does not
+	// raise is passed over.
+	Events []string `json:"events,omitempty"`
 }
 
 type Setting struct {
@@ -40,8 +46,8 @@ type Setting struct {
 
 // Speaks is the version of each capability this server speaks, and its calls: "describe" is
 // match and describe, "search" is search, "rate" is ratings, "person" is person, "list" is list,
-// "stream" is streams, "subtitles" is search and fetch.
-var Speaks = map[string]int{"describe": 1, "search": 1, "rate": 1, "person": 1, "list": 1, "stream": 1, "subtitles": 1}
+// "stream" is streams, "subtitles" is search and fetch, "events" is event.
+var Speaks = map[string]int{"describe": 1, "search": 1, "rate": 1, "person": 1, "list": 1, "stream": 1, "subtitles": 1, "events": 1}
 
 // Settings is in every request: what an admin set for the plugin, by key.
 type Settings map[string]string
@@ -294,6 +300,13 @@ type FetchRequest struct {
 // FetchResponse is a subtitle as SubRip.
 type FetchResponse struct {
 	SubRip string `json:"subrip"`
+}
+
+// EventRequest is an event the plugin hears, as a webhook is sent it, with its settings as they
+// are when it is sent.
+type EventRequest struct {
+	Settings Settings        `json:"settings"`
+	Event    json.RawMessage `json:"event"`
 }
 
 // Problem is an error a plugin answers, as RFC 9457 shapes it, with a 4xx or 5xx status.

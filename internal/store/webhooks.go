@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
 	"slices"
 	"time"
 	"uuid"
@@ -38,7 +39,7 @@ func (s *Store) AddWebhook(ctx context.Context, url string, kinds []domain.Event
 func (s *Store) Webhooks(ctx context.Context) ([]Webhook, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT w.id, w.url, array(SELECT e.kind FROM webhook_events e WHERE e.webhook_id = w.id), w.created_at
-		FROM webhooks w ORDER BY w.id`)
+		FROM webhooks w WHERE w.plugin IS NULL ORDER BY w.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -52,9 +53,36 @@ func (s *Store) Webhooks(ctx context.Context) ([]Webhook, error) {
 	})
 }
 
-// RemoveWebhook forgets a webhook and what was waiting to be sent to it.
+// RemoveWebhook forgets a webhook and what was waiting to be sent to it. A plugin's goes only with
+// the plugin.
 func (s *Store) RemoveWebhook(ctx context.Context, id uuid.UUID) error {
-	return affected(s.pool.Exec(ctx, `DELETE FROM webhooks WHERE id = $1`, id))
+	return affected(s.pool.Exec(ctx, `DELETE FROM webhooks WHERE id = $1 AND plugin IS NULL`, id))
+}
+
+// Hearing is the events a plugin hears and where it is told of them; none is a plugin told of none.
+type Hearing struct {
+	URL   string
+	Kinds []domain.EventKind
+}
+
+// hear makes a plugin's webhook what it hears now, keeping what is waiting to be sent to it.
+func hear(ctx context.Context, tx pgx.Tx, slug string, h Hearing) error {
+	if len(h.Kinds) == 0 {
+		_, err := tx.Exec(ctx, `DELETE FROM webhooks WHERE plugin = $1`, slug)
+		return err
+	}
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `
+		INSERT INTO webhooks (url, secret, plugin) VALUES ($1, $2, $3)
+		ON CONFLICT (plugin) DO UPDATE SET url = excluded.url RETURNING id`, h.URL, rand.Text(), slug).Scan(&id)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM webhook_events WHERE webhook_id = $1`, id); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO webhook_events (webhook_id, kind) SELECT $1, unnest($2::text[])`, id, h.Kinds)
+	return err
 }
 
 // QueueWebhooks queues the body made by body to every webhook that asked for kind, a job each.
@@ -83,17 +111,19 @@ func (s *Store) QueueDelivery(ctx context.Context, webhook uuid.UUID, kind domai
 	return affected(s.pool.Exec(ctx, `
 		WITH d AS (
 			INSERT INTO webhook_deliveries (webhook_id, kind, body)
-			SELECT id, $2, $3 FROM webhooks WHERE id = $1
+			SELECT id, $2, $3 FROM webhooks WHERE id = $1 AND plugin IS NULL
 			RETURNING id)
 		INSERT INTO jobs (kind, subject) SELECT 'deliver_webhook', id FROM d`, webhook, kind, string(body)))
 }
 
-// Delivery is a body waiting to be sent, where to, and the secret it is signed with.
+// Delivery is a body waiting to be sent, where to, and the secret it is signed with; and the
+// plugin it is to, where it is to one.
 type Delivery struct {
 	URL    string
 	Secret string
 	Kind   domain.EventKind
 	Body   []byte
+	Plugin *string
 }
 
 // Delivery answers a delivery waiting to be sent. ErrNotFound once it has been, or its webhook was
@@ -101,8 +131,8 @@ type Delivery struct {
 func (s *Store) Delivery(ctx context.Context, id uuid.UUID) (Delivery, error) {
 	var d Delivery
 	err := s.pool.QueryRow(ctx, `
-		SELECT w.url, w.secret, d.kind, d.body FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id
-		WHERE d.id = $1`, id).Scan(&d.URL, &d.Secret, &d.Kind, &d.Body)
+		SELECT w.url, w.secret, d.kind, d.body, w.plugin FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id
+		WHERE d.id = $1`, id).Scan(&d.URL, &d.Secret, &d.Kind, &d.Body, &d.Plugin)
 	return d, found(err)
 }
 
