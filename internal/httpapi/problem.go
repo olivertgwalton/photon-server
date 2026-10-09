@@ -16,6 +16,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
 	"github.com/olivertgwalton/photon-server/internal/provider"
+	"github.com/olivertgwalton/photon-server/internal/sso"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/task"
 	"github.com/olivertgwalton/photon-server/internal/tracker"
@@ -142,6 +143,10 @@ var problems = []struct {
 	{err: plugin.ErrRefused, code: codeInvalidBody, ownWords: true},
 	{err: historyimport.ErrRefused, code: codeInvalidBody, ownWords: true},
 	{err: tracker.ErrRefused, code: codeConflict, ownWords: true},
+	{err: sso.ErrRefused, code: codeConflict, ownWords: true},
+	{err: sso.ErrUnreachable, code: codeProviderUnavailable, ownWords: true},
+	{err: store.ErrAccountLinked, code: codeConflict, ownWords: true},
+	{err: store.ErrLastWayIn, code: codeConflict, ownWords: true},
 	{err: provider.ErrUnavailable, code: codeProviderUnavailable, ownWords: true},
 	{err: provider.ErrUnreached, code: codeProviderUnavailable, detail: "the provider did not answer"},
 	{err: provider.ErrNoSubtitler, code: codeConflict, detail: "no provider finds subtitles: an admin sets OpenSubtitles up under Providers"},

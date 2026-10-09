@@ -75,8 +75,10 @@ func (a *API) writePIN(w http.ResponseWriter, r *http.Request, pin string) {
 	}
 }
 
+// passwordChangeJSON has no current password for a profile with none yet: one a sign-in provider's
+// account was given.
 type passwordChangeJSON struct {
-	Current string `json:"current"`
+	Current string `json:"current,omitzero"`
 	New     string `json:"new"`
 }
 
@@ -139,7 +141,7 @@ func (a *API) profilesRoutes() []route {
 		},
 		{
 			pattern: "PUT /api/v1/profile/password", access: signedIn,
-			summary: "Change the profile's password, signing out its other devices",
+			summary: "Change the profile's password, or set its first, signing out its other devices",
 			body:    passwordChangeJSON{}, status: http.StatusNoContent, handle: a.changePassword,
 		},
 	}
