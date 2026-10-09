@@ -2,12 +2,17 @@
 import { vocabulary } from "#lib/vocabulary.js";
 import type { components } from "#lib/api/schema.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
+import { toast } from "svelte-sonner";
+import { goto } from "$app/navigation";
 import { act } from "#lib/act.js";
+import { accessOf } from "#lib/admin/access.js";
+import { problemMessage } from "#lib/api/problem.js";
 import { fields } from "#lib/form.js";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { relative, roleOptions } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import Choice from "#lib/components/Choice.svelte";
+import AccessFields from "#lib/components/admin/AccessFields.svelte";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
@@ -30,13 +35,28 @@ async function add(event: SubmitEvent) {
 	const form = fields(event);
 	const name = String(form.get("name") ?? "");
 	const password = String(form.get("password") ?? "");
-	const added = await act(
-		client().POST("/api/v1/admin/profiles", {
-			body: { name, role, password },
-		}),
-		`${name} was added.`,
-	);
-	if (added) adding = false;
+	const api = client();
+	const added = await api.POST("/api/v1/admin/profiles", {
+		body: { name, role, password },
+	});
+	if (added.error) {
+		toast.error(problemMessage(added.error));
+		return;
+	}
+	adding = false;
+	const id = added.data.id;
+	// A manager's starts seeing what the manager sees, and it cannot read that.
+	const limited =
+		data.me.role === "admin"
+			? api.PUT("/api/v1/admin/profiles/{id}/access", {
+					params: { path: { id } },
+					body: accessOf(form),
+				})
+			: Promise.resolve({});
+	// Added but seeing everything: its own page is where to narrow that.
+	if (!(await act(limited, `${name} was added.`))) {
+		await goto(`/settings/profiles/${id}`);
+	}
 }
 </script>
 
@@ -53,7 +73,7 @@ async function add(event: SubmitEvent) {
 					<Button {...props}>Add a profile</Button>
 				{/snippet}
 			</Dialog.Trigger>
-			<Dialog.Content>
+			<Dialog.Content class="max-h-[90dvh] overflow-y-auto">
 				<form onsubmit={add} class="grid gap-6">
 					<Dialog.Header>
 						<Dialog.Title>Add a profile</Dialog.Title>
@@ -82,8 +102,8 @@ async function add(event: SubmitEvent) {
 									{options}
 								/>
 								<Field.Description>
-									A user sees only what its access allows, set once it is added.
-									A manager adds users and keeps the ones it added.
+									A user sees only what its access allows. A manager adds users
+									and keeps the ones it added.
 								</Field.Description>
 							</Field.Field>
 						{/if}
@@ -98,6 +118,12 @@ async function add(event: SubmitEvent) {
 								required
 							/>
 						</Field.Field>
+						{#if data.me.role === "admin"}
+							<AccessFields
+								access={{ libraries: [], max_age: null, unrated: "allow" }}
+								libraries={data.libraries}
+							/>
+						{/if}
 					</Field.Group>
 					<Dialog.Footer>
 						<Button type="submit">Add profile</Button>

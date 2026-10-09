@@ -2,20 +2,19 @@
 import { vocabulary } from "#lib/vocabulary.js";
 import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
+import { accessOf } from "#lib/admin/access.js";
 import { roleOptions } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/Choice.svelte";
+import AccessFields from "#lib/components/admin/AccessFields.svelte";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import AvatarPicker from "#lib/components/AvatarPicker.svelte";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
-import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import { Label } from "#lib/components/ui/label/index.js";
-import { Switch } from "#lib/components/ui/switch/index.js";
 
 type Change = components["schemas"]["ProfileChange"];
 
@@ -27,28 +26,6 @@ const path = $derived({ params: { path: { id: data.profile.id } } });
 
 // A manager keeps users.
 const options = $derived(roleOptions(data.me.role, words.roles));
-
-// The ages certificates are for, as the server reads them.
-const ages = [
-	{ value: "any", label: "Any" },
-	...[0, 6, 7, 9, 12, 13, 15, 16, 17, 18].map((age) => ({
-		value: String(age),
-		label: age ? `Up to ${age}` : "Suitable for all",
-	})),
-];
-const age = $derived(
-	data.access.max_age == null ? "any" : String(data.access.max_age),
-);
-const ageOptions = $derived(
-	ages.some((a) => a.value === age)
-		? ages
-		: [...ages, { value: age, label: `Up to ${age}` }],
-);
-
-let every = $state(false);
-$effect.pre(() => {
-	every = data.access.libraries.length === 0;
-});
 
 const locks = {
 	pin: "Switched to with a PIN its owner set.",
@@ -74,16 +51,10 @@ async function saveProfile(event: SubmitEvent) {
 }
 
 function saveAccess(event: SubmitEvent) {
-	const form = fields(event);
-	const asked = String(form.get("max_age") ?? "any");
 	return act(
 		api.PUT("/api/v1/admin/profiles/{id}/access", {
 			...path,
-			body: {
-				max_age: asked === "any" ? null : Number(asked),
-				unrated: form.get("unrated") === "block" ? "block" : "allow",
-				libraries: every ? [] : form.getAll("libraries").map(String),
-			},
+			body: accessOf(fields(event)),
 		}),
 		"What this profile sees was saved.",
 	);
@@ -170,55 +141,7 @@ function remove() {
 		<Card.Content>
 			<form onsubmit={saveAccess}>
 				<Field.Group>
-					<Field.Set>
-						<Field.Legend>Libraries</Field.Legend>
-						<div class="flex items-center gap-2">
-							<Switch id="every" bind:checked={every} />
-							<Label for="every"
-								>Every library, including ones added later</Label
-							>
-						</div>
-						{#if !every}
-							<div class="grid gap-2 sm:grid-cols-2">
-								{#each data.libraries as library (library.id)}
-									<div class="flex items-center gap-2">
-										<Checkbox
-											id="library-{library.id}"
-											name="libraries"
-											value={library.id}
-											checked={data.access.libraries.includes(library.id)}
-										/>
-										<Label for="library-{library.id}">{library.name}</Label>
-									</div>
-								{/each}
-							</div>
-						{/if}
-					</Field.Set>
-					<div class="grid gap-4 sm:grid-cols-2">
-						<Field.Field>
-							<Field.Label for="max_age">Certificates</Field.Label>
-							<Choice
-								id="max_age"
-								name="max_age"
-								value={age}
-								options={ageOptions}
-							/>
-						</Field.Field>
-						<Field.Field>
-							<Field.Label for="unrated"
-								>Titles with no certificate</Field.Label
-							>
-							<Choice
-								id="unrated"
-								name="unrated"
-								value={data.access.unrated}
-								options={[
-									{ value: "allow", label: "Shown" },
-									{ value: "block", label: "Hidden" },
-								]}
-							/>
-						</Field.Field>
-					</div>
+					<AccessFields access={data.access} libraries={data.libraries} />
 					<Button type="submit" class="justify-self-start">Save access</Button>
 				</Field.Group>
 			</form>
