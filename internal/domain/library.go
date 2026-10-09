@@ -78,7 +78,7 @@ func (d MarkerDetection) Keeps(source MarkerSource) bool {
 	case MarkersOff:
 		return source == MarkerByUser
 	case MarkersChapters:
-		return source == MarkerByUser || source == MarkerByChapter
+		return source == MarkerByUser || source == MarkerByChapter || source == MarkerByProvider
 	case MarkersAll:
 		return true
 	}

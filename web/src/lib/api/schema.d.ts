@@ -7027,7 +7027,7 @@ export interface components {
             items: components["schemas"]["Candidate"][];
         };
         /** @enum {string} */
-        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream" | "subtitles" | "events";
+        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream" | "subtitles" | "events" | "segments";
         Card: {
             /** Format: date-time */
             added_at: string;
@@ -7561,7 +7561,7 @@ export interface components {
             state: components["schemas"]["JobState"];
         };
         /** @enum {string} */
-        JobKind: "keyframes" | "keyframe_walk" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme" | "probe" | "import_history";
+        JobKind: "keyframes" | "keyframe_walk" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme" | "probe" | "import_history" | "segments";
         JobQueue: {
             counts: components["schemas"]["JobCount"][];
             dead: components["schemas"]["DeadJob"][];
@@ -7725,7 +7725,7 @@ export interface components {
             start_ms: number;
         };
         /** @enum {string} */
-        MarkerSource: "user" | "chapter" | "fingerprint" | "blackframes";
+        MarkerSource: "user" | "chapter" | "provider" | "fingerprint" | "blackframes";
         Markers: {
             absent?: components["schemas"]["MarkerAbsent"][];
             markers: components["schemas"]["Marker"][];

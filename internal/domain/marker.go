@@ -27,14 +27,16 @@ const (
 	MarkerByUser MarkerSource = "user"
 	// MarkerByChapter is the file's own chapter of that name: its author marked the boundary to
 	// the frame, where a fingerprint only finds it to a fraction of a second either side.
-	MarkerByChapter     MarkerSource = "chapter"
+	MarkerByChapter MarkerSource = "chapter"
+	// MarkerByProvider is a plugin's, as a database of intros timed by hand has them for a release.
+	MarkerByProvider    MarkerSource = "provider"
 	MarkerByFingerprint MarkerSource = "fingerprint"
 	// MarkerByBlackFrames is a film's credits found where its picture goes dark and stays so.
 	MarkerByBlackFrames MarkerSource = "blackframes"
 )
 
 func MarkerSources() []MarkerSource {
-	return []MarkerSource{MarkerByUser, MarkerByChapter, MarkerByFingerprint, MarkerByBlackFrames}
+	return []MarkerSource{MarkerByUser, MarkerByChapter, MarkerByProvider, MarkerByFingerprint, MarkerByBlackFrames}
 }
 
 // Marker is a stretch of one part, in milliseconds from the part's start.
@@ -42,6 +44,15 @@ type Marker struct {
 	Kind    MarkerKind
 	StartMS int64
 	EndMS   int64
+}
+
+// SegmentQuery is what a provider is asked to time the intro and credits of: a film by its ids, or
+// an episode by its show's ids and its numbers, in a copy of one part of a length.
+type SegmentQuery struct {
+	Kind            ItemKind
+	IDs             map[Provider]string
+	Season, Episode int
+	Duration        time.Duration
 }
 
 // MarkerAbsent is an admin's word that a copy's part, counted from 0, has no stretch of a kind.

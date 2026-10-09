@@ -29,6 +29,7 @@ const capabilities = {
 	stream: "Streams",
 	subtitles: "Subtitles",
 	events: "Events",
+	segments: "Intros and credits",
 } as const;
 
 // A plugin's slug, from its source id plugin:<slug>.

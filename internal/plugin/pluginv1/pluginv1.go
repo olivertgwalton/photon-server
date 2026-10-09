@@ -46,8 +46,8 @@ type Setting struct {
 
 // Speaks is the version of each capability this server speaks, and its calls: "describe" is
 // match and describe, "search" is search, "rate" is ratings, "person" is person, "list" is list,
-// "stream" is streams, "subtitles" is search and fetch, "events" is event.
-var Speaks = map[string]int{"describe": 1, "search": 1, "rate": 1, "person": 1, "list": 1, "stream": 1, "subtitles": 1, "events": 1}
+// "stream" is streams, "subtitles" is search and fetch, "events" is event, "segments" is markers.
+var Speaks = map[string]int{"describe": 1, "search": 1, "rate": 1, "person": 1, "list": 1, "stream": 1, "subtitles": 1, "events": 1, "segments": 1}
 
 // Settings is in every request: what an admin set for the plugin, by key.
 type Settings map[string]string
@@ -307,6 +307,29 @@ type FetchResponse struct {
 type EventRequest struct {
 	Settings Settings        `json:"settings"`
 	Event    json.RawMessage `json:"event"`
+}
+
+// MarkersRequest asks for the intro and credits of a film by its ids, or of an episode by its
+// show's ids and its numbers, in a copy of a length: a release's timing is of that release.
+type MarkersRequest struct {
+	Settings   Settings          `json:"settings"`
+	Kind       string            `json:"kind"`
+	IDs        map[string]string `json:"ids"`
+	Season     int               `json:"season,omitempty"`
+	Episode    int               `json:"episode,omitempty"`
+	DurationMS int64             `json:"duration_ms"`
+}
+
+// MarkersResponse is the stretches the plugin has timed; none is none known for that copy.
+type MarkersResponse struct {
+	Markers []Marker `json:"markers"`
+}
+
+type Marker struct {
+	// Kind is "intro", "credits", "recap" or "preview"; any other is dropped.
+	Kind    string `json:"kind"`
+	StartMS int64  `json:"start_ms"`
+	EndMS   int64  `json:"end_ms"`
 }
 
 // Problem is an error a plugin answers, as RFC 9457 shapes it, with a 4xx or 5xx status.
