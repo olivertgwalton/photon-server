@@ -165,29 +165,38 @@ func (s *Store) Facets(ctx context.Context, lib, profile uuid.UUID) (Facets, err
 	}
 	// The facets are of the one library, by its own name and kind.
 	at["lib"], at["kind"] = lib, at["kind0"]
-	titles := `SELECT items.genres, items.studios, items.year, items.certificate FROM items, viewer(@profile) v
-		WHERE library_id = @lib AND kind = @kind AND sees(v, items)`
-	// Copies on disk of the library's films and episodes.
-	copies := `SELECT v.video_range, v.width FROM versions v JOIN items e ON e.id = v.item_id
-		CROSS JOIN viewer(@profile) asking
-		WHERE e.library_id = @lib AND v.missing_since IS NULL AND sees(asking, e)`
+	at["sites"] = domain.RatingSites()
+	// The titles are read once for all four of their facets. The kinds of copy and the rating sites
+	// are those of the titles read, as the wall's filters find them: a copy is a film's, its extras'
+	// or a show's episodes'. Each kind and site is asked whether any of those titles holds one,
+	// rather than every copy and rating of the library being read.
 	var widths []int
-	for _, q := range []struct {
-		sql  string
-		into any
-	}{
-		{`SELECT array_agg(DISTINCT g ORDER BY g) FROM (` + titles + `) t, jsonb_array_elements_text(t.genres) g`, &f.Genres},
-		{`SELECT array_agg(DISTINCT year ORDER BY year DESC) FROM (` + titles + `) t WHERE year IS NOT NULL`, &f.Years},
-		{`SELECT array_agg(DISTINCT certificate ORDER BY certificate) FROM (` + titles + `) t WHERE certificate IS NOT NULL`, &f.Certificates},
-		{`SELECT array_agg(DISTINCT st ORDER BY st) FROM (` + titles + `) t, jsonb_array_elements_text(t.studios) st`, &f.Studios},
-		{`SELECT array_agg(DISTINCT video_range) FROM (` + copies + `) c WHERE video_range IS NOT NULL`, &f.Ranges},
-		{`SELECT array_agg(DISTINCT width) FROM (` + copies + `) c WHERE width IS NOT NULL`, &widths},
-		{`SELECT array_agg(DISTINCT r.site) FROM ratings r JOIN items t ON t.id = r.item_id, viewer(@profile) v
-			WHERE t.library_id = @lib AND sees(v, t)`, &f.RatingSites},
-	} {
-		if err := s.pool.QueryRow(ctx, q.sql, at).Scan(q.into); err != nil {
-			return Facets{}, err
-		}
+	err = s.pool.QueryRow(ctx, `
+		WITH titles AS MATERIALIZED (
+			SELECT items.id, items.genres, items.studios, items.year, items.certificate FROM items, viewer(@profile) v
+			WHERE library_id = @lib AND kind = @kind AND sees(v, items)
+		),
+		copies AS MATERIALIZED (
+			SELECT k.video_range, k.width FROM (
+				SELECT DISTINCT video_range, width FROM versions WHERE library_id = @lib AND missing_since IS NULL
+			) k
+			WHERE EXISTS (SELECT 1 FROM versions c JOIN items e ON e.id = c.item_id LEFT JOIN items p ON p.id = e.parent_id
+				JOIN titles t ON t.id = coalesce(p.parent_id, e.parent_id, e.id)
+				WHERE c.library_id = @lib AND c.missing_since IS NULL
+					AND c.video_range IS NOT DISTINCT FROM k.video_range AND c.width IS NOT DISTINCT FROM k.width)
+		)
+		SELECT
+			(SELECT array_agg(DISTINCT g ORDER BY g) FROM titles, jsonb_array_elements_text(titles.genres) g),
+			(SELECT array_agg(DISTINCT year ORDER BY year DESC) FROM titles WHERE year IS NOT NULL),
+			(SELECT array_agg(DISTINCT certificate ORDER BY certificate) FROM titles WHERE certificate IS NOT NULL),
+			(SELECT array_agg(DISTINCT st ORDER BY st) FROM titles, jsonb_array_elements_text(titles.studios) st),
+			(SELECT array_agg(DISTINCT video_range) FROM copies WHERE video_range IS NOT NULL),
+			(SELECT array_agg(DISTINCT width) FROM copies WHERE width IS NOT NULL),
+			(SELECT array_agg(s.site) FROM unnest(CAST(@sites AS text[])) s (site)
+				WHERE EXISTS (SELECT 1 FROM ratings r JOIN titles t ON t.id = r.item_id WHERE r.site = s.site))`, at,
+	).Scan(&f.Genres, &f.Years, &f.Certificates, &f.Studios, &f.Ranges, &widths, &f.RatingSites)
+	if err != nil {
+		return Facets{}, err
 	}
 	for _, r := range domain.Resolutions() {
 		from, to := r.Widths()
