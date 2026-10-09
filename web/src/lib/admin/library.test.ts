@@ -14,6 +14,7 @@ const tv: Schemas["AdminLibrary"] = {
 	id: "l-tv",
 	name: "TV",
 	kind: "shows",
+	media: "folder",
 	root: "/media/tv",
 	sources: (["show", "season", "episode"] as const).map((kind) => ({
 		kind,

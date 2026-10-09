@@ -84,6 +84,7 @@ const films: Schemas["AdminLibrary"] = {
 	id: "l-films",
 	name: "Films",
 	kind: "movies",
+	media: "folder",
 	root: "/media/films",
 	sources: [
 		{
