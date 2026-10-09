@@ -38,7 +38,7 @@ func (c *Client) Describe(ctx context.Context, loc domain.Locale, _ domain.ItemK
 	if err != nil {
 		return domain.Metadata{}, nil, err
 	}
-	said, err := c.Seasons(ctx, loc, n, seasons.Numbers, seasons.Order)
+	said, err := c.Seasons(ctx, loc, n, seasons)
 	return m, said, err
 }
 

@@ -31,15 +31,15 @@ func (c *Client) Match(ctx context.Context, loc domain.Locale, kind domain.ItemK
 }
 
 // Describe answers TMDB's details of a title, its score among them, and of the seasons of a show
-// asked for that TMDB has, with the season its next episode to air is in, so the episodes yet to
-// air are known. TMDB numbers episodes as aired, so a show numbered otherwise is described without
+// asked for that TMDB has (every one, where every one is asked for), with the season its next
+// episode to air is in, so the episodes yet to air are known. TMDB numbers episodes as aired, so a show numbered otherwise is described without
 // its seasons.
 func (c *Client) Describe(ctx context.Context, loc domain.Locale, kind domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
 	n, err := strconv.Atoi(id)
 	if err != nil {
 		return domain.Metadata{}, nil, err
 	}
-	m, airing, err := c.Details(ctx, loc, kinds[kind], n)
+	m, shown, err := c.Details(ctx, loc, kinds[kind], n)
 	if err != nil {
 		return domain.Metadata{}, nil, err
 	}
@@ -47,7 +47,10 @@ func (c *Client) Describe(ctx context.Context, loc domain.Locale, kind domain.It
 	if seasons.Order != domain.OrderAired {
 		return m, said, nil
 	}
-	numbers := slices.Concat(seasons.Numbers, airing)
+	numbers := slices.Concat(seasons.Numbers, shown.Airing)
+	if seasons.Scope == domain.SeasonsEvery {
+		numbers = shown.Every
+	}
 	slices.Sort(numbers)
 	for _, number := range slices.Compact(numbers) {
 		s, err := c.Season(ctx, loc, n, number)

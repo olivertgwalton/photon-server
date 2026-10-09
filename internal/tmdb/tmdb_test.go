@@ -327,6 +327,23 @@ func TestAShowStillAiringIsDescribedWithItsComingSeason(t *testing.T) {
 	}
 }
 
+// A show with no files to number its seasons by is described with every season TMDB has.
+func TestAShowAskedForEverySeasonIsDescribedWithThemAll(t *testing.T) {
+	c := serve(t, map[string]string{
+		"/tv/1438?append_to_response=content_ratings%2Cexternal_ids%2Cvideos%2Cimages%2Caggregate_credits&include_image_language=en%2Cnull&include_video_language=en%2Cnull&language=en-GB": `{
+			"id":1438,"name":"The Wire","seasons":[{"season_number":1},{"season_number":2}]}`,
+		"/tv/1438/season/1?language=en-GB": `{"episodes":[{"episode_number":1,"name":"The Target","air_date":"2002-06-02"}]}`,
+		"/tv/1438/season/2?language=en-GB": `{"episodes":[{"episode_number":1,"name":"Ebb Tide","air_date":"2003-06-01"}]}`,
+	})
+	_, seasons, err := c.Describe(t.Context(), gb, domain.ItemShow, "1438", domain.SeasonRequest{Scope: domain.SeasonsEvery, Order: domain.OrderAired})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seasons[1].Episodes[1].Title != "The Target" || seasons[2].Episodes[1].Title != "Ebb Tide" {
+		t.Errorf("seasons = %+v, want both", seasons)
+	}
+}
+
 func reply(t *testing.T, w io.Writer, body string) {
 	t.Helper()
 	// A client hangs up on an answer it refuses, as one too large.

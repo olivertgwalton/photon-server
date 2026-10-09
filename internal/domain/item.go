@@ -155,9 +155,19 @@ func RefreshModes() []RefreshMode {
 	return []RefreshMode{RefreshMissing, RefreshAll}
 }
 
+// SeasonScope is which of a show's seasons a provider is asked about: those numbered, or every
+// season it knows, as a remote show, which has no files to number them, is described.
+type SeasonScope string
+
+const (
+	SeasonsNumbered SeasonScope = "numbered"
+	SeasonsEvery    SeasonScope = "every"
+)
+
 // SeasonRequest is which of a show's seasons a provider is asked about, in the order its files are
 // numbered in.
 type SeasonRequest struct {
+	Scope   SeasonScope
 	Numbers []int
 	Order   EpisodeOrder
 }

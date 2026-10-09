@@ -115,7 +115,9 @@ than none.
 ### `POST /describe` (describe)
 
 Say what is known of the title matched. For a show, `seasons` are the seasons the server wants,
-numbered in `order` (`aired`, `dvd` or `absolute`); describe those you have.
+numbered in `order` (`aired`, `dvd` or `absolute`); describe those you have. A `season_scope` of
+`every`, which a show in a remote library has no files to number seasons by is asked with, wants
+every season you have; `numbered`, or none, wants those in `seasons`.
 
 ```json
 {
