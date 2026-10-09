@@ -39,11 +39,41 @@ func TestLibraries(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []domain.Library{
-		{Name: "Films", Kind: domain.LibraryMovies, Root: "/srv/films", Sources: domain.DefaultSources(domain.LibraryMovies), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff, Locale: domain.Locale{Artwork: domain.ArtworkLocalized}, Titles: domain.TitlesLocalized, Collections: domain.CollectionsGrouped, SubtitleLanguages: []language.Tag{}, SubtitleMatch: domain.SubtitleMatchRelease},
-		{Name: "Television", Kind: domain.LibraryShows, Root: "/srv/tv", Sources: domain.DefaultSources(domain.LibraryShows), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff, Locale: domain.Locale{Artwork: domain.ArtworkLocalized}, Titles: domain.TitlesLocalized, Collections: domain.CollectionsGrouped, SubtitleLanguages: []language.Tag{}, SubtitleMatch: domain.SubtitleMatchRelease},
+		{Name: "Films", Kind: domain.LibraryMovies, Media: domain.MediaFolder, Root: "/srv/films", Sources: domain.DefaultSources(domain.LibraryMovies), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff, Locale: domain.Locale{Artwork: domain.ArtworkLocalized}, Titles: domain.TitlesLocalized, Collections: domain.CollectionsGrouped, SubtitleLanguages: []language.Tag{}, SubtitleMatch: domain.SubtitleMatchRelease},
+		{Name: "Television", Kind: domain.LibraryShows, Media: domain.MediaFolder, Root: "/srv/tv", Sources: domain.DefaultSources(domain.LibraryShows), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff, Locale: domain.Locale{Artwork: domain.ArtworkLocalized}, Titles: domain.TitlesLocalized, Collections: domain.CollectionsGrouped, SubtitleLanguages: []language.Tag{}, SubtitleMatch: domain.SubtitleMatchRelease},
 	}
 	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(domain.Library{}, "ID")); diff != "" {
 		t.Errorf("libraries (-want +got):\n%s", diff)
+	}
+}
+
+// A remote library holds a list's titles and plays another provider's streams. It has no folder,
+// so none is watched or deleted from, nor read whole for previews and markers unless an admin asks.
+func TestARemoteLibraryHasNoFolder(t *testing.T) {
+	s := migrated(t)
+	lib, err := s.AddRemoteLibrary(t.Context(), "Popular", domain.LibraryMovies, domain.PluginSource("aio"), "movie/top", domain.PluginSource("aio"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Library(t.Context(), lib.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Media != domain.MediaRemote || got.Root != "" || got.ListSource != domain.PluginSource("aio") || got.ListID != "movie/top" ||
+		got.StreamSource != domain.PluginSource("aio") || got.Monitor != domain.MonitorOff || got.Deletion != domain.DeletionOff ||
+		got.Previews != domain.PreviewsOff || got.Markers != domain.MarkersOff {
+		t.Errorf("the remote library is %+v", got)
+	}
+	for name, change := range map[string]LibraryChange{
+		"watched":      {Monitor: domain.MonitorRealtime},
+		"deleted from": {Deletion: domain.DeletionFiles},
+	} {
+		if err := s.SetLibrary(t.Context(), lib.ID, change); !errors.Is(err, ErrRemoteUntouched) {
+			t.Errorf("set to be %s: %v, want ErrRemoteUntouched", name, err)
+		}
+	}
+	if err := s.SetLibrary(t.Context(), lib.ID, LibraryChange{Previews: domain.PreviewsChapters}); err != nil {
+		t.Errorf("asked for chapter previews: %v", err)
 	}
 }
 

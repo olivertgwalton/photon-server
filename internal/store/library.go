@@ -14,12 +14,16 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
-var ErrLibraryExists = errors.New("a library with that name or root already exists")
+var (
+	ErrLibraryExists = errors.New("a library with that name or root already exists")
+	// ErrRemoteUntouched is a remote library set to be watched or deleted from: it has no folder.
+	ErrRemoteUntouched = errors.New("a remote library has no folder to watch or delete files from")
+)
 
 // libraryColumns and librarySourceColumns are model.Library's and model.LibrarySource's, for a
 // statement that reads whole rows.
 const (
-	libraryColumns = `id, name, kind, root, monitor, refresh_days, previews, markers, keyframes, themes, deletion,
+	libraryColumns = `id, name, kind, media, root, list_source, list_id, stream_source, monitor, refresh_days, previews, markers, keyframes, themes, deletion,
 		metadata_language, certification_country, artwork_language, title_language, collection_mode, subtitle_languages, subtitle_match`
 	librarySourceColumns = `library_id, item_kind, fetcher, source, position, enabled`
 )
@@ -30,12 +34,25 @@ func hasLibrary(ctx context.Context, q db, lib uuid.UUID) error {
 	return found(q.QueryRow(ctx, `SELECT 1 FROM libraries WHERE id = $1`, lib).Scan(&one))
 }
 
+// AddLibrary adds a library of the files under a folder.
 func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.LibraryKind, root string) (domain.Library, error) {
+	return s.addLibrary(ctx, kind, `INSERT INTO libraries (name, kind, root) VALUES ($1, $2, $3) RETURNING `+libraryColumns, name, kind, root)
+}
+
+// AddRemoteLibrary adds a library of the titles of a list on a provider, played from the streams
+// another offers. It has no folder to watch, delete from or read whole for previews and markers.
+func (s *Store) AddRemoteLibrary(ctx context.Context, name string, kind domain.LibraryKind, listSource domain.FieldSource, listID string, streamSource domain.FieldSource) (domain.Library, error) {
+	return s.addLibrary(ctx, kind, `
+		INSERT INTO libraries (name, kind, media, list_source, list_id, stream_source, monitor, previews, markers)
+		VALUES ($1, $2, 'remote', $3, $4, $5, 'off', 'off', 'off') RETURNING `+libraryColumns,
+		name, kind, listSource, listID, streamSource)
+}
+
+func (s *Store) addLibrary(ctx context.Context, kind domain.LibraryKind, insert string, args ...any) (domain.Library, error) {
 	var row model.Library
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		row, err = readRow[model.Library](ctx, tx, `
-			INSERT INTO libraries (name, kind, root) VALUES ($1, $2, $3) RETURNING `+libraryColumns, name, kind, root)
+		row, err = readRow[model.Library](ctx, tx, insert, args...)
 		if err != nil {
 			return err
 		}
@@ -208,8 +225,11 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 		}
 		return nil
 	})
-	if violates(err, uniqueViolation) {
+	switch {
+	case violates(err, uniqueViolation):
 		return ErrLibraryExists
+	case refusedBy(err, "remote_library_untouched"):
+		return ErrRemoteUntouched
 	}
 	return err
 }
@@ -392,7 +412,8 @@ func saveSources(ctx context.Context, tx db, lib uuid.UUID, sources []domain.Kin
 
 func library(r model.Library, sources []domain.KindSources, extras []domain.ExtraKind) domain.Library {
 	return domain.Library{
-		ID: r.ID, Name: r.Name, Kind: r.Kind, Root: r.Root, Sources: sources, RemoteExtras: extras,
+		ID: r.ID, Name: r.Name, Kind: r.Kind, Media: r.Media, Root: deref(r.Root), ListSource: deref(r.ListSource),
+		ListID: deref(r.ListID), StreamSource: deref(r.StreamSource), Sources: sources, RemoteExtras: extras,
 		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews, Markers: r.Markers,
 		Keyframes: r.Keyframes, Themes: r.Themes, Deletion: r.Deletion,
 		Locale: domain.Locale{Language: deref(r.MetadataLanguage), Country: deref(r.CertificationCountry), Artwork: r.ArtworkLanguage},
