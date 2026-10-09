@@ -15,11 +15,15 @@ import (
 
 // IndexedKeyframes lists the presentation times, in milliseconds, of the first video stream's
 // keyframes that a Matroska or MP4 file lists in its own index, as Jellyfin reads a Matroska file's
-// Cues: a few reads however large the file. ErrNoIndex for a file that keeps none, and for a
-// .strm's media, each read of which would be a request.
-func IndexedKeyframes(in Input) ([]int64, error) {
+// Cues: a few reads however large the file, which for a .strm's media are byte ranges asked of its
+// server. ErrNoIndex for a file that keeps none, or media whose server will not send ranges.
+func IndexedKeyframes(ctx context.Context, in Input) ([]int64, error) {
 	if in.URL != nil {
-		return nil, ErrNoIndex
+		r, err := openRemote(ctx, in.URL)
+		if err != nil {
+			return nil, err
+		}
+		return indexedKeyframes(r)
 	}
 	info, err := in.File.Stat()
 	if err != nil {

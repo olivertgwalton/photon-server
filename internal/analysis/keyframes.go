@@ -27,7 +27,7 @@ func Keyframes(st *store.Store) jobs.Handler {
 			return err
 		}
 		defer in.Close()
-		pts, err := media.IndexedKeyframes(in)
+		pts, err := media.IndexedKeyframes(ctx, in)
 		switch {
 		case err == nil:
 			return st.SaveKeyframes(ctx, part, pts)

@@ -139,7 +139,7 @@ func TestAFileWithNoIndexIsWalkedToItsKeyframes(t *testing.T) {
 		"transport.ts": {1483, 2818, 3485, 6196, 6614, 8741},
 		"no-cues.mkv":  {0, 1335, 2002, 4713, 5130, 7257},
 	} {
-		if _, err := IndexedKeyframes(Input{File: fixture(t, file)}); !errors.Is(err, ErrNoIndex) {
+		if _, err := IndexedKeyframes(t.Context(), Input{File: fixture(t, file)}); !errors.Is(err, ErrNoIndex) {
 			t.Errorf("%s: index read %v, want none", file, err)
 		}
 		got, err := tools.WalkKeyframes(t.Context(), Input{File: fixture(t, file)})
