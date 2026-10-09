@@ -2,7 +2,6 @@ package media
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,8 +16,6 @@ const rangeBlock = 64 << 10
 
 // keptBlocks is how many fetched blocks are kept for the reads after them.
 const keptBlocks = 16
-
-var errNoRanges = errors.New("its server does not answer byte ranges")
 
 // remoteMedia reads a .strm's media at u by byte ranges: a block at a time for short reads, a
 // longer read as it is asked.
@@ -82,10 +79,8 @@ func (m *remoteMedia) fetch(off, length int64) ([]byte, int64, error) {
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusPartialContent:
-	case http.StatusRequestedRangeNotSatisfiable:
-		return nil, 0, io.EOF
 	case http.StatusOK:
-		return nil, 0, fmt.Errorf("%w: %w", ErrNoIndex, errNoRanges)
+		return nil, 0, fmt.Errorf("%w: its server does not answer byte ranges", ErrNoIndex)
 	default:
 		return nil, 0, fmt.Errorf("fetching %s: %s", m.u.Redacted(), resp.Status)
 	}
@@ -93,7 +88,7 @@ func (m *remoteMedia) fetch(off, length int64) ([]byte, int64, error) {
 	_, total, _ := strings.Cut(resp.Header.Get("Content-Range"), "/")
 	size, err := strconv.ParseInt(total, 10, 64)
 	if err != nil {
-		return nil, 0, fmt.Errorf("%w: %w", ErrNoIndex, errNoRanges)
+		return nil, 0, fmt.Errorf("%w: its server does not answer byte ranges", ErrNoIndex)
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, length))
 	return b, size, err

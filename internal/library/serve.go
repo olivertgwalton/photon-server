@@ -82,7 +82,7 @@ func serveRemote(w http.ResponseWriter, r *http.Request, u *url.URL, limit int64
 	// A server that ignores the range, or answers more of it than was asked, has only the limit
 	// passed on.
 	if limited {
-		if resp.ContentLength < 0 || resp.ContentLength > limit {
+		if resp.ContentLength > limit {
 			w.Header().Del("Content-Length")
 		}
 		body = io.LimitReader(body, limit)
