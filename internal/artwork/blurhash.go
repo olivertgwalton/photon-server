@@ -51,15 +51,31 @@ func FileBlurhash(root, rel string) (string, error) {
 	return Blurhash(f)
 }
 
-// encodeBlurhash is the reference encoder (woltapp/blurhash's C), over an RGBA picture.
+// encodeBlurhash is the reference encoder (woltapp/blurhash's C), over an RGBA picture. A BlurHash
+// has no alpha, and the reference reads a transparent pixel as the black image.RGBA stores it as:
+// a logo's hash came out its letters blurred on black, its colour near black whatever the letters'.
+// Here each pixel counts as much as it is opaque, so a logo's hash is the colour of its letters, and
+// an opaque picture's is the reference's.
 func encodeBlurhash(img *image.RGBA, cx, cy int) string {
 	w, h := img.Rect.Dx(), img.Rect.Dy()
 	linear := make([][3]float64, w*h)
+	weight := make([]float64, w*h)
+	var opaque float64
 	for y := range h {
 		for x := range w {
 			p := img.Pix[y*img.Stride+x*4:]
-			linear[y*w+x] = [3]float64{toLinear(p[0]), toLinear(p[1]), toLinear(p[2])}
+			if p[3] == 0 {
+				continue
+			}
+			// image.RGBA holds colour multiplied by alpha.
+			c := func(v uint8) float64 { return toLinear(uint8(min(255, int(v)*255/int(p[3])))) }
+			linear[y*w+x] = [3]float64{c(p[0]), c(p[1]), c(p[2])}
+			weight[y*w+x] = float64(p[3]) / 255
+			opaque += weight[y*w+x]
 		}
+	}
+	if opaque == 0 {
+		opaque = float64(w * h)
 	}
 	factors := make([][3]float64, 0, cx*cy)
 	for j := range cy {
@@ -74,12 +90,12 @@ func encodeBlurhash(img *image.RGBA, cx, cy int) string {
 				for x := range w {
 					basis := norm * math.Cos(math.Pi*float64(i)*float64(x)/float64(w)) * cosY
 					for c := range 3 {
-						f[c] += basis * linear[y*w+x][c]
+						f[c] += basis * weight[y*w+x] * linear[y*w+x][c]
 					}
 				}
 			}
 			for c := range 3 {
-				f[c] /= float64(w * h)
+				f[c] /= opaque
 			}
 			factors = append(factors, f)
 		}
