@@ -252,14 +252,21 @@ func episodeItem(ctx context.Context, tx db, lib uuid.UUID, e Episode, row model
 	}
 	own := partPathsOf(e.Copies)
 	var id uuid.UUID
+	// The copies found by path and by bytes are looked up apart: asked for at once, by an OR across
+	// two joins, Postgres reads every episode copy of the library to answer.
 	err := tx.QueryRow(ctx, `
-		SELECT i.id FROM items i JOIN versions v ON v.item_id = i.id
-		LEFT JOIN parts p ON p.version_id = v.id LEFT JOIN part_files f ON f.part_id = p.id AND f.rel_path = ANY($2)
-		WHERE v.library_id = $1 AND i.kind = 'episode' AND v.split_at IS NULL AND (f.rel_path IS NOT NULL OR v.fingerprint = ANY($3))
+		WITH found AS (
+			SELECT p.version_id, true AS own FROM part_files f JOIN parts p ON p.id = f.part_id
+			WHERE f.library_id = $1 AND f.rel_path = ANY($2)
+			UNION ALL
+			SELECT id, false FROM versions WHERE library_id = $1 AND fingerprint = ANY($3)
+		)
+		SELECT i.id FROM found JOIN versions v ON v.id = found.version_id JOIN items i ON i.id = v.item_id
+		WHERE i.kind = 'episode' AND v.split_at IS NULL
 			AND ((i.season_number, i.episode_number, i.episode_end) IS NOT DISTINCT FROM ($4::int, $5::int, $6::int)
 				OR NOT EXISTS (SELECT 1 FROM versions ov JOIN parts op ON op.version_id = ov.id JOIN part_files o ON o.part_id = op.id
 					WHERE ov.item_id = i.id AND o.rel_path = ANY($7) AND o.rel_path <> ALL($2)))
-		ORDER BY f.rel_path IS NOT NULL DESC,
+		ORDER BY found.own DESC,
 			(i.season_number, i.episode_number, i.episode_end) IS NOT DISTINCT FROM ($4::int, $5::int, $6::int) DESC
 		LIMIT 1`, lib, own, keys, row.SeasonNumber, row.EpisodeNumber, row.EpisodeEnd, saving).Scan(&id)
 	if err == nil || !errors.Is(err, pgx.ErrNoRows) {
