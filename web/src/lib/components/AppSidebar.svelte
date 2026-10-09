@@ -8,11 +8,12 @@ import HeartIcon from "@lucide/svelte/icons/heart";
 import RotateCcwClockIcon from "@lucide/svelte/icons/rotate-ccw-clock";
 import HouseIcon from "@lucide/svelte/icons/house";
 import ListVideoIcon from "@lucide/svelte/icons/list-video";
+import PuzzleIcon from "@lucide/svelte/icons/puzzle";
 import SettingsIcon from "@lucide/svelte/icons/settings";
 import TvIcon from "@lucide/svelte/icons/tv";
 import type { Component } from "svelte";
 import { page } from "$app/state";
-import { setLibraryOrder } from "#lib/actions.svelte.js";
+import { setLibraryOrder, visitPage } from "#lib/actions.svelte.js";
 import type { components } from "#lib/api/schema.js";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
 import { rowPages } from "#lib/rows.js";
@@ -20,8 +21,10 @@ import LibraryMenu from "./LibraryMenu.svelte";
 import Mark from "./Mark.svelte";
 
 type Library = components["schemas"]["Library"];
+type PluginPage = components["schemas"]["PluginPage"];
 
-let { libraries }: { libraries: Library[] } = $props();
+let { libraries, pages }: { libraries: Library[]; pages: PluginPage[] } =
+	$props();
 
 const kindIcons: Record<Library["kind"], Component> = {
 	movies: FilmIcon,
@@ -212,6 +215,25 @@ function current(href: string) {
 					{@render item("/downloads", "Downloads", DownloadIcon)}
 				</Sidebar.Menu>
 			</Sidebar.Group>
+			{#if pages.length}
+				<Sidebar.Group>
+					<Sidebar.GroupLabel>Plugins</Sidebar.GroupLabel>
+					<Sidebar.Menu>
+						{#each pages as p (`${p.plugin}/${p.id}`)}
+							<Sidebar.MenuItem>
+								<Sidebar.MenuButton
+									tooltipContent={p.name}
+									class={menuButton}
+									onclick={() => visitPage(p.plugin, p.id)}
+								>
+									<PuzzleIcon />
+									<span>{p.name}</span>
+								</Sidebar.MenuButton>
+							</Sidebar.MenuItem>
+						{/each}
+					</Sidebar.Menu>
+				</Sidebar.Group>
+			{/if}
 			<Sidebar.Group class="mt-auto">
 				<Sidebar.Menu>
 					{@render item("/settings", "Settings", SettingsIcon)}

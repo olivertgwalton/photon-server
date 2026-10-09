@@ -1,6 +1,7 @@
 import { toast } from "svelte-sonner";
 import { page } from "$app/state";
 import { act } from "./act.js";
+import { problemMessage } from "./api/problem.js";
 import { client } from "./api/client.js";
 import type { components } from "./api/schema.js";
 
@@ -188,6 +189,20 @@ export function deleteTitle(id: string, name: string) {
 }
 
 // The profile's libraries in its own order, as its sidebar lists them.
+// A plugin's page is opened on the plugin's own origin, at an address with a
+// code in it that the plugin claims to know who visits.
+export async function visitPage(plugin: string, page: string) {
+	const { data, error } = await api.POST(
+		"/api/v1/plugins/{slug}/pages/{page}/visits",
+		{ params: { path: { slug: plugin, page } } },
+	);
+	if (error) {
+		toast.error(problemMessage(error));
+		return;
+	}
+	window.location.assign(data.url);
+}
+
 export function setLibraryOrder(ids: string[]) {
 	return act(
 		api.PUT("/api/v1/profile/library-order", { body: { library_ids: ids } }),
