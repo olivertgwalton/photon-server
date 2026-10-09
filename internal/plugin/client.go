@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"slices"
 
+	"golang.org/x/text/language"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/plugin/pluginv1"
 	"github.com/olivertgwalton/photon-server/internal/provider"
@@ -172,6 +174,32 @@ func (c *client) Streams(ctx context.Context, t domain.Streamed) ([]domain.Offer
 		}
 	}
 	return offers, err
+}
+
+func (c *client) SearchSubtitles(ctx context.Context, q domain.SubtitleQuery) ([]domain.FoundSubtitle, error) {
+	out, err := post[pluginv1.SubtitlesResponse](ctx, c, domain.CapabilitySubtitles, "search", func(s pluginv1.Settings) pluginv1.SubtitlesRequest {
+		return pluginv1.SubtitlesRequest{Settings: s, Kind: string(q.Kind), IDs: sentIDs(q.IDs), Season: q.Season, Episode: q.Episode, Hash: q.Hash, Language: q.Language.String()}
+	})
+	var found []domain.FoundSubtitle
+	for _, f := range out.Subtitles {
+		if lang, err := language.Parse(f.Language); err == nil && f.ID != "" {
+			found = append(found, domain.FoundSubtitle{
+				Source: c.source(), ID: f.ID, Language: lang, Release: f.Release, HearingImpaired: f.HearingImpaired,
+				Forced: f.Forced, ForRelease: f.ForRelease && q.Hash != "", Downloads: max(f.Downloads, 0),
+			})
+		}
+	}
+	return found, err
+}
+
+func (c *client) FetchSubtitle(ctx context.Context, id string) ([]byte, error) {
+	out, err := post[pluginv1.FetchResponse](ctx, c, domain.CapabilitySubtitles, "fetch", func(s pluginv1.Settings) pluginv1.FetchRequest {
+		return pluginv1.FetchRequest{Settings: s, ID: id}
+	})
+	if err == nil && out.SubRip == "" {
+		return nil, fmt.Errorf("plugin %s: subtitle %s: %w", c.manifest.ID, id, provider.ErrNotFound)
+	}
+	return []byte(out.SubRip), err
 }
 
 // metadata is what the plugin said in the server's terms. Anything the server has no name for (a

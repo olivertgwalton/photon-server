@@ -134,10 +134,12 @@ const (
 	CapabilityList Capability = "list"
 	// CapabilityStream is streaming films and episodes, which a remote library plays.
 	CapabilityStream Capability = "stream"
+	// CapabilitySubtitles is finding subtitles for a title, and fetching one.
+	CapabilitySubtitles Capability = "subtitles"
 )
 
 func Capabilities() []Capability {
-	return []Capability{CapabilityDescribe, CapabilitySearch, CapabilityRate, CapabilityPerson, CapabilityList, CapabilityStream}
+	return []Capability{CapabilityDescribe, CapabilitySearch, CapabilityRate, CapabilityPerson, CapabilityList, CapabilityStream, CapabilitySubtitles}
 }
 
 // PluginProtocol is what a plugin speaks: photon's own protocol, or a Stremio addon's.

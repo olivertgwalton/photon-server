@@ -84,7 +84,8 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
     {"name": "rate", "version": 1},
     {"name": "person", "version": 1},
     {"name": "list", "version": 1},
-    {"name": "stream", "version": 1}
+    {"name": "stream", "version": 1},
+    {"name": "subtitles", "version": 1}
   ],
   "settings": [
     {"key": "api_key", "name": "API key", "secret": true, "required": true},
@@ -97,8 +98,8 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
   digit, at most 63 characters. It may not change between manifests.
 - `capabilities` are what the plugin answers, each at a version of it. A capability's calls are
   `POST /{name}/v{version}/{call}`: `describe` is `match` and `describe`, `search` is `search`,
-  `rate` is `ratings`, `person` is `person`, `list` is `list`, `stream` is `streams`. Leave a
-  capability out and it is never called.
+  `rate` is `ratings`, `person` is `person`, `list` is `list`, `stream` is `streams`,
+  `subtitles` is `search` and `fetch`. Leave a capability out and it is never called.
 - A capability the server does not speak, by name or at that version, is passed over, and a
   plugin that answers none it speaks is refused. So a plugin can name one at two versions, or one
   only a newer server speaks, and be registered by any server for what that server speaks.
@@ -284,6 +285,40 @@ as a file's name and size: a stream with no key, or no web address, is left out.
      "name": "The Wire S01E01 1080p", "filename": "The.Wire.S01E01.mkv", "size": 1503238553}
   ]
 }
+```
+
+### `POST /subtitles/v1/search`
+
+Answer the subtitles the plugin has for a film, by its ids, or an episode, by its show's ids and
+its numbers, in `language`, an IETF tag such as `en` or `pt-BR`. `hash` is the file's
+[OpenSubtitles hash](https://trac.opensubtitles.org/projects/opensubtitles/wiki/HashSourceCodes),
+where the copy is one file; mark a subtitle made for that very file `for_release`. The server lists
+those first, then the most downloaded, beside other providers' for a viewer to pick from, and
+fetches the first that a library's settings want for titles that have none.
+
+```json
+{"settings": {"api_key": "…"}, "kind": "movie", "ids": {"imdb": "tt0113277"}, "hash": "8e245d9679d31e12", "language": "en"}
+```
+
+```json
+{
+  "subtitles": [
+    {"id": "7", "language": "en", "release": "Heat.1995.1080p.BluRay", "hearing_impaired": false,
+     "forced": false, "for_release": true, "downloads": 1200}
+  ]
+}
+```
+
+### `POST /subtitles/v1/fetch`
+
+Answer a subtitle `search` found, by its `id`, as SubRip.
+
+```json
+{"settings": {"api_key": "…"}, "id": "7"}
+```
+
+```json
+{"subrip": "1\n00:00:01,000 --> 00:00:04,000\nWhat are you, a cop?\n"}
 ```
 
 ## Calling the server

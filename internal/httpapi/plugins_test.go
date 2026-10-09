@@ -46,7 +46,7 @@ func filmsPlugin(t *testing.T, protocol int, id string) (*httptest.Server, func(
 			Protocol: protocol, ID: id, Name: "Films", Kinds: []string{"movie"},
 			// It answers capabilities, and a version of one, that this server does not speak, as one written
 			// for a newer server would; those are passed over.
-			Capabilities: []pluginv1.Capability{{Name: "describe", Version: 1}, {Name: "rate", Version: 1}, {Name: "search", Version: 2}, {Name: "subtitles", Version: 1}},
+			Capabilities: []pluginv1.Capability{{Name: "describe", Version: 1}, {Name: "rate", Version: 1}, {Name: "search", Version: 2}, {Name: "unheard-of", Version: 1}},
 			Settings:     []pluginv1.Setting{{Key: "api_key", Name: "API key", Secret: true, Required: true}},
 		})
 	})
