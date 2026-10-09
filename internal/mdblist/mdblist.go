@@ -115,8 +115,10 @@ func (c *Client) List(ctx context.Context, id string) ([]domain.Listed, error) {
 		return nil, provider.ErrNotConfigured
 	}
 	type item struct {
-		Rank int `json:"rank"`
-		IDs  struct {
+		Rank  int    `json:"rank"`
+		Title string `json:"title"`
+		Year  int    `json:"release_year"`
+		IDs   struct {
 			TMDB int    `json:"tmdb"`
 			IMDb string `json:"imdb"`
 		} `json:"ids"`
@@ -144,7 +146,7 @@ func (c *Client) List(ctx context.Context, id string) ([]domain.Listed, error) {
 				if it.IDs.IMDb != "" {
 					ids[domain.ProviderIMDb] = it.IDs.IMDb
 				}
-				all = append(all, ranked{it.Rank, domain.Listed{Kind: kind, IDs: ids}})
+				all = append(all, ranked{it.Rank, domain.Listed{Kind: kind, IDs: ids, Title: it.Title, Year: it.Year}})
 			}
 		}
 		if len(body.Movies)+len(body.Shows) < listPage {

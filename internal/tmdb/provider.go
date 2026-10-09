@@ -83,7 +83,7 @@ func (c *Client) List(ctx context.Context, id string) ([]domain.Listed, error) {
 	for page := 1; ; page++ {
 		var body struct {
 			Items []struct {
-				ID        int    `json:"id"`
+				result
 				MediaType string `json:"media_type"`
 			} `json:"items"`
 			TotalPages int `json:"total_pages"`
@@ -95,7 +95,8 @@ func (c *Client) List(ctx context.Context, id string) ([]domain.Listed, error) {
 		for _, item := range body.Items {
 			kind, ok := map[string]domain.ItemKind{"movie": domain.ItemMovie, "tv": domain.ItemShow}[item.MediaType]
 			if ok {
-				out = append(out, domain.Listed{Kind: kind, IDs: map[domain.Provider]string{domain.ProviderTMDB: strconv.Itoa(item.ID)}})
+				m := item.match()
+				out = append(out, domain.Listed{Kind: kind, IDs: map[domain.Provider]string{domain.ProviderTMDB: m.ID}, Title: m.Title, Year: m.Year})
 			}
 		}
 		if page >= body.TotalPages {

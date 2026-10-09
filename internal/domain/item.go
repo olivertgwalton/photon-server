@@ -85,7 +85,8 @@ func Providers() []Provider {
 type Listed struct {
 	Kind ItemKind
 	IDs  map[Provider]string
-	// Title and Year are what the list calls it, where it says.
+	// Title and Year are what the list calls it, where it says: a remote library's name for a
+	// title it adds, until the title is matched.
 	Title string
 	Year  int
 }
