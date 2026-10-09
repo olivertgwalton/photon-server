@@ -1,7 +1,9 @@
 package domain
 
 import (
+	"cmp"
 	"crypto/sha256"
+	"net"
 	"net/url"
 )
 
@@ -114,6 +116,15 @@ type Offer struct {
 	URL      *url.URL
 	// From is the host:port the provider answers at, which URL may name though it is not public.
 	From string
+}
+
+// OfferedFrom is the host:port of address, where a provider at it answers, for an offer's From.
+func OfferedFrom(address string) string {
+	u, err := url.Parse(address)
+	if err != nil {
+		return ""
+	}
+	return net.JoinHostPort(u.Hostname(), cmp.Or(u.Port(), map[string]string{"http": "80", "https": "443"}[u.Scheme]))
 }
 
 // Fingerprint is what the copy an offer is is known by among a library's, of the provider source

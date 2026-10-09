@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -136,12 +135,7 @@ type Addon struct {
 }
 
 func New(id domain.FieldSource, base string, m Manifest, hc *http.Client) *Addon {
-	a := &Addon{id: id, manifest: m, api: api(base, hc)}
-	if u, err := url.Parse(base); err == nil {
-		port := cmp.Or(u.Port(), map[string]string{"http": "80", "https": "443"}[u.Scheme])
-		a.host = net.JoinHostPort(u.Hostname(), port)
-	}
-	return a
+	return &Addon{id: id, manifest: m, api: api(base, hc), host: domain.OfferedFrom(base)}
 }
 
 func (a *Addon) Info() provider.Info {
