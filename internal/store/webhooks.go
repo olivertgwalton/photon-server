@@ -113,21 +113,38 @@ func (s *Store) Delivered(ctx context.Context, id uuid.UUID) error {
 }
 
 // Described is what a webhook is told of an event's profile, title and library, where it is
-// about one that is still there.
+// about one that is still there: of an episode, its numbers and its show too.
 type Described struct {
 	ProfileName *string
 	Title       *string
 	TitleKind   *domain.ItemKind
 	Year        *int
+	TitleIDs    map[domain.Provider]string
+	Season      *int
+	Episode     *int
+	Show        *uuid.UUID
+	ShowTitle   *string
+	ShowYear    *int
+	ShowIDs     map[domain.Provider]string
 	LibraryName *string
 }
 
 func (s *Store) Describe(ctx context.Context, e domain.Event) (Described, error) {
 	var d Described
 	err := s.pool.QueryRow(ctx, `
-		SELECT (SELECT name FROM profiles WHERE id = $1), i.title, i.kind, i.year,
+		SELECT (SELECT name FROM profiles WHERE id = $1), i.title, i.kind, i.year, `+knownIDs("i")+`,
+			i.season_number, i.episode_number, show.id, show.title, show.year, `+knownIDs("show")+`,
 			(SELECT name FROM libraries WHERE id = $3)
-		FROM (SELECT 1) one LEFT JOIN items i ON i.id = $2`,
-		e.Profile, e.Item, e.Library).Scan(&d.ProfileName, &d.Title, &d.TitleKind, &d.Year, &d.LibraryName)
+		FROM (SELECT 1) one LEFT JOIN items i ON i.id = $2
+		LEFT JOIN items season ON season.id = i.parent_id AND i.kind = 'episode'
+		LEFT JOIN items show ON show.id = season.parent_id`,
+		e.Profile, e.Item, e.Library).Scan(&d.ProfileName, &d.Title, &d.TitleKind, &d.Year, &d.TitleIDs,
+		&d.Season, &d.Episode, &d.Show, &d.ShowTitle, &d.ShowYear, &d.ShowIDs, &d.LibraryName)
 	return d, err
+}
+
+// knownIDs selects the ids the built-in providers know an item by, as a JSON object.
+func knownIDs(item string) string {
+	return `(SELECT jsonb_object_agg(provider, value) FROM external_ids WHERE item_id = ` + item + `.id
+		AND provider IN ('imdb', 'tmdb', 'tvdb'))`
 }

@@ -118,6 +118,11 @@ type title struct {
 	Kind  domain.ItemKind `json:"kind"`
 	Title string          `json:"title"`
 	Year  *int            `json:"year,omitzero"`
+	// IDs are the title's on IMDb, TMDB and TheTVDB, as a scrobbler finds it by.
+	IDs     map[domain.Provider]string `json:"ids,omitempty"`
+	Season  *int                       `json:"season,omitzero"`
+	Episode *int                       `json:"episode,omitzero"`
+	Show    *title                     `json:"show,omitzero"`
 }
 
 // payload is the body a webhook is sent, as Plex's carries its server, account and metadata: the
@@ -144,7 +149,10 @@ func (h *Hub) payload(ctx context.Context, e domain.Event) ([]byte, error) {
 		body.Profile = &named{ID: e.Profile, Name: *d.ProfileName}
 	}
 	if d.Title != nil {
-		body.Title = &title{ID: e.Item, Kind: *d.TitleKind, Title: *d.Title, Year: d.Year}
+		body.Title = &title{ID: e.Item, Kind: *d.TitleKind, Title: *d.Title, Year: d.Year, IDs: d.TitleIDs, Season: d.Season, Episode: d.Episode}
+		if d.Show != nil {
+			body.Title.Show = &title{ID: *d.Show, Kind: domain.ItemShow, Title: *d.ShowTitle, Year: d.ShowYear, IDs: d.ShowIDs}
+		}
 	}
 	if d.LibraryName != nil {
 		body.Library = &named{ID: e.Library, Name: *d.LibraryName}
