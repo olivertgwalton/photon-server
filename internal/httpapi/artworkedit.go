@@ -8,7 +8,10 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-var artworkKindParam = param{"kind", domain.ArtworkKind(""), "The kind of picture."}
+var (
+	artworkKindParam = param{"kind", domain.ArtworkKind(""), "The kind of picture."}
+	artworkPathParam = param{"artwork", domain.ArtworkKind(""), "The kind of picture."}
+)
 
 // artworkCandidateJSON is a picture a provider has, served at /api/v1/artwork/{id} like a title's
 // own, so a browser shows it sized and from this server.
@@ -46,7 +49,7 @@ func (a *API) artworkCandidates(w http.ResponseWriter, r *http.Request) {
 
 // pathArtworkKind answers the kind of picture a path names, or writes why not.
 func (a *API) pathArtworkKind(w http.ResponseWriter, r *http.Request) (domain.ArtworkKind, bool) {
-	kind := domain.ArtworkKind(r.PathValue("kind"))
+	kind := domain.ArtworkKind(r.PathValue("artwork"))
 	if !slices.Contains(domain.ArtworkKinds(), kind) {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return "", false
@@ -106,14 +109,14 @@ func (a *API) artworkEditRoutes() []route {
 			status:  http.StatusOK, reply: listJSON[artworkCandidateJSON]{}, handle: a.artworkCandidates,
 		},
 		{
-			pattern: "PUT /api/v1/admin/titles/{id}/artwork/{kind}", access: admin,
+			pattern: "PUT /api/v1/admin/titles/{id}/artwork/{artwork}", access: admin,
 			summary: "Choose a title's picture of a kind from its candidates, over every source",
-			path:    []param{artworkKindParam}, body: chooseArtworkJSON{}, status: http.StatusNoContent, handle: a.chooseArtwork,
+			path:    []param{artworkPathParam}, body: chooseArtworkJSON{}, status: http.StatusNoContent, handle: a.chooseArtwork,
 		},
 		{
-			pattern: "DELETE /api/v1/admin/titles/{id}/artwork/{kind}", access: admin,
+			pattern: "DELETE /api/v1/admin/titles/{id}/artwork/{artwork}", access: admin,
 			summary: "Give a title's picture of a kind back to its sources",
-			path:    []param{artworkKindParam}, status: http.StatusNoContent, handle: a.forgetArtwork,
+			path:    []param{artworkPathParam}, status: http.StatusNoContent, handle: a.forgetArtwork,
 		},
 	}
 }

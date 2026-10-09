@@ -54,7 +54,7 @@ func (a *API) styledStream(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	n, err := strconv.Atoi(r.PathValue("stream"))
+	n, err := strconv.Atoi(r.PathValue("subtitle"))
 	if err != nil {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
@@ -156,9 +156,9 @@ func (a *API) partFont(w http.ResponseWriter, r *http.Request) {
 func (a *API) styledRoutes() []route {
 	return []route{
 		{
-			pattern: "GET /api/v1/parts/{id}/subtitles/{stream}", access: signedAddress,
+			pattern: "GET /api/v1/parts/{id}/subtitles/{subtitle}", access: signedAddress,
 			summary: "A styled subtitle stream of a part, read out as it is, at the address play answered",
-			path:    []param{{"stream", "", "The stream's index in the part's file."}},
+			path:    []param{{"subtitle", "", "The stream's index in the part's file."}},
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"text/x-ssa"}, handle: a.styledStream,
 		},
 		{

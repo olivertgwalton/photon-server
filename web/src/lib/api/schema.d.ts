@@ -2562,7 +2562,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/titles/{id}/artwork/{kind}": {
+    "/api/v1/admin/titles/{id}/artwork/{artwork}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2581,7 +2581,7 @@ export interface paths {
                 path: {
                     id: string;
                     /** @description The kind of picture. */
-                    kind: components["schemas"]["ArtworkKind"];
+                    artwork: components["schemas"]["ArtworkKind"];
                 };
                 cookie?: never;
             };
@@ -2613,7 +2613,7 @@ export interface paths {
                 path: {
                     id: string;
                     /** @description The kind of picture. */
-                    kind: components["schemas"]["ArtworkKind"];
+                    artwork: components["schemas"]["ArtworkKind"];
                 };
                 cookie?: never;
             };
@@ -4223,7 +4223,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/parts/{id}/chapters/{idx}/image": {
+    "/api/v1/parts/{id}/chapters/{chapter}/image": {
         parameters: {
             query?: never;
             header?: never;
@@ -4243,7 +4243,7 @@ export interface paths {
                 path: {
                     id: string;
                     /** @description The chapter, counted from 0 in its part. */
-                    idx: number;
+                    chapter: number;
                 };
                 cookie?: never;
             };
@@ -4446,7 +4446,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/parts/{id}/subtitles/{stream}": {
+    "/api/v1/parts/{id}/subtitles/{subtitle}": {
         parameters: {
             query?: never;
             header?: never;
@@ -4466,7 +4466,7 @@ export interface paths {
                 path: {
                     id: string;
                     /** @description The stream's index in the part's file. */
-                    stream: string;
+                    subtitle: string;
                 };
                 cookie?: never;
             };
@@ -4531,7 +4531,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/parts/{id}/trickplay/{n}": {
+    "/api/v1/parts/{id}/trickplay/{sheet}": {
         parameters: {
             query?: never;
             header?: never;
@@ -4546,7 +4546,7 @@ export interface paths {
                 path: {
                     id: string;
                     /** @description The sheet, counted from 0. */
-                    n: number;
+                    sheet: number;
                 };
                 cookie?: never;
             };
