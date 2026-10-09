@@ -10,7 +10,9 @@ import TitleCard, { type CardLike } from "./TitleCard.svelte";
 // A named row of titles that scrolls sideways. Where it holds more than it
 // shows (or `total` says there are more than it was given), its heading leads
 // to the whole of it at `href`. Its `cards` are TitleCards; other `items` are
-// drawn by `card`, told how wide the row draws them.
+// drawn by `card`, told how wide the row draws them. A row with a `current`
+// card is the whole of a set the page is one of (a season, on an episode's
+// page): it shows all of it, scrolled to that card.
 let {
 	title,
 	cards = [],
@@ -20,6 +22,7 @@ let {
 	href,
 	total,
 	caption,
+	current,
 }: {
 	title: string;
 	cards?: CardLike[];
@@ -29,7 +32,10 @@ let {
 	href?: string;
 	total?: number;
 	caption?: (index: number) => string | undefined;
+	current?: string;
 } = $props();
+
+const shown = $derived(current ? cards : cards.slice(0, railLimit));
 
 const more = $derived(
 	(total ?? cards.length + items.length) > railLimit ? href : undefined,
@@ -53,6 +59,21 @@ function measure() {
 	on = list.scrollLeft + list.clientWidth < list.scrollWidth - 1;
 }
 const resized = onResize(measure);
+
+$effect(() => {
+	if (!list || !current) return;
+	const here = list.querySelector<HTMLElement>("[aria-current=page]");
+	const li = here?.closest("li");
+	if (!li) return;
+	// Sideways only: scrollIntoView would also scroll the page down to the row.
+	list.scrollTo({
+		left:
+			li.offsetLeft -
+			Number.parseFloat(getComputedStyle(list).scrollPaddingLeft),
+		behavior: "instant",
+	});
+	measure();
+});
 
 // A page at a time, as Plex Web's and Jellyfin's rows go: a little less than
 // the row's width, so the card cut at the edge is the first one shown.
@@ -100,9 +121,15 @@ const sizes = $derived(
 			onscroll={measure}
 			class="relative -mx-3 flex scroll-smooth snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
 		>
-			{#each cards.slice(0, railLimit) as c, i (c.id)}
+			{#each shown as c, i (c.id)}
 				<li class="shrink-0 snap-start {width}">
-					<TitleCard card={c} {shape} {sizes} caption={caption?.(i)} />
+					<TitleCard
+						card={c}
+						{shape}
+						{sizes}
+						caption={caption?.(i)}
+						current={c.id === current}
+					/>
 				</li>
 			{/each}
 			{#if card}
