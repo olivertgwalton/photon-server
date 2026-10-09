@@ -8,6 +8,16 @@ import { admin, adminTitles } from "./mock-admin.ts";
 type Schemas = components["schemas"];
 
 const ada: Schemas["Profile"] = { id: "p-ada", name: "Ada", role: "admin" };
+// A request plugin's pages: one for the household, one for the admins.
+const pluginPages: Schemas["PluginPage"][] = [
+	{ plugin: "requests", id: "ask", name: "Ask for a film", access: "everyone" },
+	{
+		plugin: "requests",
+		id: "queue",
+		name: "Requests waiting",
+		access: "admin",
+	},
+];
 const kids: Schemas["Profile"] = { id: "p-kids", name: "Kids", role: "user" };
 
 const server: Schemas["Info"] = { id: "s-1", name: "Den", version: "v1.0.0" };
@@ -1360,6 +1370,17 @@ const server_ = Bun.serve({
 					items: libraries.items.toSorted((a, b) => rank(a.id) - rank(b.id)),
 				});
 			}
+			case "GET /api/v1/plugin-pages":
+				return Response.json({
+					items: pluginPages.filter(
+						(p) => p.access === "everyone" || me?.role === "admin",
+					),
+				});
+			case "POST /api/v1/plugins/requests/pages/ask/visits":
+				return Response.json(
+					{ url: "http://requests.test/ui#photon_visit=c0de" },
+					{ status: 201 },
+				);
 			case "PUT /api/v1/profile/library-order": {
 				const body = (await request.json()) as Schemas["LibraryOrder"];
 				libraryOrders.set(token as string, body.library_ids);

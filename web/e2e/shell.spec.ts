@@ -126,3 +126,24 @@ test("switching profile from the menu asks a locked one for its secret", async (
 		page.getByRole("button", { name: "Ada's profile" }),
 	).toBeVisible();
 });
+
+test("a plugin's page opens on its own origin, with a visit's code", async ({
+	page,
+	isMobile,
+}) => {
+	await page.route("http://requests.test/**", (route) =>
+		route.fulfill({
+			contentType: "text/html",
+			body: "<title>Requests</title>",
+		}),
+	);
+	await logIn(page);
+	if (isMobile)
+		await page.getByRole("button", { name: "Toggle Sidebar" }).click();
+	const nav = page.getByRole("navigation", { name: "Main" });
+	await expect(
+		nav.getByRole("button", { name: "Requests waiting" }),
+	).toBeVisible();
+	await nav.getByRole("button", { name: "Ask for a film" }).click();
+	await expect(page).toHaveURL("http://requests.test/ui#photon_visit=c0de");
+});
