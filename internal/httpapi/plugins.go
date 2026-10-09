@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
 )
@@ -14,6 +15,9 @@ type pluginAdmin interface {
 	Register(ctx context.Context, address string, protocol domain.PluginProtocol, id string) (plugin.Registered, error)
 	Refresh(ctx context.Context, slug string) (plugin.Registered, error)
 	Remove(ctx context.Context, slug string) error
+	Pages(ctx context.Context, profile domain.Profile) ([]plugin.Page, error)
+	Visit(ctx context.Context, profile domain.Profile, slug, page string) (string, error)
+	Claim(ctx context.Context, slug, code string) (domain.Profile, string, error)
 }
 
 var slugParam = param{"slug", "", "The plugin's id, as its manifest gives it."}
@@ -104,8 +108,82 @@ func (a *API) answeredPlugin(w http.ResponseWriter, r *http.Request, err error) 
 	return a.answered(w, r, err)
 }
 
+type pluginPageJSON struct {
+	Plugin string            `json:"plugin"`
+	ID     string            `json:"id"`
+	Name   string            `json:"name"`
+	Access plugin.PageAccess `json:"access"`
+}
+
+type visitJSON struct {
+	// URL is where the browser opens the page, with the visit's code in its fragment.
+	URL string `json:"url"`
+}
+
+type claimJSON struct {
+	Code string `json:"code"`
+}
+
+type visitorJSON struct {
+	Page    string      `json:"page"`
+	Profile profileJSON `json:"profile"`
+}
+
+// pluginPages lists the plugins' pages the profile may visit, for the menus.
+func (a *API) pluginPages(w http.ResponseWriter, r *http.Request) {
+	all, err := a.svc.Plugins.Pages(r.Context(), auth.SessionOf(r.Context()).Profile)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	out := make([]pluginPageJSON, len(all))
+	for n, p := range all {
+		out[n] = pluginPageJSON{Plugin: p.Plugin, ID: p.ID, Name: p.Name, Access: p.Access}
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[pluginPageJSON]{Items: out})
+}
+
+// visitPage starts the profile's visit to a plugin's page, as the plugin is told who visits by
+// claiming its code: the page is on the plugin's own origin, which no token of the server's
+// reaches.
+func (a *API) visitPage(w http.ResponseWriter, r *http.Request) {
+	at, err := a.svc.Plugins.Visit(r.Context(), auth.SessionOf(r.Context()).Profile, r.PathValue("slug"), r.PathValue("page"))
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusCreated, visitJSON{URL: at})
+}
+
+// claimVisit answers a plugin who visits its page, by the code the visit gave it, once.
+func (a *API) claimVisit(w http.ResponseWriter, r *http.Request) {
+	var req claimJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	profile, page, err := a.svc.Plugins.Claim(r.Context(), r.PathValue("slug"), req.Code)
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, visitorJSON{Page: page, Profile: profileOf(profile)})
+}
+
 func (a *API) pluginsRoutes() []route {
+	pageParam := param{"page", "", "The page's id, as the plugin's manifest gives it."}
 	return []route{
+		{
+			pattern: "GET /api/v1/plugin-pages", access: signedIn, summary: "List the plugins' pages the profile may visit",
+			status: http.StatusOK, reply: listJSON[pluginPageJSON]{}, handle: a.pluginPages,
+		},
+		{
+			pattern: "POST /api/v1/plugins/{slug}/pages/{page}/visits", access: signedIn,
+			summary: "Visit a plugin's page: the address to open it at, with a code the plugin claims",
+			path:    []param{slugParam, pageParam}, status: http.StatusCreated, reply: visitJSON{}, handle: a.visitPage,
+		},
+		{
+			pattern: "POST /api/v1/plugins/{slug}/visits/claim", access: public,
+			summary: "Claim a visit to a plugin's page by its code, once, for who visits",
+			path:    []param{slugParam}, body: claimJSON{}, status: http.StatusOK, reply: visitorJSON{}, handle: a.claimVisit,
+		},
 		{
 			pattern: "GET /api/v1/admin/plugins", access: admin, summary: "List the registered plugins",
 			status: http.StatusOK, reply: listJSON[pluginJSON]{}, handle: a.adminPlugins,

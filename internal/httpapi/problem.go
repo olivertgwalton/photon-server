@@ -143,6 +143,8 @@ var problems = []struct {
 	{err: playback.ErrNoSuchSubtitle, code: codeInvalidBody, detail: "subtitle_stream is not one of the copy's subtitle streams"},
 	{err: playback.ErrNoSuchSubtitleFile, code: codeInvalidBody, detail: "subtitle_file is not one of the text subtitle files beside the copy"},
 	{err: plugin.ErrRefused, code: codeInvalidBody, ownWords: true},
+	{err: plugin.ErrNoPage, code: codeNotFound},
+	{err: plugin.ErrUnknownVisit, code: codeNotFound, detail: "no visit has that code: it was claimed, or lapsed"},
 	{err: historyimport.ErrRefused, code: codeInvalidBody, ownWords: true},
 	{err: tracker.ErrRefused, code: codeConflict, ownWords: true},
 	{err: sso.ErrRefused, code: codeConflict, ownWords: true},

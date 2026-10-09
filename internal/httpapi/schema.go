@@ -17,6 +17,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/playback"
+	"github.com/olivertgwalton/photon-server/internal/plugin"
 	"github.com/olivertgwalton/photon-server/internal/tracker"
 )
 
@@ -93,6 +94,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.StreamKind]():          values(domain.StreamKinds()),
 	reflect.TypeFor[domain.StoppedBy]():           values(domain.StoppedBys()),
 	reflect.TypeFor[domain.TaskKey]():             values(domain.TaskKeys()),
+	reflect.TypeFor[plugin.PageAccess]():          values(plugin.PageAccesses()),
 	reflect.TypeFor[domain.TaskResult]():          values(domain.TaskResults()),
 	reflect.TypeFor[domain.Timing]():              values(domain.Timings()),
 	reflect.TypeFor[domain.SecureConnections]():   values(domain.SecureConnectionModes()),

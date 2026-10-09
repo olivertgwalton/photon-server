@@ -30,6 +30,7 @@ const capabilities = {
 	subtitles: "Subtitles",
 	events: "Events",
 	segments: "Intros and credits",
+	pages: "Pages",
 } as const;
 
 // A plugin's slug, from its source id plugin:<slug>.

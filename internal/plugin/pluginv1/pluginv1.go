@@ -34,6 +34,18 @@ type Capability struct {
 	// Events are, of "events", the kinds of event the plugin is told of; one the server does not
 	// raise is passed over.
 	Events []string `json:"events,omitempty"`
+	// Pages are, of "pages", the plugin's own pages the server's menus link to.
+	Pages []Page `json:"pages,omitempty"`
+}
+
+// Page is a page the plugin serves, on its own origin: at URL, an http or https address or a path
+// under the plugin's, for "admin"s alone or "everyone" signed in.
+type Page struct {
+	// ID is the page's slug, as Manifest's: lower case letters, digits and hyphens.
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	URL    string `json:"url"`
+	Access string `json:"access"`
 }
 
 type Setting struct {
@@ -46,8 +58,8 @@ type Setting struct {
 
 // Speaks is the version of each capability this server speaks, and its calls: "describe" is
 // match and describe, "search" is search, "rate" is ratings, "person" is person, "list" is list,
-// "stream" is streams, "subtitles" is search and fetch, "events" is event, "segments" is markers.
-var Speaks = map[string]int{"describe": 1, "search": 1, "rate": 1, "person": 1, "list": 1, "stream": 1, "subtitles": 1, "events": 1, "segments": 1}
+// "stream" is streams, "subtitles" is search and fetch, "events" is event, "segments" is markers, "pages" is no call: a page is visited.
+var Speaks = map[string]int{"describe": 1, "search": 1, "rate": 1, "person": 1, "list": 1, "stream": 1, "subtitles": 1, "events": 1, "segments": 1, "pages": 1}
 
 // Settings is in every request: what an admin set for the plugin, by key.
 type Settings map[string]string

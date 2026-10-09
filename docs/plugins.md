@@ -87,7 +87,8 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
     {"name": "stream", "version": 1},
     {"name": "subtitles", "version": 1},
     {"name": "events", "version": 1, "events": ["playback.started", "playback.stopped"]},
-    {"name": "segments", "version": 1}
+    {"name": "segments", "version": 1},
+    {"name": "pages", "version": 1, "pages": [{"id": "ask", "name": "Ask for a film", "url": "/ui", "access": "everyone"}]}
   ],
   "settings": [
     {"key": "api_key", "name": "API key", "secret": true, "required": true},
@@ -101,8 +102,8 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
 - `capabilities` are what the plugin answers, each at a version of it. A capability's calls are
   `POST /{name}/v{version}/{call}`: `describe` is `match` and `describe`, `search` is `search`,
   `rate` is `ratings`, `person` is `person`, `list` is `list`, `stream` is `streams`,
-  `subtitles` is `search` and `fetch`, `events` is `event`, `segments` is `markers`. Leave a
-  capability out and it is never called.
+  `subtitles` is `search` and `fetch`, `events` is `event`, `segments` is `markers`; `pages` has no call,
+  as its pages are visited. Leave a capability out and it is never called.
 - A capability the server does not speak, by name or at that version, is passed over, and a
   plugin that answers none it speaks is refused. So a plugin can name one at two versions, or one
   only a newer server speaks, and be registered by any server for what that server speaks.
@@ -374,6 +375,30 @@ library offers markers: on `chapters` or `all`. A player is offered the plugin's
 set and what the file's chapters name, and above what the server finds by comparing sound or
 reading pictures. A stretch outside the copy, of a kind the server has no name for, or a second of a
 kind, is dropped.
+
+### Pages
+
+A plugin serves pages of its own, on its own origin, that the server's menus link to: `pages`
+names each by an `id` (lower case letters, digits and hyphens), its `name` in the menu, its `url`
+(an `http` or `https` address, or a path under the plugin's), and its `access`: `admin` for the
+admins, `everyone` for every profile signed in. The page is never served from the server's origin,
+so nothing on it can read a profile's session there.
+
+A profile opening a page is sent to its `url` with a code in its fragment, as
+`https://requests.example/ui#photon_visit=…`, which no server is sent and no log keeps. The page
+hands the code to the plugin, which claims it of the server, once, within a minute, to know who
+visits:
+
+```sh
+curl -X POST "$PHOTON_URL/api/v1/plugins/requests/visits/claim" -d '{"code": "…"}'
+```
+
+```json
+{"page": "ask", "profile": {"id": "0199c6f2-…", "name": "Kid", "role": "user"}}
+```
+
+A code claimed already, lapsed, or of another plugin's page is answered `404`. The plugin keeps
+its own session for the profile from then on.
 
 ## Calling the server
 
