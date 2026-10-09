@@ -16,10 +16,12 @@ import (
 // Subject is what a film or show is matched to a provider by, with the seasons of a show that
 // a provider has yet to describe.
 type Subject struct {
-	Kind    domain.ItemKind
-	Title   string
-	Year    int
-	IDs     map[domain.Provider]string
+	Kind  domain.ItemKind
+	Title string
+	Year  int
+	IDs   map[domain.Provider]string
+	// Scope and Seasons are which of a show's seasons it is described with.
+	Scope   domain.SeasonScope
 	Seasons []int
 	// Order is the order a show's episode files are numbered in.
 	Order domain.EpisodeOrder
@@ -53,11 +55,12 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	}
 	// Its own language and country over its library's, as Jellyfin's item settings are.
 	var own, lib domain.Locale
+	var media domain.LibraryMedia
 	err = s.pool.QueryRow(ctx, `
 		SELECT coalesce(i.metadata_language, ''), coalesce(i.certification_country, ''),
-			coalesce(l.metadata_language, ''), coalesce(l.certification_country, ''), l.artwork_language, l.title_language
+			coalesce(l.metadata_language, ''), coalesce(l.certification_country, ''), l.artwork_language, l.title_language, l.media
 		FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.id = $1`, id).
-		Scan(&own.Language, &own.Country, &lib.Language, &lib.Country, &lib.Artwork, &sub.Titles)
+		Scan(&own.Language, &own.Country, &lib.Language, &lib.Country, &lib.Artwork, &sub.Titles, &media)
 	if err != nil {
 		return Subject{}, false, err
 	}
@@ -71,7 +74,20 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	if err != nil {
 		return Subject{}, false, err
 	}
-	if item.Kind == domain.ItemShow {
+	sub.Scope = domain.SeasonsNumbered
+	switch {
+	case item.Kind == domain.ItemShow && media == domain.MediaRemote:
+		// A remote show has no files to number its seasons by. Its first match is every season the
+		// provider has; after, as for a folder show, a provider says what is airing, and the
+		// episodes that have aired since are added.
+		var seasons int
+		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM items WHERE parent_id = $1 AND kind = 'season'`, id).Scan(&seasons); err != nil {
+			return Subject{}, false, err
+		}
+		if seasons == 0 {
+			sub.Scope = domain.SeasonsEvery
+		}
+	case item.Kind == domain.ItemShow:
 		// Only a season holding an episode still titled by its file name, as Jellyfin asks a
 		// provider only about items it has never refreshed: a show's new episode costs one season.
 		// A season's own title is always its number, so it says nothing of what was asked.
@@ -123,9 +139,18 @@ func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.Fi
 				return err
 			}
 		}
+		media, err := mediaOf(ctx, tx, item)
+		if err != nil {
+			return err
+		}
 		for number, season := range seasons {
 			if err := announce(ctx, tx, item, source, rank, number, season.Episodes); err != nil {
 				return err
+			}
+			if _, ranked := rank[source]; ranked && media == domain.MediaRemote {
+				if err := addAired(ctx, tx, item, number, season.Episodes); err != nil {
+					return err
+				}
 			}
 			seasonID, err := seasonOf(ctx, tx, item, number)
 			if errors.Is(err, pgx.ErrNoRows) {

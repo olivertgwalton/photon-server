@@ -131,7 +131,7 @@ func TestDetailsInTheClientsLanguageAndCountry(t *testing.T) {
 
 func TestSeasonsReadEveryPage(t *testing.T) {
 	c, _ := fake(t)
-	got, err := c.Seasons(t.Context(), gb, 79126, []int{1}, domain.OrderAired)
+	got, err := c.Seasons(t.Context(), gb, 79126, domain.SeasonRequest{Numbers: []int{1}, Order: domain.OrderAired})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestSeasonsReadEveryPage(t *testing.T) {
 
 func TestAnEpisodeYetToAirIsDescribedThoughItsSeasonIsNotAsked(t *testing.T) {
 	c, _ := fake(t)
-	got, err := c.Seasons(t.Context(), gb, 79126, []int{1}, domain.OrderAired)
+	got, err := c.Seasons(t.Context(), gb, 79126, domain.SeasonRequest{Numbers: []int{1}, Order: domain.OrderAired})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestAnEpisodeYetToAirIsDescribedThoughItsSeasonIsNotAsked(t *testing.T) {
 
 func TestSeasonsAreNumberedInTheOrderAsked(t *testing.T) {
 	c, _ := fake(t)
-	got, err := c.Seasons(t.Context(), gb, 79126, []int{1}, domain.OrderDVD)
+	got, err := c.Seasons(t.Context(), gb, 79126, domain.SeasonRequest{Numbers: []int{1}, Order: domain.OrderDVD})
 	if err != nil || got[1].Episodes[1].Title != "The Detail" {
 		t.Errorf("on DVD, season 1 = %+v, %v; want The Detail first", got[1], err)
 	}
@@ -169,7 +169,7 @@ func TestSeasonsAreNumberedInTheOrderAsked(t *testing.T) {
 
 func TestAnEpisodeCreditsItsGuestsAndCrew(t *testing.T) {
 	c, _ := fake(t)
-	got, err := c.Seasons(t.Context(), gb, 79126, []int{1}, domain.OrderAired)
+	got, err := c.Seasons(t.Context(), gb, 79126, domain.SeasonRequest{Numbers: []int{1}, Order: domain.OrderAired})
 	if err != nil {
 		t.Fatal(err)
 	}

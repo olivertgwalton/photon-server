@@ -71,7 +71,7 @@ func describe(ctx context.Context, st *store.Store, d provider.Describer, loc do
 		log.InfoContext(ctx, "no confident match", slog.Int("year", sub.Year))
 		return nil
 	}
-	m, seasons, err := d.Describe(ctx, loc, sub.Kind, match, domain.SeasonRequest{Numbers: sub.Seasons, Order: sub.Order})
+	m, seasons, err := d.Describe(ctx, loc, sub.Kind, match, domain.SeasonRequest{Scope: sub.Scope, Numbers: sub.Seasons, Order: sub.Order})
 	if passedOver(ctx, err, log) {
 		return nil
 	}
