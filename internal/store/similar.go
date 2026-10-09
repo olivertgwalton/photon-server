@@ -58,7 +58,7 @@ func (s *Store) Similar(ctx context.Context, profile, id uuid.UUID) ([]Card, err
 			OFFSET 0
 		), shown AS (
 			SELECT id AS shown_id, score FROM ranked
-			WHERE (SELECT first_of_title(v, i) FROM items i, viewer(@profile) v WHERE i.id = ranked.id)
+			WHERE (SELECT NOT EXISTS (SELECT 1 FROM seen_before(v, i)) FROM items i, viewer(@profile) v WHERE i.id = ranked.id)
 			LIMIT @limit
 		)
 		SELECT `+itemColumns+` FROM shown JOIN items ON items.id = shown.shown_id

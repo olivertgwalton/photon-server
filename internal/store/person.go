@@ -195,7 +195,7 @@ func (s *Store) PersonCredits(ctx context.Context, profile, person uuid.UUID) ([
 		JOIN items i ON i.id = c.item_id
 		JOIN items t ON t.id = CASE i.kind WHEN 'episode' THEN (SELECT s.parent_id FROM items s WHERE s.id = i.parent_id) ELSE i.id END
 		WHERE c.person_id = $1 AND t.kind IN ('movie', 'show')
-			AND EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, t) AND first_of_title(v, t))
+			AND EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, t) AND NOT EXISTS (SELECT 1 FROM seen_before(v, t)))
 		ORDER BY t.id, c.kind, c.position`, person, profile)
 	if err != nil || len(links) == 0 {
 		return nil, err

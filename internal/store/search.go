@@ -71,10 +71,10 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error
 // order given, and how many match in all.
 func (s *Store) titlesMatching(ctx context.Context, profile uuid.UUID, args pgx.NamedArgs, where, order string) ([]Card, int64, error) {
 	matching := `
-		FROM items
+		FROM items, viewer(CAST(@profile AS uuid)) v
 		WHERE kind = ANY(@kinds) AND ` + where + `
 			AND (CAST(@library AS uuid) IS NULL OR library_id = CAST(@library AS uuid))
-			AND EXISTS (SELECT 1 FROM viewer(CAST(@profile AS uuid)) v WHERE sees(v, items) AND first_of_title(v, items))`
+			AND sees(v, items) AND NOT EXISTS (SELECT 1 FROM seen_before(v, items))`
 	var rows []*model.Item
 	total, err := s.counted(ctx, `SELECT count(*) `+matching, args, func(ctx context.Context) (err error) {
 		rows, err = queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` `+matching+`

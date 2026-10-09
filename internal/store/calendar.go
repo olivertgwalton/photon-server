@@ -69,14 +69,14 @@ var calendarHere = calendarChosen + `
 	WHERE library_id IN (SELECT id FROM libraries WHERE @library::uuid IS NULL OR id = @library) AND kind = 'movie'
 		AND released_asc BETWEEN @start::date AND @end::date AND release_date IS NOT NULL
 		AND (@filter = 'all' OR id IN (SELECT id FROM chosen))
-		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND first_of_title(v, items))
+		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND NOT EXISTS (SELECT 1 FROM seen_before(v, items)))
 	UNION ALL
 	SELECT ` + seasonLastOf("season.parent_id", "e.season_number") + `, ` + itemColumnsOf("e") + `
 	FROM items e JOIN items season ON season.id = e.parent_id
 	WHERE e.kind = 'episode' AND coalesce(e.release_date, e.air_date) BETWEEN @start::date AND @end::date
 		AND (@library::uuid IS NULL OR e.library_id = @library)
 		AND (@filter = 'all' OR season.parent_id IN (SELECT id FROM chosen))
-		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, e) AND first_of_title(v, e))`
+		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, e) AND NOT EXISTS (SELECT 1 FROM seen_before(v, e)))`
 
 // announcedColumns are an announced episode's own, its season's last, and its show's.
 var announcedColumns = `a.id AS announced_id, a.season_number AS announced_season, a.episode_number AS announced_episode,
@@ -96,7 +96,7 @@ var calendarAnnounced = calendarChosen + `
 	WHERE a.air_date BETWEEN @start::date AND @end::date AND ` + unfiled + `
 		AND (@library::uuid IS NULL OR show.library_id = @library)
 		AND (@filter = 'all' OR a.show_id IN (SELECT id FROM chosen))
-		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, show) AND first_of_title(v, show))`
+		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, show) AND NOT EXISTS (SELECT 1 FROM seen_before(v, show)))`
 
 type hereRow struct {
 	SeasonLast *int

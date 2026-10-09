@@ -5,6 +5,7 @@ package store
 import (
 	"slices"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -81,5 +82,51 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 	cards, total, err := s.Search(ctx, SearchQuery{Text: "heat", Offset: 1, Limit: 1})
 	if err != nil || total != 4 || len(cards) != 1 || cards[0].Title != "Heat Wave" {
 		t.Errorf("the second of four: %+v of %d, %v; want Heat Wave", cards, total, err)
+	}
+}
+
+// A film in two libraries is found once, in the library added first, unless the profile may see
+// only the other.
+func TestSearchFindsATitleInSeveralLibrariesOnce(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	part := func(rel string) []Copy {
+		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
+	}
+	var heats []uuid.UUID
+	var libs []uuid.UUID
+	for _, name := range []string{"Films", "4K"} {
+		lib, err := s.AddLibrary(ctx, name, domain.LibraryMovies, "/srv/"+name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Copies: part("Heat/" + name + ".mkv")}}, nil); err != nil {
+			t.Fatal(err)
+		}
+		heat := oneItem(t, s, "title = 'Heat' AND library_id = '"+lib.ID.String()+"'").ID
+		if _, err := s.pool.Exec(ctx, `INSERT INTO external_ids (item_id, provider, value, source) VALUES ($1, 'tmdb', '949', 'match')`, heat); err != nil {
+			t.Fatal(err)
+		}
+		heats, libs = append(heats, heat), append(libs, lib.ID)
+	}
+	if _, err := s.pool.Exec(ctx, `SELECT key_titles($1)`, heats); err != nil {
+		t.Fatal(err)
+	}
+	admin, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.AddProfile(ctx, "Guest", domain.RoleUser, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAccess(ctx, other.ID, ProfileAccess{Libraries: []uuid.UUID{libs[1]}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	for profile, want := range map[uuid.UUID]uuid.UUID{admin.ID: heats[0], other.ID: heats[1]} {
+		cards, total, err := s.Search(ctx, SearchQuery{Profile: profile, Text: "heat", Limit: 20})
+		if err != nil || total != 1 || len(cards) != 1 || cards[0].ID != want {
+			t.Errorf("found %+v of %d, %v; want the one Heat %v", cards, total, err, want)
+		}
 	}
 }

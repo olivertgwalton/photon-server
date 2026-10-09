@@ -47,7 +47,7 @@ var rowQueries = map[domain.HomeRow]string{
 	domain.RowContinueWatching: `
 		SELECT ` + itemColumnsOf("i") + ` FROM watch_state w JOIN items i ON i.id = w.item_id
 		WHERE w.profile_id = @profile AND w.position_ms > 0 AND i.kind IN ('movie', 'episode')
-			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))
+			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND NOT EXISTS (SELECT 1 FROM seen_before(v, i)))
 		ORDER BY w.last_played_at DESC, i.id DESC OFFSET @offset LIMIT @limit`,
 	// As Jellyfin's: the episode after the furthest one watched of each show, in the show's order
 	// and specials aside, unless it is under way already and so in Continue Watching; the shows
@@ -76,7 +76,7 @@ var rowQueries = map[domain.HomeRow]string{
 		) next
 		LEFT JOIN watch_state started ON started.item_id = next.id AND started.profile_id = @profile
 		WHERE coalesce(started.position_ms, 0) = 0
-			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE first_of_title(v, last.show))
+			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE NOT EXISTS (SELECT 1 FROM seen_before(v, last.show)))
 		ORDER BY last.last_played_at DESC, last.show_id DESC OFFSET @offset LIMIT @limit`,
 	domain.RowWatchlist:  listRow("watchlist"),
 	domain.RowFavourites: listRow("favourites"),
@@ -147,7 +147,7 @@ var rowQueries = map[domain.HomeRow]string{
 // sees.
 func onList(table string) string {
 	return ` FROM ` + table + ` l JOIN items i ON i.id = l.item_id
-		WHERE l.profile_id = @profile AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND first_of_title(v, i))`
+		WHERE l.profile_id = @profile AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND NOT EXISTS (SELECT 1 FROM seen_before(v, i)))`
 }
 
 // listRow is one of the profile's lists, the latest added first.
