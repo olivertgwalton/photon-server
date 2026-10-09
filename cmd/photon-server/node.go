@@ -192,7 +192,7 @@ func (n *node) wire(ctx context.Context) error {
 		Auth: n.auth, Limits: n.cache, Raise: n.hub.Raise, Reach: n.reach, Catalogue: st, Subscribe: n.hub.Subscribe, Audience: st, Displays: st, Preferences: st, Playlists: st,
 		Pictures: n.pictures, Playing: files, Playbacks: n.sessions, Watching: st, Themes: st, Previews: st, PreviewFiles: n.previews,
 		HLS: n.remuxer, Placer: p.placer, Owners: p.owners, Signer: p.signer,
-		Encoding: playback.Encoding{HEVC: n.hw.HEVC, Libass: n.tools.Libass}, Network: st, Sent: p.sent,
+		Network: st, Sent: p.sent,
 	}), n.listen, n.secured.Listen, n.secured.TLSConfig(), logger)
 	if err != nil {
 		return err

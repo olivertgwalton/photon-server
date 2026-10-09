@@ -4,11 +4,13 @@ package jellyfin
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -365,7 +367,7 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: plays, Watching: st, Preferences: st,
-		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
+		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
 	})
 	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
 	w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", swiftfinHeader, `{"MaxStreamingBitrate":120000000,"DeviceProfile":`+swiftfin+`}`)
@@ -442,7 +444,7 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
-		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
+		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
 	})
 	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
 	for _, tc := range []struct {
@@ -495,6 +497,77 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 	}
 }
 
+// An app's video is encoded as the node that will encode it can, not as this one could: this node
+// only serves, so its own HEVC encoder is no matter, and the node that transcodes makes H.264. With
+// no node that encodes, the app is offered no HLS that would be refused when fetched.
+func TestAnAppsVideoIsEncodedAsTheNodeEncodingItCan(t *testing.T) {
+	st, ada, heat, _ := aFilm(t)
+	n, err := st.Network(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	n.RemoteMaxBitrateKbps = 2000
+	if err := st.SetNetwork(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	self := domain.Node{ID: uuid.NewV7(), Role: domain.NodeServe, Availability: domain.NodeActive, Limit: 4, Encoder: domain.Encoder{
+		Acceleration: domain.AccelSoftware, HEVC: domain.HEVCAllow, Libass: true,
+	}}
+	transcoder := domain.Node{ID: uuid.NewV7(), Address: "http://10.0.0.2:8096", Role: domain.NodeTranscode, Availability: domain.NodeActive, Limit: 4, Encoder: domain.Encoder{
+		Acceleration: domain.AccelSoftware, HEVC: domain.HEVCDeny,
+	}}
+	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
+	for _, tc := range []struct {
+		others []domain.Node
+		codec  domain.VideoCodec
+	}{{[]domain.Node{transcoder}, domain.VideoH264}, {nil, ""}} {
+		remuxes := newFakeRemuxes()
+		api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+			Sent:    playback.NewSent(),
+			Network: st,
+			Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
+			HLS: remuxes, Placer: playback.NewPlacer(someNodes(tc.others), func() domain.Node { return self }, remuxes, nodecall.Key{}),
+			Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
+		})
+		r := httptest.NewRequest(http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", strings.NewReader(`{"MaxStreamingBitrate":120000000,"DeviceProfile":`+swiftfin+`}`))
+		r.Header.Set("Authorization", swiftfinHeader)
+		r.RemoteAddr = "203.0.113.9:5000"
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, r)
+		var info struct{ MediaSources []map[string]any }
+		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
+			t.Fatalf("%d %s", w.Code, w.Body)
+		}
+		transcoding, _ := info.MediaSources[0]["TranscodingUrl"].(string)
+		if tc.codec == "" {
+			if transcoding != "" {
+				t.Errorf("with no node that encodes, HLS is offered: %s", transcoding)
+			}
+			continue
+		}
+		u, err := url.Parse(transcoding)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var plan transcode
+		b, err := base64.RawURLEncoding.DecodeString(u.Query().Get("Plan"))
+		if err == nil {
+			err = json.Unmarshal(b, &plan)
+		}
+		if err != nil {
+			t.Fatal(transcoding, err)
+		}
+		if e := plan.Video.Encode; e == nil || e.Codec != tc.codec {
+			t.Errorf("encode %+v, want %s, as the node transcoding makes", e, tc.codec)
+		}
+	}
+}
+
+// someNodes is a cluster of this node and the others, which tell of themselves.
+type someNodes []domain.Node
+
+func (n someNodes) Nodes(context.Context) ([]domain.Node, error) { return n, nil }
+
 // Infuse takes HLS only in MPEG-TS, as its profile says, and is given it.
 func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
@@ -503,7 +576,7 @@ func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
-		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")), Encoding: playback.Encoding{HEVC: domain.HEVCAllow, Libass: true},
+		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
 	})
 	const infuse = `MediaBrowser Client="Infuse-Direct", Device="Apple TV", DeviceId="E0BE", Version="8.5.6", Token="pst_ada"`
 	w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", infuse, `{"IsPlayback":true,"EnableDirectPlay":true,
