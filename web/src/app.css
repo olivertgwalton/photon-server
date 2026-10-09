@@ -243,6 +243,13 @@
 	animation-duration: 0s;
 }
 
+/* The header stays over the page while it fades, as it is over it when still:
+   the page's picture covers the header's ground once the page is scrolled, and
+   Safari, unlike Chrome, draws the page's over the header's unless told. */
+::view-transition-group(header) {
+	z-index: 1;
+}
+
 ::view-transition-old(page) {
 	animation: 120ms ease-in both page-out;
 }
