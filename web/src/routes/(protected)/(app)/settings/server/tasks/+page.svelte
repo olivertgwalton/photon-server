@@ -1,9 +1,10 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { vocabulary } from "#lib/vocabulary.js";
-import { runTask } from "#lib/actions.svelte.js";
+import { confirmFirst, runTask } from "#lib/actions.svelte.js";
 import { runtime } from "#lib/format.js";
 import PlayIcon from "@lucide/svelte/icons/play";
+import SquareIcon from "@lucide/svelte/icons/square";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { relative, when } from "#lib/admin/words.js";
@@ -14,7 +15,6 @@ import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/Choice.svelte";
-import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import { Progress } from "#lib/components/ui/progress/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { fields } from "#lib/form.js";
@@ -174,7 +174,8 @@ function took(started?: string, finished?: string) {
 				<Table.Cell class="whitespace-normal">
 					<p class="text-ink font-semibold">{words.tasks[task.key].name}</p>
 					<p class="text-ink-3 text-xs">{words.tasks[task.key].description}</p>
-					{#if w.total}
+					<!-- A backlog with no job running is only queued, waiting for the window. -->
+					{#if w.running && w.total}
 						<div class="mt-2 grid max-w-sm gap-1">
 							<Progress
 								value={w.done}
@@ -184,13 +185,16 @@ function took(started?: string, finished?: string) {
 							<p class="text-ink-3 text-xs tabular-nums">
 								{w.percent}% · {w.done.toLocaleString()} of
 								{w.total.toLocaleString()}
-								{#if w.running}
-									· {w.running} running
-								{/if}
+								· {w.running} running
 							</p>
 						</div>
 					{:else if w.running}
 						<p class="text-ink-3 mt-2 text-xs">{w.running} running</p>
+					{:else if w.left}
+						<p class="text-ink-3 mt-2 text-xs tabular-nums">
+							{w.left.toLocaleString()}
+							queued
+						</p>
 					{/if}
 				</Table.Cell>
 				<Table.Cell class="whitespace-normal">
@@ -229,34 +233,42 @@ function took(started?: string, finished?: string) {
 						{relative(task.next_at, clock.now)}
 					</time>
 				</Table.Cell>
-				<Table.Cell class="space-x-2 text-right whitespace-nowrap">
-					{#if w.total || w.running}
-						<ConfirmButton
-							label="Stop"
-							hidden={words.tasks[task.key].name}
-							title="Stop {words.tasks[task.key].name.toLowerCase()}?"
-							confirm="Stop"
-							onconfirm={() =>
-								act(
-									api.POST("/api/v1/admin/tasks/{key}/stop", {
-										params: { path: { key: task.key } },
-									}),
-									`${words.tasks[task.key].name} was stopped.`,
+				<Table.Cell class="text-right">
+					{#if w.running}
+						<Button
+							variant="outline"
+							size="sm"
+							onclick={() =>
+								confirmFirst(
+									`Stop ${words.tasks[task.key].name.toLowerCase()}?`,
+									`The ${w.left.toLocaleString()} left are taken off the queue, and one running stops within a few minutes. What is done is kept: the task's next run, or Run now, takes up the rest.`,
+									"Stop",
+									() =>
+										act(
+											api.POST("/api/v1/admin/tasks/{key}/stop", {
+												params: { path: { key: task.key } },
+											}),
+											`${words.tasks[task.key].name} was stopped.`,
+										),
 								)}
-							body={`The ${w.left.toLocaleString()} left are taken off the queue, and one running stops within a few minutes. What is done is kept: the task's next run, or Run now, takes up the rest.`}
-						/>
+						>
+							<SquareIcon aria-hidden="true" />
+							<span class="max-sm:sr-only">Stop</span>
+							<span class="sr-only">{words.tasks[task.key].name}</span>
+						</Button>
+					{:else}
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={running}
+							onclick={() =>
+								runTask(task.key, `${words.tasks[task.key].name} is running.`)}
+						>
+							<PlayIcon aria-hidden="true" />
+							<span class="max-sm:sr-only">Run now</span>
+							<span class="sr-only">{words.tasks[task.key].name}</span>
+						</Button>
 					{/if}
-					<Button
-						variant="outline"
-						size="sm"
-						disabled={running}
-						onclick={() =>
-							runTask(task.key, `${words.tasks[task.key].name} is running.`)}
-					>
-						<PlayIcon aria-hidden="true" />
-						<span class="max-sm:sr-only">Run now</span>
-						<span class="sr-only">{words.tasks[task.key].name}</span>
-					</Button>
 				</Table.Cell>
 			</Table.Row>
 		{/each}
