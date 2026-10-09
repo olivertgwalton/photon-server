@@ -247,6 +247,14 @@ test("a show and a season open on the episode the reader is at", async ({
 	await expectAccessible(page);
 });
 
+test("an episode's page shows what its show is like", async ({ page }) => {
+	await logIn(page, "/titles/t-ep");
+	const like = page.getByRole("region", { name: /More like this/ });
+	await expect(
+		like.getByRole("link", { name: /More like this/ }),
+	).toHaveAttribute("href", "/titles/t-show/similar");
+});
+
 test("an episode's season row picks another season's episodes", async ({
 	page,
 }) => {
@@ -286,9 +294,11 @@ test("picking another episode of the season keeps the page where it was", async 
 	await page.setViewportSize({ width: 1200, height: 360 });
 	await logIn(page, "/titles/t-ep");
 	await expect(page.getByRole("heading", { name: "Season 1" })).toBeVisible();
-	await page.evaluate(() =>
-		window.scrollTo(0, document.documentElement.scrollHeight),
-	);
+	// The row in view, as the reader has it to pick from: a click scrolls to
+	// what it clicks first.
+	await page
+		.getByRole("region", { name: /Season 1/ })
+		.evaluate((row) => row.scrollIntoView({ block: "end" }));
 	const before = await page.evaluate(() => window.scrollY);
 	expect(before).toBeGreaterThan(0);
 	await page.getByRole("link", { name: /Second/ }).click();

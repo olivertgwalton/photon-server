@@ -15,7 +15,7 @@ import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
 import { goto } from "$app/navigation";
 import { findSubtitles, pickPlaylist, setMark } from "#lib/actions.svelte.js";
-import type { Extra } from "#lib/extras.js";
+import { type Extra, extrasOf } from "#lib/extras.js";
 import { blurStyle, isDark } from "#lib/blurhash.js";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import Prose from "#lib/components/Prose.svelte";
@@ -121,17 +121,35 @@ const writers = $derived(credits.filter((c) => c.kinds.includes("writer")));
 
 const trailer = $derived(t.extras?.find((e) => e.extra_kind === "trailer"));
 
+// Whose box sets, links and likes the page shows: an episode's are its
+// show's, which has no page of its own.
+const about = $derived(data.show ?? t);
+const extras = $derived(
+	data.extras.length || !data.show
+		? { of: t.id, items: data.extras }
+		: { of: data.show.id, items: extrasOf(data.show) },
+);
+const collections = $derived(
+	(about.collections ?? []).map((c) => ({ ...c, kind: "collection" as const })),
+);
+
 const links = $derived.by(() => {
-	const ids = t.ids ?? {};
+	const ids = about.ids ?? {};
 	const out: { name: string; href: string }[] = [];
-	if (t.kind !== "movie") return out;
+	if (about.kind !== "movie" && about.kind !== "show") return out;
 	if (ids.imdb) {
 		out.push({ name: "IMDb", href: `https://www.imdb.com/title/${ids.imdb}/` });
 	}
 	if (ids.tmdb) {
 		out.push({
 			name: "TMDB",
-			href: `https://www.themoviedb.org/movie/${ids.tmdb}`,
+			href: `https://www.themoviedb.org/${about.kind === "show" ? "tv" : "movie"}/${ids.tmdb}`,
+		});
+	}
+	if (ids.tvdb && about.kind === "show") {
+		out.push({
+			name: "TheTVDB",
+			href: `https://thetvdb.com/dereferrer/series/${ids.tvdb}`,
 		});
 	}
 	return out;
@@ -478,12 +496,12 @@ const poster = $derived(art("poster"));
 		</Rail>
 	{/if}
 
-	{#if data.extras.length}
+	{#if extras.items.length}
 		<Rail
 			title="Extras"
 			shape="still"
-			items={data.extras}
-			href="/titles/{t.id}/extras"
+			items={extras.items}
+			href="/titles/{extras.of}/extras"
 		>
 			{#snippet card(
 				item: Extra,
@@ -494,11 +512,11 @@ const poster = $derived(art("poster"));
 		</Rail>
 	{/if}
 
-	{#if t.collections?.length}
+	{#if collections.length}
 		<Rail
 			title="Collections"
-			cards={data.collections}
-			href="/titles/{t.id}/collections"
+			cards={collections}
+			href="/titles/{about.id}/collections"
 		/>
 	{/if}
 
@@ -507,7 +525,7 @@ const poster = $derived(art("poster"));
 			<Rail
 				title="More like this"
 				cards={similar}
-				href="/titles/{t.id}/similar"
+				href="/titles/{about.id}/similar"
 			/>
 		{/if}
 	{/await}
