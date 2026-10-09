@@ -268,6 +268,26 @@ test("an episode's page lists its whole season to pick another", async ({
 	await expectAccessible(page);
 });
 
+test("picking another episode of the season keeps the page where it was", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1200, height: 360 });
+	await logIn(page, "/titles/t-ep");
+	await expect(page.getByRole("heading", { name: "Season 1" })).toBeVisible();
+	await page.evaluate(() =>
+		window.scrollTo(0, document.documentElement.scrollHeight),
+	);
+	const before = await page.evaluate(() => window.scrollY);
+	expect(before).toBeGreaterThan(0);
+	await page.getByRole("link", { name: /Second/ }).click();
+	await expect(page).toHaveURL("/titles/t-ep2");
+	await expect(page.getByRole("link", { name: /Second/ })).toHaveAttribute(
+		"aria-current",
+		"page",
+	);
+	expect(await page.evaluate(() => window.scrollY)).toBe(before);
+});
+
 test("a picture stands in as its blur until it arrives", async ({ page }) => {
 	let arrive = () => {};
 	const held = new Promise<void>((resolve) => {

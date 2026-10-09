@@ -144,7 +144,11 @@ const sizes = $derived(
 		{/if}
 	</div>
 	<div class="relative">
+		<!-- Picking another of the set the page is one of is moving within it, so
+			the page keeps its scroll and the picked card its focus, rather than
+			both going back to the top. -->
 		<ul
+			data-sveltekit-reset={current ? "false" : undefined}
 			bind:this={list}
 			{@attach resized}
 			onscroll={measure}
