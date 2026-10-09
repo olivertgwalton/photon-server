@@ -15,12 +15,14 @@ import (
 	"path"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
+	"github.com/olivertgwalton/photon-server/internal/naming"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/words"
@@ -230,51 +232,55 @@ var errSeveralFiles = errors.New("a copy in several files plays only as HLS")
 // stream serves a copy's file as it is, with ranges, so an app seeks by asking for the bytes it
 // wants.
 func (a *API) stream(w http.ResponseWriter, r *http.Request) {
-	part, ok := a.onePart(w, r)
+	c, ok := a.oneFile(w, r)
 	if !ok {
 		return
 	}
-	a.serveFile(w, r, func(ctx context.Context) (string, string, error) { return a.svc.Playing.PartFile(ctx, part) })
+	a.serveFile(w, r, func(ctx context.Context) (string, string, error) { return a.svc.Playing.PartFile(ctx, c.Parts[0].ID) })
 }
 
-// onePart is the one file of the copy an app names, or of the one photon would play, of a title
-// the profile may play. A copy in several files is refused: see errSeveralFiles.
-func (a *API) onePart(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+// oneFile is the copy an app names, or the one photon would play, of a title the profile may play,
+// where it is in one file. A copy in several files is refused: see errSeveralFiles.
+func (a *API) oneFile(w http.ResponseWriter, r *http.Request) (store.PlayCopy, bool) {
 	id, ok := a.itemID(w, r)
 	if !ok {
-		return id, false
+		return store.PlayCopy{}, false
 	}
 	version, ok := optionalID(query(r, "mediaSourceId"))
 	if !ok {
 		a.refuse(w, http.StatusBadRequest)
-		return id, false
+		return store.PlayCopy{}, false
 	}
 	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, version)
 	switch {
 	case errors.Is(err, store.ErrNotFound) || err == nil && len(c.Parts) == 0:
 		a.refuse(w, http.StatusNotFound)
-		return id, false
+		return store.PlayCopy{}, false
 	case err != nil:
 		a.internal(w, r, err)
-		return id, false
+		return store.PlayCopy{}, false
 	case len(c.Parts) > 1:
 		a.logger.InfoContext(r.Context(), "jellyfin file refused", slog.Any("err", errSeveralFiles))
 		a.refuse(w, http.StatusConflict)
-		return id, false
+		return store.PlayCopy{}, false
 	}
-	return c.Parts[0].ID, true
+	return c, true
 }
 
 // download serves a copy's file as stream does, as an attachment named as the file is, which a
-// browser saves rather than plays.
+// browser saves rather than plays: a .strm's as its media, by the container it is in.
 func (a *API) download(w http.ResponseWriter, r *http.Request) {
-	part, ok := a.onePart(w, r)
+	c, ok := a.oneFile(w, r)
 	if !ok {
 		return
 	}
 	a.serveFile(w, r, func(ctx context.Context) (string, string, error) {
-		root, rel, err := a.svc.Playing.PartFile(ctx, part)
-		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": path.Base(rel)}))
+		root, rel, err := a.svc.Playing.PartFile(ctx, c.Parts[0].ID)
+		name := path.Base(rel)
+		if naming.IsShortcut(name) {
+			name = strings.TrimSuffix(name, path.Ext(name)) + "." + domain.ContainerName(c.Container)
+		}
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 		return root, rel, err
 	})
 }
