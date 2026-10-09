@@ -21,10 +21,10 @@ var fileTypes = map[string]string{
 	".srt": "application/x-subrip", ".vtt": "text/vtt", ".ass": "text/x-ssa", ".ssa": "text/x-ssa",
 }
 
-// Serve sends the first limit bytes of media named name, in byte ranges: a file's, or those
+// Serve sends the first limit bytes of media, in byte ranges: a file's, or those
 // fetched from its address. Its error, from reading the file's size or fetching the media, comes
 // before anything is written.
-func Serve(w http.ResponseWriter, r *http.Request, in media.Input, name string, limit int64) error {
+func Serve(w http.ResponseWriter, r *http.Request, in media.Input, limit int64) error {
 	if in.URL != nil {
 		return serveRemote(w, r, in.URL, limit)
 	}
@@ -32,15 +32,15 @@ func Serve(w http.ResponseWriter, r *http.Request, in media.Input, name string, 
 	if err != nil {
 		return err
 	}
-	if t, ok := fileTypes[strings.ToLower(path.Ext(name))]; ok {
+	if t, ok := fileTypes[strings.ToLower(path.Ext(in.Name))]; ok {
 		w.Header().Set("Content-Type", t)
 	}
 	if limit >= info.Size() {
 		// The bare file keeps the copy in the kernel: sendfile takes only an *os.File.
-		http.ServeContent(w, r, name, info.ModTime(), in.File)
+		http.ServeContent(w, r, in.Name, info.ModTime(), in.File)
 		return nil
 	}
-	http.ServeContent(w, r, name, info.ModTime(), io.NewSectionReader(in.File, 0, limit))
+	http.ServeContent(w, r, in.Name, info.ModTime(), io.NewSectionReader(in.File, 0, limit))
 	return nil
 }
 

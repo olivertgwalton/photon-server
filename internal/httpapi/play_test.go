@@ -26,6 +26,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/playback"
@@ -130,12 +131,12 @@ func (f fakePlaying) PartFile(_ context.Context, part uuid.UUID) (string, string
 	return "", "", store.ErrNotFound
 }
 
-// VisiblePartFile hides the first part from everyone but Oliver.
-func (f fakePlaying) VisiblePartFile(ctx context.Context, profile, part uuid.UUID) (string, string, error) {
+// SeesPart hides every part from everyone but Oliver.
+func (f fakePlaying) SeesPart(_ context.Context, profile, _ uuid.UUID) error {
 	if profile != oliver.ID {
-		return "", "", store.ErrNotFound
+		return store.ErrNotFound
 	}
-	return f.PartFile(ctx, part)
+	return nil
 }
 
 var playbackID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000c1")
@@ -206,7 +207,7 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
-		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{}, HLS: fakeHLS{}, Placer: alone(fakeHLS{}, false),
+		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Parts: library.Parts{Places: fakePlaying{root: root}}, Playbacks: fakePlaybacks{}, HLS: fakeHLS{}, Placer: alone(fakeHLS{}, false),
 		Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
@@ -310,7 +311,7 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
-		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Playbacks: fakePlaybacks{},
+		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Parts: library.Parts{Places: fakePlaying{root: root}}, Playbacks: fakePlaybacks{},
 		Placer: alone(remuxOpener{remuxer}, true), HLS: remuxer, Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
@@ -454,7 +455,7 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Sent:    playback.NewSent(),
 		Network: fakeNetwork{},
-		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: dir}, Playbacks: fakePlaybacks{}, Placer: alone(h, false), HLS: h,
+		Auth:    fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: dir}, Parts: library.Parts{Places: fakePlaying{root: dir}}, Playbacks: fakePlaybacks{}, Placer: alone(h, false), HLS: h,
 		Signer: playback.NewSigner([]byte("key")),
 	})
 	do := func(req *http.Request) *httptest.ResponseRecorder {
@@ -956,7 +957,7 @@ func TestAConnectionIsTimedOnAPartsFirstBytesWithoutPlaying(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "Lawrence", "Lawrence cd1.mkv"), film, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root}, Parts: library.Parts{Places: fakePlaying{root: root}}})
 	sample := func(token, ranges string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/parts/"+partOne.String()+"/sample", nil)
 		req.Header.Set("Authorization", "Bearer "+token)

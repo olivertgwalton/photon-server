@@ -13,6 +13,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/analysis"
 	"github.com/olivertgwalton/photon-server/internal/blob"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -39,7 +40,7 @@ func aFilmWithTrickplay(t *testing.T) (*API, uuid.UUID, uuid.UUID) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Previews: st, PreviewFiles: analysis.NewPreviews(dir),
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Parts: library.Parts{Places: st}, Previews: st, PreviewFiles: analysis.NewPreviews(dir),
 	})
 	return api, heat, copyID
 }

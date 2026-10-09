@@ -137,16 +137,15 @@ func (s *Store) SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel strin
 	return root, rel, found(err)
 }
 
-// VisiblePartFile is where a part's bytes are, as PartFile answers, or ErrNotFound unless the
-// profile may see its title.
-func (s *Store) VisiblePartFile(ctx context.Context, profile, part uuid.UUID) (root, rel string, err error) {
-	err = s.pool.QueryRow(ctx, `
-		SELECT l.root, f.rel_path FROM part_files f JOIN libraries l ON l.id = f.library_id
-			JOIN parts p ON p.id = f.part_id JOIN versions v ON v.id = p.version_id
-			JOIN items i ON i.id = v.item_id, viewer($2) asking
-		WHERE f.part_id = $1 AND sees(asking, i) ORDER BY f.rel_path LIMIT 1`,
-		part, profile).Scan(&root, &rel)
-	return root, rel, found(err)
+// SeesPart is ErrNotFound unless the profile may see the title of a part the scanner found.
+func (s *Store) SeesPart(ctx context.Context, profile, part uuid.UUID) error {
+	var seen bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT true FROM part_files f JOIN parts p ON p.id = f.part_id
+			JOIN versions v ON v.id = p.version_id JOIN items i ON i.id = v.item_id, viewer($2) asking
+		WHERE f.part_id = $1 AND sees(asking, i) LIMIT 1`,
+		part, profile).Scan(&seen)
+	return found(err)
 }
 
 // Subtitle answers what a subtitle file beside a copy is, or ErrNotFound.

@@ -114,7 +114,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 		if _, err := s.Playable(ctx, kid.ID, id, uuid.UUID{}); !errors.Is(err, ErrNotFound) {
 			t.Errorf("playing %s: %v, want ErrNotFound", name, err)
 		}
-		if _, _, err := s.VisiblePartFile(ctx, kid.ID, partOf(id)); !errors.Is(err, ErrNotFound) {
+		if err := s.SeesPart(ctx, kid.ID, partOf(id)); !errors.Is(err, ErrNotFound) {
 			t.Errorf("timing the connection on %s: %v, want ErrNotFound", name, err)
 		}
 	}
@@ -139,8 +139,8 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 			}
 		}
 	}
-	if root, rel, err := s.VisiblePartFile(ctx, kid.ID, partOf(ids["Paddington"])); err != nil || root != "/srv/films" || rel != "Paddington.mkv" {
-		t.Errorf("timing the connection on Paddington: %q %q %v", root, rel, err)
+	if err := s.SeesPart(ctx, kid.ID, partOf(ids["Paddington"])); err != nil {
+		t.Errorf("timing the connection on Paddington: %v", err)
 	}
 	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedAllow}, nil); err != nil {
 		t.Fatal(err)

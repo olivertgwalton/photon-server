@@ -22,6 +22,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/naming"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -31,8 +32,12 @@ import (
 type playing interface {
 	Playable(ctx context.Context, profile, item, version uuid.UUID) (store.PlayCopy, error)
 	PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.PlaybackTitle, error)
-	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
+}
+
+// parts opens the parts of copies for players to fetch.
+type parts interface {
+	Open(ctx context.Context, part uuid.UUID) (media.Input, error)
 }
 
 type playbacks interface {
@@ -250,7 +255,7 @@ func (a *API) stream(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	a.serveFile(w, r, func(ctx context.Context) (string, string, error) { return a.svc.Playing.PartFile(ctx, c.Parts[0].ID) })
+	a.serveFile(w, r, func(ctx context.Context) (media.Input, error) { return a.svc.Parts.Open(ctx, c.Parts[0].ID) })
 }
 
 // oneFile is the copy an app names, or the one photon would play, of a title the profile may play,
@@ -288,19 +293,19 @@ func (a *API) download(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	a.serveFile(w, r, func(ctx context.Context) (string, string, error) {
-		root, rel, err := a.svc.Playing.PartFile(ctx, c.Parts[0].ID)
-		name := path.Base(rel)
+	a.serveFile(w, r, func(ctx context.Context) (media.Input, error) {
+		in, err := a.svc.Parts.Open(ctx, c.Parts[0].ID)
+		name := in.Name
 		if naming.IsShortcut(name) {
 			name = strings.TrimSuffix(name, path.Ext(name)) + "." + domain.ContainerName(c.Container)
 		}
 		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
-		return root, rel, err
+		return in, err
 	})
 }
 
-func (a *API) serveFile(w http.ResponseWriter, r *http.Request, where func(context.Context) (root, rel string, err error)) {
-	root, rel, err := where(r.Context())
+func (a *API) serveFile(w http.ResponseWriter, r *http.Request, open func(context.Context) (media.Input, error)) {
+	in, err := open(r.Context())
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)
 		return
@@ -309,13 +314,8 @@ func (a *API) serveFile(w http.ResponseWriter, r *http.Request, where func(conte
 		a.internal(w, r, err)
 		return
 	}
-	in, err := library.OpenMedia(root, rel)
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
 	defer in.Close()
-	if err := library.Serve(w, r, in, rel, math.MaxInt64); err != nil {
+	if err := library.Serve(w, r, in, math.MaxInt64); err != nil {
 		a.internal(w, r, err)
 	}
 }
@@ -356,8 +356,12 @@ func (a *API) subtitle(w http.ResponseWriter, r *http.Request) {
 		a.refuse(w, http.StatusNotFound)
 		return
 	}
-	a.serveFile(w, r, func(ctx context.Context) (string, string, error) {
-		return a.svc.Playing.SubtitleFile(ctx, v.Subtitles[file].ID)
+	a.serveFile(w, r, func(ctx context.Context) (media.Input, error) {
+		root, rel, err := a.svc.Playing.SubtitleFile(ctx, v.Subtitles[file].ID)
+		if err != nil {
+			return media.Input{}, err
+		}
+		return library.OpenMedia(root, rel)
 	})
 }
 

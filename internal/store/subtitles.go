@@ -12,13 +12,13 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// SubtitleSearch is what a copy's subtitles are searched by, and where its first file is, which
-// its release is hashed by: one file of a copy in several is no release on its own.
+// SubtitleSearch is what a copy's subtitles are searched by, and its first part, which its release
+// is hashed by: one file of a copy in several is no release on its own.
 type SubtitleSearch struct {
-	Version       uuid.UUID
-	Query         domain.SubtitleQuery
-	Root, RelPath string
-	Parts         int
+	Version uuid.UUID
+	Query   domain.SubtitleQuery
+	Part    uuid.UUID
+	Parts   int
 }
 
 // SubtitleSearchOf answers what a film's or an episode's copy, the one asked for else its
@@ -29,10 +29,7 @@ func (s *Store) SubtitleSearchOf(ctx context.Context, profile, item, version uui
 	if err != nil {
 		return SubtitleSearch{}, err
 	}
-	out := SubtitleSearch{Version: c.Version, Parts: len(c.Parts)}
-	if out.Root, out.RelPath, err = s.PartFile(ctx, c.Parts[0].ID); err != nil {
-		return SubtitleSearch{}, err
-	}
+	out := SubtitleSearch{Version: c.Version, Part: c.Parts[0].ID, Parts: len(c.Parts)}
 	var show *uuid.UUID
 	var season, episode *int
 	err = s.pool.QueryRow(ctx, `

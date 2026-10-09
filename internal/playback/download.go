@@ -54,7 +54,6 @@ const MaxConversions = 1
 const progressEvery = 5 * time.Second
 
 type conversionStore interface {
-	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
 	StartConversion(ctx context.Context, id, node uuid.UUID) (store.Conversion, error)
 	ConversionProgress(ctx context.Context, id, node uuid.UUID, progress float64) error
 	FinishConversion(ctx context.Context, id, node uuid.UUID, size int64) error
@@ -78,6 +77,7 @@ type nodeAddresses interface {
 // download needs it.
 type Conversions struct {
 	store  conversionStore
+	parts  partOpener
 	nodes  nodeAddresses
 	slots  transcodeSlots
 	ffmpeg string
@@ -86,11 +86,11 @@ type Conversions struct {
 	node   uuid.UUID
 }
 
-func NewConversions(st conversionStore, nodes nodeAddresses, slots transcodeSlots, ffmpeg string, hw hls.Hardware, dir string, node uuid.UUID) (*Conversions, error) {
+func NewConversions(st conversionStore, parts partOpener, nodes nodeAddresses, slots transcodeSlots, ffmpeg string, hw hls.Hardware, dir string, node uuid.UUID) (*Conversions, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, err
 	}
-	return &Conversions{store: st, nodes: nodes, slots: slots, ffmpeg: ffmpeg, hw: hw, dir: dir, node: node}, nil
+	return &Conversions{store: st, parts: parts, nodes: nodes, slots: slots, ffmpeg: ffmpeg, hw: hw, dir: dir, node: node}, nil
 }
 
 func (c *Conversions) path(conversion uuid.UUID) string {
@@ -118,7 +118,7 @@ func (c *Conversions) Convert(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return c.fail(ctx, id, err)
 	}
-	src, err := openFile(ctx, c.store.PartFile, job.Part)
+	src, err := c.parts.Open(ctx, job.Part)
 	if err != nil {
 		return c.fail(ctx, id, err)
 	}

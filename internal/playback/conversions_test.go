@@ -18,6 +18,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
@@ -133,7 +134,7 @@ func TestTwoProfilesShareOneConversionUntilBothRemoveIt(t *testing.T) {
 
 	runs := filepath.Join(t.TempDir(), "runs")
 	dir := t.TempDir()
-	conv, err := NewConversions(st, noNodes{}, slots(t), countingFFmpeg(t, runs), hls.Hardware{Accel: domain.AccelSoftware}, dir, uuid.NewV7())
+	conv, err := NewConversions(st, library.Parts{Places: st}, noNodes{}, slots(t), countingFFmpeg(t, runs), hls.Hardware{Accel: domain.AccelSoftware}, dir, uuid.NewV7())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +206,7 @@ func TestAConversionWaitsForASlotAndGivesItUpToAPlay(t *testing.T) {
 	}
 	r := slots(t)
 	dir := t.TempDir()
-	conv, err := NewConversions(st, noNodes{}, r, ffmpeg, hls.Hardware{Accel: domain.AccelSoftware}, dir, uuid.NewV7())
+	conv, err := NewConversions(st, library.Parts{Places: st}, noNodes{}, r, ffmpeg, hls.Hardware{Accel: domain.AccelSoftware}, dir, uuid.NewV7())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +294,7 @@ func TestARestartedNodeKeepsItsReadyDownloads(t *testing.T) {
 	}
 	dir, node := t.TempDir(), uuid.NewV7()
 	ffmpeg := countingFFmpeg(t, filepath.Join(t.TempDir(), "runs"))
-	before, err := NewConversions(st, noNodes{}, slots(t), ffmpeg, hls.Hardware{Accel: domain.AccelSoftware}, dir, node)
+	before, err := NewConversions(st, library.Parts{Places: st}, noNodes{}, slots(t), ffmpeg, hls.Hardware{Accel: domain.AccelSoftware}, dir, node)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +303,7 @@ func TestARestartedNodeKeepsItsReadyDownloads(t *testing.T) {
 	}
 
 	// The node as it starts again, with its id and its cache, prunes first.
-	after, err := NewConversions(st, noNodes{}, slots(t), ffmpeg, hls.Hardware{Accel: domain.AccelSoftware}, dir, node)
+	after, err := NewConversions(st, library.Parts{Places: st}, noNodes{}, slots(t), ffmpeg, hls.Hardware{Accel: domain.AccelSoftware}, dir, node)
 	if err != nil {
 		t.Fatal(err)
 	}

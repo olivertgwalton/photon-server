@@ -12,6 +12,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -40,11 +41,15 @@ type placer interface {
 type playing interface {
 	Playable(ctx context.Context, profile, item, version uuid.UUID) (store.PlayCopy, error)
 	PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.PlaybackTitle, error)
-	PartFile(ctx context.Context, part uuid.UUID) (root, rel string, err error)
-	VisiblePartFile(ctx context.Context, profile, part uuid.UUID) (root, rel string, err error)
+	SeesPart(ctx context.Context, profile, part uuid.UUID) error
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
 	Subtitle(ctx context.Context, id uuid.UUID) (store.PlaySubtitle, error)
 	PartStreams(ctx context.Context, part uuid.UUID) ([]domain.Stream, error)
+}
+
+// parts opens the parts of copies for tools to read and players to fetch.
+type parts interface {
+	Open(ctx context.Context, part uuid.UUID) (media.Input, error)
 }
 
 type partJSON struct {

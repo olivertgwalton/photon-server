@@ -31,16 +31,20 @@ import (
 type fakeProber struct{}
 
 func (fakeProber) Probe(_ context.Context, in media.Input) (domain.Facts, error) {
-	if at, err := in.File.Seek(0, io.SeekCurrent); err != nil || at != 0 {
-		return domain.Facts{}, fmt.Errorf("probing %s from byte %d: %w", in.File.Name(), at, err)
-	}
-	info, err := in.File.Stat()
-	if err != nil {
-		return domain.Facts{}, err
+	var size int64
+	if in.File != nil {
+		if at, err := in.File.Seek(0, io.SeekCurrent); err != nil || at != 0 {
+			return domain.Facts{}, fmt.Errorf("probing %s from byte %d: %w", in.File.Name(), at, err)
+		}
+		info, err := in.File.Stat()
+		if err != nil {
+			return domain.Facts{}, err
+		}
+		size = info.Size()
 	}
 	return domain.Facts{
 		Container: "matroska,webm",
-		Size:      info.Size(),
+		Size:      size,
 		Duration:  2 * time.Hour,
 		Streams: []domain.Stream{
 			{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Height: 2160, Range: domain.RangeHDR10},
