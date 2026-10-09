@@ -149,7 +149,7 @@ func (a *Addon) Answers(c domain.Capability) bool {
 		return a.manifest.Lists()
 	case domain.CapabilityStream:
 		return a.manifest.Streams()
-	case domain.CapabilityDescribe, domain.CapabilitySearch, domain.CapabilityRate, domain.CapabilityPerson:
+	case domain.CapabilityDescribe, domain.CapabilitySearch, domain.CapabilityRate, domain.CapabilityPerson, domain.CapabilitySubtitles:
 	}
 	return false
 }

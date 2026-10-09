@@ -329,6 +329,8 @@ func Capabilities(p Provider) []domain.Capability {
 			_, ok = As[Lister](p, c)
 		case domain.CapabilityStream:
 			_, ok = As[Streamer](p, c)
+		case domain.CapabilitySubtitles:
+			_, ok = As[Subtitler](p, c)
 		}
 		if ok {
 			out = append(out, c)
@@ -439,7 +441,7 @@ func (r *Registry) SearchSubtitles(ctx context.Context, q domain.SubtitleQuery) 
 	var errs []error
 	asked := 0
 	for _, p := range all {
-		s, ok := p.(Subtitler)
+		s, ok := As[Subtitler](p, domain.CapabilitySubtitles)
 		if !ok {
 			continue
 		}
@@ -475,7 +477,7 @@ func (r *Registry) FetchSubtitle(ctx context.Context, source domain.FieldSource,
 	if err != nil {
 		return nil, err
 	}
-	s, isSubtitler := p.(Subtitler)
+	s, isSubtitler := As[Subtitler](p, domain.CapabilitySubtitles)
 	if !ok || !isSubtitler {
 		return nil, ErrNoSubtitler
 	}

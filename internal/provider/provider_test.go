@@ -1,11 +1,14 @@
 package provider
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // A write a provider answers 201 Created has worked; a redirect it answers has not.
@@ -47,5 +50,32 @@ func TestAFormBodyIsSentAsAForm(t *testing.T) {
 	form := url.Values{"grant_type": {"refresh_token"}}
 	if _, err := c.Bytes(t.Context(), Request{Method: http.MethodPost, Path: "/oauth/token/", Body: form}); err != nil {
 		t.Error(err)
+	}
+}
+
+// subtitler finds a subtitle for any title, where it answers subtitles at all.
+type subtitler struct {
+	id      domain.FieldSource
+	answers bool
+}
+
+func (s subtitler) Info() Info                                            { return Info{ID: s.id} }
+func (s subtitler) Answers(c domain.Capability) bool                      { return s.answers }
+func (s subtitler) FetchSubtitle(context.Context, string) ([]byte, error) { return []byte("1"), nil }
+
+func (s subtitler) SearchSubtitles(context.Context, domain.SubtitleQuery) ([]domain.FoundSubtitle, error) {
+	return []domain.FoundSubtitle{{Source: s.id, ID: "1"}}, nil
+}
+
+// A plugin whose manifest does not name subtitles is not asked for them, though it has the methods.
+func TestOnlyAProviderThatAnswersSubtitlesIsAskedForThem(t *testing.T) {
+	silent := subtitler{id: "plugin:silent"}
+	r := NewRegistry(nil, silent, subtitler{id: "plugin:subs", answers: true})
+	found, err := r.SearchSubtitles(t.Context(), domain.SubtitleQuery{})
+	if err != nil || len(found) != 1 || found[0].Source != "plugin:subs" {
+		t.Errorf("found = %+v %v, want the answering plugin's alone", found, err)
+	}
+	if _, err := r.FetchSubtitle(t.Context(), silent.id, "1"); !errors.Is(err, ErrNoSubtitler) {
+		t.Errorf("fetching from the silent plugin: %v, want ErrNoSubtitler", err)
 	}
 }
