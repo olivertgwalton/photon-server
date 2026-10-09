@@ -263,6 +263,10 @@ there; revoke it when the plugin is removed. The API is described at `GET /api/v
 A plugin is a service that runs on its own, so it keeps its own schedule: the server runs no task
 of a plugin's, as Jellyfin does for its plugins, which have no process of their own.
 
+Nor does a plugin check passwords, as Jellyfin's LDAP plugin does: a directory signs the household
+in through OpenID Connect, by Authentik, Keycloak or Authelia in front of it, and a Jellyfin app
+whose profile has no password signs in by pairing.
+
 ## Versions
 
 The manifest's `protocol` is the version a plugin speaks; the server registers only plugins that
