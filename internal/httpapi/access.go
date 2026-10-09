@@ -12,6 +12,8 @@ import (
 	"uuid"
 
 	"golang.org/x/sync/singleflight"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // rootAccess is whether a node can reach and read a library's root.
@@ -129,6 +131,10 @@ func (a *API) checkLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	lib, err := a.svc.Libraries.Library(ctx, id)
 	if a.answered(w, r, err) {
+		return
+	}
+	if lib.Media == domain.MediaRemote {
+		writeProblem(w, a.logger, codeConflict, "a remote library has no root: its list is read, and its titles streamed, by whichever node asks")
 		return
 	}
 	// A node has as long again as a metrics answer beyond its check, so a root it reports timed

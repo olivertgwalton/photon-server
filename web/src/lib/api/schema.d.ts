@@ -6795,8 +6795,11 @@ export interface components {
         };
         AddLibrary: {
             kind: components["schemas"]["LibraryKind"];
+            list?: components["schemas"]["ListRef"] | null;
+            media?: components["schemas"]["LibraryMedia"];
             name: string;
-            root: string;
+            root?: string;
+            streams?: components["schemas"]["FieldSource"];
         };
         AddPlaylist: {
             item_ids?: string[];
@@ -6834,15 +6837,18 @@ export interface components {
             id: string;
             keyframes: components["schemas"]["KeyframeMode"];
             kind: components["schemas"]["LibraryKind"];
+            list?: components["schemas"]["ListRef"] | null;
             markers: components["schemas"]["MarkerDetection"];
+            media: components["schemas"]["LibraryMedia"];
             metadata_language?: string;
             monitor: components["schemas"]["Monitor"];
             name: string;
             previews: components["schemas"]["PreviewLevel"];
             refresh_days: number;
             remote_extras: components["schemas"]["ExtraKind"][];
-            root: string;
+            root?: string;
             sources: components["schemas"]["KindSources"][];
+            streams?: components["schemas"]["FieldSource"];
             subtitle_languages: string[];
             subtitle_match: components["schemas"]["SubtitleMatch"];
             themes: components["schemas"]["ThemeLookup"];
@@ -6858,15 +6864,18 @@ export interface components {
             id: string;
             keyframes: components["schemas"]["KeyframeMode"];
             kind: components["schemas"]["LibraryKind"];
+            list?: components["schemas"]["ListRef"] | null;
             markers: components["schemas"]["MarkerDetection"];
+            media: components["schemas"]["LibraryMedia"];
             metadata_language?: string;
             monitor: components["schemas"]["Monitor"];
             name: string;
             previews: components["schemas"]["PreviewLevel"];
             refresh_days: number;
             remote_extras: components["schemas"]["ExtraKind"][];
-            root: string;
+            root?: string;
             sources: components["schemas"]["KindSources"][];
+            streams?: components["schemas"]["FieldSource"];
             subtitle_languages: string[];
             subtitle_match: components["schemas"]["SubtitleMatch"];
             themes: components["schemas"]["ThemeLookup"];
@@ -7643,6 +7652,8 @@ export interface components {
         LibraryList: {
             items: components["schemas"]["Library"][];
         };
+        /** @enum {string} */
+        LibraryMedia: "folder" | "remote";
         LibraryOrder: {
             library_ids: string[];
         };
