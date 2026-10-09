@@ -18,39 +18,42 @@ export const load: PageLoad = async ({ fetch, params, parent, depends }) => {
 	}
 	const season = title.kind === "episode" ? title.season : undefined;
 	if (season) depends(keys.title(season.id));
-	const [members, themeMusic, seasonEpisodes, seasons] = await Promise.all([
-		title.kind === "collection"
-			? need(api.GET("/api/v1/titles/{id}/members", path))
-			: undefined,
-		// Asked only of a page with a tune to play.
-		title.themes?.length
-			? api
-					.GET("/api/v1/profile/preferences")
-					.then(({ data }) => data?.theme_music === "play")
-			: false,
-		// An episode is shown among the rest of its season, to pick another.
-		season ? episodesOf(api, season.id) : undefined,
-		// And its show's seasons, to pick another season's.
-		title.kind === "episode" && title.show
-			? api
-					.GET("/api/v1/titles/{id}", {
-						params: { path: { id: title.show.id } },
-					})
-					.then(({ data }) => data?.seasons ?? [])
-			: undefined,
-	]);
+	const [members, themeMusic, seasonEpisodes, show, showSimilar] =
+		await Promise.all([
+			title.kind === "collection"
+				? need(api.GET("/api/v1/titles/{id}/members", path))
+				: undefined,
+			// Asked only of a page with a tune to play.
+			title.themes?.length
+				? api
+						.GET("/api/v1/profile/preferences")
+						.then(({ data }) => data?.theme_music === "play")
+				: false,
+			// An episode is shown among the rest of its season, to pick another.
+			season ? episodesOf(api, season.id) : undefined,
+			// And its show, whose seasons it picks another season's from, and whose
+			// extras, box sets, links and likes it shows, the show having no page.
+			title.kind === "episode" && title.show
+				? api
+						.GET("/api/v1/titles/{id}", {
+							params: { path: { id: title.show.id } },
+						})
+						.then(({ data }) => data)
+				: undefined,
+			// Awaited, unlike a film's: picking another episode keeps the page
+			// where it was, and a row drawn after the page would move it.
+			title.kind === "episode" && title.show
+				? similarOf(api, title.show.id)
+				: undefined,
+		]);
 	return {
 		members: members?.items,
 		seasonEpisodes,
-		seasons,
+		show,
+		seasons: show?.seasons,
 		themeMusic,
 		// Not awaited: the page is drawn before the server has looked.
-		similar:
-			title.kind === "movie"
-				? api
-						.GET("/api/v1/titles/{id}/similar", path)
-						.then(({ data }) => data?.items ?? [])
-				: undefined,
+		similar: title.kind === "movie" ? similarOf(api, title.id) : showSimilar,
 	};
 };
 
@@ -69,4 +72,10 @@ async function opening(api: ReturnType<typeof client>, title: Title) {
 	}
 	if (!first) error(404, "It has no episodes.");
 	return first;
+}
+
+function similarOf(api: ReturnType<typeof client>, id: string) {
+	return api
+		.GET("/api/v1/titles/{id}/similar", { params: { path: { id } } })
+		.then(({ data }) => data?.items ?? []);
 }
