@@ -21,6 +21,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/reach"
+	"github.com/olivertgwalton/photon-server/internal/remote"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -56,7 +57,7 @@ type discover interface {
 // plays it, as the app chooses its copy from the item's media sources first; one its provider
 // cannot give is an item with none.
 func (a *API) ensureCopies(ctx context.Context, id uuid.UUID) {
-	if err := a.svc.Copies.Ensure(ctx, id); err != nil {
+	if err := a.svc.Copies.Ensure(ctx, id); err != nil && !errors.Is(err, remote.ErrFetching) {
 		a.logger.WarnContext(ctx, "no copy of a remote title", slog.Any("err", err))
 	}
 }

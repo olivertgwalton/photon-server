@@ -17,6 +17,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/remote"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/words"
 )
@@ -279,9 +280,11 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
 	// A remote film or episode is given a copy as its page opens, as a player chooses its copy
-	// from the page before it plays; one its provider cannot give is a page with none.
-	if err := a.svc.Copies.Ensure(r.Context(), id); err != nil {
-		a.logger.WarnContext(r.Context(), "no copy of a remote title", slog.Any("err", err))
+	// from the page before it plays; one its provider cannot give is a page with none, and one
+	// it is fetching says so.
+	copied := a.svc.Copies.Ensure(r.Context(), id)
+	if copied != nil && !errors.Is(copied, remote.ErrFetching) {
+		a.logger.WarnContext(r.Context(), "no copy of a remote title", slog.Any("err", copied))
 	}
 	page, err := a.svc.Catalogue.Title(r.Context(), profile, id)
 	if a.answered(w, r, err) {
@@ -294,7 +297,9 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 	// cache keeps finding the picture under it.
 	until := time.Now().Truncate(24 * time.Hour).Add(48 * time.Hour)
 	page.SignChapterImages(func(path string) string { return a.svc.Signer.Sign(path, until) })
-	writeJSON(w, a.logger, "application/json", http.StatusOK, titlePageOf(page, words.Negotiate(w, r)))
+	out := titlePageOf(page, words.Negotiate(w, r))
+	out.Fetching = errors.Is(copied, remote.ErrFetching)
+	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
 
 const defaultHomeLimit = 20

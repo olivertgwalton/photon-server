@@ -4,6 +4,8 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"slices"
 	"time"
 	"uuid"
@@ -22,10 +24,19 @@ const (
 	// minCopy is the shortest copy kept: an addon answers a stream it could not get with a clip
 	// saying so in its place.
 	minCopy = time.Minute
+	// readyWithin is how long a stream has to begin answering before it is taken to be fetching,
+	// not dead: a debrid link already cached answers in a second or two, where a usenet release
+	// being downloaded, or a torrent being cached, keeps its player waiting on the download.
+	readyWithin = 15 * time.Second
 )
 
-// ErrNoCopy is a remote film or episode none of whose offers could be read.
-var ErrNoCopy = errors.New("remote: nothing the provider offers of the title could be read")
+var (
+	// ErrNoCopy is a remote film or episode none of whose offers could be read.
+	ErrNoCopy = errors.New("remote: nothing the provider offers of the title could be read")
+	// ErrFetching is a remote film or episode whose provider is fetching the best of what it
+	// offers: it plays once the provider has it.
+	ErrFetching = errors.New("remote: the provider is fetching the title; it plays once it has it")
+)
 
 type copyStore interface {
 	HoldDiscovered(ctx context.Context, id uuid.UUID) (bool, error)
@@ -48,16 +59,19 @@ type Copies struct {
 	// opened, so its page has what its provider says of it, and its streams its other ids.
 	identify func(ctx context.Context, id uuid.UUID) error
 	group    singleflight.Group
+	// readyWithin is the package's, a test's own shorter.
+	readyWithin time.Duration
 }
 
 func NewCopies(st copyStore, offers *Offers, p prober, identify func(ctx context.Context, id uuid.UUID) error) *Copies {
-	return &Copies{store: st, offers: offers, prober: p, identify: identify}
+	return &Copies{store: st, offers: offers, prober: p, identify: identify, readyWithin: readyWithin}
 }
 
 // Ensure has a remote film or episode hold the copies its provider offers now: a copy no longer
 // offered is missing, and, where none it holds is offered, the best offer that can be read is
-// read for what it is and kept as a version. A title a search found is made one of its library's
-// first, and matched. Anything else is left as it is.
+// read for what it is and kept as a version, or ErrFetching answered where the provider is
+// fetching it. A title a search found is made one of its library's first, and matched. Anything
+// else is left as it is.
 func (c *Copies) Ensure(ctx context.Context, item uuid.UUID) error {
 	_, err, _ := c.group.Do(item.String(), func() (any, error) { return nil, c.ensure(context.WithoutCancel(ctx), item) })
 	return err
@@ -89,8 +103,13 @@ func (c *Copies) ensure(ctx context.Context, item uuid.UUID) error {
 	if err != nil || len(live) > 0 {
 		return err
 	}
+	// A stream that fails is dead, and the next is read in its place; one that does not answer in
+	// time is being fetched, and the next is left alone, so opening a title fetches one at most.
 	for i, o := range offers[:min(len(offers), maxProbes)] {
 		facts, err := c.read(ctx, o)
+		if errors.Is(err, ErrFetching) {
+			return err
+		}
 		if err != nil {
 			continue
 		}
@@ -103,16 +122,38 @@ func (c *Copies) ensure(ctx context.Context, item uuid.UUID) error {
 	return ErrNoCopy
 }
 
-// read probes what an offer is, refusing a clip too short to be the title.
+// read probes what an offer is, once it answers, refusing a clip too short to be the title.
 func (c *Copies) read(ctx context.Context, o domain.Offer) (domain.Facts, error) {
 	in, err := media.Relayed(o.URL, o.From, o.Name)
 	if err != nil {
 		return domain.Facts{}, err
 	}
 	defer in.Close()
+	if err := c.answers(ctx, in); err != nil {
+		return domain.Facts{}, err
+	}
 	facts, err := c.prober.Probe(ctx, in)
 	if err == nil && facts.Duration < minCopy || err == nil && !slices.ContainsFunc(facts.Streams, func(s domain.Stream) bool { return s.Kind == domain.StreamVideo }) {
 		return facts, ErrNoCopy
 	}
 	return facts, err
+}
+
+// answers is whether an offer's media begins answering within readyWithin: ErrFetching where it
+// does not, and why where it fails.
+func (c *Copies) answers(ctx context.Context, in media.Input) error {
+	ctx, cancel := context.WithTimeout(ctx, c.readyWithin)
+	defer cancel()
+	resp, err := media.Fetch(ctx, http.MethodGet, in.URL, http.Header{"Range": {"bytes=0-0"}})
+	if ctx.Err() != nil {
+		return ErrFetching
+	}
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return fmt.Errorf("remote: the media answered %s", resp.Status)
+	}
+	return nil
 }
