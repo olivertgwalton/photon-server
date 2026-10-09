@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,7 +64,8 @@ type Client struct {
 }
 
 // Request is what a provider is asked: a path under its Client's Base, already escaped, and what
-// goes with it. Body, where it is not nil, is sent as JSON.
+// goes with it. Body, where it is not nil, is sent as a form where it is url.Values, as OAuth
+// requests are (RFC 6749), and as JSON otherwise.
 type Request struct {
 	Method string
 	Path   string
@@ -147,12 +149,17 @@ func (c Client) request(ctx context.Context, r Request) (*http.Request, error) {
 	target := base.JoinPath(r.Path)
 	target.RawQuery = r.Query.Encode()
 	var body io.Reader
-	if r.Body != nil {
-		b, err := json.Marshal(r.Body)
+	var contentType string
+	switch b := r.Body.(type) {
+	case nil:
+	case url.Values:
+		body, contentType = strings.NewReader(b.Encode()), "application/x-www-form-urlencoded"
+	default:
+		data, err := json.Marshal(b)
 		if err != nil {
 			return nil, err
 		}
-		body = bytes.NewReader(b)
+		body, contentType = bytes.NewReader(data), "application/json"
 	}
 	req, err := http.NewRequestWithContext(ctx, r.Method, target.String(), body)
 	if err != nil {
@@ -161,8 +168,8 @@ func (c Client) request(ctx context.Context, r Request) (*http.Request, error) {
 	if r.Header != nil {
 		req.Header = r.Header.Clone()
 	}
-	if r.Body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	return req, nil
 }
