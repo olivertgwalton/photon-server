@@ -366,14 +366,18 @@ const tell = (event: string, data: object) => {
 	}
 };
 
-// Trakt is set up and Simkl is not; a code asked for is entered once a test
+// Trakt is set up and Simkl and MDBList are not; a code asked for is entered once a test
 // says so.
 const trakt: Schemas["ProfileTracker"] = {
 	tracker: "trakt",
 	state: "unlinked",
 };
 const trackers = (): Schemas["ProfileTrackerList"] => ({
-	items: [trakt, { tracker: "simkl", state: "unavailable" }],
+	items: [
+		trakt,
+		{ tracker: "simkl", state: "unavailable" },
+		{ tracker: "mdblist", state: "unavailable" },
+	],
 });
 const traktCode: Schemas["TrackerCode"] = {
 	user_code: "TRAKT123",
@@ -593,6 +597,7 @@ const vocabulary: Schemas["Vocabulary"] = {
 		undated: "No date watched",
 	},
 	trackers: {
+		mdblist: "MDBList",
 		simkl: "Simkl",
 		trakt: "Trakt",
 	},

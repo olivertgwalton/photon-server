@@ -22,6 +22,7 @@ const api = client();
 const about: Record<Tracker, string> = {
 	trakt: "Keeps what you watch, rate and want to watch, across apps.",
 	simkl: "Keeps what you watch of films, shows and anime, across apps.",
+	mdblist: "Keeps what you watch beside your lists and ratings, across apps.",
 };
 
 // When each code shown expires, by this browser's clock. The server asks the

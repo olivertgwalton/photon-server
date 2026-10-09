@@ -8672,7 +8672,7 @@ export interface components {
         /** @enum {string} */
         TrackMemory: "remember" | "forget";
         /** @enum {string} */
-        Tracker: "trakt" | "simkl";
+        Tracker: "trakt" | "simkl" | "mdblist";
         TrackerClient: {
             client_id: string;
             tracker: components["schemas"]["Tracker"];

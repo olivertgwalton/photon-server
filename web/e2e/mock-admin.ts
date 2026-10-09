@@ -225,6 +225,7 @@ let webhooks: Schemas["Webhook"][] = [];
 const trackerClients: Schemas["TrackerClient"][] = [
 	{ tracker: "trakt", client_id: "" },
 	{ tracker: "simkl", client_id: "" },
+	{ tracker: "mdblist", client_id: "" },
 ];
 let keys: Schemas["KeyListing"][] = [];
 let chosenPoster = "a-1";

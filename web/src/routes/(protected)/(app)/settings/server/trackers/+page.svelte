@@ -28,6 +28,10 @@ const register: Record<Tracker, { href: string; how: string }> = {
 		href: "https://simkl.com/settings/developer/",
 		how: "Register an AUTH V2 app on Simkl of the type “TV, devices & command line”, and copy its client id.",
 	},
+	mdblist: {
+		href: "https://mdblist.com/developer/",
+		how: "Create an app on MDBList of the type “Device Code App”, and copy its client id.",
+	},
 };
 
 function save(event: SubmitEvent, tracker: Tracker) {
