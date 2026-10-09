@@ -147,14 +147,17 @@ func rememberFolder(ctx context.Context, tx db, lib uuid.UUID, path string, fing
 	return err
 }
 
-// insertItem adds a title the scanner found, filling in its id.
+// insertItem adds a title the scanner found, giving it its id: chosen here, the insert waits on
+// nothing and nothing waits on it.
 func insertItem(ctx context.Context, tx db, row *model.Item) error {
-	return tx.QueryRow(ctx, `
-		INSERT INTO items (library_id, kind, parent_id, season_number, episode_number, episode_end, air_date,
+	row.ID = uuid.NewV7()
+	_, err := tx.Exec(ctx, `
+		INSERT INTO items (id, library_id, kind, parent_id, season_number, episode_number, episode_end, air_date,
 			extra_kind, scan_title, title, sort_title, folder)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
-		row.LibraryID, row.Kind, row.ParentID, row.SeasonNumber, row.EpisodeNumber, row.EpisodeEnd, row.AirDate,
-		row.ExtraKind, row.ScanTitle, row.Title, row.SortTitle, row.Folder).Scan(&row.ID)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		row.ID, row.LibraryID, row.Kind, row.ParentID, row.SeasonNumber, row.EpisodeNumber, row.EpisodeEnd, row.AirDate,
+		row.ExtraKind, row.ScanTitle, row.Title, row.SortTitle, row.Folder)
+	return err
 }
 
 func saveFilm(ctx context.Context, tx db, lib uuid.UUID, settings analysis, f Film, changed Changed) error {
