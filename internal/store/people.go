@@ -30,7 +30,8 @@ type personKey struct {
 // any of their ids; a credit with none is passed over. Credits sharing an id, or whose ids name
 // people already, are one person, and people found by different ids of one are merged into the
 // first added. The ids a person lacks are added, and their name and picture follow the last
-// credit; a new picture gets a new id. Someone another match adds at the same moment is theirs.
+// credit, but for a picture by a credit with no TMDB id of someone with one: TMDB's pictures are
+// the largest. A new picture gets a new id. Someone another match adds at the same moment is theirs.
 func saveCredits(ctx context.Context, tx db, source domain.FieldSource, titles []credited) error {
 	entries, keys, cleared := creditEntries(titles)
 	_, err := tx.Exec(ctx, `DELETE FROM credits WHERE item_id = ANY($1) AND source = $2`, cleared, source)
@@ -298,11 +299,16 @@ func settlePerson(ctx context.Context, tx db, p *creditedPerson, owners map[pers
 		return keep, orphan, nil
 	}
 	o := owners[p.keys[slices.IndexFunc(p.keys, func(k personKey) bool { return owners[k].PersonID == keep })]]
-	if o.Name == p.name && (p.photo == "" || deref(o.PhotoURL) == p.photo) {
+	photo := p.photo
+	onTMDB := slices.ContainsFunc(p.keys, func(k personKey) bool { return owners[k].OnTMDB })
+	if o.PhotoURL != nil && onTMDB && !slices.ContainsFunc(p.keys, func(k personKey) bool { return k.provider == domain.ProviderTMDB }) {
+		photo = ""
+	}
+	if o.Name == p.name && (photo == "" || deref(o.PhotoURL) == photo) {
 		return keep, orphan, nil
 	}
 	row := &model.Person{Name: p.name, PhotoURL: o.PhotoURL, PhotoID: o.PhotoID, PhotoBlurhash: o.PhotoBlurhash}
-	setPhoto(row, p.photo)
+	setPhoto(row, photo)
 	_, err := tx.Exec(ctx, `UPDATE people SET name = $2, photo_url = $3, photo_id = $4, photo_blurhash = $5 WHERE id = $1`,
 		keep, row.Name, row.PhotoURL, row.PhotoID, row.PhotoBlurhash)
 	return keep, orphan, err
@@ -317,6 +323,7 @@ type owner struct {
 	PhotoURL      *string
 	PhotoID       *uuid.UUID
 	PhotoBlurhash *string
+	OnTMDB        bool
 }
 
 // personOwners answers who each of keys names, where anyone does.
@@ -326,9 +333,10 @@ func personOwners(ctx context.Context, tx db, keys []personKey) (map[personKey]o
 		providers[n], values[n] = string(k.provider), k.value
 	}
 	rows, err := queryStructs[owner](ctx, tx, `
-		SELECT i.person_id, i.provider, i.value, p.name, p.photo_url, p.photo_id, p.photo_blurhash
+		SELECT i.person_id, i.provider, i.value, p.name, p.photo_url, p.photo_id, p.photo_blurhash,
+			EXISTS (SELECT 1 FROM person_ids t WHERE t.person_id = i.person_id AND t.provider = $3) AS on_tmdb
 		FROM person_ids i JOIN people p ON p.id = i.person_id
-		WHERE (i.provider, i.value) IN (SELECT * FROM unnest($1::text[], $2::text[]))`, providers, values)
+		WHERE (i.provider, i.value) IN (SELECT * FROM unnest($1::text[], $2::text[]))`, providers, values, domain.ProviderTMDB)
 	out := make(map[personKey]owner, len(rows))
 	for _, r := range rows {
 		out[personKey{r.Provider, r.Value}] = r
