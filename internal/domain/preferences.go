@@ -11,7 +11,7 @@ import (
 type SubtitleMode string
 
 const (
-	// SubtitlesDefault is the file's say: a track it marks default or forced, or a file beside it.
+	// SubtitlesDefault is the file's say: a track it marks default or forced.
 	SubtitlesDefault SubtitleMode = "default"
 	// SubtitlesAlways is a full track in the subtitle language, else a forced one.
 	SubtitlesAlways SubtitleMode = "always"

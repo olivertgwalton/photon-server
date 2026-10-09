@@ -127,7 +127,7 @@ test("a profile links its Trakt account by the code Trakt gives it", async ({
 	page,
 }) => {
 	await logIn(page, "/settings/trackers");
-	await expect(page.getByText(/Simkl is not set up yet/)).toBeVisible();
+	await expect(page.getByText(/Simkl\s+is not set up yet/)).toBeVisible();
 	await expectAccessible(page);
 	await expect
 		.poll(async () => (await page.request.get("/mock/listening")).json())
@@ -144,7 +144,7 @@ test("a profile links its Trakt account by the code Trakt gives it", async ({
 
 	// Trakt is entered on another device, and the server tells the page.
 	await page.request.post("/mock/tracker-entered");
-	await expect(page.getByText(/Linked as ada/)).toBeVisible();
+	await expect(page.getByText(/Linked as\s+ada/)).toBeVisible();
 
 	await page.getByRole("button", { name: "Unlink Trakt" }).click();
 	await page
