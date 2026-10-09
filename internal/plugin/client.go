@@ -219,6 +219,22 @@ func (c *client) FetchSubtitle(ctx context.Context, id string) ([]byte, error) {
 	return []byte(out.SubRip), err
 }
 
+func (c *client) Segments(ctx context.Context, q domain.SegmentQuery) ([]domain.Marker, error) {
+	length := q.Duration.Milliseconds()
+	out, err := post[pluginv1.MarkersResponse](ctx, c, domain.CapabilitySegments, "markers", func(s pluginv1.Settings) pluginv1.MarkersRequest {
+		return pluginv1.MarkersRequest{Settings: s, Kind: string(q.Kind), IDs: sentIDs(q.IDs), Season: q.Season, Episode: q.Episode, DurationMS: length}
+	})
+	var markers []domain.Marker
+	for _, m := range out.Markers {
+		kind := domain.MarkerKind(m.Kind)
+		taken := slices.ContainsFunc(markers, func(t domain.Marker) bool { return t.Kind == kind })
+		if slices.Contains(domain.MarkerKinds(), kind) && !taken && 0 <= m.StartMS && m.StartMS < m.EndMS && m.EndMS <= length {
+			markers = append(markers, domain.Marker{Kind: kind, StartMS: m.StartMS, EndMS: m.EndMS})
+		}
+	}
+	return markers, err
+}
+
 // metadata is what the plugin said in the server's terms. Anything the server has no name for (a
 // kind of picture, a site, a credit) or will not fetch (a picture not on the web) is left out.
 func (c *client) metadata(m pluginv1.Metadata) domain.Metadata {

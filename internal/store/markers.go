@@ -196,8 +196,14 @@ func (s *Store) FilmEnds(ctx context.Context, film uuid.UUID) ([]FilmEnd, error)
 		ORDER BY p.id, f.rel_path`, film)
 }
 
-// SaveFoundMarkers replaces the markers source found on the parts read, and records that they were.
+// SaveFoundMarkers replaces the markers source found on the parts read, and records that they were:
+// a provider's apart from the server's own reading, which a library that starts reading files
+// still does.
 func (s *Store) SaveFoundMarkers(ctx context.Context, source domain.MarkerSource, read []uuid.UUID, found map[uuid.UUID][]domain.Marker) error {
+	asked := "fingerprinted_at"
+	if source == domain.MarkerByProvider {
+		asked = "segments_asked_at"
+	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `DELETE FROM markers WHERE part_id = ANY($1) AND source = $2`, read, source)
 		if err != nil {
@@ -214,7 +220,7 @@ func (s *Store) SaveFoundMarkers(ctx context.Context, source domain.MarkerSource
 		if err := createMarkers(ctx, tx, rows); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `UPDATE parts SET fingerprinted_at = $2 WHERE id = ANY($1)`, read, time.Now())
+		_, err = tx.Exec(ctx, `UPDATE parts SET `+asked+` = $2 WHERE id = ANY($1)`, read, time.Now())
 		return err
 	})
 }

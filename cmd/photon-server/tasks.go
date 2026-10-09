@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 	"uuid"
 
@@ -259,11 +260,29 @@ func backfillBlurhashes(ctx context.Context, st *store.Store, cache *artwork.Cac
 // compared, where the server can compare sound, and the reading of every film's end not read:
 // those from before the server could, and those cut short. It runs as the maintenance window
 // opens, window, and what it queues then is due in the window; what an admin asks for is due now.
-func markersTask(st *store.Store, tools media.Tools, window task.Trigger, logger *slog.Logger) task.Task {
+// Where a plugin times intros and credits, every film and episode not yet asked about is queued
+// to be.
+func markersTask(st *store.Store, tools media.Tools, providers *provider.Registry, window task.Trigger, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:     domain.TaskDetectMarkers,
 		Trigger: window,
 		Run: func(ctx context.Context, start task.Start) error {
+			all, err := providers.All(ctx)
+			if err != nil {
+				return err
+			}
+			if slices.ContainsFunc(all, func(p provider.Provider) bool {
+				_, ok := provider.As[provider.Segmenter](p, domain.CapabilitySegments)
+				return ok
+			}) {
+				titles, err := st.QueueSegments(ctx, due(start))
+				if titles > 0 {
+					logger.InfoContext(ctx, "titles queued to have plugins time their intros and credits", slog.Int64("titles", titles))
+				}
+				if err != nil {
+					return err
+				}
+			}
 			films, err := st.QueueFilmMarkers(ctx, due(start))
 			if films > 0 {
 				logger.InfoContext(ctx, "films queued to have their credits found", slog.Int64("films", films))

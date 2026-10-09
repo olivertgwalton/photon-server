@@ -170,7 +170,7 @@ func (n *node) wire(ctx context.Context) error {
 	window := task.Trigger{Kind: task.TriggerWindow, Opens: n.gate.Opens}
 	fetcher := subtitles.NewFetcher(st, n.parts, n.providers)
 	n.scheduler = task.NewScheduler(st, logger, n.id, n.hub.Raise, scanTask(st), sweepTask(st, logger), backupTask(n.dumper, n.hub, logger),
-		refreshTask(st, logger), sweepArtworkTask(st, n.pictures, logger), markersTask(st, n.tools, window, logger),
+		refreshTask(st, logger), sweepArtworkTask(st, n.pictures, logger), markersTask(st, n.tools, n.providers, window, logger),
 		previewsTask(st, n.previews, window, logger), sweepDownloadsTask(st, logger), pruneActivityTask(st, logger),
 		refreshCollectionsTask(st), syncListsTask(st, n.providers), fetchSubtitlesTask(fetcher, logger))
 	n.trackers = tracker.New(st, n.cache, n.hub.Raise, version, n.logger)
@@ -262,6 +262,8 @@ func (n *node) workers() []*jobs.Worker {
 	}, hub, nil, n.finished)
 	matching := map[domain.JobKind]jobs.Handler{
 		domain.JobIdentify: n.identify,
+		// Asking a plugin reads no media, so it is no reader's.
+		domain.JobSegments: analysis.Segments(st, n.providers),
 	}
 	// A node without yt-dlp leaves themes to one with it.
 	if n.tools.YTDLP.Path != "" {

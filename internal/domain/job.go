@@ -31,10 +31,12 @@ const (
 	JobProbe JobKind = "probe"
 	// JobImportHistory imports a profile's watch history from another server, one job per import.
 	JobImportHistory JobKind = "import_history"
+	// JobSegments asks the providers that time intros and credits of a film or an episode.
+	JobSegments JobKind = "segments"
 )
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes, JobKeyframeWalk, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme, JobProbe, JobImportHistory}
+	return []JobKind{JobKeyframes, JobKeyframeWalk, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme, JobProbe, JobImportHistory, JobSegments}
 }
 
 type JobState string
@@ -88,7 +90,7 @@ type Job struct {
 // keyframes or previews, a download's conversion, a webhook's delivery and an import are neither.
 func (j Job) About() (item, library uuid.UUID) {
 	switch j.Kind {
-	case JobIdentify, JobMarkers, JobTheme:
+	case JobIdentify, JobMarkers, JobTheme, JobSegments:
 		return j.Subject, uuid.UUID{}
 	case JobScanLibrary:
 		return uuid.UUID{}, j.Subject

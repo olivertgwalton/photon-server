@@ -144,7 +144,7 @@ var jobKinds = map[domain.JobKind]string{
 	domain.JobMarkers: "Find intros and credits", domain.JobPreviews: "Make previews",
 	domain.JobConvert: "Convert for download", domain.JobDeliverWebhook: "Send a webhook",
 	domain.JobTheme: "Fetch a theme tune", domain.JobProbe: "Read media info",
-	domain.JobImportHistory: "Import watch history",
+	domain.JobImportHistory: "Import watch history", domain.JobSegments: "Ask plugins for intros and credits",
 }
 
 // Kept is how the activity log's filter names a kind of event it keeps: "Plays started".

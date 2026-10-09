@@ -86,7 +86,8 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
     {"name": "list", "version": 1},
     {"name": "stream", "version": 1},
     {"name": "subtitles", "version": 1},
-    {"name": "events", "version": 1, "events": ["playback.started", "playback.stopped"]}
+    {"name": "events", "version": 1, "events": ["playback.started", "playback.stopped"]},
+    {"name": "segments", "version": 1}
   ],
   "settings": [
     {"key": "api_key", "name": "API key", "secret": true, "required": true},
@@ -100,8 +101,8 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
 - `capabilities` are what the plugin answers, each at a version of it. A capability's calls are
   `POST /{name}/v{version}/{call}`: `describe` is `match` and `describe`, `search` is `search`,
   `rate` is `ratings`, `person` is `person`, `list` is `list`, `stream` is `streams`,
-  `subtitles` is `search` and `fetch`, `events` is `event`. Leave a capability out and it is
-  never called.
+  `subtitles` is `search` and `fetch`, `events` is `event`, `segments` is `markers`. Leave a
+  capability out and it is never called.
 - A capability the server does not speak, by name or at that version, is passed over, and a
   plugin that answers none it speaks is refused. So a plugin can name one at two versions, or one
   only a newer server speaks, and be registered by any server for what that server speaks.
@@ -352,6 +353,27 @@ A redirect is not followed.
 `profile`, `title` and `library` are there where the event is about one that still is. A title
 carries its IMDb, TMDB and TheTVDB `ids`, and an episode its `season`, `episode` and `show`, as a
 scrobbler finds it by. `details` are the event's own, as the webhook of its kind is sent them.
+
+### `POST /segments/v1/markers`
+
+Time the intro, credits, recap and preview of a copy of a film, by its ids, or of an episode, by
+its show's ids and its numbers, as a database of them timed by hand for each release does.
+`duration_ms` is the copy's length: a cut of another length has other timings, so answer none
+for one the plugin has no timing of. A copy in several files is not asked about.
+
+```json
+{"settings": {"api_key": "…"}, "kind": "show", "ids": {"tvdb": "73739"}, "season": 1, "episode": 3, "duration_ms": 2640000}
+```
+
+```json
+{"markers": [{"kind": "intro", "start_ms": 60000, "end_ms": 120000}, {"kind": "credits", "start_ms": 2580000, "end_ms": 2640000}]}
+```
+
+Each part is asked about once, as the `detect_markers` task runs in the maintenance window, where a
+library offers markers: on `chapters` or `all`. A player is offered the plugin's below what an admin
+set and what the file's chapters name, and above what the server finds by comparing sound or
+reading pictures. A stretch outside the copy, of a kind the server has no name for, or a second of a
+kind, is dropped.
 
 ## Calling the server
 

@@ -45,7 +45,7 @@ func (k TaskKey) Jobs() []JobKind {
 	case TaskRefreshMetadata:
 		return []JobKind{JobIdentify}
 	case TaskDetectMarkers:
-		return []JobKind{JobMarkers}
+		return []JobKind{JobMarkers, JobSegments}
 	case TaskBackfillPreviews:
 		return []JobKind{JobPreviews}
 	case TaskSweepJobs, TaskBackupDatabase, TaskSweepArtwork, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists, TaskFetchSubtitles:

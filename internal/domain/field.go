@@ -138,10 +138,12 @@ const (
 	CapabilitySubtitles Capability = "subtitles"
 	// CapabilityEvents is being told of what happens on the server, as a webhook is.
 	CapabilityEvents Capability = "events"
+	// CapabilitySegments is timing a film's or an episode's intro and credits.
+	CapabilitySegments Capability = "segments"
 )
 
 func Capabilities() []Capability {
-	return []Capability{CapabilityDescribe, CapabilitySearch, CapabilityRate, CapabilityPerson, CapabilityList, CapabilityStream, CapabilitySubtitles, CapabilityEvents}
+	return []Capability{CapabilityDescribe, CapabilitySearch, CapabilityRate, CapabilityPerson, CapabilityList, CapabilityStream, CapabilitySubtitles, CapabilityEvents, CapabilitySegments}
 }
 
 // PluginProtocol is what a plugin speaks: photon's own protocol, or a Stremio addon's.

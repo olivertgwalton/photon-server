@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/text/language"
 
@@ -202,5 +203,30 @@ func TestAPluginHearsTheEventsItNames(t *testing.T) {
 	}
 	if h := hearing(pluginv1.Manifest{}, "http://films.test"); len(h.Kinds) != 0 {
 		t.Errorf("a plugin naming no events hears %v", h.Kinds)
+	}
+}
+
+// A plugin is asked to time a copy of a length, and a stretch it answers outside that copy, of a
+// kind the server has no name for, or of a kind already timed, is dropped.
+func TestAPluginTimesACopysIntroAndCredits(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req pluginv1.MarkersRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || r.URL.Path != "/segments/v1/markers" || req.DurationMS != 2_640_000 || req.Episode != 3 {
+			writeJSON(t, w, pluginv1.MarkersResponse{})
+			return
+		}
+		writeJSON(t, w, pluginv1.MarkersResponse{Markers: []pluginv1.Marker{
+			{Kind: "intro", StartMS: 60_000, EndMS: 120_000},
+			{Kind: "intro", StartMS: 0, EndMS: 30_000},
+			{Kind: "credits", StartMS: 2_600_000, EndMS: 2_700_000},
+			{Kind: "cold_open", StartMS: 0, EndMS: 60_000},
+		}})
+	}))
+	defer srv.Close()
+	m := pluginv1.Manifest{ID: "intros", Kinds: []string{"show"}, Capabilities: []pluginv1.Capability{{Name: "segments", Version: 1}}}
+	c := &client{manifest: m, speaks: spoken(m), base: srv.URL, http: srv.Client(), settings: func(context.Context) (map[string]string, error) { return nil, nil }}
+	got, err := c.Segments(t.Context(), domain.SegmentQuery{Kind: domain.ItemEpisode, Season: 1, Episode: 3, Duration: 44 * time.Minute})
+	if err != nil || !slices.Equal(got, []domain.Marker{{Kind: domain.MarkerIntro, StartMS: 60_000, EndMS: 120_000}}) {
+		t.Errorf("markers = %+v %v, want the first intro alone", got, err)
 	}
 }

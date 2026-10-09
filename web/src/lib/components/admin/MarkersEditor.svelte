@@ -42,6 +42,7 @@ function save(event: SubmitEvent) {
 const sources = {
 	user: "set here",
 	chapter: "from a chapter",
+	provider: "from a plugin",
 	fingerprint: "found by sound",
 	blackframes: "found by picture",
 };
