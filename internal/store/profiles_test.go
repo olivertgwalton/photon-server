@@ -67,8 +67,8 @@ func TestTheServerKeepsAnAdmin(t *testing.T) {
 	}
 }
 
-// A profile keeps its password through a change that leaves it out, and never goes without one.
-func TestEveryProfileHasAPassword(t *testing.T) {
+// A profile keeps its password through a change that leaves it out.
+func TestAProfileKeepsItsPasswordThroughAChange(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
 	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
@@ -82,9 +82,6 @@ func TestEveryProfileHasAPassword(t *testing.T) {
 	}
 	if _, secrets, err := s.ProfileSecrets(ctx, kid.ID); err != nil || secrets.Password != "new hash" {
 		t.Errorf("password hash %q, %v; want the one set last", secrets.Password, err)
-	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO profiles (name, role) VALUES ('Guest', 'user')`); err == nil {
-		t.Error("a profile was stored with no password")
 	}
 }
 

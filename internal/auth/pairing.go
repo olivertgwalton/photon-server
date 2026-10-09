@@ -104,9 +104,10 @@ func typedCode(code string) string {
 	return strings.ToUpper(strings.NewReplacer("-", "", " ", "").Replace(code))
 }
 
-// ApprovePairing gives the waiting television to the approving session's profile.
+// ApprovePairing gives the waiting television to the approving session's profile. Its session goes
+// with the account at a sign-in provider behind the approving one, as that one does.
 func (s *Service) ApprovePairing(ctx context.Context, approver domain.Session, userCode string) (Device, error) {
-	p, ok, err := s.kv.ApprovePairing(ctx, typedCode(userCode), approver.Profile.ID)
+	p, ok, err := s.kv.ApprovePairing(ctx, typedCode(userCode), approver.Profile.ID, approver.Identity)
 	if err != nil {
 		return Device{}, err
 	}
@@ -154,6 +155,6 @@ func (s *Service) PollPairing(ctx context.Context, deviceCode string) (kv.Pairin
 	if err != nil {
 		return state, "", domain.Profile{}, err
 	}
-	token, err := s.startSession(ctx, profile, Device{Name: p.Device, Client: p.Client})
+	token, err := s.startSession(ctx, profile, Device{Name: p.Device, Client: p.Client}, p.Identity)
 	return state, token, profile, err
 }

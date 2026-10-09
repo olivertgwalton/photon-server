@@ -18,6 +18,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/peer"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/reach"
+	"github.com/olivertgwalton/photon-server/internal/sso"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -93,6 +94,7 @@ type route struct {
 type authenticator interface {
 	auth.Authenticator
 	SetUp(ctx context.Context, name, password string, device auth.Device) (string, domain.Profile, error)
+	SignInAs(ctx context.Context, profile domain.Profile, identity domain.SignInIdentity, device auth.Device) (string, error)
 	SwitchProfile(ctx context.Context, session domain.Session, target uuid.UUID, secret string) (domain.Profile, error)
 	StartReset(ctx context.Context, name string) (string, error)
 	RedeemReset(ctx context.Context, code, password string) (uuid.UUID, error)
@@ -161,6 +163,9 @@ type Services struct {
 	// registered there, which TrackerClients are.
 	Trackers       trackerLinks
 	TrackerClients trackerClients
+	// SignIns are the OpenID Connect providers the household signs in through, and the accounts
+	// each profile linked at them.
+	SignIns signIns
 	// NowPlaying is every playback going on, across the cluster.
 	NowPlaying nowPlaying
 	Pictures   pictures
@@ -275,6 +280,9 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	a.mux.Handle("POST /api/v1/internal/playbacks/{id}/remux", a.svc.NodeKey.Verify(http.HandlerFunc(a.openRemote)))
 	a.mux.Handle("GET "+metricsPath, a.svc.NodeKey.Verify(http.HandlerFunc(a.nodeMetrics)))
 	a.mux.Handle("GET "+libraryCheckPath, a.svc.NodeKey.Verify(http.HandlerFunc(a.nodeCheckLibrary)))
+	// A sign-in provider sends a browser back here with a query of its own, which a client never
+	// calls.
+	a.mux.HandleFunc("GET "+sso.CallbackPattern, a.signInCallback)
 	a.mux.HandleFunc("/", a.unmatched)
 	a.handler = a.mux
 	if svc.Secure != nil {
@@ -331,6 +339,7 @@ func (a *API) routes() []route {
 		a.webhooksRoutes(),
 		a.importsRoutes(),
 		a.trackersRoutes(),
+		a.signInRoutes(),
 		a.calendarRoutes(),
 		a.artworkRoutes(),
 		a.themesRoutes(),

@@ -63,16 +63,13 @@ type Device struct {
 // the device sends from then on.
 func (s *Service) SignIn(ctx context.Context, name, password string, device Device) (string, domain.Profile, error) {
 	profile, hash, err := s.store.ProfileByName(ctx, name)
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		if _, _, err := s.hasher.Verify(ctx, s.dummy, password); err != nil {
-			return "", domain.Profile{}, err
-		}
-		return "", domain.Profile{}, ErrInvalidCredentials
-	case err != nil:
+	if errors.Is(err, store.ErrNotFound) {
+		hash, err = "", nil
+	}
+	if err != nil {
 		return "", domain.Profile{}, err
 	}
-	match, stale, err := s.hasher.Verify(ctx, hash, password)
+	match, stale, err := s.verify(ctx, hash, password)
 	if err != nil {
 		return "", domain.Profile{}, err
 	}
@@ -88,7 +85,7 @@ func (s *Service) SignIn(ctx context.Context, name, password string, device Devi
 			return "", domain.Profile{}, err
 		}
 	}
-	token, err := s.startSession(ctx, profile, device)
+	token, err := s.startSession(ctx, profile, device, domain.SignInIdentity{})
 	return token, profile, err
 }
 
@@ -102,15 +99,33 @@ func (s *Service) SetUp(ctx context.Context, name, password string, device Devic
 	if err != nil {
 		return "", domain.Profile{}, err
 	}
-	token, err := s.startSession(ctx, profile, device)
+	token, err := s.startSession(ctx, profile, device, domain.SignInIdentity{})
 	return token, profile, err
 }
 
-func (s *Service) startSession(ctx context.Context, profile domain.Profile, device Device) (string, error) {
+// verify is the hasher's Verify, refusing every password for a profile with none, or with no
+// profile: it is verified against the dummy all the same, so neither answers sooner than a profile
+// with a password.
+func (s *Service) verify(ctx context.Context, hash, password string) (match, stale bool, err error) {
+	if hash == "" {
+		_, _, err := s.hasher.Verify(ctx, s.dummy, password)
+		return false, false, err
+	}
+	return s.hasher.Verify(ctx, hash, password)
+}
+
+// SignInAs starts a session for a profile its account at a sign-in provider signed in, which the
+// caller has checked; the session ends when the account is unlinked.
+func (s *Service) SignInAs(ctx context.Context, profile domain.Profile, identity domain.SignInIdentity, device Device) (string, error) {
+	return s.startSession(ctx, profile, device, identity)
+}
+
+func (s *Service) startSession(ctx context.Context, profile domain.Profile, device Device, identity domain.SignInIdentity) (string, error) {
 	token, tokenHash := newToken()
 	_, err := s.store.CreateSession(ctx, store.NewSession{
 		Kind: domain.SessionDevice, ProfileID: profile.ID, TokenHash: tokenHash,
 		DeviceName: device.Name, Client: device.Client, ExpiresAt: new(time.Now().Add(idleExpiry)),
+		Identity: identity,
 	})
 	if err != nil {
 		return "", err

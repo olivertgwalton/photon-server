@@ -9,6 +9,8 @@ import (
 	"uuid"
 
 	"github.com/valkey-io/valkey-go"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // A pairing is one hash, named by its user code so every script touches the single key it
@@ -24,6 +26,8 @@ type Pairing struct {
 	// Style is how its user code is written, which auth names.
 	Style   string
 	Profile uuid.UUID
+	// Identity is the account behind the session that approved it, which the device's goes with.
+	Identity domain.SignInIdentity
 }
 
 type PairingState string
@@ -58,20 +62,21 @@ func (k *KV) StartPairing(ctx context.Context, userCode string, secretHash []byt
 var approve = valkey.NewLuaScript(`
 if redis.call('EXISTS', KEYS[1]) == 0 then return false end
 if redis.call('HEXISTS', KEYS[1], 'profile') == 1 then return false end
-redis.call('HSET', KEYS[1], 'profile', ARGV[1])
+redis.call('HSET', KEYS[1], 'profile', ARGV[1], 'provider', ARGV[2], 'subject', ARGV[3])
 return redis.call('HMGET', KEYS[1], 'device', 'client')`)
 
-// ApprovePairing gives the pairing waiting under userCode to profile, answering what asked.
-// ok is false for a code that is unknown, expired or already approved.
-func (k *KV) ApprovePairing(ctx context.Context, userCode string, profile uuid.UUID) (Pairing, bool, error) {
-	vals, err := approve.Exec(ctx, k.client, []string{k.pairingKey(userCode)}, []string{profile.String()}).AsStrSlice()
+// ApprovePairing gives the pairing waiting under userCode to profile, as identity's session,
+// answering what asked. ok is false for a code that is unknown, expired or already approved.
+func (k *KV) ApprovePairing(ctx context.Context, userCode string, profile uuid.UUID, identity domain.SignInIdentity) (Pairing, bool, error) {
+	vals, err := approve.Exec(ctx, k.client, []string{k.pairingKey(userCode)},
+		[]string{profile.String(), identity.Provider, identity.Subject}).AsStrSlice()
 	if valkey.IsValkeyNil(err) {
 		return Pairing{}, false, nil
 	}
 	if err != nil || len(vals) != 2 {
 		return Pairing{}, false, err
 	}
-	return Pairing{Device: vals[0], Client: vals[1], Profile: profile}, true, nil
+	return Pairing{Device: vals[0], Client: vals[1], Profile: profile, Identity: identity}, true, nil
 }
 
 var status = valkey.NewLuaScript(`
@@ -112,9 +117,9 @@ redis.call('HSET', KEYS[1], 'polled', now)
 if now - last < tonumber(ARGV[2]) then return {'slow_down'} end
 local profile = redis.call('HGET', KEYS[1], 'profile')
 if not profile then return {'pending'} end
-local fields = redis.call('HMGET', KEYS[1], 'device', 'client')
+local fields = redis.call('HMGET', KEYS[1], 'device', 'client', 'provider', 'subject')
 redis.call('DEL', KEYS[1])
-return {'approved', profile, fields[1], fields[2]}`)
+return {'approved', profile, fields[1], fields[2], fields[3] or '', fields[4] or ''}`)
 
 // PollPairing answers a device asking after its pairing. A wrong secret reads as expired, so a
 // guessed user code reveals nothing.
@@ -128,6 +133,12 @@ func (k *KV) PollPairing(ctx context.Context, userCode string, secretHash []byte
 	if state != PairingApproved {
 		return state, Pairing{}, nil
 	}
+	if len(vals) != 6 {
+		return "", Pairing{}, errors.New("a pairing answered without its approver")
+	}
 	profile, err := uuid.Parse(vals[1])
-	return state, Pairing{Profile: profile, Device: vals[2], Client: vals[3]}, err
+	return state, Pairing{
+		Profile: profile, Device: vals[2], Client: vals[3],
+		Identity: domain.SignInIdentity{Provider: vals[4], Subject: vals[5]},
+	}, err
 }

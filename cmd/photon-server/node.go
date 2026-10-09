@@ -36,6 +36,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/reach"
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/secure"
+	"github.com/olivertgwalton/photon-server/internal/sso"
 	"github.com/olivertgwalton/photon-server/internal/storage"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/subtitles"
@@ -78,6 +79,7 @@ type node struct {
 	sessions  *playback.Sessions
 	imports   *historyimport.Imports
 	trackers  *tracker.Links
+	signIns   *sso.Service
 	identity  *identity.Server
 	secured   *secure.Server
 	jellyfin  *jellyfin.Listener
@@ -182,6 +184,7 @@ func (n *node) wire(ctx context.Context) error {
 	if n.reach, err = reach.New(ctx, st, n.hub.Subscribe, logger); err != nil {
 		return err
 	}
+	n.signIns = sso.New(st, n.cache, n.reach.PublicURL, logger)
 	p := playing{
 		files: files, owners: playback.NewRouter(n.cache, n.id), signer: playback.NewSigner(signingKey), nodeKey: nodeKey,
 		placer: playback.NewPlacer(n.cache, n.self.Node, playback.NewRemuxes(files, n.remuxer), nodeKey),
@@ -228,7 +231,7 @@ func (n *node) httpServer(p playing) (*http.Server, error) {
 	return &http.Server{
 		Addr: n.listen, TLSConfig: n.secured.TLSConfig(),
 		Handler: httpapi.New(n.logger, n.info, httpapi.Services{
-			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, SignIns: n.signIns, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Postgres: st, Valkey: cache, Web: web,
 			Metrics: metrics(version, n.self, n.remuxer, n.sessions, p.placer, p.sent, n.finished, cluster{lead: n.scheduler, st: st, nodes: cache, self: p.placer}),
 			Sent:    p.sent,
 		}),
@@ -320,6 +323,7 @@ func (n *node) serve(ctx context.Context) error {
 	})
 	wg.Go(func() { n.jellyfin.Run(background) })
 	wg.Go(func() { n.trackers.Run(ctx) })
+	wg.Go(func() { n.signIns.Run(ctx) })
 	logger.InfoContext(ctx, "serving", slog.String("addr", n.srv.Addr), slog.String("version", n.info.Version))
 	err := listenUntilDone(ctx, n.srv, n.secured.Listen, func() {
 		if errors.As(context.Cause(ctx), new(*stoppedForRestore)) {

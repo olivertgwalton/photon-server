@@ -8,10 +8,11 @@ import (
 )
 
 type Profile struct {
-	ID           uuid.UUID
-	Name         string
-	Role         domain.Role
-	PasswordHash string
+	ID   uuid.UUID
+	Name string
+	Role domain.Role
+	// PasswordHash is nil for a profile a sign-in provider's account was given, until it sets one.
+	PasswordHash *string
 	PinHash      *string
 	AvatarID     *uuid.UUID
 	ManagedBy    *uuid.UUID
