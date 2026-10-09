@@ -17,11 +17,12 @@ let { data } = $props();
 const words = vocabulary();
 
 // Where an admin registers the server's app on each tracker, and what to
-// register: the device flow needs a client id and nothing else.
+// register: the device flow needs a client id and nothing else, but Trakt
+// takes a refresh only with the redirect URI the app has.
 const register: Record<Tracker, { href: string; how: string }> = {
 	trakt: {
 		href: "https://app.trakt.tv/settings/apps",
-		how: "Create an app on Trakt and copy its client id.",
+		how: "Create an app on Trakt with the redirect URI urn:ietf:wg:oauth:2.0:oob, which this server refreshes its access with, and copy its client id.",
 	},
 	simkl: {
 		href: "https://simkl.com/settings/developer/",
