@@ -73,7 +73,7 @@ func Open(dir, name string) (*os.File, error) {
 	if _, ok := madeAt(name); !ok {
 		return nil, fs.ErrNotExist
 	}
-	return os.Open(filepath.Join(dir, name))
+	return os.OpenInRoot(dir, name)
 }
 
 // Dumper writes dumps of a database into a folder with pg_dump, found by media.Look.
