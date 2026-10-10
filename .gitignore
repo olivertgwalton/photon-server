@@ -1,3 +1,4 @@
 /photon-server
 *.out
 .DS_Store
+/macos/.build
