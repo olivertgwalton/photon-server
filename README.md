@@ -13,8 +13,8 @@ A media server for films and television, written in Go.
 ## Deploy
 
 The image is `ghcr.io/olivertgwalton/photon-server` (amd64 and arm64), run with PostgreSQL and
-Valkey by the compose file in [docs/install.md](docs/install.md), which also covers hardware
-transcoding.
+Valkey by the compose file in [docs/install.md](docs/install.md). Each release also has a `.deb`,
+an `.rpm`, and archives for Linux, macOS and Windows, which the same guide installs.
 
 Open `http://<server>:8640` from the server's local network to set it up: the first admin, the
 server's name, its libraries and how it is reached from outside. Setup is open only while the
