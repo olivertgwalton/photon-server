@@ -1,7 +1,9 @@
 package jellyfin
 
 import (
+	"bytes"
 	"cmp"
+	"encoding/json"
 
 	"golang.org/x/text/language"
 
@@ -101,6 +103,14 @@ func textual(codec string) bool {
 }
 
 // sourceOf is a copy as a media source. Its Path is its file's name alone, as Infuse reads one,
+// streamIndex is a track's index, which Jellyfin's web app sends as a string from its menus and
+// Jellyfin reads either way.
+type streamIndex int
+
+func (i *streamIndex) UnmarshalJSON(b []byte) error {
+	return json.Unmarshal(bytes.Trim(b, `"`), (*int)(i))
+}
+
 // never where it is on the server.
 func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 	file := ""

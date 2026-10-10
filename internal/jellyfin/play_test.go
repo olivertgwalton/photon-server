@@ -188,6 +188,10 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 		info.MediaSources[0]["TranscodingUrl"] != nil {
 		t.Errorf("sources: %v", info.MediaSources)
 	}
+	// Jellyfin's web app sends the tracks chosen in its menus as strings, which Jellyfin reads as
+	// numbers, as it does where they are reported.
+	webApp := `{"AudioStreamIndex":"1","SubtitleStreamIndex":"-1","MediaSourceId":"` + guid(copyID) + `","DeviceProfile":{"MaxStaticBitrate":200000000}}`
+	call(http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", webApp, http.StatusOK)
 	streams, _ := info.MediaSources[0]["MediaStreams"].([]any)
 	external, _ := streams[len(streams)-1].(map[string]any)
 	if external["IsExternal"] != true || external["Index"] != 2.0 || external["Language"] != "eng" {
@@ -222,7 +226,7 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 
 	report := func(path string, ticks int64, session string) {
 		call(http.MethodPost, path, `{"ItemId":"`+guid(heat)+`","PlaySessionId":"`+session+`","PositionTicks":`+
-			strconv.FormatInt(ticks, 10)+`,"PlayMethod":"DirectStream","IsPaused":false,"AudioStreamIndex":1,"SubtitleStreamIndex":-1}`, http.StatusNoContent)
+			strconv.FormatInt(ticks, 10)+`,"PlayMethod":"DirectStream","IsPaused":false,"AudioStreamIndex":"1","SubtitleStreamIndex":"-1"}`, http.StatusNoContent)
 	}
 	report("/Sessions/Playing", 0, info.PlaySessionID)
 	report("/Sessions/Playing/Progress", 10*60*1e7, info.PlaySessionID)
