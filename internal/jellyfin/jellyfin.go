@@ -172,7 +172,7 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	a.handle(a.item, "GET /Items/{itemId}", "GET /Users/{userId}/Items/{itemId}")
 	a.handle(a.seasons, "GET /Shows/{seriesId}/Seasons")
 	a.handle(a.episodes, "GET /Shows/{seriesId}/Episodes")
-	a.handle(a.row(domain.RowContinueWatching), "GET /UserItems/Resume", "GET /Users/{userId}/Items/Resume")
+	a.handle(a.resume, "GET /UserItems/Resume", "GET /Users/{userId}/Items/Resume")
 	a.handle(a.nextUp, "GET /Shows/NextUp")
 	a.handle(a.upcoming, "GET /Shows/Upcoming")
 	a.handle(a.latest, "GET /Items/Latest", "GET /Users/{userId}/Items/Latest")
