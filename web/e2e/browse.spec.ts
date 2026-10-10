@@ -236,14 +236,19 @@ test("a film's page plays the copy and tracks chosen", async ({ page }) => {
 	await expectAccessible(page);
 });
 
-test("a show and a season open on the episode the reader is at", async ({
+test("a show opens on itself, and its season on the episode the reader is at", async ({
 	page,
 }) => {
 	await logIn(page, "/titles/t-show");
-	await expect(page).toHaveURL("/titles/t-ep");
-	await expect(page.getByRole("heading", { name: "Pilot" })).toBeVisible();
-	await page.goto("/titles/t-s2");
+	await expect(page.getByRole("heading", { name: "Small Show" })).toBeVisible();
+	await expect(
+		page.getByRole("link", { name: "Resume S1 E1" }),
+	).toHaveAttribute("href", "/play/t-ep");
+	const seasons = page.getByRole("region", { name: /Seasons/ });
+	await seasons.getByRole("link", { name: /Season 2/ }).click();
 	await expect(page).toHaveURL("/titles/t-ep3");
+	await page.getByRole("link", { name: "Small Show" }).click();
+	await expect(page).toHaveURL("/titles/t-show");
 	await expectAccessible(page);
 });
 
