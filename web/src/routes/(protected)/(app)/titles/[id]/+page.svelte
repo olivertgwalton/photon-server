@@ -92,8 +92,29 @@ const facts = $derived(
 		t.year,
 		t.certificate,
 		duration && runtime(duration),
+		t.kind === "show" && t.seasons?.length && count(t.seasons.length, "season"),
+		t.kind === "show" &&
+			t.seasons?.length &&
+			count(
+				t.seasons.reduce((n, s) => n + s.episodes, 0),
+				"episode",
+			),
 	].filter(Boolean),
 );
+
+const seasonCards = $derived(
+	t.kind === "show"
+		? (t.seasons ?? []).map((s) => ({ ...s, kind: "season" as const }))
+		: [],
+);
+// "2 of 8 episodes" once the reader has started a season.
+function seasonCaption(i: number) {
+	const s = seasonCards[i];
+	const seen = s.episodes - (s.state?.unwatched ?? s.episodes);
+	return seen
+		? `${seen} of ${count(s.episodes, "episode")}`
+		: count(s.episodes, "episode");
+}
 
 // The season the row shows, where the reader picked another than the page's:
 // kept with the page it was picked on, so the next page shows its own.
@@ -128,7 +149,7 @@ const writers = $derived(credits.filter((c) => c.kinds.includes("writer")));
 const trailer = $derived(t.extras?.find((e) => e.extra_kind === "trailer"));
 
 // Whose box sets, links and likes the page shows: an episode's are its
-// show's, which has no page of its own.
+// show's.
 const about = $derived(data.show ?? t);
 const extras = $derived(
 	data.extras.length || !data.show
@@ -218,6 +239,14 @@ const poster = $derived(art("poster"));
 				backdrop ? "pt-[28svh]" : "pt-6",
 			]}
 		>
+			{#if t.show}
+				<a
+					href="/titles/{t.show.id}"
+					class="text-ink-2 text-sm hover:underline"
+				>
+					{t.show.title}
+				</a>
+			{/if}
 			<div class="flex items-end gap-6">
 				{#if poster && !backdrop}
 					<Artwork
@@ -310,6 +339,17 @@ const poster = $derived(art("poster"));
 						Being fetched. It plays once its provider has it; look again in a
 						few minutes.
 					</p>
+				{:else if data.next}
+					{@const next = data.next}
+					<Button href={playHref(next.id)} size="lg" class="rounded-full px-5">
+						<PlayIcon class="fill-current" />
+						{next.state?.position_ms ? "Resume" : "Play"}
+						{episodeLabel(
+							next.season_number,
+							next.episode_number,
+							next.episode_end,
+						)}
+					</Button>
 				{/if}
 				{#if trailer}
 					<Button
@@ -419,15 +459,6 @@ const poster = $derived(art("poster"));
 										<RefreshCwIcon />Refresh metadata…
 									</DropdownMenu.Item>
 								{/if}
-								{#if t.show}
-									<!-- A show has no page of its own to manage it from. -->
-									<DropdownMenu.Item
-										onSelect={() =>
-											goto(`/settings/server/titles/${t.show?.id}`)}
-									>
-										<WrenchIcon />Manage show
-									</DropdownMenu.Item>
-								{/if}
 							</DropdownMenu.Group>
 						{/if}
 					</DropdownMenu.Content>
@@ -450,6 +481,10 @@ const poster = $derived(art("poster"));
 			{/if}
 		</div>
 	</header>
+
+	{#if seasonCards.length}
+		<Rail title="Seasons" cards={seasonCards} caption={seasonCaption} />
+	{/if}
 
 	{#if t.season &&
 		episodes &&
