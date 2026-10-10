@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strconv"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -11,10 +12,12 @@ import (
 )
 
 // Hardware is the device video is encoded on, chosen for the whole server as Jellyfin's is:
-// VideoToolbox on a Mac, VAAPI or QSV on an Intel or AMD render node, NVENC on an NVIDIA card.
+// VideoToolbox on a Mac, VAAPI or QSV on an Intel or AMD render node, NVENC on an NVIDIA card,
+// and on Windows QSV on an Intel GPU or AMF on an AMD one.
 type Hardware struct {
 	Accel domain.Acceleration
-	// Device is the VAAPI or QSV render node, or the CUDA device's index.
+	// Device is the VAAPI or QSV render node, or the CUDA device's index; on Windows, where QSV
+	// opens the Intel GPU through D3D11, none.
 	Device string
 	// HEVC is whether video is encoded to HEVC for a client that plays it.
 	HEVC domain.HEVCEncoding
@@ -36,7 +39,7 @@ const longGOP = "1000"
 // every device that encodes H.264, but for an interlaced picture on VideoToolbox, which refuses
 // one; anything else is decoded by FFmpeg and uploaded.
 func (h Hardware) decodes(codec string, e domain.VideoEncode) bool {
-	return h.Accel != domain.AccelSoftware && (codec == "h264" || codec == "hevc") &&
+	return h.Accel != domain.AccelSoftware && h.Accel != domain.AccelAMF && (codec == "h264" || codec == "hevc") &&
 		(!e.Deinterlace || h.Accel != domain.AccelVideoToolbox)
 }
 
@@ -44,7 +47,7 @@ func (h Hardware) decodes(codec string, e domain.VideoEncode) bool {
 func (h Hardware) inputArgs(codec string, e domain.VideoEncode) []string {
 	var init, decode []string
 	switch h.Accel {
-	case domain.AccelSoftware:
+	case domain.AccelSoftware, domain.AccelAMF:
 		return nil
 	case domain.AccelVideoToolbox:
 		init = []string{"-init_hw_device", "videotoolbox=hw", "-filter_hw_device", "hw"}
@@ -53,9 +56,14 @@ func (h Hardware) inputArgs(codec string, e domain.VideoEncode) []string {
 		init = []string{"-init_hw_device", "vaapi=hw:" + h.Device, "-filter_hw_device", "hw"}
 		decode = []string{"-hwaccel", "vaapi", "-hwaccel_output_format", "vaapi", "-hwaccel_device", "hw"}
 	case domain.AccelQSV:
-		// QSV decodes through VAAPI on Linux, as Jellyfin's does, and its frames are mapped across.
+		// QSV decodes through VAAPI on Linux and D3D11 on Windows, as Jellyfin's does, and its frames
+		// are mapped across.
 		init = []string{"-init_hw_device", "vaapi=va:" + h.Device, "-init_hw_device", "qsv=hw@va", "-filter_hw_device", "hw"}
 		decode = []string{"-hwaccel", "vaapi", "-hwaccel_output_format", "vaapi", "-hwaccel_device", "va"}
+		if runtime.GOOS == "windows" {
+			init = []string{"-init_hw_device", "d3d11va=va:,vendor=0x8086", "-init_hw_device", "qsv=hw@va", "-filter_hw_device", "hw"}
+			decode = []string{"-hwaccel", "d3d11va", "-hwaccel_output_format", "d3d11", "-hwaccel_device", "va"}
+		}
 	case domain.AccelNVENC:
 		init = []string{"-init_hw_device", "cuda=hw:" + h.Device, "-filter_hw_device", "hw"}
 		decode = []string{"-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-hwaccel_device", "hw"}
@@ -110,7 +118,7 @@ func (h Hardware) videoArgs(e domain.VideoEncode, codec string) (string, []strin
 	deinterlace := ""
 	if e.Deinterlace {
 		deinterlace = map[domain.Acceleration]string{
-			domain.AccelSoftware: "yadif=0:-1:0,", domain.AccelVideoToolbox: "yadif=0:-1:0,",
+			domain.AccelSoftware: "yadif=0:-1:0,", domain.AccelVideoToolbox: "yadif=0:-1:0,", domain.AccelAMF: "yadif=0:-1:0,",
 			domain.AccelVAAPI: "deinterlace_vaapi=rate=frame,", domain.AccelNVENC: "yadif_cuda=0:-1:0,",
 		}[h.Accel]
 	}
@@ -121,13 +129,23 @@ func (h Hardware) videoArgs(e domain.VideoEncode, codec string) (string, []strin
 		encoder = append(encoder, "-tag:v", "hvc1")
 	}
 	switch h.Accel {
-	case domain.AccelSoftware:
+	case domain.AccelSoftware, domain.AccelAMF:
 		filter = deinterlace + "scale=" + w + ":" + ht + ",format=yuv420p"
 		if ten {
 			filter += "10le"
 		}
 		if e.ToneMap {
 			filter = deinterlace + "scale=" + w + ":" + ht + "," + media.ToneMap
+		}
+		if h.Accel == domain.AccelAMF {
+			// ponytail: AMF is given frames decoded, scaled and tone mapped on the CPU, Jellyfin's
+			// pipeline where OpenCL is missing; its D3D11 and OpenCL one if the CPU cannot keep up.
+			// Jellyfin's rate control, with the qmin of AMF's transcoding preset lowered.
+			encoder = append(encoder, "-quality", "speed", "-rc", "cbr", "-qmin", "0", "-qmax", "32")
+			if e.Codec == domain.VideoHEVC {
+				encoder = append(encoder, "-header_insertion_mode", "gop", "-gops_per_idr", "1")
+			}
+			break
 		}
 		// Jellyfin's software transcode: constant quality at its defaults, capped.
 		encoder = append(encoder, "-profile:v", profile, "-maxrate", kbps, "-bufsize", strconv.Itoa(2*e.BitrateKbps)+"k")
@@ -159,6 +177,10 @@ func (h Hardware) videoArgs(e domain.VideoEncode, codec string) (string, []strin
 			upload = "format=nv12|p010le,hwupload=extra_hw_frames=64,"
 		}
 		filter = upload + "vpp_qsv=w=" + w + ":h=" + ht + ":format=" + format
+		if runtime.GOOS == "windows" && h.decodes(codec, e) {
+			// D3D11's frame pool cannot grow, so the encoder must not hold the decoder's frames.
+			filter += ":passthrough=0"
+		}
 		if e.Deinterlace {
 			filter += ":deinterlace=2"
 		}

@@ -98,13 +98,16 @@ func webApp(objectOrigin func() string) (*httpapi.Web, error) {
 
 // encoders are what a node may encode video on, in the order it tries them: VideoToolbox on a
 // Mac, NVENC on an NVIDIA card, then QSV and VAAPI on each render node (QSV is faster on Intel;
-// only VAAPI drives AMD).
+// only VAAPI drives AMD), or on Windows QSV on an Intel GPU and AMF on an AMD one.
 func encoders() ([]hls.Hardware, error) {
 	var out []hls.Hardware
 	if runtime.GOOS == "darwin" {
 		out = append(out, hls.Hardware{Accel: domain.AccelVideoToolbox})
 	}
 	out = append(out, hls.Hardware{Accel: domain.AccelNVENC, Device: "0"})
+	if runtime.GOOS == "windows" {
+		return append(out, hls.Hardware{Accel: domain.AccelQSV}, hls.Hardware{Accel: domain.AccelAMF}), nil
+	}
 	renderNodes, err := filepath.Glob("/dev/dri/renderD*")
 	if err != nil {
 		return nil, err
@@ -169,7 +172,7 @@ func automaticTranscodes(accel domain.Acceleration) int {
 	switch accel {
 	case domain.AccelSoftware:
 		return max(runtime.NumCPU()/cpusPerTranscode, 1)
-	case domain.AccelVideoToolbox, domain.AccelVAAPI, domain.AccelQSV, domain.AccelNVENC:
+	case domain.AccelVideoToolbox, domain.AccelVAAPI, domain.AccelQSV, domain.AccelNVENC, domain.AccelAMF:
 	}
 	return hardwareTranscodes
 }
