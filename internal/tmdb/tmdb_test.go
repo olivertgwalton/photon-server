@@ -79,6 +79,7 @@ func TestDetailsTakeTheCountrysCertificate(t *testing.T) {
 			"credits":{"cast":[{"id":10205,"name":"Sigourney Weaver","character":"Ripley","profile_path":"/sw.jpg"}],
 				"crew":[{"id":578,"name":"Ridley Scott","job":"Director","department":"Directing"},
 					{"id":1,"name":"Dan O'Bannon","job":"Screenplay","department":"Writing"},
+					{"id":3,"name":"A Songwriter","job":"Songs","department":"Writing"},
 					{"id":2,"name":"A Gaffer","job":"Gaffer","department":"Lighting"}]},
 			"images":{
 				"posters":[{"file_path":"/plain.jpg","vote_average":9},{"file_path":"/english.jpg","iso_639_1":"en","width":2000,"height":3000,"vote_average":5}],

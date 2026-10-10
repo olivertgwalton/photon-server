@@ -422,6 +422,14 @@ type credits struct {
 // castShown is how much of a cast is kept, in billing order: the rest are walk-ons.
 const castShown = 50
 
+// storyJobs are the Writing department's jobs that wrote the story. The department also holds a
+// film's songwriters, story artists and script editors, by the dozen on an animated film.
+var storyJobs = map[string]bool{
+	"Writer": true, "Screenplay": true, "Story": true, "Teleplay": true, "Screenstory": true,
+	"Original Story": true, "Novel": true, "Book": true, "Author": true, "Characters": true,
+	"Comic Book": true, "Short Story": true, "Theatre Play": true, "Original Film Writer": true,
+}
+
 // list answers the cast, as actors of kind, and the crew whose jobs a reader looks for, as Jellyfin
 // keeps them: directors, writers, producers and composers.
 func (c credits) list(actor domain.CreditKind) []domain.Credit {
@@ -442,7 +450,7 @@ func (c credits) list(actor domain.CreditKind) []domain.Credit {
 		switch {
 		case job == "Director":
 			kind = domain.CreditDirector
-		case p.Department == "Writing":
+		case p.Department == "Writing" && storyJobs[job]:
 			kind = domain.CreditWriter
 		case job == "Producer":
 			kind = domain.CreditProducer
