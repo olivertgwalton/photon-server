@@ -106,3 +106,13 @@ func TestLookAnswersAnAbsolutePath(t *testing.T) {
 		t.Errorf("Look(./pg_dump) = %q, %v; want %q", got, err, path)
 	}
 }
+
+// A release's own ffmpeg, beside the server, is run rather than one the system has on PATH.
+func TestLookPrefersAToolBesideTheServer(t *testing.T) {
+	bundled := fakeTool(t, "ffmpeg", "ffmpeg version 8.1.3-Jellyfin Copyright")
+	t.Setenv("PATH", filepath.Dir(fakeTool(t, "ffmpeg", "ffmpeg version 9.0.2 Copyright")))
+	got, err := look(filepath.Dir(bundled), "ffmpeg")
+	if err != nil || got != bundled {
+		t.Errorf("look(ffmpeg) = %q, %v; want %q", got, err, bundled)
+	}
+}

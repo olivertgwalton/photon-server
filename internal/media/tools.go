@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -81,9 +82,23 @@ func findYTDLP(ctx context.Context, name string) (Tool, error) {
 	return Tool{Path: path, Version: string(bytes.TrimSpace(out))}, nil
 }
 
-// Look answers the executable file name names, a path or a command found on PATH, by its absolute
-// path, so what runs is what was found however the working directory changes.
+// Look answers the executable file name names, a path or a command found beside the server, as a
+// release archive lays its tools out, or else on PATH, by its absolute path, so what runs is what
+// was found however the working directory changes.
 func Look(name string) (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return look(filepath.Dir(exe), name)
+}
+
+func look(beside, name string) (string, error) {
+	if filepath.Base(name) == name {
+		if path, err := exec.LookPath(filepath.Join(beside, name)); err == nil {
+			return path, nil
+		}
+	}
 	path, err := exec.LookPath(name)
 	if err != nil {
 		return "", err
