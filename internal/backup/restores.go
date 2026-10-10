@@ -29,9 +29,12 @@ type Restores struct {
 }
 
 // Begin asks for the dump named name, in this node's folder, to be restored, refusing one this
-// node does not keep (fs.ErrNotExist), one newer than this binary (ErrNewer), and a second restore
-// while one is under way (ErrRestoring).
+// node does not keep (fs.ErrNotExist), one newer than this binary (ErrNewer), a second restore
+// while one is under way (ErrRestoring), and any on a node without the tools (ErrNoTools).
 func (s Restores) Begin(ctx context.Context, name string) error {
+	if s.Restorer.PGRestore == "" {
+		return ErrNoTools
+	}
 	f, err := Open(s.Dir, name)
 	if err != nil {
 		return err
