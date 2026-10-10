@@ -99,6 +99,16 @@ function step(event: KeyboardEvent) {
 	next.focus();
 }
 
+// Safari gives a link it is clicked on no focus (it focuses the page's main
+// instead), so there would be no card to step from: a card clicked takes
+// focus, as it does in Chrome. On click, after Safari has moved it to main.
+function hold(event: MouseEvent) {
+	if (!(event.target instanceof Element)) return;
+	event.target
+		.closest<HTMLElement>("a, button")
+		?.focus({ preventScroll: true });
+}
+
 const sizes = $derived(
 	shape === "poster"
 		? "(min-width: 1536px) 12rem, (min-width: 1024px) 10rem, 9rem"
@@ -173,6 +183,7 @@ const sizes = $derived(
 			{@attach resized}
 			onscroll={measure}
 			{@attach (ul) => listen(ul, "keydown", step)}
+			{@attach (ul) => listen(ul, "click", hold)}
 			class="relative -mx-3 flex [contain-intrinsic-size:auto_16rem] [content-visibility:auto] scroll-smooth snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
 		>
 			{#each shown as c, i (c.id)}

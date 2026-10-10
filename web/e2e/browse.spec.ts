@@ -300,6 +300,11 @@ test("the arrow keys step along an episode's season row", async ({ page }) => {
 	await expect(second).toBeFocused();
 	await page.keyboard.press("ArrowLeft");
 	await expect(pilot).toBeFocused();
+	// From a card clicked, too: Safari focuses no link it is clicked on.
+	await second.click();
+	await expect(page).toHaveURL("/titles/t-ep2");
+	await page.keyboard.press("ArrowLeft");
+	await expect(pilot).toBeFocused();
 });
 
 test("picking another episode of the season keeps the page where it was", async ({
