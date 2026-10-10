@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -61,7 +60,7 @@ func FindTools(ctx context.Context, names ToolNames) (Tools, error) {
 
 // hasLibass reports whether FFmpeg has the subtitles filter, which only a build with libass has.
 func hasLibass(ctx context.Context, ffmpeg string) bool {
-	out, err := output(ctx, Foreground, PartRun, nil, ffmpeg, "-hide_banner", "-h", "filter=subtitles")
+	out, err := output(ctx, Foreground, PartRun, ffmpeg, "-hide_banner", "-h", "filter=subtitles")
 	return err == nil && bytes.Contains(out, []byte("Filter subtitles"))
 }
 
@@ -75,7 +74,7 @@ func findYTDLP(ctx context.Context, name string) (Tool, error) {
 	if err != nil {
 		return Tool{}, err
 	}
-	out, err := output(ctx, Foreground, PartRun, nil, path, "--version")
+	out, err := output(ctx, Foreground, PartRun, path, "--version")
 	if err != nil {
 		return Tool{}, fmt.Errorf("%s --version: %w", path, err)
 	}
@@ -97,7 +96,7 @@ func findTool(ctx context.Context, name string) (Tool, error) {
 	if err != nil {
 		return Tool{}, err
 	}
-	out, err := output(ctx, Foreground, PartRun, nil, path, "-hide_banner", "-version")
+	out, err := output(ctx, Foreground, PartRun, path, "-hide_banner", "-version")
 	if err != nil {
 		return Tool{}, fmt.Errorf("%s -version: %w", path, err)
 	}
@@ -162,8 +161,7 @@ const (
 // is fixed, as Jellyfin's is everywhere but trickplay.
 const backgroundNice = 10
 
-// Command is a tool run as every one is run: at its priority; files are its descriptors from 3 up;
-// once ctx ends it is asked to stop with SIGTERM, so ffmpeg can finish what it is writing, and
+// Command is a tool run as every one is run: at its priority; once ctx ends it is asked to stop with SIGTERM, so ffmpeg can finish what it is writing, and
 // killed after stopGrace; and the end of what it writes to stderr is kept for Err. It is started by
 // its own Start, Run and Output, which give a Background tool its priority.
 type Command struct {
@@ -173,9 +171,8 @@ type Command struct {
 	stderr   tail
 }
 
-func NewCommand(ctx context.Context, priority Priority, files []*os.File, path string, args ...string) *Command {
+func NewCommand(ctx context.Context, priority Priority, path string, args ...string) *Command {
 	cmd := exec.CommandContext(ctx, path, args...)
-	cmd.ExtraFiles = files
 	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 	cmd.WaitDelay = stopGrace
 	c := &Command{Cmd: cmd, ctx: ctx, priority: priority}
@@ -244,10 +241,10 @@ func (t *tail) Write(p []byte) (int, error) {
 }
 
 // output runs a tool to completion within limit, at priority, and returns its stdout.
-func output(ctx context.Context, priority Priority, limit time.Duration, files []*os.File, path string, args ...string) ([]byte, error) {
+func output(ctx context.Context, priority Priority, limit time.Duration, path string, args ...string) ([]byte, error) {
 	ctx, cancel := Within(ctx, path, limit)
 	defer cancel()
-	c := NewCommand(ctx, priority, files, path, args...)
+	c := NewCommand(ctx, priority, path, args...)
 	out, err := c.Output()
 	return out, c.Err(err)
 }

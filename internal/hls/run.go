@@ -109,7 +109,7 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	}
 	// Once ffmpeg has ended, a reader still waiting for it to connect finds no cues.
 	defer closeSockets(sockets)
-	cmd := media.NewCommand(ctx, media.Foreground, in.Files(), r.tools.FFmpeg.Path, args(in, r.hw, start, src.Video, src.Audio, layer, s.format, sockets)...)
+	cmd := media.NewCommand(ctx, media.Foreground, r.tools.FFmpeg.Path, args(in, r.hw, start, src.Video, src.Audio, layer, s.format, sockets)...)
 	out, err := cmd.StdoutPipe()
 	if err == nil {
 		err = cmd.Start()

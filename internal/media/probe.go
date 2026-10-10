@@ -22,7 +22,7 @@ import (
 // the first frame of each stream: FFmpeg 9 leaves a stream's colour unknown until a frame is
 // decoded, and HDR10+ metadata is only ever on frames.
 func (t Tools) Probe(ctx context.Context, in Input) (domain.Facts, error) {
-	out, err := output(ctx, Background, PartRun, in.Files(), t.FFprobe.Path, append([]string{
+	out, err := output(ctx, Background, PartRun, t.FFprobe.Path, append([]string{
 		"-hide_banner", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters",
 		"-show_frames", "-read_intervals", "%+#1",
 	}, in.Args()...)...)

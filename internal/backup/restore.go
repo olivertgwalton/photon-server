@@ -121,7 +121,7 @@ func (r Restorer) check(ctx context.Context, file string) (have, want int64, err
 // version reads the schema version a dump was made at from its goose_db_version table, the
 // newest migration applied there, before anything is restored.
 func (r Restorer) version(ctx context.Context, file string) (int64, error) {
-	cmd := media.NewCommand(ctx, media.Foreground, nil, r.PGRestore, "--data-only", "--table=goose_db_version", "--file=-", file)
+	cmd := media.NewCommand(ctx, media.Foreground, r.PGRestore, "--data-only", "--table=goose_db_version", "--file=-", file)
 	stdout, err := cmd.Output()
 	if err != nil {
 		return 0, cmd.Err(err)
@@ -187,12 +187,12 @@ func (r Restorer) replace(ctx context.Context, file string) error {
 		return err
 	}
 	defer write.Close()
-	psql := media.NewCommand(ctx, media.Foreground, nil, r.PSQL, "--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1", "--dbname="+dbURL)
+	psql := media.NewCommand(ctx, media.Foreground, r.PSQL, "--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1", "--dbname="+dbURL)
 	psql.Env, psql.Stdin = env, read
 	if err := errors.Join(psql.Start(), read.Close()); err != nil {
 		return psql.Err(err)
 	}
-	dump := media.NewCommand(ctx, media.Foreground, nil, r.PGRestore, "--no-owner", "--no-privileges", "--file=-", file)
+	dump := media.NewCommand(ctx, media.Foreground, r.PGRestore, "--no-owner", "--no-privileges", "--file=-", file)
 	dump.Stdout = write
 	_, err = io.WriteString(write, "BEGIN;\nSET client_min_messages = warning;\nDROP SCHEMA IF EXISTS public CASCADE;\nCREATE SCHEMA public;\n")
 	if err == nil {
