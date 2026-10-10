@@ -1,6 +1,8 @@
 # Installing photon-server
 
-photon-server runs beside PostgreSQL and Valkey. Docker Compose runs all three from one file.
+photon-server runs beside PostgreSQL 18 and Valkey 9. Docker Compose runs all three from one
+file; a native install runs the server from a package or an archive and uses a PostgreSQL and
+Valkey you install.
 
 ## Docker
 
@@ -151,3 +153,80 @@ The server's log says which it encodes on as it starts, and Settings › Server 
 
 Each machine running a server sets `PHOTON_HOSTNAME` in its `.env` to a name of its own, which
 Settings › Server shows; it is `photon` where unset. See [cluster.md](cluster.md).
+
+## Native
+
+Each [release](https://github.com/olivertgwalton/photon-server/releases) has a `.deb` and an
+`.rpm` for Linux, and an archive for Linux, macOS and Windows. Each carries the server, its web
+app and the ffmpeg, ffprobe and yt-dlp it runs. It needs:
+
+- **PostgreSQL 18**, with a database and a user of its own:
+  ```sh
+  createuser --pwprompt photon
+  createdb --owner photon photon
+  ```
+  and, to back the database up and restore it, the PostgreSQL client tools, `pg_dump`,
+  `pg_restore` and `psql`, on the server's `PATH`, no older than the PostgreSQL they reach.
+- **Valkey 9**, where a distribution's own is older, from [valkey.io](https://valkey.io/download/).
+
+### Debian, Ubuntu, Fedora
+
+Install the package for your machine, `amd64` or `arm64`:
+
+```sh
+sudo apt install ./photon-server_<version>_amd64.deb
+sudo dnf install ./photon-server-<version>-1.x86_64.rpm
+```
+
+It installs a `photon-server` service, run as a user of its own in the `render` and `video` groups,
+so an Intel or AMD GPU is used with nothing to set. Set the database's and Valkey's addresses in
+`/etc/photon-server/env`, then start it; it migrates the database as it starts:
+
+```sh
+sudo systemctl start photon-server
+journalctl -u photon-server -f
+```
+
+Libraries are added at their own paths, which the `photon-server` user must be able to read. The
+cache is in `/var/cache/photon-server` and the dumps in `/var/lib/photon-server/backups`.
+
+### Archives
+
+Unpack the archive anywhere and keep its layout: the server finds its web app and tools from where
+it is. Set the two addresses, migrate, and start it:
+
+```sh
+export PHOTON_DATABASE_URL=postgres://photon:<password>@localhost/photon
+export PHOTON_VALKEY_URL=valkey://localhost:6379
+photon-server/bin/photon-server migrate
+photon-server/bin/photon-server
+```
+
+On macOS, Homebrew's `postgresql@18` and `valkey` serve, and the server encodes on VideoToolbox.
+The binaries are not signed: clear the download's quarantine before the first run with
+`xattr -dr com.apple.quarantine photon-server`.
+
+On Windows, set the two addresses as environment variables and run `bin\photon-server.exe`.
+PostgreSQL's installer does not put its tools on `PATH`, and without them the server neither backs
+up nor restores; add its `bin` folder, such as `C:\Program Files\PostgreSQL\18\bin`. Valkey has no Windows build, so run it in WSL or Docker.
+The server encodes on an NVIDIA, Intel or AMD GPU, or in software.
+
+To run it as a Windows service, from an administrator's PowerShell, with the archive unpacked in
+`C:\photon-server` and the database migrated as above:
+
+```powershell
+sc.exe create photon-server binPath= "C:\photon-server\bin\photon-server.exe" start= auto
+reg add HKLM\SYSTEM\CurrentControlSet\Services\photon-server /v Environment /t REG_MULTI_SZ /f `
+  /d "PHOTON_DATABASE_URL=postgres://photon:<password>@localhost/photon\0PHOTON_VALKEY_URL=valkey://localhost:6379"
+sc.exe failure photon-server reset= 0 actions= restart/5000
+sc.exe failureflag photon-server 1
+sc.exe start photon-server
+```
+
+It runs as Local System, which must be able to read the libraries, and keeps its cache, its dumps
+and its log, `photon-server.log`, in `C:\Windows\System32\config\systemprofile\AppData\Local\photon-server`.
+Stopping it plays its streams to their end first; the failure actions start it again after a
+restore. The PostgreSQL tools must be on the system's `PATH` for the service to find them.
+
+A server stopped for a restore exits with status 75 to be started again: the package's service and
+the Windows service above do, and anything else running the server must too.
