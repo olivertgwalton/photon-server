@@ -65,13 +65,15 @@ export function editTitle(id: string, tab: EditorTab) {
 	Object.assign(editor, { open: true, id, tab });
 }
 
-export function refreshTitle(id: string, name: string) {
+export function refreshTitle(id: string, name: string, mode: RefreshMode) {
 	return act(
 		api.POST("/api/v1/admin/titles/{id}/refresh", {
 			...path(id),
-			body: { mode: "all" },
+			body: { mode },
 		}),
-		`Asking the providers about ${name} again.`,
+		mode === "all"
+			? `${name} is being described again from its providers.`
+			: `${name} is being filled in where it's missing.`,
 	);
 }
 

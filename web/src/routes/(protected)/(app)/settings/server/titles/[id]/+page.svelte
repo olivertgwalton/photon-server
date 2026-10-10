@@ -1,6 +1,7 @@
 <script lang="ts">
 import { fullTitle } from "#lib/format.js";
 import { act } from "#lib/act.js";
+import { refreshTitle } from "#lib/actions.svelte.js";
 import { fields } from "#lib/form.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
@@ -18,15 +19,6 @@ let { data } = $props();
 
 const api = client();
 const path = $derived({ params: { path: { id: data.title.id } } });
-
-function refresh(mode: components["schemas"]["RefreshMode"]) {
-	return act(
-		api.POST("/api/v1/admin/titles/{id}/refresh", { ...path, body: { mode } }),
-		mode === "all"
-			? "Asking the providers about everything again."
-			: "Asking the providers for what is missing.",
-	);
-}
 
 function order(event: SubmitEvent) {
 	const asked = String(fields(event).get("order"));
@@ -71,10 +63,16 @@ const name = $derived(
 			</Card.Header>
 			<Card.Content>
 				<div class="flex flex-wrap gap-2">
-					<Button variant="outline" onclick={() => refresh("missing")}>
+					<Button
+						variant="outline"
+						onclick={() => refreshTitle(t.id, name, "missing")}
+					>
 						Fill in what's missing
 					</Button>
-					<Button variant="outline" onclick={() => refresh("all")}>
+					<Button
+						variant="outline"
+						onclick={() => refreshTitle(t.id, name, "all")}
+					>
 						Replace everything
 					</Button>
 				</div>

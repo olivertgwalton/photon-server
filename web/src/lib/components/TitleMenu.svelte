@@ -2,6 +2,7 @@
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 import ScanSearchIcon from "@lucide/svelte/icons/scan-search";
 import BookmarkXIcon from "@lucide/svelte/icons/bookmark-x";
+import DatabaseBackupIcon from "@lucide/svelte/icons/database-backup";
 import CheckIcon from "@lucide/svelte/icons/check";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
@@ -192,8 +193,13 @@ const name = $derived(titleWithShow(card));
 				</DropdownMenu.Item>
 			{/if}
 			{#if refreshes}
-				<DropdownMenu.Item onSelect={() => refreshTitle(card.id, name)}>
-					<RefreshCwIcon />Refresh metadata
+				<DropdownMenu.Item
+					onSelect={() => refreshTitle(card.id, name, "missing")}
+				>
+					<RefreshCwIcon />Refresh missing metadata
+				</DropdownMenu.Item>
+				<DropdownMenu.Item onSelect={() => refreshTitle(card.id, name, "all")}>
+					<DatabaseBackupIcon />Refresh all metadata
 				</DropdownMenu.Item>
 			{/if}
 			{#if card.kind !== "collection"}
