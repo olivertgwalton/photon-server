@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Photon
+Comment=Serve your films and television
+Exec=photon
+Icon=io.github.olivertgwalton.Photon
+Categories=AudioVideo;Video;Network;
+Terminal=false

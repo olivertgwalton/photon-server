@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.olivertgwalton.Photon</id>
+  <name>Photon</name>
+  <summary>Serve your films and television</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>
+      A media server for films and television, with its own database: open it, and its web app
+      opens in your browser to set it up.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.olivertgwalton.Photon.desktop</launchable>
+  <url type="homepage">https://github.com/olivertgwalton/photon-server</url>
+  <developer id="io.github.olivertgwalton">
+    <name>Oliver Walton</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+</component>
