@@ -56,6 +56,8 @@ type item struct {
 	ParentBackdropImageTags []string            `json:"ParentBackdropImageTags,omitempty"`
 	UserData                *userData           `json:"UserData,omitempty"`
 	ChildCount              *int                `json:"ChildCount,omitempty"`
+	MovieCount              int                 `json:"MovieCount,omitempty"`
+	SeriesCount             int                 `json:"SeriesCount,omitempty"`
 	SeriesName              string              `json:"SeriesName,omitempty"`
 	SeriesID                string              `json:"SeriesId,omitempty"`
 	SeasonID                string              `json:"SeasonId,omitempty"`

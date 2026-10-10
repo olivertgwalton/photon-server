@@ -94,6 +94,7 @@ func TestAnAppOpensSomeoneAndTheirWork(t *testing.T) {
 		ID, Name, Type, Overview, PremiereDate string
 		ProductionLocations                    []string
 		ProviderIDs                            map[string]string
+		MovieCount, SeriesCount                int
 	}
 	var people struct {
 		Items            []found
@@ -107,6 +108,14 @@ func TestAnAppOpensSomeoneAndTheirWork(t *testing.T) {
 	if code := get("pst_ada", "/Users/"+guid(ada.ID)+"/Items/"+guid(her), &one); code != http.StatusOK || one.Type != "Person" || one.Overview != "An actor." ||
 		one.PremiereDate[:10] != "1949-10-08" || len(one.ProductionLocations) != 1 || one.ProviderIDs["Tmdb"] != "10205" {
 		t.Errorf("her: %d %+v", code, one)
+	}
+	// Jellyfin's web app lists her films and shows only where her item counts them.
+	if one.MovieCount != 1 || one.SeriesCount != 1 {
+		t.Errorf("her work counted: %d films, %d shows; want a film and a show", one.MovieCount, one.SeriesCount)
+	}
+	var theirs found
+	if get("pst_kid", "/Items/"+guid(her), &theirs); theirs.MovieCount != 1 || theirs.SeriesCount != 0 {
+		t.Errorf("her work counted for the kid: %d films, %d shows; want the film alone", theirs.MovieCount, theirs.SeriesCount)
 	}
 	work := func(token, people string) []string {
 		t.Helper()
