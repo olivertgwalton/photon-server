@@ -5,6 +5,7 @@
 !internal
 !LICENSE
 !deploy/ffmpeg-NOTICE
+!deploy/entrypoint.sh
 !web
 web/node_modules
 web/.svelte-kit
