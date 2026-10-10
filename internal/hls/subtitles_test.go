@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -242,7 +243,12 @@ func TestAPartReadOutWithoutAStreamIsReadAgain(t *testing.T) {
 // filter whole.
 func TestAFilterTakesAnyPath(t *testing.T) {
 	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
-	dir := filepath.Join(t.TempDir(), `it's [a]:b,c;d\e`)
+	name := `it's [a]:b,c;d\e`
+	if runtime.GOOS == "windows" {
+		// Neither : nor \ can be in a name there, but the drive's colon and each separator are in the path.
+		name = `it's [a],c;d`
+	}
+	dir := filepath.Join(t.TempDir(), name)
 	if err := os.Mkdir(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
