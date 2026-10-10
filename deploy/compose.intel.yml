@@ -2,4 +2,3 @@
 services:
   server:
     devices: [/dev/dri:/dev/dri]
-    group_add: ["${RENDER_GID:?set RENDER_GID to the host's render group id}"]
