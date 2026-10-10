@@ -64,16 +64,23 @@ function measure() {
 }
 const resized = onResize(measure);
 
+// SvelteKit keeps a page's components when it goes to another of the same
+// route (one title's to another's), and with them how far each row was
+// scrolled; a row holding other cards starts again from its first.
+const holds = $derived([...shown, ...items].map((c) => c.id).join());
+
 $effect(() => {
-	if (!list || !current) return;
-	const here = list.querySelector<HTMLElement>("[aria-current=page]");
-	const li = here?.closest("li");
-	if (!li) return;
+	if (!list) return;
+	void holds;
+	const li = current
+		? list.querySelector("[aria-current=page]")?.closest("li")
+		: undefined;
 	// Sideways only: scrollIntoView would also scroll the page down to the row.
 	list.scrollTo({
-		left:
-			li.offsetLeft -
-			Number.parseFloat(getComputedStyle(list).scrollPaddingLeft),
+		left: li
+			? li.offsetLeft -
+				Number.parseFloat(getComputedStyle(list).scrollPaddingLeft)
+			: 0,
 		behavior: "instant",
 	});
 	measure();
