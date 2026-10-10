@@ -2,6 +2,7 @@
 import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
 import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 import type { Snippet } from "svelte";
+import { on as listen } from "svelte/events";
 import type { Shape } from "#lib/artwork.js";
 import { railLimit } from "#lib/rows.js";
 import { onResize } from "#lib/size.js";
@@ -84,6 +85,20 @@ function page(direction: 1 | -1) {
 	list?.scrollBy({ left: direction * list.clientWidth * 0.9 });
 }
 
+// Left and Right step from card to card, as a row goes on a TV: the next
+// card's link takes focus, and the row scrolls to it. Heard on the list, from
+// the links in it.
+function step(event: KeyboardEvent) {
+	const by = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+	if (!by || !list) return;
+	const cards = [...list.children];
+	const at = cards.findIndex((li) => li.contains(document.activeElement));
+	const next = cards[at + by]?.querySelector<HTMLElement>("a, button");
+	if (at < 0 || !next) return;
+	event.preventDefault();
+	next.focus();
+}
+
 const sizes = $derived(
 	shape === "poster"
 		? "(min-width: 1536px) 12rem, (min-width: 1024px) 10rem, 9rem"
@@ -157,6 +172,7 @@ const sizes = $derived(
 			bind:this={list}
 			{@attach resized}
 			onscroll={measure}
+			{@attach (ul) => listen(ul, "keydown", step)}
 			class="relative -mx-3 flex [contain-intrinsic-size:auto_16rem] [content-visibility:auto] scroll-smooth snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
 		>
 			{#each shown as c, i (c.id)}
