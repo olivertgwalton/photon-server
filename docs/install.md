@@ -190,6 +190,17 @@ journalctl -u photon-server -f
 Libraries are added at their own paths, which the `photon-server` user must be able to read. The
 cache is in `/var/cache/photon-server` and the dumps in `/var/lib/photon-server/backups`.
 
+### macOS
+
+On a Mac with Apple silicon, open the release's DMG and drag Photon to Applications. It carries its
+own PostgreSQL and Valkey, so there is nothing else to install or set.
+
+Photon runs in the menu bar. Opened the first time, it makes its database in
+`~/Library/Application Support/Photon`; each time, it starts PostgreSQL, Valkey and the server,
+reached only through sockets there, and migrates the database. Open Photon opens it, Start at
+Login starts it with the Mac, and Show Logs shows `~/Library/Logs/Photon`. Quitting it stops all
+three at once. It encodes on VideoToolbox.
+
 ### Archives
 
 Unpack the archive anywhere and keep its layout: the server finds its web app and tools from where
@@ -202,9 +213,9 @@ photon-server/bin/photon-server migrate
 photon-server/bin/photon-server
 ```
 
-On macOS, Homebrew's `postgresql@18` and `valkey` serve, and the server encodes on VideoToolbox.
-The binaries are not signed: clear the download's quarantine before the first run with
-`xattr -dr com.apple.quarantine photon-server`.
+On macOS the archive uses a PostgreSQL and Valkey you install, such as Homebrew's `postgresql@18`
+and `valkey`. Its binaries are not signed, as the DMG's are: clear the download's quarantine before
+the first run with `xattr -dr com.apple.quarantine photon-server`.
 
 On Windows, set the two addresses as environment variables and run `bin\photon-server.exe`.
 PostgreSQL's installer does not put its tools on `PATH`, and without them the server neither backs
