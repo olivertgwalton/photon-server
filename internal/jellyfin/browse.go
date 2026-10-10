@@ -38,6 +38,7 @@ type catalogue interface {
 	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error)
 	LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library uuid.UUID, limit int) ([]store.Card, error)
 	Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID][]store.VersionPage, error)
+	Streamed(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]bool, error)
 	ExternalIDs(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]map[domain.Provider]string, error)
 	Picture(ctx context.Context, id uuid.UUID) (domain.Picture, error)
 	SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error
@@ -151,6 +152,9 @@ func (a *API) list(ctx context.Context, cards []store.Card, l listed) ([]item, e
 					out[n].MediaStreams = out[n].MediaSources[0].MediaStreams
 				}
 			}
+		}
+		if err := a.listPlaceholders(ctx, out, cards, l); err != nil {
+			return nil, err
 		}
 	}
 	if l.fields["providerids"] {
@@ -364,32 +368,6 @@ var searchKinds = map[string]domain.ItemKind{
 	"movie": domain.ItemMovie, "series": domain.ItemShow, "episode": domain.ItemEpisode, "boxset": domain.ItemCollection,
 }
 
-// searchQuery is a search as an app asks for one, of the kinds of item it names; false where a
-// search finds none of them.
-func searchQuery(r *http.Request, text string, library uuid.UUID, types []string, l listed) (store.SearchQuery, bool) {
-	q := store.SearchQuery{Profile: auth.SessionOf(r.Context()).Profile.ID, Text: text, Library: library, Offset: l.start, Limit: l.limit}
-	for _, t := range types {
-		if k, ok := searchKinds[strings.ToLower(t)]; ok {
-			q.Kinds = append(q.Kinds, k)
-		}
-	}
-	return q, len(q.Kinds) > 0 || len(types) == 0
-}
-
-func (a *API) search(w http.ResponseWriter, r *http.Request, text string, library uuid.UUID, types []string, l listed) {
-	q, ok := searchQuery(r, text, library, types, l)
-	if !ok {
-		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
-		return
-	}
-	cards, total, err := a.searched(r.Context(), q)
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	a.writeList(w, r, cards, total, l.start, l)
-}
-
 // children answers what is in a collection, a show or a season: a collection's titles; a show's
 // seasons, or its episodes where an app asks for them; a season's episodes. Anything else holds
 // nothing an app can ask for here.
@@ -527,6 +505,10 @@ func (a *API) titleItem(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
 		return
 	}
 	it := a.fromTitle(p, words.Negotiate(w, r))
+	if it, err = a.titlePlaceholder(r.Context(), it, id, p.Title); err != nil {
+		a.internal(w, r, err)
+		return
+	}
 	if p.Kind == domain.ItemCollection {
 		members, err := a.svc.Catalogue.Members(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 		if err != nil {

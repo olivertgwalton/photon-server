@@ -69,7 +69,7 @@ func (a *API) trickplayFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
-	c, err := a.svc.Playing.Playable(r.Context(), profile, id, version)
+	c, err := a.svc.Playing.Playable(r.Context(), profile, id, copyAsked(id, version))
 	if err == nil && len(c.Parts) != 1 {
 		err = store.ErrNotFound
 	}

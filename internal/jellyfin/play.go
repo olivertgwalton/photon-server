@@ -95,6 +95,7 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		a.refuse(w, http.StatusBadRequest)
 		return
 	}
+	version = copyAsked(id, version)
 	profile := auth.SessionOf(r.Context()).Profile.ID
 	a.ensureCopies(r.Context(), id)
 	c, err := a.svc.Playing.Playable(r.Context(), profile, id, version)
@@ -266,7 +267,9 @@ func (a *API) oneFile(w http.ResponseWriter, r *http.Request) (store.PlayCopy, b
 		a.refuse(w, http.StatusBadRequest)
 		return store.PlayCopy{}, false
 	}
-	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, version)
+	// An app may stream a placeholder without asking for its playback info first.
+	a.ensureCopies(r.Context(), id)
+	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, copyAsked(id, version))
 	switch {
 	case errors.Is(err, store.ErrNotFound) || err == nil && len(c.Parts) == 0:
 		a.refuse(w, http.StatusNotFound)
@@ -457,7 +460,7 @@ func (a *API) startDirect(r *http.Request, id uuid.UUID, rep report) error {
 		return store.ErrNotFound
 	}
 	s := auth.SessionOf(r.Context())
-	c, err := a.svc.Playing.Playable(r.Context(), s.Profile.ID, item, version)
+	c, err := a.svc.Playing.Playable(r.Context(), s.Profile.ID, item, copyAsked(item, version))
 	if err != nil {
 		return err
 	}

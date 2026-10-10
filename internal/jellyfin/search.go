@@ -3,8 +3,10 @@ package jellyfin
 import (
 	"context"
 	"net/http"
+	"strings"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -98,4 +100,30 @@ func (a *API) searched(ctx context.Context, q store.SearchQuery) ([]store.Card, 
 		cards = append(cards, d.Card())
 	}
 	return cards, int(total) + len(found), nil
+}
+
+// searchQuery is a search as an app asks for one, of the kinds of item it names; false where a
+// search finds none of them.
+func searchQuery(r *http.Request, text string, library uuid.UUID, types []string, l listed) (store.SearchQuery, bool) {
+	q := store.SearchQuery{Profile: auth.SessionOf(r.Context()).Profile.ID, Text: text, Library: library, Offset: l.start, Limit: l.limit}
+	for _, t := range types {
+		if k, ok := searchKinds[strings.ToLower(t)]; ok {
+			q.Kinds = append(q.Kinds, k)
+		}
+	}
+	return q, len(q.Kinds) > 0 || len(types) == 0
+}
+
+func (a *API) search(w http.ResponseWriter, r *http.Request, text string, library uuid.UUID, types []string, l listed) {
+	q, ok := searchQuery(r, text, library, types, l)
+	if !ok {
+		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
+		return
+	}
+	cards, total, err := a.searched(r.Context(), q)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	a.writeList(w, r, cards, total, l.start, l)
 }
