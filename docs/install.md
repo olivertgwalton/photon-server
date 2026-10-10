@@ -156,9 +156,10 @@ Settings › Server shows; it is `photon` where unset. See [cluster.md](cluster.
 
 ## Native
 
-Each [release](https://github.com/olivertgwalton/photon-server/releases) has a macOS app in a DMG,
-which carries its own PostgreSQL and Valkey, and an archive for Linux, macOS and Windows. Each
-carries the server, its web app and the ffmpeg, ffprobe and yt-dlp it runs. An archive needs:
+Each [release](https://github.com/olivertgwalton/photon-server/releases) has a Flatpak for Linux
+and a macOS app in a DMG, each carrying its own PostgreSQL and Valkey, and an archive for Linux,
+macOS and Windows. Each carries the server, its web app and the ffmpeg, ffprobe and yt-dlp it runs.
+An archive needs:
 
 - **PostgreSQL 18**, with a database and a user of its own:
   ```sh
@@ -168,6 +169,23 @@ carries the server, its web app and the ffmpeg, ffprobe and yt-dlp it runs. An a
   and, to back the database up and restore it, the PostgreSQL client tools, `pg_dump`,
   `pg_restore` and `psql`, on the server's `PATH`, no older than the PostgreSQL they reach.
 - **Valkey 9**, where a distribution's own is older, from [valkey.io](https://valkey.io/download/).
+
+### Linux
+
+Install the release's Flatpak for your machine, `amd64` or `arm64`; it fetches its runtime from
+Flathub:
+
+```sh
+flatpak install --user ./photon-server_<version>_linux_amd64.flatpak
+```
+
+Open Photon from your applications, or run `flatpak run io.github.olivertgwalton.Photon`. It
+carries its own PostgreSQL and Valkey, so there is nothing else to install or set: the first time,
+it makes its database in `~/.var/app/io.github.olivertgwalton.Photon/data/photon`; each time, it
+starts PostgreSQL, Valkey and the server, reached only through sockets of its own, migrates the
+database and opens the web app. Its logs are in that folder's `logs`. It reads libraries anywhere
+on the machine and writes none, and encodes on the GPU where the Flatpak runtime's drivers reach
+it. It runs while you are logged in; for a server that runs from boot, use Docker.
 
 ### macOS
 
