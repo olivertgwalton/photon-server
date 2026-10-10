@@ -140,3 +140,13 @@ func TestAFileBeingWrittenAsksForItsScanSeldom(t *testing.T) {
 		t.Errorf("a thousand writes asked for %d scans, want one or a few", n)
 	}
 }
+
+// A library at the root of a drive, as an external disk's often is, is told of changes under it.
+func TestALibraryAtADrivesRootOwnsWhatIsUnderIt(t *testing.T) {
+	root := filepath.VolumeName(t.TempDir()) + string(filepath.Separator)
+	films := uuid.NewV7()
+	w := &Watcher{roots: map[uuid.UUID]string{films: root}}
+	if lib, ok := w.owner(filepath.Join(root, "Films", "Heat (1995)", "Heat.mkv")); !ok || lib != films {
+		t.Errorf("a file under %s belongs to %v, %t; want the library there", root, lib, ok)
+	}
+}
