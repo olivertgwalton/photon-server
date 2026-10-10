@@ -112,6 +112,14 @@ func (web *Web) servePage(w http.ResponseWriter, r *http.Request) {
 // first.
 var encodings = []struct{ token, ext string }{{"br", ".br"}, {"gzip", ".gz"}}
 
+// webTypes are the types of the files a build is made of, fixed: mime.TypeByExtension reads the
+// system's table, and a Windows registry that has .js as text/plain, as some installs leave it,
+// would have nosniff stop the app.
+var webTypes = map[string]string{
+	".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+	".json": "application/json", ".svg": "image/svg+xml", ".wasm": "application/wasm", ".woff2": "font/woff2",
+}
+
 func (web *Web) serveFile(w http.ResponseWriter, r *http.Request, name string) error {
 	h := w.Header()
 	if strings.HasPrefix(name, "_app/immutable/") {
@@ -120,7 +128,7 @@ func (web *Web) serveFile(w http.ResponseWriter, r *http.Request, name string) e
 	} else {
 		h.Set("Cache-Control", "no-cache")
 	}
-	h.Set("Content-Type", cmp.Or(mime.TypeByExtension(path.Ext(name)), "application/octet-stream"))
+	h.Set("Content-Type", cmp.Or(webTypes[path.Ext(name)], mime.TypeByExtension(path.Ext(name)), "application/octet-stream"))
 	h.Add("Vary", "Accept-Encoding")
 	f, err := web.open(w, r, name)
 	if err != nil {
