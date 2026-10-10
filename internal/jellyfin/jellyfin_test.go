@@ -632,3 +632,11 @@ func TestAnAppMeasuresItsBitrate(t *testing.T) {
 		t.Errorf("signed out: %d, want 401", w.Code)
 	}
 }
+
+// The server's address is not found, as any path no route has, rather than redirected to itself.
+func TestTheRootIsNotFound(t *testing.T) {
+	api, _, _, _ := newAPI()
+	if w := serve(api, http.MethodGet, "/", "", ""); w.Code != http.StatusNotFound {
+		t.Errorf("/: %d %v", w.Code, w.Header())
+	}
+}

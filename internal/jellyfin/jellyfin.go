@@ -269,6 +269,10 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // of those it matches as ServeMux prefers it, leaving the rest, an id or a name, as it came, even
 // where another route has a segment of that name; and drops a trailing slash.
 func (a *API) canonical(path string) string {
+	// The root has no slash to drop: without it ServeMux redirects to the root again.
+	if path == "/" {
+		return path
+	}
 	segs := strings.Split(strings.TrimSuffix(path, "/"), "/")
 	var best []string
 	most := -1
