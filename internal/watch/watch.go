@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"syscall"
 	"time"
 	"uuid"
@@ -182,6 +181,9 @@ func (w *Watcher) owner(p string) (uuid.UUID, bool) {
 	return best, longest >= 0
 }
 
+// within reports whether p is root or under it, a root that ends in a separator, as / and D:\ do,
+// among them.
 func within(p, root string) bool {
-	return p == root || strings.HasPrefix(p, root+string(filepath.Separator))
+	rel, err := filepath.Rel(root, p)
+	return err == nil && (rel == "." || filepath.IsLocal(rel))
 }
