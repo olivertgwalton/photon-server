@@ -1,3 +1,0 @@
-# Read by photon-server.service. Both passwords go into URLs: use letters and digits only.
-PHOTON_DATABASE_URL=postgres://photon:PASSWORD@localhost/photon
-PHOTON_VALKEY_URL=valkey://photon:PASSWORD@localhost:6379
