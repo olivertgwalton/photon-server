@@ -91,6 +91,7 @@ func slots(t *testing.T) *hls.Remuxer {
 	if err != nil {
 		t.Fatal(err)
 	}
+	closing(t, r)
 	return r
 }
 

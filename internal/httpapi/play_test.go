@@ -309,6 +309,7 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	closing(t, remuxer)
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Copies: noCopies{}, Discover: noDiscoveries{},
 		Sent:    playback.NewSent(),
@@ -741,6 +742,7 @@ func TestAPlayerIsGivenTheSegmentsItAsksFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	closing(t, remuxer)
 	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Copies: noCopies{}, Discover: noDiscoveries{},
@@ -774,6 +776,7 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	closing(t, remuxer)
 	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
 	placer := alone(remuxOpener{remuxer}, false)
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
@@ -865,6 +868,7 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	closing(t, remuxer)
 	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
 	var told []domain.Event
 	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
