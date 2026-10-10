@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -99,6 +100,9 @@ type Services struct {
 	Network settings
 	// Sent counts the media this node sends.
 	Sent *playback.Sent
+	// Web is Jellyfin's web app, served under /web/ as Jellyfin serves it, for the TV apps (LG's,
+	// Samsung's) are that app loaded from the server; nil where none is installed.
+	Web fs.FS
 }
 
 type API struct {
@@ -110,6 +114,8 @@ type API struct {
 	// name is what the server is called now.
 	name func() string
 	mux  *http.ServeMux
+	// web serves Services.Web, or is nil.
+	web http.Handler
 	// routes are the paths of the routes by segment, a wildcard as "", for Jellyfin's routes are
 	// matched whatever their case and ServeMux's are not.
 	routes [][]string
@@ -124,6 +130,9 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 		logger: logger, svc: svc, name: name,
 		id:  strings.ReplaceAll(server, "-", ""),
 		mux: http.NewServeMux(),
+	}
+	if svc.Web != nil {
+		a.web = http.StripPrefix("/web", http.FileServerFS(svc.Web))
 	}
 	// Ping answers as Jellyfin does: its product's name, not the server's.
 	a.anyone(a.constant(`"`+product+`"`), "GET /System/Ping", "POST /System/Ping")
@@ -260,6 +269,19 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Max-Age", "86400")
 		w.WriteHeader(http.StatusNoContent)
 		return
+	}
+	// The web app's files are matched as they are named, not as a route is.
+	if a.web != nil {
+		switch {
+		case r.URL.Path == "/" || r.URL.Path == "/web":
+			http.Redirect(w, r, "/web/", http.StatusFound)
+			return
+		case strings.HasPrefix(r.URL.Path, "/web/"):
+			// The TV apps open index.html by name, which FileServer would redirect to its folder.
+			r.URL.Path = strings.TrimSuffix(r.URL.Path, "index.html")
+			a.web.ServeHTTP(w, r)
+			return
+		}
 	}
 	r.URL.Path, r.URL.RawPath = a.canonical(r.URL.Path), ""
 	a.mux.ServeHTTP(w, r)
