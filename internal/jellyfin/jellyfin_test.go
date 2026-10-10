@@ -669,3 +669,31 @@ func TestATVAppLoadsTheWebAppFromTheServer(t *testing.T) {
 		t.Errorf("api beside it: %d", w.Code)
 	}
 }
+
+type fakeNetwork domain.Network
+
+func (n fakeNetwork) Network(context.Context) (domain.Network, error) { return domain.Network(n), nil }
+
+// An app is told whether it is on the server's machine and its networks, which Jellyfin's web
+// app needs to know before it measures its bitrate rather than stream at 1.5 Mbps.
+func TestAnAppIsToldWhetherItIsOnTheServersNetwork(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), serverID.String(), func() string { return "Den" }, Services{
+		Auth: fakeAuth{pairing: new(kv.PairingState)}, Network: fakeNetwork{},
+	})
+	for _, tc := range []struct {
+		from, want string
+	}{
+		{"127.0.0.1:5000", `{"IsLocal":true,"IsInNetwork":true}`},
+		{"192.168.1.20:5000", `{"IsLocal":false,"IsInNetwork":true}`},
+		{"203.0.113.9:5000", `{"IsLocal":false,"IsInNetwork":false}`},
+	} {
+		r := httptest.NewRequest(http.MethodGet, "/System/Endpoint", nil)
+		r.Header.Set("Authorization", `MediaBrowser Token="pst_device"`)
+		r.RemoteAddr = tc.from
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, r)
+		if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != tc.want {
+			t.Errorf("from %s: %d %s, want %s", tc.from, w.Code, w.Body, tc.want)
+		}
+	}
+}

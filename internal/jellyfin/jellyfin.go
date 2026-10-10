@@ -152,6 +152,7 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	a.anyone(a.image, "GET /UserImage", "GET /Users/{userId}/Images/{imageType}")
 	a.handle(a.authorizeQuickConnect, "POST /QuickConnect/Authorize")
 	a.handle(a.systemInfo, "GET /System/Info")
+	a.handle(a.endpoint, "GET /System/Endpoint")
 	a.handle(a.me, "GET /Users/Me")
 	a.handle(a.user, "GET /Users/{userId}")
 	a.handle(a.setConfiguration, "POST /Users/Configuration", "POST /Users/{userId}/Configuration")
