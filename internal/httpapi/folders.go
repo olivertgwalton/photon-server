@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strings"
 
 	"github.com/olivertgwalton/photon-server/internal/library"
 )
@@ -68,7 +67,7 @@ func (a *API) adminFolders(w http.ResponseWriter, r *http.Request) {
 	for _, e := range entries {
 		switch hidden {
 		case hideHidden:
-			if strings.HasPrefix(e.Name(), ".") {
+			if hiddenFolder(e) {
 				continue
 			}
 		case showHidden:
@@ -129,7 +128,7 @@ func (a *API) foldersRoutes() []route {
 			summary: "List a folder's subfolders on the server, or the folders to start from, for choosing a library's",
 			query: []param{
 				{"path", "", "An absolute path; without one, the folders to start from."},
-				{"hidden", hideHidden, "show lists folders whose names start with a dot, hidden by default."},
+				{"hidden", hideHidden, "show lists hidden folders: those whose names start with a dot, and on Windows those marked hidden. They are hidden by default."},
 			},
 			status: http.StatusOK, reply: folderListJSON{}, handle: a.adminFolders,
 		},
