@@ -156,9 +156,9 @@ Settings › Server shows; it is `photon` where unset. See [cluster.md](cluster.
 
 ## Native
 
-Each [release](https://github.com/olivertgwalton/photon-server/releases) has a `.deb` and an
-`.rpm` for Linux, and an archive for Linux, macOS and Windows. Each carries the server, its web
-app and the ffmpeg, ffprobe and yt-dlp it runs. It needs:
+Each [release](https://github.com/olivertgwalton/photon-server/releases) has a macOS app in a DMG,
+which carries its own PostgreSQL and Valkey, and an archive for Linux, macOS and Windows. Each
+carries the server, its web app and the ffmpeg, ffprobe and yt-dlp it runs. An archive needs:
 
 - **PostgreSQL 18**, with a database and a user of its own:
   ```sh
@@ -168,27 +168,6 @@ app and the ffmpeg, ffprobe and yt-dlp it runs. It needs:
   and, to back the database up and restore it, the PostgreSQL client tools, `pg_dump`,
   `pg_restore` and `psql`, on the server's `PATH`, no older than the PostgreSQL they reach.
 - **Valkey 9**, where a distribution's own is older, from [valkey.io](https://valkey.io/download/).
-
-### Debian, Ubuntu, Fedora
-
-Install the package for your machine, `amd64` or `arm64`:
-
-```sh
-sudo apt install ./photon-server_<version>_amd64.deb
-sudo dnf install ./photon-server-<version>-1.x86_64.rpm
-```
-
-It installs a `photon-server` service, run as a user of its own in the `render` and `video` groups,
-so an Intel or AMD GPU is used with nothing to set. Set the database's and Valkey's addresses in
-`/etc/photon-server/env`, then start it; it migrates the database as it starts:
-
-```sh
-sudo systemctl start photon-server
-journalctl -u photon-server -f
-```
-
-Libraries are added at their own paths, which the `photon-server` user must be able to read. The
-cache is in `/var/cache/photon-server` and the dumps in `/var/lib/photon-server/backups`.
 
 ### macOS
 
@@ -217,7 +196,9 @@ On macOS the archive uses a PostgreSQL and Valkey you install, such as Homebrew'
 and `valkey`. Its binaries are not signed, as the DMG's are: clear the download's quarantine before
 the first run with `xattr -dr com.apple.quarantine photon-server`.
 
-On Windows, set the two addresses as environment variables and run `bin\photon-server.exe`.
+On Windows, run Photon in Docker Desktop with the compose file above: Valkey has no Windows build.
+The archive is for those who run PostgreSQL and Valkey themselves, such as in WSL. Set the two
+addresses as environment variables and run `bin\photon-server.exe`.
 PostgreSQL's installer does not put its tools on `PATH`, and without them the server neither backs
 up nor restores; add its `bin` folder, such as `C:\Program Files\PostgreSQL\18\bin`. Valkey has no Windows build, so run it in WSL or Docker.
 The server encodes on an NVIDIA, Intel or AMD GPU, or in software.
@@ -239,5 +220,5 @@ and its log, `photon-server.log`, in `C:\Windows\System32\config\systemprofile\A
 Stopping it plays its streams to their end first; the failure actions start it again after a
 restore. The PostgreSQL tools must be on the system's `PATH` for the service to find them.
 
-A server stopped for a restore exits with status 75 to be started again: the package's service and
-the Windows service above do, and anything else running the server must too.
+A server stopped for a restore exits with status 75 to be started again: the Mac app and the
+Windows service above do, and anything else running the server must too.
