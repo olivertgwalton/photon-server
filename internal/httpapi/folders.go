@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+
+	"github.com/olivertgwalton/photon-server/internal/library"
 )
 
 // maxFolders is the most subfolders a listing answers; past it, truncated says so.
@@ -89,7 +91,7 @@ func isFolder(path string, e fs.DirEntry) bool {
 	if e.IsDir() {
 		return true
 	}
-	if e.Type()&fs.ModeSymlink == 0 {
+	if !library.IsLink(e) {
 		return false
 	}
 	info, err := os.Stat(path) //nolint:gosec // browsing the server's folders is the point, and only an admin may

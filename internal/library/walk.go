@@ -216,7 +216,7 @@ func read(full string, v visit, entries []fs.DirEntry) Folder {
 		}
 		var info fs.FileInfo
 		var err error
-		isDir, link := e.IsDir(), e.Type()&fs.ModeSymlink != 0
+		isDir, link := e.IsDir(), IsLink(e)
 		if link || !isDir {
 			info, err = os.Stat(filepath.Join(full, name))
 			isDir = err == nil && info.IsDir()
@@ -252,6 +252,12 @@ func read(full string, v visit, entries []fs.DirEntry) Folder {
 	}
 	h.Sum(folder.Fingerprint[:0])
 	return folder
+}
+
+// IsLink is whether an entry leads elsewhere: a symbolic link, or a junction, which Go reports on
+// Windows as irregular.
+func IsLink(e fs.DirEntry) bool {
+	return e.Type()&(fs.ModeSymlink|fs.ModeIrregular) != 0
 }
 
 func leadsAbove(info fs.FileInfo, above []string) bool {
