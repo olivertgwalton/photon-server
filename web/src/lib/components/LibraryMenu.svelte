@@ -1,5 +1,4 @@
 <script lang="ts">
-import DatabaseBackupIcon from "@lucide/svelte/icons/database-backup";
 import EllipsisVerticalIcon from "@lucide/svelte/icons/ellipsis-vertical";
 import ArrowUpDownIcon from "@lucide/svelte/icons/arrow-up-down";
 import FolderSyncIcon from "@lucide/svelte/icons/folder-sync";
@@ -9,7 +8,7 @@ import TrashIcon from "@lucide/svelte/icons/trash";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 import {
-	refreshLibrary,
+	refreshMetadata,
 	removeLibrary,
 	scanLibrary,
 } from "#lib/actions.svelte.js";
@@ -52,14 +51,9 @@ const admin = $derived(page.data.me?.role === "admin");
 				<FolderSyncIcon />Scan library files
 			</DropdownMenu.Item>
 			<DropdownMenu.Item
-				onSelect={() => refreshLibrary(library.id, library.name, "missing")}
+				onSelect={() => refreshMetadata("library", library.id, library.name)}
 			>
-				<RefreshCwIcon />Refresh missing metadata
-			</DropdownMenu.Item>
-			<DropdownMenu.Item
-				onSelect={() => refreshLibrary(library.id, library.name, "all")}
-			>
-				<DatabaseBackupIcon />Refresh all metadata
+				<RefreshCwIcon />Refresh metadata…
 			</DropdownMenu.Item>
 			<DropdownMenu.Separator />
 			<DropdownMenu.Item

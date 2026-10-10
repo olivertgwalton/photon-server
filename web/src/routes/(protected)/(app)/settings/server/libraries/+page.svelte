@@ -1,6 +1,10 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { removeLibrary, scanLibrary } from "#lib/actions.svelte.js";
+import {
+	refreshMetadata,
+	removeLibrary,
+	scanLibrary,
+} from "#lib/actions.svelte.js";
 import DatabaseBackupIcon from "@lucide/svelte/icons/database-backup";
 import FilmIcon from "@lucide/svelte/icons/film";
 import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
@@ -12,7 +16,6 @@ import { liveStream } from "#lib/admin/stream.svelte.js";
 import { holding } from "#lib/format.js";
 import IconButton from "#lib/components/IconButton.svelte";
 import LibraryCheck from "#lib/components/admin/LibraryCheck.svelte";
-import LibraryRefresh from "#lib/components/admin/LibraryRefresh.svelte";
 import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 
@@ -80,10 +83,11 @@ const live = liveStream();
 						disabled={!!scan}
 						onclick={() => scanLibrary(library.id, library.name)}
 					/>
-					<LibraryRefresh
-						id={library.id}
-						name={library.name}
+					<IconButton
+						label="Refresh metadata"
+						hidden="of {library.name}"
 						icon={DatabaseBackupIcon}
+						onclick={() => refreshMetadata("library", library.id, library.name)}
 					/>
 					<!-- A remote library has no root for a node to read. -->
 					{#if library.media === "folder"}

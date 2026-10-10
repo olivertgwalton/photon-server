@@ -65,15 +65,32 @@ export function editTitle(id: string, tab: EditorTab) {
 	Object.assign(editor, { open: true, id, tab });
 }
 
-export function refreshTitle(id: string, name: string, mode: RefreshMode) {
+export type RefreshOf = "library" | "title";
+
+// The one choice of how much to refresh, drawn by the shell for an admin and
+// opened from a library's or a title's menu, as Jellyfin's Refresh metadata
+// asks.
+export const refreshing = $state({
+	open: false,
+	of: "title" as RefreshOf,
+	id: "",
+	name: "",
+});
+
+export function refreshMetadata(of: RefreshOf, id: string, name: string) {
+	Object.assign(refreshing, { open: true, of, id, name });
+}
+
+export function refresh(mode: RefreshMode) {
+	const { of, id, name } = refreshing;
+	const body = { ...path(id), body: { mode } };
 	return act(
-		api.POST("/api/v1/admin/titles/{id}/refresh", {
-			...path(id),
-			body: { mode },
-		}),
+		of === "library"
+			? api.POST("/api/v1/admin/libraries/{id}/refresh", body)
+			: api.POST("/api/v1/admin/titles/{id}/refresh", body),
 		mode === "all"
-			? `${name} is being described again from its providers.`
-			: `${name} is being filled in where it's missing.`,
+			? `Fetching all metadata for ${name} again.`
+			: `Fetching missing metadata for ${name}.`,
 	);
 }
 
@@ -217,18 +234,6 @@ export function scanLibrary(id: string, name: string) {
 	return act(
 		api.POST("/api/v1/admin/libraries/{id}/scan", path(id)),
 		`${name} is being scanned.`,
-	);
-}
-
-export function refreshLibrary(id: string, name: string, mode: RefreshMode) {
-	return act(
-		api.POST("/api/v1/admin/libraries/{id}/refresh", {
-			...path(id),
-			body: { mode },
-		}),
-		mode === "all"
-			? `${name} is being described again from its providers.`
-			: `${name} is being filled in where it's missing.`,
 	);
 }
 
