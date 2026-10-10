@@ -3,6 +3,7 @@ import Artwork from "#lib/components/Artwork.svelte";
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 import CaptionsIcon from "@lucide/svelte/icons/captions";
 import CheckIcon from "@lucide/svelte/icons/check";
+import DatabaseBackupIcon from "@lucide/svelte/icons/database-backup";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
@@ -11,10 +12,16 @@ import HeartIcon from "@lucide/svelte/icons/heart";
 import InfoIcon from "@lucide/svelte/icons/info";
 import ListPlusIcon from "@lucide/svelte/icons/list-plus";
 import PlayIcon from "@lucide/svelte/icons/play";
+import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
 import { goto } from "$app/navigation";
-import { findSubtitles, pickPlaylist, setMark } from "#lib/actions.svelte.js";
+import {
+	findSubtitles,
+	pickPlaylist,
+	refreshTitle,
+	setMark,
+} from "#lib/actions.svelte.js";
 import { type Extra, extrasOf } from "#lib/extras.js";
 import { blurStyle, isDark } from "#lib/blurhash.js";
 import CardGrid from "#lib/components/CardGrid.svelte";
@@ -159,7 +166,6 @@ const adminTools = $derived(
 	[
 		["edit", "Edit metadata"],
 		["identify", "Identify"],
-		["refresh", "Refresh metadata"],
 		["artwork", "Edit artwork"],
 		playable && t.kind !== "extra" && ["markers", "Edit markers"],
 	].filter((tool) => !!tool),
@@ -406,6 +412,19 @@ const poster = $derived(art("poster"));
 										<WrenchIcon />{name}
 									</DropdownMenu.Item>
 								{/each}
+								{#if t.kind !== "collection" && t.kind !== "extra"}
+									<DropdownMenu.Item
+										onSelect={() =>
+											refreshTitle(t.id, titleWithShow(t), "missing")}
+									>
+										<RefreshCwIcon />Refresh missing metadata
+									</DropdownMenu.Item>
+									<DropdownMenu.Item
+										onSelect={() => refreshTitle(t.id, titleWithShow(t), "all")}
+									>
+										<DatabaseBackupIcon />Refresh all metadata
+									</DropdownMenu.Item>
+								{/if}
 								{#if t.show}
 									<!-- A show has no page of its own to manage it from. -->
 									<DropdownMenu.Item
