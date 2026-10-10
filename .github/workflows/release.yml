@@ -4,7 +4,7 @@ on:
     tags: ["v*"]
   # A change to how archives are made builds and runs them without publishing.
   pull_request:
-    paths: [.github/workflows/release.yml, deploy/fetch-tools.sh]
+    paths: [.github/workflows/release.yml, deploy/fetch-tools.sh, deploy/linux/**]
 permissions:
   contents: read
 jobs:
@@ -85,9 +85,97 @@ jobs:
           grep '"msg":"media tools"' run.log | grep -Eq 'photon-server.{1,2}bin.{1,2}ffmpeg'
           grep '"msg":"media tools"' run.log | grep -q '"yt_dlp_version":"20'
 
+  package:
+    needs: archive
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: "*_linux_${{ matrix.arch }}"
+          merge-multiple: true
+      - name: Build the .deb and .rpm from the archive
+        env:
+          ARCH: ${{ matrix.arch }}
+          # A package's version is a number: the tag's, or 0.0.0 for a PR's.
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '0.0.0' }}
+        run: |
+          tar -xzf photon-server_*.tar.gz
+          for p in deb rpm; do
+            go run github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0 package -f deploy/linux/nfpm.yaml -p "$p"
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages_${{ matrix.arch }}
+          path: |
+            *.deb
+            *.rpm
+          if-no-files-found: error
+
+  # The .deb installs on Ubuntu, and its service migrates and serves.
+  deb:
+    needs: package
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: photon
+          POSTGRES_PASSWORD: photon
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+      valkey:
+        image: valkey/valkey:9-alpine
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: packages_amd64
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ./*.deb
+      - name: Configure and start the service until it is ready
+        run: |
+          printf '%s\n' PHOTON_DATABASE_URL=postgres://photon:photon@localhost/photon \
+            PHOTON_VALKEY_URL=valkey://localhost:6379 | sudo tee /etc/photon-server/env
+          sudo systemctl start photon-server
+          for _ in $(seq 30); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' localhost:8640/readyz)" = 204 ]; then
+              [ "$(ps -o uid= -C photon-server | tr -d ' ')" = "$(id -u photon-server)" ] && exit 0
+              break
+            fi
+            sleep 2
+          done
+          sudo journalctl -u photon-server --no-pager
+          exit 1
+
+  # The .rpm installs on Fedora, and the server finds the tools it carries.
+  rpm:
+    needs: package
+    runs-on: ubuntu-latest
+    container: fedora:43
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: packages_amd64
+      - run: dnf install -y --setopt=install_weak_deps=False ./*.x86_64.rpm
+      - name: Start the server until it has found its tools
+        env:
+          PHOTON_DATABASE_URL: postgres://none/none
+          PHOTON_VALKEY_URL: valkey://none:6379
+        run: |
+          photon-server > run.log 2>&1 || true
+          cat run.log
+          grep '"msg":"media tools"' run.log | grep -q '"ffmpeg":"/usr/lib/photon-server/bin/ffmpeg"'
+
   publish:
     if: github.ref_type == 'tag'
-    needs: run
+    needs: [run, deb, rpm]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -98,4 +186,4 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --generate-notes photon-server_*
+        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --generate-notes photon-server[_-]*

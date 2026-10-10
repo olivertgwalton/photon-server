@@ -1,0 +1,38 @@
+# nfpm's description of the .deb and .rpm, built from a linux release archive unpacked at
+# ./photon-server, for ARCH (amd64 or arm64) at VERSION.
+name: photon-server
+arch: ${ARCH}
+version: ${VERSION}
+section: video
+maintainer: Oliver Walton <38323818+olivertgwalton@users.noreply.github.com>
+description: A media server for films and television.
+homepage: https://github.com/olivertgwalton/photon-server
+license: GPL-3.0
+contents:
+  - src: photon-server/bin
+    dst: /usr/lib/photon-server/bin
+  - src: photon-server/share
+    dst: /usr/lib/photon-server/share
+  - src: photon-server/LICENSE
+    dst: /usr/share/licenses/photon-server/LICENSE
+  - src: /usr/lib/photon-server/bin/photon-server
+    dst: /usr/bin/photon-server
+    type: symlink
+  - src: deploy/linux/photon-server.service
+    dst: /usr/lib/systemd/system/photon-server.service
+  - src: deploy/linux/env
+    dst: /etc/photon-server/env
+    type: config|noreplace
+scripts:
+  postinstall: deploy/linux/postinstall.sh
+  preremove: deploy/linux/preremove.sh
+overrides:
+  # pg_dump, pg_restore and psql back the database up and put it back, and must be no older than
+  # the server they reach; the fonts are for subtitles drawn into a transcode; the VAAPI drivers
+  # are for Intel and AMD GPUs.
+  deb:
+    depends: [postgresql-client]
+    recommends: [fonts-liberation, fonts-noto-core, mesa-va-drivers]
+  rpm:
+    depends: [postgresql, shadow-utils]
+    recommends: [liberation-fonts, google-noto-sans-fonts, mesa-va-drivers]
