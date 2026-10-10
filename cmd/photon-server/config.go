@@ -80,20 +80,30 @@ func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *
 	)
 }
 
-// webApp is the web app's build, beside the binary as an install lays it out
-// (/usr/local/share/photon-server/web for /usr/local/bin/photon-server), served wherever there is
-// one; nil where there is none, and the server answers the API alone. Its pages may draw from
-// where objectOrigin says clients read artwork and previews.
+// webApp is the web app's build, served wherever there is one; nil where there is none, and the
+// server answers the API alone. Its pages may draw from where objectOrigin says clients read
+// artwork and previews.
 func webApp(objectOrigin func() string) (*httpapi.Web, error) {
+	build, err := installed("web")
+	if build == nil || err != nil {
+		return nil, err
+	}
+	return httpapi.NewWeb(build, objectOrigin)
+}
+
+// installed is the web app named in share/photon-server beside the binary, as an install lays it
+// out (/usr/local/share/photon-server/web for /usr/local/bin/photon-server); nil where there is no
+// index.html in it.
+func installed(name string) (fs.FS, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, err
 	}
-	build := os.DirFS(filepath.Join(filepath.Dir(exe), "..", "share", "photon-server", "web"))
-	if _, err := fs.Stat(build, "index.html"); errors.Is(err, fs.ErrNotExist) {
+	dir := os.DirFS(filepath.Join(filepath.Dir(exe), "..", "share", "photon-server", name))
+	if _, err := fs.Stat(dir, "index.html"); errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
-	return httpapi.NewWeb(build, objectOrigin)
+	return dir, nil
 }
 
 // encoders are what a node may encode video on, in the order it tries them: VideoToolbox on a

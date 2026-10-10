@@ -215,11 +215,15 @@ func (n *node) wire(ctx context.Context) error {
 		sent:   playback.NewSent(), plugins: n.plugins, fetcher: fetcher,
 	}
 	n.secured = secure.New(st, n.hub.Subscribe, logger)
+	jellyfinWeb, err := installed("jellyfin-web")
+	if err != nil {
+		return err
+	}
 	n.jellyfin, err = jellyfin.NewListener(st, n.hub.Subscribe, jellyfin.New(logger, n.info.ID, n.identity.Name, jellyfin.Services{
 		Auth: n.auth, Limits: n.cache, Raise: n.hub.Raise, Reach: n.reach, Catalogue: st, Subscribe: n.hub.Subscribe, Audience: st, Displays: st, Preferences: st, Playlists: st,
 		Pictures: n.pictures, Playing: files, Parts: n.parts, Copies: n.copies, Discover: n.discover, Playbacks: n.sessions, Watching: st, Themes: st, Previews: st, PreviewFiles: n.previews,
 		HLS: n.remuxer, Placer: p.placer, Owners: p.owners, Signer: p.signer,
-		Network: st, Sent: p.sent,
+		Network: st, Sent: p.sent, Web: jellyfinWeb,
 	}), n.listen, n.secured.Listen, n.secured.TLSConfig(), logger)
 	if err != nil {
 		return err

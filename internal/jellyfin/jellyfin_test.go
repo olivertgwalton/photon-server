@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 	"uuid"
 
@@ -630,5 +631,41 @@ func TestAnAppMeasuresItsBitrate(t *testing.T) {
 	}
 	if w := serve(api, http.MethodGet, "/Playback/BitrateTest?size=10", kotlin, ""); w.Code != http.StatusUnauthorized {
 		t.Errorf("signed out: %d, want 401", w.Code)
+	}
+}
+
+// Without Jellyfin's web app the server's address is not found, as any path no route has, rather
+// than redirected to itself.
+func TestTheRootWithoutTheWebAppIsNotFound(t *testing.T) {
+	api, _, _, _ := newAPI()
+	if w := serve(api, http.MethodGet, "/", "", ""); w.Code != http.StatusNotFound {
+		t.Errorf("/: %d %v", w.Code, w.Header())
+	}
+}
+
+// A TV app (LG's, Samsung's) is Jellyfin's web app loaded from the server: it reads its manifest,
+// then opens its page, and the server's own address leads there.
+func TestATVAppLoadsTheWebAppFromTheServer(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), serverID.String(), func() string { return "Den" }, Services{
+		Web: fstest.MapFS{
+			"index.html":    {Data: []byte("<!doctype html>")},
+			"manifest.json": {Data: []byte(`{"start_url":"index.html"}`)},
+		},
+	})
+	if w := serve(api, http.MethodGet, "/web/manifest.json", "", ""); w.Code != http.StatusOK || w.Body.String() != `{"start_url":"index.html"}` {
+		t.Errorf("manifest: %d %q", w.Code, w.Body)
+	}
+	for _, path := range []string{"/web/index.html", "/web/"} {
+		if w := serve(api, http.MethodGet, path, "", ""); w.Code != http.StatusOK || w.Body.String() != "<!doctype html>" {
+			t.Errorf("%s: %d %q", path, w.Code, w.Body)
+		}
+	}
+	for _, path := range []string{"/", "/web"} {
+		if w := serve(api, http.MethodGet, path, "", ""); w.Code != http.StatusFound || w.Header().Get("Location") != "/web/" {
+			t.Errorf("%s: %d %v", path, w.Code, w.Header())
+		}
+	}
+	if w := serve(api, http.MethodGet, "/System/Info/Public", "", ""); w.Code != http.StatusOK {
+		t.Errorf("api beside it: %d", w.Code)
 	}
 }

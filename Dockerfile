@@ -8,6 +8,12 @@ RUN bun install --frozen-lockfile
 COPY web .
 RUN bun run build
 
+# Jellyfin's web app, which its API serves, is files too.
+FROM --platform=$BUILDPLATFORM ubuntu:26.04 AS jellyfin-web
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl
+COPY deploy/fetch-jellyfin-web.sh /tmp/fetch-jellyfin-web.sh
+RUN /tmp/fetch-jellyfin-web.sh /out/web /out/licenses
+
 FROM --platform=$BUILDPLATFORM golang:1.27-trixie AS build
 ARG TARGETOS TARGETARCH VERSION=(devel)
 WORKDIR /src
@@ -41,6 +47,8 @@ RUN apt-get update \
 COPY deploy/ffmpeg-NOTICE /usr/share/licenses/jellyfin-ffmpeg/NOTICE
 COPY --from=build /out/photon-server /usr/local/bin/photon-server
 COPY --from=web /web/build /usr/local/share/photon-server/web
+COPY --from=jellyfin-web /out/web /usr/local/share/photon-server/jellyfin-web
+COPY --from=jellyfin-web /out/licenses /usr/share/licenses/jellyfin-web
 COPY LICENSE /usr/share/licenses/photon-server/LICENSE
 COPY deploy/entrypoint.sh /usr/local/bin/photon-entrypoint
 # The server keeps its cache in the user's cache folder and its dumps in its config folder.
