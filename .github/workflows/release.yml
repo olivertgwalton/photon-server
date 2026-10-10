@@ -4,7 +4,7 @@ on:
     tags: ["v*"]
   # A change to how archives are made builds and runs them without publishing.
   pull_request:
-    paths: [.github/workflows/release.yml, deploy/fetch-tools.sh, deploy/linux/**]
+    paths: [.github/workflows/release.yml, deploy/fetch-tools.sh, deploy/linux/**, macos/**]
 permissions:
   contents: read
 jobs:
@@ -195,9 +195,112 @@ jobs:
           cat run.log
           grep '"msg":"media tools"' run.log | grep -q '"ffmpeg":"/usr/lib/photon-server/bin/ffmpeg"'
 
+  # Photon.app, the menu-bar app that runs the server beside its own PostgreSQL and Valkey, in a
+  # DMG for Apple silicon: signed with the Developer ID and notarized where the secrets are set, as a tag requires. The secrets:
+  # MACOS_CERTIFICATE, the Developer ID Application certificate and key as a base64 .p12, and
+  # MACOS_CERTIFICATE_PASSWORD; APPLE_API_KEY, an App Store Connect API key's .p8 in base64, with
+  # APPLE_API_KEY_ID and APPLE_API_ISSUER_ID.
+  dmg:
+    needs: archive
+    runs-on: macos-latest
+    env:
+      VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: "*_darwin_arm64"
+          merge-multiple: true
+      # PostgreSQL and Valkey are built again only when the versions build-services.sh pins change.
+      - uses: actions/cache@v6
+        id: services
+        with:
+          path: services
+          key: services-${{ hashFiles('macos/build-services.sh') }}
+      - name: Build PostgreSQL and Valkey
+        if: steps.services.outputs.cache-hit != 'true'
+        run: |
+          brew install icu4c@78
+          macos/build-services.sh services
+      - name: Build the app
+        run: |
+          tar -xzf photon-server_*.tar.gz
+          macos/build-app.sh "$VERSION" photon-server services .
+      - name: Sign the app
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          security create-keychain -p "" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "" "$keychain"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -k "" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain"
+          identity=$(security find-identity -v -p codesigning "$keychain" | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"')
+          sign() { codesign --force --timestamp --options runtime --sign "$identity" "$@"; }
+          res=Photon.app/Contents/Resources
+          sign --entitlements macos/yt-dlp.entitlements "$res/photon-server/bin/yt-dlp"
+          find "$res" -type f ! -name yt-dlp | while read -r f; do
+            if file "$f" | grep -q Mach-O; then sign "$f"; fi
+          done
+          sign Photon.app
+          codesign --verify --strict --verbose=2 Photon.app
+          echo "IDENTITY=$identity" >> "$GITHUB_ENV"
+      - name: Make the DMG
+        run: |
+          mkdir dmg
+          cp -R Photon.app dmg/
+          ln -s /Applications dmg/Applications
+          name="photon-server_${VERSION}_darwin_arm64.dmg"
+          hdiutil create -volname Photon -srcfolder dmg -fs HFS+ -format UDZO "$name"
+          echo "DMG=$name" >> "$GITHUB_ENV"
+      - name: Notarize the DMG
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          codesign --timestamp --sign "$IDENTITY" "$DMG"
+          echo "$APPLE_API_KEY" | base64 --decode > "$RUNNER_TEMP/key.p8"
+          xcrun notarytool submit "$DMG" --key "$RUNNER_TEMP/key.p8" --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER_ID" --wait
+          xcrun stapler staple "$DMG"
+          spctl --assess --type open --context context:primary-signature --verbose "$DMG"
+      - name: A tag's DMG is signed
+        if: github.ref_type == 'tag' && env.MACOS_CERTIFICATE == ''
+        run: |
+          echo "set the MACOS_CERTIFICATE and APPLE_API_KEY secrets to publish a signed DMG" >&2
+          exit 1
+      # Opened from the DMG, the app makes its database, starts PostgreSQL, Valkey and the server,
+      # and serves the web app; quit, it stops all three.
+      - name: Run the app from the DMG
+        run: |
+          hdiutil attach "$DMG" -mountpoint /Volumes/Photon -nobrowse
+          /Volumes/Photon/Photon.app/Contents/MacOS/Photon &
+          for _ in $(seq 60); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' localhost:8640/readyz)" = 204 ] && break
+            sleep 2
+          done
+          cat ~/Library/Logs/Photon/*.log
+          curl -fsS localhost:8640/auth/login | grep -q 'kit.start'
+          osascript -e 'tell application id "io.github.olivertgwalton.photon" to quit'
+          for _ in $(seq 20); do pgrep -f Photon.app >/dev/null || exit 0; sleep 1; done
+          pgrep -lf Photon.app
+          exit 1
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.DMG }}
+          path: ${{ env.DMG }}
+          if-no-files-found: error
+
   publish:
     if: github.ref_type == 'tag'
-    needs: [run, deb, rpm]
+    needs: [run, deb, rpm, dmg]
     runs-on: ubuntu-latest
     permissions:
       contents: write
