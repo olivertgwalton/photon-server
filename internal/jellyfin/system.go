@@ -3,6 +3,8 @@ package jellyfin
 import (
 	"net"
 	"net/http"
+
+	"github.com/olivertgwalton/photon-server/internal/peer"
 )
 
 // publicInfo is Jellyfin's PublicSystemInfo, which an app reads first and anyone may.
@@ -54,4 +56,22 @@ func (a *API) systemInfo(w http.ResponseWriter, r *http.Request) {
 		CompletedInstallations: []struct{}{}, CastReceiverApplications: []struct{}{},
 		publicInfo: a.public(r),
 	})
+}
+
+// endpointInfo is Jellyfin's EndPointInfo: whether the app is on the server's own machine, and on
+// its networks. Jellyfin's web app measures its bitrate only once it knows, and else streams at
+// 1.5 Mbps.
+type endpointInfo struct {
+	IsLocal     bool `json:"IsLocal"`
+	IsInNetwork bool `json:"IsInNetwork"`
+}
+
+func (a *API) endpoint(w http.ResponseWriter, r *http.Request) {
+	n, err := a.svc.Network.Network(r.Context())
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	client := a.svc.Reach.Client(r).Unmap()
+	a.writeJSON(w, endpointInfo{IsLocal: client.IsLoopback(), IsInNetwork: peer.LocalIn(n.LocalNetworks, client)})
 }
