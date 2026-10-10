@@ -2891,7 +2891,7 @@ export interface paths {
         };
         get?: never;
         /**
-         * Give a film or show a metadata language and certification country of its own, and describe it again in them
+         * Give a film or show a metadata language, certification country and title language of its own, and describe it again in them
          * @description Admin only.
          */
         put: {
@@ -8750,6 +8750,7 @@ export interface components {
         TitleLocale: {
             certification_country: string;
             metadata_language: string;
+            title_language?: components["schemas"]["TitleLanguage"];
         };
         TitlePage: {
             /** Format: date-time */
@@ -8799,6 +8800,7 @@ export interface components {
             tagline?: string;
             themes?: string[];
             title: string;
+            title_language?: components["schemas"]["TitleLanguage"];
             versions?: components["schemas"]["VersionPage"][];
             videos?: components["schemas"]["VideoLink"][];
             year?: number;

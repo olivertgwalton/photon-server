@@ -32,6 +32,7 @@ type fakeEditing struct {
 	unmatched uuid.UUID
 	split     uuid.UUID
 	locale    domain.Locale
+	titles    domain.TitleLanguage
 	// files are films' own; forgot is the title forgotten once they were deleted.
 	files  []store.LibraryFile
 	forgot uuid.UUID
@@ -92,11 +93,11 @@ func (f *fakeEditing) ForgetTitle(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (f *fakeEditing) SetTitleLocale(_ context.Context, id uuid.UUID, loc domain.Locale, _ domain.TitleLanguage) error {
+func (f *fakeEditing) SetTitleLocale(_ context.Context, id uuid.UUID, loc domain.Locale, titles domain.TitleLanguage) error {
 	if id != films {
 		return store.ErrNotFound
 	}
-	f.locale = loc
+	f.locale, f.titles = loc, titles
 	return nil
 }
 
@@ -215,7 +216,8 @@ func TestAnAdminFixesATitle(t *testing.T) {
 		{memberToken, http.MethodPut, base + "/locale", `{"metadata_language": "fr"}`, http.StatusForbidden, ""},
 		{goodToken, http.MethodPut, base + "/locale", `{"certification_country": "Gaul"}`, http.StatusBadRequest, "certification_country"},
 		{goodToken, http.MethodPut, "/api/v1/admin/titles/" + uuid.NewV7().String() + "/locale", `{}`, http.StatusNotFound, "no film or show"},
-		{goodToken, http.MethodPut, base + "/locale", `{"metadata_language": "fr-fr", "certification_country": "fr"}`, http.StatusAccepted, ""},
+		{goodToken, http.MethodPut, base + "/locale", `{"title_language": "native"}`, http.StatusBadRequest, "title_language"},
+		{goodToken, http.MethodPut, base + "/locale", `{"metadata_language": "fr-fr", "certification_country": "fr", "title_language": "original"}`, http.StatusAccepted, ""},
 		{memberToken, http.MethodPost, base + "/split", "", http.StatusForbidden, ""},
 		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + bare.String() + "/split", "", http.StatusConflict, "one copy"},
 		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + uuid.NewV7().String() + "/split", "", http.StatusNotFound, "no film"},
@@ -257,7 +259,7 @@ func TestAnAdminFixesATitle(t *testing.T) {
 			t.Errorf("%s %s %s: %d %s, want %d with %s", tc.method, tc.target, tc.body, rec.Code, rec.Body, tc.want, tc.has)
 		}
 	}
-	if e.edited.Title != "Heat" || e.edited.ReleaseDate.Year() != 1995 || len(e.edited.Locked) != 1 || len(e.reset) != 2 || e.pinned != "tmdb/949" || e.order != domain.OrderDVD || e.mode != domain.RefreshAll || e.analysed != films || e.unmatched != films || e.split != films || e.locale != (domain.Locale{Language: "fr-FR", Country: "FR"}) || len(e.marked) != 1 || e.marked[0].EndMS != 121500 ||
+	if e.edited.Title != "Heat" || e.edited.ReleaseDate.Year() != 1995 || len(e.edited.Locked) != 1 || len(e.reset) != 2 || e.pinned != "tmdb/949" || e.order != domain.OrderDVD || e.mode != domain.RefreshAll || e.analysed != films || e.unmatched != films || e.split != films || e.locale != (domain.Locale{Language: "fr-FR", Country: "FR"}) || e.titles != domain.TitlesOriginal || len(e.marked) != 1 || e.marked[0].EndMS != 121500 ||
 		len(e.absent) != 1 || e.absent[0] != (domain.MarkerAbsent{Kind: domain.MarkerRecap}) {
 		t.Errorf("done: %+v %v %q", e.edited, e.reset, e.pinned)
 	}
