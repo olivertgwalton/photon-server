@@ -10,7 +10,7 @@ import (
 )
 
 // What a remote library's search finds is kept under ids that are the same each time it is found,
-// with its poster, and leaves out what a library already holds. Opened, it becomes a title of the
+// with its poster where it has one, and leaves out what a library already holds. Opened, it becomes a title of the
 // library under its id, matched by the id it was found by; a profile held to an age searches none.
 func TestASearchFindsARemoteLibraryTitlesItBecomesAsOpened(t *testing.T) {
 	s := migrated(t)
@@ -33,13 +33,17 @@ func TestASearchFindsARemoteLibraryTitlesItBecomesAsOpened(t *testing.T) {
 	found := []domain.Candidate{
 		{ID: "949", Title: "Heat", Year: 1995},
 		{ID: "27205", Title: "Inception", Year: 2010, Overview: "Dreams.", Poster: "https://image.tmdb.org/t/p/original/inception.jpg"},
+		{ID: "1104431", Title: "A Short Nobody Pictured", Year: 2023},
 	}
 	saved, err := s.SaveDiscoveries(ctx, lib.ID, domain.ItemMovie, domain.ProviderTMDB, found)
-	if err != nil || len(saved) != 1 || saved[0].Title != "Inception" {
-		t.Fatalf("found %+v, %v; want Inception, not Heat, which a library holds", saved, err)
+	if err != nil || len(saved) != 2 || saved[0].Title != "Inception" {
+		t.Fatalf("found %+v, %v; want Inception and the short, not Heat, which a library holds", saved, err)
+	}
+	if saved[1].Poster != (uuid.UUID{}) {
+		t.Errorf("a find with no poster shows poster %v, which nothing answers", saved[1].Poster)
 	}
 	again, err := s.SaveDiscoveries(ctx, lib.ID, domain.ItemMovie, domain.ProviderTMDB, found)
-	if err != nil || len(again) != 1 || again[0].ID != saved[0].ID {
+	if err != nil || len(again) != 2 || again[0].ID != saved[0].ID {
 		t.Errorf("found again as %+v, %v; want the same id", again, err)
 	}
 	if pic, err := s.Picture(ctx, saved[0].Poster); err != nil || pic.URL != found[1].Poster {

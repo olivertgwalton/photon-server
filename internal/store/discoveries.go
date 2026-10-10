@@ -82,6 +82,9 @@ func (s *Store) SaveDiscoveries(ctx context.Context, lib uuid.UUID, kind domain.
 			if err != nil {
 				return err
 			}
+			if c.Poster == "" {
+				d.Poster = uuid.UUID{}
+			}
 			out = append(out, d)
 		}
 		return nil
