@@ -290,6 +290,12 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	if resume, _ := list("pst_ada", "/UserItems/Resume?limit=12&mediaTypes=Video&recursive=true&fields="+infuseFields); len(resume) != 1 || resume[0]["Name"] != "Heat" {
 		t.Errorf("continue watching: %v", names(resume))
 	}
+	// Jellyfin's web app asks for its Continue Listening and Reading rows by their media type.
+	for _, media := range []string{"Audio", "Book"} {
+		if resume, total := list("pst_ada", "/UserItems/Resume?limit=12&mediaTypes="+media); len(resume) != 0 || total != 0 {
+			t.Errorf("continue with %s: %v", media, names(resume))
+		}
+	}
 	if next, _ := list("pst_ada", "/Shows/NextUp?limit=24&fields="+infuseFields); len(next) != 1 || next[0]["Id"] != episodes[1]["Id"] {
 		t.Errorf("next up: %v", names(next))
 	}

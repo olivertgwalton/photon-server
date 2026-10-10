@@ -3,6 +3,8 @@ package jellyfin
 import (
 	"errors"
 	"net/http"
+	"slices"
+	"strings"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
@@ -28,6 +30,18 @@ func (a *API) row(kind domain.HomeRow) http.HandlerFunc {
 		}
 		a.writeList(w, r, cards, int(total), l.start, l)
 	}
+}
+
+// resume answers what the profile is part way through, all of it video: an app asking for audio or
+// books alone, as Jellyfin's web app does for its Continue Listening and Reading rows, has none.
+func (a *API) resume(w http.ResponseWriter, r *http.Request) {
+	types := values(r, "mediaTypes")
+	if len(types) > 0 && !slices.ContainsFunc(types, func(t string) bool { return strings.EqualFold(t, "Video") }) {
+		l := listedOf(w, r)
+		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
+		return
+	}
+	a.row(domain.RowContinueWatching)(w, r)
 }
 
 // nextUp answers the episodes to play next: of every show, or of the one an app names.
