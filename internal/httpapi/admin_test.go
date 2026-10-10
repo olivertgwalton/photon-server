@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -191,10 +192,11 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 		return rec
 	}
 	root := t.TempDir()
+	quoted, missing := strconv.Quote(root), strconv.Quote(filepath.Join(root, "missing"))
 	if rec := do(memberToken, http.MethodGet, "/api/v1/admin/libraries", ""); rec.Code != http.StatusForbidden {
 		t.Errorf("a member listing: %d, want 403", rec.Code)
 	}
-	rec := do(goodToken, http.MethodPost, "/api/v1/admin/libraries", `{"name": "Films", "kind": "movies", "root": "`+root+`"}`)
+	rec := do(goodToken, http.MethodPost, "/api/v1/admin/libraries", `{"name": "Films", "kind": "movies", "root": `+quoted+`}`)
 	var added adminLibraryJSON
 	if err := json.NewDecoder(rec.Body).Decode(&added); err != nil || rec.Code != http.StatusCreated || added.Root != root {
 		t.Fatalf("adding: %d %+v %v", rec.Code, added, err)
@@ -211,8 +213,8 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 		method, target, body string
 		want                 int
 	}{
-		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Again", "kind": "movies", "root": "` + root + `"}`, http.StatusConflict},
-		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Gone", "kind": "movies", "root": "` + root + `/missing"}`, http.StatusBadRequest},
+		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Again", "kind": "movies", "root": ` + quoted + `}`, http.StatusConflict},
+		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Gone", "kind": "movies", "root": ` + missing + `}`, http.StatusBadRequest},
 		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Relative", "kind": "movies", "root": "films"}`, http.StatusBadRequest},
 		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Music", "kind": "music", "root": "/"}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"sources": [{"kind": "movie", "metadata": [{"source": "tmdb", "enabled": true}, {"source": "tmdb", "enabled": false}]}]}`, http.StatusBadRequest},
