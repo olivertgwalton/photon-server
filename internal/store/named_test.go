@@ -11,8 +11,8 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// An id is told for what it names, a title and its kind, an episode announced or a playlist, only to
-// a profile that may open it; someone credited, to anyone.
+// An id is told for what it names, a title and its kind, a version and its title, an episode
+// announced or a playlist, only to a profile that may open it; someone credited, to anyone.
 func TestAnIDIsToldForWhatItNames(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
@@ -42,6 +42,11 @@ func TestAnIDIsToldForWhatItNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	show, season := oneItem(t, s, "kind = 'show'").ID, oneItem(t, s, "kind = 'season'").ID
+	episode := oneItem(t, s, "kind = 'episode'").ID
+	versions, err := s.Versions(ctx, []uuid.UUID{episode})
+	if err != nil || len(versions[episode]) != 1 {
+		t.Fatal(versions, err)
+	}
 	aired := time.Date(2026, time.October, 17, 0, 0, 0, 0, time.UTC)
 	if err := s.SaveIdentity(ctx, show, domain.SourceTMDB, domain.Metadata{Title: "Severance", Credits: []domain.Credit{{
 		Name: "Adam Scott", IDs: map[domain.Provider]string{domain.ProviderTMDB: "55536"}, Kind: domain.CreditActor, Role: "Mark",
@@ -77,6 +82,7 @@ func TestAnIDIsToldForWhatItNames(t *testing.T) {
 		{season, Named{Kind: NamedTitle, Title: domain.ItemSeason}},
 		{announced, Named{Kind: NamedAnnounced}},
 		{playlist, Named{Kind: NamedPlaylist}},
+		{versions[episode][0].ID, Named{Kind: NamedVersion, Title: domain.ItemEpisode, Of: episode}},
 	} {
 		if got, err := s.Named(ctx, admin.ID, c.id); err != nil || got != c.want {
 			t.Errorf("%v names %+v, %v; want %+v", c.id, got, err, c.want)
