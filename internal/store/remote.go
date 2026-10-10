@@ -202,11 +202,12 @@ func (s *Store) SaveCopy(ctx context.Context, lib, item uuid.UUID, c Copy) error
 }
 
 // Streamed answers which of items are films or episodes of remote libraries, whose copies their
-// providers stream.
+// providers stream, or films a remote library's search found, which become such as they are opened.
 func (s *Store) Streamed(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]bool, error) {
 	ids, err := queryColumn[uuid.UUID](ctx, s.pool, `
 		SELECT i.id FROM items i JOIN libraries l ON l.id = i.library_id
-		WHERE i.id = ANY($1) AND l.media = 'remote' AND i.kind IN ('movie', 'episode')`, items)
+		WHERE i.id = ANY($1) AND l.media = 'remote' AND i.kind IN ('movie', 'episode')
+		UNION ALL SELECT id FROM discoveries WHERE id = ANY($1) AND kind = 'movie'`, items)
 	out := make(map[uuid.UUID]bool, len(ids))
 	for _, id := range ids {
 		out[id] = true

@@ -39,9 +39,17 @@ func (s streaming) Ensure(ctx context.Context, item uuid.UUID) error {
 	})
 }
 
-// A remote film with no copy yet is listed with one media source, under its own id, as Infuse needs
-// one to play an item and not fail the page it is on. Played by that id, it is given its copy and
-// played; one its provider has nothing for is not found.
+// discovered is what a remote library's search finds, whatever is searched for.
+type discovered []store.Discovery
+
+func (d discovered) Find(context.Context, uuid.UUID, string, []domain.ItemKind) ([]store.Discovery, error) {
+	return d, nil
+}
+
+// A remote film with no copy yet, or one a search found, is listed with one media source under its
+// own id, as Infuse needs one to play an item, to show it among what it searched for, and not to
+// fail the page it is on. Played by that id, it is given its copy and played; one its provider has
+// nothing for is not found.
 func TestARemoteFilmIsListedWithACopyToBeFetchedAsItIsPlayed(t *testing.T) {
 	ctx := t.Context()
 	db := storetest.FreshDatabase(t)
@@ -55,7 +63,7 @@ func TestARemoteFilmIsListedWithACopyToBeFetchedAsItIsPlayed(t *testing.T) {
 	}
 	t.Cleanup(st.Close)
 	aio := domain.PluginSource("aio")
-	lib, err := st.AddRemoteLibrary(ctx, "Streamed", domain.LibraryMovies, store.Remote{ListSource: aio, ListID: "movie/top", StreamSource: aio})
+	lib, err := st.AddRemoteLibrary(ctx, "Streamed", domain.LibraryMovies, store.Remote{ListSource: aio, ListID: "movie/top", DiscoverSource: domain.SourceTMDB, StreamSource: aio})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,8 +86,12 @@ func TestARemoteFilmIsListedWithACopyToBeFetchedAsItIsPlayed(t *testing.T) {
 	for _, c := range cards {
 		ids[c.Title] = c.ID
 	}
+	found, err := st.SaveDiscoveries(ctx, lib.ID, domain.ItemMovie, domain.ProviderTMDB, []domain.Candidate{{ID: "27205", Title: "Inception", Year: 2010}})
+	if err != nil || len(found) != 1 {
+		t.Fatalf("found %+v, %v", found, err)
+	}
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: streaming{st, lib.ID, map[uuid.UUID]bool{ids["Heat"]: true}}, Discover: noDiscoveries{},
+		Copies: streaming{st, lib.ID, map[uuid.UUID]bool{ids["Heat"]: true}}, Discover: discovered(found),
 		Sent: playback.NewSent(), Network: st, Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st,
 		Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st, Placer: alone(nil),
 	})
@@ -99,6 +111,11 @@ func TestARemoteFilmIsListedWithACopyToBeFetchedAsItIsPlayed(t *testing.T) {
 		if len(it.MediaSources) != 1 || it.MediaSources[0].ID != guid(ids[it.Name]) {
 			t.Errorf("%s is listed with %+v, want one source under its own id", it.Name, it.MediaSources)
 		}
+	}
+	w = serve(api, http.MethodGet, "/Items?searchTerm=Inception&Recursive=true&Fields=MediaSources", infuse, "")
+	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || len(page.Items) != 1 || len(page.Items[0].MediaSources) != 1 ||
+		page.Items[0].MediaSources[0].ID != guid(found[0].ID) {
+		t.Errorf("Inception, which a search found: %d %s, want it with its placeholder", w.Code, w.Body)
 	}
 
 	var info struct{ MediaSources []source }
