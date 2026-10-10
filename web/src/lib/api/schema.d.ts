@@ -487,7 +487,7 @@ export interface paths {
                 query?: {
                     /** @description An absolute path; without one, the folders to start from. */
                     path?: string;
-                    /** @description show lists folders whose names start with a dot, hidden by default. */
+                    /** @description show lists hidden folders: those whose names start with a dot, and on Windows those marked hidden. They are hidden by default. */
                     hidden?: components["schemas"]["HiddenFolders"];
                 };
                 header?: never;
