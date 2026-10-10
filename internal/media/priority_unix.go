@@ -7,6 +7,11 @@ import (
 	"syscall"
 )
 
+// backgroundNice is the niceness a Background tool's process is given as it starts: 10, which is
+// what .NET makes of BelowNormal, the priority Jellyfin gives each such process as it starts it. It
+// is fixed, as Jellyfin's is everywhere but trickplay.
+const backgroundNice = 10
+
 // lower gives a process backgroundNice. A process already gone (ESRCH) is not lowered, nor is one
 // whose server already runs lower than backgroundNice (EPERM, EACCES: only root raises a priority),
 // and neither is an error.

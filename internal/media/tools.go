@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"syscall"
 	"time"
 )
 
@@ -171,14 +170,9 @@ const (
 	Background Priority = "background"
 )
 
-// backgroundNice is the niceness a Background tool's process is given as it starts: 10, which is
-// what .NET makes of BelowNormal, the priority Jellyfin gives each such process as it starts it. It
-// is fixed, as Jellyfin's is everywhere but trickplay.
-const backgroundNice = 10
-
-// Command is a tool run as every one is run: at its priority; once ctx ends it is asked to stop with SIGTERM, so ffmpeg can finish what it is writing, and
-// killed after stopGrace; and the end of what it writes to stderr is kept for Err. It is started by
-// its own Start, Run and Output, which give a Background tool its priority.
+// Command is a tool run as every one is run: at its priority; once ctx ends it is stopped (see
+// stop), and killed after stopGrace; and the end of what it writes to stderr is kept for Err. It
+// is started by its own Start, Run and Output, which give a Background tool its priority.
 type Command struct {
 	*exec.Cmd
 	ctx      context.Context
@@ -188,7 +182,7 @@ type Command struct {
 
 func NewCommand(ctx context.Context, priority Priority, path string, args ...string) *Command {
 	cmd := exec.CommandContext(ctx, path, args...)
-	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.Cancel = func() error { return stop(cmd.Process) }
 	cmd.WaitDelay = stopGrace
 	c := &Command{Cmd: cmd, ctx: ctx, priority: priority}
 	cmd.Stderr = &c.stderr
