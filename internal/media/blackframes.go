@@ -28,7 +28,7 @@ type Shade struct {
 // time.
 func (t Tools) Shades(ctx context.Context, in Input, from time.Duration) ([]Shade, error) {
 	args := []string{"-hide_banner", "-v", "error", "-skip_frame", "nokey", "-ss", strconv.FormatFloat(from.Seconds(), 'f', 3, 64), "-copyts"}
-	out, err := output(ctx, Background, in.WholeRun(), in.Files(), t.FFmpeg.Path, slices.Concat(args, in.Args(), []string{
+	out, err := output(ctx, Background, in.WholeRun(), t.FFmpeg.Path, slices.Concat(args, in.Args(), []string{
 		"-map", "0:v:0", "-vf", "scale=320:-2,blackframe=amount=0:threshold=28,signalstats,metadata=print:file=-",
 		"-f", "null", "-",
 	})...)

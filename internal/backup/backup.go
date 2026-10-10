@@ -96,7 +96,7 @@ func (d Dumper) Dump(ctx context.Context, now time.Time) (string, error) {
 	}
 	name := filepath.Join(d.Dir, prefix+now.UTC().Format(stamp)+suffix)
 	part := name + ".part"
-	cmd := media.NewCommand(ctx, media.Background, nil, d.PGDump, "--format=custom", "--no-owner", "--file="+part, "--dbname="+dbURL)
+	cmd := media.NewCommand(ctx, media.Background, d.PGDump, "--format=custom", "--no-owner", "--file="+part, "--dbname="+dbURL)
 	cmd.Env = env
 	if err := cmd.Run(); err != nil {
 		// RemoveAll, as pg_dump may have failed before writing anything.

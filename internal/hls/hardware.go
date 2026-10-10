@@ -221,6 +221,6 @@ func (h Hardware) Check(ctx context.Context, ffmpeg string, codec domain.VideoCo
 func encodeTest(ctx context.Context, ffmpeg string, args []string) error {
 	ctx, cancel := media.Within(ctx, ffmpeg, media.PartRun)
 	defer cancel()
-	cmd := media.NewCommand(ctx, media.Foreground, nil, ffmpeg, args...)
+	cmd := media.NewCommand(ctx, media.Foreground, ffmpeg, args...)
 	return cmd.Err(cmd.Run())
 }

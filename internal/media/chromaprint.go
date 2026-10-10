@@ -16,7 +16,7 @@ var ErrNoChromaprint = errors.New("ffmpeg has no chromaprint muxer")
 
 // hasChromaprint reports whether ffmpeg can write a fingerprint: Homebrew's cannot, jellyfin-ffmpeg's can.
 func hasChromaprint(ctx context.Context, ffmpeg string) bool {
-	out, err := output(ctx, Foreground, PartRun, nil, ffmpeg, "-hide_banner", "-h", "muxer=chromaprint")
+	out, err := output(ctx, Foreground, PartRun, ffmpeg, "-hide_banner", "-h", "muxer=chromaprint")
 	return err == nil && bytes.Contains(out, []byte("Muxer chromaprint"))
 }
 
@@ -30,7 +30,7 @@ func (t Tools) Fingerprint(ctx context.Context, in Input, from, length time.Dura
 		"-hide_banner", "-v", "error",
 		"-ss", strconv.FormatFloat(from.Seconds(), 'f', 3, 64), "-t", strconv.FormatFloat(length.Seconds(), 'f', 3, 64),
 	}
-	out, err := output(ctx, Background, PartRun, in.Files(), t.FFmpeg.Path, slices.Concat(args, in.Args(), []string{
+	out, err := output(ctx, Background, PartRun, t.FFmpeg.Path, slices.Concat(args, in.Args(), []string{
 		"-map", "0:a:0", "-ac", "2", "-f", "chromaprint", "-fp_format", "raw", "-",
 	})...)
 	if err != nil {

@@ -16,10 +16,10 @@ func quiet() []string {
 // args copies or encodes a file's video and its audio into fragmented MP4 or MPEG-TS on stdout,
 // from start, on the file's own clock (see clockOffset). Copied video starts at the keyframe at
 // start; encoded video makes one there and every SegmentLength after, on hw, with styled text
-// drawn in where there is a layer of it. Each of the subtitle streams is written to a descriptor
-// of its own after in's, a cue at a time, on the file's clock: as SubRip, whose muxer ends a cue as it writes
+// drawn in where there is a layer of it. Each of the subtitle streams is written to its socket,
+// a cue at a time, on the file's clock: as SubRip, whose muxer ends a cue as it writes
 // it, where WebVTT's ends one only as it begins the next.
-func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer, f domain.SegmentFormat, subtitles []int) []string {
+func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer, f domain.SegmentFormat, subtitles []subtitleSocket) []string {
 	a := quiet()
 	hw = hw.encoding(video)
 	if video.Encode != nil {
@@ -48,9 +48,8 @@ func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPl
 		"-output_ts_offset", strconv.FormatFloat(clockOffset.Seconds(), 'f', 0, 64),
 		"-fflags", "+bitexact", "-",
 	)
-	firstPipe := 3 + len(in.Files())
-	for i, n := range subtitles {
-		a = append(a, "-map", "0:"+strconv.Itoa(n), "-c:s", "subrip", "-f", "srt", "-flush_packets", "1", "pipe:"+strconv.Itoa(firstPipe+i))
+	for _, s := range subtitles {
+		a = append(a, "-map", "0:"+strconv.Itoa(s.stream), "-c:s", "subrip", "-f", "srt", "-flush_packets", "1", s.url())
 	}
 	return a
 }

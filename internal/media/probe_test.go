@@ -87,23 +87,16 @@ func TestProbeFindsAnInterlacedPicture(t *testing.T) {
 	}
 }
 
-// The file reaches ffprobe as descriptor 3, never as a path.
-func TestProbeReadsTheOpenFile(t *testing.T) {
-	dir := t.TempDir()
-	fixture, err := filepath.Abs(filepath.Join("testdata", "sdr.json"))
+// A file is read by its path whatever its name, one that begins as a protocol's would among them.
+func TestProbeReadsAFileWhoseNameLooksLikeAnAddress(t *testing.T) {
+	tools := ffprobe(t)
+	b, err := os.ReadFile(filepath.Join("testdata", "keyframes", "cues-front.mkv"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := "#!/bin/sh\n" +
-		`case "$*" in *"-fd 3"*"-i fd:"*) ;; *) echo "unexpected arguments: $*" >&2; exit 2 ;; esac` + "\n" +
-		`[ "$(cat <&3)" = "media bytes" ] || { echo "descriptor 3 is not the file" >&2; exit 3; }` + "\n" +
-		"cat '" + fixture + "'\n"
-	ffprobe := filepath.Join(dir, "ffprobe")
-	if err := os.WriteFile(ffprobe, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	media := filepath.Join(dir, "Movie (2010).mkv")
-	if err := os.WriteFile(media, []byte("media bytes"), 0o644); err != nil {
+	t.Chdir(t.TempDir())
+	media := "http:Movie (2010).mkv"
+	if err := os.WriteFile(media, b, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	f, err := os.Open(media)
@@ -112,11 +105,11 @@ func TestProbeReadsTheOpenFile(t *testing.T) {
 	}
 	defer f.Close()
 
-	facts, err := Tools{FFprobe: Tool{Path: ffprobe}}.Probe(t.Context(), Input{File: f})
+	facts, err := tools.Probe(t.Context(), Input{File: f})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if facts.Container != "mov,mp4,m4a,3gp,3g2,mj2" {
+	if facts.Container != "matroska,webm" {
 		t.Errorf("container = %q", facts.Container)
 	}
 }

@@ -58,13 +58,10 @@ const trickplayThreads = 1
 // keyframes only, as Jellyfin's keyframe-only extraction and Plex's index do: each thumbnail is the
 // keyframe nearest its time. A second output lists the thumbnails, which is how many there are.
 func (t Tools) Trickplay(ctx context.Context, in Input, dir string, g Grid, source domain.Range) (Thumbnails, error) {
-	if err := in.Rewind(); err != nil {
-		return Thumbnails{}, err
-	}
 	graph := fmt.Sprintf("[0:v:0]fps=1000/%d,%s,split[s][n];[s]tile=%dx%d[t]",
 		g.Interval.Milliseconds(), fitted(g.Width, source), g.Columns, g.Rows)
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-skip_frame", "nokey", "-threads", strconv.Itoa(trickplayThreads)}
-	out, err := output(ctx, Background, in.WholeRun(), in.Files(), t.FFmpeg.Path, slices.Concat(args, in.Args(), []string{
+	out, err := output(ctx, Background, in.WholeRun(), t.FFmpeg.Path, slices.Concat(args, in.Args(), []string{
 		"-an", "-sn", "-dn",
 		"-filter_complex_threads", strconv.Itoa(trickplayThreads), "-filter_complex", graph,
 		"-map", "[t]", "-threads", strconv.Itoa(trickplayThreads), "-c:v", "mjpeg", "-q:v", jpegQuality, "-f", "image2", "-start_number", "0",
@@ -114,9 +111,6 @@ const (
 // Still writes the frame at a time in a video, taken as decode says, to path as a JPEG, width
 // pixels wide.
 func (t Tools) Still(ctx context.Context, in Input, decode Decode, at time.Duration, width int, source domain.Range, path string) error {
-	if err := in.Rewind(); err != nil {
-		return err
-	}
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin"}
 	switch decode {
 	case DecodeKeyframes:
@@ -124,7 +118,7 @@ func (t Tools) Still(ctx context.Context, in Input, decode Decode, at time.Durat
 	case DecodeEvery:
 	}
 	args = append(args, "-ss", strconv.FormatFloat(at.Seconds(), 'f', 3, 64))
-	_, err := output(ctx, Background, PartRun, in.Files(), t.FFmpeg.Path, slices.Concat(args, in.Args(), []string{
+	_, err := output(ctx, Background, PartRun, t.FFmpeg.Path, slices.Concat(args, in.Args(), []string{
 		"-an", "-sn", "-dn", "-frames:v", "1",
 		"-vf", fitted(width, source), "-c:v", "mjpeg", "-q:v", jpegQuality, "-f", "image2", "-update", "1", path,
 	})...)

@@ -1,14 +1,13 @@
 package media
 
 import (
-	"io"
 	"net/url"
 	"os"
 	"strconv"
 	"time"
 )
 
-// Input is the media a tool reads: a library file, passed to it as descriptor 3, or an address,
+// Input is the media a tool reads: a library file, which the tool opens by its path, or an address,
 // http or https, the tool fetches itself.
 type Input struct {
 	// File is the library file opened; nil for media read from URL.
@@ -40,15 +39,8 @@ func (in Input) Args() []string {
 			"-i", in.URL.String(),
 		}
 	}
-	return []string{"-protocol_whitelist", "fd", "-fd", "3", "-i", "fd:"}
-}
-
-// Files are the descriptors a tool reading in is passed, from 3 up: none for an address.
-func (in Input) Files() []*os.File {
-	if in.File == nil {
-		return nil
-	}
-	return []*os.File{in.File}
+	// file: keeps a name that begins as an address would, http: or the like, from being read as one.
+	return []string{"-protocol_whitelist", "file", "-i", "file:" + in.File.Name()}
 }
 
 func (in Input) Close() error {
@@ -59,16 +51,6 @@ func (in Input) Close() error {
 		return nil
 	}
 	return in.File.Close()
-}
-
-// Rewind has the next tool read in from its start: a file's offset is shared with every tool it
-// is passed to, where an address is fetched afresh.
-func (in Input) Rewind() error {
-	if in.File == nil {
-		return nil
-	}
-	_, err := in.File.Seek(0, io.SeekStart)
-	return err
 }
 
 // WholeRun is how long a tool reading all of in may run.

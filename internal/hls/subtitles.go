@@ -118,15 +118,12 @@ func (r *Remuxer) WebVTT(ctx context.Context, open func() (media.Input, error), 
 	if err != nil {
 		return "", err
 	}
-	if _, err := in.File.Seek(0, io.SeekStart); err != nil {
-		return "", err
-	}
 	if charset != "" {
 		a = append(a, "-sub_charenc", charset)
 	}
 	a = append(a, in.Args()...)
 	a = append(a, "-map", "0:s:0", "-c:s", "webvtt", "-f", "webvtt", "-")
-	cmd := media.NewCommand(ctx, media.Foreground, in.Files(), r.tools.FFmpeg.Path, a...)
+	cmd := media.NewCommand(ctx, media.Foreground, r.tools.FFmpeg.Path, a...)
 	out, err := cmd.Output()
 	return string(out), cmd.Err(err)
 }
@@ -198,9 +195,6 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) e
 		if err != nil {
 			return err
 		}
-		if err := in.Rewind(); err != nil {
-			return err
-		}
 		for _, font := range carried {
 			n := strconv.Itoa(font.Index)
 			a = append(a, "-dump_attachment:"+n, filepath.Join(fonts, n+font.Ext))
@@ -213,7 +207,7 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) e
 			a = append(a, "-map", "0:"+n, "-c:s", "copy", "-f", "ass", filepath.Join(made, StyledName(s.Index)))
 		}
 	}
-	cmd := media.NewCommand(ctx, media.Foreground, in.Files(), r.tools.FFmpeg.Path, a...)
+	cmd := media.NewCommand(ctx, media.Foreground, r.tools.FFmpeg.Path, a...)
 	if err := cmd.Run(); err != nil {
 		return cmd.Err(err)
 	}

@@ -22,7 +22,7 @@ var fontExts = []string{".ttf", ".otf", ".ttc", ".woff", ".woff2"}
 // Fonts lists the fonts media carries, from its header: attachments FFmpeg names a font codec, or
 // whose names say they are fonts, as Matroska files often call a font a stream of bytes.
 func (t Tools) Fonts(ctx context.Context, in Input) ([]Font, error) {
-	out, err := output(ctx, Foreground, PartRun, in.Files(), t.FFprobe.Path, append([]string{
+	out, err := output(ctx, Foreground, PartRun, t.FFprobe.Path, append([]string{
 		"-hide_banner", "-v", "error", "-select_streams", "t", "-show_entries", "stream=index,codec_name:stream_tags=filename", "-of", "json",
 	}, in.Args()...)...)
 	if err != nil {

@@ -29,7 +29,7 @@ func niceness(t *testing.T, pid int) int {
 func TestABackgroundToolRunsAtALowerPriority(t *testing.T) {
 	server := niceness(t, os.Getpid())
 	for priority, want := range map[Priority]int{Foreground: server, Background: max(backgroundNice, server)} {
-		c := NewCommand(t.Context(), priority, nil, "sleep", "5")
+		c := NewCommand(t.Context(), priority, "sleep", "5")
 		if err := c.Start(); err != nil {
 			t.Fatal(err)
 		}
