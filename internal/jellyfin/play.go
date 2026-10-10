@@ -143,8 +143,8 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 // playbackRequest is Jellyfin's PlaybackInfoDto, as much of it as photon decides by.
 type playbackRequest struct {
 	MediaSourceID       string         `json:"MediaSourceId"`
-	AudioStreamIndex    *int           `json:"AudioStreamIndex"`
-	SubtitleStreamIndex *int           `json:"SubtitleStreamIndex"`
+	AudioStreamIndex    *streamIndex   `json:"AudioStreamIndex"`
+	SubtitleStreamIndex *streamIndex   `json:"SubtitleStreamIndex"`
 	StartTimeTicks      int64          `json:"StartTimeTicks"`
 	MaxStreamingBitrate int64          `json:"MaxStreamingBitrate"`
 	DeviceProfile       *deviceProfile `json:"DeviceProfile"`
@@ -157,8 +157,8 @@ type playbackRequest struct {
 func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID, c store.PlayCopy, req playbackRequest, remote int) {
 	p := *req.DeviceProfile
 	limit := int64(playback.Capped(int(cmp.Or(req.MaxStreamingBitrate, p.MaxStreamingBitrate)/1000), remote)) * 1000
-	video, sound := direct(c, req.AudioStreamIndex)
-	sub, picked := subtitleOf(c, req.SubtitleStreamIndex)
+	video, sound := direct(c, (*int)(req.AudioStreamIndex))
+	sub, picked := subtitleOf(c, (*int)(req.SubtitleStreamIndex))
 	if p.playsDirectly(c, video, sound, picked, limit) {
 		return
 	}
@@ -367,13 +367,13 @@ func (a *API) subtitle(w http.ResponseWriter, r *http.Request) {
 // report is Jellyfin's PlaybackStartInfo, PlaybackProgressInfo and PlaybackStopInfo, as much of
 // them as photon keeps.
 type report struct {
-	ItemID              string `json:"ItemId"`
-	MediaSourceID       string `json:"MediaSourceId"`
-	PlaySessionID       string `json:"PlaySessionId"`
-	PositionTicks       int64  `json:"PositionTicks"`
-	IsPaused            bool   `json:"IsPaused"`
-	AudioStreamIndex    *int   `json:"AudioStreamIndex"`
-	SubtitleStreamIndex *int   `json:"SubtitleStreamIndex"`
+	ItemID              string       `json:"ItemId"`
+	MediaSourceID       string       `json:"MediaSourceId"`
+	PlaySessionID       string       `json:"PlaySessionId"`
+	PositionTicks       int64        `json:"PositionTicks"`
+	IsPaused            bool         `json:"IsPaused"`
+	AudioStreamIndex    *streamIndex `json:"AudioStreamIndex"`
+	SubtitleStreamIndex *streamIndex `json:"SubtitleStreamIndex"`
 }
 
 // playID is the playback a play session names: the id PlaybackInfo gave it, or one made of an id
@@ -413,9 +413,9 @@ func (a *API) reported(kind reportKind) http.HandlerFunc {
 		if rep.IsPaused {
 			state = domain.StatePaused
 		}
-		tracks := domain.ChosenTracks{Audio: rep.AudioStreamIndex}
+		tracks := domain.ChosenTracks{Audio: (*int)(rep.AudioStreamIndex)}
 		if rep.SubtitleStreamIndex != nil && *rep.SubtitleStreamIndex >= 0 {
-			tracks.Subtitle = rep.SubtitleStreamIndex
+			tracks.Subtitle = (*int)(rep.SubtitleStreamIndex)
 		}
 		id := playID(cmp.Or(rep.PlaySessionID, guid(auth.SessionOf(r.Context()).ID)+rep.ItemID))
 		progress := func(ctx context.Context) error {
@@ -468,9 +468,9 @@ func (a *API) startDirect(r *http.Request, id uuid.UUID, rep report) error {
 	if err != nil {
 		return err
 	}
-	sub, _ := subtitleOf(c, rep.SubtitleStreamIndex)
+	sub, _ := subtitleOf(c, (*int)(rep.SubtitleStreamIndex))
 	d := playback.Decision{Method: domain.PlayDirect}
-	video, sound := direct(c, rep.AudioStreamIndex)
+	video, sound := direct(c, (*int)(rep.AudioStreamIndex))
 	if video != nil {
 		d.Video = &domain.VideoPlan{Stream: video.Index, Codec: video.Codec}
 	}
