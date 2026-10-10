@@ -361,6 +361,29 @@ func TestPreviewsOfAMissingFileLastTheGrace(t *testing.T) {
 	}
 }
 
+// A part's file gone, as a scan marks its version missing, is passed over by the work queued for
+// it, rather than failing every attempt, and keeps what was made of it.
+func TestAPartWhoseFileWentMissingIsPassedOver(t *testing.T) {
+	f := newFixture(t)
+	f.setKeyframes(domain.KeyframesFull)
+	_, part := f.film("heat")
+	f.run(part)
+	f.missingFor(time.Hour)
+	parts := library.Parts{Places: f.st}
+	for name, h := range map[string]jobs.Handler{
+		"previews":      f.make,
+		"keyframes":     Keyframes(f.st, parts),
+		"keyframe walk": WalkKeyframes(f.st, parts, media.Tools{}),
+	} {
+		if err := h(t.Context(), part); err != nil {
+			t.Errorf("%s: %v, want the part passed over", name, err)
+		}
+	}
+	if _, err := f.st.Trickplay(t.Context(), f.admin.ID, part); err != nil {
+		t.Errorf("the missing part's trickplay: %v, want it kept", err)
+	}
+}
+
 func TestTheSweepClearsPreviewsNoPartHas(t *testing.T) {
 	f := newFixture(t)
 	_, part := f.film("heat")

@@ -156,7 +156,11 @@ func MakePreviews(st *store.Store, parts opener, tools media.Tools, p *Previews,
 			}
 			return p.remove(ctx, part, nil)
 		}
+		// A part left nowhere keeps the previews made of it, as its version is kept missing.
 		in, err := parts.Open(ctx, part)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}

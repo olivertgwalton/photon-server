@@ -15,7 +15,7 @@ import (
 // index, as its library asks: a few reads, made as the part is added. A file with no index is known
 // to have none under KeyframesIndex; under KeyframesFull it is queued to be walked through in the
 // maintenance window, as Jellyfin reads a Matroska file's index on demand and walks files only in
-// a scheduled task of its own.
+// a scheduled task of its own. A part gone since is passed over.
 func Keyframes(st *store.Store, parts opener) jobs.Handler {
 	return func(ctx context.Context, part uuid.UUID) error {
 		known, err := st.Keyframes(ctx, part)
@@ -23,6 +23,9 @@ func Keyframes(st *store.Store, parts opener) jobs.Handler {
 			return err
 		}
 		in, err := parts.Open(ctx, part)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
@@ -44,7 +47,7 @@ func Keyframes(st *store.Store, parts opener) jobs.Handler {
 }
 
 // WalkKeyframes walks a part with no index through for its keyframes. One whose library no longer
-// finds them in full, or whose keyframes are known since, is passed over.
+// finds them in full, whose keyframes are known since, or that is gone since, is passed over.
 func WalkKeyframes(st *store.Store, parts opener, tools media.Tools) jobs.Handler {
 	return func(ctx context.Context, part uuid.UUID) error {
 		known, err := st.Keyframes(ctx, part)
@@ -52,6 +55,9 @@ func WalkKeyframes(st *store.Store, parts opener, tools media.Tools) jobs.Handle
 			return err
 		}
 		in, err := parts.Open(ctx, part)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
