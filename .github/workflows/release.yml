@@ -4,7 +4,7 @@ on:
     tags: ["v*"]
   # A change to how archives are made builds and runs them without publishing.
   pull_request:
-    paths: [.github/workflows/release.yml, deploy/fetch-tools.sh, macos/**]
+    paths: [.github/workflows/release.yml, deploy/fetch-tools.sh, macos/**, flatpak/**]
 permissions:
   contents: read
 jobs:
@@ -210,9 +210,60 @@ jobs:
           path: ${{ env.DMG }}
           if-no-files-found: error
 
+  # The Linux build: a Flatpak carrying the server with its own PostgreSQL and Valkey. Run, it makes
+  # its database, serves the web app, and stops all three when told to.
+  flatpak:
+    needs: archive
+    strategy:
+      matrix:
+        include:
+          - { arch: x86_64, goarch: amd64, runner: ubuntu-latest }
+          - { arch: aarch64, goarch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08
+      options: --privileged
+    env:
+      BUNDLE: photon-server_${{ github.ref_type == 'tag' && github.ref_name || github.sha }}_linux_${{ matrix.goarch }}.flatpak
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: "*_linux_${{ matrix.goarch }}"
+          merge-multiple: true
+      - run: mv photon-server_*.tar.gz flatpak/photon-server.tar.gz
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: ${{ env.BUNDLE }}
+          manifest-path: flatpak/io.github.olivertgwalton.Photon.yml
+          arch: ${{ matrix.arch }}
+          upload-artifact: false
+      - name: Run it
+        run: |
+          flatpak install --user -y --noninteractive "$BUNDLE"
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/runtime"
+          mkdir -m 700 -p "$XDG_RUNTIME_DIR"
+          flatpak run io.github.olivertgwalton.Photon &
+          app=$!
+          for _ in $(seq 60); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' localhost:8640/readyz)" = 204 ] && break
+            sleep 2
+          done
+          cat ~/.var/app/io.github.olivertgwalton.Photon/data/photon/logs/*.log
+          curl -fsS localhost:8640/auth/login | grep -q 'kit.start'
+          # Stopping flatpak run would kill the sandbox outright: the launcher inside is asked.
+          pkill -TERM -f '/app/bin/photon$'
+          wait "$app" || true
+          if pgrep -f '/app/bin/(postgres|valkey-server|photon-server)'; then exit 1; fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.BUNDLE }}
+          path: ${{ env.BUNDLE }}
+          if-no-files-found: error
+
   publish:
     if: github.ref_type == 'tag'
-    needs: [run, dmg]
+    needs: [run, dmg, flatpak]
     runs-on: ubuntu-latest
     permissions:
       contents: write
