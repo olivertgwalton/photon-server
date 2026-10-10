@@ -66,18 +66,26 @@ const exitRestart = 75
 var errRestart = errors.New("stopped for a restore; to be started again")
 
 func main() {
+	if ok, code := asService(os.Args[1:]); ok {
+		os.Exit(code)
+	}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	stops := make(chan os.Signal, 2)
 	signal.Notify(stops, os.Interrupt, syscall.SIGTERM)
-	err := run(logger, os.Args[1:], stops)
+	os.Exit(exitCode(logger, run(logger, os.Args[1:], stops)))
+}
+
+// exitCode is the code the server exits with once run ends with err, said in the log.
+func exitCode(logger *slog.Logger, err error) int {
 	switch {
 	case errors.Is(err, errRestart):
 		logger.Info("photon-server stopped for a restore; its restart policy starts it again", slog.Int("exit", exitRestart))
-		os.Exit(exitRestart)
+		return exitRestart
 	case err != nil:
 		logger.Error("photon-server stopped", slog.Any("err", err))
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 // run runs what args ask for until it is done or told to stop on stops; a node draining its
