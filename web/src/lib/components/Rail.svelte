@@ -1,3 +1,11 @@
+<script lang="ts" module>
+// A card picked from a row of the set the page is one of. The page is drawn
+// afresh for the card's own (the app's layout keys it by path), so the row it
+// was picked from is a new one, and the card is focused again in it, to step
+// on from.
+let picked = false;
+</script>
+
 <script lang="ts" generics="T extends Record<'id', string>">
 import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
 import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
@@ -77,6 +85,8 @@ $effect(() => {
 		behavior: "instant",
 	});
 	measure();
+	if (picked) here?.focus({ preventScroll: true });
+	picked = false;
 });
 
 // A page at a time, as Plex Web's and Jellyfin's rows go: a little less than
@@ -104,9 +114,9 @@ function step(event: KeyboardEvent) {
 // focus, as it does in Chrome. On click, after Safari has moved it to main.
 function hold(event: MouseEvent) {
 	if (!(event.target instanceof Element)) return;
-	event.target
-		.closest<HTMLElement>("a, button")
-		?.focus({ preventScroll: true });
+	const link = event.target.closest<HTMLElement>("a, button");
+	link?.focus({ preventScroll: true });
+	if (current && link instanceof HTMLAnchorElement) picked = true;
 }
 
 const sizes = $derived(
