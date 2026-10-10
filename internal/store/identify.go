@@ -32,7 +32,7 @@ type Subject struct {
 	Unmatched bool
 	// Locale is what its library asks in; what it leaves unsaid is the server's.
 	Locale domain.Locale
-	// Titles is which title its library gives it.
+	// Titles is which title it gives, its own over its library's.
 	Titles domain.TitleLanguage
 }
 
@@ -58,7 +58,8 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 	var media domain.LibraryMedia
 	err = s.pool.QueryRow(ctx, `
 		SELECT coalesce(i.metadata_language, ''), coalesce(i.certification_country, ''),
-			coalesce(l.metadata_language, ''), coalesce(l.certification_country, ''), l.artwork_language, l.title_language, l.media
+			coalesce(l.metadata_language, ''), coalesce(l.certification_country, ''), l.artwork_language,
+			coalesce(i.title_language, l.title_language), l.media
 		FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.id = $1`, id).
 		Scan(&own.Language, &own.Country, &lib.Language, &lib.Country, &lib.Artwork, &sub.Titles, &media)
 	if err != nil {

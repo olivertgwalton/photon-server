@@ -10,8 +10,9 @@ import { fields } from "#lib/form.js";
 
 type Schemas = components["schemas"];
 
-// A film's or show's own metadata language and certification country, over
-// its library's, as Jellyfin's item settings.
+// A film's or show's own metadata language, certification country and title,
+// over its library's, as Jellyfin's item settings and Plex's "Use original
+// title".
 let {
 	title,
 	locales,
@@ -34,6 +35,9 @@ function save(event: SubmitEvent) {
 			body: {
 				metadata_language: chosen("metadata_language"),
 				certification_country: chosen("certification_country"),
+				title_language: (chosen("title_language") || undefined) as
+					| Schemas["TitleLanguage"]
+					| undefined,
 			},
 		}),
 		"Saved. It is described again in them in a moment.",
@@ -59,6 +63,19 @@ function save(event: SubmitEvent) {
 				name="certification_country"
 				value={title.certification_country ?? serverLocale}
 				options={named(locales.countries, "region")}
+			/>
+		</Field.Field>
+		<Field.Field>
+			<Field.Label for="title-titles">Title</Field.Label>
+			<Choice
+				id="title-titles"
+				name="title_language"
+				value={title.title_language ?? serverLocale}
+				options={[
+					{ value: serverLocale, label: "Its library's" },
+					{ value: "localized", label: "In its language" },
+					{ value: "original", label: "As first named" },
+				]}
 			/>
 		</Field.Field>
 	</div>

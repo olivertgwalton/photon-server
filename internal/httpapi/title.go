@@ -60,10 +60,11 @@ type titlePageJSON struct {
 	Rule         *store.SmartRule    `json:"rule,omitzero"`
 	List         *store.ListRef      `json:"list,omitzero"`
 	EpisodeOrder domain.EpisodeOrder `json:"episode_order,omitzero"`
-	// MetadataLanguage and CertificationCountry are a film's or show's own, over its library's;
-	// absent where it takes its library's.
-	MetadataLanguage     string `json:"metadata_language,omitzero"`
-	CertificationCountry string `json:"certification_country,omitzero"`
+	// MetadataLanguage, CertificationCountry and TitleLanguage are a film's or show's own, over its
+	// library's; absent where it takes its library's.
+	MetadataLanguage     string               `json:"metadata_language,omitzero"`
+	CertificationCountry string               `json:"certification_country,omitzero"`
+	TitleLanguage        domain.TitleLanguage `json:"title_language,omitzero"`
 	// QualifiedCertificate is Certificate with the country whose system rates it, where that is not
 	// the server's (GB:PG), as parental controls read it and an edit takes it.
 	QualifiedCertificate string            `json:"qualified_certificate,omitzero"`
@@ -283,7 +284,7 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 		Collections: each(p.Collections, func(c store.CollectionCard) collectionCardJSON { return collectionCardJSON(c) }),
 		Credits:     each(p.Credits, func(c store.CreditRef) creditRefJSON { return creditRefJSON(c) }),
 		Origin:      p.Origin, Placement: p.Placement, Rule: p.Rule, List: p.List, EpisodeOrder: p.EpisodeOrder,
-		MetadataLanguage: p.Locale.Language, CertificationCountry: p.Locale.Country, AddedAt: p.AddedAt, SeasonNumber: p.SeasonNumber,
+		MetadataLanguage: p.Locale.Language, CertificationCountry: p.Locale.Country, TitleLanguage: p.Titles, AddedAt: p.AddedAt, SeasonNumber: p.SeasonNumber,
 		EpisodeNumber: p.EpisodeNumber, EpisodeEnd: p.EpisodeEnd,
 		Show: (*titleRefJSON)(p.Show), Season: (*titleRefJSON)(p.Season),
 		Versions: each(p.Versions, func(v store.VersionPage) versionPageJSON { return versionPageOf(v, w) }),

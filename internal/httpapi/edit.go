@@ -26,7 +26,7 @@ type editing interface {
 	Refresh(ctx context.Context, id uuid.UUID, mode domain.RefreshMode) error
 	AnalyseTitle(ctx context.Context, id uuid.UUID) error
 	Unmatch(ctx context.Context, id uuid.UUID) error
-	SetTitleLocale(ctx context.Context, id uuid.UUID, loc domain.Locale) error
+	SetTitleLocale(ctx context.Context, id uuid.UUID, loc domain.Locale, titles domain.TitleLanguage) error
 	SplitTitle(ctx context.Context, id uuid.UUID) error
 	TitleFiles(ctx context.Context, id uuid.UUID) ([]store.LibraryFile, error)
 	ForgetTitle(ctx context.Context, id uuid.UUID) error
@@ -265,6 +265,8 @@ type titleLocaleJSON struct {
 	// such as GB; "" is its library's.
 	MetadataLanguage     string `json:"metadata_language"`
 	CertificationCountry string `json:"certification_country"`
+	// TitleLanguage is which title it gives, localized or original; absent is its library's.
+	TitleLanguage domain.TitleLanguage `json:"title_language,omitzero"`
 }
 
 // setTitleLocale gives a film or show a locale of its own over its library's, as Jellyfin's item
@@ -284,7 +286,7 @@ func (a *API) setTitleLocale(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, refusal)
 		return
 	}
-	err := a.svc.Editing.SetTitleLocale(r.Context(), id, domain.Locale{Language: lang, Country: country})
+	err := a.svc.Editing.SetTitleLocale(r.Context(), id, domain.Locale{Language: lang, Country: country}, req.TitleLanguage)
 	if a.answeredAs(w, r, err, "no film or show has that id") {
 		return
 	}
@@ -374,7 +376,7 @@ func (a *API) editRoutes() []route {
 		},
 		{
 			pattern: "PUT /api/v1/admin/titles/{id}/locale", access: admin,
-			summary: "Give a film or show a metadata language and certification country of its own, and describe it again in them",
+			summary: "Give a film or show a metadata language, certification country and title language of its own, and describe it again in them",
 			body:    titleLocaleJSON{}, status: http.StatusAccepted, handle: a.setTitleLocale,
 		},
 		{
