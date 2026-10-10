@@ -4,7 +4,7 @@ on:
     tags: ["v*"]
   # A change to how archives are made builds and runs them without publishing.
   pull_request:
-    paths: [.github/workflows/release.yml, deploy/fetch-tools.sh, macos/**, flatpak/**]
+    paths: [.github/workflows/release.yml, deploy/fetch-tools.sh, deploy/fetch-jellyfin-web.sh, macos/**, flatpak/**]
 permissions:
   contents: read
 jobs:
@@ -29,7 +29,7 @@ jobs:
           goos=${TARGET%/*} goarch=${TARGET#*/}
           exe=
           [ "$goos" = windows ] && exe=.exe
-          # Laid out as an install is: the web app is found at ../share/photon-server/web from the
+          # Laid out as an install is: the web apps are found in ../share/photon-server from the
           # binary, and the tools beside it.
           root=photon-server
           mkdir -p "$root/bin" "$root/share/photon-server" "$root/share/licenses/jellyfin-ffmpeg"
@@ -38,6 +38,7 @@ jobs:
           CGO_ENABLED=0 GOOS=$goos GOARCH=$goarch go build -trimpath \
             -ldflags "-s -w -X main.version=$VERSION" -o "$root/bin/photon-server$exe" ./cmd/photon-server
           deploy/fetch-tools.sh "$goos" "$goarch" "$root/bin"
+          deploy/fetch-jellyfin-web.sh "$root/share/photon-server/jellyfin-web" "$root/share/licenses/jellyfin-web"
           cp LICENSE "$root/LICENSE"
           cp deploy/ffmpeg-NOTICE "$root/share/licenses/jellyfin-ffmpeg/NOTICE"
           name="photon-server_${VERSION}_${goos}_${goarch}"
