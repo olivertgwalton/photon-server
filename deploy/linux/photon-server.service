@@ -1,0 +1,27 @@
+[Unit]
+Description=photon-server media server
+Wants=network-online.target
+After=network-online.target postgresql.service valkey.service
+
+[Service]
+Type=exec
+User=photon-server
+Group=photon-server
+EnvironmentFile=/etc/photon-server/env
+# The cache and the dumps land where the image keeps them: /var/cache/photon-server and
+# /var/lib/photon-server/backups.
+Environment=XDG_CACHE_HOME=/var/cache XDG_CONFIG_HOME=/var/lib
+CacheDirectory=photon-server
+StateDirectory=photon-server
+ExecStartPre=/usr/lib/photon-server/bin/photon-server migrate
+ExecStart=/usr/lib/photon-server/bin/photon-server
+# Stopping, it plays its streams to their end first, up to two hours. Stopped for a restore, it
+# exits 75 to be started again.
+TimeoutStopSec=2h
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
