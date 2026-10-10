@@ -38,6 +38,7 @@ type catalogue interface {
 	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error)
 	LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library uuid.UUID, limit int) ([]store.Card, error)
 	Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID][]store.VersionPage, error)
+	Streamed(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]bool, error)
 	ExternalIDs(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]map[domain.Provider]string, error)
 	Picture(ctx context.Context, id uuid.UUID) (domain.Picture, error)
 	SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error
@@ -151,6 +152,9 @@ func (a *API) list(ctx context.Context, cards []store.Card, l listed) ([]item, e
 					out[n].MediaStreams = out[n].MediaSources[0].MediaStreams
 				}
 			}
+		}
+		if err := a.listPlaceholders(ctx, out, cards, l); err != nil {
+			return nil, err
 		}
 	}
 	if l.fields["providerids"] {
@@ -501,6 +505,10 @@ func (a *API) titleItem(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
 		return
 	}
 	it := a.fromTitle(p, words.Negotiate(w, r))
+	if it, err = a.titlePlaceholder(r.Context(), it, id, p.Title); err != nil {
+		a.internal(w, r, err)
+		return
+	}
 	if p.Kind == domain.ItemCollection {
 		members, err := a.svc.Catalogue.Members(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 		if err != nil {
