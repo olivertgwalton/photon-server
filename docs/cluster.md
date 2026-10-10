@@ -16,8 +16,8 @@ A node finds what it encodes video with as it starts: VideoToolbox on a Mac, NVE
 VAAPI on each render node, the first that encodes a test picture, or software where none does.
 Its log says which, and Settings › Server shows it.
 
-A node is named by its host. In a container, give each machine's its own name: the deploy
-folder's compose file takes `PHOTON_HOSTNAME`, `photon` where it is unset.
+A node is named by its host. In a container, give each machine's its own name: the compose
+file in [install.md](install.md) takes `PHOTON_HOSTNAME`, `photon` where it is unset.
 
 Every node mounts the media at the same path, as a library is kept by its path. Node addresses
 belong on a private network: the nodes trust what they hand each other.
