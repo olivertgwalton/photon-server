@@ -7,6 +7,7 @@ import PlaylistPicker from "#lib/components/PlaylistPicker.svelte";
 import ShareDialog from "#lib/components/ShareDialog.svelte";
 import SubtitleSearch from "#lib/components/SubtitleSearch.svelte";
 import VersionPicker from "#lib/components/VersionPicker.svelte";
+import RefreshDialog from "#lib/components/admin/RefreshDialog.svelte";
 import TitleEditor from "#lib/components/admin/TitleEditor.svelte";
 import ConfirmDialog from "#lib/components/ConfirmDialog.svelte";
 import ProfileMenu from "#lib/components/ProfileMenu.svelte";
@@ -89,4 +90,5 @@ $effect(() => {
 <ConfirmDialog />
 {#if data.me.role === "admin"}
 	<TitleEditor />
+	<RefreshDialog />
 {/if}

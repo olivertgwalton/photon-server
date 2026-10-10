@@ -243,7 +243,7 @@ test("a library's metadata is refreshed, what is missing or all of it", async ({
 }) => {
 	await logIn(page, "/settings/server/libraries");
 	await page.getByRole("button", { name: "Refresh metadata of Films" }).click();
-	const dialog = page.getByRole("dialog", { name: "Refresh library metadata" });
+	const dialog = page.getByRole("dialog", { name: "Refresh metadata" });
 	await expect(dialog.getByText("Choose how much of Films")).toBeVisible();
 	await expectAccessible(page);
 
@@ -255,7 +255,7 @@ test("a library's metadata is refreshed, what is missing or all of it", async ({
 		.click();
 	expect((await asked).postDataJSON()).toEqual({ mode: "missing" });
 	await expect(
-		page.getByText("Films is being filled in where it's missing."),
+		page.getByText("Fetching missing metadata for Films."),
 	).toBeVisible();
 	await expect(dialog).toBeHidden();
 
@@ -281,7 +281,11 @@ test("a library is scanned, refreshed and opened from its menu in the sidebar", 
 		"**/api/v1/admin/libraries/l-films/refresh",
 	);
 	await menu.click();
-	await page.getByRole("menuitem", { name: "Refresh all metadata" }).click();
+	await page.getByRole("menuitem", { name: "Refresh metadata…" }).click();
+	await page
+		.getByRole("dialog", { name: "Refresh metadata" })
+		.getByRole("button", { name: /Refresh all metadata/ })
+		.click();
 	expect((await asked).postDataJSON()).toEqual({ mode: "all" });
 
 	// Removing asks first.
@@ -812,6 +816,30 @@ test("a title is analysed from its card", async ({ page }) => {
 	await expect(
 		page.getByText("Analysing Quiet Hours: its files are read again."),
 	).toBeVisible();
+});
+
+test("a title's metadata is refreshed from its card, as much as is chosen", async ({
+	page,
+}) => {
+	await logIn(page);
+	await page
+		.getByRole("region", { name: "Recently Added in Films" })
+		.getByRole("button", { name: "More for Quiet Hours" })
+		.click();
+	await page.getByRole("menuitem", { name: "Refresh metadata…" }).click();
+	const dialog = page.getByRole("dialog", { name: "Refresh metadata" });
+	await expect(
+		dialog.getByText("Choose how much of Quiet Hours"),
+	).toBeVisible();
+	await expectAccessible(page);
+
+	const asked = page.waitForRequest("**/api/v1/admin/titles/t-film/refresh");
+	await dialog.getByRole("button", { name: /Refresh all metadata/ }).click();
+	expect((await asked).postDataJSON()).toEqual({ mode: "all" });
+	await expect(
+		page.getByText("Fetching all metadata for Quiet Hours again."),
+	).toBeVisible();
+	await expect(dialog).toBeHidden();
 });
 
 test("a title is unmatched from its card", async ({ page }) => {

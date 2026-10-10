@@ -1,7 +1,7 @@
 <script lang="ts">
 import { fullTitle } from "#lib/format.js";
 import { act } from "#lib/act.js";
-import { refreshTitle } from "#lib/actions.svelte.js";
+import { refreshMetadata } from "#lib/actions.svelte.js";
 import { fields } from "#lib/form.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
@@ -57,25 +57,17 @@ const name = $derived(
 			<Card.Header>
 				<Card.Title><h2 class="heading">Refresh</h2></Card.Title>
 				<Card.Description>
-					Ask its providers again now, ahead of the library's schedule. A show
-					takes its seasons and episodes with it.
+					Update it from its providers now, without waiting for the library's
+					schedule.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
-				<div class="flex flex-wrap gap-2">
-					<Button
-						variant="outline"
-						onclick={() => refreshTitle(t.id, name, "missing")}
-					>
-						Fill in what's missing
-					</Button>
-					<Button
-						variant="outline"
-						onclick={() => refreshTitle(t.id, name, "all")}
-					>
-						Replace everything
-					</Button>
-				</div>
+				<Button
+					variant="outline"
+					onclick={() => refreshMetadata("title", t.id, name)}
+				>
+					Refresh metadata…
+				</Button>
 			</Card.Content>
 		</Card.Root>
 	{/if}

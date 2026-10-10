@@ -3,7 +3,6 @@ import Artwork from "#lib/components/Artwork.svelte";
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 import CaptionsIcon from "@lucide/svelte/icons/captions";
 import CheckIcon from "@lucide/svelte/icons/check";
-import DatabaseBackupIcon from "@lucide/svelte/icons/database-backup";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
@@ -19,7 +18,7 @@ import { goto } from "$app/navigation";
 import {
 	findSubtitles,
 	pickPlaylist,
-	refreshTitle,
+	refreshMetadata,
 	setMark,
 } from "#lib/actions.svelte.js";
 import { type Extra, extrasOf } from "#lib/extras.js";
@@ -415,14 +414,9 @@ const poster = $derived(art("poster"));
 								{#if t.kind !== "collection" && t.kind !== "extra"}
 									<DropdownMenu.Item
 										onSelect={() =>
-											refreshTitle(t.id, titleWithShow(t), "missing")}
+											refreshMetadata("title", t.id, titleWithShow(t))}
 									>
-										<RefreshCwIcon />Refresh missing metadata
-									</DropdownMenu.Item>
-									<DropdownMenu.Item
-										onSelect={() => refreshTitle(t.id, titleWithShow(t), "all")}
-									>
-										<DatabaseBackupIcon />Refresh all metadata
+										<RefreshCwIcon />Refresh metadata…
 									</DropdownMenu.Item>
 								{/if}
 								{#if t.show}

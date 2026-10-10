@@ -1,12 +1,15 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
-import { removeLibrary, scanLibrary } from "#lib/actions.svelte.js";
+import {
+	refreshMetadata,
+	removeLibrary,
+	scanLibrary,
+} from "#lib/actions.svelte.js";
 import { fields } from "#lib/form.js";
 import { libraryChange } from "#lib/admin/library.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { client } from "#lib/api/client.js";
 import LibraryForm from "#lib/components/admin/LibraryForm.svelte";
-import LibraryRefresh from "#lib/components/admin/LibraryRefresh.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -46,7 +49,14 @@ function save(event: SubmitEvent) {
 		>
 			{scan ? "Scanning…" : "Scan now"}
 		</Button>
-		<LibraryRefresh id={data.library.id} name={data.library.name} />
+		<Button
+			variant="outline"
+			size="sm"
+			onclick={() =>
+				refreshMetadata("library", data.library.id, data.library.name)}
+		>
+			Refresh metadata <span class="sr-only">of {data.library.name}</span>
+		</Button>
 		<Button
 			variant="outline"
 			size="sm"
