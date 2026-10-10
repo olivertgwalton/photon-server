@@ -71,7 +71,7 @@ func (a *API) styledStream(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	f, err := os.Open(filepath.Join(dir, hls.StyledName(n)))
+	f, err := os.OpenInRoot(dir, hls.StyledName(n))
 	if err != nil {
 		a.internal(w, r, err)
 		return

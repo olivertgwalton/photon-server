@@ -2,6 +2,9 @@ package library
 
 import (
 	"errors"
+	"io"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -40,5 +43,27 @@ func TestAStrmIsReadAsTheAddressItNames(t *testing.T) {
 		if _, err := OpenMedia(dir, rel); !errors.Is(err, media.ErrNotMedia) {
 			t.Errorf("%s: %v, want it not media: only an http or https address is fetched", rel, err)
 		}
+	}
+}
+
+// A file being played can be renamed and deleted, as Sonarr and Radarr do to upgrade it, on
+// Windows as on Linux and macOS.
+func TestAFileBeingReadCanBeRenamedAndDeleted(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, map[string]string{"Film (2010)/Film (2010).mkv": "media"})
+	f, err := Open(root, "Film (2010)/Film (2010).mkv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	moved := filepath.Join(root, "Film (2010)", "Film (2010) - 1080p.mkv")
+	if err := os.Rename(filepath.Join(root, "Film (2010)", "Film (2010).mkv"), moved); err != nil {
+		t.Fatalf("renamed while open: %v", err)
+	}
+	if err := os.Remove(moved); err != nil {
+		t.Fatalf("deleted while open: %v", err)
+	}
+	if b, err := io.ReadAll(f); err != nil || string(b) != "media" {
+		t.Errorf("read %q, %v; want what was opened", b, err)
 	}
 }

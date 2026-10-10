@@ -305,5 +305,5 @@ func Open(root, rel string) (*os.File, error) {
 	if !filepath.IsLocal(filepath.FromSlash(rel)) {
 		return nil, fmt.Errorf("%q: %w", rel, errNotInside)
 	}
-	return os.Open(filepath.Join(root, filepath.FromSlash(rel)))
+	return openShared(filepath.Join(root, filepath.FromSlash(rel)))
 }

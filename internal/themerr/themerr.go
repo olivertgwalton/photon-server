@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 	"uuid"
@@ -170,7 +169,7 @@ func download(ctx context.Context, ytdlp, ffmpeg, link string, keep func(io.Read
 		}
 		return err
 	}
-	f, err := os.Open(filepath.Join(dir, "theme.m4a"))
+	f, err := os.OpenInRoot(dir, "theme.m4a")
 	if errors.Is(err, fs.ErrNotExist) {
 		// yt-dlp skips a file over --max-filesize, and says nothing under --quiet.
 		return fmt.Errorf("%w: over %s", errRefused, maxSize)

@@ -225,7 +225,7 @@ func (c *Conversions) File(ctx context.Context, download uuid.UUID) (*os.File, s
 		}
 		return nil, address, err
 	}
-	f, err := os.Open(c.path(conversion))
+	f, err := os.OpenInRoot(c.dir, filepath.Base(c.path(conversion)))
 	if errors.Is(err, fs.ErrNotExist) {
 		err = store.ErrNotFound
 	}
