@@ -77,7 +77,12 @@ $effect(() => {
 			tabindex="-1"
 			class="min-w-0 flex-1 px-3 py-6 [view-transition-name:page] sm:px-6"
 		>
-			{@render children()}
+			<!-- SvelteKit keeps a page's components when it goes to another page of
+				the same route (one title's to another's), and with them how far each
+				row was scrolled: a new page starts afresh. -->
+			{#key page.url.pathname}
+				{@render children()}
+			{/key}
 		</main>
 	</Sidebar.Inset>
 </Sidebar.Provider>
