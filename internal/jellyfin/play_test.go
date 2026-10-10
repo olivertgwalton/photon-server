@@ -629,3 +629,64 @@ func alone(local interface {
 type noNodes struct{}
 
 func (noNodes) Nodes(context.Context) ([]domain.Node, error) { return nil, nil }
+
+// An app that asks for one of a film's copies is answered that copy alone, as Jellyfin answers
+// it: Jellyfin's web app plays a copy that says it plays as it is over the one it asked for.
+func TestAnAppIsAnsweredTheCopyItAskedFor(t *testing.T) {
+	ctx := t.Context()
+	db := storetest.FreshDatabase(t)
+	log := slog.New(slog.DiscardHandler)
+	if err := store.Migrate(ctx, db, log); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(ctx, db, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(st.Close)
+	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	copyOf := func(name string, width, height int, codec string) store.Copy {
+		return store.Copy{ContentKey: []byte(name), Parts: []store.Part{{RelPath: "Heat/" + name, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+			Size: 1, Duration: time.Hour, Container: "matroska,webm",
+			Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: codec, Width: width, Height: height, Range: domain.RangeSDR}},
+		}}}}
+	}
+	film := store.Film{Title: "Heat", Folder: "Heat", Copies: []store.Copy{copyOf("hd.mkv", 1920, 1080, "h264"), copyOf("uhd.mkv", 3840, 2160, "hevc")}}
+	if _, err := st.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []store.Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cards, _, err := st.Wall(ctx, []uuid.UUID{films.ID}, store.WallPage{Profile: ada.ID, Sort: domain.SortTitle, Limit: 1})
+	if err != nil || len(cards) != 1 {
+		t.Fatal(cards, err)
+	}
+	heat := cards[0].ID
+	versions, err := st.Versions(ctx, []uuid.UUID{heat})
+	if err != nil || len(versions[heat]) != 2 {
+		t.Fatal(versions, err)
+	}
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Preferences: st,
+	})
+	for _, v := range versions[heat] {
+		w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", `MediaBrowser Token="pst_ada"`, `{"MediaSourceId":"`+guid(v.ID)+`"}`)
+		var info struct{ MediaSources []map[string]any }
+		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
+			t.Fatalf("%d %s", w.Code, w.Body)
+		}
+		if len(info.MediaSources) != 1 || info.MediaSources[0]["Id"] != guid(v.ID) {
+			t.Errorf("asked for %v, answered %v", guid(v.ID), info.MediaSources)
+		}
+	}
+	w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", `MediaBrowser Token="pst_ada"`, `{}`)
+	if !strings.Contains(w.Body.String(), guid(versions[heat][0].ID)) || !strings.Contains(w.Body.String(), guid(versions[heat][1].ID)) {
+		t.Errorf("asked for none, answered %s; want both", w.Body)
+	}
+}

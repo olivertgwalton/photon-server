@@ -123,9 +123,10 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	said := words.Negotiate(w, r)
 	for _, v := range versions[id] {
 		src := sourceOf(v, said)
+		// An app that names a copy is answered it alone, as Jellyfin answers it.
 		if v.ID == c.Version {
 			out.MediaSources = slices.Insert(out.MediaSources, 0, src)
-		} else {
+		} else if version == (uuid.UUID{}) {
 			out.MediaSources = append(out.MediaSources, src)
 		}
 	}
