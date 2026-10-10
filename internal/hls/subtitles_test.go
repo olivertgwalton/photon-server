@@ -17,6 +17,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
 // fakeConverter is an ffmpeg that converts any subtitle to the same WebVTT.
@@ -26,11 +27,7 @@ func fakeConverter(t *testing.T, vtt string) string {
 	if err := os.WriteFile(filepath.Join(dir, "out.vtt"), []byte(vtt), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, "ffmpeg")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec cat '"+filepath.Join(dir, "out.vtt")+"'\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	return testtool.Script(t, dir, "ffmpeg", "exec cat '"+filepath.Join(dir, "out.vtt")+"'\n")
 }
 
 const film = `WEBVTT
@@ -155,10 +152,7 @@ func TestStyledSubtitlesAreReadOutOnce(t *testing.T) {
 		t.Fatalf("making the film: %v: %s", err, out)
 	}
 	runs := filepath.Join(dir, "runs")
-	counting := filepath.Join(dir, "ffmpeg")
-	if err := os.WriteFile(counting, []byte("#!/bin/sh\necho >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	counting := testtool.Script(t, dir, "ffmpeg", "echo >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n")
 	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: counting}, FFprobe: media.Tool{Path: tool(t, "ffprobe", "PHOTON_FFPROBE")}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
@@ -316,10 +310,7 @@ func TestEmbeddedSubtitlesComeWithTheVideo(t *testing.T) {
 	}
 	fetched := func() (media.Input, error) { return media.Input{URL: address}, nil }
 	runs := filepath.Join(dir, "runs")
-	counting := filepath.Join(dir, "ffmpeg")
-	if err := os.WriteFile(counting, []byte("#!/bin/sh\necho >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	counting := testtool.Script(t, dir, "ffmpeg", "echo >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n")
 	for _, tc := range []struct {
 		name  string
 		open  func() (media.Input, error)

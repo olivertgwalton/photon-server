@@ -9,18 +9,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
 // fakePGRestore writes, as pg_restore does of a dump's goose_db_version, one recording version.
 func fakePGRestore(t *testing.T, version string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "pg_restore")
-	script := "#!/bin/sh\nprintf 'SET row_security = off;\\nCOPY public.goose_db_version (id, version_id, is_applied, tstamp) FROM stdin;\\n" +
-		"1\\t0\\tt\\t2026-10-08 00:56:38\\n2\\t" + version + "\\tt\\t2026-10-08 00:56:38\\n\\\\.\\n'\n"
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	return testtool.Script(t, t.TempDir(), "pg_restore", "printf 'SET row_security = off;\\nCOPY public.goose_db_version (id, version_id, is_applied, tstamp) FROM stdin;\\n"+
+		"1\\t0\\tt\\t2026-10-08 00:56:38\\n2\\t"+version+"\\tt\\t2026-10-08 00:56:38\\n\\\\.\\n'\n")
 }
 
 func TestADumpFromANewerServerIsRefusedBeforeAnythingIsTouched(t *testing.T) {
