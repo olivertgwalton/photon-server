@@ -191,6 +191,10 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 		streams[2].(map[string]any)["DisplayTitle"] != "English (SRT)" {
 		t.Errorf("names: copy %v, tracks %v and %v", source["Name"], streams[1].(map[string]any)["DisplayTitle"], streams[2].(map[string]any)["DisplayTitle"])
 	}
+	// Jellyfin's web app fetches the copy it plays by its id, as Jellyfin makes each copy an item.
+	if byCopy, _ := get("pst_ada", "/Users/"+guid(admin.ID)+"/Items/"+source["Id"].(string)).(map[string]any); byCopy["Id"] != film["Id"] {
+		t.Errorf("a copy by its id: %v, want its film", byCopy["Name"])
+	}
 	userData, _ := film["UserData"].(map[string]any)
 	requireKeys(t, "UserItemDataDto", userData, "PlaybackPositionTicks", "PlayCount", "IsFavorite", "Played", "Key", "ItemId")
 

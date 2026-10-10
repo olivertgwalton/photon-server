@@ -385,7 +385,7 @@ func (a *API) children(w http.ResponseWriter, r *http.Request, profile, parent u
 	switch named.Kind {
 	case store.NamedTitle:
 		a.titleChildren(w, r, profile, parent, named.Title, types, l)
-	case store.NamedAnnounced, store.NamedPerson, store.NamedPlaylist:
+	case store.NamedAnnounced, store.NamedPerson, store.NamedPlaylist, store.NamedVersion:
 		a.writeJSON(w, none)
 	}
 }
@@ -481,6 +481,9 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	switch named.Kind {
 	case store.NamedTitle:
 		a.titleItem(w, r, id)
+	// Jellyfin's web app fetches the version it plays by its id before it asks how to play it.
+	case store.NamedVersion:
+		a.titleItem(w, r, named.Of)
 	case store.NamedAnnounced:
 		a.announcedItem(w, r, id)
 	case store.NamedPerson:
