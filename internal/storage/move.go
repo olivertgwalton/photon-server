@@ -157,7 +157,8 @@ func (s *Stores) finish(ctx context.Context, c Cluster, st domain.Storage, m dom
 		if err != nil {
 			return err
 		}
-		sources = append(slices.DeleteFunc(others, func(n uuid.UUID) bool { return n == c.Node }), c.Node)
+		// A copy: the nodes are the caller's, and another goroutine may be reading them.
+		sources = append(slices.DeleteFunc(slices.Clone(others), func(n uuid.UUID) bool { return n == c.Node }), c.Node)
 	}
 	finished, err := s.settings.FinishStorageMove(ctx, sources)
 	if err != nil || !finished {
