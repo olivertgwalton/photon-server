@@ -288,6 +288,20 @@ test("an episode's page lists its whole season to pick another", async ({
 	await expectAccessible(page);
 });
 
+test("the arrow keys step along an episode's season row", async ({ page }) => {
+	await logIn(page, "/titles/t-ep");
+	const row = page.getByRole("region", { name: /Season 1/ });
+	const pilot = row.getByRole("link", { name: /Pilot/ });
+	const second = row.getByRole("link", { name: /Second/ });
+	await pilot.focus();
+	await page.keyboard.press("ArrowRight");
+	await expect(second).toBeFocused();
+	await page.keyboard.press("ArrowRight");
+	await expect(second).toBeFocused();
+	await page.keyboard.press("ArrowLeft");
+	await expect(pilot).toBeFocused();
+});
+
 test("picking another episode of the season keeps the page where it was", async ({
 	page,
 }) => {
