@@ -321,12 +321,12 @@ func (s *Store) RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeR
 }
 
 // LibraryRow answers the first cards, up to limit, of a row made for each library, of library:
-// ErrNotFound for any other row.
-func (s *Store) LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library uuid.UUID, limit int) ([]Card, error) {
-	if _, ok := libraryRows[row]; !ok {
+// ErrNotFound for any other row, or one not made for that kind of library.
+func (s *Store) LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library *SeenLibrary, limit int) ([]Card, error) {
+	if !slices.Contains(libraryRows[row], library.Kind) {
 		return nil, ErrNotFound
 	}
-	items, err := queryRows[model.Item](ctx, s.pool, rowQueries[row], pgx.NamedArgs{"profile": profile, "limit": limit, "offset": 0, "lib": library})
+	items, err := queryRows[model.Item](ctx, s.pool, rowQueries[row], pgx.NamedArgs{"profile": profile, "limit": limit, "offset": 0, "lib": library.ID})
 	if err != nil {
 		return nil, err
 	}

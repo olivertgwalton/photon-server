@@ -87,7 +87,7 @@ func (a *API) latest(w http.ResponseWriter, r *http.Request) {
 	}
 	var cards []store.Card
 	for _, lib := range libs {
-		got, err := a.svc.Catalogue.LibraryRow(r.Context(), auth.SessionOf(r.Context()).Profile.ID, latestRows[lib.Kind], lib.ID, limit)
+		got, err := a.svc.Catalogue.LibraryRow(r.Context(), auth.SessionOf(r.Context()).Profile.ID, latestRows[lib.Kind], lib, limit)
 		if err != nil {
 			a.internal(w, r, err)
 			return

@@ -36,7 +36,7 @@ type catalogue interface {
 	Calendar(ctx context.Context, q store.CalendarQuery) ([]store.CalendarDay, error)
 	AnnouncedEpisode(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error)
-	LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library uuid.UUID, limit int) ([]store.Card, error)
+	LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library *store.SeenLibrary, limit int) ([]store.Card, error)
 	Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID][]store.VersionPage, error)
 	Streamed(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]bool, error)
 	ExternalIDs(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]map[domain.Provider]string, error)
