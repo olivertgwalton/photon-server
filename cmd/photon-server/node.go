@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 	"uuid"
@@ -139,6 +140,11 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 		return err
 	}
 	configDir, err := os.UserConfigDir()
+	if runtime.GOOS == "windows" {
+		// Windows' config folder roams with the user's profile, and dumps are too big to; its local one
+		// stays on the machine.
+		configDir, err = os.UserCacheDir()
+	}
 	if err != nil {
 		return err
 	}
