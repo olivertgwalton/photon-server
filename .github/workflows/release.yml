@@ -238,13 +238,35 @@ jobs:
           manifest-path: flatpak/io.github.olivertgwalton.Photon.yml
           arch: ${{ matrix.arch }}
           upload-artifact: false
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.BUNDLE }}
+          path: ${{ env.BUNDLE }}
+          if-no-files-found: error
+
+  # Each bundle is installed and run on its own runner, as a desktop runs it: by a user, as
+  # PostgreSQL will not run as root, which the build's container is.
+  flatpak-run:
+    needs: flatpak
+    strategy:
+      matrix:
+        include:
+          - { goarch: amd64, runner: ubuntu-latest }
+          - { goarch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: "*_linux_${{ matrix.goarch }}.flatpak"
+          merge-multiple: true
       - name: Run it
         run: |
-          flatpak install --user -y --noninteractive "$BUNDLE"
-          export XDG_RUNTIME_DIR="$RUNNER_TEMP/runtime"
-          mkdir -m 700 -p "$XDG_RUNTIME_DIR"
+          sudo apt-get update -qq && sudo apt-get install -y -qq flatpak
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive ./*.flatpak
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" "$XDG_RUNTIME_DIR"
           flatpak run io.github.olivertgwalton.Photon &
-          app=$!
           for _ in $(seq 60); do
             [ "$(curl -s -o /dev/null -w '%{http_code}' localhost:8640/readyz)" = 204 ] && break
             sleep 2
@@ -253,17 +275,16 @@ jobs:
           curl -fsS localhost:8640/auth/login | grep -q 'kit.start'
           # Stopping flatpak run would kill the sandbox outright: the launcher inside is asked.
           pkill -TERM -f '/app/bin/photon$'
-          wait "$app" || true
-          if pgrep -f '/app/bin/(postgres|valkey-server|photon-server)'; then exit 1; fi
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.BUNDLE }}
-          path: ${{ env.BUNDLE }}
-          if-no-files-found: error
+          for _ in $(seq 30); do
+            pgrep -f '/app/bin/(postgres|valkey-server|photon-server)' >/dev/null || exit 0
+            sleep 1
+          done
+          pgrep -af '/app/bin/'
+          exit 1
 
   publish:
     if: github.ref_type == 'tag'
-    needs: [run, dmg, flatpak]
+    needs: [run, dmg, flatpak-run]
     runs-on: ubuntu-latest
     permissions:
       contents: write
