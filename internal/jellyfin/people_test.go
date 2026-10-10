@@ -64,7 +64,7 @@ func TestAnAppOpensSomeoneAndTheirWork(t *testing.T) {
 	if err != nil || len(titles) != 3 {
 		t.Fatal(titles, err)
 	}
-	weaver := domain.Credit{Name: "Sigourney Weaver", IDs: map[domain.Provider]string{domain.ProviderTMDB: "10205"}, Kind: domain.CreditActor, Role: "Ripley"}
+	weaver := domain.Credit{Name: "Sigourney Weaver", IDs: map[domain.Provider]string{domain.ProviderTMDB: "10205"}, Kind: domain.CreditActor, Role: "Ripley", Photo: "https://image.tmdb.org/t/p/original/weaver.jpg"}
 	for _, title := range []store.Card{titles[0], titles[2]} {
 		if err := st.SaveIdentity(ctx, title.ID, domain.SourceTMDB, domain.Metadata{Title: title.Title, Credits: []domain.Credit{weaver}}, nil); err != nil {
 			t.Fatal(err)
@@ -94,6 +94,7 @@ func TestAnAppOpensSomeoneAndTheirWork(t *testing.T) {
 		ID, Name, Type, Overview, PremiereDate string
 		ProductionLocations                    []string
 		ProviderIDs                            map[string]string
+		ImageTags                              map[string]string
 	}
 	var people struct {
 		Items            []found
@@ -107,6 +108,14 @@ func TestAnAppOpensSomeoneAndTheirWork(t *testing.T) {
 	if code := get("pst_ada", "/Users/"+guid(ada.ID)+"/Items/"+guid(her), &one); code != http.StatusOK || one.Type != "Person" || one.Overview != "An actor." ||
 		one.PremiereDate[:10] != "1949-10-08" || len(one.ProductionLocations) != 1 || one.ProviderIDs["Tmdb"] != "10205" {
 		t.Errorf("her: %d %+v", code, one)
+	}
+	// Jellyfin's web app shows a title's cast by the photo tag each credit carries.
+	var film struct {
+		People []struct{ ID, PrimaryImageTag string }
+	}
+	get("pst_ada", "/Users/"+guid(ada.ID)+"/Items/"+guid(titles[0].ID), &film)
+	if len(film.People) != 1 || film.People[0].PrimaryImageTag == "" || film.People[0].PrimaryImageTag != one.ImageTags["Primary"] {
+		t.Errorf("%s's cast: %+v, want her photo %q", titles[0].Title, film.People, one.ImageTags["Primary"])
 	}
 	work := func(token, people string) []string {
 		t.Helper()

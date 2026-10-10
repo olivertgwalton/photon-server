@@ -97,12 +97,15 @@ type userData struct {
 	ItemID                string     `json:"ItemId"`
 }
 
-// person is Jellyfin's BaseItemPerson.
+// person is Jellyfin's BaseItemPerson. Jellyfin's web app shows a cast member's photo by its
+// PrimaryImageTag alone.
 type person struct {
-	Name string `json:"Name"`
-	ID   string `json:"Id,omitempty"`
-	Role string `json:"Role,omitempty"`
-	Type string `json:"Type"`
+	Name            string              `json:"Name"`
+	ID              string              `json:"Id,omitempty"`
+	Role            string              `json:"Role,omitempty"`
+	Type            string              `json:"Type"`
+	PrimaryImageTag string              `json:"PrimaryImageTag,omitempty"`
+	ImageBlurHashes map[string]blurhash `json:"ImageBlurHashes,omitempty"`
 }
 
 // itemKinds are Jellyfin's BaseItemKind for each of photon's kinds of title.
@@ -245,7 +248,11 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 		it.ParentID, it.SeriesID, it.SeriesName = guid(p.Show.ID), guid(p.Show.ID), p.Show.Title
 	}
 	for _, c := range p.Credits {
-		it.People = append(it.People, person{Name: c.Name, ID: guid(c.PersonID), Role: c.Role, Type: cmp.Or(personKinds[c.Kind], "Unknown")})
+		who := person{Name: c.Name, ID: guid(c.PersonID), Role: c.Role, Type: cmp.Or(personKinds[c.Kind], "Unknown"), PrimaryImageTag: tag(c.Photo)}
+		if h, ok := c.Blurhashes[c.Photo]; ok {
+			who.ImageBlurHashes = map[string]blurhash{"Primary": {guid(c.Photo): h}}
+		}
+		it.People = append(it.People, who)
 	}
 	it.CanDownload = downloadable(p.Versions)
 	if len(p.Versions) > 0 {
