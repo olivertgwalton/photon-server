@@ -1,0 +1,101 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+  # A change to how archives are made builds and runs them without publishing.
+  pull_request:
+    paths: [.github/workflows/release.yml, deploy/fetch-tools.sh]
+permissions:
+  contents: read
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4"
+      - name: Build the archive
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+        run: |
+          goos=${TARGET%/*} goarch=${TARGET#*/}
+          exe=
+          [ "$goos" = windows ] && exe=.exe
+          # Laid out as an install is: the web app is found at ../share/photon-server/web from the
+          # binary, and the tools beside it.
+          root=photon-server
+          mkdir -p "$root/bin" "$root/share/photon-server" "$root/share/licenses/jellyfin-ffmpeg"
+          (cd web && bun install --frozen-lockfile && bun run build)
+          cp -R web/build "$root/share/photon-server/web"
+          CGO_ENABLED=0 GOOS=$goos GOARCH=$goarch go build -trimpath \
+            -ldflags "-s -w -X main.version=$VERSION" -o "$root/bin/photon-server$exe" ./cmd/photon-server
+          deploy/fetch-tools.sh "$goos" "$goarch" "$root/bin"
+          cp LICENSE "$root/LICENSE"
+          cp deploy/ffmpeg-NOTICE "$root/share/licenses/jellyfin-ffmpeg/NOTICE"
+          name="photon-server_${VERSION}_${goos}_${goarch}"
+          if [ "$goos" = windows ]; then
+            zip -qr "$name.zip" "$root"
+          else
+            tar -czf "$name.tar.gz" "$root"
+          fi
+          echo "NAME=$name" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.NAME }}
+          path: ${{ env.NAME }}.*
+          if-no-files-found: error
+
+  # Each archive that has a runner of its own starts there and finds the tools it carries.
+  run:
+    needs: archive
+    strategy:
+      matrix:
+        include:
+          - { target: linux_amd64, runner: ubuntu-latest }
+          - { target: linux_arm64, runner: ubuntu-24.04-arm }
+          - { target: darwin_arm64, runner: macos-latest }
+          - { target: windows_amd64, runner: windows-latest }
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: "*_${{ matrix.target }}"
+          merge-multiple: true
+      - name: Start the server until it has found its tools
+        env:
+          PHOTON_DATABASE_URL: postgres://none/none
+          PHOTON_VALKEY_URL: valkey://none:6379
+        run: |
+          for f in photon-server_*; do
+            case "$f" in *.zip) unzip -q "$f" ;; *) tar -xzf "$f" ;; esac
+          done
+          photon-server/bin/photon-server > run.log 2>&1 || true
+          cat run.log
+          grep '"msg":"media tools"' run.log | grep -Eq 'photon-server.{1,2}bin.{1,2}ffmpeg'
+          grep '"msg":"media tools"' run.log | grep -q '"yt_dlp_version":"20'
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --generate-notes photon-server_*
