@@ -23,6 +23,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
 // fakeFFmpeg writes what jellyfin-ffmpeg wrote for the fixture, from its start whatever it is asked:
@@ -40,11 +41,7 @@ func writing(t *testing.T, name string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(t.TempDir(), "ffmpeg")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec cat '"+fixture+"'\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	return testtool.Script(t, t.TempDir(), "ffmpeg", "exec cat '"+fixture+"'\n")
 }
 
 // shownIn answers when each fragment of a segment is shown, read back through its part's init.
@@ -531,11 +528,7 @@ func TestAnInitIsAnsweredBeforeAnySegmentIsMade(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An encoder slow to make its first segment: it writes the initialisation, then nothing.
-	ffmpeg := filepath.Join(t.TempDir(), "ffmpeg")
-	script := "#!/bin/sh\nhead -c " + strconv.Itoa(len(init)) + " '" + fixture + "'\nexec sleep 60\n"
-	if err := os.WriteFile(ffmpeg, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	ffmpeg := testtool.Script(t, t.TempDir(), "ffmpeg", "head -c "+strconv.Itoa(len(init))+" '"+fixture+"'\nexec sleep 60\n")
 	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)

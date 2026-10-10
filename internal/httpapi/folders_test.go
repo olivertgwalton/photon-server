@@ -56,8 +56,8 @@ func TestAnAdminBrowsesTheServersFolders(t *testing.T) {
 	if rec, _ := get(memberToken, nil); rec.Code != http.StatusForbidden {
 		t.Errorf("a member: %d, want 403", rec.Code)
 	}
-	if _, roots := get(goodToken, nil); !slices.Contains(names(roots), "/") {
-		t.Errorf("roots = %v, want / among them", roots.Items)
+	if _, roots := get(goodToken, nil); !slices.Contains(names(roots), filepath.VolumeName(root)+string(filepath.Separator)) {
+		t.Errorf("roots = %v, want the one %s is on among them", roots.Items, root)
 	}
 	_, got := get(goodToken, url.Values{"path": {root + "/"}})
 	if want := []string{"Films", "Movies", "Shows"}; !slices.Equal(names(got), want) || got.Path != root || got.Parent != filepath.Dir(root) {

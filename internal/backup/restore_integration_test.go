@@ -12,6 +12,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
 func TestAskingToRestoreTellsEveryNodeAndAllowsOneAtATime(t *testing.T) {
@@ -21,11 +22,7 @@ func TestAskingToRestoreTellsEveryNodeAndAllowsOneAtATime(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A dump of a database at version 1, which every binary is newer than.
-	fake := filepath.Join(t.TempDir(), "pg_restore")
-	script := "#!/bin/sh\nprintf 'COPY public.goose_db_version (id, version_id, is_applied, tstamp) FROM stdin;\\n1\\t1\\tt\\tnow\\n\\\\.\\n'\n"
-	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	fake := testtool.Script(t, t.TempDir(), "pg_restore", "printf 'COPY public.goose_db_version (id, version_id, is_applied, tstamp) FROM stdin;\\n1\\t1\\tt\\tnow\\n\\\\.\\n'\n")
 	k, err := kv.Open(os.Getenv("TEST_VALKEY_URL"), uuid.NewV7())
 	if err != nil {
 		t.Fatalf("TEST_VALKEY_URL: %v", err)

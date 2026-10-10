@@ -22,17 +22,13 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
+	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
 // countingFFmpeg writes "converted" wherever it is told to and notes each run in runs.
 func countingFFmpeg(t *testing.T, runs string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "ffmpeg")
-	script := "#!/bin/sh\necho run >> '" + runs + "'\nfor a; do out=$a; done\nprintf converted > \"$out\"\necho out_time_us=4000000\necho progress=end\n"
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	return testtool.Script(t, t.TempDir(), "ffmpeg", "echo run >> '"+runs+"'\nfor a; do out=$a; done\nprintf converted > \"$out\"\necho out_time_us=4000000\necho progress=end\n")
 }
 
 type noNodes struct{}
@@ -95,6 +91,7 @@ func slots(t *testing.T) *hls.Remuxer {
 	if err != nil {
 		t.Fatal(err)
 	}
+	closing(t, r)
 	return r
 }
 
@@ -197,13 +194,10 @@ func TestAConversionWaitsForASlotAndGivesItUpToAPlay(t *testing.T) {
 	}
 	// While slow exists, ffmpeg writes a little, says it is halfway, and goes on until it is killed.
 	scratch := t.TempDir()
-	slow, ffmpeg := filepath.Join(scratch, "slow"), filepath.Join(scratch, "ffmpeg")
-	script := "#!/bin/sh\nfor a; do out=$a; done\n" +
-		"if [ -e '" + slow + "' ]; then printf partial > \"$out\"; echo out_time_us=2000000; exec sleep 60; fi\n" +
-		"printf converted > \"$out\"\necho out_time_us=4000000\necho progress=end\n"
-	if err := os.WriteFile(ffmpeg, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	slow := filepath.Join(scratch, "slow")
+	ffmpeg := testtool.Script(t, scratch, "ffmpeg", "for a; do out=$a; done\n"+
+		"if [ -e '"+slow+"' ]; then printf partial > \"$out\"; echo out_time_us=2000000; exec sleep 60; fi\n"+
+		"printf converted > \"$out\"\necho out_time_us=4000000\necho progress=end\n")
 	r := slots(t)
 	dir := t.TempDir()
 	conv, err := NewConversions(st, library.Parts{Places: st}, noNodes{}, r, ffmpeg, hls.Hardware{Accel: domain.AccelSoftware}, dir, uuid.NewV7())

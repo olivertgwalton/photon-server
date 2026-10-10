@@ -82,6 +82,7 @@ func join(t *testing.T, c *sharedValkey, limit int) *peerNode {
 	if err != nil {
 		t.Fatal(err)
 	}
+	closing(t, remuxer)
 	// Every node derives the same key, so each takes the others' calls.
 	clusterKey, err := nodecall.NewKey([]byte("sharedValkey signing key"))
 	if err != nil {
@@ -105,6 +106,16 @@ func join(t *testing.T, c *sharedValkey, limit int) *peerNode {
 	t.Cleanup(n.srv.Close)
 	c.tell(n.self())
 	return n
+}
+
+// closing ends each of r's remuxes as the test does, before its folders are removed: Windows
+// removes no folder a remux still holds open.
+func closing(t *testing.T, r *hls.Remuxer) {
+	t.Cleanup(func() {
+		for _, p := range r.Playbacks() {
+			r.Close(p)
+		}
+	})
 }
 
 // encode fills one of n's transcode slots, as a playback encoding there does.

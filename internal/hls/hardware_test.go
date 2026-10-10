@@ -2,12 +2,11 @@ package hls
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
 func TestADeviceThatWillNotEncodeIsFoundAtStart(t *testing.T) {
@@ -15,10 +14,7 @@ func TestADeviceThatWillNotEncodeIsFoundAtStart(t *testing.T) {
 		script string
 		want   error
 	}{{"exit 0", nil}, {"echo 'No VA display found' >&2; exit 1", errHardware}} {
-		ffmpeg := filepath.Join(t.TempDir(), "ffmpeg")
-		if err := os.WriteFile(ffmpeg, []byte("#!/bin/sh\n"+tc.script+"\n"), 0o755); err != nil {
-			t.Fatal(err)
-		}
+		ffmpeg := testtool.Script(t, t.TempDir(), "ffmpeg", tc.script+"\n")
 		err := Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128"}.Check(t.Context(), ffmpeg, domain.VideoHEVC)
 		if !errors.Is(err, tc.want) {
 			t.Errorf("%s: %v, want %v", tc.script, err, tc.want)

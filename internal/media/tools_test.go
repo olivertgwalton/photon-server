@@ -1,21 +1,17 @@
 package media
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
 func fakeTool(t *testing.T, name, firstLine string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), name)
-	script := "#!/bin/sh\necho '" + firstLine + "'\necho 'built with Apple clang'\n"
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	return testtool.Script(t, t.TempDir(), name, "echo '"+firstLine+"'\necho 'built with Apple clang'\n")
 }
 
 func TestFindTools(t *testing.T) {
@@ -54,11 +50,7 @@ func TestFindTools(t *testing.T) {
 }
 
 func TestFindToolsReportsStderr(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "ffmpeg")
-	script := "#!/bin/sh\necho 'dyld: Library not loaded: libplacebo.dylib' >&2\nexit 1\n"
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	path := testtool.Script(t, t.TempDir(), "ffmpeg", "echo 'dyld: Library not loaded: libplacebo.dylib' >&2\nexit 1\n")
 	_, err := FindTools(t.Context(), ToolNames{FFmpeg: path, FFprobe: "ffprobe", YTDLP: "yt-dlp"})
 	if err == nil || !strings.Contains(err.Error(), "libplacebo.dylib") {
 		t.Fatalf("err = %v, want it to carry the tool's stderr", err)
@@ -67,10 +59,7 @@ func TestFindToolsReportsStderr(t *testing.T) {
 
 // A tool stuck on a mount that stopped answering fails its job rather than holding it.
 func TestAToolThatHangsIsStopped(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "ffprobe")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	path := testtool.Script(t, t.TempDir(), "ffprobe", "exec sleep 60\n")
 	start := time.Now()
 	_, err := output(t.Context(), Background, 100*time.Millisecond, path)
 	if err == nil || !strings.Contains(err.Error(), "still running after 100ms") {
@@ -85,10 +74,7 @@ func TestAToolThatHangsIsStopped(t *testing.T) {
 // it is not.
 func TestYTDLPIsOptional(t *testing.T) {
 	ffmpeg, ffprobe := fakeTool(t, "ffmpeg", "ffmpeg version 9.0.2 Copyright"), fakeTool(t, "ffprobe", "ffprobe version 9.0.2 Copyright")
-	ytdlp := filepath.Join(t.TempDir(), "yt-dlp")
-	if err := os.WriteFile(ytdlp, []byte("#!/bin/sh\necho 2026.08.19\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	ytdlp := testtool.Script(t, t.TempDir(), "yt-dlp", "echo 2026.08.19\n")
 	for path, want := range map[string]Tool{ytdlp: {Path: ytdlp, Version: "2026.08.19"}, filepath.Join(t.TempDir(), "none"): {}} {
 		tools, err := FindTools(t.Context(), ToolNames{FFmpeg: ffmpeg, FFprobe: ffprobe, YTDLP: path})
 		if err != nil || tools.YTDLP != want {

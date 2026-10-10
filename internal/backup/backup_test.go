@@ -9,17 +9,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
 // fakePGDump writes its environment's password and its arguments into the file it is given.
 func fakePGDump(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "pg_dump")
-	script := "#!/bin/sh\nfor a; do case $a in --file=*) f=${a#--file=};; esac; done\necho \"$PGPASSWORD $*\" > \"$f\"\n"
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	return testtool.Script(t, t.TempDir(), "pg_dump", "for a; do case $a in --file=*) f=${a#--file=};; esac; done\necho \"$PGPASSWORD $*\" > \"$f\"\n")
 }
 
 func TestTheNewestDumpsAreKept(t *testing.T) {

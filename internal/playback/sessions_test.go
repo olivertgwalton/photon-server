@@ -288,6 +288,7 @@ func TestAPausedPlayerThatKeepsReportingKeepsItsStream(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		closing(t, remuxer)
 		s := NewSessions(memory{}, positions{}, remuxer, func(context.Context, domain.Event) {}, thisNode)
 		ctx := t.Context()
 		oliver := uuid.NewV7()
@@ -426,4 +427,14 @@ func TestAProfileIsToldOfItsPlaceAsItsReachChanges(t *testing.T) {
 	if told != 3 {
 		t.Errorf("told %d times, want 3: as it started, became resumable and reached the end", told)
 	}
+}
+
+// closing ends each of r's remuxes as the test does, before its folders are removed: Windows
+// removes no folder a remux still holds open.
+func closing(t *testing.T, r *hls.Remuxer) {
+	t.Cleanup(func() {
+		for _, p := range r.Playbacks() {
+			r.Close(p)
+		}
+	})
 }

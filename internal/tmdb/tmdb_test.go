@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -346,8 +346,10 @@ func TestAShowAskedForEverySeasonIsDescribedWithThemAll(t *testing.T) {
 
 func reply(t *testing.T, w io.Writer, body string) {
 	t.Helper()
-	// A client hangs up on an answer it refuses, as one too large.
-	if _, err := io.WriteString(w, body); err != nil && !errors.Is(err, syscall.EPIPE) && !errors.Is(err, syscall.ECONNRESET) {
+	// A client hangs up on an answer it refuses, as one too large, which each platform reports in its
+	// own words.
+	var hungUp *net.OpError
+	if _, err := io.WriteString(w, body); err != nil && !errors.As(err, &hungUp) {
 		t.Error(err)
 	}
 }

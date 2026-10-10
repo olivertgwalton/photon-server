@@ -12,6 +12,7 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
 // The fixtures are ffprobe 9.0.1's output for files made with ffmpeg (sdr.json, hdr10.json); dv8
@@ -150,10 +151,7 @@ func TestAFileWithNoMediaInIsNotMediaAndOneUnreadIsNot(t *testing.T) {
 		t.Errorf("probing a page of HTML: %v, want ErrNotMedia", err)
 	}
 
-	failing := filepath.Join(dir, "ffprobe")
-	if err := os.WriteFile(failing, []byte("#!/bin/sh\necho 'fd:: Input/output error' >&2\nexit 1\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	failing := testtool.Script(t, dir, "ffprobe", "echo 'fd:: Input/output error' >&2\nexit 1\n")
 	if _, err := (Tools{FFprobe: Tool{Path: failing}}).Probe(t.Context(), Input{File: f}); err == nil || errors.Is(err, ErrNotMedia) {
 		t.Errorf("a read that failed: %v, want an error that is not ErrNotMedia", err)
 	}

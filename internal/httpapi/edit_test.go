@@ -302,15 +302,23 @@ func TestAnAdminDeletesATitleFilesFirst(t *testing.T) {
 		t.Errorf("no title: %d, want 404", rec.Code)
 	}
 
-	// A file that will not go stops the delete, and the title is kept.
-	if err := os.Chmod(film, 0o555); err != nil {
+	// A file that will not go stops the delete, and the title is kept: here the subtitle is a folder
+	// with something in it, which no platform removes as a file.
+	srt := filepath.Join(film, "Heat.en.srt")
+	if err := os.Remove(srt); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(srt, "held"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	rec := del(goodToken, films)
 	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "0 of its 3 files were deleted") || e.forgot != (uuid.UUID{}) {
 		t.Errorf("a file that would not go: %d %s, forgot %v; want 409 saying so and the title kept", rec.Code, rec.Body, e.forgot)
 	}
-	if err := os.Chmod(film, 0o755); err != nil {
+	if err := os.RemoveAll(srt); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(srt, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 

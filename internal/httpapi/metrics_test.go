@@ -67,6 +67,7 @@ func TestAnAdminSeesAPlaybackStartedInTheMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	closing(t, remuxer)
 	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
 	sessions := playback.NewSessions(live, live, remuxer, func(context.Context, domain.Event) {}, uuid.NewV7())
 	placer, sent := alone(remuxOpener{remuxer}, false), playback.NewSent()

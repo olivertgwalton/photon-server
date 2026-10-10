@@ -19,6 +19,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
 type fakeStore struct {
@@ -56,19 +57,15 @@ func (m fakeMisses) ThemeMissing(_ context.Context, key string) (bool, error) {
 func fakeYTDLP(t *testing.T) (path, runs string) {
 	t.Helper()
 	dir := t.TempDir()
-	path, runs = filepath.Join(dir, "yt-dlp"), filepath.Join(dir, "runs")
-	script := `#!/bin/sh
-echo run >> '` + runs + `'
+	runs = filepath.Join(dir, "runs")
+	path = testtool.Script(t, dir, "yt-dlp", `echo run >> '`+runs+`'
 for a; do [ "$prev" = --paths ] && out=$a; prev=$a; link=$a; done
 case "$link" in
 *blocked*) echo "ERROR: [youtube] blocked: Video unavailable. This video contains content from SME, who has blocked it on copyright grounds" >&2; exit 1 ;;
 *flaky*) echo "ERROR: unable to download video data: HTTP Error 403: Forbidden" >&2; exit 1 ;;
 esac
 printf 'm4a of %s' "$link" > "$out/theme.m4a"
-`
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+`)
 	return path, runs
 }
 

@@ -25,6 +25,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
+	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
 // fakeFFmpeg writes what FFmpeg 9 made of a generated 1050-second video (ffmpeg -f lavfi -i
@@ -36,22 +37,16 @@ func fakeFFmpeg(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(t.TempDir(), "ffmpeg")
-	script := `#!/bin/sh
-for a; do last=$a; done
+	return testtool.Script(t, t.TempDir(), "ffmpeg", `for a; do last=$a; done
 case "$*" in
 *framecrc*)
 	while [ $# -gt 0 ]; do [ "$1" = -start_number ] && sheets=$(dirname "$3"); shift; done
-	cp '` + testdata + `/sheet.jpg' "$sheets/0.jpg"
-	cp '` + testdata + `/sheet.jpg' "$sheets/1.jpg"
-	cat '` + testdata + `/thumbnails.framecrc' ;;
-*) cp '` + testdata + `/still.jpg' "$last" ;;
+	cp '`+testdata+`/sheet.jpg' "$sheets/0.jpg"
+	cp '`+testdata+`/sheet.jpg' "$sheets/1.jpg"
+	cat '`+testdata+`/thumbnails.framecrc' ;;
+*) cp '`+testdata+`/still.jpg' "$last" ;;
 esac
-`
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return path
+`)
 }
 
 type fixture struct {
@@ -465,18 +460,14 @@ func stillFFmpeg(t *testing.T, hang string) (path, calls string) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	path, calls = filepath.Join(dir, "ffmpeg"), filepath.Join(dir, "calls")
-	script := `#!/bin/sh
-echo "$*" >> '` + calls + `'
+	calls = filepath.Join(dir, "calls")
+	path = testtool.Script(t, dir, "ffmpeg", `echo "$*" >> '`+calls+`'
 for a; do last=$a; done
 case "$*" in
-*"-ss ` + hang + ` "*) exec sleep 30 ;;
+*"-ss `+hang+` "*) exec sleep 30 ;;
 esac
-cp '` + testdata + `/still.jpg' "$last"
-`
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+cp '`+testdata+`/still.jpg' "$last"
+`)
 	return path, calls
 }
 

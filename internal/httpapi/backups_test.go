@@ -17,6 +17,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/playback"
+	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
 func TestAnAdminListsAndDownloadsThisNodesDumps(t *testing.T) {
@@ -107,11 +108,7 @@ func TestARestoreIsRefusedForADumpThisNodeLacksOrANewerOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	// pg_restore, telling of a dump made at a schema version no binary has yet.
-	pgRestore := filepath.Join(t.TempDir(), "pg_restore")
-	script := "#!/bin/sh\nprintf 'COPY public.goose_db_version (id, version_id, is_applied, tstamp) FROM stdin;\\n1\\t99999\\tt\\tnow\\n\\\\.\\n'\n"
-	if err := os.WriteFile(pgRestore, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	pgRestore := testtool.Script(t, t.TempDir(), "pg_restore", "printf 'COPY public.goose_db_version (id, version_id, is_applied, tstamp) FROM stdin;\\n1\\t99999\\tt\\tnow\\n\\\\.\\n'\n")
 	node := uuid.NewV7()
 	started := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
 	restores := fakeRestores{
