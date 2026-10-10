@@ -92,7 +92,7 @@ func (f *fakeEditing) ForgetTitle(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (f *fakeEditing) SetTitleLocale(_ context.Context, id uuid.UUID, loc domain.Locale) error {
+func (f *fakeEditing) SetTitleLocale(_ context.Context, id uuid.UUID, loc domain.Locale, _ domain.TitleLanguage) error {
 	if id != films {
 		return store.ErrNotFound
 	}

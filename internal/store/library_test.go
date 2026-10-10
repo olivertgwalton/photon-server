@@ -198,7 +198,7 @@ func TestAFilmAsksInALocaleOfItsOwnOverItsLibrarys(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `DELETE FROM jobs`); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetTitleLocale(ctx, film, domain.Locale{Language: "fr-FR"}); err != nil {
+	if err := s.SetTitleLocale(ctx, film, domain.Locale{Language: "fr-FR"}, domain.TitlesOriginal); err != nil {
 		t.Fatal(err)
 	}
 	sub, _, err := s.IdentifySubject(ctx, film)
@@ -209,18 +209,21 @@ func TestAFilmAsksInALocaleOfItsOwnOverItsLibrarys(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM jobs WHERE kind = 'identify' AND subject = $1`, film).Scan(&queued); err != nil || queued != 1 {
 		t.Errorf("%d identify jobs, %v; want the film described again", queued, err)
 	}
-	if page, err := s.Title(ctx, uuid.UUID{}, film); err != nil || page.Locale.Language != "fr-FR" {
-		t.Errorf("its page says %+v, %v; want its own language", page.Locale, err)
+	if sub.Titles != domain.TitlesOriginal {
+		t.Errorf("the film gives its %s title, want its own original over its library's localized", sub.Titles)
 	}
-	if err := s.SetTitleLocale(ctx, film, domain.Locale{}); err != nil {
+	if page, err := s.Title(ctx, uuid.UUID{}, film); err != nil || page.Locale.Language != "fr-FR" || page.Titles != domain.TitlesOriginal {
+		t.Errorf("its page says %+v, %s, %v; want its own language and title", page.Locale, page.Titles, err)
+	}
+	if err := s.SetTitleLocale(ctx, film, domain.Locale{}, ""); err != nil {
 		t.Fatal(err)
 	}
 	sub, _, err = s.IdentifySubject(ctx, film)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sub.Locale.Language != "de-DE" {
-		t.Errorf("given back, it asks in %+v, want its library's German", sub.Locale)
+	if sub.Locale.Language != "de-DE" || sub.Titles != domain.TitlesLocalized {
+		t.Errorf("given back, it asks in %+v for its %s title, want its library's German and localized", sub.Locale, sub.Titles)
 	}
 }
 

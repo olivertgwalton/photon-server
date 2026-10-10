@@ -26,7 +26,7 @@ type editing interface {
 	Refresh(ctx context.Context, id uuid.UUID, mode domain.RefreshMode) error
 	AnalyseTitle(ctx context.Context, id uuid.UUID) error
 	Unmatch(ctx context.Context, id uuid.UUID) error
-	SetTitleLocale(ctx context.Context, id uuid.UUID, loc domain.Locale) error
+	SetTitleLocale(ctx context.Context, id uuid.UUID, loc domain.Locale, titles domain.TitleLanguage) error
 	SplitTitle(ctx context.Context, id uuid.UUID) error
 	TitleFiles(ctx context.Context, id uuid.UUID) ([]store.LibraryFile, error)
 	ForgetTitle(ctx context.Context, id uuid.UUID) error
@@ -284,7 +284,7 @@ func (a *API) setTitleLocale(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, refusal)
 		return
 	}
-	err := a.svc.Editing.SetTitleLocale(r.Context(), id, domain.Locale{Language: lang, Country: country})
+	err := a.svc.Editing.SetTitleLocale(r.Context(), id, domain.Locale{Language: lang, Country: country}, "")
 	if a.answeredAs(w, r, err, "no film or show has that id") {
 		return
 	}

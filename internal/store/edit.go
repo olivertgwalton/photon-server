@@ -70,13 +70,15 @@ func (s *Store) PinMatch(ctx context.Context, id uuid.UUID, provider domain.Prov
 	})
 }
 
-// SetTitleLocale gives a film or show a metadata language and certification country of its own,
-// "" for its library's, and describes it again in them, its seasons and episodes with it.
-func (s *Store) SetTitleLocale(ctx context.Context, id uuid.UUID, loc domain.Locale) error {
+// SetTitleLocale gives a film or show a metadata language, certification country and title
+// language of its own, "" for its library's, and describes it again in them, its seasons and
+// episodes with it.
+func (s *Store) SetTitleLocale(ctx context.Context, id uuid.UUID, loc domain.Locale, titles domain.TitleLanguage) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		err := affected(tx.Exec(ctx, `
-			UPDATE items SET metadata_language = nullif($2, ''), certification_country = nullif($3, '')
-			WHERE id = $1 AND kind IN ('movie', 'show')`, id, loc.Language, loc.Country))
+			UPDATE items SET metadata_language = nullif($2, ''), certification_country = nullif($3, ''),
+				title_language = nullif($4, '')
+			WHERE id = $1 AND kind IN ('movie', 'show')`, id, loc.Language, loc.Country, titles))
 		if err != nil {
 			return err
 		}

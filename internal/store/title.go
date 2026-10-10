@@ -42,9 +42,10 @@ type TitlePage struct {
 	List *ListRef
 	// EpisodeOrder is the order a show's episode files are numbered in.
 	EpisodeOrder domain.EpisodeOrder
-	// Locale is a film's or show's own metadata language and certification country, over its
-	// library's; empty where it takes its library's.
+	// Locale and Titles are a film's or show's own metadata language, certification country and
+	// title language, over its library's; empty where it takes its library's.
 	Locale        domain.Locale
+	Titles        domain.TitleLanguage
 	AddedAt       time.Time
 	SeasonNumber  *int
 	EpisodeNumber *int
@@ -223,14 +224,15 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	return p, nil
 }
 
-// locale reads a film's or show's own metadata language and certification country.
+// locale reads a film's or show's own metadata language, certification country and title language.
 func (s *Store) locale(ctx context.Context, item *model.Item, p *TitlePage) error {
 	if item.Kind != domain.ItemMovie && item.Kind != domain.ItemShow {
 		return nil
 	}
 	return s.pool.QueryRow(ctx, `
-		SELECT coalesce(metadata_language, ''), coalesce(certification_country, '') FROM items WHERE id = $1`, item.ID).
-		Scan(&p.Locale.Language, &p.Locale.Country)
+		SELECT coalesce(metadata_language, ''), coalesce(certification_country, ''), coalesce(title_language, '')
+		FROM items WHERE id = $1`, item.ID).
+		Scan(&p.Locale.Language, &p.Locale.Country, &p.Titles)
 }
 
 // ofKind fills in what only a title of item's kind has: a show's seasons, a season's episodes, a
