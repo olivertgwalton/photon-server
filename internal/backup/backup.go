@@ -76,7 +76,12 @@ func Open(dir, name string) (*os.File, error) {
 	return os.OpenInRoot(dir, name)
 }
 
-// Dumper writes dumps of a database into a folder with pg_dump, found by media.Look.
+// ErrNoTools is a server without the PostgreSQL client tools on its PATH, as a Windows one is
+// unless PostgreSQL's bin folder is added: it neither backs up nor restores.
+var ErrNoTools = errors.New("the PostgreSQL client tools, pg_dump, pg_restore and psql, are not on the server's PATH")
+
+// Dumper writes dumps of a database into a folder with pg_dump, found by media.Look; with none
+// found, PGDump is empty and Dump refuses with ErrNoTools.
 type Dumper struct {
 	PGDump string
 	URL    string
@@ -87,6 +92,9 @@ type Dumper struct {
 // newest Keep. The password goes to pg_dump in its environment, not its arguments, where anyone
 // listing processes would see it.
 func (d Dumper) Dump(ctx context.Context, now time.Time) (string, error) {
+	if d.PGDump == "" {
+		return "", ErrNoTools
+	}
 	if err := os.MkdirAll(d.Dir, 0o700); err != nil {
 		return "", err
 	}

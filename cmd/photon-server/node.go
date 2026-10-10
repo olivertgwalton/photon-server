@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"sync"
@@ -144,12 +145,17 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	n.pictures = artwork.New(&n.stores.Artwork, n.st.SetBlurhash)
 	n.previews = analysis.NewPreviews(&n.stores.Previews)
 	pgDump, err := media.Look("pg_dump")
-	if err != nil {
+	if err != nil && !errors.Is(err, exec.ErrNotFound) {
 		return err
 	}
 	rest, err := restorer(databaseURL, valkeyURL, n.logger)
-	if err != nil {
+	if errors.Is(err, exec.ErrNotFound) {
+		rest = backup.Restorer{DatabaseURL: databaseURL, ValkeyURL: valkeyURL, Log: n.logger}
+	} else if err != nil {
 		return err
+	}
+	if pgDump == "" || rest.PGRestore == "" {
+		n.logger.WarnContext(ctx, "the database is neither backed up nor restored", slog.Any("err", backup.ErrNoTools))
 	}
 	n.dumper = backup.Dumper{
 		PGDump: pgDump, URL: databaseURL,

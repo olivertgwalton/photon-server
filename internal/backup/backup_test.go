@@ -87,3 +87,19 @@ func TestTheDumpsMadeAreListedAndOpenedByNameAlone(t *testing.T) {
 		t.Errorf("a folder not yet made: %v %v, want no dumps", dumps, err)
 	}
 }
+
+// A server without the PostgreSQL client tools runs, saying why it neither backs up nor restores
+// when asked to.
+func TestAServerWithoutThePostgresToolsRefusesToBackUpOrRestore(t *testing.T) {
+	dir := t.TempDir()
+	name := "photon-20261008T120000Z.dump"
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("dump"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (Dumper{URL: "postgres://localhost/photon", Dir: dir}).Dump(t.Context(), time.Now()); !errors.Is(err, ErrNoTools) {
+		t.Errorf("backing up: %v, want it refused for want of the tools", err)
+	}
+	if err := (Restores{Dir: dir}).Begin(t.Context(), name); !errors.Is(err, ErrNoTools) {
+		t.Errorf("restoring: %v, want it refused for want of the tools", err)
+	}
+}
