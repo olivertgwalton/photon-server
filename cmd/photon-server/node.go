@@ -7,10 +7,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 	"uuid"
 
@@ -62,6 +60,8 @@ type node struct {
 	started   time.Time
 	listen    string
 	cacheRoot string
+	// stops are requests to stop after the first, which ended ctx: one stops a drain at once.
+	stops <-chan os.Signal
 
 	id          uuid.UUID
 	info        domain.Info
@@ -350,10 +350,7 @@ func (n *node) serve(ctx context.Context) error {
 			endStreams(n.self, n.remuxer)
 			return
 		}
-		again := make(chan os.Signal, 1)
-		signal.Notify(again, os.Interrupt, syscall.SIGTERM)
-		defer signal.Stop(again)
-		drain(context.WithoutCancel(ctx), n.self, n.remuxer, again, drainFor, logger)
+		drain(context.WithoutCancel(ctx), n.self, n.remuxer, n.stops, drainFor, logger)
 	})
 	if stopped, ok := errors.AsType[*stoppedForRestore](context.Cause(ctx)); ok && err == nil {
 		return stopped

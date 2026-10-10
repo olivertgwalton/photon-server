@@ -66,21 +66,40 @@ const exitRestart = 75
 var errRestart = errors.New("stopped for a restore; to be started again")
 
 func main() {
+	if ok, code := asService(os.Args[1:]); ok {
+		os.Exit(code)
+	}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	err := run(logger, os.Args[1:])
+	stops := make(chan os.Signal, 2)
+	signal.Notify(stops, os.Interrupt, syscall.SIGTERM)
+	os.Exit(exitCode(logger, run(logger, os.Args[1:], stops)))
+}
+
+// exitCode is the code the server exits with once run ends with err, said in the log.
+func exitCode(logger *slog.Logger, err error) int {
 	switch {
 	case errors.Is(err, errRestart):
 		logger.Info("photon-server stopped for a restore; its restart policy starts it again", slog.Int("exit", exitRestart))
-		os.Exit(exitRestart)
+		return exitRestart
 	case err != nil:
 		logger.Error("photon-server stopped", slog.Any("err", err))
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
-func run(logger *slog.Logger, args []string) error {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+// run runs what args ask for until it is done or told to stop on stops; a node draining its
+// streams stops at once when told again.
+func run(logger *slog.Logger, args []string, stops <-chan os.Signal) error {
+	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
+	go func() {
+		select {
+		case <-stops:
+			stop()
+		case <-ctx.Done():
+		}
+	}()
 
 	if len(args) == 1 && args[0] == "openapi" {
 		return writeDescription(os.Stdout)
@@ -91,7 +110,7 @@ func run(logger *slog.Logger, args []string) error {
 	}
 	switch {
 	case len(args) == 0:
-		return serve(ctx, logger, databaseURL)
+		return serve(ctx, logger, databaseURL, stops)
 	case len(args) == 1 && args[0] == "migrate":
 		return store.Migrate(ctx, databaseURL, logger)
 	case len(args) == 2 && args[0] == "restore":
@@ -128,12 +147,12 @@ func requiredEnv(name string) (string, error) {
 
 // serve runs the node until it is told to stop; stopped for a restore, it restores the dump
 // where it keeps it, and answers errRestart, for the restart policy to start it again.
-func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
+func serve(ctx context.Context, logger *slog.Logger, databaseURL string, stops <-chan os.Signal) error {
 	valkeyURL, err := requiredEnv("PHOTON_VALKEY_URL")
 	if err != nil {
 		return err
 	}
-	err = serveNode(ctx, logger, databaseURL, valkeyURL)
+	err = serveNode(ctx, logger, databaseURL, valkeyURL, stops)
 	stopped, ok := errors.AsType[*stoppedForRestore](err)
 	if !ok {
 		return err
@@ -152,7 +171,7 @@ func serve(ctx context.Context, logger *slog.Logger, databaseURL string) error {
 
 // serveNode opens what the node keeps its state in, wires the node together on it, and serves
 // until it is told to stop.
-func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL string) error {
+func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL string, stops <-chan os.Signal) error {
 	started := time.Now()
 	tools, err := mediaTools(ctx)
 	if err != nil {
@@ -189,7 +208,7 @@ func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL 
 	defer stores.Close()
 	n := &node{
 		logger: logger, st: st, cache: cache, stores: stores, tools: tools, server: id,
-		started: started, listen: listen, cacheRoot: cacheRoot,
+		started: started, listen: listen, cacheRoot: cacheRoot, stops: stops,
 	}
 	if err := n.join(ctx, databaseURL, valkeyURL); err != nil {
 		return err

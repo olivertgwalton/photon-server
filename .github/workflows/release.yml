@@ -84,6 +84,28 @@ jobs:
           cat run.log
           grep '"msg":"media tools"' run.log | grep -Eq 'photon-server.{1,2}bin.{1,2}ffmpeg'
           grep '"msg":"media tools"' run.log | grep -q '"yt_dlp_version":"20'
+      # Run by the service manager, it logs to its cache folder and, finding no database, stops
+      # failed with its own exit code, which is what starts a service's recovery actions.
+      - name: Run it as a Windows service
+        if: matrix.target == 'windows_amd64'
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path photon-server\bin\photon-server.exe).Path
+          sc.exe create photon-server binPath= "`"$exe`"" start= demand
+          reg add HKLM\SYSTEM\CurrentControlSet\Services\photon-server /v Environment /t REG_MULTI_SZ /f `
+            /d "PHOTON_DATABASE_URL=postgres://none/none\0PHOTON_VALKEY_URL=valkey://none:6379"
+          sc.exe start photon-server
+          $log = "$env:SystemRoot\System32\config\systemprofile\AppData\Local\photon-server\photon-server.log"
+          for ($i = 0; $i -lt 30; $i++) {
+            if ((Test-Path $log) -and (Select-String -Path $log -Pattern '"msg":"photon-server stopped"' -Quiet)) { break }
+            Start-Sleep 2
+          }
+          Get-Content $log
+          if (-not (Select-String -Path $log -Pattern '"msg":"media tools"' -Quiet)) { exit 1 }
+          Start-Sleep 2
+          $state = sc.exe query photon-server | Out-String
+          $state
+          if ($state -notmatch 'SERVICE_EXIT_CODE\s*:\s*1\s') { exit 1 }
 
   package:
     needs: archive
