@@ -1,4 +1,0 @@
-# Intel and AMD: docker compose -f compose.yml -f compose.intel.yml up
-services:
-  server:
-    devices: [/dev/dri:/dev/dri]

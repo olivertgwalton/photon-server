@@ -1,3 +1,13 @@
+# Installing photon-server
+
+photon-server runs beside PostgreSQL and Valkey. Docker Compose runs all three from one file.
+
+## Docker
+
+The image is `ghcr.io/olivertgwalton/photon-server`, for amd64 and arm64. Make a folder for the
+server and save this in it as `compose.yml`:
+
+```yaml compose.yml
 name: photon
 
 x-server: &server
@@ -85,3 +95,59 @@ volumes:
   valkey:
   cache:
   backups:
+```
+
+Save this beside it as `.env`, with two passwords of your own, letters and digits only as they go
+into URLs, and the folder holding your libraries:
+
+```sh
+POSTGRES_PASSWORD=
+VALKEY_PASSWORD=
+MEDIA_DIR=/srv/media
+```
+
+Then start it:
+
+```sh
+docker compose up -d
+```
+
+Open `http://<server>:8640` from the server's local network to set it up, as the
+[README](../README.md#deploy) describes.
+
+To update, pull the new image and recreate the server:
+
+```sh
+docker compose pull && docker compose up -d
+```
+
+### Hardware transcoding
+
+For an Intel or AMD GPU, pass its devices to the server, under `server:`:
+
+```yaml
+    devices: [/dev/dri:/dev/dri]
+```
+
+For an NVIDIA GPU, install the
+[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+on the host, then add under `server:`:
+
+```yaml
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              # graphics is what lets libplacebo use NVIDIA's Vulkan driver; the toolkit
+              # mounts only compute and utility by default.
+              capabilities: [gpu, compute, utility, video, graphics]
+```
+
+The server's log says which it encodes on as it starts, and Settings › Server shows it.
+
+### Several servers
+
+Each machine running a server sets `PHOTON_HOSTNAME` in its `.env` to a name of its own, which
+Settings › Server shows; it is `photon` where unset. See [cluster.md](cluster.md).
