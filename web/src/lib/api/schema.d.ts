@@ -6903,7 +6903,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        Acceleration: "software" | "videotoolbox" | "vaapi" | "qsv" | "nvenc";
+        Acceleration: "software" | "videotoolbox" | "vaapi" | "qsv" | "nvenc" | "amf";
         Access: {
             libraries: string[];
             max_age: number | null;

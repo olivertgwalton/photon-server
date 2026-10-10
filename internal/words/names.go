@@ -127,7 +127,7 @@ var jobStates = map[domain.JobState]string{
 
 var accelerations = map[domain.Acceleration]string{
 	domain.AccelSoftware: "Software", domain.AccelVideoToolbox: "VideoToolbox",
-	domain.AccelVAAPI: "VA-API", domain.AccelQSV: "Quick Sync", domain.AccelNVENC: "NVENC",
+	domain.AccelVAAPI: "VA-API", domain.AccelQSV: "Quick Sync", domain.AccelNVENC: "NVENC", domain.AccelAMF: "AMF",
 }
 
 var rows = map[domain.HomeRow]string{

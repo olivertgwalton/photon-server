@@ -291,10 +291,11 @@ const (
 	AccelVAAPI        Acceleration = "vaapi"
 	AccelQSV          Acceleration = "qsv"
 	AccelNVENC        Acceleration = "nvenc"
+	AccelAMF          Acceleration = "amf"
 )
 
 func Accelerations() []Acceleration {
-	return []Acceleration{AccelSoftware, AccelVideoToolbox, AccelVAAPI, AccelQSV, AccelNVENC}
+	return []Acceleration{AccelSoftware, AccelVideoToolbox, AccelVAAPI, AccelQSV, AccelNVENC, AccelAMF}
 }
 
 // TranscodeReason is why a copy cannot reach a client as it is, in Jellyfin's TranscodeReason terms.

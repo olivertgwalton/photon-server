@@ -33,13 +33,13 @@ func TestEachDeviceDeinterlacesAnInterlacedPicture(t *testing.T) {
 	for accel, filter := range map[domain.Acceleration]string{
 		domain.AccelSoftware: "yadif=0:-1:0,scale=", domain.AccelVideoToolbox: "yadif=0:-1:0,format=nv12|p010le,hwupload,scale_vt",
 		domain.AccelVAAPI: "hwupload,deinterlace_vaapi=rate=frame,scale_vaapi", domain.AccelQSV: "vpp_qsv=w=720:h=576:format=nv12:deinterlace=2",
-		domain.AccelNVENC: "hwupload,yadif_cuda=0:-1:0,scale_cuda",
+		domain.AccelNVENC: "hwupload,yadif_cuda=0:-1:0,scale_cuda", domain.AccelAMF: "yadif=0:-1:0,scale=",
 	} {
 		hw := Hardware{Accel: accel, Device: "d"}
 		if got, _ := hw.videoArgs(e, "mpeg2video"); !strings.Contains(got, filter) {
 			t.Errorf("%s: %q lacks %q", accel, got, filter)
 		}
-		if decoded := strings.Contains(strings.Join(hw.inputArgs("h264", e), " "), "-hwaccel "); decoded == (accel == domain.AccelSoftware || accel == domain.AccelVideoToolbox) {
+		if decoded := strings.Contains(strings.Join(hw.inputArgs("h264", e), " "), "-hwaccel "); decoded == (accel == domain.AccelSoftware || accel == domain.AccelVideoToolbox || accel == domain.AccelAMF) {
 			t.Errorf("%s: interlaced H.264 decoded on the device %t", accel, decoded)
 		}
 		progressive := e
@@ -51,12 +51,13 @@ func TestEachDeviceDeinterlacesAnInterlacedPicture(t *testing.T) {
 }
 
 // Every device encodes H.264 with a keyframe each segment, decodes H.264 and HEVC itself, and has
-// anything else uploaded to it.
+// anything else uploaded to it; AMF is given what FFmpeg decodes.
 func TestEachDeviceEncodesTheWholeChain(t *testing.T) {
 	e := domain.VideoEncode{Codec: domain.VideoH264, Width: 1280, Height: 720, BitrateKbps: 4000, Range: domain.RangeSDR, ToneMap: true}
 	for accel, encoder := range map[domain.Acceleration]string{
 		domain.AccelSoftware: "libx264", domain.AccelVideoToolbox: "h264_videotoolbox",
 		domain.AccelVAAPI: "h264_vaapi", domain.AccelQSV: "h264_qsv", domain.AccelNVENC: "h264_nvenc",
+		domain.AccelAMF: "h264_amf",
 	} {
 		hw := Hardware{Accel: accel, Device: "d"}
 		line := func(codec string) string {
@@ -69,7 +70,7 @@ func TestEachDeviceEncodesTheWholeChain(t *testing.T) {
 				t.Errorf("%s: %q lacks %q", accel, hevc, want)
 			}
 		}
-		if accel == domain.AccelSoftware {
+		if accel == domain.AccelSoftware || accel == domain.AccelAMF {
 			continue
 		}
 		if !strings.Contains(hevc, "-hwaccel ") || strings.Contains(hevc, "hwupload") {
@@ -90,7 +91,7 @@ func TestEachDeviceKeepsHDRInHEVC(t *testing.T) {
 	for accel, want := range map[domain.Acceleration][2]string{
 		domain.AccelSoftware: {"libx265", "format=yuv420p10le"}, domain.AccelVideoToolbox: {"hevc_videotoolbox", "scale_vt=w=1920:h=1080:format=p010"},
 		domain.AccelVAAPI: {"hevc_vaapi", "scale_vaapi=w=1920:h=1080:format=p010"}, domain.AccelQSV: {"hevc_qsv", "vpp_qsv=w=1920:h=1080:format=p010"},
-		domain.AccelNVENC: {"hevc_nvenc", "scale_cuda=w=1920:h=1080:format=p010"},
+		domain.AccelNVENC: {"hevc_nvenc", "scale_cuda=w=1920:h=1080:format=p010"}, domain.AccelAMF: {"hevc_amf", "format=yuv420p10le"},
 	} {
 		hw := Hardware{Accel: accel, Device: "d"}
 		filter, encoder := hw.videoArgs(hdr, "hevc")
