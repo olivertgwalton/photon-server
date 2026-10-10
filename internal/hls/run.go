@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"time"
 
@@ -100,24 +101,21 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 			return err
 		}
 	}
-	// Each embedded subtitle is written to a pipe of its own, read as ffmpeg reaches its cues.
-	reads, writes, streams, err := s.subtitlePipes()
+	// Each embedded subtitle is written to a loopback socket of its own, read as ffmpeg reaches its
+	// cues: a descriptor beyond stdout cannot be passed to a process on Windows.
+	sockets, err := s.subtitleSockets(ctx)
 	if err != nil {
 		return err
 	}
-	files := append(in.Files(), writes...)
-	cmd := media.NewCommand(ctx, media.Foreground, files, r.tools.FFmpeg.Path, args(in, r.hw, start, src.Video, src.Audio, layer, s.format, streams)...)
+	// Once ffmpeg has ended, a reader still waiting for it to connect finds no cues.
+	defer closeSockets(sockets)
+	cmd := media.NewCommand(ctx, media.Foreground, in.Files(), r.tools.FFmpeg.Path, args(in, r.hw, start, src.Video, src.Audio, layer, s.format, sockets)...)
 	out, err := cmd.StdoutPipe()
 	if err == nil {
 		err = cmd.Start()
 	}
-	// ffmpeg holds the pipes' ends it writes to, and a reader learns they are closed once it ends.
-	if cerr := closeAll(writes); cerr != nil {
-		r.log.WarnContext(ctx, "subtitle pipe not closed", slog.String("dir", s.dir), slog.Any("err", cerr))
-	}
-	// The readers own the ends they read once ffmpeg runs, and none runs without it.
 	if err != nil {
-		return errors.Join(err, closeAll(reads))
+		return err
 	}
 	var readers errgroup.Group
 	k := 0
@@ -125,17 +123,24 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 		if sub.Stream == nil {
 			continue
 		}
-		read, offset := reads[k], s.offsets[run.part]
+		socket, offset := sockets[k], s.offsets[run.part]
 		k++
 		readers.Go(func() error {
-			err := readVTT(read, func(c Cue) {
+			conn, err := socket.ln.Accept()
+			if errors.Is(err, net.ErrClosed) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			err = readVTT(conn, func(c Cue) {
 				c.Start += offset
 				c.End += offset
 				c.Settings, c.Text = "", fromSubRip(c.Text)
 				sub.add(c)
 			})
 			// What ffmpeg writes on is not read now, so it fails at once rather than blocking.
-			return errors.Join(err, read.Close())
+			return errors.Join(err, conn.Close())
 		})
 	}
 	err = r.cut(ctx, s, run, out)
@@ -146,31 +151,43 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	// holding it past the grace a stop gives it.
 	closeErr := out.Close()
 	err = cmp.Or(err, closeErr, cmd.Err(cmd.Wait()))
+	closeSockets(sockets)
 	return cmp.Or(err, readers.Wait())
 }
 
-// subtitlePipes opens a pipe for each subtitle stream of the session: the ends read, the ends
-// ffmpeg writes to, and the streams written.
-func (s *session) subtitlePipes() (reads, writes []*os.File, streams []int, err error) {
+// subtitleSocket is a loopback socket ffmpeg writes a subtitle stream to.
+type subtitleSocket struct {
+	stream int
+	ln     net.Listener
+}
+
+func (s subtitleSocket) url() string {
+	return "tcp://" + s.ln.Addr().String()
+}
+
+// subtitleSockets listens on a loopback socket for each subtitle stream of the session.
+func (s *session) subtitleSockets(ctx context.Context) ([]subtitleSocket, error) {
+	var sockets []subtitleSocket
+	var lc net.ListenConfig
 	for _, sub := range s.subtitles {
 		if sub.Stream == nil {
 			continue
 		}
-		read, write, err := os.Pipe()
+		ln, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
 		if err != nil {
-			return nil, nil, nil, errors.Join(err, closeAll(reads), closeAll(writes))
+			closeSockets(sockets)
+			return nil, err
 		}
-		reads, writes, streams = append(reads, read), append(writes, write), append(streams, *sub.Stream)
+		sockets = append(sockets, subtitleSocket{stream: *sub.Stream, ln: ln})
 	}
-	return reads, writes, streams, nil
+	return sockets, nil
 }
 
-func closeAll(files []*os.File) error {
-	var errs []error
-	for _, f := range files {
-		errs = append(errs, f.Close())
+// closeSockets stops listening; a socket closed twice says so, which is nothing to report.
+func closeSockets(sockets []subtitleSocket) {
+	for _, s := range sockets {
+		s.ln.Close()
 	}
-	return errors.Join(errs...)
 }
 
 // fragments is ffmpeg's output read as fragments that each begin on a video keyframe.
