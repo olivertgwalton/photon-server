@@ -22,7 +22,7 @@ const measure = onResize<HTMLParagraphElement>((p) => {
 	<p
 		{@attach measure}
 		class="line-clamp-(--lines) leading-relaxed whitespace-pre-line"
-		style="--lines: {lines}"
+		style:--lines={lines}
 	>
 		{text}
 	</p>
