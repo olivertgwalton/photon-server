@@ -2,8 +2,6 @@
 import { vocabulary } from "#lib/vocabulary.js";
 import type { components } from "#lib/api/schema.js";
 import {
-	defaultSources,
-	itemKinds,
 	localeOptions,
 	offeredSources,
 	serverLocale,
@@ -24,12 +22,14 @@ type Schemas = components["schemas"];
 // one being changed. A library's kind and folder are fixed once it is made.
 let {
 	library,
+	kinds,
 	providers,
 	locales,
 	serverLanguage,
 	serverCountry,
 }: {
 	library?: Schemas["AdminLibrary"];
+	kinds: Schemas["LibraryKindOptions"][];
 	providers: Schemas["MetadataProvider"][];
 	locales: Schemas["Locales"];
 	// The server's own metadata language and certification country, which a
@@ -113,8 +113,10 @@ const fetchers = [
 	},
 ] as const;
 
-const chosen = (item: Schemas["ItemKind"]) =>
-	library?.sources.find((s) => s.kind === item) ?? defaultSources(item);
+// What a library of its kind ranks sources for, and what a new one ranks.
+const options = $derived(kinds.find((k) => k.kind === kind));
+const chosen = (made: Schemas["KindSources"]) =>
+	library?.sources.find((s) => s.kind === made.kind) ?? made;
 
 const extras = $derived(library?.remote_extras ?? defaults.remote_extras);
 
@@ -294,7 +296,9 @@ const refreshOptions = $derived(
 		</summary>
 		<Field.Group class="mt-7">
 			{#key kind}
-				{#each itemKinds(kind) as item (item)}
+				{#each options?.sources ?? [] as made (made.kind)}
+					{@const item = made.kind}
+					{@const fetchable = options?.fetchable.find((x) => x.kind === item)}
 					{#each fetchers as { f, title, said } (f)}
 						{@const id = `sources-${item}-${f}`}
 						<Field.Set>
@@ -306,8 +310,13 @@ const refreshOptions = $derived(
 							<SourceRanker
 								name={id}
 								labelledby="{id}-legend"
-								offered={offeredSources(providers, f, item)}
-								chosen={chosen(item)[f]}
+								offered={offeredSources(
+									providers,
+									fetchable?.[f] ?? [],
+									f,
+									item,
+								)}
+								chosen={chosen(made)[f]}
 							/>
 						</Field.Set>
 					{/each}

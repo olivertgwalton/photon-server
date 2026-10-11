@@ -5,44 +5,29 @@ type Ranked = Schemas["RankedSource"];
 
 type Fetcher = "metadata" | "images";
 
-// The kinds of item a library ranks its sources for, as Jellyfin titles
-// its downloaders and fetchers.
-export function itemKinds(kind: Schemas["LibraryKind"]): Schemas["ItemKind"][] {
-	return kind === "movies" ? ["movie"] : ["show", "season", "episode"];
-}
-
-// The sources a library may rank to fetch f for an item of a kind: an NFO
-// describes anything beside its file and pictures nothing, and each provider
-// says the kinds it may be ranked for.
+// The sources a library may rank to fetch f for an item of a kind: the
+// built-ins the server says it may that are no provider, named as Jellyfin
+// names its own ("Nfo"), and each provider that says it may be.
 export function offeredSources(
 	providers: Schemas["MetadataProvider"][],
+	fetchable: Schemas["FieldSource"][],
 	f: Fetcher,
 	kind: Schemas["ItemKind"],
 ) {
 	return [
-		...(f === "metadata"
-			? [{ id: "nfo" as Schemas["FieldSource"], name: "Nfo", ready: true }]
-			: []),
+		...fetchable
+			.filter((id) => !providers.some((p) => p.id === id))
+			.map((id) => ({
+				id,
+				name: String(id).charAt(0).toUpperCase() + String(id).slice(1),
+				ready: true,
+			})),
 		...providers
 			.filter((p) =>
 				(f === "metadata" ? p.metadata_kinds : p.image_kinds).includes(kind),
 			)
 			.map((p) => ({ id: p.id, name: p.name, ready: p.ready })),
 	];
-}
-
-// What a new library starts with, as the server makes it.
-export function defaultSources(
-	kind: Schemas["ItemKind"],
-): Schemas["KindSources"] {
-	return {
-		kind,
-		metadata: [
-			{ source: "nfo", enabled: true },
-			{ source: "tmdb", enabled: true },
-		],
-		images: [{ source: "tmdb", enabled: true }],
-	};
 }
 
 // Unticked sources at the foot of a list say nothing a list without them

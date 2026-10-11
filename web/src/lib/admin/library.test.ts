@@ -147,6 +147,12 @@ const providers = [
 		["movie", "show", "season", "episode"],
 	),
 	provider(
+		"tvdb",
+		"TheTVDB",
+		["show", "season", "episode"],
+		["show", "season", "episode"],
+	),
+	provider(
 		"omdb",
 		"The Open Movie Database",
 		["movie", "show", "episode"],
@@ -154,11 +160,36 @@ const providers = [
 	),
 ];
 
-test("each kind offers the NFO for metadata and the providers that say they can", () => {
-	const ids = (f: "metadata" | "images", kind: Schemas["ItemKind"]) =>
-		offeredSources(providers, f, kind).map((s) => s.id);
-	expect(ids("metadata", "episode")).toEqual(["nfo", "tmdb", "omdb"]);
-	expect(ids("metadata", "season")).toEqual(["nfo", "tmdb"]);
-	expect(ids("images", "episode")).toEqual(["tmdb"]);
-	expect(ids("images", "movie")).toEqual(["tmdb", "omdb"]);
+test("each kind offers the built-ins the server says it may rank and the providers that say they can", () => {
+	// As the server lists them for these kinds; the NFO is no provider.
+	const fetchable = {
+		metadata: {
+			episode: ["nfo", "tmdb", "tvdb", "omdb"],
+			season: ["nfo", "tmdb", "tvdb"],
+		},
+		images: { episode: ["tmdb", "tvdb"], movie: ["tmdb", "omdb"] },
+	} as Record<"metadata" | "images", Record<string, string[]>>;
+	const offered = (f: "metadata" | "images", kind: Schemas["ItemKind"]) =>
+		offeredSources(providers, fetchable[f]?.[kind] ?? [], f, kind);
+	expect(offered("metadata", "episode").map((s) => s.id)).toEqual([
+		"nfo",
+		"tmdb",
+		"tvdb",
+		"omdb",
+	]);
+	expect(offered("metadata", "season")[0]).toEqual({
+		id: "nfo",
+		name: "Nfo",
+		ready: true,
+	});
+	expect(offered("metadata", "season").map((s) => s.id)).toEqual([
+		"nfo",
+		"tmdb",
+		"tvdb",
+	]);
+	expect(offered("images", "episode").map((s) => s.id)).toEqual([
+		"tmdb",
+		"tvdb",
+	]);
+	expect(offered("images", "movie").map((s) => s.id)).toEqual(["tmdb", "omdb"]);
 });

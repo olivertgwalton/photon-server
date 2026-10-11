@@ -6,9 +6,10 @@ import type { PageLoad } from "./$types";
 export const load: PageLoad = async ({ fetch, params, depends, parent }) => {
 	depends(keys.admin.libraries);
 	const api = client(fetch);
-	const [{ server }, libraries, providers, locales] = await Promise.all([
+	const [{ server }, libraries, kinds, providers, locales] = await Promise.all([
 		parent(),
 		need(api.GET("/api/v1/admin/libraries")),
+		need(api.GET("/api/v1/admin/library-kinds")),
 		need(api.GET("/api/v1/admin/providers")),
 		need(api.GET("/api/v1/admin/locales")),
 	]);
@@ -16,6 +17,7 @@ export const load: PageLoad = async ({ fetch, params, depends, parent }) => {
 	if (!library) error(404, "That isn't here any more.");
 	return {
 		library,
+		kinds: kinds.items,
 		providers: providers.items,
 		locales,
 		serverLanguage: server.metadata_language,
