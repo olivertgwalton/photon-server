@@ -3,6 +3,7 @@ package store
 import (
 	"cmp"
 	"context"
+	"slices"
 	"time"
 	"uuid"
 
@@ -209,6 +210,10 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	})
 	g.Go(func() error { return s.dress(gctx, item, &p) })
 	g.Go(func() error {
+		// A show's is counted with its seasons', from the same episodes.
+		if item.Kind == domain.ItemShow {
+			return nil
+		}
 		states, err := s.states(gctx, profile, []*model.Item{item})
 		p.State = states[item.ID]
 		return err
@@ -241,7 +246,9 @@ func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item,
 	switch item.Kind {
 	case domain.ItemShow:
 		p.EpisodeOrder = item.EpisodeOrder
-		p.Seasons, err = s.seasons(ctx, profile, item.ID)
+		var states map[uuid.UUID]TitleState
+		p.Seasons, states, err = s.seasons(ctx, profile, item.ID, item)
+		p.State = states[item.ID]
 	case domain.ItemSeason:
 		p.Episodes, err = s.episodes(ctx, profile, item.ID)
 	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
@@ -378,7 +385,8 @@ func (s *Store) Seasons(ctx context.Context, profile, show uuid.UUID) ([]SeasonC
 	if ok, err := s.visible(ctx, profile, show); err != nil || !ok {
 		return nil, cmp.Or(err, ErrNotFound)
 	}
-	return s.seasons(ctx, profile, show)
+	seasons, _, err := s.seasons(ctx, profile, show)
+	return seasons, err
 }
 
 // Episodes answers the episodes of a show, every season's, or of one season, in order, as cards;
@@ -420,11 +428,13 @@ func (s *Store) parents(ctx context.Context, item *model.Item, p *TitlePage) err
 	return nil
 }
 
-func (s *Store) seasons(ctx context.Context, profile, show uuid.UUID) ([]SeasonCard, error) {
+// seasons answers a show's seasons, and the states of them and of the titles alongside, counted
+// from the same episodes in one lookup.
+func (s *Store) seasons(ctx context.Context, profile, show uuid.UUID, alongside ...*model.Item) ([]SeasonCard, map[uuid.UUID]TitleState, error) {
 	rows, err := queryRows[model.Item](ctx, s.pool, `
 		SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind = 'season' ORDER BY season_number`, show)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var episodes map[uuid.UUID]int
 	var pictures map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID
@@ -442,11 +452,11 @@ func (s *Store) seasons(ctx context.Context, profile, show uuid.UUID) ([]SeasonC
 		return err
 	})
 	g.Go(func() (err error) {
-		states, err = s.states(gctx, profile, rows)
+		states, err = s.states(gctx, profile, slices.Concat(rows, alongside))
 		return err
 	})
 	if err := g.Wait(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	out := make([]SeasonCard, len(rows))
 	for n, r := range rows {
@@ -457,7 +467,7 @@ func (s *Store) seasons(ctx context.Context, profile, show uuid.UUID) ([]SeasonC
 		}
 		out[n].Blurhashes = blurhashesOf(hashes, out[n].Poster)
 	}
-	return out, nil
+	return out, states, nil
 }
 
 func (s *Store) episodes(ctx context.Context, profile, season uuid.UUID) ([]EpisodeCard, error) {
