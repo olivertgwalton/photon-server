@@ -50,11 +50,11 @@ func TestAnEpisodeWearsItsShowsPictures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	showPictures, _, err := s.pictureOrder(ctx, []*model.Item{show})
+	showPictures, _, err := s.bestPictures(ctx, []*model.Item{show})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ownPictures, _, err := s.pictureOrder(ctx, []*model.Item{ep})
+	ownPictures, _, err := s.bestPictures(ctx, []*model.Item{ep})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"uuid"
 
 	"github.com/jackc/pgx/v5"
 
@@ -75,10 +76,17 @@ func (s *Store) RemovePlugin(ctx context.Context, slug string) error {
 			return err
 		}
 		source := domain.PluginSource(slug)
-		if _, err := tx.Exec(ctx, `DELETE FROM library_sources WHERE source = $1`, source); err != nil {
+		// The libraries that ranked its pictures choose their titles' best again.
+		ranked, err := queryColumn[uuid.UUID](ctx, tx, `
+			WITH gone AS (DELETE FROM library_sources WHERE source = $1 RETURNING library_id, fetcher)
+			SELECT DISTINCT library_id FROM gone WHERE fetcher = 'images'`, source)
+		if err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `DELETE FROM providers WHERE id = $1`, source)
+		if err := keepLibraryPictures(ctx, tx, ranked); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM providers WHERE id = $1`, source)
 		return err
 	})
 }

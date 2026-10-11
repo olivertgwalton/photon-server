@@ -1,11 +1,9 @@
 package store
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"maps"
-	"math"
 	"net/url"
 	"path"
 	"slices"
@@ -13,7 +11,6 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -56,13 +53,25 @@ func saveProviderArtwork(ctx context.Context, tx db, item uuid.UUID, source doma
 }
 
 func queueArtwork(b *pgx.Batch, rows []*model.Artwork) {
-	for _, r := range rows {
-		// A provider may list one picture twice.
-		b.Queue(`
-			INSERT INTO artwork (item_id, source, kind, place, position, folder, language, width, height, blurhash)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING`,
-			r.ItemID, r.Source, r.Kind, r.Place, r.Position, r.Folder, r.Language, r.Width, r.Height, r.Blurhash)
+	if len(rows) == 0 {
+		return
 	}
+	n := len(rows)
+	items, positions := make([]uuid.UUID, n), make([]int, n)
+	sources, kinds, places := make([]string, n), make([]string, n), make([]string, n)
+	folders, languages, blurhashes := make([]*string, n), make([]*string, n), make([]*string, n)
+	widths, heights := make([]*int, n), make([]*int, n)
+	for i, r := range rows {
+		items[i], sources[i], kinds[i], places[i], positions[i] = r.ItemID, string(r.Source), string(r.Kind), r.Place, r.Position
+		folders[i], languages[i], widths[i], heights[i], blurhashes[i] = r.Folder, r.Language, r.Width, r.Height, r.Blurhash
+	}
+	// A provider may list one picture twice.
+	b.Queue(`
+		INSERT INTO artwork (item_id, source, kind, place, position, folder, language, width, height, blurhash)
+		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::text[], $5::smallint[], $6::text[], $7::text[],
+			$8::int[], $9::int[], $10::text[])
+		ON CONFLICT DO NOTHING`,
+		items, sources, kinds, places, positions, folders, languages, widths, heights, blurhashes)
 }
 
 // Blurhashes are the BlurHashes of the pictures an answer carries, by picture id, for those that
@@ -94,61 +103,47 @@ func photo(id *uuid.UUID, hash *string) (uuid.UUID, Blurhashes) {
 	return *id, Blurhashes{*id: *hash}
 }
 
-// pictureOrder answers each title's pictures by kind, best first, and the BlurHashes of those
-// that have one. A picture listed again under a lower source, as one an admin chose is under its
-// provider, is left out.
-func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
+// bestPictures answers each title's best picture of each kind, as best_artwork keeps them, and the
+// BlurHashes of those that have one: what a card shows, and what a title's page answers, as Plex and
+// Jellyfin answer an item with one of each kind and list the rest as candidates.
+func (s *Store) bestPictures(ctx context.Context, items []*model.Item) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
 	out := map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID{}
 	hashes := map[uuid.UUID]string{}
-	rows, err := s.rankedPictures(ctx, items)
+	rows, err := s.pool.Query(ctx, `SELECT item_id, kind, artwork_id, blurhash FROM best_artwork WHERE item_id = ANY($1)`, ids(items))
 	if err != nil {
 		return nil, nil, err
 	}
-	type place struct {
-		item  uuid.UUID
-		kind  domain.ArtworkKind
-		place string
-	}
-	seen := map[place]bool{}
-	for _, r := range rows {
-		p := place{r.ItemID, r.Kind, r.Place}
-		if seen[p] {
-			continue
+	var item, id uuid.UUID
+	var kind domain.ArtworkKind
+	var hash *string
+	_, err = pgx.ForEachRow(rows, []any{&item, &kind, &id, &hash}, func() error {
+		if out[item] == nil {
+			out[item] = map[domain.ArtworkKind][]uuid.UUID{}
 		}
-		seen[p] = true
-		if out[r.ItemID] == nil {
-			out[r.ItemID] = map[domain.ArtworkKind][]uuid.UUID{}
+		out[item][kind] = []uuid.UUID{id}
+		if hash != nil {
+			hashes[id] = *hash
 		}
-		out[r.ItemID][r.Kind] = append(out[r.ItemID][r.Kind], r.ID)
-		if r.Blurhash != nil {
-			hashes[r.ID] = *r.Blurhash
-		}
-	}
-	return out, hashes, nil
+		return nil
+	})
+	return out, hashes, err
 }
 
-// rankedPictures answers the pictures of items, best first, as rankPictures puts them.
+// keepLibraryPictures chooses again the best pictures of the titles of libs, whose picture sources
+// changed.
+func keepLibraryPictures(ctx context.Context, tx db, libs []uuid.UUID) error {
+	_, err := tx.Exec(ctx, `SELECT keep_best_artwork(ARRAY(SELECT id FROM items WHERE library_id = ANY($1)))`, libs)
+	return err
+}
+
+// rankedPictures answers the pictures of items, best first in each title's pictures of a kind, as
+// ranked_artwork numbers them.
 func (s *Store) rankedPictures(ctx context.Context, items []*model.Item) ([]*model.Artwork, error) {
 	if len(items) == 0 {
 		return nil, nil
 	}
-	// The pictures and how their libraries rank them are read at once.
-	var rows []*model.Artwork
-	var taken map[uuid.UUID][]domain.FieldSource
-	g, gctx := errgroup.WithContext(ctx)
-	g.Go(func() (err error) {
-		rows, err = queryRows[model.Artwork](gctx, s.pool, `SELECT `+artworkColumns+` FROM artwork WHERE item_id = ANY($1)`, ids(items))
-		return err
-	})
-	g.Go(func() (err error) {
-		taken, err = rankings(gctx, s.pool, items, domain.FetcherImages)
-		return err
-	})
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-	rankPictures(rows, items, taken)
-	return rows, nil
+	return queryRows[model.Artwork](ctx, s.pool, `SELECT `+artworkColumns+` FROM ranked_artwork($1)
+		ORDER BY item_id, kind, nth`, ids(items))
 }
 
 // Unfetched are pictures titles show first that are a provider's, and photos of the people they
@@ -185,21 +180,12 @@ func (s *Store) Unfetched(ctx context.Context, after uuid.UUID, limit int) (Unfe
 }
 
 func (s *Store) unfetched(ctx context.Context, items []*model.Item) (Unfetched, error) {
-	rows, err := s.rankedPictures(ctx, items)
+	rows, err := queryRows[model.Artwork](ctx, s.pool, `SELECT `+artworkColumns+` FROM ranked_artwork($1) WHERE nth = 1`, ids(items))
 	if err != nil {
 		return nil, err
 	}
-	type shown struct {
-		item uuid.UUID
-		kind domain.ArtworkKind
-	}
-	first := map[shown]bool{}
 	out := Unfetched{}
 	for _, r := range rows {
-		if first[shown{r.ItemID, r.Kind}] {
-			continue
-		}
-		first[shown{r.ItemID, r.Kind}] = true
 		if r.Source != domain.SourceFile && r.Blurhash == nil {
 			out[r.ID] = r.Place
 		}
@@ -212,29 +198,6 @@ func (s *Store) unfetched(ctx context.Context, items []*model.Item) (Unfetched, 
 	}
 	maps.Copy(out, photos)
 	return out, nil
-}
-
-// rankPictures puts the pictures of items best first: an admin's choice, files beside the title,
-// then the providers its library asks for pictures of its kind in the library's order (taken, as
-// rankings answers), then each provider's own order.
-func rankPictures(rows []*model.Artwork, items []*model.Item, taken map[uuid.UUID][]domain.FieldSource) {
-	rank := map[uuid.UUID]map[domain.FieldSource]int{}
-	for _, it := range items {
-		rank[it.ID] = map[domain.FieldSource]int{domain.SourceUser: -2, domain.SourceFile: -1}
-		for n, src := range taken[it.ID] {
-			rank[it.ID][src] = n
-		}
-	}
-	// A provider the library no longer asks comes after every one it does.
-	order := func(x *model.Artwork) int {
-		if r, ok := rank[x.ItemID][x.Source]; ok {
-			return r
-		}
-		return math.MaxInt
-	}
-	slices.SortStableFunc(rows, func(x, y *model.Artwork) int {
-		return cmp.Or(cmp.Compare(order(x), order(y)), cmp.Compare(x.Position, y.Position))
-	})
 }
 
 // ArtworkCandidate is a picture of a kind a provider has for a title, for an admin to choose.
@@ -258,15 +221,11 @@ func (s *Store) ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain
 	if err != nil {
 		return nil, err
 	}
-	rows, err := queryRows[model.Artwork](ctx, s.pool, `SELECT `+artworkColumns+` FROM artwork WHERE item_id = $1 AND kind = $2`, item.ID, kind)
+	rows, err := s.rankedPictures(ctx, []*model.Item{item})
 	if err != nil {
 		return nil, err
 	}
-	taken, err := rankings(ctx, s.pool, []*model.Item{item}, domain.FetcherImages)
-	if err != nil {
-		return nil, err
-	}
-	rankPictures(rows, []*model.Item{item}, taken)
+	rows = slices.DeleteFunc(rows, func(r *model.Artwork) bool { return r.Kind != kind })
 	var chosen string
 	if len(rows) > 0 && rows[0].Source == domain.SourceUser {
 		chosen = rows[0].Place
