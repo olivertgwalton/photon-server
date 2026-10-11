@@ -7,8 +7,6 @@ import PlaylistPicker from "#lib/components/PlaylistPicker.svelte";
 import ShareDialog from "#lib/components/ShareDialog.svelte";
 import SubtitleSearch from "#lib/components/SubtitleSearch.svelte";
 import VersionPicker from "#lib/components/VersionPicker.svelte";
-import RefreshDialog from "#lib/components/admin/RefreshDialog.svelte";
-import TitleEditor from "#lib/components/admin/TitleEditor.svelte";
 import ConfirmDialog from "#lib/components/ConfirmDialog.svelte";
 import ProfileMenu from "#lib/components/ProfileMenu.svelte";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
@@ -93,7 +91,17 @@ $effect(() => {
 <SubtitleSearch />
 <VersionPicker />
 <ConfirmDialog />
+<!-- Asked for only by an admin's shell: the editor brings every admin form
+	with it, which no one else's first page should wait on. -->
 {#if data.me.role === "admin"}
-	<TitleEditor />
-	<RefreshDialog />
+	{#await import(
+		"#lib/components/admin/TitleEditor.svelte"
+	) then { default: TitleEditor }}
+		<TitleEditor />
+	{/await}
+	{#await import(
+		"#lib/components/admin/RefreshDialog.svelte"
+	) then { default: RefreshDialog }}
+		<RefreshDialog />
+	{/await}
 {/if}
