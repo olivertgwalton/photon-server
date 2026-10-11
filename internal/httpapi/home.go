@@ -2,12 +2,14 @@ package httpapi
 
 import (
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
@@ -78,6 +80,37 @@ func (a *API) homeRow(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[cardJSON]{cardsJSON(cards), offset, total})
 }
 
+// libraryRow answers the first of one of a library's rows, as the home page has it: the newest or
+// the best, a count and no more, as Plex's and Jellyfin's are.
+func (a *API) libraryRow(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	// The route takes no offset.
+	_, limit, ok := a.paging(w, r, defaultHomeLimit)
+	if !ok {
+		return
+	}
+	profile := auth.SessionOf(r.Context()).Profile.ID
+	libs, err := a.svc.Catalogue.LibrariesSeen(r.Context(), profile)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	i := slices.IndexFunc(libs, func(l *store.SeenLibrary) bool { return l.ID == id })
+	if i < 0 {
+		a.answered(w, r, store.ErrNotFound)
+		return
+	}
+	lib, row := libs[i], domain.HomeRow(r.PathValue("row"))
+	cards, err := a.svc.Catalogue.LibraryRow(r.Context(), profile, row, lib, limit)
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
+}
+
 func (a *API) homeRoutes() []route {
 	return []route{
 		{
@@ -90,6 +123,13 @@ func (a *API) homeRoutes() []route {
 			summary: "Page one of the profile's own home rows: continue watching, next up, its watchlist or its favourites",
 			path:    []param{{"row", domain.HomeRow(""), "The row; a library's or a collection's is paged on its own page."}},
 			query:   pageParams, status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.homeRow,
+		},
+		{
+			pattern: "GET /api/v1/libraries/{id}/rows/{row}", access: signedIn,
+			summary: "The first of one of a library's rows: recently added, recently released or top rated",
+			path:    []param{{"row", domain.HomeRow(""), "The row, made for the library's kind."}},
+			query:   []param{{"limit", 0, "How many titles, from 1 to " + strconv.Itoa(maxWallLimit) + "."}},
+			status:  http.StatusOK, reply: listJSON[cardJSON]{}, handle: a.libraryRow,
 		},
 	}
 }

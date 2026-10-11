@@ -133,6 +133,15 @@ func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow,
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat"}}, 1, nil
 }
 
+// LibraryRow answers, of a films library's row of films, a card titled after the row and how many
+// it was asked for.
+func (fakeCatalogue) LibraryRow(_ context.Context, _ uuid.UUID, row domain.HomeRow, lib *store.SeenLibrary, limit int) ([]store.Card, error) {
+	if lib.Kind != domain.LibraryMovies || row != domain.RowRecentFilms && row != domain.RowTopRatedUnwatched {
+		return nil, store.ErrNotFound
+	}
+	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: string(row) + " " + strconv.Itoa(limit)}}, nil
+}
+
 func TestHome(t *testing.T) {
 	rec := serve(t, http.MethodGet, "/api/v1/home?limit=2", goodToken, "")
 	var got struct {
@@ -178,6 +187,26 @@ func TestHomeRow(t *testing.T) {
 		{"/api/v1/home/watchlist?limit=0", http.StatusBadRequest, ""},
 	} {
 		rec := serve(t, http.MethodGet, tc.target, goodToken, "")
+		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.wantBody) {
+			t.Errorf("%s: %d %s, want %d %s", tc.target, rec.Code, rec.Body, tc.want, tc.wantBody)
+		}
+	}
+}
+
+func TestLibraryRow(t *testing.T) {
+	for _, tc := range []struct {
+		target   string
+		want     int
+		wantBody string
+	}{
+		{"/libraries/" + films.String() + "/rows/recently_added_films", http.StatusOK, `"title":"recently_added_films 20"`},
+		{"/libraries/" + films.String() + "/rows/top_rated_unwatched?limit=21", http.StatusOK, `"title":"top_rated_unwatched 21"`},
+		{"/libraries/" + films.String() + "/rows/recently_added_shows", http.StatusNotFound, ""},
+		{"/libraries/" + films.String() + "/rows/watchlist", http.StatusNotFound, ""},
+		{"/libraries/" + films.String() + "/rows/recently_added_films?offset=1", http.StatusBadRequest, ""},
+		{"/libraries/" + uuid.NewV7().String() + "/rows/recently_added_films", http.StatusNotFound, ""},
+	} {
+		rec := serve(t, http.MethodGet, "/api/v1"+tc.target, goodToken, "")
 		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.wantBody) {
 			t.Errorf("%s: %d %s, want %d %s", tc.target, rec.Code, rec.Body, tc.want, tc.wantBody)
 		}
