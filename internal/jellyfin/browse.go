@@ -247,9 +247,6 @@ func wallPage(r *http.Request, profile uuid.UUID, l listed) store.WallPage {
 	return p
 }
 
-// libraryKinds are the kinds of title each kind of library holds, as Jellyfin's apps ask for them.
-var libraryKinds = map[domain.LibraryKind]string{domain.LibraryMovies: "Movie", domain.LibraryShows: "Series"}
-
 // items answers Jellyfin's /Items: the items an app names, a library's films or shows, a show's
 // seasons or episodes, a season's episodes, every collection, or what matches a search; every
 // library at once where an app names none, and the profile's playlists where it asks for those
@@ -342,7 +339,7 @@ func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Req
 	var ids []uuid.UUID
 	var shown []*store.SeenLibrary
 	for _, lib := range libs {
-		if len(types) == 0 || has(types, libraryKinds[lib.Kind]) {
+		if len(types) == 0 || has(types, libraryKind(lib)) {
 			ids, shown = append(ids, lib.ID), append(shown, lib)
 		}
 	}
@@ -361,11 +358,6 @@ func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Req
 		return
 	}
 	a.writeList(w, r, cards, int(total), l.start, l)
-}
-
-// searchKinds are photon's kinds for Jellyfin's, of those a search finds.
-var searchKinds = map[string]domain.ItemKind{
-	"movie": domain.ItemMovie, "series": domain.ItemShow, "episode": domain.ItemEpisode, "boxset": domain.ItemCollection,
 }
 
 // children answers what is in a collection, a show or a season: a collection's titles; a show's
