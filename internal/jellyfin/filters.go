@@ -34,7 +34,7 @@ func asked(r *http.Request, libs []*store.SeenLibrary, seen map[uuid.UUID]*store
 	}
 	types := values(r, "includeItemTypes")
 	return slices.DeleteFunc(slices.Clone(libs), func(l *store.SeenLibrary) bool {
-		return len(types) > 0 && !has(types, libraryKinds[l.Kind])
+		return len(types) > 0 && !has(types, libraryKind(l))
 	})
 }
 

@@ -116,6 +116,11 @@ var itemKinds = map[domain.ItemKind]string{
 	domain.ItemEpisode: "Episode", domain.ItemCollection: "BoxSet", domain.ItemExtra: "Video",
 }
 
+// libraryKind is the kind of title a library holds, as Jellyfin's apps ask for it.
+func libraryKind(l *store.SeenLibrary) string {
+	return itemKinds[l.Kind.ItemKinds()[0]]
+}
+
 // collectionTypes are Jellyfin's CollectionType for each kind of library.
 var collectionTypes = map[domain.LibraryKind]string{domain.LibraryMovies: "movies", domain.LibraryShows: "tvshows"}
 

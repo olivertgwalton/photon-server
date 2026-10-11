@@ -3,10 +3,10 @@ package jellyfin
 import (
 	"context"
 	"net/http"
-	"strings"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -106,9 +106,9 @@ func (a *API) searched(ctx context.Context, q store.SearchQuery) ([]store.Card, 
 // search finds none of them.
 func searchQuery(r *http.Request, text string, library uuid.UUID, types []string, l listed) (store.SearchQuery, bool) {
 	q := store.SearchQuery{Profile: auth.SessionOf(r.Context()).Profile.ID, Text: text, Library: library, Offset: l.start, Limit: l.limit}
-	for _, t := range types {
-		if k, ok := searchKinds[strings.ToLower(t)]; ok {
-			q.Kinds = append(q.Kinds, k)
+	for _, k := range domain.SearchKinds() {
+		if name, ok := itemKinds[domain.ItemKind(k)]; ok && has(types, name) {
+			q.Kinds = append(q.Kinds, domain.ItemKind(k))
 		}
 	}
 	return q, len(q.Kinds) > 0 || len(types) == 0
