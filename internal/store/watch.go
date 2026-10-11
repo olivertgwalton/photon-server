@@ -323,17 +323,10 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 	}
 	if len(groups) > 0 {
 		counts, err := queryStructs[episodeCount](ctx, s.pool, `
-			SELECT g.id, count(e.id) AS episodes, count(ws.watched_at) AS watched,
-				max(ws.last_played_at) AS last_played, max(ws.watched_at) AS watched_at
-			FROM items g
-			CROSS JOIN LATERAL (
-				SELECT e.id FROM items e WHERE e.parent_id = g.id AND e.kind = 'episode'
-				UNION ALL
-				SELECT e.id FROM items s JOIN items e ON e.parent_id = s.id WHERE s.parent_id = g.id AND e.kind = 'episode'
-			) e
-			LEFT JOIN watch_state ws ON ws.item_id = e.id AND ws.profile_id = $1
-			WHERE g.id = ANY($2::uuid[])
-			GROUP BY g.id`, profile, ids(groups))
+			SELECT c.group_id AS id, c.episodes, coalesce(w.watched, 0) AS watched,
+				w.last_played_at AS last_played, w.watched_at
+			FROM episode_counts c LEFT JOIN watched_counts w ON w.group_id = c.group_id AND w.profile_id = $1
+			WHERE c.group_id = ANY($2::uuid[])`, profile, ids(groups))
 		if err != nil {
 			return nil, err
 		}
