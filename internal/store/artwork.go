@@ -56,13 +56,25 @@ func saveProviderArtwork(ctx context.Context, tx db, item uuid.UUID, source doma
 }
 
 func queueArtwork(b *pgx.Batch, rows []*model.Artwork) {
-	for _, r := range rows {
-		// A provider may list one picture twice.
-		b.Queue(`
-			INSERT INTO artwork (item_id, source, kind, place, position, folder, language, width, height, blurhash)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING`,
-			r.ItemID, r.Source, r.Kind, r.Place, r.Position, r.Folder, r.Language, r.Width, r.Height, r.Blurhash)
+	if len(rows) == 0 {
+		return
 	}
+	n := len(rows)
+	items, positions := make([]uuid.UUID, n), make([]int, n)
+	sources, kinds, places := make([]string, n), make([]string, n), make([]string, n)
+	folders, languages, blurhashes := make([]*string, n), make([]*string, n), make([]*string, n)
+	widths, heights := make([]*int, n), make([]*int, n)
+	for i, r := range rows {
+		items[i], sources[i], kinds[i], places[i], positions[i] = r.ItemID, string(r.Source), string(r.Kind), r.Place, r.Position
+		folders[i], languages[i], widths[i], heights[i], blurhashes[i] = r.Folder, r.Language, r.Width, r.Height, r.Blurhash
+	}
+	// A provider may list one picture twice.
+	b.Queue(`
+		INSERT INTO artwork (item_id, source, kind, place, position, folder, language, width, height, blurhash)
+		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[], $4::text[], $5::smallint[], $6::text[], $7::text[],
+			$8::int[], $9::int[], $10::text[])
+		ON CONFLICT DO NOTHING`,
+		items, sources, kinds, places, positions, folders, languages, widths, heights, blurhashes)
 }
 
 // Blurhashes are the BlurHashes of the pictures an answer carries, by picture id, for those that
