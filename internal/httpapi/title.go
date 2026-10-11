@@ -55,7 +55,6 @@ type titlePageJSON struct {
 	Collections   []collectionCardJSON       `json:"collections,omitzero"`
 	Credits       []creditRefJSON            `json:"credits,omitzero"`
 	Origin        domain.CollectionOrigin    `json:"origin,omitzero"`
-	Placement     domain.CollectionPlacement `json:"placement,omitzero"`
 	// Rule is what finds a smart collection's titles, List the list a list collection holds.
 	Rule         *store.SmartRule    `json:"rule,omitzero"`
 	List         *store.ListRef      `json:"list,omitzero"`
@@ -283,7 +282,7 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 		Ratings:     each(p.Ratings, func(r domain.Rating) ratingRefJSON { return ratingRefJSON(r) }),
 		Collections: each(p.Collections, func(c store.CollectionCard) collectionCardJSON { return collectionCardJSON(c) }),
 		Credits:     each(p.Credits, func(c store.CreditRef) creditRefJSON { return creditRefJSON(c) }),
-		Origin:      p.Origin, Placement: p.Placement, Rule: p.Rule, List: p.List, EpisodeOrder: p.EpisodeOrder,
+		Origin:      p.Origin, Rule: p.Rule, List: p.List, EpisodeOrder: p.EpisodeOrder,
 		MetadataLanguage: p.Locale.Language, CertificationCountry: p.Locale.Country, TitleLanguage: p.Titles, AddedAt: p.AddedAt, SeasonNumber: p.SeasonNumber,
 		EpisodeNumber: p.EpisodeNumber, EpisodeEnd: p.EpisodeEnd,
 		Show: (*titleRefJSON)(p.Show), Season: (*titleRefJSON)(p.Season),

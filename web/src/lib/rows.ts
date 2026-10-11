@@ -40,8 +40,6 @@ export const homeRows: Record<
 		library: { wall: { sort: "released" } },
 	},
 	top_rated_unwatched: { shape: "poster", whole: true },
-	// A row each, under the collection's own name, leading to its page.
-	collection: { shape: "poster" },
 };
 
 // The rows with a page of their own, as Plex's Watchlist and Jellyfin's
@@ -59,12 +57,6 @@ export function isHomeRow(kind: string): kind is Kind {
 // leads.
 export function rail(row: Row): { key: string; href: string } {
 	const kind = homeRows[row.kind];
-	if (row.collection) {
-		return {
-			key: row.collection.id,
-			href: `/titles/${row.collection.id}`,
-		};
-	}
 	if (row.library && kind.whole) {
 		return {
 			key: `${row.kind}/${row.library.id}`,

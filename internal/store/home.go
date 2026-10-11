@@ -18,8 +18,6 @@ import (
 // HomeRow is one row of a profile's home page.
 type HomeRow struct {
 	Kind domain.HomeRow
-	// Collection is the collection a RowCollection row is.
-	Collection *TitleRef
 	// Library is the library a row of libraryRows is.
 	Library *LibraryRef
 	Cards   []Card
@@ -155,21 +153,6 @@ func listRow(table string) string {
 	return `SELECT ` + itemColumnsOf("i") + onList(table) + ` ORDER BY l.added_at DESC, i.id DESC OFFSET @offset LIMIT @limit`
 }
 
-// collectionRowsQuery is, for each collection placed on the home page that the profile sees, by
-// name, up to the limit of its titles the profile sees, in memberOrder.
-var collectionRowsQuery = `
-	SELECT col.id AS collection_id, col.title AS collection_title, ` + itemColumnsOf("member") + `
-	FROM collections c JOIN items col ON col.id = c.item_id
-	CROSS JOIN LATERAL (
-		SELECT items.*, row_number() OVER (ORDER BY ` + memberOrder + `) AS n
-		FROM collection_members m JOIN items ON items.id = m.item_id
-		WHERE m.collection_id = c.item_id AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
-		ORDER BY n LIMIT @limit
-	) member
-	WHERE c.placement = 'home' AND c.item_id IN (` + shownCollections + `)
-		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, col))
-	ORDER BY col.sort_title, col.id, member.n`
-
 // librariesSeen are the libraries a profile sees, in the order it put them, those it has not placed
 // after, by name, as its library list is.
 const librariesSeen = `
@@ -193,12 +176,6 @@ func (s *Store) LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*SeenLi
 type rowItems struct {
 	row   HomeRow
 	items []*model.Item
-}
-
-type collectionMember struct {
-	CollectionID    uuid.UUID
-	CollectionTitle string
-	model.Item
 }
 
 // leastVotes is how many votes a rating needs to put a title on the top rated row, so a title a
@@ -237,20 +214,6 @@ func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeR
 	for _, section := range prefs.Home {
 		kind := section.Row
 		if section.Visibility == domain.RowHidden {
-			continue
-		}
-		if kind == domain.RowCollection {
-			asks = append(asks, func(ctx context.Context) ([]rowItems, error) {
-				members, err := queryRows[collectionMember](ctx, s.pool, collectionRowsQuery, args(uuid.UUID{}))
-				var out []rowItems
-				for n, m := range members {
-					if n == 0 || m.CollectionID != members[n-1].CollectionID {
-						out = append(out, rowItems{row: HomeRow{Kind: kind, Collection: &TitleRef{ID: m.CollectionID, Title: m.CollectionTitle}}})
-					}
-					out[len(out)-1].items = append(out[len(out)-1].items, &m.Item)
-				}
-				return out, err
-			})
 			continue
 		}
 		if kinds, ok := libraryRows[kind]; ok {

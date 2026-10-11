@@ -135,7 +135,6 @@ var rows = map[domain.HomeRow]string{
 	domain.RowWatchlist: "Watchlist", domain.RowFavourites: "Favourites",
 	domain.RowRecentFilms: "Recently Added Films", domain.RowRecentShows: "Recently Added Shows",
 	domain.RowRecentlyReleased: "Recently Released", domain.RowTopRatedUnwatched: "Top Rated",
-	domain.RowCollection: "Collections",
 }
 
 var jobKinds = map[domain.JobKind]string{

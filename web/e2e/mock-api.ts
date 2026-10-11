@@ -506,7 +506,6 @@ const vocabulary: Schemas["Vocabulary"] = {
 		theme: "Fetch a theme tune",
 	},
 	rows: {
-		collection: "Collections",
 		continue_watching: "Continue Watching",
 		favourites: "Favourites",
 		next_up: "Next Up",

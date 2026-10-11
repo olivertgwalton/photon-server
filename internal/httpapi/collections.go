@@ -22,7 +22,6 @@ type collections interface {
 	SetListMembers(ctx context.Context, collection uuid.UUID, listed []domain.Listed) error
 	CollectionList(ctx context.Context, collection uuid.UUID) (store.ListRef, error)
 	SetMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error
-	SetPlacement(ctx context.Context, collection uuid.UUID, placement domain.CollectionPlacement) error
 	RemoveCollection(ctx context.Context, collection uuid.UUID) error
 }
 
@@ -122,30 +121,6 @@ func (a *API) setMembers(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case a.answeredAs(w, r, err, "the collection, or one of its titles, is not in its library"):
 	default:
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-type placementJSON struct {
-	Placement domain.CollectionPlacement `json:"placement"`
-}
-
-// setPlacement puts a collection, an admin's or a provider's, on the home page or back in its
-// library only.
-func (a *API) setPlacement(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	var req placementJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
-	if req.Placement == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "placement is set")
-		return
-	}
-	if !a.answered(w, r, a.svc.Collections.SetPlacement(r.Context(), id, req.Placement)) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -251,11 +226,6 @@ func (a *API) collectionsRoutes() []route {
 			pattern: "POST /api/v1/admin/collections/{id}/sync", access: admin,
 			summary: "Read a list collection's list again now, and keep the titles of it the library has",
 			status:  http.StatusNoContent, handle: a.syncList,
-		},
-		{
-			pattern: "PUT /api/v1/admin/collections/{id}/placement", access: admin,
-			summary: "Show a collection on the home page, or in its library only",
-			body:    placementJSON{}, status: http.StatusNoContent, handle: a.setPlacement,
 		},
 		{
 			pattern: "DELETE /api/v1/admin/collections/{id}", access: admin,

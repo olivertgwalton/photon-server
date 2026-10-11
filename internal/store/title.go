@@ -35,8 +35,7 @@ type TitlePage struct {
 	// Credits are its cast and crew, as the highest-ranked source gives them.
 	Credits []CreditRef
 	// Origin is who made a collection: an admin's is changed by hand, a provider's only by it.
-	Origin    domain.CollectionOrigin
-	Placement domain.CollectionPlacement
+	Origin domain.CollectionOrigin
 	// Rule is what finds a smart collection's titles, List the list a list collection holds.
 	Rule *SmartRule
 	List *ListRef
@@ -252,8 +251,8 @@ func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item,
 	case domain.ItemCollection:
 		var source, list *string
 		var missing int
-		err = s.pool.QueryRow(ctx, `SELECT origin, placement, rule, list_source, list_id, list_missing FROM collections WHERE item_id = $1`, item.ID).
-			Scan(&p.Origin, &p.Placement, &p.Rule, &source, &list, &missing)
+		err = s.pool.QueryRow(ctx, `SELECT origin, rule, list_source, list_id, list_missing FROM collections WHERE item_id = $1`, item.ID).
+			Scan(&p.Origin, &p.Rule, &source, &list, &missing)
 		if source != nil && list != nil {
 			p.List = &ListRef{Source: domain.FieldSource(*source), ID: *list, Missing: missing}
 		}
