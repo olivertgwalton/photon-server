@@ -1,11 +1,9 @@
 package store
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"maps"
-	"math"
 	"net/url"
 	"path"
 	"slices"
@@ -13,7 +11,6 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
@@ -139,28 +136,14 @@ func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[uuid
 	return out, hashes, nil
 }
 
-// rankedPictures answers the pictures of items, best first, as rankPictures puts them.
+// rankedPictures answers the pictures of items, best first in each title's pictures of a kind, as
+// ranked_artwork ranks them, each provider's own order breaking a tie.
 func (s *Store) rankedPictures(ctx context.Context, items []*model.Item) ([]*model.Artwork, error) {
 	if len(items) == 0 {
 		return nil, nil
 	}
-	// The pictures and how their libraries rank them are read at once.
-	var rows []*model.Artwork
-	var taken map[uuid.UUID][]domain.FieldSource
-	g, gctx := errgroup.WithContext(ctx)
-	g.Go(func() (err error) {
-		rows, err = queryRows[model.Artwork](gctx, s.pool, `SELECT `+artworkColumns+` FROM artwork WHERE item_id = ANY($1)`, ids(items))
-		return err
-	})
-	g.Go(func() (err error) {
-		taken, err = rankings(gctx, s.pool, items, domain.FetcherImages)
-		return err
-	})
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-	rankPictures(rows, items, taken)
-	return rows, nil
+	return queryRows[model.Artwork](ctx, s.pool, `SELECT `+artworkColumns+` FROM ranked_artwork($1)
+		ORDER BY item_id, kind, rank, position, id`, ids(items))
 }
 
 // Unfetched are pictures titles show first that are a provider's, and photos of the people they
@@ -226,29 +209,6 @@ func (s *Store) unfetched(ctx context.Context, items []*model.Item) (Unfetched, 
 	return out, nil
 }
 
-// rankPictures puts the pictures of items best first: an admin's choice, files beside the title,
-// then the providers its library asks for pictures of its kind in the library's order (taken, as
-// rankings answers), then each provider's own order.
-func rankPictures(rows []*model.Artwork, items []*model.Item, taken map[uuid.UUID][]domain.FieldSource) {
-	rank := map[uuid.UUID]map[domain.FieldSource]int{}
-	for _, it := range items {
-		rank[it.ID] = map[domain.FieldSource]int{domain.SourceUser: -2, domain.SourceFile: -1}
-		for n, src := range taken[it.ID] {
-			rank[it.ID][src] = n
-		}
-	}
-	// A provider the library no longer asks comes after every one it does.
-	order := func(x *model.Artwork) int {
-		if r, ok := rank[x.ItemID][x.Source]; ok {
-			return r
-		}
-		return math.MaxInt
-	}
-	slices.SortStableFunc(rows, func(x, y *model.Artwork) int {
-		return cmp.Or(cmp.Compare(order(x), order(y)), cmp.Compare(x.Position, y.Position))
-	})
-}
-
 // ArtworkCandidate is a picture of a kind a provider has for a title, for an admin to choose.
 type ArtworkCandidate struct {
 	ID       uuid.UUID
@@ -270,15 +230,11 @@ func (s *Store) ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain
 	if err != nil {
 		return nil, err
 	}
-	rows, err := queryRows[model.Artwork](ctx, s.pool, `SELECT `+artworkColumns+` FROM artwork WHERE item_id = $1 AND kind = $2`, item.ID, kind)
+	rows, err := s.rankedPictures(ctx, []*model.Item{item})
 	if err != nil {
 		return nil, err
 	}
-	taken, err := rankings(ctx, s.pool, []*model.Item{item}, domain.FetcherImages)
-	if err != nil {
-		return nil, err
-	}
-	rankPictures(rows, []*model.Item{item}, taken)
+	rows = slices.DeleteFunc(rows, func(r *model.Artwork) bool { return r.Kind != kind })
 	var chosen string
 	if len(rows) > 0 && rows[0].Source == domain.SourceUser {
 		chosen = rows[0].Place
