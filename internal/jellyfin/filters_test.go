@@ -47,7 +47,7 @@ func TestAnAppNarrowsALibraryByWhatItsTitlesHave(t *testing.T) {
 		year                int
 		genres              []string
 	}{
-		{"Alien", "18", "Brandywine", 1979, []string{"Horror", "Science Fiction"}},
+		{"Alien", "18", "Éclair", 1979, []string{"Horror", "Science Fiction"}},
 		{"Brazil", "15", "Embassy", 1985, []string{"Comedy", "Science Fiction"}},
 		{"Heat", "IN:A", "Warner Bros.", 1995, []string{"Crime, Thriller"}},
 	} {
@@ -95,8 +95,8 @@ func TestAnAppNarrowsALibraryByWhatItsTitlesHave(t *testing.T) {
 	if !slices.Equal(genres, []string{"Comedy", "Crime, Thriller", "Horror", "Science Fiction"}) || items[0].Type != "Genre" {
 		t.Errorf("genres: %v", items)
 	}
-	if studios, items := list("/Studios"); !slices.Equal(studios, []string{"Brandywine", "Embassy", "Warner Bros."}) || items[0].Type != "Studio" {
-		t.Errorf("studios of every library: %v", items)
+	if studios, items := list("/Studios"); !slices.Equal(studios, []string{"Éclair", "Embassy", "Warner Bros."}) || items[0].Type != "Studio" {
+		t.Errorf("studios of every library, in the order of one: %v", items)
 	}
 	if none, _ := list("/Genres?includeItemTypes=Series"); len(none) != 0 {
 		t.Errorf("the genres of shows, of which there are none: %v", none)
@@ -129,10 +129,10 @@ func TestAnAppNarrowsALibraryByWhatItsTitlesHave(t *testing.T) {
 		"genreIds=" + filters.Genres[3].ID:                    {"Alien", "Brazil"},
 		"genres=" + url.QueryEscape("Crime, Thriller|Comedy"): {"Brazil", "Heat"},
 		"studios=Embassy": {"Brazil"},
-		"studioIds=" + guid(nameID("Studio", "Brandywine")): {"Alien"},
-		"officialRatings=A|18":                              {"Alien", "Heat"},
-		"genreIds=" + guid(uuid.NewV7()):                    nil,
-		"officialRatings=U":                                 nil,
+		"studioIds=" + guid(nameID("Studio", "Éclair")): {"Alien"},
+		"officialRatings=A|18":                          {"Alien", "Heat"},
+		"genreIds=" + guid(uuid.NewV7()):                nil,
+		"officialRatings=U":                             nil,
 	} {
 		if got := walled(narrowed); !slices.Equal(got, want) {
 			t.Errorf("%s: %v, want %v", narrowed, got, want)
