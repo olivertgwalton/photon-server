@@ -16,8 +16,7 @@ export const load: PageLoad = async ({ fetch, params, url, depends }) => {
 	const { sort, order, ...filters } = query;
 	const path = { id: params.id };
 	// Letters are where the wall is in title order; any other order has none.
-	// Streamed, not awaited: the page is drawn at once, the wall as it comes,
-	// saying which query it answers.
+	// Streamed, not awaited: the page is drawn at once, the wall as it comes.
 	const wall = Promise.all([
 		need(
 			api.GET("/api/v1/libraries/{id}/titles", {
@@ -31,7 +30,7 @@ export const load: PageLoad = async ({ fetch, params, url, depends }) => {
 					}),
 				)
 			: undefined,
-	]).then(([titles, letters]) => ({ query, titles, letters: letters?.items }));
+	]).then(([titles, letters]) => ({ titles, letters: letters?.items }));
 	// The page takes the refusal; a load preloaded and never shown has no page.
 	wall.catch(() => {});
 	return {

@@ -6,7 +6,8 @@ import RectangleHorizontalIcon from "@lucide/svelte/icons/rectangle-horizontal";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 import { act } from "#lib/act.js";
-import { client } from "#lib/api/client.js";
+import type { components } from "#lib/api/schema.js";
+import { client, refusal } from "#lib/api/client.js";
 import SmartCollectionDialog from "#lib/components/admin/SmartCollectionDialog.svelte";
 import LetterBar from "#lib/components/LetterBar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -16,7 +17,6 @@ import WallFilterMenu from "#lib/components/WallFilterMenu.svelte";
 import WallSortMenu from "#lib/components/WallSortMenu.svelte";
 import { count } from "#lib/format.js";
 import { gridColumns } from "#lib/grid.js";
-import { settled } from "#lib/settled.svelte.js";
 import {
 	cleared,
 	filterCount,
@@ -29,17 +29,16 @@ import {
 	wallSearch,
 } from "#lib/wall.js";
 
+type Letter = components["schemas"]["Letter"];
+
 let { data } = $props();
 
 let wall = $state<Wall>();
 let view = $derived(data.view);
-const streamed = settled(() => data.wall);
-// The wall of this address: one of another query, still here while this one
-// is on its way, is not drawn beside this one's filters.
+// The wall, or why the server refused it. Another query's stays, dimmed,
+// until this one's comes, and the page then changes at once.
 const shown = $derived(
-	streamed.value && wallSearch(streamed.value.query) === wallSearch(data.query)
-		? streamed.value
-		: undefined,
+	data.wall.catch((e: unknown) => ({ refused: refusal(e) })),
 );
 // Empty card frames, a screenful, until the wall arrives.
 const blanks = Array.from({ length: 24 }, (_, n) => n);
@@ -98,9 +97,8 @@ async function fetchPage(offset: number) {
 	return page?.items;
 }
 
-function jump(letter: string) {
-	if (!shown?.letters) return;
-	wall?.jump(letterOffset(shown.letters, letter, data.query.order ?? "asc"));
+function jump(letters: Letter[], letter: string) {
+	wall?.jump(letterOffset(letters, letter, data.query.order ?? "asc"));
 }
 </script>
 
@@ -127,9 +125,15 @@ function jump(letter: string) {
 		</ToggleGroup.Root>
 	{/if}
 	<p class="text-ink-3 mr-auto text-sm" aria-live="polite">
-		{#if shown}
-			{count(shown.titles.total, episodes ? "episode" : "title")}
-		{/if}
+		<svelte:boundary>
+			{@const answer = await shown}
+			{#if "titles" in answer}
+				{count(answer.titles.total, episodes ? "episode" : "title")}
+			{/if}
+			{#snippet pending()}
+				<!-- No count until the wall comes. -->
+			{/snippet}
+		</svelte:boundary>
 	</p>
 	{#if narrowed}
 		<Button variant="ghost" size="sm" onclick={() => show(cleared(data.query))}>
@@ -170,62 +174,75 @@ function jump(letter: string) {
 	</ToggleGroup.Root>
 </div>
 
-{#if streamed.failed}
-	<div class="grid min-h-[30svh] place-content-center gap-3 text-center">
-		<p class="heading">{streamed.failed}</p>
-	</div>
-{:else if !shown}
-	<ul
-		class={view === "list" ? "grid gap-y-4.5" : "grid gap-x-3 gap-y-4.5"}
-		style={view === "list"
-			? ""
-			: `grid-template-columns: ${gridColumns(view === "still" ? "still" : "poster")}`}
-		aria-hidden="true"
-	>
-		{#each blanks as card (card)}
-			<li>
-				<div
-					class={[
-						"bg-raise rounded-xl",
-						view === "list"
-							? "h-18 w-full"
-							: view === "still"
-								? "aspect-video"
-								: "aspect-[2/3]",
-					]}
-				></div>
-			</li>
-		{/each}
-	</ul>
-{:else if shown.titles.total}
-	<div class="flex flex-col gap-4 md:flex-row-reverse">
-		{#if shown.letters}
-			<LetterBar letters={shown.letters} onjump={jump} />
-		{/if}
-		<div class="min-w-0 flex-1">
-			<Wall
-				bind:this={wall}
-				total={shown.titles.total}
-				first={shown.titles.items}
-				pageSize={wallPageSize}
-				{fetchPage}
-				{view}
-				label={data.library.name}
-			/>
+<svelte:boundary>
+	{@const answer = await shown}
+	{#if "refused" in answer}
+		<div class="grid min-h-[30svh] place-content-center gap-3 text-center">
+			<p class="heading">{answer.refused}</p>
 		</div>
-	</div>
-{:else}
-	<div class="grid min-h-[30svh] place-content-center gap-3 text-center">
-		{#if narrowed}
-			<p class="heading">Nothing matches these filters</p>
-			<p>
-				<Button variant="outline" onclick={() => show(cleared(data.query))}>
-					Clear filters
-				</Button>
-			</p>
-		{:else}
-			<p class="heading">Nothing in {data.library.name} yet</p>
-			<p class="text-sm">Titles appear here as the library is scanned.</p>
-		{/if}
-	</div>
-{/if}
+	{:else if answer.titles.total}
+		<div class="flex flex-col gap-4 md:flex-row-reverse">
+			{#if answer.letters}
+				{@const letters = answer.letters}
+				<LetterBar
+					{letters}
+					onjump={(letter: string) => jump(letters, letter)}
+				/>
+			{/if}
+			<div
+				class={[
+					"min-w-0 flex-1 transition-opacity",
+					$effect.pending() && "opacity-60",
+				]}
+			>
+				<Wall
+					bind:this={wall}
+					total={answer.titles.total}
+					first={answer.titles.items}
+					pageSize={wallPageSize}
+					{fetchPage}
+					{view}
+					label={data.library.name}
+				/>
+			</div>
+		</div>
+	{:else}
+		<div class="grid min-h-[30svh] place-content-center gap-3 text-center">
+			{#if narrowed}
+				<p class="heading">Nothing matches these filters</p>
+				<p>
+					<Button variant="outline" onclick={() => show(cleared(data.query))}>
+						Clear filters
+					</Button>
+				</p>
+			{:else}
+				<p class="heading">Nothing in {data.library.name} yet</p>
+				<p class="text-sm">Titles appear here as the library is scanned.</p>
+			{/if}
+		</div>
+	{/if}
+	{#snippet pending()}
+		<ul
+			class={view === "list" ? "grid gap-y-4.5" : "grid gap-x-3 gap-y-4.5"}
+			style={view === "list"
+				? ""
+				: `grid-template-columns: ${gridColumns(view === "still" ? "still" : "poster")}`}
+			aria-hidden="true"
+		>
+			{#each blanks as card (card)}
+				<li>
+					<div
+						class={[
+							"bg-raise rounded-xl",
+							view === "list"
+								? "h-18 w-full"
+								: view === "still"
+									? "aspect-video"
+									: "aspect-[2/3]",
+						]}
+					></div>
+				</li>
+			{/each}
+		</ul>
+	{/snippet}
+</svelte:boundary>
