@@ -13,7 +13,7 @@ type Version = components["schemas"]["VersionPage"];
 
 // Which copy to play or keep, asked of a title's copies on disk.
 let downloading = $state(false);
-let copy = $state<Version>();
+let copy = $state.raw<Version>();
 
 // Its copies on disk, asked each time it opens. One alone is no choice: it
 // plays, or its download is asked about, at once.

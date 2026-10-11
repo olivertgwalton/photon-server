@@ -19,7 +19,7 @@ type Section = components["schemas"]["HomeSection"];
 let { data } = $props();
 const words = vocabulary();
 // Each change answers the home as kept; a load gives it afresh.
-let kept = $state<Section[]>();
+let kept = $state.raw<Section[]>();
 const home = $derived(kept ?? data.prefs.home);
 // Said to a screen reader as a row moves, since the list redraws under focus.
 let said = $state("");

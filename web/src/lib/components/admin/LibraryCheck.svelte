@@ -18,7 +18,7 @@ let { id, name }: { id: string; name: string } = $props();
 
 let open = $state(false);
 let checking = $state(false);
-let check = $state<Check>();
+let check = $state.raw<Check>();
 let refused = $state("");
 
 const said: Record<Exclude<Access, "readable">, string> = {
