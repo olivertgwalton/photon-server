@@ -8,12 +8,7 @@ export const load: PageLoad = ({ fetch, params, depends }) => {
 	const kind = params.row;
 	// A library's rows, and those with a page of their own, lead to that page
 	// instead.
-	if (
-		!isHomeRow(kind) ||
-		homeRows[kind].library ||
-		homeRows[kind].whole ||
-		kind in rowPages
-	)
+	if (!isHomeRow(kind) || homeRows[kind].of || kind in rowPages)
 		error(404, "There's no such row.");
 	return loadRow(fetch, depends, kind);
 };

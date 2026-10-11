@@ -2,7 +2,7 @@
 import CardGrid from "#lib/components/CardGrid.svelte";
 import { vocabulary } from "#lib/vocabulary.js";
 
-// One of a library's rows whole, as the Photon apps draw it: its own page,
+// What one of a library's rails holds, as the Photon apps draw it: its own page,
 // not the library's, so it carries none of the library's tabs.
 let { data } = $props();
 

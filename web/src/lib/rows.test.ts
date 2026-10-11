@@ -8,7 +8,7 @@ test("a row moves to where it is put, the rest keeping their order", () => {
 	expect(moved(["a", "b", "c"], 1, 9)).toEqual(["a", "c", "b"]);
 });
 
-test("a library's row leads to the row whole or to its wall in its order", () => {
+test("a library's row leads to a page of what its rail holds", () => {
 	const library = { id: "l-films", name: "Films" };
 	const row = { library };
 	expect(rail({ ...row, kind: "recently_added_films" })).toEqual({
@@ -19,7 +19,7 @@ test("a library's row leads to the row whole or to its wall in its order", () =>
 		"/libraries/l-films/rows/top_rated_unwatched",
 	);
 	expect(rail({ ...row, kind: "recently_released" }).href).toBe(
-		"/libraries/l-films?sort=released",
+		"/libraries/l-films/rows/recently_released",
 	);
 	expect(rail({ kind: "next_up" })).toEqual({
 		key: "next_up",

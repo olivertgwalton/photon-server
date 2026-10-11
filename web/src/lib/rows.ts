@@ -1,29 +1,22 @@
 import type { Shape } from "./artwork.js";
 import type { components } from "./api/schema.js";
-import { type WallQuery, wallSearch } from "./wall.js";
 
 type Kind = components["schemas"]["HomeRowKind"];
 type LibraryKind = components["schemas"]["LibraryKind"];
 // A row as the home draws it: of a kind, and a library's of that library.
 export type Row = { kind: Kind; library?: { id: string; name: string } };
 
-// A rail shows this many; the rest are its heading's to show, as the Photon
-// apps' rows are twenty with the heading as the rest.
+// A rail shows this many, as the Photon apps' rows are twenty.
 export const railLimit = 20;
 
 // How each kind of row is drawn. A row of a library's titles is one for each
-// library of the kinds it is `of`, as Plex's library hubs are, leading to the
-// row whole or to that library's wall in the row's order.
+// library of the kinds it is `of`, as Plex's library hubs are, leading to a
+// page of what its rail holds.
 export const homeRows: Record<
 	Kind,
 	{
 		shape: Shape;
 		of?: LibraryKind[];
-		library?: { wall: WallQuery };
-		// A library's row whose page is the row whole, as the Photon apps' are,
-		// rather than the library's wall: what was added last, and the best
-		// rated of what is unwatched.
-		whole?: true;
 		// What its own page says where it has nothing.
 		empty?: string;
 	}
@@ -36,18 +29,10 @@ export const homeRows: Record<
 			"Nothing here yet. Choose the bookmark on a film or show to keep it here until it is watched.",
 	},
 	favourites: { shape: "poster" },
-	recently_added_films: { shape: "poster", of: ["movies"], whole: true },
-	recently_added_shows: { shape: "poster", of: ["shows"], whole: true },
-	recently_released: {
-		shape: "poster",
-		of: ["movies", "shows"],
-		library: { wall: { sort: "released" } },
-	},
-	top_rated_unwatched: {
-		shape: "poster",
-		of: ["movies", "shows"],
-		whole: true,
-	},
+	recently_added_films: { shape: "poster", of: ["movies"] },
+	recently_added_shows: { shape: "poster", of: ["shows"] },
+	recently_released: { shape: "poster", of: ["movies", "shows"] },
+	top_rated_unwatched: { shape: "poster", of: ["movies", "shows"] },
 };
 
 // The rows with a page of their own, as Plex's Watchlist and Jellyfin's
@@ -65,16 +50,10 @@ export function isHomeRow(kind: string): kind is Kind {
 // leads.
 export function rail(row: Row): { key: string; href: string } {
 	const kind = homeRows[row.kind];
-	if (row.library && kind.whole) {
+	if (row.library && kind.of) {
 		return {
 			key: `${row.kind}/${row.library.id}`,
 			href: `/libraries/${row.library.id}/rows/${row.kind}`,
-		};
-	}
-	if (row.library && kind.library) {
-		return {
-			key: `${row.kind}/${row.library.id}`,
-			href: `/libraries/${row.library.id}${wallSearch(kind.library.wall)}`,
 		};
 	}
 	return {
