@@ -18,12 +18,10 @@ const (
 	RowRecentlyReleased HomeRow = "recently_released"
 	// RowTopRatedUnwatched is the best rated films and shows the profile has not begun.
 	RowTopRatedUnwatched HomeRow = "top_rated_unwatched"
-	// RowCollection is a row for each collection placed on the home page, by name.
-	RowCollection HomeRow = "collection"
 )
 
 func HomeRows() []HomeRow {
-	return []HomeRow{RowContinueWatching, RowNextUp, RowWatchlist, RowFavourites, RowRecentFilms, RowRecentShows, RowRecentlyReleased, RowTopRatedUnwatched, RowCollection}
+	return []HomeRow{RowContinueWatching, RowNextUp, RowWatchlist, RowFavourites, RowRecentFilms, RowRecentShows, RowRecentlyReleased, RowTopRatedUnwatched}
 }
 
 // RowVisibility is whether a profile's home shows a row.

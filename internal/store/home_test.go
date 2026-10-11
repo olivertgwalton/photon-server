@@ -660,7 +660,7 @@ func TestRowPage(t *testing.T) {
 			t.Errorf("%s in pages of two = %v, want %v", tc.row, got, tc.want)
 		}
 	}
-	for _, row := range []domain.HomeRow{domain.RowRecentFilms, domain.RowRecentShows, domain.RowCollection} {
+	for _, row := range []domain.HomeRow{domain.RowRecentFilms, domain.RowRecentShows} {
 		if _, _, err := s.RowPage(ctx, admin, row, 0, 2); !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s: err = %v, want %v", row, err, ErrNotFound)
 		}

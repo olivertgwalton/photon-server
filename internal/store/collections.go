@@ -252,11 +252,6 @@ func (s *Store) SetMembers(ctx context.Context, collection uuid.UUID, items []uu
 	})
 }
 
-// SetPlacement sets where a collection is shown, an admin's or a provider's.
-func (s *Store) SetPlacement(ctx context.Context, collection uuid.UUID, placement domain.CollectionPlacement) error {
-	return affected(s.pool.Exec(ctx, `UPDATE collections SET placement = $2 WHERE item_id = $1`, collection, placement))
-}
-
 // RemoveCollection removes an admin's collection, made by hand, by a rule or by a list; its titles
 // are left as they are.
 func (s *Store) RemoveCollection(ctx context.Context, collection uuid.UUID) error {

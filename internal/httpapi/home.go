@@ -19,8 +19,6 @@ type homeRowJSON struct {
 	Kind domain.HomeRow `json:"kind"`
 	// Title is the row's heading, in the reader's language.
 	Title string `json:"title"`
-	// Collection is the collection a row of kind collection is.
-	Collection *titleRefJSON `json:"collection,omitzero"`
 	// Library is the library a row of its titles is of: recently added, recently released and top
 	// rated are a row for each library.
 	Library *libraryRefJSON `json:"library,omitzero"`
@@ -52,15 +50,11 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 	out := homeJSON{Rows: make([]homeRowJSON, len(rows))}
 	for i, row := range rows {
 		title := said.HomeRow(row.Kind)
-		switch {
-		case row.Collection != nil:
-			title = row.Collection.Title
-		case row.Library != nil:
+		if row.Library != nil {
 			title = strings.ReplaceAll(said.LibraryRow(row.Kind), "{library}", row.Library.Name)
 		}
 		out.Rows[i] = homeRowJSON{
-			Kind: row.Kind, Title: title, Collection: (*titleRefJSON)(row.Collection),
-			Library: (*libraryRefJSON)(row.Library), Items: cardsJSON(row.Cards),
+			Kind: row.Kind, Title: title, Library: (*libraryRefJSON)(row.Library), Items: cardsJSON(row.Cards),
 		}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
@@ -121,7 +115,7 @@ func (a *API) homeRoutes() []route {
 		{
 			pattern: "GET /api/v1/home/{row}", access: signedIn,
 			summary: "Page one of the profile's own home rows: continue watching, next up, its watchlist or its favourites",
-			path:    []param{{"row", domain.HomeRow(""), "The row; a library's or a collection's is paged on its own page."}},
+			path:    []param{{"row", domain.HomeRow(""), "The row; a library's is asked of the library."}},
 			query:   pageParams, status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.homeRow,
 		},
 		{
