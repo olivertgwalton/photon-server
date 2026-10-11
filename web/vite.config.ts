@@ -14,7 +14,9 @@ export default defineConfig({
 		// the build, with its own Content-Security-Policy.
 		sveltekit({
 			adapter: adapter({ fallback: "index.html", precompress: true }),
-			compilerOptions: { runes: true },
+			// `await` in a component, a derived or the markup: a page keeps what
+			// it shows while the next answer is on its way, then changes at once.
+			compilerOptions: { runes: true, experimental: { async: true } },
 		}),
 	],
 	server: { proxy: { "/api": api, "/readyz": api } },
