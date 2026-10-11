@@ -14,11 +14,6 @@ let { data } = $props();
 const b = $derived(data.backups);
 const last = $derived(b.last_restore);
 
-// A restore under way, as the page loaded it, is shown as one told live is.
-$effect(() => {
-	if (b.restoring) restoring.on = true;
-});
-
 async function restore(name: string) {
 	const ok = await act(
 		client().POST("/api/v1/admin/backups/{name}/restore", {
