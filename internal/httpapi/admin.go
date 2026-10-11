@@ -160,17 +160,22 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 	if l.ListSource != "" {
 		j.List = &store.ListRef{Source: l.ListSource, ID: l.ListID}
 	}
-	ranked := func(list []domain.RankedSource) []rankedSourceJSON {
-		out := make([]rankedSourceJSON, len(list))
-		for i, r := range list {
-			out[i] = rankedSourceJSON(r)
-		}
-		return out
-	}
 	for _, k := range l.Sources {
-		j.Sources = append(j.Sources, kindSourcesJSON{Kind: k.Kind, Metadata: ranked(k.Metadata), Images: ranked(k.Images)})
+		j.Sources = append(j.Sources, kindSourcesOf(k))
 	}
 	return j
+}
+
+func kindSourcesOf(k domain.KindSources) kindSourcesJSON {
+	return kindSourcesJSON{Kind: k.Kind, Metadata: rankedJSON(k.Metadata), Images: rankedJSON(k.Images)}
+}
+
+func rankedJSON(list []domain.RankedSource) []rankedSourceJSON {
+	out := make([]rankedSourceJSON, len(list))
+	for i, r := range list {
+		out[i] = rankedSourceJSON(r)
+	}
+	return out
 }
 
 func nonNil[T any](s []T) []T {

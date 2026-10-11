@@ -111,6 +111,50 @@ const films: Schemas["AdminLibrary"] = {
 	subtitle_match: "release",
 };
 
+// As the server lists them, less OMDb, which this one has no provider for.
+const madeWith = (kind: Schemas["ItemKind"]): Schemas["KindSources"] => ({
+	kind,
+	metadata: [
+		{ source: "nfo", enabled: true },
+		{ source: "tmdb", enabled: true },
+	],
+	images: [{ source: "tmdb", enabled: true }],
+});
+const libraryKinds: Schemas["LibraryKindOptions"][] = [
+	{
+		kind: "movies",
+		sources: [madeWith("movie")],
+		fetchable: [
+			{
+				kind: "movie",
+				metadata: ["nfo", "tmdb", "mdblist"],
+				images: ["tmdb"],
+			},
+		],
+	},
+	{
+		kind: "shows",
+		sources: [madeWith("show"), madeWith("season"), madeWith("episode")],
+		fetchable: [
+			{
+				kind: "show",
+				metadata: ["nfo", "tmdb", "tvdb", "mdblist"],
+				images: ["tmdb", "tvdb"],
+			},
+			{
+				kind: "season",
+				metadata: ["nfo", "tmdb", "tvdb"],
+				images: ["tmdb", "tvdb"],
+			},
+			{
+				kind: "episode",
+				metadata: ["nfo", "tmdb", "tvdb"],
+				images: ["tmdb", "tvdb"],
+			},
+		],
+	},
+];
+
 const providers: Schemas["MetadataProvider"][] = [
 	{
 		id: "tmdb",
@@ -486,6 +530,8 @@ export async function admin(
 		return json(nodes.find((n) => n.id === node));
 	}
 	switch (route) {
+		case "GET /api/v1/admin/library-kinds":
+			return json({ items: libraryKinds });
 		case "GET /api/v1/admin/locales":
 			return json({
 				languages: ["de-DE", "en-GB", "en-US", "fr-FR"],

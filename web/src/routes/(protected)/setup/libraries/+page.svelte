@@ -45,6 +45,7 @@ async function add(event: SubmitEvent) {
 		{/if}
 		<form onsubmit={add} class="grid gap-6">
 			<LibraryForm
+				kinds={data.kinds}
 				providers={data.providers}
 				locales={data.locales}
 				serverLanguage={data.server.metadata_language}

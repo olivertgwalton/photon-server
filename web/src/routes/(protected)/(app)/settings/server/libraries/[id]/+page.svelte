@@ -74,6 +74,7 @@ function save(event: SubmitEvent) {
 	{#key data.library}
 		<LibraryForm
 			library={data.library}
+			kinds={data.kinds}
 			providers={data.providers}
 			locales={data.locales}
 			serverLanguage={data.serverLanguage}
