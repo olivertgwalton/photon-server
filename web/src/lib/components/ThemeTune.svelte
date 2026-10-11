@@ -1,5 +1,6 @@
 <script lang="ts">
 import VolumeXIcon from "@lucide/svelte/icons/volume-x";
+import type { Attachment } from "svelte/attachments";
 import { Button } from "#lib/components/ui/button/index.js";
 
 // A title's theme tunes, played once under its page, one after another, as
@@ -14,20 +15,21 @@ const fadeMS = 2000;
 let index = $state(0);
 let stopped = $state(false);
 let playing = $state(false);
-let player = $state<HTMLAudioElement>();
 
-$effect(() => {
-	if (!player) return;
-	player.volume = 0;
-	// A browser that refuses to play before the reader has touched the page
-	// leaves the page silent, as it should.
-	player.play().catch(() => {});
-});
+// Each tune in turn, played from silence. A browser that refuses to play
+// before the reader has touched the page leaves the page silent, as it should.
+function plays(src: string): Attachment<HTMLAudioElement> {
+	return (player) => {
+		player.src = src;
+		player.volume = 0;
+		player.play().catch(() => {});
+	};
+}
 
 // The volume follows the playhead: up from nothing at a tune's start, down to
 // nothing at its end.
-function shape() {
-	if (!player || !Number.isFinite(player.duration)) return;
+function shape(player: HTMLAudioElement) {
+	if (!Number.isFinite(player.duration)) return;
 	const fromStart = player.currentTime * 1000;
 	const toEnd = (player.duration - player.currentTime) * 1000;
 	player.volume =
@@ -36,21 +38,18 @@ function shape() {
 </script>
 
 {#if !stopped && index < themes.length}
-	{#key index}
-		<!-- biome-ignore lint/a11y/useMediaCaption: a theme tune is music, with no words to caption -->
-		<audio
-			bind:this={player}
-			src="/api/v1/themes/{themes[index]}"
-			preload="auto"
-			data-theme-tune
-			ontimeupdate={shape}
-			onplaying={() => (playing = true)}
-			onended={() => {
-				playing = false;
-				index++;
-			}}
-		></audio>
-	{/key}
+	<!-- biome-ignore lint/a11y/useMediaCaption: a theme tune is music, with no words to caption -->
+	<audio
+		{@attach plays(`/api/v1/themes/${themes[index]}`)}
+		preload="auto"
+		data-theme-tune
+		ontimeupdate={(e) => shape(e.currentTarget)}
+		onplaying={() => (playing = true)}
+		onended={() => {
+			playing = false;
+			index++;
+		}}
+	></audio>
 	{#if playing}
 		<Button
 			variant="outline"
