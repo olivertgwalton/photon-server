@@ -3,7 +3,7 @@
 A media server for films and television, written in Go.
 
 Official support is at [photon.oliverwalton.uk](https://photon.oliverwalton.uk). On iPhone, iPad,
-Mac and Apple TV, play from it with
+Mac, Apple TV and Apple Vision Pro, play from it with
 [Photon Player](https://apps.apple.com/gb/app/photon-player/id6804291311) on the App Store.
 
 ## Tech stack
