@@ -38,9 +38,21 @@ export type ListFilter = (typeof lists)[number];
 
 // The lists whose values are the server's own words.
 const known: Partial<Record<ListFilter, string[]>> = {
-	mark: ["watched", "unwatched", "in_progress", "favourite", "watchlist"],
-	resolution: ["sd", "720p", "1080p", "4k"],
-	range: ["sdr", "hlg", "hdr10", "hdr10plus", "dv"],
+	mark: [
+		"watched",
+		"unwatched",
+		"in_progress",
+		"favourite",
+		"watchlist",
+	] satisfies Schemas["Mark"][],
+	resolution: ["sd", "720p", "1080p", "4k"] satisfies Schemas["Resolution"][],
+	range: [
+		"sdr",
+		"hlg",
+		"hdr10",
+		"hdr10plus",
+		"dv",
+	] satisfies Schemas["Range"][],
 };
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
