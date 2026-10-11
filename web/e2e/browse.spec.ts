@@ -14,14 +14,14 @@ test("a title is taken off Continue Watching from its card", async ({
 	await expect(page.getByText("Removed from Continue Watching.")).toBeVisible();
 	await expect(row.getByRole("link", { name: /Quiet Hours/ })).toHaveCount(0);
 
-	// A row shown whole leads nowhere; one with more leads to the rest.
+	// Every row's heading leads to its page, a short row's too.
 	await expect(
-		page.getByRole("link", { name: /Continue Watching/ }),
-	).toHaveCount(0);
+		page.getByRole("link", { name: "Continue Watching View all" }),
+	).toBeVisible();
 	await page
 		.getByRole("link", { name: "Recently Added in Films View all" })
 		.click();
-	// What was added last is the row whole, not the library's wall.
+	// A library's row opens what its rail holds, not the library's wall.
 	await expect(page).toHaveURL("/libraries/l-films/rows/recently_added_films");
 	await expect(
 		page.getByRole("heading", { level: 1, name: "Recently Added in Films" }),
