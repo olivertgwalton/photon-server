@@ -153,11 +153,11 @@ const sizes = $derived(
 	trackpad, a swipe, Tab from card to card and the arrows move it, and its
 	padding holds a card's focus ring. -->
 <section aria-labelledby={id} class="min-w-0">
-	<!-- A row's name is quieter than its cards', as the app has it: the cards
-		are what is read. Its arrows sit together at the other end of the line,
-		over the row rather than on its cards. -->
+	<!-- A row's name is set as every other section's on a page; the pill is
+		for a row that holds more than it shows. Its arrows sit together at the
+		other end of the line, over the row rather than on its cards. -->
 	<div class="mb-3 flex items-center justify-between gap-3">
-		<h2 {id} class="text-ink-2 font-sans text-[0.9375rem] font-semibold">
+		<h2 {id} class="heading">
 			{#if more}
 				<a
 					href={more}
