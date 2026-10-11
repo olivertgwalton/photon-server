@@ -31,6 +31,11 @@ func TestEveryValueAClientShowsHasAName(t *testing.T) {
 	hasNames(t, downloadStates, domain.DownloadStates())
 	hasNames(t, accelerations, domain.Accelerations())
 	hasNames(t, rows, domain.HomeRows())
+	for _, k := range domain.HomeRows() {
+		if k.LibraryKinds() != nil && w.LibraryRow(k) == "" {
+			t.Errorf("row %s, made for each library, has no heading for one", k)
+		}
+	}
 	hasNames(t, jobKinds, domain.JobKinds())
 	for _, k := range domain.TaskKeys() {
 		if d := w.Task(k); d.Name == string(k) || d.Description == "" {

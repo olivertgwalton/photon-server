@@ -96,8 +96,8 @@ func (a *API) vocabulary(w http.ResponseWriter, r *http.Request) {
 func libraryRowWords(said words.Words) map[domain.HomeRow]string {
 	out := map[domain.HomeRow]string{}
 	for _, k := range domain.HomeRows() {
-		if w := said.LibraryRow(k); w != "" {
-			out[k] = w
+		if k.LibraryKinds() != nil {
+			out[k] = said.LibraryRow(k)
 		}
 	}
 	return out

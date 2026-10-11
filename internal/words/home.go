@@ -8,7 +8,7 @@ import (
 func (w Words) HomeRow(k domain.HomeRow) string { return label(rows, k) }
 
 // LibraryRow is how a row of one library's titles is headed, with {library} where the library's
-// name goes, "Recently Added in {library}": empty for a row that is not one library's.
+// name goes, "Recently Added in {library}".
 func (w Words) LibraryRow(k domain.HomeRow) string { return libraryRows[k] }
 
 var libraryRows = map[domain.HomeRow]string{
