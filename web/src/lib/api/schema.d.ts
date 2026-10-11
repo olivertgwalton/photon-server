@@ -4403,6 +4403,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/libraries/{id}/rows/{row}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The first of one of a library's rows: recently added, recently released or top rated */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description How many titles, from 1 to 200. */
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                    /** @description The row, made for the library's kind. */
+                    row: components["schemas"]["HomeRowKind"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CardList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries/{id}/titles": {
         parameters: {
             query?: never;
@@ -8971,6 +9015,9 @@ export interface components {
                 [key: string]: string;
             };
             library_kinds: {
+                [key: string]: string;
+            };
+            library_rows: {
                 [key: string]: string;
             };
             logged: {

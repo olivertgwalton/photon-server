@@ -12,6 +12,7 @@ export const load: PageLoad = ({ fetch, params, depends }) => {
 		!isHomeRow(kind) ||
 		kind === "collection" ||
 		homeRows[kind].library ||
+		homeRows[kind].whole ||
 		kind in rowPages
 	)
 		error(404, "There's no such row.");
