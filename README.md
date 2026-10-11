@@ -20,6 +20,11 @@ Mac, Apple TV and Apple Vision Pro, play from it with
 - **Web**: SvelteKit (static build served by the Go server), Tailwind, bits-ui, Bun, Biome,
   Playwright
 
+## Performance
+
+[docs/comparison.md](docs/comparison.md) measures photon against Jellyfin, Plex and silo on one host
+with one library: API latency and throughput, page loads, memory and security.
+
 ## Deploy
 
 The image is `ghcr.io/olivertgwalton/photon-server` (amd64 and arm64), run with PostgreSQL and
