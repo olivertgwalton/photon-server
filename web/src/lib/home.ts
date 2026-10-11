@@ -23,12 +23,11 @@ type Card = components["schemas"]["Card"];
 type Library = components["schemas"]["Library"];
 type Section = components["schemas"]["HomeSection"];
 
-// A row of the home, its titles on their way: one more than a rail shows, so
-// it knows whether there is more to see.
+// A row of the home, its titles on their way: as many as a rail shows.
 export type HomeRail = Row & {
 	key: string;
 	href: string;
-	cards: Promise<{ items: Card[]; total?: number }>;
+	cards: Promise<{ items: Card[] }>;
 };
 
 // The home's rows, each asked for on its own as Jellyfin's are: those the
@@ -40,7 +39,7 @@ export function homeRails(
 	libraries: Library[],
 ): HomeRail[] {
 	const api = client(fetch);
-	const limit = railLimit + 1;
+	const limit = railLimit;
 	return arrangement
 		.filter((s) => s.visibility === "shown")
 		.flatMap(({ row: kind }): HomeRail[] => {

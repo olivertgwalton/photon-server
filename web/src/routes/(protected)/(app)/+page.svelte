@@ -20,7 +20,7 @@ const all = settled(() =>
 	}),
 );
 
-const unread = { items: [], total: 0 };
+const unread = { items: [] };
 
 function title(r: (typeof data.rails)[number]) {
 	return r.library
@@ -50,9 +50,9 @@ function title(r: (typeof data.rails)[number]) {
 					<Rail
 						title={title(r) ?? r.kind}
 						cards={page.items}
-						total={page.total}
 						shape={homeRows[r.kind].shape}
 						href={r.href}
+						pill="always"
 					/>
 				{/if}
 			{/await}

@@ -18,7 +18,8 @@ import TitleCard, { type CardLike } from "./TitleCard.svelte";
 
 // A named row of titles that scrolls sideways. Where it holds more than it
 // shows (or `total` says there are more than it was given), its heading leads
-// to the whole of it at `href`. Its `cards` are TitleCards; other `items` are
+// to the whole of it at `href`; a row whose `pill` is always leads there
+// however much it holds. Its `cards` are TitleCards; other `items` are
 // drawn by `card`, told how wide the row draws them. A row with a `current`
 // card is the whole of a set the page is one of (a season, on an episode's
 // page): it shows all of it, scrolled to that card.
@@ -33,6 +34,7 @@ let {
 	caption,
 	current,
 	heading,
+	pill = "past_rail",
 }: {
 	title: string;
 	cards?: CardLike[];
@@ -45,13 +47,21 @@ let {
 	current?: string;
 	// What the row's name is drawn as, where it is more than its words.
 	heading?: Snippet;
+	pill?: "past_rail" | "always";
 } = $props();
 
 const shown = $derived(current ? cards : cards.slice(0, railLimit));
 
-const more = $derived(
-	(total ?? cards.length + items.length) > railLimit ? href : undefined,
-);
+const more = $derived.by(() => {
+	switch (pill) {
+		case "always":
+			return href;
+		case "past_rail":
+			return (total ?? cards.length + items.length) > railLimit
+				? href
+				: undefined;
+	}
+});
 
 const id = $props.id();
 
@@ -154,8 +164,9 @@ const sizes = $derived(
 	padding holds a card's focus ring. -->
 <section aria-labelledby={id} class="min-w-0">
 	<!-- A row's name is set as every other section's on a page; the pill is
-		for a row that holds more than it shows. Its arrows sit together at the
-		other end of the line, over the row rather than on its cards. -->
+		for a row that holds more than it shows, or that always has one. Its
+		arrows sit together at the other end of the line, over the row rather
+		than on its cards. -->
 	<div class="mb-3 flex items-center justify-between gap-3">
 		<h2 {id} class="heading">
 			{#if more}
