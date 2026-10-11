@@ -153,12 +153,52 @@ func rankedFor(info provider.Info, can []domain.Capability, f domain.Fetcher) []
 	return out
 }
 
+type libraryKindOptionsJSON struct {
+	Kind domain.LibraryKind `json:"kind"`
+	// Sources are what a new library of the kind ranks, one for each kind of item it holds, its
+	// titles' first.
+	Sources []kindSourcesJSON `json:"sources"`
+	// Fetchable are, for each kind of item it holds, the built-in sources it may rank for its
+	// metadata and its pictures. A plugin may be ranked for what its provider's kinds say.
+	Fetchable []fetchableJSON `json:"fetchable"`
+}
+
+type fetchableJSON struct {
+	Kind     domain.ItemKind      `json:"kind"`
+	Metadata []domain.FieldSource `json:"metadata"`
+	Images   []domain.FieldSource `json:"images"`
+}
+
+// libraryKinds lists the kinds of library and the options of each, as Jellyfin's library options
+// list each type's metadata and image fetchers.
+func (a *API) libraryKinds(w http.ResponseWriter, _ *http.Request) {
+	out := []libraryKindOptionsJSON{}
+	for _, lib := range domain.LibraryKinds() {
+		j := libraryKindOptionsJSON{Kind: lib, Sources: []kindSourcesJSON{}, Fetchable: []fetchableJSON{}}
+		for _, k := range domain.DefaultSources(lib) {
+			j.Sources = append(j.Sources, kindSourcesOf(k))
+			j.Fetchable = append(j.Fetchable, fetchableJSON{
+				Kind:     k.Kind,
+				Metadata: nonNil(domain.Fetchable(domain.FetcherMetadata, k.Kind)),
+				Images:   nonNil(domain.Fetchable(domain.FetcherImages, k.Kind)),
+			})
+		}
+		out = append(out, j)
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[libraryKindOptionsJSON]{Items: out})
+}
+
 func (a *API) providersRoutes() []route {
 	return []route{
 		{
 			pattern: "GET /api/v1/admin/providers", access: admin,
 			summary: "List the metadata providers, what each can do and needs set",
 			status:  http.StatusOK, reply: listJSON[metadataProviderJSON]{}, handle: a.adminProviders,
+		},
+		{
+			pattern: "GET /api/v1/admin/library-kinds", access: admin,
+			summary: "List the kinds of library, the sources a new one of each ranks, and those it may",
+			status:  http.StatusOK, reply: listJSON[libraryKindOptionsJSON]{}, handle: a.libraryKinds,
 		},
 		{
 			pattern: "PATCH /api/v1/admin/providers/{id}", access: admin, summary: "Change a provider's settings",

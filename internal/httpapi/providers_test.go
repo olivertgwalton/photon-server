@@ -75,3 +75,20 @@ func TestAnAdminSetsAProvidersKeyAndNeverSeesItAgain(t *testing.T) {
 		t.Errorf("kept %v", settings)
 	}
 }
+
+func TestAnAdminIsToldWhatEachKindOfLibraryRanksItsSourcesFor(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/library-kinds", nil)
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	for _, want := range []string{
+		`{"kind":"movies","sources":[{"kind":"movie","metadata":[{"source":"nfo","enabled":true},{"source":"tmdb","enabled":true}],` +
+			`"images":[{"source":"tmdb","enabled":true}]}]`,
+		`{"kind":"season","metadata":["nfo","tmdb","tvdb"],"images":["tmdb","tvdb"]}`,
+	} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("%d %s\nwant %s", rec.Code, rec.Body, want)
+		}
+	}
+}

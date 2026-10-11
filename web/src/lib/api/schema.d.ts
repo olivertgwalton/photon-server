@@ -1085,6 +1085,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/library-kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the kinds of library, the sources a new one of each ranks, and those it may
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LibraryKindOptionsList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/locales": {
         parameters: {
             query?: never;
@@ -7517,6 +7557,11 @@ export interface components {
             /** Format: uuid */
             version_id: string;
         };
+        Fetchable: {
+            images: components["schemas"]["FieldSource"][];
+            kind: components["schemas"]["ItemKind"];
+            metadata: components["schemas"]["FieldSource"][];
+        };
         /** @enum {string} */
         Field: "title" | "sort_title" | "original_title" | "overview" | "tagline" | "certificate" | "release_date" | "year" | "genres" | "studios";
         FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "mdblist" | "omdb" | "opensubtitles") | unknown;
@@ -7732,6 +7777,14 @@ export interface components {
         };
         /** @enum {string} */
         LibraryKind: "movies" | "shows";
+        LibraryKindOptions: {
+            fetchable: components["schemas"]["Fetchable"][];
+            kind: components["schemas"]["LibraryKind"];
+            sources: components["schemas"]["KindSources"][];
+        };
+        LibraryKindOptionsList: {
+            items: components["schemas"]["LibraryKindOptions"][];
+        };
         LibraryList: {
             items: components["schemas"]["Library"][];
         };
