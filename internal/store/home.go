@@ -37,15 +37,14 @@ var rowQueries = map[domain.HomeRow]string{
 	// in the order that episode was last played.
 	domain.RowNextUp: `
 		WITH last AS (
-			SELECT DISTINCT ON (show.id) show.id AS show_id, show, e.season_number, e.episode_number,
-				w.last_played_at
+			SELECT DISTINCT ON (show.id) show.id AS show_id, show, ` + episodeOrderOf("e") + ` AS at, w.last_played_at
 			FROM watch_state w
 			JOIN items e ON e.id = w.item_id AND e.kind = 'episode'
 			JOIN items season ON season.id = e.parent_id
 			JOIN items show ON show.id = season.parent_id
 			WHERE w.profile_id = @profile AND w.watched_at IS NOT NULL AND e.season_number > 0
 				AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, show))
-			ORDER BY show.id, e.season_number DESC, e.episode_number DESC NULLS LAST
+			ORDER BY show.id, ` + episodeOrderBy("DESC") + `
 		)
 		SELECT ` + itemColumnsOf("next") + ` FROM last
 		CROSS JOIN LATERAL (
@@ -53,9 +52,8 @@ var rowQueries = map[domain.HomeRow]string{
 			JOIN items e ON e.parent_id = season.id AND e.kind = 'episode'
 			LEFT JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
 			WHERE season.parent_id = last.show_id AND season.kind = 'season' AND season.season_number > 0
-				AND (e.season_number, coalesce(e.episode_number, 0)) > (last.season_number, coalesce(last.episode_number, 0))
-				AND w.watched_at IS NULL
-			ORDER BY e.season_number, e.episode_number LIMIT 1
+				AND ` + episodeOrderOf("e") + ` > last.at AND w.watched_at IS NULL
+			ORDER BY ` + episodeOrderBy("ASC") + ` LIMIT 1
 		) next
 		LEFT JOIN watch_state started ON started.item_id = next.id AND started.profile_id = @profile
 		WHERE coalesce(started.position_ms, 0) = 0
@@ -213,19 +211,19 @@ var nextQueries = map[domain.ItemKind]string{
 		JOIN items season ON season.id = e.parent_id
 		JOIN items here ON here.id = @id
 		WHERE e.kind = 'episode' AND season.parent_id = (SELECT parent_id FROM items WHERE id = here.parent_id)
-			AND (e.season_number, coalesce(e.episode_number, 0)) > (here.season_number, coalesce(here.episode_number, 0))
+			AND ` + episodeOrderOf("e") + ` > ` + episodeOrderOf("here") + `
 			AND (e.season_number > 0 OR here.season_number = 0)
-		ORDER BY e.season_number, e.episode_number, e.id LIMIT 1`,
+		ORDER BY ` + episodeOrderBy("ASC") + ` LIMIT 1`,
 	// Of a show or a season, where the profile is: the episode under way, else the first unwatched
 	// after the furthest one watched, else the first.
 	domain.ItemShow:   resumeQuery,
 	domain.ItemSeason: resumeQuery,
 }
 
-const resumeQuery = `
+var resumeQuery = `
 	WITH e AS (
 		SELECT e.id, coalesce(w.position_ms, 0) > 0 AS started, w.watched_at IS NOT NULL AS watched,
-			w.last_played_at, row_number() OVER (ORDER BY e.season_number, e.episode_number, e.id) AS n
+			w.last_played_at, row_number() OVER (ORDER BY ` + episodeOrderBy("ASC") + `) AS n
 		FROM items e
 		JOIN items season ON season.id = e.parent_id
 		LEFT JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
