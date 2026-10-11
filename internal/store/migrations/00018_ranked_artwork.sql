@@ -20,12 +20,14 @@ CREATE FUNCTION ranked_artwork(titles uuid[]) RETURNS TABLE (id uuid, item_id uu
 LANGUAGE sql STABLE PARALLEL SAFE AS $$
   SELECT a.id, a.item_id, a.source, a.kind, a.place, a.position, a.folder, a.language, a.width, a.height,
     a.blurhash, row_number() OVER (PARTITION BY a.item_id, a.kind ORDER BY
-      CASE a.source WHEN 'user' THEN -2 WHEN 'file' THEN -1 ELSE coalesce(ls.position, 32767) END, a.position, a.id)
+      CASE a.source WHEN 'user' THEN -2 WHEN 'file' THEN -1 ELSE coalesce(array_position(r.sources, a.source), 32767) END,
+      a.position, a.id)
   FROM items i
   JOIN libraries l ON l.id = i.library_id
+  -- The library's order is read once for each title, not once for each of its pictures.
+  CROSS JOIN LATERAL (SELECT array_agg(ls.source ORDER BY ls.position) AS sources FROM library_sources ls
+    WHERE ls.library_id = l.id AND ls.item_kind = ranked_as(l.kind, i.kind) AND ls.fetcher = 'images' AND ls.enabled) r
   JOIN artwork a ON a.item_id = i.id
-  LEFT JOIN library_sources ls ON ls.library_id = l.id AND ls.fetcher = 'images' AND ls.enabled
-    AND ls.source = a.source AND ls.item_kind = ranked_as(l.kind, i.kind)
   WHERE i.id = ANY(titles)
 $$;
 -- +goose StatementEnd
