@@ -11,14 +11,14 @@ let { data } = $props();
 
 const signOut = (id: string) =>
 	act(
-		client().DELETE("/api/v1/auth/devices/{id}", { params: { path: { id } } }),
+		client().DELETE("/api/v1/devices/{id}", { params: { path: { id } } }),
 		"That device is signed out.",
 	);
 </script>
 
 <PageHeader
 	title="Devices"
-	description={`Everything signed in to this household. Signing a device out ends its session at once; to sign in a television, use Link a device.`}
+	description={`What is signed in to your profile and, if you keep others, to theirs. Signing a device out ends its session at once; to sign in a television, use Link a device.`}
 />
 
 <Card.Root>

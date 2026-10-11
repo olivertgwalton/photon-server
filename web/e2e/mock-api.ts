@@ -1529,13 +1529,14 @@ const server_ = Bun.serve({
 						},
 					],
 				} satisfies Schemas["Person"]);
-			case "GET /api/v1/auth/devices":
+			case "GET /api/v1/devices":
 				return Response.json({
 					items: [
 						{
 							id: "d-this",
 							device: "Chrome on macOS",
 							client: "Photon Web",
+							profile_id: me.id,
 							profile: me.name,
 							signed_in_at: "2026-10-01T20:00:00Z",
 							last_seen_at: "2026-10-05T20:00:00Z",
@@ -1545,6 +1546,7 @@ const server_ = Bun.serve({
 							id: "d-tv",
 							device: "Living Room",
 							client: "Photon for tvOS",
+							profile_id: kids.id,
 							profile: "Kids",
 							signed_in_at: "2026-09-01T20:00:00Z",
 							last_seen_at: "2026-10-04T20:00:00Z",
@@ -1552,7 +1554,7 @@ const server_ = Bun.serve({
 						},
 					],
 				} satisfies Schemas["DeviceListingList"]);
-			case "DELETE /api/v1/auth/devices/d-tv":
+			case "DELETE /api/v1/devices/d-tv":
 				return new Response(null, { status: 204 });
 			case "GET /api/v1/profile/trackers":
 				return Response.json(
