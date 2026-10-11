@@ -339,14 +339,10 @@ func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 		for _, c := range found {
 			search = append(search, c.ID)
 		}
-		rows, err := s.Home(ctx, profile, 10)
-		if err != nil {
-			t.Fatal(err)
-		}
 		home = map[domain.HomeRow][]uuid.UUID{}
-		for _, r := range rows {
-			for _, c := range r.Cards {
-				home[r.Kind] = append(home[r.Kind], c.ID)
+		for row, cards := range everyRow(ctx, t, s, profile) {
+			for _, c := range cards {
+				home[row] = append(home[row], c.ID)
 			}
 		}
 		return search, home

@@ -344,7 +344,7 @@ func (a *API) routes() []route {
 		a.trackersRoutes(),
 		a.signInRoutes(),
 		a.calendarRoutes(),
-		a.homeRoutes(),
+		a.rowsRoutes(),
 		a.artworkRoutes(),
 		a.themesRoutes(),
 	)

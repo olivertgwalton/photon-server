@@ -114,14 +114,10 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 			t.Errorf("searching for %q: %+v, want nothing", text, found)
 		}
 	}
-	rows, err := s.Home(ctx, kid.ID, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, r := range rows {
-		for _, c := range r.Cards {
+	for row, cards := range everyRow(ctx, t, s, kid.ID) {
+		for _, c := range cards {
 			if c.Title != "Paddington" {
-				t.Errorf("home row %s holds %q", r.Kind, c.Title)
+				t.Errorf("home row %s holds %q", row, c.Title)
 			}
 		}
 	}
