@@ -3,7 +3,7 @@ import PlayIcon from "@lucide/svelte/icons/play";
 import SquareIcon from "@lucide/svelte/icons/square";
 import { act } from "#lib/act.js";
 import { runTask } from "#lib/actions.js";
-import { ticking } from "#lib/admin/clock.svelte.js";
+import { Clock } from "#lib/admin/clock.js";
 import { jobsProgress } from "#lib/admin/live.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { relative, when } from "#lib/admin/words.js";
@@ -28,7 +28,7 @@ const words = vocabulary();
 const api = client();
 
 const live = liveStream();
-const clock = ticking(30_000);
+const clock = new Clock(30_000);
 
 const hours = Array.from({ length: 24 }, (_, h) => ({
 	value: String(h),

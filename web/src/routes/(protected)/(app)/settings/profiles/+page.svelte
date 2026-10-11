@@ -2,7 +2,7 @@
 import { toast } from "svelte-sonner";
 import { act } from "#lib/act.js";
 import { accessOf } from "#lib/admin/access.js";
-import { ticking } from "#lib/admin/clock.svelte.js";
+import { Clock } from "#lib/admin/clock.js";
 import { relative, roleOptions } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
@@ -29,7 +29,7 @@ const options = $derived(roleOptions(data.me.role, words.roles));
 
 let adding = $state(false);
 let role = $state<components["schemas"]["Role"]>("user");
-const clock = ticking(30_000);
+const clock = new Clock(30_000);
 
 async function add(event: SubmitEvent) {
 	const form = fields(event);

@@ -1,6 +1,6 @@
 <script lang="ts">
 import ActivityIcon from "@lucide/svelte/icons/activity";
-import { ticking } from "#lib/admin/clock.svelte.js";
+import { Clock } from "#lib/admin/clock.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { byName } from "#lib/admin/words.js";
 import type { components } from "#lib/api/schema.js";
@@ -16,7 +16,7 @@ let { libraries }: { libraries: components["schemas"]["Library"][] } = $props();
 const brief = 2_000;
 
 const live = liveStream();
-const clock = ticking();
+const clock = new Clock();
 const names = $derived(byName(libraries));
 const state = $derived({
 	...live.state,

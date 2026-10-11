@@ -1,6 +1,6 @@
 <script lang="ts">
 import { runTask } from "#lib/actions.js";
-import { ticking } from "#lib/admin/clock.svelte.js";
+import { Clock } from "#lib/admin/clock.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { byName, elapsed } from "#lib/admin/words.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
@@ -15,7 +15,7 @@ import { count } from "#lib/format.js";
 let { data } = $props();
 
 const live = liveStream();
-const clock = ticking();
+const clock = new Clock();
 
 // What the page loaded until the stream's snapshot arrives, then the stream.
 const playbacks = $derived(

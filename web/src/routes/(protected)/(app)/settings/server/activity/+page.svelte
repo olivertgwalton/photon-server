@@ -1,5 +1,5 @@
 <script lang="ts">
-import { ticking } from "#lib/admin/clock.svelte.js";
+import { Clock } from "#lib/admin/clock.js";
 import { narrow } from "#lib/admin/narrow.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
@@ -13,7 +13,7 @@ let { data } = $props();
 const words = vocabulary();
 
 const live = liveStream();
-const clock = ticking(30_000);
+const clock = new Clock(30_000);
 
 const kinds = [
 	{ value: "all", label: "Everything" },

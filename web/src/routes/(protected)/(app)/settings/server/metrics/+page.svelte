@@ -1,6 +1,6 @@
 <script lang="ts">
 import { untrack } from "svelte";
-import { ticking } from "#lib/admin/clock.svelte.js";
+import { Clock } from "#lib/admin/clock.js";
 import {
 	keepFor,
 	type Point,
@@ -26,7 +26,7 @@ let { data } = $props();
 const words = vocabulary();
 
 const api = client();
-const clock = ticking(pollEvery);
+const clock = new Clock(pollEvery);
 
 // Every answer of the last few minutes, by when it came, for the sparklines
 // and for rates between the last two; the page's load is the first.
