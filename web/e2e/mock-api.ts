@@ -115,41 +115,31 @@ const everything = () => [
 ];
 const byID = (id: string) => everything().find((c) => c.id === id);
 
-const homeRows = (): Schemas["HomeRow"][] => [
+// The rows the server answers, each asked for on its own: the profile's, and
+// a library's of the library.
+const homeRows = (): {
+	kind: Schemas["HomeRowKind"];
+	library?: { id: string; name: string };
+	items: ReturnType<typeof everything>;
+}[] => [
 	{
 		kind: "continue_watching",
-		title: "Continue Watching",
 		items: everything().filter((c) => states.get(c.id)?.position_ms),
 	},
 	{
 		kind: "watchlist",
-		title: "Watchlist",
 		items: everything().filter((c) => states.get(c.id)?.watchlisted_at),
 	},
 	{
 		kind: "favourites",
-		title: "Favourites",
 		items: everything().filter((c) => states.get(c.id)?.favourite_at),
 	},
 	{
 		kind: "recently_added_films",
-		title: "Recently Added in Films",
 		library: { id: "l-films", name: "Films" },
 		items: films,
 	},
 ];
-
-// The server's rows, in the reader's order and leaving out those hidden.
-function home(arranged: Schemas["HomeSection"][], limit = 20): Schemas["Home"] {
-	const rows = homeRows();
-	return {
-		rows: arranged
-			.filter((s) => s.visibility === "shown")
-			.flatMap((s) => rows.filter((r) => r.kind === s.row))
-			.map((r) => ({ ...r, items: r.items.slice(0, limit).map(card) }))
-			.filter((r) => r.items.length),
-	};
-}
 
 const facets: Schemas["Facets"] = {
 	genres: ["Comedy", "Drama"],
@@ -1409,13 +1399,6 @@ const server_ = Bun.serve({
 				libraryOrders.set(token as string, body.library_ids);
 				return new Response(null, { status: 204 });
 			}
-			case "GET /api/v1/home":
-				return Response.json(
-					home(
-						(preferences.get(token as string) ?? defaults).home,
-						Number(url.searchParams.get("limit")) || 20,
-					),
-				);
 			case "GET /api/v1/events": {
 				let mine: ReadableStreamDefaultController<string>;
 				const body = new ReadableStream<string>({
@@ -1611,19 +1594,19 @@ const server_ = Bun.serve({
 		const parts = url.pathname.split("/").slice(3);
 		const [kind, id, sub, entry, leaf] = parts;
 		const path = `${request.method} ${kind}/${sub ?? ""}`;
+		if (request.method === "GET" && kind === "profile" && id === "rows") {
+			const row = homeRows().find((r) => r.kind === sub && !r.library);
+			if (!row) return problem(404, "not_found", "Not Found");
+			const items = row.items;
+			const offset = Number(url.searchParams.get("offset") ?? 0);
+			const limit = Number(url.searchParams.get("limit") ?? 50);
+			return Response.json({
+				items: items.slice(offset, offset + limit).map(card),
+				offset,
+				total: items.length,
+			} satisfies Schemas["CardPage"]);
+		}
 		switch (path) {
-			case "GET home/": {
-				const row = homeRows().find((r) => r.kind === id && !r.library);
-				if (!row) return problem(404, "not_found", "Not Found");
-				const items = row.items;
-				const offset = Number(url.searchParams.get("offset") ?? 0);
-				const limit = Number(url.searchParams.get("limit") ?? 50);
-				return Response.json({
-					items: items.slice(offset, offset + limit).map(card),
-					offset,
-					total: items.length,
-				} satisfies Schemas["CardPage"]);
-			}
 			case "GET libraries/titles": {
 				const pool = byTitle(id === "l-shows" ? shows : films);
 				const genre = url.searchParams.get("genre");
@@ -1656,7 +1639,11 @@ const server_ = Bun.serve({
 					(r) => r.library?.id === id && r.kind === entry,
 				);
 				return row
-					? Response.json({ items: row.items.slice(0, 20).map(card) })
+					? Response.json({
+							items: row.items
+								.slice(0, Number(url.searchParams.get("limit")) || 20)
+								.map(card),
+						})
 					: problem(404, "not_found", "Not Found");
 			}
 			case "GET libraries/collections":

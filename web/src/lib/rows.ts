@@ -3,19 +3,22 @@ import type { components } from "./api/schema.js";
 import { type WallQuery, wallSearch } from "./wall.js";
 
 type Kind = components["schemas"]["HomeRowKind"];
-type Row = components["schemas"]["HomeRow"];
+type LibraryKind = components["schemas"]["LibraryKind"];
+// A row as the home draws it: of a kind, and a library's of that library.
+export type Row = { kind: Kind; library?: { id: string; name: string } };
 
 // A rail shows this many; the rest are its heading's to show, as the Photon
 // apps' rows are twenty with the heading as the rest.
 export const railLimit = 20;
 
 // How each kind of row is drawn. A row of a library's titles is one for each
-// library, as Plex's library hubs are, leading to that library's wall in the
-// row's order. The server names every row.
+// library of the kinds it is `of`, as Plex's library hubs are, leading to the
+// row whole or to that library's wall in the row's order.
 export const homeRows: Record<
 	Kind,
 	{
 		shape: Shape;
+		of?: LibraryKind[];
 		library?: { wall: WallQuery };
 		// A library's row whose page is the row whole, as the Photon apps' are,
 		// rather than the library's wall: what was added last, and the best
@@ -33,13 +36,18 @@ export const homeRows: Record<
 			"Nothing here yet. Choose the bookmark on a film or show to keep it here until it is watched.",
 	},
 	favourites: { shape: "poster" },
-	recently_added_films: { shape: "poster", whole: true },
-	recently_added_shows: { shape: "poster", whole: true },
+	recently_added_films: { shape: "poster", of: ["movies"], whole: true },
+	recently_added_shows: { shape: "poster", of: ["shows"], whole: true },
 	recently_released: {
 		shape: "poster",
+		of: ["movies", "shows"],
 		library: { wall: { sort: "released" } },
 	},
-	top_rated_unwatched: { shape: "poster", whole: true },
+	top_rated_unwatched: {
+		shape: "poster",
+		of: ["movies", "shows"],
+		whole: true,
+	},
 };
 
 // The rows with a page of their own, as Plex's Watchlist and Jellyfin's

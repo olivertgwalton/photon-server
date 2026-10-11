@@ -6,7 +6,7 @@ import type { PageLoad } from "./$types";
 export const load: PageLoad = async ({ fetch, depends }) => {
 	depends(keys.home, keys.userdata);
 	const row = await need(
-		client(fetch).GET("/api/v1/home/{row}", {
+		client(fetch).GET("/api/v1/profile/rows/{row}", {
 			params: { path: { row: "favourites" }, query: { limit: 200 } },
 		}),
 	);

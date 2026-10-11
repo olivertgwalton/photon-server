@@ -1,18 +1,17 @@
 import { client, need } from "#lib/api/client.js";
 import { keys } from "#lib/changes.js";
-import { railLimit } from "#lib/rows.js";
+import { homeRails } from "#lib/home.js";
 import type { PageLoad } from "./$types";
 
-export const load: PageLoad = ({ fetch, depends }) => {
+export const load: PageLoad = async ({ fetch, parent, depends }) => {
 	depends(keys.home, keys.userdata);
-	// One more than a rail shows, so it knows whether there is more to see.
-	// Streamed, not awaited: the page is drawn at once, its rows as they come.
-	const home = need(
-		client(fetch).GET("/api/v1/home", {
-			params: { query: { limit: railLimit + 1 } },
-		}),
-	);
-	// The page takes the refusal; a load preloaded and never shown has no page.
-	home.catch(() => {});
-	return { home };
+	const [{ libraries }, prefs] = await Promise.all([
+		parent(),
+		need(client(fetch).GET("/api/v1/profile/preferences")),
+	]);
+	// Streamed, not awaited: the page is drawn at once, each row as it comes.
+	const rails = homeRails(fetch, prefs.home, libraries);
+	// The page takes a refusal; a load preloaded and never shown has no page.
+	for (const r of rails) r.cards.catch(() => {});
+	return { rails };
 };

@@ -1,36 +1,61 @@
 <script lang="ts">
 import Rail from "#lib/components/Rail.svelte";
-import { homeRows, rail } from "#lib/rows.js";
+import { homeRows } from "#lib/rows.js";
 import { settled } from "#lib/settled.svelte.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 let { data } = $props();
-const home = settled(() => data.home);
+const words = vocabulary();
+
+// Every row's answer, to say once they are all in whether the page has
+// nothing, or could get nothing.
+const all = settled(() =>
+	Promise.allSettled(data.rails.map((r) => r.cards)).then((answers) => {
+		const refused = answers.find((a) => a.status === "rejected");
+		if (answers.length && answers.every((a) => a.status === "rejected"))
+			throw refused?.reason;
+		return answers.some(
+			(a) => a.status === "fulfilled" && a.value.items.length,
+		);
+	}),
+);
+
+const unread = { items: [], total: 0 };
+
+function title(r: (typeof data.rails)[number]) {
+	return r.library
+		? words.library_rows[r.kind]?.replace("{library}", r.library.name)
+		: words.rows[r.kind];
+}
 </script>
 
 <svelte:head><title>Home · Photon</title></svelte:head>
 
 <h1 class="sr-only">Home</h1>
-{#if home.failed}
+{#if all.failed}
 	<div class="grid min-h-[50svh] place-content-center gap-2 text-center">
-		<p class="heading">{home.failed}</p>
+		<p class="heading">{all.failed}</p>
 	</div>
-{:else if home.value?.rows.length}
-	<div class="grid gap-8">
-		{#each home.value.rows.map((row) => ({
-			row,
-			...rail(row),
-		})) as { row, key, href } (key)}
-			<Rail
-				title={row.title}
-				cards={row.items}
-				shape={homeRows[row.kind].shape}
-				{href}
-			/>
-		{/each}
-	</div>
-{:else if home.value}
+{:else if all.value === false}
 	<div class="grid min-h-[50svh] place-content-center gap-2 text-center">
 		<p class="heading">Nothing to watch yet</p>
 		<p class="text-sm">Titles appear here once a library has been scanned.</p>
+	</div>
+{:else}
+	<div class="grid gap-8">
+		{#each data.rails as r (r.key)}
+			<!-- A row that could not be read is left out; the rest are drawn. -->
+			{#await r.cards.catch(() => unread) then page}
+				{#if page.items.length}
+					<Rail
+						title={title(r) ?? r.kind}
+						cards={page.items}
+						total={page.total}
+						shape={homeRows[r.kind].shape}
+						href={r.href}
+					/>
+				{/if}
+			{/await}
+		{/each}
 	</div>
 {/if}
