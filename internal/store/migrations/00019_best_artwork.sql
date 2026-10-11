@@ -19,8 +19,7 @@ CREATE FUNCTION keep_best_artwork(titles uuid[]) RETURNS void LANGUAGE sql AS $$
   SELECT FROM items WHERE id = ANY(titles) ORDER BY id FOR NO KEY UPDATE;
   DELETE FROM best_artwork WHERE item_id = ANY(titles);
   INSERT INTO best_artwork (item_id, kind, artwork_id, blurhash)
-  SELECT DISTINCT ON (item_id, kind) item_id, kind, id, blurhash FROM ranked_artwork(titles)
-  ORDER BY item_id, kind, rank, "position", id;
+  SELECT item_id, kind, id, blurhash FROM ranked_artwork(titles) WHERE nth = 1;
 $$;
 -- +goose StatementEnd
 

@@ -1,14 +1,16 @@
 -- +goose Up
--- A title's pictures, each with its rank: an admin's choice, then files beside the title, then the
--- providers its library asks for pictures of the kind it is ranked as, in the library's order,
--- then those it no longer asks. A collection or an extra is ranked as its library's titles, as
--- LibraryKind.RankedAs ranks them.
+-- A title's pictures, each numbered by its place among the title's pictures of its kind, the best
+-- first: an admin's choice, then files beside the title, then the providers its library asks for
+-- pictures of the kind it is ranked as, in the library's order, then those it no longer asks, each
+-- provider's own order breaking a tie. A collection or an extra is ranked as its library's titles,
+-- as LibraryKind.RankedAs ranks them.
 -- +goose StatementBegin
 CREATE FUNCTION ranked_artwork(titles uuid[]) RETURNS TABLE (id uuid, item_id uuid, source text, kind text,
-  place text, "position" smallint, folder text, language text, width int, height int, blurhash text, rank int)
+  place text, "position" smallint, folder text, language text, width int, height int, blurhash text, nth bigint)
 LANGUAGE sql STABLE PARALLEL SAFE AS $$
   SELECT a.id, a.item_id, a.source, a.kind, a.place, a.position, a.folder, a.language, a.width, a.height,
-    a.blurhash, CASE a.source WHEN 'user' THEN -2 WHEN 'file' THEN -1 ELSE coalesce(ls.position, 32767) END
+    a.blurhash, row_number() OVER (PARTITION BY a.item_id, a.kind ORDER BY
+      CASE a.source WHEN 'user' THEN -2 WHEN 'file' THEN -1 ELSE coalesce(ls.position, 32767) END, a.position, a.id)
   FROM items i
   JOIN libraries l ON l.id = i.library_id
   JOIN artwork a ON a.item_id = i.id

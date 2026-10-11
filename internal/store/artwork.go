@@ -184,13 +184,13 @@ func keepLibraryPictures(ctx context.Context, tx db, libs []uuid.UUID) error {
 }
 
 // rankedPictures answers the pictures of items, best first in each title's pictures of a kind, as
-// ranked_artwork ranks them, each provider's own order breaking a tie.
+// ranked_artwork numbers them.
 func (s *Store) rankedPictures(ctx context.Context, items []*model.Item) ([]*model.Artwork, error) {
 	if len(items) == 0 {
 		return nil, nil
 	}
 	return queryRows[model.Artwork](ctx, s.pool, `SELECT `+artworkColumns+` FROM ranked_artwork($1)
-		ORDER BY item_id, kind, rank, position, id`, ids(items))
+		ORDER BY item_id, kind, nth`, ids(items))
 }
 
 // Unfetched are pictures titles show first that are a provider's, and photos of the people they
@@ -227,21 +227,12 @@ func (s *Store) Unfetched(ctx context.Context, after uuid.UUID, limit int) (Unfe
 }
 
 func (s *Store) unfetched(ctx context.Context, items []*model.Item) (Unfetched, error) {
-	rows, err := s.rankedPictures(ctx, items)
+	rows, err := queryRows[model.Artwork](ctx, s.pool, `SELECT `+artworkColumns+` FROM ranked_artwork($1) WHERE nth = 1`, ids(items))
 	if err != nil {
 		return nil, err
 	}
-	type shown struct {
-		item uuid.UUID
-		kind domain.ArtworkKind
-	}
-	first := map[shown]bool{}
 	out := Unfetched{}
 	for _, r := range rows {
-		if first[shown{r.ItemID, r.Kind}] {
-			continue
-		}
-		first[shown{r.ItemID, r.Kind}] = true
 		if r.Source != domain.SourceFile && r.Blurhash == nil {
 			out[r.ID] = r.Place
 		}
