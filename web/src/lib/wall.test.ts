@@ -42,10 +42,22 @@ test("a filter value is turned on and off again", () => {
 	expect(toggled(on, "genre", "Drama").genre).toBeUndefined();
 });
 
-test("clearing filters keeps the order the reader chose", () => {
+test("clearing filters keeps what the wall holds and the order the reader chose", () => {
 	expect(
-		cleared({ sort: "added", order: "asc", genre: ["Drama"], min_rating: 60 }),
-	).toEqual({ sort: "added", order: "asc", rating_site: undefined });
+		cleared({
+			kind: "episodes",
+			sort: "added",
+			order: "asc",
+			genre: ["Drama"],
+			min_rating: 60,
+		}),
+	).toEqual({ kind: "episodes", sort: "added", order: "asc" });
+});
+
+test("a wall of episodes survives the trip through its address", () => {
+	const query = { kind: "episodes" as const, sort: "released" as const };
+	expect(wallQuery(new URLSearchParams(wallSearch(query)))).toEqual(query);
+	expect(wallQuery(new URLSearchParams("kind=seasons"))).toEqual({});
 });
 
 test("a letter's place is the count of every title before it", () => {
@@ -77,4 +89,8 @@ test("a narrowed wall is kept as a smart collection, and opens again as it was",
 test("a wall of a profile's own marks or plays is no smart collection", () => {
 	expect(smartRule({ mark: ["unwatched"] })).toBeUndefined();
 	expect(smartRule({ sort: "played" })).toBeUndefined();
+});
+
+test("a wall of episodes is no smart collection, which holds titles", () => {
+	expect(smartRule({ kind: "episodes", genre: ["Drama"] })).toBeUndefined();
 });

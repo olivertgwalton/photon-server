@@ -94,6 +94,15 @@ const collection = base("c-set", "collection", "Quiet Collection", {
 	origin: "tmdb",
 });
 
+// What a library's wall holds: its titles, or a show library's episodes in
+// their show's order.
+const wallOf = (library: string, url: URL) =>
+	library !== "l-shows"
+		? byTitle(films)
+		: url.searchParams.get("kind") === "episodes"
+			? [...episodes, later]
+			: byTitle(shows);
+
 const card = (c: Schemas["Card"]): Schemas["Card"] => {
 	const state = states.get(c.id);
 	return state ? { ...c, state } : c;
@@ -1625,7 +1634,7 @@ const server_ = Bun.serve({
 		}
 		switch (path) {
 			case "GET libraries/titles": {
-				const pool = byTitle(id === "l-shows" ? shows : films);
+				const pool = wallOf(id, url);
 				const genre = url.searchParams.get("genre");
 				const sorted =
 					url.searchParams.get("order") === "desc" ? [...pool].reverse() : pool;
@@ -1639,10 +1648,9 @@ const server_ = Bun.serve({
 				} satisfies Schemas["CardPage"]);
 			}
 			case "GET libraries/letters": {
-				const pool = byTitle(id === "l-shows" ? shows : films);
 				const counts = new Map<string, number>();
-				for (const f of pool) {
-					const l = f.title[0].toUpperCase();
+				for (const f of wallOf(id, url)) {
+					const l = (f.show?.title ?? f.title)[0].toUpperCase();
 					counts.set(l, (counts.get(l) ?? 0) + 1);
 				}
 				return Response.json({

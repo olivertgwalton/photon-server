@@ -85,6 +85,23 @@ test("a library offers its collections only where it keeps some", async ({
 	).toHaveCount(0);
 });
 
+test("a show library's wall shows its episodes across its shows", async ({
+	page,
+}) => {
+	await logIn(page, "/libraries/l-shows");
+	await expect(page.getByText("1 title", { exact: true })).toBeVisible();
+	await page.getByRole("radio", { name: "Episodes" }).click();
+	await expect(page).toHaveURL("/libraries/l-shows?kind=episodes");
+	await expect(page.getByText("3 episodes", { exact: true })).toBeVisible();
+	// A collection holds titles, so a narrowed wall of episodes is none.
+	await expect(
+		page.getByRole("button", { name: "Save as a smart collection" }),
+	).toHaveCount(0);
+	await page.getByRole("radio", { name: "Shows" }).click();
+	await expect(page).toHaveURL("/libraries/l-shows");
+	await expect(page.getByText("1 title", { exact: true })).toBeVisible();
+});
+
 test("a wall is sorted, filtered and drawn as the reader asks", async ({
 	page,
 }) => {

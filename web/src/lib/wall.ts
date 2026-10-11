@@ -61,6 +61,7 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // out rather than sent, so a mistyped link opens the plain wall.
 export function wallQuery(search: URLSearchParams): WallQuery {
 	const query: WallQuery = {};
+	if (search.get("kind") === "episodes") query.kind = "episodes";
 	const sort = search.get("sort") as Schemas["WallSort"];
 	if (sorts.includes(sort)) query.sort = sort;
 	const order = search.get("order");
@@ -122,9 +123,10 @@ export function filterCount(query: WallQuery): number {
 	);
 }
 
-// Only what narrows: the order is the reader's to keep.
+// Only what narrows: what the wall holds and its order are the reader's to keep.
 export function cleared(query: WallQuery): WallQuery {
 	return {
+		kind: query.kind,
 		sort: query.sort,
 		order: query.order,
 		rating_site: query.sort === "rating" ? query.rating_site : undefined,
@@ -149,9 +151,15 @@ export function letterOffset(
 
 // A wall's query as a smart collection's rule, as Plex saves a filtered
 // library as a smart collection; none where it reads a profile's own marks or
-// plays, which a collection everyone shares cannot.
+// plays, which a collection everyone shares cannot, or pages episodes, which a
+// collection of titles cannot hold.
 export function smartRule(query: WallQuery): Schemas["SmartRule"] | undefined {
-	if (query.mark?.length || query.sort === "played") return undefined;
+	if (
+		query.mark?.length ||
+		query.sort === "played" ||
+		query.kind === "episodes"
+	)
+		return undefined;
 	return {
 		filter: {
 			genres: query.genre,

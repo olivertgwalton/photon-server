@@ -9,7 +9,7 @@ import {
 } from "#lib/wall.js";
 import type { PageLoad } from "./$types";
 
-export const load: PageLoad = ({ fetch, params, url, depends }) => {
+export const load: PageLoad = async ({ fetch, params, url, depends }) => {
 	depends(keys.library(params.id), keys.userdata);
 	const api = client(fetch);
 	const query = wallQuery(url.searchParams);
@@ -36,6 +36,16 @@ export const load: PageLoad = ({ fetch, params, url, depends }) => {
 	wall.catch(() => {});
 	return {
 		query,
+		// The filters an episodes wall offers are its episodes', not those of the
+		// library's shows the layout read.
+		episodeFacets:
+			query.kind === "episodes"
+				? await need(
+						api.GET("/api/v1/libraries/{id}/facets", {
+							params: { path, query: { kind: query.kind } },
+						}),
+					)
+				: undefined,
 		// A smart collection whose rule is being changed here.
 		editing: url.searchParams.get("collection") ?? undefined,
 		wall,

@@ -45,6 +45,8 @@ const shown = $derived(
 const blanks = Array.from({ length: 24 }, (_, n) => n);
 
 const id = $derived(data.library.id);
+const episodes = $derived(data.query.kind === "episodes");
+const facets = $derived(data.episodeFacets ?? data.facets);
 const narrowed = $derived(filterCount(data.query) > 0);
 // What an admin may keep of this wall as a smart collection.
 const rule = $derived(
@@ -106,9 +108,27 @@ function jump(letter: string) {
 
 <h2 class="sr-only">Titles</h2>
 <div class="flex flex-wrap items-center gap-2">
+	{#if data.library.kind === "shows"}
+		<ToggleGroup.Root
+			type="single"
+			variant="outline"
+			size="sm"
+			value={episodes ? "episodes" : "titles"}
+			onValueChange={(kind) =>
+				kind &&
+				show({
+					...data.query,
+					kind: kind === "episodes" ? "episodes" : undefined,
+				})}
+			aria-label="Show"
+		>
+			<ToggleGroup.Item value="titles">Shows</ToggleGroup.Item>
+			<ToggleGroup.Item value="episodes">Episodes</ToggleGroup.Item>
+		</ToggleGroup.Root>
+	{/if}
 	<p class="text-ink-3 mr-auto text-sm" aria-live="polite">
 		{#if shown}
-			{count(shown.titles.total, "title")}
+			{count(shown.titles.total, episodes ? "episode" : "title")}
 		{/if}
 	</p>
 	{#if narrowed}
@@ -124,10 +144,10 @@ function jump(letter: string) {
 		</Button>
 		<SmartCollectionDialog bind:open={saving} library={id} {rule} />
 	{/if}
-	<WallFilterMenu query={data.query} facets={data.facets} onchange={show} />
+	<WallFilterMenu query={data.query} {facets} onchange={show} />
 	<WallSortMenu
 		query={data.query}
-		sites={data.facets.rating_sites}
+		sites={facets.rating_sites}
 		onchange={show}
 	/>
 	<ToggleGroup.Root
