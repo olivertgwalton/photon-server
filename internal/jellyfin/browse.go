@@ -193,7 +193,7 @@ func (a *API) seenLibraries(r *http.Request) ([]*store.SeenLibrary, map[uuid.UUI
 
 // sorts are photon's sorts for Jellyfin's ItemSortBy, which an app sends most important first.
 var sorts = map[string]domain.WallSort{
-	"sortname": domain.SortTitle, "name": domain.SortTitle, "datecreated": domain.SortAdded,
+	"sortname": domain.SortTitle, "name": domain.SortTitle, "seriessortname": domain.SortTitle, "datecreated": domain.SortAdded,
 	"premieredate": domain.SortReleased, "productionyear": domain.SortReleased, "communityrating": domain.SortRating,
 	"criticrating": domain.SortRating, "runtime": domain.SortRuntime, "dateplayed": domain.SortPlayed,
 }
@@ -330,7 +330,8 @@ func (a *API) byID(w http.ResponseWriter, r *http.Request, names []string, seen 
 }
 
 // wall answers the titles of libraries, those of several sorted together, of the kinds asked for;
-// or their collections, where an app asks for box sets alone.
+// their episodes, where an app asks for those alone; or their collections, where it asks for box
+// sets alone.
 func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Request, types []string, l listed) {
 	if len(types) == 1 && strings.EqualFold(types[0], "BoxSet") {
 		a.collections(libs, w, r, l)
@@ -339,7 +340,7 @@ func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Req
 	var ids []uuid.UUID
 	var shown []*store.SeenLibrary
 	for _, lib := range libs {
-		if len(types) == 0 || has(types, libraryKind(lib)) {
+		if holds(lib, types) {
 			ids, shown = append(ids, lib.ID), append(shown, lib)
 		}
 	}
@@ -348,7 +349,8 @@ func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Req
 		return
 	}
 	p := wallPage(r, auth.SessionOf(r.Context()).Profile.ID, l)
-	if err := a.narrow(r, shown, &p.Filter); err != nil {
+	p.Kind = wallKind(types)
+	if err := a.narrow(r, shown, p.Kind, &p.Filter); err != nil {
 		a.internal(w, r, err)
 		return
 	}
