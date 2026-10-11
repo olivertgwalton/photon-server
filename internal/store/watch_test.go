@@ -519,3 +519,62 @@ func TestTitlesSharingAnIDThroughAnotherAreOneTitle(t *testing.T) {
 		t.Errorf("with B gone search finds %d (%v), want A's and C's", total, err)
 	}
 }
+
+// A show's card counts the episodes left as a scan adds them and as one is forgotten, not only as
+// they are watched.
+func TestAShowsEpisodesLeftFollowItsScans(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scan := func(fingerprint string, numbers ...int) {
+		t.Helper()
+		var episodes []Episode
+		for _, n := range numbers {
+			episodes = append(episodes, Episode{
+				Season: 1, Episodes: []int{n}, Title: "episode", Folder: "The Wire/Season 1", ByNumber: true,
+				Copies: []Copy{{ContentKey: []byte{byte(n)}, Parts: []Part{{
+					RelPath: "The Wire/Season 1/" + string(rune('0'+n)) + ".mkv", Size: 1, ModTime: time.Unix(0, 0),
+					Facts: &domain.Facts{Duration: time.Hour},
+				}}}},
+			})
+		}
+		if _, err := s.SaveShowFolder(ctx, lib.ID, "The Wire/Season 1", []byte(fingerprint), Show{Title: "the wire", Folder: "The Wire"}, episodes, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	left := func() int {
+		t.Helper()
+		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: oliver.ID, Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
+		if err != nil || len(cards) != 1 {
+			t.Fatalf("wall = %+v, %v", cards, err)
+		}
+		return cards[0].State.Unwatched
+	}
+
+	scan("v1", 1, 2)
+	first := oneItem(t, s, `kind = 'episode' AND episode_number = 1`).ID
+	if err := s.MarkWatched(ctx, oliver.ID, first, nil); err != nil {
+		t.Fatal(err)
+	}
+	if n := left(); n != 1 {
+		t.Errorf("two episodes, one watched: %d left, want 1", n)
+	}
+	scan("v2", 1, 2, 3)
+	if n := left(); n != 2 {
+		t.Errorf("a third episode found: %d left, want 2", n)
+	}
+	second := oneItem(t, s, `kind = 'episode' AND episode_number = 2`).ID
+	if err := s.ForgetTitle(ctx, second); err != nil {
+		t.Fatal(err)
+	}
+	if n := left(); n != 1 {
+		t.Errorf("the second forgotten: %d left, want 1", n)
+	}
+}
