@@ -57,10 +57,18 @@ type preferencesChangeJSON struct {
 	CreditsAction     domain.SegmentAction `json:"credits_action,omitzero"`
 	ThemeMusic        domain.ThemeMusic    `json:"theme_music,omitzero"`
 	// Home is the rows in the order wanted, each once; any left out follow, shown.
-	Home []homeSectionJSON `json:"home,omitzero"`
+	Home []homeSectionChangeJSON `json:"home,omitzero"`
 }
 
 type homeSectionJSON struct {
+	Row        domain.HomeRow       `json:"row"`
+	Visibility domain.RowVisibility `json:"visibility"`
+	// LibraryKinds are the kinds of library the row is made once for each of, as Plex's library
+	// hubs are: absent for a row of the profile's own.
+	LibraryKinds []domain.LibraryKind `json:"library_kinds,omitzero"`
+}
+
+type homeSectionChangeJSON struct {
 	Row        domain.HomeRow       `json:"row"`
 	Visibility domain.RowVisibility `json:"visibility"`
 }
@@ -75,7 +83,7 @@ func preferencesOf(p domain.Preferences) preferencesJSON {
 		Home: make([]homeSectionJSON, len(p.Home)),
 	}
 	for i, h := range p.Home {
-		out.Home[i] = homeSectionJSON(h)
+		out.Home[i] = homeSectionJSON{Row: h.Row, Visibility: h.Visibility, LibraryKinds: h.Row.LibraryKinds()}
 	}
 	if !p.SavedAt.IsZero() {
 		out.SavedAt = &p.SavedAt

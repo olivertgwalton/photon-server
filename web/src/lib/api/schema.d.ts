@@ -7587,6 +7587,11 @@ export interface components {
         /** @enum {string} */
         HomeRowKind: "continue_watching" | "next_up" | "watchlist" | "favourites" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched";
         HomeSection: {
+            library_kinds?: components["schemas"]["LibraryKind"][];
+            row: components["schemas"]["HomeRowKind"];
+            visibility: components["schemas"]["RowVisibility"];
+        };
+        HomeSectionChange: {
             row: components["schemas"]["HomeRowKind"];
             visibility: components["schemas"]["RowVisibility"];
         };
@@ -8245,7 +8250,7 @@ export interface components {
             audio_language?: string | null;
             audio_track?: components["schemas"]["AudioTrack"];
             credits_action?: components["schemas"]["SegmentAction"];
-            home?: components["schemas"]["HomeSection"][];
+            home?: components["schemas"]["HomeSectionChange"][];
             intro_action?: components["schemas"]["SegmentAction"];
             max_bitrate_kbps?: number | null;
             next_episode?: components["schemas"]["NextEpisode"];

@@ -1037,6 +1037,21 @@ async function avatar(profile: Schemas["Profile"], request: Request) {
 const sessions = new Map<string, Schemas["Profile"]>();
 let kidsPIN = "";
 
+// The kinds of library each of a library's rows is made for, as the server
+// says of a home section.
+const rowLibraryKinds: Partial<
+	Record<Schemas["HomeRowKind"], Schemas["LibraryKind"][]>
+> = {
+	recently_added_films: ["movies"],
+	recently_added_shows: ["shows"],
+	recently_released: ["movies", "shows"],
+	top_rated_unwatched: ["movies", "shows"],
+};
+const section = (s: Schemas["HomeSectionChange"]): Schemas["HomeSection"] => {
+	const kinds = rowLibraryKinds[s.row];
+	return kinds ? { ...s, library_kinds: kinds } : s;
+};
+
 // token → how its reader plays: each sign-in starts from the defaults, so
 // one test's choices are not the next's.
 const defaults: Schemas["Preferences"] = {
@@ -1060,10 +1075,9 @@ const defaults: Schemas["Preferences"] = {
 		"recently_added_shows",
 		"recently_released",
 		"top_rated_unwatched",
-	].map((row) => ({
-		row: row as Schemas["HomeRowKind"],
-		visibility: "shown" as const,
-	})),
+	].map((row) =>
+		section({ row: row as Schemas["HomeRowKind"], visibility: "shown" }),
+	),
 };
 const preferences = new Map<string, Schemas["Preferences"]>();
 // Each profile's library order, as the server keeps it.
@@ -1368,6 +1382,7 @@ const server_ = Bun.serve({
 					...Object.fromEntries(
 						Object.entries(change).filter(([, v]) => v !== undefined),
 					),
+					...(change.home && { home: change.home.map(section) }),
 					saved_at: new Date().toISOString(),
 				};
 				preferences.set(token as string, kept);
