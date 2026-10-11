@@ -103,10 +103,25 @@ func photo(id *uuid.UUID, hash *string) (uuid.UUID, Blurhashes) {
 	return *id, Blurhashes{*id: *hash}
 }
 
-// pictureOrder answers each title's pictures by kind, best first, and the BlurHashes of those
-// that have one. A picture listed again under a lower source, as one an admin chose is under its
-// provider, is left out.
-func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
+// pictureDepth is how many of a title's pictures of each kind a lookup answers.
+type pictureDepth string
+
+const (
+	// bestPicture is the best of each kind alone, as best_artwork keeps it: all a card shows.
+	bestPicture pictureDepth = "best"
+	// everyPicture is every one, best first, as a title's page offers them.
+	everyPicture pictureDepth = "every"
+)
+
+// pictureOrder answers each title's pictures by kind, best first, as many as depth asks, and the
+// BlurHashes of those that have one. A picture listed again under a lower source, as one an admin
+// chose is under its provider, is left out.
+func (s *Store) pictureOrder(ctx context.Context, items []*model.Item, depth pictureDepth) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
+	switch depth {
+	case bestPicture:
+		return s.bestPictures(ctx, items)
+	case everyPicture:
+	}
 	out := map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID{}
 	hashes := map[uuid.UUID]string{}
 	rows, err := s.rankedPictures(ctx, items)
@@ -134,6 +149,38 @@ func (s *Store) pictureOrder(ctx context.Context, items []*model.Item) (map[uuid
 		}
 	}
 	return out, hashes, nil
+}
+
+// bestPictures answers each title's best picture of each kind, as best_artwork keeps them, and the
+// BlurHashes of those that have one.
+func (s *Store) bestPictures(ctx context.Context, items []*model.Item) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
+	out := map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID{}
+	hashes := map[uuid.UUID]string{}
+	rows, err := s.pool.Query(ctx, `SELECT item_id, kind, artwork_id, blurhash FROM best_artwork WHERE item_id = ANY($1)`, ids(items))
+	if err != nil {
+		return nil, nil, err
+	}
+	var item, id uuid.UUID
+	var kind domain.ArtworkKind
+	var hash *string
+	_, err = pgx.ForEachRow(rows, []any{&item, &kind, &id, &hash}, func() error {
+		if out[item] == nil {
+			out[item] = map[domain.ArtworkKind][]uuid.UUID{}
+		}
+		out[item][kind] = []uuid.UUID{id}
+		if hash != nil {
+			hashes[id] = *hash
+		}
+		return nil
+	})
+	return out, hashes, err
+}
+
+// keepLibraryPictures chooses again the best pictures of the titles of libs, whose picture sources
+// changed.
+func keepLibraryPictures(ctx context.Context, tx db, libs []uuid.UUID) error {
+	_, err := tx.Exec(ctx, `SELECT keep_best_artwork(ARRAY(SELECT id FROM items WHERE library_id = ANY($1)))`, libs)
+	return err
 }
 
 // rankedPictures answers the pictures of items, best first in each title's pictures of a kind, as

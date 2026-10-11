@@ -244,9 +244,23 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 	return err
 }
 
+// pictureRanking answers how a library ranks picture sources, to tell when replacing its sources
+// changed it.
+func pictureRanking(ctx context.Context, tx db, lib uuid.UUID) (string, error) {
+	var ranking string
+	err := tx.QueryRow(ctx, `
+		SELECT coalesce(string_agg(item_kind || ' ' || source || ' ' || enabled, ',' ORDER BY item_kind, position), '')
+		FROM library_sources WHERE library_id = $1 AND fetcher = 'images'`, lib).Scan(&ranking)
+	return ranking, err
+}
+
 // replaceSources puts sources in place of the library's rankings of the kinds and fetchers they
 // give, and forgets its folders' fingerprints so the next scan reads them all again.
 func replaceSources(ctx context.Context, tx db, id uuid.UUID, sources []domain.KindSources) error {
+	before, err := pictureRanking(ctx, tx, id)
+	if err != nil {
+		return err
+	}
 	for _, k := range sources {
 		for _, f := range domain.Fetchers() {
 			if k.Of(f) == nil {
@@ -261,6 +275,13 @@ func replaceSources(ctx context.Context, tx db, id uuid.UUID, sources []domain.K
 	}
 	if err := saveSources(ctx, tx, id, sources); err != nil {
 		return err
+	}
+	if after, err := pictureRanking(ctx, tx, id); err != nil {
+		return err
+	} else if after != before {
+		if err := keepLibraryPictures(ctx, tx, []uuid.UUID{id}); err != nil {
+			return err
+		}
 	}
 	// A show's match asks only about seasons not yet described, so those whose own
 	// sources changed are described again.
@@ -277,7 +298,7 @@ func replaceSources(ctx context.Context, tx db, id uuid.UUID, sources []domain.K
 			return err
 		}
 	}
-	_, err := tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1`, id)
+	_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1`, id)
 	return err
 }
 

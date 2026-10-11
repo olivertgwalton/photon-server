@@ -273,7 +273,7 @@ func (s *Store) dress(ctx context.Context, item *model.Item, p *TitlePage) error
 	if err != nil {
 		return err
 	}
-	pictures, hashes, err := s.picturesWorn(ctx, []*model.Item{item}, shows)
+	pictures, hashes, err := s.picturesWorn(ctx, []*model.Item{item}, shows, everyPicture)
 	if err != nil {
 		return err
 	}
@@ -448,7 +448,7 @@ func (s *Store) seasons(ctx context.Context, profile, show uuid.UUID, alongside 
 		return err
 	})
 	g.Go(func() (err error) {
-		pictures, hashes, err = s.pictureOrder(gctx, rows)
+		pictures, hashes, err = s.pictureOrder(gctx, rows, bestPicture)
 		return err
 	})
 	g.Go(func() (err error) {
@@ -487,7 +487,7 @@ func (s *Store) episodes(ctx context.Context, profile, season uuid.UUID) ([]Epis
 		return err
 	})
 	g.Go(func() (err error) {
-		pictures, hashes, err = s.pictureOrder(gctx, rows)
+		pictures, hashes, err = s.pictureOrder(gctx, rows, bestPicture)
 		return err
 	})
 	g.Go(func() (err error) {

@@ -136,6 +136,10 @@ func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
+		if err != nil || len(cards) != 1 || cards[0].Poster != posters[0] {
+			t.Errorf("card = %+v, %v; want the page's best poster %v", cards, err, posters[0])
+		}
 		return pic.URL + pic.Path, len(posters)
 	}
 	match("a.jpg", "b.jpg")
@@ -185,6 +189,63 @@ func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
 	}
 	if _, err := s.ArtworkCandidates(ctx, uuid.NewV7(), domain.ArtworkPoster); !errors.Is(err, ErrNotFound) {
 		t.Errorf("candidates of no title: %v, want ErrNotFound", err)
+	}
+}
+
+// A plugin ranked first for a library's pictures leads its titles' cards until it is removed, and
+// then the next provider does.
+func TestARemovedPluginsPicturesNoLongerLead(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddPlugin(ctx, Plugin{Slug: "art", Protocol: domain.PluginPhoton, URL: "http://art.test", Manifest: []byte("{}")}, Hearing{}); err != nil {
+		t.Fatal(err)
+	}
+	art := domain.PluginSource("art")
+	change := LibraryChange{Name: "Films", Sources: []domain.KindSources{{
+		Kind:     domain.ItemMovie,
+		Metadata: []domain.RankedSource{{Source: domain.SourceTMDB, Enabled: true}},
+		Images:   []domain.RankedSource{{Source: art, Enabled: true}, {Source: domain.SourceTMDB, Enabled: true}},
+	}}}
+	if err := s.SetLibrary(ctx, lib.ID, change); err != nil {
+		t.Fatal(err)
+	}
+	film := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+		RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
+	}}}}}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	item := oneItem(t, s, `kind = 'movie'`).ID
+	for source, url := range map[domain.FieldSource]string{domain.SourceTMDB: "https://tmdb.example/heat.jpg", art: "https://art.example/heat.jpg"} {
+		if err := s.SaveIdentity(ctx, item, source, domain.Metadata{Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, URL: url}}}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	poster := func() string {
+		t.Helper()
+		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
+		if err != nil || len(cards) != 1 {
+			t.Fatalf("wall = %+v, %v", cards, err)
+		}
+		p, err := s.Picture(ctx, cards[0].Poster)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.URL
+	}
+
+	if got := poster(); got != "https://art.example/heat.jpg" {
+		t.Errorf("with the plugin ranked first, the poster is %q, want the plugin's", got)
+	}
+	if err := s.RemovePlugin(ctx, "art"); err != nil {
+		t.Fatal(err)
+	}
+	if got := poster(); got != "https://tmdb.example/heat.jpg" {
+		t.Errorf("with the plugin removed, the poster is %q, want TMDB's", got)
 	}
 }
 

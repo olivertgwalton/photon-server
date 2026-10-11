@@ -190,7 +190,7 @@ func (s *Store) collectionsOf(ctx context.Context, item uuid.UUID) ([]Collection
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}
-	pictures, hashes, err := s.pictureOrder(ctx, rows)
+	pictures, hashes, err := s.pictureOrder(ctx, rows, bestPicture)
 	if err != nil {
 		return nil, err
 	}
