@@ -58,10 +58,8 @@ const changeRule = $derived.by(() => {
 	return `/libraries/${data.library}${search}${search ? "&" : "?"}collection=${data.collection.id}`;
 });
 
-let members = $state<Card[]>([]);
-$effect.pre(() => {
-	members = [...data.members];
-});
+// As the server keeps them, until they are reordered, added to or taken from.
+let members = $derived<Card[]>(data.members);
 
 let query = $state("");
 let found = $state<Card[]>([]);
