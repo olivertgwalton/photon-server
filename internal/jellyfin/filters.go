@@ -44,7 +44,7 @@ func (a *API) facets(ctx context.Context, profile uuid.UUID, libs []*store.SeenL
 	for n, l := range libs {
 		ids[n] = l.ID
 	}
-	return a.svc.Catalogue.Facets(ctx, ids, profile)
+	return a.svc.Catalogue.Facets(ctx, ids, profile, domain.WallTitles)
 }
 
 // facetsAsked are the facets of the libraries a request names.

@@ -57,7 +57,7 @@ func (fakeCatalogue) Wall(_ context.Context, libs []uuid.UUID, p store.WallPage)
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: title, ReleaseDate: time.Date(1995, 12, 15, 0, 0, 0, 0, time.UTC)}}, 120, nil
 }
 
-func (fakeCatalogue) Letters(_ context.Context, lib, _ uuid.UUID, f store.WallFilter) ([]store.Letter, error) {
+func (fakeCatalogue) Letters(_ context.Context, lib, _ uuid.UUID, _ domain.WallKind, f store.WallFilter) ([]store.Letter, error) {
 	if lib != films {
 		return nil, store.ErrNotFound
 	}
@@ -67,7 +67,7 @@ func (fakeCatalogue) Letters(_ context.Context, lib, _ uuid.UUID, f store.WallFi
 	return []store.Letter{{Letter: "#", Count: 2}, {Letter: "A", Count: 7}}, nil
 }
 
-func (fakeCatalogue) Facets(_ context.Context, libs []uuid.UUID, _ uuid.UUID) (store.Facets, error) {
+func (fakeCatalogue) Facets(_ context.Context, libs []uuid.UUID, _ uuid.UUID, _ domain.WallKind) (store.Facets, error) {
 	if !slices.Equal(libs, []uuid.UUID{films}) {
 		return store.Facets{}, store.ErrNotFound
 	}
@@ -423,7 +423,7 @@ func (ratedCatalogue) Wall(context.Context, []uuid.UUID, store.WallPage) ([]stor
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat", Certificate: "US:R"}}, 1, nil
 }
 
-func (ratedCatalogue) Facets(context.Context, []uuid.UUID, uuid.UUID) (store.Facets, error) {
+func (ratedCatalogue) Facets(context.Context, []uuid.UUID, uuid.UUID, domain.WallKind) (store.Facets, error) {
 	return store.Facets{Certificates: []string{"15", "US:R"}}, nil
 }
 

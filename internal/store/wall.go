@@ -56,8 +56,10 @@ type Card struct {
 // StartIndex and Plex's X-Plex-Container-Start page, narrowed by Filter.
 type WallPage struct {
 	Profile uuid.UUID
-	Sort    domain.WallSort
-	Order   domain.Order
+	// Kind is what the wall pages, its titles where it names none.
+	Kind  domain.WallKind
+	Sort  domain.WallSort
+	Order domain.Order
 	// RatingSite is whose rating SortRating sorts by.
 	RatingSite domain.RatingSite
 	Filter     WallFilter
@@ -65,11 +67,11 @@ type WallPage struct {
 	Limit      int
 }
 
-// Wall answers a page of the films and shows of libraries, sorted together, and how many there are
-// in all. Ties in the sort are broken by id, so a page is the same whenever it is asked for while
-// the libraries are.
+// Wall answers a page of the films and shows of libraries, or of their episodes, sorted together,
+// and how many there are in all. Ties in the sort are broken by id, so a page is the same whenever
+// it is asked for while the libraries are.
 func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card, int64, error) {
-	titles, args, err := s.wallQuery(ctx, libs, p.Profile, p.Filter)
+	titles, args, err := s.wallQuery(ctx, libs, p.Profile, p.Kind, p.Filter)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -77,7 +79,7 @@ func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card,
 	args["offset"], args["limit"] = p.Offset, p.Limit
 	var rows []*model.Item
 	total, err := s.counted(ctx, `SELECT count(*) `+titles, args, func(ctx context.Context) (err error) {
-		rows, err = queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` `+titles+` `+order+` OFFSET @offset LIMIT @limit`, args)
+		rows, err = queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumnsOf("items")+` `+titles+` `+order+` OFFSET @offset LIMIT @limit`, args)
 		return err
 	})
 	if err != nil {
@@ -88,7 +90,8 @@ func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card,
 }
 
 // orderBy is the ORDER BY of a page of a wall, its ties broken by id, adding the values it takes to
-// args.
+// args. Episodes are in their shows' order where the sort ties, as Plex's default episode sort has
+// them, and by title means by show; every key runs the one way, as Jellyfin's SortOrder does.
 func (p WallPage) orderBy(args pgx.NamedArgs) string {
 	dir := "ASC"
 	if p.Order == domain.Descending {
@@ -105,6 +108,9 @@ func (p WallPage) orderBy(args pgx.NamedArgs) string {
 		if dir == "DESC" {
 			key = "items.released_desc"
 		}
+		if p.Kind == domain.WallEpisodes {
+			key = episodeAired(dir)
+		}
 	case domain.SortRating:
 		key, nulls = "(SELECT r.score FROM ranked_ratings(items) r WHERE r.site = @sort_site)", " NULLS LAST"
 		args["sort_site"] = p.RatingSite
@@ -115,20 +121,37 @@ func (p WallPage) orderBy(args pgx.NamedArgs) string {
 	case domain.SortTitle:
 		key = "items.sort_title"
 	}
-	return "ORDER BY " + key + " " + dir + nulls + ", items.id " + dir
+	if p.Kind != domain.WallEpisodes {
+		return "ORDER BY " + key + " " + dir + nulls + ", items.id " + dir
+	}
+	order := "ORDER BY "
+	if p.Sort != domain.SortTitle {
+		order += key + " " + dir + nulls + ", "
+	}
+	return order + strings.Join([]string{"show.sort_title", "show.id", "items.season_number", "items.episode_number", "items.id"}, " "+dir+", ") + " " + dir
+}
+
+// episodeAired is when an episode came out, for a wall sorted in dir: its release date, else the
+// day it aired, and one undated last whichever way, as released_asc and released_desc pad a title.
+func episodeAired(dir string) string {
+	if dir == "DESC" {
+		return "coalesce(items.release_date, items.air_date, '0001-01-01')"
+	}
+	return "coalesce(items.release_date, items.air_date, '9999-12-31')"
 }
 
 // wallQuery is the FROM and WHERE of a library's films or shows a profile may see, and its
-// collections as the library shows them, as a filter narrows them, and the values they take;
-// ErrNotFound for no such library. A library holds one kind of title, and naming it lets the wall's
-// sort indexes read a page in order.
-func (s *Store) wallQuery(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, f WallFilter) (string, pgx.NamedArgs, error) {
+// collections as the library shows them, or of its episodes, joined to their shows as show, as a
+// filter narrows them, and the values they take; ErrNotFound for no such library. A library holds
+// one kind of title, and naming it lets the wall's sort indexes read a page in order.
+func (s *Store) wallQuery(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, wall domain.WallKind, f WallFilter) (string, pgx.NamedArgs, error) {
 	rows, err := s.pool.Query(ctx, `SELECT id, kind, collection_mode FROM libraries WHERE id = ANY($1) ORDER BY id`, libs)
 	if err != nil {
 		return "", nil, err
 	}
 	args := pgx.NamedArgs{"libs": libs, "profile": profile}
-	filter := f.where(args)
+	from, row := wallRows(wall)
+	filter := f.where(args, row)
 	// Each library's titles are what its kind and collection mode make them.
 	var arms []string
 	var id uuid.UUID
@@ -137,9 +160,12 @@ func (s *Store) wallQuery(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 	if _, err := pgx.ForEachRow(rows, []any{&id, &kind, &mode}, func() error {
 		n := strconv.Itoa(len(arms))
 		args["lib"+n], args["kind"+n] = id, kind.ItemKinds()[0]
+		if wall == domain.WallEpisodes {
+			args["kind"+n] = domain.ItemEpisode
+		}
 		titles := `items.kind = @kind` + n
 		// A filtered wall answers titles alone, as Plex's does: a collection has no genre or year.
-		if filter == "" {
+		if filter == "" && wall != domain.WallEpisodes {
 			switch mode {
 			case domain.CollectionsGrouped:
 				titles = `(items.kind = @kind` + n + ` AND NOT EXISTS (SELECT 1 FROM collection_members cm JOIN items ci ON ci.id = cm.collection_id
@@ -157,8 +183,17 @@ func (s *Store) wallQuery(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 	if len(arms) != len(libs) {
 		return "", nil, ErrNotFound
 	}
-	return `FROM items WHERE library_id = ANY(@libs)
+	return `FROM ` + from + ` WHERE items.library_id = ANY(@libs)
 		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND (` + strings.Join(arms, " OR ") + `))` + filter, args, nil
+}
+
+// wallRows are the items a wall pages, as from, and the row of them whose letter, genres, studios
+// and certificate a title has: an episode's are its show's.
+func wallRows(wall domain.WallKind) (from, row string) {
+	if wall == domain.WallEpisodes {
+		return "items JOIN items season ON season.id = items.parent_id JOIN items show ON show.id = season.parent_id", "show"
+	}
+	return "items", "items"
 }
 
 // Letter is how many of a library's titles sort under a letter: "#" for those before A.
@@ -168,14 +203,16 @@ type Letter struct {
 }
 
 // Letters counts a library's titles, as a filter narrows them, by the first letter they sort by,
-// in title order, as Plex's firstCharacter does, so a client can jump to a letter by its offset.
-// Letters are read unaccented, so "Émile" counts under E where the wall sorts it.
-func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, f WallFilter) ([]Letter, error) {
-	titles, args, err := s.wallQuery(ctx, []uuid.UUID{lib}, profile, f)
+// in title order, as Plex's firstCharacter does, so a client can jump to a letter by its offset; its
+// episodes by their shows'. Letters are read unaccented, so "Émile" counts under E where the wall
+// sorts it.
+func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, wall domain.WallKind, f WallFilter) ([]Letter, error) {
+	titles, args, err := s.wallQuery(ctx, []uuid.UUID{lib}, profile, wall, f)
 	if err != nil {
 		return nil, err
 	}
-	out, err := queryStructs[Letter](ctx, s.pool, `SELECT `+firstLetter+` AS letter, count(*) AS count `+titles+`
+	_, row := wallRows(wall)
+	out, err := queryStructs[Letter](ctx, s.pool, `SELECT `+firstLetter(row)+` AS letter, count(*) AS count `+titles+`
 		GROUP BY letter ORDER BY letter`, args)
 	// Titles before A sort first in the wall, whatever the collation makes of "#".
 	if n := slices.IndexFunc(out, func(l Letter) bool { return l.Letter == "#" }); n > 0 {

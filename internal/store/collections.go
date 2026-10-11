@@ -367,7 +367,7 @@ func (s *Store) SetRule(ctx context.Context, collection uuid.UUID, rule SmartRul
 
 // findMembers replaces a smart collection's titles with what its rule finds now, in its order.
 func (s *Store) findMembers(ctx context.Context, tx db, collection, lib uuid.UUID, rule SmartRule) error {
-	titles, args, err := s.wallQuery(ctx, []uuid.UUID{lib}, uuid.UUID{}, rule.Filter)
+	titles, args, err := s.wallQuery(ctx, []uuid.UUID{lib}, uuid.UUID{}, domain.WallTitles, rule.Filter)
 	if err != nil {
 		return err
 	}

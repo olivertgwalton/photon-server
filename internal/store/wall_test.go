@@ -3,6 +3,7 @@
 package store
 
 import (
+	"cmp"
 	"errors"
 	"slices"
 	"testing"
@@ -98,12 +99,12 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 		t.Errorf("past the end: %d of %d, %v; want none of 7", len(past), total, err)
 	}
 	// Alien, Brazil, Heat and heat, Memento, Ran, Zodiac.
-	letters, err := s.Letters(ctx, lib.ID, uuid.UUID{}, WallFilter{})
+	letters, err := s.Letters(ctx, lib.ID, uuid.UUID{}, domain.WallTitles, WallFilter{})
 	want := []Letter{{"A", 1}, {"B", 1}, {"H", 2}, {"M", 1}, {"R", 1}, {"Z", 1}}
 	if err != nil || !slices.Equal(letters, want) {
 		t.Errorf("letters = %v, %v; want %v", letters, err, want)
 	}
-	if _, err := s.Letters(ctx, uuid.NewV7(), uuid.UUID{}, WallFilter{}); !errors.Is(err, ErrNotFound) {
+	if _, err := s.Letters(ctx, uuid.NewV7(), uuid.UUID{}, domain.WallTitles, WallFilter{}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("letters of an unknown library: %v, want ErrNotFound", err)
 	}
 	if _, _, err := s.Wall(ctx, []uuid.UUID{uuid.NewV7()}, WallPage{Sort: domain.SortTitle, Limit: 3}); !errors.Is(err, ErrNotFound) {
@@ -194,5 +195,134 @@ func TestCardsAreTheTitlesAskedForByID(t *testing.T) {
 	}
 	if got := titles(kid, fargo, heat); !slices.Equal(got, []string{"Heat"}) {
 		t.Errorf("for a profile without the shows: %v, want the film alone", got)
+	}
+}
+
+// A show library's episodes are paged across its shows: those that came out the same day in their
+// shows' order, the undated last, each show read as its show is.
+func TestAWallPagesEpisodesAcrossShows(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	day := func(d int) *time.Time { return new(time.Date(2026, 1, d, 0, 0, 0, 0, time.UTC)) }
+	type episode struct {
+		title           string
+		season, episode int
+		aired           *time.Time
+	}
+	ids := map[string]uuid.UUID{}
+	for _, show := range []struct {
+		title, cert, genre string
+		episodes           []episode
+	}{
+		// Added first, so the show's id can't put it first.
+		{"The Wire", "18", "Drama", []episode{{"w2", 1, 2, day(12)}, {"w1", 1, 1, day(5)}}},
+		{"Archer", "15", "Comedy", []episode{{"a3", 2, 1, nil}, {"a2", 1, 2, day(5)}, {"a1", 1, 1, day(5)}}},
+	} {
+		showID := addItem(t, s, model.Item{
+			LibraryID: lib.ID, Kind: domain.ItemShow, Title: show.title, ScanTitle: show.title, SortTitle: sortTitle(show.title),
+			Folder: show.title, Certificate: &show.cert, Genres: []string{show.genre},
+		})
+		seasons := map[int]uuid.UUID{}
+		for _, e := range show.episodes {
+			if _, ok := seasons[e.season]; !ok {
+				seasons[e.season] = addItem(t, s, model.Item{
+					LibraryID: lib.ID, Kind: domain.ItemSeason, ParentID: &showID, SeasonNumber: &e.season,
+					Title: "Season", ScanTitle: "Season", SortTitle: "season", Folder: show.title,
+				})
+			}
+			ids[e.title] = addItem(t, s, model.Item{
+				LibraryID: lib.ID, Kind: domain.ItemEpisode, ParentID: new(seasons[e.season]), SeasonNumber: &e.season,
+				EpisodeNumber: &e.episode, AirDate: e.aired, Title: e.title, ScanTitle: e.title, SortTitle: e.title, Folder: show.title,
+			})
+		}
+	}
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkWatched(ctx, oliver.ID, ids["a1"], nil); err != nil {
+		t.Fatal(err)
+	}
+	titles := func(cards []Card) []string {
+		out := []string{}
+		for _, c := range cards {
+			out = append(out, c.Title)
+		}
+		return out
+	}
+	episodes := func(p WallPage) []string {
+		t.Helper()
+		p.Profile, p.Kind, p.Limit = cmp.Or(p.Profile, oliver.ID), domain.WallEpisodes, 100
+		cards, total, err := s.Wall(ctx, []uuid.UUID{lib.ID}, p)
+		if err != nil || int(total) != len(cards) {
+			t.Fatalf("%+v: %d of %d, %v", p, len(cards), total, err)
+		}
+		return titles(cards)
+	}
+
+	for _, tc := range []struct {
+		name string
+		page WallPage
+		want []string
+	}{
+		{"by show", WallPage{Sort: domain.SortTitle}, []string{"a1", "a2", "a3", "w1", "w2"}},
+		{"by show, Z to A", WallPage{Sort: domain.SortTitle, Order: domain.Descending}, []string{"w2", "w1", "a3", "a2", "a1"}},
+		{"oldest first", WallPage{Sort: domain.SortReleased}, []string{"a1", "a2", "w1", "w2", "a3"}},
+		{"newest first", WallPage{Sort: domain.SortReleased, Order: domain.Descending}, []string{"w2", "w1", "a2", "a1", "a3"}},
+		{"a drama, by its show", WallPage{Sort: domain.SortTitle, Filter: WallFilter{Genres: []string{"Drama"}}}, []string{"w1", "w2"}},
+		{"unwatched", WallPage{Sort: domain.SortTitle, Filter: WallFilter{Marks: []domain.Mark{domain.MarkUnwatched}}}, []string{"a2", "a3", "w1", "w2"}},
+		{"under W", WallPage{Sort: domain.SortTitle, Filter: WallFilter{StartsWith: "W"}}, []string{"w1", "w2"}},
+	} {
+		if got := episodes(tc.page); !slices.Equal(got, tc.want) {
+			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
+		}
+	}
+	// Every sort pages the same episodes in the same order a page at a time.
+	for _, sort := range domain.WallSorts() {
+		for _, order := range domain.Orders() {
+			full := episodes(WallPage{Sort: sort, Order: order})
+			var paged []string
+			for offset := 0; offset < len(full); offset += 2 {
+				page, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: oliver.ID, Kind: domain.WallEpisodes, Sort: sort, Order: order, Offset: offset, Limit: 2})
+				if err != nil {
+					t.Fatal(err)
+				}
+				paged = append(paged, titles(page)...)
+			}
+			if len(full) != 5 || !slices.Equal(paged, full) {
+				t.Errorf("%s %s: paging by 2 gave %q, want %q", sort, order, paged, full)
+			}
+		}
+	}
+
+	// A profile kept to 15 sees The Wire's episodes no more than The Wire.
+	teen, err := s.AddProfile(ctx, "Teen", domain.RoleUser, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAccess(ctx, teen.ID, ProfileAccess{MaxAge: new(15), Unrated: domain.UnratedAllow}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := episodes(WallPage{Profile: teen.ID, Sort: domain.SortTitle}); !slices.Equal(got, []string{"a1", "a2", "a3"}) {
+		t.Errorf("kept to 15: %q, want Archer's", got)
+	}
+	letters, err := s.Letters(ctx, lib.ID, oliver.ID, domain.WallEpisodes, WallFilter{})
+	if want := []Letter{{"A", 3}, {"W", 2}}; err != nil || !slices.Equal(letters, want) {
+		t.Errorf("letters = %v, %v; want %v, by show", letters, err, want)
+	}
+	facets, err := s.Facets(ctx, []uuid.UUID{lib.ID}, oliver.ID, domain.WallEpisodes)
+	if err != nil || !slices.Equal(facets.Genres, []string{"Comedy", "Drama"}) || !slices.Equal(facets.Certificates, []string{"15", "18"}) {
+		t.Errorf("facets = %+v, %v; want their shows' genres and certificates", facets, err)
+	}
+	if cards, total, err := s.Wall(ctx, []uuid.UUID{films.ID}, WallPage{Kind: domain.WallEpisodes, Sort: domain.SortTitle, Limit: 10}); err != nil || total != 0 || len(cards) != 0 {
+		t.Errorf("a film library's episodes: %d of %d, %v; want none", len(cards), total, err)
 	}
 }

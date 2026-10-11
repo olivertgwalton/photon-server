@@ -30,8 +30,8 @@ const (
 type catalogue interface {
 	LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*store.SeenLibrary, error)
 	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
-	Letters(ctx context.Context, lib, profile uuid.UUID, f store.WallFilter) ([]store.Letter, error)
-	Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID) (store.Facets, error)
+	Letters(ctx context.Context, lib, profile uuid.UUID, wall domain.WallKind, f store.WallFilter) ([]store.Letter, error)
+	Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, wall domain.WallKind) (store.Facets, error)
 	Similar(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
@@ -151,7 +151,7 @@ func (a *API) letters(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
 	}
-	letters, err := a.svc.Catalogue.Letters(r.Context(), lib, auth.SessionOf(r.Context()).Profile.ID, f)
+	letters, err := a.svc.Catalogue.Letters(r.Context(), lib, auth.SessionOf(r.Context()).Profile.ID, domain.WallTitles, f)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -401,7 +401,7 @@ func (a *API) facets(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	f, err := a.svc.Catalogue.Facets(r.Context(), []uuid.UUID{lib}, auth.SessionOf(r.Context()).Profile.ID)
+	f, err := a.svc.Catalogue.Facets(r.Context(), []uuid.UUID{lib}, auth.SessionOf(r.Context()).Profile.ID, domain.WallTitles)
 	if a.answered(w, r, err) {
 		return
 	}

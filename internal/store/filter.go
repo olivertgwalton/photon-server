@@ -44,9 +44,11 @@ func (f WallFilter) Check() error {
 	return nil
 }
 
-// firstLetter is a sort title's first letter unaccented, or "#" for anything before A.
-const firstLetter = `CASE WHEN upper(left(unaccent(items.sort_title), 1)) BETWEEN 'A' AND 'Z'
-	THEN upper(left(unaccent(items.sort_title), 1)) ELSE '#' END`
+// firstLetter is the first letter of a row's sort title unaccented, or "#" for anything before A.
+func firstLetter(row string) string {
+	return `CASE WHEN upper(left(unaccent(` + row + `.sort_title), 1)) BETWEEN 'A' AND 'Z'
+	THEN upper(left(unaccent(` + row + `.sort_title), 1)) ELSE '#' END`
+}
 
 // versionOf is a copy on disk of a film, or of any episode of a show. Each level is its own arm,
 // as an OR across them is a scan of every item for every title.
@@ -56,8 +58,8 @@ const versionOf = `SELECT 1 FROM (
 		UNION ALL SELECT e.id FROM items s JOIN items e ON e.parent_id = s.id WHERE s.parent_id = items.id
 	) t JOIN versions v ON v.item_id = t.id WHERE v.missing_since IS NULL`
 
-// episodesOf are a show's episodes, two levels down, and a film itself.
-const episodesOf = `SELECT items.id WHERE items.kind = 'movie'
+// episodesOf are a show's episodes, two levels down, and a film or an episode itself.
+const episodesOf = `SELECT items.id WHERE items.kind IN ('movie', 'episode')
 	UNION ALL SELECT e.id FROM items s JOIN items e ON e.parent_id = s.id
 		WHERE s.parent_id = items.id AND e.kind = 'episode'`
 
@@ -67,8 +69,10 @@ const begun = `EXISTS (SELECT 1 FROM (` + episodesOf + `) e
 	WHERE w.watched_at IS NOT NULL OR w.position_ms > 0)`
 
 // where is the conditions, each led by AND, that narrow a statement over items to what the filter
-// lets through, for the profile args holds as @profile; it adds the values they take to args.
-func (f WallFilter) where(args pgx.NamedArgs) string {
+// lets through, for the profile args holds as @profile; it adds the values they take to args. A
+// title's letter, genres, studios and certificate are read from row: an episode's are its show's,
+// as Plex's show.genre filters episodes.
+func (f WallFilter) where(args pgx.NamedArgs, row string) string {
 	var w strings.Builder
 	and := func(cond, name string, value any) {
 		w.WriteString(" AND " + cond)
@@ -77,22 +81,22 @@ func (f WallFilter) where(args pgx.NamedArgs) string {
 		}
 	}
 	if f.StartsWith != "" {
-		and(firstLetter+" = @letter", "letter", f.StartsWith)
+		and(firstLetter(row)+" = @letter", "letter", f.StartsWith)
 	}
 	for _, m := range f.Marks {
 		and(markSQL(m), "", nil)
 	}
 	if len(f.Genres) > 0 {
-		and("items.genres ?| @genres", "genres", f.Genres)
+		and(row+".genres ?| @genres", "genres", f.Genres)
 	}
 	if len(f.Studios) > 0 {
-		and("items.studios ?| @studios", "studios", f.Studios)
+		and(row+".studios ?| @studios", "studios", f.Studios)
 	}
 	if len(f.Years) > 0 {
 		and("items.year = ANY(@years)", "years", f.Years)
 	}
 	if len(f.Certificates) > 0 {
-		and("items.certificate = ANY(@certificates)", "certificates", f.Certificates)
+		and(row+".certificate = ANY(@certificates)", "certificates", f.Certificates)
 	}
 	if len(f.Resolutions) > 0 {
 		widths := make([]string, len(f.Resolutions))
@@ -159,11 +163,11 @@ type Facets struct {
 	RatingSites  []domain.RatingSite
 }
 
-// Facets answers the values the films and shows of libraries a profile may see have; ErrNotFound
-// for no such library.
-func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID) (Facets, error) {
+// Facets answers the values the films and shows of libraries, or their episodes, a profile may see
+// have; ErrNotFound for no such library.
+func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, wall domain.WallKind) (Facets, error) {
 	var f Facets
-	_, at, err := s.wallQuery(ctx, libs, profile, WallFilter{})
+	_, at, err := s.wallQuery(ctx, libs, profile, wall, WallFilter{})
 	if err != nil {
 		return f, err
 	}
@@ -178,10 +182,16 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID)
 	// are those of the titles read, as the wall's filters find them: a copy is a film's, its extras'
 	// or a show's episodes'. Each kind and site is asked whether any of those titles holds one,
 	// rather than every copy and rating of the library being read.
+	from, row := wallRows(wall)
+	// An episode's copies are its own; a title's are its extras' and its episodes' too.
+	owner := "coalesce(p.parent_id, e.parent_id, e.id)"
+	if wall == domain.WallEpisodes {
+		owner = "e.id"
+	}
 	var widths []int
 	err = s.pool.QueryRow(ctx, `
 		WITH titles AS MATERIALIZED (
-			SELECT items.id, items.genres, items.studios, items.year, items.certificate FROM items
+			SELECT items.id, `+row+`.genres, `+row+`.studios, items.year, `+row+`.certificate FROM `+from+`
 			JOIN unnest(CAST(@ids AS uuid[]), CAST(@kinds AS text[])) l (lib, kind) ON items.library_id = l.lib AND items.kind = l.kind,
 			viewer(@profile) v
 			WHERE sees(v, items)
@@ -191,7 +201,7 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID)
 				SELECT DISTINCT video_range, width FROM versions WHERE library_id = ANY(@libs) AND missing_since IS NULL
 			) k
 			WHERE EXISTS (SELECT 1 FROM versions c JOIN items e ON e.id = c.item_id LEFT JOIN items p ON p.id = e.parent_id
-				JOIN titles t ON t.id = coalesce(p.parent_id, e.parent_id, e.id)
+				JOIN titles t ON t.id = `+owner+`
 				WHERE c.library_id = ANY(@libs) AND c.missing_since IS NULL
 					AND c.video_range IS NOT DISTINCT FROM k.video_range AND c.width IS NOT DISTINCT FROM k.width)
 		)

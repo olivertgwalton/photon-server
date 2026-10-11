@@ -176,7 +176,7 @@ func TestALibrarysWallShowsItsCollectionsAsItSays(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		letters, err := s.Letters(ctx, lib.ID, uuid.UUID{}, f)
+		letters, err := s.Letters(ctx, lib.ID, uuid.UUID{}, domain.WallTitles, f)
 		if err != nil {
 			t.Fatal(err)
 		}
