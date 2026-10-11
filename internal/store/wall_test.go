@@ -280,6 +280,7 @@ func TestAWallPagesEpisodesAcrossShows(t *testing.T) {
 		{"a drama, by its show", WallPage{Sort: domain.SortTitle, Filter: WallFilter{Genres: []string{"Drama"}}}, []string{"w1", "w2"}},
 		{"unwatched", WallPage{Sort: domain.SortTitle, Filter: WallFilter{Marks: []domain.Mark{domain.MarkUnwatched}}}, []string{"a2", "a3", "w1", "w2"}},
 		{"under W", WallPage{Sort: domain.SortTitle, Filter: WallFilter{StartsWith: "W"}}, []string{"w1", "w2"}},
+		{"last played first, the unplayed by show", WallPage{Sort: domain.SortPlayed, Order: domain.Descending}, []string{"a1", "w2", "w1", "a3", "a2"}},
 	} {
 		if got := episodes(tc.page); !slices.Equal(got, tc.want) {
 			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
