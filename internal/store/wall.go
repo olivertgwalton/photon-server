@@ -150,7 +150,7 @@ func (s *Store) wallQuery(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 		return "", nil, err
 	}
 	args := pgx.NamedArgs{"libs": libs, "profile": profile}
-	from, row := wallRows(wall)
+	from, row, seen := wallRows(wall)
 	filter := f.where(args, row)
 	// Each library's titles are what its kind and collection mode make them.
 	var arms []string
@@ -184,16 +184,17 @@ func (s *Store) wallQuery(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 		return "", nil, ErrNotFound
 	}
 	return `FROM ` + from + ` WHERE items.library_id = ANY(@libs)
-		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items) AND (` + strings.Join(arms, " OR ") + `))` + filter, args, nil
+		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE ` + seen + ` AND (` + strings.Join(arms, " OR ") + `))` + filter, args, nil
 }
 
-// wallRows are the items a wall pages, as from, and the row of them whose letter, genres, studios
-// and certificate a title has: an episode's are its show's.
-func wallRows(wall domain.WallKind) (from, row string) {
+// wallRows are the items a wall pages, as from; the row of them whose letter, genres, studios and
+// certificate a title has, an episode's being its show's; and whether the viewer v sees one.
+func wallRows(wall domain.WallKind) (from, row, seen string) {
 	if wall == domain.WallEpisodes {
-		return "items JOIN items season ON season.id = items.parent_id JOIN items show ON show.id = season.parent_id", "show"
+		return "items JOIN items season ON season.id = items.parent_id JOIN items show ON show.id = season.parent_id", "show",
+			"sees(v, items, season, show)"
 	}
-	return "items", "items"
+	return "items", "items", "sees(v, items)"
 }
 
 // Letter is how many of a library's titles sort under a letter: "#" for those before A.
@@ -211,7 +212,7 @@ func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, wall domain
 	if err != nil {
 		return nil, err
 	}
-	_, row := wallRows(wall)
+	_, row, _ := wallRows(wall)
 	out, err := queryStructs[Letter](ctx, s.pool, `SELECT `+firstLetter(row)+` AS letter, count(*) AS count `+titles+`
 		GROUP BY letter ORDER BY letter`, args)
 	// Titles before A sort first in the wall, whatever the collation makes of "#".

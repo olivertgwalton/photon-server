@@ -182,7 +182,7 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 	// are those of the titles read, as the wall's filters find them: a copy is a film's, its extras'
 	// or a show's episodes'. Each kind and site is asked whether any of those titles holds one,
 	// rather than every copy and rating of the library being read.
-	from, row := wallRows(wall)
+	from, row, seen := wallRows(wall)
 	// An episode's copies are its own; a title's are its extras' and its episodes' too.
 	owner := "coalesce(p.parent_id, e.parent_id, e.id)"
 	if wall == domain.WallEpisodes {
@@ -194,7 +194,7 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 			SELECT items.id, `+row+`.genres, `+row+`.studios, items.year, `+row+`.certificate FROM `+from+`
 			JOIN unnest(CAST(@ids AS uuid[]), CAST(@kinds AS text[])) l (lib, kind) ON items.library_id = l.lib AND items.kind = l.kind,
 			viewer(@profile) v
-			WHERE sees(v, items)
+			WHERE `+seen+`
 		),
 		copies AS MATERIALIZED (
 			SELECT k.video_range, k.width FROM (
