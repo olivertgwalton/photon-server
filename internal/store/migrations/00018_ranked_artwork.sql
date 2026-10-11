@@ -1,9 +1,19 @@
 -- +goose Up
+-- The kind whose source ranking a title takes, as LibraryKind.RankedAs answers: its own, or for a
+-- collection or an extra, its library's titles'.
+-- +goose StatementBegin
+CREATE FUNCTION ranked_as(library_kind text, item_kind text) RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE RETURN
+  CASE
+    WHEN library_kind = 'shows' AND item_kind IN ('show', 'season', 'episode') THEN item_kind
+    WHEN library_kind = 'shows' THEN 'show'
+    ELSE 'movie'
+  END;
+-- +goose StatementEnd
+
 -- A title's pictures, each numbered by its place among the title's pictures of its kind, the best
 -- first: an admin's choice, then files beside the title, then the providers its library asks for
 -- pictures of the kind it is ranked as, in the library's order, then those it no longer asks, each
--- provider's own order breaking a tie. A collection or an extra is ranked as its library's titles,
--- as LibraryKind.RankedAs ranks them.
+-- provider's own order breaking a tie.
 -- +goose StatementBegin
 CREATE FUNCTION ranked_artwork(titles uuid[]) RETURNS TABLE (id uuid, item_id uuid, source text, kind text,
   place text, "position" smallint, folder text, language text, width int, height int, blurhash text, nth bigint)
@@ -15,13 +25,11 @@ LANGUAGE sql STABLE PARALLEL SAFE AS $$
   JOIN libraries l ON l.id = i.library_id
   JOIN artwork a ON a.item_id = i.id
   LEFT JOIN library_sources ls ON ls.library_id = l.id AND ls.fetcher = 'images' AND ls.enabled
-    AND ls.source = a.source AND ls.item_kind = CASE
-      WHEN l.kind = 'shows' AND i.kind IN ('show', 'season', 'episode') THEN i.kind
-      WHEN l.kind = 'shows' THEN 'show'
-      ELSE 'movie' END
+    AND ls.source = a.source AND ls.item_kind = ranked_as(l.kind, i.kind)
   WHERE i.id = ANY(titles)
 $$;
 -- +goose StatementEnd
 
 -- +goose Down
 DROP FUNCTION ranked_artwork(uuid[]);
+DROP FUNCTION ranked_as(text, text);

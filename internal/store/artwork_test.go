@@ -363,3 +363,19 @@ func TestTheProviderPicturesATitleShowsFirstAreFetchedUntilHashed(t *testing.T) 
 		t.Errorf("page past the film = %v, %s, %v; want none and the end", page, last, err)
 	}
 }
+
+// Postgres ranks a title's sources as the kind its library does, for every library and title kind.
+func TestPostgresRanksATitleAsItsLibraryDoes(t *testing.T) {
+	s := migrated(t)
+	for _, lib := range domain.LibraryKinds() {
+		for _, item := range domain.ItemKinds() {
+			var got domain.ItemKind
+			if err := s.pool.QueryRow(t.Context(), `SELECT ranked_as($1, $2)`, lib, item).Scan(&got); err != nil {
+				t.Fatal(err)
+			}
+			if want := lib.RankedAs(item); got != want {
+				t.Errorf("a %s in a %s library is ranked as %s, want %s", item, lib, got, want)
+			}
+		}
+	}
+}
