@@ -119,7 +119,7 @@ func (f WallFilter) where(args pgx.NamedArgs) string {
 	}
 	if f.MinRating > 0 {
 		args["rating_site"] = f.RatingSite
-		and("EXISTS (SELECT 1 FROM ratings r WHERE r.item_id = items.id AND r.site = @rating_site AND r.score >= @min_rating)",
+		and("EXISTS (SELECT 1 FROM ranked_ratings(items) r WHERE r.site = @rating_site AND r.score >= @min_rating)",
 			"min_rating", f.MinRating)
 	}
 	return w.String()

@@ -77,3 +77,47 @@ func TestAProvidersSettingsAreSetAndCleared(t *testing.T) {
 		t.Errorf("after clearing one: %v, %v; want the key alone", got, err)
 	}
 }
+
+// Two sources score a film on IMDb, the one its library trusts less higher: the wall sorts and
+// filters it, and the home page ranks it, by the score its card shows.
+func TestATitleIsSortedAndFilteredByTheRatingItsCardShows(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	admin, _ := homeLibraries(t, s, []string{"Jaws", "Heat"}, nil)
+	jaws, heat := oneItem(t, s, `title = 'Jaws'`), oneItem(t, s, `title = 'Heat'`).ID
+	lib := jaws.LibraryID
+	if err := s.SetLibrary(ctx, lib, LibraryChange{Sources: metadataFrom(domain.LibraryMovies, domain.SourceTMDB, domain.SourceMDBList)}); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range []struct {
+		id     uuid.UUID
+		source domain.FieldSource
+		score  float64
+	}{{jaws.ID, domain.SourceTMDB, 60}, {jaws.ID, domain.SourceMDBList, 90}, {heat, domain.SourceMDBList, 75}} {
+		if err := s.SaveRatings(ctx, r.id, r.source, []domain.Rating{{Site: domain.SiteIMDb, Score: r.score}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	titles := func(p WallPage) (out []string) {
+		cards, _, err := s.Wall(ctx, []uuid.UUID{lib}, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range cards {
+			out = append(out, c.Title)
+			if c.Title == "Jaws" && (len(c.Ratings) != 1 || c.Ratings[0].Score != 60) {
+				t.Errorf("Jaws's card shows %v, want TMDB's 60", c.Ratings)
+			}
+		}
+		return out
+	}
+	if got, want := titles(WallPage{Sort: domain.SortRating, RatingSite: domain.SiteIMDb, Order: domain.Descending, Limit: 10}), []string{"Heat", "Jaws"}; !slices.Equal(got, want) {
+		t.Errorf("best on IMDb = %v, want %v", got, want)
+	}
+	if got, want := titles(WallPage{Sort: domain.SortTitle, Filter: WallFilter{RatingSite: domain.SiteIMDb, MinRating: 70}, Limit: 10}), []string{"Heat"}; !slices.Equal(got, want) {
+		t.Errorf("IMDb 70 and up = %v, want %v", got, want)
+	}
+	if got, want := homeRow(t, s, admin, domain.RowTopRatedUnwatched), []string{"Heat", "Jaws"}; !slices.Equal(got, want) {
+		t.Errorf("top rated = %v, want %v", got, want)
+	}
+}

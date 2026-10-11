@@ -447,8 +447,8 @@ func TestTopRatedUnwatched(t *testing.T) {
 		score               float32
 		votes               *int
 	}{
-		{"Best", "tmdb", "imdb", 40, nil},
-		{"Best", "omdb", "imdb", 90, new(250000)},
+		{"Best", "tmdb", "imdb", 90, new(250000)},
+		{"Best", "omdb", "imdb", 40, nil},
 		{"Few Votes", "omdb", "imdb", 95, new(12)},
 		{"Watched", "omdb", "imdb", 88, nil},
 		{"Started", "omdb", "imdb", 87, nil},
