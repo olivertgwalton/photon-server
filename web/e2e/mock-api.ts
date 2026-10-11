@@ -516,6 +516,12 @@ const vocabulary: Schemas["Vocabulary"] = {
 		top_rated_unwatched: "Top Rated",
 		watchlist: "Watchlist",
 	},
+	library_rows: {
+		recently_added_films: "Recently Added in {library}",
+		recently_added_shows: "Recently Added in {library}",
+		recently_released: "Recently Released in {library}",
+		top_rated_unwatched: "Top Rated in {library}",
+	},
 	roles: {
 		admin: "Admin",
 		manager: "Manager",
@@ -1646,6 +1652,14 @@ const server_ = Bun.serve({
 			}
 			case "GET libraries/facets":
 				return Response.json(facets);
+			case "GET libraries/rows": {
+				const row = homeRows().find(
+					(r) => r.library?.id === id && r.kind === entry,
+				);
+				return row
+					? Response.json({ items: row.items.slice(0, 20).map(card) })
+					: problem(404, "not_found", "Not Found");
+			}
 			case "GET libraries/collections":
 				return Response.json({
 					items: id === "l-films" ? [collection] : [],

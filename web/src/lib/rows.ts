@@ -17,6 +17,10 @@ export const homeRows: Record<
 	{
 		shape: Shape;
 		library?: { wall: WallQuery };
+		// A library's row whose page is the row whole, as the Photon apps' are,
+		// rather than the library's wall: what was added last, and the best
+		// rated of what is unwatched.
+		whole?: true;
 		// What its own page says where it has nothing.
 		empty?: string;
 	}
@@ -29,24 +33,13 @@ export const homeRows: Record<
 			"Nothing here yet. Choose the bookmark on a film or show to keep it here until it is watched.",
 	},
 	favourites: { shape: "poster" },
-	recently_added_films: {
-		shape: "poster",
-		library: { wall: { sort: "added" } },
-	},
-	recently_added_shows: {
-		shape: "poster",
-		library: { wall: { sort: "added" } },
-	},
+	recently_added_films: { shape: "poster", whole: true },
+	recently_added_shows: { shape: "poster", whole: true },
 	recently_released: {
 		shape: "poster",
 		library: { wall: { sort: "released" } },
 	},
-	top_rated_unwatched: {
-		shape: "poster",
-		library: {
-			wall: { sort: "rating", mark: ["unwatched"] },
-		},
-	},
+	top_rated_unwatched: { shape: "poster", whole: true },
 	// A row each, under the collection's own name, leading to its page.
 	collection: { shape: "poster" },
 };
@@ -70,6 +63,12 @@ export function rail(row: Row): { key: string; href: string } {
 		return {
 			key: row.collection.id,
 			href: `/titles/${row.collection.id}`,
+		};
+	}
+	if (row.library && kind.whole) {
+		return {
+			key: `${row.kind}/${row.library.id}`,
+			href: `/libraries/${row.library.id}/rows/${row.kind}`,
 		};
 	}
 	if (row.library && kind.library) {

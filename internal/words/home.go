@@ -4,20 +4,14 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// HomeRow is a home row's heading: a collection's by the collection's name, and a row of one
-// library's titles by what it holds and the library, "Recently Added in Films".
-func (w Words) HomeRow(k domain.HomeRow, library, collection string) string {
-	if k == domain.RowCollection && collection != "" {
-		return collection
-	}
-	if of, ok := libraryRows[k]; ok && library != "" {
-		return of + " in " + library
-	}
-	return label(rows, k)
-}
+// HomeRow is a kind of home row's name, as its own page and the home's arrangement head it.
+func (w Words) HomeRow(k domain.HomeRow) string { return label(rows, k) }
 
-// What a row of one library's titles holds, before the library's name.
+// LibraryRow is how a row of one library's titles is headed, with {library} where the library's
+// name goes, "Recently Added in {library}": empty for a row that is not one library's.
+func (w Words) LibraryRow(k domain.HomeRow) string { return libraryRows[k] }
+
 var libraryRows = map[domain.HomeRow]string{
-	domain.RowRecentFilms: "Recently Added", domain.RowRecentShows: "Recently Added",
-	domain.RowRecentlyReleased: "Recently Released", domain.RowTopRatedUnwatched: "Top Rated",
+	domain.RowRecentFilms: "Recently Added in {library}", domain.RowRecentShows: "Recently Added in {library}",
+	domain.RowRecentlyReleased: "Recently Released in {library}", domain.RowTopRatedUnwatched: "Top Rated in {library}",
 }

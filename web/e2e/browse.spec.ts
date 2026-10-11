@@ -21,10 +21,12 @@ test("a title is taken off Continue Watching from its card", async ({
 	await page
 		.getByRole("link", { name: "Recently Added in Films View all" })
 		.click();
-	await expect(page).toHaveURL("/libraries/l-films?sort=added");
+	// What was added last is the row whole, not the library's wall.
+	await expect(page).toHaveURL("/libraries/l-films/rows/recently_added_films");
 	await expect(
-		page.getByRole("heading", { level: 1, name: "Films" }),
+		page.getByRole("heading", { level: 1, name: "Recently Added in Films" }),
 	).toBeVisible();
+	await expect(page.getByRole("main").getByRole("listitem")).toHaveCount(20);
 });
 
 test("a rail shows twenty, and its heading leads to all of them", async ({

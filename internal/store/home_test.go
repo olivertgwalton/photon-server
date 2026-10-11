@@ -681,10 +681,10 @@ func TestLibraryRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	of := func(kind domain.LibraryKind) uuid.UUID {
-		return libs[slices.IndexFunc(libs, func(l domain.Library) bool { return l.Kind == kind })].ID
+	of := func(kind domain.LibraryKind) *SeenLibrary {
+		return &SeenLibrary{ID: libs[slices.IndexFunc(libs, func(l domain.Library) bool { return l.Kind == kind })].ID, Kind: kind}
 	}
-	titles := func(profile uuid.UUID, row domain.HomeRow, lib uuid.UUID) []string {
+	titles := func(profile uuid.UUID, row domain.HomeRow, lib *SeenLibrary) []string {
 		cards, err := s.LibraryRow(ctx, profile, row, lib, 2)
 		if err != nil {
 			t.Fatal(err)
@@ -704,5 +704,8 @@ func TestLibraryRow(t *testing.T) {
 	}
 	if _, err := s.LibraryRow(ctx, admin, domain.RowContinueWatching, of(domain.LibraryMovies), 2); !errors.Is(err, ErrNotFound) {
 		t.Errorf("a row of the profile's own: %v, want %v", err, ErrNotFound)
+	}
+	if _, err := s.LibraryRow(ctx, admin, domain.RowRecentShows, of(domain.LibraryMovies), 2); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a row of shows of a library of films: %v, want %v", err, ErrNotFound)
 	}
 }
