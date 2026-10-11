@@ -709,3 +709,69 @@ func TestLibraryRow(t *testing.T) {
 		t.Errorf("a row of shows of a library of films: %v, want %v", err, ErrNotFound)
 	}
 }
+
+func TestPlayFollowsTheEpisodesPage(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Two files both numbered 2, and a dated episode with no number at all.
+	var eps []Episode
+	for _, e := range []struct {
+		title string
+		n     []int
+		aired time.Time
+	}{
+		{"E1", []int{1}, time.Time{}},
+		{"E2a", []int{2}, time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC)},
+		{"E2b", []int{2}, time.Date(2020, 1, 3, 0, 0, 0, 0, time.UTC)},
+		{"Dated", nil, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
+	} {
+		rel := "Wire/" + e.title + ".mkv"
+		eps = append(eps, Episode{
+			Season: 1, Episodes: e.n, AirDate: e.aired, Title: e.title, Folder: "Wire",
+			Copies: []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
+		})
+	}
+	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
+		t.Fatal(err)
+	}
+	page, err := s.Episodes(ctx, profile.ID, oneItem(t, s, `kind = 'show'`).ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, c := range page {
+		order = append(order, c.Title)
+	}
+	if want := []string{"E1", "E2a", "E2b", "Dated"}; !slices.Equal(order, want) {
+		t.Fatalf("the episodes page = %v, want %v", order, want)
+	}
+	for n, c := range page {
+		want := "none"
+		if n+1 < len(page) {
+			want = page[n+1].Title
+		}
+		got := "none"
+		if next, err := s.Next(ctx, profile.ID, c.ID); err == nil {
+			got = next.Title
+		} else if !errors.Is(err, ErrNoNext) {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("after %s: %s, want %s, as the episodes page lists them", c.Title, got, want)
+		}
+		if err := s.MarkWatched(ctx, profile.ID, c.ID, nil); err != nil {
+			t.Fatal(err)
+		}
+		if got := homeRow(t, s, profile.ID, domain.RowNextUp); (want == "none") != (len(got) == 0) || len(got) > 0 && got[0] != want {
+			t.Errorf("next up with %s watched = %v, want %s", c.Title, got, want)
+		}
+	}
+}

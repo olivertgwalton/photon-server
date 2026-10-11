@@ -25,6 +25,27 @@ func itemColumnsOf(alias string) string {
 	return strings.Join(cols, ", ")
 }
 
+// episodeOrder is the order a show's episodes play in, read through alias: by season and number, one
+// with no number after those with one, then by air date and title. Where specials go is each
+// statement's own choice.
+func episodeOrder(alias string) []string {
+	return []string{
+		alias + ".season_number", alias + ".episode_number IS NULL", "coalesce(" + alias + ".episode_number, 0)",
+		alias + ".air_date IS NULL", "coalesce(" + alias + ".air_date, 'epoch')", alias + ".sort_title", alias + ".id",
+	}
+}
+
+// episodeOrderBy is episodeOrder, read through e, as columns to sort by, each in dir: a row of them
+// sorts slower.
+func episodeOrderBy(dir string) string {
+	return strings.Join(episodeOrder("e"), " "+dir+", ") + " " + dir
+}
+
+// episodeOrderOf is episodeOrder as one row, to compare two episodes by.
+func episodeOrderOf(alias string) string {
+	return "(" + strings.Join(episodeOrder(alias), ", ") + ")"
+}
+
 // The columns of the other rows read whole.
 const (
 	versionColumns = `id, item_id, library_id, fingerprint, edition, label, container, width, height, video_codec,

@@ -201,11 +201,11 @@ func playableOf(ctx context.Context, tx db, id uuid.UUID) ([]uuid.UUID, error) {
 	case domain.ItemMovie, domain.ItemEpisode:
 		return []uuid.UUID{id}, nil
 	case domain.ItemSeason:
-		sql = `SELECT id FROM items WHERE parent_id = $1 AND kind = 'episode' ORDER BY episode_number, id`
+		sql = `SELECT id FROM items e WHERE parent_id = $1 AND kind = 'episode' ORDER BY ` + episodeOrderBy("ASC")
 	case domain.ItemShow:
 		sql = `SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id
 			WHERE s.parent_id = $1 AND e.kind = 'episode'
-			ORDER BY s.season_number = 0, s.season_number, e.episode_number, e.id`
+			ORDER BY s.season_number = 0, ` + episodeOrderBy("ASC")
 	case domain.ItemCollection:
 		sql = `SELECT m.item_id FROM collection_members m JOIN collections c ON c.item_id = m.collection_id
 			JOIN items i ON i.id = m.item_id WHERE m.collection_id = $1

@@ -398,7 +398,7 @@ func (s *Store) Episodes(ctx context.Context, profile, of uuid.UUID) ([]Card, er
 	rows, err := queryRows[model.Item](ctx, s.pool, `
 		SELECT `+itemColumnsOf("e")+` FROM items e JOIN items season ON season.id = e.parent_id
 		WHERE e.kind = 'episode' AND (season.id = $1 OR season.parent_id = $1)
-		ORDER BY e.season_number, e.episode_number, e.air_date, e.sort_title`, of)
+		ORDER BY `+episodeOrderBy("ASC"), of)
 	if err != nil {
 		return nil, err
 	}
@@ -472,8 +472,8 @@ func (s *Store) seasons(ctx context.Context, profile, show uuid.UUID, alongside 
 
 func (s *Store) episodes(ctx context.Context, profile, season uuid.UUID) ([]EpisodeCard, error) {
 	rows, err := queryRows[model.Item](ctx, s.pool, `
-		SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind = 'episode'
-		ORDER BY episode_number, air_date, sort_title`, season)
+		SELECT `+itemColumns+` FROM items e WHERE parent_id = $1 AND kind = 'episode'
+		ORDER BY `+episodeOrderBy("ASC"), season)
 	if err != nil {
 		return nil, err
 	}
