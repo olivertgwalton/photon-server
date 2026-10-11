@@ -18,6 +18,8 @@ let {
 	locales,
 }: { title: Schemas["TitlePage"]; locales: Schemas["Locales"] } = $props();
 
+const id = $props.id();
+
 const named = (codes: string[], type: "language" | "region") => [
 	{ value: serverLocale, label: "Its library's" },
 	...localeOptions(codes, type),
@@ -48,27 +50,27 @@ function save(event: SubmitEvent) {
 <form onsubmit={save} class="grid gap-4">
 	<div class="grid gap-4 sm:grid-cols-2">
 		<Field.Field>
-			<Field.Label for="title-language">Metadata language</Field.Label>
+			<Field.Label for="{id}-title-language">Metadata language</Field.Label>
 			<Choice
-				id="title-language"
+				id="{id}-title-language"
 				name="metadata_language"
 				value={title.metadata_language ?? serverLocale}
 				options={named(locales.languages, "language")}
 			/>
 		</Field.Field>
 		<Field.Field>
-			<Field.Label for="title-country">Certification country</Field.Label>
+			<Field.Label for="{id}-title-country">Certification country</Field.Label>
 			<Choice
-				id="title-country"
+				id="{id}-title-country"
 				name="certification_country"
 				value={title.certification_country ?? serverLocale}
 				options={named(locales.countries, "region")}
 			/>
 		</Field.Field>
 		<Field.Field>
-			<Field.Label for="title-titles">Title</Field.Label>
+			<Field.Label for="{id}-title-titles">Title</Field.Label>
 			<Choice
-				id="title-titles"
+				id="{id}-title-titles"
 				name="title_language"
 				value={title.title_language ?? serverLocale}
 				options={[

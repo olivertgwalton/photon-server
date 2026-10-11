@@ -14,6 +14,8 @@ let {
 	node,
 	open = $bindable(false),
 }: { node: components["schemas"]["KnownNode"]; open?: boolean } = $props();
+
+const id = $props.id();
 const words = vocabulary();
 
 type Role = components["schemas"]["NodeRole"];
@@ -85,16 +87,21 @@ async function save(event: SubmitEvent) {
 		</Dialog.Header>
 		<form onsubmit={save} class="grid gap-6">
 			<Field.Field>
-				<Field.Label for="node-role">Role</Field.Label>
-				<Choice id="node-role" name="role" bind:value={role} options={roles} />
+				<Field.Label for="{id}-node-role">Role</Field.Label>
+				<Choice
+					id="{id}-node-role"
+					name="role"
+					bind:value={role}
+					options={roles}
+				/>
 				<Field.Description
 					>{words.node_roles[role].description}</Field.Description
 				>
 			</Field.Field>
 			<Field.Field>
-				<Field.Label for="node-address">Address</Field.Label>
+				<Field.Label for="{id}-node-address">Address</Field.Label>
 				<Input
-					id="node-address"
+					id="{id}-node-address"
 					name="address"
 					type="url"
 					placeholder="http://10.0.0.5:8640"
@@ -108,16 +115,16 @@ async function save(event: SubmitEvent) {
 			</Field.Field>
 			{#if role !== "serve"}
 				<Field.Field>
-					<Field.Label for="node-limit">Transcodes at once</Field.Label>
+					<Field.Label for="{id}-node-limit">Transcodes at once</Field.Label>
 					<Choice
-						id="node-limit"
+						id="{id}-node-limit"
 						name="limit"
 						bind:value={limit}
 						options={limits}
 					/>
 					{#if limit === "at_most"}
 						<Input
-							id="node-most"
+							id="{id}-node-most"
 							name="transcode_limit"
 							type="number"
 							min={1}

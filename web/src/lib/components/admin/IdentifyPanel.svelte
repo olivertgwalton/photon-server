@@ -8,6 +8,8 @@ import { Input } from "#lib/components/ui/input/index.js";
 import { act } from "#lib/act.js";
 import Choice from "#lib/components/Choice.svelte";
 
+const id = $props.id();
+
 const api = client();
 
 type Schemas = components["schemas"];
@@ -62,22 +64,22 @@ async function search(event: SubmitEvent) {
 	<form onsubmit={search} class="grid gap-4">
 		<div class="grid gap-4 sm:grid-cols-[auto_1fr_6rem_auto] sm:items-end">
 			<Field.Field>
-				<Field.Label for="identify-provider">Provider</Field.Label>
+				<Field.Label for="{id}-identify-provider">Provider</Field.Label>
 				<Choice
-					id="identify-provider"
+					id="{id}-identify-provider"
 					name="provider"
 					bind:value={provider}
 					options={searchers}
 				/>
 			</Field.Field>
 			<Field.Field>
-				<Field.Label for="identify-title">Name</Field.Label>
-				<Input id="identify-title" bind:value={name} required />
+				<Field.Label for="{id}-identify-title">Name</Field.Label>
+				<Input id="{id}-identify-title" bind:value={name} required />
 			</Field.Field>
 			<Field.Field>
-				<Field.Label for="identify-year">Year</Field.Label>
+				<Field.Label for="{id}-identify-year">Year</Field.Label>
 				<Input
-					id="identify-year"
+					id="{id}-identify-year"
 					bind:value={year}
 					inputmode="numeric"
 					maxlength={4}

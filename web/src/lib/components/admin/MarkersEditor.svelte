@@ -22,6 +22,8 @@ type Schemas = components["schemas"];
 // chapters, sound or picture say, and which of its parts have none of a kind.
 // Saving with nothing listed gives the copy back to what was found.
 let { version }: { version: Schemas["VersionPage"] } = $props();
+
+const id = $props.id();
 const words = vocabulary();
 
 let refusal = $state("");
@@ -81,11 +83,11 @@ const parts = $derived(Array.from({ length: version.parts }, (_, i) => i));
 			{#each rows as row, i (row.key)}
 				<li class="grid grid-cols-[1fr_5.5rem_5.5rem_auto] items-end gap-2">
 					<Field.Field>
-						<Field.Label for="kind-{row.key}" class={i ? "sr-only" : ""}
+						<Field.Label for="{id}-kind-{row.key}" class={i ? "sr-only" : ""}
 							>Kind</Field.Label
 						>
 						<Choice
-							id="kind-{row.key}"
+							id="{id}-kind-{row.key}"
 							name="kind"
 							bind:value={row.kind}
 							options={kindOptions}
@@ -93,11 +95,11 @@ const parts = $derived(Array.from({ length: version.parts }, (_, i) => i));
 						/>
 					</Field.Field>
 					<Field.Field>
-						<Field.Label for="start-{row.key}" class={i ? "sr-only" : ""}
+						<Field.Label for="{id}-start-{row.key}" class={i ? "sr-only" : ""}
 							>Starts</Field.Label
 						>
 						<Input
-							id="start-{row.key}"
+							id="{id}-start-{row.key}"
 							name="start"
 							bind:value={row.start}
 							required
@@ -105,11 +107,11 @@ const parts = $derived(Array.from({ length: version.parts }, (_, i) => i));
 						/>
 					</Field.Field>
 					<Field.Field>
-						<Field.Label for="end-{row.key}" class={i ? "sr-only" : ""}
+						<Field.Label for="{id}-end-{row.key}" class={i ? "sr-only" : ""}
 							>Ends</Field.Label
 						>
 						<Input
-							id="end-{row.key}"
+							id="{id}-end-{row.key}"
 							name="end"
 							bind:value={row.end}
 							required
@@ -161,11 +163,11 @@ const parts = $derived(Array.from({ length: version.parts }, (_, i) => i));
 				{#each kindOptions as option (option.value)}
 					<div class="flex items-center gap-2">
 						<Checkbox
-							id="absent-{version.id}-{part}-{option.value}"
+							id="{id}-absent-{version.id}-{part}-{option.value}"
 							name="absent"
 							value="{option.value}:{part}"
 						/>
-						<Label for="absent-{version.id}-{part}-{option.value}">
+						<Label for="{id}-absent-{version.id}-{part}-{option.value}">
 							No {option.label.toLowerCase()}
 							{#if parts.length > 1}
 								<span class="sr-only">in part {part + 1}</span>

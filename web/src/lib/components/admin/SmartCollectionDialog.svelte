@@ -22,6 +22,8 @@ let {
 	rule: components["schemas"]["SmartRule"];
 } = $props();
 
+const id = $props.id();
+
 let title = $state("");
 
 async function make(event: SubmitEvent) {
@@ -47,9 +49,9 @@ async function make(event: SubmitEvent) {
 		</Dialog.Header>
 		<form onsubmit={make} class="grid gap-4">
 			<Field.Field>
-				<Field.Label for="smart-title">Name</Field.Label>
+				<Field.Label for="{id}-smart-title">Name</Field.Label>
 				<Input
-					id="smart-title"
+					id="{id}-smart-title"
 					bind:value={title}
 					required
 					placeholder="Recent comedies"

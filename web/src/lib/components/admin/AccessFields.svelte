@@ -13,6 +13,8 @@ let {
 	libraries: { id: string; name: string }[];
 } = $props();
 
+const id = $props.id();
+
 // The ages certificates are for, as the server reads them.
 const ages = [
 	{ value: "any", label: "Any" },
@@ -34,8 +36,8 @@ let every = $derived(access.libraries.length === 0);
 <Field.Set>
 	<Field.Legend>Libraries</Field.Legend>
 	<Field.Field orientation="horizontal">
-		<Switch id="every" bind:checked={every} />
-		<Field.Label for="every"
+		<Switch id="{id}-every" bind:checked={every} />
+		<Field.Label for="{id}-every"
 			>Every library, including ones added later</Field.Label
 		>
 	</Field.Field>
@@ -44,12 +46,14 @@ let every = $derived(access.libraries.length === 0);
 			{#each libraries as library (library.id)}
 				<Field.Field orientation="horizontal">
 					<Checkbox
-						id="library-{library.id}"
+						id="{id}-library-{library.id}"
 						name="libraries"
 						value={library.id}
 						checked={access.libraries.includes(library.id)}
 					/>
-					<Field.Label for="library-{library.id}">{library.name}</Field.Label>
+					<Field.Label for="{id}-library-{library.id}"
+						>{library.name}</Field.Label
+					>
 				</Field.Field>
 			{/each}
 		</div>
@@ -57,13 +61,13 @@ let every = $derived(access.libraries.length === 0);
 </Field.Set>
 <div class="grid gap-4 sm:grid-cols-2">
 	<Field.Field>
-		<Field.Label for="max_age">Certificates</Field.Label>
-		<Choice id="max_age" name="max_age" value={age} options={ageOptions} />
+		<Field.Label for="{id}-max_age">Certificates</Field.Label>
+		<Choice id="{id}-max_age" name="max_age" value={age} options={ageOptions} />
 	</Field.Field>
 	<Field.Field>
-		<Field.Label for="unrated">Titles with no certificate</Field.Label>
+		<Field.Label for="{id}-unrated">Titles with no certificate</Field.Label>
 		<Choice
-			id="unrated"
+			id="{id}-unrated"
 			name="unrated"
 			value={access.unrated}
 			options={[
