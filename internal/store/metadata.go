@@ -35,30 +35,27 @@ type fields struct {
 	ids     map[domain.Provider]domain.IDSource
 }
 
-// fieldsOf reads a title's fields, in one statement however many sources then write them.
+// fieldsOf reads a title's fields once, however many sources then write them.
 func fieldsOf(ctx context.Context, tx db, item uuid.UUID) (*fields, error) {
-	var kind domain.ItemKind
-	var library domain.LibraryKind
+	it := &model.Item{ID: item}
 	var named []domain.Field
 	var by []domain.FieldSource
 	var providers []domain.Provider
 	var from []domain.IDSource
-	var kinds []domain.ItemKind
-	var taken []domain.FieldSource
 	err := tx.QueryRow(ctx, `
-		SELECT i.kind, l.kind,
+		SELECT i.kind, i.library_id,
 			ARRAY(SELECT field FROM item_fields WHERE item_id = i.id ORDER BY field),
 			ARRAY(SELECT source FROM item_fields WHERE item_id = i.id ORDER BY field),
 			ARRAY(SELECT provider FROM external_ids WHERE item_id = i.id ORDER BY provider),
-			ARRAY(SELECT source FROM external_ids WHERE item_id = i.id ORDER BY provider),
-			ARRAY(SELECT item_kind FROM library_sources WHERE library_id = l.id AND fetcher = $2 AND enabled
-				ORDER BY position, item_kind, source),
-			ARRAY(SELECT source FROM library_sources WHERE library_id = l.id AND fetcher = $2 AND enabled
-				ORDER BY position, item_kind, source)
-		FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.id = $1`, item, domain.FetcherMetadata).
-		Scan(&kind, &library, &named, &by, &providers, &from, &kinds, &taken)
+			ARRAY(SELECT source FROM external_ids WHERE item_id = i.id ORDER BY provider)
+		FROM items i WHERE i.id = $1`, item).
+		Scan(&it.Kind, &it.LibraryID, &named, &by, &providers, &from)
 	if err != nil {
 		return nil, found(err)
+	}
+	taken, err := rankings(ctx, tx, []*model.Item{it}, domain.FetcherMetadata)
+	if err != nil {
+		return nil, err
 	}
 	f := &fields{item: item, sources: map[domain.Field]domain.FieldSource{}, ids: map[domain.Provider]domain.IDSource{}}
 	for n, field := range named {
@@ -67,13 +64,7 @@ func fieldsOf(ctx context.Context, tx db, item uuid.UUID) (*fields, error) {
 	for n, provider := range providers {
 		f.ids[provider] = from[n]
 	}
-	var asked []domain.FieldSource
-	for n, k := range kinds {
-		if k == library.RankedAs(kind) {
-			asked = append(asked, taken[n])
-		}
-	}
-	f.ranked = rankOf(asked)
+	f.ranked = rankOf(taken[item])
 	return f, nil
 }
 
