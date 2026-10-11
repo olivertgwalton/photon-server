@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"net/http"
 	"slices"
+	"strings"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
@@ -33,18 +34,33 @@ func asked(r *http.Request, libs []*store.SeenLibrary, seen map[uuid.UUID]*store
 		}
 	}
 	types := values(r, "includeItemTypes")
-	return slices.DeleteFunc(slices.Clone(libs), func(l *store.SeenLibrary) bool {
-		return len(types) > 0 && !has(types, libraryKind(l))
-	})
+	return slices.DeleteFunc(slices.Clone(libs), func(l *store.SeenLibrary) bool { return !holds(l, types) })
 }
 
-// facets are the values the titles of libraries have.
-func (a *API) facets(ctx context.Context, profile uuid.UUID, libs []*store.SeenLibrary) (store.Facets, error) {
+// wallKind is what an app's includeItemTypes asks a library for: its episodes where it asks for
+// those alone, as Jellyfin's Episodes tab does, else its titles.
+func wallKind(types []string) domain.WallKind {
+	if len(types) == 1 && strings.EqualFold(types[0], itemKinds[domain.ItemEpisode]) {
+		return domain.WallEpisodes
+	}
+	return domain.WallTitles
+}
+
+// holds is whether a library holds what an app's includeItemTypes asks for.
+func holds(l *store.SeenLibrary, types []string) bool {
+	if wallKind(types) == domain.WallEpisodes {
+		return slices.Contains(l.Kind.ItemKinds(), domain.ItemEpisode)
+	}
+	return len(types) == 0 || has(types, libraryKind(l))
+}
+
+// facets are the values the titles of libraries, or their episodes, have.
+func (a *API) facets(ctx context.Context, profile uuid.UUID, libs []*store.SeenLibrary, wall domain.WallKind) (store.Facets, error) {
 	ids := make([]uuid.UUID, len(libs))
 	for n, l := range libs {
 		ids[n] = l.ID
 	}
-	return a.svc.Catalogue.Facets(ctx, ids, profile)
+	return a.svc.Catalogue.Facets(ctx, ids, profile, wall)
 }
 
 // facetsAsked are the facets of the libraries a request names.
@@ -53,7 +69,7 @@ func (a *API) facetsAsked(r *http.Request) (store.Facets, error) {
 	if err != nil {
 		return store.Facets{}, err
 	}
-	return a.facets(r.Context(), auth.SessionOf(r.Context()).Profile.ID, asked(r, libs, seen))
+	return a.facets(r.Context(), auth.SessionOf(r.Context()).Profile.ID, asked(r, libs, seen), wallKind(values(r, "includeItemTypes")))
 }
 
 func (a *API) genres(w http.ResponseWriter, r *http.Request) {
@@ -131,12 +147,12 @@ func (a *API) filters2(w http.ResponseWriter, r *http.Request) {
 
 // narrow adds to a filter the names of the genres and studios an app names by id, and the
 // certificates it names bare, of those the libraries have.
-func (a *API) narrow(r *http.Request, libs []*store.SeenLibrary, f *store.WallFilter) error {
+func (a *API) narrow(r *http.Request, libs []*store.SeenLibrary, wall domain.WallKind, f *store.WallFilter) error {
 	genres, studios, ratings := values(r, "genreIds"), values(r, "studioIds"), piped(r, "officialRatings")
 	if len(genres)+len(studios)+len(ratings) == 0 {
 		return nil
 	}
-	have, err := a.facets(r.Context(), auth.SessionOf(r.Context()).Profile.ID, libs)
+	have, err := a.facets(r.Context(), auth.SessionOf(r.Context()).Profile.ID, libs, wall)
 	if err != nil {
 		return err
 	}

@@ -20,6 +20,19 @@ func WallSorts() []WallSort {
 	return []WallSort{SortTitle, SortAdded, SortReleased, SortRating, SortRuntime, SortPlayed}
 }
 
+// WallKind is what a wall pages: a library's titles, or a show library's episodes across its shows,
+// as Plex's episode type and Jellyfin's Episodes tab list them.
+type WallKind string
+
+const (
+	WallTitles   WallKind = "titles"
+	WallEpisodes WallKind = "episodes"
+)
+
+func WallKinds() []WallKind {
+	return []WallKind{WallTitles, WallEpisodes}
+}
+
 // Mark is what a profile has made of a title, which a wall may be narrowed to.
 type Mark string
 

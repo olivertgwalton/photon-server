@@ -109,6 +109,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.ThemeMusic]():          values(domain.ThemeMusics()),
 	reflect.TypeFor[domain.Unrated]():             values(domain.UnratedPolicies()),
 	reflect.TypeFor[domain.WallSort]():            values(domain.WallSorts()),
+	reflect.TypeFor[domain.WallKind]():            values(domain.WallKinds()),
 	reflect.TypeFor[domain.VideoCodec]():          values(domain.VideoCodecs()),
 	reflect.TypeFor[domain.TranscodeReason]():     values(domain.TranscodeReasons()),
 	reflect.TypeFor[downloadScope]():              values(downloadScopes()),

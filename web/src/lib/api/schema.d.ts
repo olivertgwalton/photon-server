@@ -4230,7 +4230,10 @@ export interface paths {
         /** The values a library's titles can be narrowed to */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description What to page: titles, or a show library's episodes across its shows. */
+                    kind?: components["schemas"]["WallKind"];
+                };
                 header?: never;
                 path: {
                     id: string;
@@ -4270,6 +4273,8 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
+                    /** @description What to page: titles, or a show library's episodes across its shows. */
+                    kind?: components["schemas"]["WallKind"];
                     /** @description A letter, or # for anything before A. */
                     starts_with?: string;
                     mark?: components["schemas"]["Mark"][];
@@ -4369,7 +4374,9 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description The order, title by default. */
+                    /** @description What to page: titles, or a show library's episodes across its shows. */
+                    kind?: components["schemas"]["WallKind"];
+                    /** @description The order, title by default; of episodes, by show. */
                     sort?: components["schemas"]["WallSort"];
                     /** @description Its direction; titles from A, anything else the newest first, by default. */
                     order?: components["schemas"]["Order"];
@@ -9036,6 +9043,8 @@ export interface components {
             studios?: string[];
             years?: number[];
         };
+        /** @enum {string} */
+        WallKind: "titles" | "episodes";
         /** @enum {string} */
         WallSort: "title" | "added" | "released" | "rating" | "runtime" | "played";
         Watched: {

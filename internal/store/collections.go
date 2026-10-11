@@ -367,11 +367,11 @@ func (s *Store) SetRule(ctx context.Context, collection uuid.UUID, rule SmartRul
 
 // findMembers replaces a smart collection's titles with what its rule finds now, in its order.
 func (s *Store) findMembers(ctx context.Context, tx db, collection, lib uuid.UUID, rule SmartRule) error {
-	titles, args, err := s.wallQuery(ctx, []uuid.UUID{lib}, uuid.UUID{}, rule.Filter)
+	where, args, err := s.wallQuery(ctx, []uuid.UUID{lib}, uuid.UUID{}, domain.WallTitles, rule.Filter)
 	if err != nil {
 		return err
 	}
-	order := rule.page().orderBy(args)
+	_, order := rule.page().orderBy(args)
 	args["collection"] = collection
 	limit := ""
 	if rule.Limit > 0 {
@@ -382,7 +382,7 @@ func (s *Store) findMembers(ctx context.Context, tx db, collection, lib uuid.UUI
 	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO collection_members (collection_id, item_id, position)
-		SELECT @collection, items.id, row_number() OVER (`+order+`) - 1 `+titles+` AND items.kind <> 'collection' `+order+limit, args)
+		SELECT @collection, items.id, row_number() OVER (`+order+`) - 1 FROM items `+where+` AND items.kind <> 'collection' `+order+limit, args)
 	return err
 }
 

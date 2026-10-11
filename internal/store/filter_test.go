@@ -159,7 +159,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		}
 	}
 
-	facets, err := s.Facets(ctx, []uuid.UUID{lib.ID}, uuid.UUID{})
+	facets, err := s.Facets(ctx, []uuid.UUID{lib.ID}, uuid.UUID{}, domain.WallTitles)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 	if err := s.SetAccess(ctx, teen.ID, ProfileAccess{MaxAge: new(15), Unrated: domain.UnratedAllow}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if facets, err = s.Facets(ctx, []uuid.UUID{lib.ID}, teen.ID); err != nil {
+	if facets, err = s.Facets(ctx, []uuid.UUID{lib.ID}, teen.ID, domain.WallTitles); err != nil {
 		t.Fatal(err)
 	}
 	want = Facets{
@@ -194,13 +194,13 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		t.Errorf("facets of a profile kept to 15 (-want +got):\n%s", diff)
 	}
 	// A show's copies are its episodes'.
-	if facets, err = s.Facets(ctx, []uuid.UUID{shows.ID}, oliver.ID); err != nil {
+	if facets, err = s.Facets(ctx, []uuid.UUID{shows.ID}, oliver.ID, domain.WallTitles); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(facets.Resolutions, []domain.Resolution{domain.ResolutionFHD}) || !slices.Equal(facets.Ranges, []domain.Range{domain.RangeSDR}) {
 		t.Errorf("a shows library's copies: %v %v, want its episodes' 1080p SDR", facets.Resolutions, facets.Ranges)
 	}
-	letters, err := s.Letters(ctx, lib.ID, oliver.ID, WallFilter{Marks: []domain.Mark{domain.MarkUnwatched}})
+	letters, err := s.Letters(ctx, lib.ID, oliver.ID, domain.WallTitles, WallFilter{Marks: []domain.Mark{domain.MarkUnwatched}})
 	if err != nil || !slices.Equal(letters, []Letter{{"B", 1}, {"E", 1}}) {
 		t.Errorf("letters of the unwatched = %v, %v", letters, err)
 	}

@@ -51,13 +51,16 @@ func (fakeCatalogue) Wall(_ context.Context, libs []uuid.UUID, p store.WallPage)
 		return nil, 0, store.ErrNotFound
 	}
 	title := string(p.Sort) + " " + string(p.Order) + " " + strconv.Itoa(p.Offset) + "+" + strconv.Itoa(p.Limit)
+	if p.Kind != domain.WallTitles {
+		title = string(p.Kind) + " " + title
+	}
 	if f := p.Filter; f.MinRating > 0 || len(f.Genres) > 0 || len(f.Marks) > 0 || len(f.Years) > 0 {
 		title += fmt.Sprintf(" %v %v %v %s>=%v", f.Genres, f.Marks, f.Years, f.RatingSite, f.MinRating)
 	}
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: title, ReleaseDate: time.Date(1995, 12, 15, 0, 0, 0, 0, time.UTC)}}, 120, nil
 }
 
-func (fakeCatalogue) Letters(_ context.Context, lib, _ uuid.UUID, f store.WallFilter) ([]store.Letter, error) {
+func (fakeCatalogue) Letters(_ context.Context, lib, _ uuid.UUID, _ domain.WallKind, f store.WallFilter) ([]store.Letter, error) {
 	if lib != films {
 		return nil, store.ErrNotFound
 	}
@@ -67,7 +70,7 @@ func (fakeCatalogue) Letters(_ context.Context, lib, _ uuid.UUID, f store.WallFi
 	return []store.Letter{{Letter: "#", Count: 2}, {Letter: "A", Count: 7}}, nil
 }
 
-func (fakeCatalogue) Facets(_ context.Context, libs []uuid.UUID, _ uuid.UUID) (store.Facets, error) {
+func (fakeCatalogue) Facets(_ context.Context, libs []uuid.UUID, _ uuid.UUID, _ domain.WallKind) (store.Facets, error) {
 	if !slices.Equal(libs, []uuid.UUID{films}) {
 		return store.Facets{}, store.ErrNotFound
 	}
@@ -253,6 +256,8 @@ func TestWall(t *testing.T) {
 		{"?min_rating=101", http.StatusBadRequest, ""},
 		{"?starts_with=ab", http.StatusBadRequest, ""},
 		{"?sort=rating&rating_site=tmdb", http.StatusOK, "rating desc 0+50"},
+		{"?kind=episodes&sort=released", http.StatusOK, "episodes released desc 0+50"},
+		{"?kind=seasons", http.StatusBadRequest, ""},
 	} {
 		rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/titles"+tc.query, goodToken, "")
 		if rec.Code != tc.wantStatus {
@@ -423,7 +428,7 @@ func (ratedCatalogue) Wall(context.Context, []uuid.UUID, store.WallPage) ([]stor
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat", Certificate: "US:R"}}, 1, nil
 }
 
-func (ratedCatalogue) Facets(context.Context, []uuid.UUID, uuid.UUID) (store.Facets, error) {
+func (ratedCatalogue) Facets(context.Context, []uuid.UUID, uuid.UUID, domain.WallKind) (store.Facets, error) {
 	return store.Facets{Certificates: []string{"15", "US:R"}}, nil
 }
 
