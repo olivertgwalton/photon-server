@@ -4099,91 +4099,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/home": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The profile's home rows, in order */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description How many titles a row holds, from 1 to 200. */
-                    limit?: number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Home"];
-                    };
-                };
-                default: components["responses"]["Problem"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/home/{row}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Page one of the profile's own home rows: continue watching, next up, its watchlist or its favourites */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Where the page starts, from 0. */
-                    offset?: number;
-                    /** @description How many to answer, from 1 to 200. */
-                    limit?: number;
-                };
-                header?: never;
-                path: {
-                    /** @description The row; a library's is asked of the library. */
-                    row: components["schemas"]["HomeRowKind"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CardPage"];
-                    };
-                };
-                default: components["responses"]["Problem"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/libraries": {
         parameters: {
             query?: never;
@@ -5739,6 +5654,51 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
+        trace?: never;
+    };
+    "/api/v1/profile/rows/{row}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page one of the profile's own rows: continue watching, next up, its watchlist or its favourites */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Where the page starts, from 0. */
+                    offset?: number;
+                    /** @description How many to answer, from 1 to 200. */
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    /** @description The row; a library's is asked of the library. */
+                    row: components["schemas"]["HomeRowKind"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CardPage"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/profile/sign-in-providers": {
@@ -7623,15 +7583,6 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
-        Home: {
-            rows: components["schemas"]["HomeRow"][];
-        };
-        HomeRow: {
-            items: components["schemas"]["Card"][];
-            kind: components["schemas"]["HomeRowKind"];
-            library?: components["schemas"]["LibraryRef"] | null;
-            title: string;
-        };
         /** @enum {string} */
         HomeRowKind: "continue_watching" | "next_up" | "watchlist" | "favourites" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched";
         HomeSection: {
@@ -7782,11 +7733,6 @@ export interface components {
         LibraryMedia: "folder" | "remote";
         LibraryOrder: {
             library_ids: string[];
-        };
-        LibraryRef: {
-            /** Format: uuid */
-            id: string;
-            name: string;
         };
         /** @enum {string} */
         LimitSource: "automatic" | "set";

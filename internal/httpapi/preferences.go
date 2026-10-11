@@ -37,7 +37,7 @@ type preferencesJSON struct {
 	CreditsAction     domain.SegmentAction `json:"credits_action"`
 	// ThemeMusic is whether a title's page plays its theme tune.
 	ThemeMusic domain.ThemeMusic `json:"theme_music"`
-	// Home is every row of the profile's home, in the order /api/v1/home answers them.
+	// Home is every row of the profile's home, in the order the home page draws them.
 	Home []homeSectionJSON `json:"home"`
 	// SavedAt is when they were last changed: absent while every one is its default.
 	SavedAt *time.Time `json:"saved_at,omitzero"`

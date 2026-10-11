@@ -9,25 +9,10 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
-
-// HomeRow is one row of a profile's home page.
-type HomeRow struct {
-	Kind domain.HomeRow
-	// Library is the library a row of libraryRows is.
-	Library *LibraryRef
-	Cards   []Card
-}
-
-// LibraryRef names a library.
-type LibraryRef struct {
-	ID   uuid.UUID
-	Name string
-}
 
 // libraryRows are the rows made once for each library the profile sees, as Plex's library hubs
 // are, and the kinds of library each is made for. A title in two libraries is in each one's row.
@@ -172,12 +157,6 @@ func (s *Store) LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*SeenLi
 	return queryRows[SeenLibrary](ctx, s.pool, librariesSeen, pgx.NamedArgs{"profile": profile})
 }
 
-// rowItems are a home row and its titles, before their cards are made.
-type rowItems struct {
-	row   HomeRow
-	items []*model.Item
-}
-
 // leastVotes is how many votes a rating needs to put a title on the top rated row, so a title a
 // handful rated highly does not lead it.
 const leastVotes = 1000
@@ -185,82 +164,6 @@ const leastVotes = 1000
 // releasedWithinDays is how lately a title is released to be on the recently released row: a
 // year, as a film's files come months after it opens in cinemas.
 const releasedWithinDays = 365
-
-// Home answers a profile's home page: each row it shows with anything in it, in the order it
-// arranged them, up to limit cards each.
-func (s *Store) Home(ctx context.Context, profile uuid.UUID, limit int) ([]HomeRow, error) {
-	prefs, err := s.Preferences(ctx, profile)
-	if err != nil {
-		return nil, err
-	}
-	libs, err := s.LibrariesSeen(ctx, profile)
-	if err != nil {
-		return nil, err
-	}
-	// Each row is asked for at once, on a connection of its own, and kept in the profile's order.
-	var asks []func(context.Context) ([]rowItems, error)
-	args := func(lib uuid.UUID) pgx.NamedArgs {
-		return pgx.NamedArgs{"profile": profile, "limit": limit, "offset": 0, "lib": lib}
-	}
-	of := func(row HomeRow, args pgx.NamedArgs) func(context.Context) ([]rowItems, error) {
-		return func(ctx context.Context) ([]rowItems, error) {
-			items, err := queryRows[model.Item](ctx, s.pool, rowQueries[row.Kind], args)
-			if err != nil || len(items) == 0 {
-				return nil, err
-			}
-			return []rowItems{{row, items}}, nil
-		}
-	}
-	for _, section := range prefs.Home {
-		kind := section.Row
-		if section.Visibility == domain.RowHidden {
-			continue
-		}
-		if kinds, ok := libraryRows[kind]; ok {
-			for _, lib := range libs {
-				if slices.Contains(kinds, lib.Kind) {
-					asks = append(asks, of(HomeRow{Kind: kind, Library: &LibraryRef{ID: lib.ID, Name: lib.Name}}, args(lib.ID)))
-				}
-			}
-			continue
-		}
-		asks = append(asks, of(HomeRow{Kind: kind}, args(uuid.UUID{})))
-	}
-	found := make([][]rowItems, len(asks))
-	g, gctx := errgroup.WithContext(ctx)
-	for n, ask := range asks {
-		g.Go(func() (err error) {
-			found[n], err = ask(gctx)
-			return err
-		})
-	}
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-	var rows []HomeRow
-	var lengths []int
-	var all []*model.Item
-	for _, f := range found {
-		for _, r := range f {
-			rows = append(rows, r.row)
-			lengths = append(lengths, len(r.items))
-			all = append(all, r.items...)
-		}
-	}
-	if len(all) == 0 {
-		return rows, nil
-	}
-	// Every row's cards are made at once, so the page costs the same few queries however many
-	// rows it has.
-	cards, err := s.cards(ctx, profile, all)
-	if err != nil {
-		return nil, err
-	}
-	for n, length := range lengths {
-		rows[n].Cards, cards = cards[:length], cards[length:]
-	}
-	return rows, nil
-}
 
 // RowPage answers a page of one of the profile's own home rows, in the row's order, and how many
 // titles it holds: ErrNotFound for a library's or a collection's row, which lead to its own page.

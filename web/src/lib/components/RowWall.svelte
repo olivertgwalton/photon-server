@@ -17,7 +17,7 @@ const row = $derived(homeRows[kind]);
 const title = $derived(words.rows[kind]);
 
 async function fetchPage(offset: number) {
-	const { data } = await client().GET("/api/v1/home/{row}", {
+	const { data } = await client().GET("/api/v1/profile/rows/{row}", {
 		params: { path: { row: kind }, query: { offset, limit: wallPageSize } },
 	});
 	return data?.items;

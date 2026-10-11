@@ -108,29 +108,26 @@ func (fakeCatalogue) Search(_ context.Context, q store.SearchQuery) ([]store.Car
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: title}}, 1, nil
 }
 
-func (fakeCatalogue) Home(_ context.Context, profile uuid.UUID, limit int) ([]store.HomeRow, error) {
-	if profile != oliver.ID {
-		return nil, nil
+// The watchlist holds the one film, from offset 0; next up as many episodes of The Wire as a page
+// is asked for.
+func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error) {
+	switch row {
+	case domain.RowWatchlist:
+		if offset > 0 {
+			return []store.Card{}, 1, nil
+		}
+		return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat"}}, 1, nil
+	case domain.RowNextUp:
+		cards := make([]store.Card, limit)
+		for i := range cards {
+			cards[i] = store.Card{ID: films, Kind: domain.ItemEpisode, Title: "Pilot", Show: &store.TitleRef{ID: films, Title: "The Wire"}}
+		}
+		return cards, int64(offset + limit), nil
+	case domain.RowContinueWatching, domain.RowFavourites:
+		return []store.Card{}, 0, nil
+	case domain.RowRecentFilms, domain.RowRecentShows, domain.RowRecentlyReleased, domain.RowTopRatedUnwatched:
 	}
-	cards := make([]store.Card, limit)
-	for i := range cards {
-		cards[i] = store.Card{ID: films, Kind: domain.ItemEpisode, Title: "Pilot", Show: &store.TitleRef{ID: films, Title: "The Wire"}}
-	}
-	return []store.HomeRow{
-		{Kind: domain.RowNextUp, Cards: cards},
-		{Kind: domain.RowRecentFilms, Library: &store.LibraryRef{ID: films, Name: "Films"}, Cards: []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat"}}},
-	}, nil
-}
-
-// The watchlist holds the one film, from offset 0.
-func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow, offset, _ int) ([]store.Card, int64, error) {
-	if row != domain.RowWatchlist {
-		return nil, 0, store.ErrNotFound
-	}
-	if offset > 0 {
-		return []store.Card{}, 1, nil
-	}
-	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat"}}, 1, nil
+	return nil, 0, store.ErrNotFound
 }
 
 // LibraryRow answers, of a films library's row of films, a card titled after the row and how many
@@ -142,49 +139,23 @@ func (fakeCatalogue) LibraryRow(_ context.Context, _ uuid.UUID, row domain.HomeR
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: string(row) + " " + strconv.Itoa(limit)}}, nil
 }
 
-func TestHome(t *testing.T) {
-	rec := serve(t, http.MethodGet, "/api/v1/home?limit=2", goodToken, "")
-	var got struct {
-		Rows []struct {
-			Kind    string `json:"kind"`
-			Title   string `json:"title"`
-			Library struct {
-				Name string `json:"name"`
-			} `json:"library"`
-			Items []struct {
-				Title string `json:"title"`
-				Show  struct {
-					Title string `json:"title"`
-				} `json:"show"`
-			} `json:"items"`
-		} `json:"rows"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
-		t.Fatal(err)
-	}
-	if len(got.Rows) != 2 || got.Rows[0].Kind != "next_up" || len(got.Rows[0].Items) != 2 || got.Rows[0].Items[0].Show.Title != "The Wire" ||
-		got.Rows[1].Kind != "recently_added_films" || got.Rows[1].Library.Name != "Films" {
-		t.Errorf("home = %+v, want the signed-in profile's next up, two episodes of The Wire, then Films' recently added", got)
-	}
-	// Each row is headed as the server words it, a library's by the library.
-	if got.Rows[0].Title != "Next Up" || got.Rows[1].Title != "Recently Added in Films" {
-		t.Errorf("headings %q and %q", got.Rows[0].Title, got.Rows[1].Title)
-	}
-	if rec := serve(t, http.MethodGet, "/api/v1/home?limit=0", goodToken, ""); rec.Code != http.StatusBadRequest {
-		t.Errorf("limit=0: %d, want 400", rec.Code)
+func TestTheWholeHomeIsGone(t *testing.T) {
+	// A client asks for each row of its own, as Jellyfin's do.
+	if rec := serve(t, http.MethodGet, "/api/v1/home", goodToken, ""); rec.Code != http.StatusNotFound && rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("the whole home: %d, want it gone", rec.Code)
 	}
 }
 
-func TestHomeRow(t *testing.T) {
+func TestProfileRow(t *testing.T) {
 	for _, tc := range []struct {
 		target   string
 		want     int
 		wantBody string
 	}{
-		{"/api/v1/home/watchlist", http.StatusOK, `"offset":0,"total":1}`},
-		{"/api/v1/home/watchlist?offset=1", http.StatusOK, `{"items":[],"offset":1,"total":1}`},
-		{"/api/v1/home/recently_added_films", http.StatusNotFound, ""},
-		{"/api/v1/home/watchlist?limit=0", http.StatusBadRequest, ""},
+		{"/api/v1/profile/rows/watchlist", http.StatusOK, `"offset":0,"total":1}`},
+		{"/api/v1/profile/rows/watchlist?offset=1", http.StatusOK, `{"items":[],"offset":1,"total":1}`},
+		{"/api/v1/profile/rows/recently_added_films", http.StatusNotFound, ""},
+		{"/api/v1/profile/rows/watchlist?limit=0", http.StatusBadRequest, ""},
 	} {
 		rec := serve(t, http.MethodGet, tc.target, goodToken, "")
 		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.wantBody) {

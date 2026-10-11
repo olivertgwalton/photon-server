@@ -3,6 +3,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -52,14 +53,10 @@ func TestHome(t *testing.T) {
 	}
 	home := func() map[domain.HomeRow][]string {
 		t.Helper()
-		rows, err := s.Home(ctx, profile.ID, 10)
-		if err != nil {
-			t.Fatal(err)
-		}
 		out := map[domain.HomeRow][]string{}
-		for _, r := range rows {
-			for _, c := range r.Cards {
-				out[r.Kind] = append(out[r.Kind], c.Title)
+		for row, cards := range everyRow(ctx, t, s, profile.ID) {
+			for _, c := range cards {
+				out[row] = append(out[row], c.Title)
 			}
 		}
 		return out
@@ -129,37 +126,23 @@ func TestHome(t *testing.T) {
 	if page.State.WatchedAt == nil || page.State.Plays != 1 {
 		t.Errorf("a watched episode's state = %+v, want it still watched once", page.State)
 	}
-	rows, err := s.Home(ctx, profile.ID, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, r := range rows {
-		for _, c := range r.Cards {
+	for row, cards := range everyRow(ctx, t, s, profile.ID) {
+		for _, c := range cards {
 			if c.Kind == domain.ItemEpisode && (c.Show == nil || c.Show.Title != "The Wire" || c.DurationMS != time.Hour.Milliseconds() ||
 				c.Season == nil || c.Season.Title != fmt.Sprintf("Season %d", *c.SeasonNumber)) {
-				t.Errorf("%s: episode card %+v, want its show, its season and its length", r.Kind, c)
+				t.Errorf("%s: episode card %+v, want its show, its season and its length", row, c)
 			}
 		}
 	}
 
-	// The profile's own arrangement: shows first, films hidden, the rest as they were.
+	// The profile's own arrangement, which a client draws its home in: shows first, films hidden,
+	// the rest as they were.
 	prefs := domain.DefaultPreferences()
 	prefs.Home = []domain.HomeSection{
 		{Row: domain.RowRecentShows, Visibility: domain.RowShown}, {Row: domain.RowRecentFilms, Visibility: domain.RowHidden},
 	}
 	if _, err := s.SetPreferences(ctx, profile.ID, prefs); err != nil {
 		t.Fatal(err)
-	}
-	rows, err = s.Home(ctx, profile.ID, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var order []domain.HomeRow
-	for _, r := range rows {
-		order = append(order, r.Kind)
-	}
-	if want := []domain.HomeRow{domain.RowRecentShows, domain.RowNextUp}; !slices.Equal(order, want) {
-		t.Errorf("arranged home = %v, want %v", order, want)
 	}
 	kept, err := s.Preferences(ctx, profile.ID)
 	if err != nil || len(kept.Home) != len(domain.HomeRows()) || kept.Home[1] != prefs.Home[1] {
@@ -288,17 +271,9 @@ func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
 	show := oneItem(t, s, `kind = 'show'`).ID
 	nextUp := func() []string {
 		t.Helper()
-		rows, err := s.Home(ctx, profile.ID, 10)
-		if err != nil {
-			t.Fatal(err)
-		}
 		var out []string
-		for _, r := range rows {
-			if r.Kind == domain.RowNextUp {
-				for _, c := range r.Cards {
-					out = append(out, c.Title)
-				}
-			}
+		for _, c := range everyRow(ctx, t, s, profile.ID)[domain.RowNextUp] {
+			out = append(out, c.Title)
 		}
 		return out
 	}
@@ -332,19 +307,44 @@ func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
 	}
 }
 
-// homeRow answers the titles on one of a profile's home rows, in order.
+// homeRow answers the titles on one of a profile's home rows, in order, a library's of each
+// library in turn.
 func homeRow(t *testing.T, s *Store, profile uuid.UUID, row domain.HomeRow) []string {
 	t.Helper()
-	rows, err := s.Home(t.Context(), profile, 10)
+	var out []string
+	for _, c := range everyRow(t.Context(), t, s, profile)[row] {
+		out = append(out, c.Title)
+	}
+	return out
+}
+
+// everyRow answers the cards of each row a profile's home can show, as a client asks for them: its
+// own rows, and each library's in the order it put them.
+func everyRow(ctx context.Context, t *testing.T, s *Store, profile uuid.UUID) map[domain.HomeRow][]Card {
+	t.Helper()
+	libs, err := s.LibrariesSeen(ctx, profile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var out []string
-	for _, r := range rows {
-		if r.Kind == row {
-			for _, c := range r.Cards {
-				out = append(out, c.Title)
+	out := map[domain.HomeRow][]Card{}
+	for _, row := range domain.HomeRows() {
+		if libraryRows[row] == nil {
+			cards, _, err := s.RowPage(ctx, profile, row, 0, 10)
+			if err != nil {
+				t.Fatal(err)
 			}
+			out[row] = cards
+			continue
+		}
+		for _, lib := range libs {
+			cards, err := s.LibraryRow(ctx, profile, row, lib, 10)
+			if errors.Is(err, ErrNotFound) {
+				continue
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			out[row] = append(out[row], cards...)
 		}
 	}
 	return out
@@ -420,14 +420,14 @@ func TestRecentlyReleased(t *testing.T) {
 	if got, want := homeRow(t, s, admin, domain.RowRecentlyReleased), []string{"Weeks", "Months", "The Wire"}; !slices.Equal(got, want) {
 		t.Errorf("recently released = %v, want %v: each library's newest first, a show by its episode, nothing old or yet to come", got, want)
 	}
-	rows, err := s.Home(t.Context(), admin, 10)
+	seen, err := s.LibrariesSeen(t.Context(), admin)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var libs []string
-	for _, r := range rows {
-		if r.Kind == domain.RowRecentlyReleased {
-			libs = append(libs, r.Library.Name)
+	for _, lib := range seen {
+		if cards, err := s.LibraryRow(t.Context(), admin, domain.RowRecentlyReleased, lib, 10); err == nil && len(cards) > 0 {
+			libs = append(libs, lib.Name)
 		}
 	}
 	if want := []string{"Films", "TV"}; !slices.Equal(libs, want) {

@@ -25,8 +25,8 @@ func asked(target, encoding string) *httptest.ResponseRecorder {
 }
 
 func TestALargeJSONAnswerIsGzipped(t *testing.T) {
-	plain := asked("/api/v1/home?limit=50", "")
-	zipped := asked("/api/v1/home?limit=50", "gzip, deflate, br")
+	plain := asked("/api/v1/profile/rows/next_up?limit=50", "")
+	zipped := asked("/api/v1/profile/rows/next_up?limit=50", "gzip, deflate, br")
 	if plain.Header().Get("Content-Encoding") != "" || zipped.Header().Get("Content-Encoding") != "gzip" ||
 		zipped.Header().Get("Vary") != "Accept-Encoding" {
 		t.Fatalf("Content-Encoding %q then %q, Vary %q: want gzip only when asked", plain.Header().Get("Content-Encoding"),
@@ -113,8 +113,8 @@ func revalidated(target, encoding, tags string) *httptest.ResponseRecorder {
 }
 
 func TestAnAnswerTheClientHoldsIsNotSentAgain(t *testing.T) {
-	// The home is big enough to gzip; a title page is not.
-	for _, target := range []string{"/api/v1/home?limit=50", "/api/v1/titles/" + films.String()} {
+	// A page of fifty episodes is big enough to gzip; a title page is not.
+	for _, target := range []string{"/api/v1/profile/rows/next_up?limit=50", "/api/v1/titles/" + films.String()} {
 		plain := asked(target, "")
 		tag := plain.Header().Get("ETag")
 		if !strings.HasPrefix(tag, `W/"`) || plain.Header().Get("Cache-Control") != "private, no-cache" {
