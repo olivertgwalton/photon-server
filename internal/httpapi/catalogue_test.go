@@ -67,8 +67,8 @@ func (fakeCatalogue) Letters(_ context.Context, lib, _ uuid.UUID, f store.WallFi
 	return []store.Letter{{Letter: "#", Count: 2}, {Letter: "A", Count: 7}}, nil
 }
 
-func (fakeCatalogue) Facets(_ context.Context, lib, _ uuid.UUID) (store.Facets, error) {
-	if lib != films {
+func (fakeCatalogue) Facets(_ context.Context, libs []uuid.UUID, _ uuid.UUID) (store.Facets, error) {
+	if !slices.Equal(libs, []uuid.UUID{films}) {
 		return store.Facets{}, store.ErrNotFound
 	}
 	return store.Facets{Genres: []string{"Crime"}}, nil
@@ -423,7 +423,7 @@ func (ratedCatalogue) Wall(context.Context, []uuid.UUID, store.WallPage) ([]stor
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat", Certificate: "US:R"}}, 1, nil
 }
 
-func (ratedCatalogue) Facets(context.Context, uuid.UUID, uuid.UUID) (store.Facets, error) {
+func (ratedCatalogue) Facets(context.Context, []uuid.UUID, uuid.UUID) (store.Facets, error) {
 	return store.Facets{Certificates: []string{"15", "US:R"}}, nil
 }
 

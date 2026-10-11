@@ -1,7 +1,6 @@
 package jellyfin
 
 import (
-	"cmp"
 	"context"
 	"crypto/sha256"
 	"net/http"
@@ -39,27 +38,13 @@ func asked(r *http.Request, libs []*store.SeenLibrary, seen map[uuid.UUID]*store
 	})
 }
 
-// facets are the values the titles of libraries have, each once: names in order, years the
-// newest first.
+// facets are the values the titles of libraries have.
 func (a *API) facets(ctx context.Context, profile uuid.UUID, libs []*store.SeenLibrary) (store.Facets, error) {
-	var all store.Facets
-	for _, l := range libs {
-		f, err := a.svc.Catalogue.Facets(ctx, l.ID, profile)
-		if err != nil {
-			return store.Facets{}, err
-		}
-		all.Genres = append(all.Genres, f.Genres...)
-		all.Studios = append(all.Studios, f.Studios...)
-		all.Certificates = append(all.Certificates, f.Certificates...)
-		all.Years = append(all.Years, f.Years...)
+	ids := make([]uuid.UUID, len(libs))
+	for n, l := range libs {
+		ids[n] = l.ID
 	}
-	for _, names := range []*[]string{&all.Genres, &all.Studios, &all.Certificates} {
-		slices.Sort(*names)
-		*names = slices.Compact(*names)
-	}
-	slices.SortFunc(all.Years, func(a, b int) int { return cmp.Compare(b, a) })
-	all.Years = slices.Compact(all.Years)
-	return all, nil
+	return a.svc.Catalogue.Facets(ctx, ids, profile)
 }
 
 // facetsAsked are the facets of the libraries a request names.

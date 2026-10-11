@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"uuid"
 
@@ -158,16 +159,20 @@ type Facets struct {
 	RatingSites  []domain.RatingSite
 }
 
-// Facets answers the values a library's films and shows a profile may see have; ErrNotFound for no
-// such library.
-func (s *Store) Facets(ctx context.Context, lib, profile uuid.UUID) (Facets, error) {
+// Facets answers the values the films and shows of libraries a profile may see have; ErrNotFound
+// for no such library.
+func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID) (Facets, error) {
 	var f Facets
-	_, at, err := s.wallQuery(ctx, []uuid.UUID{lib}, profile, WallFilter{})
+	_, at, err := s.wallQuery(ctx, libs, profile, WallFilter{})
 	if err != nil {
 		return f, err
 	}
-	// The facets are of the one library, by its own name and kind.
-	at["lib"], at["kind"] = lib, at["kind0"]
+	// The facets are of each library's own kind of title.
+	ids, kinds := make([]any, len(libs)), make([]any, len(libs))
+	for n := range libs {
+		ids[n], kinds[n] = at["lib"+strconv.Itoa(n)], at["kind"+strconv.Itoa(n)]
+	}
+	at["ids"], at["kinds"] = ids, kinds
 	at["sites"] = domain.RatingSites()
 	// The titles are read once for all four of their facets. The kinds of copy and the rating sites
 	// are those of the titles read, as the wall's filters find them: a copy is a film's, its extras'
@@ -176,16 +181,18 @@ func (s *Store) Facets(ctx context.Context, lib, profile uuid.UUID) (Facets, err
 	var widths []int
 	err = s.pool.QueryRow(ctx, `
 		WITH titles AS MATERIALIZED (
-			SELECT items.id, items.genres, items.studios, items.year, items.certificate FROM items, viewer(@profile) v
-			WHERE library_id = @lib AND kind = @kind AND sees(v, items)
+			SELECT items.id, items.genres, items.studios, items.year, items.certificate FROM items
+			JOIN unnest(CAST(@ids AS uuid[]), CAST(@kinds AS text[])) l (lib, kind) ON items.library_id = l.lib AND items.kind = l.kind,
+			viewer(@profile) v
+			WHERE sees(v, items)
 		),
 		copies AS MATERIALIZED (
 			SELECT k.video_range, k.width FROM (
-				SELECT DISTINCT video_range, width FROM versions WHERE library_id = @lib AND missing_since IS NULL
+				SELECT DISTINCT video_range, width FROM versions WHERE library_id = ANY(@libs) AND missing_since IS NULL
 			) k
 			WHERE EXISTS (SELECT 1 FROM versions c JOIN items e ON e.id = c.item_id LEFT JOIN items p ON p.id = e.parent_id
 				JOIN titles t ON t.id = coalesce(p.parent_id, e.parent_id, e.id)
-				WHERE c.library_id = @lib AND c.missing_since IS NULL
+				WHERE c.library_id = ANY(@libs) AND c.missing_since IS NULL
 					AND c.video_range IS NOT DISTINCT FROM k.video_range AND c.width IS NOT DISTINCT FROM k.width)
 		)
 		SELECT
