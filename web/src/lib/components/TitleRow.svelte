@@ -6,7 +6,7 @@ import type { components } from "#lib/api/schema.js";
 import { blurStyle } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
 import { episodeLine, runtime } from "#lib/format.js";
-import TitleMenu from "./TitleMenu.svelte";
+import TitleMenuButton from "./TitleMenuButton.svelte";
 
 type Card = components["schemas"]["Card"];
 
@@ -67,6 +67,6 @@ const line = $derived(
 	{#if end}
 		{@render end()}
 	{:else}
-		<TitleMenu {card} />
+		<TitleMenuButton {card} />
 	{/if}
 </div>

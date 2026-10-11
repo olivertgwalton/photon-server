@@ -12,6 +12,7 @@ import { adminAffected } from "#lib/changes.js";
 import AppSidebar from "#lib/components/AppSidebar.svelte";
 import ProfileMenu from "#lib/components/ProfileMenu.svelte";
 import RestoringScreen from "#lib/components/RestoringScreen.svelte";
+import TitleMenu from "#lib/components/TitleMenu.svelte";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
 import { connectLive, invalidateLater } from "#lib/live.svelte.js";
 import { page } from "$app/state";
@@ -91,6 +92,7 @@ $effect(() => {
 </Sidebar.Provider>
 
 <RestoringScreen />
+<TitleMenu />
 <!-- Each dialog is asked for the first time a page opens it, and kept: most
 	visits open none, and their first page should not wait on them. -->
 {#if picker.ids.length}
