@@ -103,56 +103,9 @@ func photo(id *uuid.UUID, hash *string) (uuid.UUID, Blurhashes) {
 	return *id, Blurhashes{*id: *hash}
 }
 
-// pictureDepth is how many of a title's pictures of each kind a lookup answers.
-type pictureDepth string
-
-const (
-	// bestPicture is the best of each kind alone, as best_artwork keeps it: all a card shows.
-	bestPicture pictureDepth = "best"
-	// everyPicture is every one, best first, as a title's page offers them.
-	everyPicture pictureDepth = "every"
-)
-
-// pictureOrder answers each title's pictures by kind, best first, as many as depth asks, and the
-// BlurHashes of those that have one. A picture listed again under a lower source, as one an admin
-// chose is under its provider, is left out.
-func (s *Store) pictureOrder(ctx context.Context, items []*model.Item, depth pictureDepth) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
-	switch depth {
-	case bestPicture:
-		return s.bestPictures(ctx, items)
-	case everyPicture:
-	}
-	out := map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID{}
-	hashes := map[uuid.UUID]string{}
-	rows, err := s.rankedPictures(ctx, items)
-	if err != nil {
-		return nil, nil, err
-	}
-	type place struct {
-		item  uuid.UUID
-		kind  domain.ArtworkKind
-		place string
-	}
-	seen := map[place]bool{}
-	for _, r := range rows {
-		p := place{r.ItemID, r.Kind, r.Place}
-		if seen[p] {
-			continue
-		}
-		seen[p] = true
-		if out[r.ItemID] == nil {
-			out[r.ItemID] = map[domain.ArtworkKind][]uuid.UUID{}
-		}
-		out[r.ItemID][r.Kind] = append(out[r.ItemID][r.Kind], r.ID)
-		if r.Blurhash != nil {
-			hashes[r.ID] = *r.Blurhash
-		}
-	}
-	return out, hashes, nil
-}
-
 // bestPictures answers each title's best picture of each kind, as best_artwork keeps them, and the
-// BlurHashes of those that have one.
+// BlurHashes of those that have one: what a card shows, and what a title's page answers, as Plex and
+// Jellyfin answer an item with one of each kind and list the rest as candidates.
 func (s *Store) bestPictures(ctx context.Context, items []*model.Item) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
 	out := map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID{}
 	hashes := map[uuid.UUID]string{}

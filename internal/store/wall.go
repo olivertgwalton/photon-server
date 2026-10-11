@@ -192,7 +192,7 @@ func (s *Store) PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.Playbac
 		return domain.PlaybackTitle{}, err
 	}
 	rows := []*model.Item{row}
-	pictures, _, err := s.pictureOrder(ctx, rows, bestPicture)
+	pictures, _, err := s.bestPictures(ctx, rows)
 	if err != nil {
 		return domain.PlaybackTitle{}, err
 	}
@@ -229,7 +229,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 		if shows, err = s.showsOf(gctx, rows); err != nil {
 			return err
 		}
-		pictures, hashes, err = s.picturesWorn(gctx, rows, shows, bestPicture)
+		pictures, hashes, err = s.picturesWorn(gctx, rows, shows)
 		return err
 	})
 	g.Go(func() (err error) {
@@ -276,10 +276,10 @@ type seasonShow struct {
 	Certificate *string
 }
 
-// picturesWorn answers titles' pictures as pictureOrder does, an episode wearing its show's of
+// picturesWorn answers titles' pictures as bestPictures does, an episode wearing its show's of
 // each kind it has none of (a poster, a backdrop, the lettering), as Plex answers an episode with its
 // show's art: its own still stays its thumb. The shows are read in the same lookup.
-func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[uuid.UUID]episodeShow, depth pictureDepth) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
+func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[uuid.UUID]episodeShow) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
 	// A show is ranked as a show of its episode's library; nothing more of it is read.
 	all := slices.Clone(rows)
 	seen := map[uuid.UUID]bool{}
@@ -289,7 +289,7 @@ func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[
 			all = append(all, &model.Item{ID: show.ID, LibraryID: r.LibraryID, Kind: domain.ItemShow})
 		}
 	}
-	pictures, hashes, err := s.pictureOrder(ctx, all, depth)
+	pictures, hashes, err := s.bestPictures(ctx, all)
 	if err != nil {
 		return nil, nil, err
 	}

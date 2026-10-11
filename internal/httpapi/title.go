@@ -79,7 +79,8 @@ type titlePageJSON struct {
 	Extras               []extraCardJSON   `json:"extras,omitzero"`
 	Videos               []videoLinkJSON   `json:"videos,omitzero"`
 	State                titleStateJSON    `json:"state,omitzero"`
-	// Artwork is the title's pictures by kind, best first, by id: /api/v1/artwork/{id}.
+	// Artwork is the title's best picture of each kind, by id: /api/v1/artwork/{id}. Every picture a
+	// provider offers for it is an admin's to choose from at /api/v1/admin/titles/{id}/artwork/candidates.
 	Artwork    map[domain.ArtworkKind][]uuid.UUID `json:"artwork,omitzero"`
 	Blurhashes store.Blurhashes                   `json:"blurhashes,omitzero"`
 	// Themes are the tunes to play under its page, in order, by id: /api/v1/themes/{id}. A season's

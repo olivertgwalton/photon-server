@@ -59,7 +59,7 @@ type TitlePage struct {
 	Videos        []VideoLink
 	// State is what the profile asking has made of it.
 	State TitleState
-	// Artwork is the title's pictures by kind, best first, by id: /api/v1/artwork/{id}.
+	// Artwork is the title's best picture of each kind, by id: /api/v1/artwork/{id}.
 	Artwork map[domain.ArtworkKind][]uuid.UUID
 	// Blurhashes are those of its pictures that have one, by id.
 	Blurhashes Blurhashes
@@ -273,7 +273,7 @@ func (s *Store) dress(ctx context.Context, item *model.Item, p *TitlePage) error
 	if err != nil {
 		return err
 	}
-	pictures, hashes, err := s.picturesWorn(ctx, []*model.Item{item}, shows, everyPicture)
+	pictures, hashes, err := s.picturesWorn(ctx, []*model.Item{item}, shows)
 	if err != nil {
 		return err
 	}
@@ -448,7 +448,7 @@ func (s *Store) seasons(ctx context.Context, profile, show uuid.UUID, alongside 
 		return err
 	})
 	g.Go(func() (err error) {
-		pictures, hashes, err = s.pictureOrder(gctx, rows, bestPicture)
+		pictures, hashes, err = s.bestPictures(gctx, rows)
 		return err
 	})
 	g.Go(func() (err error) {
@@ -487,7 +487,7 @@ func (s *Store) episodes(ctx context.Context, profile, season uuid.UUID) ([]Epis
 		return err
 	})
 	g.Go(func() (err error) {
-		pictures, hashes, err = s.pictureOrder(gctx, rows, bestPicture)
+		pictures, hashes, err = s.bestPictures(gctx, rows)
 		return err
 	})
 	g.Go(func() (err error) {

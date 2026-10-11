@@ -45,19 +45,16 @@ func TestPicturesBesideATitleComeBeforeAProvidersAndItsCardShowsTheBest(t *testi
 		t.Fatal(err)
 	}
 	posters := page.Artwork[domain.ArtworkPoster]
-	if len(posters) != 2 || len(page.Artwork[domain.ArtworkBackdrop]) != 1 {
-		t.Fatalf("artwork = %v, want two posters and a backdrop", page.Artwork)
+	if len(posters) != 1 || len(page.Artwork[domain.ArtworkBackdrop]) != 1 {
+		t.Fatalf("artwork = %v, want the best poster and backdrop", page.Artwork)
 	}
 	local, err := s.Picture(ctx, posters[0])
 	if err != nil || local.Path != "Heat/poster.jpg" || local.Root != "/srv/films" {
 		t.Errorf("best poster = %+v, %v; want the file beside the film", local, err)
 	}
-	provider, err := s.Picture(ctx, posters[1])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if provider.URL != "https://image.tmdb.org/t/p/original/heat.jpg" {
-		t.Errorf("second poster = %+v, want TMDB's", provider)
+	offered, err := s.ArtworkCandidates(ctx, item, domain.ArtworkPoster)
+	if err != nil || len(offered) != 1 || offered[0].Source != domain.SourceTMDB {
+		t.Errorf("candidates = %+v, %v; want TMDB's poster", offered, err)
 	}
 	cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10})
 	if err != nil || len(cards) != 1 || cards[0].Poster != posters[0] || cards[0].Backdrop != page.Artwork[domain.ArtworkBackdrop][0] {
@@ -150,8 +147,8 @@ func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
 	if err := s.ChooseArtwork(ctx, id, domain.ArtworkPoster, offered[1].ID); err != nil {
 		t.Fatal(err)
 	}
-	if got, n := best(); got != "b.jpg" || n != 3 {
-		t.Errorf("chosen: best poster %q of %d; want b.jpg over the file, listed once", got, n)
+	if got, n := best(); got != "b.jpg" || n != 1 {
+		t.Errorf("chosen: best poster %q of %d; want b.jpg over the file, the page showing it alone", got, n)
 	}
 	offered, err = s.ArtworkCandidates(ctx, id, domain.ArtworkPoster)
 	if err != nil {
