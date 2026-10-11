@@ -12,7 +12,8 @@ const jobs: Record<Kind, string> = {
 	creator: "Creator",
 };
 
-const performs = (kind: Kind) => kind === "actor" || kind === "guest_star";
+const acting: Kind[] = ["actor", "guest_star"];
+const performs = (kind: Kind) => acting.includes(kind);
 
 type Folded<T> = {
 	// Every credit folded in, in the order given.
@@ -65,7 +66,7 @@ export function castOf(credits: components["schemas"]["CreditRef"][]) {
 }
 
 const crafts: [string, Kind[]][] = [
-	["Acting", ["actor", "guest_star"]],
+	["Acting", acting],
 	["Directing", ["director"]],
 	["Creating", ["creator"]],
 	["Writing", ["writer"]],
