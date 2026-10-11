@@ -12,7 +12,7 @@ import (
 var ErrDeviceNotFound = errors.New("no such signed-in device")
 
 // scope is whose devices a session may see and sign out: an admin's, every device; anyone else's,
-// the devices on their own profile.
+// those on their own profile and, for a manager, on the users it keeps.
 func scope(s domain.Session) *uuid.UUID {
 	switch s.Profile.Role {
 	case domain.RoleAdmin:

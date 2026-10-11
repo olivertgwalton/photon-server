@@ -246,26 +246,32 @@ type DeviceListing struct {
 	ID         uuid.UUID
 	DeviceName string
 	Client     string
+	ProfileID  uuid.UUID
 	Profile    string
 	CreatedAt  time.Time
 	LastSeenAt time.Time
 }
 
-// Devices lists signed-in devices, newest first: every device, or with profile set only those on
-// that profile.
+// devicesOf is whether a device's profile p is one whose devices profile $1 may see: with $1
+// nil every one, as an admin's; otherwise its own and those it keeps, as keptBy has them.
+const devicesOf = `($1::uuid IS NULL OR p.id = $1 OR (p.managed_by = $1 AND p.role = 'user'))`
+
+// Devices lists signed-in devices, newest first: every device, or with profile set those on it and
+// on the users it keeps.
 func (s *Store) Devices(ctx context.Context, profile *uuid.UUID) ([]DeviceListing, error) {
 	return queryStructs[DeviceListing](ctx, s.pool, `
-		SELECT d.id, d.device_name, d.client, p.name AS profile, d.created_at, d.last_seen_at
+		SELECT d.id, d.device_name, d.client, p.id AS profile_id, p.name AS profile, d.created_at, d.last_seen_at
 		FROM device_sessions d JOIN profiles p ON p.id = d.profile_id
-		WHERE d.kind = 'device' AND d.expires_at > now() AND ($1::uuid IS NULL OR d.profile_id = $1)
+		WHERE d.kind = 'device' AND d.expires_at > now() AND `+devicesOf+`
 		ORDER BY d.last_seen_at DESC`, profile)
 }
 
-// DeleteDevice signs a device out: any device, or with profile set only one on that profile. It
-// reports whether there was such a device.
+// DeleteDevice signs a device out, of those Devices lists for profile, and reports whether there
+// was such a device.
 func (s *Store) DeleteDevice(ctx context.Context, id uuid.UUID, profile *uuid.UUID) (bool, error) {
 	info, err := s.pool.Exec(ctx, `
-		DELETE FROM device_sessions WHERE id = $1 AND kind = 'device' AND ($2::uuid IS NULL OR profile_id = $2)`, id, profile)
+		DELETE FROM device_sessions d USING profiles p
+		WHERE p.id = d.profile_id AND d.id = $2 AND d.kind = 'device' AND `+devicesOf, profile, id)
 	return info.RowsAffected() == 1, err
 }
 
