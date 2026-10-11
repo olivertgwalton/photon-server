@@ -6,6 +6,12 @@ Official support is at [photon.oliverwalton.uk](https://photon.oliverwalton.uk).
 Mac, Apple TV and Apple Vision Pro, play from it with
 [Photon Player](https://apps.apple.com/gb/app/photon-player/id6804291311) on the App Store.
 
+![Home](docs/images/home.webp)
+
+| Films | A film | A show |
+|---|---|---|
+| ![Films](docs/images/films.webp) | ![Inception](docs/images/film.webp) | ![Grey's Anatomy](docs/images/show.webp) |
+
 ## Tech stack
 
 - **Server**: Go, PostgreSQL (pgx, goose migrations), Valkey
