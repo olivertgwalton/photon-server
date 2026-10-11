@@ -79,12 +79,15 @@ export function isDark(hash: string | undefined): boolean {
 
 const darkLuma = 0.3;
 
-// The blur is drawn this small and stretched: it has no detail to lose.
-const drawn = 32;
+// The blur is drawn this small and stretched: it has no detail to lose. Each
+// side holds the hash's nine waves at most without folding them, at a seventh
+// of the time the reference decoder's 32 takes, which a wall's first screen
+// of new hashes waits on.
+const drawn = 16;
 
 // Each hash is drawn once: a wall redraws its cards as it scrolls, and a
-// title shows on many rows. Each is a couple of kilobytes, so the oldest go
-// past a few thousand.
+// title shows on many rows. Each is under a kilobyte, so the oldest go past a
+// few thousand.
 const drawnStyles = new Map<string, string>();
 const drawnLimit = 4_000;
 
