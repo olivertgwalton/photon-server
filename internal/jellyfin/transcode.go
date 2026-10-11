@@ -193,38 +193,22 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 			return true
 		}
 	}
-	o := playback.Opening{
-		Profile: s.Profile.ID, Item: item, Version: c.Version, Video: t.Video, Audio: t.Audio, Segments: t.Segments, StartMS: t.StartMS,
+	_, _, err = playback.Place(r.Context(), a.svc.Placer, a.svc.Playbacks, candidates, playback.Start{
+		ID: session, Session: s, Address: a.svc.Reach.Client(r).String(), Title: title, Copy: c, Tracks: domain.ChosenTracks{Subtitle: t.Subtitle},
+		Opening: playback.Opening{Profile: s.Profile.ID, Item: item, Version: c.Version, Segments: t.Segments, StartMS: t.StartMS},
+	}, func(playback.Encoding) (playback.Decision, error) { return d, nil })
+	switch {
+	case err == nil, errors.Is(err, playback.ErrStarted):
+		// Here, the request is answered; elsewhere, by another node asked at once, it is handed on
+		// to the node that runs it.
+		return false
+	case errors.Is(err, hls.ErrTranscodeLimit):
+		a.logger.InfoContext(r.Context(), "jellyfin transcode refused", slog.Any("err", a.svc.Placer.Refuse(candidates)))
+		w.Header().Set("Retry-After", "30")
+		a.refuse(w, http.StatusServiceUnavailable)
+		return true
 	}
-	for _, node := range candidates {
-		card := playback.Card(s, a.svc.Reach.Client(r).String(), title, c, d, domain.ChosenTracks{Subtitle: t.Subtitle})
-		card.Acceleration = hls.EncodedOn(node.Encoder.Acceleration, t.Video)
-		p, err := a.svc.Playbacks.Start(r.Context(), session, t.Method, card, time.Duration(t.StartMS)*time.Millisecond, node.ID)
-		if errors.Is(err, playback.ErrStarted) {
-			// Another node, asked at once, runs it: the request is handed on to it.
-			return false
-		} else if err != nil {
-			a.internal(w, r, err)
-			return true
-		}
-		err = a.svc.Placer.Open(r.Context(), node, session, c, o)
-		if err == nil {
-			a.svc.Playbacks.Opened(r.Context(), p)
-			// Here, the request is answered; elsewhere, handed on to the node that runs it.
-			return false
-		}
-		if aerr := a.svc.Playbacks.Abandon(context.WithoutCancel(r.Context()), session); aerr != nil {
-			a.internal(w, r, aerr)
-			return true
-		}
-		if !errors.Is(err, hls.ErrTranscodeLimit) {
-			a.internal(w, r, err)
-			return true
-		}
-	}
-	a.logger.InfoContext(r.Context(), "jellyfin transcode refused", slog.Any("err", a.svc.Placer.Refuse(candidates)))
-	w.Header().Set("Retry-After", "30")
-	a.refuse(w, http.StatusServiceUnavailable)
+	a.internal(w, r, err)
 	return true
 }
 

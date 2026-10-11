@@ -201,7 +201,16 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	d, session, err := a.place(r, req, id, c, title, candidates)
+	// The node with the most transcode slots free decides, with what it encodes; the next is asked
+	// where it has none by then, and decides again with its own.
+	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
+	s := auth.SessionOf(r.Context())
+	d, session, err := playback.Place(r.Context(), a.svc.Placer, a.svc.Playbacks, candidates, playback.Start{
+		ID: uuid.NewV7(), Session: s, Address: a.svc.Reach.Client(r).String(), Title: title, Copy: c, Tracks: tracks,
+		Opening: playback.Opening{Profile: s.Profile.ID, Item: id, Version: c.Version, Segments: req.Profile.Segments, StartMS: req.StartMS},
+	}, func(e playback.Encoding) (playback.Decision, error) {
+		return playback.Decide(*req.Profile, playback.CopyOf(c), tracks, e)
+	})
 	if errors.Is(err, playback.ErrNoCompatibleStream) {
 		status := codeNoCompatibleStream.status()
 		writeJSON(w, a.logger, "application/problem+json", status, refusalJSON{problem{Title: http.StatusText(status), Status: status, Code: codeNoCompatibleStream}, d.Reasons})
@@ -243,41 +252,6 @@ func (a *API) playRequest(w http.ResponseWriter, r *http.Request) (playJSON, boo
 		req.Profile.Segments = domain.SegmentsFMP4
 	}
 	return req, true
-}
-
-// place decides how c is played and starts its playback. The node with the most transcode slots
-// free decides, with what it encodes; the next is asked where it has none by then, and decides
-// again with its own. Where no node takes video to encode, this one decides, and a copy it would
-// encode is refused.
-func (a *API) place(r *http.Request, req playJSON, id uuid.UUID, c store.PlayCopy, title domain.PlaybackTitle, candidates []domain.Node) (playback.Decision, domain.Playback, error) {
-	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
-	asked := candidates
-	if len(asked) == 0 {
-		asked = []domain.Node{a.svc.Placer.Self()}
-	}
-	var d playback.Decision
-	var session domain.Playback
-	var err error
-	for _, node := range asked {
-		d, err = playback.Decide(*req.Profile, playback.CopyOf(c), tracks, playback.EncodingOf(node))
-		if err != nil {
-			break
-		}
-		if d.Video == nil || d.Video.Encode == nil {
-			// Nothing is encoded: the node asked plays it.
-			node = a.svc.Placer.Self()
-		} else if len(candidates) == 0 {
-			err = hls.ErrTranscodeLimit
-			break
-		}
-		session, err = a.start(r, node, title, c, d, tracks, playback.Opening{
-			Profile: auth.SessionOf(r.Context()).Profile.ID, Item: id, Version: c.Version, Segments: req.Profile.Segments, StartMS: req.StartMS,
-		})
-		if !errors.Is(err, hls.ErrTranscodeLimit) {
-			break
-		}
-	}
-	return d, session, err
 }
 
 // opened is what the client is told of a playback of c, played as d decided.
@@ -351,35 +325,6 @@ func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayM
 		})
 	}
 	return out
-}
-
-// playbackCard is what the dashboard shows of a playback the request starts.
-func (a *API) playbackCard(r *http.Request, node domain.Node, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, tracks domain.ChosenTracks) domain.PlaybackCard {
-	card := playback.Card(auth.SessionOf(r.Context()), a.svc.Reach.Client(r).String(), t, c, d, tracks)
-	if v := d.Video; v != nil && v.Encode != nil {
-		card.Acceleration = hls.EncodedOn(node.Encoder.Acceleration, *v)
-	}
-	return card
-}
-
-// start starts a playback of c that node serves, and its remux there where it is not played
-// directly; a node with every slot held refuses it (hls.ErrTranscodeLimit), and it is forgotten.
-func (a *API) start(r *http.Request, node domain.Node, t domain.PlaybackTitle, c store.PlayCopy, d playback.Decision, tracks domain.ChosenTracks, o playback.Opening) (domain.Playback, error) {
-	session, err := a.svc.Playbacks.Start(r.Context(), uuid.NewV7(), d.Method, a.playbackCard(r, node, t, c, d, tracks), time.Duration(o.StartMS)*time.Millisecond, node.ID)
-	if err != nil {
-		return session, err
-	}
-	if d.Method != domain.PlayDirect {
-		o.Video, o.Audio = *d.Video, d.Audio
-		if err := a.svc.Placer.Open(r.Context(), node, session.ID, c, o); err != nil {
-			if aerr := a.svc.Playbacks.Abandon(context.WithoutCancel(r.Context()), session.ID); aerr != nil {
-				return session, errors.Join(err, aerr)
-			}
-			return session, err
-		}
-	}
-	a.svc.Playbacks.Opened(r.Context(), session)
-	return session, nil
 }
 
 // openRemote opens the remux of a playback another node placed on this one, reading its copy
