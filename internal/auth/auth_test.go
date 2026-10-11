@@ -373,16 +373,24 @@ func TestSwitchingProfiles(t *testing.T) {
 	}
 }
 
+// Each profile sees its own devices; a manager its users' too; an admin every one.
 func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
 	svc, st := newService(t)
 	addOliver(t, st)
-	hash, err := HashPassword(t.Context(), "sam's password")
-	if err != nil {
-		t.Fatal(err)
+	add := func(name, password string, role domain.Role, by *uuid.UUID) domain.Profile {
+		t.Helper()
+		hash, err := HashPassword(t.Context(), password)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, err := st.AddProfile(t.Context(), name, role, hash, by)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
 	}
-	if _, err := st.AddProfile(t.Context(), "Sam", domain.RoleUser, hash, nil); err != nil {
-		t.Fatal(err)
-	}
+	mia := add("Mia", "mia's password", domain.RoleManager, nil)
+	add("Sam", "sam's password", domain.RoleUser, &mia.ID)
 	signIn := func(name, password, device string) domain.Session {
 		t.Helper()
 		token, _, err := svc.SignIn(t.Context(), name, password, Device{Name: device, Client: "Photon"})
@@ -396,6 +404,7 @@ func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
 		return s
 	}
 	admin := signIn("Oliver", "correct horse", "Mac")
+	manager := signIn("Mia", "mia's password", "Mia's laptop")
 	sam := signIn("Sam", "sam's password", "Sam's phone")
 	samTV := signIn("Sam", "sam's password", "Sam's TV")
 
@@ -407,8 +416,11 @@ func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
 		}
 		return len(list)
 	}
-	if n := count(admin); n != 3 {
-		t.Errorf("the admin sees %d devices, want 3", n)
+	if n := count(admin); n != 4 {
+		t.Errorf("the admin sees %d devices, want all 4", n)
+	}
+	if n := count(manager); n != 3 {
+		t.Errorf("Mia sees %d devices, want hers and Sam's 2", n)
 	}
 	if n := count(sam); n != 2 {
 		t.Errorf("Sam sees %d devices, want Sam's 2", n)
@@ -416,14 +428,20 @@ func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
 	if err := svc.SignOutDevice(t.Context(), sam, admin.ID); !errors.Is(err, ErrDeviceNotFound) {
 		t.Errorf("Sam signed out the admin's device (err %v)", err)
 	}
-	if err := svc.SignOutDevice(t.Context(), sam, samTV.ID); err != nil {
-		t.Errorf("Sam could not sign out Sam's own TV: %v", err)
+	if err := svc.SignOutDevice(t.Context(), sam, manager.ID); !errors.Is(err, ErrDeviceNotFound) {
+		t.Errorf("Sam signed out Mia's device (err %v)", err)
+	}
+	if err := svc.SignOutDevice(t.Context(), manager, admin.ID); !errors.Is(err, ErrDeviceNotFound) {
+		t.Errorf("Mia signed out the admin's device (err %v)", err)
+	}
+	if err := svc.SignOutDevice(t.Context(), manager, samTV.ID); err != nil {
+		t.Errorf("Mia could not sign out the TV of Sam, whom she keeps: %v", err)
 	}
 	if err := svc.SignOutDevice(t.Context(), admin, sam.ID); err != nil {
 		t.Errorf("the admin could not sign out Sam's phone: %v", err)
 	}
-	if n := count(admin); n != 1 {
-		t.Errorf("%d devices left, want the admin's own", n)
+	if n := count(admin); n != 2 {
+		t.Errorf("%d devices left, want the admin's and Mia's", n)
 	}
 }
 
