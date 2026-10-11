@@ -1,4 +1,5 @@
 <script lang="ts">
+import { on } from "svelte/events";
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 import CalendarDaysIcon from "@lucide/svelte/icons/calendar-days";
 import DownloadIcon from "@lucide/svelte/icons/download";
@@ -68,18 +69,18 @@ function grab(event: PointerEvent, id: string) {
 		draft = ids;
 	};
 	const drop = async () => {
-		window.removeEventListener("pointermove", drag);
-		window.removeEventListener("pointerup", drop);
-		window.removeEventListener("pointercancel", drop);
+		for (const off of listening) off();
 		const ids = draft;
 		dragged = undefined;
 		if (ids && ids.join() !== libraries.map((l) => l.id).join())
 			await setLibraryOrder(ids);
 		draft = undefined;
 	};
-	window.addEventListener("pointermove", drag);
-	window.addEventListener("pointerup", drop);
-	window.addEventListener("pointercancel", drop);
+	const listening = [
+		on(window, "pointermove", drag),
+		on(window, "pointerup", drop),
+		on(window, "pointercancel", drop),
+	];
 }
 
 function nudge(event: KeyboardEvent, index: number) {
