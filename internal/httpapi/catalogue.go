@@ -117,6 +117,9 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	page := store.WallPage{Profile: auth.SessionOf(r.Context()).Profile.ID}
+	if page.Kind, ok = queryEnum(a, w, r, "kind", domain.WallTitles, domain.WallKinds()); !ok {
+		return
+	}
 	if page.Sort, ok = queryEnum(a, w, r, "sort", domain.SortTitle, domain.WallSorts()); !ok {
 		return
 	}
@@ -146,12 +149,16 @@ func (a *API) letters(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	kind, ok := queryEnum(a, w, r, "kind", domain.WallTitles, domain.WallKinds())
+	if !ok {
+		return
+	}
 	f, err := wallFilter(r.URL.Query())
 	if err != nil {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
 	}
-	letters, err := a.svc.Catalogue.Letters(r.Context(), lib, auth.SessionOf(r.Context()).Profile.ID, domain.WallTitles, f)
+	letters, err := a.svc.Catalogue.Letters(r.Context(), lib, auth.SessionOf(r.Context()).Profile.ID, kind, f)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -302,6 +309,9 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
 
+// wallKindParameter is what a wall pages, as Plex's type and Jellyfin's IncludeItemTypes ask for.
+var wallKindParameter = param{"kind", domain.WallTitles, "What to page: titles, or a show library's episodes across its shows."}
+
 // wallFilterParameters are what a wall, and its letters, are narrowed by: each list repeated or
 // comma-separated, any of its values.
 var wallFilterParameters = []param{
@@ -401,7 +411,11 @@ func (a *API) facets(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	f, err := a.svc.Catalogue.Facets(r.Context(), []uuid.UUID{lib}, auth.SessionOf(r.Context()).Profile.ID, domain.WallTitles)
+	kind, ok := queryEnum(a, w, r, "kind", domain.WallTitles, domain.WallKinds())
+	if !ok {
+		return
+	}
+	f, err := a.svc.Catalogue.Facets(r.Context(), []uuid.UUID{lib}, auth.SessionOf(r.Context()).Profile.ID, kind)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -463,7 +477,8 @@ func (a *API) catalogueRoutes() []route {
 		{
 			pattern: "GET /api/v1/libraries/{id}/titles", access: signedIn, summary: "Page a library's titles",
 			query: slices.Concat([]param{
-				{"sort", domain.SortTitle, "The order, title by default."},
+				wallKindParameter,
+				{"sort", domain.SortTitle, "The order, title by default; of episodes, by show."},
 				{"order", domain.Ascending, "Its direction; titles from A, anything else the newest first, by default."},
 			}, pageParams, wallFilterParameters),
 			status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.wall,
@@ -471,12 +486,12 @@ func (a *API) catalogueRoutes() []route {
 		{
 			pattern: "GET /api/v1/libraries/{id}/letters", access: signedIn,
 			summary: "Count a library's titles under each letter, in title order",
-			query:   wallFilterParameters, status: http.StatusOK, reply: listJSON[letterJSON]{}, handle: a.letters,
+			query:   append([]param{wallKindParameter}, wallFilterParameters...), status: http.StatusOK, reply: listJSON[letterJSON]{}, handle: a.letters,
 		},
 		{
 			pattern: "GET /api/v1/libraries/{id}/facets", access: signedIn,
 			summary: "The values a library's titles can be narrowed to",
-			status:  http.StatusOK, reply: facetsJSON{}, handle: a.facets,
+			query:   []param{wallKindParameter}, status: http.StatusOK, reply: facetsJSON{}, handle: a.facets,
 		},
 		{
 			pattern: "GET /api/v1/titles/{id}/next", access: signedIn,

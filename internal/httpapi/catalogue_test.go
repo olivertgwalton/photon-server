@@ -51,6 +51,9 @@ func (fakeCatalogue) Wall(_ context.Context, libs []uuid.UUID, p store.WallPage)
 		return nil, 0, store.ErrNotFound
 	}
 	title := string(p.Sort) + " " + string(p.Order) + " " + strconv.Itoa(p.Offset) + "+" + strconv.Itoa(p.Limit)
+	if p.Kind != domain.WallTitles {
+		title = string(p.Kind) + " " + title
+	}
 	if f := p.Filter; f.MinRating > 0 || len(f.Genres) > 0 || len(f.Marks) > 0 || len(f.Years) > 0 {
 		title += fmt.Sprintf(" %v %v %v %s>=%v", f.Genres, f.Marks, f.Years, f.RatingSite, f.MinRating)
 	}
@@ -253,6 +256,8 @@ func TestWall(t *testing.T) {
 		{"?min_rating=101", http.StatusBadRequest, ""},
 		{"?starts_with=ab", http.StatusBadRequest, ""},
 		{"?sort=rating&rating_site=tmdb", http.StatusOK, "rating desc 0+50"},
+		{"?kind=episodes&sort=released", http.StatusOK, "episodes released desc 0+50"},
+		{"?kind=seasons", http.StatusBadRequest, ""},
 	} {
 		rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/titles"+tc.query, goodToken, "")
 		if rec.Code != tc.wantStatus {
