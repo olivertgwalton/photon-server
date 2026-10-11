@@ -48,21 +48,16 @@ func TestAnEventReadsAsASentence(t *testing.T) {
 	}
 }
 
-// A home row is headed by what it holds, a library's by the library, a collection's by its name.
+// A home row is headed by what it holds, a library's with the library's name in its place.
 func TestAHomeRowIsHeadedByWhatItHolds(t *testing.T) {
 	w := In(language.English)
-	for _, c := range []struct {
-		kind                domain.HomeRow
-		library, collection string
-		want                string
-	}{
-		{domain.RowRecentFilms, "Films", "", "Recently Added in Films"},
-		{domain.RowTopRatedUnwatched, "Shows", "", "Top Rated in Shows"},
-		{domain.RowCollection, "", "Alien Anthology", "Alien Anthology"},
-		{domain.RowContinueWatching, "", "", "Continue Watching"},
-	} {
-		if got := w.HomeRow(c.kind, c.library, c.collection); got != c.want {
-			t.Errorf("HomeRow(%s, %q, %q) = %q, want %q", c.kind, c.library, c.collection, got, c.want)
-		}
+	if got := w.HomeRow(domain.RowContinueWatching); got != "Continue Watching" {
+		t.Errorf("continue watching is headed %q", got)
+	}
+	if got := w.LibraryRow(domain.RowTopRatedUnwatched); got != "Top Rated in {library}" {
+		t.Errorf("a library's top rated is headed %q", got)
+	}
+	if got := w.LibraryRow(domain.RowWatchlist); got != "" {
+		t.Errorf("the watchlist, no library's, is headed %q as one", got)
 	}
 }

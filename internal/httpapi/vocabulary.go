@@ -16,7 +16,9 @@ type vocabularyJSON struct {
 	Tasks map[domain.TaskKey]describedJSON `json:"tasks"`
 	Jobs  map[domain.JobKind]string        `json:"jobs"`
 	// Rows are the kinds of home row, as each one's own page heads it.
-	Rows          map[domain.HomeRow]string                `json:"rows"`
+	Rows map[domain.HomeRow]string `json:"rows"`
+	// LibraryRows are how a row of one library's titles is headed, {library} its name.
+	LibraryRows   map[domain.HomeRow]string                `json:"library_rows"`
 	Roles         map[domain.Role]string                   `json:"roles"`
 	Markers       map[domain.MarkerKind]string             `json:"markers"`
 	Extras        map[domain.ExtraKind]string              `json:"extras"`
@@ -62,7 +64,8 @@ func (a *API) vocabulary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, vocabularyJSON{
 		Tasks:           wordsFor(domain.TaskKeys(), func(k domain.TaskKey) describedJSON { return describedJSON(said.Task(k)) }),
 		Jobs:            wordsFor(domain.JobKinds(), said.JobKind),
-		Rows:            wordsFor(domain.HomeRows(), func(k domain.HomeRow) string { return said.HomeRow(k, "", "") }),
+		Rows:            wordsFor(domain.HomeRows(), said.HomeRow),
+		LibraryRows:     libraryRowWords(said),
 		Roles:           wordsFor(domain.Roles(), said.Role),
 		Markers:         wordsFor(domain.MarkerKinds(), said.MarkerKind),
 		Extras:          wordsFor(domain.ExtraKinds(), said.ExtraKind),
@@ -88,6 +91,16 @@ func (a *API) vocabulary(w http.ResponseWriter, r *http.Request) {
 		Logged:          wordsFor(domain.LoggedEventKinds(), said.Kept),
 		Hookable:        wordsFor(domain.HookableEventKinds(), said.Told),
 	})
+}
+
+func libraryRowWords(said words.Words) map[domain.HomeRow]string {
+	out := map[domain.HomeRow]string{}
+	for _, k := range domain.HomeRows() {
+		if w := said.LibraryRow(k); w != "" {
+			out[k] = w
+		}
+	}
+	return out
 }
 
 func wordsFor[T comparable, W any](values []T, word func(T) W) map[T]W {

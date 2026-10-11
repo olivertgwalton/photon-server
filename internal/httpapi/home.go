@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
@@ -48,15 +49,15 @@ func (a *API) home(w http.ResponseWriter, r *http.Request) {
 	said := words.Negotiate(w, r)
 	out := homeJSON{Rows: make([]homeRowJSON, len(rows))}
 	for i, row := range rows {
-		var library, collection string
-		if row.Library != nil {
-			library = row.Library.Name
-		}
-		if row.Collection != nil {
-			collection = row.Collection.Title
+		title := said.HomeRow(row.Kind)
+		switch {
+		case row.Collection != nil:
+			title = row.Collection.Title
+		case row.Library != nil:
+			title = strings.ReplaceAll(said.LibraryRow(row.Kind), "{library}", row.Library.Name)
 		}
 		out.Rows[i] = homeRowJSON{
-			Kind: row.Kind, Title: said.HomeRow(row.Kind, library, collection), Collection: (*titleRefJSON)(row.Collection),
+			Kind: row.Kind, Title: title, Collection: (*titleRefJSON)(row.Collection),
 			Library: (*libraryRefJSON)(row.Library), Items: cardsJSON(row.Cards),
 		}
 	}
