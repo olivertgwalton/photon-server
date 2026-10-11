@@ -40,47 +40,27 @@ func saveRatings(ctx context.Context, tx db, item uuid.UUID, source domain.Field
 	return tx.SendBatch(ctx, b).Close()
 }
 
-// ratings answers each title's rating from each site, each from the source its library ranks
-// highest, in the order of domain.RatingSites.
+// ratings answers each title's rating from each site, as ranked_ratings ranks them, in the order
+// of domain.RatingSites.
 func (s *Store) ratings(ctx context.Context, items []*model.Item) (map[uuid.UUID][]domain.Rating, error) {
 	out := map[uuid.UUID][]domain.Rating{}
 	if len(items) == 0 {
 		return out, nil
 	}
-	rows, err := queryRows[model.Rating](ctx, s.pool,
-		`SELECT item_id, source, site, score, votes FROM ratings WHERE item_id = ANY($1)`, ids(items))
-	if err != nil || len(rows) == 0 {
+	rows, err := queryRows[model.Rating](ctx, s.pool, `
+		SELECT r.item_id, r.source, r.site, r.score, r.votes FROM items i, ranked_ratings(i) r WHERE i.id = ANY($1)`, ids(items))
+	if err != nil {
 		return out, err
 	}
-	taken, err := rankings(ctx, s.pool, items, domain.FetcherMetadata)
-	if err != nil {
-		return nil, err
-	}
-	ranked := map[uuid.UUID]map[domain.FieldSource]int{}
-	for _, it := range items {
-		ranked[it.ID] = rankOf(taken[it.ID])
-	}
-	best := map[uuid.UUID]map[domain.RatingSite]*model.Rating{}
 	for _, row := range rows {
-		rank := ranked[row.ItemID]
-		if best[row.ItemID] == nil {
-			best[row.ItemID] = map[domain.RatingSite]*model.Rating{}
-		}
-		if b, ok := best[row.ItemID][row.Site]; !ok || rank[row.Source] > rank[b.Source] {
-			best[row.ItemID][row.Site] = row
-		}
+		// Kept as a real; a tenth of a point is as fine as any site scores.
+		out[row.ItemID] = append(out[row.ItemID], domain.Rating{Site: row.Site, Score: math.Round(float64(row.Score)*10) / 10, Votes: deref(row.Votes)})
 	}
 	order := domain.RatingSites()
-	for item, sites := range best {
-		list := make([]domain.Rating, 0, len(sites))
-		for _, row := range sites {
-			// Kept as a real; a tenth of a point is as fine as any site scores.
-			list = append(list, domain.Rating{Site: row.Site, Score: math.Round(float64(row.Score)*10) / 10, Votes: deref(row.Votes)})
-		}
+	for _, list := range out {
 		slices.SortFunc(list, func(a, b domain.Rating) int {
 			return cmp.Compare(slices.Index(order, a.Site), slices.Index(order, b.Site))
 		})
-		out[item] = list
 	}
 	return out, nil
 }

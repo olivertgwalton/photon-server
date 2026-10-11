@@ -106,7 +106,7 @@ func (p WallPage) orderBy(args pgx.NamedArgs) string {
 			key = "items.released_desc"
 		}
 	case domain.SortRating:
-		key, nulls = "(SELECT max(r.score) FROM ratings r WHERE r.item_id = items.id AND r.site = @sort_site)", " NULLS LAST"
+		key, nulls = "(SELECT r.score FROM ranked_ratings(items) r WHERE r.site = @sort_site)", " NULLS LAST"
 		args["sort_site"] = p.RatingSite
 	case domain.SortRuntime:
 		key, nulls = "(SELECT max(v.duration_ms) FROM versions v WHERE v.item_id = items.id AND v.missing_since IS NULL)", " NULLS LAST"
