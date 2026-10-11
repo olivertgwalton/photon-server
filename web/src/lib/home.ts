@@ -1,7 +1,7 @@
 import { client, need } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import { keys } from "#lib/changes.js";
-import { homeRows, type Row, rail, railLimit } from "#lib/rows.js";
+import { type Row, rail, railLimit } from "#lib/rows.js";
 import { wallPageSize } from "#lib/wall.js";
 
 // A home row's first page, for the page that draws all of it.
@@ -31,8 +31,8 @@ export type HomeRail = Row & {
 };
 
 // The home's rows, each asked for on its own as Jellyfin's are: those the
-// profile shows, in its order, a library's once for each library it is made
-// for, in the profile's order of them.
+// profile shows, in its order, a library's once for each library of the kinds
+// it is made for, as Plex's library hubs are, in the profile's order of them.
 export function homeRails(
 	fetch: typeof globalThis.fetch,
 	arrangement: Section[],
@@ -42,8 +42,7 @@ export function homeRails(
 	const limit = railLimit;
 	return arrangement
 		.filter((s) => s.visibility === "shown")
-		.flatMap(({ row: kind }): HomeRail[] => {
-			const of = homeRows[kind].of;
+		.flatMap(({ row: kind, library_kinds: of }): HomeRail[] => {
 			if (!of) {
 				const row = { kind };
 				return [
