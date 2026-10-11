@@ -22,39 +22,55 @@ Measured on 11 October 2026 on one Mac mini: an M4 with 16 GB of memory, running
 - **Memory and CPU.** Sampled with `docker stats` every two seconds for the whole run.
 - **Page loads.** Each server's own web client, signed in, in Chromium at 1440×900. Plex is left out of this one: its web client served from the server sent the browser to plex.tv to sign in on every load.
 
-The host lets its CPU idle between requests, and every server pays for it. At 10 requests a second each server answers 4–6× slower than back to back:
-
-| | Back to back | 10 a second |
-|---|---|---|
-| photon films A–Z, 60 titles | 4.6 ms | 20 ms |
-| photon shows A–Z, 60 titles | 8.1 ms | 27 ms |
-| photon film page | 1.3 ms | 8 ms |
-| Plex shows A–Z, 60 titles | 3.2 ms | 18 ms |
-
-The paced figures below are what a client waits for on an idle host. The back-to-back figures are the work each server does.
+The host lets its CPU idle between requests, and every server pays for it: at 10 requests a second each answers 2–6× slower than back to back. The paced table is what a client waits for on an idle host. The back-to-back table is the work each server does.
 
 ## Latency
 
-Paced, 10 requests a second, p50 / p95 in milliseconds. Bold marks the fastest server on each row.
+Bold marks the fastest server on each row.
+
+### Back to back
+
+p50 / p95 in milliseconds.
+
+| Endpoint | photon | silo | Jellyfin | Plex |
+|---|---|---|---|---|
+| Libraries | **0.18** / 0.28 | 0.37 / 1.03 | 18.1 / 22.6 | 0.24 / 0.53 |
+| Recently added films, 20 | **1.9** / 3.3 | 3.1 / 4.3 | 11.5 / 13.6 | 10.8 / 11.6 |
+| Continue watching, 20 | **1.4** / 2.5 | 4.6 / 7.3 | 16.1 / 20.2 | 1.6 / 1.8 |
+| Films A–Z, 60 | **4.8** / 6.2 | 8.7 / 12.6 | 20.7 / 25.0 | 10.2 / 11.7 |
+| Shows A–Z, 60 | 8.7 / 11.5 | 36.8 / 41.4 | 26.3 / 28.2 | **4.6** / 4.9 |
+| Search "star" | **2.2** / 4.1 | 4.0 / 6.0 | 73.3 / 79.3 | 8.1 / 8.3 |
+| Search "incep" | **1.5** / 2.4 | 5.2 / 6.1 | 10.7 / 11.6 | 4.2 / 4.4 |
+| Film page | **2.3** / 3.7 | 3.1 / 4.8 | 11.2 / 12.5 | 59.7 / 63.5 |
+| Show page | **2.3** / 3.2 | 6.4 / 9.9 | 23.0 / 24.6 | 4.0 / 5.5 |
+| Seasons | in the show page | **4.2** / 5.1 | 8.1 / 9.1 | 8.6 / 9.6 |
+| Season 1's episodes | **1.6** / 2.7 | 1.7 / 2.1 | 17.8 / 20.9 | 2.4 / 3.7 |
+| Similar titles | **3.6** / 5.2 | 0.3 / 0.5 ¹ | 44.1 / 48.7 | 51.8 / 55.0 |
+
+### Paced, 10 requests a second
+
+p50 / p95 in milliseconds.
 
 | Endpoint | photon | silo | Jellyfin | Plex |
 |---|---|---|---|---|
 | Libraries | **2.1** / 3.9 | 4.5 / 5.5 | 33.3 / 39.4 | 2.2 / 2.7 |
-| Recently added films, 20 | **10.3** / 14.0 | — | 30.2 / 36.6 | 31.6 / 36.1 |
-| Continue watching, 20 | **9.2** / 14.2 | — | 33.2 / 37.1 | 10.4 / 11.6 |
+| Recently added films, 20 | **10.3** / 14.0 | 15.6 / 18.4 | 30.2 / 36.6 | 31.6 / 36.1 |
+| Continue watching, 20 | **9.2** / 14.2 | 23.4 / 30.5 | 33.2 / 37.1 | 10.4 / 11.6 |
 | Films A–Z, 60 | **20.3** / 22.9 | 30.3 / 36.3 | 33.9 / 40.3 | 30.7 / 36.4 |
 | Shows A–Z, 60 | 22.1 / 28.1 | 40.3 / 44.1 | 34.5 / 37.5 | **15.4** / 17.9 |
 | Search "star" | **9.6** / 12.9 | 17.4 / 21.9 | 72.5 / 77.1 | 25.0 / 30.7 |
 | Search "incep" | **7.0** / 26.3 | 19.1 / 22.9 | 29.3 / 33.4 | 16.4 / 22.1 |
 | Film page | **9.4** / 27.4 | 19.6 / 25.4 | 31.6 / 37.8 | 62.4 / 65.6 |
 | Show page | **12.3** / 15.9 | 25.3 / 28.1 | 34.1 / 37.4 | 19.9 / 22.2 |
+| Seasons | in the show page | **22.3** / 26.0 | 31.5 / 34.2 | 30.6 / 35.6 |
 | Season 1's episodes | **10.6** / 14.8 | 12.7 / 14.9 | 33.8 / 37.9 | 13.8 / 15.7 |
-| Similar titles | **23.9** / 29.9 | — | 42.6 / 45.4 | 53.7 / 55.2 |
+| Similar titles | 23.9 / 29.9 | 4.0 / 4.8 ¹ | 42.6 / 45.4 | 53.7 / 55.2 |
+
+¹ Silo's similar titles came back empty for every title tried. Its recommendations had not been built on this server, so its time isn't comparable.
 
 Notes on the rows:
-- **Silo** has no separate recently-added or continue-watching rows; its home is one call, which took 39.5 ms. It also has no similar-titles endpoint.
+- **Silo's home** also comes whole from one call. That call took 35.4 ms back to back and 39.9 ms paced.
 - **Jellyfin** finds no film or show titled "star" and still takes 72 ms to say so.
-- **Photon's p95** on search and the film page comes from the idle host: back to back, those calls take 3–9 ms.
 
 ## Page data
 
@@ -91,22 +107,23 @@ What each client downloads before it can sign anyone in, from a cold cache:
 
 ## Throughput
 
-`ab -k -c 8 -n 800`, in requests per second, with the p50 in milliseconds in brackets.
+`ab -k -c 8 -n 800`, in requests per second, with the p50 in milliseconds in brackets. Silo's per-key rate limit was turned off for this run.
 
-| Endpoint | photon | Jellyfin | Plex |
-|---|---|---|---|
-| Libraries | **18,724** (0) | 201 (39) | 6,969 (1) |
-| Recently added films | **1,764** (4) | 276 (29) | 91 (88) |
-| Continue watching | **1,946** (4) | 121 (66) | 560 (14) |
-| Films A–Z, 60 | **687** (11) | 126 (62) | 88 (91) |
-| Shows A–Z, 60 | **319** (24) | 101 (78) | 143 (56) |
-| Search "incep" | **2,650** (3) | 244 (32) | 138 (58) |
-| Film page | **1,355** (5) | 122 (67) | 28 (285) |
-| Show page | **1,087** (7) | 46 (175) | 192 (42) |
-| Season 1's episodes | **1,594** (5) | 188 (42) | 258 (31) |
-| Similar titles | **877** (9) | 81 (97) | 22 (371) |
-
-Silo is left out of this table. It limits an API key to about 20 requests a second, and 85–90% of its burst requests were refused with 429. Of the requests it did answer, the shows list ran at 108 requests a second and its home at 110.
+| Endpoint | photon | silo | Jellyfin | Plex |
+|---|---|---|---|---|
+| Libraries | **18,884** (0) | 6,211 (1) | 186 (43) | 7,442 (1) |
+| Recently added films | **1,712** (4) | 1,007 (7) | 264 (30) | 87 (92) |
+| Continue watching | **2,098** (3) | 608 (13) | 115 (69) | 559 (14) |
+| Films A–Z, 60 | **645** (12) | 416 (18) | 122 (64) | 83 (97) |
+| Shows A–Z, 60 | **327** (24) | 109 (71) | 100 (80) | 135 (60) |
+| Search "star" | **1,237** (6) | 776 (10) | 58 (137) | 88 (91) |
+| Search "incep" | **2,668** (3) | 669 (11) | 229 (35) | 133 (60) |
+| Film page | **1,238** (5) | 927 (8) | 119 (67) | 26 (312) |
+| Show page | **1,068** (7) | 631 (12) | 47 (173) | 178 (45) |
+| Seasons | in the show page | **793** (10) | 315 (25) | 118 (67) |
+| Season 1's episodes | 1,638 (5) | **1,768** (4) | 168 (47) | 242 (33) |
+| Similar titles | **849** (9) | 6,673 (1) ¹ | 79 (100) | 20 (396) |
+| Home, whole | — | 112 (69) | — | — |
 
 ## Memory and CPU
 
@@ -145,5 +162,6 @@ From `docker stats`, in MiB. For the PostgreSQL containers this includes the pag
 
 ## Where photon is slower
 
-- **Shows A–Z.** Back to back, photon takes 8.1 ms and Plex 3.2 ms. A card reads every picture a title has and ranks them in Go, and a show has about twice a film's pictures: 51 against 26.5. Ranking in SQL was slower on the current artwork index.
+- **Shows A–Z.** Back to back, photon takes 8.7 ms against Plex's 4.6 ms. A card reads every picture a title has and ranks them in Go, and a show has about twice a film's pictures: 51 against 26.5. Ranking in SQL was slower on the current artwork index.
+- **Season 1's episodes.** Silo and photon are level here: 1.7 ms against 1.6 ms back to back. Silo serves 8% more under load, 1,768 requests a second against 1,638.
 - **First paint.** Silo paints its home first. Photon's web client starts with 116 requests where silo's starts with 12. That costs little on a LAN, more on a slow link.
