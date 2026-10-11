@@ -77,6 +77,10 @@ func TestAProfileKeepsHowItPlays(t *testing.T) {
 	if _, body = call(http.MethodPatch, `{"home": [{"row": "next_up", "visibility": "shown"}, {"row": "favourites", "visibility": "hidden"}]}`); !strings.Contains(body, `"home":[{"row":"next_up","visibility":"shown"},{"row":"favourites","visibility":"hidden"}`) {
 		t.Errorf("the home arranged: %s", body)
 	}
+	// A client draws a library's row once for each library of the kinds it is made for.
+	if _, body = call(http.MethodPatch, `{"home": [{"row": "recently_released", "visibility": "shown"}]}`); !strings.Contains(body, `{"row":"recently_released","visibility":"shown","library_kinds":["movies","shows"]}`) {
+		t.Errorf("a library's row does not say the libraries it is made for: %s", body)
+	}
 
 	for _, bad := range []string{
 		`{"subtitle_mode": "foreign"}`, `{"audio_language": "not a language"}`, `{"max_bitrate_kbps": -1}`,

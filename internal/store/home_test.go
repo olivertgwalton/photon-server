@@ -328,7 +328,7 @@ func everyRow(ctx context.Context, t *testing.T, s *Store, profile uuid.UUID) ma
 	}
 	out := map[domain.HomeRow][]Card{}
 	for _, row := range domain.HomeRows() {
-		if libraryRows[row] == nil {
+		if row.LibraryKinds() == nil {
 			cards, _, err := s.RowPage(ctx, profile, row, 0, 10)
 			if err != nil {
 				t.Fatal(err)

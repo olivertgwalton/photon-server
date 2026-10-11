@@ -24,6 +24,22 @@ func HomeRows() []HomeRow {
 	return []HomeRow{RowContinueWatching, RowNextUp, RowWatchlist, RowFavourites, RowRecentFilms, RowRecentShows, RowRecentlyReleased, RowTopRatedUnwatched}
 }
 
+// LibraryKinds are the kinds of library the row is made once for each of, as Plex's library hubs
+// are: none for a row of the profile's own. A title in two libraries is in each one's row.
+func (r HomeRow) LibraryKinds() []LibraryKind {
+	switch r {
+	case RowContinueWatching, RowNextUp, RowWatchlist, RowFavourites:
+		return nil
+	case RowRecentFilms:
+		return []LibraryKind{LibraryMovies}
+	case RowRecentShows:
+		return []LibraryKind{LibraryShows}
+	case RowRecentlyReleased, RowTopRatedUnwatched:
+		return []LibraryKind{LibraryMovies, LibraryShows}
+	}
+	return nil
+}
+
 // RowVisibility is whether a profile's home shows a row.
 type RowVisibility string
 

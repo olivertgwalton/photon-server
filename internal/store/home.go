@@ -14,17 +14,8 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
-// libraryRows are the rows made once for each library the profile sees, as Plex's library hubs
-// are, and the kinds of library each is made for. A title in two libraries is in each one's row.
-var libraryRows = map[domain.HomeRow][]domain.LibraryKind{
-	domain.RowRecentFilms:       {domain.LibraryMovies},
-	domain.RowRecentShows:       {domain.LibraryShows},
-	domain.RowRecentlyReleased:  {domain.LibraryMovies, domain.LibraryShows},
-	domain.RowTopRatedUnwatched: {domain.LibraryMovies, domain.LibraryShows},
-}
-
-// rowQueries are the rows' queries, each taking the profile and a limit, a library of the
-// libraryRows and an offset of the rest, and holding only what the profile may see; the profile's
+// rowQueries are the rows' queries, each taking the profile and a limit, a library of a
+// library's rows and an offset of the rest, and holding only what the profile may see; the profile's
 // own rows hold a title in several libraries once.
 var rowQueries = map[domain.HomeRow]string{
 	domain.RowContinueWatching: `
@@ -167,7 +158,7 @@ const releasedWithinDays = 365
 // titles it holds: ErrNotFound for a library's or a collection's row, which lead to its own page.
 func (s *Store) RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]Card, int64, error) {
 	q, ok := rowQueries[row]
-	if _, ofLibrary := libraryRows[row]; !ok || ofLibrary {
+	if !ok || row.LibraryKinds() != nil {
 		return nil, 0, ErrNotFound
 	}
 	// LIMIT NULL is no limit.
@@ -187,7 +178,7 @@ func (s *Store) RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeR
 // LibraryRow answers the first cards, up to limit, of a row made for each library, of library:
 // ErrNotFound for any other row, or one not made for that kind of library.
 func (s *Store) LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library *SeenLibrary, limit int) ([]Card, error) {
-	if !slices.Contains(libraryRows[row], library.Kind) {
+	if !slices.Contains(row.LibraryKinds(), library.Kind) {
 		return nil, ErrNotFound
 	}
 	items, err := queryRows[model.Item](ctx, s.pool, rowQueries[row], pgx.NamedArgs{"profile": profile, "limit": limit, "offset": 0, "lib": library.ID})
