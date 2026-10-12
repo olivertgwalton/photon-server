@@ -1,5 +1,6 @@
 <script lang="ts">
 import { tick, untrack } from "svelte";
+import { innerHeight } from "svelte/reactivity/window";
 import { onResize } from "#lib/size.js";
 import type { components } from "#lib/api/schema.js";
 import { columnGap, columnsFor, gridColumns } from "#lib/grid.js";
@@ -62,14 +63,11 @@ function load(page: number): Promise<void> {
 
 let list = $state<HTMLElement>();
 let width = $state(0);
-// Where the wall's top is against the window's, and how much window there is.
+// Where the wall's top is against the window's.
 let top = $state(0);
-let viewport = $state(0);
 
 function measure() {
-	if (!list) return;
-	top = list.getBoundingClientRect().top;
-	viewport = window.innerHeight;
+	if (list) top = list.getBoundingClientRect().top;
 }
 
 const resized = onResize((_, box) => {
@@ -87,14 +85,18 @@ const rowHeight = $derived(
 );
 const rows = $derived(Math.ceil(total / columns));
 
+// The rows drawn, as numbers: a scroll that keeps them changes nothing past
+// here, where the cards would otherwise be gone over again on every one.
+const screen = $derived(innerHeight.current || 800);
+const from = $derived(
+	Math.max(0, Math.floor((-top - screen * overscan) / rowHeight)),
+);
+const to = $derived(
+	Math.min(rows, Math.ceil((-top + screen * (1 + overscan)) / rowHeight)),
+);
+
 const shown = $derived.by(() => {
 	if (!width) return [];
-	const screen = viewport || 800;
-	const from = Math.max(0, Math.floor((-top - screen * overscan) / rowHeight));
-	const to = Math.min(
-		rows,
-		Math.ceil((-top + screen * (1 + overscan)) / rowHeight),
-	);
 	const out: number[] = [];
 	for (let i = from * columns; i < Math.min(total, to * columns); i++) {
 		out.push(i);
