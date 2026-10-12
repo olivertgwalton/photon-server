@@ -199,11 +199,17 @@ test("the home's rows are put in order and hidden, by pointer or keyboard", asyn
 	await page
 		.getByRole("button", { name: "Move Recently Added Films up" })
 		.focus();
-	for (let i = 0; i < 4; i++) await page.keyboard.press("Enter");
+	for (let to = 4; to >= 1; to--) {
+		await page.keyboard.press("Enter");
+		await expect(
+			page.getByText(`Recently Added Films moved to ${to} of 8.`),
+		).toBeAttached();
+	}
 	await expect(rows.first()).toHaveText("Recently Added Films");
+	// At the top, focus passes to the arrow that can still move it.
 	await expect(
-		page.getByText("Recently Added Films moved to 1 of 8."),
-	).toBeAttached();
+		page.getByRole("button", { name: "Move Recently Added Films down" }),
+	).toBeFocused();
 	await page.getByRole("switch", { name: "Show Continue Watching" }).click();
 
 	await page.reload();
