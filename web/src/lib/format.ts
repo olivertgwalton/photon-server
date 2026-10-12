@@ -156,6 +156,27 @@ export function language(code: string | undefined): string {
 	}
 }
 
+const regions = new Intl.DisplayNames(undefined, { type: "region" });
+
+export function country(code: string): string {
+	try {
+		return regions.of(code) ?? code;
+	} catch {
+		return code;
+	}
+}
+
+// Languages or countries as choices, named in the reader's own language and
+// in its order, as Plex's and Jellyfin's settings list them.
+export function localeOptions(
+	codes: Iterable<string>,
+	name: (code: string) => string = language,
+): { value: string; label: string }[] {
+	return [...codes]
+		.map((value) => ({ value, label: name(value) }))
+		.toSorted((a, b) => a.label.localeCompare(b.label));
+}
+
 // The copy asked for by id, else the one the server plays when none is: the
 // first with its files on disk.
 export function onDisk(

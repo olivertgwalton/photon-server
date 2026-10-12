@@ -1,6 +1,5 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
-import { localeOptions } from "#lib/admin/library.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/Choice.svelte";
@@ -8,6 +7,7 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { fields, textAsTyped } from "#lib/form.js";
+import { country, localeOptions } from "#lib/format.js";
 
 type Schemas = components["schemas"];
 
@@ -27,8 +27,8 @@ let {
 
 const id = $props.id();
 
-const languages = $derived(localeOptions(locales.languages, "language"));
-const countries = $derived(localeOptions(locales.countries, "region"));
+const languages = $derived(localeOptions(locales.languages));
+const countries = $derived(localeOptions(locales.countries, country));
 
 function save(event: SubmitEvent) {
 	const form = fields(event);

@@ -8,7 +8,7 @@ import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import Choice from "#lib/components/Choice.svelte";
-import { language } from "#lib/format.js";
+import { language, localeOptions } from "#lib/format.js";
 import { subtitleLanguages } from "#lib/player/words.js";
 
 type Found = components["schemas"]["FoundSubtitles"];
@@ -26,10 +26,7 @@ async function startLanguage(): Promise<string> {
 }
 
 const options = (lang: string) =>
-	[...new Set([lang, ...subtitleLanguages])]
-		.filter(Boolean)
-		.map((tag) => ({ value: tag, label: language(tag) }))
-		.sort((a, b) => a.label.localeCompare(b.label));
+	localeOptions(new Set([lang, ...subtitleLanguages].filter(Boolean)));
 
 function search(lang: string) {
 	return client().GET("/api/v1/titles/{id}/subtitles/candidates", {

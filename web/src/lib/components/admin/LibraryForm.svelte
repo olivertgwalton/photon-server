@@ -1,12 +1,8 @@
 <script lang="ts">
 import { vocabulary } from "#lib/vocabulary.js";
 import type { components } from "#lib/api/schema.js";
-import {
-	localeOptions,
-	offeredSources,
-	serverLocale,
-} from "#lib/admin/library.js";
-import { language } from "#lib/format.js";
+import { offeredSources, serverLocale } from "#lib/admin/library.js";
+import { country, language, localeOptions } from "#lib/format.js";
 import { subtitleLanguages } from "#lib/player/words.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -41,23 +37,19 @@ let {
 const id = $props.id();
 const words = vocabulary();
 
-// Languages and countries by name in the reader's own language, as Plex's and
-// Jellyfin's library settings list them.
-const languageNames = new Intl.DisplayNames(undefined, { type: "language" });
-const countryNames = new Intl.DisplayNames(undefined, { type: "region" });
 const languages = $derived([
 	{
 		value: serverLocale,
-		label: `Server default (${languageNames.of(serverLanguage) ?? serverLanguage})`,
+		label: `Server default (${language(serverLanguage)})`,
 	},
-	...localeOptions(locales.languages, "language"),
+	...localeOptions(locales.languages),
 ]);
 const countries = $derived([
 	{
 		value: serverLocale,
-		label: `Automatic${serverCountry ? ` (${countryNames.of(serverCountry)})` : ""}`,
+		label: `Automatic${serverCountry ? ` (${country(serverCountry)})` : ""}`,
 	},
-	...localeOptions(locales.countries, "region"),
+	...localeOptions(locales.countries, country),
 ]);
 
 const defaults = {
@@ -125,9 +117,7 @@ const extras = $derived(library?.remote_extras ?? defaults.remote_extras);
 // The languages offered: the common ones, and any the library already has.
 const fetching = $derived(library?.subtitle_languages ?? []);
 const offeredLanguages = $derived(
-	[...new Set([...subtitleLanguages, ...fetching])]
-		.map((tag) => ({ tag, name: language(tag) }))
-		.sort((a, b) => a.name.localeCompare(b.name)),
+	localeOptions(new Set([...subtitleLanguages, ...fetching])),
 );
 
 const refreshing = [
@@ -361,7 +351,7 @@ const refreshOptions = $derived(
 					subtitle providers when they are added, and daily after.
 				</Field.Description>
 				<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-					{#each offeredLanguages as { tag, name } (tag)}
+					{#each offeredLanguages as { value: tag, label } (tag)}
 						<div class="flex items-center gap-2">
 							<Checkbox
 								id="{id}-subtitle-{tag}"
@@ -369,7 +359,7 @@ const refreshOptions = $derived(
 								value={tag}
 								checked={fetching.includes(tag)}
 							/>
-							<Label for="{id}-subtitle-{tag}">{name}</Label>
+							<Label for="{id}-subtitle-{tag}">{label}</Label>
 						</div>
 					{/each}
 				</div>
