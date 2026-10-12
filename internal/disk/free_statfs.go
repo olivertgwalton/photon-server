@@ -1,11 +1,12 @@
 //go:build linux || darwin
 
-package httpapi
+// Package disk tells the space left on a filesystem.
+package disk
 
 import "syscall"
 
-// freeBytes is the space left to the server under path.
-func freeBytes(path string) (uint64, bool) {
+// Free is the space left to the server under path.
+func Free(path string) (uint64, bool) {
 	var st syscall.Statfs_t
 	if syscall.Statfs(path, &st) != nil {
 		return 0, false
