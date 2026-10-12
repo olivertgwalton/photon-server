@@ -201,7 +201,7 @@ async function start(event: SubmitEvent) {
 							Titles not imported
 						</summary>
 						<ul class="mt-2 grid gap-1">
-							{#each run.misses as miss, i (i)}
+							{#each run.misses as miss}
 								<li class="flex justify-between gap-4">
 									<span class="text-ink truncate">{miss.title}</span>
 									<span class="text-ink-3 shrink-0"

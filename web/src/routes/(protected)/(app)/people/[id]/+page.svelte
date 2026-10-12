@@ -39,7 +39,7 @@ const life = $derived(
 		{/if}
 		<div class="grid content-start gap-3">
 			<h1 class="title">{p.name}</h1>
-			{#each life as line, i (i)}
+			{#each life as line (line)}
 				<p class="text-ink-2 text-sm">{line}</p>
 			{/each}
 			{#if p.biography}

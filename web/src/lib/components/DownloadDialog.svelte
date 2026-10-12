@@ -108,7 +108,7 @@ async function request(event: SubmitEvent) {
 			<Field.Set>
 				<Field.Legend>Quality</Field.Legend>
 				<div class="grid gap-1">
-					{#each qualities as quality, i (i)}
+					{#each qualities as quality, i (quality.kbps)}
 						<label
 							class="hover:bg-accent has-checked:bg-accent flex items-center gap-3 rounded-md px-3 py-2"
 						>

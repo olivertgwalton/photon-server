@@ -177,7 +177,7 @@ const absence = (e: Entry, day: string) =>
 				<Dialog.Description>{entries.length} out that day</Dialog.Description>
 			</Dialog.Header>
 			<ul class="grid max-h-96 overflow-y-auto">
-				{#each entries as e, i (i)}
+				{#each entries as e (e.id)}
 					<li>{@render card(e, date)}</li>
 				{/each}
 			</ul>
@@ -260,7 +260,7 @@ const absence = (e: Entry, day: string) =>
 					{dayLabel(day.date, now)}
 				</h2>
 				<ul class="grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
-					{#each day.entries as e, i (i)}
+					{#each day.entries as e (e.id)}
 						<li>{@render card(e, day.date)}</li>
 					{/each}
 				</ul>
@@ -312,7 +312,7 @@ const absence = (e: Entry, day: string) =>
 					>
 						{at(day.date).getUTCDate()}
 					</span>
-					{#each day.entries.slice(0, shown) as e, i (i)}
+					{#each day.entries.slice(0, shown) as e (e.id)}
 						{@render chip(e)}
 					{/each}
 					{#if day.entries.length > shown}
