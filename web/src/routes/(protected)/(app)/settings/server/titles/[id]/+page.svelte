@@ -2,6 +2,7 @@
 import { fullTitle } from "#lib/format.js";
 import { act } from "#lib/act.js";
 import { refreshMetadata } from "#lib/actions.svelte.js";
+import { matchable, refreshable } from "#lib/admin/edit.js";
 import { fields } from "#lib/form.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
@@ -32,8 +33,8 @@ function order(event: SubmitEvent) {
 }
 
 const t = $derived(data.title);
-const matched = $derived(t.kind === "movie" || t.kind === "show");
-const refreshes = $derived(t.kind !== "collection" && t.kind !== "extra");
+const matched = $derived(matchable(t.kind));
+const refreshes = $derived(refreshable(t.kind));
 const versions = $derived(
 	t.kind === "movie" || t.kind === "episode" ? (t.versions ?? []) : [],
 );

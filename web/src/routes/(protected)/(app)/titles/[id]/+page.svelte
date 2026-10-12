@@ -33,6 +33,7 @@ import PlayChoices from "#lib/components/PlayChoices.svelte";
 import RatingScore from "#lib/components/RatingScore.svelte";
 import Rail from "#lib/components/Rail.svelte";
 import Choice from "#lib/components/Choice.svelte";
+import { refreshable } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
 import { episodesOf } from "#lib/seasons.js";
 import ThemeTune from "#lib/components/ThemeTune.svelte";
@@ -451,7 +452,7 @@ const poster = $derived(art("poster"));
 										<WrenchIcon />{name}
 									</DropdownMenu.Item>
 								{/each}
-								{#if t.kind !== "collection" && t.kind !== "extra"}
+								{#if refreshable(t.kind)}
 									<DropdownMenu.Item
 										onSelect={() =>
 											refreshMetadata("title", t.id, titleWithShow(t))}

@@ -4,6 +4,17 @@ import { parseClock } from "./words.js";
 
 type Schemas = components["schemas"];
 type Field = Schemas["Field"];
+type Kind = Schemas["ItemKind"];
+
+// What an admin can do to a title, as Plex's and Jellyfin's offer: a film or
+// show is matched, and all but a collection or an extra refreshed.
+export function matchable(kind: Kind): boolean {
+	return kind === "movie" || kind === "show";
+}
+
+export function refreshable(kind: Kind): boolean {
+	return kind !== "collection" && kind !== "extra";
+}
 
 // The fields an admin edits, as the title page says them now.
 export function fieldsOf(t: Schemas["TitlePage"]): Record<Field, string> {
