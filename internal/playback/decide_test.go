@@ -326,6 +326,22 @@ func TestAnInterlacedPictureIsDeinterlacedAsItIsEncoded(t *testing.T) {
 	}
 }
 
+// A UHD Blu-ray's Dolby Vision 7 goes to a client of HDR10 as its base layer, copied, not encoded.
+func TestDolbyVision7IsSentAsItsHDR10(t *testing.T) {
+	remux := film
+	remux.Streams = slices.Clone(film.Streams)
+	remux.Streams[0].DolbyVision = &domain.DolbyVision{Profile: 7, Compatibility: domain.CompatibleBluRay}
+	safari := appleTV
+	safari.Video = []VideoSupport{{Codec: "hevc", Ranges: []domain.Range{domain.RangeSDR, domain.RangeHDR10, domain.RangeDV}, DolbyVisionProfiles: []int{5, 8}}}
+	got, err := Decide(safari, remux, domain.ChosenTracks{}, Encoding{HEVC: domain.HEVCAllow})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Method != domain.PlayRemux || got.Video.DolbyVision != domain.DolbyVisionStrip {
+		t.Errorf("%s with Dolby Vision %s, want remuxed with it stripped", got.Method, got.Video.DolbyVision)
+	}
+}
+
 func TestVideoLimits(t *testing.T) {
 	h264 := domain.Stream{Kind: domain.StreamVideo, Codec: "h264", Profile: "High 10", Level: 51, Width: 1920, Height: 1080, BitDepth: 10}
 	for _, tc := range []struct {
