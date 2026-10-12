@@ -7,6 +7,7 @@ import { keys } from "#lib/changes.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
 import { bitrate, bytes } from "#lib/format.js";
+import { pollWhile } from "#lib/poll.svelte.js";
 import { vocabulary } from "#lib/vocabulary.js";
 import { invalidate } from "$app/navigation";
 
@@ -25,11 +26,11 @@ function remove(id: string) {
 const working = $derived(
 	data.downloads.some((d) => d.state === "queued" || d.state === "converting"),
 );
-$effect(() => {
-	if (!working) return;
-	const timer = setInterval(() => invalidate(keys.downloads), 3000);
-	return () => clearInterval(timer);
-});
+pollWhile(
+	() => working,
+	() => invalidate(keys.downloads),
+	3_000,
+);
 </script>
 
 <svelte:head><title>Downloads · Photon</title></svelte:head>

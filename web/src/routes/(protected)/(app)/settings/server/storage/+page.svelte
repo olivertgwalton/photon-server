@@ -17,6 +17,7 @@ import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
 import { fields, text } from "#lib/form.js";
+import { pollWhile, progressEvery } from "#lib/poll.svelte.js";
 import { refreshAll } from "$app/navigation";
 
 let { data } = $props();
@@ -42,11 +43,7 @@ const move = $derived(data.storage.move);
 let checking = $state(false);
 
 // A move's progress is read again every few seconds until it is done.
-$effect(() => {
-	if (!move) return;
-	const timer = setInterval(() => refreshAll(), 2000);
-	return () => clearInterval(timer);
-});
+pollWhile(() => !!move, refreshAll, progressEvery);
 
 const clock = new Clock(30_000);
 
