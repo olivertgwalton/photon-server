@@ -6,6 +6,7 @@ import FilmIcon from "@lucide/svelte/icons/film";
 import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import HouseIcon from "@lucide/svelte/icons/house";
+import LibraryBigIcon from "@lucide/svelte/icons/library-big";
 import ListVideoIcon from "@lucide/svelte/icons/list-video";
 import PuzzleIcon from "@lucide/svelte/icons/puzzle";
 import RotateCcwClockIcon from "@lucide/svelte/icons/rotate-ccw-clock";
@@ -24,7 +25,11 @@ import Mark from "./Mark.svelte";
 type Library = components["schemas"]["Library"];
 type PluginPage = components["schemas"]["PluginPage"];
 
-let { libraries, pages }: { libraries: Library[]; pages: PluginPage[] } =
+let {
+	libraries,
+	collections,
+	pages,
+}: { libraries: Library[]; collections: boolean; pages: PluginPage[] } =
 	$props();
 
 const kindIcons: Record<Library["kind"], Component> = {
@@ -182,7 +187,7 @@ function current(href: string) {
 					{@render item("/calendar", "Calendar", CalendarDaysIcon)}
 				</Sidebar.Menu>
 			</Sidebar.Group>
-			{#if libraries.length}
+			{#if libraries.length || collections}
 				<Sidebar.Group>
 					<Sidebar.GroupLabel>Libraries</Sidebar.GroupLabel>
 					{#if reordering}
@@ -204,6 +209,10 @@ function current(href: string) {
 								index,
 							)}
 						{/each}
+						<!-- In no library, after them all, as Jellyfin's box sets are. -->
+						{#if collections}
+							{@render item("/collections", "Collections", LibraryBigIcon)}
+						{/if}
 					</Sidebar.Menu>
 				</Sidebar.Group>
 			{/if}

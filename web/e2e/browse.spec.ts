@@ -670,3 +670,20 @@ test("an episode's page names its show by the show's lettering alone", async ({
 		"/titles/t-show",
 	);
 });
+
+test("collections, in no library, have a view of their own in the sidebar", async ({
+	page,
+}) => {
+	await logIn(page, "/");
+	await page
+		.getByRole("navigation")
+		.getByRole("link", { name: "Collections", exact: true })
+		.click();
+	await expect(page).toHaveURL("/collections");
+	await expect(
+		page.getByRole("heading", { name: "Collections", level: 1 }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("link", { name: /Lighthouse Films/ }),
+	).toBeVisible();
+});

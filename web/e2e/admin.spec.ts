@@ -697,10 +697,10 @@ test("a collection is made from a TMDB list, and read again as asked", async ({
 	});
 	await expect(page).toHaveURL("/settings/server/collections/t-smart");
 	await expect(page.locator("main")).toContainText(
-		"Holds the titles of TMDB list 8136 the library has",
+		"Holds the titles of TMDB list 8136 your libraries have",
 	);
 	await expect(page.locator("main")).toContainText(
-		"2 of it are not in the library.",
+		"2 of it are in none of them.",
 	);
 	await expectAccessible(page);
 

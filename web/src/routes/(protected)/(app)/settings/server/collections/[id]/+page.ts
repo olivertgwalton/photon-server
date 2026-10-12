@@ -11,6 +11,8 @@ export const load: PageLoad = async ({ fetch, params }) => {
 	return {
 		collection,
 		members: members.items,
-		library: collection.library_id ?? undefined,
+		// The first library a smart collection's rule reads, on whose wall the
+		// rule is changed.
+		library: collection.library_ids?.[0],
 	};
 };

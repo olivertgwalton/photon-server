@@ -40,7 +40,11 @@ $effect(() => {
 </a>
 
 <Sidebar.Provider open={data.sidebarOpen}>
-	<AppSidebar libraries={data.libraries} pages={data.pages} />
+	<AppSidebar
+		libraries={data.libraries}
+		collections={data.collections}
+		pages={data.pages}
+	/>
 	<Sidebar.Inset>
 		<header
 			class="border-line bg-ground/85 sticky top-0 z-20 flex h-14 items-center gap-3 border-b px-3 backdrop-blur-xl sm:px-4"
