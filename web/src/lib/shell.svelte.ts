@@ -1,12 +1,16 @@
 import { createContext } from "svelte";
 import { toast } from "svelte-sonner";
+import { goto } from "$app/navigation";
 import {
 	deleteTitle,
 	type RefreshOf,
 	removeLibrary,
 	splitTitle,
 } from "./actions.js";
+import { client } from "./api/client.js";
+import { problemMessage } from "./api/problem.js";
 import type { components } from "./api/schema.js";
+import { playHref } from "./format.js";
 
 export type MenuCard = Pick<
 	components["schemas"]["Card"],
@@ -14,6 +18,7 @@ export type MenuCard = Pick<
 >;
 export type EditorTab = "details" | "match" | "artwork";
 type VersionUse = "play" | "download";
+type Version = components["schemas"]["VersionPage"];
 
 // What the shell draws once and any page under it opens: the title menu and
 // the dialogs a title's or a library's menu leads to. Its methods are arrows,
@@ -86,16 +91,41 @@ export class Shell {
 		Object.assign(this.sharing, { open: true, url, title });
 	};
 
-	// Which copy, as Plex's Play Version and Save File ask.
+	// Which copy, as Plex's Play Version and Save File ask, of its copies on
+	// disk, asked each time. One alone is no choice: it plays, or its download
+	// is asked about, at once.
 	versions = $state({
 		open: false,
+		downloading: false,
 		id: "",
 		title: "",
 		use: "play" as VersionUse,
 	});
+	onDisk = $state.raw<Version[]>([]);
+	copy = $state.raw<Version>();
 
-	chooseVersion = (id: string, title: string, use: VersionUse) => {
-		Object.assign(this.versions, { open: true, id, title, use });
+	chooseVersion = async (id: string, title: string, use: VersionUse) => {
+		const { data, error } = await client().GET("/api/v1/titles/{id}", {
+			params: { path: { id } },
+		});
+		if (!data) {
+			toast.error(problemMessage(error));
+			return;
+		}
+		this.onDisk = (data.versions ?? []).filter((v) => !v.missing_since);
+		Object.assign(this.versions, { id, title, use });
+		if (this.onDisk.length === 1) this.pickVersion(this.onDisk[0]);
+		else this.versions.open = true;
+	};
+
+	pickVersion = (v: Version) => {
+		this.versions.open = false;
+		if (this.versions.use === "play") {
+			goto(playHref(this.versions.id, { version: v.id }));
+			return;
+		}
+		this.copy = v;
+		this.versions.downloading = true;
 	};
 
 	// As Plex's Search for subtitles is. It opens in the reader's subtitle

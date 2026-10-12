@@ -630,6 +630,37 @@ test("a version is chosen from a card to play or to download", async ({
 	).toBeVisible();
 });
 
+test("a title's one copy goes to its download without a choice", async ({
+	page,
+}) => {
+	let answer = () => {};
+	const answered = new Promise<void>((done) => {
+		answer = done;
+	});
+	await page.route("**/api/v1/titles/t-film", async (route) => {
+		const response = await route.fetch();
+		const title = await response.json();
+		await answered;
+		await route.fulfill({
+			response,
+			json: { ...title, versions: title.versions.slice(0, 1) },
+		});
+	});
+	await logIn(page);
+	await page
+		.getByRole("region", { name: "Recently Added in Films" })
+		.getByRole("button", { name: "More for Quiet Hours" })
+		.click();
+	await page.getByRole("menuitem", { name: "Download…" }).click();
+	await expect(page.getByRole("menu")).toBeHidden();
+	await expect(page.getByRole("dialog")).toBeHidden();
+	answer();
+	await expect(page.getByRole("dialog", { name: "Download" })).toBeVisible();
+	await expect(
+		page.getByRole("dialog", { name: "Download version" }),
+	).toBeHidden();
+});
+
 test("a reader finds subtitles for a film and adds one", async ({ page }) => {
 	let added: Record<string, unknown> | undefined;
 	page.on("request", (r) => {
