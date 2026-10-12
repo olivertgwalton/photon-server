@@ -2,17 +2,20 @@
 import DatabaseBackupIcon from "@lucide/svelte/icons/database-backup";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import type { Component } from "svelte";
-import { refresh, refreshing } from "#lib/actions.svelte.js";
+import { type RefreshOf, refresh } from "#lib/actions.js";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
+import { getShell } from "#lib/shell.svelte.js";
+
+const shell = getShell();
 
 type Mode = components["schemas"]["RefreshMode"];
 
 const modes: {
 	mode: Mode;
 	title: string;
-	detail: Record<typeof refreshing.of, string>;
+	detail: Record<RefreshOf, string>;
 	Icon: Component;
 }[] = [
 	{
@@ -43,17 +46,18 @@ let asking = $state(false);
 
 async function choose(mode: Mode) {
 	asking = true;
-	if (await refresh(mode)) refreshing.open = false;
+	const { of, id, name } = shell.refreshing;
+	if (await refresh(of, id, name, mode)) shell.refreshing.open = false;
 	asking = false;
 }
 </script>
 
-<Dialog.Root bind:open={refreshing.open}>
+<Dialog.Root bind:open={shell.refreshing.open}>
 	<Dialog.Content class="sm:max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>Refresh metadata</Dialog.Title>
 			<Dialog.Description>
-				Choose how much of {refreshing.name} to update from its metadata
+				Choose how much of {shell.refreshing.name} to update from its metadata
 				providers. Your edits, locked fields and chosen artwork are kept.
 			</Dialog.Description>
 		</Dialog.Header>
@@ -68,7 +72,9 @@ async function choose(mode: Mode) {
 					<Icon class="text-ink-3 mt-0.5 size-5 shrink-0" aria-hidden="true" />
 					<span class="grid gap-1">
 						<span class="text-ink font-semibold">{title}</span>
-						<span class="text-ink-2 text-sm">{detail[refreshing.of]}</span>
+						<span class="text-ink-2 text-sm"
+							>{detail[shell.refreshing.of]}</span
+						>
 					</span>
 				</button>
 			{/each}

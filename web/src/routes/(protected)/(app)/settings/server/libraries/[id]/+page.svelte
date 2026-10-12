@@ -1,10 +1,6 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
-import {
-	refreshMetadata,
-	removeLibrary,
-	scanLibrary,
-} from "#lib/actions.svelte.js";
+import { scanLibrary } from "#lib/actions.js";
 import { libraryChange } from "#lib/admin/library.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { client } from "#lib/api/client.js";
@@ -13,8 +9,11 @@ import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import { fields } from "#lib/form.js";
+import { getShell } from "#lib/shell.svelte.js";
+import { page } from "$app/state";
 
 let { data } = $props();
+const shell = getShell();
 
 const live = liveStream();
 const scan = $derived(
@@ -53,14 +52,19 @@ function save(event: SubmitEvent) {
 			variant="outline"
 			size="sm"
 			onclick={() =>
-				refreshMetadata("library", data.library.id, data.library.name)}
+				shell.refreshMetadata("library", data.library.id, data.library.name)}
 		>
 			Refresh metadata <span class="sr-only">of {data.library.name}</span>
 		</Button>
 		<Button
 			variant="outline"
 			size="sm"
-			onclick={() => removeLibrary(data.library.id, data.library.name)}
+			onclick={() =>
+				shell.askToRemoveLibrary(
+					data.library.id,
+					data.library.name,
+					page.url.pathname,
+				)}
 		>
 			Remove <span class="sr-only">{data.library.name}</span>
 		</Button>

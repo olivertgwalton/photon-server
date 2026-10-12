@@ -7,15 +7,16 @@ import ShuffleIcon from "@lucide/svelte/icons/shuffle";
 import TrashIcon from "@lucide/svelte/icons/trash";
 import XIcon from "@lucide/svelte/icons/x";
 import { act } from "#lib/act.js";
-import { confirmFirst } from "#lib/actions.svelte.js";
 import { client } from "#lib/api/client.js";
 import TitleRow from "#lib/components/TitleRow.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { count, playHref, runtime, titleWithShow } from "#lib/format.js";
+import { getShell } from "#lib/shell.svelte.js";
 
 let { data } = $props();
+const shell = getShell();
 
 const api = client();
 const path = $derived({ id: data.playlist.id });
@@ -33,7 +34,7 @@ async function rename(event: SubmitEvent) {
 
 function remove() {
 	const title = data.playlist.name;
-	confirmFirst(
+	shell.confirmFirst(
 		`Delete ${title}?`,
 		"The playlist goes; its titles stay in the library.",
 		"Delete",

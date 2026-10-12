@@ -1,28 +1,27 @@
 <script lang="ts">
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import type { Attachment } from "svelte/attachments";
-import {
-	type MenuCard,
-	openTitleMenu,
-	titleMenu,
-} from "#lib/actions.svelte.js";
 import { titleWithShow } from "#lib/format.js";
+import { getShell, type MenuCard } from "#lib/shell.svelte.js";
 import { cn } from "#lib/utils.js";
 
 // Opens the shell's one title menu beside it.
 let { card, class: className }: { card: MenuCard; class?: string } = $props();
+const shell = getShell();
 
 let button = $state<HTMLButtonElement>();
-const open = $derived(titleMenu.open && titleMenu.anchor === button);
+const open = $derived(
+	shell.titleMenu.open && shell.titleMenu.anchor === button,
+);
 
 function toggle(anchor: HTMLButtonElement) {
-	if (open) titleMenu.open = false;
-	else openTitleMenu(card, anchor);
+	if (open) shell.titleMenu.open = false;
+	else shell.openTitleMenu(card, anchor);
 }
 
 // A card scrolled out of a wall takes its menu with it.
 const closesMenu: Attachment<HTMLButtonElement> = (element) => () => {
-	if (titleMenu.anchor === element) titleMenu.open = false;
+	if (shell.titleMenu.anchor === element) shell.titleMenu.open = false;
 };
 </script>
 
@@ -42,7 +41,7 @@ const closesMenu: Attachment<HTMLButtonElement> = (element) => () => {
 	onkeydown={(e) => {
 		if (e.key !== "ArrowDown" || open) return;
 		e.preventDefault();
-		openTitleMenu(card, e.currentTarget);
+		shell.openTitleMenu(card, e.currentTarget);
 	}}
 >
 	<EllipsisIcon class="size-4" />

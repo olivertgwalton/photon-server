@@ -1,6 +1,6 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
-import { runTask } from "#lib/actions.svelte.js";
+import { runTask } from "#lib/actions.js";
 import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";

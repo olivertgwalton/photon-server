@@ -1,7 +1,6 @@
 <script lang="ts">
 import StarIcon from "@lucide/svelte/icons/star";
 import { act } from "#lib/act.js";
-import { subtitleSearch } from "#lib/actions.svelte.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
@@ -10,6 +9,9 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import { language, localeOptions } from "#lib/format.js";
 import { subtitleLanguages } from "#lib/player/words.js";
+import { getShell } from "#lib/shell.svelte.js";
+
+const shell = getShell();
 
 type Found = components["schemas"]["FoundSubtitles"];
 
@@ -30,38 +32,41 @@ const options = (lang: string) =>
 
 function search(lang: string) {
 	return client().GET("/api/v1/titles/{id}/subtitles/candidates", {
-		params: { path: { id: subtitleSearch.id }, query: { language: lang } },
+		params: {
+			path: { id: shell.subtitleSearch.id },
+			query: { language: lang },
+		},
 	});
 }
 
 async function fetchOne(found: Found, s: Found["items"][number]) {
 	const done = await act(
 		client().POST("/api/v1/titles/{id}/subtitles", {
-			params: { path: { id: subtitleSearch.id } },
+			params: { path: { id: shell.subtitleSearch.id } },
 			body: { version_id: found.version_id, ...s },
 		}),
-		`${language(s.language) || "Subtitles"} added to ${subtitleSearch.title}.`,
+		`${language(s.language) || "Subtitles"} added to ${shell.subtitleSearch.title}.`,
 	);
-	if (done) subtitleSearch.open = false;
+	if (done) shell.subtitleSearch.open = false;
 }
 </script>
 
-<Dialog.Root bind:open={subtitleSearch.open}>
+<Dialog.Root bind:open={shell.subtitleSearch.open}>
 	<Dialog.Content class="max-h-[85vh] grid-rows-[auto_auto_1fr]">
 		<Dialog.Header>
 			<Dialog.Title>Find subtitles</Dialog.Title>
-			<Dialog.Description>{subtitleSearch.title}</Dialog.Description>
+			<Dialog.Description>{shell.subtitleSearch.title}</Dialog.Description>
 		</Dialog.Header>
 		<svelte:boundary>
 			{@const first = await startLanguage()}
-			{@const lang = subtitleSearch.language || first}
+			{@const lang = shell.subtitleSearch.language || first}
 			<Choice
 				aria-label="Language"
 				class="w-56"
 				value={lang}
 				options={options(lang)}
 				onchange={(v: string) => {
-					subtitleSearch.language = v;
+					shell.subtitleSearch.language = v;
 				}}
 			/>
 			<svelte:boundary>

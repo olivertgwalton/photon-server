@@ -1,6 +1,5 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
-import { confirmFirst } from "#lib/actions.svelte.js";
 import { positionAt } from "#lib/admin/live.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
@@ -8,6 +7,7 @@ import Artwork from "#lib/components/Artwork.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
 import { bitrate, fullTitle, timecode } from "#lib/format.js";
+import { getShell } from "#lib/shell.svelte.js";
 import { vocabulary } from "#lib/vocabulary.js";
 
 const api = client();
@@ -22,6 +22,7 @@ let {
 	now,
 	nodes,
 }: { playback: NowPlaying; now: number; nodes: number } = $props();
+const shell = getShell();
 const words = vocabulary();
 
 const picture = $derived(p.title.thumb ?? p.title.backdrop);
@@ -51,7 +52,7 @@ function line(
 let stopping = $state(false);
 
 function stop() {
-	confirmFirst(
+	shell.confirmFirst(
 		`Stop ${p.profile.name}'s play?`,
 		`${name} stops on ${p.device.name} where it is now, and its place is kept.`,
 		"Stop",

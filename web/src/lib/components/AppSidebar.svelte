@@ -12,7 +12,7 @@ import RotateCcwClockIcon from "@lucide/svelte/icons/rotate-ccw-clock";
 import SettingsIcon from "@lucide/svelte/icons/settings";
 import TvIcon from "@lucide/svelte/icons/tv";
 import type { Component } from "svelte";
-import { setLibraryOrder, visitPage } from "#lib/actions.svelte.js";
+import { setLibraryOrder, visitPage } from "#lib/actions.js";
 import type { components } from "#lib/api/schema.js";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
 import { rowPages } from "#lib/rows.js";

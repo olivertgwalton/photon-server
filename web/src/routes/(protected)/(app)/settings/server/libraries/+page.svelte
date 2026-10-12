@@ -6,11 +6,7 @@ import PencilIcon from "@lucide/svelte/icons/pencil";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import Trash2Icon from "@lucide/svelte/icons/trash-2";
 import TvIcon from "@lucide/svelte/icons/tv";
-import {
-	refreshMetadata,
-	removeLibrary,
-	scanLibrary,
-} from "#lib/actions.svelte.js";
+import { scanLibrary } from "#lib/actions.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import LibraryCheck from "#lib/components/admin/LibraryCheck.svelte";
 import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
@@ -18,8 +14,11 @@ import IconButton from "#lib/components/IconButton.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import { holding } from "#lib/format.js";
+import { getShell } from "#lib/shell.svelte.js";
+import { page } from "$app/state";
 
 let { data } = $props();
+const shell = getShell();
 
 const live = liveStream();
 </script>
@@ -87,7 +86,8 @@ const live = liveStream();
 						label="Refresh metadata"
 						hidden="of {library.name}"
 						icon={DatabaseBackupIcon}
-						onclick={() => refreshMetadata("library", library.id, library.name)}
+						onclick={() =>
+							shell.refreshMetadata("library", library.id, library.name)}
 					/>
 					<!-- A remote library has no root for a node to read. -->
 					{#if library.media === "folder"}
@@ -104,7 +104,12 @@ const live = liveStream();
 						hidden={library.name}
 						icon={Trash2Icon}
 						tone="destructive"
-						onclick={() => removeLibrary(library.id, library.name)}
+						onclick={() =>
+							shell.askToRemoveLibrary(
+								library.id,
+								library.name,
+								page.url.pathname,
+							)}
 					/>
 				</div>
 			</li>

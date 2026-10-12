@@ -1,5 +1,4 @@
 <script lang="ts">
-import { type EditorTab, editor } from "#lib/actions.svelte.js";
 import { matchable } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
@@ -9,6 +8,9 @@ import MetadataForm from "#lib/components/admin/MetadataForm.svelte";
 import TitleLocale from "#lib/components/admin/TitleLocale.svelte";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Tabs from "#lib/components/ui/tabs/index.js";
+import { type EditorTab, getShell } from "#lib/shell.svelte.js";
+
+const shell = getShell();
 
 // A title's editing over the page it was opened from, as Plex's Edit dialog
 // is: its details, its match and its pictures, each the admin title page's.
@@ -17,7 +19,9 @@ import * as Tabs from "#lib/components/ui/tabs/index.js";
 function load() {
 	const api = client();
 	return Promise.all([
-		api.GET("/api/v1/titles/{id}", { params: { path: { id: editor.id } } }),
+		api.GET("/api/v1/titles/{id}", {
+			params: { path: { id: shell.editor.id } },
+		}),
 		api.GET("/api/v1/admin/providers"),
 		api.GET("/api/v1/admin/locales"),
 	]);
@@ -26,7 +30,7 @@ function load() {
 const part = "-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pt-4";
 </script>
 
-<Dialog.Root bind:open={editor.open}>
+<Dialog.Root bind:open={shell.editor.open}>
 	<!-- One height whichever part is shown, as Plex's Edit dialog keeps: the
 		tabs stay put and the part beneath them scrolls. -->
 	<Dialog.Content
@@ -53,8 +57,8 @@ const part = "-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pt-4";
 			{:else}
 				{@const matched = matchable(title.kind)}
 				<Tabs.Root
-					value={editor.tab}
-					onValueChange={(tab) => (editor.tab = tab as EditorTab)}
+					value={shell.editor.tab}
+					onValueChange={(tab) => (shell.editor.tab = tab as EditorTab)}
 					class="min-h-0 flex-1"
 				>
 					<Tabs.List>

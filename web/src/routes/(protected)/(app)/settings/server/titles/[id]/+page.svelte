@@ -1,6 +1,5 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
-import { refreshMetadata } from "#lib/actions.svelte.js";
 import { matchable, refreshable } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
@@ -15,8 +14,10 @@ import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { fields } from "#lib/form.js";
 import { fullTitle } from "#lib/format.js";
+import { getShell } from "#lib/shell.svelte.js";
 
 let { data } = $props();
+const shell = getShell();
 
 const api = client();
 const path = $derived({ params: { path: { id: data.title.id } } });
@@ -63,7 +64,7 @@ const name = $derived(fullTitle(t, t.show?.title));
 			<Card.Content>
 				<Button
 					variant="outline"
-					onclick={() => refreshMetadata("title", t.id, name)}
+					onclick={() => shell.refreshMetadata("title", t.id, name)}
 				>
 					Refresh metadata…
 				</Button>
