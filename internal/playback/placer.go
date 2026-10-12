@@ -76,9 +76,9 @@ func EncodingOf(n domain.Node) Encoding {
 func (p *Placer) Self() domain.Node { return p.self() }
 
 // Candidates are the nodes that could encode what need asks, this one among them: those with a
-// slot free first, of them those set to transcode, then those with no limit, then those with
-// more of their slots free; of nodes otherwise equal, the one this node opened a remux on least
-// recently, so they take turns. A full one is still listed, as it may have a
+// slot free first, of them those in this node's group, then those set to transcode, then those
+// with no limit, then those with more of their slots free; of nodes otherwise equal, the one this
+// node opened a remux on least recently, so they take turns. A full one is still listed, as it may have a
 // slot by the time it is asked; a node that never encodes is not.
 func (p *Placer) Candidates(ctx context.Context, need Need) ([]domain.Node, error) {
 	self := p.self()
@@ -91,11 +91,13 @@ func (p *Placer) Candidates(ctx context.Context, need Need) ([]domain.Node, erro
 	nodes = slices.DeleteFunc(nodes, func(n domain.Node) bool {
 		return !n.Role.Encodes() || !n.Availability.Takes() || need.HEVC && n.Encoder.HEVC != domain.HEVCAllow || need.Libass && !n.Encoder.Libass
 	})
+	near := func(n domain.Node) bool { return n.Group == self.Group }
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	slices.SortStableFunc(nodes, func(a, b domain.Node) int {
 		return cmp.Or(
 			cmp.Compare(rank(b, roomy), rank(a, roomy)),
+			cmp.Compare(rank(b, near), rank(a, near)),
 			cmp.Compare(rank(b, transcoding), rank(a, transcoding)),
 			cmp.Compare(rank(b, unlimited), rank(a, unlimited)),
 			cmp.Compare(free(b), free(a)),
