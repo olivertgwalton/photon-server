@@ -12,7 +12,7 @@ import { page } from "$app/state";
 
 let { data } = $props();
 let message = $state<string>();
-let linked = $state<components["schemas"]["Device"]>();
+let linked = $state.raw<components["schemas"]["Device"]>();
 
 async function link(event: SubmitEvent) {
 	const code = fields(event).get("code");

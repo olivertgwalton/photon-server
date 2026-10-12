@@ -22,7 +22,7 @@ const words = vocabulary();
 const api = client();
 let adding = $state(false);
 // The secret is answered once, when the webhook is added, and never again.
-let added = $state<components["schemas"]["AddedWebhook"]>();
+let added = $state.raw<components["schemas"]["AddedWebhook"]>();
 
 async function add(event: SubmitEvent) {
 	const form = fields(event);
