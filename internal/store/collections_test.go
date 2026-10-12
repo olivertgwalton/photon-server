@@ -10,6 +10,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
 func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
@@ -450,5 +451,78 @@ func TestAListCollectionHoldsWhatTheLibraryHasOfItsList(t *testing.T) {
 	}
 	if err := s.RemoveCollection(ctx, set); err != nil {
 		t.Errorf("removing it: %v", err)
+	}
+}
+
+// An admin puts a season or an episode in a collection of its own, as Plex's Add to Collection and
+// Jellyfin's box sets take them, one at a time from its menu.
+func TestAnAdminPutsSeasonsAndEpisodesInACollection(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := func(lib uuid.UUID, kind domain.ItemKind, title string, parent *uuid.UUID, season, episode int) uuid.UUID {
+		return addItem(t, s, model.Item{
+			LibraryID: lib, Kind: kind, Title: title, ScanTitle: title, SortTitle: title, Folder: title,
+			ParentID: parent, SeasonNumber: &season, EpisodeNumber: &episode,
+		})
+	}
+	show := item(tv.ID, domain.ItemShow, "Severance", nil, 0, 0)
+	one := item(tv.ID, domain.ItemSeason, "Season 1", &show, 1, 0)
+	two := item(tv.ID, domain.ItemSeason, "Season 2", &show, 2, 0)
+	pilot := item(tv.ID, domain.ItemEpisode, "Good News About Hell", &one, 1, 1)
+	item(tv.ID, domain.ItemEpisode, "Half Loop", &one, 1, 2)
+	opener := item(tv.ID, domain.ItemEpisode, "Hello, Ms. Cobel", &two, 2, 1)
+	heat := item(films.ID, domain.ItemMovie, "Heat", nil, 0, 0)
+
+	set, err := s.AddCollection(ctx, tv.ID, "Openers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddMembers(ctx, set, []uuid.UUID{pilot, two}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddMembers(ctx, set, []uuid.UUID{pilot}); err != nil {
+		t.Errorf("adding the pilot again: %v, want it left where it is", err)
+	}
+	members, err := s.Members(ctx, uuid.UUID{}, set)
+	if err != nil || len(members) != 2 || members[0].ID != pilot || members[1].ID != two {
+		t.Fatalf("members = %+v, %v; want the pilot then season 2, each once, as put", members, err)
+	}
+	for name, id := range map[string]uuid.UUID{"a film of another library": heat, "the collection itself": set, "no title": uuid.NewV7()} {
+		if err := s.AddMembers(ctx, set, []uuid.UUID{id}); !errors.Is(err, ErrNotFound) {
+			t.Errorf("adding %s: %v, want ErrNotFound", name, err)
+		}
+	}
+	if err := s.SetMembers(ctx, set, []uuid.UUID{two, pilot, show}); err != nil {
+		t.Errorf("setting a season, an episode and a show: %v", err)
+	}
+	// Marked watched, it is its episodes marked: the pilot's, and those of the seasons and shows in it.
+	if err := s.SetMembers(ctx, set, []uuid.UUID{pilot, two}); err != nil {
+		t.Fatal(err)
+	}
+	viewer, err := s.AddProfile(ctx, "Viewer", domain.RoleUser, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkWatched(ctx, viewer.ID, set, nil); err != nil {
+		t.Fatal(err)
+	}
+	cards, err := s.Cards(ctx, viewer.ID, []uuid.UUID{pilot, opener, one})
+	if err != nil || len(cards) != 3 {
+		t.Fatal(cards, err)
+	}
+	watched := map[uuid.UUID]bool{}
+	for _, c := range cards {
+		watched[c.ID] = c.State.WatchedAt != nil
+	}
+	if !watched[pilot] || !watched[opener] || watched[one] {
+		t.Errorf("watched = %v; want the pilot and season 2's opener, and season 1 not, its second unwatched", watched)
 	}
 }

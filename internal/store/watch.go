@@ -276,10 +276,12 @@ func (s *Store) leaves(ctx context.Context, id uuid.UUID) ([]*model.Item, error)
 		}
 	case domain.ItemSeason:
 	case domain.ItemCollection:
-		// A box set marked is each of its titles marked, as Jellyfin's is.
+		// A box set marked is each of its titles marked, as Jellyfin's is: a film or episode in it,
+		// and the episodes of a season or show in it.
 		return queryRows[model.Item](ctx, s.pool, `
 			SELECT `+itemColumns+` FROM items
-			WHERE (kind = 'movie' AND id IN (SELECT item_id FROM collection_members WHERE collection_id = $1))
+			WHERE (kind IN ('movie', 'episode') AND id IN (SELECT item_id FROM collection_members WHERE collection_id = $1))
+				OR (kind = 'episode' AND parent_id IN (SELECT item_id FROM collection_members WHERE collection_id = $1))
 				OR (kind = 'episode' AND parent_id IN (SELECT s.id FROM items s
 					JOIN collection_members m ON s.parent_id = m.item_id WHERE m.collection_id = $1))`, row.ID)
 	}
