@@ -7,7 +7,7 @@ const settle = 1000;
 
 // A refused or dropped stream is not retried by the browser once it has
 // closed, so it is opened again after this long.
-export const retryAfter = 5_000;
+const retryAfter = 5_000;
 
 // Reloads what a stream's events make stale, once the burst has settled.
 export function invalidateLater() {
@@ -31,28 +31,24 @@ export function invalidateLater() {
 	};
 }
 
-// Listens until the returned function is called. The feed keeps nothing to
-// resend, so after a reconnect every page loads again.
-export function connectLive(): () => void {
+type Listeners = Record<string, (event: MessageEvent<string>) => void>;
+
+// Opens a stream with these listeners and keeps it open until the returned
+// function is called. `dropped` is told of every error, closing or not.
+export function openStream(
+	url: string,
+	listeners: Listeners,
+	dropped?: () => void,
+): () => void {
 	let source: EventSource | undefined;
 	let retry: ReturnType<typeof setTimeout> | undefined;
-	let reconnected = false;
-	const later = invalidateLater();
-	const take = (event: MessageEvent<string>) => {
-		const change = { ...JSON.parse(event.data), kind: event.type } as Change;
-		later.add(affected(change));
-	};
 	const connect = () => {
-		source = new EventSource("/api/v1/events");
-		source.addEventListener("hello", () => {
-			if (reconnected) refreshAll();
-			reconnected = true;
-		});
-		for (const kind of changeKinds) source.addEventListener(kind, take);
-		source.addEventListener("restore.started", () => {
-			restoring.on = true;
-		});
+		source = new EventSource(url);
+		for (const [name, listener] of Object.entries(listeners)) {
+			source.addEventListener(name, listener);
+		}
 		source.onerror = () => {
+			dropped?.();
 			if (source?.readyState === EventSource.CLOSED) {
 				retry = setTimeout(connect, retryAfter);
 			}
@@ -61,7 +57,31 @@ export function connectLive(): () => void {
 	connect();
 	return () => {
 		clearTimeout(retry);
-		later.stop();
 		source?.close();
+	};
+}
+
+// Listens until the returned function is called. The feed keeps nothing to
+// resend, so after a reconnect every page loads again.
+export function connectLive(): () => void {
+	let reconnected = false;
+	const later = invalidateLater();
+	const take = (event: MessageEvent<string>) => {
+		const change = { ...JSON.parse(event.data), kind: event.type } as Change;
+		later.add(affected(change));
+	};
+	const close = openStream("/api/v1/events", {
+		hello: () => {
+			if (reconnected) refreshAll();
+			reconnected = true;
+		},
+		...Object.fromEntries(changeKinds.map((kind) => [kind, take])),
+		"restore.started": () => {
+			restoring.on = true;
+		},
+	});
+	return () => {
+		later.stop();
+		close();
 	};
 }

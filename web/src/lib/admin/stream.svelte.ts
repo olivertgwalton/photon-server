@@ -1,5 +1,5 @@
 import { createContext } from "svelte";
-import { retryAfter } from "#lib/live.svelte.js";
+import { openStream } from "#lib/live.svelte.js";
 import { apply, type EventKind, idle, type Live } from "./live.js";
 
 // Every name the stream sends an event by: an EventSource hears only the names
@@ -40,29 +40,22 @@ export class LiveStream {
 	// Opens the stream and keeps it open until the returned function is called.
 	// `heard` is told each event's name after it has been applied.
 	open(heard: (name: string) => void): () => void {
-		let source: EventSource | undefined;
-		let timer: ReturnType<typeof setTimeout> | undefined;
-		const connect = () => {
-			source = new EventSource("/api/v1/admin/events");
-			for (const name of names) {
-				source.addEventListener(name, (message) => {
-					this.state = apply(this.state, name, JSON.parse(message.data));
-					this.connected = true;
-					heard(name);
-				});
-			}
-			source.onerror = () => {
+		return openStream(
+			"/api/v1/admin/events",
+			Object.fromEntries(
+				names.map((name) => [
+					name,
+					(message: MessageEvent<string>) => {
+						this.state = apply(this.state, name, JSON.parse(message.data));
+						this.connected = true;
+						heard(name);
+					},
+				]),
+			),
+			() => {
 				this.connected = false;
-				if (source?.readyState === EventSource.CLOSED) {
-					timer = setTimeout(connect, retryAfter);
-				}
-			};
-		};
-		connect();
-		return () => {
-			clearTimeout(timer);
-			source?.close();
-		};
+			},
+		);
 	}
 }
 
