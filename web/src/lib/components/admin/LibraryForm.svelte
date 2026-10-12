@@ -67,13 +67,11 @@ const defaults = {
 } as const;
 
 // A new library's kind changes the sources offered; a library's own is fixed.
-const kindOf = () => library?.kind ?? "movies";
-let kind = $state<Schemas["LibraryKind"]>(kindOf());
+let kind = $derived<Schemas["LibraryKind"]>(library?.kind ?? "movies");
 
 // Where its media is: files under a folder, or what a provider streams of the
 // titles of a list, as a remote library plays; fixed once it is made.
-const mediaOf = () => library?.media ?? "folder";
-let media = $state<Schemas["LibraryMedia"]>(mediaOf());
+let media = $derived<Schemas["LibraryMedia"]>(library?.media ?? "folder");
 const remote = $derived(media === "remote");
 const able = (c: Schemas["Capability"]) =>
 	providers
