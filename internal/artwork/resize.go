@@ -51,19 +51,7 @@ var ErrNotResizable = errors.New("picture cannot be resized")
 // made, and answers the name its format is known by: "" for a copy, whose content says.
 func (c *Cache) Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (blob.Object, string, error) {
 	name := path.Base(p.Path + p.URL)
-	original := func(ctx context.Context) (blob.Object, error) {
-		switch {
-		case p.Kept:
-			return c.Kept(ctx, id)
-		case p.URL != "":
-			return c.File(ctx, id, p.URL)
-		}
-		f, err := library.Open(p.Root, p.Path)
-		if err != nil {
-			return blob.Object{}, err
-		}
-		return blob.OfFile(f)
-	}
+	original := func(ctx context.Context) (blob.Object, error) { return c.original(ctx, id, p) }
 	if width > 0 || height > 0 {
 		f, err := c.Resized(ctx, id.String(), width, height, original)
 		if !errors.Is(err, ErrNotResizable) {
@@ -72,6 +60,24 @@ func (c *Cache) Open(ctx context.Context, id uuid.UUID, p domain.Picture, width,
 	}
 	f, err := original(ctx)
 	return f, name, err
+}
+
+// original opens picture id as it is kept: given to the server, fetched from a provider, a file in
+// a library, or a mosaic made here of others.
+func (c *Cache) original(ctx context.Context, id uuid.UUID, p domain.Picture) (blob.Object, error) {
+	switch {
+	case p.Kept:
+		return c.Kept(ctx, id)
+	case p.URL != "":
+		return c.File(ctx, id, p.URL)
+	case len(p.Mosaic) > 0:
+		return c.Mosaic(ctx, id, p.Mosaic)
+	}
+	f, err := library.Open(p.Root, p.Path)
+	if err != nil {
+		return blob.Object{}, err
+	}
+	return blob.OfFile(f)
 }
 
 // Resized answers the picture with key shrunk to fit inside width×height, keeping its shape, where
