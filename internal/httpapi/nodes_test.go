@@ -131,6 +131,14 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 	if got := nodes[gpu].NodeSettings; got.Group != "loft" || got.Role != domain.NodeServe {
 		t.Errorf("grouped: %+v, want in loft, its role kept", got)
 	}
+	// Its public URL is an origin as its address is.
+	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"public_url":"https://gpu.example.com/"}`)
+	if got := nodes[gpu].PublicURL; got != "https://gpu.example.com" {
+		t.Errorf("public URL kept as %q, want https://gpu.example.com", got)
+	}
+	if rec := ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"public_url":"gpu.example.com"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("a public URL with no scheme: %d, want 400", rec.Code)
+	}
 	// Drained with a note for other admins, then resumed, which clears it.
 	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"availability":"draining","note":"driver update"}`)
 	if got := nodes[gpu].NodeSettings; got.Availability != domain.NodeDraining || got.Note != "driver update" || got.Role != domain.NodeServe {
