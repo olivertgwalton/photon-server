@@ -33,8 +33,9 @@ async function add(event: SubmitEvent) {
 	await act(
 		client().POST("/api/v1/admin/collections", {
 			body: {
-				library_id: textAsTyped(form, "library"),
 				title: textAsTyped(form, "title"),
+				library_ids:
+					source === "hand" ? undefined : [textAsTyped(form, "library")],
 				list:
 					source === "hand" ? undefined : { source, id: text(form, "list") },
 			},

@@ -185,7 +185,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Make a collection in a library
+         * Make a collection, of the titles of any library
          * @description Admin only.
          */
         post: {
@@ -3788,6 +3788,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page every collection, in the Collections view */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Where the page starts, from 0. */
+                    offset?: number;
+                    /** @description How many to answer, from 1 to 200. */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CardPage"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices": {
         parameters: {
             query?: never;
@@ -4211,7 +4253,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Page a library's collections */
+        /** Page the collections holding a library's titles */
         get: {
             parameters: {
                 query?: {
@@ -6945,8 +6987,7 @@ export interface components {
             unrated: components["schemas"]["Unrated"];
         };
         AddCollection: {
-            /** Format: uuid */
-            library_id: string;
+            library_ids?: string[];
             list?: components["schemas"]["ListRef"] | null;
             rule?: components["schemas"]["SmartRule"] | null;
             title: string;
@@ -8809,6 +8850,7 @@ export interface components {
             kind: components["schemas"]["ItemKind"];
             /** Format: uuid */
             library_id?: string | null;
+            library_ids?: string[];
             list?: components["schemas"]["ListRef"] | null;
             metadata_language?: string;
             origin?: components["schemas"]["CollectionOrigin"];

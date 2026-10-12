@@ -43,6 +43,10 @@ func (fakeCollections) Members(_ context.Context, _, id uuid.UUID) ([]store.Card
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Alien"}}, nil
 }
 
+func (fakeCollections) AllCollections(context.Context, uuid.UUID, int, int) ([]store.Card, int64, error) {
+	return []store.Card{{ID: alienSet, Kind: domain.ItemCollection, Title: "Alien Collection"}}, 1, nil
+}
+
 func (fakeCollections) AddCollection(context.Context, string) (uuid.UUID, error) {
 	return mySet, nil
 }
@@ -158,31 +162,36 @@ func TestCollectionsAreBrowsedAndAnAdminsAreKept(t *testing.T) {
 		{memberToken, http.MethodGet, "/api/v1/libraries/" + films.String() + "/collections?offset=20", "", http.StatusOK, `"title":"Alien Collection"`},
 		{memberToken, http.MethodGet, "/api/v1/libraries/" + uuid.NewV7().String() + "/collections", "", http.StatusNotFound, ""},
 		{memberToken, http.MethodGet, "/api/v1/titles/" + alienSet.String() + "/members", "", http.StatusOK, `"title":"Alien"`},
-		{memberToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Mine"}`, http.StatusForbidden, ""},
-		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Mine"}`, http.StatusCreated, mySet.String()},
-		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `"}`, http.StatusBadRequest, ""},
+		{memberToken, http.MethodPost, "/api/v1/admin/collections", `{"title": "Mine"}`, http.StatusForbidden, ""},
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"title": "Mine"}`, http.StatusCreated, mySet.String()},
+		{memberToken, http.MethodGet, "/api/v1/collections", "", http.StatusOK, `"title":"Alien Collection"`},
+		// A collection made by hand reads no library; one made by a rule or a list names those it reads.
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"title": "Mine", "library_ids": ["` + films.String() + `"]}`, http.StatusBadRequest, "library_ids"},
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"title": "Comedies", "rule": {"filter": {}}}`, http.StatusBadRequest, "library_ids"},
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"title": "Comedies", "rule": {"filter": {}}, "library_ids": ["` + uuid.NewV7().String() + `"]}`, http.StatusBadRequest, "library_ids"},
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{}`, http.StatusBadRequest, ""},
 		// A smart collection is a wall's filter and order, the same for everyone.
-		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Recent comedies",
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_ids": ["` + films.String() + `"], "title": "Recent comedies",
 			"rule": {"filter": {"genres": ["Comedy"], "years": [2024]}, "sort": "added", "limit": 20}}`, http.StatusCreated, mySet.String()},
-		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Unwatched",
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_ids": ["` + films.String() + `"], "title": "Unwatched",
 			"rule": {"filter": {"marks": ["unwatched"]}}}`, http.StatusBadRequest, "no one's marks"},
-		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Played",
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_ids": ["` + films.String() + `"], "title": "Played",
 			"rule": {"filter": {}, "sort": "played"}}`, http.StatusBadRequest, ""},
-		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Best",
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_ids": ["` + films.String() + `"], "title": "Best",
 			"rule": {"filter": {"min_rating": 120}}}`, http.StatusBadRequest, "min_rating"},
 		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + mySet.String() + "/rule", `{"filter": {"resolutions": ["4k"]}, "sort": "rating"}`, http.StatusNoContent, ""},
 		// A list collection holds a list kept on a provider, read as it is made.
-		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Alien films",
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_ids": ["` + films.String() + `"], "title": "Alien films",
 			"list": {"source": "tmdb", "id": "8136"}}`, http.StatusCreated, myList.String()},
-		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Gone",
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_ids": ["` + films.String() + `"], "title": "Gone",
 			"list": {"source": "tmdb", "id": "1"}}`, http.StatusBadRequest, "cannot be read"},
-		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Out",
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_ids": ["` + films.String() + `"], "title": "Out",
 			"list": {"source": "tmdb", "id": "../8136"}}`, http.StatusBadRequest, "user/list"},
-		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "None",
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_ids": ["` + films.String() + `"], "title": "None",
 			"list": {"source": "omdb", "id": "8136"}}`, http.StatusBadRequest, "keeps no lists"},
-		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Down",
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_ids": ["` + films.String() + `"], "title": "Down",
 			"list": {"source": "mdblist", "id": "12"}}`, http.StatusBadGateway, ""},
-		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_id": "` + films.String() + `", "title": "Both",
+		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"library_ids": ["` + films.String() + `"], "title": "Both",
 			"rule": {"filter": {}}, "list": {"source": "tmdb", "id": "8136"}}`, http.StatusBadRequest, "not both"},
 		{goodToken, http.MethodPost, "/api/v1/admin/collections/" + myList.String() + "/sync", "", http.StatusNoContent, ""},
 		{goodToken, http.MethodPost, "/api/v1/admin/collections/" + mySet.String() + "/sync", "", http.StatusConflict, ""},

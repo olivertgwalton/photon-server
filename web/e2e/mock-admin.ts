@@ -865,7 +865,7 @@ export async function admin(
 			const asked = (await request.json()) as Schemas["AddCollection"];
 			smart = {
 				id: "t-smart",
-				library_id: asked.library_id,
+				library_id: asked.library_ids?.[0],
 				kind: "collection",
 				title: asked.title,
 				added_at: film.added_at,
@@ -896,6 +896,7 @@ export function adminTitles(route: string): Response | undefined {
 			return json({ items: [] } satisfies Schemas["CardList"]);
 		case "GET /api/v1/titles/t-smart":
 			return smart ? json(smart) : undefined;
+		case "GET /api/v1/collections":
 		case "GET /api/v1/libraries/l-films/collections":
 			return json({
 				items: [

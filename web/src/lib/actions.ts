@@ -49,13 +49,9 @@ export function addToCollection(
 	);
 }
 
-export async function newCollection(
-	library: string,
-	name: string,
-	ids: string[],
-) {
+export async function newCollection(name: string, ids: string[]) {
 	const { data, error } = await api.POST("/api/v1/admin/collections", {
-		body: { library_id: library, title: name },
+		body: { title: name },
 	});
 	if (!data) {
 		toast.error(problemMessage(error));
