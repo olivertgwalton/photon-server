@@ -290,6 +290,9 @@ func (s *session) fragments(run *run, out io.Reader) (fragments, error) {
 	case domain.SegmentsFMP4:
 	}
 	fmp4, init, err := readInit(out)
+	if err == nil && s.sources[run.part].Video.DolbyVision == domain.DolbyVisionConvert {
+		err = fmp4.profile81(init)
+	}
 	if err != nil {
 		return nil, err
 	}

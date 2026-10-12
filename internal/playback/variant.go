@@ -65,6 +65,8 @@ func videoCodec(s domain.Stream, v domain.VideoPlan) string {
 	switch {
 	case v.DolbyVision == domain.DolbyVisionKeep && s.DolbyVision != nil:
 		return fmt.Sprintf("dvh1.%02d.%02d", s.DolbyVision.Profile, s.DolbyVision.Level)
+	case v.DolbyVision == domain.DolbyVisionConvert && s.DolbyVision != nil:
+		return fmt.Sprintf("dvh1.08.%02d", s.DolbyVision.Level)
 	case s.Codec == "h264" && h264Profiles[s.Profile] != "" && s.Level > 0:
 		return fmt.Sprintf("avc1.%s%02X", h264Profiles[s.Profile], s.Level)
 	case s.Codec == "hevc" && s.Level > 0:

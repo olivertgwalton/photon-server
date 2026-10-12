@@ -24,6 +24,8 @@ type stream struct {
 	r     io.Reader
 	video uint32
 	scale uint32
+	// rewrite, where it is set, rewrites each video sample as it is written.
+	rewrite func([]byte) ([]byte, error)
 }
 
 // readInit reads the initialisation and learns the video track and its timescale.
@@ -92,6 +94,9 @@ func (s *stream) next() (fragment, error) {
 
 // write writes fragment f whole to w, reading its pictures as they are written.
 func (s *stream) write(w io.Writer, f fragment) error {
+	if s.rewrite != nil {
+		return s.writeRewritten(w, f)
+	}
 	if _, err := w.Write(f.head); err != nil {
 		return err
 	}

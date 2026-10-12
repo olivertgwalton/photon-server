@@ -164,9 +164,13 @@ func Decide(p Profile, c Copy, tracks domain.ChosenTracks, enc Encoding) (Decisi
 		d.Video = &domain.VideoPlan{Stream: video.Index, Codec: video.Codec}
 		videoReasons = p.videoReasons(*video)
 		if video.DolbyVision != nil && len(videoReasons) == 0 {
-			d.Video.DolbyVision = domain.DolbyVisionStrip
-			if p.showsDolbyVision(*video) {
+			switch {
+			case p.showsDolbyVision(*video):
 				d.Video.DolbyVision = domain.DolbyVisionKeep
+			case p.convertsDolbyVision(*video):
+				d.Video.DolbyVision = domain.DolbyVisionConvert
+			default:
+				d.Video.DolbyVision = domain.DolbyVisionStrip
 			}
 		}
 	}
@@ -376,6 +380,14 @@ func (p Profile) showsDolbyVision(s domain.Stream) bool {
 	v, ok := p.video(s.Codec)
 	return ok && slices.Contains(v.Ranges, domain.RangeDV) &&
 		(len(v.DolbyVisionProfiles) == 0 || slices.Contains(v.DolbyVisionProfiles, s.DolbyVision.Profile))
+}
+
+// convertsDolbyVision reports whether a stream's Dolby Vision 7 reaches the client as the 8.1 it
+// shows, which fragmented MP4 alone carries.
+func (p Profile) convertsDolbyVision(s domain.Stream) bool {
+	v, ok := p.video(s.Codec)
+	return ok && s.DolbyVision.Profile == 7 && p.Segments != domain.SegmentsMPEGTS &&
+		slices.Contains(v.Ranges, domain.RangeDV) && slices.Contains(v.DolbyVisionProfiles, 8)
 }
 
 // showsBase reports whether the client shows a Dolby Vision stream's base layer by itself.

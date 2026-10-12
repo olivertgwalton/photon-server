@@ -80,7 +80,7 @@ func streamArgs(hw Hardware, video domain.VideoPlan, audio *domain.AudioPlan, la
 		filter, encoder := hw.videoArgs(*e, video.Codec)
 		a = append(append(a, "-map", in, "-vf", filter), encoder...)
 	// Apple's players take HEVC only as hvc1, and Dolby Vision as dvh1.
-	case video.Codec == "hevc" && video.DolbyVision == domain.DolbyVisionKeep:
+	case video.Codec == "hevc" && (video.DolbyVision == domain.DolbyVisionKeep || video.DolbyVision == domain.DolbyVisionConvert):
 		a = append(a, "-map", in, "-c:v", "copy", "-tag:v", "dvh1")
 	case video.Codec == "hevc":
 		a = append(a, "-map", in, "-c:v", "copy", "-tag:v", "hvc1")

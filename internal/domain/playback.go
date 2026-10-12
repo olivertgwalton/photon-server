@@ -259,11 +259,14 @@ const (
 	DolbyVisionKeep DolbyVisionHandling = "keep"
 	// DolbyVisionStrip drops it for the base layer, to a client that shows only that.
 	DolbyVisionStrip DolbyVisionHandling = "strip"
+	// DolbyVisionConvert carries profile 7's as profile 8.1, to a client that shows 8 but not 7:
+	// its enhancement layer dropped and its RPUs rewritten.
+	DolbyVisionConvert DolbyVisionHandling = "convert"
 )
 
 // DolbyVisionHandlings are what a stream with Dolby Vision may have done with it.
 func DolbyVisionHandlings() []DolbyVisionHandling {
-	return []DolbyVisionHandling{DolbyVisionKeep, DolbyVisionStrip}
+	return []DolbyVisionHandling{DolbyVisionKeep, DolbyVisionStrip, DolbyVisionConvert}
 }
 
 // AudioPlan is the audio stream played, by its index in the file, and what it is encoded to where

@@ -3,6 +3,7 @@ package playback
 import (
 	"context"
 	"os"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -53,6 +54,9 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 		{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Profile: "High", Level: 41, Range: domain.RangeSDR},
 		{Index: 1, Kind: domain.StreamAudio, Codec: "aac", Profile: "LC"},
 	}}
+	dv7 := film
+	dv7.Streams = slices.Clone(film.Streams)
+	dv7.Streams[0].DolbyVision = &domain.DolbyVision{Profile: 7, Level: 6, Compatibility: domain.CompatibleBluRay}
 	for _, tc := range []struct {
 		name      string
 		copy      Copy
@@ -65,6 +69,12 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 			name: "Dolby Vision and TrueHD copied", copy: film,
 			video: domain.VideoPlan{Stream: 0, Codec: "hevc", DolbyVision: domain.DolbyVisionKeep}, audio: &domain.AudioPlan{Stream: 1},
 			want:      hls.Variant{BandwidthKbps: 40_000, Codecs: []string{"dvh1.08.00", "mlpa"}, Range: "PQ", Width: 3840, Height: 2160, FrameRate: 24000.0 / 1001},
+			subtitles: []string{"", "English"},
+		},
+		{
+			name: "Dolby Vision 7 as 8.1", copy: dv7,
+			video: domain.VideoPlan{Stream: 0, Codec: "hevc", DolbyVision: domain.DolbyVisionConvert}, audio: &domain.AudioPlan{Stream: 2},
+			want:      hls.Variant{BandwidthKbps: 40_000, Codecs: []string{"dvh1.08.06", "ac-3"}, Range: "PQ", Width: 3840, Height: 2160, FrameRate: 24000.0 / 1001},
 			subtitles: []string{"", "English"},
 		},
 		{
