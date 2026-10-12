@@ -10,7 +10,8 @@ Mac, Apple TV and Apple Vision Pro, play from it with
 
 - **Server**: Go, PostgreSQL (pgx, goose migrations), Valkey
 - **Media**: FFmpeg (jellyfin-ffmpeg in the image, with VAAPI, Quick Sync, NVIDIA and Vulkan)
-- **Metadata**: TMDB, TheTVDB, Kodi NFO
+- **Metadata**: TMDB, TheTVDB, OMDb, MDBList, Kodi NFO; subtitles from OpenSubtitles, theme tunes
+  from ThemerrDB
 - **Web**: SvelteKit (static build served by the Go server), Tailwind, bits-ui, Bun, Biome,
   Playwright
 
@@ -87,6 +88,11 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 Metadata provided by [TheTVDB](https://thetvdb.com). Please consider adding missing information or
 subscribing.
+
+Ratings and details also come from [OMDb](https://www.omdbapi.com) and
+[MDBList](https://mdblist.com), subtitles from [OpenSubtitles](https://www.opensubtitles.com) and
+theme tunes from [ThemerrDB](https://github.com/LizardByte/ThemerrDB). OMDb, MDBList and
+OpenSubtitles each need a key, set by an admin.
 
 ## Licence
 
