@@ -111,7 +111,9 @@ func (r NodeRole) Encodes() bool {
 // Encoder is what a node encodes video with.
 type Encoder struct {
 	Acceleration Acceleration
-	HEVC         HEVCEncoding
+	// Device is the render node a VAAPI or QSV encoder is on, or the index of the NVIDIA card.
+	Device string
+	HEVC   HEVCEncoding
 	// Libass is whether it can draw styled subtitles into video.
 	Libass bool
 }
@@ -158,6 +160,30 @@ type NodeSettings struct {
 	// Group is the nodes it is among, such as those at one site: a node asked to play what is
 	// encoded asks those of its own group first.
 	Group string
+	// Encoding is what it encodes video on.
+	Encoding EncoderChoice
+}
+
+// EncoderSource is where what a node encodes video on comes from.
+type EncoderSource string
+
+const (
+	// EncoderAutomatic is the first the node finds that encodes a test picture.
+	EncoderAutomatic EncoderSource = "automatic"
+	// EncoderSet is an admin's.
+	EncoderSet EncoderSource = "set"
+)
+
+func EncoderSources() []EncoderSource {
+	return []EncoderSource{EncoderAutomatic, EncoderSet}
+}
+
+// EncoderChoice is what an admin sets a node to encode video on: with EncoderSet, an acceleration
+// and the device it is on, none being the first of them.
+type EncoderChoice struct {
+	Source       EncoderSource
+	Acceleration Acceleration
+	Device       string
 }
 
 // NodeRecord is a node as the server keeps it, whether it is up or not.

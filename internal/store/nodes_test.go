@@ -20,14 +20,17 @@ func TestANodeKeepsWhatAnAdminSetsAcrossRestarts(t *testing.T) {
 	if err != nil || n.Role != domain.NodeAll || n.LimitSource != domain.LimitAutomatic || n.Name != "mini" || n.Availability != domain.NodeActive {
 		t.Fatalf("a new node: %+v, %v; want all, its limit worked out, taking work", n, err)
 	}
-	set := domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitSet, Limit: 12, Availability: domain.NodeDraining, Note: "driver update", Address: "http://10.0.0.5:8640", Group: "loft", PublicURL: "https://gpu.example.com", StreamLimit: 20, EgressLimitMbps: 900, LocalURL: "http://192.168.1.5:8640"}
+	set := domain.NodeSettings{
+		Role: domain.NodeTranscode, LimitSource: domain.LimitSet, Limit: 12, Availability: domain.NodeDraining, Note: "driver update", Address: "http://10.0.0.5:8640", Group: "loft", PublicURL: "https://gpu.example.com", StreamLimit: 20, EgressLimitMbps: 900, LocalURL: "http://192.168.1.5:8640",
+		Encoding: domain.EncoderChoice{Source: domain.EncoderSet, Acceleration: domain.AccelNVENC, Device: "1"},
+	}
 	if err := s.SetNodeSettings(ctx, id, set); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := s.JoinNode(ctx, id, "mini-2"); err != nil || n.NodeSettings != set || n.Name != "mini-2" {
 		t.Errorf("starting again: %+v, %v; want %+v kept, under its new name", n, err, set)
 	}
-	none := domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitSet, Availability: domain.NodeActive}
+	none := domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitSet, Availability: domain.NodeActive, Encoding: domain.EncoderChoice{Source: domain.EncoderAutomatic}}
 	if err := s.SetNodeSettings(ctx, id, none); err != nil {
 		t.Fatal(err)
 	}
@@ -35,8 +38,8 @@ func TestANodeKeepsWhatAnAdminSetsAcrossRestarts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n.LimitSource != domain.LimitSet || n.Limit != 0 {
-		t.Errorf("set to no limit: %+v", n)
+	if n.LimitSource != domain.LimitSet || n.Limit != 0 || n.Encoding != (domain.EncoderChoice{Source: domain.EncoderAutomatic}) {
+		t.Errorf("set to no limit, its encoder found again: %+v", n)
 	}
 	if err := s.SetNodeSettings(ctx, uuid.NewV7(), set); !errors.Is(err, ErrNotFound) {
 		t.Errorf("setting a node there has never been: %v, want ErrNotFound", err)

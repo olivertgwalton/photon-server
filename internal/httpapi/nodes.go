@@ -42,17 +42,29 @@ type nodeJSON struct {
 	EgressKbps   int                     `json:"egress_kbps"`
 }
 
-// nodeEncoderJSON is what a node encodes video with, and whether it draws styled subtitles in.
+// nodeEncoderJSON is what a node encodes video with, on which device, and whether it draws styled
+// subtitles in.
 type nodeEncoderJSON struct {
 	Acceleration domain.Acceleration `json:"acceleration"`
+	Device       string              `json:"device,omitzero"`
 	HEVC         domain.HEVCEncoding `json:"hevc"`
 	Libass       bool                `json:"libass"`
+}
+
+// nodeEncodingJSON is what a node is set to encode video on: automatic, the first it finds that
+// encodes a test picture, or set, an acceleration and the device it is on, the render node of a
+// VAAPI or QSV one or the index of an NVIDIA card, none being the first. One set that encodes no
+// test picture is passed over for the first that does, which online says.
+type nodeEncodingJSON struct {
+	Source       domain.EncoderSource `json:"source"`
+	Acceleration domain.Acceleration  `json:"acceleration,omitzero"`
+	Device       string               `json:"device,omitzero"`
 }
 
 func showNode(n domain.Node) nodeJSON {
 	return nodeJSON{
 		ID: n.ID, Name: n.Name, Availability: n.Availability, Address: n.Address, LastSeen: n.Seen.UTC(),
-		Encoder:    nodeEncoderJSON{n.Encoder.Acceleration, n.Encoder.HEVC, n.Encoder.Libass},
+		Encoder:    nodeEncoderJSON{n.Encoder.Acceleration, n.Encoder.Device, n.Encoder.HEVC, n.Encoder.Libass},
 		Transcodes: n.Transcodes, Conversions: n.Conversions, Limit: n.Limit, LimitSource: n.LimitSource,
 		Streams: n.Streams, EgressKbps: n.EgressKbps,
 	}
@@ -88,6 +100,7 @@ type knownNodeJSON struct {
 	Group        string                  `json:"group"`
 	PublicURL    string                  `json:"public_url"`
 	LocalURL     string                  `json:"local_url"`
+	Encoding     nodeEncodingJSON        `json:"encoding"`
 	Online       *nodeJSON               `json:"online,omitempty"`
 }
 
@@ -108,6 +121,7 @@ type nodeChangeJSON struct {
 	Group        *string                 `json:"group,omitzero"`
 	PublicURL    *string                 `json:"public_url,omitzero"`
 	LocalURL     *string                 `json:"local_url,omitzero"`
+	Encoding     *nodeEncodingJSON       `json:"encoding,omitzero"`
 	StreamLimit  *int                    `json:"stream_limit,omitzero"`
 	EgressLimit  *int                    `json:"egress_limit_mbps,omitzero"`
 }
@@ -130,7 +144,7 @@ func showKnownNode(n domain.NodeRecord, online map[uuid.UUID]domain.Node) knownN
 	out := knownNodeJSON{
 		ID: n.ID, Name: n.Name, FirstSeen: n.FirstSeen.UTC(), LastSeen: n.LastSeen.UTC(), Role: n.Role, LimitSource: n.LimitSource, Limit: n.Limit,
 		StreamLimit: n.StreamLimit, EgressLimit: n.EgressLimitMbps, Availability: n.Availability, Note: n.Note, Address: n.Address, Group: n.Group, PublicURL: n.PublicURL,
-		LocalURL: n.LocalURL,
+		LocalURL: n.LocalURL, Encoding: nodeEncodingJSON{n.Encoding.Source, n.Encoding.Acceleration, n.Encoding.Device},
 	}
 	if advert, ok := online[n.ID]; ok {
 		shown := showNode(advert)
@@ -282,6 +296,18 @@ func (a *API) setNode(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if e := req.Encoding; e != nil {
+		switch e.Source {
+		case domain.EncoderSet:
+			if e.Acceleration == "" {
+				writeProblem(w, a.logger, codeInvalidBody, "an encoder set is an acceleration, and the device it is on where it is not the first")
+				return
+			}
+			set.Encoding = domain.EncoderChoice{Source: domain.EncoderSet, Acceleration: e.Acceleration, Device: strings.TrimSpace(e.Device)}
+		case domain.EncoderAutomatic:
+			set.Encoding = domain.EncoderChoice{Source: domain.EncoderAutomatic}
+		}
+	}
 	if req.StreamLimit != nil {
 		if *req.StreamLimit < 0 {
 			writeProblem(w, a.logger, codeInvalidBody, "stream_limit is how many playbacks at once, 0 for no limit")
@@ -342,7 +368,7 @@ func (a *API) nodesRoutes() []route {
 		},
 		{
 			pattern: "PATCH /api/v1/admin/nodes/{id}", access: admin,
-			summary: "Change a node's role, its limit on transcodes at once, its limits on streams at once and on egress, its address, its public and local URLs or its group; it takes them up at once",
+			summary: "Change a node's role, its limit on transcodes at once, its limits on streams at once and on egress, its address, its public and local URLs, its group or what it encodes on; it takes them up at once",
 			body:    nodeChangeJSON{}, status: http.StatusOK, reply: knownNodeJSON{}, handle: a.setNode,
 		},
 		{

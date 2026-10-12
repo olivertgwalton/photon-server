@@ -37,11 +37,10 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 	node := uuid.NewV7()
 	seen := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 	svc := Services{
-		Auth: fakeAuth{}, HLS: fakeHLS{}, Identity: den(),
+		Auth: fakeAuth{}, HLS: fakeHLS{hw: hls.Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128"}}, Identity: den(),
 		Setup: Setup{
 			Started: seen.Add(-time.Hour), Node: node, Listen: ":8640",
 			Tools:    media.Tools{FFmpeg: media.Tool{Path: "/usr/bin/ffmpeg", Version: "8.0"}, Chromaprint: true},
-			Encoder:  hls.Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128"},
 			CacheDir: t.TempDir(), BackupDir: t.TempDir() + "/missing",
 		},
 		Postgres: fakeBackend{version: "18.1"},

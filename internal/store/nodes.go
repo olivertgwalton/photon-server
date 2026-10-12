@@ -9,15 +9,21 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-const nodeColumns = `id, name, first_seen, last_seen, role, transcode_limit, availability, note, address, node_group, public_url, stream_limit, egress_limit_mbps, local_url`
+const nodeColumns = `id, name, first_seen, last_seen, role, transcode_limit, availability, note, address, node_group, public_url, stream_limit, egress_limit_mbps, local_url, acceleration, encoder_device`
 
 func scanNode(row pgx.Row) (domain.NodeRecord, error) {
 	var n domain.NodeRecord
 	var limit *int
-	err := row.Scan(&n.ID, &n.Name, &n.FirstSeen, &n.LastSeen, &n.Role, &limit, &n.Availability, &n.Note, &n.Address, &n.Group, &n.PublicURL, &n.StreamLimit, &n.EgressLimitMbps, &n.LocalURL)
+	var accel *domain.Acceleration
+	err := row.Scan(&n.ID, &n.Name, &n.FirstSeen, &n.LastSeen, &n.Role, &limit, &n.Availability, &n.Note, &n.Address, &n.Group, &n.PublicURL, &n.StreamLimit, &n.EgressLimitMbps, &n.LocalURL,
+		&accel, &n.Encoding.Device)
 	n.LimitSource = domain.LimitAutomatic
 	if limit != nil {
 		n.LimitSource, n.Limit = domain.LimitSet, *limit
+	}
+	n.Encoding.Source = domain.EncoderAutomatic
+	if accel != nil {
+		n.Encoding.Source, n.Encoding.Acceleration = domain.EncoderSet, *accel
 	}
 	return n, err
 }
@@ -66,9 +72,16 @@ func (s *Store) SetNodeSettings(ctx context.Context, id uuid.UUID, n domain.Node
 		limit = &n.Limit
 	case domain.LimitAutomatic:
 	}
+	var accel *domain.Acceleration
+	device := ""
+	switch n.Encoding.Source {
+	case domain.EncoderSet:
+		accel, device = &n.Encoding.Acceleration, n.Encoding.Device
+	case domain.EncoderAutomatic:
+	}
 	return affected(s.pool.Exec(ctx, `
 		UPDATE node SET role = $2, transcode_limit = $3, availability = $4, note = $5, address = $6, node_group = $7,
-			public_url = $8, stream_limit = $9, egress_limit_mbps = $10, local_url = $11
+			public_url = $8, stream_limit = $9, egress_limit_mbps = $10, local_url = $11, acceleration = $12, encoder_device = $13
 		WHERE id = $1`,
-		id, n.Role, limit, n.Availability, n.Note, n.Address, n.Group, n.PublicURL, n.StreamLimit, n.EgressLimitMbps, n.LocalURL))
+		id, n.Role, limit, n.Availability, n.Note, n.Address, n.Group, n.PublicURL, n.StreamLimit, n.EgressLimitMbps, n.LocalURL, accel, device))
 }

@@ -67,7 +67,6 @@ type node struct {
 	id          uuid.UUID
 	info        domain.Info
 	self        *nodes.Self
-	hw          hls.Hardware
 	remuxer     *hls.Remuxer
 	conversions *playback.Conversions
 	parts       library.Parts
@@ -101,13 +100,9 @@ type node struct {
 // join makes this node one of the cluster's: what it encodes on, who it is, and what it raises
 // events and keeps backups with.
 func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
-	hw, err := hardware(ctx, n.tools.FFmpeg.Path, n.logger)
-	if err != nil {
-		return err
-	}
-	automatic := automaticTranscodes(hw.Accel)
-	n.hw = hw
-	n.remuxer, err = hls.NewRemuxer(n.tools, filepath.Join(n.cacheRoot, "hls"), filepath.Join(n.cacheRoot, "subtitles"), hw, automatic, n.logger)
+	// It encodes in software, one video at a time, until it joins and finds what it encodes on.
+	var err error
+	n.remuxer, err = hls.NewRemuxer(n.tools, filepath.Join(n.cacheRoot, "hls"), filepath.Join(n.cacheRoot, "subtitles"), hls.Hardware{Accel: domain.AccelSoftware}, 1, n.logger)
 	if err != nil {
 		return err
 	}
@@ -128,9 +123,19 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 		n.trackers.Played(e)
 	}, n.id)
 	n.sent = playback.NewSent()
-	// self is this node, doing what an admin sets of it: its role, and how many videos it encodes.
-	n.self, err = nodes.Join(ctx, n.st, n.id, hostname,
-		domain.Encoder{Acceleration: hw.Accel, HEVC: hw.HEVC, Libass: n.tools.Libass}, automatic, n.remuxer, n.sessions, n.sent, n.logger)
+	// self is this node, doing what an admin sets of it: its role, what it encodes on, and how many
+	// videos it encodes.
+	n.self, err = nodes.Join(ctx, n.st, n.id, hostname, nodes.Parts{
+		Transcodes: n.remuxer, Deliveries: n.sessions, Egress: n.sent,
+		Retool: func(ctx context.Context, choice domain.EncoderChoice) (domain.Encoder, int, error) {
+			hw, err := hardware(ctx, n.tools.FFmpeg.Path, choice, n.logger)
+			if err != nil {
+				return domain.Encoder{}, 0, err
+			}
+			n.remuxer.SetHardware(hw)
+			return domain.Encoder{Acceleration: hw.Accel, Device: hw.Device, HEVC: hw.HEVC, Libass: n.tools.Libass}, automaticTranscodes(hw.Accel), nil
+		},
+	}, n.logger)
 	if err != nil {
 		return err
 	}
@@ -143,7 +148,7 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	n.providers = metadataProviders(n.st, n.plugins, n.cache)
 	offers := remote.New(n.providers)
 	n.parts = library.Parts{Places: n.st, Streams: offers}
-	n.conversions, err = playback.NewConversions(n.st, n.parts, n.cache, n.remuxer, n.tools.FFmpeg.Path, hw, filepath.Join(n.cacheRoot, "downloads"), n.id)
+	n.conversions, err = playback.NewConversions(n.st, n.parts, n.cache, n.remuxer, n.tools.FFmpeg.Path, filepath.Join(n.cacheRoot, "downloads"), n.id)
 	if err != nil {
 		return err
 	}
@@ -254,7 +259,7 @@ func (n *node) httpServer(p playing) (*http.Server, error) {
 		return nil, err
 	}
 	setup := httpapi.Setup{
-		Started: n.started, Node: n.id, Listen: n.listen, Tools: n.tools, Encoder: n.hw,
+		Started: n.started, Node: n.id, Listen: n.listen, Tools: n.tools,
 		CacheDir: n.cacheRoot, BackupDir: n.dumper.Dir,
 	}
 	st, cache := n.st, n.cache

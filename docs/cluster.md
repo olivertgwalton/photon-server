@@ -13,8 +13,8 @@ where the other nodes reach it, such as `http://10.0.0.5:8640`, which it takes u
 and is not listed as running.
 
 A node finds what it encodes video with as it starts: VideoToolbox on a Mac, NVENC, then QSV and
-VAAPI on each render node, the first that encodes a test picture, or software where none does.
-Its log says which, and Settings › Server shows it.
+VAAPI on each render node, the first that encodes a test picture, or software where none does, or
+what an admin sets of it (see Encoder below). Its log says which, and Settings › Server shows it.
 
 A node is named by its host. In a container, give each machine's its own name: the compose
 file in [install.md](install.md) takes `PHOTON_HOSTNAME`, `photon` where it is unset.
@@ -87,6 +87,12 @@ taken up at once, as it runs:
   node measures it every 5 seconds, from what it sent since; at or past its limit, it has no room
   for another stream, as one delivering as many as it may has none. A stream begun since it last
   measured is not yet in it, so a node may pass its limit by those.
+
+- **Encoder.** Automatic, as above, or an acceleration and the device it is on: the render node
+  of a VAAPI or QSV one, such as `/dev/dri/renderD129`, or the index of an NVIDIA card, such as
+  `1` for the second, none being the first. The node tries it as it is set, and encodes the next
+  video it starts on it; one encoding keeps what it began on, so a seek never changes it. One that
+  encodes no test picture is passed over for the first that does, and its log says so.
 
 - **Transcodes at once.** Worked out from the node's encoder, or set: at most a number, or no
   limit. Lowering it stops none playing; none is begun until there is room under it.

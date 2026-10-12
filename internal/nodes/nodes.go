@@ -42,39 +42,54 @@ type egress interface {
 	Kbps() int
 }
 
+// Parts are what this node is made of that what an admin sets of it changes.
+type Parts struct {
+	Transcodes transcodes
+	Deliveries deliveries
+	Egress     egress
+	// Retool finds what this node encodes video on as choice says, and has it encode on that from
+	// then: what it encodes with, and the limit on transcodes at once that keeps up with it.
+	Retool func(ctx context.Context, choice domain.EncoderChoice) (domain.Encoder, int, error)
+}
+
 // Self is this node: what it is, and what an admin sets of it.
 type Self struct {
-	id      uuid.UUID
-	name    string
-	encoder domain.Encoder
-	// automatic is the limit its encoder keeps up with.
-	automatic  int
-	settings   settings
-	transcodes transcodes
-	deliveries deliveries
-	egress     egress
-	log        *slog.Logger
+	id       uuid.UUID
+	name     string
+	settings settings
+	parts    Parts
+	log      *slog.Logger
+	// retooling is held while it finds what it encodes on, so one choice is tried at a time.
+	retooling sync.Mutex
 
 	mu  sync.Mutex
 	set domain.NodeSettings
+	// encoder is what it encodes with, found for choice, and automatic the limit it keeps up with.
+	encoder   domain.Encoder
+	choice    domain.EncoderChoice
+	automatic int
 	// stopping is whether the process is stopping, which drains it whatever is set.
 	stopping bool
 	// changed is told, once for any number of changes, as what is set of it changes.
 	changed chan struct{}
 }
 
-// Join keeps this node among the server's nodes, as name, and takes up what an admin has set of
-// it.
-func Join(ctx context.Context, s settings, id uuid.UUID, name string, encoder domain.Encoder, automatic int, t transcodes, d deliveries, e egress, log *slog.Logger) (*Self, error) {
+// Join keeps this node among the server's nodes, as name, finds what it encodes on, and takes up
+// what an admin has set of it.
+func Join(ctx context.Context, s settings, id uuid.UUID, name string, p Parts, log *slog.Logger) (*Self, error) {
 	n, err := s.JoinNode(ctx, id, name)
 	if err != nil {
 		return nil, err
 	}
-	self := &Self{
-		id: id, name: name, encoder: encoder, automatic: automatic,
-		settings: s, transcodes: t, deliveries: d, egress: e, log: log, changed: make(chan struct{}, 1),
+	encoder, automatic, err := p.Retool(ctx, n.Encoding)
+	if err != nil {
+		return nil, err
 	}
-	self.apply(n.NodeSettings)
+	self := &Self{
+		id: id, name: name, settings: s, parts: p, log: log, changed: make(chan struct{}, 1),
+		encoder: encoder, choice: n.Encoding, automatic: automatic,
+	}
+	self.apply(ctx, n.NodeSettings)
 	return self, nil
 }
 
@@ -97,44 +112,85 @@ func (s *Self) reread(ctx context.Context) {
 		}
 		return
 	}
-	s.apply(n.NodeSettings)
+	s.apply(ctx, n.NodeSettings)
 }
 
-func (s *Self) apply(set domain.NodeSettings) {
+// apply takes up set, finding what this node encodes on again, meanwhile, where its choice changed.
+func (s *Self) apply(ctx context.Context, set domain.NodeSettings) {
 	s.mu.Lock()
 	was := s.set
 	s.set = set
+	retool := set.Encoding != s.choice
+	s.choice = set.Encoding
 	s.mu.Unlock()
 	if set != was {
-		select {
-		case s.changed <- struct{}{}:
-		default:
-		}
+		s.tell()
 	}
+	s.limit()
+	s.parts.Deliveries.SetStreamLimit(set.StreamLimit)
+	if retool {
+		go s.retool(context.WithoutCancel(ctx), set.Encoding)
+	}
+}
+
+// limit holds this node to as many transcodes at once as is set, or as its encoder keeps up with.
+func (s *Self) limit() {
+	s.mu.Lock()
 	limit := s.automatic
-	switch set.LimitSource {
+	switch s.set.LimitSource {
 	case domain.LimitSet:
-		limit = set.Limit
+		limit = s.set.Limit
 	case domain.LimitAutomatic:
 	}
-	s.transcodes.SetLimit(limit)
-	s.deliveries.SetStreamLimit(set.StreamLimit)
+	s.mu.Unlock()
+	s.parts.Transcodes.SetLimit(limit)
+}
+
+// retool finds what this node encodes on as choice says, unless an admin has chosen again since.
+func (s *Self) retool(ctx context.Context, choice domain.EncoderChoice) {
+	s.retooling.Lock()
+	defer s.retooling.Unlock()
+	s.mu.Lock()
+	latest := s.choice
+	s.mu.Unlock()
+	if choice != latest {
+		return
+	}
+	encoder, automatic, err := s.parts.Retool(ctx, choice)
+	if err != nil {
+		s.log.WarnContext(ctx, "what the node encodes on not found again", slog.Any("err", err))
+		return
+	}
+	s.mu.Lock()
+	s.encoder, s.automatic = encoder, automatic
+	s.mu.Unlock()
+	s.limit()
+	s.tell()
+}
+
+// tell tells Changes, once for any number of changes since it was read.
+func (s *Self) tell() {
+	select {
+	case s.changed <- struct{}{}:
+	default:
+	}
 }
 
 // Node is this node as it tells the others of itself, now.
 func (s *Self) Node() domain.Node {
 	s.mu.Lock()
-	set, stopping := s.set, s.stopping
+	set, stopping, encoder := s.set, s.stopping, s.encoder
 	s.mu.Unlock()
 	if stopping {
 		set.Availability = domain.NodeDraining
 	}
 	n := domain.Node{
-		ID: s.id, Address: set.Address, Name: s.name, Group: set.Group, PublicURL: set.PublicURL, LocalURL: set.LocalURL, StreamLimit: set.StreamLimit, EgressLimitMbps: set.EgressLimitMbps, Role: set.Role, Availability: set.Availability,
-		Encoder: s.encoder, LimitSource: set.LimitSource,
+		ID: s.id, Address: set.Address, Name: s.name, Group: set.Group, PublicURL: set.PublicURL, LocalURL: set.LocalURL,
+		StreamLimit: set.StreamLimit, EgressLimitMbps: set.EgressLimitMbps, Role: set.Role, Availability: set.Availability,
+		Encoder: encoder, LimitSource: set.LimitSource,
 	}
-	n.Transcodes, n.Conversions, n.Limit = s.transcodes.Transcodes()
-	n.Streams, n.EgressKbps = s.deliveries.Delivering(), s.egress.Kbps()
+	n.Transcodes, n.Conversions, n.Limit = s.parts.Transcodes.Transcodes()
+	n.Streams, n.EgressKbps = s.parts.Deliveries.Delivering(), s.parts.Egress.Kbps()
 	return n
 }
 
@@ -158,10 +214,7 @@ func (s *Self) Stop() {
 	s.mu.Lock()
 	s.stopping = true
 	s.mu.Unlock()
-	select {
-	case s.changed <- struct{}{}:
-	default:
-	}
+	s.tell()
 }
 
 // Changes is told as what is set of this node changes, once for any number since it was read.

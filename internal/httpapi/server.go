@@ -15,7 +15,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
@@ -25,7 +24,6 @@ type Setup struct {
 	Node      uuid.UUID
 	Listen    string
 	Tools     media.Tools
-	Encoder   hls.Hardware
 	CacheDir  string
 	BackupDir string
 }
@@ -102,12 +100,13 @@ type serverJSON struct {
 func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
 	s := a.svc.Setup
 	active, _, limit := a.svc.HLS.Transcodes()
+	hw := a.svc.HLS.Hardware()
 	out := serverJSON{
 		Info: a.self(), NodeID: s.Node, StartedAt: s.Started.UTC(), OS: runtime.GOOS, Arch: runtime.GOARCH,
 		FFmpeg:      toolJSON{s.Tools.FFmpeg.Path, s.Tools.FFmpeg.Version},
 		FFprobe:     toolJSON{s.Tools.FFprobe.Path, s.Tools.FFprobe.Version},
 		YTDLP:       toolJSON{s.Tools.YTDLP.Path, s.Tools.YTDLP.Version},
-		Chromaprint: s.Tools.Chromaprint, Libass: s.Tools.Libass, Encoder: encoderJSON{s.Encoder.Accel, s.Encoder.Device, s.Encoder.HEVC},
+		Chromaprint: s.Tools.Chromaprint, Libass: s.Tools.Libass, Encoder: encoderJSON{hw.Accel, hw.Device, hw.HEVC},
 		Transcodes: active, TranscodeLimit: limit, Listen: s.Listen,
 		Folders:          foldersJSON{folder(s.CacheDir), folder(s.BackupDir)},
 		MetadataLanguage: a.svc.Identity.Locale().Language, CertificationCountry: a.svc.Identity.Locale().Country,

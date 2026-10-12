@@ -67,6 +67,7 @@ type conversionStore interface {
 // transcodeSlots are the node's slots for encoding video, shared with its playbacks.
 type transcodeSlots interface {
 	HoldConversion(ctx context.Context) (held context.Context, release func(), ok bool)
+	Hardware() hls.Hardware
 }
 
 type nodeAddresses interface {
@@ -81,16 +82,15 @@ type Conversions struct {
 	nodes  nodeAddresses
 	slots  transcodeSlots
 	ffmpeg string
-	hw     hls.Hardware
 	dir    string
 	node   uuid.UUID
 }
 
-func NewConversions(st conversionStore, parts partOpener, nodes nodeAddresses, slots transcodeSlots, ffmpeg string, hw hls.Hardware, dir string, node uuid.UUID) (*Conversions, error) {
+func NewConversions(st conversionStore, parts partOpener, nodes nodeAddresses, slots transcodeSlots, ffmpeg string, dir string, node uuid.UUID) (*Conversions, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, err
 	}
-	return &Conversions{store: st, parts: parts, nodes: nodes, slots: slots, ffmpeg: ffmpeg, hw: hw, dir: dir, node: node}, nil
+	return &Conversions{store: st, parts: parts, nodes: nodes, slots: slots, ffmpeg: ffmpeg, dir: dir, node: node}, nil
 }
 
 func (c *Conversions) path(conversion uuid.UUID) string {
@@ -114,7 +114,8 @@ func (c *Conversions) Convert(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	d, err := Conversion(Copy{Container: job.Container, BitrateKbps: job.BitrateKbps, Streams: job.Streams}, job.Quality, Converted(job.Quality), c.hw.HEVC)
+	hw := c.slots.Hardware()
+	d, err := Conversion(Copy{Container: job.Container, BitrateKbps: job.BitrateKbps, Streams: job.Streams}, job.Quality, Converted(job.Quality), hw.HEVC)
 	if err != nil {
 		return c.fail(ctx, id, err)
 	}
@@ -126,7 +127,7 @@ func (c *Conversions) Convert(ctx context.Context, id uuid.UUID) error {
 	dst := c.path(id)
 	temp := dst + ".part"
 	var reported time.Time
-	err = c.hw.Convert(held, c.ffmpeg, src, *d.Video, d.Audio, job.Duration, temp, func(p float64) error {
+	err = hw.Convert(held, c.ffmpeg, src, *d.Video, d.Audio, job.Duration, temp, func(p float64) error {
 		if time.Since(reported) < progressEvery {
 			return nil
 		}

@@ -150,7 +150,7 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 				plays = append(plays, playback.VideoSupport{Codec: codec, Ranges: req.VideoRanges})
 			}
 		}
-		d, err := playback.Conversion(pc, q, plays, a.svc.Setup.Encoder.HEVC)
+		d, err := playback.Conversion(pc, q, plays, a.svc.HLS.Hardware().HEVC)
 		if errors.Is(err, playback.ErrNoCompatibleStream) {
 			writeProblem(w, a.logger, codeNoCompatibleStream, "the copy has no video to convert to a codec the device plays")
 			return
