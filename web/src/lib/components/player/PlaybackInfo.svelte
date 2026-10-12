@@ -46,9 +46,10 @@ const videoTarget = $derived.by(() => {
 	const v = playback.video;
 	if (!v) return "";
 	if (v.decision === "copy") {
-		return v.dolby_vision === "strip"
-			? "Copied, Dolby Vision removed"
-			: "Copied";
+		if (v.dolby_vision === "strip") return "Copied, Dolby Vision removed";
+		if (v.dolby_vision === "convert")
+			return "Copied, Dolby Vision as profile 8.1";
+		return "Copied";
 	}
 	return [
 		`Converted to ${v.codec?.toUpperCase()}`,

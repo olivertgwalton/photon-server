@@ -326,19 +326,34 @@ func TestAnInterlacedPictureIsDeinterlacedAsItIsEncoded(t *testing.T) {
 	}
 }
 
-// A UHD Blu-ray's Dolby Vision 7 goes to a client of HDR10 as its base layer, copied, not encoded.
-func TestDolbyVision7IsSentAsItsHDR10(t *testing.T) {
+// A UHD Blu-ray's Dolby Vision 7 is copied, never encoded, to a client of its HDR10: as 8.1 where
+// the client shows that and is sent fragmented MP4, else as its base layer.
+func TestDolbyVision7IsCopied(t *testing.T) {
 	remux := film
 	remux.Streams = slices.Clone(film.Streams)
 	remux.Streams[0].DolbyVision = &domain.DolbyVision{Profile: 7, Compatibility: domain.CompatibleBluRay}
+	hdr10 := appleTV
+	hdr10.Video = []VideoSupport{{Codec: "hevc", Ranges: []domain.Range{domain.RangeSDR, domain.RangeHDR10}}}
 	safari := appleTV
 	safari.Video = []VideoSupport{{Codec: "hevc", Ranges: []domain.Range{domain.RangeSDR, domain.RangeHDR10, domain.RangeDV}, DolbyVisionProfiles: []int{5, 8}}}
-	got, err := Decide(safari, remux, domain.ChosenTracks{}, Encoding{HEVC: domain.HEVCAllow})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Method != domain.PlayRemux || got.Video.DolbyVision != domain.DolbyVisionStrip {
-		t.Errorf("%s with Dolby Vision %s, want remuxed with it stripped", got.Method, got.Video.DolbyVision)
+	safariTS := safari
+	safariTS.Segments = domain.SegmentsMPEGTS
+	for _, tc := range []struct {
+		name    string
+		profile Profile
+		want    domain.DolbyVisionHandling
+	}{
+		{"a client of HDR10", hdr10, domain.DolbyVisionStrip},
+		{"a client of Dolby Vision 8", safari, domain.DolbyVisionConvert},
+		{"a client of Dolby Vision 8 in MPEG-TS", safariTS, domain.DolbyVisionStrip},
+	} {
+		got, err := Decide(tc.profile, remux, domain.ChosenTracks{}, Encoding{HEVC: domain.HEVCAllow})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Method != domain.PlayRemux || got.Video.DolbyVision != tc.want {
+			t.Errorf("%s: %s with Dolby Vision %s, want remuxed with it %s", tc.name, got.Method, got.Video.DolbyVision, tc.want)
+		}
 	}
 }
 
