@@ -865,7 +865,7 @@ export async function admin(
 			const asked = (await request.json()) as Schemas["AddCollection"];
 			smart = {
 				id: "t-smart",
-				library_id: asked.library_ids?.[0],
+				library_ids: asked.library_ids ?? undefined,
 				kind: "collection",
 				title: asked.title,
 				added_at: film.added_at,

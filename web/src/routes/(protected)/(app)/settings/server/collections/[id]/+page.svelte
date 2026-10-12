@@ -52,7 +52,7 @@ function sync() {
 		"Read again.",
 	);
 }
-// Its library's wall, filtered by its rule, where the rule is changed.
+// A library's wall it reads, filtered by its rule, where the rule is changed.
 const changeRule = $derived.by(() => {
 	if (!smart || !data.library) return undefined;
 	const search = wallSearch(ruleQuery(smart));
@@ -68,12 +68,12 @@ let found = $state<Card[]>([]);
 async function search(event: SubmitEvent) {
 	event.preventDefault();
 	const { data: answer } = await api.GET("/api/v1/search", {
-		params: { query: { q: query, library: data.library, limit: 12 } },
+		params: { query: { q: query, limit: 12 } },
 	});
+	// Any title of any library, a film, a show or an episode, but another
+	// collection.
 	found = (answer?.titles.items ?? []).filter(
-		(c) =>
-			(c.kind === "movie" || c.kind === "show") &&
-			!members.some((m) => m.id === c.id),
+		(c) => c.kind !== "collection" && !members.some((m) => m.id === c.id),
 	);
 }
 
@@ -105,15 +105,15 @@ function caption(card: Card) {
 					String(list.source).replace(/^plugin:/, "")}
 				list
 				<span class="font-mono">{list.id}</span>
-				the library has, read again daily.
+				your libraries have, read again daily.
 				{#if list.missing}
 					{list.missing}
-					of it {list.missing === 1 ? "is" : "are"} not in the library.
+					of it {list.missing === 1 ? "is" : "are"} in none of them.
 				{/if}
 			{:else if smart}
 				A smart collection: it holds what its filters find
-				{smart.limit ? `, the first ${smart.limit}` : ""}, found again as the
-				library changes, and the same for everyone.
+				{smart.limit ? `, the first ${smart.limit}` : ""}, found again as its
+				libraries change, and the same for everyone.
 				{#if changeRule}
 					<a href={changeRule} class="underline">Change its filters</a>.
 				{/if}
@@ -222,7 +222,7 @@ function caption(card: Card) {
 				label="Remove this collection"
 				title="Remove {data.collection.title}?"
 				confirm="Remove collection"
-				body={"Its titles stay in the library."}
+				body={"Its titles stay in their libraries."}
 			/>
 		</div>
 	{/if}
