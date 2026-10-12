@@ -1,5 +1,5 @@
 <script lang="ts">
-import { tick } from "svelte";
+import type { Attachment } from "svelte/attachments";
 import { innerHeight } from "svelte/reactivity/window";
 import { onResize } from "#lib/size.js";
 import type { components } from "#lib/api/schema.js";
@@ -106,9 +106,17 @@ $effect(() => {
 	for (const index of shown) load(Math.floor(index / pageSize));
 });
 
+// The card a letter jumped to, until it is drawn and has taken focus.
+let jumped = $state<number>();
+
+const focusCard: Attachment<HTMLElement> = (li) => {
+	li.querySelector("a")?.focus({ preventScroll: true });
+	jumped = undefined;
+};
+
 // Brings the card at `offset` to the top of the window and hands it focus,
 // for the letters beside the wall.
-export async function jump(offset: number) {
+export function jump(offset: number) {
 	if (!list) return;
 	const row = Math.floor(offset / columns);
 	const header =
@@ -122,11 +130,7 @@ export async function jump(offset: number) {
 			8,
 	});
 	measure();
-	await load(Math.floor(offset / pageSize));
-	await tick();
-	list.querySelector<HTMLElement>(`[data-index="${offset}"] a`)?.focus({
-		preventScroll: true,
-	});
+	jumped = offset;
 }
 
 const sizes = $derived(`${Math.ceil(cardWidth) || 200}px`);
@@ -159,7 +163,7 @@ const sizes = $derived(`${Math.ceil(cardWidth) || 200}px`);
 		{#each shown as index (index)}
 			{@const c = card(index)}
 			<li
-				data-index={index}
+				{@attach index === jumped && c ? focusCard : undefined}
 				aria-setsize={total}
 				aria-posinset={index + 1}
 				class="absolute"
