@@ -245,6 +245,27 @@ test("the home's rows are put in order and hidden, by pointer or keyboard", asyn
 	).toHaveCount(0);
 });
 
+test("the home's rows follow another device's order, after one is saved here", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/home");
+	const rows = page
+		.getByRole("list", { name: "Home rows" })
+		.getByRole("listitem");
+	await page.getByRole("switch", { name: "Show Continue Watching" }).click();
+	await expect(page.getByText("Continue Watching hidden.")).toBeAttached();
+	await savedElsewhere(page, {
+		home: [
+			{ row: "top_rated_unwatched", visibility: "shown" },
+			{ row: "continue_watching", visibility: "shown" },
+		],
+	});
+	await expect(rows).toHaveText(["Top Rated", "Continue Watching"]);
+	await expect(
+		page.getByRole("switch", { name: "Show Continue Watching" }),
+	).toHaveAttribute("aria-checked", "true");
+});
+
 test("a profile is given a picture, shown wherever it is", async ({ page }) => {
 	await logIn(page, "/settings");
 	const menu = page.getByRole("button", { name: "Ada's profile" });
