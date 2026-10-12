@@ -1,8 +1,6 @@
 <script lang="ts">
-import { goto } from "$app/navigation";
-import { toast } from "svelte-sonner";
+import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
@@ -28,13 +26,14 @@ let title = $state("");
 
 async function make(event: SubmitEvent) {
 	event.preventDefault();
-	const { data, error } = await client().POST("/api/v1/admin/collections", {
-		body: { library_id: library, title, rule },
-	});
-	if (error) return toast.error(problemMessage(error));
-	open = false;
-	toast.success(`${title} is a smart collection.`);
-	await goto(`/settings/server/collections/${data.id}`);
+	const saved = await act(
+		client().POST("/api/v1/admin/collections", {
+			body: { library_id: library, title, rule },
+		}),
+		`${title} is a smart collection.`,
+		(made) => `/settings/server/collections/${made.id}`,
+	);
+	if (saved) open = false;
 }
 </script>
 

@@ -1,9 +1,7 @@
 <script lang="ts">
 import ListVideoIcon from "@lucide/svelte/icons/list-video";
-import { toast } from "svelte-sonner";
-import { goto } from "$app/navigation";
+import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
@@ -14,11 +12,13 @@ let { data } = $props();
 
 async function create(event: SubmitEvent) {
 	const form = fields(event);
-	const { data: made, error } = await client().POST("/api/v1/playlists", {
-		body: { name: String(form.get("name")).trim() },
-	});
-	if (error) toast.error(problemMessage(error));
-	else goto(`/playlists/${made.id}`);
+	await act(
+		client().POST("/api/v1/playlists", {
+			body: { name: String(form.get("name")).trim() },
+		}),
+		undefined,
+		(made) => `/playlists/${made.id}`,
+	);
 }
 </script>
 
