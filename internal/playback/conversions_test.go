@@ -33,7 +33,9 @@ func countingFFmpeg(t *testing.T, runs string) string {
 
 type noNodes struct{}
 
-func (noNodes) NodeAddress(context.Context, uuid.UUID) (string, bool, error) { return "", false, nil }
+func (noNodes) Node(context.Context, uuid.UUID) (domain.Node, bool, error) {
+	return domain.Node{}, false, nil
+}
 
 // filmToDownload is a store holding one film, and its title and part.
 func filmToDownload(t *testing.T) (st *store.Store, item, part uuid.UUID) {

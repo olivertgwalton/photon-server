@@ -593,8 +593,8 @@ func (noHLS) Close(uuid.UUID) {}
 
 type owner string
 
-func (o owner) Owner(_ context.Context, playback uuid.UUID) (string, bool, error) {
-	return string(o), playback == playbackID, nil
+func (o owner) Owner(_ context.Context, playback uuid.UUID) (domain.Node, bool, error) {
+	return domain.Node{Address: string(o)}, playback == playbackID, nil
 }
 
 func TestHLSIsServedByTheNodeRunningIt(t *testing.T) {

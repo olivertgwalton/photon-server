@@ -18,9 +18,9 @@ func (c cluster) Playback(_ context.Context, id uuid.UUID) (domain.Playback, boo
 	return p, ok, nil
 }
 
-func (c cluster) NodeAddress(_ context.Context, id uuid.UUID) (string, bool, error) {
+func (c cluster) Node(_ context.Context, id uuid.UUID) (domain.Node, bool, error) {
 	a, ok := c.addresses[id]
-	return a, ok, nil
+	return domain.Node{ID: id, Address: a}, ok, nil
 }
 
 func TestAPlaybackIsServedByTheNodeThatOpenedIt(t *testing.T) {
@@ -41,8 +41,8 @@ func TestAPlaybackIsServedByTheNodeThatOpenedIt(t *testing.T) {
 		"a node gone quiet's":     {orphan, "", false},
 		"a playback there is not": {uuid.NewV7(), "", false},
 	} {
-		address, elsewhere, err := r.Owner(t.Context(), tc.playback)
-		if err != nil || address != tc.address || elsewhere != tc.elsewhere {
+		owner, elsewhere, err := r.Owner(t.Context(), tc.playback)
+		if address := owner.Address; err != nil || address != tc.address || elsewhere != tc.elsewhere {
 			t.Errorf("%s: %q, %v, %v; want %q, %v", name, address, elsewhere, err, tc.address, tc.elsewhere)
 		}
 	}

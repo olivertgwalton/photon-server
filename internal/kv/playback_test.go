@@ -74,7 +74,7 @@ func TestANodeIsReachedWhileItSaysWhere(t *testing.T) {
 	defer k.Close()
 	ctx := t.Context()
 	node := uuid.NewV7()
-	if _, ok, err := k.NodeAddress(ctx, node); ok || err != nil {
+	if _, ok, err := k.Node(ctx, node); ok || err != nil {
 		t.Fatalf("before it said: %v, %v", ok, err)
 	}
 	advert := domain.Node{
@@ -84,8 +84,8 @@ func TestANodeIsReachedWhileItSaysWhere(t *testing.T) {
 	if err := k.SetNode(ctx, advert, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if got, ok, err := k.NodeAddress(ctx, node); !ok || err != nil || got != "http://10.0.0.5:8640" {
-		t.Errorf("NodeAddress = %q, %v, %v", got, ok, err)
+	if got, ok, err := k.Node(ctx, node); !ok || err != nil || got.Address != "http://10.0.0.5:8640" || got.Name != "gpu-1" {
+		t.Errorf("Node = %+v, %v, %v", got, ok, err)
 	}
 	nodes, err := k.Nodes(ctx)
 	if err != nil {

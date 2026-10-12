@@ -104,10 +104,9 @@ func (k *KV) SetNode(ctx context.Context, n domain.Node, ttl time.Duration) erro
 	return keep(ctx, k, nodes, n.ID, n, ttl)
 }
 
-// NodeAddress answers where a node answers its peers, or false for one that has gone quiet.
-func (k *KV) NodeAddress(ctx context.Context, id uuid.UUID) (string, bool, error) {
-	n, ok, err := kept[domain.Node](ctx, k, nodes, id)
-	return n.Address, ok, err
+// Node answers a node as it last told the others of itself, or false for one that has gone quiet.
+func (k *KV) Node(ctx context.Context, id uuid.UUID) (domain.Node, bool, error) {
+	return kept[domain.Node](ctx, k, nodes, id)
 }
 
 // Nodes answers every node that has said where its peers reach it and not gone quiet.

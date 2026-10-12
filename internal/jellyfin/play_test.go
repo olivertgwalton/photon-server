@@ -363,7 +363,9 @@ func (f *fakeRemuxes) Resource(_ context.Context, id uuid.UUID, name string) (hl
 // noOwners is a cluster of one node, which runs every playback itself.
 type noOwners struct{}
 
-func (noOwners) Owner(context.Context, uuid.UUID) (string, bool, error) { return "", false, nil }
+func (noOwners) Owner(context.Context, uuid.UUID) (domain.Node, bool, error) {
+	return domain.Node{}, false, nil
+}
 
 // An app whose player opens no MKV is given HLS of one, at the TranscodingUrl its PlaybackInfo
 // answers: fetching it starts the playback and its remux, once, and every address in its playlists

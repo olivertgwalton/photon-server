@@ -38,7 +38,7 @@ type placer interface {
 
 // owners say which node of the cluster runs a playback's HLS.
 type owners interface {
-	Owner(ctx context.Context, playback uuid.UUID) (string, bool, error)
+	Owner(ctx context.Context, playback uuid.UUID) (domain.Node, bool, error)
 }
 
 // transcodeFor is how long a TranscodingUrl may be fetched for, as long as any film plays.
@@ -221,12 +221,12 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 // address its own API serves the session's HLS at, carrying the app's query into the playlists it
 // answers.
 func (a *API) fromOwner(w http.ResponseWriter, r *http.Request, session uuid.UUID, name string) {
-	address, elsewhere, err := a.svc.Owners.Owner(r.Context(), session)
+	owner, elsewhere, err := a.svc.Owners.Owner(r.Context(), session)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	target, perr := url.Parse(address)
+	target, perr := url.Parse(owner.Address)
 	if !elsewhere || perr != nil {
 		a.refuse(w, http.StatusNotFound)
 		return
