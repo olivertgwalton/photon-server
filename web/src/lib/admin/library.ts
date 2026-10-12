@@ -1,3 +1,4 @@
+import { textAsTyped } from "#lib/form.js";
 import type { components } from "#lib/api/schema.js";
 
 type Schemas = components["schemas"];
@@ -52,7 +53,7 @@ export function libraryChange(
 		.getAll("remote_extras")
 		.map(String) as Schemas["ExtraKind"][];
 	const change: Schemas["LibraryChange"] = {
-		name: String(form.get("name") ?? ""),
+		name: textAsTyped(form, "name"),
 		// A remote library has no folder to watch or delete from, and the form asks
 		// neither of one.
 		monitor: (form.get("monitor") ?? undefined) as

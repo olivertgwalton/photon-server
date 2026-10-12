@@ -6,7 +6,7 @@ import { accessOf } from "#lib/admin/access.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
-import { fields } from "#lib/form.js";
+import { fields, text } from "#lib/form.js";
 import Choice from "#lib/components/Choice.svelte";
 import AccessFields from "#lib/components/admin/AccessFields.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -65,19 +65,18 @@ async function copy() {
 
 async function save(event: SubmitEvent) {
 	const form = fields(event);
-	const text = (name: string) => String(form.get(name) ?? "").trim();
 	pending = true;
 	const { data: saved, error } = await client().PUT(
 		"/api/v1/admin/sign-in-providers/{slug}",
 		{
 			params: { path: { slug: provider?.slug ?? slug } },
 			body: {
-				name: text("name"),
-				issuer: text("issuer"),
-				client_id: text("client_id"),
-				client_secret: text("client_secret") || undefined,
+				name: text(form, "name"),
+				issuer: text(form, "issuer"),
+				client_id: text(form, "client_id"),
+				client_secret: text(form, "client_secret") || undefined,
 				provisioning,
-				group: text("group") || undefined,
+				group: text(form, "group") || undefined,
 				recheck,
 				access: provisioning === "create" ? accessOf(form) : undefined,
 			},

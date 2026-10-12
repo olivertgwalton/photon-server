@@ -3,7 +3,7 @@ import { vocabulary } from "#lib/vocabulary.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { toast } from "svelte-sonner";
 import { refreshAll } from "$app/navigation";
-import { fields } from "#lib/form.js";
+import { fields, textAsTyped } from "#lib/form.js";
 import { byName, when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
@@ -53,17 +53,19 @@ function dates(run: components["schemas"]["Import"]) {
 
 async function start(event: SubmitEvent) {
 	const form = fields(event);
-	const text = (name: string) => String(form.get(name) ?? "");
 	busy = true;
 	const { error } = await api.POST("/api/v1/admin/imports", {
 		body: {
 			source,
-			url: text("url"),
-			profile_id: text("profile"),
+			url: textAsTyped(form, "url"),
+			profile_id: textAsTyped(form, "profile"),
 			credentials:
 				source === "plex"
-					? { token: text("token") }
-					: { username: text("username"), password: text("password") },
+					? { token: textAsTyped(form, "token") }
+					: {
+							username: textAsTyped(form, "username"),
+							password: textAsTyped(form, "password"),
+						},
 		},
 	});
 	busy = false;

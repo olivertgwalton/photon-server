@@ -1,7 +1,7 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { act } from "#lib/act.js";
-import { fields } from "#lib/form.js";
+import { fields, text, textAsTyped } from "#lib/form.js";
 import { client } from "#lib/api/client.js";
 import Choice from "#lib/components/Choice.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
@@ -33,12 +33,10 @@ async function add(event: SubmitEvent) {
 	await act(
 		client().POST("/api/v1/admin/collections", {
 			body: {
-				library_id: String(form.get("library") ?? ""),
-				title: String(form.get("title") ?? ""),
+				library_id: textAsTyped(form, "library"),
+				title: textAsTyped(form, "title"),
 				list:
-					source === "hand"
-						? undefined
-						: { source, id: String(form.get("list") ?? "").trim() },
+					source === "hand" ? undefined : { source, id: text(form, "list") },
 			},
 		}),
 		undefined,

@@ -7,7 +7,7 @@ import { goto } from "$app/navigation";
 import { act } from "#lib/act.js";
 import { accessOf } from "#lib/admin/access.js";
 import { problemMessage } from "#lib/api/problem.js";
-import { fields } from "#lib/form.js";
+import { fields, textAsTyped } from "#lib/form.js";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { relative, roleOptions } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
@@ -33,8 +33,8 @@ const clock = ticking(30_000);
 
 async function add(event: SubmitEvent) {
 	const form = fields(event);
-	const name = String(form.get("name") ?? "");
-	const password = String(form.get("password") ?? "");
+	const name = textAsTyped(form, "name");
+	const password = textAsTyped(form, "password");
 	const api = client();
 	const added = await api.POST("/api/v1/admin/profiles", {
 		body: { name, role, password },

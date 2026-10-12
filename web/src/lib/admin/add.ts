@@ -1,3 +1,4 @@
+import { text, textAsTyped } from "#lib/form.js";
 import { toast } from "svelte-sonner";
 import { libraryChange } from "#lib/admin/library.js";
 import { client } from "#lib/api/client.js";
@@ -15,22 +16,22 @@ export async function addLibrary(
 		body:
 			form.get("media") === "remote"
 				? {
-						name: String(form.get("name") ?? ""),
+						name: textAsTyped(form, "name"),
 						kind: form.get("kind") === "shows" ? "shows" : "movies",
 						media: "remote",
 						list: form.get("list_source")
 							? {
 									source: String(form.get("list_source")),
-									id: String(form.get("list_id") ?? "").trim(),
+									id: text(form, "list_id"),
 								}
 							: undefined,
-						discover: String(form.get("discover") ?? "") || undefined,
-						streams: String(form.get("streams") ?? ""),
+						discover: textAsTyped(form, "discover") || undefined,
+						streams: textAsTyped(form, "streams"),
 					}
 				: {
-						name: String(form.get("name") ?? ""),
+						name: textAsTyped(form, "name"),
 						kind: form.get("kind") === "shows" ? "shows" : "movies",
-						root: String(form.get("root") ?? ""),
+						root: textAsTyped(form, "root"),
 					},
 	});
 	if (added.error) {

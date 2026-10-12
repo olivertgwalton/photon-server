@@ -2,7 +2,7 @@
 import { vocabulary } from "#lib/vocabulary.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { act } from "#lib/act.js";
-import { fields } from "#lib/form.js";
+import { fields, text, textAsTyped } from "#lib/form.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
@@ -54,7 +54,7 @@ async function save(event: SubmitEvent, provider: Provider) {
 	const form = fields(event);
 	const settings: Record<string, string> = {};
 	for (const s of provider.settings) {
-		const value = String(form.get(s.key) ?? "");
+		const value = textAsTyped(form, s.key);
 		if (s.secret && !value) continue;
 		settings[s.key] = value;
 	}
@@ -73,8 +73,8 @@ let protocol = $state<(typeof protocols)[number]["value"]>("photon");
 
 async function register(event: SubmitEvent) {
 	const form = fields(event);
-	const url = String(form.get("url") ?? "");
-	const id = String(form.get("id") ?? "").trim() || undefined;
+	const url = textAsTyped(form, "url");
+	const id = text(form, "id") || undefined;
 	const element = event.currentTarget as HTMLFormElement;
 	if (
 		await act(

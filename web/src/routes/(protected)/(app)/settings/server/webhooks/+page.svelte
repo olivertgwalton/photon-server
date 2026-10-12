@@ -2,7 +2,7 @@
 import { vocabulary } from "#lib/vocabulary.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { act } from "#lib/act.js";
-import { fields } from "#lib/form.js";
+import { fields, textAsTyped } from "#lib/form.js";
 import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
@@ -29,7 +29,7 @@ async function add(event: SubmitEvent) {
 	const hook = await act(
 		api.POST("/api/v1/admin/webhooks", {
 			body: {
-				url: String(form.get("url") ?? ""),
+				url: textAsTyped(form, "url"),
 				events: form
 					.getAll("events")
 					.map(String) as components["schemas"]["EventKind"][],

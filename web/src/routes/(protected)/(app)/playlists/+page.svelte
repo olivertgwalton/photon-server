@@ -5,7 +5,7 @@ import { client } from "#lib/api/client.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import { fields } from "#lib/form.js";
+import { fields, text } from "#lib/form.js";
 import { count, runtime } from "#lib/format.js";
 
 let { data } = $props();
@@ -14,7 +14,7 @@ async function create(event: SubmitEvent) {
 	const form = fields(event);
 	await act(
 		client().POST("/api/v1/playlists", {
-			body: { name: String(form.get("name")).trim() },
+			body: { name: text(form, "name") },
 		}),
 		undefined,
 		(made) => `/playlists/${made.id}`,
