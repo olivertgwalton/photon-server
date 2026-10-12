@@ -13,10 +13,13 @@ import ListPlusIcon from "@lucide/svelte/icons/list-plus";
 import PlayIcon from "@lucide/svelte/icons/play";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
+import ShuffleIcon from "@lucide/svelte/icons/shuffle";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
+import { toast } from "svelte-sonner";
 import { setMark } from "#lib/actions.js";
 import { refreshable } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
+import { problemMessage } from "#lib/api/problem.js";
 import { blurStyle, isDark } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
 import CardGrid from "#lib/components/CardGrid.svelte";
@@ -42,6 +45,7 @@ import {
 	timecode,
 	titleWithShow,
 } from "#lib/format.js";
+import { playQueue } from "#lib/queue.js";
 import { episodesOf } from "#lib/seasons.js";
 import { getShell } from "#lib/shell.svelte.js";
 import { goto } from "$app/navigation";
@@ -208,6 +212,20 @@ const adminTools = $derived(
 		playable && t.kind !== "extra" && ["markers", "Edit markers"],
 	].filter((tool) => !!tool),
 );
+
+// A show plays its episodes shuffled, as does an episode its show's; a
+// collection, its films and episodes.
+const shuffles = $derived(
+	t.kind === "show" || t.kind === "collection" ? t.id : t.show?.id,
+);
+
+async function shuffle(id: string) {
+	const { data, error } = await client().GET("/api/v1/titles/{id}/playable", {
+		params: { path: { id } },
+	});
+	if (error) toast.error(problemMessage(error));
+	else playQueue(data.items, true);
+}
 
 // What sits beside Play: panes of glass over the backdrop, Play the one
 // filled control on the page.
@@ -379,6 +397,19 @@ const poster = $derived(art("poster"));
 							next.episode_number,
 							next.episode_end,
 						)}
+					</Button>
+				{/if}
+				{#if shuffles}
+					{@const id = shuffles}
+					<Button
+						variant="ghost"
+						class={glass}
+						size="icon-lg"
+						aria-label="Shuffle"
+						title="Shuffle"
+						onclick={() => shuffle(id)}
+					>
+						<ShuffleIcon />
 					</Button>
 				{/if}
 				{#if trailer}

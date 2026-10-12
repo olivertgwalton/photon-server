@@ -1694,6 +1694,10 @@ const server_ = Bun.serve({
 						card(films.find((f) => f.id === "t-film") as Schemas["Card"]),
 					],
 				});
+			case "GET titles/playable":
+				return id === "t-show"
+					? Response.json({ items: [...episodes, later].map(card) })
+					: problem(404, "not_found", "Not Found");
 			case "GET titles/similar":
 				return Response.json({
 					items: films
