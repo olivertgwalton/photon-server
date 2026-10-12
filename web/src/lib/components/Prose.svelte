@@ -1,4 +1,5 @@
 <script lang="ts">
+import type { Attachment } from "svelte/attachments";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import { onResize } from "#lib/size.js";
 
@@ -12,9 +13,19 @@ let {
 	class: className,
 }: { text: string; lines: number; title: string; class?: string } = $props();
 
+// Other writing is measured again, as it may fill the same lines, and closes
+// Read more.
+const shown = $derived(text);
 let clamped = $state(false);
-const measure = onResize<HTMLParagraphElement>((p) => {
-	clamped = p.scrollHeight > p.clientHeight + 1;
+const measure: Attachment<HTMLParagraphElement> = (p) => {
+	shown;
+	return onResize(() => {
+		clamped = p.scrollHeight > p.clientHeight + 1;
+	})(p);
+};
+let open = $derived.by(() => {
+	shown;
+	return false;
 });
 </script>
 
@@ -27,7 +38,7 @@ const measure = onResize<HTMLParagraphElement>((p) => {
 		{text}
 	</p>
 	{#if clamped}
-		<Dialog.Root>
+		<Dialog.Root bind:open>
 			<Dialog.Trigger
 				class="text-ink mt-1 text-xs font-bold tracking-wide uppercase hover:underline"
 			>
