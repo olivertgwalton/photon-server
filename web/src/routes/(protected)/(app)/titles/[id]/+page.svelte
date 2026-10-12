@@ -56,11 +56,28 @@ const playable = $derived(
 );
 const admin = $derived(data.me.role === "admin");
 
-let version = $state<string>();
-let audio = $state<number>();
-let subtitle = $state<number | "off">();
-let mediaInfo = $state(false);
-let download = $state(false);
+// What the reader chose or opened here, which another title starts without.
+const id = $derived(t.id);
+let version = $derived.by<string | undefined>(() => {
+	id;
+	return undefined;
+});
+let audio = $derived.by<number | undefined>(() => {
+	id;
+	return undefined;
+});
+let subtitle = $derived.by<number | "off" | undefined>(() => {
+	id;
+	return undefined;
+});
+let mediaInfo = $derived.by(() => {
+	id;
+	return false;
+});
+let download = $derived.by(() => {
+	id;
+	return false;
+});
 
 const chosen = $derived(onDisk(t.versions, version));
 const duration = $derived(chosen?.duration_ms);
@@ -74,13 +91,12 @@ const watched = $derived(!!t.state?.watched_at);
 const favourite = $derived(!!t.state?.favourite_at);
 const watchlisted = $derived(!!t.state?.watchlisted_at);
 
-const now = new Date();
 const endsAt = $derived(
 	duration && playable
-		? new Date(now.getTime() + duration - position).toLocaleTimeString(
-				undefined,
-				{ hour: "numeric", minute: "2-digit" },
-			)
+		? new Date(Date.now() + duration - position).toLocaleTimeString(undefined, {
+				hour: "numeric",
+				minute: "2-digit",
+			})
 		: undefined,
 );
 
@@ -115,26 +131,29 @@ function seasonCaption(i: number) {
 		: count(s.episodes, "episode");
 }
 
-// The season the row shows, where the reader picked another than the page's:
-// kept with the page it was picked on, so the next page shows its own.
-let chosenSeason = $state<{
-	on: string;
-	season: { id: string; title: string; number: number };
-	episodes: NonNullable<typeof data.seasonEpisodes>;
-}>();
-const picked = $derived(
-	chosenSeason?.on === t.id ? chosenSeason.season : undefined,
-);
-const episodes = $derived(
-	chosenSeason?.on === t.id ? chosenSeason.episodes : data.seasonEpisodes,
-);
-async function pick(id: string) {
-	const season = data.seasons?.find((s) => s.id === id);
+// The season the row shows, where the reader picked another than the page's.
+let chosenSeason = $derived.by<
+	| {
+			season: { id: string; title: string; number: number };
+			episodes: NonNullable<typeof data.seasonEpisodes>;
+	  }
+	| undefined
+>(() => {
+	id;
+	return undefined;
+});
+const picked = $derived(chosenSeason?.season);
+const episodes = $derived(chosenSeason?.episodes ?? data.seasonEpisodes);
+async function pick(seasonId: string) {
+	const season = data.seasons?.find((s) => s.id === seasonId);
 	if (!season) return;
-	const on = t.id;
+	const on = id;
 	const shown =
-		id === t.season?.id ? data.seasonEpisodes : await episodesOf(client(), id);
-	chosenSeason = { on, season, episodes: shown ?? [] };
+		seasonId === t.season?.id
+			? data.seasonEpisodes
+			: await episodesOf(client(), seasonId);
+	// Not on another title, gone to while the season was asked for.
+	if (on === id) chosenSeason = { season, episodes: shown ?? [] };
 }
 
 const credits = $derived(data.cast);
