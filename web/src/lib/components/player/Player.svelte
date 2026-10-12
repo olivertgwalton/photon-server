@@ -82,8 +82,8 @@ let reporter: ProgressReporter | undefined;
 let opening = 0;
 let pendingSeek: number | undefined;
 
-let playback = $state<Schemas["Playback"]>();
-let refusal = $state<{
+let playback = $state.raw<Schemas["Playback"]>();
+let refusal = $state.raw<{
 	message: string;
 	reasons: Schemas["TranscodeReason"][];
 }>();
@@ -125,8 +125,8 @@ const pipAvailable = document.pictureInPictureEnabled;
 let resting = $state(false);
 let menuOpen = $state(false);
 let infoOpen = $state(false);
-let frames = $state<VideoPlaybackQuality>();
-let next = $state<Schemas["Card"]>();
+let frames = $state.raw<VideoPlaybackQuality>();
+let next = $state.raw<Schemas["Card"]>();
 let upNextHidden = $state(false);
 let restTimer: ReturnType<typeof setTimeout> | undefined;
 

@@ -22,7 +22,7 @@ let {
 
 let open = $state(false);
 let hidden = $state(false);
-let listing = $state<components["schemas"]["FolderList"]>();
+let listing = $state.raw<components["schemas"]["FolderList"]>();
 let refusal = $state("");
 
 async function browse(path?: string) {

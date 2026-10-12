@@ -36,7 +36,7 @@ let provider = $derived(searchers[0]?.value ?? "");
 let name = $derived(title.title);
 let year = $derived(title.year ? String(title.year) : "");
 
-let candidates = $state<Schemas["Candidate"][]>();
+let candidates = $state.raw<Schemas["Candidate"][]>();
 let refusal = $state("");
 let searching = $state(false);
 

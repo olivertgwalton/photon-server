@@ -15,7 +15,9 @@ import { fields } from "#lib/form.js";
 let { data } = $props();
 const words = vocabulary();
 // Why a change was refused, beside the card it was made in.
-let refused = $state<{ name?: string; pin?: string; password?: string }>({});
+let refused = $state.raw<{ name?: string; pin?: string; password?: string }>(
+	{},
+);
 
 // A change that worked says so in a toast and redraws the page; one refused
 // says why beside it.
