@@ -120,6 +120,7 @@ const folders = $derived<[string, components["schemas"]["Folder"]][]>([
 			<Table.Row>
 				<Table.Head class="whitespace-normal">Node</Table.Head>
 				<Table.Head class="whitespace-normal">Does</Table.Head>
+				<Table.Head class="whitespace-normal">Streams</Table.Head>
 				<Table.Head class="whitespace-normal">Transcoding</Table.Head>
 				<Table.Head><span class="sr-only">Settings</span></Table.Head>
 			</Table.Row>
@@ -152,6 +153,13 @@ const folders = $derived<[string, components["schemas"]["Folder"]][]>([
 							{#if node.note}
 								<span class="text-ink-3 block text-xs">“{node.note}”</span>
 							{/if}
+						{/if}
+					</Table.Cell>
+					<Table.Cell class="whitespace-normal">
+						{#if up}
+							{transcodeLoad(up.streams, node.stream_limit)}
+						{:else}
+							<span class="text-ink-3">None</span>
 						{/if}
 					</Table.Cell>
 					<Table.Cell class="whitespace-normal">

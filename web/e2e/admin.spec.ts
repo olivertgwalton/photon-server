@@ -64,6 +64,7 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 	await expect(gpu).toContainText("Serves and transcodes");
 	await expect(gpu).toContainText("NVENC · H.264, HEVC");
 	await expect(gpu).toContainText("3 of 8");
+	await expect(gpu).toContainText("2, no limit");
 	await expect(gpu).toContainText("1 for downloads");
 	await expect(
 		nodes.getByRole("row", { name: /den \(this node\)/ }),
@@ -92,6 +93,10 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 	await dialog.getByLabel("Address").fill("http://10.0.0.6:8640");
 	// Where clients fetch what it transcodes for the others' clients.
 	await dialog.getByLabel("Public URL").fill("https://gpu.example.com");
+	// As many streams as its uplink carries.
+	await dialog.getByLabel("Streams at once").click();
+	await page.getByRole("option", { name: "At most" }).click();
+	await dialog.getByLabel("Most streams at once").fill("30");
 	// Among the nodes at its site, which it asks to transcode first.
 	await dialog.getByLabel("Group").fill("loft");
 	await expectAccessible(page);
@@ -104,6 +109,7 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 		address: "http://10.0.0.6:8640",
 		public_url: "https://gpu.example.com",
 		group: "loft",
+		stream_limit: 30,
 		transcode_limit: 12,
 	});
 	await expect(

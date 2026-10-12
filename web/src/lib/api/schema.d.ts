@@ -1492,7 +1492,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Change a node's role, its limit on transcodes at once, its address, its public URL or its group; it takes them up at once
+         * Change a node's role, its limit on transcodes at once, its limit on streams at once, its address, its public URL or its group; it takes them up at once
          * @description Admin only.
          */
         patch: {
@@ -7863,6 +7863,7 @@ export interface components {
             online?: components["schemas"]["Node"] | null;
             public_url: string;
             role: components["schemas"]["NodeRole"];
+            stream_limit: number;
             transcode_limit: number;
             transcode_limit_source: components["schemas"]["LimitSource"];
         };
@@ -8069,6 +8070,7 @@ export interface components {
             /** Format: date-time */
             last_seen: string;
             name?: string;
+            streams: number;
             transcode_limit?: number;
             transcode_limit_source: components["schemas"]["LimitSource"];
             transcodes: number;
@@ -8082,6 +8084,7 @@ export interface components {
             note?: string;
             public_url?: string | null;
             role?: components["schemas"]["NodeRole"];
+            stream_limit?: number | null;
             transcode_limit?: number | null;
             transcode_limit_source?: components["schemas"]["LimitSource"];
         };
@@ -8453,7 +8456,7 @@ export interface components {
             title: string;
         };
         /** @enum {string} */
-        ProblemCode: "not_found" | "method_not_allowed" | "unknown_parameter" | "invalid_parameter" | "not_ready" | "invalid_body" | "unauthenticated" | "sign_in_refused" | "internal" | "pairing_not_found" | "wrong_secret" | "rate_limited" | "no_compatible_stream" | "forbidden" | "conflict" | "transcode_limit" | "provider_unavailable" | "authorization_pending" | "slow_down" | "expired_token";
+        ProblemCode: "not_found" | "method_not_allowed" | "unknown_parameter" | "invalid_parameter" | "not_ready" | "invalid_body" | "unauthenticated" | "sign_in_refused" | "internal" | "pairing_not_found" | "wrong_secret" | "rate_limited" | "no_compatible_stream" | "forbidden" | "conflict" | "transcode_limit" | "stream_limit" | "provider_unavailable" | "authorization_pending" | "slow_down" | "expired_token";
         Profile: {
             /** Format: uuid */
             avatar?: string;

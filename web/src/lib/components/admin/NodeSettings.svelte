@@ -20,6 +20,12 @@ const words = vocabulary();
 
 type Role = components["schemas"]["NodeRole"];
 type Limit = "automatic" | "at_most" | "none";
+type StreamLimit = "at_most" | "none";
+
+const streamLimits: readonly { value: StreamLimit; label: string }[] = [
+	{ value: "none", label: "No limit" },
+	{ value: "at_most", label: "At most" },
+];
 
 const roles = Object.entries(words.node_roles).map(([value, { name }]) => ({
 	value: value as Role,
@@ -55,27 +61,25 @@ let limit = $derived<Limit>(
 			: "none",
 );
 let most = $derived(node.transcode_limit || node.online?.transcode_limit || 8);
+let streams = $derived<StreamLimit>(node.stream_limit ? "at_most" : "none");
+let streamMost = $derived(node.stream_limit || 20);
 const name = $derived(node.name || "this node");
 
 async function save(event: SubmitEvent) {
 	event.preventDefault();
-	const body: components["schemas"]["NodeChange"] =
-		limit === "automatic"
-			? {
-					role,
-					address,
-					public_url: publicURL,
-					group,
-					transcode_limit_source: "automatic",
-				}
+	const body: components["schemas"]["NodeChange"] = {
+		role,
+		address,
+		public_url: publicURL,
+		group,
+		stream_limit: streams === "none" ? 0 : streamMost,
+		...(limit === "automatic"
+			? { transcode_limit_source: "automatic" }
 			: {
-					role,
-					address,
-					public_url: publicURL,
-					group,
 					transcode_limit_source: "set",
 					transcode_limit: limit === "none" ? 0 : most,
-				};
+				}),
+	};
 	const saved = await act(
 		client().PATCH("/api/v1/admin/nodes/{id}", {
 			params: { path: { id: node.id } },
@@ -150,6 +154,31 @@ async function save(event: SubmitEvent) {
 				<Field.Description>
 					Such as the site it runs at. It asks the nodes of its own group to
 					transcode first, so a stream need not cross between sites.
+				</Field.Description>
+			</Field.Field>
+			<Field.Field>
+				<Field.Label for="{id}-node-streams">Streams at once</Field.Label>
+				<Choice
+					id="{id}-node-streams"
+					name="streams"
+					bind:value={streams}
+					options={streamLimits}
+				/>
+				{#if streams === "at_most"}
+					<Input
+						id="{id}-node-stream-most"
+						name="stream_limit"
+						type="number"
+						min={1}
+						required
+						bind:value={streamMost}
+						aria-label="Most streams at once"
+						class="w-32 font-mono"
+					/>
+				{/if}
+				<Field.Description>
+					What it delivers, transcoded or not. Full, it is passed over for the
+					next node; no one watching is stopped.
 				</Field.Description>
 			</Field.Field>
 			{#if role !== "serve"}
