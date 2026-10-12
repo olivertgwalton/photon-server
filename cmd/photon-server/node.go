@@ -86,6 +86,7 @@ type node struct {
 	providers *provider.Registry
 	scheduler *task.Scheduler
 	sessions  *playback.Sessions
+	sent      *playback.Sent
 	imports   *historyimport.Imports
 	trackers  *tracker.Links
 	signIns   *sso.Service
@@ -126,9 +127,10 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 		n.hub.Raise(ctx, e)
 		n.trackers.Played(e)
 	}, n.id)
+	n.sent = playback.NewSent()
 	// self is this node, doing what an admin sets of it: its role, and how many videos it encodes.
 	n.self, err = nodes.Join(ctx, n.st, n.id, hostname,
-		domain.Encoder{Acceleration: hw.Accel, HEVC: hw.HEVC, Libass: n.tools.Libass}, automatic, n.remuxer, n.sessions, n.logger)
+		domain.Encoder{Acceleration: hw.Accel, HEVC: hw.HEVC, Libass: n.tools.Libass}, automatic, n.remuxer, n.sessions, n.sent, n.logger)
 	if err != nil {
 		return err
 	}
@@ -212,8 +214,8 @@ func (n *node) wire(ctx context.Context) error {
 	n.signIns = sso.New(st, n.cache, n.reach.PublicURL, logger)
 	p := playing{
 		files: files, owners: playback.NewRouter(n.cache, n.id), signer: playback.NewSigner(signingKey), nodeKey: nodeKey,
-		placer: playback.NewPlacer(n.cache, n.self.Node, playback.NewRemuxes(files, n.parts, n.remuxer), n.sessions, nodeKey),
-		sent:   playback.NewSent(), plugins: n.plugins, fetcher: fetcher,
+		placer:  playback.NewPlacer(n.cache, n.self.Node, playback.NewRemuxes(files, n.parts, n.remuxer), n.sessions, nodeKey),
+		plugins: n.plugins, fetcher: fetcher,
 	}
 	n.secured = secure.New(st, n.hub.Subscribe, logger)
 	jellyfinWeb, err := installed("jellyfin-web")
@@ -224,7 +226,7 @@ func (n *node) wire(ctx context.Context) error {
 		Auth: n.auth, Limits: n.cache, Raise: n.hub.Raise, Reach: n.reach, Catalogue: st, Subscribe: n.hub.Subscribe, Audience: st, Displays: st, Preferences: st, Playlists: st,
 		Pictures: n.pictures, Playing: files, Parts: n.parts, Copies: n.copies, Discover: n.discover, Playbacks: n.sessions, Watching: st, Themes: st, Previews: st, PreviewFiles: n.previews,
 		HLS: n.remuxer, Placer: p.placer, Owners: p.owners, Signer: p.signer,
-		Network: st, Sent: p.sent, Web: jellyfinWeb,
+		Network: st, Sent: n.sent, Web: jellyfinWeb,
 	}), n.listen, n.secured.Listen, n.secured.TLSConfig(), logger)
 	if err != nil {
 		return err
@@ -241,7 +243,6 @@ type playing struct {
 	signer  playback.Signer
 	nodeKey nodecall.Key
 	placer  *playback.Placer
-	sent    *playback.Sent
 	plugins *plugin.Plugins
 	fetcher subtitles.Fetcher
 }
@@ -261,8 +262,8 @@ func (n *node) httpServer(p playing) (*http.Server, error) {
 		Addr: n.listen, TLSConfig: n.secured.TLSConfig(),
 		Handler: httpapi.New(n.logger, n.info, httpapi.Services{
 			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Parts: n.parts, Copies: n.copies, Discover: n.discover, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, SignIns: n.signIns, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Postgres: st, Valkey: cache, Web: web,
-			Metrics: metrics(version, n.self, n.remuxer, n.sessions, p.placer, p.sent, n.finished, cluster{lead: n.scheduler, st: st, nodes: cache, self: p.placer}),
-			Sent:    p.sent,
+			Metrics: metrics(version, n.self, n.remuxer, n.sessions, p.placer, n.sent, n.finished, cluster{lead: n.scheduler, st: st, nodes: cache, self: p.placer}),
+			Sent:    n.sent,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
@@ -339,6 +340,7 @@ func (n *node) serve(ctx context.Context) error {
 	wg.Go(func() { sweepPlaybacks(background, n.sessions, n.remuxer, logger) })
 	wg.Go(func() { pruneConversions(background, n.conversions, logger) })
 	wg.Go(func() { n.self.Run(background, n.hub.Subscribe) })
+	wg.Go(func() { n.sent.Measure(background) })
 	wg.Go(func() { advertise(background, n.cache, n.self.Node, n.remuxer.Changes(), n.self.Changes(), logger) })
 	wg.Go(func() {
 		if err := watch.New(n.st, logger).Run(ctx); err != nil {

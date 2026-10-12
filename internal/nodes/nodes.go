@@ -37,6 +37,11 @@ type deliveries interface {
 	SetStreamLimit(limit int)
 }
 
+// egress is how fast this node sends its players media.
+type egress interface {
+	Kbps() int
+}
+
 // Self is this node: what it is, and what an admin sets of it.
 type Self struct {
 	id      uuid.UUID
@@ -47,6 +52,7 @@ type Self struct {
 	settings   settings
 	transcodes transcodes
 	deliveries deliveries
+	egress     egress
 	log        *slog.Logger
 
 	mu  sync.Mutex
@@ -59,14 +65,14 @@ type Self struct {
 
 // Join keeps this node among the server's nodes, as name, and takes up what an admin has set of
 // it.
-func Join(ctx context.Context, s settings, id uuid.UUID, name string, encoder domain.Encoder, automatic int, t transcodes, d deliveries, log *slog.Logger) (*Self, error) {
+func Join(ctx context.Context, s settings, id uuid.UUID, name string, encoder domain.Encoder, automatic int, t transcodes, d deliveries, e egress, log *slog.Logger) (*Self, error) {
 	n, err := s.JoinNode(ctx, id, name)
 	if err != nil {
 		return nil, err
 	}
 	self := &Self{
 		id: id, name: name, encoder: encoder, automatic: automatic,
-		settings: s, transcodes: t, deliveries: d, log: log, changed: make(chan struct{}, 1),
+		settings: s, transcodes: t, deliveries: d, egress: e, log: log, changed: make(chan struct{}, 1),
 	}
 	self.apply(n.NodeSettings)
 	return self, nil
@@ -124,11 +130,11 @@ func (s *Self) Node() domain.Node {
 		set.Availability = domain.NodeDraining
 	}
 	n := domain.Node{
-		ID: s.id, Address: set.Address, Name: s.name, Group: set.Group, PublicURL: set.PublicURL, StreamLimit: set.StreamLimit, Role: set.Role, Availability: set.Availability,
+		ID: s.id, Address: set.Address, Name: s.name, Group: set.Group, PublicURL: set.PublicURL, StreamLimit: set.StreamLimit, EgressLimitMbps: set.EgressLimitMbps, Role: set.Role, Availability: set.Availability,
 		Encoder: s.encoder, LimitSource: set.LimitSource,
 	}
 	n.Transcodes, n.Conversions, n.Limit = s.transcodes.Transcodes()
-	n.Streams = s.deliveries.Delivering()
+	n.Streams, n.EgressKbps = s.deliveries.Delivering(), s.egress.Kbps()
 	return n
 }
 
