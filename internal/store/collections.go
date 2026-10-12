@@ -218,8 +218,13 @@ func (s *Store) AddCollection(ctx context.Context, lib uuid.UUID, title string) 
 	return id, err
 }
 
-// SetMembers replaces an admin's collection's titles with these, in this order. Each must be a
-// film or show of the collection's library.
+// memberKinds are what an admin's collection holds of its library: a film, or a show, a season or
+// an episode, as Jellyfin's box sets and Plex's collections of episodes do; nothing an extra's or
+// a collection.
+const memberKinds = `kind NOT IN ('extra', 'collection')`
+
+// SetMembers replaces an admin's collection's titles with these, in this order. Each must be one
+// of memberKinds of the collection's library.
 func (s *Store) SetMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		lib, err := userCollection(ctx, tx, collection, domain.CollectionUser)
@@ -230,8 +235,7 @@ func (s *Store) SetMembers(ctx context.Context, collection uuid.UUID, items []uu
 			return ErrNotFound
 		}
 		var titles int
-		err = tx.QueryRow(ctx, `
-			SELECT count(*) FROM items WHERE library_id = $1 AND kind IN ('movie', 'show') AND id = ANY($2)`,
+		err = tx.QueryRow(ctx, `SELECT count(*) FROM items WHERE library_id = $1 AND `+memberKinds+` AND id = ANY($2)`,
 			lib, items).Scan(&titles)
 		if err != nil {
 			return err
@@ -248,6 +252,32 @@ func (s *Store) SetMembers(ctx context.Context, collection uuid.UUID, items []uu
 		_, err = tx.Exec(ctx, `
 			INSERT INTO collection_members (collection_id, item_id, position)
 			SELECT $1, id, position - 1 FROM unnest($2::uuid[]) WITH ORDINALITY AS m(id, position)`, collection, items)
+		return err
+	})
+}
+
+// AddMembers puts titles, each one of memberKinds of the collection's library, last in an admin's
+// collection in this order; one already in it stays where it is.
+func (s *Store) AddMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		lib, err := userCollection(ctx, tx, collection, domain.CollectionUser)
+		if err != nil {
+			return err
+		}
+		var titles int
+		err = tx.QueryRow(ctx, `SELECT count(*) FROM items WHERE library_id = $1 AND `+memberKinds+` AND id = ANY($2)`,
+			lib, items).Scan(&titles)
+		if err != nil {
+			return err
+		}
+		if hasRepeats(items) || titles != len(items) {
+			return ErrNotFound
+		}
+		_, err = tx.Exec(ctx, `
+			INSERT INTO collection_members (collection_id, item_id, position)
+			SELECT $1, id, (SELECT coalesce(max(position) + 1, 0) FROM collection_members WHERE collection_id = $1) + n - 1
+			FROM unnest($2::uuid[]) WITH ORDINALITY AS m(id, n)
+			ON CONFLICT DO NOTHING`, collection, items)
 		return err
 	})
 }
