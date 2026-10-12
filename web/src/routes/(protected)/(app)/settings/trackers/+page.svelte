@@ -1,5 +1,6 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
+import { Clock } from "#lib/admin/clock.js";
 import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
@@ -35,18 +36,14 @@ const deadlines = $derived(
 		),
 	),
 );
-let now = $state(Date.now());
+const clock = new Clock();
 $effect(() => {
-	if (!deadlines.size) return;
-	const tick = setInterval(() => {
-		now = Date.now();
-		if ([...deadlines.values()].some((d) => d <= now))
-			invalidate(keys.trackers);
-	}, 1000);
-	return () => clearInterval(tick);
+	if ([...deadlines.values()].some((d) => d <= clock.now))
+		invalidate(keys.trackers);
 });
 
 function left(tracker: Tracker) {
+	const now = clock.now;
 	const s = Math.max(
 		0,
 		Math.round(((deadlines.get(tracker) ?? now) - now) / 1000),

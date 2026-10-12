@@ -12,6 +12,7 @@ import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { fields, textAsTyped } from "#lib/form.js";
+import { pollWhile, progressEvery } from "#lib/poll.svelte.js";
 import { vocabulary } from "#lib/vocabulary.js";
 import { refreshAll } from "$app/navigation";
 
@@ -35,14 +36,12 @@ const profiles = $derived(
 );
 
 // An import under way is read again every few seconds until it ends.
-$effect(() => {
-	if (
-		!data.imports.some((i) => i.status === "queued" || i.status === "running")
-	)
-		return;
-	const timer = setInterval(() => refreshAll(), 2000);
-	return () => clearInterval(timer);
-});
+pollWhile(
+	() =>
+		data.imports.some((i) => i.status === "queued" || i.status === "running"),
+	refreshAll,
+	progressEvery,
+);
 
 function dates(run: components["schemas"]["Import"]) {
 	const started = `Started ${when.format(new Date(run.created_at))}`;
