@@ -26,6 +26,9 @@ type Node struct {
 	// Streams are the playbacks it delivers now, encoded or not, of at most StreamLimit at once;
 	// a StreamLimit of zero is none.
 	Streams, StreamLimit int
+	// EgressKbps is how fast it sends its players media, as last measured, of at most
+	// EgressLimitMbps; an EgressLimitMbps of zero is none.
+	EgressKbps, EgressLimitMbps int
 }
 
 // NodeRole is what a node does for the cluster, as an admin sets it.
@@ -121,6 +124,9 @@ type NodeSettings struct {
 	PublicURL string
 	// StreamLimit is how many playbacks it delivers at once, encoded or not; zero is no limit.
 	StreamLimit int
+	// EgressLimitMbps is how fast it sends its players media, in megabits a second, past which it
+	// is given no more to deliver; zero is no limit.
+	EgressLimitMbps int
 	// Group is the nodes it is among, such as those at one site: a node asked to play what is
 	// encoded asks those of its own group first.
 	Group string

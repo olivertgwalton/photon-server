@@ -2,6 +2,7 @@ package playback
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -87,9 +88,9 @@ func TestANodeAsksItsOwnGroupFirst(t *testing.T) {
 	}
 }
 
-// A playback whose video is not encoded is delivered by a node of this one's group first, of them
-// one set to serve only, then by the node delivering fewest streams, this one before another
-// delivering as many; never by one its clients cannot reach, or one drained.
+// A playback whose video is not encoded is delivered by a node with room for it first, of them one
+// of this one's group, then one set to serve only, then the node delivering fewest streams, this
+// one before another delivering as many; never by one its clients cannot reach, or one drained.
 func TestAPlaybackPlayedAsItIsIsDeliveredNearAndByTheLeastBusy(t *testing.T) {
 	self := domain.Node{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "self", Group: "loft", Streams: 2}
 	nodes := told{
@@ -99,6 +100,8 @@ func TestAPlaybackPlayedAsItIsIsDeliveredNearAndByTheLeastBusy(t *testing.T) {
 		{Role: domain.NodeServe, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "proxy, loft", Address: "http://d", PublicURL: "https://d", Group: "loft", Streams: 9},
 		{Role: domain.NodeServe, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "no public URL", Address: "http://e", Group: "loft"},
 		{Role: domain.NodeServe, Availability: domain.NodeDraining, ID: uuid.NewV7(), Name: "drained", Address: "http://f", PublicURL: "https://f", Group: "loft"},
+		{Role: domain.NodeServe, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "proxy, sending its fill", Address: "http://g", PublicURL: "https://g", Group: "loft", EgressKbps: 1_000_000, EgressLimitMbps: 1000},
+		{Role: domain.NodeServe, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "proxy, full", Address: "http://h", PublicURL: "https://h", Group: "loft", Streams: 3, StreamLimit: 3},
 	}
 	got, err := NewPlacer(nodes, func() domain.Node { return self }, nil, nil, nodecall.Key{}).Deliverers(t.Context())
 	if err != nil {
@@ -108,10 +111,31 @@ func TestAPlaybackPlayedAsItIsIsDeliveredNearAndByTheLeastBusy(t *testing.T) {
 	for _, n := range got {
 		names = append(names, n.Name)
 	}
-	if want := []string{"proxy, loft", "self", "loft, as busy", "loft, busy", "proxy, office"}; !slices.Equal(names, want) {
+	if want := []string{"proxy, loft", "self", "loft, as busy", "loft, busy", "proxy, office", "proxy, sending its fill", "proxy, full"}; !slices.Equal(names, want) {
 		t.Errorf("%v, want %v", names, want)
 	}
 }
+
+// A node sending media as fast as an admin lets it refuses a playback asked of it, for the next
+// node to deliver, until it sends slower.
+func TestANodeSendingAsFastAsItMayRefusesAPlayback(t *testing.T) {
+	self := domain.Node{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), EgressKbps: 500_000, EgressLimitMbps: 500}
+	p := NewPlacer(told{}, func() domain.Node { return self }, nil, everyDelivery{}, nodecall.Key{})
+	if err := p.Open(t.Context(), self, uuid.NewV7(), store.PlayCopy{}, Opening{Method: domain.PlayDirect}); !errors.Is(err, ErrStreamLimit) {
+		t.Errorf("at its limit: %v, want ErrStreamLimit", err)
+	}
+	self.EgressKbps = 499_000
+	if err := p.Open(t.Context(), self, uuid.NewV7(), store.PlayCopy{}, Opening{Method: domain.PlayDirect}); err != nil {
+		t.Errorf("under its limit: %v, want it delivered", err)
+	}
+}
+
+// everyDelivery takes every playback it is given.
+type everyDelivery struct{}
+
+func (everyDelivery) Deliver(uuid.UUID) error { return nil }
+
+func (everyDelivery) Release(uuid.UUID) {}
 
 // Of nodes otherwise equal, the one a remux was opened on is asked after the others next time,
 // so they take turns.

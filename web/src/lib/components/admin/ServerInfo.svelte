@@ -9,7 +9,7 @@ import {
 import type { components } from "#lib/api/schema.js";
 import NodeActions from "#lib/components/admin/NodeActions.svelte";
 import * as Table from "#lib/components/ui/table/index.js";
-import { bytes } from "#lib/format.js";
+import { bitrate, bytes } from "#lib/format.js";
 import { vocabulary } from "#lib/vocabulary.js";
 
 // How the server is set up, read-only but for what each node does, and its nodes.
@@ -158,6 +158,11 @@ const folders = $derived<[string, components["schemas"]["Folder"]][]>([
 					<Table.Cell class="whitespace-normal">
 						{#if up}
 							{transcodeLoad(up.streams, node.stream_limit)}
+							<span class="text-ink-3 block text-xs"
+								>{bitrate(up.egress_kbps)}{node.egress_limit_mbps
+									? ` of ${node.egress_limit_mbps} Mbps`
+									: ""}</span
+							>
 						{:else}
 							<span class="text-ink-3">None</span>
 						{/if}

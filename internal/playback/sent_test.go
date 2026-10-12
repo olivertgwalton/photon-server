@@ -54,6 +54,37 @@ func TestADirectPlayIsCountedAsItIsSent(t *testing.T) {
 	}
 }
 
+// How fast a node sends media is measured from what it sent since it last measured.
+func TestHowFastMediaIsSentIsMeasured(t *testing.T) {
+	sent := NewSent()
+	start := time.Now()
+	sent.at = start
+	srv := httptest.NewServer(sent.Counting(DeliverySegment, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := w.Write(make([]byte, 1_250_000)); err != nil {
+			t.Error(err)
+		}
+	})))
+	defer srv.Close()
+	for range 2 {
+		resp, err := http.Get(srv.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+	sent.measure(start.Add(2 * time.Second))
+	if got := sent.Kbps(); got != 10_000 {
+		t.Errorf("2.5 MB sent in 2 s measured at %d kbit/s, want 10000", got)
+	}
+	sent.measure(start.Add(4 * time.Second))
+	if got := sent.Kbps(); got != 0 {
+		t.Errorf("nothing more sent, measured at %d kbit/s, want 0", got)
+	}
+}
+
 // readerFroms records what a response is handed to send.
 type readerFroms struct {
 	http.ResponseWriter
@@ -72,7 +103,7 @@ func TestAFileIsHandedOnForSendfile(t *testing.T) {
 	f := bigFile(t, size)
 	under := &readerFroms{ResponseWriter: httptest.NewRecorder()}
 	sent := NewSent()
-	c := &counting{ResponseWriter: under, sent: sent.bytes.WithLabelValues(string(DeliveryFile))}
+	c := &counting{ResponseWriter: under, sent: sent.bytes.WithLabelValues(string(DeliveryFile)), total: sent}
 	src := io.LimitReader(f, size).(*io.LimitedReader)
 	n, err := c.ReadFrom(src)
 	if err != nil || n != size || src.N != 0 {

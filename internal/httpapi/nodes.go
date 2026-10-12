@@ -26,7 +26,7 @@ type nodeSettings interface {
 
 // nodeJSON is a node as it tells the others of itself: what it encodes with, and transcodes, of
 // which conversions are downloads', of at most transcode_limit at once, absent when unlimited, and
-// the streams it delivers, encoded or not.
+// the streams it delivers, encoded or not, and how fast it sends media, as last measured.
 type nodeJSON struct {
 	ID           uuid.UUID               `json:"id"`
 	Name         string                  `json:"name,omitzero"`
@@ -39,6 +39,7 @@ type nodeJSON struct {
 	Limit        int                     `json:"transcode_limit,omitzero"`
 	LimitSource  domain.LimitSource      `json:"transcode_limit_source"`
 	Streams      int                     `json:"streams"`
+	EgressKbps   int                     `json:"egress_kbps"`
 }
 
 // nodeEncoderJSON is what a node encodes video with, and whether it draws styled subtitles in.
@@ -53,7 +54,7 @@ func showNode(n domain.Node) nodeJSON {
 		ID: n.ID, Name: n.Name, Availability: n.Availability, Address: n.Address, LastSeen: n.Seen.UTC(),
 		Encoder:    nodeEncoderJSON{n.Encoder.Acceleration, n.Encoder.HEVC, n.Encoder.Libass},
 		Transcodes: n.Transcodes, Conversions: n.Conversions, Limit: n.Limit, LimitSource: n.LimitSource,
-		Streams: n.Streams,
+		Streams: n.Streams, EgressKbps: n.EgressKbps,
 	}
 }
 
@@ -61,7 +62,8 @@ func showNode(n domain.Node) nodeJSON {
 // encodes video, serve never encodes, transcode encodes before any of all; transcode_limit, with
 // transcode_limit_source set, is how many videos it encodes at once, 0 for no limit, and is worked
 // out from its encoder where automatic; stream_limit is how many playbacks it delivers at once,
-// encoded or not, 0 for no limit. availability is whether it takes new work: one draining
+// encoded or not, 0 for no limit, and egress_limit_mbps how fast it sends media before it is given
+// no more, 0 for no limit. availability is whether it takes new work: one draining
 // plays its streams to their end and is given nothing new, note saying why. address is where the
 // other nodes reach it, empty for a node handed no one else's requests. group is the nodes it asks
 // first to encode what its clients play, such as those at its site. public_url is where clients
@@ -78,6 +80,7 @@ type knownNodeJSON struct {
 	LimitSource  domain.LimitSource      `json:"transcode_limit_source"`
 	Limit        int                     `json:"transcode_limit"`
 	StreamLimit  int                     `json:"stream_limit"`
+	EgressLimit  int                     `json:"egress_limit_mbps"`
 	Availability domain.NodeAvailability `json:"availability"`
 	Note         string                  `json:"note,omitzero"`
 	Address      string                  `json:"address"`
@@ -91,7 +94,7 @@ type knownNodeJSON struct {
 // no limit; note, with availability, is why, for other admins, and is cleared on resuming; address,
 // an http or https origin such as http://10.0.0.5:8640, or empty to hand it no one else's requests;
 // group, any name, or empty for none; public_url, an origin as address is, or empty for none;
-// stream_limit, 0 for no limit.
+// stream_limit and egress_limit_mbps, 0 for no limit.
 type nodeChangeJSON struct {
 	Role         domain.NodeRole         `json:"role,omitzero"`
 	LimitSource  domain.LimitSource      `json:"transcode_limit_source,omitzero"`
@@ -102,6 +105,7 @@ type nodeChangeJSON struct {
 	Group        *string                 `json:"group,omitzero"`
 	PublicURL    *string                 `json:"public_url,omitzero"`
 	StreamLimit  *int                    `json:"stream_limit,omitzero"`
+	EgressLimit  *int                    `json:"egress_limit_mbps,omitzero"`
 }
 
 // nodeAddress is s as a node's address, an http or https origin the others put a path after; ok is
@@ -121,7 +125,7 @@ func nodeAddress(s string) (address string, ok bool) {
 func showKnownNode(n domain.NodeRecord, online map[uuid.UUID]domain.Node) knownNodeJSON {
 	out := knownNodeJSON{
 		ID: n.ID, Name: n.Name, FirstSeen: n.FirstSeen.UTC(), LastSeen: n.LastSeen.UTC(), Role: n.Role, LimitSource: n.LimitSource, Limit: n.Limit,
-		StreamLimit: n.StreamLimit, Availability: n.Availability, Note: n.Note, Address: n.Address, Group: n.Group, PublicURL: n.PublicURL,
+		StreamLimit: n.StreamLimit, EgressLimit: n.EgressLimitMbps, Availability: n.Availability, Note: n.Note, Address: n.Address, Group: n.Group, PublicURL: n.PublicURL,
 	}
 	if advert, ok := online[n.ID]; ok {
 		shown := showNode(advert)
@@ -274,6 +278,13 @@ func (a *API) setNode(w http.ResponseWriter, r *http.Request) {
 		}
 		set.StreamLimit = *req.StreamLimit
 	}
+	if req.EgressLimit != nil {
+		if *req.EgressLimit < 0 {
+			writeProblem(w, a.logger, codeInvalidBody, "egress_limit_mbps is megabits a second, 0 for no limit")
+			return
+		}
+		set.EgressLimitMbps = *req.EgressLimit
+	}
 	if req.Group != nil {
 		set.Group = strings.TrimSpace(*req.Group)
 	}
@@ -320,7 +331,7 @@ func (a *API) nodesRoutes() []route {
 		},
 		{
 			pattern: "PATCH /api/v1/admin/nodes/{id}", access: admin,
-			summary: "Change a node's role, its limit on transcodes at once, its limit on streams at once, its address, its public URL or its group; it takes them up at once",
+			summary: "Change a node's role, its limit on transcodes at once, its limits on streams at once and on egress, its address, its public URL or its group; it takes them up at once",
 			body:    nodeChangeJSON{}, status: http.StatusOK, reply: knownNodeJSON{}, handle: a.setNode,
 		},
 		{

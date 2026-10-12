@@ -79,6 +79,11 @@ taken up at once, as it runs:
 - **Streams at once.** How many playbacks a node delivers at once, transcoded or not, or no
   limit, as its uplink carries. Lowering it stops none playing; none is begun until there is room.
 
+- **Egress.** How fast a node sends its players media, in megabits a second, or no limit. Each
+  node measures it every 5 seconds, from what it sent since; at or past its limit, it has no room
+  for another stream, as one delivering as many as it may has none. A stream begun since it last
+  measured is not yet in it, so a node may pass its limit by those.
+
 - **Transcodes at once.** Worked out from the node's encoder, or set: at most a number, or no
   limit. Lowering it stops none playing; none is begun until there is room under it.
 

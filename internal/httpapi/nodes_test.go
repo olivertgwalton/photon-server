@@ -138,6 +138,10 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 	if rec := ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"stream_limit":-1}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("a negative stream limit: %d, want 400", rec.Code)
 	}
+	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"egress_limit_mbps":900}`)
+	if got := nodes[gpu].NodeSettings; got.EgressLimitMbps != 900 || got.StreamLimit != 20 {
+		t.Errorf("egress limited: %+v, want 900 Mbit/s, its stream limit kept", got)
+	}
 	// Its public URL is an origin as its address is.
 	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"public_url":"https://gpu.example.com/"}`)
 	if got := nodes[gpu].PublicURL; got != "https://gpu.example.com" {
