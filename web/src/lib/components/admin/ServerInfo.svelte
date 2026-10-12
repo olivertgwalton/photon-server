@@ -1,7 +1,4 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
-import type { components } from "#lib/api/schema.js";
-import { bytes } from "#lib/format.js";
 import {
 	limitSources,
 	nodeAvailability,
@@ -9,8 +6,11 @@ import {
 	transcodeLoad,
 	when,
 } from "#lib/admin/words.js";
+import type { components } from "#lib/api/schema.js";
 import NodeActions from "#lib/components/admin/NodeActions.svelte";
 import * as Table from "#lib/components/ui/table/index.js";
+import { bytes } from "#lib/format.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 // How the server is set up, read-only but for what each node does, and its nodes.
 let {

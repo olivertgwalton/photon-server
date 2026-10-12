@@ -13,7 +13,7 @@ import TitleRow from "#lib/components/TitleRow.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import { count, titleWithShow, playHref, runtime } from "#lib/format.js";
+import { count, playHref, runtime, titleWithShow } from "#lib/format.js";
 
 let { data } = $props();
 

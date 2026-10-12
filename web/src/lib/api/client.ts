@@ -1,8 +1,8 @@
 import { error, isHttpError, isRedirect, redirect } from "@sveltejs/kit";
 import createClient from "openapi-fetch";
+import { loginPath } from "#lib/session.js";
 import { goto } from "$app/navigation";
 import { navigating } from "$app/state";
-import { loginPath } from "#lib/session.js";
 import { problemMessage } from "./problem.js";
 import type { paths } from "./schema.js";
 

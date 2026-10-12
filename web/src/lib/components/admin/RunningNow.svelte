@@ -1,10 +1,10 @@
 <script lang="ts">
 import { ticking } from "#lib/admin/clock.svelte.js";
-import { vocabulary } from "#lib/vocabulary.js";
 import { jobsProgress, type Live } from "#lib/admin/live.js";
 import { relative } from "#lib/admin/words.js";
 import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
 import { Progress } from "#lib/components/ui/progress/index.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 // What the server is doing now, as the admin stream tells it: scans with their
 // progress, scheduled tasks and when they started, and jobs by kind, each with

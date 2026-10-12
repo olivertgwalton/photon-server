@@ -1,7 +1,7 @@
 <script lang="ts">
 import "../app.css";
-import { onNavigate } from "$app/navigation";
 import { Toaster } from "#lib/components/ui/sonner/index.js";
+import { onNavigate } from "$app/navigation";
 
 let { children } = $props();
 

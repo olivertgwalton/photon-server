@@ -4,11 +4,11 @@ import LogOutIcon from "@lucide/svelte/icons/log-out";
 import MonitorSmartphoneIcon from "@lucide/svelte/icons/monitor-smartphone";
 import SettingsIcon from "@lucide/svelte/icons/settings";
 import UsersIcon from "@lucide/svelte/icons/users";
+import type { components } from "#lib/api/schema.js";
+import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
+import { logOut } from "#lib/logout.js";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
-import type { components } from "#lib/api/schema.js";
-import { logOut } from "#lib/logout.js";
-import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
 import ProfileAvatar from "./ProfileAvatar.svelte";
 
 let { profile }: { profile: components["schemas"]["Profile"] } = $props();

@@ -1,6 +1,5 @@
 <script lang="ts">
 import { untrack } from "svelte";
-import { vocabulary } from "#lib/vocabulary.js";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import {
 	keepFor,
@@ -12,13 +11,14 @@ import {
 import { relative } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import PageHeader from "#lib/components/PageHeader.svelte";
 import JobsTable from "#lib/components/admin/JobsTable.svelte";
 import Sparkline from "#lib/components/admin/Sparkline.svelte";
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Table from "#lib/components/ui/table/index.js";
 import { bitrate, bytes, count } from "#lib/format.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 type Schemas = components["schemas"];
 

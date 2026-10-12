@@ -1,14 +1,14 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
-import type { components } from "#lib/api/schema.js";
 import { offeredSources, serverLocale } from "#lib/admin/library.js";
-import { country, language, localeOptions } from "#lib/format.js";
-import { subtitleLanguages } from "#lib/player/words.js";
+import type { components } from "#lib/api/schema.js";
+import Choice from "#lib/components/Choice.svelte";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { Label } from "#lib/components/ui/label/index.js";
-import Choice from "#lib/components/Choice.svelte";
+import { country, language, localeOptions } from "#lib/format.js";
+import { subtitleLanguages } from "#lib/player/words.js";
+import { vocabulary } from "#lib/vocabulary.js";
 import FolderPicker from "./FolderPicker.svelte";
 import SourceRanker from "./SourceRanker.svelte";
 

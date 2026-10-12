@@ -1,9 +1,9 @@
 <script lang="ts">
 import ActivityIcon from "@lucide/svelte/icons/activity";
-import { byName } from "#lib/admin/words.js";
-import type { components } from "#lib/api/schema.js";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
+import { byName } from "#lib/admin/words.js";
+import type { components } from "#lib/api/schema.js";
 import RunningNow from "#lib/components/admin/RunningNow.svelte";
 import * as Popover from "#lib/components/ui/popover/index.js";
 

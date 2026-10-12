@@ -1,14 +1,14 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import XIcon from "@lucide/svelte/icons/x";
-import { invalidate } from "$app/navigation";
-import { keys } from "#lib/changes.js";
 import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
+import { keys } from "#lib/changes.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
 import { bitrate, bytes } from "#lib/format.js";
+import { vocabulary } from "#lib/vocabulary.js";
+import { invalidate } from "$app/navigation";
 
 let { data } = $props();
 const words = vocabulary();

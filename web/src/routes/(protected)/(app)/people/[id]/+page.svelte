@@ -1,6 +1,6 @@
 <script lang="ts">
-import Artwork from "#lib/components/Artwork.svelte";
 import { blurStyle } from "#lib/blurhash.js";
+import Artwork from "#lib/components/Artwork.svelte";
 import Prose from "#lib/components/Prose.svelte";
 import Rail from "#lib/components/Rail.svelte";
 import { wallSearch } from "#lib/wall.js";

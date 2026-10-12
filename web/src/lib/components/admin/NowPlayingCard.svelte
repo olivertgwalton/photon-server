@@ -1,14 +1,14 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
-import Artwork from "#lib/components/Artwork.svelte";
 import { act } from "#lib/act.js";
 import { confirmFirst } from "#lib/actions.svelte.js";
+import { positionAt } from "#lib/admin/live.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import { bitrate, fullTitle, timecode } from "#lib/format.js";
-import { positionAt } from "#lib/admin/live.js";
+import Artwork from "#lib/components/Artwork.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
+import { bitrate, fullTitle, timecode } from "#lib/format.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 const api = client();
 

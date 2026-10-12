@@ -1,7 +1,5 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
 import { toast } from "svelte-sonner";
-import { refreshAll } from "$app/navigation";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import AvatarPicker from "#lib/components/AvatarPicker.svelte";
@@ -11,6 +9,8 @@ import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { fields } from "#lib/form.js";
+import { vocabulary } from "#lib/vocabulary.js";
+import { refreshAll } from "$app/navigation";
 
 let { data } = $props();
 const words = vocabulary();

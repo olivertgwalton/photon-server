@@ -1,8 +1,8 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
 import Pager from "#lib/components/Pager.svelte";
 import TitleRow from "#lib/components/TitleRow.svelte";
 import { timecode } from "#lib/format.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 let { data } = $props();
 const words = vocabulary();

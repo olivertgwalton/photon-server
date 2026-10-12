@@ -1,20 +1,20 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
-import Artwork from "#lib/components/Artwork.svelte";
-import { withQuery } from "#lib/address.js";
 import CheckIcon from "@lucide/svelte/icons/check";
 import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
 import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 import FilmIcon from "@lucide/svelte/icons/film";
 import TvIcon from "@lucide/svelte/icons/tv";
-import { page } from "$app/state";
+import { withQuery } from "#lib/address.js";
 import type { components } from "#lib/api/schema.js";
 import { blurStyle } from "#lib/blurhash.js";
 import { dayLabel, monthKey, shift, today } from "#lib/calendar.js";
+import Artwork from "#lib/components/Artwork.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import { episodeLabel } from "#lib/format.js";
+import { vocabulary } from "#lib/vocabulary.js";
+import { page } from "$app/state";
 
 type Entry = components["schemas"]["CalendarEntry"];
 

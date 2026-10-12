@@ -1,31 +1,29 @@
 <script lang="ts">
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
-import ScanSearchIcon from "@lucide/svelte/icons/scan-search";
 import BookmarkXIcon from "@lucide/svelte/icons/bookmark-x";
+import CaptionsIcon from "@lucide/svelte/icons/captions";
 import CheckIcon from "@lucide/svelte/icons/check";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
-import LayersIcon from "@lucide/svelte/icons/layers";
 import EyeOffIcon from "@lucide/svelte/icons/eye-off";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import HeartOffIcon from "@lucide/svelte/icons/heart-off";
 import ImageIcon from "@lucide/svelte/icons/image";
+import LayersIcon from "@lucide/svelte/icons/layers";
 import ListPlusIcon from "@lucide/svelte/icons/list-plus";
-import CaptionsIcon from "@lucide/svelte/icons/captions";
 import PencilIcon from "@lucide/svelte/icons/pencil";
 import PlayIcon from "@lucide/svelte/icons/play";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
+import ScanSearchIcon from "@lucide/svelte/icons/scan-search";
 import SearchCheckIcon from "@lucide/svelte/icons/search-check";
 import SearchXIcon from "@lucide/svelte/icons/search-x";
 import SettingsIcon from "@lucide/svelte/icons/settings";
-import SplitIcon from "@lucide/svelte/icons/split";
 import Share2Icon from "@lucide/svelte/icons/share-2";
+import SplitIcon from "@lucide/svelte/icons/split";
 import TrashIcon from "@lucide/svelte/icons/trash";
 import TvIcon from "@lucide/svelte/icons/tv";
 import UndoIcon from "@lucide/svelte/icons/undo-2";
-import { goto } from "$app/navigation";
-import { page } from "$app/state";
 import {
 	analyseTitle,
 	chooseVersion,
@@ -43,8 +41,10 @@ import {
 import { matchable, refreshable } from "#lib/admin/edit.js";
 import type { components } from "#lib/api/schema.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
-import { titleWithShow, playHref } from "#lib/format.js";
+import { playHref, titleWithShow } from "#lib/format.js";
 import { cn } from "#lib/utils.js";
+import { goto } from "$app/navigation";
+import { page } from "$app/state";
 
 type Card = components["schemas"]["Card"];
 

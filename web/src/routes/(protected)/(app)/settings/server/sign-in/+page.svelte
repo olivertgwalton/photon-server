@@ -1,9 +1,9 @@
 <script lang="ts">
-import PageHeader from "#lib/components/PageHeader.svelte";
-import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
-import SignInProviderForm from "#lib/components/admin/SignInProviderForm.svelte";
 import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
+import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
+import SignInProviderForm from "#lib/components/admin/SignInProviderForm.svelte";
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";

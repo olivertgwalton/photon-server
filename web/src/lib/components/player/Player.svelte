@@ -1,5 +1,4 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
 import ArrowLeftIcon from "@lucide/svelte/icons/arrow-left";
 import CaptionsIcon from "@lucide/svelte/icons/captions";
 import CaptionsOffIcon from "@lucide/svelte/icons/captions-off";
@@ -19,19 +18,18 @@ import type Hls from "hls.js";
 import type JASSUB from "jassub";
 import { onMount, untrack } from "svelte";
 import { on } from "svelte/events";
-import { goto } from "$app/navigation";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Menu from "#lib/components/ui/dropdown-menu/index.js";
 import { bitrate, fullTitle, timecode } from "#lib/format.js";
+import { type Preferences, skipping } from "#lib/player/preferences.js";
 import {
 	browserProfile,
 	type Capabilities,
 	probe,
 } from "#lib/player/profile.js";
-import { type Preferences, skipping } from "#lib/player/preferences.js";
 import { ProgressReporter, type Report } from "#lib/player/progress.js";
 import {
 	beside,
@@ -42,6 +40,8 @@ import {
 	webVTT,
 } from "#lib/player/subtitles.js";
 import { qualities, skips } from "#lib/player/words.js";
+import { vocabulary } from "#lib/vocabulary.js";
+import { goto } from "$app/navigation";
 import PlaybackInfo from "./PlaybackInfo.svelte";
 import SeekBar from "./SeekBar.svelte";
 import UpNext from "./UpNext.svelte";

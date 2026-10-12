@@ -2,12 +2,12 @@
 import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
 import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
 import XIcon from "@lucide/svelte/icons/x";
+import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import { act } from "#lib/act.js";
 import { moved } from "#lib/rows.js";
 import { ruleQuery, wallSearch } from "#lib/wall.js";
 

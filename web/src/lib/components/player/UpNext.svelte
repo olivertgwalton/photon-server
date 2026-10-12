@@ -1,9 +1,9 @@
 <script lang="ts">
-import Artwork from "#lib/components/Artwork.svelte";
-import { episodeLabel } from "#lib/format.js";
-import { blurStyle } from "#lib/blurhash.js";
 import type { components } from "#lib/api/schema.js";
+import { blurStyle } from "#lib/blurhash.js";
+import Artwork from "#lib/components/Artwork.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
+import { episodeLabel } from "#lib/format.js";
 
 // The next episode, offered as the credits roll, playing by itself once the
 // count runs out unless the reader says otherwise, or has turned autoplay off.

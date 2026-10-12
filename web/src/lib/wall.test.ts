@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import {
 	cleared,
-	ruleQuery,
-	smartRule,
 	filterCount,
 	letterOffset,
+	ruleQuery,
+	smartRule,
 	toggled,
 	wallQuery,
 	wallSearch,

@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { components } from "#lib/api/schema.js";
-import { thumbnail } from "#lib/player/trickplay.js";
 import { timecode } from "#lib/format.js";
+import { thumbnail } from "#lib/player/trickplay.js";
 
 type Schemas = components["schemas"];
 

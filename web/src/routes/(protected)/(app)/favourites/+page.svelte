@@ -1,7 +1,7 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import { byKind } from "#lib/rows.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 let { data } = $props();
 const words = vocabulary();

@@ -7,8 +7,8 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import { Switch } from "#lib/components/ui/switch/index.js";
 import { Label } from "#lib/components/ui/label/index.js";
+import { Switch } from "#lib/components/ui/switch/index.js";
 
 const api = client();
 

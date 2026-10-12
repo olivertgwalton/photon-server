@@ -1,9 +1,9 @@
 <script lang="ts">
 import { client } from "#lib/api/client.js";
-import { vocabulary } from "#lib/vocabulary.js";
 import type { components } from "#lib/api/schema.js";
 import Wall from "#lib/components/Wall.svelte";
 import { homeRows } from "#lib/rows.js";
+import { vocabulary } from "#lib/vocabulary.js";
 import { wallPageSize } from "#lib/wall.js";
 
 type Kind = components["schemas"]["HomeRowKind"];

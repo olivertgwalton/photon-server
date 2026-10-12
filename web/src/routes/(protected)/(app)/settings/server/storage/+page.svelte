@@ -2,22 +2,22 @@
 import CircleAlertIcon from "@lucide/svelte/icons/circle-alert";
 import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
 import { toast } from "svelte-sonner";
-import { refreshAll } from "$app/navigation";
-import PageHeader from "#lib/components/PageHeader.svelte";
+import { act } from "#lib/act.js";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { relative } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
-import Choice from "#lib/components/Choice.svelte";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
+import Choice from "#lib/components/Choice.svelte";
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
-import { act } from "#lib/act.js";
 import { fields, text } from "#lib/form.js";
+import { refreshAll } from "$app/navigation";
 
 let { data } = $props();
 

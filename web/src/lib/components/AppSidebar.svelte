@@ -1,22 +1,22 @@
 <script lang="ts">
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 import CalendarDaysIcon from "@lucide/svelte/icons/calendar-days";
+import DownloadIcon from "@lucide/svelte/icons/download";
 import FilmIcon from "@lucide/svelte/icons/film";
 import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
-import DownloadIcon from "@lucide/svelte/icons/download";
 import HeartIcon from "@lucide/svelte/icons/heart";
-import RotateCcwClockIcon from "@lucide/svelte/icons/rotate-ccw-clock";
 import HouseIcon from "@lucide/svelte/icons/house";
 import ListVideoIcon from "@lucide/svelte/icons/list-video";
 import PuzzleIcon from "@lucide/svelte/icons/puzzle";
+import RotateCcwClockIcon from "@lucide/svelte/icons/rotate-ccw-clock";
 import SettingsIcon from "@lucide/svelte/icons/settings";
 import TvIcon from "@lucide/svelte/icons/tv";
 import type { Component } from "svelte";
-import { page } from "$app/state";
 import { setLibraryOrder, visitPage } from "#lib/actions.svelte.js";
 import type { components } from "#lib/api/schema.js";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
 import { rowPages } from "#lib/rows.js";
+import { page } from "$app/state";
 import LibraryMenu from "./LibraryMenu.svelte";
 import Mark from "./Mark.svelte";
 

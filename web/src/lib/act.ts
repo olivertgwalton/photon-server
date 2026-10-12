@@ -1,6 +1,6 @@
 import { toast } from "svelte-sonner";
-import { goto, refreshAll } from "$app/navigation";
 import { problemMessage } from "#lib/api/problem.js";
+import { goto, refreshAll } from "$app/navigation";
 
 // A change asked of the API from a page: a refusal says why in a toast, and
 // one that worked redraws the page, or goes `to` another where what it changed

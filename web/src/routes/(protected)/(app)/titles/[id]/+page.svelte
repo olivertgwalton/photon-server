@@ -1,5 +1,4 @@
 <script lang="ts">
-import Artwork from "#lib/components/Artwork.svelte";
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 import CaptionsIcon from "@lucide/svelte/icons/captions";
 import CheckIcon from "@lucide/svelte/icons/check";
@@ -14,40 +13,41 @@ import PlayIcon from "@lucide/svelte/icons/play";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
-import { goto } from "$app/navigation";
 import {
 	findSubtitles,
 	pickPlaylist,
 	refreshMetadata,
 	setMark,
 } from "#lib/actions.svelte.js";
-import { type Extra, extrasOf } from "#lib/extras.js";
-import { blurStyle, isDark } from "#lib/blurhash.js";
-import CardGrid from "#lib/components/CardGrid.svelte";
-import Prose from "#lib/components/Prose.svelte";
-import DownloadDialog from "#lib/components/DownloadDialog.svelte";
-import MediaInfo from "#lib/components/MediaInfo.svelte";
-import ExtraCard from "#lib/components/ExtraCard.svelte";
-import PersonCard from "#lib/components/PersonCard.svelte";
-import PlayChoices from "#lib/components/PlayChoices.svelte";
-import RatingScore from "#lib/components/RatingScore.svelte";
-import Rail from "#lib/components/Rail.svelte";
-import Choice from "#lib/components/Choice.svelte";
 import { refreshable } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
-import { episodesOf } from "#lib/seasons.js";
+import { blurStyle, isDark } from "#lib/blurhash.js";
+import Artwork from "#lib/components/Artwork.svelte";
+import CardGrid from "#lib/components/CardGrid.svelte";
+import Choice from "#lib/components/Choice.svelte";
+import DownloadDialog from "#lib/components/DownloadDialog.svelte";
+import ExtraCard from "#lib/components/ExtraCard.svelte";
+import MediaInfo from "#lib/components/MediaInfo.svelte";
+import PersonCard from "#lib/components/PersonCard.svelte";
+import PlayChoices from "#lib/components/PlayChoices.svelte";
+import Prose from "#lib/components/Prose.svelte";
+import Rail from "#lib/components/Rail.svelte";
+import RatingScore from "#lib/components/RatingScore.svelte";
 import ThemeTune from "#lib/components/ThemeTune.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
+import { type Extra, extrasOf } from "#lib/extras.js";
 import {
 	count,
-	timecode,
 	episodeLabel,
-	titleWithShow,
-	playHref,
 	onDisk,
+	playHref,
 	runtime,
+	timecode,
+	titleWithShow,
 } from "#lib/format.js";
+import { episodesOf } from "#lib/seasons.js";
+import { goto } from "$app/navigation";
 
 let { data } = $props();
 

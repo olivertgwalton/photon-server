@@ -1,13 +1,13 @@
 <script lang="ts">
-import PageHeader from "#lib/components/PageHeader.svelte";
-import { runTask } from "#lib/actions.svelte.js";
 import { act } from "#lib/act.js";
+import { runTask } from "#lib/actions.svelte.js";
 import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
+import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
+import PageHeader from "#lib/components/PageHeader.svelte";
+import { Button } from "#lib/components/ui/button/index.js";
 import { bytes } from "#lib/format.js";
 import { restoring } from "#lib/restoring.svelte.js";
-import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
 
 let { data } = $props();
 

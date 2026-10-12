@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { returnPath, loginPath } from "./session.ts";
+import { loginPath, returnPath } from "./session.ts";
 
 const from = (to: string) =>
 	returnPath(
