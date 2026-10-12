@@ -17,7 +17,8 @@ import (
 
 type told []domain.Node
 
-func (t told) Nodes(context.Context) ([]domain.Node, error) { return t, nil }
+// Nodes are a copy, as Valkey answers each time.
+func (t told) Nodes(context.Context) ([]domain.Node, error) { return slices.Clone(t), nil }
 
 // A transcode is offered first to the node with the most of its slots free, a node with no limit
 // before any, and only to nodes that encode what it needs and that the others can reach.
@@ -102,17 +103,27 @@ func TestAPlaybackPlayedAsItIsIsDeliveredNearAndByTheLeastBusy(t *testing.T) {
 		{Role: domain.NodeServe, Availability: domain.NodeDraining, ID: uuid.NewV7(), Name: "drained", Address: "http://f", PublicURL: "https://f", Group: "loft"},
 		{Role: domain.NodeServe, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "proxy, sending its fill", Address: "http://g", PublicURL: "https://g", Group: "loft", EgressKbps: 1_000_000, EgressLimitMbps: 1000},
 		{Role: domain.NodeServe, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "proxy, full", Address: "http://h", PublicURL: "https://h", Group: "loft", Streams: 3, StreamLimit: 3},
+		{Role: domain.NodeServe, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "proxy, at home", Address: "http://i", LocalURL: "http://192.168.1.9:8640", Group: "office"},
 	}
-	got, err := NewPlacer(nodes, func() domain.Node { return self }, nil, nil, nodecall.Key{}).Deliverers(t.Context())
-	if err != nil {
-		t.Fatal(err)
+	p := NewPlacer(nodes, func() domain.Node { return self }, nil, nil, nodecall.Key{})
+	names := func(network domain.ClientNetwork) []string {
+		t.Helper()
+		got, err := p.Deliverers(t.Context(), network)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, n := range got {
+			out = append(out, n.Name)
+		}
+		return out
 	}
-	var names []string
-	for _, n := range got {
-		names = append(names, n.Name)
+	if got, want := names(domain.NetworkRemote), []string{"proxy, loft", "self", "loft, as busy", "loft, busy", "proxy, office", "proxy, sending its fill", "proxy, full"}; !slices.Equal(got, want) {
+		t.Errorf("to a remote client: %v, want %v", got, want)
 	}
-	if want := []string{"proxy, loft", "self", "loft, as busy", "loft, busy", "proxy, office", "proxy, sending its fill", "proxy, full"}; !slices.Equal(names, want) {
-		t.Errorf("%v, want %v", names, want)
+	// One reached only on the server's local networks delivers to a client on them.
+	if got, want := names(domain.NetworkLocal), []string{"proxy, loft", "self", "loft, as busy", "loft, busy", "proxy, office", "proxy, at home", "proxy, sending its fill", "proxy, full"}; !slices.Equal(got, want) {
+		t.Errorf("to a local client: %v, want %v", got, want)
 	}
 }
 

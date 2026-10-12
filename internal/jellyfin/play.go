@@ -131,12 +131,12 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.DeviceProfile != nil && len(out.MediaSources) > 0 {
-		remote, err := playback.RemoteLimit(r.Context(), a.svc.Network, a.svc.Reach.Client(r))
+		n, err := a.svc.Network.Network(r.Context())
 		if err != nil {
 			a.internal(w, r, err)
 			return
 		}
-		a.decide(r, &out.MediaSources[0], id, session, c, req, remote)
+		a.decide(r, &out.MediaSources[0], id, session, c, req, playback.RemoteLimit(n, a.svc.Reach.Network(r)))
 	}
 	a.writeJSON(w, out)
 }

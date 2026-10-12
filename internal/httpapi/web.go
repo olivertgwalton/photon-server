@@ -26,7 +26,8 @@ type Web struct {
 	scripts string
 	// objectOrigin is where artwork and previews are read from as the page is served, or "".
 	objectOrigin func() string
-	// streamOrigins are the nodes' public URLs, which a playback another node makes is fetched from.
+	// streamOrigins are the nodes' public and local URLs, which a playback another node delivers is
+	// fetched from.
 	streamOrigins func(ctx context.Context) []string
 }
 

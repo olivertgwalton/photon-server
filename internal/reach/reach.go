@@ -35,6 +35,7 @@ type Reach struct {
 
 type state struct {
 	proxies   peer.Proxies
+	local     []netip.Prefix
 	public    *url.URL
 	discovery domain.Discovery
 }
@@ -67,7 +68,7 @@ func (r *Reach) reread(ctx context.Context) {
 }
 
 func (r *Reach) apply(n domain.Network) {
-	s := &state{proxies: n.TrustedProxies, discovery: n.Discovery}
+	s := &state{proxies: n.TrustedProxies, local: n.LocalNetworks, discovery: n.Discovery}
 	if n.PublicURL != "" {
 		u, err := url.Parse(n.PublicURL)
 		if err != nil {
@@ -87,6 +88,15 @@ func (r *Reach) now() *state {
 
 // Client is the client a request came from, as a trusted proxy says.
 func (r *Reach) Client(req *http.Request) netip.Addr { return r.now().proxies.Client(req) }
+
+// Network is which of the server's networks a request's client is on, by its local networks.
+func (r *Reach) Network(req *http.Request) domain.ClientNetwork {
+	s := r.now()
+	if peer.LocalIn(s.local, s.proxies.Client(req)) {
+		return domain.NetworkLocal
+	}
+	return domain.NetworkRemote
+}
 
 // HTTPS is whether a request reached the server over HTTPS, as a trusted proxy says.
 func (r *Reach) HTTPS(req *http.Request) bool { return r.now().proxies.HTTPS(req) }
