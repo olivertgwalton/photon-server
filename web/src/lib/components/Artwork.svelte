@@ -18,8 +18,12 @@ let {
 } = $props();
 </script>
 
+<!-- Another picture put in its place fades in as the first did. -->
 <img
-	{@attach fadeIn}
+	{@attach (img) => {
+		id;
+		return fadeIn(img);
+	}}
 	src={artworkSrc(id, shape)}
 	srcset={artworkSrcset(id, shape)}
 	{alt}

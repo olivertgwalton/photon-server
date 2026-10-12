@@ -1,11 +1,3 @@
-<script lang="ts" module>
-// A card picked from a row of the set the page is one of. The page is drawn
-// afresh for the card's own (the app's layout keys it by path), so the row it
-// was picked from is a new one, and the card is focused again in it, to step
-// on from.
-let picked = false;
-</script>
-
 <script lang="ts" generics="T extends Record<'id', string>">
 import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
 import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
@@ -83,22 +75,23 @@ function measure() {
 }
 const resized = onResize(measure);
 
-// The row scrolled to the page's own card, which takes focus again where it
-// was picked from here.
-const showCurrent: Attachment<HTMLUListElement> = (ul) => {
-	if (!current) return;
-	const here = ul.querySelector<HTMLElement>("[aria-current=page]");
-	const li = here?.closest("li");
-	if (!li) return;
+// Each new set of cards starts at the row's start, or scrolled to the page's
+// own card where it has one.
+const ids = $derived([...shown, ...items].map((c) => c.id).join());
+const start: Attachment<HTMLUListElement> = (ul) => {
+	if (!ids) return;
+	const li = current
+		? ul.querySelector("[aria-current=page]")?.closest("li")
+		: undefined;
 	// Sideways only: scrollIntoView would also scroll the page down to the row.
 	ul.scrollTo({
-		left:
-			li.offsetLeft - Number.parseFloat(getComputedStyle(ul).scrollPaddingLeft),
+		left: li
+			? li.offsetLeft -
+				Number.parseFloat(getComputedStyle(ul).scrollPaddingLeft)
+			: 0,
 		behavior: "instant",
 	});
 	measure();
-	if (picked) here?.focus({ preventScroll: true });
-	picked = false;
 };
 
 // A page at a time, as Plex Web's and Jellyfin's rows go: a little less than
@@ -128,7 +121,6 @@ function hold(event: MouseEvent) {
 	if (!(event.target instanceof Element)) return;
 	const link = event.target.closest<HTMLElement>("a, button");
 	link?.focus({ preventScroll: true });
-	if (current && link instanceof HTMLAnchorElement) picked = true;
 }
 
 const sizes = $derived(
@@ -201,7 +193,7 @@ const sizes = $derived(
 			data-sveltekit-reset={current ? "false" : undefined}
 			bind:this={list}
 			{@attach resized}
-			{@attach showCurrent}
+			{@attach start}
 			onscroll={measure}
 			{@attach (ul) => listen(ul, "keydown", step)}
 			{@attach (ul) => listen(ul, "click", hold)}

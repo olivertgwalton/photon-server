@@ -1692,7 +1692,12 @@ const server_ = Bun.serve({
 					],
 				});
 			case "GET titles/similar":
-				return Response.json({ items: films.slice(1, 26).map(card) });
+				return Response.json({
+					items: films
+						.filter((f) => f.id !== id)
+						.slice(0, 25)
+						.map(card),
+				});
 			case "GET titles/next":
 				// The show and its first season are at their first episode; the
 				// second season is not started.

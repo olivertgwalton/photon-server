@@ -12,9 +12,21 @@ let { themes }: { themes: string[] } = $props();
 const volume = 0.3;
 const fadeMS = 2000;
 
-let index = $state(0);
-let stopped = $state(false);
-let playing = $state(false);
+// Another title's tunes start again from the first; another page of the same
+// one's goes on.
+const set = $derived(themes.join());
+let index = $derived.by(() => {
+	set;
+	return 0;
+});
+let stopped = $derived.by(() => {
+	set;
+	return false;
+});
+let playing = $derived.by(() => {
+	set;
+	return false;
+});
 
 // Each tune in turn, played from silence. A browser that refuses to play
 // before the reader has touched the page leaves the page silent, as it should.

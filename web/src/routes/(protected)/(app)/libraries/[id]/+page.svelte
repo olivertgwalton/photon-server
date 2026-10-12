@@ -53,7 +53,10 @@ const rule = $derived(
 		? smartRule(data.query)
 		: undefined,
 );
-let saving = $state(false);
+let saving = $derived.by(() => {
+	id;
+	return false;
+});
 
 // The filters live in the address: a narrowed wall can be shared, and Back
 // leaves the library rather than undoing a filter.

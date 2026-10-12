@@ -353,6 +353,72 @@ test("picking another episode of the season keeps the page where it was", async 
 	expect(await page.evaluate(() => window.scrollY)).toBe(before);
 });
 
+test("another title's page starts its rows at their start", async ({
+	page,
+}) => {
+	await logIn(page, "/titles/t-film");
+	const similar = page
+		.getByRole("region", { name: /More like this/ })
+		.getByRole("list");
+	await expect(similar.getByRole("listitem")).toHaveCount(20);
+	await similar.evaluate((row) =>
+		row.scrollTo({ left: row.scrollWidth, behavior: "instant" }),
+	);
+	expect(await similar.evaluate((row) => row.scrollLeft)).toBeGreaterThan(0);
+	// From the keyboard: a click could land on the card beside it as the row
+	// settles.
+	const last = similar.getByRole("listitem").last().getByRole("link").first();
+	const href = await last.getAttribute("href");
+	await last.focus();
+	await page.keyboard.press("Enter");
+	await expect(page).toHaveURL(href ?? "");
+	await expect(
+		similar.getByRole("link", { name: /Quiet Hours/ }),
+	).toBeVisible();
+	expect(await similar.evaluate((row) => row.scrollLeft)).toBe(0);
+});
+
+test("going back to another episode leaves the season and dialog picked on this one", async ({
+	page,
+}) => {
+	await logIn(page, "/titles/t-ep");
+	await page.getByRole("link", { name: /Second/ }).click();
+	await expect(page).toHaveURL("/titles/t-ep2");
+	await page
+		.getByRole("region", { name: /Season 1/ })
+		.getByRole("button", { name: "Season 1" })
+		.click();
+	await page.getByRole("option", { name: "Season 2" }).click();
+	await expect(page.getByRole("region", { name: /Season 2/ })).toBeVisible();
+	await page.getByRole("button", { name: "More", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Media info" }).click();
+	await expect(page.getByRole("dialog", { name: "Media info" })).toBeVisible();
+	await page.goBack();
+	await expect(page).toHaveURL("/titles/t-ep");
+	await expect(page.getByRole("dialog")).toHaveCount(0);
+	await expect(
+		page.getByRole("region", { name: /Season 1/ }).getByRole("link", {
+			name: /Pilot/,
+		}),
+	).toHaveAttribute("aria-current", "page");
+});
+
+test("a show's theme goes on from one of its episodes to the next", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/playback");
+	await page.getByRole("switch", { name: "Play theme music" }).click();
+	await expect(page.getByText("Saved for every device.")).toBeVisible();
+	await page.goto("/titles/t-ep");
+	const tune = await page.locator("audio[data-theme-tune]").elementHandle();
+	await page.getByRole("link", { name: /Second/ }).click();
+	await expect(page.getByRole("link", { name: /Second/ })).toHaveAttribute(
+		"aria-current",
+		"page",
+	);
+	expect(await tune?.evaluate((audio) => audio.isConnected)).toBe(true);
+});
+
 test("a picture stands in as its blur until it arrives", async ({ page }) => {
 	let arrive = () => {};
 	const held = new Promise<void>((resolve) => {
