@@ -724,10 +724,12 @@ func alone(local interface {
 }
 
 // noNodes is a cluster of one: no other node tells of itself.
-// noDirect delivers what is played as it is without counting it.
+// noDirect delivers every playback without counting it.
 type noDirect struct{}
 
-func (noDirect) Deliver(uuid.UUID) {}
+func (noDirect) Deliver(uuid.UUID) error { return nil }
+
+func (noDirect) Release(uuid.UUID) {}
 
 type noNodes struct{}
 

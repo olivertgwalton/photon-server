@@ -207,6 +207,11 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 		w.Header().Set("Retry-After", "30")
 		a.refuse(w, http.StatusServiceUnavailable)
 		return true
+	case errors.Is(err, playback.ErrStreamLimit):
+		a.logger.InfoContext(r.Context(), "jellyfin stream refused", slog.Any("err", err))
+		w.Header().Set("Retry-After", "30")
+		a.refuse(w, http.StatusServiceUnavailable)
+		return true
 	}
 	a.internal(w, r, err)
 	return true

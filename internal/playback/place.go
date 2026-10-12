@@ -36,9 +36,10 @@ type Start struct {
 }
 
 // Place starts s on the first of nodes to take it, asking each in turn how decide plays it with
-// what that node encodes; one that encodes nothing is delivered by the first of deliverers, this
-// node where they are none. A node with every slot held refuses it, and the next is asked; one that
-// would be encoded where nodes are none, or that every node refused, is hls.ErrTranscodeLimit. A
+// what that node encodes; one that encodes nothing is delivered by the first of deliverers to take
+// it, this node where they are none. A node with every slot held, or delivering as many streams as
+// it may, refuses it, and the next is asked; one that would be encoded where nodes are none, or
+// that every node refused, is hls.ErrTranscodeLimit or ErrStreamLimit, as the last refused it. A
 // playback started already under s.ID is ErrStarted.
 func Place(ctx context.Context, p placing, sessions starting, nodes, deliverers []domain.Node, s Start, decide func(Encoding) (Decision, error)) (Decision, domain.Playback, error) {
 	asked := nodes
@@ -53,20 +54,30 @@ func Place(ctx context.Context, p placing, sessions starting, nodes, deliverers 
 			return d, started, err
 		}
 		if d.Video == nil || d.Video.Encode == nil {
-			if len(deliverers) > 0 {
-				node = deliverers[0]
-			} else {
-				node = p.Self()
+			if len(deliverers) == 0 {
+				deliverers = []domain.Node{p.Self()}
 			}
-		} else if len(nodes) == 0 {
+			for _, node := range deliverers {
+				if started, err = start(ctx, p, sessions, node, s, d); !errors.Is(err, ErrStreamLimit) {
+					break
+				}
+			}
+			return d, started, err
+		}
+		if len(nodes) == 0 {
 			return d, started, hls.ErrTranscodeLimit
 		}
 		started, err = start(ctx, p, sessions, node, s, d)
-		if !errors.Is(err, hls.ErrTranscodeLimit) {
+		if !refused(err) {
 			break
 		}
 	}
 	return d, started, err
+}
+
+// refused is a node's refusal of a playback for want of room, for the next to be asked.
+func refused(err error) bool {
+	return errors.Is(err, hls.ErrTranscodeLimit) || errors.Is(err, ErrStreamLimit)
 }
 
 // start starts s on node, and opens it there; one the node refuses is abandoned.

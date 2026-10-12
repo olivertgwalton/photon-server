@@ -68,6 +68,8 @@ func (s *slots) Transcodes() (int, int, int) {
 
 func (s *slots) Delivering() int { return 0 }
 
+func (s *slots) SetStreamLimit(int) {}
+
 func (s *slots) SetLimit(limit int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

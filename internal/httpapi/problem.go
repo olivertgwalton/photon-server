@@ -42,6 +42,9 @@ const (
 	codeForbidden          problemCode = "forbidden"
 	codeConflict           problemCode = "conflict"
 	codeTranscodeLimit     problemCode = "transcode_limit"
+	// codeStreamLimit is every node that could deliver a playback delivering as many at once as
+	// an admin lets it.
+	codeStreamLimit problemCode = "stream_limit"
 	// codeProviderUnavailable is a metadata provider, a plugin, that could not be reached or
 	// failed on its side.
 	codeProviderUnavailable problemCode = "provider_unavailable"
@@ -57,7 +60,7 @@ func problemCodes() []problemCode {
 		codeNotFound, codeMethodNotAllowed, codeUnknownParameter, codeInvalidParameter, codeNotReady,
 		codeInvalidBody, codeUnauthenticated, codeSignInRefused, codeInternal, codePairingNotFound,
 		codeWrongSecret, codeRateLimited, codeNoCompatibleStream, codeForbidden, codeConflict,
-		codeTranscodeLimit, codeProviderUnavailable, codeAuthorizationPending, codeSlowDown, codeExpiredToken,
+		codeTranscodeLimit, codeStreamLimit, codeProviderUnavailable, codeAuthorizationPending, codeSlowDown, codeExpiredToken,
 	}
 }
 
@@ -69,7 +72,7 @@ func (c problemCode) status() int {
 		return http.StatusMethodNotAllowed
 	case codeUnknownParameter, codeInvalidParameter:
 		return http.StatusBadRequest
-	case codeNotReady, codeTranscodeLimit:
+	case codeNotReady, codeTranscodeLimit, codeStreamLimit:
 		return http.StatusServiceUnavailable
 	case codeInvalidBody:
 		return http.StatusBadRequest
