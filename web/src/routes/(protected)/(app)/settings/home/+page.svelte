@@ -24,36 +24,45 @@ let home = $derived(data.prefs.home);
 // Said to a screen reader as a row moves, since the list redraws under focus.
 let said = $state("");
 
-async function save(next: Section[], message: string) {
-	const before = home;
+// The order last kept by the server, to go back to where a save fails.
+let kept = $derived(data.prefs.home);
+// Each save is sent once the one before is answered, so the server keeps the
+// last order drawn; only the answer to that last one is drawn.
+let sending = Promise.resolve();
+
+function save(next: Section[], message: string) {
 	home = next;
-	const { data: saved, error } = await client().PATCH(
-		"/api/v1/profile/preferences",
-		{
-			body: { home: next.map(({ row, visibility }) => ({ row, visibility })) },
-		},
-	);
-	if (error) {
-		home = before;
-		toast.error(problemMessage(error));
-		return;
-	}
-	home = saved.home;
-	said = message;
+	const send = async () => {
+		const { data: saved, error } = await client().PATCH(
+			"/api/v1/profile/preferences",
+			{
+				body: {
+					home: next.map(({ row, visibility }) => ({ row, visibility })),
+				},
+			},
+		);
+		if (saved) kept = saved.home;
+		if (home !== next) return;
+		if (error) {
+			home = kept;
+			toast.error(problemMessage(error));
+			return;
+		}
+		home = saved.home;
+		said = message;
+	};
+	sending = sending.then(send, send);
 }
 
 function move(from: number, to: number) {
 	if (to < 0 || to >= home.length || to === from) return;
 	const name = words.rows[home[from].row];
-	void save(
-		moved(home, from, to),
-		`${name} moved to ${to + 1} of ${home.length}.`,
-	);
+	save(moved(home, from, to), `${name} moved to ${to + 1} of ${home.length}.`);
 }
 
 function show(i: number, shown: boolean) {
 	const name = words.rows[home[i].row];
-	void save(
+	save(
 		home.with(i, { ...home[i], visibility: shown ? "shown" : "hidden" }),
 		`${name} ${shown ? "shown" : "hidden"}.`,
 	);

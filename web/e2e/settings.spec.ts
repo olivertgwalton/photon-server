@@ -251,6 +251,43 @@ test("the home's rows are put in order and hidden, by pointer or keyboard", asyn
 	).toHaveCount(0);
 });
 
+test("a home row stays where the last of quick moves put it", async ({
+	page,
+}) => {
+	// The first move's save is answered last.
+	let answer = () => {};
+	const answered = new Promise<void>((done) => {
+		answer = done;
+	});
+	let first = true;
+	await page.route("**/api/v1/profile/preferences", async (route) => {
+		if (route.request().method() === "PATCH" && first) {
+			first = false;
+			await answered;
+		}
+		await route.continue();
+	});
+	await logIn(page, "/settings/home");
+	const rows = page
+		.getByRole("list", { name: "Home rows" })
+		.getByRole("listitem");
+	await page
+		.getByRole("button", { name: "Move Recently Added Films up" })
+		.focus();
+	for (let i = 0; i < 4; i++) await page.keyboard.press("Enter");
+	answer();
+	await expect(
+		page.getByText("Recently Added Films moved to 1 of 8."),
+	).toBeAttached();
+	await expect(rows.first()).toHaveText("Recently Added Films");
+	await expect(
+		page.getByRole("button", { name: "Move Recently Added Films down" }),
+	).toBeFocused();
+
+	await page.reload();
+	await expect(rows.first()).toHaveText("Recently Added Films");
+});
+
 test("the home's rows follow another device's order, after one is saved here", async ({
 	page,
 }) => {
