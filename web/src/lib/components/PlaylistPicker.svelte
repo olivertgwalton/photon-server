@@ -26,9 +26,8 @@ async function create(event: SubmitEvent) {
 			<Dialog.Description>{picker.title}</Dialog.Description>
 		</Dialog.Header>
 		<!-- Asked each time it opens, so a list made elsewhere is there. -->
-		{#await client().GET("/api/v1/playlists")}
-			<p class="text-ink-3">Loading playlists…</p>
-		{:then { data, error }}
+		<svelte:boundary>
+			{@const { data, error } = await client().GET("/api/v1/playlists")}
 			{#if !data}
 				<p role="alert" class="text-destructive">{problemMessage(error)}</p>
 			{:else if data.items.length}
@@ -48,7 +47,10 @@ async function create(event: SubmitEvent) {
 					{/each}
 				</ul>
 			{/if}
-		{/await}
+			{#snippet pending()}
+				<p class="text-ink-3">Loading playlists…</p>
+			{/snippet}
+		</svelte:boundary>
 		<form onsubmit={create}>
 			<Field.Field orientation="horizontal">
 				<Field.Label for="new-playlist" class="sr-only">
