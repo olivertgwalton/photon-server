@@ -68,6 +68,8 @@
 
 @theme {
 	--ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+	/* A card lifted under the pointer. */
+	--shadow-lift: 0 1rem 2rem -0.75rem oklch(0 0 0 / 80%);
 }
 
 @theme inline {
@@ -127,8 +129,7 @@
 	}
 
 	html {
-		@apply font-sans;
-		color-scheme: dark;
+		@apply font-sans scheme-dark;
 		-webkit-tap-highlight-color: transparent;
 	}
 
@@ -199,7 +200,7 @@
 	   pointer, its picture easing closer, and gives a little when pressed. The
 	   picture comes into focus out of the frame's blur as `fadeIn` lets it. */
 	.card-frame {
-		@apply bg-raise group-hover:ring-line-strong group-focus-visible:ring-signal relative overflow-hidden rounded-xl ring-2 ring-transparent transition-[translate,box-shadow] duration-300 ease-out-expo group-hover:-translate-y-1 group-hover:shadow-[0_1rem_2rem_-0.75rem_oklch(0_0_0/80%)] group-active:translate-y-0 group-active:scale-[0.98];
+		@apply bg-raise group-hover:ring-line-strong group-focus-visible:ring-signal relative overflow-hidden rounded-xl ring-2 ring-transparent transition-[translate,box-shadow] duration-300 ease-out-expo group-hover:-translate-y-1 group-hover:shadow-lift group-active:translate-y-0 group-active:scale-98;
 	}
 
 	.card-picture {
