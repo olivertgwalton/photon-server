@@ -150,12 +150,6 @@ const marker = $derived(
 const credits = $derived(version?.markers?.find((m) => m.kind === "credits"));
 // A marker skipped by itself is skipped once: seeking back into it plays it.
 const skippedAt = new Set<number>();
-$effect(() => {
-	if (!marker || skipping(marker.kind, prefs) !== "skip") return;
-	if (skippedAt.has(marker.start_ms)) return;
-	skippedAt.add(marker.start_ms);
-	untrack(() => skip(marker));
-});
 const upNext = $derived(
 	next &&
 		!upNextHidden &&
@@ -580,7 +574,12 @@ onMount(() => {
 			pendingSeek = undefined;
 		}}
 		ontimeupdate={() => {
-			if (video && pendingSeek === undefined) time = video.currentTime;
+			if (!video || pendingSeek !== undefined) return;
+			time = video.currentTime;
+			if (!marker || skipping(marker.kind, prefs) !== "skip") return;
+			if (skippedAt.has(marker.start_ms)) return;
+			skippedAt.add(marker.start_ms);
+			skip(marker);
 		}}
 		onplay={wake}
 		onplaying={() => reporter?.playing()}
