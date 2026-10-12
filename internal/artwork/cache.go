@@ -61,20 +61,23 @@ func New(blobs objects, hashed func(ctx context.Context, id uuid.UUID, blurhash 
 	}
 }
 
-// File answers the picture with id, fetching it from url the first time it is asked for. Callers
-// asking together share one fetch, which carries on if the first of them goes away.
+// File answers the picture with id, fetching it from url the first time it is asked for.
 func (c *Cache) File(ctx context.Context, id uuid.UUID, url string) (blob.Object, error) {
+	return c.once(ctx, id, func(ctx context.Context) error { return c.fetch(ctx, id, url) })
+}
+
+// once answers the object kept under id, made by build the first time it is asked for. Callers
+// asking together share one making, which carries on if the first of them goes away.
+func (c *Cache) once(ctx context.Context, id uuid.UUID, build func(context.Context) error) (blob.Object, error) {
 	name := id.String()
 	if o, err := c.blobs.Open(ctx, name); !errors.Is(err, fs.ErrNotExist) {
 		return o, err
 	}
-	fetched := c.group.DoChan(name, func() (any, error) {
-		return nil, c.fetch(context.WithoutCancel(ctx), id, url)
-	})
+	made := c.group.DoChan(name, func() (any, error) { return nil, build(context.WithoutCancel(ctx)) })
 	select {
 	case <-ctx.Done():
 		return blob.Object{}, ctx.Err()
-	case r := <-fetched:
+	case r := <-made:
 		if r.Err != nil {
 			return blob.Object{}, r.Err
 		}
