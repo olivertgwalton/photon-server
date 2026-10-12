@@ -247,7 +247,7 @@ type playing struct {
 
 // httpServer is the server of photon's own API and web app.
 func (n *node) httpServer(p playing) (*http.Server, error) {
-	web, err := webApp(n.stores.Origin)
+	web, err := webApp(n.stores.Origin, n.cache, n.logger)
 	if err != nil {
 		return nil, err
 	}

@@ -52,6 +52,11 @@ server is transcoding as many videos at once as it may, and how many that is acr
 
 A playback that copies its video, or is played as it is, is made by the node asked.
 
+A playback made by a node with a public URL, for a client that asked another, is fetched from
+that URL: the client is answered its playlist there, not through the node it asked, and the web
+app's pages may fetch streams from every node's public URL a node tells the others of as the page
+loads. Jellyfin's apps ask for a stream before it is placed, so theirs are always handed on.
+
 Nodes ask each other at `POST /api/v1/internal/playbacks/{id}/remux`, signed with a key derived
 from the cluster's own, which no client is ever given: a request no node signed, or changed on
 its way, is refused. The route is no client's, and in no description of the API.
@@ -67,6 +72,10 @@ taken up at once, as it runs:
   it has a slot free, and serves clients too: the GPU node.
 - **Transcodes at once.** Worked out from the node's encoder, or set: at most a number, or no
   limit. Lowering it stops none playing; none is begun until there is room under it.
+
+- **Public URL.** Where clients reach a node themselves, such as `https://gpu.example.com`, or
+  none. A stream it transcodes for another node's client is fetched from there; without one, its
+  streams go through the node the client asked.
 
 - **Group.** Any name, such as the site a node runs at, or none. A node asks those of its own
   group to transcode first, where one has a slot free, so a stream need not cross between sites;

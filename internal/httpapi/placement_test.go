@@ -62,13 +62,15 @@ type peerNode struct {
 	remuxer *hls.Remuxer
 	placer  *playback.Placer
 	srv     *httptest.Server
+	// public is where clients reach it themselves, set before it is asked anything.
+	public string
 	// started counts the playback.started events this node raised.
 	started atomic.Int32
 }
 
 func (n *peerNode) self() domain.Node {
 	d := domain.Node{
-		ID: n.id, Address: n.srv.URL, Name: n.srv.URL, Role: n.role.Load().(domain.NodeRole), Availability: domain.NodeActive,
+		ID: n.id, Address: n.srv.URL, Name: n.srv.URL, PublicURL: n.public, Role: n.role.Load().(domain.NodeRole), Availability: domain.NodeActive,
 		Encoder: domain.Encoder{Acceleration: domain.AccelSoftware, HEVC: domain.HEVCDeny},
 	}
 	d.Transcodes, d.Conversions, d.Limit = n.remuxer.Transcodes()
@@ -178,6 +180,34 @@ func TestATranscodeIsMadeWhereASlotIsFree(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "application/vnd.apple.mpegurl" {
 		t.Errorf("its playlist through the front: %s %s, want it from the GPU node", resp.Status, resp.Header.Get("Content-Type"))
+	}
+}
+
+// A transcode made by a node with a public URL is fetched from there, not handed on through the
+// node the client asked, by a web app served from any origin; one the node asked makes itself is
+// fetched from where the client reached it.
+func TestATranscodeElsewhereIsFetchedFromThatNodesPublicURL(t *testing.T) {
+	c := newSharedValkey()
+	front, gpu := join(t, c, 2), join(t, c, 1)
+	front.public, gpu.public = "https://front.example.com", gpu.srv.URL
+	front.encode(t)
+	c.tell(front.self())
+	c.tell(gpu.self())
+	_, playlist := transcodeOn(t, front)
+	if !strings.HasPrefix(playlist, gpu.srv.URL+"/api/v1/hls/") {
+		t.Fatalf("made on the GPU node, its playlist is at %s, want it at the GPU node's public URL", playlist)
+	}
+	c.tell(gpu.self())
+	if _, own := transcodeOn(t, front); !strings.HasPrefix(own, "/api/v1/hls/") {
+		t.Errorf("made on the front itself, its playlist is at %s, want an address relative to it", own)
+	}
+	resp, err := http.Get(playlist)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Access-Control-Allow-Origin") != "*" {
+		t.Errorf("its playlist from the GPU node: %s, Access-Control-Allow-Origin %q; want it, to any page", resp.Status, resp.Header.Get("Access-Control-Allow-Origin"))
 	}
 }
 

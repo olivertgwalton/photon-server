@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"uuid"
 
@@ -82,13 +83,25 @@ func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *
 
 // webApp is the web app's build, served wherever there is one; nil where there is none, and the
 // server answers the API alone. Its pages may draw from where objectOrigin says clients read
-// artwork and previews.
-func webApp(objectOrigin func() string) (*httpapi.Web, error) {
+// artwork and previews, and play streams from the nodes' public URLs, as each tells the others.
+func webApp(objectOrigin func() string, cache *kv.KV, logger *slog.Logger) (*httpapi.Web, error) {
 	build, err := installed("web")
 	if build == nil || err != nil {
 		return nil, err
 	}
-	return httpapi.NewWeb(build, objectOrigin)
+	return httpapi.NewWeb(build, objectOrigin, func(ctx context.Context) []string {
+		nodes, err := cache.Nodes(ctx)
+		if err != nil {
+			logger.WarnContext(ctx, "the nodes' public URLs not read for the web app's policy", slog.Any("err", err))
+		}
+		var origins []string
+		for _, n := range nodes {
+			if n.PublicURL != "" && !slices.Contains(origins, n.PublicURL) {
+				origins = append(origins, n.PublicURL)
+			}
+		}
+		return origins
+	})
 }
 
 // installed is the web app named in share/photon-server beside the binary, as an install lays it

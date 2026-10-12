@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
@@ -25,14 +26,17 @@ type Web struct {
 	scripts string
 	// objectOrigin is where artwork and previews are read from as the page is served, or "".
 	objectOrigin func() string
+	// streamOrigins are the nodes' public URLs, which a playback another node makes is fetched from.
+	streamOrigins func(ctx context.Context) []string
 }
 
 // inlineScript is the script SvelteKit writes into index.html to start the app.
 var inlineScript = regexp.MustCompile(`(?s)<script>(.*?)</script>`)
 
 // NewWeb reads the build in files, which must hold its index.html. Its pages may show pictures and
-// play sounds from where objectOrigin says clients read artwork and previews as each is served.
-func NewWeb(files fs.FS, objectOrigin func() string) (*Web, error) {
+// play sounds from where objectOrigin says clients read artwork and previews as each is served,
+// and play streams from the origins streamOrigins says.
+func NewWeb(files fs.FS, objectOrigin func() string, streamOrigins func(ctx context.Context) []string) (*Web, error) {
 	index, err := fs.ReadFile(files, "index.html")
 	if err != nil {
 		return nil, fmt.Errorf("the web app's build: %w", err)
@@ -46,20 +50,24 @@ func NewWeb(files fs.FS, objectOrigin func() string) (*Web, error) {
 		sum := sha256.Sum256(m[1])
 		scripts = append(scripts, "'sha256-"+base64.StdEncoding.EncodeToString(sum[:])+"'")
 	}
-	return &Web{files: files, index: index, scripts: strings.Join(scripts, " "), objectOrigin: objectOrigin}, nil
+	return &Web{files: files, index: index, scripts: strings.Join(scripts, " "), objectOrigin: objectOrigin, streamOrigins: streamOrigins}, nil
 }
 
 // csp is the page's policy. A browser holds a redirect's end to it too, so artwork and previews
-// sent to their bucket are drawn only while its origin is allowed.
-func (web *Web) csp() string {
-	images, media := "img-src 'self' data: "+candidatePosters, "media-src 'self' blob:"
+// sent to their bucket are drawn only while its origin is allowed. A stream is fetched from a
+// node's public URL by hls.js, and played from it where the browser plays HLS itself.
+func (web *Web) csp(ctx context.Context) string {
+	images, media, connect := "img-src 'self' data: "+candidatePosters, "media-src 'self' blob:", "connect-src 'self'"
 	if o := web.objectOrigin(); o != "" {
 		images, media = images+" "+o, media+" "+o
+	}
+	for _, o := range web.streamOrigins(ctx) {
+		media, connect = media+" "+o, connect+" "+o
 	}
 	return strings.Join([]string{
 		"default-src 'self'", "script-src " + web.scripts, "worker-src 'self' blob:",
 		"style-src 'self' 'unsafe-inline'", images, media,
-		"font-src 'self' data:", "connect-src 'self'", "object-src 'none'", "base-uri 'self'",
+		"font-src 'self' data:", connect, "object-src 'none'", "base-uri 'self'",
 		"form-action 'self'", "frame-ancestors 'none'",
 	}, "; ")
 }
@@ -104,7 +112,7 @@ func (web *Web) servePage(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	// A new build names new files, so the page that names them is always asked for again.
 	h.Set("Cache-Control", "no-cache")
-	h.Set("Content-Security-Policy", web.csp())
+	h.Set("Content-Security-Policy", web.csp(r.Context()))
 	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(web.index))
 }
 

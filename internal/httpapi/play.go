@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 	"uuid"
@@ -140,7 +141,8 @@ type playJSON struct {
 }
 
 // playbackJSON is a playback opened: its parts played as they are, or its playlist, and the
-// subtitles the client draws beside them, at addresses relative to the server.
+// subtitles the client draws beside them, at addresses relative to the server; the playlist of
+// one another node makes, at that node's public URL where it has one.
 type playbackJSON struct {
 	PlaybackID uuid.UUID                `json:"playback_id"`
 	Method     domain.PlayMethod        `json:"method"`
@@ -223,7 +225,20 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, a.opened(*req.Profile, c, d, session))
+	writeJSON(w, a.logger, "application/json", http.StatusOK, a.opened(*req.Profile, c, d, session, streamOrigin(a.svc.Placer.Self().ID, candidates, session)))
+}
+
+// streamOrigin is where the client fetches a playback's HLS from: the public URL of the node making
+// it, where that is another node with one, so its stream is not handed on through this one; empty
+// for this server, as the client reached it.
+func streamOrigin(self uuid.UUID, candidates []domain.Node, p domain.Playback) string {
+	if p.Node == self {
+		return ""
+	}
+	if i := slices.IndexFunc(candidates, func(n domain.Node) bool { return n.ID == p.Node }); i >= 0 {
+		return candidates[i].PublicURL
+	}
+	return ""
 }
 
 // playRequest is a play's body, checked, with the parts and segments the client left out filled
@@ -254,8 +269,9 @@ func (a *API) playRequest(w http.ResponseWriter, r *http.Request) (playJSON, boo
 	return req, true
 }
 
-// opened is what the client is told of a playback of c, played as d decided.
-func (a *API) opened(p playback.Profile, c store.PlayCopy, d playback.Decision, session domain.Playback) playbackJSON {
+// opened is what the client is told of a playback of c, played as d decided, its playlist fetched
+// from origin.
+func (a *API) opened(p playback.Profile, c store.PlayCopy, d playback.Decision, session domain.Playback, origin string) playbackJSON {
 	until := time.Now().Add(streamFor)
 	answer := playbackJSON{
 		PlaybackID: session.ID, Method: d.Method, VersionID: c.Version, Reasons: d.Reasons,
@@ -281,7 +297,7 @@ func (a *API) opened(p playback.Profile, c store.PlayCopy, d playback.Decision, 
 	if d.Method != domain.PlayDirect {
 		subject := hlsSubject(session.ID)
 		exp, sig := a.svc.Signer.Token(subject, until)
-		answer.Playlist = subject + "/" + exp + "/" + sig + "/main.m3u8"
+		answer.Playlist = origin + subject + "/" + exp + "/" + sig + "/main.m3u8"
 	} else {
 		for _, part := range c.Parts {
 			answer.Parts = append(answer.Parts, partJSON{
