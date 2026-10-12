@@ -6,6 +6,7 @@ import { runtime } from "#lib/format.js";
 import PlayIcon from "@lucide/svelte/icons/play";
 import SquareIcon from "@lucide/svelte/icons/square";
 import { ticking } from "#lib/admin/clock.svelte.js";
+import { jobsProgress } from "#lib/admin/live.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { relative, when } from "#lib/admin/words.js";
 import { Badge } from "#lib/components/ui/badge/index.js";
@@ -65,20 +66,13 @@ function saveWindow(event: SubmitEvent) {
 	);
 }
 
-// How far a task's work has got: the backlog of the jobs it queued, as the
-// stream tells it, and how many of them run now.
+// How far a task's work has got: the jobs it queued.
 function work(task: components["schemas"]["Task"]) {
-	const kinds = task.jobs ?? [];
-	const backlogs = live.state.backlogs.filter((b) => kinds.includes(b.kind));
-	const done = backlogs.reduce((n, b) => n + b.done, 0);
-	const total = backlogs.reduce((n, b) => n + b.done + b.left, 0);
-	const running = live.state.jobs.filter((j) => kinds.includes(j.kind)).length;
+	const p = jobsProgress(live.state, task.jobs ?? []);
 	return {
-		done,
-		total,
-		running,
-		left: total - done,
-		percent: total ? Math.floor((done / total) * 100) : 0,
+		...p,
+		left: p.total - p.done,
+		percent: p.total ? Math.floor((p.done / p.total) * 100) : 0,
 	};
 }
 
