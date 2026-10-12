@@ -55,9 +55,8 @@ async function fetchOne(found: Found, s: Found["items"][number]) {
 			<Dialog.Title>Find subtitles</Dialog.Title>
 			<Dialog.Description>{subtitleSearch.title}</Dialog.Description>
 		</Dialog.Header>
-		{#await startLanguage()}
-			<p class="text-ink-3 text-sm">Searching…</p>
-		{:then first}
+		<svelte:boundary>
+			{@const first = await startLanguage()}
 			{@const lang = subtitleSearch.language || first}
 			<Choice
 				aria-label="Language"
@@ -68,12 +67,16 @@ async function fetchOne(found: Found, s: Found["items"][number]) {
 					subtitleSearch.language = v;
 				}}
 			/>
-			{#await search(lang)}
-				<div class="min-h-0 overflow-y-auto" aria-busy="true">
-					<p class="text-ink-3 text-sm">Searching…</p>
-				</div>
-			{:then { data: found, error }}
-				<div class="min-h-0 overflow-y-auto">
+			<svelte:boundary>
+				{@const { data: found, error } = await search(lang)}
+				<!-- Another language's results stay, dimmed, until its own come. -->
+				<div
+					class={[
+						"min-h-0 overflow-y-auto transition-opacity",
+						$effect.pending() && "opacity-60",
+					]}
+					aria-busy={$effect.pending() > 0}
+				>
 					{#if !found}
 						<p class="text-ink-3 text-sm" role="alert">
 							{problemMessage(error)}
@@ -122,7 +125,15 @@ async function fetchOne(found: Found, s: Found["items"][number]) {
 						</ul>
 					{/if}
 				</div>
-			{/await}
-		{/await}
+				{#snippet pending()}
+					<div class="min-h-0 overflow-y-auto" aria-busy="true">
+						<p class="text-ink-3 text-sm">Searching…</p>
+					</div>
+				{/snippet}
+			</svelte:boundary>
+			{#snippet pending()}
+				<p class="text-ink-3 text-sm">Searching…</p>
+			{/snippet}
+		</svelte:boundary>
 	</Dialog.Content>
 </Dialog.Root>

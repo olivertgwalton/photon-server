@@ -36,7 +36,7 @@ function ask(of: Kind) {
 // The providers' pictures of the kind shown, asked again as the kind
 // changes, and after a choice refused: a refresh in between listed them
 // afresh, so what is there now is shown.
-let listed = $state.raw(ask("poster"));
+let listed = $derived(ask(kind));
 
 async function choose(id: string) {
 	const chosen = await act(
@@ -58,29 +58,27 @@ const giveBack = () =>
 	);
 </script>
 
-<Tabs.Root
-	bind:value={kind}
-	onValueChange={(k) => {
-		listed = ask(k as Kind);
-	}}
->
+<!-- The tab picked shows at once; its pictures follow when they come. -->
+<Tabs.Root value={$state.eager(kind)} onValueChange={(k) => (kind = k as Kind)}>
 	<Tabs.List>
 		{#each kinds as k (k.kind)}
 			<Tabs.Trigger value={k.kind}>{k.label}</Tabs.Trigger>
 		{/each}
 	</Tabs.List>
-	<Tabs.Content value={kind} class="grid gap-4 pt-2">
-		{#await listed}
-			<p class="text-ink-3 text-sm">Asking the providers…</p>
-		{:then { data, error }}
+	<Tabs.Content value={$state.eager(kind)} class="grid gap-4 pt-2">
+		<svelte:boundary>
+			{@const { data, error } = await listed}
 			{#if !data}
 				<p role="alert" class="text-destructive text-sm">
 					{problemMessage(error)}
 				</p>
 			{:else if data.items.length}
+				<!-- Another kind's pictures stay, dimmed, until its own come. -->
 				<ul
+					aria-busy={$effect.pending() > 0}
 					class={[
-						"grid gap-3",
+						"grid gap-3 transition-opacity",
+						$effect.pending() && "opacity-60",
 						kind === "poster"
 							? "grid-cols-3 sm:grid-cols-4 lg:grid-cols-6"
 							: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
@@ -125,7 +123,10 @@ const giveBack = () =>
 					The providers have no {current.label.toLowerCase()} for this title.
 				</p>
 			{/if}
-		{/await}
+			{#snippet pending()}
+				<p class="text-ink-3 text-sm">Asking the providers…</p>
+			{/snippet}
+		</svelte:boundary>
 		<Button variant="outline" class="justify-self-start" onclick={giveBack}>
 			Give the {current.label.toLowerCase()} back to the sources
 		</Button>

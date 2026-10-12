@@ -46,9 +46,8 @@ function choose(v: Version) {
 			</Dialog.Title>
 			<Dialog.Description>{asked.title}</Dialog.Description>
 		</Dialog.Header>
-		{#await onDisk()}
-			<p class="text-ink-3">Loading versions…</p>
-		{:then { versions, failed }}
+		<svelte:boundary>
+			{@const { versions, failed } = await onDisk()}
 			{#if failed}
 				<p role="alert" class="text-destructive">{failed}</p>
 			{:else if !versions?.length}
@@ -68,7 +67,10 @@ function choose(v: Version) {
 					{/each}
 				</ul>
 			{/if}
-		{/await}
+			{#snippet pending()}
+				<p class="text-ink-3">Loading versions…</p>
+			{/snippet}
+		</svelte:boundary>
 	</Dialog.Content>
 </Dialog.Root>
 
