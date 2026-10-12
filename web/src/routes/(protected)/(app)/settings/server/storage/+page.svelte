@@ -121,20 +121,17 @@ async function save(event: SubmitEvent) {
 }
 
 // Whether this browser reaches the bucket clients are sent to, by a picture there.
-let reach = $state<"trying" | "reached" | "unreached">("trying");
-$effect(() => {
-	const probe = bucket?.probe;
-	if (!probe) return;
-	reach = "trying";
-	const img = new Image();
-	img.onload = () => (reach = "reached");
-	img.onerror = () => (reach = "unreached");
-	img.src = probe;
-	return () => {
-		img.onload = img.onerror = null;
-	};
-});
-const origin = $derived(bucket?.probe ? new URL(bucket.probe).origin : "");
+function reaches(probe: string): Promise<boolean> {
+	return new Promise((answer) => {
+		const img = new Image();
+		img.onload = () => answer(true);
+		img.onerror = () => answer(false);
+		img.src = probe;
+	});
+}
+// A string, so a page loaded again with the same bucket does not try it again.
+const probe = $derived(bucket?.probe);
+const origin = $derived(probe ? new URL(probe).origin : "");
 </script>
 
 <PageHeader
@@ -337,27 +334,30 @@ const origin = $derived(bucket?.probe ? new URL(bucket.probe).origin : "");
 					{/if}
 				</Field.Group>
 			</Field.Set>
-			{#if bucket?.probe && data.storage.kind === "bucket"}
+			{#if probe && data.storage.kind === "bucket"}
 				<p role="status" class="flex items-start gap-2 text-sm">
-					{#if reach === "reached"}
-						<CircleCheckIcon
-							class="text-ink-2 mt-0.5 size-4 shrink-0"
-							aria-hidden="true"
-						/>
-						This browser loads pictures from the bucket.
-					{:else if reach === "unreached"}
-						<CircleAlertIcon
-							class="text-destructive mt-0.5 size-4 shrink-0"
-							aria-hidden="true"
-						/>
-						<span>
-							This browser can't load pictures from the bucket at {origin}. Set
-							the address clients reach it at, or have clients load pictures
-							from this server.
-						</span>
-					{:else}
-						Trying the bucket from this browser…
-					{/if}
+					<svelte:boundary>
+						{#if await reaches(probe)}
+							<CircleCheckIcon
+								class="text-ink-2 mt-0.5 size-4 shrink-0"
+								aria-hidden="true"
+							/>
+							This browser loads pictures from the bucket.
+						{:else}
+							<CircleAlertIcon
+								class="text-destructive mt-0.5 size-4 shrink-0"
+								aria-hidden="true"
+							/>
+							<span>
+								This browser can't load pictures from the bucket at {origin}.
+								Set the address clients reach it at, or have clients load
+								pictures from this server.
+							</span>
+						{/if}
+						{#snippet pending()}
+							Trying the bucket from this browser…
+						{/snippet}
+					</svelte:boundary>
 				</p>
 			{/if}
 		{/if}
