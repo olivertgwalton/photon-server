@@ -4,7 +4,6 @@ import BookmarkXIcon from "@lucide/svelte/icons/bookmark-x";
 import CaptionsIcon from "@lucide/svelte/icons/captions";
 import CheckIcon from "@lucide/svelte/icons/check";
 import DownloadIcon from "@lucide/svelte/icons/download";
-import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import EyeOffIcon from "@lucide/svelte/icons/eye-off";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import HeartOffIcon from "@lucide/svelte/icons/heart-off";
@@ -36,185 +35,183 @@ import {
 	setMark,
 	shareTitle,
 	splitTitle,
+	titleMenu,
 	unmatchTitle,
 } from "#lib/actions.svelte.js";
 import { matchable, refreshable } from "#lib/admin/edit.js";
-import type { components } from "#lib/api/schema.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
 import { playHref, titleWithShow } from "#lib/format.js";
-import { cn } from "#lib/utils.js";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
-type Card = components["schemas"]["Card"];
-
 // What can be done to a title without opening it, as the title's page offers.
-let {
-	card,
-	class: className,
-}: {
-	card: Pick<
-		Card,
-		"id" | "kind" | "title" | "state" | "show" | "season" | "version_count"
-	>;
-	class?: string;
-} = $props();
+// It is the card's that last opened it.
+const card = $derived(titleMenu.card);
 
 const playable = $derived(
-	card.kind === "movie" || card.kind === "episode" || card.kind === "extra",
+	card?.kind === "movie" || card?.kind === "episode" || card?.kind === "extra",
 );
 // A show or season is watched once every episode is.
-const watched = $derived(!!card.state?.watched_at);
-const favourite = $derived(!!card.state?.favourite_at);
-const started = $derived(!!card.state?.position_ms);
-const watchlisted = $derived(!!card.state?.watchlisted_at);
+const watched = $derived(!!card?.state?.watched_at);
+const favourite = $derived(!!card?.state?.favourite_at);
+const started = $derived(!!card?.state?.position_ms);
+const watchlisted = $derived(!!card?.state?.watchlisted_at);
 const admin = $derived(page.data.me?.role === "admin");
-const matched = $derived(matchable(card.kind));
-const refreshes = $derived(refreshable(card.kind));
-const name = $derived(titleWithShow(card));
+const matched = $derived(card ? matchable(card.kind) : false);
+const refreshes = $derived(card ? refreshable(card.kind) : false);
+const name = $derived(card ? titleWithShow(card) : "");
 </script>
 
-<DropdownMenu.Root>
-	<DropdownMenu.Trigger
-		class={cn(
-			"bg-ground/90 text-ink hover:bg-ink hover:text-ground grid size-8 place-items-center rounded-full",
-			className,
-		)}
-		aria-label="More for {name}"
+<DropdownMenu.Root bind:open={titleMenu.open}>
+	<DropdownMenu.Content
+		align="end"
+		class="w-60"
+		customAnchor={titleMenu.anchor}
+		onInteractOutside={(e) => {
+			// Its button closes it, as a second click on a menu's trigger does.
+			if (titleMenu.anchor?.contains(e.target as Node)) e.preventDefault();
+		}}
+		onCloseAutoFocus={(e) => {
+			e.preventDefault();
+			titleMenu.anchor?.focus();
+		}}
 	>
-		<EllipsisIcon class="size-4" />
-	</DropdownMenu.Trigger>
-	<DropdownMenu.Content align="end" class="w-60">
-		{#if playable}
-			<DropdownMenu.Item onSelect={() => goto(playHref(card.id))}>
-				<PlayIcon />{started ? "Resume" : "Play"}
-			</DropdownMenu.Item>
-		{/if}
-		{#if playable && started}
-			<DropdownMenu.Item onSelect={() => goto(playHref(card.id, { t: 0 }))}>
-				<RotateCcwIcon />Play from the beginning
-			</DropdownMenu.Item>
-		{/if}
-		{#if playable && (card.version_count ?? 0) > 1}
-			<DropdownMenu.Item onSelect={() => chooseVersion(card.id, name, "play")}>
-				<LayersIcon />Play version…
-			</DropdownMenu.Item>
-		{/if}
-		{#if card.kind !== "collection"}
-			<DropdownMenu.Item onSelect={() => setMark(card.id, "watched", !watched)}>
-				{#if watched}
-					<UndoIcon />Mark as unwatched
-				{:else}
-					<CheckIcon />Mark as watched
-				{/if}
-			</DropdownMenu.Item>
-		{/if}
-		<DropdownMenu.Item
-			onSelect={() => setMark(card.id, "favourite", !favourite)}
-		>
-			{#if favourite}
-				<HeartOffIcon />Remove from favourites
-			{:else}
-				<HeartIcon />Add to favourites
-			{/if}
-		</DropdownMenu.Item>
-		{#if card.kind !== "collection" && card.kind !== "extra"}
-			<DropdownMenu.Item
-				onSelect={() => setMark(card.id, "watchlist", !watchlisted)}
-			>
-				{#if watchlisted}
-					<BookmarkXIcon />Remove from watchlist
-				{:else}
-					<BookmarkIcon />Add to watchlist
-				{/if}
-			</DropdownMenu.Item>
-		{/if}
-		{#if card.kind !== "extra"}
-			<DropdownMenu.Item onSelect={() => pickPlaylist([card.id], name)}>
-				<ListPlusIcon />Add to playlist…
-			</DropdownMenu.Item>
-		{/if}
-		{#if playable && card.version_count}
-			<DropdownMenu.Item
-				onSelect={() => chooseVersion(card.id, name, "download")}
-			>
-				<DownloadIcon />Download…
-			</DropdownMenu.Item>
-		{/if}
-		{#if card.kind === "movie" || card.kind === "episode"}
-			<DropdownMenu.Item onSelect={() => findSubtitles(card.id, name)}>
-				<CaptionsIcon />Find subtitles…
-			</DropdownMenu.Item>
-		{/if}
-		<DropdownMenu.Item onSelect={() => shareTitle(card.id, name)}>
-			<Share2Icon />Share…
-		</DropdownMenu.Item>
-		{#if started && playable}
-			<DropdownMenu.Item onSelect={() => forgetProgress(card.id)}>
-				<EyeOffIcon />Remove from Continue Watching
-			</DropdownMenu.Item>
-		{/if}
-		{#if card.show}
-			{@const show = card.show}
-			<DropdownMenu.Separator />
-			{#if card.season}
-				{@const season = card.season}
-				<DropdownMenu.Item onSelect={() => goto(`/titles/${season.id}`)}>
-					<TvIcon />Go to {season.title}
+		{#if card}
+			{#if playable}
+				<DropdownMenu.Item onSelect={() => goto(playHref(card.id))}>
+					<PlayIcon />{started ? "Resume" : "Play"}
 				</DropdownMenu.Item>
 			{/if}
-			<DropdownMenu.Item onSelect={() => goto(`/titles/${show.id}`)}>
-				<TvIcon />Go to {show.title}
-			</DropdownMenu.Item>
-		{/if}
-		{#if admin}
-			<DropdownMenu.Separator />
-			<DropdownMenu.Item onSelect={() => editTitle(card.id, "details")}>
-				<PencilIcon />Edit…
-			</DropdownMenu.Item>
-			{#if matched}
-				<DropdownMenu.Item onSelect={() => editTitle(card.id, "match")}>
-					<SearchCheckIcon />Fix match…
+			{#if playable && started}
+				<DropdownMenu.Item onSelect={() => goto(playHref(card.id, { t: 0 }))}>
+					<RotateCcwIcon />Play from the beginning
 				</DropdownMenu.Item>
-				<DropdownMenu.Item onSelect={() => unmatchTitle(card.id, name)}>
-					<SearchXIcon />Unmatch
+			{/if}
+			{#if playable && (card.version_count ?? 0) > 1}
+				<DropdownMenu.Item
+					onSelect={() => chooseVersion(card.id, name, "play")}
+				>
+					<LayersIcon />Play version…
 				</DropdownMenu.Item>
-				{#if card.kind === "movie" && (card.version_count ?? 0) > 1}
-					<DropdownMenu.Item onSelect={() => splitTitle(card.id, name)}>
-						<SplitIcon />Split apart…
-					</DropdownMenu.Item>
+			{/if}
+			{#if card.kind !== "collection"}
+				<DropdownMenu.Item
+					onSelect={() => setMark(card.id, "watched", !watched)}
+				>
+					{#if watched}
+						<UndoIcon />Mark as unwatched
+					{:else}
+						<CheckIcon />Mark as watched
+					{/if}
+				</DropdownMenu.Item>
+			{/if}
+			<DropdownMenu.Item
+				onSelect={() => setMark(card.id, "favourite", !favourite)}
+			>
+				{#if favourite}
+					<HeartOffIcon />Remove from favourites
+				{:else}
+					<HeartIcon />Add to favourites
 				{/if}
+			</DropdownMenu.Item>
+			{#if card.kind !== "collection" && card.kind !== "extra"}
+				<DropdownMenu.Item
+					onSelect={() => setMark(card.id, "watchlist", !watchlisted)}
+				>
+					{#if watchlisted}
+						<BookmarkXIcon />Remove from watchlist
+					{:else}
+						<BookmarkIcon />Add to watchlist
+					{/if}
+				</DropdownMenu.Item>
 			{/if}
 			{#if card.kind !== "extra"}
-				<DropdownMenu.Item onSelect={() => editTitle(card.id, "artwork")}>
-					<ImageIcon />Choose artwork…
+				<DropdownMenu.Item onSelect={() => pickPlaylist([card.id], name)}>
+					<ListPlusIcon />Add to playlist…
 				</DropdownMenu.Item>
 			{/if}
-			{#if refreshes}
+			{#if playable && card.version_count}
 				<DropdownMenu.Item
-					onSelect={() => refreshMetadata("title", card.id, name)}
+					onSelect={() => chooseVersion(card.id, name, "download")}
 				>
-					<RefreshCwIcon />Refresh metadata…
+					<DownloadIcon />Download…
 				</DropdownMenu.Item>
 			{/if}
-			{#if card.kind !== "collection"}
-				<DropdownMenu.Item onSelect={() => analyseTitle(card.id, name)}>
-					<ScanSearchIcon />Analyse
+			{#if card.kind === "movie" || card.kind === "episode"}
+				<DropdownMenu.Item onSelect={() => findSubtitles(card.id, name)}>
+					<CaptionsIcon />Find subtitles…
 				</DropdownMenu.Item>
 			{/if}
-			<DropdownMenu.Item
-				onSelect={() => goto(`/settings/server/titles/${card.id}`)}
-			>
-				<SettingsIcon />Manage…
+			<DropdownMenu.Item onSelect={() => shareTitle(card.id, name)}>
+				<Share2Icon />Share…
 			</DropdownMenu.Item>
-			{#if card.kind !== "collection"}
-				<DropdownMenu.Separator />
-				<DropdownMenu.Item
-					variant="destructive"
-					onSelect={() => deleteTitle(card.id, name)}
-				>
-					<TrashIcon />Delete…
+			{#if started && playable}
+				<DropdownMenu.Item onSelect={() => forgetProgress(card.id)}>
+					<EyeOffIcon />Remove from Continue Watching
 				</DropdownMenu.Item>
+			{/if}
+			{#if card.show}
+				{@const show = card.show}
+				<DropdownMenu.Separator />
+				{#if card.season}
+					{@const season = card.season}
+					<DropdownMenu.Item onSelect={() => goto(`/titles/${season.id}`)}>
+						<TvIcon />Go to {season.title}
+					</DropdownMenu.Item>
+				{/if}
+				<DropdownMenu.Item onSelect={() => goto(`/titles/${show.id}`)}>
+					<TvIcon />Go to {show.title}
+				</DropdownMenu.Item>
+			{/if}
+			{#if admin}
+				<DropdownMenu.Separator />
+				<DropdownMenu.Item onSelect={() => editTitle(card.id, "details")}>
+					<PencilIcon />Edit…
+				</DropdownMenu.Item>
+				{#if matched}
+					<DropdownMenu.Item onSelect={() => editTitle(card.id, "match")}>
+						<SearchCheckIcon />Fix match…
+					</DropdownMenu.Item>
+					<DropdownMenu.Item onSelect={() => unmatchTitle(card.id, name)}>
+						<SearchXIcon />Unmatch
+					</DropdownMenu.Item>
+					{#if card.kind === "movie" && (card.version_count ?? 0) > 1}
+						<DropdownMenu.Item onSelect={() => splitTitle(card.id, name)}>
+							<SplitIcon />Split apart…
+						</DropdownMenu.Item>
+					{/if}
+				{/if}
+				{#if card.kind !== "extra"}
+					<DropdownMenu.Item onSelect={() => editTitle(card.id, "artwork")}>
+						<ImageIcon />Choose artwork…
+					</DropdownMenu.Item>
+				{/if}
+				{#if refreshes}
+					<DropdownMenu.Item
+						onSelect={() => refreshMetadata("title", card.id, name)}
+					>
+						<RefreshCwIcon />Refresh metadata…
+					</DropdownMenu.Item>
+				{/if}
+				{#if card.kind !== "collection"}
+					<DropdownMenu.Item onSelect={() => analyseTitle(card.id, name)}>
+						<ScanSearchIcon />Analyse
+					</DropdownMenu.Item>
+				{/if}
+				<DropdownMenu.Item
+					onSelect={() => goto(`/settings/server/titles/${card.id}`)}
+				>
+					<SettingsIcon />Manage…
+				</DropdownMenu.Item>
+				{#if card.kind !== "collection"}
+					<DropdownMenu.Separator />
+					<DropdownMenu.Item
+						variant="destructive"
+						onSelect={() => deleteTitle(card.id, name)}
+					>
+						<TrashIcon />Delete…
+					</DropdownMenu.Item>
+				{/if}
 			{/if}
 		{/if}
 	</DropdownMenu.Content>

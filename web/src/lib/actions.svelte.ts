@@ -43,6 +43,23 @@ export function newPlaylist(name: string, ids: string[]) {
 	);
 }
 
+// The one title menu, drawn by the shell beside the card's button it was
+// opened from: a menu of its own on every card cost more to draw than the card.
+export type MenuCard = Pick<
+	components["schemas"]["Card"],
+	"id" | "kind" | "title" | "state" | "show" | "season" | "version_count"
+>;
+
+export const titleMenu = $state<{
+	open: boolean;
+	card?: MenuCard;
+	anchor?: HTMLElement;
+}>({ open: false });
+
+export function openTitleMenu(card: MenuCard, anchor: HTMLElement) {
+	Object.assign(titleMenu, { open: true, card, anchor });
+}
+
 // The one "Add to playlist" dialog, drawn by the shell and opened from any
 // title's menu.
 export const picker = $state({ open: false, ids: [] as string[], title: "" });

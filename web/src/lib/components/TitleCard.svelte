@@ -14,7 +14,7 @@ import type { Shape } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
 import { episodeLine } from "#lib/format.js";
-import TitleMenu from "./TitleMenu.svelte";
+import TitleMenuButton from "./TitleMenuButton.svelte";
 
 // A title on a wall or a rail: a poster, or for an episode or a row about
 // where the reader is, a still. `sizes` is how wide the rail draws it, and
@@ -127,7 +127,7 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 		</div>
 	</a>
 	<!-- Beside the link, not in it: a control inside a link is two at once. -->
-	<TitleMenu
+	<TitleMenuButton
 		{card}
 		class="absolute top-2 right-2 opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
 	/>
