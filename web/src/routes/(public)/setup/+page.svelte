@@ -1,9 +1,8 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
 import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
-import { CLIENT, deviceName } from "#lib/device.js";
 import { fields } from "#lib/form.js";
+import { attempt, browserSession } from "#lib/signin.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -22,20 +21,14 @@ async function setUp(event: SubmitEvent) {
 		return;
 	}
 	pending = true;
-	const { data: signedIn, error } = await client()
-		.POST("/api/v1/setup", {
-			body: {
-				name: String(form.get("name")),
-				password,
-				device: deviceName(navigator.userAgent),
-				client: CLIENT,
-				keep: "cookie",
-			},
-		})
-		.catch(() => ({ data: undefined, error: undefined }));
-	if (!signedIn) {
+	const signedIn = await attempt(
+		client().POST("/api/v1/setup", {
+			body: { name: String(form.get("name")), password, ...browserSession() },
+		}),
+	);
+	if (!signedIn.answer) {
 		pending = false;
-		message = error ? problemMessage(error) : "The server isn't answering.";
+		message = signedIn.message;
 		return;
 	}
 	// Signed in as the admin, the rest of setup is the admin's to do.

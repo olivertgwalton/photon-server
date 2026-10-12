@@ -1,4 +1,5 @@
 import { problemMessage } from "#lib/api/problem.js";
+import { CLIENT, deviceName } from "#lib/device.js";
 
 // What the server says in `refused` when a provider's answer signed no one
 // in, said to the reader.
@@ -19,18 +20,40 @@ export function refusalMessage(reason: string | null): string | undefined {
 	return refusals[reason] ?? refusals.failed;
 }
 
+// A browser signs in to a session its cookie keeps.
+export function browserSession() {
+	return {
+		device: deviceName(navigator.userAgent),
+		client: CLIENT,
+		keep: "cookie" as const,
+	};
+}
+
+// A call's answer, or what to tell the reader when it failed: the server's
+// problem, or that the server never answered.
+export async function attempt<
+	A extends { error?: unknown; response: Response },
+>(
+	call: Promise<A>,
+): Promise<
+	{ answer: A; message?: undefined } | { answer?: undefined; message: string }
+> {
+	const answer = await call.catch(() => undefined);
+	if (!answer) return { message: "The server isn't answering." };
+	if (!answer.response.ok) return { message: problemMessage(answer.error) };
+	return { answer };
+}
+
 // Sends the browser to a provider, as the API answered where to; a refusal is
 // answered as what to say.
 export async function leaveFor(
-	call: Promise<{ data?: { url: string }; error?: unknown }>,
+	call: Promise<{
+		data?: { url: string };
+		error?: unknown;
+		response: Response;
+	}>,
 ): Promise<string> {
-	const { data, error } = await call.catch(() => ({
-		data: undefined,
-		error: undefined,
-	}));
-	if (data) {
-		location.assign(data.url);
-		return "";
-	}
-	return error ? problemMessage(error) : "The server isn't answering.";
+	const { answer, message } = await attempt(call);
+	if (answer?.data) location.assign(answer.data.url);
+	return message ?? "";
 }

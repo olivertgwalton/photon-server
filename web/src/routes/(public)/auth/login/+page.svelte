@@ -2,11 +2,15 @@
 import { goto, preloadData } from "$app/navigation";
 import { page } from "$app/state";
 import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
 import { CLIENT, deviceName } from "#lib/device.js";
 import { returnPath } from "#lib/session.js";
 import type { PageData as PickerData } from "../../../(protected)/profiles/$types";
-import { leaveFor, refusalMessage } from "#lib/signin.js";
+import {
+	attempt,
+	browserSession,
+	leaveFor,
+	refusalMessage,
+} from "#lib/signin.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -22,21 +26,19 @@ async function login(event: SubmitEvent) {
 	const form = fields(event);
 	pending = true;
 	const api = client();
-	const { data: signedIn, error } = await api
-		.POST("/api/v1/auth/login", {
+	const signedIn = await attempt(
+		api.POST("/api/v1/auth/login", {
 			body: {
 				method: "password",
 				name: String(form.get("name")),
 				password: String(form.get("password")),
-				device: deviceName(navigator.userAgent),
-				client: CLIENT,
-				keep: "cookie",
+				...browserSession(),
 			},
-		})
-		.catch(() => ({ data: undefined, error: undefined }));
-	if (!signedIn) {
+		}),
+	);
+	if (!signedIn.answer) {
 		pending = false;
-		message = error ? problemMessage(error) : "The server isn't answering.";
+		message = signedIn.message;
 		return;
 	}
 	// A household of several is asked who is watching, as Plex and Netflix

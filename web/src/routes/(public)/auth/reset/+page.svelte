@@ -3,9 +3,9 @@ import { toast } from "svelte-sonner";
 import { goto } from "$app/navigation";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import { problemMessage } from "#lib/api/problem.js";
 import { fields } from "#lib/form.js";
 import { LOGIN } from "#lib/session.js";
+import { attempt } from "#lib/signin.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -25,16 +25,10 @@ async function call<T>(
 	request: Promise<{ data?: T; error?: unknown; response: Response }>,
 ) {
 	pending = true;
-	const answer = await request.catch(() => undefined);
+	const settled = await attempt(request);
 	pending = false;
-	if (!answer?.response.ok) {
-		message = answer
-			? problemMessage(answer.error)
-			: "The server isn't answering.";
-		return;
-	}
-	message = undefined;
-	return answer;
+	message = settled.message;
+	return settled.answer;
 }
 
 async function ask(event: SubmitEvent) {
