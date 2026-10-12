@@ -652,3 +652,21 @@ test("a reader finds subtitles for a film and adds one", async ({ page }) => {
 		id: "9",
 	});
 });
+
+test("an episode's page names its show by the show's lettering alone", async ({
+	page,
+}) => {
+	await logIn(page, "/titles/t-ep");
+	const heading = page.getByRole("heading", { level: 1 });
+	await expect(heading.getByRole("img", { name: "Small Show" })).toBeVisible();
+	await expect(
+		page
+			.getByRole("main")
+			.locator("header")
+			.getByText("Small Show", { exact: true }),
+	).toHaveCount(0);
+	await expect(heading.getByRole("link")).toHaveAttribute(
+		"href",
+		"/titles/t-show",
+	);
+});

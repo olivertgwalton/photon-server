@@ -238,7 +238,8 @@ const poster = $derived(art("poster"));
 				backdrop ? "pt-[28svh]" : "pt-6",
 			]}
 		>
-			{#if t.show}
+			<!-- An episode's or season's lettering is its show's, which names it and leads to it. -->
+			{#if t.show && !logo}
 				<a
 					href="/titles/{t.show.id}"
 					class="text-ink-2 text-sm hover:underline"
@@ -260,16 +261,27 @@ const poster = $derived(art("poster"));
 				<h1 class="max-w-3xl">
 					{#if logo}
 						{#key logo}
-							<Artwork
-								id={logo}
-								shape="still"
-								loading="eager"
-								sizes="24rem"
-								alt={t.title}
-								class="max-h-36 w-auto max-w-[min(24rem,80vw)] object-contain object-left transition-opacity duration-500 data-loading:opacity-0 {darkLogo
-									? "lettering-glow"
-									: ""}"
-							/>
+							{#snippet lettering(
+								alt: string,
+							)}
+								<Artwork
+									id={logo}
+									shape="still"
+									loading="eager"
+									sizes="24rem"
+									{alt}
+									class="max-h-36 w-auto max-w-[min(24rem,80vw)] object-contain object-left transition-opacity duration-500 data-loading:opacity-0 {darkLogo
+										? "lettering-glow"
+										: ""}"
+								/>
+							{/snippet}
+							{#if t.show}
+								<a href="/titles/{t.show.id}" class="block w-fit">
+									{@render lettering(t.show.title)}
+								</a>
+							{:else}
+								{@render lettering(t.title)}
+							{/if}
 						{/key}
 					{:else}
 						<span class="title block text-3xl md:text-5xl">{t.title}</span>
