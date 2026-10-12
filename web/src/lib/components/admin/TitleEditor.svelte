@@ -31,15 +31,22 @@ const part = "-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pt-4";
 	<Dialog.Content
 		class="flex h-[min(85svh,48rem)] flex-col overflow-hidden sm:max-w-3xl"
 	>
-		{#await load()}
-			<Dialog.Header>
-				<Dialog.Title>Edit</Dialog.Title>
-			</Dialog.Header>
-			<p class="text-ink-3">Loading…</p>
-		{:then [{ data: title, error }, providers, locales]}
-			<Dialog.Header>
-				<Dialog.Title>Edit {title?.title ?? ""}</Dialog.Title>
-			</Dialog.Header>
+		{@const loaded = load()}
+		<!-- One title, outside what waits, so the dialog is named by it
+			throughout; its name follows when it comes. -->
+		<Dialog.Header>
+			<Dialog.Title>
+				Edit
+				<svelte:boundary>
+					{(await loaded)[0].data?.title}
+					{#snippet pending()}
+						<!-- The name follows. -->
+					{/snippet}
+				</svelte:boundary>
+			</Dialog.Title>
+		</Dialog.Header>
+		<svelte:boundary>
+			{@const [{ data: title, error }, providers, locales] = await loaded}
 			{#if !title}
 				<p role="alert" class="text-destructive">{problemMessage(error)}</p>
 			{:else}
@@ -76,6 +83,9 @@ const part = "-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pt-4";
 					{/if}
 				</Tabs.Root>
 			{/if}
-		{/await}
+			{#snippet pending()}
+				<p class="text-ink-3">Loading…</p>
+			{/snippet}
+		</svelte:boundary>
 	</Dialog.Content>
 </Dialog.Root>
