@@ -1,5 +1,5 @@
 <script lang="ts">
-import { tick, untrack } from "svelte";
+import { tick } from "svelte";
 import { innerHeight } from "svelte/reactivity/window";
 import { onResize } from "#lib/size.js";
 import type { components } from "#lib/api/schema.js";
@@ -34,27 +34,21 @@ const overscan = 1;
 const rowGap = 18;
 const listRowHeight = 80;
 
-let pages = $state<Record<number, Card[]>>({});
-// Each page asked for, by number, until it arrives or is refused.
-let asked = new Map<number, Promise<void>>();
-let generation = 0;
-
-$effect.pre(() => {
-	const page = first;
-	untrack(() => {
-		generation++;
-		asked = new Map([[0, Promise.resolve()]]);
-		pages = { 0: page };
-	});
+// The pages drawn, and each asked for, by number, until it arrives or is
+// refused. A new `first` starts them again; a page answered for the wall
+// before it is dropped.
+let wall = $derived({
+	pages: { 0: first } as Record<number, Card[]>,
+	asked: new Map<number, Promise<void>>([[0, Promise.resolve()]]),
 });
 
 function load(page: number): Promise<void> {
+	const { asked } = wall;
 	const known = asked.get(page);
 	if (known) return known;
-	const asking = generation;
 	const loading = fetchPage(page * pageSize).then((cards) => {
-		if (asking !== generation) return;
-		if (cards) pages[page] = cards;
+		if (asked !== wall.asked) return;
+		if (cards) wall = { asked, pages: { ...wall.pages, [page]: cards } };
 		else asked.delete(page);
 	});
 	asked.set(page, loading);
@@ -105,7 +99,7 @@ const shown = $derived.by(() => {
 });
 
 function card(index: number): Card | undefined {
-	return pages[Math.floor(index / pageSize)]?.[index % pageSize];
+	return wall.pages[Math.floor(index / pageSize)]?.[index % pageSize];
 }
 
 $effect(() => {

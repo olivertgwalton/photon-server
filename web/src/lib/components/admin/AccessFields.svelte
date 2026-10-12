@@ -28,10 +28,7 @@ const ageOptions = $derived(
 		: [...ages, { value: age, label: `Up to ${age}` }],
 );
 
-let every = $state(false);
-$effect.pre(() => {
-	every = access.libraries.length === 0;
-});
+let every = $derived(access.libraries.length === 0);
 </script>
 
 <Field.Set>
