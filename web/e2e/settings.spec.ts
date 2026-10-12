@@ -97,7 +97,7 @@ test("a show's episode plays its theme once the profile asks for theme music", a
 }) => {
 	const tune = page.locator("audio[data-theme-tune]");
 	await logIn(page, "/titles/t-ep");
-	await expect(page.getByRole("heading", { name: "Pilot" })).toBeVisible();
+	await expect(page.getByRole("img", { name: "Small Show" })).toBeVisible();
 	await expect(tune).toHaveCount(0);
 	await page.goto("/settings/playback");
 	await page.getByRole("switch", { name: "Play theme music" }).click();
