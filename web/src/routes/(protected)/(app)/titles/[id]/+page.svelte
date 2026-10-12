@@ -463,11 +463,19 @@ const poster = $derived(art("poster"));
 						{/if}
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
-				{#if data.themeMusic && t.themes?.length}
-					<!-- An episode of the same show goes on with the tune already playing. -->
-					{#key t.themes.join()}
-						<ThemeTune themes={t.themes} />
-					{/key}
+				{#if t.themes?.length}
+					{@const themes = t.themes}
+					<svelte:boundary>
+						{#if await data.themeMusic}
+							<!-- An episode of the same show goes on with the tune already playing. -->
+							{#key themes.join()}
+								<ThemeTune {themes} />
+							{/key}
+						{/if}
+						{#snippet pending()}
+							<!-- Silent until the profile's answer comes. -->
+						{/snippet}
+					</svelte:boundary>
 				{/if}
 			</div>
 
