@@ -971,3 +971,34 @@ test("an admin puts an episode in a new collection, and a film in one of theirs"
 	await dialog.getByRole("button", { name: "Lighthouse Films" }).click();
 	await expect(page.getByText("Added to Lighthouse Films.")).toBeVisible();
 });
+
+test("a restore under way shows once the backups page opens, not on hovering its link", async ({
+	page,
+}) => {
+	await page.route("**/api/v1/admin/backups", (route) =>
+		route.fulfill({
+			json: {
+				folder: "/backups",
+				items: [],
+				node_id: "00000000-0000-0000-0000-000000000001",
+				node_name: "den",
+				restoring: {
+					dump: "photon-2026-10-06.dump",
+					node_id: "00000000-0000-0000-0000-000000000001",
+					phase: "restoring",
+					started_at: "2026-10-06T19:00:00Z",
+				},
+			},
+		}),
+	);
+	await logIn(page, "/settings/server");
+	const link = page.getByRole("link", { name: "Backups" });
+	const preloaded = page.waitForRequest("**/api/v1/admin/backups");
+	await link.hover();
+	await preloaded;
+	const screen = page.getByRole("alertdialog", { name: "Restoring…" });
+	await expect(screen).toBeHidden();
+
+	await link.click();
+	await expect(screen).toBeVisible();
+});
