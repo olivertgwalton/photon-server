@@ -121,13 +121,13 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 
 	var all result
 	get("pst_ada", "/Items?includeItemTypes=BoxSet&recursive=true&sortBy=SortName", &all)
-	if all.TotalRecordCount != 2 || len(all.Items) != 2 || all.Items[0].Name != "Racing" || all.Items[0].Type != "BoxSet" || !all.Items[0].IsFolder {
-		t.Errorf("every collection = %+v, want both, box sets, the documentaries' first as their library comes first", all)
+	if all.TotalRecordCount != 2 || len(all.Items) != 2 || all.Items[0].Name != "Alien Collection" || all.Items[0].Type != "BoxSet" || !all.Items[0].IsFolder {
+		t.Errorf("every collection = %+v, want both, box sets, by title, in no library", all)
 	}
 	var second result
 	get("pst_ada", "/Items?includeItemTypes=BoxSet&recursive=true&startIndex=1&limit=1", &second)
-	if second.TotalRecordCount != 2 || len(second.Items) != 1 || second.Items[0].Name != "Alien Collection" {
-		t.Errorf("the second collection of two = %v of %d, want the films'", names(second), second.TotalRecordCount)
+	if second.TotalRecordCount != 2 || len(second.Items) != 1 || second.Items[0].Name != "Racing" {
+		t.Errorf("the second collection of two = %v of %d, want Racing", names(second), second.TotalRecordCount)
 	}
 	var docsOnly result
 	get("pst_ada", "/Items?parentId="+guid(docs.ID)+"&includeItemTypes=BoxSet&recursive=true", &docsOnly)
@@ -141,7 +141,7 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 	}
 
 	// Opened, a box set says how many titles it holds, and lists them in its order.
-	alien := all.Items[1].ID
+	alien := all.Items[0].ID
 	var set struct {
 		Name, Type string
 		ChildCount *int
@@ -191,7 +191,7 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 	}
 	var inView result
 	get("pst_ada", "/Items?parentId="+view+"&includeItemTypes=BoxSet&recursive=true&sortBy=SortName", &inView)
-	if got := names(inView); inView.TotalRecordCount != 2 || len(got) != 2 || got[0] != "Racing" {
+	if got := names(inView); inView.TotalRecordCount != 2 || len(got) != 2 || got[0] != "Alien Collection" {
 		t.Errorf("the view of collections holds %v, want every collection", got)
 	}
 	var kidsView result

@@ -22,6 +22,7 @@ type catalogue interface {
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
 	Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
+	AllCollections(ctx context.Context, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
 	HasCollections(ctx context.Context, profile uuid.UUID) (bool, error)
 	Members(ctx context.Context, profile, collection uuid.UUID) ([]store.Card, error)
 	Named(ctx context.Context, profile, id uuid.UUID) (store.Named, error)
