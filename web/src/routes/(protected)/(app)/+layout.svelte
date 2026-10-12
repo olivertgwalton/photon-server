@@ -32,6 +32,13 @@ $effect(() => {
 });
 </script>
 
+<!-- Each lazily loaded component has a boundary of its own, so loading one
+	holds up nothing else; one whose chunk fails to load (an open tab after a
+	deploy) is logged and left out, and the shell stays. -->
+{#snippet nothing()}
+	<!-- Nothing, until it loads. -->
+{/snippet}
+
 <a
 	href="#main"
 	class="focus:bg-signal focus:text-signal-ink sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-100 focus:rounded-full focus:px-4 focus:py-2 focus:font-medium"
@@ -68,11 +75,12 @@ $effect(() => {
 				</form>
 			</search>
 			{#if data.me.role === "admin"}
-				{#await import(
-					"#lib/components/ActivityMenu.svelte"
-				) then { default: ActivityMenu }}
+				<svelte:boundary pending={nothing} onerror={console.error}>
+					{@const ActivityMenu = (
+						await import("#lib/components/ActivityMenu.svelte")
+					).default}
 					<ActivityMenu libraries={data.libraries} />
-				{/await}
+				</svelte:boundary>
 			{/if}
 			<ProfileMenu profile={data.me} />
 		</header>
@@ -96,56 +104,63 @@ $effect(() => {
 <!-- Each dialog is asked for the first time a page opens it, and kept: most
 	visits open none, and their first page should not wait on them. -->
 {#if shell.picker.ids.length}
-	{#await import(
-		"#lib/components/PlaylistPicker.svelte"
-	) then { default: PlaylistPicker }}
+	<svelte:boundary pending={nothing} onerror={console.error}>
+		{@const PlaylistPicker = (
+			await import("#lib/components/PlaylistPicker.svelte")
+		).default}
 		<PlaylistPicker />
-	{/await}
+	</svelte:boundary>
 {/if}
 {#if shell.sharing.url}
-	{#await import(
-		"#lib/components/ShareDialog.svelte"
-	) then { default: ShareDialog }}
+	<svelte:boundary pending={nothing} onerror={console.error}>
+		{@const ShareDialog = (await import("#lib/components/ShareDialog.svelte"))
+			.default}
 		<ShareDialog />
-	{/await}
+	</svelte:boundary>
 {/if}
 {#if shell.subtitleSearch.id}
-	{#await import(
-		"#lib/components/SubtitleSearch.svelte"
-	) then { default: SubtitleSearch }}
+	<svelte:boundary pending={nothing} onerror={console.error}>
+		{@const SubtitleSearch = (
+			await import("#lib/components/SubtitleSearch.svelte")
+		).default}
 		<SubtitleSearch />
-	{/await}
+	</svelte:boundary>
 {/if}
 {#if shell.versions.id}
-	{#await import(
-		"#lib/components/VersionPicker.svelte"
-	) then { default: VersionPicker }}
+	<svelte:boundary pending={nothing} onerror={console.error}>
+		{@const VersionPicker = (
+			await import("#lib/components/VersionPicker.svelte")
+		).default}
 		<VersionPicker />
-	{/await}
+	</svelte:boundary>
 {/if}
 {#if shell.confirming.title}
-	{#await import(
-		"#lib/components/ConfirmDialog.svelte"
-	) then { default: ConfirmDialog }}
+	<svelte:boundary pending={nothing} onerror={console.error}>
+		{@const ConfirmDialog = (
+			await import("#lib/components/ConfirmDialog.svelte")
+		).default}
 		<ConfirmDialog />
-	{/await}
+	</svelte:boundary>
 {/if}
 <!-- Asked for only by an admin's shell: the editor brings every admin form
 	with it, which no one else's first page should wait on. -->
 {#if data.me.role === "admin"}
-	{#await import(
-		"#lib/components/admin/TitleEditor.svelte"
-	) then { default: TitleEditor }}
+	<svelte:boundary pending={nothing} onerror={console.error}>
+		{@const TitleEditor = (
+			await import("#lib/components/admin/TitleEditor.svelte")
+		).default}
 		<TitleEditor />
-	{/await}
-	{#await import(
-		"#lib/components/admin/RefreshDialog.svelte"
-	) then { default: RefreshDialog }}
+	</svelte:boundary>
+	<svelte:boundary pending={nothing} onerror={console.error}>
+		{@const RefreshDialog = (
+			await import("#lib/components/admin/RefreshDialog.svelte")
+		).default}
 		<RefreshDialog />
-	{/await}
-	{#await import(
-		"#lib/components/admin/CollectionPicker.svelte"
-	) then { default: CollectionPicker }}
+	</svelte:boundary>
+	<svelte:boundary pending={nothing} onerror={console.error}>
+		{@const CollectionPicker = (
+			await import("#lib/components/admin/CollectionPicker.svelte")
+		).default}
 		<CollectionPicker />
-	{/await}
+	</svelte:boundary>
 {/if}
