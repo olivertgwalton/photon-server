@@ -2,7 +2,7 @@
 import PlayIcon from "@lucide/svelte/icons/play";
 import SquareIcon from "@lucide/svelte/icons/square";
 import { act } from "#lib/act.js";
-import { confirmFirst, runTask } from "#lib/actions.svelte.js";
+import { runTask } from "#lib/actions.js";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { jobsProgress } from "#lib/admin/live.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
@@ -18,9 +18,11 @@ import { Progress } from "#lib/components/ui/progress/index.js";
 import * as Table from "#lib/components/ui/table/index.js";
 import { fields } from "#lib/form.js";
 import { runtime } from "#lib/format.js";
+import { getShell } from "#lib/shell.svelte.js";
 import { vocabulary } from "#lib/vocabulary.js";
 
 let { data } = $props();
+const shell = getShell();
 const words = vocabulary();
 
 const api = client();
@@ -233,7 +235,7 @@ function took(started?: string, finished?: string) {
 							variant="outline"
 							size="sm"
 							onclick={() =>
-								confirmFirst(
+								shell.confirmFirst(
 									`Stop ${words.tasks[task.key].name.toLowerCase()}?`,
 									`The ${w.left.toLocaleString()} left are taken off the queue, and one running stops within a few minutes. What is done is kept: the task's next run, or Run now, takes up the rest.`,
 									"Stop",

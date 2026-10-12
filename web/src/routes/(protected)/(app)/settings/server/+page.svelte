@@ -1,5 +1,5 @@
 <script lang="ts">
-import { runTask } from "#lib/actions.svelte.js";
+import { runTask } from "#lib/actions.js";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { byName, elapsed } from "#lib/admin/words.js";

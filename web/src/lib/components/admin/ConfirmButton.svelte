@@ -1,6 +1,6 @@
 <script lang="ts">
-import { confirmFirst } from "#lib/actions.svelte.js";
 import { Button } from "#lib/components/ui/button/index.js";
+import { getShell } from "#lib/shell.svelte.js";
 
 // A button for something that cannot be undone, which asks first.
 let {
@@ -19,12 +19,13 @@ let {
 	confirm: string;
 	onconfirm: () => unknown;
 } = $props();
+const shell = getShell();
 </script>
 
 <Button
 	variant="outline"
 	size="sm"
-	onclick={() => confirmFirst(title, body, confirm, onconfirm)}
+	onclick={() => shell.confirmFirst(title, body, confirm, onconfirm)}
 >
 	{label}
 	{#if hidden}

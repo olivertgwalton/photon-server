@@ -1,27 +1,29 @@
 <script lang="ts">
-import { confirming } from "#lib/actions.svelte.js";
 import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
 import { buttonVariants } from "#lib/components/ui/button/index.js";
+import { getShell } from "#lib/shell.svelte.js";
 import { cn } from "#lib/utils.js";
+
+const shell = getShell();
 </script>
 
 <!-- bits-ui's Action does not close its dialog: the answer does, then acts. -->
-<AlertDialog.Root bind:open={confirming.open}>
+<AlertDialog.Root bind:open={shell.confirming.open}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
-			<AlertDialog.Title>{confirming.title}</AlertDialog.Title>
-			<AlertDialog.Description>{confirming.body}</AlertDialog.Description>
+			<AlertDialog.Title>{shell.confirming.title}</AlertDialog.Title>
+			<AlertDialog.Description>{shell.confirming.body}</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
 			<AlertDialog.Action
 				class={cn(buttonVariants({ variant: "destructive" }))}
 				onclick={() => {
-					confirming.open = false;
-					return confirming.run();
+					shell.confirming.open = false;
+					return shell.confirming.run();
 				}}
 			>
-				{confirming.act}
+				{shell.confirming.act}
 			</AlertDialog.Action>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>

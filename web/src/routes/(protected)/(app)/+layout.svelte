@@ -1,12 +1,5 @@
 <script lang="ts">
 import SearchIcon from "@lucide/svelte/icons/search";
-import {
-	confirming,
-	picker,
-	sharing,
-	subtitleSearch,
-	versions,
-} from "#lib/actions.svelte.js";
 import { LiveStream, setLiveStream } from "#lib/admin/stream.svelte.js";
 import { adminAffected } from "#lib/changes.js";
 import AppSidebar from "#lib/components/AppSidebar.svelte";
@@ -15,9 +8,12 @@ import RestoringScreen from "#lib/components/RestoringScreen.svelte";
 import TitleMenu from "#lib/components/TitleMenu.svelte";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
 import { connectLive, invalidateLater } from "#lib/live.svelte.js";
+import { Shell, setShell } from "#lib/shell.svelte.js";
 import { page } from "$app/state";
 
 let { data, children } = $props();
+// The menu and dialogs drawn below, opened from any page in the shell.
+const shell = setShell(new Shell());
 
 // The server's changes, for as long as the shell is open.
 $effect(() => connectLive());
@@ -95,35 +91,35 @@ $effect(() => {
 <TitleMenu />
 <!-- Each dialog is asked for the first time a page opens it, and kept: most
 	visits open none, and their first page should not wait on them. -->
-{#if picker.ids.length}
+{#if shell.picker.ids.length}
 	{#await import(
 		"#lib/components/PlaylistPicker.svelte"
 	) then { default: PlaylistPicker }}
 		<PlaylistPicker />
 	{/await}
 {/if}
-{#if sharing.url}
+{#if shell.sharing.url}
 	{#await import(
 		"#lib/components/ShareDialog.svelte"
 	) then { default: ShareDialog }}
 		<ShareDialog />
 	{/await}
 {/if}
-{#if subtitleSearch.id}
+{#if shell.subtitleSearch.id}
 	{#await import(
 		"#lib/components/SubtitleSearch.svelte"
 	) then { default: SubtitleSearch }}
 		<SubtitleSearch />
 	{/await}
 {/if}
-{#if versions.id}
+{#if shell.versions.id}
 	{#await import(
 		"#lib/components/VersionPicker.svelte"
 	) then { default: VersionPicker }}
 		<VersionPicker />
 	{/await}
 {/if}
-{#if confirming.title}
+{#if shell.confirming.title}
 	{#await import(
 		"#lib/components/ConfirmDialog.svelte"
 	) then { default: ConfirmDialog }}

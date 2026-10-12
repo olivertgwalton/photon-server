@@ -1,7 +1,6 @@
 <script lang="ts">
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import { act } from "#lib/act.js";
-import { confirmFirst } from "#lib/actions.svelte.js";
 import { relative } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
@@ -11,6 +10,7 @@ import { buttonVariants } from "#lib/components/ui/button/index.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Textarea } from "#lib/components/ui/textarea/index.js";
+import { getShell } from "#lib/shell.svelte.js";
 import { cn } from "#lib/utils.js";
 
 type Node = components["schemas"]["KnownNode"];
@@ -18,6 +18,7 @@ type Node = components["schemas"]["KnownNode"];
 // What an admin may do of a node: set what it does, drain it before stopping it, resume it, and
 // forget it once taken away.
 let { node, nodes }: { node: Node; nodes: Node[] } = $props();
+const shell = getShell();
 
 const id = $props.id();
 
@@ -38,7 +39,7 @@ const others = $derived(
 );
 
 function forget() {
-	confirmFirst(
+	shell.confirmFirst(
 		`Forget ${node.name}?`,
 		`It was last seen ${relative(node.last_seen, Date.now())}. What is set of it goes with it; should it start again, it is back as a new node.`,
 		`Forget ${node.name}`,

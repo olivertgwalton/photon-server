@@ -13,12 +13,7 @@ import PlayIcon from "@lucide/svelte/icons/play";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
-import {
-	findSubtitles,
-	pickPlaylist,
-	refreshMetadata,
-	setMark,
-} from "#lib/actions.svelte.js";
+import { setMark } from "#lib/actions.js";
 import { refreshable } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
 import { blurStyle, isDark } from "#lib/blurhash.js";
@@ -47,9 +42,11 @@ import {
 	titleWithShow,
 } from "#lib/format.js";
 import { episodesOf } from "#lib/seasons.js";
+import { getShell } from "#lib/shell.svelte.js";
 import { goto } from "$app/navigation";
 
 let { data } = $props();
+const shell = getShell();
 
 const t = $derived(data.title);
 const art = (kind: string) => t.artwork?.[kind]?.[0];
@@ -418,7 +415,7 @@ const poster = $derived(art("poster"));
 					<DropdownMenu.Content align="start" class="w-56">
 						{#if t.kind !== "extra"}
 							<DropdownMenu.Item
-								onSelect={() => pickPlaylist([t.id], titleWithShow(t))}
+								onSelect={() => shell.pickPlaylist([t.id], titleWithShow(t))}
 							>
 								<ListPlusIcon />Add to playlist…
 							</DropdownMenu.Item>
@@ -430,7 +427,7 @@ const poster = $derived(art("poster"));
 						{/if}
 						{#if chosen && (t.kind === "movie" || t.kind === "episode")}
 							<DropdownMenu.Item
-								onSelect={() => findSubtitles(t.id, titleWithShow(t))}
+								onSelect={() => shell.findSubtitles(t.id, titleWithShow(t))}
 							>
 								<CaptionsIcon />Find subtitles…
 							</DropdownMenu.Item>
@@ -455,7 +452,7 @@ const poster = $derived(art("poster"));
 								{#if refreshable(t.kind)}
 									<DropdownMenu.Item
 										onSelect={() =>
-											refreshMetadata("title", t.id, titleWithShow(t))}
+											shell.refreshMetadata("title", t.id, titleWithShow(t))}
 									>
 										<RefreshCwIcon />Refresh metadata…
 									</DropdownMenu.Item>

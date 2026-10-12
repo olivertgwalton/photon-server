@@ -5,13 +5,10 @@ import FolderSyncIcon from "@lucide/svelte/icons/folder-sync";
 import PencilIcon from "@lucide/svelte/icons/pencil";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import TrashIcon from "@lucide/svelte/icons/trash";
-import {
-	refreshMetadata,
-	removeLibrary,
-	scanLibrary,
-} from "#lib/actions.svelte.js";
+import { scanLibrary } from "#lib/actions.js";
 import type { components } from "#lib/api/schema.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
+import { getShell } from "#lib/shell.svelte.js";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -24,6 +21,7 @@ let {
 	library,
 	onreorder,
 }: { library: Pick<Library, "id" | "name">; onreorder: () => void } = $props();
+const shell = getShell();
 
 const admin = $derived(page.data.me?.role === "admin");
 </script>
@@ -51,14 +49,16 @@ const admin = $derived(page.data.me?.role === "admin");
 				<FolderSyncIcon />Scan library files
 			</DropdownMenu.Item>
 			<DropdownMenu.Item
-				onSelect={() => refreshMetadata("library", library.id, library.name)}
+				onSelect={() =>
+					shell.refreshMetadata("library", library.id, library.name)}
 			>
 				<RefreshCwIcon />Refresh metadata…
 			</DropdownMenu.Item>
 			<DropdownMenu.Separator />
 			<DropdownMenu.Item
 				variant="destructive"
-				onSelect={() => removeLibrary(library.id, library.name)}
+				onSelect={() =>
+					shell.askToRemoveLibrary(library.id, library.name, page.url.pathname)}
 			>
 				<TrashIcon />Remove…
 			</DropdownMenu.Item>

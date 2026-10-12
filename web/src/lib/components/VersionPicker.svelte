@@ -1,5 +1,4 @@
 <script lang="ts">
-import { versions as asked } from "#lib/actions.svelte.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
@@ -7,7 +6,10 @@ import DownloadDialog from "#lib/components/DownloadDialog.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import { playHref } from "#lib/format.js";
+import { getShell } from "#lib/shell.svelte.js";
 import { goto } from "$app/navigation";
+
+const asked = getShell().versions;
 
 type Version = components["schemas"]["VersionPage"];
 

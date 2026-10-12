@@ -25,28 +25,22 @@ import TvIcon from "@lucide/svelte/icons/tv";
 import UndoIcon from "@lucide/svelte/icons/undo-2";
 import {
 	analyseTitle,
-	chooseVersion,
-	deleteTitle,
-	editTitle,
-	findSubtitles,
 	forgetProgress,
-	pickPlaylist,
-	refreshMetadata,
 	setMark,
-	shareTitle,
-	splitTitle,
-	titleMenu,
 	unmatchTitle,
-} from "#lib/actions.svelte.js";
+} from "#lib/actions.js";
 import { matchable, refreshable } from "#lib/admin/edit.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
 import { playHref, titleWithShow } from "#lib/format.js";
+import { getShell } from "#lib/shell.svelte.js";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
+const shell = getShell();
+
 // What can be done to a title without opening it, as the title's page offers.
 // It is the card's that last opened it.
-const card = $derived(titleMenu.card);
+const card = $derived(shell.titleMenu.card);
 
 const playable = $derived(
 	card?.kind === "movie" || card?.kind === "episode" || card?.kind === "extra",
@@ -62,18 +56,19 @@ const refreshes = $derived(card ? refreshable(card.kind) : false);
 const name = $derived(card ? titleWithShow(card) : "");
 </script>
 
-<DropdownMenu.Root bind:open={titleMenu.open}>
+<DropdownMenu.Root bind:open={shell.titleMenu.open}>
 	<DropdownMenu.Content
 		align="end"
 		class="w-60"
-		customAnchor={titleMenu.anchor}
+		customAnchor={shell.titleMenu.anchor}
 		onInteractOutside={(e) => {
 			// Its button closes it, as a second click on a menu's trigger does.
-			if (titleMenu.anchor?.contains(e.target as Node)) e.preventDefault();
+			if (shell.titleMenu.anchor?.contains(e.target as Node))
+				e.preventDefault();
 		}}
 		onCloseAutoFocus={(e) => {
 			e.preventDefault();
-			titleMenu.anchor?.focus();
+			shell.titleMenu.anchor?.focus();
 		}}
 	>
 		{#if card}
@@ -89,7 +84,7 @@ const name = $derived(card ? titleWithShow(card) : "");
 			{/if}
 			{#if playable && (card.version_count ?? 0) > 1}
 				<DropdownMenu.Item
-					onSelect={() => chooseVersion(card.id, name, "play")}
+					onSelect={() => shell.chooseVersion(card.id, name, "play")}
 				>
 					<LayersIcon />Play version…
 				</DropdownMenu.Item>
@@ -126,23 +121,23 @@ const name = $derived(card ? titleWithShow(card) : "");
 				</DropdownMenu.Item>
 			{/if}
 			{#if card.kind !== "extra"}
-				<DropdownMenu.Item onSelect={() => pickPlaylist([card.id], name)}>
+				<DropdownMenu.Item onSelect={() => shell.pickPlaylist([card.id], name)}>
 					<ListPlusIcon />Add to playlist…
 				</DropdownMenu.Item>
 			{/if}
 			{#if playable && card.version_count}
 				<DropdownMenu.Item
-					onSelect={() => chooseVersion(card.id, name, "download")}
+					onSelect={() => shell.chooseVersion(card.id, name, "download")}
 				>
 					<DownloadIcon />Download…
 				</DropdownMenu.Item>
 			{/if}
 			{#if card.kind === "movie" || card.kind === "episode"}
-				<DropdownMenu.Item onSelect={() => findSubtitles(card.id, name)}>
+				<DropdownMenu.Item onSelect={() => shell.findSubtitles(card.id, name)}>
 					<CaptionsIcon />Find subtitles…
 				</DropdownMenu.Item>
 			{/if}
-			<DropdownMenu.Item onSelect={() => shareTitle(card.id, name)}>
+			<DropdownMenu.Item onSelect={() => shell.shareTitle(card.id, name)}>
 				<Share2Icon />Share…
 			</DropdownMenu.Item>
 			{#if started && playable}
@@ -165,30 +160,32 @@ const name = $derived(card ? titleWithShow(card) : "");
 			{/if}
 			{#if admin}
 				<DropdownMenu.Separator />
-				<DropdownMenu.Item onSelect={() => editTitle(card.id, "details")}>
+				<DropdownMenu.Item onSelect={() => shell.editTitle(card.id, "details")}>
 					<PencilIcon />Edit…
 				</DropdownMenu.Item>
 				{#if matched}
-					<DropdownMenu.Item onSelect={() => editTitle(card.id, "match")}>
+					<DropdownMenu.Item onSelect={() => shell.editTitle(card.id, "match")}>
 						<SearchCheckIcon />Fix match…
 					</DropdownMenu.Item>
 					<DropdownMenu.Item onSelect={() => unmatchTitle(card.id, name)}>
 						<SearchXIcon />Unmatch
 					</DropdownMenu.Item>
 					{#if card.kind === "movie" && (card.version_count ?? 0) > 1}
-						<DropdownMenu.Item onSelect={() => splitTitle(card.id, name)}>
+						<DropdownMenu.Item onSelect={() => shell.askToSplit(card.id, name)}>
 							<SplitIcon />Split apart…
 						</DropdownMenu.Item>
 					{/if}
 				{/if}
 				{#if card.kind !== "extra"}
-					<DropdownMenu.Item onSelect={() => editTitle(card.id, "artwork")}>
+					<DropdownMenu.Item
+						onSelect={() => shell.editTitle(card.id, "artwork")}
+					>
 						<ImageIcon />Choose artwork…
 					</DropdownMenu.Item>
 				{/if}
 				{#if refreshes}
 					<DropdownMenu.Item
-						onSelect={() => refreshMetadata("title", card.id, name)}
+						onSelect={() => shell.refreshMetadata("title", card.id, name)}
 					>
 						<RefreshCwIcon />Refresh metadata…
 					</DropdownMenu.Item>
@@ -207,7 +204,7 @@ const name = $derived(card ? titleWithShow(card) : "");
 					<DropdownMenu.Separator />
 					<DropdownMenu.Item
 						variant="destructive"
-						onSelect={() => deleteTitle(card.id, name)}
+						onSelect={() => shell.askToDelete(card.id, name)}
 					>
 						<TrashIcon />Delete…
 					</DropdownMenu.Item>
