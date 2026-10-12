@@ -24,7 +24,7 @@ type Library = components["schemas"]["Library"];
 type Section = components["schemas"]["HomeSection"];
 
 // A row of the home, its titles on their way: as many as a rail shows.
-export type HomeRail = Row & {
+type HomeRail = Row & {
 	key: string;
 	href: string;
 	cards: Promise<{ items: Card[] }>;
