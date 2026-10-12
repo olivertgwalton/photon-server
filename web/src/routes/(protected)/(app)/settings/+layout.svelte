@@ -25,6 +25,7 @@ import UserIcon from "@lucide/svelte/icons/user";
 import UsersIcon from "@lucide/svelte/icons/users";
 import WebhookIcon from "@lucide/svelte/icons/webhook";
 import type { Component } from "svelte";
+import { afterNavigate } from "$app/navigation";
 import { page } from "$app/state";
 
 let { data, children } = $props();
@@ -81,8 +82,7 @@ const groups = $derived(
 
 // On a phone the links are a strip: the page's own is brought into view.
 let strip = $state<HTMLElement>();
-$effect(() => {
-	void page.url.pathname;
+afterNavigate(() => {
 	strip
 		?.querySelector("[aria-current=page]")
 		?.scrollIntoView({ block: "nearest", inline: "center" });

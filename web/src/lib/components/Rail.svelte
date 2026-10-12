@@ -10,6 +10,7 @@ let picked = false;
 import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
 import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 import type { Snippet } from "svelte";
+import type { Attachment } from "svelte/attachments";
 import { on as listen } from "svelte/events";
 import type { Shape } from "#lib/artwork.js";
 import { railLimit } from "#lib/rows.js";
@@ -82,22 +83,23 @@ function measure() {
 }
 const resized = onResize(measure);
 
-$effect(() => {
-	if (!list || !current) return;
-	const here = list.querySelector<HTMLElement>("[aria-current=page]");
+// The row scrolled to the page's own card, which takes focus again where it
+// was picked from here.
+const showCurrent: Attachment<HTMLUListElement> = (ul) => {
+	if (!current) return;
+	const here = ul.querySelector<HTMLElement>("[aria-current=page]");
 	const li = here?.closest("li");
 	if (!li) return;
 	// Sideways only: scrollIntoView would also scroll the page down to the row.
-	list.scrollTo({
+	ul.scrollTo({
 		left:
-			li.offsetLeft -
-			Number.parseFloat(getComputedStyle(list).scrollPaddingLeft),
+			li.offsetLeft - Number.parseFloat(getComputedStyle(ul).scrollPaddingLeft),
 		behavior: "instant",
 	});
 	measure();
 	if (picked) here?.focus({ preventScroll: true });
 	picked = false;
-});
+};
 
 // A page at a time, as Plex Web's and Jellyfin's rows go: a little less than
 // the row's width, so the card cut at the edge is the first one shown.
@@ -199,6 +201,7 @@ const sizes = $derived(
 			data-sveltekit-reset={current ? "false" : undefined}
 			bind:this={list}
 			{@attach resized}
+			{@attach showCurrent}
 			onscroll={measure}
 			{@attach (ul) => listen(ul, "keydown", step)}
 			{@attach (ul) => listen(ul, "click", hold)}

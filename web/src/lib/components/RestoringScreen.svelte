@@ -1,11 +1,11 @@
 <script lang="ts">
+import type { Attachment } from "svelte/attachments";
 import { backAfterRestore } from "#lib/restored.js";
 import { restoring } from "#lib/restoring.svelte.js";
 
 // Over everything while the server restores its database, until a node
 // answers again; the page is then loaded afresh, as what it showed may be gone.
-$effect(() => {
-	if (!restoring.on) return;
+const reloadsWhenBack: Attachment = () => {
 	let gone = false;
 	backAfterRestore().then(() => {
 		if (!gone) location.reload();
@@ -13,11 +13,12 @@ $effect(() => {
 	return () => {
 		gone = true;
 	};
-});
+};
 </script>
 
 {#if restoring.on}
 	<div
+		{@attach reloadsWhenBack}
 		role="alertdialog"
 		aria-modal="true"
 		aria-labelledby="restoring-title"
