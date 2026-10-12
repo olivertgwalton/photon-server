@@ -679,6 +679,25 @@ test("a filtered library is kept as a smart collection, and its filters changed 
 	await expect(page).toHaveURL("/settings/server/collections/t-smart");
 });
 
+test("a collection is made from a list a provider offers", async ({ page }) => {
+	await logIn(page, "/settings/server/collections");
+	await page.getByRole("button", { name: "Browse lists" }).click();
+	const dialog = page.getByRole("dialog");
+	await dialog.getByRole("tab", { name: "MDBList" }).click();
+	await expect(dialog.getByRole("alert")).toContainText("not configured");
+	await dialog.getByRole("tab", { name: "TMDB" }).click();
+	await expectAccessible(page);
+	const made = page.waitForRequest(
+		(r) => r.method() === "POST" && r.url().endsWith("/admin/collections"),
+	);
+	await dialog.getByRole("button", { name: /^Popular films/ }).click();
+	expect((await made).postDataJSON()).toMatchObject({
+		title: "Popular films",
+		list: { source: "tmdb", id: "movie/popular" },
+	});
+	await expect(page).toHaveURL("/settings/server/collections/t-smart");
+});
+
 test("a collection is made from a TMDB list, and read again as asked", async ({
 	page,
 }) => {

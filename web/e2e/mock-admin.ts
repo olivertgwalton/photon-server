@@ -861,6 +861,31 @@ export async function admin(
 		case "POST /api/v1/admin/collections/t-box/members":
 		case "POST /api/v1/admin/collections/t-smart/members":
 			return done();
+		case "GET /api/v1/admin/lists":
+			return url.searchParams.get("source") === "tmdb"
+				? json({
+						items: [
+							{
+								source: "tmdb",
+								id: "movie/popular",
+								title: "Popular films",
+								about: "TMDB's chart, its first 100 titles",
+								holds: "movie",
+							},
+						],
+					} satisfies Schemas["KeptListList"])
+				: Response.json(
+						{
+							title: "Bad Request",
+							status: 400,
+							code: "invalid_parameter",
+							detail: "source cannot offer its lists: provider: not configured",
+						},
+						{
+							status: 400,
+							headers: { "Content-Type": "application/problem+json" },
+						},
+					);
 		case "POST /api/v1/admin/collections": {
 			const asked = (await request.json()) as Schemas["AddCollection"];
 			smart = {

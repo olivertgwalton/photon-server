@@ -1,6 +1,7 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
+import ListBrowser from "#lib/components/admin/ListBrowser.svelte";
 import Choice from "#lib/components/Choice.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
@@ -84,7 +85,10 @@ function readFrom(choice: string) {
 						placeholder="Christmas films"
 					/>
 				</Field.Field>
-				<Button type="submit">Make it</Button>
+				<div class="flex gap-2">
+					<Button type="submit">Make it</Button>
+					<ListBrowser libraries={data.libraries.map((l) => l.id)} />
+				</div>
 			</div>
 			<div class="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-end">
 				<Field.Field>
