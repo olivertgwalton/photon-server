@@ -34,7 +34,7 @@ const line = $derived(
 		class="group flex min-w-0 flex-1 items-center gap-3 rounded-lg outline-none"
 	>
 		<span
-			class="bg-raise group-focus-visible:ring-signal group-hover:ring-line-strong block aspect-[2/3] w-12 shrink-0 overflow-hidden rounded-md ring-2 ring-transparent"
+			class="bg-raise group-focus-visible:ring-signal group-hover:ring-line-strong block aspect-2/3 w-12 shrink-0 overflow-hidden rounded-md ring-2 ring-transparent"
 		>
 			{#if picture}
 				<Artwork

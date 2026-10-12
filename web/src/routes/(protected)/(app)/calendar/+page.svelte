@@ -94,7 +94,7 @@ const absence = (e: Entry, day: string) =>
 		]}
 	>
 		<span
-			class="bg-raise group-hover:ring-line-strong block aspect-[2/3] w-12 shrink-0 overflow-hidden rounded-md ring-2 ring-transparent"
+			class="bg-raise group-hover:ring-line-strong block aspect-2/3 w-12 shrink-0 overflow-hidden rounded-md ring-2 ring-transparent"
 		>
 			{#if e.poster}
 				<Artwork

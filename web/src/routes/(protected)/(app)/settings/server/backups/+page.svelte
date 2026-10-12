@@ -59,7 +59,7 @@ async function restore(name: string) {
 
 <section aria-labelledby="dumps" class="grid gap-3">
 	<h2 id="dumps" class="heading">On {b.node_name}</h2>
-	<p class="text-ink-3 text-sm [overflow-wrap:anywhere]">In {b.folder}</p>
+	<p class="text-ink-3 text-sm wrap-anywhere">In {b.folder}</p>
 	{#if b.items.length}
 		<ul class="grid gap-3">
 			{#each b.items as dump (dump.name)}
