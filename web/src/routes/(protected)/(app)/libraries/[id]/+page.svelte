@@ -238,7 +238,7 @@ function jump(letters: Letter[], letter: string) {
 								? "h-18 w-full"
 								: view === "still"
 									? "aspect-video"
-									: "aspect-[2/3]",
+									: "aspect-2/3",
 						]}
 					></div>
 				</li>

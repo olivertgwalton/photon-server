@@ -98,7 +98,7 @@ async function search(event: SubmitEvent) {
 					what it is about, to tell like-named titles apart. -->
 				<li class="flex items-start gap-4 py-3">
 					<div
-						class="bg-raise aspect-[2/3] w-16 shrink-0 overflow-hidden rounded-md"
+						class="bg-raise aspect-2/3 w-16 shrink-0 overflow-hidden rounded-md"
 					>
 						{#if candidate.poster}
 							<img

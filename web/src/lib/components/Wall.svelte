@@ -181,7 +181,7 @@ const sizes = $derived(`${Math.ceil(cardWidth) || 200}px`);
 							view === "list"
 								? "h-18"
 								: shape === "poster"
-									? "aspect-[2/3]"
+									? "aspect-2/3"
 									: "aspect-video",
 						]}
 					></div>

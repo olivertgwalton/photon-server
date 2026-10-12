@@ -20,7 +20,7 @@ let {
 
 <a href="/people/{id}" class="group block outline-none">
 	<span
-		class="card-frame block aspect-[2/3]"
+		class="card-frame block aspect-2/3"
 		style={photo ? blurStyle(blurhashes?.[photo]) : undefined}
 	>
 		{#if photo}

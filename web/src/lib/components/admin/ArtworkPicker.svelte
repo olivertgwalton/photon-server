@@ -18,11 +18,11 @@ type Kind = Schemas["ArtworkKind"];
 let { title }: { title: Schemas["TitlePage"] } = $props();
 
 const kinds: { kind: Kind; label: string; shape: string; width: number }[] = [
-	{ kind: "poster", label: "Poster", shape: "aspect-[2/3]", width: 240 },
+	{ kind: "poster", label: "Poster", shape: "aspect-2/3", width: 240 },
 	{ kind: "backdrop", label: "Backdrop", shape: "aspect-video", width: 480 },
 	{ kind: "thumb", label: "Still", shape: "aspect-video", width: 480 },
-	{ kind: "logo", label: "Logo", shape: "aspect-[5/2]", width: 480 },
-	{ kind: "banner", label: "Banner", shape: "aspect-[27/5]", width: 640 },
+	{ kind: "logo", label: "Logo", shape: "aspect-5/2", width: 480 },
+	{ kind: "banner", label: "Banner", shape: "aspect-27/5", width: 640 },
 ];
 
 let kind = $state<Kind>("poster");

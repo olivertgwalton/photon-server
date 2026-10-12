@@ -33,7 +33,7 @@ const life = $derived(
 				shape="poster"
 				loading="eager"
 				sizes="200px"
-				class="aspect-[2/3] w-40 shrink-0 self-start rounded-xl object-cover shadow-2xl sm:w-50"
+				class="aspect-2/3 w-40 shrink-0 self-start rounded-xl object-cover shadow-2xl sm:w-50"
 				style={blurStyle(p.blurhashes?.[p.photo])}
 			/>
 		{/if}

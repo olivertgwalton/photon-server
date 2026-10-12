@@ -254,7 +254,7 @@ const poster = $derived(art("poster"));
 						shape="poster"
 						loading="eager"
 						sizes="12rem"
-						class="hidden aspect-[2/3] w-48 rounded-lg object-cover sm:block"
+						class="hidden aspect-2/3 w-48 rounded-lg object-cover sm:block"
 						style={blurStyle(t.blurhashes?.[poster])}
 					/>
 				{/if}
@@ -371,7 +371,7 @@ const poster = $derived(art("poster"));
 						title={watched ? "Mark as unwatched" : "Mark as watched"}
 						onclick={() => setMark(t.id, "watched", !watched)}
 					>
-						<CheckIcon class={watched ? "stroke-[3]" : "text-ink-3"} />
+						<CheckIcon class={watched ? "stroke-3" : "text-ink-3"} />
 					</Button>
 				{/if}
 				<Button

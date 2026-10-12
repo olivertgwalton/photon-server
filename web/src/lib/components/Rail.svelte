@@ -205,7 +205,7 @@ const sizes = $derived(
 			onscroll={measure}
 			{@attach (ul) => listen(ul, "keydown", step)}
 			{@attach (ul) => listen(ul, "click", hold)}
-			class="relative -mx-3 flex scroll-smooth snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
+			class="relative -mx-3 flex scroll-smooth snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 scrollbar-none sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
 		>
 			{#each shown as c, i (c.id)}
 				<li class="shrink-0 snap-start {width}">

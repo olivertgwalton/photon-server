@@ -71,7 +71,7 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 			class={[
 				"card-frame",
 				current && "ring-ink ring-2",
-				shape === "poster" ? "aspect-[2/3]" : "aspect-video",
+				shape === "poster" ? "aspect-2/3" : "aspect-video",
 			]}
 			style={picture ? blurStyle(card.blurhashes?.[picture]) : undefined}
 		>
