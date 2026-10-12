@@ -43,5 +43,5 @@ const { offset, total } = $derived(data.history);
 	{:else}
 		<p class="text-ink-3">Nothing played yet.</p>
 	{/each}
-	<Pager {offset} limit={data.pageSize} {total} />
+	<Pager {offset} {total} />
 </div>

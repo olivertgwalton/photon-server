@@ -90,4 +90,4 @@ function reached(position: number, duration?: number) {
 	<p class="text-ink-3 text-sm">Nothing has been played yet.</p>
 {/if}
 
-<Pager offset={data.page.offset} limit={data.limit} total={data.page.total} />
+<Pager offset={data.page.offset} total={data.page.total} />

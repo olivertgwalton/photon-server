@@ -1,8 +1,7 @@
 import type { components } from "#lib/api/schema.js";
 import { client, need } from "#lib/api/client.js";
+import { offsetOf, pageSize } from "#lib/paging.js";
 import type { PageLoad } from "./$types";
-
-const limit = 50;
 
 export const load: PageLoad = async ({ fetch, url, parent }) => {
 	const api = client(fetch);
@@ -12,11 +11,11 @@ export const load: PageLoad = async ({ fetch, url, parent }) => {
 		asked in words.logged
 			? (asked as components["schemas"]["EventKind"])
 			: undefined;
-	const offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
+	const offset = offsetOf(url);
 	const page = await need(
 		api.GET("/api/v1/admin/activity", {
-			params: { query: { kind, offset, limit } },
+			params: { query: { kind, offset, limit: pageSize } },
 		}),
 	);
-	return { page, kind, limit };
+	return { page, kind };
 };
