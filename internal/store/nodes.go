@@ -9,12 +9,12 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-const nodeColumns = `id, name, first_seen, last_seen, role, transcode_limit, availability, note, address, node_group, public_url, stream_limit, egress_limit_mbps`
+const nodeColumns = `id, name, first_seen, last_seen, role, transcode_limit, availability, note, address, node_group, public_url, stream_limit, egress_limit_mbps, local_url`
 
 func scanNode(row pgx.Row) (domain.NodeRecord, error) {
 	var n domain.NodeRecord
 	var limit *int
-	err := row.Scan(&n.ID, &n.Name, &n.FirstSeen, &n.LastSeen, &n.Role, &limit, &n.Availability, &n.Note, &n.Address, &n.Group, &n.PublicURL, &n.StreamLimit, &n.EgressLimitMbps)
+	err := row.Scan(&n.ID, &n.Name, &n.FirstSeen, &n.LastSeen, &n.Role, &limit, &n.Availability, &n.Note, &n.Address, &n.Group, &n.PublicURL, &n.StreamLimit, &n.EgressLimitMbps, &n.LocalURL)
 	n.LimitSource = domain.LimitAutomatic
 	if limit != nil {
 		n.LimitSource, n.Limit = domain.LimitSet, *limit
@@ -68,7 +68,7 @@ func (s *Store) SetNodeSettings(ctx context.Context, id uuid.UUID, n domain.Node
 	}
 	return affected(s.pool.Exec(ctx, `
 		UPDATE node SET role = $2, transcode_limit = $3, availability = $4, note = $5, address = $6, node_group = $7,
-			public_url = $8, stream_limit = $9, egress_limit_mbps = $10
+			public_url = $8, stream_limit = $9, egress_limit_mbps = $10, local_url = $11
 		WHERE id = $1`,
-		id, n.Role, limit, n.Availability, n.Note, n.Address, n.Group, n.PublicURL, n.StreamLimit, n.EgressLimitMbps))
+		id, n.Role, limit, n.Availability, n.Note, n.Address, n.Group, n.PublicURL, n.StreamLimit, n.EgressLimitMbps, n.LocalURL))
 }

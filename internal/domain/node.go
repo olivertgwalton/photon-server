@@ -16,6 +16,7 @@ type Node struct {
 	Name         string
 	Group        string
 	PublicURL    string
+	LocalURL     string
 	Role         NodeRole
 	Availability NodeAvailability
 	Encoder      Encoder
@@ -29,6 +30,29 @@ type Node struct {
 	// EgressKbps is how fast it sends its players media, as last measured, of at most
 	// EgressLimitMbps; an EgressLimitMbps of zero is none.
 	EgressKbps, EgressLimitMbps int
+}
+
+// ClientNetwork is which of the server's networks a client is on, which says where it reaches a
+// node.
+type ClientNetwork string
+
+const (
+	// NetworkLocal is one of the server's local networks, as Settings › Network lists them.
+	NetworkLocal  ClientNetwork = "local"
+	NetworkRemote ClientNetwork = "remote"
+)
+
+// URLFor is where a client on network reaches n itself: its local URL, or its public URL where it
+// has none, for one on a local network, and its public URL for one elsewhere. Empty is nowhere.
+func (n Node) URLFor(network ClientNetwork) string {
+	switch network {
+	case NetworkLocal:
+		if n.LocalURL != "" {
+			return n.LocalURL
+		}
+	case NetworkRemote:
+	}
+	return n.PublicURL
 }
 
 // NodeRole is what a node does for the cluster, as an admin sets it.
@@ -122,6 +146,10 @@ type NodeSettings struct {
 	// it makes for another node's client is fetched from there, not handed on through that node.
 	// None is a node clients reach only through the others.
 	PublicURL string
+	// LocalURL is where clients on the server's local networks reach it themselves, such as
+	// http://192.168.1.5:8640, or its tailnet address where the tailnet is among them; none is a
+	// node they reach at its public URL.
+	LocalURL string
 	// StreamLimit is how many playbacks it delivers at once, encoded or not; zero is no limit.
 	StreamLimit int
 	// EgressLimitMbps is how fast it sends its players media, in megabits a second, past which it
