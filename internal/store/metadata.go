@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"uuid"
@@ -127,11 +128,13 @@ func rankOf(taken []domain.FieldSource) map[domain.FieldSource]int {
 }
 
 // rankings answers, for each of items, the sources its library asks for f of its kind, most
-// trusted first.
+// trusted first; for a collection, in no library, the providers whose box sets become collections.
 func rankings(ctx context.Context, q db, items []*model.Item, f domain.Fetcher) (map[uuid.UUID][]domain.FieldSource, error) {
-	libraries := make([]uuid.UUID, len(items))
-	for n, it := range items {
-		libraries[n] = it.LibraryID
+	var libraries []uuid.UUID
+	for _, it := range items {
+		if it.LibraryID != nil {
+			libraries = append(libraries, *it.LibraryID)
+		}
 	}
 	type ranking struct {
 		library uuid.UUID
@@ -157,8 +160,10 @@ func rankings(ctx context.Context, q db, items []*model.Item, f domain.Fetcher) 
 	}
 	out := map[uuid.UUID][]domain.FieldSource{}
 	for _, it := range items {
-		if kind, ok := kinds[it.LibraryID]; ok {
-			out[it.ID] = by[ranking{it.LibraryID, kind.RankedAs(it.Kind)}]
+		if it.LibraryID == nil {
+			out[it.ID] = slices.Sorted(maps.Keys(groupingProviders))
+		} else if kind, ok := kinds[*it.LibraryID]; ok {
+			out[it.ID] = by[ranking{*it.LibraryID, kind.RankedAs(it.Kind)}]
 		}
 	}
 	return out, nil

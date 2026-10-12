@@ -13,25 +13,22 @@ import { getShell } from "#lib/shell.svelte.js";
 const asked = getShell().collectionPicker;
 const id = $props.id();
 
-// The title's library and the collections of it an admin puts titles in by
-// hand: a provider's, a list's or a rule's are theirs to fill. Every page is
-// read, as a library may hold hundreds of a provider's box sets.
-async function load(title: string) {
+// The collections an admin puts titles in by hand, of any library: a
+// provider's, a list's or a rule's are theirs to fill. Every page is read, as
+// a server may hold hundreds of a provider's box sets.
+async function load() {
 	const api = client();
-	const { library_id: library } = await answer(
-		api.GET("/api/v1/titles/{id}", { params: { path: { id: title } } }),
-	);
 	const mine = [];
 	for (let offset = 0, total = 1; offset < total; offset += 200) {
 		const page = await answer(
-			api.GET("/api/v1/libraries/{id}/collections", {
-				params: { path: { id: library }, query: { offset, limit: 200 } },
+			api.GET("/api/v1/collections", {
+				params: { query: { offset, limit: 200 } },
 			}),
 		);
 		mine.push(...page.items.filter((c) => c.origin === "user"));
 		total = page.total;
 	}
-	return { library, collections: mine };
+	return mine;
 }
 
 // What the API answered, or why it refused, said in the dialog.
@@ -45,9 +42,9 @@ async function add(collection: string, name: string) {
 	if (await addToCollection(collection, [asked.id], name)) asked.open = false;
 }
 
-async function create(event: SubmitEvent, library: string) {
+async function create(event: SubmitEvent) {
 	const name = text(fields(event), "name");
-	if (await newCollection(library, name, [asked.id])) asked.open = false;
+	if (await newCollection(name, [asked.id])) asked.open = false;
 }
 </script>
 
@@ -60,7 +57,7 @@ async function create(event: SubmitEvent, library: string) {
 		<!-- Asked each time it opens, so a collection made elsewhere is there. -->
 		{#if asked.open}
 			<svelte:boundary>
-				{@const { library, collections } = await load(asked.id)}
+				{@const collections = await load()}
 				{#if collections.length}
 					<ul class="-mx-2 grid max-h-64 overflow-y-auto">
 						{#each collections as collection (collection.id)}
@@ -77,7 +74,7 @@ async function create(event: SubmitEvent, library: string) {
 						{/each}
 					</ul>
 				{/if}
-				<form onsubmit={(event) => create(event, library)}>
+				<form onsubmit={create}>
 					<Field.Field orientation="horizontal">
 						<Field.Label for="{id}-new-collection" class="sr-only">
 							New collection

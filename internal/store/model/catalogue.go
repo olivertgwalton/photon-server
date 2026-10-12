@@ -8,8 +8,9 @@ import (
 )
 
 type Item struct {
-	ID        uuid.UUID
-	LibraryID uuid.UUID
+	ID uuid.UUID
+	// LibraryID is the library a title is in; nil for a collection, which is in none.
+	LibraryID *uuid.UUID
 	Kind      domain.ItemKind
 	Title     string
 	SortTitle string

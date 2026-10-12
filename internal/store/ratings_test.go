@@ -85,7 +85,7 @@ func TestATitleIsSortedAndFilteredByTheRatingItsCardShows(t *testing.T) {
 	ctx := t.Context()
 	admin, _ := homeLibraries(t, s, []string{"Jaws", "Heat"}, nil)
 	jaws, heat := oneItem(t, s, `title = 'Jaws'`), oneItem(t, s, `title = 'Heat'`).ID
-	lib := jaws.LibraryID
+	lib := *jaws.LibraryID
 	if err := s.SetLibrary(ctx, lib, LibraryChange{Sources: metadataFrom(domain.LibraryMovies, domain.SourceTMDB, domain.SourceMDBList)}); err != nil {
 		t.Fatal(err)
 	}

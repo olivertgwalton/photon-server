@@ -7,14 +7,16 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// LibraryCounts counts each library's films, shows, seasons, episodes and listed collections, as
-// the server holds them.
+// LibraryCounts counts each library's films, shows, seasons, episodes, and the listed collections
+// holding its titles, as the server holds them.
 func (s *Store) LibraryCounts(ctx context.Context) (map[uuid.UUID]domain.TitleCounts, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT library_id, kind, count(*) FROM items WHERE kind IN ('movie', 'show', 'season', 'episode')
 		GROUP BY 1, 2
 		UNION ALL
-		SELECT items.library_id, items.kind, count(*) FROM items, viewer(NULL) v
+		SELECT title.library_id, items.kind, count(DISTINCT items.id)
+		FROM items JOIN collection_members held ON held.collection_id = items.id JOIN items title ON title.id = held.item_id,
+			viewer(NULL) v
 		WHERE `+listedCollection+`
 		GROUP BY 1, 2`)
 	if err != nil {

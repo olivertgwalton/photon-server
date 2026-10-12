@@ -17,8 +17,9 @@ import (
 // TitlePage is everything a title's page shows, read in one go: a film's or episode's versions, a
 // show's seasons, a season's episodes, and whatever extras and videos the title has.
 type TitlePage struct {
-	ID            uuid.UUID
-	Library       uuid.UUID
+	ID uuid.UUID
+	// Library is the library it is in; nil for a collection, which is in none.
+	Library       *uuid.UUID
 	Kind          domain.ItemKind
 	Title         string
 	OriginalTitle string
@@ -37,9 +38,11 @@ type TitlePage struct {
 	Credits []CreditRef
 	// Origin is who made a collection: an admin's is changed by hand, a provider's only by it.
 	Origin domain.CollectionOrigin
-	// Rule is what finds a smart collection's titles, List the list a list collection holds.
-	Rule *SmartRule
-	List *ListRef
+	// Rule is what finds a smart collection's titles, List the list a list collection holds, and
+	// Libraries the libraries either reads.
+	Rule      *SmartRule
+	List      *ListRef
+	Libraries []uuid.UUID
 	// EpisodeOrder is the order a show's episode files are numbered in.
 	EpisodeOrder domain.EpisodeOrder
 	// Locale and Titles are a film's or show's own metadata language, certification country and
@@ -191,7 +194,7 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		return err
 	})
 	g.Go(func() (err error) {
-		p.Collections, err = s.collectionsOf(gctx, item.ID)
+		p.Collections, err = s.collectionsOf(gctx, profile, item.ID)
 		return err
 	})
 	g.Go(func() (err error) {
@@ -258,8 +261,8 @@ func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item,
 	case domain.ItemCollection:
 		var source, list *string
 		var missing int
-		err = s.pool.QueryRow(ctx, `SELECT origin, rule, list_source, list_id, list_missing FROM collections WHERE item_id = $1`, item.ID).
-			Scan(&p.Origin, &p.Rule, &source, &list, &missing)
+		err = s.pool.QueryRow(ctx, `SELECT origin, rule, list_source, list_id, list_missing, libraries FROM collections WHERE item_id = $1`, item.ID).
+			Scan(&p.Origin, &p.Rule, &source, &list, &missing, &p.Libraries)
 		if source != nil && list != nil {
 			p.List = &ListRef{Source: domain.FieldSource(*source), ID: *list, Missing: missing}
 		}

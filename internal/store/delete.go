@@ -66,9 +66,13 @@ func (s *Store) ForgetTitle(ctx context.Context, id uuid.UUID) error {
 		if err != nil {
 			return err
 		}
+		// A collection is in no library, and is removed as one.
+		if item.LibraryID == nil {
+			return ErrNotFound
+		}
 		if _, err := tx.Exec(ctx, `DELETE FROM items WHERE id = $1`, id); err != nil {
 			return err
 		}
-		return askScan(ctx, tx, item.LibraryID, []string{item.Folder}, 0)
+		return askScan(ctx, tx, *item.LibraryID, []string{item.Folder}, 0)
 	})
 }

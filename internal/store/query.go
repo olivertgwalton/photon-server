@@ -161,3 +161,15 @@ func first(ids []uuid.UUID) uuid.UUID {
 	}
 	return ids[0]
 }
+
+// hasRepeats is whether any id comes more than once.
+func hasRepeats(ids []uuid.UUID) bool {
+	seen := map[uuid.UUID]bool{}
+	for _, id := range ids {
+		if seen[id] {
+			return true
+		}
+		seen[id] = true
+	}
+	return false
+}

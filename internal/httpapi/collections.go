@@ -14,11 +14,12 @@ import (
 
 type collections interface {
 	Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
+	AllCollections(ctx context.Context, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
 	Members(ctx context.Context, profile, collection uuid.UUID) ([]store.Card, error)
-	AddCollection(ctx context.Context, lib uuid.UUID, title string) (uuid.UUID, error)
-	AddSmartCollection(ctx context.Context, lib uuid.UUID, title string, rule store.SmartRule) (uuid.UUID, error)
+	AddCollection(ctx context.Context, title string) (uuid.UUID, error)
+	AddSmartCollection(ctx context.Context, libs []uuid.UUID, title string, rule store.SmartRule) (uuid.UUID, error)
 	SetRule(ctx context.Context, collection uuid.UUID, rule store.SmartRule) error
-	AddListCollection(ctx context.Context, lib uuid.UUID, title string, list store.ListRef, listed []domain.Listed) (uuid.UUID, error)
+	AddListCollection(ctx context.Context, libs []uuid.UUID, title string, list store.ListRef, listed []domain.Listed) (uuid.UUID, error)
 	SetListMembers(ctx context.Context, collection uuid.UUID, listed []domain.Listed) error
 	CollectionList(ctx context.Context, collection uuid.UUID) (store.ListRef, error)
 	SetMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error
@@ -26,7 +27,22 @@ type collections interface {
 	RemoveCollection(ctx context.Context, collection uuid.UUID) error
 }
 
-// libraryCollections answers a page of a library's collections, by title, as walls page.
+// allCollections answers a page of every collection the profile is shown, by title: what the
+// Collections view lists.
+func (a *API) allCollections(w http.ResponseWriter, r *http.Request) {
+	offset, limit, ok := a.paging(w, r, defaultWallLimit)
+	if !ok {
+		return
+	}
+	cards, total, err := a.svc.Collections.AllCollections(r.Context(), auth.SessionOf(r.Context()).Profile.ID, offset, limit)
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[cardJSON]{cardsJSON(cards), offset, total})
+}
+
+// libraryCollections answers a page of the collections holding a library's titles, by title, as
+// walls page.
 func (a *API) libraryCollections(w http.ResponseWriter, r *http.Request) {
 	lib, ok := a.pathID(w, r, "id")
 	if !ok {
@@ -56,17 +72,17 @@ func (a *API) members(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
 }
 
-// addCollectionJSON is an admin's collection: titles put in it by hand; given a rule, a smart
-// collection of the titles the rule finds, as Plex's; or given a list kept on a provider, the
-// titles of it the library has, as Kometa's list builders.
+// addCollectionJSON is an admin's collection, in no library: titles of any put in it by hand;
+// given a rule, a smart collection of the titles the rule finds in LibraryIDs, as Plex's; or given
+// a list kept on a provider, the titles of it LibraryIDs have, as Kometa's list builders.
 type addCollectionJSON struct {
-	LibraryID uuid.UUID        `json:"library_id"`
-	Title     string           `json:"title"`
-	Rule      *store.SmartRule `json:"rule,omitzero"`
-	List      *store.ListRef   `json:"list,omitzero"`
+	Title      string           `json:"title"`
+	Rule       *store.SmartRule `json:"rule,omitzero"`
+	List       *store.ListRef   `json:"list,omitzero"`
+	LibraryIDs []uuid.UUID      `json:"library_ids,omitzero"`
 }
 
-// addCollection makes an admin's collection in a library.
+// addCollection makes an admin's collection.
 func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
 	var req addCollectionJSON
 	if !a.decode(w, r, &req) {
@@ -80,6 +96,10 @@ func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "a collection is made by a rule or a list, not both")
 		return
 	}
+	if (req.Rule != nil || req.List != nil) != (len(req.LibraryIDs) > 0) {
+		writeProblem(w, a.logger, codeInvalidBody, "library_ids names the libraries a rule or a list reads, and a collection made by hand none")
+		return
+	}
 	if req.Rule != nil && !a.checkedRule(w, *req.Rule) {
 		return
 	}
@@ -87,18 +107,18 @@ func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch {
 	case req.Rule != nil:
-		id, err = a.svc.Collections.AddSmartCollection(r.Context(), req.LibraryID, req.Title, *req.Rule)
+		id, err = a.svc.Collections.AddSmartCollection(r.Context(), req.LibraryIDs, req.Title, *req.Rule)
 	case req.List != nil:
 		listed, ok := a.readList(w, r, *req.List)
 		if !ok {
 			return
 		}
-		id, err = a.svc.Collections.AddListCollection(r.Context(), req.LibraryID, req.Title, *req.List, listed)
+		id, err = a.svc.Collections.AddListCollection(r.Context(), req.LibraryIDs, req.Title, *req.List, listed)
 	default:
-		id, err = a.svc.Collections.AddCollection(r.Context(), req.LibraryID, req.Title)
+		id, err = a.svc.Collections.AddCollection(r.Context(), req.Title)
 	}
 	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeInvalidBody, "library_id is not a library")
+		writeProblem(w, a.logger, codeInvalidBody, "library_ids names one library or more, each once")
 		return
 	}
 	if err != nil {
@@ -219,7 +239,11 @@ func (a *API) syncList(w http.ResponseWriter, r *http.Request) {
 func (a *API) collectionsRoutes() []route {
 	return []route{
 		{
-			pattern: "GET /api/v1/libraries/{id}/collections", access: signedIn, summary: "Page a library's collections",
+			pattern: "GET /api/v1/collections", access: signedIn, summary: "Page every collection, in the Collections view",
+			query: pageParams, status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.allCollections,
+		},
+		{
+			pattern: "GET /api/v1/libraries/{id}/collections", access: signedIn, summary: "Page the collections holding a library's titles",
 			query: pageParams, status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.libraryCollections,
 		},
 		{
@@ -227,7 +251,7 @@ func (a *API) collectionsRoutes() []route {
 			status: http.StatusOK, reply: listJSON[cardJSON]{}, handle: a.members,
 		},
 		{
-			pattern: "POST /api/v1/admin/collections", access: admin, summary: "Make a collection in a library",
+			pattern: "POST /api/v1/admin/collections", access: admin, summary: "Make a collection, of the titles of any library",
 			body: addCollectionJSON{}, status: http.StatusCreated, reply: createdJSON{}, handle: a.addCollection,
 		},
 		{

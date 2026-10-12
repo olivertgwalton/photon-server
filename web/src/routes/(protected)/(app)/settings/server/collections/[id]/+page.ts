@@ -11,6 +11,6 @@ export const load: PageLoad = async ({ fetch, params }) => {
 	return {
 		collection,
 		members: members.items,
-		library: collection.library_id,
+		library: collection.library_id ?? undefined,
 	};
 };

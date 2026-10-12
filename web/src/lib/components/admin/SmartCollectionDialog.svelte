@@ -28,7 +28,7 @@ async function make(event: SubmitEvent) {
 	event.preventDefault();
 	const saved = await act(
 		client().POST("/api/v1/admin/collections", {
-			body: { library_id: library, title, rule },
+			body: { library_ids: [library], title, rule },
 		}),
 		`${title} is a smart collection.`,
 		(made) => `/settings/server/collections/${made.id}`,

@@ -96,7 +96,7 @@ func (s *Store) Unmatch(ctx context.Context, id uuid.UUID) error {
 		if _, err := tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND path = $2`, item.LibraryID, item.Folder); err != nil {
 			return err
 		}
-		return askScan(ctx, tx, item.LibraryID, []string{item.Folder}, 0)
+		return askScan(ctx, tx, *item.LibraryID, []string{item.Folder}, 0)
 	})
 }
 
