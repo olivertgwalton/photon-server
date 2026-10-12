@@ -18,13 +18,6 @@ const everyone = $derived([
 	...data.profiles.map((p) => ({ value: p.id, label: p.name })),
 ]);
 
-function name(card: (typeof data.page.items)[number]["title"]) {
-	return fullTitle(
-		card,
-		card.kind === "episode" ? card.show?.title : undefined,
-	);
-}
-
 function reached(position: number, duration?: number) {
 	return duration
 		? `${Math.min(Math.round((position / duration) * 100), 100)}%`
@@ -71,7 +64,7 @@ function reached(position: number, duration?: number) {
 							href="/titles/{entry.title.id}"
 							class="text-ink font-semibold hover:underline"
 						>
-							{name(entry.title)}
+							{fullTitle(entry.title, entry.title.show?.title)}
 						</a>
 					</Table.Cell>
 					<Table.Cell

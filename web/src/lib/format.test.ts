@@ -36,9 +36,15 @@ test("an episode is placed by season and number, a double by both ends", () => {
 
 test("an episode is named with its show and place, anything else alone", () => {
 	expect(
-		fullTitle({ title: "Second", season_number: 1, episode_number: 2 }, "Show"),
+		fullTitle(
+			{ kind: "episode", title: "Second", season_number: 1, episode_number: 2 },
+			"Show",
+		),
 	).toBe("Show S1 E2 · Second");
-	expect(fullTitle({ title: "Heat" }, undefined)).toBe("Heat");
+	expect(fullTitle({ kind: "season", title: "Season 1" }, "Show")).toBe(
+		"Season 1",
+	);
+	expect(fullTitle({ kind: "movie", title: "Heat" }, undefined)).toBe("Heat");
 });
 
 test("each site's score is printed on that site's own scale", () => {

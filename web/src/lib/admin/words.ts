@@ -1,5 +1,4 @@
 import type { components } from "#lib/api/schema.js";
-import { fullTitle } from "#lib/format.js";
 
 type Schemas = components["schemas"];
 
@@ -37,11 +36,6 @@ export function byName(
 	items: readonly { id: string; name: string }[],
 ): Map<string, string> {
 	return new Map(items.map((i) => [i.id, i.name]));
-}
-
-// A played title as one line: a show's episode by its show and place in it.
-export function playedTitle(t: Schemas["PlaybackTitle"]): string {
-	return fullTitle(t, t.kind === "episode" ? t.show : undefined);
 }
 
 // The reverse of timecode: "1:02:03", "2:03" or "3" seconds, with an optional

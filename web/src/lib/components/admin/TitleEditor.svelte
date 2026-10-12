@@ -1,5 +1,6 @@
 <script lang="ts">
 import { type EditorTab, editor } from "#lib/actions.svelte.js";
+import { matchable } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import ArtworkPicker from "#lib/components/admin/ArtworkPicker.svelte";
@@ -50,7 +51,7 @@ const part = "-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pt-4";
 			{#if !title}
 				<p role="alert" class="text-destructive">{problemMessage(error)}</p>
 			{:else}
-				{@const matched = title.kind === "movie" || title.kind === "show"}
+				{@const matched = matchable(title.kind)}
 				<Tabs.Root
 					value={editor.tab}
 					onValueChange={(tab) => (editor.tab = tab as EditorTab)}

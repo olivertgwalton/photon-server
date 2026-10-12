@@ -40,6 +40,7 @@ import {
 	splitTitle,
 	unmatchTitle,
 } from "#lib/actions.svelte.js";
+import { matchable, refreshable } from "#lib/admin/edit.js";
 import type { components } from "#lib/api/schema.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
 import { titleWithShow, playHref } from "#lib/format.js";
@@ -68,10 +69,8 @@ const favourite = $derived(!!card.state?.favourite_at);
 const started = $derived(!!card.state?.position_ms);
 const watchlisted = $derived(!!card.state?.watchlisted_at);
 const admin = $derived(page.data.me?.role === "admin");
-// What an admin can do to it, as Plex's and Jellyfin's card menus offer: a
-// film or show is matched, and all but a collection or an extra refreshed.
-const matched = $derived(card.kind === "movie" || card.kind === "show");
-const refreshes = $derived(card.kind !== "collection" && card.kind !== "extra");
+const matched = $derived(matchable(card.kind));
+const refreshes = $derived(refreshable(card.kind));
 const name = $derived(titleWithShow(card));
 </script>
 
