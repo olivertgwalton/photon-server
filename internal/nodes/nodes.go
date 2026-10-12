@@ -31,6 +31,11 @@ type transcodes interface {
 	SetLimit(limit int)
 }
 
+// deliveries are the playbacks this node delivers.
+type deliveries interface {
+	Delivering() int
+}
+
 // Self is this node: what it is, and what an admin sets of it.
 type Self struct {
 	id      uuid.UUID
@@ -40,6 +45,7 @@ type Self struct {
 	automatic  int
 	settings   settings
 	transcodes transcodes
+	deliveries deliveries
 	log        *slog.Logger
 
 	mu  sync.Mutex
@@ -52,14 +58,14 @@ type Self struct {
 
 // Join keeps this node among the server's nodes, as name, and takes up what an admin has set of
 // it.
-func Join(ctx context.Context, s settings, id uuid.UUID, name string, encoder domain.Encoder, automatic int, t transcodes, log *slog.Logger) (*Self, error) {
+func Join(ctx context.Context, s settings, id uuid.UUID, name string, encoder domain.Encoder, automatic int, t transcodes, d deliveries, log *slog.Logger) (*Self, error) {
 	n, err := s.JoinNode(ctx, id, name)
 	if err != nil {
 		return nil, err
 	}
 	self := &Self{
 		id: id, name: name, encoder: encoder, automatic: automatic,
-		settings: s, transcodes: t, log: log, changed: make(chan struct{}, 1),
+		settings: s, transcodes: t, deliveries: d, log: log, changed: make(chan struct{}, 1),
 	}
 	self.apply(n.NodeSettings)
 	return self, nil
@@ -120,6 +126,7 @@ func (s *Self) Node() domain.Node {
 		Encoder: s.encoder, LimitSource: set.LimitSource,
 	}
 	n.Transcodes, n.Conversions, n.Limit = s.transcodes.Transcodes()
+	n.Streams = s.deliveries.Delivering()
 	return n
 }
 

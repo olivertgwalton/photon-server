@@ -68,6 +68,9 @@ type Sessions struct {
 	// direct are the files this node streams of playbacks played as they are, each with what cuts
 	// it off: a player holds one request open for the whole file, so refusing the next is not enough.
 	direct map[uuid.UUID]map[*func()]bool
+	// delivered are the playbacks played as they are that this node was given to deliver, until
+	// each ends.
+	delivered map[uuid.UUID]bool
 }
 
 // NewSessions keeps playbacks in live and places in saved, and closes this node's streams of
@@ -76,7 +79,7 @@ type Sessions struct {
 func NewSessions(live sessionStore, saved progressStore, st streams, raise func(context.Context, domain.Event), node uuid.UUID) *Sessions {
 	return &Sessions{
 		live: live, saved: saved, streams: st, raise: raise, node: node, starts: newStarts(),
-		direct: map[uuid.UUID]map[*func()]bool{},
+		direct: map[uuid.UUID]map[*func()]bool{}, delivered: map[uuid.UUID]bool{},
 	}
 }
 
@@ -287,6 +290,22 @@ func (s *Sessions) Serve(ctx context.Context, id uuid.UUID, cut func()) (done fu
 	return done, nil
 }
 
+// Deliver takes a playback played as it is for this node to deliver, until it ends.
+func (s *Sessions) Deliver(id uuid.UUID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.delivered[id] = true
+}
+
+// Delivering is how many playbacks this node delivers now: those played as they are it was given,
+// and its remuxes.
+func (s *Sessions) Delivering() int {
+	s.mu.Lock()
+	n := len(s.delivered)
+	s.mu.Unlock()
+	return n + len(s.streams.Playbacks())
+}
+
 // close ends this node's streams of a playback: its remux, and the files it streams as they are.
 func (s *Sessions) close(id uuid.UUID) {
 	s.streams.Close(id)
@@ -296,12 +315,13 @@ func (s *Sessions) close(id uuid.UUID) {
 		(*cut)()
 	}
 	delete(s.direct, id)
+	delete(s.delivered, id)
 }
 
 func (s *Sessions) directPlaybacks() []uuid.UUID {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return slices.Collect(maps.Keys(s.direct))
+	return append(slices.Collect(maps.Keys(s.direct)), slices.Collect(maps.Keys(s.delivered))...)
 }
 
 func (s *Sessions) own(ctx context.Context, profile, id uuid.UUID) (domain.Playback, error) {

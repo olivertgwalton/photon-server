@@ -22,7 +22,9 @@ type Node struct {
 	// Transcodes are the videos it encodes now, Conversions of them for downloads, of at most
 	// Limit at once; a Limit of zero is none.
 	Transcodes, Conversions, Limit int
-	LimitSource                    LimitSource
+	// Streams are the playbacks it delivers now, encoded or not.
+	Streams     int
+	LimitSource LimitSource
 }
 
 // NodeRole is what a node does for the cluster, as an admin sets it.
