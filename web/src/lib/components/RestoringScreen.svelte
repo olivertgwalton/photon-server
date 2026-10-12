@@ -2,6 +2,7 @@
 import type { Attachment } from "svelte/attachments";
 import { backAfterRestore } from "#lib/restored.js";
 import { restoring } from "#lib/restoring.svelte.js";
+import { page } from "$app/state";
 
 const id = $props.id();
 
@@ -18,7 +19,8 @@ const reloadsWhenBack: Attachment = () => {
 };
 </script>
 
-{#if restoring.on}
+<!-- A restore the backups page loaded is shown as one told live is. -->
+{#if restoring.on || page.data.backups?.restoring}
 	<div
 		{@attach reloadsWhenBack}
 		role="alertdialog"
