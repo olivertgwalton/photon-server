@@ -853,3 +853,22 @@ func TestTakingOrGivingBackASlotIsTold(t *testing.T) {
 	}
 	told("a playback copying its video", false)
 }
+
+func TestATranscodeIsRefusedWhereTheCacheIsShortOfSpace(t *testing.T) {
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.free = func(string) (uint64, bool) { return 1 << 30, true }
+	if err := r.Open(t.Context(), uuid.NewV7(), transcode); !errors.Is(err, ErrNoSpace) || !errors.Is(err, ErrTranscodeLimit) {
+		t.Errorf("a transcode with 1 GiB free: %v, want ErrNoSpace, which passes it to the next node", err)
+	}
+	remux := Copy{Parts: []Source{{Open: unplayed, Part: transcode.Parts[0].Part, Video: domain.VideoPlan{Codec: "h264"}}}}
+	if err := r.Open(t.Context(), uuid.NewV7(), remux); err != nil {
+		t.Errorf("a remux with 1 GiB free: %v, want it opened, as no other node would make it", err)
+	}
+	r.free = func(string) (uint64, bool) { return 3 << 30, true }
+	if err := r.Open(t.Context(), uuid.NewV7(), transcode); err != nil {
+		t.Errorf("a transcode with 3 GiB free: %v, want it opened", err)
+	}
+}

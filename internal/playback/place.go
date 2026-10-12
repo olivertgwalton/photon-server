@@ -37,10 +37,10 @@ type Start struct {
 
 // Place starts s on the first of nodes to take it, asking each in turn how decide plays it with
 // what that node encodes; one that encodes nothing is delivered by the first of deliverers to take
-// it, this node where they are none. A node with every slot held, or delivering as many streams as
-// it may, refuses it, and the next is asked; one that would be encoded where nodes are none, or
-// that every node refused, is hls.ErrTranscodeLimit or ErrStreamLimit, as the last refused it. A
-// playback started already under s.ID is ErrStarted.
+// it, this node where they are none. A node with every slot held, short of space, or delivering as
+// many streams as it may, refuses it, and the next is asked; one that would be encoded where nodes
+// are none is hls.ErrTranscodeLimit, one every deliverer refused ErrStreamLimit, and one every
+// node refused each refusal joined. A playback started already under s.ID is ErrStarted.
 func Place(ctx context.Context, p placing, sessions starting, nodes, deliverers []domain.Node, s Start, decide func(Encoding) (Decision, error)) (Decision, domain.Playback, error) {
 	asked := nodes
 	if len(asked) == 0 {
@@ -49,6 +49,7 @@ func Place(ctx context.Context, p placing, sessions starting, nodes, deliverers 
 	var d Decision
 	var started domain.Playback
 	var err error
+	var refusals []error
 	for _, node := range asked {
 		if d, err = decide(EncodingOf(node)); err != nil {
 			return d, started, err
@@ -69,10 +70,11 @@ func Place(ctx context.Context, p placing, sessions starting, nodes, deliverers 
 		}
 		started, err = start(ctx, p, sessions, node, s, d)
 		if !refused(err) {
-			break
+			return d, started, err
 		}
+		refusals = append(refusals, err)
 	}
-	return d, started, err
+	return d, started, errors.Join(refusals...)
 }
 
 // refused is a node's refusal of a playback for want of room, for the next to be asked.

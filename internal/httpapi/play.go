@@ -37,7 +37,7 @@ type placer interface {
 	Deliverers(ctx context.Context, network domain.ClientNetwork) ([]domain.Node, error)
 	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o playback.Opening) error
 	Self() domain.Node
-	Refuse(candidates []domain.Node) error
+	Refuse(candidates []domain.Node, refused error) error
 }
 
 type playing interface {
@@ -226,7 +226,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, hls.ErrTranscodeLimit) {
-		writeProblem(w, a.logger, codeTranscodeLimit, a.svc.Placer.Refuse(candidates).Error())
+		writeProblem(w, a.logger, codeTranscodeLimit, a.svc.Placer.Refuse(candidates, err).Error())
 		return
 	}
 	if errors.Is(err, playback.ErrStreamLimit) {
@@ -378,6 +378,8 @@ func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
 		err = a.svc.Placer.Open(r.Context(), a.svc.Placer.Self(), id, c, o)
 	}
 	switch {
+	case errors.Is(err, hls.ErrNoSpace):
+		writeProblem(w, a.logger, codeNoSpace, err.Error())
 	case errors.Is(err, playback.ErrStreamLimit):
 		writeProblem(w, a.logger, codeStreamLimit, err.Error())
 	case errors.Is(err, hls.ErrTranscodeLimit):

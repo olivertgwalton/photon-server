@@ -59,13 +59,16 @@ const (
 	// refusedNoEncoder is no node that could: each serves only, is drained, or cannot make what it
 	// asks.
 	refusedNoEncoder refusal = "no_encoder"
+	// refusedNoSpace is every node that could refusing it, one or more for want of space in its
+	// transcode cache.
+	refusedNoSpace refusal = "no_space"
 )
 
 func newRefusals() *prometheus.CounterVec {
 	refusals := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "photon_transcode_refusals_total", Help: "The playbacks this node refused for want of a node to encode them, by why.",
 	}, []string{"reason"})
-	for _, r := range []refusal{refusedFull, refusedNoEncoder} {
+	for _, r := range []refusal{refusedFull, refusedNoEncoder, refusedNoSpace} {
 		refusals.WithLabelValues(string(r))
 	}
 	return refusals

@@ -482,6 +482,7 @@ func TestWithNoNodeTranscodingACopyThatNeedsItIsRefused(t *testing.T) {
 # TYPE photon_transcode_refusals_total counter
 photon_transcode_refusals_total{reason="full"} 0
 photon_transcode_refusals_total{reason="no_encoder"} 1
+photon_transcode_refusals_total{reason="no_space"} 0
 `
 	if err := testutil.CollectAndCompare(only.placer, strings.NewReader(refusals)); err != nil {
 		t.Error(err)

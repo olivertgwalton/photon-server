@@ -848,6 +848,7 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 # TYPE photon_transcode_refusals_total counter
 photon_transcode_refusals_total{reason="full"} 1
 photon_transcode_refusals_total{reason="no_encoder"} 0
+photon_transcode_refusals_total{reason="no_space"} 0
 `)); err != nil {
 		t.Error(err)
 	}

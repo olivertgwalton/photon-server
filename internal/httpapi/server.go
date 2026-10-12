@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/disk"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
 )
@@ -131,7 +132,7 @@ func (a *API) backend(r *http.Request, name string, b versioned) backendJSON {
 
 func folder(path string) folderJSON {
 	f := folderJSON{Path: path}
-	if free, ok := freeBytes(path); ok {
+	if free, ok := disk.Free(path); ok {
 		f.FreeBytes = &free
 	}
 	return f

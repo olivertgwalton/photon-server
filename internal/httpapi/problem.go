@@ -45,6 +45,9 @@ const (
 	// codeStreamLimit is every node that could deliver a playback delivering as many at once as
 	// an admin lets it.
 	codeStreamLimit problemCode = "stream_limit"
+	// codeNoSpace is a node short of space in its transcode cache, answering the node that asked
+	// it to transcode.
+	codeNoSpace problemCode = "no_space"
 	// codeProviderUnavailable is a metadata provider, a plugin, that could not be reached or
 	// failed on its side.
 	codeProviderUnavailable problemCode = "provider_unavailable"
@@ -60,7 +63,7 @@ func problemCodes() []problemCode {
 		codeNotFound, codeMethodNotAllowed, codeUnknownParameter, codeInvalidParameter, codeNotReady,
 		codeInvalidBody, codeUnauthenticated, codeSignInRefused, codeInternal, codePairingNotFound,
 		codeWrongSecret, codeRateLimited, codeNoCompatibleStream, codeForbidden, codeConflict,
-		codeTranscodeLimit, codeStreamLimit, codeProviderUnavailable, codeAuthorizationPending, codeSlowDown, codeExpiredToken,
+		codeTranscodeLimit, codeStreamLimit, codeNoSpace, codeProviderUnavailable, codeAuthorizationPending, codeSlowDown, codeExpiredToken,
 	}
 }
 
@@ -90,6 +93,8 @@ func (c problemCode) status() int {
 		return http.StatusConflict
 	case codeProviderUnavailable:
 		return http.StatusBadGateway
+	case codeNoSpace:
+		return http.StatusInsufficientStorage
 	case codeInternal:
 		return http.StatusInternalServerError
 	case codePairingNotFound:
