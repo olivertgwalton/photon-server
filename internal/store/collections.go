@@ -40,7 +40,11 @@ func saveGroupings(ctx context.Context, tx db, item uuid.UUID, source domain.Fie
 	}
 	keep := []uuid.UUID{}
 	for _, g := range groupings {
-		// One box set of a source's, whichever libraries its titles are in.
+		// One box set of a source's, whichever libraries its titles are in. Titles are matched
+		// at once, so the first to find none makes it while the others wait to find it.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, string(source)+"/"+g.ID); err != nil {
+			return err
+		}
 		var id uuid.UUID
 		err := tx.QueryRow(ctx, `
 			SELECT c.item_id FROM collections c

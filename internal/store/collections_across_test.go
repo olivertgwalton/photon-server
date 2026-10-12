@@ -4,6 +4,8 @@ package store
 
 import (
 	"slices"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 	"uuid"
@@ -96,5 +98,41 @@ func TestACollectionHoldsTheTitlesOfEveryLibrary(t *testing.T) {
 	}
 	if found, _, err = s.Search(ctx, SearchQuery{Text: "weekend", Library: uhd.ID, Limit: 10}); err != nil || len(found) != 0 {
 		t.Errorf("searching the 4K films for it = %q, %v; want none", titles(found), err)
+	}
+}
+
+// Films matched at once, as a refresh matches them, make their box set once.
+func TestFilmsMatchedAtOnceMakeOneBoxSet(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []uuid.UUID
+	for i := range 8 {
+		title := "Avengers " + strconv.Itoa(i)
+		ids = append(ids, addItem(t, s, model.Item{
+			LibraryID: &films.ID, Kind: domain.ItemMovie, Title: title, ScanTitle: title, SortTitle: sortTitle(title), Folder: title,
+		}))
+	}
+	var wg sync.WaitGroup
+	for _, id := range ids {
+		wg.Go(func() {
+			m := domain.Metadata{Title: "Avengers", Collections: []domain.Grouping{{ID: "86311", Title: "The Avengers Collection"}}}
+			if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, m, nil); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	var sets, held int
+	if err := s.pool.QueryRow(ctx, `
+		SELECT count(DISTINCT c.item_id), count(m.item_id) FROM collections c
+		LEFT JOIN collection_members m ON m.collection_id = c.item_id WHERE c.origin = 'tmdb'`).Scan(&sets, &held); err != nil {
+		t.Fatal(err)
+	}
+	if sets != 1 || held != len(ids) {
+		t.Errorf("%d box sets holding %d films, want 1 holding %d", sets, held, len(ids))
 	}
 }
