@@ -9,18 +9,14 @@ import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Switch } from "#lib/components/ui/switch/index.js";
 import { bitrate, localeOptions } from "#lib/format.js";
-import type {
-	Preferences,
-	PreferencesChange,
-} from "#lib/player/preferences.js";
+import type { PreferencesChange } from "#lib/player/preferences.js";
 import { qualities } from "#lib/player/words.js";
 
 type Schemas = components["schemas"];
 
 let { data } = $props();
-// Each change answers them as kept; a load gives them afresh.
-let saved = $state<Preferences>();
-const prefs = $derived(saved ?? data.prefs);
+// Each change answers them as kept, until a load gives them afresh.
+let prefs = $derived(data.prefs);
 
 async function set(change: PreferencesChange) {
 	const { data: kept, error } = await client().PATCH(
@@ -33,7 +29,7 @@ async function set(change: PreferencesChange) {
 		toast.error(problemMessage(error));
 		return;
 	}
-	saved = kept;
+	prefs = kept;
 	toast.success("Saved for every device.");
 }
 

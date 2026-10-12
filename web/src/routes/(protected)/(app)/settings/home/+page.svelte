@@ -19,15 +19,14 @@ type Section = components["schemas"]["HomeSection"];
 
 let { data } = $props();
 const words = vocabulary();
-// Each change answers the home as kept; a load gives it afresh.
-let kept = $state.raw<Section[]>();
-const home = $derived(kept ?? data.prefs.home);
+// Each change answers the home as kept, until a load gives it afresh.
+let home = $derived(data.prefs.home);
 // Said to a screen reader as a row moves, since the list redraws under focus.
 let said = $state("");
 
 async function save(next: Section[], message: string) {
-	const before = kept;
-	kept = next;
+	const before = home;
+	home = next;
 	const { data: saved, error } = await client().PATCH(
 		"/api/v1/profile/preferences",
 		{
@@ -35,11 +34,11 @@ async function save(next: Section[], message: string) {
 		},
 	);
 	if (error) {
-		kept = before;
+		home = before;
 		toast.error(problemMessage(error));
 		return;
 	}
-	kept = saved.home;
+	home = saved.home;
 	said = message;
 }
 

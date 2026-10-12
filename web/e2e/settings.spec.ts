@@ -1,5 +1,17 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { expectAccessible, logIn, switchToKids } from "./helpers";
+
+// Another device saves this change, then the page's stream comes back from a
+// drop: the server greets it again, and every page loads afresh.
+async function savedElsewhere(page: Page, change: object) {
+	await page.request.patch("/api/v1/profile/preferences", { data: change });
+	await expect
+		.poll(async () => (await page.request.get("/mock/listening")).json())
+		.toBeGreaterThan(0);
+	await page.request.post("/mock/emit", {
+		data: { event: "hello", data: { scans: [] } },
+	});
+}
 
 test("an admin's settings are one place: their account, then the server", async ({
 	page,
@@ -90,6 +102,18 @@ test("playback settings are the profile's, kept by the server", async ({
 	await expect(
 		page.getByRole("switch", { name: "Play the next episode" }),
 	).toHaveAttribute("aria-checked", "false");
+});
+
+test("playback settings follow another device's, after one is saved here", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/playback");
+	const subtitles = page.getByLabel("Subtitles", { exact: true });
+	await subtitles.click();
+	await page.getByRole("option", { name: "Always" }).click();
+	await expect(page.getByText("Saved for every device.")).toBeVisible();
+	await savedElsewhere(page, { subtitle_mode: "none" });
+	await expect(subtitles).toHaveText("Never");
 });
 
 test("a show's episode plays its theme once the profile asks for theme music", async ({
@@ -219,6 +243,27 @@ test("the home's rows are put in order and hidden, by pointer or keyboard", asyn
 	await expect(
 		page.getByRole("heading", { name: "Continue Watching" }),
 	).toHaveCount(0);
+});
+
+test("the home's rows follow another device's order, after one is saved here", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/home");
+	const rows = page
+		.getByRole("list", { name: "Home rows" })
+		.getByRole("listitem");
+	await page.getByRole("switch", { name: "Show Continue Watching" }).click();
+	await expect(page.getByText("Continue Watching hidden.")).toBeAttached();
+	await savedElsewhere(page, {
+		home: [
+			{ row: "top_rated_unwatched", visibility: "shown" },
+			{ row: "continue_watching", visibility: "shown" },
+		],
+	});
+	await expect(rows).toHaveText(["Top Rated", "Continue Watching"]);
+	await expect(
+		page.getByRole("switch", { name: "Show Continue Watching" }),
+	).toHaveAttribute("aria-checked", "true");
 });
 
 test("a profile is given a picture, shown wherever it is", async ({ page }) => {
