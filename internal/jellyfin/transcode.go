@@ -193,7 +193,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 			return true
 		}
 	}
-	_, _, err = playback.Place(r.Context(), a.svc.Placer, a.svc.Playbacks, candidates, playback.Start{
+	_, _, err = playback.Place(r.Context(), a.svc.Placer, a.svc.Playbacks, candidates, nil, playback.Start{
 		ID: session, Session: s, Address: a.svc.Reach.Client(r).String(), Title: title, Copy: c, Tracks: domain.ChosenTracks{Subtitle: t.Subtitle},
 		Opening: playback.Opening{Profile: s.Profile.ID, Item: item, Version: c.Version, Segments: t.Segments, StartMS: t.StartMS},
 	}, func(playback.Encoding) (playback.Decision, error) { return d, nil })

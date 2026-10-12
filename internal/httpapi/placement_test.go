@@ -3,10 +3,13 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -18,6 +21,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/playback"
@@ -57,11 +61,12 @@ func (c *sharedValkey) NodeAddress(_ context.Context, id uuid.UUID) (string, boo
 
 // peerNode is a server node of a sharedValkey, served over HTTP, encoding in software.
 type peerNode struct {
-	id      uuid.UUID
-	role    atomic.Value
-	remuxer *hls.Remuxer
-	placer  *playback.Placer
-	srv     *httptest.Server
+	id       uuid.UUID
+	role     atomic.Value
+	remuxer  *hls.Remuxer
+	placer   *playback.Placer
+	sessions *playback.Sessions
+	srv      *httptest.Server
 	// public is where clients reach it themselves, set before it is asked anything.
 	public string
 	// started counts the playback.started events this node raised.
@@ -74,6 +79,9 @@ func (n *peerNode) self() domain.Node {
 		Encoder: domain.Encoder{Acceleration: domain.AccelSoftware, HEVC: domain.HEVCDeny},
 	}
 	d.Transcodes, d.Conversions, d.Limit = n.remuxer.Transcodes()
+	if n.sessions != nil {
+		d.Streams = n.sessions.Delivering()
+	}
 	return d
 }
 
@@ -92,17 +100,27 @@ func join(t *testing.T, c *sharedValkey, limit int) *peerNode {
 	}
 	n := &peerNode{id: uuid.NewV7(), remuxer: remuxer}
 	n.role.Store(domain.NodeAll)
-	n.placer = playback.NewPlacer(c, n.self, remuxOpener{remuxer}, clusterKey)
+	n.sessions = playback.NewSessions(c.livePlaybacks, c.livePlaybacks, remuxer, func(_ context.Context, e domain.Event) {
+		if e.Kind == domain.EventPlaybackStarted {
+			n.started.Add(1)
+		}
+	}, n.id)
+	n.placer = playback.NewPlacer(c, n.self, remuxOpener{remuxer}, n.sessions, clusterKey)
+	// Every node mounts the media, here a film's first file, at the same path.
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "Lawrence"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Lawrence", "Lawrence cd1.mkv"), []byte("0123456789"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	n.srv = httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Copies: noCopies{}, Discover: noDiscoveries{},
 		Sent:    playback.NewSent(),
-		Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{},
-		Playbacks: playback.NewSessions(c.livePlaybacks, c.livePlaybacks, remuxer, func(_ context.Context, e domain.Event) {
-			if e.Kind == domain.EventPlaybackStarted {
-				n.started.Add(1)
-			}
-		}, n.id),
-		Placer: n.placer, NodeKey: clusterKey,
+		Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root},
+		Parts:     library.Parts{Places: fakePlaying{root: root}},
+		Playbacks: n.sessions,
+		Placer:    n.placer, NodeKey: clusterKey,
 		HLS: remuxer, Owners: playback.NewRouter(c, n.id), Signer: playback.NewSigner([]byte("key")),
 	}))
 	t.Cleanup(n.srv.Close)
@@ -208,6 +226,60 @@ func TestATranscodeElsewhereIsFetchedFromThatNodesPublicURL(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Access-Control-Allow-Origin") != "*" {
 		t.Errorf("its playlist from the GPU node: %s, Access-Control-Allow-Origin %q; want it, to any page", resp.Status, resp.Header.Get("Access-Control-Allow-Origin"))
+	}
+}
+
+// A film played as it is is delivered by a node set to serve only, its files fetched from that
+// node's public URL; its stop, asked of the node the client asked, ends it there.
+func TestAFilmPlayedAsItIsIsDeliveredByANodeServingOnly(t *testing.T) {
+	c := newSharedValkey()
+	front, proxy := join(t, c, 1), join(t, c, 1)
+	proxy.role.Store(domain.NodeServe)
+	proxy.public = proxy.srv.URL
+	c.tell(proxy.self())
+	req := playRequest(`"matroska"`)
+	req.RequestURI, req.URL.Scheme, req.URL.Host = "", "http", strings.TrimPrefix(front.srv.URL, "http://")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var played struct {
+		PlaybackID uuid.UUID `json:"playback_id"`
+		Parts      []struct {
+			URL string `json:"url"`
+		} `json:"parts"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&played); err != nil || len(played.Parts) == 0 {
+		t.Fatalf("play: %s, %+v, %v", resp.Status, played, err)
+	}
+	if !strings.HasPrefix(played.Parts[0].URL, proxy.srv.URL+"/") {
+		t.Fatalf("its first file is at %s, want it at the proxy's public URL", played.Parts[0].URL)
+	}
+	if got := proxy.sessions.Delivering(); got != 1 {
+		t.Errorf("the proxy delivers %d streams, want the one", got)
+	}
+	file, err := http.Get(played.Parts[0].URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Body.Close()
+	body, err := io.ReadAll(file.Body)
+	if err != nil || file.StatusCode != http.StatusOK || string(body) != "0123456789" {
+		t.Errorf("its first file from the proxy: %s %q, %v", file.Status, body, err)
+	}
+	stop, err := http.NewRequestWithContext(t.Context(), http.MethodPost, front.srv.URL+"/api/v1/playbacks/"+played.PlaybackID.String()+"/stop", strings.NewReader(`{"position_ms": 0}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop.Header.Set("Authorization", "Bearer "+goodToken)
+	stopped, err := http.DefaultClient.Do(stop)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopped.Body.Close()
+	if stopped.StatusCode != http.StatusOK || proxy.sessions.Delivering() != 0 {
+		t.Errorf("stopped through the front: %s, the proxy delivering %d; want it ended there", stopped.Status, proxy.sessions.Delivering())
 	}
 }
 

@@ -720,10 +720,15 @@ func alone(local interface {
 		}
 		return n
 	}
-	return playback.NewPlacer(noNodes{}, self, local, nodecall.Key{})
+	return playback.NewPlacer(noNodes{}, self, local, noDirect{}, nodecall.Key{})
 }
 
 // noNodes is a cluster of one: no other node tells of itself.
+// noDirect delivers what is played as it is without counting it.
+type noDirect struct{}
+
+func (noDirect) Deliver(uuid.UUID) {}
+
 type noNodes struct{}
 
 func (noNodes) Nodes(context.Context) ([]domain.Node, error) { return nil, nil }

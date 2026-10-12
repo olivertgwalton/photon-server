@@ -72,7 +72,7 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 		}}},
 		Placer: playback.NewPlacer(fakeBackend{}, func() domain.Node {
 			return domain.Node{ID: self, Name: "mini", Role: domain.NodeAll, Availability: domain.NodeActive, Limit: 2, LimitSource: domain.LimitAutomatic}
-		}, nil, nodecall.Key{}),
+		}, nil, nil, nodecall.Key{}),
 	})
 	var listed listJSON[knownNodeJSON]
 	if rec := ask(api, http.MethodGet, "/api/v1/admin/nodes", ""); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&listed) != nil {

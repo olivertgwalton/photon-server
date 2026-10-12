@@ -37,7 +37,7 @@ func TestTheNodeWithTheMostSlotsFreeIsAskedFirst(t *testing.T) {
 		// This node's own advert, older than what it knows of itself now.
 		{Role: domain.NodeAll, Availability: domain.NodeActive, ID: self.ID, Name: "self, as it said", Address: "http://self", Encoder: h264, Limit: 4},
 	}
-	p := NewPlacer(nodes, func() domain.Node { return self }, nil, nodecall.Key{})
+	p := NewPlacer(nodes, func() domain.Node { return self }, nil, nil, nodecall.Key{})
 	names := func(need Need) []string {
 		t.Helper()
 		got, err := p.Candidates(t.Context(), need)
@@ -74,7 +74,7 @@ func TestANodeAsksItsOwnGroupFirst(t *testing.T) {
 		{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "loft", Address: "http://loft", Group: "loft", Encoder: enc, Transcodes: 3, Limit: 4},
 		{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "none", Address: "http://none", Encoder: enc, Limit: 8},
 	}
-	got, err := NewPlacer(nodes, func() domain.Node { return self }, nil, nodecall.Key{}).Candidates(t.Context(), Need{})
+	got, err := NewPlacer(nodes, func() domain.Node { return self }, nil, nil, nodecall.Key{}).Candidates(t.Context(), Need{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +87,32 @@ func TestANodeAsksItsOwnGroupFirst(t *testing.T) {
 	}
 }
 
+// A playback whose video is not encoded is delivered by a node of this one's group first, of them
+// one set to serve only, then by the node delivering fewest streams, this one before another
+// delivering as many; never by one its clients cannot reach, or one drained.
+func TestAPlaybackPlayedAsItIsIsDeliveredNearAndByTheLeastBusy(t *testing.T) {
+	self := domain.Node{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "self", Group: "loft", Streams: 2}
+	nodes := told{
+		{Role: domain.NodeServe, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "proxy, office", Address: "http://a", PublicURL: "https://a", Group: "office"},
+		{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "loft, busy", Address: "http://b", PublicURL: "https://b", Group: "loft", Streams: 5},
+		{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "loft, as busy", Address: "http://c", PublicURL: "https://c", Group: "loft", Streams: 2},
+		{Role: domain.NodeServe, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "proxy, loft", Address: "http://d", PublicURL: "https://d", Group: "loft", Streams: 9},
+		{Role: domain.NodeServe, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "no public URL", Address: "http://e", Group: "loft"},
+		{Role: domain.NodeServe, Availability: domain.NodeDraining, ID: uuid.NewV7(), Name: "drained", Address: "http://f", PublicURL: "https://f", Group: "loft"},
+	}
+	got, err := NewPlacer(nodes, func() domain.Node { return self }, nil, nil, nodecall.Key{}).Deliverers(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, n := range got {
+		names = append(names, n.Name)
+	}
+	if want := []string{"proxy, loft", "self", "loft, as busy", "loft, busy", "proxy, office"}; !slices.Equal(names, want) {
+		t.Errorf("%v, want %v", names, want)
+	}
+}
+
 // Of nodes otherwise equal, the one a remux was opened on is asked after the others next time,
 // so they take turns.
 func TestNodesOtherwiseEqualTakeTurns(t *testing.T) {
@@ -95,7 +121,7 @@ func TestNodesOtherwiseEqualTakeTurns(t *testing.T) {
 	enc := domain.Encoder{Acceleration: domain.AccelSoftware, HEVC: domain.HEVCDeny}
 	self := domain.Node{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "self", Encoder: enc, Limit: hls.Unlimited}
 	other := domain.Node{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "other", Address: remote.URL, Encoder: enc, Limit: hls.Unlimited}
-	p := NewPlacer(told{other}, func() domain.Node { return self }, nil, nodecall.Key{})
+	p := NewPlacer(told{other}, func() domain.Node { return self }, nil, nil, nodecall.Key{})
 	first := func() string {
 		t.Helper()
 		got, err := p.Candidates(t.Context(), Need{})

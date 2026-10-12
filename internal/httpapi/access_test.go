@@ -60,7 +60,7 @@ func TestAnAdminChecksEveryNodeCanReadALibrarysRoot(t *testing.T) {
 		}},
 		Placer: playback.NewPlacer(fakeBackend{}, func() domain.Node {
 			return domain.Node{ID: self, Name: "alpha", Role: domain.NodeAll, Availability: domain.NodeActive}
-		}, nil, key),
+		}, nil, nil, key),
 	})
 	check := func(token string, lib domain.Library) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/libraries/"+lib.ID.String()+"/check", nil)

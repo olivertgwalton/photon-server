@@ -31,7 +31,13 @@ type opener interface {
 	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error
 }
 
-// Placer chooses the node that encodes a playback's video, and opens its remux there. It keeps no
+// directs are the playbacks played as they are a node delivers.
+type directs interface {
+	Deliver(playback uuid.UUID)
+}
+
+// Placer chooses the node that delivers a playback, encoding its video where it is encoded, and
+// opens it there: its remux, or its files played as they are. It keeps no
 // count of the cluster's transcodes: the node asked admits or refuses under its own lock, and
 // the next is asked, so the nodes' own counts are the only ones. It keeps only when it last opened
 // a remux on each node, to take turns between nodes otherwise equal.
@@ -39,6 +45,7 @@ type Placer struct {
 	adverts  adverts
 	self     func() domain.Node
 	local    opener
+	direct   directs
 	key      nodecall.Key
 	client   *http.Client
 	refusals *prometheus.CounterVec
@@ -47,10 +54,11 @@ type Placer struct {
 	opened map[uuid.UUID]time.Time
 }
 
-// NewPlacer places on the nodes adverts tells of and on this one, as self says it is now.
-func NewPlacer(a adverts, self func() domain.Node, local opener, key nodecall.Key) *Placer {
+// NewPlacer places on the nodes adverts tells of and on this one, as self says it is now, opening
+// this one's remuxes on local and its playbacks played as they are on direct.
+func NewPlacer(a adverts, self func() domain.Node, local opener, direct directs, key nodecall.Key) *Placer {
 	return &Placer{
-		adverts: a, self: self, local: local, key: key, client: &http.Client{Timeout: openWithin}, refusals: newRefusals(),
+		adverts: a, self: self, local: local, direct: direct, key: key, client: &http.Client{Timeout: openWithin}, refusals: newRefusals(),
 		opened: map[uuid.UUID]time.Time{},
 	}
 }
@@ -107,6 +115,47 @@ func (p *Placer) Candidates(ctx context.Context, need Need) ([]domain.Node, erro
 	return nodes, nil
 }
 
+// Deliverers are the nodes that could deliver a playback whose video is not encoded to a client of
+// this one: this one, and those its clients reach themselves at a public URL that are not drained.
+// Those in this node's group come first, of them those set to serve only, then those delivering
+// fewer streams, this one before another; of nodes otherwise equal, the one this node opened a
+// playback on least recently, so they take turns.
+func (p *Placer) Deliverers(ctx context.Context) ([]domain.Node, error) {
+	self := p.self()
+	nodes, err := p.adverts.Nodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nodes = slices.DeleteFunc(nodes, func(n domain.Node) bool {
+		return n.ID == self.ID || n.Address == "" || n.PublicURL == "" || !n.Availability.Takes()
+	})
+	nodes = append(nodes, self)
+	near := func(n domain.Node) bool { return n.Group == self.Group }
+	itself := func(n domain.Node) bool { return n.ID == self.ID }
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	slices.SortStableFunc(nodes, func(a, b domain.Node) int {
+		return cmp.Or(
+			cmp.Compare(rank(b, near), rank(a, near)),
+			cmp.Compare(rank(b, serving), rank(a, serving)),
+			cmp.Compare(a.Streams, b.Streams),
+			cmp.Compare(rank(b, itself), rank(a, itself)),
+			p.opened[a.ID].Compare(p.opened[b.ID]),
+		)
+	})
+	return nodes, nil
+}
+
+// serving is a node set to serve only, which delivers what the others encode nothing of.
+func serving(n domain.Node) bool {
+	switch n.Role {
+	case domain.NodeServe:
+		return true
+	case domain.NodeAll, domain.NodeTranscode:
+	}
+	return false
+}
+
 // rank is one for a node that is, and zero for one that is not.
 func rank(n domain.Node, is func(domain.Node) bool) int {
 	if is(n) {
@@ -138,9 +187,11 @@ func free(n domain.Node) float64 {
 	return float64(n.Limit-n.Transcodes) / float64(n.Limit)
 }
 
-// Opening is a playback's remux as one node asks another to open it: the profile's copy, by ids
-// the node it is asked of reads again, and how it is played.
+// Opening is a playback as one node asks another to open it: the profile's copy, by ids the node
+// it is asked of reads again, and how it is played, its remux's video and audio where it is not
+// played as it is.
 type Opening struct {
+	Method   domain.PlayMethod    `json:"method"`
 	Profile  uuid.UUID            `json:"profile"`
 	Item     uuid.UUID            `json:"item"`
 	Version  uuid.UUID            `json:"version"`
@@ -150,12 +201,17 @@ type Opening struct {
 	StartMS  int64                `json:"start_ms"`
 }
 
-// Open opens a playback's remux of c, as o says, on node: on this one, or by asking it. A node
-// that has every slot held answers hls.ErrTranscodeLimit.
+// Open opens a playback of c, as o says, on node: on this one, or by asking it. A node that has
+// every slot held answers hls.ErrTranscodeLimit.
 func (p *Placer) Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o Opening) error {
 	if node.ID == p.self().ID {
-		if err := p.local.Open(ctx, playback, c, o.Video, o.Audio, o.Segments, time.Duration(o.StartMS)*time.Millisecond); err != nil {
-			return err
+		switch o.Method {
+		case domain.PlayDirect:
+			p.direct.Deliver(playback)
+		case domain.PlayRemux, domain.PlayTranscode:
+			if err := p.local.Open(ctx, playback, c, o.Video, o.Audio, o.Segments, time.Duration(o.StartMS)*time.Millisecond); err != nil {
+				return err
+			}
 		}
 		p.chose(node)
 		return nil
@@ -191,9 +247,9 @@ func (p *Placer) chose(node domain.Node) {
 	p.opened[node.ID] = time.Now()
 }
 
-// RemotePath is where a node is asked to open a playback's remux.
+// RemotePath is where a node is asked to open a playback.
 func RemotePath(playback uuid.UUID) string {
-	return "/api/v1/internal/playbacks/" + playback.String() + "/remux"
+	return "/api/v1/internal/playbacks/" + playback.String() + "/delivery"
 }
 
 // Refuse counts, and answers, the refusal of a playback every one of candidates refused.
