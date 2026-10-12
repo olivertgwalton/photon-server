@@ -1,4 +1,5 @@
 <script lang="ts">
+import { cn } from "#lib/utils.js";
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import { act } from "#lib/act.js";
 import { relative } from "#lib/admin/words.js";
@@ -49,7 +50,7 @@ function set(body: components["schemas"]["NodeChange"], said: string) {
 
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger
-		class={buttonVariants({ variant: "outline", size: "sm" })}
+		class={cn(buttonVariants({ variant: "outline", size: "sm" }))}
 		aria-label="Actions for {node.name}"
 	>
 		<EllipsisIcon class="size-4" aria-hidden="true" />

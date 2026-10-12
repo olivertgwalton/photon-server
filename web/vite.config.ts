@@ -19,5 +19,12 @@ export default defineConfig({
 			compilerOptions: { runes: true, experimental: { async: true } },
 		}),
 	],
+	// The ui components merge their variants' classes through cn(), so
+	// tailwind-variants need not bring its own copy of tailwind-merge.
+	resolve: {
+		alias: [
+			{ find: /^tailwind-variants$/, replacement: "tailwind-variants/lite" },
+		],
+	},
 	server: { proxy: { "/api": api, "/readyz": api } },
 });

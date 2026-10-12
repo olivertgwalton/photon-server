@@ -1,4 +1,5 @@
 <script lang="ts">
+import { cn } from "#lib/utils.js";
 import { confirming } from "#lib/actions.svelte.js";
 import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
 import { buttonVariants } from "#lib/components/ui/button/index.js";
@@ -14,7 +15,7 @@ import { buttonVariants } from "#lib/components/ui/button/index.js";
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
 			<AlertDialog.Action
-				class={buttonVariants({ variant: "destructive" })}
+				class={cn(buttonVariants({ variant: "destructive" }))}
 				onclick={() => {
 					confirming.open = false;
 					return confirming.run();
