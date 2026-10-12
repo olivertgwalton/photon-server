@@ -438,6 +438,62 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	}
 }
 
+// elsewhere says another node runs every playback.
+type elsewhere struct{ node domain.Node }
+
+func (e elsewhere) Owner(context.Context, uuid.UUID) (domain.Node, bool, error) {
+	return e.node, true, nil
+}
+
+// An app fetching HLS another node runs is sent to that node where it reaches it, at its local URL
+// on the server's networks and its public URL elsewhere, to fetch the rest from there; one it
+// reaches at neither is handed its HLS through this node.
+func TestAnAppIsSentToTheNodeRunningItsHLS(t *testing.T) {
+	st, ada, heat, _ := aFilm(t)
+	owner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := w.Write([]byte("m4s")); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer owner.Close()
+	signer := playback.NewSigner([]byte("key"))
+	session := uuid.NewV7()
+	for _, tc := range []struct {
+		name, client string
+		node         domain.Node
+		at           string
+	}{
+		{"remote", "203.0.113.9:5000", domain.Node{Address: owner.URL, PublicURL: "https://gpu.example.com", LocalURL: "http://192.168.1.5:8640"}, "https://gpu.example.com"},
+		{"local", "192.168.1.20:5000", domain.Node{Address: owner.URL, PublicURL: "https://gpu.example.com", LocalURL: "http://192.168.1.5:8640"}, "http://192.168.1.5:8640"},
+		{"reached at neither", "203.0.113.9:5000", domain.Node{Address: owner.URL}, ""},
+	} {
+		api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+			Copies: noCopies{}, Discover: noDiscoveries{},
+			Sent:    playback.NewSent(),
+			Network: st,
+			Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
+			HLS: newFakeRemuxes(), Placer: alone(newFakeRemuxes()), Owners: elsewhere{tc.node}, Signer: signer,
+		})
+		r := httptest.NewRequest(http.MethodGet, "/videos/"+guid(heat)+"/0.m4s?PlaySessionId="+guid(session)+"&ApiKey=pst_ada", nil)
+		r.RemoteAddr = tc.client
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, r)
+		if tc.at == "" {
+			if w.Code != http.StatusOK || w.Body.String() != "m4s" {
+				t.Errorf("%s: %d %q, want the segment handed on", tc.name, w.Code, w.Body)
+			}
+			continue
+		}
+		location := w.Header().Get("Location")
+		rest, found := strings.CutPrefix(location, tc.at+"/api/v1/hls/"+session.String()+"/")
+		parts := strings.Split(rest, "/")
+		if w.Code != http.StatusFound || !found || len(parts) != 3 || parts[2] != "0.m4s" ||
+			!signer.Valid("/api/v1/hls/"+session.String(), parts[0], parts[1], time.Now()) {
+			t.Errorf("%s: %d to %s, want sent to the node's signed HLS at %s", tc.name, w.Code, location, tc.at)
+		}
+	}
+}
+
 // An app outside the server's networks is kept within the server's limit on a remote stream, the
 // video encoded to fit it; on them, it is copied.
 func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {

@@ -28,9 +28,11 @@ type hlsFiles interface {
 	Resource(ctx context.Context, playback uuid.UUID, name string) (hls.Resource, error)
 }
 
-// placer chooses the node that encodes a playback, and opens its remux there.
+// placer chooses the node that delivers a playback, encoding it where it is encoded, and opens its
+// remux there.
 type placer interface {
 	Candidates(ctx context.Context, need playback.Need) ([]domain.Node, error)
+	Deliverers(ctx context.Context, network domain.ClientNetwork) ([]domain.Node, error)
 	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o playback.Opening) error
 	Self() domain.Node
 	Refuse(candidates []domain.Node) error
@@ -185,15 +187,18 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 	}
 	d := playback.Decision{Method: t.Method, Video: &t.Video, Audio: t.Audio, Reasons: t.Reasons}
 	// A copy encoded is opened on the node with the most transcode slots free that can encode it,
-	// the next where it has none by then; one copied, here.
-	candidates := []domain.Node{a.svc.Placer.Self()}
+	// the next where it has none by then; one copied, on the node best placed to deliver it.
+	var candidates, deliverers []domain.Node
 	if t.Video.Encode != nil {
-		if candidates, err = a.svc.Placer.Candidates(r.Context(), playback.NeedOf(t.Video)); err != nil {
-			a.internal(w, r, err)
-			return true
-		}
+		candidates, err = a.svc.Placer.Candidates(r.Context(), playback.NeedOf(t.Video))
+	} else {
+		deliverers, err = a.svc.Placer.Deliverers(r.Context(), a.svc.Reach.Network(r))
 	}
-	_, _, err = playback.Place(r.Context(), a.svc.Placer, a.svc.Playbacks, candidates, nil, playback.Start{
+	if err != nil {
+		a.internal(w, r, err)
+		return true
+	}
+	_, _, err = playback.Place(r.Context(), a.svc.Placer, a.svc.Playbacks, candidates, deliverers, playback.Start{
 		ID: session, Session: s, Address: a.svc.Reach.Client(r).String(), Title: title, Copy: c, Tracks: domain.ChosenTracks{Subtitle: t.Subtitle},
 		Opening: playback.Opening{Profile: s.Profile.ID, Item: item, Version: c.Version, Segments: t.Segments, StartMS: t.StartMS},
 	}, func(playback.Encoding) (playback.Decision, error) { return d, nil })
@@ -217,9 +222,10 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 	return true
 }
 
-// fromOwner hands a request for a play session another node runs to that node, by the signed
-// address its own API serves the session's HLS at, carrying the app's query into the playlists it
-// answers.
+// fromOwner sends a request for a play session another node runs to the signed address that node's
+// own API serves the session's HLS at: at the node itself, where the app reaches it, so the rest
+// is fetched from there too; else through this node, carrying the app's query into the playlists
+// it answers.
 func (a *API) fromOwner(w http.ResponseWriter, r *http.Request, session uuid.UUID, name string) {
 	owner, elsewhere, err := a.svc.Owners.Owner(r.Context(), session)
 	if err != nil {
@@ -232,6 +238,11 @@ func (a *API) fromOwner(w http.ResponseWriter, r *http.Request, session uuid.UUI
 		return
 	}
 	subject := "/api/v1/hls/" + session.String()
+	if base := owner.URLFor(a.svc.Reach.Network(r)); base != "" {
+		exp, sig := a.svc.Signer.Token(subject, time.Now().Add(transcodeFor))
+		http.Redirect(w, r, base+subject+"/"+exp+"/"+sig+"/"+name, http.StatusFound)
+		return
+	}
 	exp, sig := a.svc.Signer.Token(subject, time.Now().Add(time.Hour))
 	appQuery := r.URL.RawQuery
 	proxy := &httputil.ReverseProxy{
