@@ -33,7 +33,7 @@ function tool(t: components["schemas"]["Tool"]) {
 // What a node encodes with, in a few words.
 function encodes(e: components["schemas"]["Node"]["encoder"]) {
 	return [
-		words.accelerations[e.acceleration],
+		words.accelerations[e.acceleration] + (e.device ? ` (${e.device})` : ""),
 		e.hevc === "allow" ? "H.264, HEVC" : "H.264",
 		e.libass ? "subtitles" : "",
 	]

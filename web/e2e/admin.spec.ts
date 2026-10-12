@@ -102,6 +102,10 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 	await dialog.getByLabel("Egress").click();
 	await page.getByRole("option", { name: "At most" }).click();
 	await dialog.getByLabel("Most megabits a second").fill("900");
+	// On its second card.
+	await dialog.getByLabel("Encoder").click();
+	await page.getByRole("option", { name: "NVENC" }).click();
+	await dialog.getByLabel("Device").fill("1");
 	// Among the nodes at its site, which it asks to transcode first.
 	await dialog.getByLabel("Group").fill("loft");
 	await expectAccessible(page);
@@ -117,6 +121,7 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 		group: "loft",
 		stream_limit: 30,
 		egress_limit_mbps: 900,
+		encoding: { source: "set", acceleration: "nvenc", device: "1" },
 		transcode_limit: 12,
 	});
 	await expect(

@@ -1492,7 +1492,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Change a node's role, its limit on transcodes at once, its limits on streams at once and on egress, its address, its public and local URLs or its group; it takes them up at once
+         * Change a node's role, its limit on transcodes at once, its limits on streams at once and on egress, its address, its public and local URLs, its group or what it encodes on; it takes them up at once
          * @description Admin only.
          */
         patch: {
@@ -7552,6 +7552,8 @@ export interface components {
             device?: string;
             hevc: components["schemas"]["HEVCEncoding"];
         };
+        /** @enum {string} */
+        EncoderSource: "automatic" | "set";
         Entry: {
             /** Format: date-time */
             added_at: string;
@@ -7852,6 +7854,7 @@ export interface components {
             address: string;
             availability: components["schemas"]["NodeAvailability"];
             egress_limit_mbps: number;
+            encoding: components["schemas"]["NodeEncoding"];
             /** Format: date-time */
             first_seen: string;
             group: string;
@@ -8084,6 +8087,7 @@ export interface components {
             address?: string | null;
             availability?: components["schemas"]["NodeAvailability"];
             egress_limit_mbps?: number | null;
+            encoding?: components["schemas"]["NodeEncoding"] | null;
             group?: string | null;
             local_url?: string | null;
             note?: string;
@@ -8095,8 +8099,14 @@ export interface components {
         };
         NodeEncoder: {
             acceleration: components["schemas"]["Acceleration"];
+            device?: string;
             hevc: components["schemas"]["HEVCEncoding"];
             libass: boolean;
+        };
+        NodeEncoding: {
+            acceleration?: components["schemas"]["Acceleration"];
+            device?: string;
+            source: components["schemas"]["EncoderSource"];
         };
         NodeMetrics: {
             availability: components["schemas"]["NodeAvailability"];

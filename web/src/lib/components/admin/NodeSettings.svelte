@@ -19,6 +19,8 @@ const id = $props.id();
 const words = vocabulary();
 
 type Role = components["schemas"]["NodeRole"];
+type Acceleration = components["schemas"]["Acceleration"];
+type Encoding = "automatic" | Acceleration;
 type Limit = "automatic" | "at_most" | "none";
 type StreamLimit = "at_most" | "none";
 
@@ -26,6 +28,21 @@ const streamLimits: readonly { value: StreamLimit; label: string }[] = [
 	{ value: "none", label: "No limit" },
 	{ value: "at_most", label: "At most" },
 ];
+
+const encodings: readonly { value: Encoding; label: string }[] = [
+	{ value: "automatic", label: "Automatic" },
+	...Object.entries(words.accelerations).map(([value, label]) => ({
+		value: value as Acceleration,
+		label,
+	})),
+];
+
+// The device each acceleration is on, as a node names it, where it may have several.
+const devices: Partial<Record<Acceleration, string>> = {
+	nvenc: "0",
+	qsv: "/dev/dri/renderD128",
+	vaapi: "/dev/dri/renderD128",
+};
 
 const roles = Object.entries(words.node_roles).map(([value, { name }]) => ({
 	value: value as Role,
@@ -62,6 +79,12 @@ let limit = $derived<Limit>(
 			: "none",
 );
 let most = $derived(node.transcode_limit || node.online?.transcode_limit || 8);
+let encoding = $derived<Encoding>(
+	node.encoding.source === "set" && node.encoding.acceleration
+		? node.encoding.acceleration
+		: "automatic",
+);
+let device = $derived(node.encoding.device ?? "");
 let streams = $derived<StreamLimit>(node.stream_limit ? "at_most" : "none");
 let streamMost = $derived(node.stream_limit || 20);
 let egress = $derived<StreamLimit>(node.egress_limit_mbps ? "at_most" : "none");
@@ -76,6 +99,14 @@ async function save(event: SubmitEvent) {
 		public_url: publicURL,
 		local_url: localURL,
 		group,
+		encoding:
+			encoding === "automatic"
+				? { source: "automatic" }
+				: {
+						source: "set",
+						acceleration: encoding,
+						device: encoding in devices ? device : "",
+					},
 		stream_limit: streams === "none" ? 0 : streamMost,
 		egress_limit_mbps: egress === "none" ? 0 : egressMost,
 		...(limit === "automatic"
@@ -257,6 +288,29 @@ async function save(event: SubmitEvent) {
 					</Field.Description>
 				</Field.Field>
 			{/if}
+			<Field.Field>
+				<Field.Label for="{id}-node-encoder">Encoder</Field.Label>
+				<Choice
+					id="{id}-node-encoder"
+					name="encoder"
+					bind:value={encoding}
+					options={encodings}
+				/>
+				{#if encoding !== "automatic" && encoding in devices}
+					<Input
+						id="{id}-node-device"
+						name="device"
+						placeholder={devices[encoding]}
+						bind:value={device}
+						aria-label="Device"
+						class="font-mono"
+					/>
+				{/if}
+				<Field.Description>
+					What it encodes video on, taken up for the next video it encodes. One
+					that encodes no test picture is passed over for the first that does.
+				</Field.Description>
+			</Field.Field>
 			<Dialog.Footer>
 				<Button type="submit">Save</Button>
 			</Dialog.Footer>
