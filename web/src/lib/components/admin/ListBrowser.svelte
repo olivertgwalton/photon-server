@@ -77,7 +77,7 @@ async function make(list: KeptList) {
 				aria-label="Search lists"
 			/>
 		</form>
-		<div class="-mx-6 min-h-0 flex-1 overflow-y-auto px-6 pb-1">
+		<div class="-mx-6 min-h-0 flex-1 overflow-y-auto px-6 py-1">
 			<svelte:boundary>
 				{@const answer = await lists}
 				{#if answer.error}
