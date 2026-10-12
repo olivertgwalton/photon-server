@@ -100,6 +100,40 @@ func (c *Client) ratings(ctx context.Context, key, path string) ([]domain.Rating
 	return out, nil
 }
 
+// Lists answers MDBList's public lists named like query, or with none its best liked, as "user/list".
+func (c *Client) Lists(ctx context.Context, query string) ([]domain.KeptList, error) {
+	set, err := c.settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	key := set[keySetting]
+	if key == "" {
+		return nil, provider.ErrNotConfigured
+	}
+	path, q := "/lists/top", url.Values{"apikey": {key}}
+	if query != "" {
+		path = "/lists/search"
+		q.Set("query", query)
+	}
+	var body []struct {
+		User        string `json:"user_name"`
+		Slug        string `json:"slug"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		MediaType   string `json:"mediatype"`
+		Items       int    `json:"items"`
+	}
+	if err := c.api.Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: q}, &body); err != nil {
+		return nil, err
+	}
+	out := make([]domain.KeptList, len(body))
+	for i, l := range body {
+		holds := map[string]domain.ItemKind{"movie": domain.ItemMovie, "show": domain.ItemShow}[l.MediaType]
+		out[i] = domain.KeptList{ID: l.User + "/" + l.Slug, Title: l.Name, About: l.Description, Holds: holds, Size: l.Items}
+	}
+	return out, nil
+}
+
 // listPage is how many of a list's titles MDBList answers at most at once.
 const listPage = 1000
 

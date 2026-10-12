@@ -13,6 +13,7 @@ type providerList interface {
 	All(ctx context.Context) ([]provider.Provider, error)
 	Get(ctx context.Context, id domain.FieldSource) (provider.Provider, bool, error)
 	List(ctx context.Context, source domain.FieldSource, id string) ([]domain.Listed, error)
+	Lists(ctx context.Context, source domain.FieldSource, query string) ([]domain.KeptList, error)
 	Forget()
 }
 

@@ -117,3 +117,40 @@ func TestAListIsItsTitlesInRankOrder(t *testing.T) {
 		t.Errorf("listed (-want +got):\n%s", diff)
 	}
 }
+
+func TestListsAreTheBestLikedUnlessSearched(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := map[string]string{
+			"/lists/top":           `[{"user_name": "garycrawfordgc", "slug": "netflix-shows", "name": "Netflix Shows", "mediatype": "show", "items": 300}]`,
+			"/lists/search horror": `[{"user_name": "hdlists", "slug": "horror", "name": "Horror", "description": "Scary", "mediatype": "movie", "items": 920}, {"user_name": "k0meta", "slug": "pride", "name": "Pride", "mediatype": ""}]`,
+		}[strings.TrimSpace(r.URL.Path+" "+r.URL.Query().Get("query"))]
+		if body == "" || r.URL.Query().Get("apikey") != "secret" {
+			http.NotFound(w, r)
+			return
+		}
+		if _, err := io.WriteString(w, body); err != nil {
+			t.Error(err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": "secret"}, nil }, unlimited{})
+	c.api.Base = srv.URL
+	top, err := c.Lists(t.Context(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []domain.KeptList{{ID: "garycrawfordgc/netflix-shows", Title: "Netflix Shows", Holds: domain.ItemShow, Size: 300}}; !cmp.Equal(want, top) {
+		t.Errorf("top lists %+v", top)
+	}
+	found, err := c.Lists(t.Context(), "horror")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []domain.KeptList{
+		{ID: "hdlists/horror", Title: "Horror", About: "Scary", Holds: domain.ItemMovie, Size: 920},
+		{ID: "k0meta/pride", Title: "Pride"},
+	}
+	if diff := cmp.Diff(want, found); diff != "" {
+		t.Errorf("found (-want +got):\n%s", diff)
+	}
+}
