@@ -37,6 +37,8 @@ let {
 	serverLanguage: string;
 	serverCountry?: string;
 } = $props();
+
+const id = $props.id();
 const words = vocabulary();
 
 // Languages and countries by name in the reader's own language, as Plex's and
@@ -147,15 +149,20 @@ const refreshOptions = $derived(
 
 <Field.Group>
 	<Field.Field>
-		<Field.Label for="library-name">Name</Field.Label>
-		<Input id="library-name" name="name" required value={library?.name ?? ""} />
+		<Field.Label for="{id}-library-name">Name</Field.Label>
+		<Input
+			id="{id}-library-name"
+			name="name"
+			required
+			value={library?.name ?? ""}
+		/>
 	</Field.Field>
 
 	{#if !library}
 		<Field.Field>
-			<Field.Label for="library-kind">Holds</Field.Label>
+			<Field.Label for="{id}-library-kind">Holds</Field.Label>
 			<Choice
-				id="library-kind"
+				id="{id}-library-kind"
 				name="kind"
 				bind:value={kind}
 				options={Object.entries(words.library_kinds).map(([value, label]) => ({
@@ -165,9 +172,9 @@ const refreshOptions = $derived(
 			/>
 		</Field.Field>
 		<Field.Field>
-			<Field.Label for="library-media">Its media</Field.Label>
+			<Field.Label for="{id}-library-media">Its media</Field.Label>
 			<Choice
-				id="library-media"
+				id="{id}-library-media"
 				name="media"
 				bind:value={media}
 				options={[
@@ -189,9 +196,9 @@ const refreshOptions = $derived(
 		{#if remote}
 			<div class="grid gap-4 sm:grid-cols-[auto_1fr]">
 				<Field.Field>
-					<Field.Label for="library-list-source">Titles from</Field.Label>
+					<Field.Label for="{id}-library-list-source">Titles from</Field.Label>
 					<Choice
-						id="library-list-source"
+						id="{id}-library-list-source"
 						name="list_source"
 						bind:value={listSource}
 						options={listers}
@@ -200,9 +207,9 @@ const refreshOptions = $derived(
 				</Field.Field>
 				{#if listSource}
 					<Field.Field>
-						<Field.Label for="library-list">List</Field.Label>
+						<Field.Label for="{id}-library-list">List</Field.Label>
 						<Input
-							id="library-list"
+							id="{id}-library-list"
 							name="list_id"
 							required
 							placeholder="movie/top"
@@ -212,11 +219,11 @@ const refreshOptions = $derived(
 				{/if}
 			</div>
 			<Field.Field>
-				<Field.Label for="library-discover"
+				<Field.Label for="{id}-library-discover"
 					>Search finds titles from</Field.Label
 				>
 				<Choice
-					id="library-discover"
+					id="{id}-library-discover"
 					name="discover"
 					value={searchers[1]?.value ?? ""}
 					options={searchers}
@@ -227,9 +234,9 @@ const refreshOptions = $derived(
 				</Field.Description>
 			</Field.Field>
 			<Field.Field>
-				<Field.Label for="library-streams">Streamed by</Field.Label>
+				<Field.Label for="{id}-library-streams">Streamed by</Field.Label>
 				<Choice
-					id="library-streams"
+					id="{id}-library-streams"
 					name="streams"
 					value={streamers[0]?.value}
 					options={streamers}
@@ -241,8 +248,8 @@ const refreshOptions = $derived(
 			</Field.Field>
 		{:else}
 			<Field.Field>
-				<Field.Label for="library-root">Folder</Field.Label>
-				<FolderPicker id="library-root" name="root" />
+				<Field.Label for="{id}-library-root">Folder</Field.Label>
+				<FolderPicker id="{id}-library-root" name="root" />
 				<Field.Description>
 					A folder on the server. Everything under it is scanned.
 				</Field.Description>
@@ -251,9 +258,9 @@ const refreshOptions = $derived(
 	{:else if library.media === "remote"}
 		{#if library.list}
 			<Field.Field>
-				<Field.Label for="library-list">Titles from</Field.Label>
+				<Field.Label for="{id}-library-list">Titles from</Field.Label>
 				<Input
-					id="library-list"
+					id="{id}-library-list"
 					value="{nameOf(library.list.source)}: {library.list.id}"
 					readonly
 					class="font-mono"
@@ -262,25 +269,29 @@ const refreshOptions = $derived(
 		{/if}
 		{#if library.discover}
 			<Field.Field>
-				<Field.Label for="library-discover"
+				<Field.Label for="{id}-library-discover"
 					>Search finds titles from</Field.Label
 				>
 				<Input
-					id="library-discover"
+					id="{id}-library-discover"
 					value={nameOf(library.discover)}
 					readonly
 				/>
 			</Field.Field>
 		{/if}
 		<Field.Field>
-			<Field.Label for="library-streams">Streamed by</Field.Label>
-			<Input id="library-streams" value={nameOf(library.streams)} readonly />
+			<Field.Label for="{id}-library-streams">Streamed by</Field.Label>
+			<Input
+				id="{id}-library-streams"
+				value={nameOf(library.streams)}
+				readonly
+			/>
 		</Field.Field>
 	{:else}
 		<Field.Field>
-			<Field.Label for="library-root">Folder</Field.Label>
+			<Field.Label for="{id}-library-root">Folder</Field.Label>
 			<Input
-				id="library-root"
+				id="{id}-library-root"
 				value={library.root}
 				readonly
 				class="font-mono"
@@ -332,12 +343,12 @@ const refreshOptions = $derived(
 					{#each Object.entries(words.extras) as [value, label] (value)}
 						<div class="flex items-center gap-2">
 							<Checkbox
-								id="extra-{value}"
+								id="{id}-extra-{value}"
 								name="remote_extras"
 								{value}
 								checked={(extras as string[]).includes(value)}
 							/>
-							<Label for="extra-{value}">{label}</Label>
+							<Label for="{id}-extra-{value}">{label}</Label>
 						</div>
 					{/each}
 				</div>
@@ -353,19 +364,19 @@ const refreshOptions = $derived(
 					{#each offeredLanguages as { tag, name } (tag)}
 						<div class="flex items-center gap-2">
 							<Checkbox
-								id="subtitle-{tag}"
+								id="{id}-subtitle-{tag}"
 								name="subtitle_languages"
 								value={tag}
 								checked={fetching.includes(tag)}
 							/>
-							<Label for="subtitle-{tag}">{name}</Label>
+							<Label for="{id}-subtitle-{tag}">{name}</Label>
 						</div>
 					{/each}
 				</div>
 				<Field.Field>
-					<Field.Label for="library-subtitle-match">Download</Field.Label>
+					<Field.Label for="{id}-library-subtitle-match">Download</Field.Label>
 					<Choice
-						id="library-subtitle-match"
+						id="{id}-library-subtitle-match"
 						name="subtitle_match"
 						value={library?.subtitle_match ?? defaults.subtitle_match}
 						options={[
@@ -383,9 +394,11 @@ const refreshOptions = $derived(
 			<div class="grid gap-4 sm:grid-cols-2">
 				{#if !remote}
 					<Field.Field>
-						<Field.Label for="library-monitor">Watch for changes</Field.Label>
+						<Field.Label for="{id}-library-monitor"
+							>Watch for changes</Field.Label
+						>
 						<Choice
-							id="library-monitor"
+							id="{id}-library-monitor"
 							name="monitor"
 							value={library?.monitor ?? defaults.monitor}
 							options={[
@@ -396,18 +409,18 @@ const refreshOptions = $derived(
 					</Field.Field>
 				{/if}
 				<Field.Field>
-					<Field.Label for="library-refresh">Refresh metadata</Field.Label>
+					<Field.Label for="{id}-library-refresh">Refresh metadata</Field.Label>
 					<Choice
-						id="library-refresh"
+						id="{id}-library-refresh"
 						name="refresh_days"
 						value={refresh}
 						options={refreshOptions}
 					/>
 				</Field.Field>
 				<Field.Field>
-					<Field.Label for="library-previews">Previews</Field.Label>
+					<Field.Label for="{id}-library-previews">Previews</Field.Label>
 					<Choice
-						id="library-previews"
+						id="{id}-library-previews"
 						name="previews"
 						value={library?.previews ?? (remote ? "off" : defaults.previews)}
 						options={[
@@ -418,9 +431,11 @@ const refreshOptions = $derived(
 					/>
 				</Field.Field>
 				<Field.Field>
-					<Field.Label for="library-markers">Intros and credits</Field.Label>
+					<Field.Label for="{id}-library-markers"
+						>Intros and credits</Field.Label
+					>
 					<Choice
-						id="library-markers"
+						id="{id}-library-markers"
 						name="markers"
 						value={library?.markers ?? (remote ? "off" : defaults.markers)}
 						options={[
@@ -435,9 +450,9 @@ const refreshOptions = $derived(
 					</Field.Description>
 				</Field.Field>
 				<Field.Field>
-					<Field.Label for="library-keyframes">Keyframes</Field.Label>
+					<Field.Label for="{id}-library-keyframes">Keyframes</Field.Label>
 					<Choice
-						id="library-keyframes"
+						id="{id}-library-keyframes"
 						name="keyframes"
 						value={library?.keyframes ?? defaults.keyframes}
 						options={[
@@ -453,9 +468,9 @@ const refreshOptions = $derived(
 					</Field.Description>
 				</Field.Field>
 				<Field.Field>
-					<Field.Label for="library-themes">Theme music</Field.Label>
+					<Field.Label for="{id}-library-themes">Theme music</Field.Label>
 					<Choice
-						id="library-themes"
+						id="{id}-library-themes"
 						name="themes"
 						value={library?.themes ?? defaults.themes}
 						options={[
@@ -472,9 +487,11 @@ const refreshOptions = $derived(
 					</Field.Description>
 				</Field.Field>
 				<Field.Field>
-					<Field.Label for="library-language">Metadata language</Field.Label>
+					<Field.Label for="{id}-library-language"
+						>Metadata language</Field.Label
+					>
 					<Choice
-						id="library-language"
+						id="{id}-library-language"
 						name="metadata_language"
 						value={library?.metadata_language ?? serverLocale}
 						options={languages}
@@ -485,9 +502,9 @@ const refreshOptions = $derived(
 					</Field.Description>
 				</Field.Field>
 				<Field.Field>
-					<Field.Label for="library-titles">Titles</Field.Label>
+					<Field.Label for="{id}-library-titles">Titles</Field.Label>
 					<Choice
-						id="library-titles"
+						id="{id}-library-titles"
 						name="title_language"
 						value={library?.title_language ?? defaults.title_language}
 						options={[
@@ -501,9 +518,9 @@ const refreshOptions = $derived(
 					</Field.Description>
 				</Field.Field>
 				<Field.Field>
-					<Field.Label for="library-collections">Collections</Field.Label>
+					<Field.Label for="{id}-library-collections">Collections</Field.Label>
 					<Choice
-						id="library-collections"
+						id="{id}-library-collections"
 						name="collection_mode"
 						value={library?.collection_mode ?? defaults.collection_mode}
 						options={[
@@ -518,9 +535,9 @@ const refreshOptions = $derived(
 					</Field.Description>
 				</Field.Field>
 				<Field.Field>
-					<Field.Label for="library-artwork">Pictures</Field.Label>
+					<Field.Label for="{id}-library-artwork">Pictures</Field.Label>
 					<Choice
-						id="library-artwork"
+						id="{id}-library-artwork"
 						name="artwork_language"
 						value={library?.artwork_language ?? defaults.artwork_language}
 						options={[
@@ -534,9 +551,11 @@ const refreshOptions = $derived(
 					</Field.Description>
 				</Field.Field>
 				<Field.Field>
-					<Field.Label for="library-country">Certification country</Field.Label>
+					<Field.Label for="{id}-library-country"
+						>Certification country</Field.Label
+					>
 					<Choice
-						id="library-country"
+						id="{id}-library-country"
 						name="certification_country"
 						value={library?.certification_country ?? serverLocale}
 						options={countries}
@@ -548,9 +567,11 @@ const refreshOptions = $derived(
 				</Field.Field>
 				{#if !remote}
 					<Field.Field>
-						<Field.Label for="library-deletion">Media deletion</Field.Label>
+						<Field.Label for="{id}-library-deletion"
+							>Media deletion</Field.Label
+						>
 						<Choice
-							id="library-deletion"
+							id="{id}-library-deletion"
 							name="deletion"
 							value={library?.deletion ?? defaults.deletion}
 							options={[

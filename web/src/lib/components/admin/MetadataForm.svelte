@@ -22,6 +22,8 @@ type Schemas = components["schemas"];
 // writing it; giving it back lets the sources say it again.
 let { title }: { title: Schemas["TitlePage"] } = $props();
 
+const id = $props.id();
+
 const fields: {
 	key: Schemas["Field"];
 	label: string;
@@ -73,11 +75,15 @@ async function giveBack(field: Schemas["Field"], label: string) {
 		{#each fields as field (field.key)}
 			<Field.Field>
 				<div class="flex flex-wrap items-center justify-between gap-2">
-					<Field.Label for="field-{field.key}">{field.label}</Field.Label>
+					<Field.Label for="{id}-field-{field.key}">{field.label}</Field.Label>
 					<div class="flex items-center gap-3">
 						<div class="flex items-center gap-1.5">
-							<Checkbox id="hold-{field.key}" name="locked" value={field.key} />
-							<Label for="hold-{field.key}" class="text-ink-3 text-xs">
+							<Checkbox
+								id="{id}-hold-{field.key}"
+								name="locked"
+								value={field.key}
+							/>
+							<Label for="{id}-hold-{field.key}" class="text-ink-3 text-xs">
 								Hold <span class="sr-only">{field.label}</span>
 							</Label>
 						</div>
@@ -93,14 +99,14 @@ async function giveBack(field: Schemas["Field"], label: string) {
 				</div>
 				{#if field.long}
 					<Textarea
-						id="field-{field.key}"
+						id="{id}-field-{field.key}"
 						name={field.key}
 						value={values[field.key]}
 						rows={5}
 					/>
 				{:else}
 					<Input
-						id="field-{field.key}"
+						id="{id}-field-{field.key}"
 						name={field.key}
 						type={field.type ?? "text"}
 						value={values[field.key]}

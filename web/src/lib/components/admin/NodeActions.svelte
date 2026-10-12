@@ -17,6 +17,8 @@ type Node = components["schemas"]["KnownNode"];
 // forget it once taken away.
 let { node, nodes }: { node: Node; nodes: Node[] } = $props();
 
+const id = $props.id();
+
 let settings = $state(false);
 let draining = $state(false);
 let forgetting = $state(false);
@@ -95,9 +97,9 @@ function set(body: components["schemas"]["NodeChange"], said: string) {
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<Field.Field>
-			<Field.Label for="drain-note">Note for other admins</Field.Label>
+			<Field.Label for="{id}-drain-note">Note for other admins</Field.Label>
 			<Textarea
-				id="drain-note"
+				id="{id}-drain-note"
 				bind:value={note}
 				rows={2}
 				placeholder="Optional"

@@ -22,6 +22,8 @@ let {
 	ondismiss: () => void;
 } = $props();
 
+const id = $props.id();
+
 const countdown = 10;
 let left = $state(countdown);
 
@@ -42,7 +44,7 @@ const where = $derived(episodeLabel(card.season_number, card.episode_number));
 </script>
 
 <section
-	aria-labelledby="up-next"
+	aria-labelledby="{id}-up-next"
 	class="bg-raise/95 ring-line-strong flex w-80 max-w-[calc(100vw-2rem)] gap-3 rounded-xl p-3 shadow-2xl ring-1 backdrop-blur"
 >
 	<div
@@ -60,7 +62,7 @@ const where = $derived(episodeLabel(card.season_number, card.episode_number));
 	</div>
 	<div class="flex min-w-0 flex-col gap-2">
 		<div class="min-w-0">
-			<p id="up-next" class="label">Up next</p>
+			<p id="{id}-up-next" class="label">Up next</p>
 			<p class="text-ink truncate text-sm font-semibold">
 				{[where, card.title].filter(Boolean).join(" · ")}
 			</p>

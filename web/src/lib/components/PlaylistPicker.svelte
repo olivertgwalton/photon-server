@@ -9,6 +9,8 @@ import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { fields } from "#lib/form.js";
 
+const uid = $props.id();
+
 async function add(id: string, listName: string) {
 	if (await addToPlaylist(id, picker.ids, listName)) picker.open = false;
 }
@@ -53,11 +55,11 @@ async function create(event: SubmitEvent) {
 		</svelte:boundary>
 		<form onsubmit={create}>
 			<Field.Field orientation="horizontal">
-				<Field.Label for="new-playlist" class="sr-only">
+				<Field.Label for="{uid}-new-playlist" class="sr-only">
 					New playlist
 				</Field.Label>
 				<Input
-					id="new-playlist"
+					id="{uid}-new-playlist"
 					name="name"
 					placeholder="New playlist"
 					required

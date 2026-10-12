@@ -25,6 +25,8 @@ let {
 	to?: string;
 } = $props();
 
+const id = $props.id();
+
 const languages = $derived(localeOptions(locales.languages, "language"));
 const countries = $derived(localeOptions(locales.countries, "region"));
 
@@ -46,9 +48,9 @@ function save(event: SubmitEvent) {
 
 <form onsubmit={save} class="grid max-w-2xl gap-6">
 	<Field.Field>
-		<Field.Label for="server-name">Name</Field.Label>
+		<Field.Label for="{id}-server-name">Name</Field.Label>
 		<Input
-			id="server-name"
+			id="{id}-server-name"
 			name="name"
 			value={settings.name}
 			autocomplete="off"
@@ -60,9 +62,9 @@ function save(event: SubmitEvent) {
 	</Field.Field>
 	<div class="grid gap-6 sm:grid-cols-2">
 		<Field.Field>
-			<Field.Label for="server-language">Metadata language</Field.Label>
+			<Field.Label for="{id}-server-language">Metadata language</Field.Label>
 			<Choice
-				id="server-language"
+				id="{id}-server-language"
 				name="metadata_language"
 				value={settings.metadata_language}
 				options={languages}
@@ -72,9 +74,9 @@ function save(event: SubmitEvent) {
 			</Field.Description>
 		</Field.Field>
 		<Field.Field>
-			<Field.Label for="server-country">Certification country</Field.Label>
+			<Field.Label for="{id}-server-country">Certification country</Field.Label>
 			<Choice
-				id="server-country"
+				id="{id}-server-country"
 				name="certification_country"
 				value={settings.certification_country}
 				options={countries}
