@@ -565,7 +565,8 @@ const poster = $derived(art("poster"));
 		/>
 	{/if}
 
-	{#await data.similar then similar}
+	<svelte:boundary>
+		{@const similar = await data.similar}
 		{#if similar?.length}
 			<Rail
 				title="More like this"
@@ -573,7 +574,13 @@ const poster = $derived(art("poster"));
 				href="/titles/{about.id}/similar"
 			/>
 		{/if}
-	{/await}
+		{#snippet pending()}
+			<!-- Nothing, until the server has looked. -->
+		{/snippet}
+		{#snippet failed()}
+			<!-- Nothing: the rest of the page is no less for it. -->
+		{/snippet}
+	</svelte:boundary>
 
 	{#if t.studios?.length ||
 		directors.length ||

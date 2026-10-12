@@ -1,5 +1,6 @@
-import { error, redirect } from "@sveltejs/kit";
+import { error, isHttpError, isRedirect, redirect } from "@sveltejs/kit";
 import createClient from "openapi-fetch";
+import { goto } from "$app/navigation";
 import { navigating } from "$app/state";
 import { loginPath } from "#lib/session.js";
 import { problemMessage } from "./problem.js";
@@ -23,4 +24,15 @@ export async function need<T>(call: Promise<Answer<T>>): Promise<T> {
 		redirect(303, loginPath(navigating.to?.url ?? new URL(location.href)));
 	}
 	error(response.status, problemMessage(problem));
+}
+
+// What a page says of a call it streamed rather than awaited, where `need`
+// refused it: the refusal's words, or, for a lapsed session, nothing to say,
+// as the login page is gone to.
+export function refusal(e: unknown): string {
+	if (isRedirect(e)) {
+		void goto(e.location);
+		return "";
+	}
+	return isHttpError(e) ? e.body.message : "Something went wrong.";
 }
