@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/provider"
@@ -81,16 +82,39 @@ func (c *Client) Candidates(ctx context.Context, loc domain.Locale, kind domain.
 	return c.Search(ctx, loc, kinds[kind], title, year)
 }
 
-// charts are TMDB's charts, read as lists by their paths, and what each holds; a trending chart
-// of both says of each title which it is.
-var charts = map[string]domain.ItemKind{
-	"trending/all/day": "", "trending/all/week": "",
-	"trending/movie/day": domain.ItemMovie, "trending/movie/week": domain.ItemMovie,
-	"trending/tv/day": domain.ItemShow, "trending/tv/week": domain.ItemShow,
-	"movie/popular": domain.ItemMovie, "movie/top_rated": domain.ItemMovie,
-	"movie/now_playing": domain.ItemMovie, "movie/upcoming": domain.ItemMovie,
-	"tv/popular": domain.ItemShow, "tv/top_rated": domain.ItemShow,
-	"tv/airing_today": domain.ItemShow, "tv/on_the_air": domain.ItemShow,
+// charts are TMDB's charts, read as lists by their paths: what each is called, and what it holds.
+// A trending chart of both says of each title which it is.
+type chart struct {
+	path, title string
+	holds       domain.ItemKind
+}
+
+var charts = []chart{
+	{"trending/all/day", "Trending today", ""},
+	{"trending/all/week", "Trending this week", ""},
+	{"trending/movie/day", "Films trending today", domain.ItemMovie},
+	{"trending/movie/week", "Films trending this week", domain.ItemMovie},
+	{"trending/tv/day", "Shows trending today", domain.ItemShow},
+	{"trending/tv/week", "Shows trending this week", domain.ItemShow},
+	{"movie/popular", "Popular films", domain.ItemMovie},
+	{"tv/popular", "Popular shows", domain.ItemShow},
+	{"movie/top_rated", "Top rated films", domain.ItemMovie},
+	{"tv/top_rated", "Top rated shows", domain.ItemShow},
+	{"movie/now_playing", "Films in cinemas", domain.ItemMovie},
+	{"movie/upcoming", "Films coming to cinemas", domain.ItemMovie},
+	{"tv/airing_today", "Shows on today", domain.ItemShow},
+	{"tv/on_the_air", "Shows on this week", domain.ItemShow},
+}
+
+// Lists answers TMDB's charts, those named like query. TMDB has no search of its users' lists.
+func (c *Client) Lists(_ context.Context, query string) ([]domain.KeptList, error) {
+	var out []domain.KeptList
+	for _, ch := range charts {
+		if strings.Contains(strings.ToLower(ch.title), strings.ToLower(query)) {
+			out = append(out, domain.KeptList{ID: ch.path, Title: ch.title, About: "TMDB's chart, its first 100 titles", Holds: ch.holds})
+		}
+	}
+	return out, nil
 }
 
 // chartPages is how much of a chart is read: its first 100 titles. TMDB pages its popular
@@ -100,10 +124,12 @@ const chartPages = 5
 // List answers a TMDB list's films and shows in its order, a page at a time; or one of its charts,
 // named by its path.
 func (c *Client) List(ctx context.Context, id string) ([]domain.Listed, error) {
-	chart, isChart := charts[id]
+	i := slices.IndexFunc(charts, func(ch chart) bool { return ch.path == id })
+	isChart := i >= 0
+	var chart domain.ItemKind
 	path := "/list/" + url.PathEscape(id)
 	if isChart {
-		path = "/" + id
+		chart, path = charts[i].holds, "/"+id
 	}
 	kinds := map[string]domain.ItemKind{"movie": domain.ItemMovie, "tv": domain.ItemShow}
 	var out []domain.Listed

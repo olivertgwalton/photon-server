@@ -390,3 +390,13 @@ func reply(t *testing.T, w io.Writer, body string) {
 		t.Error(err)
 	}
 }
+
+func TestChartsAreTheListsTMDBOffers(t *testing.T) {
+	got, err := New(withToken, unlimited{}).Lists(t.Context(), "popular")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].ID != "movie/popular" || got[1].Holds != domain.ItemShow {
+		t.Errorf("lists %+v", got)
+	}
+}

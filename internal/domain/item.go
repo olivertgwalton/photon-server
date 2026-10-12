@@ -75,6 +75,17 @@ func Providers() []Provider {
 	return []Provider{ProviderTMDB, ProviderIMDb, ProviderTVDB}
 }
 
+// KeptList is a list kept on a provider, which a collection could follow.
+type KeptList struct {
+	ID    string
+	Title string
+	About string
+	// Holds is what kind of title it lists, or empty for both films and shows.
+	Holds ItemKind
+	// Size is how many titles it lists, where the provider says.
+	Size int
+}
+
 // Listed is a title a list kept on a provider holds: a film or a show, by its ids.
 type Listed struct {
 	Kind ItemKind

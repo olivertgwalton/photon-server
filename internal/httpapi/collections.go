@@ -217,6 +217,37 @@ func (a *API) readList(w http.ResponseWriter, r *http.Request, list store.ListRe
 	return listed, true
 }
 
+// keptListJSON is a list kept on a provider, which a list collection could follow by its source
+// and id.
+type keptListJSON struct {
+	Source domain.FieldSource `json:"source"`
+	ID     string             `json:"id"`
+	Title  string             `json:"title"`
+	About  string             `json:"about,omitzero"`
+	Holds  domain.ItemKind    `json:"holds,omitzero" doc:"movie or show; absent for both"`
+	Size   int                `json:"size,omitzero"`
+}
+
+// keptLists answers the lists a provider keeps that a collection could follow, read from it now,
+// as Silo's collection templates offer them.
+func (a *API) keptLists(w http.ResponseWriter, r *http.Request) {
+	source := domain.FieldSource(r.URL.Query().Get("source"))
+	lists, err := a.svc.Providers.Lists(r.Context(), source, r.URL.Query().Get("query"))
+	switch {
+	case errors.Is(err, provider.ErrNoLister), errors.Is(err, provider.ErrNotConfigured):
+		writeProblem(w, a.logger, codeInvalidParameter, "source cannot offer its lists: "+err.Error())
+		return
+	case err != nil:
+		writeProblem(w, a.logger, codeProviderUnavailable, err.Error())
+		return
+	}
+	out := make([]keptListJSON, len(lists))
+	for i, l := range lists {
+		out[i] = keptListJSON{Source: source, ID: l.ID, Title: l.Title, About: l.About, Holds: l.Holds, Size: l.Size}
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[keptListJSON]{Items: out})
+}
+
 // syncList reads a list collection's list again now, and keeps what it holds.
 func (a *API) syncList(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r, "id")
@@ -249,6 +280,14 @@ func (a *API) collectionsRoutes() []route {
 		{
 			pattern: "GET /api/v1/titles/{id}/members", access: signedIn, summary: "A collection's titles",
 			status: http.StatusOK, reply: listJSON[cardJSON]{}, handle: a.members,
+		},
+		{
+			pattern: "GET /api/v1/admin/lists", access: admin, summary: "The lists a provider keeps that a collection could follow",
+			query: []param{
+				{"source", domain.FieldSource(""), "The provider: tmdb, mdblist, or a plugin that keeps lists; required."},
+				{"query", "", "Lists named like this; by default the provider's own choice, as its best liked."},
+			},
+			status: http.StatusOK, reply: listJSON[keptListJSON]{}, handle: a.keptLists,
 		},
 		{
 			pattern: "POST /api/v1/admin/collections", access: admin, summary: "Make a collection, of the titles of any library",

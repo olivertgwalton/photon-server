@@ -1153,6 +1153,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The lists a provider keeps that a collection could follow
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description The provider: tmdb, mdblist, or a plugin that keeps lists; required. */
+                    source?: components["schemas"]["FieldSource"];
+                    /** @description Lists named like this; by default the provider's own choice, as its best liked. */
+                    query?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KeptListList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/locales": {
         parameters: {
             query?: never;
@@ -7767,6 +7812,17 @@ export interface components {
         JobState: "queued" | "running" | "rerun" | "dead";
         /** @enum {string} */
         Keep: "token" | "cookie";
+        KeptList: {
+            about?: string;
+            holds?: components["schemas"]["ItemKind"];
+            id: string;
+            size?: number;
+            source: components["schemas"]["FieldSource"];
+            title: string;
+        };
+        KeptListList: {
+            items: components["schemas"]["KeptList"][];
+        };
         KeyListing: {
             /** Format: date-time */
             created_at: string;

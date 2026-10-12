@@ -149,6 +149,16 @@ func (listing) List(_ context.Context, source domain.FieldSource, id string) ([]
 	return nil, provider.ErrNoLister
 }
 
+func (listing) Lists(_ context.Context, source domain.FieldSource, query string) ([]domain.KeptList, error) {
+	if source == domain.SourceMDBList {
+		return nil, provider.ErrNotConfigured
+	}
+	if source != domain.SourceTMDB {
+		return nil, provider.ErrNoLister
+	}
+	return []domain.KeptList{{ID: "movie/popular", Title: "Popular films " + query, Holds: domain.ItemMovie}}, nil
+}
+
 func (listing) Forget() {}
 
 func TestCollectionsAreBrowsedAndAnAdminsAreKept(t *testing.T) {
@@ -164,6 +174,10 @@ func TestCollectionsAreBrowsedAndAnAdminsAreKept(t *testing.T) {
 		{memberToken, http.MethodGet, "/api/v1/titles/" + alienSet.String() + "/members", "", http.StatusOK, `"title":"Alien"`},
 		{memberToken, http.MethodPost, "/api/v1/admin/collections", `{"title": "Mine"}`, http.StatusForbidden, ""},
 		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"title": "Mine"}`, http.StatusCreated, mySet.String()},
+		{memberToken, http.MethodGet, "/api/v1/admin/lists?source=tmdb", "", http.StatusForbidden, ""},
+		{goodToken, http.MethodGet, "/api/v1/admin/lists?source=tmdb&query=now", "", http.StatusOK, `"items":[{"source":"tmdb","id":"movie/popular","title":"Popular films now","holds":"movie"}]`},
+		{goodToken, http.MethodGet, "/api/v1/admin/lists?source=mdblist", "", http.StatusBadRequest, "not configured"},
+		{goodToken, http.MethodGet, "/api/v1/admin/lists?source=omdb", "", http.StatusBadRequest, "keeps no lists"},
 		{memberToken, http.MethodGet, "/api/v1/collections", "", http.StatusOK, `"title":"Alien Collection"`},
 		// A collection made by hand reads no library; one made by a rule or a list names those it reads.
 		{goodToken, http.MethodPost, "/api/v1/admin/collections", `{"title": "Mine", "library_ids": ["` + films.String() + `"]}`, http.StatusBadRequest, "library_ids"},
