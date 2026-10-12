@@ -51,6 +51,7 @@ function changeSettings(provider: Provider, settings: Record<string, string>) {
 // Every setting typed in; a secret left empty keeps what was set, as it is
 // never shown to edit.
 async function save(event: SubmitEvent, provider: Provider) {
+	const element = event.currentTarget as HTMLFormElement;
 	const form = fields(event);
 	const settings: Record<string, string> = {};
 	for (const s of provider.settings) {
@@ -59,7 +60,7 @@ async function save(event: SubmitEvent, provider: Provider) {
 		settings[s.key] = value;
 	}
 	if (await changeSettings(provider, settings)) {
-		(event.currentTarget as HTMLFormElement).reset();
+		element.reset();
 	}
 }
 

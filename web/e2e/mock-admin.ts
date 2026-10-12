@@ -639,6 +639,12 @@ export async function admin(
 			return json({ items: [] });
 		case "POST /api/v1/admin/profiles":
 			return json({ id: "p-new", name: "Guest", role: "user" }, 201);
+		case "PATCH /api/v1/admin/profiles/p-kids":
+			return json({
+				id: "p-kids",
+				name: "Kids",
+				role: "user",
+			} satisfies Schemas["Profile"]);
 		case "GET /api/v1/admin/profiles/p-kids/access":
 			return json({
 				max_age: 12,

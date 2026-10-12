@@ -33,6 +33,7 @@ const locks = {
 } as const;
 
 async function saveProfile(event: SubmitEvent) {
+	const element = event.currentTarget as HTMLFormElement;
 	const form = fields(event);
 	const body: Change = {
 		name: textAsTyped(form, "name"),
@@ -46,7 +47,7 @@ async function saveProfile(event: SubmitEvent) {
 			password ? "Saved, with the new password." : "Saved.",
 		)
 	) {
-		(event.currentTarget as HTMLFormElement).reset();
+		element.reset();
 	}
 }
 
