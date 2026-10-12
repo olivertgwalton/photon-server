@@ -1,10 +1,11 @@
 <script lang="ts">
-import { goto } from "$app/navigation";
+import { goto, preloadData } from "$app/navigation";
 import { page } from "$app/state";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import { CLIENT, deviceName } from "#lib/device.js";
 import { returnPath } from "#lib/session.js";
+import type { PageData as PickerData } from "../../../(protected)/profiles/$types";
 import { leaveFor, refusalMessage } from "#lib/signin.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
@@ -39,15 +40,14 @@ async function login(event: SubmitEvent) {
 		return;
 	}
 	// A household of several is asked who is watching, as Plex and Netflix
-	// ask; a household of one goes straight on.
+	// ask; a household of one goes straight on. The picker's own load says
+	// which, and is not asked again on the way there.
 	const to = returnPath(page.url);
-	const profiles = await api.GET("/api/v1/profiles");
-	await goto(
-		(profiles.data?.items.length ?? 0) > 1
-			? `/profiles?to=${encodeURIComponent(to)}`
-			: to,
-		{ refreshAll: true },
-	);
+	const picker = `/profiles?to=${encodeURIComponent(to)}`;
+	const asked = await preloadData(picker);
+	const several =
+		asked.type === "loaded" && (asked.data as PickerData).profiles.length > 1;
+	await goto(several ? picker : to);
 }
 
 // The provider signs the reader in as their own profile, so they come back
