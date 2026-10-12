@@ -94,6 +94,7 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 	await dialog.getByLabel("Address").fill("http://10.0.0.6:8640");
 	// Where clients fetch what it transcodes for the others' clients.
 	await dialog.getByLabel("Public URL").fill("https://gpu.example.com");
+	await dialog.getByLabel("Local URL").fill("http://100.64.0.5:8640");
 	// As many streams as its uplink carries.
 	await dialog.getByLabel("Streams at once").click();
 	await page.getByRole("option", { name: "At most" }).click();
@@ -112,6 +113,7 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 		role: "transcode",
 		address: "http://10.0.0.6:8640",
 		public_url: "https://gpu.example.com",
+		local_url: "http://100.64.0.5:8640",
 		group: "loft",
 		stream_limit: 30,
 		egress_limit_mbps: 900,
