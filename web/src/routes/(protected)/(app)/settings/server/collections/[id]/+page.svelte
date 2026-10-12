@@ -8,6 +8,7 @@ import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { act } from "#lib/act.js";
+import { moved } from "#lib/rows.js";
 import { ruleQuery, wallSearch } from "#lib/wall.js";
 
 const api = client();
@@ -77,10 +78,7 @@ async function search(event: SubmitEvent) {
 }
 
 function move(from: number, to: number) {
-	const next = [...members];
-	const [moved] = next.splice(from, 1);
-	if (moved) next.splice(to, 0, moved);
-	members = next;
+	members = moved(members, from, to);
 }
 
 function caption(card: Card) {

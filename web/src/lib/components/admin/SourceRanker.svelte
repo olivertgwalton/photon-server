@@ -6,6 +6,8 @@ import type { components } from "#lib/api/schema.js";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
+import { reorder } from "#lib/reorder.svelte.js";
+import { moved } from "#lib/rows.js";
 
 // A built-in's name or plugin:<slug>.
 type Source = components["schemas"]["FieldSource"];
@@ -35,15 +37,11 @@ const initial = () => [
 		.map((o) => ({ ...o, used: false })),
 ];
 let ranked = $state(initial());
-let dragging = $state<number>();
 
 function move(from: number, to: number) {
-	if (to < 0 || to >= ranked.length || from === to) return;
-	const next = [...ranked];
-	const [moved] = next.splice(from, 1);
-	if (moved) next.splice(to, 0, moved);
-	ranked = next;
+	ranked = moved(ranked, from, to);
 }
+const drag = reorder(move);
 </script>
 
 <input
@@ -59,20 +57,9 @@ function move(from: number, to: number) {
 		<li
 			class={[
 				"flex items-center gap-3 px-3 py-2",
-				dragging === i && "opacity-50",
+				drag.dragging === i && "opacity-50",
 			]}
-			draggable="true"
-			ondragstart={(e) => {
-				dragging = i;
-				e.dataTransfer?.setData("text/plain", String(source.id));
-			}}
-			ondragover={(e) => e.preventDefault()}
-			ondrop={(e) => {
-				e.preventDefault();
-				if (dragging !== undefined) move(dragging, i);
-				dragging = undefined;
-			}}
-			ondragend={() => (dragging = undefined)}
+			{@attach drag.row(i)}
 		>
 			<GripVerticalIcon
 				class="text-ink-3 size-4 shrink-0 cursor-grab"
