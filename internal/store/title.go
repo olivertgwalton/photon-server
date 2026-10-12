@@ -208,7 +208,7 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		p.Videos, err = s.videos(gctx, item.ID)
 		return err
 	})
-	g.Go(func() error { return s.dress(gctx, item, &p) })
+	g.Go(func() error { return s.dress(gctx, profile, item, &p) })
 	g.Go(func() error {
 		// A show's is counted with its seasons', from the same episodes.
 		if item.Kind == domain.ItemShow {
@@ -267,8 +267,8 @@ func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item,
 	return err
 }
 
-// dress fills in the pictures item wears and their blurhashes.
-func (s *Store) dress(ctx context.Context, item *model.Item, p *TitlePage) error {
+// dress fills in the pictures item wears, as profile is shown them, and their blurhashes.
+func (s *Store) dress(ctx context.Context, profile uuid.UUID, item *model.Item, p *TitlePage) error {
 	shows, err := s.showsOf(ctx, []*model.Item{item})
 	if err != nil {
 		return err
@@ -277,6 +277,11 @@ func (s *Store) dress(ctx context.Context, item *model.Item, p *TitlePage) error
 	if err != nil {
 		return err
 	}
+	posters, err := s.collectionPosters(ctx, profile, []*model.Item{item})
+	if err != nil {
+		return err
+	}
+	wearPosters(pictures, hashes, posters)
 	p.Artwork = pictures[item.ID]
 	var shown []uuid.UUID
 	for _, of := range p.Artwork {

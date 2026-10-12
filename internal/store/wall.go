@@ -274,6 +274,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 		lengths  map[uuid.UUID]onDisk
 		origins  map[uuid.UUID]domain.CollectionOrigin
 		ratings  map[uuid.UUID][]domain.Rating
+		posters  []shownPoster
 	)
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() (err error) {
@@ -299,9 +300,14 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 		ratings, err = s.ratings(gctx, rows)
 		return err
 	})
+	g.Go(func() (err error) {
+		posters, err = s.collectionPosters(gctx, profile, rows)
+		return err
+	})
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
+	wearPosters(pictures, hashes, posters)
 	cards := make([]Card, len(rows))
 	for n, r := range rows {
 		cards[n] = Card{

@@ -1,5 +1,7 @@
 package domain
 
+import "uuid"
+
 // ArtworkKind is what a picture of a title is for.
 type ArtworkKind string
 
@@ -29,6 +31,14 @@ type Picture struct {
 	URL  string
 	// Kept is a picture given to the server, as an avatar is, held in its picture cache.
 	Kept bool
+	// Mosaic is the pictures a collection's mosaic is made of, in the order they are laid out.
+	Mosaic []Tile
+}
+
+// Tile is one picture of a mosaic, by its own id.
+type Tile struct {
+	ID      uuid.UUID
+	Picture Picture
 }
 
 // Artwork is one picture of a title: a file in the library (Path, relative to its root) or a

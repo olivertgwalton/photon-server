@@ -313,6 +313,15 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (domain.Picture, erro
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return domain.Picture{}, err
 		}
+		// Or a collection's mosaic, of its titles' posters.
+		var parts []uuid.UUID
+		err = s.pool.QueryRow(ctx, `SELECT parts FROM mosaics WHERE id = $1`, id).Scan(&parts)
+		if err == nil {
+			return s.mosaic(ctx, parts)
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return domain.Picture{}, err
+		}
 		// Or the poster of a title a search found.
 		var poster *string
 		err = s.pool.QueryRow(ctx, `SELECT poster_url FROM discoveries WHERE poster_id = $1`, id).Scan(&poster)
@@ -336,21 +345,23 @@ func videoStill(site, key string) string {
 	return ""
 }
 
-// LivePictures answers which of these picture ids are still a title's, a person's, a video's or a
-// profile's, or a theme tune's kept beside them.
+// LivePictures answers which of these picture ids are still a title's, a person's, a video's, a
+// profile's or a collection's mosaic, or a theme tune's kept beside them.
 func (s *Store) LivePictures(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]bool, error) {
 	return querySet[uuid.UUID](ctx, s.pool, `
 		SELECT id FROM artwork WHERE id = ANY($1)
 		UNION SELECT photo_id FROM people WHERE photo_id = ANY($1)
 		UNION SELECT thumb_id FROM remote_videos WHERE thumb_id = ANY($1)
 		UNION SELECT avatar_id FROM profiles WHERE avatar_id = ANY($1)
-		UNION SELECT id FROM themes WHERE id = ANY($1)`, ids)
+		UNION SELECT id FROM themes WHERE id = ANY($1)
+		UNION SELECT id FROM mosaics WHERE id = ANY($1)`, ids)
 }
 
-// SetBlurhash keeps the BlurHash of the picture with id, a title's or a person's.
+// SetBlurhash keeps the BlurHash of the picture with id, a title's, a person's or a mosaic's.
 func (s *Store) SetBlurhash(ctx context.Context, id uuid.UUID, hash string) error {
 	_, err := s.pool.Exec(ctx, `
-		WITH titles AS (UPDATE artwork SET blurhash = $2 WHERE id = $1)
+		WITH titles AS (UPDATE artwork SET blurhash = $2 WHERE id = $1),
+			mosaics AS (UPDATE mosaics SET blurhash = $2 WHERE id = $1)
 		UPDATE people SET photo_blurhash = $2 WHERE photo_id = $1`, id, hash)
 	return err
 }
