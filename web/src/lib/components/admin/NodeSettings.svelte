@@ -46,6 +46,7 @@ const limits = $derived<readonly { value: Limit; label: string }[]>([
 let role = $derived<Role>(node.role);
 let address = $derived(node.address);
 let group = $derived(node.group);
+let publicURL = $derived(node.public_url);
 let limit = $derived<Limit>(
 	node.transcode_limit_source === "automatic"
 		? "automatic"
@@ -60,10 +61,17 @@ async function save(event: SubmitEvent) {
 	event.preventDefault();
 	const body: components["schemas"]["NodeChange"] =
 		limit === "automatic"
-			? { role, address, group, transcode_limit_source: "automatic" }
+			? {
+					role,
+					address,
+					public_url: publicURL,
+					group,
+					transcode_limit_source: "automatic",
+				}
 			: {
 					role,
 					address,
+					public_url: publicURL,
 					group,
 					transcode_limit_source: "set",
 					transcode_limit: limit === "none" ? 0 : most,
@@ -80,7 +88,7 @@ async function save(event: SubmitEvent) {
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content>
+	<Dialog.Content class="max-h-[90dvh] overflow-y-auto">
 		<Dialog.Header>
 			<Dialog.Title>{name}</Dialog.Title>
 			<Dialog.Description
@@ -113,6 +121,22 @@ async function save(event: SubmitEvent) {
 				<Field.Description>
 					Where the other nodes reach it, on a private network. Without one it
 					serves only the clients that reach it directly.
+				</Field.Description>
+			</Field.Field>
+			<Field.Field>
+				<Field.Label for="{id}-node-public-url">Public URL</Field.Label>
+				<Input
+					id="{id}-node-public-url"
+					name="public_url"
+					type="url"
+					placeholder="https://gpu.example.com"
+					bind:value={publicURL}
+					class="font-mono"
+				/>
+				<Field.Description>
+					Where clients reach it themselves. A stream it transcodes for another
+					node's client is fetched from here, not passed on through that node.
+					Without one, its streams go through the node the client asked.
 				</Field.Description>
 			</Field.Field>
 			<Field.Field>

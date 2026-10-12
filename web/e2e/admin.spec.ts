@@ -90,6 +90,8 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 		"http://10.0.0.5:8640",
 	);
 	await dialog.getByLabel("Address").fill("http://10.0.0.6:8640");
+	// Where clients fetch what it transcodes for the others' clients.
+	await dialog.getByLabel("Public URL").fill("https://gpu.example.com");
 	// Among the nodes at its site, which it asks to transcode first.
 	await dialog.getByLabel("Group").fill("loft");
 	await expectAccessible(page);
@@ -100,6 +102,7 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 	expect((await saved).postDataJSON()).toMatchObject({
 		role: "transcode",
 		address: "http://10.0.0.6:8640",
+		public_url: "https://gpu.example.com",
 		group: "loft",
 		transcode_limit: 12,
 	});
