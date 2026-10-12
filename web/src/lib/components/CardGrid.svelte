@@ -25,7 +25,7 @@ let {
 	class="grid gap-x-3 gap-y-4.5"
 	style="grid-template-columns: {gridColumns(shape)}"
 >
-	{#each cards as c, i (`${c.id}-${i}`)}
+	{#each cards as c, i (c.id)}
 		<li>
 			<TitleCard
 				card={c}
@@ -36,7 +36,7 @@ let {
 		</li>
 	{/each}
 	{#if card}
-		{#each items as item, i (`${item.id}-${i}`)}
+		{#each items as item (item.id)}
 			<li>{@render card(item)}</li>
 		{/each}
 	{/if}
