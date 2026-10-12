@@ -1,3 +1,4 @@
+import { MediaQuery } from "svelte/reactivity";
 import type { components } from "#lib/api/schema.js";
 
 type Schemas = components["schemas"];
@@ -68,6 +69,8 @@ const questions = [
 // Surround is sent where the browser decodes it; it mixes it down for the
 // speakers it has, as Jellyfin's web profile assumes.
 const surround = 6;
+
+const hdrScreen = new MediaQuery("dynamic-range: high");
 
 // The profile sent with a play, built from what the browser answered, as
 // Jellyfin's browserDeviceProfile builds its own. A browser draws no subtitle
@@ -188,7 +191,7 @@ export async function probe(): Promise<Capabilities> {
 		types.includes(t),
 	);
 	const shows = async (transferFunction: "pq" | "hlg") => {
-		if (!tenBit || !matchMedia("(dynamic-range: high)").matches) return false;
+		if (!tenBit || !hdrScreen.current) return false;
 		const info = await navigator.mediaCapabilities
 			.decodingInfo({
 				type: "file",

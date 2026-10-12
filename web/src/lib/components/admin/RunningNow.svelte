@@ -1,5 +1,5 @@
 <script lang="ts">
-import { ticking } from "#lib/admin/clock.svelte.js";
+import { Clock } from "#lib/admin/clock.js";
 import { jobsProgress, type Live } from "#lib/admin/live.js";
 import { relative } from "#lib/admin/words.js";
 import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
@@ -13,7 +13,7 @@ import { vocabulary } from "#lib/vocabulary.js";
 let { live, libraries }: { live: Live; libraries: Map<string, string> } =
 	$props();
 
-const clock = ticking();
+const clock = new Clock();
 // A backlog with no job running is only queued (waiting for its window, say),
 // so it has no line.
 const jobs = $derived(

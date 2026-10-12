@@ -1,9 +1,12 @@
 <script lang="ts">
 import "../app.css";
+import { MediaQuery } from "svelte/reactivity";
 import { Toaster } from "#lib/components/ui/sonner/index.js";
 import { onNavigate } from "$app/navigation";
 
 let { children } = $props();
+
+const reducedMotion = new MediaQuery("prefers-reduced-motion: reduce");
 
 // A page of the shell is led in from another by a View Transition, where the
 // browser has them and the reader has not asked for less motion. Not the
@@ -22,7 +25,7 @@ onNavigate((navigation) => {
 		navigation.from?.url.pathname === navigation.to?.url.pathname ||
 		window.scrollY > 0 ||
 		!document.startViewTransition ||
-		matchMedia("(prefers-reduced-motion: reduce)").matches
+		reducedMotion.current
 	)
 		return;
 	return new Promise((resolve) => {

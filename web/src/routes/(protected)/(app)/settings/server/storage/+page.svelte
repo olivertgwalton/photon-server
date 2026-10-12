@@ -3,7 +3,7 @@ import CircleAlertIcon from "@lucide/svelte/icons/circle-alert";
 import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
 import { toast } from "svelte-sonner";
 import { act } from "#lib/act.js";
-import { ticking } from "#lib/admin/clock.svelte.js";
+import { Clock } from "#lib/admin/clock.js";
 import { relative } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
@@ -48,7 +48,7 @@ $effect(() => {
 	return () => clearInterval(timer);
 });
 
-const clock = ticking(30_000);
+const clock = new Clock(30_000);
 
 // Where a copy is from: a server's own disk, by its name, or the bucket every server shares.
 function from(node?: string) {

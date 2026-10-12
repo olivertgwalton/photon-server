@@ -1,6 +1,6 @@
 <script lang="ts">
 import { untrack } from "svelte";
-import { ticking } from "#lib/admin/clock.svelte.js";
+import { Clock } from "#lib/admin/clock.js";
 import {
 	keepFor,
 	type Point,
@@ -26,7 +26,7 @@ let { data } = $props();
 const words = vocabulary();
 
 const api = client();
-const clock = ticking(pollEvery);
+const clock = new Clock(pollEvery);
 
 // Every answer of the last few minutes, by when it came, for the sparklines
 // and for rates between the last two; the page's load is the first.
@@ -36,33 +36,22 @@ let answers = $state.raw(
 
 // Asked again every few seconds while the page is in view, as Plex's and
 // Jellyfin's dashboards are, and not at all while the tab is hidden.
+let visibility = $state<DocumentVisibilityState>("visible");
+
+async function ask() {
+	const { data: metrics } = await api.GET("/api/v1/admin/metrics");
+	if (!metrics) return;
+	const now = Date.now();
+	answers = [
+		...answers.filter((a) => a.at > now - keepFor),
+		{ at: now, metrics },
+	];
+}
+
 $effect(() => {
-	let timer: ReturnType<typeof setInterval> | undefined;
-	async function ask() {
-		const { data: metrics } = await api.GET("/api/v1/admin/metrics");
-		if (!metrics) return;
-		const now = Date.now();
-		answers = [
-			...answers.filter((a) => a.at > now - keepFor),
-			{ at: now, metrics },
-		];
-	}
-	function follow() {
-		clearInterval(timer);
-		timer = undefined;
-		if (document.hidden) return;
-		timer = setInterval(ask, pollEvery);
-	}
-	function shown() {
-		if (!document.hidden) void ask();
-		follow();
-	}
-	follow();
-	document.addEventListener("visibilitychange", shown);
-	return () => {
-		clearInterval(timer);
-		document.removeEventListener("visibilitychange", shown);
-	};
+	if (visibility === "hidden") return;
+	const timer = setInterval(ask, pollEvery);
+	return () => clearInterval(timer);
 });
 
 const latest = $derived(answers[answers.length - 1].metrics);
@@ -155,6 +144,13 @@ function ago(seconds: number, now: number) {
 	return relative(now - seconds * 1000, now);
 }
 </script>
+
+<svelte:document
+	bind:visibilityState={visibility}
+	onvisibilitychange={() => {
+		if (document.visibilityState === "visible") void ask();
+	}}
+/>
 
 <PageHeader
 	title="Metrics"
