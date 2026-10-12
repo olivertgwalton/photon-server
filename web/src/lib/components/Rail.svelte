@@ -83,17 +83,21 @@ function measure() {
 }
 const resized = onResize(measure);
 
-// The row scrolled to the page's own card, which takes focus again where it
-// was picked from here.
-const showCurrent: Attachment<HTMLUListElement> = (ul) => {
-	if (!current) return;
-	const here = ul.querySelector<HTMLElement>("[aria-current=page]");
+// Each new set of cards starts at the row's start, or scrolled to the page's
+// own card where it has one.
+const ids = $derived([...shown, ...items].map((c) => c.id).join());
+const start: Attachment<HTMLUListElement> = (ul) => {
+	if (!ids) return;
+	const here = current
+		? ul.querySelector<HTMLElement>("[aria-current=page]")
+		: undefined;
 	const li = here?.closest("li");
-	if (!li) return;
 	// Sideways only: scrollIntoView would also scroll the page down to the row.
 	ul.scrollTo({
-		left:
-			li.offsetLeft - Number.parseFloat(getComputedStyle(ul).scrollPaddingLeft),
+		left: li
+			? li.offsetLeft -
+				Number.parseFloat(getComputedStyle(ul).scrollPaddingLeft)
+			: 0,
 		behavior: "instant",
 	});
 	measure();
@@ -201,7 +205,7 @@ const sizes = $derived(
 			data-sveltekit-reset={current ? "false" : undefined}
 			bind:this={list}
 			{@attach resized}
-			{@attach showCurrent}
+			{@attach start}
 			onscroll={measure}
 			{@attach (ul) => listen(ul, "keydown", step)}
 			{@attach (ul) => listen(ul, "click", hold)}
