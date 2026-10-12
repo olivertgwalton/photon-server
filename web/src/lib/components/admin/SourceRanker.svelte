@@ -6,6 +6,7 @@ import type { components } from "#lib/api/schema.js";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
+import { moved } from "#lib/rows.js";
 
 // A built-in's name or plugin:<slug>.
 type Source = components["schemas"]["FieldSource"];
@@ -38,11 +39,7 @@ let ranked = $state(initial());
 let dragging = $state<number>();
 
 function move(from: number, to: number) {
-	if (to < 0 || to >= ranked.length || from === to) return;
-	const next = [...ranked];
-	const [moved] = next.splice(from, 1);
-	if (moved) next.splice(to, 0, moved);
-	ranked = next;
+	ranked = moved(ranked, from, to);
 }
 </script>
 
