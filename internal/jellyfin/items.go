@@ -202,6 +202,10 @@ func (a *API) fromCard(c store.Card) item {
 	it.SeriesID, it.SeriesName = ref(c.Show)
 	it.SeasonID, it.SeasonName = ref(c.Season)
 	it.ParentIndexNumber, it.IndexNumber, it.IndexNumberEnd = c.SeasonNumber, c.EpisodeNumber, c.EpisodeEnd
+	if c.Kind == domain.ItemSeason {
+		// Jellyfin numbers a season by its own index, under its show.
+		it.ParentID, it.ParentIndexNumber, it.IndexNumber = it.SeriesID, nil, c.SeasonNumber
+	}
 	switch c.Kind {
 	case domain.ItemEpisode:
 		// An episode's picture is its still; it wears its show's poster, backdrop and lettering.

@@ -495,6 +495,10 @@ func TestAnAdminPutsSeasonsAndEpisodesInACollection(t *testing.T) {
 	if err != nil || len(members) != 2 || members[0].ID != pilot || members[1].ID != two {
 		t.Fatalf("members = %+v, %v; want the pilot then season 2, each once, as put", members, err)
 	}
+	// A season names its show, as an episode does, so a client opens the show on it.
+	if s := members[1]; s.Show == nil || s.Show.ID != show || s.Season != nil {
+		t.Errorf("season 2's card names %+v, season %+v; want Severance and no season of its own", s.Show, s.Season)
+	}
 	for name, id := range map[string]uuid.UUID{"a film of another library": heat, "the collection itself": set, "no title": uuid.NewV7()} {
 		if err := s.AddMembers(ctx, set, []uuid.UUID{id}); !errors.Is(err, ErrNotFound) {
 			t.Errorf("adding %s: %v, want ErrNotFound", name, err)
