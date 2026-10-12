@@ -2,7 +2,7 @@
 import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
 import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
 import GripIcon from "@lucide/svelte/icons/grip-vertical";
-import { tick } from "svelte";
+import type { Attachment } from "svelte/attachments";
 import { toast } from "svelte-sonner";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
@@ -61,19 +61,26 @@ function show(i: number, shown: boolean) {
 
 const drag = reorder(move);
 
+type Way = "up" | "down";
+
 // A keyed row is moved in the page, which takes focus from its arrow: it is
 // given back, or to the other arrow where this one has reached the end.
-async function step(i: number, by: number) {
-	const name = words.rows[home[i].row];
-	move(i, i + by);
-	await tick();
-	const arrow = (way: string) =>
-		document.querySelector<HTMLButtonElement>(
-			`[aria-label="Move ${name} ${way}"]`,
-		);
-	const [ahead, back] = by < 0 ? ["up", "down"] : ["down", "up"];
-	const target = arrow(ahead);
-	(target && !target.disabled ? target : arrow(back))?.focus();
+let focus = $state.raw<{ row: Section["row"]; way: Way }>();
+
+function step(i: number, by: number) {
+	const row = home[i].row;
+	const to = i + by;
+	move(i, to);
+	if (by < 0) focus = { row, way: to === 0 ? "down" : "up" };
+	else focus = { row, way: to === home.length - 1 ? "up" : "down" };
+}
+
+function arrow(row: Section["row"], way: Way): Attachment<HTMLElement> {
+	return (button) => {
+		if (focus?.row !== row || focus.way !== way) return;
+		button.focus();
+		focus = undefined;
+	};
 }
 </script>
 
@@ -112,6 +119,7 @@ async function step(i: number, by: number) {
 						aria-label="Move {name} up"
 						disabled={i === 0}
 						onclick={() => step(i, -1)}
+						{@attach arrow(section.row, "up")}
 					>
 						<ArrowUpIcon />
 					</Button>
@@ -121,6 +129,7 @@ async function step(i: number, by: number) {
 						aria-label="Move {name} down"
 						disabled={i === home.length - 1}
 						onclick={() => step(i, 1)}
+						{@attach arrow(section.row, "down")}
 					>
 						<ArrowDownIcon />
 					</Button>
