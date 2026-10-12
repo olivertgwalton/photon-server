@@ -1492,7 +1492,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Change a node's role, its limit on transcodes at once, its limit on streams at once, its address, its public URL or its group; it takes them up at once
+         * Change a node's role, its limit on transcodes at once, its limits on streams at once and on egress, its address, its public URL or its group; it takes them up at once
          * @description Admin only.
          */
         patch: {
@@ -7851,6 +7851,7 @@ export interface components {
         KnownNode: {
             address: string;
             availability: components["schemas"]["NodeAvailability"];
+            egress_limit_mbps: number;
             /** Format: date-time */
             first_seen: string;
             group: string;
@@ -8064,6 +8065,7 @@ export interface components {
             address: string;
             availability: components["schemas"]["NodeAvailability"];
             conversions: number;
+            egress_kbps: number;
             encoder: components["schemas"]["NodeEncoder"];
             /** Format: uuid */
             id: string;
@@ -8080,6 +8082,7 @@ export interface components {
         NodeChange: {
             address?: string | null;
             availability?: components["schemas"]["NodeAvailability"];
+            egress_limit_mbps?: number | null;
             group?: string | null;
             note?: string;
             public_url?: string | null;

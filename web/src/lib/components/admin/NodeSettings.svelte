@@ -63,6 +63,8 @@ let limit = $derived<Limit>(
 let most = $derived(node.transcode_limit || node.online?.transcode_limit || 8);
 let streams = $derived<StreamLimit>(node.stream_limit ? "at_most" : "none");
 let streamMost = $derived(node.stream_limit || 20);
+let egress = $derived<StreamLimit>(node.egress_limit_mbps ? "at_most" : "none");
+let egressMost = $derived(node.egress_limit_mbps || 1000);
 const name = $derived(node.name || "this node");
 
 async function save(event: SubmitEvent) {
@@ -73,6 +75,7 @@ async function save(event: SubmitEvent) {
 		public_url: publicURL,
 		group,
 		stream_limit: streams === "none" ? 0 : streamMost,
+		egress_limit_mbps: egress === "none" ? 0 : egressMost,
 		...(limit === "automatic"
 			? { transcode_limit_source: "automatic" }
 			: {
@@ -179,6 +182,34 @@ async function save(event: SubmitEvent) {
 				<Field.Description>
 					What it delivers, transcoded or not. Full, it is passed over for the
 					next node; no one watching is stopped.
+				</Field.Description>
+			</Field.Field>
+			<Field.Field>
+				<Field.Label for="{id}-node-egress">Egress</Field.Label>
+				<Choice
+					id="{id}-node-egress"
+					name="egress"
+					bind:value={egress}
+					options={streamLimits}
+				/>
+				{#if egress === "at_most"}
+					<div class="flex items-center gap-2">
+						<Input
+							id="{id}-node-egress-most"
+							name="egress_limit_mbps"
+							type="number"
+							min={1}
+							required
+							bind:value={egressMost}
+							aria-label="Most megabits a second"
+							class="w-32 font-mono"
+						/>
+						<span class="text-ink-2 text-sm">Mbps</span>
+					</div>
+				{/if}
+				<Field.Description>
+					How fast it sends media, measured every few seconds. Past it, it is
+					passed over for the next node.
 				</Field.Description>
 			</Field.Field>
 			{#if role !== "serve"}
