@@ -93,7 +93,7 @@ function facts(s: Stream): [string, string | number | undefined][] {
 						{@render list(facts(stream))}
 					</div>
 				{/each}
-				{#each version.subtitles ?? [] as sub, i (i)}
+				{#each version.subtitles ?? [] as sub (sub.id)}
 					<div class="border-line grid gap-2 border-t pt-3">
 						<h4 class="label">Subtitle file</h4>
 						{@render list([
@@ -113,7 +113,7 @@ function facts(s: Stream): [string, string | number | undefined][] {
 					<div class="border-line grid gap-2 border-t pt-3">
 						<h4 class="label">Chapters</h4>
 						<ol class="grid gap-1 text-sm">
-							{#each version.chapters as chapter, i (i)}
+							{#each version.chapters as chapter, i}
 								<li class="flex gap-3">
 									<span class="text-ink-3 w-16 font-mono">
 										{timecode(chapter.start_ms)}

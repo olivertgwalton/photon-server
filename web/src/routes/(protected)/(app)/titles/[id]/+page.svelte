@@ -290,7 +290,7 @@ const poster = $derived(art("poster"));
 			</div>
 			{#if facts.length || endsAt}
 				<p class="text-ink-2 flex flex-wrap gap-x-3 gap-y-1 text-sm">
-					{#each facts as fact, i (i)}
+					{#each facts as fact (fact)}
 						<span>{fact}</span>
 					{/each}
 					{#if endsAt}
@@ -303,7 +303,7 @@ const poster = $derived(art("poster"));
 			{/if}
 			{#if t.ratings?.length}
 				<ul class="flex flex-wrap gap-2" aria-label="Ratings">
-					{#each t.ratings as rating, i (`${rating.site}-${i}`)}
+					{#each t.ratings as rating (rating.site)}
 						<li
 							class="rounded-full bg-white/8 px-3 py-1 text-sm backdrop-blur-xl"
 						>
