@@ -485,16 +485,14 @@ test("a playlist is made, filled, reordered and deleted", async ({ page }) => {
 	await page.goto("/playlists");
 	await expectAccessible(page);
 	await page.getByRole("link", { name: /Late shows/ }).click();
-	await expect(page.getByRole("link", { name: "Play all" })).toHaveAttribute(
-		"href",
-		"/play/t-ep2?playlist=pl-1",
-	);
 	await page.getByRole("button", { name: "Move Small Show: Pilot up" }).click();
-	await expect(page.getByRole("link", { name: "Play all" })).toHaveAttribute(
-		"href",
-		"/play/t-ep?playlist=pl-1",
-	);
+	await expect(
+		page.getByRole("button", { name: "Move Small Show: Pilot up" }),
+	).toBeDisabled();
 	await expectAccessible(page);
+	await page.getByRole("button", { name: "Play all" }).click();
+	await expect(page).toHaveURL("/play/t-ep");
+	await page.goBack();
 
 	await page.getByRole("button", { name: "Rename" }).click();
 	await page.getByLabel("Name").fill("Night shift");

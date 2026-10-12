@@ -198,8 +198,6 @@ export function playHref(
 		audio?: number;
 		subtitle?: number | "off";
 		t?: number;
-		playlist?: string;
-		shuffle?: boolean;
 	} = {},
 ): string {
 	const query = new URLSearchParams();
@@ -207,8 +205,6 @@ export function playHref(
 	if (choice.audio != null) query.set("audio", String(choice.audio));
 	if (choice.subtitle != null) query.set("subtitle", String(choice.subtitle));
 	if (choice.t != null) query.set("t", String(choice.t));
-	if (choice.playlist) query.set("playlist", choice.playlist);
-	if (choice.shuffle) query.set("shuffle", "1");
 	const q = query.toString();
 	return `/play/${id}${q ? `?${q}` : ""}`;
 }
