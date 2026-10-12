@@ -8,6 +8,7 @@ import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
 import FilmIcon from "@lucide/svelte/icons/film";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import InfoIcon from "@lucide/svelte/icons/info";
+import LibraryBigIcon from "@lucide/svelte/icons/library-big";
 import ListPlusIcon from "@lucide/svelte/icons/list-plus";
 import PlayIcon from "@lucide/svelte/icons/play";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
@@ -441,6 +442,14 @@ const poster = $derived(art("poster"));
 							<DropdownMenu.Separator />
 							<DropdownMenu.Group>
 								<DropdownMenu.GroupHeading>Admin</DropdownMenu.GroupHeading>
+								{#if t.kind !== "collection" && t.kind !== "extra"}
+									<DropdownMenu.Item
+										onSelect={() =>
+											shell.pickCollection(t.id, titleWithShow(t))}
+									>
+										<LibraryBigIcon />Add to collection…
+									</DropdownMenu.Item>
+								{/if}
 								{#each adminTools as [tool, name] (tool)}
 									<DropdownMenu.Item
 										onSelect={() =>
