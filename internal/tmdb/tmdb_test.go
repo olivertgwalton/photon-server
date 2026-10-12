@@ -3,6 +3,7 @@ package tmdb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -307,6 +308,41 @@ func TestAListIsReadInItsOrder(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("listed (-want +got):\n%s", diff)
+	}
+}
+
+func TestAChartIsReadAsAList(t *testing.T) {
+	asked := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/movie/popular" {
+			http.NotFound(w, r)
+			return
+		}
+		asked++
+		reply(t, w, fmt.Sprintf(`{"results":[{"id":%s}],"total_pages":500}`, r.URL.Query().Get("page")))
+	}))
+	t.Cleanup(srv.Close)
+	c := New(withToken, unlimited{})
+	c.api.Base = srv.URL
+	got, err := c.List(t.Context(), "movie/popular")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asked != chartPages || len(got) != chartPages || got[0].Kind != domain.ItemMovie || got[4].IDs[domain.ProviderTMDB] != "5" {
+		t.Errorf("read %d pages, listed %+v", asked, got)
+	}
+}
+
+func TestATrendingChartOfBothSaysWhichEachIs(t *testing.T) {
+	c := serveIn(t, "", map[string]string{
+		"/trending/all/day?language=&page=1": `{"results":[{"id":1,"media_type":"tv"},{"id":2,"media_type":"person"},{"id":3,"media_type":"movie"}],"total_pages":1}`,
+	})
+	got, err := c.List(t.Context(), "trending/all/day")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Kind != domain.ItemShow || got[1].Kind != domain.ItemMovie {
+		t.Errorf("listed %+v", got)
 	}
 }
 

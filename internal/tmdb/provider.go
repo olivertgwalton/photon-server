@@ -1,6 +1,7 @@
 package tmdb
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/url"
@@ -80,29 +81,55 @@ func (c *Client) Candidates(ctx context.Context, loc domain.Locale, kind domain.
 	return c.Search(ctx, loc, kinds[kind], title, year)
 }
 
-// List answers a TMDB list's films and shows in its order, a page at a time.
+// charts are TMDB's charts, read as lists by their paths, and what each holds; a trending chart
+// of both says of each title which it is.
+var charts = map[string]domain.ItemKind{
+	"trending/all/day": "", "trending/all/week": "",
+	"trending/movie/day": domain.ItemMovie, "trending/movie/week": domain.ItemMovie,
+	"trending/tv/day": domain.ItemShow, "trending/tv/week": domain.ItemShow,
+	"movie/popular": domain.ItemMovie, "movie/top_rated": domain.ItemMovie,
+	"movie/now_playing": domain.ItemMovie, "movie/upcoming": domain.ItemMovie,
+	"tv/popular": domain.ItemShow, "tv/top_rated": domain.ItemShow,
+	"tv/airing_today": domain.ItemShow, "tv/on_the_air": domain.ItemShow,
+}
+
+// chartPages is how much of a chart is read: its first 100 titles. TMDB pages its popular
+// charts through every title it has.
+const chartPages = 5
+
+// List answers a TMDB list's films and shows in its order, a page at a time; or one of its charts,
+// named by its path.
 func (c *Client) List(ctx context.Context, id string) ([]domain.Listed, error) {
+	chart, isChart := charts[id]
+	path := "/list/" + url.PathEscape(id)
+	if isChart {
+		path = "/" + id
+	}
+	kinds := map[string]domain.ItemKind{"movie": domain.ItemMovie, "tv": domain.ItemShow}
 	var out []domain.Listed
 	for page := 1; ; page++ {
+		type item struct {
+			result
+			MediaType string `json:"media_type"`
+		}
 		var body struct {
-			Items []struct {
-				result
-				MediaType string `json:"media_type"`
-			} `json:"items"`
-			TotalPages int `json:"total_pages"`
+			Items      []item `json:"items"`
+			Results    []item `json:"results"`
+			TotalPages int    `json:"total_pages"`
 		}
 		q := url.Values{"page": {strconv.Itoa(page)}}
-		if err := c.get(ctx, domain.Locale{}, "/list/"+url.PathEscape(id), q, &body); err != nil {
+		if err := c.get(ctx, domain.Locale{}, path, q, &body); err != nil {
 			return nil, err
 		}
-		for _, item := range body.Items {
-			kind, ok := map[string]domain.ItemKind{"movie": domain.ItemMovie, "tv": domain.ItemShow}[item.MediaType]
-			if ok {
-				m := item.match()
-				out = append(out, domain.Listed{Kind: kind, IDs: map[domain.Provider]string{domain.ProviderTMDB: m.ID}, Title: m.Title, Year: m.Year})
+		for _, it := range append(body.Items, body.Results...) {
+			kind := cmp.Or(chart, kinds[it.MediaType])
+			if kind == "" {
+				continue
 			}
+			m := it.match()
+			out = append(out, domain.Listed{Kind: kind, IDs: map[domain.Provider]string{domain.ProviderTMDB: m.ID}, Title: m.Title, Year: m.Year})
 		}
-		if page >= body.TotalPages {
+		if page >= body.TotalPages || isChart && page >= chartPages {
 			return out, nil
 		}
 	}
