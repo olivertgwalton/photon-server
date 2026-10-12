@@ -131,6 +131,13 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 	if got := nodes[gpu].NodeSettings; got.Group != "loft" || got.Role != domain.NodeServe {
 		t.Errorf("grouped: %+v, want in loft, its role kept", got)
 	}
+	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"stream_limit":20}`)
+	if got := nodes[gpu].StreamLimit; got != 20 {
+		t.Errorf("stream limit kept as %d, want 20", got)
+	}
+	if rec := ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"stream_limit":-1}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("a negative stream limit: %d, want 400", rec.Code)
+	}
 	// Its public URL is an origin as its address is.
 	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"public_url":"https://gpu.example.com/"}`)
 	if got := nodes[gpu].PublicURL; got != "https://gpu.example.com" {

@@ -43,18 +43,20 @@ Settings › Server lists the nodes, what each transcodes with, and how busy eac
 
 A playback that encodes its video is made on the node with the most of its transcode slots free,
 of those whose encoder can make it (HEVC, or styled subtitles drawn in, where it asks for them):
-of those with a slot free, one in the group of the node the client asks first, then one set to
-transcode first, then one with no limit. The node a client asks decides how the copy is played with that
-node's encoder, starts the playback there, and answers the client: the client's every request
+of those with a slot free and room for another stream, one in the group of the node the client
+asks first, then one set to transcode first, then one with no limit. The node a client asks
+decides how the copy is played with that node's encoder, starts the playback there, and answers the client: the client's every request
 for its HLS, to whichever node, is handed to the node making it. A node with no slot free by the
 time it is asked refuses, and the next is asked; when every one refuses, the client is told the
 server is transcoding as many videos at once as it may, and how many that is across the nodes.
 
 A playback that copies its video, or is played as it is, is delivered by the node asked, or by
-another its clients reach at a public URL that is not drained: of those, one in the node asked's
-group first, of them one set to serve only, then the one delivering the fewest streams, the node
-asked before another delivering as many. Nodes set to serve only, with public URLs, are so the
-cluster's proxies. Jellyfin's apps are delivered by the node they ask.
+another its clients reach at a public URL that is not drained: of those, one with room for another
+stream first, of them one in the node asked's group, then one set to serve only, then the one
+delivering the fewest streams, the node asked before another delivering as many. Nodes set to
+serve only, with public URLs, are so the cluster's proxies. A node with no room by the time it is
+asked refuses, and the next is asked; when every one refuses, the client is told `stream_limit`.
+Jellyfin's apps are delivered by the node they ask.
 
 A playback delivered by a node with a public URL, for a client that asked another, is fetched
 from that URL: the client is answered its files or playlist there, not through the node it asked,
@@ -74,6 +76,9 @@ taken up at once, as it runs:
   only* serves clients and transcodes nothing, for its playbacks or for downloads: a node without
   a GPU beside one with. *Transcode first* is asked for a transcode before any node of all, where
   it has a slot free, and serves clients too: the GPU node.
+- **Streams at once.** How many playbacks a node delivers at once, transcoded or not, or no
+  limit, as its uplink carries. Lowering it stops none playing; none is begun until there is room.
+
 - **Transcodes at once.** Worked out from the node's encoder, or set: at most a number, or no
   limit. Lowering it stops none playing; none is begun until there is room under it.
 
