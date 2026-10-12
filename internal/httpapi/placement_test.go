@@ -67,17 +67,17 @@ type peerNode struct {
 	placer   *playback.Placer
 	sessions *playback.Sessions
 	srv      *httptest.Server
-	// public is where clients reach it themselves, and streams how many playbacks it delivers at
-	// once, set before it is asked anything.
-	public  string
-	streams int
+	// public and local are where clients reach it themselves, and streams how many playbacks it
+	// delivers at once, set before it is asked anything.
+	public, local string
+	streams       int
 	// started counts the playback.started events this node raised.
 	started atomic.Int32
 }
 
 func (n *peerNode) self() domain.Node {
 	d := domain.Node{
-		ID: n.id, Address: n.srv.URL, Name: n.srv.URL, PublicURL: n.public, StreamLimit: n.streams, Role: n.role.Load().(domain.NodeRole), Availability: domain.NodeActive,
+		ID: n.id, Address: n.srv.URL, Name: n.srv.URL, PublicURL: n.public, LocalURL: n.local, StreamLimit: n.streams, Role: n.role.Load().(domain.NodeRole), Availability: domain.NodeActive,
 		Encoder: domain.Encoder{Acceleration: domain.AccelSoftware, HEVC: domain.HEVCDeny},
 	}
 	d.Transcodes, d.Conversions, d.Limit = n.remuxer.Transcodes()
@@ -304,6 +304,19 @@ func TestAFilmPlayedAsItIsIsDeliveredByANodeServingOnly(t *testing.T) {
 	stopped.Body.Close()
 	if stopped.StatusCode != http.StatusOK || proxy.sessions.Delivering() != 0 {
 		t.Errorf("stopped through the front: %s, the proxy delivering %d; want it ended there", stopped.Status, proxy.sessions.Delivering())
+	}
+}
+
+// A client on the server's local networks, as this machine is, fetches a stream from where they
+// reach the node delivering it.
+func TestALocalClientFetchesAStreamAtTheNodesLocalURL(t *testing.T) {
+	c := newSharedValkey()
+	front, proxy := join(t, c, 1), join(t, c, 1)
+	proxy.role.Store(domain.NodeServe)
+	proxy.public, proxy.local = "https://proxy.example.com", proxy.srv.URL
+	c.tell(proxy.self())
+	if p := playAsItIsOn(t, front); p.status != http.StatusOK || !strings.HasPrefix(p.Parts[0].URL, proxy.srv.URL+"/") {
+		t.Errorf("%+v, want it at the proxy's local URL", p)
 	}
 }
 

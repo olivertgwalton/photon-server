@@ -130,7 +130,7 @@ func (s *Self) Node() domain.Node {
 		set.Availability = domain.NodeDraining
 	}
 	n := domain.Node{
-		ID: s.id, Address: set.Address, Name: s.name, Group: set.Group, PublicURL: set.PublicURL, StreamLimit: set.StreamLimit, EgressLimitMbps: set.EgressLimitMbps, Role: set.Role, Availability: set.Availability,
+		ID: s.id, Address: set.Address, Name: s.name, Group: set.Group, PublicURL: set.PublicURL, LocalURL: set.LocalURL, StreamLimit: set.StreamLimit, EgressLimitMbps: set.EgressLimitMbps, Role: set.Role, Availability: set.Availability,
 		Encoder: s.encoder, LimitSource: set.LimitSource,
 	}
 	n.Transcodes, n.Conversions, n.Limit = s.transcodes.Transcodes()

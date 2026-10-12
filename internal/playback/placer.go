@@ -117,19 +117,19 @@ func (p *Placer) Candidates(ctx context.Context, need Need) ([]domain.Node, erro
 }
 
 // Deliverers are the nodes that could deliver a playback whose video is not encoded to a client of
-// this one: this one, and those its clients reach themselves at a public URL that are not drained.
+// this one on network: this one, and those such a client reaches itself that are not drained.
 // Those with room for another stream come first, of them those in this node's group, then those
 // set to serve only, then those delivering fewer streams, this one before another; of nodes
 // otherwise equal, the one this node opened a playback on least recently, so they take turns. A
 // full one is still listed, as it may have room by the time it is asked.
-func (p *Placer) Deliverers(ctx context.Context) ([]domain.Node, error) {
+func (p *Placer) Deliverers(ctx context.Context, network domain.ClientNetwork) ([]domain.Node, error) {
 	self := p.self()
 	nodes, err := p.adverts.Nodes(ctx)
 	if err != nil {
 		return nil, err
 	}
 	nodes = slices.DeleteFunc(nodes, func(n domain.Node) bool {
-		return n.ID == self.ID || n.Address == "" || n.PublicURL == "" || !n.Availability.Takes()
+		return n.ID == self.ID || n.Address == "" || n.URLFor(network) == "" || !n.Availability.Takes()
 	})
 	nodes = append(nodes, self)
 	near := func(n domain.Node) bool { return n.Group == self.Group }

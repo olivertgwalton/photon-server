@@ -83,7 +83,8 @@ func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *
 
 // webApp is the web app's build, served wherever there is one; nil where there is none, and the
 // server answers the API alone. Its pages may draw from where objectOrigin says clients read
-// artwork and previews, and play streams from the nodes' public URLs, as each tells the others.
+// artwork and previews, and play streams from the nodes' public and local URLs, as each tells the
+// others.
 func webApp(objectOrigin func() string, cache *kv.KV, logger *slog.Logger) (*httpapi.Web, error) {
 	build, err := installed("web")
 	if build == nil || err != nil {
@@ -96,8 +97,10 @@ func webApp(objectOrigin func() string, cache *kv.KV, logger *slog.Logger) (*htt
 		}
 		var origins []string
 		for _, n := range nodes {
-			if n.PublicURL != "" && !slices.Contains(origins, n.PublicURL) {
-				origins = append(origins, n.PublicURL)
+			for _, u := range []string{n.PublicURL, n.LocalURL} {
+				if u != "" && !slices.Contains(origins, u) {
+					origins = append(origins, u)
+				}
 			}
 		}
 		return origins

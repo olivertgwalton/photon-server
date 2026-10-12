@@ -27,6 +27,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/playback"
+	"github.com/olivertgwalton/photon-server/internal/reach"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
@@ -448,13 +449,22 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	remuxes := newFakeRemuxes()
-	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
-		Sent:    playback.NewSent(),
-		Network: st,
-		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
-		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
-	})
+	// The server as it is reached now, read again as a node is told the network changed.
+	reached := func() *API {
+		t.Helper()
+		rc, err := reach.New(t.Context(), st, nil, slog.New(slog.DiscardHandler))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+			Copies: noCopies{}, Discover: noDiscoveries{},
+			Sent:    playback.NewSent(),
+			Network: st, Reach: rc,
+			Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
+			HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
+		})
+	}
+	api := reached()
 	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
 	for _, tc := range []struct {
 		from    string
@@ -486,6 +496,7 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 	if err := st.SetNetwork(t.Context(), n); err != nil {
 		t.Fatal(err)
 	}
+	api = reached()
 	r := httptest.NewRequest(http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", strings.NewReader(`{"MaxStreamingBitrate":120000000,"DeviceProfile":`+swiftfin+`}`))
 	r.Header.Set("Authorization", swiftfinHeader)
 	r.RemoteAddr = "203.0.113.9:5000"

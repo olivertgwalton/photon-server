@@ -53,6 +53,7 @@ let role = $derived<Role>(node.role);
 let address = $derived(node.address);
 let group = $derived(node.group);
 let publicURL = $derived(node.public_url);
+let localURL = $derived(node.local_url);
 let limit = $derived<Limit>(
 	node.transcode_limit_source === "automatic"
 		? "automatic"
@@ -73,6 +74,7 @@ async function save(event: SubmitEvent) {
 		role,
 		address,
 		public_url: publicURL,
+		local_url: localURL,
 		group,
 		stream_limit: streams === "none" ? 0 : streamMost,
 		egress_limit_mbps: egress === "none" ? 0 : egressMost,
@@ -144,6 +146,22 @@ async function save(event: SubmitEvent) {
 					Where clients reach it themselves. A stream it transcodes for another
 					node's client is fetched from here, not passed on through that node.
 					Without one, its streams go through the node the client asked.
+				</Field.Description>
+			</Field.Field>
+			<Field.Field>
+				<Field.Label for="{id}-node-local-url">Local URL</Field.Label>
+				<Input
+					id="{id}-node-local-url"
+					name="local_url"
+					type="url"
+					placeholder="http://192.168.1.5:8640"
+					bind:value={localURL}
+					class="font-mono"
+				/>
+				<Field.Description>
+					Where clients on the server's local networks reach it, such as its
+					tailnet address where the tailnet is among them. Without one, they use
+					its public URL.
 				</Field.Description>
 			</Field.Field>
 			<Field.Field>

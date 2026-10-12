@@ -51,17 +51,17 @@ time it is asked refuses, and the next is asked; when every one refuses, the cli
 server is transcoding as many videos at once as it may, and how many that is across the nodes.
 
 A playback that copies its video, or is played as it is, is delivered by the node asked, or by
-another its clients reach at a public URL that is not drained: of those, one with room for another
-stream first, of them one in the node asked's group, then one set to serve only, then the one
-delivering the fewest streams, the node asked before another delivering as many. Nodes set to
-serve only, with public URLs, are so the cluster's proxies. A node with no room by the time it is
+another the client reaches itself, at its local or public URL, that is not drained: of those, one
+with room for another stream first, of them one in the node asked's group, then one set to serve
+only, then the one delivering the fewest streams, the node asked before another delivering as
+many. Nodes set to serve only, with public or local URLs, are so the cluster's proxies. A node with no room by the time it is
 asked refuses, and the next is asked; when every one refuses, the client is told `stream_limit`.
 Jellyfin's apps are delivered by the node they ask.
 
-A playback delivered by a node with a public URL, for a client that asked another, is fetched
-from that URL: the client is answered its files or playlist there, not through the node it asked,
-and the web app's pages may fetch streams from every node's public URL a node tells the others of
-as the page loads. Jellyfin's apps ask for a stream before it is placed, so theirs are always handed on.
+A playback delivered by a node the client reaches itself, for a client that asked another, is
+fetched from there: the client is answered its files or playlist at the node's local or public
+URL, not through the node it asked, and the web app's pages may fetch streams from every node's
+URLs a node tells the others of as the page loads. Jellyfin's apps ask for a stream before it is placed, so theirs are always handed on.
 
 Nodes ask each other at `POST /api/v1/internal/playbacks/{id}/delivery`, signed with a key derived
 from the cluster's own, which no client is ever given: a request no node signed, or changed on
@@ -88,8 +88,13 @@ taken up at once, as it runs:
   limit. Lowering it stops none playing; none is begun until there is room under it.
 
 - **Public URL.** Where clients reach a node themselves, such as `https://gpu.example.com`, or
-  none. A stream it transcodes for another node's client is fetched from there; without one, its
+  none. A stream it delivers for another node's client is fetched from there; without one, its
   streams go through the node the client asked.
+
+- **Local URL.** Where clients on the server's local networks (Settings › Network) reach a node
+  themselves, such as `http://192.168.1.5:8640`, or its tailnet address where the tailnet is among
+  them, or none. Such a client fetches a stream from there, and from its public URL where it has
+  none; a client elsewhere, from its public URL.
 
 - **Group.** Any name, such as the site a node runs at, or none. A node asks those of its own
   group to transcode first, where one has a slot free, so a stream need not cross between sites;

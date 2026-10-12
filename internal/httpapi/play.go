@@ -34,7 +34,7 @@ type playbacks interface {
 // placer chooses the node that encodes a playback, and opens its remux there.
 type placer interface {
 	Candidates(ctx context.Context, need playback.Need) ([]domain.Node, error)
-	Deliverers(ctx context.Context) ([]domain.Node, error)
+	Deliverers(ctx context.Context, network domain.ClientNetwork) ([]domain.Node, error)
 	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o playback.Opening) error
 	Self() domain.Node
 	Refuse(candidates []domain.Node) error
@@ -191,16 +191,17 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		audio, subtitles := copyTracks(c)
 		req.AudioStream = playback.DefaultTracks(audio, subtitles, prefs, last).Audio
 	}
-	limit, err := playback.RemoteLimit(r.Context(), a.svc.Network, a.svc.Reach.Client(r))
+	n, err := a.svc.Network.Network(r.Context())
 	if a.answered(w, r, err) {
 		return
 	}
-	req.Profile.MaxBitrateKbps = playback.Capped(req.Profile.MaxBitrateKbps, limit)
+	network := a.svc.Reach.Network(r)
+	req.Profile.MaxBitrateKbps = playback.Capped(req.Profile.MaxBitrateKbps, playback.RemoteLimit(n, network))
 	candidates, err := a.svc.Placer.Candidates(r.Context(), playback.Need{})
 	if a.answered(w, r, err) {
 		return
 	}
-	deliverers, err := a.svc.Placer.Deliverers(r.Context())
+	deliverers, err := a.svc.Placer.Deliverers(r.Context(), network)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -235,18 +236,18 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, a.opened(*req.Profile, c, d, session, streamOrigin(a.svc.Placer.Self().ID, append(candidates, deliverers...), session)))
+	writeJSON(w, a.logger, "application/json", http.StatusOK, a.opened(*req.Profile, c, d, session, streamOrigin(a.svc.Placer.Self().ID, append(candidates, deliverers...), session, network)))
 }
 
-// streamOrigin is where the client fetches a playback from: the public URL of the node delivering
-// it, where that is another node with one, so its stream is not handed on through this one; empty
-// for this server, as the client reached it.
-func streamOrigin(self uuid.UUID, candidates []domain.Node, p domain.Playback) string {
+// streamOrigin is where a client on network fetches a playback from: where it reaches the node
+// delivering it, where that is another node it reaches itself, so its stream is not handed on
+// through this one; empty for this server, as the client reached it.
+func streamOrigin(self uuid.UUID, candidates []domain.Node, p domain.Playback, network domain.ClientNetwork) string {
 	if p.Node == self {
 		return ""
 	}
 	if i := slices.IndexFunc(candidates, func(n domain.Node) bool { return n.ID == p.Node }); i >= 0 {
-		return candidates[i].PublicURL
+		return candidates[i].URLFor(network)
 	}
 	return ""
 }

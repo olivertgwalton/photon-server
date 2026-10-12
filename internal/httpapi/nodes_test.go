@@ -150,6 +150,13 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 	if rec := ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"public_url":"gpu.example.com"}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("a public URL with no scheme: %d, want 400", rec.Code)
 	}
+	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"local_url":"http://192.168.1.5:8640"}`)
+	if got := nodes[gpu].NodeSettings; got.LocalURL != "http://192.168.1.5:8640" || got.PublicURL != "https://gpu.example.com" {
+		t.Errorf("local URL set: %+v, want it beside its public URL", got)
+	}
+	if rec := ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"local_url":"192.168.1.5"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("a local URL with no scheme: %d, want 400", rec.Code)
+	}
 	// Drained with a note for other admins, then resumed, which clears it.
 	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"availability":"draining","note":"driver update"}`)
 	if got := nodes[gpu].NodeSettings; got.Availability != domain.NodeDraining || got.Note != "driver update" || got.Role != domain.NodeServe {
