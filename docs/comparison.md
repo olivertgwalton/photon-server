@@ -20,7 +20,6 @@ Measured on 11 October 2026 on one Mac mini: an M4 with 16 GB of memory, running
 - **Back-to-back latency.** The same requests sent one after another with no gap.
 - **Throughput.** `ab -k -c 8 -n 800` against each endpoint, three runs; the median is shown.
 - **Memory and CPU.** Sampled with `docker stats` every two seconds for the whole run.
-- **Page loads.** Each server's own web client, signed in, in Chromium at 1440×900. Plex is left out of this one: its web client served from the server sent the browser to plex.tv to sign in on every load.
 
 The host lets its CPU idle between requests, and every server pays for it: at 10 requests a second each answers 2–6× slower than back to back. The paced table is what a client waits for on an idle host. The back-to-back table is the work each server does.
 
@@ -83,28 +82,6 @@ These timings cover the API calls each web client makes to draw a page, sent in 
 | Show and season 1 | **27** / 31 | 50 / 55 | 108 / 113 | 83 / 86 |
 | Films library | **31** / 35 | 51 / 56 | 83 / 86 | 49 / 51 |
 
-## Home page in a browser
-
-Signed in, with a warm cache, the case of a returning user. The figures are the range over repeated loads. These were measured on photon v0.3.0-3, before the changes in #617–#627; the tables above are from v0.3.0-13.
-
-| | photon | silo | Jellyfin |
-|---|---|---|---|
-| First Contentful Paint | 96–192 ms | **60–92 ms** | 96–116 ms |
-| Largest Contentful Paint | **184–256 ms** | 232–368 ms | 472–588 ms |
-| API calls, and when the last one ends | 15, 129–204 ms | 45, 203–340 ms | 10, 266–406 ms |
-| Images, and when the last one ends | 64, 245–336 ms | 26, 201–385 ms | 33, 303–452 ms |
-
-Each client draws its own home, so the pages differ in content. Photon showed three rows with 12 posters in view, silo two rows with 7, and Jellyfin three rows of wide cards.
-
-What each client downloads before it can sign anyone in, from a cold cache:
-
-| | Requests | Transferred | Load event |
-|---|---|---|---|
-| photon | 116 | 332 KB | 156 ms |
-| silo | 12 | 350 KB | 115 ms |
-| Jellyfin | 120 | 2.1 MB | 2.6 s |
-| Plex | 4 to start | 5.8 MB, uncompressed | — |
-
 ## Throughput
 
 `ab -k -c 8 -n 800`, in requests per second, with the p50 in milliseconds in brackets: the median of three runs. Silo's per-key rate limit was turned off for these runs.
@@ -142,25 +119,3 @@ From `docker stats`, in MiB. For the PostgreSQL containers this includes the pag
 
 - **Smallest servers.** Plex and photon have the smallest server processes at rest. Photon's grew to 359 MiB while answering 17,000 requests a second and returned to 79 MiB afterwards.
 - **Whole stacks.** Plex and Jellyfin keep their whole stack in one process. Photon's comes to about 730 MiB and silo's to about 1.1 GB, most of it PostgreSQL.
-
-## Security
-
-| Check | photon | silo | Jellyfin | Plex |
-|---|---|---|---|---|
-| Content-Security-Policy on the web client | yes, with `frame-ancestors 'none'` | yes, but no `frame-ancestors` | none | none |
-| `X-Content-Type-Options: nosniff` | yes | yes | no | no |
-| CORS for an unknown origin | refused | refused | `*` | the origin echoed back |
-| Failed sign-ins (30 for a user that doesn't exist) | 429 after 10 | 429 after 10 | never limited | signs in through plex.tv |
-| Token accepted in the query string | no | no | no | yes, `X-Plex-Token` |
-| A page of a million titles | refused, 400 | refused, 422 | returns 13.7 MB | returns 16.9 MB |
-| Answered without signing in | name, version, OpenAPI document | API digest, sign-in providers | name, version, LAN address | machine id, version |
-| Forged token | 401 | 401 | 401 | 401 |
-| Path traversal on static files | refused | refused | refused | refused |
-| TLS | behind a reverse proxy | behind a reverse proxy | behind a reverse proxy | enforced |
-| Container user | uid 10001 | root | root | root, the server as `plex` |
-
-## Where photon is slower
-
-- **Season 1's episodes under load.** Silo serves 7% more, 1,817 requests a second against 1,699, though photon answers one request faster (1.6 ms against 1.7 ms back to back).
-- **A film page's data.** Silo's web client asks for a film in one call (27 ms); photon's asks for the film and its similar titles (30 ms).
-- **First paint.** Silo paints its home first. Photon's web client starts with more requests than silo's, which costs little on a LAN and more on a slow link.

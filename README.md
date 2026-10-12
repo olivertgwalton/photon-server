@@ -23,7 +23,7 @@ Mac, Apple TV and Apple Vision Pro, play from it with
 ## Performance
 
 [docs/comparison.md](docs/comparison.md) measures photon against Jellyfin, Plex and silo on one host
-with one library: API latency and throughput, page loads, memory and security.
+with one library: API latency and throughput, page data and memory.
 
 ## Deploy
 
