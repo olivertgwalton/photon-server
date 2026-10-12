@@ -68,15 +68,17 @@ async function make(list: KeptList) {
 				<Tabs.Trigger value="mdblist">MDBList</Tabs.Trigger>
 			</Tabs.List>
 		</Tabs.Root>
-		<form onsubmit={search} role="search">
-			<Input
-				type="search"
-				name="query"
-				value={query}
-				placeholder="Search lists"
-				aria-label="Search lists"
-			/>
-		</form>
+		<search>
+			<form onsubmit={search}>
+				<Input
+					type="search"
+					name="query"
+					value={query}
+					placeholder="Search lists"
+					aria-label="Search lists"
+				/>
+			</form>
+		</search>
 		<div class="-mx-6 min-h-0 flex-1 overflow-y-auto px-6 py-1">
 			<svelte:boundary>
 				{@const answer = await lists}
