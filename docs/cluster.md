@@ -42,8 +42,9 @@ Settings › Server lists the nodes, what each transcodes with, and how busy eac
 ## Where a transcode is made
 
 A playback that encodes its video is made on the node with the most of its transcode slots free,
-of those whose encoder can make it (HEVC, or styled subtitles drawn in, where it asks for them);
-a node with no limit first. The node a client asks decides how the copy is played with that
+of those whose encoder can make it (HEVC, or styled subtitles drawn in, where it asks for them):
+of those with a slot free, one in the group of the node the client asks first, then one set to
+transcode first, then one with no limit. The node a client asks decides how the copy is played with that
 node's encoder, starts the playback there, and answers the client: the client's every request
 for its HLS, to whichever node, is handed to the node making it. A node with no slot free by the
 time it is asked refuses, and the next is asked; when every one refuses, the client is told the
@@ -66,6 +67,10 @@ taken up at once, as it runs:
   it has a slot free, and serves clients too: the GPU node.
 - **Transcodes at once.** Worked out from the node's encoder, or set: at most a number, or no
   limit. Lowering it stops none playing; none is begun until there is room under it.
+
+- **Group.** Any name, such as the site a node runs at, or none. A node asks those of its own
+  group to transcode first, where one has a slot free, so a stream need not cross between sites;
+  a node with no group is in the group of those with none.
 
 - **Drain.** A node drained takes no new stream to transcode and no download's conversion; its
   streams play to their end, and the others take new ones. Settings › Server says "Draining · 3
