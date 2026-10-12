@@ -31,9 +31,10 @@ type opener interface {
 	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error
 }
 
-// directs are the playbacks played as they are a node delivers.
-type directs interface {
-	Deliver(playback uuid.UUID)
+// delivering are the playbacks a node delivers, of at most as many as it may at once.
+type delivering interface {
+	Deliver(playback uuid.UUID) error
+	Release(playback uuid.UUID)
 }
 
 // Placer chooses the node that delivers a playback, encoding its video where it is encoded, and
@@ -45,7 +46,7 @@ type Placer struct {
 	adverts  adverts
 	self     func() domain.Node
 	local    opener
-	direct   directs
+	delivers delivering
 	key      nodecall.Key
 	client   *http.Client
 	refusals *prometheus.CounterVec
@@ -55,10 +56,10 @@ type Placer struct {
 }
 
 // NewPlacer places on the nodes adverts tells of and on this one, as self says it is now, opening
-// this one's remuxes on local and its playbacks played as they are on direct.
-func NewPlacer(a adverts, self func() domain.Node, local opener, direct directs, key nodecall.Key) *Placer {
+// this one's remuxes on local and counting every playback it delivers on delivers.
+func NewPlacer(a adverts, self func() domain.Node, local opener, delivers delivering, key nodecall.Key) *Placer {
 	return &Placer{
-		adverts: a, self: self, local: local, direct: direct, key: key, client: &http.Client{Timeout: openWithin}, refusals: newRefusals(),
+		adverts: a, self: self, local: local, delivers: delivers, key: key, client: &http.Client{Timeout: openWithin}, refusals: newRefusals(),
 		opened: map[uuid.UUID]time.Time{},
 	}
 }
@@ -84,7 +85,7 @@ func EncodingOf(n domain.Node) Encoding {
 func (p *Placer) Self() domain.Node { return p.self() }
 
 // Candidates are the nodes that could encode what need asks, this one among them: those with a
-// slot free first, of them those in this node's group, then those set to transcode, then those
+// slot free, and room for another stream, first, of them those in this node's group, then those set to transcode, then those
 // with no limit, then those with more of their slots free; of nodes otherwise equal, the one this
 // node opened a remux on least recently, so they take turns. A full one is still listed, as it may have a
 // slot by the time it is asked; a node that never encodes is not.
@@ -117,9 +118,10 @@ func (p *Placer) Candidates(ctx context.Context, need Need) ([]domain.Node, erro
 
 // Deliverers are the nodes that could deliver a playback whose video is not encoded to a client of
 // this one: this one, and those its clients reach themselves at a public URL that are not drained.
-// Those in this node's group come first, of them those set to serve only, then those delivering
-// fewer streams, this one before another; of nodes otherwise equal, the one this node opened a
-// playback on least recently, so they take turns.
+// Those with room for another stream come first, of them those in this node's group, then those
+// set to serve only, then those delivering fewer streams, this one before another; of nodes
+// otherwise equal, the one this node opened a playback on least recently, so they take turns. A
+// full one is still listed, as it may have room by the time it is asked.
 func (p *Placer) Deliverers(ctx context.Context) ([]domain.Node, error) {
 	self := p.self()
 	nodes, err := p.adverts.Nodes(ctx)
@@ -136,6 +138,7 @@ func (p *Placer) Deliverers(ctx context.Context) ([]domain.Node, error) {
 	defer p.mu.Unlock()
 	slices.SortStableFunc(nodes, func(a, b domain.Node) int {
 		return cmp.Or(
+			cmp.Compare(rank(b, streamRoom), rank(a, streamRoom)),
 			cmp.Compare(rank(b, near), rank(a, near)),
 			cmp.Compare(rank(b, serving), rank(a, serving)),
 			cmp.Compare(a.Streams, b.Streams),
@@ -164,8 +167,11 @@ func rank(n domain.Node, is func(domain.Node) bool) int {
 	return 0
 }
 
-// roomy is a node with a transcode slot free, as it last said.
-func roomy(n domain.Node) bool { return unlimited(n) || n.Transcodes < n.Limit }
+// roomy is a node with a transcode slot free and room for another stream, as it last said.
+func roomy(n domain.Node) bool { return (unlimited(n) || n.Transcodes < n.Limit) && streamRoom(n) }
+
+// streamRoom is a node with room for another stream, as it last said.
+func streamRoom(n domain.Node) bool { return n.StreamLimit == 0 || n.Streams < n.StreamLimit }
 
 // transcoding is a node set to transcode before any other, where it has a slot.
 func transcoding(n domain.Node) bool {
@@ -201,15 +207,19 @@ type Opening struct {
 	StartMS  int64                `json:"start_ms"`
 }
 
-// Open opens a playback of c, as o says, on node: on this one, or by asking it. A node that has
-// every slot held answers hls.ErrTranscodeLimit.
+// Open opens a playback of c, as o says, on node: on this one, or by asking it. A node that
+// delivers as many streams as it may answers ErrStreamLimit, and one that has every transcode slot
+// held hls.ErrTranscodeLimit.
 func (p *Placer) Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o Opening) error {
 	if node.ID == p.self().ID {
+		if err := p.delivers.Deliver(playback); err != nil {
+			return err
+		}
 		switch o.Method {
 		case domain.PlayDirect:
-			p.direct.Deliver(playback)
 		case domain.PlayRemux, domain.PlayTranscode:
 			if err := p.local.Open(ctx, playback, c, o.Video, o.Audio, o.Segments, time.Duration(o.StartMS)*time.Millisecond); err != nil {
+				p.delivers.Release(playback)
 				return err
 			}
 		}
@@ -236,6 +246,11 @@ func (p *Placer) Open(ctx context.Context, node domain.Node, playback uuid.UUID,
 		p.chose(node)
 		return nil
 	case http.StatusServiceUnavailable:
+		// The node says which of its limits it is at, by the problem's code.
+		var refusal struct{ Code string }
+		if json.NewDecoder(resp.Body).Decode(&refusal) == nil && refusal.Code == streamLimitCode {
+			return ErrStreamLimit
+		}
 		return hls.ErrTranscodeLimit
 	}
 	return fmt.Errorf("node %s answered %s", node.Name, resp.Status)
@@ -246,6 +261,9 @@ func (p *Placer) chose(node domain.Node) {
 	defer p.mu.Unlock()
 	p.opened[node.ID] = time.Now()
 }
+
+// streamLimitCode is the problem code a node answers ErrStreamLimit with.
+const streamLimitCode = "stream_limit"
 
 // RemotePath is where a node is asked to open a playback.
 func RemotePath(playback uuid.UUID) string {

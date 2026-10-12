@@ -67,15 +67,17 @@ type peerNode struct {
 	placer   *playback.Placer
 	sessions *playback.Sessions
 	srv      *httptest.Server
-	// public is where clients reach it themselves, set before it is asked anything.
-	public string
+	// public is where clients reach it themselves, and streams how many playbacks it delivers at
+	// once, set before it is asked anything.
+	public  string
+	streams int
 	// started counts the playback.started events this node raised.
 	started atomic.Int32
 }
 
 func (n *peerNode) self() domain.Node {
 	d := domain.Node{
-		ID: n.id, Address: n.srv.URL, Name: n.srv.URL, PublicURL: n.public, Role: n.role.Load().(domain.NodeRole), Availability: domain.NodeActive,
+		ID: n.id, Address: n.srv.URL, Name: n.srv.URL, PublicURL: n.public, StreamLimit: n.streams, Role: n.role.Load().(domain.NodeRole), Availability: domain.NodeActive,
 		Encoder: domain.Encoder{Acceleration: domain.AccelSoftware, HEVC: domain.HEVCDeny},
 	}
 	d.Transcodes, d.Conversions, d.Limit = n.remuxer.Transcodes()
@@ -229,6 +231,40 @@ func TestATranscodeElsewhereIsFetchedFromThatNodesPublicURL(t *testing.T) {
 	}
 }
 
+// limitStreams sets how many playbacks n delivers at once, and tells the others.
+func (n *peerNode) limitStreams(c *sharedValkey, limit int) {
+	n.streams = limit
+	n.sessions.SetStreamLimit(limit)
+	c.tell(n.self())
+}
+
+// played is a film played as it is, as play answers it, or why it was refused.
+type played struct {
+	status     int
+	Code       string    `json:"code"`
+	PlaybackID uuid.UUID `json:"playback_id"`
+	Parts      []struct {
+		URL string `json:"url"`
+	} `json:"parts"`
+}
+
+// playAsItIsOn asks n to play the film as it is.
+func playAsItIsOn(t *testing.T, n *peerNode) played {
+	t.Helper()
+	req := playRequest(`"matroska"`)
+	req.RequestURI, req.URL.Scheme, req.URL.Host = "", "http", strings.TrimPrefix(n.srv.URL, "http://")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	p := played{status: resp.StatusCode}
+	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 // A film played as it is is delivered by a node set to serve only, its files fetched from that
 // node's public URL; its stop, asked of the node the client asked, ends it there.
 func TestAFilmPlayedAsItIsIsDeliveredByANodeServingOnly(t *testing.T) {
@@ -237,21 +273,9 @@ func TestAFilmPlayedAsItIsIsDeliveredByANodeServingOnly(t *testing.T) {
 	proxy.role.Store(domain.NodeServe)
 	proxy.public = proxy.srv.URL
 	c.tell(proxy.self())
-	req := playRequest(`"matroska"`)
-	req.RequestURI, req.URL.Scheme, req.URL.Host = "", "http", strings.TrimPrefix(front.srv.URL, "http://")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	var played struct {
-		PlaybackID uuid.UUID `json:"playback_id"`
-		Parts      []struct {
-			URL string `json:"url"`
-		} `json:"parts"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&played); err != nil || len(played.Parts) == 0 {
-		t.Fatalf("play: %s, %+v, %v", resp.Status, played, err)
+	played := playAsItIsOn(t, front)
+	if played.status != http.StatusOK || len(played.Parts) == 0 {
+		t.Fatalf("play: %+v", played)
 	}
 	if !strings.HasPrefix(played.Parts[0].URL, proxy.srv.URL+"/") {
 		t.Fatalf("its first file is at %s, want it at the proxy's public URL", played.Parts[0].URL)
@@ -280,6 +304,39 @@ func TestAFilmPlayedAsItIsIsDeliveredByANodeServingOnly(t *testing.T) {
 	stopped.Body.Close()
 	if stopped.StatusCode != http.StatusOK || proxy.sessions.Delivering() != 0 {
 		t.Errorf("stopped through the front: %s, the proxy delivering %d; want it ended there", stopped.Status, proxy.sessions.Delivering())
+	}
+}
+
+// A node delivering as many streams at once as an admin lets it is passed over, and refuses one
+// asked of it all the same, for the next to deliver; with every node full, the play is refused.
+func TestANodeAtItsStreamLimitIsPassedOver(t *testing.T) {
+	c := newSharedValkey()
+	front, proxy := join(t, c, 1), join(t, c, 1)
+	proxy.role.Store(domain.NodeServe)
+	proxy.public = proxy.srv.URL
+	front.limitStreams(c, 1)
+	proxy.limitStreams(c, 1)
+	if p := playAsItIsOn(t, front); p.status != http.StatusOK || !strings.HasPrefix(p.Parts[0].URL, proxy.srv.URL+"/") {
+		t.Fatalf("the first: %+v, want it delivered by the proxy", p)
+	}
+	// The proxy, full now, last said it had room.
+	stale := proxy.self()
+	stale.Streams = 0
+	c.tell(stale)
+	if p := playAsItIsOn(t, front); p.status != http.StatusOK || !strings.HasPrefix(p.Parts[0].URL, "/api/v1/") {
+		t.Fatalf("the second: %+v, want it delivered by the front, the proxy refusing it", p)
+	}
+	c.tell(front.self())
+	c.tell(proxy.self())
+	if p := playAsItIsOn(t, front); p.status != http.StatusServiceUnavailable || p.Code != "stream_limit" {
+		t.Errorf("the third: %+v, want 503 stream_limit, every node full", p)
+	}
+	plays, err := c.Playbacks(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plays) != 2 {
+		t.Errorf("%d playbacks kept, want only the two delivered", len(plays))
 	}
 }
 

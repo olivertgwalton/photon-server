@@ -228,6 +228,10 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeTranscodeLimit, a.svc.Placer.Refuse(candidates).Error())
 		return
 	}
+	if errors.Is(err, playback.ErrStreamLimit) {
+		writeProblem(w, a.logger, codeStreamLimit, "every node is delivering as many streams at once as it may")
+		return
+	}
 	if a.answered(w, r, err) {
 		return
 	}
@@ -350,7 +354,8 @@ func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayM
 }
 
 // openRemote opens a playback another node placed on this one, reading its copy again as the
-// profile may see it: 204 once open, 503 where every transcode slot is held.
+// profile may see it: 204 once open, 503 where every transcode slot is held or it delivers as many
+// streams as it may.
 func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	var o playback.Opening
@@ -372,6 +377,8 @@ func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
 		err = a.svc.Placer.Open(r.Context(), a.svc.Placer.Self(), id, c, o)
 	}
 	switch {
+	case errors.Is(err, playback.ErrStreamLimit):
+		writeProblem(w, a.logger, codeStreamLimit, err.Error())
 	case errors.Is(err, hls.ErrTranscodeLimit):
 		writeProblem(w, a.logger, codeTranscodeLimit, err.Error())
 	case err != nil:

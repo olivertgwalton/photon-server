@@ -28,6 +28,9 @@ const (
 // ErrNoPlayback is a playback that has stopped, lapsed, or is another profile's.
 var ErrNoPlayback = errors.New("no such playback")
 
+// ErrStreamLimit is a playback refused by a node delivering as many at once as it may.
+var ErrStreamLimit = errors.New("the node delivers as many streams at once as it may")
+
 // ErrStarted is a playback started already, on this node or another, under the id asked for.
 var ErrStarted = errors.New("the playback is started already")
 
@@ -68,9 +71,10 @@ type Sessions struct {
 	// direct are the files this node streams of playbacks played as they are, each with what cuts
 	// it off: a player holds one request open for the whole file, so refusing the next is not enough.
 	direct map[uuid.UUID]map[*func()]bool
-	// delivered are the playbacks played as they are that this node was given to deliver, until
-	// each ends.
-	delivered map[uuid.UUID]bool
+	// delivered are the playbacks this node was given to deliver, encoded or not, until each ends,
+	// of at most streamLimit at once; zero is no limit.
+	delivered   map[uuid.UUID]bool
+	streamLimit int
 }
 
 // NewSessions keeps playbacks in live and places in saved, and closes this node's streams of
@@ -290,20 +294,38 @@ func (s *Sessions) Serve(ctx context.Context, id uuid.UUID, cut func()) (done fu
 	return done, nil
 }
 
-// Deliver takes a playback played as it is for this node to deliver, until it ends.
-func (s *Sessions) Deliver(id uuid.UUID) {
+// Deliver takes a playback for this node to deliver, until it ends or is let go; ErrStreamLimit
+// where it delivers as many as it may.
+func (s *Sessions) Deliver(id uuid.UUID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.streamLimit > 0 && len(s.delivered) >= s.streamLimit && !s.delivered[id] {
+		return ErrStreamLimit
+	}
 	s.delivered[id] = true
+	return nil
 }
 
-// Delivering is how many playbacks this node delivers now: those played as they are it was given,
-// and its remuxes.
+// Release lets go a playback this node was given whose stream did not open.
+func (s *Sessions) Release(id uuid.UUID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.delivered, id)
+}
+
+// Delivering is how many playbacks this node delivers now.
 func (s *Sessions) Delivering() int {
 	s.mu.Lock()
-	n := len(s.delivered)
-	s.mu.Unlock()
-	return n + len(s.streams.Playbacks())
+	defer s.mu.Unlock()
+	return len(s.delivered)
+}
+
+// SetStreamLimit sets how many playbacks this node delivers at once, zero for no limit. Lowering
+// it ends none.
+func (s *Sessions) SetStreamLimit(limit int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.streamLimit = limit
 }
 
 // close ends this node's streams of a playback: its remux, and the files it streams as they are.

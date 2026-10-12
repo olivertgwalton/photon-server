@@ -34,6 +34,7 @@ type transcodes interface {
 // deliveries are the playbacks this node delivers.
 type deliveries interface {
 	Delivering() int
+	SetStreamLimit(limit int)
 }
 
 // Self is this node: what it is, and what an admin sets of it.
@@ -111,6 +112,7 @@ func (s *Self) apply(set domain.NodeSettings) {
 	case domain.LimitAutomatic:
 	}
 	s.transcodes.SetLimit(limit)
+	s.deliveries.SetStreamLimit(set.StreamLimit)
 }
 
 // Node is this node as it tells the others of itself, now.
@@ -122,7 +124,7 @@ func (s *Self) Node() domain.Node {
 		set.Availability = domain.NodeDraining
 	}
 	n := domain.Node{
-		ID: s.id, Address: set.Address, Name: s.name, Group: set.Group, PublicURL: set.PublicURL, Role: set.Role, Availability: set.Availability,
+		ID: s.id, Address: set.Address, Name: s.name, Group: set.Group, PublicURL: set.PublicURL, StreamLimit: set.StreamLimit, Role: set.Role, Availability: set.Availability,
 		Encoder: s.encoder, LimitSource: set.LimitSource,
 	}
 	n.Transcodes, n.Conversions, n.Limit = s.transcodes.Transcodes()
