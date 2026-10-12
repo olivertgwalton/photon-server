@@ -14,11 +14,9 @@ const api = client();
 
 // A folder on the server, typed or found by walking the server's own folders,
 // since a path inside a container is rarely the one its owner knows.
-let {
-	id,
-	name,
-	value = $bindable(""),
-}: { id: string; name: string; value?: string } = $props();
+let { id, name }: { id: string; name: string } = $props();
+
+let value = $state("");
 
 let open = $state(false);
 let hidden = $state(false);
