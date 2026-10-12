@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"maps"
 	"os"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/olivertgwalton/photon-server/internal/disk"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
 )
@@ -36,6 +38,10 @@ const (
 	// behind is how many segments are kept before the one last asked for, a minute's: a player
 	// seeking back further has them made again, and a long film never fills the disk.
 	behind = 10
+	// spareSpace is the least free space under a remuxer's folder it begins an encode with. An
+	// encode keeps behind+aheadEncoding segments, some 600 MB of 4K at 40 Mbit/s; the rest is room
+	// for those under way.
+	spareSpace = 2 << 30
 )
 
 // ErrNoRemux is a remux that has ended, or never was.
@@ -43,6 +49,10 @@ var ErrNoRemux = errors.New("hls: no such remux")
 
 // ErrTranscodeLimit is a remux that would encode video on a remuxer already encoding its limit.
 var ErrTranscodeLimit = errors.New("hls: at the limit of transcodes at once")
+
+// ErrNoSpace is a remux that would encode video on a remuxer short of space for its segments. It
+// is an ErrTranscodeLimit, so another node is asked.
+var ErrNoSpace = fmt.Errorf("hls: short of space to transcode into: %w", ErrTranscodeLimit)
 
 // ErrPreempted is a conversion stopped so a playback could have its transcode slot.
 var ErrPreempted = errors.New("hls: conversion stopped for a playback")
@@ -77,6 +87,7 @@ type Remuxer struct {
 	subtitles string
 	limit     int
 	idle      time.Duration
+	free      func(path string) (uint64, bool)
 	log       *slog.Logger
 	// segmentWait is how long each request for a segment waits for it to be made.
 	segmentWait prometheus.Histogram
@@ -114,7 +125,7 @@ func NewRemuxer(tools media.Tools, dir, subtitles string, hw Hardware, limit int
 		}
 	}
 	return &Remuxer{
-		tools: tools, dir: dir, subtitles: subtitles, hw: hw, limit: limit, idle: idleRun, log: log,
+		tools: tools, dir: dir, subtitles: subtitles, hw: hw, limit: limit, idle: idleRun, free: disk.Free, log: log,
 		sessions: map[uuid.UUID]*session{}, conversions: map[*conversion]struct{}{}, extractions: map[uuid.UUID]*extraction{},
 		changed: make(chan struct{}, 1), segmentWait: newSegmentWait(),
 	}, nil
@@ -201,7 +212,8 @@ func (s *subtitle) add(c Cue) {
 // while the player reads its playlists. Addresses in its playlists are relative to the playlists'
 // own. A copy whose video is encoded is refused with ErrTranscodeLimit while playbacks hold every
 // transcode slot; where a conversion holds one, the conversion is stopped and the playback has its
-// slot.
+// slot. One is refused with ErrNoSpace where the remuxer's folder has less than spareSpace free; a
+// copy whose video is copied is not, as no other node would make it.
 func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 	parts := make([]Part, len(c.Parts))
 	offsets := make([]time.Duration, len(c.Parts))
@@ -230,6 +242,12 @@ func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 	for n, sub := range c.Subtitles {
 		s.subtitles = append(s.subtitles, &subtitle{Subtitle: sub})
 		s.playlists[subtitleName(n)] = Playlist(s.plan, version, nil, func(k int) string { return subtitleSegmentName(n, k) })
+	}
+	if s.encodes() {
+		if free, ok := r.free(r.dir); ok && free < spareSpace {
+			r.log.WarnContext(ctx, "transcode refused for want of space", slog.String("dir", r.dir), slog.Uint64("free_bytes", free))
+			return ErrNoSpace
+		}
 	}
 	if err := os.MkdirAll(s.dir, 0o750); err != nil {
 		return err
