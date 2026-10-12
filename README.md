@@ -12,6 +12,8 @@ Mac, Apple TV and Apple Vision Pro, play from it with
 |---|---|---|
 | ![Films](docs/images/films.webp) | ![Inception](docs/images/film.webp) | ![Grey's Anatomy](docs/images/show.webp) |
 
+https://github.com/user-attachments/assets/6e3b3d94-8076-4d41-aa39-83e45a2d9409
+
 ## Tech stack
 
 - **Server**: Go, PostgreSQL (pgx, goose migrations), Valkey
