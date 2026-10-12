@@ -382,13 +382,13 @@ func (p Profile) showsDolbyVision(s domain.Stream) bool {
 func (v VideoSupport) showsBase(dv *domain.DolbyVision) bool {
 	ranges := v.ranges()
 	switch dv.Compatibility {
-	case domain.CompatibleHDR10:
+	case domain.CompatibleHDR10, domain.CompatibleBluRay:
 		return slices.Contains(ranges, domain.RangeHDR10)
 	case domain.CompatibleSDR:
 		return slices.Contains(ranges, domain.RangeSDR)
 	case domain.CompatibleHLG:
 		return slices.Contains(ranges, domain.RangeHLG)
-	case domain.CompatibleNone, domain.CompatibleBluRay:
+	case domain.CompatibleNone:
 	}
 	return false
 }
