@@ -296,7 +296,35 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
-        post?: never;
+        /**
+         * Put titles at the end of an admin's collection: films, or shows, seasons and episodes
+         * @description Admin only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ItemIDs"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;

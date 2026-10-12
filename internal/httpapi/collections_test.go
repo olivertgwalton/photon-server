@@ -22,6 +22,7 @@ var (
 // fakeCollections has TMDB's Alien set in the films library, and one an admin made.
 type fakeCollections struct {
 	set    []uuid.UUID
+	added  []uuid.UUID
 	rule   store.SmartRule
 	list   store.ListRef
 	listed []domain.Listed
@@ -104,6 +105,17 @@ func (f *fakeCollections) SetMembers(_ context.Context, id uuid.UUID, items []uu
 	return store.ErrNotFound
 }
 
+func (f *fakeCollections) AddMembers(_ context.Context, id uuid.UUID, items []uuid.UUID) error {
+	switch id {
+	case alienSet:
+		return store.ErrNotUserCollection
+	case mySet:
+		f.added = append(f.added, items...)
+		return nil
+	}
+	return store.ErrNotFound
+}
+
 func (fakeCollections) RemoveCollection(_ context.Context, id uuid.UUID) error {
 	switch id {
 	case alienSet:
@@ -180,6 +192,9 @@ func TestCollectionsAreBrowsedAndAnAdminsAreKept(t *testing.T) {
 		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + alienSet.String() + "/rule", `{"filter": {}}`, http.StatusConflict, ""},
 		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + mySet.String() + "/members", `{"item_ids": ["` + films.String() + `"]}`, http.StatusNoContent, ""},
 		{goodToken, http.MethodPut, "/api/v1/admin/collections/" + alienSet.String() + "/members", `{"item_ids": []}`, http.StatusConflict, ""},
+		{memberToken, http.MethodPost, "/api/v1/admin/collections/" + mySet.String() + "/members", `{"item_ids": ["` + shows.String() + `"]}`, http.StatusForbidden, ""},
+		{goodToken, http.MethodPost, "/api/v1/admin/collections/" + mySet.String() + "/members", `{"item_ids": ["` + shows.String() + `"]}`, http.StatusNoContent, ""},
+		{goodToken, http.MethodPost, "/api/v1/admin/collections/" + alienSet.String() + "/members", `{"item_ids": ["` + shows.String() + `"]}`, http.StatusConflict, ""},
 		{goodToken, http.MethodDelete, "/api/v1/admin/collections/" + alienSet.String(), "", http.StatusConflict, ""},
 		{goodToken, http.MethodDelete, "/api/v1/admin/collections/" + mySet.String(), "", http.StatusNoContent, ""},
 	} {
@@ -193,6 +208,9 @@ func TestCollectionsAreBrowsedAndAnAdminsAreKept(t *testing.T) {
 	}
 	if len(c.set) != 1 || c.set[0] != films {
 		t.Errorf("members set: %v", c.set)
+	}
+	if len(c.added) != 1 || c.added[0] != shows {
+		t.Errorf("members added: %v, want the one an admin put in", c.added)
 	}
 	if c.list.ID != "8136" || len(c.listed) != 1 || c.listed[0].IDs[domain.ProviderTMDB] != "348" {
 		t.Errorf("list kept: %+v of %+v, want TMDB's 8136 read", c.list, c.listed)

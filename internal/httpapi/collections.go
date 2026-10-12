@@ -22,6 +22,7 @@ type collections interface {
 	SetListMembers(ctx context.Context, collection uuid.UUID, listed []domain.Listed) error
 	CollectionList(ctx context.Context, collection uuid.UUID) (store.ListRef, error)
 	SetMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error
+	AddMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error
 	RemoveCollection(ctx context.Context, collection uuid.UUID) error
 }
 
@@ -108,6 +109,23 @@ func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
 }
 
 // setMembers replaces an admin's collection's titles, in the order given.
+func (a *API) addMembers(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var req itemIDsJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	err := a.svc.Collections.AddMembers(r.Context(), id, req.ItemIDs)
+	switch {
+	case a.answeredAs(w, r, err, "the collection, or one of its titles, is not in its library"):
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func (a *API) setMembers(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r, "id")
 	if !ok {
@@ -211,6 +229,11 @@ func (a *API) collectionsRoutes() []route {
 		{
 			pattern: "POST /api/v1/admin/collections", access: admin, summary: "Make a collection in a library",
 			body: addCollectionJSON{}, status: http.StatusCreated, reply: createdJSON{}, handle: a.addCollection,
+		},
+		{
+			pattern: "POST /api/v1/admin/collections/{id}/members", access: admin,
+			summary: "Put titles at the end of an admin's collection: films, or shows, seasons and episodes",
+			body:    itemIDsJSON{}, status: http.StatusNoContent, handle: a.addMembers,
 		},
 		{
 			pattern: "PUT /api/v1/admin/collections/{id}/members", access: admin,
