@@ -131,6 +131,20 @@ export function apply(live: Live, name: string, data: unknown): Live {
 	return next;
 }
 
+// How far the jobs of these kinds have got: their backlogs, as the stream tells
+// them, and how many run now.
+export function jobsProgress(
+	live: Snapshot,
+	kinds: readonly Schemas["JobKind"][],
+) {
+	const backlogs = live.backlogs.filter((b) => kinds.includes(b.kind));
+	return {
+		running: live.jobs.filter((j) => kinds.includes(j.kind)).length,
+		done: backlogs.reduce((n, b) => n + b.done, 0),
+		total: backlogs.reduce((n, b) => n + b.done + b.left, 0),
+	};
+}
+
 // Where a playing title is now: the position it last reported, moved on by the
 // time since while it plays, as no event tells each second of it.
 export function positionAt(p: NowPlaying, now: number): number {

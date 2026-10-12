@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { apply, idle, type Live, type NowPlaying, positionAt } from "./live";
+import {
+	apply,
+	idle,
+	jobsProgress,
+	type Live,
+	type NowPlaying,
+	positionAt,
+} from "./live";
 
 const playing: NowPlaying = {
 	id: "pb-1",
@@ -241,5 +248,22 @@ describe("a playing title's position", () => {
 		expect(positionAt({ ...playing, state: "paused" }, updated + 5_000)).toBe(
 			60_000,
 		);
+	});
+});
+
+test("a task's jobs are counted across its kinds, and no other", () => {
+	const live: Live = {
+		...idle,
+		backlogs: [
+			{ kind: "markers", done: 3, left: 2 },
+			{ kind: "previews", done: 1, left: 4 },
+			{ kind: "identify", done: 9, left: 9 },
+		],
+		jobs: [{ id: 1, kind: "markers", subject: "t-1", attempt: 1 }],
+	};
+	expect(jobsProgress(live, ["markers", "previews"])).toEqual({
+		running: 1,
+		done: 4,
+		total: 10,
 	});
 });

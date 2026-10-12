@@ -1,7 +1,7 @@
 <script lang="ts">
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { vocabulary } from "#lib/vocabulary.js";
-import type { Live } from "#lib/admin/live.js";
+import { jobsProgress, type Live } from "#lib/admin/live.js";
 import { relative } from "#lib/admin/words.js";
 import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
 import { Progress } from "#lib/components/ui/progress/index.js";
@@ -14,19 +14,13 @@ let { live, libraries }: { live: Live; libraries: Map<string, string> } =
 	$props();
 
 const clock = ticking();
-const running = $derived(Object.groupBy(live.jobs, (j) => j.kind));
 // A backlog with no job running is only queued (waiting for its window, say),
 // so it has no line.
 const jobs = $derived(
-	[...new Set(live.jobs.map((j) => j.kind))].map((kind) => {
-		const backlog = live.backlogs.find((b) => b.kind === kind);
-		return {
-			kind,
-			running: running[kind]?.length ?? 0,
-			done: backlog?.done ?? 0,
-			total: backlog ? backlog.done + backlog.left : 0,
-		};
-	}),
+	[...new Set(live.jobs.map((j) => j.kind))].map((kind) => ({
+		kind,
+		...jobsProgress(live, [kind]),
+	})),
 );
 
 const words = vocabulary();
