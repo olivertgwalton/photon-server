@@ -25,5 +25,6 @@ const number = (name: string) => {
 		subtitle={page.url.searchParams.get("subtitle") === "off"
 			? "off"
 			: number("subtitle")}
+		queued={page.state.queued}
 	/>
 {/key}

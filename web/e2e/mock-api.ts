@@ -122,7 +122,10 @@ const everything = () => [
 	later,
 	collection,
 ];
-const byID = (id: string) => everything().find((c) => c.id === id);
+// The player's titles are found too, so a playlist can hold them.
+const byID = (id: string) =>
+	everything().find((c) => c.id === id) ??
+	(titles[id] as Schemas["Card"] | undefined);
 
 // The rows the server answers, each asked for on its own: the profile's, and
 // a library's of the library.

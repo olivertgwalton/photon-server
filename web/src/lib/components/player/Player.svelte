@@ -40,6 +40,7 @@ import {
 	webVTT,
 } from "#lib/player/subtitles.js";
 import { qualities, skips } from "#lib/player/words.js";
+import { queued } from "#lib/queue.js";
 import { vocabulary } from "#lib/vocabulary.js";
 import { goto } from "$app/navigation";
 import PlaybackInfo from "./PlaybackInfo.svelte";
@@ -58,6 +59,7 @@ let {
 	version: askedVersion,
 	audio: askedAudio,
 	subtitle: askedSubtitle,
+	queued: at,
 }: {
 	title: Schemas["TitlePage"];
 	prefs: Preferences;
@@ -65,6 +67,8 @@ let {
 	version?: string;
 	audio?: number;
 	subtitle?: number | "off";
+	// Where the title is in the queue it was opened from.
+	queued?: number;
 } = $props();
 const words = vocabulary();
 
@@ -456,7 +460,11 @@ function togglePip() {
 }
 
 function playNext() {
-	if (next) void goto(`/play/${next.id}`, { replace: true });
+	if (!next) return;
+	void goto(`/play/${next.id}`, {
+		replace: true,
+		state: at === undefined ? {} : { queued: at + 1 },
+	});
 }
 
 function skip(m: Schemas["MarkerRef"]) {
@@ -509,7 +517,8 @@ function tracksAdded() {
 }
 
 onMount(() => {
-	if (title.kind === "episode") {
+	if (at !== undefined) next = queued(at + 1);
+	else if (title.kind === "episode") {
 		api
 			.GET("/api/v1/titles/{id}/next", { params: { path: { id: title.id } } })
 			.then(({ data }) => {

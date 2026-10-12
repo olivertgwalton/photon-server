@@ -12,7 +12,8 @@ import TitleRow from "#lib/components/TitleRow.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import { count, playHref, runtime, titleWithShow } from "#lib/format.js";
+import { count, runtime, titleWithShow } from "#lib/format.js";
+import { playQueue } from "#lib/queue.js";
 import { getShell } from "#lib/shell.svelte.js";
 
 let { data } = $props();
@@ -64,8 +65,6 @@ function drop(entry: string) {
 		"Removed from the playlist.",
 	);
 }
-
-const first = $derived(data.entries[0]);
 </script>
 
 <svelte:head><title>{data.playlist.name} · Photon</title></svelte:head>
@@ -92,14 +91,11 @@ const first = $derived(data.entries[0]);
 	</p>
 
 	<div class="flex flex-wrap gap-2">
-		{#if first}
-			<Button href={playHref(first.id, { playlist: data.playlist.id })}>
+		{#if data.entries.length}
+			<Button onclick={() => playQueue(data.entries)}>
 				<PlayIcon class="fill-current" />Play all
 			</Button>
-			<Button
-				href={playHref(first.id, { playlist: data.playlist.id, shuffle: true })}
-				variant="outline"
-			>
+			<Button onclick={() => playQueue(data.entries, true)} variant="outline">
 				<ShuffleIcon />Shuffle
 			</Button>
 		{/if}

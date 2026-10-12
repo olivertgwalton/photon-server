@@ -165,6 +165,27 @@ test("the next episode is offered in the credits and plays", async ({
 	).toBeVisible();
 });
 
+test("a playlist plays in its order, not the show's", async ({ page }) => {
+	await logIn(page);
+	const list = await (
+		await page.request.post("/api/v1/playlists", { data: { name: "Mixed" } })
+	).json();
+	await page.request.post(`/api/v1/playlists/${list.id}/entries`, {
+		data: { item_ids: ["p-ep2", "p-ep", "p-film"] },
+	});
+	await page.goto(`/playlists/${list.id}`);
+	await page.getByRole("button", { name: "Play all" }).click();
+	await expect(page).toHaveURL("/play/p-ep2");
+	const upNext = page.getByRole("region", { name: "Up next" });
+	await expect(upNext).toContainText("S1 E1 · Pilot");
+	await upNext.getByRole("button", { name: "Play now" }).click();
+	await expect(page).toHaveURL("/play/p-ep");
+	// The show would go on to its second episode; the playlist goes to a film.
+	await page.keyboard.press("9");
+	await expect(upNext).toContainText("Quiet Hours");
+	await page.request.delete(`/api/v1/playlists/${list.id}`);
+});
+
 test("scrubbing shows the chapter and the thumbnail under the pointer", async ({
 	page,
 }) => {
