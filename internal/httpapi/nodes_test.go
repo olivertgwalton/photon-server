@@ -142,6 +142,20 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 	if got := nodes[gpu].NodeSettings; got.EgressLimitMbps != 900 || got.StreamLimit != 20 {
 		t.Errorf("egress limited: %+v, want 900 Mbit/s, its stream limit kept", got)
 	}
+	// Set to encode on its second card, it says so; set automatic again, its card is forgotten.
+	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"encoding":{"source":"set","acceleration":"nvenc","device":" 1 "}}`)
+	if got := nodes[gpu].Encoding; got != (domain.EncoderChoice{Source: domain.EncoderSet, Acceleration: domain.AccelNVENC, Device: "1"}) {
+		t.Errorf("set to the second card: %+v", got)
+	}
+	for _, bad := range []string{`{"source":"set"}`, `{"source":"set","acceleration":"cuda"}`, `{"source":"gpu"}`} {
+		if rec := ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"encoding":`+bad+`}`); rec.Code != http.StatusBadRequest {
+			t.Errorf("encoding %s: %d, want 400", bad, rec.Code)
+		}
+	}
+	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"encoding":{"source":"automatic"}}`)
+	if got := nodes[gpu].Encoding; got != (domain.EncoderChoice{Source: domain.EncoderAutomatic}) {
+		t.Errorf("set automatic: %+v", got)
+	}
 	// Its public URL is an origin as its address is.
 	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"public_url":"https://gpu.example.com/"}`)
 	if got := nodes[gpu].PublicURL; got != "https://gpu.example.com" {
