@@ -14,6 +14,7 @@ type Node struct {
 	Seen    time.Time
 	// Name is its host's, to tell nodes apart by.
 	Name         string
+	Group        string
 	Role         NodeRole
 	Availability NodeAvailability
 	Encoder      Encoder
@@ -110,6 +111,9 @@ type NodeSettings struct {
 	// Address is where the other nodes reach it, such as http://10.0.0.5:8640; none is a node
 	// handed no one else's requests and not listed.
 	Address string
+	// Group is the nodes it is among, such as those at one site: a node asked to play what is
+	// encoded asks those of its own group first.
+	Group string
 }
 
 // NodeRecord is a node as the server keeps it, whether it is up or not.
