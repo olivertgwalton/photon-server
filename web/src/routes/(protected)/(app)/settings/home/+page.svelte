@@ -11,6 +11,7 @@ import PageHeader from "#lib/components/PageHeader.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import { Switch } from "#lib/components/ui/switch/index.js";
+import { reorder } from "#lib/reorder.svelte.js";
 import { moved } from "#lib/rows.js";
 import { vocabulary } from "#lib/vocabulary.js";
 
@@ -23,7 +24,6 @@ let kept = $state.raw<Section[]>();
 const home = $derived(kept ?? data.prefs.home);
 // Said to a screen reader as a row moves, since the list redraws under focus.
 let said = $state("");
-let dragging = $state<number>();
 
 async function save(next: Section[], message: string) {
 	const before = kept;
@@ -60,6 +60,8 @@ function show(i: number, shown: boolean) {
 	);
 }
 
+const drag = reorder(move);
+
 // A keyed row is moved in the page, which takes focus from its arrow: it is
 // given back, or to the other arrow where this one has reached the end.
 async function step(i: number, by: number) {
@@ -87,21 +89,10 @@ async function step(i: number, by: number) {
 			{#each home as section, i (section.row)}
 				{@const name = words.rows[section.row]}
 				<li
-					draggable="true"
-					ondragstart={(e) => {
-						dragging = i;
-						e.dataTransfer?.setData("text/plain", section.row);
-					}}
-					ondragover={(e) => e.preventDefault()}
-					ondrop={(e) => {
-						e.preventDefault();
-						if (dragging !== undefined) move(dragging, i);
-						dragging = undefined;
-					}}
-					ondragend={() => (dragging = undefined)}
+					{@attach drag.row(i)}
 					class={[
 						"bg-ground border-line flex items-center gap-3 rounded-lg border px-3 py-2",
-						dragging === i && "opacity-50",
+						drag.dragging === i && "opacity-50",
 					]}
 				>
 					<GripIcon
