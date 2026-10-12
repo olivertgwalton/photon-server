@@ -383,6 +383,12 @@ test("a profile is added seeing one library, and what another may see is set", a
 	await expect(
 		page.getByText("What this profile sees was saved."),
 	).toBeVisible();
+
+	// A new password is typed once, and gone from the form once saved.
+	await page.getByLabel("New password").fill("battery staple");
+	await page.getByRole("button", { name: "Save", exact: true }).click();
+	await expect(page.getByText("Saved, with the new password.")).toBeVisible();
+	await expect(page.getByLabel("New password")).toHaveValue("");
 });
 
 test("a provider is given its key, which is never shown back", async ({
@@ -394,6 +400,7 @@ test("a provider is given its key, which is never shown back", async ({
 	await page.getByLabel("API key (required)").fill("abc123");
 	await page.getByRole("button", { name: "Save MDBList settings" }).click();
 	await expect(page.getByText("Saved.")).toBeVisible();
+	await expect(page.getByLabel("API key (required)")).toHaveValue("");
 });
 
 test("tasks run, dead jobs are retried, and the logs read", async ({
