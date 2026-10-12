@@ -105,4 +105,32 @@ func TestAnAppPagesALibrarysEpisodes(t *testing.T) {
 			t.Errorf("%s = %q, want %q", target, got, want)
 		}
 	}
+
+	// A season asked for by id, as a box set's member is listed, is numbered and placed under its
+	// show as Jellyfin's own are.
+	shows, _, err := st.Wall(ctx, []uuid.UUID{tv.ID}, store.WallPage{Profile: ada.ID, Sort: domain.SortTitle, Limit: 10})
+	if err != nil || len(shows) != 2 {
+		t.Fatal(shows, err)
+	}
+	seasons, err := st.Seasons(ctx, ada.ID, shows[1].ID)
+	if err != nil || len(seasons) != 1 {
+		t.Fatal(seasons, err)
+	}
+	w := serve(api, http.MethodGet, "/Items?Ids="+seasons[0].ID.String(), `MediaBrowser Client="Jellyfin Web", Token="pst_ada"`, "")
+	var got struct {
+		Items []struct {
+			Type, SeriesName  string
+			SeriesID          string `json:"SeriesId"`
+			ParentID          string `json:"ParentId"`
+			IndexNumber       int
+			ParentIndexNumber *int
+		}
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got.Items) != 1 {
+		t.Fatal(w.Body, err)
+	}
+	if it := got.Items[0]; it.Type != "Season" || it.SeriesName != "Severance" || it.SeriesID != it.ParentID || it.SeriesID == "" ||
+		it.IndexNumber != 1 || it.ParentIndexNumber != nil {
+		t.Errorf("season = %+v, want season 1 of Severance, under it", it)
+	}
 }
