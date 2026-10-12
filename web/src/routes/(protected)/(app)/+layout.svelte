@@ -1,13 +1,14 @@
 <script lang="ts">
 import SearchIcon from "@lucide/svelte/icons/search";
 import { page } from "$app/state";
-import ActivityMenu from "#lib/components/ActivityMenu.svelte";
+import {
+	confirming,
+	picker,
+	sharing,
+	subtitleSearch,
+	versions,
+} from "#lib/actions.svelte.js";
 import AppSidebar from "#lib/components/AppSidebar.svelte";
-import PlaylistPicker from "#lib/components/PlaylistPicker.svelte";
-import ShareDialog from "#lib/components/ShareDialog.svelte";
-import SubtitleSearch from "#lib/components/SubtitleSearch.svelte";
-import VersionPicker from "#lib/components/VersionPicker.svelte";
-import ConfirmDialog from "#lib/components/ConfirmDialog.svelte";
 import ProfileMenu from "#lib/components/ProfileMenu.svelte";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
 import { LiveStream, setLiveStream } from "#lib/admin/stream.svelte.js";
@@ -66,7 +67,11 @@ $effect(() => {
 				</form>
 			</search>
 			{#if data.me.role === "admin"}
-				<ActivityMenu libraries={data.libraries} />
+				{#await import(
+					"#lib/components/ActivityMenu.svelte"
+				) then { default: ActivityMenu }}
+					<ActivityMenu libraries={data.libraries} />
+				{/await}
 			{/if}
 			<ProfileMenu profile={data.me} />
 		</header>
@@ -85,12 +90,44 @@ $effect(() => {
 	</Sidebar.Inset>
 </Sidebar.Provider>
 
-<PlaylistPicker />
 <RestoringScreen />
-<ShareDialog />
-<SubtitleSearch />
-<VersionPicker />
-<ConfirmDialog />
+<!-- Each dialog is asked for the first time a page opens it, and kept: most
+	visits open none, and their first page should not wait on them. -->
+{#if picker.ids.length}
+	{#await import(
+		"#lib/components/PlaylistPicker.svelte"
+	) then { default: PlaylistPicker }}
+		<PlaylistPicker />
+	{/await}
+{/if}
+{#if sharing.url}
+	{#await import(
+		"#lib/components/ShareDialog.svelte"
+	) then { default: ShareDialog }}
+		<ShareDialog />
+	{/await}
+{/if}
+{#if subtitleSearch.id}
+	{#await import(
+		"#lib/components/SubtitleSearch.svelte"
+	) then { default: SubtitleSearch }}
+		<SubtitleSearch />
+	{/await}
+{/if}
+{#if versions.id}
+	{#await import(
+		"#lib/components/VersionPicker.svelte"
+	) then { default: VersionPicker }}
+		<VersionPicker />
+	{/await}
+{/if}
+{#if confirming.title}
+	{#await import(
+		"#lib/components/ConfirmDialog.svelte"
+	) then { default: ConfirmDialog }}
+		<ConfirmDialog />
+	{/await}
+{/if}
 <!-- Asked for only by an admin's shell: the editor brings every admin form
 	with it, which no one else's first page should wait on. -->
 {#if data.me.role === "admin"}
