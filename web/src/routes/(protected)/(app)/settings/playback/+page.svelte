@@ -12,7 +12,7 @@ import type {
 	Preferences,
 	PreferencesChange,
 } from "#lib/player/preferences.js";
-import { bitrate, language } from "#lib/format.js";
+import { bitrate, localeOptions } from "#lib/format.js";
 import { qualities } from "#lib/player/words.js";
 
 type Schemas = components["schemas"];
@@ -37,6 +37,8 @@ async function set(change: PreferencesChange) {
 	toast.success("Saved for every device.");
 }
 
+// Languages alone, not subtitleLanguages: a preference matches a track by its
+// language whatever its region, and Jellyfin keeps it as a bare ISO 639 code.
 const tags = [
 	"en",
 	"fr",
@@ -66,9 +68,7 @@ const tags = [
 	"vi",
 	"id",
 ];
-const languages = tags
-	.map((value) => ({ value, label: language(value) }))
-	.sort((a, b) => a.label.localeCompare(b.label));
+const languages = localeOptions(tags);
 const qualityOptions = qualities.map((kbps) => ({
 	value: String(kbps),
 	label: kbps ? `Up to ${bitrate(kbps)}` : "Original: the file as it is",

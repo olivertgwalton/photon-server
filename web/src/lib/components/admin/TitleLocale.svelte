@@ -1,12 +1,13 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
-import { localeOptions, serverLocale } from "#lib/admin/library.js";
+import { serverLocale } from "#lib/admin/library.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/Choice.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { fields } from "#lib/form.js";
+import { country, language, localeOptions } from "#lib/format.js";
 
 type Schemas = components["schemas"];
 
@@ -20,9 +21,9 @@ let {
 
 const id = $props.id();
 
-const named = (codes: string[], type: "language" | "region") => [
+const named = (codes: string[], name: (code: string) => string) => [
 	{ value: serverLocale, label: "Its library's" },
-	...localeOptions(codes, type),
+	...localeOptions(codes, name),
 ];
 
 function save(event: SubmitEvent) {
@@ -55,7 +56,7 @@ function save(event: SubmitEvent) {
 				id="{id}-title-language"
 				name="metadata_language"
 				value={title.metadata_language ?? serverLocale}
-				options={named(locales.languages, "language")}
+				options={named(locales.languages, language)}
 			/>
 		</Field.Field>
 		<Field.Field>
@@ -64,7 +65,7 @@ function save(event: SubmitEvent) {
 				id="{id}-title-country"
 				name="certification_country"
 				value={title.certification_country ?? serverLocale}
-				options={named(locales.countries, "region")}
+				options={named(locales.countries, country)}
 			/>
 		</Field.Field>
 		<Field.Field>
