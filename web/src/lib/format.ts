@@ -75,6 +75,7 @@ export function episodeLine(t: {
 // in it; anything else by its own title.
 export function fullTitle(
 	t: {
+		kind: Schemas["ItemKind"];
 		title: string;
 		season_number?: number | null;
 		episode_number?: number | null;
@@ -82,7 +83,7 @@ export function fullTitle(
 	},
 	show: string | undefined,
 ): string {
-	if (!show) return t.title;
+	if (t.kind !== "episode" || !show) return t.title;
 	const at = episodeLabel(t.season_number, t.episode_number, t.episode_end);
 	return `${[show, at].filter(Boolean).join(" ")} · ${t.title}`;
 }

@@ -37,9 +37,7 @@ const refreshes = $derived(t.kind !== "collection" && t.kind !== "extra");
 const versions = $derived(
 	t.kind === "movie" || t.kind === "episode" ? (t.versions ?? []) : [],
 );
-const name = $derived(
-	fullTitle(t, t.kind === "episode" ? t.show?.title : undefined),
-);
+const name = $derived(fullTitle(t, t.show?.title));
 </script>
 
 <svelte:head><title>Edit {t.title} · Settings · Photon</title></svelte:head>

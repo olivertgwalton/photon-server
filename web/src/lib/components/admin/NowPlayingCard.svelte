@@ -5,9 +5,8 @@ import { act } from "#lib/act.js";
 import { confirmFirst } from "#lib/actions.svelte.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import { bitrate, timecode } from "#lib/format.js";
+import { bitrate, fullTitle, timecode } from "#lib/format.js";
 import { positionAt } from "#lib/admin/live.js";
-import { playedTitle } from "#lib/admin/words.js";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
 
@@ -27,7 +26,7 @@ const words = vocabulary();
 
 const picture = $derived(p.title.thumb ?? p.title.backdrop);
 const position = $derived(positionAt(p, now));
-const name = $derived(playedTitle(p.title));
+const name = $derived(fullTitle(p.title, p.title.show));
 
 function resolution(width?: number, height?: number) {
 	return width && height ? `${width}×${height}` : "";
