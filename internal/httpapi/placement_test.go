@@ -52,11 +52,11 @@ func (c *sharedValkey) Nodes(context.Context) ([]domain.Node, error) {
 	return slices.Collect(maps.Values(c.adverts)), nil
 }
 
-func (c *sharedValkey) NodeAddress(_ context.Context, id uuid.UUID) (string, bool, error) {
+func (c *sharedValkey) Node(_ context.Context, id uuid.UUID) (domain.Node, bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	n, ok := c.adverts[id]
-	return n.Address, ok, nil
+	return n, ok, nil
 }
 
 // peerNode is a server node of a sharedValkey, served over HTTP, encoding in software.

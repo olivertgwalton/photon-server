@@ -41,27 +41,31 @@ Settings › Server lists the nodes, what each transcodes with, and how busy eac
 
 ## Where a transcode is made
 
-A playback that encodes its video is made on the node with the most of its transcode slots free,
-of those whose encoder can make it (HEVC, or styled subtitles drawn in, where it asks for them):
-of those with a slot free and room for another stream, one in the group of the node the client
-asks first, then one set to transcode first, then one with no limit. The node a client asks
-decides how the copy is played with that node's encoder, starts the playback there, and answers the client: the client's every request
-for its HLS, to whichever node, is handed to the node making it. A node with no slot free by the
-time it is asked refuses, and the next is asked; when every one refuses, the client is told the
-server is transcoding as many videos at once as it may, and how many that is across the nodes.
+A playback that encodes its video is made on the node with the most of its transcode slots free, of
+those whose encoder can make it (HEVC, or styled subtitles drawn in, where it asks for them): of
+those with a slot free and room for another stream, one in the group of the node the client asks
+first, then one set to transcode first, then one with no limit. The node a client asks decides how
+the copy is played with that node's encoder, starts the playback there, and answers the client: the
+client's every request for its HLS, to whichever node, is handed to the node making it. A node with
+no slot free by the time it is asked refuses, and the next is asked; when every one refuses, the
+client is told the server is transcoding as many videos at once as it may, and how many that is
+across the nodes.
 
 A playback that copies its video, or is played as it is, is delivered by the node asked, or by
 another the client reaches itself, at its local or public URL, that is not drained: of those, one
 with room for another stream first, of them one in the node asked's group, then one set to serve
-only, then the one delivering the fewest streams, the node asked before another delivering as
-many. Nodes set to serve only, with public or local URLs, are so the cluster's proxies. A node with no room by the time it is
-asked refuses, and the next is asked; when every one refuses, the client is told `stream_limit`.
-Jellyfin's apps are delivered by the node they ask.
+only, then the one delivering the fewest streams, the node asked before another delivering as many.
+Nodes set to serve only, with public or local URLs, are so the cluster's proxies. A node with no
+room by the time it is asked refuses, and the next is asked; when every one refuses, the client is
+told `stream_limit`. A Jellyfin app's file played as it is is delivered by the node it asks: the
+app fetches it before it says it plays, so there is no playback yet to place.
 
 A playback delivered by a node the client reaches itself, for a client that asked another, is
-fetched from there: the client is answered its files or playlist at the node's local or public
-URL, not through the node it asked, and the web app's pages may fetch streams from every node's
-URLs a node tells the others of as the page loads. Jellyfin's apps ask for a stream before it is placed, so theirs are always handed on.
+fetched from there: the client is answered its files or playlist at the node's local or public URL,
+not through the node it asked, and the web app's pages may fetch streams from every node's URLs a
+node tells the others of as the page loads. A Jellyfin app is sent to the HLS another node runs, by
+a redirect to its signed address there, where the app reaches it; one it reaches at neither URL is
+handed it through the node it asked.
 
 Nodes ask each other at `POST /api/v1/internal/playbacks/{id}/delivery`, signed with a key derived
 from the cluster's own, which no client is ever given: a request no node signed, or changed on

@@ -70,7 +70,7 @@ type transcodeSlots interface {
 }
 
 type nodeAddresses interface {
-	NodeAddress(ctx context.Context, id uuid.UUID) (string, bool, error)
+	Node(ctx context.Context, id uuid.UUID) (domain.Node, bool, error)
 }
 
 // Conversions makes downloads' conversions on this node, each a file of its own in dir while a
@@ -219,11 +219,11 @@ func (c *Conversions) File(ctx context.Context, download uuid.UUID) (*os.File, s
 		return nil, "", err
 	}
 	if node != c.node {
-		address, ok, err := c.nodes.NodeAddress(ctx, node)
+		n, ok, err := c.nodes.Node(ctx, node)
 		if err == nil && !ok {
 			err = store.ErrNotFound
 		}
-		return nil, address, err
+		return nil, n.Address, err
 	}
 	f, err := os.OpenInRoot(c.dir, filepath.Base(c.path(conversion)))
 	if errors.Is(err, fs.ErrNotExist) {

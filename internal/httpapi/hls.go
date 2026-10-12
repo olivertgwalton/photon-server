@@ -9,6 +9,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
@@ -16,7 +17,7 @@ import (
 
 // owners say which node of the cluster serves a playback's HLS.
 type owners interface {
-	Owner(ctx context.Context, playback uuid.UUID) (string, bool, error)
+	Owner(ctx context.Context, playback uuid.UUID) (domain.Node, bool, error)
 }
 
 type hlsFiles interface {
@@ -63,12 +64,12 @@ func (a *API) routeToOwner(param string, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		address, elsewhere, err := a.svc.Owners.Owner(r.Context(), playback)
+		owner, elsewhere, err := a.svc.Owners.Owner(r.Context(), playback)
 		if err != nil {
 			a.internal(w, r, err)
 			return
 		}
-		target, perr := url.Parse(address)
+		target, perr := url.Parse(owner.Address)
 		if !elsewhere || perr != nil {
 			next.ServeHTTP(w, r)
 			return
