@@ -151,42 +151,29 @@ func episodeAired(dir string) string {
 	return "coalesce(items.release_date, items.air_date, '9999-12-31')"
 }
 
-// wallQuery is the WHERE, over wallRows, of a library's films or shows a profile may see, and its
-// collections as the library shows them, or of its episodes, as a filter narrows them, and the
-// values they take; ErrNotFound for no such library. A library holds one kind of title, and naming
+// wallQuery is the WHERE, over wallRows, of a library's films or shows a profile may see, or of its
+// episodes, as a filter narrows them, and the values they take; ErrNotFound for no such library.
+// A library's collections are listed beside its wall, not on it. A library holds one kind of title, and naming
 // it lets the wall's sort indexes read a page in order.
 func (s *Store) wallQuery(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, wall domain.WallKind, f WallFilter) (string, pgx.NamedArgs, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, kind, collection_mode FROM libraries WHERE id = ANY($1) ORDER BY id`, libs)
+	rows, err := s.pool.Query(ctx, `SELECT id, kind FROM libraries WHERE id = ANY($1) ORDER BY id`, libs)
 	if err != nil {
 		return "", nil, err
 	}
 	args := pgx.NamedArgs{"libs": libs, "profile": profile}
 	_, row, seen := wallRows(wall)
 	filter := f.where(args, row)
-	// Each library's titles are what its kind and collection mode make them.
+	// Each library's titles are what its kind makes them.
 	var arms []string
 	var id uuid.UUID
 	var kind domain.LibraryKind
-	var mode domain.CollectionMode
-	if _, err := pgx.ForEachRow(rows, []any{&id, &kind, &mode}, func() error {
+	if _, err := pgx.ForEachRow(rows, []any{&id, &kind}, func() error {
 		n := strconv.Itoa(len(arms))
 		args["lib"+n], args["kind"+n] = id, kind.ItemKinds()[0]
 		if wall == domain.WallEpisodes {
 			args["kind"+n] = domain.ItemEpisode
 		}
-		titles := `items.kind = @kind` + n
-		// A filtered wall answers titles alone, as Plex's does: a collection has no genre or year.
-		if filter == "" && wall != domain.WallEpisodes {
-			switch mode {
-			case domain.CollectionsGrouped:
-				titles = `(items.kind = @kind` + n + ` AND NOT EXISTS (SELECT 1 FROM collection_members cm JOIN items ci ON ci.id = cm.collection_id
-					WHERE cm.item_id = items.id AND ci.id IN (` + shownCollections + `) AND sees(v, ci)) OR ` + listedCollection + `)`
-			case domain.CollectionsShown:
-				titles = `(items.kind = @kind` + n + ` OR ` + listedCollection + `)`
-			case domain.CollectionsHidden:
-			}
-		}
-		arms = append(arms, `(items.library_id = @lib`+n+` AND `+titles+`)`)
+		arms = append(arms, `(items.library_id = @lib`+n+` AND items.kind = @kind`+n+`)`)
 		return nil
 	}); err != nil {
 		return "", nil, err

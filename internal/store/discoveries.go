@@ -127,7 +127,7 @@ func (s *Store) HoldDiscovered(ctx context.Context, id uuid.UUID) (bool, error) 
 		if err != nil {
 			return err
 		}
-		row := model.Item{ID: id, LibraryID: d.Library, Kind: d.Kind, ScanTitle: d.Title, Title: d.Title, SortTitle: sortTitle(d.Title)}
+		row := model.Item{ID: id, LibraryID: &d.Library, Kind: d.Kind, ScanTitle: d.Title, Title: d.Title, SortTitle: sortTitle(d.Title)}
 		_, err = tx.Exec(ctx, `
 			INSERT INTO items (id, library_id, kind, scan_title, title, sort_title, folder) VALUES ($1, $2, $3, $4, $5, $6, '')`,
 			row.ID, row.LibraryID, row.Kind, row.ScanTitle, row.Title, row.SortTitle)

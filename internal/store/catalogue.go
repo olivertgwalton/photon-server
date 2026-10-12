@@ -201,7 +201,7 @@ func filmItem(ctx context.Context, tx db, lib uuid.UUID, f Film, changed Changed
 			return uuid.UUID{}, err
 		default:
 			item := model.Item{
-				LibraryID: lib, Kind: domain.ItemMovie,
+				LibraryID: &lib, Kind: domain.ItemMovie,
 				ScanTitle: f.Title, Title: f.Title, SortTitle: sortTitle(f.Title), Folder: f.Folder,
 			}
 			if err := insertItem(ctx, tx, &item); err != nil {
@@ -281,8 +281,6 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 				AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
 			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'show'
 				AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
-			`DELETE FROM items i USING collections c WHERE c.item_id = i.id AND i.library_id = $1
-				AND c.origin NOT IN ` + madeHere + ` AND NOT EXISTS (SELECT 1 FROM collection_members m WHERE m.collection_id = c.item_id)`,
 		} {
 			removed, err := queryColumn[uuid.UUID](ctx, tx, sql+` RETURNING i.id`, lib)
 			if err != nil {
@@ -290,6 +288,14 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 			}
 			changed.add(domain.TitleRemoved, removed...)
 		}
+		// A provider's box set left empty goes, whichever library's titles it held.
+		removed, err := queryColumn[uuid.UUID](ctx, tx, `
+			DELETE FROM items i USING collections c WHERE c.item_id = i.id AND c.origin NOT IN `+madeHere+`
+				AND NOT EXISTS (SELECT 1 FROM collection_members m WHERE m.collection_id = c.item_id) RETURNING i.id`)
+		if err != nil {
+			return err
+		}
+		changed.add(domain.TitleRemoved, removed...)
 		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND `+notIn("path", "$2")+` AND `+inScope("path", "$3"),
 			lib, folders, scopes)
 		return err

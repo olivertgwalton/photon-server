@@ -39,7 +39,7 @@ type titlePageJSON struct {
 	// Fetching is a remote film or episode whose provider is fetching a copy: it plays once the
 	// provider has it, a while from now.
 	Fetching      bool                       `json:"fetching,omitzero"`
-	LibraryID     uuid.UUID                  `json:"library_id"`
+	LibraryID     *uuid.UUID                 `json:"library_id,omitzero"`
 	Kind          domain.ItemKind            `json:"kind"`
 	Title         string                     `json:"title"`
 	OriginalTitle string                     `json:"original_title,omitzero"`

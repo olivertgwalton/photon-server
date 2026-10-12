@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"uuid"
@@ -42,15 +43,12 @@ func (fakeCollections) Members(_ context.Context, _, id uuid.UUID) ([]store.Card
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Alien"}}, nil
 }
 
-func (fakeCollections) AddCollection(_ context.Context, lib uuid.UUID, _ string) (uuid.UUID, error) {
-	if lib != films {
-		return uuid.UUID{}, store.ErrNotFound
-	}
+func (fakeCollections) AddCollection(context.Context, string) (uuid.UUID, error) {
 	return mySet, nil
 }
 
-func (f *fakeCollections) AddSmartCollection(_ context.Context, lib uuid.UUID, _ string, rule store.SmartRule) (uuid.UUID, error) {
-	if lib != films {
+func (f *fakeCollections) AddSmartCollection(_ context.Context, libs []uuid.UUID, _ string, rule store.SmartRule) (uuid.UUID, error) {
+	if !slices.Equal(libs, []uuid.UUID{films}) {
 		return uuid.UUID{}, store.ErrNotFound
 	}
 	f.rule = rule
@@ -68,8 +66,8 @@ func (f *fakeCollections) SetRule(_ context.Context, id uuid.UUID, rule store.Sm
 // myList is an admin's list collection of a TMDB list.
 var myList = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e3")
 
-func (f *fakeCollections) AddListCollection(_ context.Context, lib uuid.UUID, _ string, list store.ListRef, listed []domain.Listed) (uuid.UUID, error) {
-	if lib != films {
+func (f *fakeCollections) AddListCollection(_ context.Context, libs []uuid.UUID, _ string, list store.ListRef, listed []domain.Listed) (uuid.UUID, error) {
+	if !slices.Equal(libs, []uuid.UUID{films}) {
 		return uuid.UUID{}, store.ErrNotFound
 	}
 	f.list, f.listed = list, listed

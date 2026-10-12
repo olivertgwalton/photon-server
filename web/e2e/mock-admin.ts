@@ -106,7 +106,6 @@ const films: Schemas["AdminLibrary"] = {
 	deletion: "off",
 	artwork_language: "localized",
 	title_language: "localized",
-	collection_mode: "grouped",
 	subtitle_languages: ["fr"],
 	subtitle_match: "release",
 };

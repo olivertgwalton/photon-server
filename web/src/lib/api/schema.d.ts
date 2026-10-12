@@ -6990,7 +6990,6 @@ export interface components {
         AdminLibrary: {
             artwork_language: components["schemas"]["ArtworkLanguage"];
             certification_country?: string;
-            collection_mode: components["schemas"]["CollectionMode"];
             deletion: components["schemas"]["MediaDeletion"];
             discover?: components["schemas"]["FieldSource"];
             /** Format: uuid */
@@ -7017,7 +7016,6 @@ export interface components {
         AdminLibraryListing: {
             artwork_language: components["schemas"]["ArtworkLanguage"];
             certification_country?: string;
-            collection_mode: components["schemas"]["CollectionMode"];
             counts: components["schemas"]["Counts"];
             deletion: components["schemas"]["MediaDeletion"];
             discover?: components["schemas"]["FieldSource"];
@@ -7287,8 +7285,6 @@ export interface components {
             poster?: string;
             title: string;
         };
-        /** @enum {string} */
-        CollectionMode: "grouped" | "shown" | "hidden";
         /** @enum {string} */
         CollectionOrigin: "tmdb" | "user" | "smart" | "list";
         Counts: {
@@ -7790,7 +7786,6 @@ export interface components {
         LibraryChange: {
             artwork_language?: components["schemas"]["ArtworkLanguage"];
             certification_country?: string | null;
-            collection_mode?: components["schemas"]["CollectionMode"];
             deletion?: components["schemas"]["MediaDeletion"];
             keyframes?: components["schemas"]["KeyframeMode"];
             markers?: components["schemas"]["MarkerDetection"];
@@ -8813,7 +8808,7 @@ export interface components {
             };
             kind: components["schemas"]["ItemKind"];
             /** Format: uuid */
-            library_id: string;
+            library_id?: string | null;
             list?: components["schemas"]["ListRef"] | null;
             metadata_language?: string;
             origin?: components["schemas"]["CollectionOrigin"];

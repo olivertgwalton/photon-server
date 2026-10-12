@@ -98,6 +98,10 @@ func (s *Store) SetTitleLocale(ctx context.Context, id uuid.UUID, loc domain.Loc
 
 // rematch has a title's folder read again, and its film or show matched again.
 func rematch(ctx context.Context, tx db, item *model.Item) error {
+	// A collection has no folder to read again, nor any match.
+	if item.LibraryID == nil {
+		return nil
+	}
 	if _, err := tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND path = $2`, item.LibraryID, item.Folder); err != nil {
 		return err
 	}
@@ -110,7 +114,7 @@ func rematch(ctx context.Context, tx db, item *model.Item) error {
 			return err
 		}
 	}
-	return askScan(ctx, tx, item.LibraryID, []string{item.Folder}, 0)
+	return askScan(ctx, tx, *item.LibraryID, []string{item.Folder}, 0)
 }
 
 // matchedAs answers the film or show an item is matched to providers as: itself, or the show a

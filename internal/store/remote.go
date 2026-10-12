@@ -38,7 +38,7 @@ func (s *Store) SaveListed(ctx context.Context, lib uuid.UUID, kind domain.ItemK
 			}
 			// A title the list does not name is called by an id it is listed by until it is matched.
 			title := cmp.Or(l.Title, l.IDs[slices.Sorted(maps.Keys(l.IDs))[0]])
-			item := model.Item{LibraryID: lib, Kind: kind, ScanTitle: title, Title: title, SortTitle: sortTitle(title)}
+			item := model.Item{LibraryID: &lib, Kind: kind, ScanTitle: title, Title: title, SortTitle: sortTitle(title)}
 			if err := insertItem(ctx, tx, &item); err != nil {
 				return err
 			}
@@ -124,7 +124,7 @@ func addAired(ctx context.Context, tx db, show uuid.UUID, number int, episodes m
 		e := episodes[n]
 		title := cmp.Or(e.Title, fmt.Sprintf("Episode %d", n))
 		row := model.Item{
-			LibraryID: lib, Kind: domain.ItemEpisode, ParentID: &season, SeasonNumber: &number, EpisodeNumber: &n,
+			LibraryID: &lib, Kind: domain.ItemEpisode, ParentID: &season, SeasonNumber: &number, EpisodeNumber: &n,
 			AirDate: &e.ReleaseDate, ScanTitle: title, Title: title, SortTitle: sortTitle(title),
 		}
 		if err := insertItem(ctx, tx, &row); err != nil {

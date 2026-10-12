@@ -51,9 +51,9 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 		}
 		return lib
 	}
-	collection := func(lib domain.Library, name string, titles ...string) uuid.UUID {
+	collection := func(name string, titles ...string) uuid.UUID {
 		t.Helper()
-		id, err := st.AddCollection(ctx, lib.ID, name)
+		id, err := st.AddCollection(ctx, name)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -66,11 +66,11 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 		}
 		return id
 	}
-	cinema := library("Films", "Alien", "Aliens", "Heat")
+	library("Films", "Alien", "Aliens", "Heat")
 	docs := library("Documentaries", "Senna")
 	shorts := library("Shorts", "Pilot")
-	collection(cinema, "Alien Collection", "Alien", "Aliens")
-	collection(docs, "Racing", "Senna")
+	collection("Alien Collection", "Alien", "Aliens")
+	collection("Racing", "Senna")
 	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)
 	if err != nil {
 		t.Fatal(err)

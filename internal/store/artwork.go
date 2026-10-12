@@ -287,7 +287,7 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (domain.Picture, erro
 	var place, root string
 	err := s.pool.QueryRow(ctx, `
 		SELECT a.source, a.place, coalesce(l.root, '') FROM artwork a
-		JOIN items i ON i.id = a.item_id JOIN libraries l ON l.id = i.library_id
+		JOIN items i ON i.id = a.item_id LEFT JOIN libraries l ON l.id = i.library_id
 		WHERE a.id = $1`, id).Scan(&source, &place, &root)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Or a person's.
@@ -380,7 +380,7 @@ func (s *Store) Unhashed(ctx context.Context, after uuid.UUID, limit int) ([]Unh
 	return queryStructs[Unhashed](ctx, s.pool, `
 		(SELECT a.id, CASE a.source WHEN 'file' THEN l.root ELSE '' END AS root,
 			CASE a.source WHEN 'file' THEN a.place ELSE '' END AS path
-		FROM artwork a JOIN items i ON i.id = a.item_id JOIN libraries l ON l.id = i.library_id
+		FROM artwork a JOIN items i ON i.id = a.item_id LEFT JOIN libraries l ON l.id = i.library_id
 		WHERE a.blurhash IS NULL AND a.id > @after ORDER BY a.id LIMIT @limit)
 		UNION ALL
 		(SELECT photo_id, '', '' FROM people WHERE photo_blurhash IS NULL AND photo_id > @after ORDER BY photo_id LIMIT @limit)

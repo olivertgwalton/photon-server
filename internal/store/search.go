@@ -73,7 +73,8 @@ func (s *Store) titlesMatching(ctx context.Context, profile uuid.UUID, args pgx.
 	matching := `
 		FROM items, viewer(CAST(@profile AS uuid)) v
 		WHERE kind = ANY(@kinds) AND ` + where + `
-			AND (CAST(@library AS uuid) IS NULL OR library_id = CAST(@library AS uuid))
+			AND (CAST(@library AS uuid) IS NULL OR library_id = CAST(@library AS uuid)
+				OR kind = 'collection' AND ` + holdsTitleOf("CAST(@library AS uuid)") + `)
 			AND sees(v, items) AND NOT EXISTS (SELECT 1 FROM seen_before(v, items))`
 	var rows []*model.Item
 	total, err := s.counted(ctx, `SELECT count(*) `+matching, args, func(ctx context.Context) (err error) {

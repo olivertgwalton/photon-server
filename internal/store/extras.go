@@ -95,7 +95,7 @@ func one(ctx context.Context, tx db, sql string, args ...any) (uuid.UUID, error)
 
 func saveExtra(ctx context.Context, tx db, lib uuid.UUID, settings analysis, owner uuid.UUID, e Extra) error {
 	row := model.Item{
-		LibraryID: lib, Kind: domain.ItemExtra, ParentID: &owner, ExtraKind: &e.Kind,
+		LibraryID: &lib, Kind: domain.ItemExtra, ParentID: &owner, ExtraKind: &e.Kind,
 		ScanTitle: e.Title, Title: e.Title, SortTitle: sortTitle(e.Title), Folder: e.Folder,
 	}
 	var version uuid.UUID

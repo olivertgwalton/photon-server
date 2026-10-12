@@ -46,7 +46,7 @@ func TestACollectionWithNoPosterWearsAMosaicOfItsTitles(t *testing.T) {
 		}
 		posters[f.title] = page.Artwork[domain.ArtworkPoster][0]
 	}
-	set, err := s.AddCollection(ctx, lib.ID, "Five")
+	set, err := s.AddCollection(ctx, "Five")
 	if err != nil {
 		t.Fatal(err)
 	}

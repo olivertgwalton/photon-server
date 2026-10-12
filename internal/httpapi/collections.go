@@ -15,10 +15,10 @@ import (
 type collections interface {
 	Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
 	Members(ctx context.Context, profile, collection uuid.UUID) ([]store.Card, error)
-	AddCollection(ctx context.Context, lib uuid.UUID, title string) (uuid.UUID, error)
-	AddSmartCollection(ctx context.Context, lib uuid.UUID, title string, rule store.SmartRule) (uuid.UUID, error)
+	AddCollection(ctx context.Context, title string) (uuid.UUID, error)
+	AddSmartCollection(ctx context.Context, libs []uuid.UUID, title string, rule store.SmartRule) (uuid.UUID, error)
 	SetRule(ctx context.Context, collection uuid.UUID, rule store.SmartRule) error
-	AddListCollection(ctx context.Context, lib uuid.UUID, title string, list store.ListRef, listed []domain.Listed) (uuid.UUID, error)
+	AddListCollection(ctx context.Context, libs []uuid.UUID, title string, list store.ListRef, listed []domain.Listed) (uuid.UUID, error)
 	SetListMembers(ctx context.Context, collection uuid.UUID, listed []domain.Listed) error
 	CollectionList(ctx context.Context, collection uuid.UUID) (store.ListRef, error)
 	SetMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error
@@ -87,15 +87,15 @@ func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch {
 	case req.Rule != nil:
-		id, err = a.svc.Collections.AddSmartCollection(r.Context(), req.LibraryID, req.Title, *req.Rule)
+		id, err = a.svc.Collections.AddSmartCollection(r.Context(), []uuid.UUID{req.LibraryID}, req.Title, *req.Rule)
 	case req.List != nil:
 		listed, ok := a.readList(w, r, *req.List)
 		if !ok {
 			return
 		}
-		id, err = a.svc.Collections.AddListCollection(r.Context(), req.LibraryID, req.Title, *req.List, listed)
+		id, err = a.svc.Collections.AddListCollection(r.Context(), []uuid.UUID{req.LibraryID}, req.Title, *req.List, listed)
 	default:
-		id, err = a.svc.Collections.AddCollection(r.Context(), req.LibraryID, req.Title)
+		id, err = a.svc.Collections.AddCollection(r.Context(), req.Title)
 	}
 	if errors.Is(err, store.ErrNotFound) {
 		writeProblem(w, a.logger, codeInvalidBody, "library_id is not a library")

@@ -120,9 +120,6 @@ type adminLibraryJSON struct {
 	// TitleLanguage is which title it gives its films and shows: localized, in its language; or
 	// original, in the title's own.
 	TitleLanguage domain.TitleLanguage `json:"title_language"`
-	// CollectionMode is how its wall shows its collections: grouped, in place of the titles they
-	// hold; shown, beside them; or hidden.
-	CollectionMode domain.CollectionMode `json:"collection_mode"`
 	// SubtitleLanguages are the languages it fetches subtitles in for copies with none in them,
 	// as BCP 47 tags; none is no fetching. SubtitleMatch is which it takes: release, one made for
 	// the copy's very file; or any, the best found.
@@ -151,7 +148,7 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
 		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes, Deletion: l.Deletion,
 		MetadataLanguage: l.Locale.Language, CertificationCountry: l.Locale.Country, ArtworkLanguage: l.Locale.Artwork,
-		TitleLanguage: l.Titles, CollectionMode: l.Collections, SubtitleLanguages: make([]string, len(l.SubtitleLanguages)),
+		TitleLanguage: l.Titles, SubtitleLanguages: make([]string, len(l.SubtitleLanguages)),
 		SubtitleMatch: l.SubtitleMatch,
 	}
 	for i, t := range l.SubtitleLanguages {
@@ -347,8 +344,6 @@ type libraryChangeJSON struct {
 	ArtworkLanguage domain.ArtworkLanguage `json:"artwork_language,omitzero"`
 	// TitleLanguage is which title it gives its films and shows; changing it describes them again.
 	TitleLanguage domain.TitleLanguage `json:"title_language,omitzero"`
-	// CollectionMode is how its wall shows its collections.
-	CollectionMode domain.CollectionMode `json:"collection_mode,omitzero"`
 	// SubtitleLanguages replace the languages it fetches subtitles in; [] is none.
 	SubtitleLanguages []string             `json:"subtitle_languages,omitzero"`
 	SubtitleMatch     domain.SubtitleMatch `json:"subtitle_match,omitzero"`
@@ -379,7 +374,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	change := store.LibraryChange{
 		Name: req.Name, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays,
 		Previews: req.Previews, Markers: req.Markers, Keyframes: req.Keyframes, Themes: req.Themes,
-		Deletion: req.Deletion, Collections: req.CollectionMode, SubtitleMatch: req.SubtitleMatch,
+		Deletion: req.Deletion, SubtitleMatch: req.SubtitleMatch,
 	}
 	if req.SubtitleLanguages != nil {
 		change.SubtitleLanguages = make([]language.Tag, 0, len(req.SubtitleLanguages))

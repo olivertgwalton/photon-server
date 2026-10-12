@@ -39,7 +39,7 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 		{"Ran", 1985, nil},
 	} {
 		item := model.Item{
-			LibraryID: lib.ID, Kind: domain.ItemMovie, Title: f.title, ScanTitle: f.title,
+			LibraryID: &lib.ID, Kind: domain.ItemMovie, Title: f.title, ScanTitle: f.title,
 			SortTitle: sortTitle(f.title), Folder: f.title, AddedAt: base.Add(time.Duration(n%5) * time.Hour),
 			ReleaseDate: f.released,
 		}
@@ -49,7 +49,7 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 		id := addItem(t, s, item)
 		if f.title == "Heat" {
 			addItem(t, s, model.Item{
-				LibraryID: lib.ID, Kind: domain.ItemExtra, ParentID: &id, ExtraKind: new(domain.ExtraTrailer), Title: "Trailer",
+				LibraryID: &lib.ID, Kind: domain.ItemExtra, ParentID: &id, ExtraKind: new(domain.ExtraTrailer), Title: "Trailer",
 				ScanTitle: "Trailer", SortTitle: "trailer", Folder: "Heat",
 			})
 		}
@@ -122,7 +122,7 @@ func TestTitlesSortTheirNumbersAsNumbers(t *testing.T) {
 	}
 	for _, title := range []string{"1917", "The Age of Adaline", "13 Going on 30", "2 Fast 2 Furious", "Alien", "21 Jump Street"} {
 		addItem(t, s, model.Item{
-			LibraryID: lib.ID, Kind: domain.ItemMovie, Title: title, ScanTitle: title,
+			LibraryID: &lib.ID, Kind: domain.ItemMovie, Title: title, ScanTitle: title,
 			SortTitle: sortTitle(title), Folder: title,
 		})
 	}
@@ -227,19 +227,19 @@ func TestAWallPagesEpisodesAcrossShows(t *testing.T) {
 		{"Archer", "15", "Comedy", []episode{{"a3", 2, 1, nil}, {"a2", 1, 2, day(5)}, {"a1", 1, 1, day(5)}}},
 	} {
 		showID := addItem(t, s, model.Item{
-			LibraryID: lib.ID, Kind: domain.ItemShow, Title: show.title, ScanTitle: show.title, SortTitle: sortTitle(show.title),
+			LibraryID: &lib.ID, Kind: domain.ItemShow, Title: show.title, ScanTitle: show.title, SortTitle: sortTitle(show.title),
 			Folder: show.title, Certificate: &show.cert, Genres: []string{show.genre},
 		})
 		seasons := map[int]uuid.UUID{}
 		for _, e := range show.episodes {
 			if _, ok := seasons[e.season]; !ok {
 				seasons[e.season] = addItem(t, s, model.Item{
-					LibraryID: lib.ID, Kind: domain.ItemSeason, ParentID: &showID, SeasonNumber: &e.season,
+					LibraryID: &lib.ID, Kind: domain.ItemSeason, ParentID: &showID, SeasonNumber: &e.season,
 					Title: "Season", ScanTitle: "Season", SortTitle: "season", Folder: show.title,
 				})
 			}
 			ids[e.title] = addItem(t, s, model.Item{
-				LibraryID: lib.ID, Kind: domain.ItemEpisode, ParentID: new(seasons[e.season]), SeasonNumber: &e.season,
+				LibraryID: &lib.ID, Kind: domain.ItemEpisode, ParentID: new(seasons[e.season]), SeasonNumber: &e.season,
 				EpisodeNumber: &e.episode, AirDate: e.aired, Title: e.title, ScanTitle: e.title, SortTitle: e.title, Folder: show.title,
 			})
 		}

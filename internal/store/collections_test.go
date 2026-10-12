@@ -5,6 +5,7 @@ package store
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -102,7 +103,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	}
 
 	// An admin's own, in their order, of any size.
-	mine, err := s.AddCollection(ctx, lib.ID, "Favourites of 1979")
+	mine, err := s.AddCollection(ctx, "Favourites of 1979")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +145,9 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	}
 }
 
-func TestALibrarysWallShowsItsCollectionsAsItSays(t *testing.T) {
+// A library's wall shows its titles alone, those in a collection among them: its collections are
+// listed beside it, in its tab and the Collections view.
+func TestALibrarysWallShowsItsTitlesAlone(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
 	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
@@ -165,7 +168,7 @@ func TestALibrarysWallShowsItsCollectionsAsItSays(t *testing.T) {
 		}
 		ids[title] = cards[0].ID
 	}
-	set, err := s.AddCollection(ctx, lib.ID, "Alien Anthology")
+	set, err := s.AddCollection(ctx, "Alien Anthology")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,42 +197,33 @@ func TestALibrarysWallShowsItsCollectionsAsItSays(t *testing.T) {
 		}
 		return titles
 	}
-	for _, tc := range []struct {
-		mode domain.CollectionMode
-		want []string
-	}{
-		{domain.CollectionsGrouped, []string{"Alien Anthology", "Heat"}},
-		{domain.CollectionsShown, []string{"Alien", "Alien Anthology", "Aliens", "Heat"}},
-		{domain.CollectionsHidden, []string{"Alien", "Aliens", "Heat"}},
-	} {
-		if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Collections: tc.mode}); err != nil {
-			t.Fatal(err)
-		}
-		if got := wall(WallFilter{}); !reflect.DeepEqual(got, tc.want) {
-			t.Errorf("%s: the wall shows %q, want %q", tc.mode, got, tc.want)
-		}
-	}
-	// A filtered wall answers titles alone, those in a set among them.
-	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{Collections: domain.CollectionsGrouped}); err != nil {
-		t.Fatal(err)
+	if got := wall(WallFilter{}); !reflect.DeepEqual(got, []string{"Alien", "Aliens", "Heat"}) {
+		t.Errorf("the wall shows %q, want the films alone", got)
 	}
 	if got := wall(WallFilter{StartsWith: "A"}); !reflect.DeepEqual(got, []string{"Alien", "Aliens"}) {
 		t.Errorf("filtered to A: the wall shows %q, want the films alone", got)
 	}
+	if listed, _, err := s.Collections(ctx, lib.ID, uuid.UUID{}, 0, 10); err != nil || len(listed) != 1 || listed[0].ID != set {
+		t.Errorf("its collections = %+v, %v; want the anthology, listed beside the wall", listed, err)
+	}
 }
 
-func TestALibraryCountsTheCollectionsItLists(t *testing.T) {
+// A collection, in no library, is listed in the Collections view, and in each library whose titles
+// it holds, which counts it; a profile is shown one where it sees one of its titles, or it holds
+// none yet.
+func TestACollectionIsListedInTheLibrariesWhoseTitlesItHolds(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
 	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
 	if err != nil {
 		t.Fatal(err)
 	}
-	empty, err := s.AddLibrary(ctx, "Other", domain.LibraryMovies, "/srv/other")
+	other, err := s.AddLibrary(ctx, "Other", domain.LibraryMovies, "/srv/other")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AddCollection(ctx, films.ID, "Sunday Films"); err != nil {
+	sunday, err := s.AddCollection(ctx, "Sunday Films")
+	if err != nil {
 		t.Fatal(err)
 	}
 	// A provider's set of one title is not listed, so it is not counted either.
@@ -243,21 +237,24 @@ func TestALibraryCountsTheCollectionsItLists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	alien := cards[0].ID
 	m := domain.Metadata{Title: "Alien", Certificate: "18", Collections: []domain.Grouping{{ID: "8091", Title: "Alien Collection"}}}
-	if err := s.SaveIdentity(ctx, cards[0].ID, domain.SourceTMDB, m, nil); err != nil {
+	if err := s.SaveIdentity(ctx, alien, domain.SourceTMDB, m, nil); err != nil {
 		t.Fatal(err)
 	}
 	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	agree := func(profile uuid.UUID, want map[uuid.UUID]int) {
+	agree := func(profile uuid.UUID, all int, want map[uuid.UUID]int) {
 		t.Helper()
+		if _, listed, err := s.AllCollections(ctx, profile, 0, 10); err != nil || listed != int64(all) {
+			t.Errorf("the Collections view lists %d, %v; want %d", listed, err, all)
+		}
 		counts, err := s.LibraryCounts(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		total := 0
 		for lib, n := range want {
 			_, listed, err := s.Collections(ctx, lib, profile, 0, 10)
 			if err != nil || listed != int64(n) {
@@ -267,22 +264,27 @@ func TestALibraryCountsTheCollectionsItLists(t *testing.T) {
 			if profile == (uuid.UUID{}) && counts[lib].Collections != n {
 				t.Errorf("library %s counts %d collections, lists %d", lib, counts[lib].Collections, n)
 			}
-			total += n
 		}
-		if has, err := s.HasCollections(ctx, profile); err != nil || has != (total > 0) {
-			t.Errorf("has collections: %v, %v; want %v", has, err, total > 0)
+		if has, err := s.HasCollections(ctx, profile); err != nil || has != (all > 0) {
+			t.Errorf("has collections: %v, %v; want %v", has, err, all > 0)
 		}
 	}
-	agree(uuid.UUID{}, map[uuid.UUID]int{films.ID: 1, empty.ID: 0})
+	// Empty, it is in the Collections view alone, holding no library's titles.
+	agree(uuid.UUID{}, 1, map[uuid.UUID]int{films.ID: 0, other.ID: 0})
+	if err := s.SetMembers(ctx, sunday, []uuid.UUID{alien}); err != nil {
+		t.Fatal(err)
+	}
+	agree(uuid.UUID{}, 1, map[uuid.UUID]int{films.ID: 1, other.ID: 0})
+	// A profile that may see none of its titles is not shown it.
 	twelve := 12
 	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedBlock}, nil); err != nil {
 		t.Fatal(err)
 	}
-	agree(kid.ID, map[uuid.UUID]int{films.ID: 1, empty.ID: 0})
-	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{empty.ID}}, nil); err != nil {
+	agree(kid.ID, 0, map[uuid.UUID]int{films.ID: 0, other.ID: 0})
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{other.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	agree(kid.ID, map[uuid.UUID]int{films.ID: 0, empty.ID: 0})
+	agree(kid.ID, 0, map[uuid.UUID]int{films.ID: 0, other.ID: 0})
 }
 
 // A smart collection is its library's titles its rule finds, in its order, the same for everyone:
@@ -316,7 +318,7 @@ func TestASmartCollectionIsWhatItsRuleFinds(t *testing.T) {
 	add("Groundhog Day", year(1993), "Comedy")
 
 	rule := SmartRule{Filter: WallFilter{Genres: []string{"Comedy"}}, Sort: domain.SortReleased, Order: domain.Descending}
-	set, err := s.AddSmartCollection(ctx, lib.ID, "Comedies", rule)
+	set, err := s.AddSmartCollection(ctx, []uuid.UUID{lib.ID}, "Comedies", rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,9 +356,9 @@ func TestASmartCollectionIsWhatItsRuleFinds(t *testing.T) {
 	if page, err := s.Title(ctx, uuid.UUID{}, set); err != nil || page.Origin != domain.CollectionSmart || page.Rule == nil || page.Rule.Limit != 1 {
 		t.Errorf("its page: %+v, %v; want it smart, with its rule", page.Rule, err)
 	}
-	// Its page names its library, whose wall its rule is changed on.
-	if page, err := s.Title(ctx, uuid.UUID{}, set); err != nil || page.Library != lib.ID {
-		t.Errorf("its library: %v, %v; want %v", page.Library, err, lib.ID)
+	// It is in no library; its page names the library its rule reads, whose wall it is changed on.
+	if page, err := s.Title(ctx, uuid.UUID{}, set); err != nil || page.Library != nil || !slices.Equal(page.Libraries, []uuid.UUID{lib.ID}) {
+		t.Errorf("its library %v and the libraries it reads %v, %v; want none and %v", page.Library, page.Libraries, err, lib.ID)
 	}
 
 	// Finding nothing, it is shown still, and a scan keeps it.
@@ -364,7 +366,7 @@ func TestASmartCollectionIsWhatItsRuleFinds(t *testing.T) {
 		t.Fatal(err)
 	}
 	add("Heat", year(1995), "Crime")
-	if shown, total, err := s.Collections(ctx, lib.ID, uuid.UUID{}, 0, 10); err != nil || total != 1 || shown[0].ID != set {
+	if shown, total, err := s.AllCollections(ctx, uuid.UUID{}, 0, 10); err != nil || total != 1 || shown[0].ID != set {
 		t.Errorf("collections %+v of %d, %v; want the empty smart one shown", shown, total, err)
 	}
 	if err := s.SetMembers(ctx, set, nil); !errors.Is(err, ErrNotUserCollection) {
@@ -421,7 +423,7 @@ func TestAListCollectionHoldsWhatTheLibraryHasOfItsList(t *testing.T) {
 		film("tmdb", "679", "imdb", "tt0090605"),                                             // Aliens again
 	}
 	list := ListRef{Source: domain.SourceTMDB, ID: "8136"}
-	set, err := s.AddListCollection(ctx, lib.ID, "Alien films", list, listed)
+	set, err := s.AddListCollection(ctx, []uuid.UUID{lib.ID}, "Alien films", list, listed)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -469,7 +471,7 @@ func TestAnAdminPutsSeasonsAndEpisodesInACollection(t *testing.T) {
 	}
 	item := func(lib uuid.UUID, kind domain.ItemKind, title string, parent *uuid.UUID, season, episode int) uuid.UUID {
 		return addItem(t, s, model.Item{
-			LibraryID: lib, Kind: kind, Title: title, ScanTitle: title, SortTitle: title, Folder: title,
+			LibraryID: &lib, Kind: kind, Title: title, ScanTitle: title, SortTitle: title, Folder: title,
 			ParentID: parent, SeasonNumber: &season, EpisodeNumber: &episode,
 		})
 	}
@@ -477,11 +479,11 @@ func TestAnAdminPutsSeasonsAndEpisodesInACollection(t *testing.T) {
 	one := item(tv.ID, domain.ItemSeason, "Season 1", &show, 1, 0)
 	two := item(tv.ID, domain.ItemSeason, "Season 2", &show, 2, 0)
 	pilot := item(tv.ID, domain.ItemEpisode, "Good News About Hell", &one, 1, 1)
-	item(tv.ID, domain.ItemEpisode, "Half Loop", &one, 1, 2)
+	half := item(tv.ID, domain.ItemEpisode, "Half Loop", &one, 1, 2)
 	opener := item(tv.ID, domain.ItemEpisode, "Hello, Ms. Cobel", &two, 2, 1)
 	heat := item(films.ID, domain.ItemMovie, "Heat", nil, 0, 0)
 
-	set, err := s.AddCollection(ctx, tv.ID, "Openers")
+	set, err := s.AddCollection(ctx, "Openers")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,13 +501,51 @@ func TestAnAdminPutsSeasonsAndEpisodesInACollection(t *testing.T) {
 	if s := members[1]; s.Show == nil || s.Show.ID != show || s.Season != nil {
 		t.Errorf("season 2's card names %+v, season %+v; want Severance and no season of its own", s.Show, s.Season)
 	}
-	for name, id := range map[string]uuid.UUID{"a film of another library": heat, "the collection itself": set, "no title": uuid.NewV7()} {
+	for name, id := range map[string]uuid.UUID{"the collection itself": set, "no title": uuid.NewV7()} {
 		if err := s.AddMembers(ctx, set, []uuid.UUID{id}); !errors.Is(err, ErrNotFound) {
 			t.Errorf("adding %s: %v, want ErrNotFound", name, err)
 		}
 	}
+	// A film of another library is in it beside the show's season and episode, as a box set holds
+	// any title.
+	if err := s.AddMembers(ctx, set, []uuid.UUID{heat}); err != nil {
+		t.Errorf("adding a film of another library: %v", err)
+	}
 	if err := s.SetMembers(ctx, set, []uuid.UUID{two, pilot, show}); err != nil {
 		t.Errorf("setting a season, an episode and a show: %v", err)
+	}
+	// Each episode's page names the collections it, its season or its show is in, as the rail beside
+	// it: the season's on each of the season's episodes.
+	named := func(id uuid.UUID) []uuid.UUID {
+		t.Helper()
+		page, err := s.Title(ctx, uuid.UUID{}, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []uuid.UUID
+		for _, c := range page.Collections {
+			out = append(out, c.ID)
+		}
+		return out
+	}
+	if err := s.SetMembers(ctx, set, []uuid.UUID{pilot, two}); err != nil {
+		t.Fatal(err)
+	}
+	if got := named(opener); !slices.Equal(got, []uuid.UUID{set}) {
+		t.Errorf("an episode of season 2, which is in it, names %v; want %v", got, set)
+	}
+	if got := named(half); len(got) != 0 {
+		t.Errorf("an episode of season 1, which is not, names %v; want none", got)
+	}
+	whole, err := s.AddCollection(ctx, "Whole shows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetMembers(ctx, whole, []uuid.UUID{show}); err != nil {
+		t.Fatal(err)
+	}
+	if got := named(half); !slices.Equal(got, []uuid.UUID{whole}) {
+		t.Errorf("an episode of a show in a collection names %v; want %v", got, whole)
 	}
 	// Marked watched, it is its episodes marked: the pilot's, and those of the seasons and shows in it.
 	if err := s.SetMembers(ctx, set, []uuid.UUID{pilot, two}); err != nil {

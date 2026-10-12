@@ -131,7 +131,7 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 
 func ensureShow(ctx context.Context, tx db, lib uuid.UUID, show Show, changed Changed) (uuid.UUID, error) {
 	row := model.Item{
-		LibraryID: lib, Kind: domain.ItemShow,
+		LibraryID: &lib, Kind: domain.ItemShow,
 		ScanTitle: show.Title, Title: show.Title, SortTitle: sortTitle(show.Title), Folder: show.Folder,
 	}
 	err := tx.QueryRow(ctx, `SELECT id FROM items WHERE library_id = $1 AND kind = 'show' AND folder = $2 LIMIT 1`,
@@ -163,7 +163,7 @@ func ensureSeason(ctx context.Context, tx db, lib, showID uuid.UUID, folder stri
 	if errors.Is(err, pgx.ErrNoRows) {
 		change = domain.TitleAdded
 		row := model.Item{
-			LibraryID: lib, Kind: domain.ItemSeason, ParentID: &showID, SeasonNumber: &number,
+			LibraryID: &lib, Kind: domain.ItemSeason, ParentID: &showID, SeasonNumber: &number,
 			ScanTitle: title, Title: title, SortTitle: sortTitle(title), Folder: folder,
 		}
 		err = insertItem(ctx, tx, &row)
@@ -186,7 +186,7 @@ func seasonOf(ctx context.Context, tx db, showID uuid.UUID, number int) (uuid.UU
 
 func saveEpisode(ctx context.Context, tx db, lib uuid.UUID, settings analysis, showID, seasonID uuid.UUID, e Episode, saving []string, changed Changed) error {
 	row := model.Item{
-		LibraryID: lib, Kind: domain.ItemEpisode, ParentID: &seasonID, SeasonNumber: &e.Season,
+		LibraryID: &lib, Kind: domain.ItemEpisode, ParentID: &seasonID, SeasonNumber: &e.Season,
 		ScanTitle: e.Title, Title: e.Title, SortTitle: sortTitle(e.Title), Folder: e.Folder,
 	}
 	if len(e.Episodes) > 0 {

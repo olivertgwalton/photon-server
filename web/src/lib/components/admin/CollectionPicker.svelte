@@ -21,6 +21,7 @@ async function load(title: string) {
 	const { library_id: library } = await answer(
 		api.GET("/api/v1/titles/{id}", { params: { path: { id: title } } }),
 	);
+	if (!library) throw new Error("A collection is put in no collection.");
 	const mine = [];
 	for (let offset = 0, total = 1; offset < total; offset += 200) {
 		const page = await answer(

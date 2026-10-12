@@ -57,7 +57,7 @@ func TestItemCountsCountTitlesByKind(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, title := range []string{"Alien", "Heat"} {
-		addItem(t, s, model.Item{LibraryID: films.ID, Kind: domain.ItemMovie, Title: title, SortTitle: title, Folder: title})
+		addItem(t, s, model.Item{LibraryID: &films.ID, Kind: domain.ItemMovie, Title: title, SortTitle: title, Folder: title})
 	}
 	got, err := s.ItemCounts(t.Context(), []domain.ItemKind{domain.ItemMovie, domain.ItemEpisode})
 	if err != nil {

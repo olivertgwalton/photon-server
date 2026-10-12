@@ -495,7 +495,7 @@ func TestWatchlist(t *testing.T) {
 			ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 		}}})
 	}
-	if _, err := s.SaveShowFolder(ctx, show.LibraryID, "The Wire", []byte("v2"), Show{Title: "The Wire", Folder: "The Wire"}, eps, nil); err != nil {
+	if _, err := s.SaveShowFolder(ctx, *show.LibraryID, "The Wire", []byte("v2"), Show{Title: "The Wire", Folder: "The Wire"}, eps, nil); err != nil {
 		t.Fatal(err)
 	}
 	heat, alien := oneItem(t, s, `title = 'Heat'`).ID, oneItem(t, s, `title = 'Alien'`).ID
@@ -514,7 +514,7 @@ func TestWatchlist(t *testing.T) {
 	if page, err := s.Title(ctx, admin, show.ID); err != nil || page.State.WatchlistedAt == nil {
 		t.Errorf("the show's state = %+v, %v; want it on the watchlist", page.State, err)
 	}
-	box, err := s.AddCollection(ctx, show.LibraryID, "Box")
+	box, err := s.AddCollection(ctx, "Box")
 	if err != nil {
 		t.Fatal(err)
 	}

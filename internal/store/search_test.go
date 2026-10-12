@@ -26,7 +26,7 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 	add := func(lib uuid.UUID, kind domain.ItemKind, title, original string) {
 		t.Helper()
 		item := model.Item{
-			LibraryID: lib, Kind: kind, Title: title, ScanTitle: title, SortTitle: sortTitle(title), Folder: title,
+			LibraryID: &lib, Kind: kind, Title: title, ScanTitle: title, SortTitle: sortTitle(title), Folder: title,
 		}
 		if original != "" {
 			item.OriginalTitle = &original
