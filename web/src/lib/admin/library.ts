@@ -1,5 +1,5 @@
-import { textAsTyped } from "#lib/form.js";
 import type { components } from "#lib/api/schema.js";
+import { textAsTyped } from "#lib/form.js";
 
 type Schemas = components["schemas"];
 type Ranked = Schemas["RankedSource"];

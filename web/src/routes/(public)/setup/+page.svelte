@@ -1,12 +1,12 @@
 <script lang="ts">
-import { goto } from "$app/navigation";
 import { client } from "#lib/api/client.js";
-import { fields } from "#lib/form.js";
-import { attempt, browserSession } from "#lib/signin.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
+import { fields } from "#lib/form.js";
+import { attempt, browserSession } from "#lib/signin.js";
+import { goto } from "$app/navigation";
 
 let { data } = $props();
 let pending = $state(false);

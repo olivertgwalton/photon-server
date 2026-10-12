@@ -1,11 +1,11 @@
 <script lang="ts">
-import PageHeader from "#lib/components/PageHeader.svelte";
-import { vocabulary } from "#lib/vocabulary.js";
-import type { components } from "#lib/api/schema.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import JobsTable from "#lib/components/admin/JobsTable.svelte";
 import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
+import type { components } from "#lib/api/schema.js";
+import JobsTable from "#lib/components/admin/JobsTable.svelte";
+import PageHeader from "#lib/components/PageHeader.svelte";
+import { Button } from "#lib/components/ui/button/index.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 type Schemas = components["schemas"];
 

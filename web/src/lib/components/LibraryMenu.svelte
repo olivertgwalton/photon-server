@@ -1,12 +1,10 @@
 <script lang="ts">
-import EllipsisVerticalIcon from "@lucide/svelte/icons/ellipsis-vertical";
 import ArrowUpDownIcon from "@lucide/svelte/icons/arrow-up-down";
+import EllipsisVerticalIcon from "@lucide/svelte/icons/ellipsis-vertical";
 import FolderSyncIcon from "@lucide/svelte/icons/folder-sync";
 import PencilIcon from "@lucide/svelte/icons/pencil";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import TrashIcon from "@lucide/svelte/icons/trash";
-import { goto } from "$app/navigation";
-import { page } from "$app/state";
 import {
 	refreshMetadata,
 	removeLibrary,
@@ -14,6 +12,8 @@ import {
 } from "#lib/actions.svelte.js";
 import type { components } from "#lib/api/schema.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
+import { goto } from "$app/navigation";
+import { page } from "$app/state";
 
 type Library = components["schemas"]["Library"];
 

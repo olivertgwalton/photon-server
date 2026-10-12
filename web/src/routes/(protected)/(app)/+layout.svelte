@@ -1,6 +1,5 @@
 <script lang="ts">
 import SearchIcon from "@lucide/svelte/icons/search";
-import { page } from "$app/state";
 import {
 	confirming,
 	picker,
@@ -8,13 +7,14 @@ import {
 	subtitleSearch,
 	versions,
 } from "#lib/actions.svelte.js";
-import AppSidebar from "#lib/components/AppSidebar.svelte";
-import ProfileMenu from "#lib/components/ProfileMenu.svelte";
-import * as Sidebar from "#lib/components/ui/sidebar/index.js";
 import { LiveStream, setLiveStream } from "#lib/admin/stream.svelte.js";
 import { adminAffected } from "#lib/changes.js";
-import { connectLive, invalidateLater } from "#lib/live.svelte.js";
+import AppSidebar from "#lib/components/AppSidebar.svelte";
+import ProfileMenu from "#lib/components/ProfileMenu.svelte";
 import RestoringScreen from "#lib/components/RestoringScreen.svelte";
+import * as Sidebar from "#lib/components/ui/sidebar/index.js";
+import { connectLive, invalidateLater } from "#lib/live.svelte.js";
+import { page } from "$app/state";
 
 let { data, children } = $props();
 

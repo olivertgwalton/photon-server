@@ -1,10 +1,10 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
 import ListFilterIcon from "@lucide/svelte/icons/list-filter";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
 import { score } from "#lib/format.js";
+import { vocabulary } from "#lib/vocabulary.js";
 import {
 	filterCount,
 	type ListFilter,

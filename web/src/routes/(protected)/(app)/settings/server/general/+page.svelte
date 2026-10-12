@@ -1,6 +1,6 @@
 <script lang="ts">
-import PageHeader from "#lib/components/PageHeader.svelte";
 import ServerSettingsForm from "#lib/components/admin/ServerSettingsForm.svelte";
+import PageHeader from "#lib/components/PageHeader.svelte";
 
 let { data } = $props();
 </script>

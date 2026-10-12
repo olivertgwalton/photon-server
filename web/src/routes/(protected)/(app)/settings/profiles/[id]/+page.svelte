@@ -1,20 +1,20 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
 import { act } from "#lib/act.js";
-import { fields, textAsTyped } from "#lib/form.js";
 import { accessOf } from "#lib/admin/access.js";
 import { roleOptions } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import Choice from "#lib/components/Choice.svelte";
+import AvatarPicker from "#lib/components/AvatarPicker.svelte";
 import AccessFields from "#lib/components/admin/AccessFields.svelte";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
-import AvatarPicker from "#lib/components/AvatarPicker.svelte";
+import Choice from "#lib/components/Choice.svelte";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
+import { fields, textAsTyped } from "#lib/form.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 type Change = components["schemas"]["ProfileChange"];
 

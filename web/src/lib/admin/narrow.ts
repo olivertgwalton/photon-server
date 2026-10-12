@@ -1,5 +1,5 @@
-import { goto } from "$app/navigation";
 import { withQuery } from "#lib/address.js";
+import { goto } from "$app/navigation";
 import { page } from "$app/state";
 
 // A paged list for one choice, from its first page.

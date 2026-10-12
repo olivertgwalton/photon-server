@@ -1,17 +1,17 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
-import PageHeader from "#lib/components/PageHeader.svelte";
 import { act } from "#lib/act.js";
-import { fields, text, textAsTyped } from "#lib/form.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import Choice from "#lib/components/Choice.svelte";
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
+import { fields, text, textAsTyped } from "#lib/form.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 type Provider = components["schemas"]["MetadataProvider"];
 

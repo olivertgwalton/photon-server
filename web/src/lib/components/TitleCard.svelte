@@ -7,12 +7,12 @@ export type CardLike = Pick<Card, "id" | "kind" | "title"> & Partial<Card>;
 </script>
 
 <script lang="ts">
-import Artwork from "#lib/components/Artwork.svelte";
 import CheckIcon from "@lucide/svelte/icons/check";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import PlayIcon from "@lucide/svelte/icons/play";
 import type { Shape } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
+import Artwork from "#lib/components/Artwork.svelte";
 import { episodeLine } from "#lib/format.js";
 import TitleMenu from "./TitleMenu.svelte";
 

@@ -1,24 +1,24 @@
 <script lang="ts">
-import PageHeader from "#lib/components/PageHeader.svelte";
-import { vocabulary } from "#lib/vocabulary.js";
-import { confirmFirst, runTask } from "#lib/actions.svelte.js";
-import { runtime } from "#lib/format.js";
 import PlayIcon from "@lucide/svelte/icons/play";
 import SquareIcon from "@lucide/svelte/icons/square";
+import { act } from "#lib/act.js";
+import { confirmFirst, runTask } from "#lib/actions.svelte.js";
 import { ticking } from "#lib/admin/clock.svelte.js";
 import { jobsProgress } from "#lib/admin/live.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { relative, when } from "#lib/admin/words.js";
-import { Badge } from "#lib/components/ui/badge/index.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Table from "#lib/components/ui/table/index.js";
-import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/Choice.svelte";
-import { Progress } from "#lib/components/ui/progress/index.js";
+import PageHeader from "#lib/components/PageHeader.svelte";
+import { Badge } from "#lib/components/ui/badge/index.js";
+import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
+import { Progress } from "#lib/components/ui/progress/index.js";
+import * as Table from "#lib/components/ui/table/index.js";
 import { fields } from "#lib/form.js";
+import { runtime } from "#lib/format.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 let { data } = $props();
 const words = vocabulary();

@@ -1,16 +1,16 @@
 <script lang="ts">
-import { invalidate } from "$app/navigation";
-import PageHeader from "#lib/components/PageHeader.svelte";
-import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
-import { when } from "#lib/admin/words.js";
 import { act } from "#lib/act.js";
+import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import { keys } from "#lib/changes.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
+import { vocabulary } from "#lib/vocabulary.js";
+import { invalidate } from "$app/navigation";
 
 type Tracker = components["schemas"]["Tracker"];
 

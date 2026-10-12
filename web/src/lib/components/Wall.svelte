@@ -1,9 +1,9 @@
 <script lang="ts">
 import type { Attachment } from "svelte/attachments";
 import { innerHeight } from "svelte/reactivity/window";
-import { onResize } from "#lib/size.js";
 import type { components } from "#lib/api/schema.js";
 import { columnGap, columnsFor, gridColumns } from "#lib/grid.js";
+import { onResize } from "#lib/size.js";
 import type { ViewStyle } from "#lib/wall.js";
 import TitleCard from "./TitleCard.svelte";
 import TitleRow from "./TitleRow.svelte";

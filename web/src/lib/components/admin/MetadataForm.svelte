@@ -1,16 +1,16 @@
 <script lang="ts">
 import { toast } from "svelte-sonner";
+import { act } from "#lib/act.js";
+import { editOf, fieldsOf } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
-import { editOf, fieldsOf } from "#lib/admin/edit.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { Label } from "#lib/components/ui/label/index.js";
 import { Textarea } from "#lib/components/ui/textarea/index.js";
-import { act } from "#lib/act.js";
 import { fields as formFields } from "#lib/form.js";
 
 const api = client();

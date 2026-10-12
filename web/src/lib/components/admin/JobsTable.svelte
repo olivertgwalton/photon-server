@@ -1,8 +1,8 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
-import { vocabulary } from "#lib/vocabulary.js";
 import type { components } from "#lib/api/schema.js";
 import * as Table from "#lib/components/ui/table/index.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 type Schemas = components["schemas"];
 

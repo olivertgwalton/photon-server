@@ -1,12 +1,12 @@
 <script lang="ts">
+import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
+import Choice from "#lib/components/Choice.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import { act } from "#lib/act.js";
-import Choice from "#lib/components/Choice.svelte";
 
 const id = $props.id();
 

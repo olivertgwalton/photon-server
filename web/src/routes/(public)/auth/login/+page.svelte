@@ -1,21 +1,21 @@
 <script lang="ts">
-import { goto, preloadData } from "$app/navigation";
-import { page } from "$app/state";
 import { client } from "#lib/api/client.js";
+import { Button } from "#lib/components/ui/button/index.js";
+import * as Card from "#lib/components/ui/card/index.js";
+import * as Field from "#lib/components/ui/field/index.js";
+import { Input } from "#lib/components/ui/input/index.js";
 import { CLIENT, deviceName } from "#lib/device.js";
+import { fields } from "#lib/form.js";
 import { returnPath } from "#lib/session.js";
-import type { PageData as PickerData } from "../../../(protected)/profiles/$types";
 import {
 	attempt,
 	browserSession,
 	leaveFor,
 	refusalMessage,
 } from "#lib/signin.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { fields } from "#lib/form.js";
+import { goto, preloadData } from "$app/navigation";
+import { page } from "$app/state";
+import type { PageData as PickerData } from "../../../(protected)/profiles/$types";
 
 let { data } = $props();
 let pending = $state(false);

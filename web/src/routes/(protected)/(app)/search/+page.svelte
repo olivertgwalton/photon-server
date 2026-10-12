@@ -1,12 +1,12 @@
 <script lang="ts">
+import { withQuery } from "#lib/address.js";
+import Choice from "#lib/components/Choice.svelte";
+import PersonCard from "#lib/components/PersonCard.svelte";
+import Rail from "#lib/components/Rail.svelte";
+import { byKind } from "#lib/rows.js";
 import { vocabulary } from "#lib/vocabulary.js";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
-import { withQuery } from "#lib/address.js";
-import Rail from "#lib/components/Rail.svelte";
-import PersonCard from "#lib/components/PersonCard.svelte";
-import Choice from "#lib/components/Choice.svelte";
-import { byKind } from "#lib/rows.js";
 
 let { data } = $props();
 const words = vocabulary();

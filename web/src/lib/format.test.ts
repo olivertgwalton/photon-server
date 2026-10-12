@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import {
 	bitrate,
-	holding,
 	episodeLabel,
 	fullTitle,
+	holding,
 	playHref,
 	ratingMark,
 	runtime,

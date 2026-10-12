@@ -1,13 +1,11 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
-import PageHeader from "#lib/components/PageHeader.svelte";
 import { act } from "#lib/act.js";
-import { fields, textAsTyped } from "#lib/form.js";
 import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import RevealOnce from "#lib/components/admin/RevealOnce.svelte";
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import { Checkbox } from "#lib/components/ui/checkbox/index.js";
@@ -15,6 +13,8 @@ import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { Label } from "#lib/components/ui/label/index.js";
+import { fields, textAsTyped } from "#lib/form.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 let { data } = $props();
 const words = vocabulary();

@@ -1,5 +1,4 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
 import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
@@ -8,6 +7,7 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 // What a node does, as an admin sets it: taken up by the node at once.
 let {

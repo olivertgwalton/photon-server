@@ -5,14 +5,14 @@ import {
 	removeLibrary,
 	scanLibrary,
 } from "#lib/actions.svelte.js";
-import { fields } from "#lib/form.js";
 import { libraryChange } from "#lib/admin/library.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import { client } from "#lib/api/client.js";
 import LibraryForm from "#lib/components/admin/LibraryForm.svelte";
-import PageHeader from "#lib/components/PageHeader.svelte";
 import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
+import { fields } from "#lib/form.js";
 
 let { data } = $props();
 

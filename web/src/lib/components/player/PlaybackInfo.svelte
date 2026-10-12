@@ -1,9 +1,9 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
 import type { components } from "#lib/api/schema.js";
 import * as Sheet from "#lib/components/ui/sheet/index.js";
 import { bitrate } from "#lib/format.js";
 import { channels } from "#lib/player/words.js";
+import { vocabulary } from "#lib/vocabulary.js";
 
 type Schemas = components["schemas"];
 

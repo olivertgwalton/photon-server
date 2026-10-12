@@ -1,5 +1,5 @@
-import { text } from "#lib/form.js";
 import type { components } from "#lib/api/schema.js";
+import { text } from "#lib/form.js";
 import { parseClock } from "./words.js";
 
 type Schemas = components["schemas"];

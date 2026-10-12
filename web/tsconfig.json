@@ -3,6 +3,8 @@
 	"include": ["src", "e2e", "vite.config.ts", "playwright.config.ts"],
 	"compilerOptions": {
 		"strict": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
 		"sourceMap": true,
 		"types": ["bun", "$app/types"]
 	}

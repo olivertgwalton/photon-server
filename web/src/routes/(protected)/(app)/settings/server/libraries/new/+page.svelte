@@ -1,10 +1,10 @@
 <script lang="ts">
-import PageHeader from "#lib/components/PageHeader.svelte";
-import { goto } from "$app/navigation";
-import { fields } from "#lib/form.js";
 import { addLibrary } from "#lib/admin/add.js";
 import LibraryForm from "#lib/components/admin/LibraryForm.svelte";
+import PageHeader from "#lib/components/PageHeader.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
+import { fields } from "#lib/form.js";
+import { goto } from "$app/navigation";
 
 let { data } = $props();
 

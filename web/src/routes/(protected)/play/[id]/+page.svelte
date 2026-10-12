@@ -1,6 +1,6 @@
 <script lang="ts">
-import { page } from "$app/state";
 import Player from "#lib/components/player/Player.svelte";
+import { page } from "$app/state";
 
 let { data } = $props();
 

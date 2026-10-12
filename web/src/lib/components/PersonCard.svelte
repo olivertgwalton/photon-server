@@ -1,6 +1,6 @@
 <script lang="ts">
-import Artwork from "#lib/components/Artwork.svelte";
 import { blurStyle } from "#lib/blurhash.js";
+import Artwork from "#lib/components/Artwork.svelte";
 
 // A person, by their photograph, or their initial where there is none.
 let {

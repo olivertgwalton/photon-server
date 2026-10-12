@@ -1,10 +1,10 @@
 <script lang="ts">
-import Artwork from "#lib/components/Artwork.svelte";
 import CheckIcon from "@lucide/svelte/icons/check";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import type { Snippet } from "svelte";
-import { blurStyle } from "#lib/blurhash.js";
 import type { components } from "#lib/api/schema.js";
+import { blurStyle } from "#lib/blurhash.js";
+import Artwork from "#lib/components/Artwork.svelte";
 import { episodeLine, runtime } from "#lib/format.js";
 import TitleMenu from "./TitleMenu.svelte";
 

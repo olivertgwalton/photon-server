@@ -1,5 +1,5 @@
-import type { Shape } from "./artwork.js";
 import type { components } from "./api/schema.js";
+import type { Shape } from "./artwork.js";
 
 type Kind = components["schemas"]["HomeRowKind"];
 // A row as the home draws it: of a kind, and a library's of that library.

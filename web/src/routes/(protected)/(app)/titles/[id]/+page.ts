@@ -1,8 +1,8 @@
 import { error, redirect } from "@sveltejs/kit";
 import { client, need } from "#lib/api/client.js";
+import type { components } from "#lib/api/schema.js";
 import { keys } from "#lib/changes.js";
 import { episodesOf } from "#lib/seasons.js";
-import type { components } from "#lib/api/schema.js";
 import type { PageLoad } from "./$types";
 
 type Title = components["schemas"]["TitlePage"];

@@ -1,9 +1,9 @@
 <script lang="ts">
-import { vocabulary } from "#lib/vocabulary.js";
 import ArrowDownUpIcon from "@lucide/svelte/icons/arrow-down-up";
 import type { components } from "#lib/api/schema.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
+import { vocabulary } from "#lib/vocabulary.js";
 import { sorts, type WallQuery } from "#lib/wall.js";
 
 type Sort = components["schemas"]["WallSort"];

@@ -1,6 +1,6 @@
 <script lang="ts">
-import { page } from "$app/state";
 import { Button } from "#lib/components/ui/button/index.js";
+import { page } from "$app/state";
 </script>
 
 <svelte:head><title>{page.status} · Photon</title></svelte:head>

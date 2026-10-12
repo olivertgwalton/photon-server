@@ -1,13 +1,11 @@
 <script lang="ts">
 import LayoutGridIcon from "@lucide/svelte/icons/layout-grid";
-import { withQuery } from "#lib/address.js";
 import ListIcon from "@lucide/svelte/icons/list";
 import RectangleHorizontalIcon from "@lucide/svelte/icons/rectangle-horizontal";
-import { goto } from "$app/navigation";
-import { page } from "$app/state";
 import { act } from "#lib/act.js";
-import type { components } from "#lib/api/schema.js";
+import { withQuery } from "#lib/address.js";
 import { client, refusal } from "#lib/api/client.js";
+import type { components } from "#lib/api/schema.js";
 import SmartCollectionDialog from "#lib/components/admin/SmartCollectionDialog.svelte";
 import LetterBar from "#lib/components/LetterBar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -28,6 +26,8 @@ import {
 	wallPageSize,
 	wallSearch,
 } from "#lib/wall.js";
+import { goto } from "$app/navigation";
+import { page } from "$app/state";
 
 type Letter = components["schemas"]["Letter"];
 
