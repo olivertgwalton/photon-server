@@ -169,7 +169,7 @@ function ago(seconds: number, now: number) {
 		<div class="bg-raise grid content-start gap-1 rounded-xl p-4">
 			<dt class="label">Streams</dt>
 			<dd class="text-ink font-heading text-2xl font-bold">
-				{streams.reduce((s, [, n]) => s + n, 0)}
+				{total(Object.fromEntries(streams))}
 			</dd>
 			<dd class="text-ink-3 text-xs">
 				{streams
@@ -216,9 +216,7 @@ function ago(seconds: number, now: number) {
 			<dt class="label">Library</dt>
 			{#if cluster}
 				<dd class="text-ink font-heading text-2xl font-bold">
-					{bytes(
-						Object.values(cluster.library_bytes).reduce((s, b) => s + b, 0),
-					)}
+					{bytes(total(cluster.library_bytes))}
 				</dd>
 				{#each held as [kind, n] (kind)}
 					<dd class="text-ink-3 text-xs">
