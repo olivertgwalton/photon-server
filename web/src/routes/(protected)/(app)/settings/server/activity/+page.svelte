@@ -58,4 +58,4 @@ const events = $derived(
 
 <ActivityList {events} now={clock.now} />
 
-<Pager offset={data.page.offset} limit={data.limit} total={data.page.total} />
+<Pager offset={data.page.offset} total={data.page.total} />
