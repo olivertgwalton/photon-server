@@ -15,6 +15,7 @@ type Node struct {
 	// Name is its host's, to tell nodes apart by.
 	Name         string
 	Group        string
+	PublicURL    string
 	Role         NodeRole
 	Availability NodeAvailability
 	Encoder      Encoder
@@ -111,6 +112,10 @@ type NodeSettings struct {
 	// Address is where the other nodes reach it, such as http://10.0.0.5:8640; none is a node
 	// handed no one else's requests and not listed.
 	Address string
+	// PublicURL is where clients reach it themselves, such as https://gpu.example.com: a playback
+	// it makes for another node's client is fetched from there, not handed on through that node.
+	// None is a node clients reach only through the others.
+	PublicURL string
 	// Group is the nodes it is among, such as those at one site: a node asked to play what is
 	// encoded asks those of its own group first.
 	Group string

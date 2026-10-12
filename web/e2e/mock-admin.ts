@@ -287,6 +287,7 @@ let nodes: Schemas["KnownNode"][] = [
 		name: "den",
 		address: "http://10.0.0.4:8640",
 		group: "",
+		public_url: "",
 		first_seen: "2026-09-01T08:00:00Z",
 		last_seen: "2026-10-06T20:20:00Z",
 		role: "all",
@@ -311,6 +312,7 @@ let nodes: Schemas["KnownNode"][] = [
 		name: "gpu-1",
 		address: "http://10.0.0.5:8640",
 		group: "",
+		public_url: "",
 		first_seen: "2026-09-02T08:00:00Z",
 		last_seen: "2026-10-06T20:20:00Z",
 		role: "all",
@@ -335,6 +337,7 @@ let nodes: Schemas["KnownNode"][] = [
 		name: "old-mini",
 		address: "",
 		group: "",
+		public_url: "",
 		first_seen: "2026-08-01T08:00:00Z",
 		last_seen: "2026-09-20T08:00:00Z",
 		role: "serve",
@@ -517,6 +520,7 @@ export async function admin(
 						role: change.role ?? n.role,
 						address: change.address ?? n.address,
 						group: change.group ?? n.group,
+						public_url: change.public_url ?? n.public_url,
 						transcode_limit_source:
 							change.transcode_limit_source ?? n.transcode_limit_source,
 						transcode_limit:

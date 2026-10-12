@@ -18,18 +18,19 @@ const startScript = `kit.start(app, element);`
 
 func webAPI(t *testing.T) *API {
 	t.Helper()
-	return webAPIFrom(t, func() string { return "" })
+	return webAPIFrom(t, func() string { return "" }, nil)
 }
 
-// webAPIFrom serves a build whose pages may draw from where objectOrigin says as each is served.
-func webAPIFrom(t *testing.T, objectOrigin func() string) *API {
+// webAPIFrom serves a build whose pages may draw from where objectOrigin says as each is served,
+// and play streams from streams.
+func webAPIFrom(t *testing.T, objectOrigin func() string, streams []string) *API {
 	t.Helper()
 	web, err := NewWeb(fstest.MapFS{
 		"index.html":                     {Data: []byte(`<!doctype html><script>` + startScript + `</script>`)},
 		"favicon.svg":                    {Data: []byte(`<svg/>`)},
 		"_app/immutable/entry/app.js":    {Data: []byte(`export {}`)},
 		"_app/immutable/entry/app.js.br": {Data: []byte(`brotli`)},
-	}, objectOrigin)
+	}, objectOrigin, func(context.Context) []string { return streams })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func TestThePageMayRunOnlyItsOwnScript(t *testing.T) {
 // whichever it is as the page is served.
 func TestThePageMayDrawFromTheBucketClientsAreSentTo(t *testing.T) {
 	origin := "https://media.example.com"
-	api := webAPIFrom(t, func() string { return origin })
+	api := webAPIFrom(t, func() string { return origin }, nil)
 	csp := get(api, "/").Header().Get("Content-Security-Policy")
 	if !strings.Contains(csp, "img-src 'self' data: https://image.tmdb.org https://artworks.thetvdb.com https://media.example.com;") ||
 		!strings.Contains(csp, "media-src 'self' blob: https://media.example.com;") {
@@ -89,6 +90,14 @@ func TestThePageMayDrawFromTheBucketClientsAreSentTo(t *testing.T) {
 	origin = ""
 	if csp := get(api, "/").Header().Get("Content-Security-Policy"); strings.Contains(csp, "media.example.com") {
 		t.Errorf("Content-Security-Policy %q once clients are sent nowhere, want the bucket gone from it", csp)
+	}
+}
+
+// A stream another node makes is fetched and played from that node's public URL.
+func TestThePageMayPlayStreamsFromTheNodesPublicURLs(t *testing.T) {
+	csp := get(webAPIFrom(t, func() string { return "" }, []string{"https://gpu.example.com"}), "/").Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "connect-src 'self' https://gpu.example.com;") || !strings.Contains(csp, "media-src 'self' blob: https://gpu.example.com;") {
+		t.Errorf("Content-Security-Policy %q, want streams fetched and played from the node's public URL", csp)
 	}
 }
 
@@ -145,7 +154,7 @@ func TestTheAppIsOnlyRead(t *testing.T) {
 }
 
 func TestNoBuildNoWebApp(t *testing.T) {
-	if _, err := NewWeb(fstest.MapFS{}, func() string { return "" }); err == nil {
+	if _, err := NewWeb(fstest.MapFS{}, func() string { return "" }, nil); err == nil {
 		t.Error("a build with no index.html was taken")
 	}
 }

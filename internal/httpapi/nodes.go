@@ -60,7 +60,9 @@ func showNode(n domain.Node) nodeJSON {
 // out from its encoder where automatic. availability is whether it takes new work: one draining
 // plays its streams to their end and is given nothing new, note saying why. address is where the
 // other nodes reach it, empty for a node handed no one else's requests. group is the nodes it asks
-// first to encode what its clients play, such as those at its site. online is it as it
+// first to encode what its clients play, such as those at its site. public_url is where clients
+// reach it themselves, which a playback it makes for another node's client is fetched from, empty
+// for a node reached only through the others. online is it as it
 // tells the others of itself now, absent while it says nothing, as one stopped or not answering
 // is, last_seen being when it last said it was up.
 type knownNodeJSON struct {
@@ -75,6 +77,7 @@ type knownNodeJSON struct {
 	Note         string                  `json:"note,omitzero"`
 	Address      string                  `json:"address"`
 	Group        string                  `json:"group"`
+	PublicURL    string                  `json:"public_url"`
 	Online       *nodeJSON               `json:"online,omitempty"`
 }
 
@@ -82,7 +85,7 @@ type knownNodeJSON struct {
 // takes new work, or any of them; transcode_limit is given with transcode_limit_source set, 0 for
 // no limit; note, with availability, is why, for other admins, and is cleared on resuming; address,
 // an http or https origin such as http://10.0.0.5:8640, or empty to hand it no one else's requests;
-// group, any name, or empty for none.
+// group, any name, or empty for none; public_url, an origin as address is, or empty for none.
 type nodeChangeJSON struct {
 	Role         domain.NodeRole         `json:"role,omitzero"`
 	LimitSource  domain.LimitSource      `json:"transcode_limit_source,omitzero"`
@@ -91,6 +94,7 @@ type nodeChangeJSON struct {
 	Note         string                  `json:"note,omitzero"`
 	Address      *string                 `json:"address,omitzero"`
 	Group        *string                 `json:"group,omitzero"`
+	PublicURL    *string                 `json:"public_url,omitzero"`
 }
 
 // nodeAddress is s as a node's address, an http or https origin the others put a path after; ok is
@@ -110,7 +114,7 @@ func nodeAddress(s string) (address string, ok bool) {
 func showKnownNode(n domain.NodeRecord, online map[uuid.UUID]domain.Node) knownNodeJSON {
 	out := knownNodeJSON{
 		ID: n.ID, Name: n.Name, FirstSeen: n.FirstSeen.UTC(), LastSeen: n.LastSeen.UTC(), Role: n.Role, LimitSource: n.LimitSource, Limit: n.Limit,
-		Availability: n.Availability, Note: n.Note, Address: n.Address, Group: n.Group,
+		Availability: n.Availability, Note: n.Note, Address: n.Address, Group: n.Group, PublicURL: n.PublicURL,
 	}
 	if advert, ok := online[n.ID]; ok {
 		shown := showNode(advert)
@@ -250,6 +254,12 @@ func (a *API) setNode(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if req.PublicURL != nil {
+		if set.PublicURL, ok = nodeAddress(*req.PublicURL); !ok {
+			writeProblem(w, a.logger, codeInvalidBody, "public_url is an http or https address with a host and port alone, such as https://gpu.example.com")
+			return
+		}
+	}
 	if req.Group != nil {
 		set.Group = strings.TrimSpace(*req.Group)
 	}
@@ -296,7 +306,7 @@ func (a *API) nodesRoutes() []route {
 		},
 		{
 			pattern: "PATCH /api/v1/admin/nodes/{id}", access: admin,
-			summary: "Change a node's role, its limit on transcodes at once, its address or its group; it takes them up at once",
+			summary: "Change a node's role, its limit on transcodes at once, its address, its public URL or its group; it takes them up at once",
 			body:    nodeChangeJSON{}, status: http.StatusOK, reply: knownNodeJSON{}, handle: a.setNode,
 		},
 		{

@@ -31,7 +31,10 @@ func hlsSubject(playback uuid.UUID) string { return "/api/v1/hls/" + playback.St
 
 // hlsFile serves a remux's playlist, a part's initialisation or a segment, made as they are asked
 // for. The playlist addresses everything else relative to itself, so one signature covers it all.
+// Any page may fetch it, as a web app served by another node does at this one's public URL: the
+// signature, not the page's origin, is what admits it.
 func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	playback, ok := a.pathID(w, r, "playback")
 	if !ok {
 		return
