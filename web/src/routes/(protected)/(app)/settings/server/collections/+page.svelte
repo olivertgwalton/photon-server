@@ -1,10 +1,8 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { toast } from "svelte-sonner";
-import { goto } from "$app/navigation";
+import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
 import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
 import Choice from "#lib/components/Choice.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -32,9 +30,8 @@ const placeholders: Record<string, string> = {
 
 async function add(event: SubmitEvent) {
 	const form = fields(event);
-	const { data: made, error } = await client().POST(
-		"/api/v1/admin/collections",
-		{
+	await act(
+		client().POST("/api/v1/admin/collections", {
 			body: {
 				library_id: String(form.get("library") ?? ""),
 				title: String(form.get("title") ?? ""),
@@ -43,10 +40,10 @@ async function add(event: SubmitEvent) {
 						? undefined
 						: { source, id: String(form.get("list") ?? "").trim() },
 			},
-		},
+		}),
+		undefined,
+		(made) => `/settings/server/collections/${made.id}`,
 	);
-	if (error) return toast.error(problemMessage(error));
-	await goto(`/settings/server/collections/${made.id}`);
 }
 
 const origins = {

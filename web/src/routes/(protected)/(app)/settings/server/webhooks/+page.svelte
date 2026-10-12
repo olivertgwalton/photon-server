@@ -1,13 +1,10 @@
 <script lang="ts">
 import { vocabulary } from "#lib/vocabulary.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { toast } from "svelte-sonner";
-import { refreshAll } from "$app/navigation";
 import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
 import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import RevealOnce from "#lib/components/admin/RevealOnce.svelte";
@@ -29,18 +26,19 @@ let added = $state<components["schemas"]["AddedWebhook"]>();
 
 async function add(event: SubmitEvent) {
 	const form = fields(event);
-	const { data: hook, error } = await api.POST("/api/v1/admin/webhooks", {
-		body: {
-			url: String(form.get("url") ?? ""),
-			events: form
-				.getAll("events")
-				.map(String) as components["schemas"]["EventKind"][],
-		},
-	});
-	if (error) return toast.error(problemMessage(error));
+	const hook = await act(
+		api.POST("/api/v1/admin/webhooks", {
+			body: {
+				url: String(form.get("url") ?? ""),
+				events: form
+					.getAll("events")
+					.map(String) as components["schemas"]["EventKind"][],
+			},
+		}),
+	);
+	if (!hook) return;
 	adding = false;
-	added = hook;
-	await refreshAll();
+	added = hook.data;
 }
 </script>
 

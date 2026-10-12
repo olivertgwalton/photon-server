@@ -9,14 +9,16 @@ import { problemMessage } from "#lib/api/problem.js";
 export async function act<T>(
 	call: Promise<{ data?: T; error?: unknown }>,
 	said?: string,
-	to?: string,
+	to?: string | ((data: T) => string),
 ): Promise<{ data: T } | undefined> {
 	const { data, error } = await call;
 	if (error) {
 		toast.error(problemMessage(error));
 		return;
 	}
-	await (to ? goto(to, { refreshAll: true }) : refreshAll());
+	await (to
+		? goto(typeof to === "string" ? to : to(data as T), { refreshAll: true })
+		: refreshAll());
 	if (said) toast.success(said);
 	return { data: data as T };
 }

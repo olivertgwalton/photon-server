@@ -1,12 +1,9 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { toast } from "svelte-sonner";
-import { refreshAll } from "$app/navigation";
 import { act } from "#lib/act.js";
 import { fields } from "#lib/form.js";
 import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import RevealOnce from "#lib/components/admin/RevealOnce.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -23,13 +20,10 @@ let made = $state<{ name: string; token: string }>();
 
 async function add(event: SubmitEvent) {
 	const name = String(fields(event).get("name") ?? "");
-	const { data: key, error } = await api.POST("/api/v1/admin/keys", {
-		body: { name },
-	});
-	if (error) return toast.error(problemMessage(error));
+	const key = await act(api.POST("/api/v1/admin/keys", { body: { name } }));
+	if (!key) return;
 	adding = false;
-	made = { name, token: key.token };
-	await refreshAll();
+	made = { name, token: key.data.token };
 }
 </script>
 
