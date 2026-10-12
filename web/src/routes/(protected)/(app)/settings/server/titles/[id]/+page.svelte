@@ -103,9 +103,7 @@ const name = $derived(fullTitle(t, t.show?.title));
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
-				{#key t}
-					<TitleLocale title={t} locales={data.locales} />
-				{/key}
+				<TitleLocale title={t} locales={data.locales} />
 			</Card.Content>
 		</Card.Root>
 	{/if}
