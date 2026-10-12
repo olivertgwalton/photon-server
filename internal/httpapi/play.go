@@ -34,6 +34,7 @@ type playbacks interface {
 // placer chooses the node that encodes a playback, and opens its remux there.
 type placer interface {
 	Candidates(ctx context.Context, need playback.Need) ([]domain.Node, error)
+	Deliverers(ctx context.Context) ([]domain.Node, error)
 	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o playback.Opening) error
 	Self() domain.Node
 	Refuse(candidates []domain.Node) error
@@ -141,8 +142,8 @@ type playJSON struct {
 }
 
 // playbackJSON is a playback opened: its parts played as they are, or its playlist, and the
-// subtitles the client draws beside them, at addresses relative to the server; the playlist of
-// one another node makes, at that node's public URL where it has one.
+// subtitles the client draws beside them, at addresses relative to the server; the parts or
+// playlist of one another node delivers, at that node's public URL where it has one.
 type playbackJSON struct {
 	PlaybackID uuid.UUID                `json:"playback_id"`
 	Method     domain.PlayMethod        `json:"method"`
@@ -199,15 +200,20 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
+	deliverers, err := a.svc.Placer.Deliverers(r.Context())
+	if a.answered(w, r, err) {
+		return
+	}
 	title, err := a.svc.Playing.PlaybackTitle(r.Context(), id)
 	if a.answered(w, r, err) {
 		return
 	}
 	// The node with the most transcode slots free decides, with what it encodes; the next is asked
-	// where it has none by then, and decides again with its own.
+	// where it has none by then, and decides again with its own. One it would not encode is
+	// delivered by the node best placed to.
 	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
 	s := auth.SessionOf(r.Context())
-	d, session, err := playback.Place(r.Context(), a.svc.Placer, a.svc.Playbacks, candidates, playback.Start{
+	d, session, err := playback.Place(r.Context(), a.svc.Placer, a.svc.Playbacks, candidates, deliverers, playback.Start{
 		ID: uuid.NewV7(), Session: s, Address: a.svc.Reach.Client(r).String(), Title: title, Copy: c, Tracks: tracks,
 		Opening: playback.Opening{Profile: s.Profile.ID, Item: id, Version: c.Version, Segments: req.Profile.Segments, StartMS: req.StartMS},
 	}, func(e playback.Encoding) (playback.Decision, error) {
@@ -225,10 +231,10 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, a.opened(*req.Profile, c, d, session, streamOrigin(a.svc.Placer.Self().ID, candidates, session)))
+	writeJSON(w, a.logger, "application/json", http.StatusOK, a.opened(*req.Profile, c, d, session, streamOrigin(a.svc.Placer.Self().ID, append(candidates, deliverers...), session)))
 }
 
-// streamOrigin is where the client fetches a playback's HLS from: the public URL of the node making
+// streamOrigin is where the client fetches a playback from: the public URL of the node delivering
 // it, where that is another node with one, so its stream is not handed on through this one; empty
 // for this server, as the client reached it.
 func streamOrigin(self uuid.UUID, candidates []domain.Node, p domain.Playback) string {
@@ -269,8 +275,8 @@ func (a *API) playRequest(w http.ResponseWriter, r *http.Request) (playJSON, boo
 	return req, true
 }
 
-// opened is what the client is told of a playback of c, played as d decided, its playlist fetched
-// from origin.
+// opened is what the client is told of a playback of c, played as d decided, its parts or playlist
+// fetched from origin.
 func (a *API) opened(p playback.Profile, c store.PlayCopy, d playback.Decision, session domain.Playback, origin string) playbackJSON {
 	until := time.Now().Add(streamFor)
 	answer := playbackJSON{
@@ -301,7 +307,7 @@ func (a *API) opened(p playback.Profile, c store.PlayCopy, d playback.Decision, 
 	} else {
 		for _, part := range c.Parts {
 			answer.Parts = append(answer.Parts, partJSON{
-				ID: part.ID, URL: a.svc.Signer.Sign("/api/v1/playbacks/"+session.ID.String()+"/parts/"+part.ID.String()+"/stream", until),
+				ID: part.ID, URL: origin + a.svc.Signer.Sign("/api/v1/playbacks/"+session.ID.String()+"/parts/"+part.ID.String()+"/stream", until),
 				OffsetMS: part.OffsetMS, DurationMS: part.DurationMS,
 			})
 		}
@@ -343,8 +349,8 @@ func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayM
 	return out
 }
 
-// openRemote opens the remux of a playback another node placed on this one, reading its copy
-// again as the profile may see it: 204 once open, 503 where every transcode slot is held.
+// openRemote opens a playback another node placed on this one, reading its copy again as the
+// profile may see it: 204 once open, 503 where every transcode slot is held.
 func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	var o playback.Opening
@@ -356,8 +362,9 @@ func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A node set to serve only, or drained, since another placed this on it, takes nothing new.
-	if self := a.svc.Placer.Self(); !self.Role.Encodes() || !self.Availability.Takes() {
-		writeProblem(w, a.logger, codeTranscodeLimit, "this node encodes nothing new")
+	self := a.svc.Placer.Self()
+	if o.Video.Encode != nil && !self.Role.Encodes() || !self.Availability.Takes() {
+		writeProblem(w, a.logger, codeTranscodeLimit, "this node takes nothing new of this")
 		return
 	}
 	c, err := a.svc.Playing.Playable(r.Context(), o.Profile, o.Item, o.Version)

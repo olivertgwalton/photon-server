@@ -120,9 +120,15 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	if n.id, err = nodeID(n.cacheRoot); err != nil {
 		return err
 	}
+	// Trackers are told of a play by the node it is raised on, not by every node it reaches; no
+	// playback starts before both are wired.
+	n.sessions = playback.NewSessions(n.cache, n.st, n.remuxer, func(ctx context.Context, e domain.Event) {
+		n.hub.Raise(ctx, e)
+		n.trackers.Played(e)
+	}, n.id)
 	// self is this node, doing what an admin sets of it: its role, and how many videos it encodes.
 	n.self, err = nodes.Join(ctx, n.st, n.id, hostname,
-		domain.Encoder{Acceleration: hw.Accel, HEVC: hw.HEVC, Libass: n.tools.Libass}, automatic, n.remuxer, n.logger)
+		domain.Encoder{Acceleration: hw.Accel, HEVC: hw.HEVC, Libass: n.tools.Libass}, automatic, n.remuxer, n.sessions, n.logger)
 	if err != nil {
 		return err
 	}
@@ -186,11 +192,6 @@ func (n *node) wire(ctx context.Context) error {
 		previewsTask(st, n.previews, window, logger), sweepDownloadsTask(st, logger), pruneActivityTask(st, logger),
 		refreshCollectionsTask(st), syncListsTask(st, n.providers), fetchSubtitlesTask(fetcher, logger))
 	n.trackers = tracker.New(st, n.cache, n.hub.Raise, version, n.logger)
-	// Trackers are told of a play by the node it is raised on, not by every node it reaches.
-	n.sessions = playback.NewSessions(n.cache, st, n.remuxer, func(ctx context.Context, e domain.Event) {
-		n.hub.Raise(ctx, e)
-		n.trackers.Played(e)
-	}, n.id)
 	n.imports = historyimport.New(st, n.logger)
 	// Fetched subtitles are written from Postgres into each node's cache as it opens them.
 	files, err := subtitles.NewFiles(st, filepath.Join(n.cacheRoot, "fetched-subtitles"))
@@ -211,7 +212,7 @@ func (n *node) wire(ctx context.Context) error {
 	n.signIns = sso.New(st, n.cache, n.reach.PublicURL, logger)
 	p := playing{
 		files: files, owners: playback.NewRouter(n.cache, n.id), signer: playback.NewSigner(signingKey), nodeKey: nodeKey,
-		placer: playback.NewPlacer(n.cache, n.self.Node, playback.NewRemuxes(files, n.parts, n.remuxer), nodeKey),
+		placer: playback.NewPlacer(n.cache, n.self.Node, playback.NewRemuxes(files, n.parts, n.remuxer), n.sessions, nodeKey),
 		sent:   playback.NewSent(), plugins: n.plugins, fetcher: fetcher,
 	}
 	n.secured = secure.New(st, n.hub.Subscribe, logger)

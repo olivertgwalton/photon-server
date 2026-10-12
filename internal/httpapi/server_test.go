@@ -48,7 +48,7 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 		Valkey:   fakeBackend{version: "9.0.0"},
 		Placer: playback.NewPlacer(fakeBackend{}, func() domain.Node {
 			return domain.Node{ID: node, Role: domain.NodeTranscode, LimitSource: domain.LimitSet}
-		}, nil, nodecall.Key{}),
+		}, nil, nil, nodecall.Key{}),
 	}
 	get := func(svc Services, token string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/server", nil)

@@ -36,11 +36,11 @@ type Start struct {
 }
 
 // Place starts s on the first of nodes to take it, asking each in turn how decide plays it with
-// what that node encodes; one that encodes nothing is played on this node. A node with every slot
-// held refuses it, and the next is asked; one that would be encoded where nodes are none, or that
-// every node refused, is hls.ErrTranscodeLimit. A playback started already under s.ID is
-// ErrStarted.
-func Place(ctx context.Context, p placing, sessions starting, nodes []domain.Node, s Start, decide func(Encoding) (Decision, error)) (Decision, domain.Playback, error) {
+// what that node encodes; one that encodes nothing is delivered by the first of deliverers, this
+// node where they are none. A node with every slot held refuses it, and the next is asked; one that
+// would be encoded where nodes are none, or that every node refused, is hls.ErrTranscodeLimit. A
+// playback started already under s.ID is ErrStarted.
+func Place(ctx context.Context, p placing, sessions starting, nodes, deliverers []domain.Node, s Start, decide func(Encoding) (Decision, error)) (Decision, domain.Playback, error) {
 	asked := nodes
 	if len(asked) == 0 {
 		asked = []domain.Node{p.Self()}
@@ -53,7 +53,11 @@ func Place(ctx context.Context, p placing, sessions starting, nodes []domain.Nod
 			return d, started, err
 		}
 		if d.Video == nil || d.Video.Encode == nil {
-			node = p.Self()
+			if len(deliverers) > 0 {
+				node = deliverers[0]
+			} else {
+				node = p.Self()
+			}
 		} else if len(nodes) == 0 {
 			return d, started, hls.ErrTranscodeLimit
 		}
@@ -65,8 +69,7 @@ func Place(ctx context.Context, p placing, sessions starting, nodes []domain.Nod
 	return d, started, err
 }
 
-// start starts s on node, and its remux there where it is not played directly; a remux the node
-// refuses is abandoned, and the playback with it.
+// start starts s on node, and opens it there; one the node refuses is abandoned.
 func start(ctx context.Context, p placing, sessions starting, node domain.Node, s Start, d Decision) (domain.Playback, error) {
 	card := Card(s.Session, s.Address, s.Title, s.Copy, d, s.Tracks)
 	if d.Video != nil {
@@ -76,16 +79,17 @@ func start(ctx context.Context, p placing, sessions starting, node domain.Node, 
 	if err != nil {
 		return started, err
 	}
+	o := s.Opening
+	o.Method = d.Method
 	if d.Method != domain.PlayDirect {
-		o := s.Opening
 		o.Video, o.Audio = *d.Video, d.Audio
-		if err := p.Open(ctx, node, s.ID, s.Copy, o); err != nil {
-			// One not abandoned holds its id, so no other node is asked.
-			if aerr := sessions.Abandon(context.WithoutCancel(ctx), s.ID); aerr != nil {
-				return started, fmt.Errorf("abandoning a playback node %s did not open: %w", node.Name, aerr)
-			}
-			return started, err
+	}
+	if err := p.Open(ctx, node, s.ID, s.Copy, o); err != nil {
+		// One not abandoned holds its id, so no other node is asked.
+		if aerr := sessions.Abandon(context.WithoutCancel(ctx), s.ID); aerr != nil {
+			return started, fmt.Errorf("abandoning a playback node %s did not open: %w", node.Name, aerr)
 		}
+		return started, err
 	}
 	sessions.Opened(ctx, started)
 	return started, nil

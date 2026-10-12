@@ -17,7 +17,7 @@ import (
 // An operator's metrics say what the node is set to, and that it drains as it stops.
 func TestANodesMetricsSayItsRoleAndWhetherItTakesWork(t *testing.T) {
 	settings := &kept{set: domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}}
-	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", domain.Encoder{}, 8, &slots{}, slog.New(slog.DiscardHandler))
+	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", domain.Encoder{}, 8, &slots{}, &slots{}, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,6 +66,8 @@ func (s *slots) Transcodes() (int, int, int) {
 	return 1, 0, s.limit
 }
 
+func (s *slots) Delivering() int { return 0 }
+
 func (s *slots) SetLimit(limit int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -79,7 +81,7 @@ func TestANodeTakesUpWhatIsSetOfItAsItIsTold(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		settings := &kept{set: domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}}
 		t8 := &slots{}
-		self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", domain.Encoder{}, 8, t8, slog.New(slog.DiscardHandler))
+		self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", domain.Encoder{}, 8, t8, t8, slog.New(slog.DiscardHandler))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -123,7 +125,7 @@ func TestANodeTakesUpWhatIsSetOfItAsItIsTold(t *testing.T) {
 // is draining, at once.
 func TestANodeStoppingTellsTheOthersItIsDraining(t *testing.T) {
 	settings := &kept{set: domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}}
-	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", domain.Encoder{}, 8, &slots{}, slog.New(slog.DiscardHandler))
+	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", domain.Encoder{}, 8, &slots{}, &slots{}, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

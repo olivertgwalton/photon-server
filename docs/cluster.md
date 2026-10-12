@@ -50,14 +50,18 @@ for its HLS, to whichever node, is handed to the node making it. A node with no 
 time it is asked refuses, and the next is asked; when every one refuses, the client is told the
 server is transcoding as many videos at once as it may, and how many that is across the nodes.
 
-A playback that copies its video, or is played as it is, is made by the node asked.
+A playback that copies its video, or is played as it is, is delivered by the node asked, or by
+another its clients reach at a public URL that is not drained: of those, one in the node asked's
+group first, of them one set to serve only, then the one delivering the fewest streams, the node
+asked before another delivering as many. Nodes set to serve only, with public URLs, are so the
+cluster's proxies. Jellyfin's apps are delivered by the node they ask.
 
-A playback made by a node with a public URL, for a client that asked another, is fetched from
-that URL: the client is answered its playlist there, not through the node it asked, and the web
-app's pages may fetch streams from every node's public URL a node tells the others of as the page
-loads. Jellyfin's apps ask for a stream before it is placed, so theirs are always handed on.
+A playback delivered by a node with a public URL, for a client that asked another, is fetched
+from that URL: the client is answered its files or playlist there, not through the node it asked,
+and the web app's pages may fetch streams from every node's public URL a node tells the others of
+as the page loads. Jellyfin's apps ask for a stream before it is placed, so theirs are always handed on.
 
-Nodes ask each other at `POST /api/v1/internal/playbacks/{id}/remux`, signed with a key derived
+Nodes ask each other at `POST /api/v1/internal/playbacks/{id}/delivery`, signed with a key derived
 from the cluster's own, which no client is ever given: a request no node signed, or changed on
 its way, is refused. The route is no client's, and in no description of the API.
 

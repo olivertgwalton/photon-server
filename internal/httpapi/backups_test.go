@@ -38,7 +38,7 @@ func TestAnAdminListsAndDownloadsThisNodesDumps(t *testing.T) {
 	node := uuid.NewV7()
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Auth: fakeAuth{}, Setup: Setup{BackupDir: dir}, Backups: fakeRestores{},
-		Placer: playback.NewPlacer(fakeBackend{}, func() domain.Node { return domain.Node{ID: node, Name: "nas"} }, nil, nodecall.Key{}),
+		Placer: playback.NewPlacer(fakeBackend{}, func() domain.Node { return domain.Node{ID: node, Name: "nas"} }, nil, nil, nodecall.Key{}),
 	})
 	get := func(path, token string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -118,7 +118,7 @@ func TestARestoreIsRefusedForADumpThisNodeLacksOrANewerOne(t *testing.T) {
 	}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
 		Auth: fakeAuth{}, Setup: Setup{BackupDir: dir}, Backups: restores,
-		Placer: playback.NewPlacer(fakeBackend{}, func() domain.Node { return domain.Node{ID: node, Name: "nas"} }, nil, nodecall.Key{}),
+		Placer: playback.NewPlacer(fakeBackend{}, func() domain.Node { return domain.Node{ID: node, Name: "nas"} }, nil, nil, nodecall.Key{}),
 	})
 	do := func(method, path, token string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, nil)

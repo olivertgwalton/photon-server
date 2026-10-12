@@ -181,7 +181,7 @@ func TestEveryNodeIsAskedForItsMetrics(t *testing.T) {
 		}},
 		Placer: playback.NewPlacer(fakeBackend{}, func() domain.Node {
 			return domain.Node{ID: self, Name: "alpha", Role: domain.NodeAll, Availability: domain.NodeActive}
-		}, nil, key),
+		}, nil, nil, key),
 	})
 	got := adminMetrics(t, api)
 	if len(got.Nodes) != 3 {

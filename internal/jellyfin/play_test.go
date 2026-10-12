@@ -536,7 +536,7 @@ func TestAnAppsVideoIsEncodedAsTheNodeEncodingItCan(t *testing.T) {
 			Sent:    playback.NewSent(),
 			Network: st,
 			Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
-			HLS: remuxes, Placer: playback.NewPlacer(someNodes(tc.others), func() domain.Node { return self }, remuxes, nodecall.Key{}),
+			HLS: remuxes, Placer: playback.NewPlacer(someNodes(tc.others), func() domain.Node { return self }, remuxes, noDirect{}, nodecall.Key{}),
 			Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
 		})
 		r := httptest.NewRequest(http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", strings.NewReader(`{"MaxStreamingBitrate":120000000,"DeviceProfile":`+swiftfin+`}`))
@@ -622,10 +622,15 @@ func alone(local interface {
 	self := domain.Node{ID: uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1"), Role: domain.NodeAll, Availability: domain.NodeActive, Limit: 4, Encoder: domain.Encoder{
 		Acceleration: domain.AccelSoftware, HEVC: domain.HEVCAllow, Libass: true,
 	}}
-	return playback.NewPlacer(noNodes{}, func() domain.Node { return self }, local, nodecall.Key{})
+	return playback.NewPlacer(noNodes{}, func() domain.Node { return self }, local, noDirect{}, nodecall.Key{})
 }
 
 // noNodes is a cluster of one: no other node tells of itself.
+// noDirect delivers what is played as it is without counting it.
+type noDirect struct{}
+
+func (noDirect) Deliver(uuid.UUID) {}
+
 type noNodes struct{}
 
 func (noNodes) Nodes(context.Context) ([]domain.Node, error) { return nil, nil }
