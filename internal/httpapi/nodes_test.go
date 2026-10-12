@@ -127,6 +127,10 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 	if got := nodes[gpu].Address; got != "" {
 		t.Errorf("address cleared to %q", got)
 	}
+	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"group":" loft "}`)
+	if got := nodes[gpu].NodeSettings; got.Group != "loft" || got.Role != domain.NodeServe {
+		t.Errorf("grouped: %+v, want in loft, its role kept", got)
+	}
 	// Drained with a note for other admins, then resumed, which clears it.
 	ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), `{"availability":"draining","note":"driver update"}`)
 	if got := nodes[gpu].NodeSettings; got.Availability != domain.NodeDraining || got.Note != "driver update" || got.Role != domain.NodeServe {

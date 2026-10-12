@@ -1492,7 +1492,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Change a node's role or its limit on transcodes at once; it takes them up at once
+         * Change a node's role, its limit on transcodes at once, its address or its group; it takes them up at once
          * @description Admin only.
          */
         patch: {
@@ -7853,6 +7853,7 @@ export interface components {
             availability: components["schemas"]["NodeAvailability"];
             /** Format: date-time */
             first_seen: string;
+            group: string;
             /** Format: uuid */
             id: string;
             /** Format: date-time */
@@ -8076,6 +8077,7 @@ export interface components {
         NodeChange: {
             address?: string | null;
             availability?: components["schemas"]["NodeAvailability"];
+            group?: string | null;
             note?: string;
             role?: components["schemas"]["NodeRole"];
             transcode_limit?: number | null;

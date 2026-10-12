@@ -133,7 +133,7 @@ const folders = $derived<[string, components["schemas"]["Folder"]][]>([
 							{node.name}{node.id === s.node_id ? " (this node)" : ""}
 						</span>
 						<span class="text-ink-3 block text-xs">
-							{up
+							{node.group ? `${node.group} · ` : ""}{up
 								? `seen ${relative(up.last_seen, now)}`
 								: `Not running · last seen ${relative(node.last_seen, now)}`}
 						</span>

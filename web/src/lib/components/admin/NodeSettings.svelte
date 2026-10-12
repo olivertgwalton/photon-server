@@ -45,6 +45,7 @@ const limits = $derived<readonly { value: Limit; label: string }[]>([
 
 let role = $derived<Role>(node.role);
 let address = $derived(node.address);
+let group = $derived(node.group);
 let limit = $derived<Limit>(
 	node.transcode_limit_source === "automatic"
 		? "automatic"
@@ -59,10 +60,11 @@ async function save(event: SubmitEvent) {
 	event.preventDefault();
 	const body: components["schemas"]["NodeChange"] =
 		limit === "automatic"
-			? { role, address, transcode_limit_source: "automatic" }
+			? { role, address, group, transcode_limit_source: "automatic" }
 			: {
 					role,
 					address,
+					group,
 					transcode_limit_source: "set",
 					transcode_limit: limit === "none" ? 0 : most,
 				};
@@ -111,6 +113,19 @@ async function save(event: SubmitEvent) {
 				<Field.Description>
 					Where the other nodes reach it, on a private network. Without one it
 					serves only the clients that reach it directly.
+				</Field.Description>
+			</Field.Field>
+			<Field.Field>
+				<Field.Label for="{id}-node-group">Group</Field.Label>
+				<Input
+					id="{id}-node-group"
+					name="group"
+					placeholder="None"
+					bind:value={group}
+				/>
+				<Field.Description>
+					Such as the site it runs at. It asks the nodes of its own group to
+					transcode first, so a stream need not cross between sites.
 				</Field.Description>
 			</Field.Field>
 			{#if role !== "serve"}

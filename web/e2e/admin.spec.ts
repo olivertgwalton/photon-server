@@ -90,6 +90,8 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 		"http://10.0.0.5:8640",
 	);
 	await dialog.getByLabel("Address").fill("http://10.0.0.6:8640");
+	// Among the nodes at its site, which it asks to transcode first.
+	await dialog.getByLabel("Group").fill("loft");
 	await expectAccessible(page);
 	const saved = page.waitForRequest(
 		(r) => r.method() === "PATCH" && r.url().endsWith("/admin/nodes/n-2"),
@@ -98,12 +100,14 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 	expect((await saved).postDataJSON()).toMatchObject({
 		role: "transcode",
 		address: "http://10.0.0.6:8640",
+		group: "loft",
 		transcode_limit: 12,
 	});
 	await expect(
 		page.getByText("Saved. gpu-1 takes it up at once."),
 	).toBeVisible();
 	await expect(gpu).toContainText("Transcodes first");
+	await expect(gpu).toContainText("loft ·");
 
 	// Drained before its driver is updated: its streams finish, and nothing new is given it.
 	await gpu.getByRole("button", { name: "Actions for gpu-1" }).click();
