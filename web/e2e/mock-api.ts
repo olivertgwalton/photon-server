@@ -186,6 +186,8 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 			: "l-films",
 		artwork: c.poster ? { poster: [art], backdrop: [art] } : {},
 	};
+	// An episode wears its show's lettering.
+	if (id === "t-ep") out.artwork = { ...out.artwork, logo: [art] };
 	if (id === "t-film") {
 		Object.assign(out, {
 			overview: "A night shift at a radio station.",
