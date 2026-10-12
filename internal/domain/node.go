@@ -22,9 +22,10 @@ type Node struct {
 	// Transcodes are the videos it encodes now, Conversions of them for downloads, of at most
 	// Limit at once; a Limit of zero is none.
 	Transcodes, Conversions, Limit int
-	// Streams are the playbacks it delivers now, encoded or not.
-	Streams     int
-	LimitSource LimitSource
+	LimitSource                    LimitSource
+	// Streams are the playbacks it delivers now, encoded or not, of at most StreamLimit at once;
+	// a StreamLimit of zero is none.
+	Streams, StreamLimit int
 }
 
 // NodeRole is what a node does for the cluster, as an admin sets it.
@@ -118,6 +119,8 @@ type NodeSettings struct {
 	// it makes for another node's client is fetched from there, not handed on through that node.
 	// None is a node clients reach only through the others.
 	PublicURL string
+	// StreamLimit is how many playbacks it delivers at once, encoded or not; zero is no limit.
+	StreamLimit int
 	// Group is the nodes it is among, such as those at one site: a node asked to play what is
 	// encoded asks those of its own group first.
 	Group string
