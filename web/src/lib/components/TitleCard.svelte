@@ -40,10 +40,11 @@ const picture = $derived(
 		: (card.thumb ?? card.backdrop),
 );
 
-// An episode is named by its show, with where it is in it beneath.
+// An episode or a season is named by its show, with where it is in it beneath.
 const name = $derived(card.show?.title ?? card.title);
 const caption = $derived.by(() => {
 	if (given !== undefined) return given;
+	if (card.kind === "season") return card.title;
 	if (card.kind !== "episode") return card.year ? String(card.year) : "";
 	return episodeLine(card);
 });

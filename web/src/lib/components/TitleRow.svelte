@@ -20,7 +20,11 @@ const name = $derived(card.show?.title ?? card.title);
 const line = $derived(
 	detail ??
 		[
-			card.kind === "episode" ? episodeLine(card) : card.year,
+			card.kind === "episode"
+				? episodeLine(card)
+				: card.kind === "season"
+					? card.title
+					: card.year,
 			card.duration_ms && runtime(card.duration_ms),
 		]
 			.filter(Boolean)
