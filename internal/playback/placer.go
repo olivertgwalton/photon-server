@@ -170,8 +170,11 @@ func rank(n domain.Node, is func(domain.Node) bool) int {
 // roomy is a node with a transcode slot free and room for another stream, as it last said.
 func roomy(n domain.Node) bool { return (unlimited(n) || n.Transcodes < n.Limit) && streamRoom(n) }
 
-// streamRoom is a node with room for another stream, as it last said.
-func streamRoom(n domain.Node) bool { return n.StreamLimit == 0 || n.Streams < n.StreamLimit }
+// streamRoom is a node with room for another stream, as it last said: delivering fewer than its
+// limit, and sending slower than its limit.
+func streamRoom(n domain.Node) bool {
+	return (n.StreamLimit == 0 || n.Streams < n.StreamLimit) && (n.EgressLimitMbps == 0 || n.EgressKbps < n.EgressLimitMbps*1000)
+}
 
 // transcoding is a node set to transcode before any other, where it has a slot.
 func transcoding(n domain.Node) bool {
@@ -211,7 +214,10 @@ type Opening struct {
 // delivers as many streams as it may answers ErrStreamLimit, and one that has every transcode slot
 // held hls.ErrTranscodeLimit.
 func (p *Placer) Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o Opening) error {
-	if node.ID == p.self().ID {
+	if self := p.self(); node.ID == self.ID {
+		if !streamRoom(self) {
+			return ErrStreamLimit
+		}
 		if err := p.delivers.Deliver(playback); err != nil {
 			return err
 		}

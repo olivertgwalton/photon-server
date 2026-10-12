@@ -28,8 +28,9 @@ const (
 // ErrNoPlayback is a playback that has stopped, lapsed, or is another profile's.
 var ErrNoPlayback = errors.New("no such playback")
 
-// ErrStreamLimit is a playback refused by a node delivering as many at once as it may.
-var ErrStreamLimit = errors.New("the node delivers as many streams at once as it may")
+// ErrStreamLimit is a playback refused by a node delivering as many at once as it may, or sending
+// as fast as it may.
+var ErrStreamLimit = errors.New("the node delivers as many streams at once, or as fast, as it may")
 
 // ErrStarted is a playback started already, on this node or another, under the id asked for.
 var ErrStarted = errors.New("the playback is started already")
