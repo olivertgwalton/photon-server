@@ -1,3 +1,4 @@
+import { text } from "#lib/form.js";
 import type { components } from "#lib/api/schema.js";
 import { parseClock } from "./words.js";
 
@@ -37,7 +38,7 @@ export function editOf(
 	const now = fieldsOf(t);
 	const edit: Schemas["Edit"] = {};
 	for (const field of Object.keys(now) as Field[]) {
-		const value = String(form.get(field) ?? "").trim();
+		const value = text(form, field);
 		if (value === now[field]) continue;
 		if (!value) {
 			return "A field can't be emptied. Give it back to its sources instead.";

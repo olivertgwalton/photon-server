@@ -3,7 +3,7 @@ import PageHeader from "#lib/components/PageHeader.svelte";
 import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import { fields } from "#lib/form.js";
+import { fields, text } from "#lib/form.js";
 import { vocabulary } from "#lib/vocabulary.js";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -36,7 +36,7 @@ const register: Record<Tracker, { href: string; how: string }> = {
 
 function save(event: SubmitEvent, tracker: Tracker) {
 	const name = words.trackers[tracker] ?? tracker;
-	const clientID = String(fields(event).get("client_id") ?? "").trim();
+	const clientID = text(fields(event), "client_id");
 	return act(
 		client().PUT("/api/v1/admin/trackers/{tracker}", {
 			params: { path: { tracker } },

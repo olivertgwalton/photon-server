@@ -5,7 +5,7 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import { fields } from "#lib/form.js";
+import { fields, text } from "#lib/form.js";
 
 let { data } = $props();
 
@@ -18,7 +18,7 @@ function save(event: SubmitEvent) {
 		client().PUT("/api/v1/admin/network", {
 			body: {
 				...network,
-				public_url: String(form.get("public_url") ?? "").trim(),
+				public_url: text(form, "public_url"),
 				remote_max_bitrate_kbps: Math.round(
 					Number(form.get("remote_max_mbps")) * 1000,
 				),

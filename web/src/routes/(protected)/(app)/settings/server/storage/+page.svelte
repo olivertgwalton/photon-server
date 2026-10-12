@@ -17,7 +17,7 @@ import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { Progress } from "#lib/components/ui/progress/index.js";
 import { act } from "#lib/act.js";
-import { fields } from "#lib/form.js";
+import { fields, text } from "#lib/form.js";
 
 let { data } = $props();
 
@@ -68,18 +68,18 @@ const count = new Intl.NumberFormat();
 
 function chosen(form: FormData): components["schemas"]["Storage"] {
 	if (kind === "disk") return { kind };
-	const text = (name: string) => String(form.get(name) ?? "").trim();
 	return {
 		kind,
 		bucket: {
-			endpoint: text("endpoint"),
-			name: text("name"),
-			folder: text("folder"),
-			region: text("region"),
-			access_key: text("access_key"),
-			secret_key: text("secret_key"),
+			endpoint: text(form, "endpoint"),
+			name: text(form, "name"),
+			folder: text(form, "folder"),
+			region: text(form, "region"),
+			access_key: text(form, "access_key"),
+			secret_key: text(form, "secret_key"),
 			delivery,
-			public_endpoint: delivery === "redirect" ? text("public_endpoint") : "",
+			public_endpoint:
+				delivery === "redirect" ? text(form, "public_endpoint") : "",
 		},
 	};
 }

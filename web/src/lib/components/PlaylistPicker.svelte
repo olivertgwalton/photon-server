@@ -7,7 +7,7 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import { fields } from "#lib/form.js";
+import { fields, text } from "#lib/form.js";
 
 const uid = $props.id();
 
@@ -16,7 +16,7 @@ async function add(id: string, listName: string) {
 }
 
 async function create(event: SubmitEvent) {
-	const name = String(fields(event).get("name")).trim();
+	const name = text(fields(event), "name");
 	if (await newPlaylist(name, picker.ids)) picker.open = false;
 }
 </script>

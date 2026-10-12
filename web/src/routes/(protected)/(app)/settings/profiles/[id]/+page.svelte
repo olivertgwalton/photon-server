@@ -1,7 +1,7 @@
 <script lang="ts">
 import { vocabulary } from "#lib/vocabulary.js";
 import { act } from "#lib/act.js";
-import { fields } from "#lib/form.js";
+import { fields, textAsTyped } from "#lib/form.js";
 import { accessOf } from "#lib/admin/access.js";
 import { roleOptions } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
@@ -35,10 +35,10 @@ const locks = {
 async function saveProfile(event: SubmitEvent) {
 	const form = fields(event);
 	const body: Change = {
-		name: String(form.get("name") ?? ""),
+		name: textAsTyped(form, "name"),
 		role: String(form.get("role")) as Change["role"],
 	};
-	const password = String(form.get("password") ?? "");
+	const password = textAsTyped(form, "password");
 	if (password) body.password = password;
 	if (
 		await act(

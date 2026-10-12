@@ -7,7 +7,7 @@ import Choice from "#lib/components/Choice.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import { fields } from "#lib/form.js";
+import { fields, textAsTyped } from "#lib/form.js";
 
 type Schemas = components["schemas"];
 
@@ -35,9 +35,9 @@ function save(event: SubmitEvent) {
 	return act(
 		client().PUT("/api/v1/admin/server", {
 			body: {
-				name: String(form.get("name") ?? ""),
-				metadata_language: String(form.get("metadata_language") ?? ""),
-				certification_country: String(form.get("certification_country") ?? ""),
+				name: textAsTyped(form, "name"),
+				metadata_language: textAsTyped(form, "metadata_language"),
+				certification_country: textAsTyped(form, "certification_country"),
 			},
 		}),
 		to ? undefined : "Saved. Every server goes by it now.",

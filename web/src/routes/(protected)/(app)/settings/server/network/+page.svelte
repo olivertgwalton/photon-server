@@ -7,7 +7,7 @@ import Choice from "#lib/components/Choice.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
-import { fields } from "#lib/form.js";
+import { fields, text } from "#lib/form.js";
 
 let { data } = $props();
 
@@ -41,18 +41,17 @@ const list = (text: string) => text.split(/[\s,]+/).filter(Boolean);
 
 function save(event: SubmitEvent) {
 	const form = fields(event);
-	const path = (name: string) => String(form.get(name) ?? "").trim();
 	return act(
 		client().PUT("/api/v1/admin/network", {
 			body: {
 				secure_connections: secure,
-				certificate: path("certificate"),
-				key: path("key"),
+				certificate: text(form, "certificate"),
+				key: text(form, "key"),
 				jellyfin,
 				jellyfin_port: Number(form.get("jellyfin_port")),
-				local_networks: list(path("local_networks")),
-				public_url: path("public_url"),
-				trusted_proxies: list(path("trusted_proxies")),
+				local_networks: list(text(form, "local_networks")),
+				public_url: text(form, "public_url"),
+				trusted_proxies: list(text(form, "trusted_proxies")),
 				discovery,
 				remote_max_bitrate_kbps: Math.round(
 					Number(form.get("remote_max_mbps")) * 1000,

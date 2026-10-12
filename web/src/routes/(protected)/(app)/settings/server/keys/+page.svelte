@@ -1,7 +1,7 @@
 <script lang="ts">
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { act } from "#lib/act.js";
-import { fields } from "#lib/form.js";
+import { fields, textAsTyped } from "#lib/form.js";
 import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
@@ -19,7 +19,7 @@ let adding = $state(false);
 let made = $state<{ name: string; token: string }>();
 
 async function add(event: SubmitEvent) {
-	const name = String(fields(event).get("name") ?? "");
+	const name = textAsTyped(fields(event), "name");
 	const key = await act(api.POST("/api/v1/admin/keys", { body: { name } }));
 	if (!key) return;
 	adding = false;
