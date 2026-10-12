@@ -468,6 +468,17 @@ test("search finds titles and people", async ({ page }) => {
 	);
 });
 
+test("a show shuffles into one of its episodes, from its page or an episode's", async ({
+	page,
+}) => {
+	await logIn(page, "/titles/t-show");
+	await page.getByRole("button", { name: "Shuffle" }).click();
+	await expect(page).toHaveURL(/\/play\/t-ep[23]?$/);
+	await page.goto("/titles/t-ep2");
+	await page.getByRole("button", { name: "Shuffle" }).click();
+	await expect(page).toHaveURL(/\/play\/t-ep[23]?$/);
+});
+
 test("a playlist is made, filled, reordered and deleted", async ({ page }) => {
 	await logIn(page, "/titles/t-ep2");
 	await page.getByRole("button", { name: "More", exact: true }).click();

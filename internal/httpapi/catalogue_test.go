@@ -92,6 +92,14 @@ func (fakeCatalogue) Next(_ context.Context, _, id uuid.UUID) (store.Card, error
 	return store.Card{ID: uuid.NewV7(), Kind: domain.ItemEpisode, Title: "The Target"}, nil
 }
 
+// PlayOrder has two episodes in films and nothing else.
+func (fakeCatalogue) PlayOrder(_ context.Context, _, id uuid.UUID) ([]store.Card, error) {
+	if id != films {
+		return nil, store.ErrNotFound
+	}
+	return []store.Card{{ID: uuid.NewV7(), Kind: domain.ItemEpisode, Title: "Pilot"}, {ID: uuid.NewV7(), Kind: domain.ItemEpisode, Title: "Second"}}, nil
+}
+
 func (fakeCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage, error) {
 	if id != films {
 		return store.TitlePage{}, store.ErrNotFound
@@ -307,6 +315,9 @@ func TestWall(t *testing.T) {
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/titles/"+films.String()+"/similar", goodToken, ""); !strings.Contains(rec.Body.String(), `"title":"Thief"`) {
 		t.Errorf("similar: %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(t, http.MethodGet, "/api/v1/titles/"+films.String()+"/playable", goodToken, ""); !strings.Contains(rec.Body.String(), `"title":"Second"`) {
+		t.Errorf("playable: %d %s", rec.Code, rec.Body)
 	}
 	if rec := serve(t, http.MethodGet, "/api/v1/titles/"+films.String()+"/next", goodToken, ""); rec.Code != http.StatusOK ||
 		!strings.Contains(rec.Body.String(), `"title":"The Target"`) {

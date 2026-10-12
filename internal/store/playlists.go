@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"slices"
 	"time"
@@ -187,6 +188,19 @@ func appendEntries(ctx context.Context, tx db, playlist uuid.UUID, items []uuid.
 		}
 	}
 	return touch(ctx, tx, playlist)
+}
+
+// PlayOrder answers the films and episodes a title stands for that a profile may see, as cards in
+// the order they play.
+func (s *Store) PlayOrder(ctx context.Context, profile, id uuid.UUID) ([]Card, error) {
+	if ok, err := s.visible(ctx, profile, id); err != nil || !ok {
+		return nil, cmp.Or(err, ErrNotFound)
+	}
+	ids, err := playableOf(ctx, s.pool, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.Cards(ctx, profile, ids)
 }
 
 // playableOf answers the films and episodes a title stands for, in the order they play; ErrNotFound
