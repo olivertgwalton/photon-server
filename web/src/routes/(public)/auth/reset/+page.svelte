@@ -18,7 +18,7 @@ let pending = $state(false);
 let message = $state<string>();
 // Where the code was written, once asked for; a reader handed a code already
 // goes straight to entering it.
-let asked = $state<Asked>();
+let asked = $state.raw<Asked>();
 let haveCode = $state(false);
 
 async function call<T>(

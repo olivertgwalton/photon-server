@@ -63,7 +63,7 @@ const changeRule = $derived.by(() => {
 let members = $derived<Card[]>(data.members);
 
 let query = $state("");
-let found = $state<Card[]>([]);
+let found = $state.raw<Card[]>([]);
 
 async function search(event: SubmitEvent) {
 	event.preventDefault();

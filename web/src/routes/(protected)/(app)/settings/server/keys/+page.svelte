@@ -16,7 +16,7 @@ let { data } = $props();
 const api = client();
 let adding = $state(false);
 // The token is answered once, when the key is made: the server keeps only its hash.
-let made = $state<{ name: string; token: string }>();
+let made = $state.raw<{ name: string; token: string }>();
 
 async function add(event: SubmitEvent) {
 	const name = textAsTyped(fields(event), "name");
