@@ -933,3 +933,22 @@ test("a title is set to ask in a language of its own", async ({ page }) => {
 		certification_country: "",
 	});
 });
+
+test("an admin puts an episode in a new collection, and a film in one of theirs", async ({
+	page,
+}) => {
+	await logIn(page, "/titles/t-ep");
+	await page.getByRole("button", { name: "More", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Add to collection…" }).click();
+	const dialog = page.getByRole("dialog", { name: "Add to collection" });
+	await dialog.getByPlaceholder("New collection").fill("Openers");
+	await dialog.getByRole("button", { name: "Create" }).click();
+	await expect(page.getByText("Added to Openers.")).toBeVisible();
+	await expect(dialog).toBeHidden();
+
+	await page.goto("/titles/t-quiet");
+	await page.getByRole("button", { name: "More", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Add to collection…" }).click();
+	await dialog.getByRole("button", { name: "Lighthouse Films" }).click();
+	await expect(page.getByText("Added to Lighthouse Films.")).toBeVisible();
+});

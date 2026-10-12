@@ -35,6 +35,35 @@ export function addToPlaylist(playlist: string, ids: string[], name: string) {
 	);
 }
 
+export function addToCollection(
+	collection: string,
+	ids: string[],
+	name: string,
+) {
+	return act(
+		api.POST("/api/v1/admin/collections/{id}/members", {
+			...path(collection),
+			body: { item_ids: ids },
+		}),
+		`Added to ${name}.`,
+	);
+}
+
+export async function newCollection(
+	library: string,
+	name: string,
+	ids: string[],
+) {
+	const { data, error } = await api.POST("/api/v1/admin/collections", {
+		body: { library_id: library, title: name },
+	});
+	if (!data) {
+		toast.error(problemMessage(error));
+		return false;
+	}
+	return addToCollection(data.id, ids, name);
+}
+
 export function newPlaylist(name: string, ids: string[]) {
 	return act(
 		api.POST("/api/v1/playlists", { body: { name, item_ids: ids } }),

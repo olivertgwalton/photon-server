@@ -139,4 +139,9 @@ $effect(() => {
 	) then { default: RefreshDialog }}
 		<RefreshDialog />
 	{/await}
+	{#await import(
+		"#lib/components/admin/CollectionPicker.svelte"
+	) then { default: CollectionPicker }}
+		<CollectionPicker />
+	{/await}
 {/if}

@@ -9,6 +9,7 @@ import HeartIcon from "@lucide/svelte/icons/heart";
 import HeartOffIcon from "@lucide/svelte/icons/heart-off";
 import ImageIcon from "@lucide/svelte/icons/image";
 import LayersIcon from "@lucide/svelte/icons/layers";
+import LibraryBigIcon from "@lucide/svelte/icons/library-big";
 import ListPlusIcon from "@lucide/svelte/icons/list-plus";
 import PencilIcon from "@lucide/svelte/icons/pencil";
 import PlayIcon from "@lucide/svelte/icons/play";
@@ -160,6 +161,13 @@ const name = $derived(card ? titleWithShow(card) : "");
 			{/if}
 			{#if admin}
 				<DropdownMenu.Separator />
+				{#if card.kind !== "collection" && card.kind !== "extra"}
+					<DropdownMenu.Item
+						onSelect={() => shell.pickCollection(card.id, name)}
+					>
+						<LibraryBigIcon />Add to collection…
+					</DropdownMenu.Item>
+				{/if}
 				<DropdownMenu.Item onSelect={() => shell.editTitle(card.id, "details")}>
 					<PencilIcon />Edit…
 				</DropdownMenu.Item>

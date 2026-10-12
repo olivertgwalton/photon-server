@@ -35,6 +35,13 @@ export class Shell {
 		Object.assign(this.picker, { open: true, ids, title });
 	};
 
+	// For an admin, as Plex's Add to > Collection is.
+	collectionPicker = $state({ open: false, id: "", title: "" });
+
+	pickCollection = (id: string, title: string) => {
+		Object.assign(this.collectionPicker, { open: true, id, title });
+	};
+
 	// Opened at the part asked for, as Plex's Edit and Fix Match are.
 	editor = $state({ open: false, id: "", tab: "details" as EditorTab });
 

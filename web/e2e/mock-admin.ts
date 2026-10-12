@@ -859,6 +859,8 @@ export async function admin(
 				},
 			);
 		case "PUT /api/v1/admin/collections/t-box/members":
+		case "POST /api/v1/admin/collections/t-box/members":
+		case "POST /api/v1/admin/collections/t-smart/members":
 			return done();
 		case "POST /api/v1/admin/collections": {
 			const asked = (await request.json()) as Schemas["AddCollection"];
