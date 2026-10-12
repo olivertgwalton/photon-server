@@ -1,11 +1,3 @@
-<script lang="ts" module>
-// A card picked from a row of the set the page is one of. The page is drawn
-// afresh for the card's own (the app's layout keys it by path), so the row it
-// was picked from is a new one, and the card is focused again in it, to step
-// on from.
-let picked = false;
-</script>
-
 <script lang="ts" generics="T extends Record<'id', string>">
 import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
 import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
@@ -88,10 +80,9 @@ const resized = onResize(measure);
 const ids = $derived([...shown, ...items].map((c) => c.id).join());
 const start: Attachment<HTMLUListElement> = (ul) => {
 	if (!ids) return;
-	const here = current
-		? ul.querySelector<HTMLElement>("[aria-current=page]")
+	const li = current
+		? ul.querySelector("[aria-current=page]")?.closest("li")
 		: undefined;
-	const li = here?.closest("li");
 	// Sideways only: scrollIntoView would also scroll the page down to the row.
 	ul.scrollTo({
 		left: li
@@ -101,8 +92,6 @@ const start: Attachment<HTMLUListElement> = (ul) => {
 		behavior: "instant",
 	});
 	measure();
-	if (picked) here?.focus({ preventScroll: true });
-	picked = false;
 };
 
 // A page at a time, as Plex Web's and Jellyfin's rows go: a little less than
@@ -132,7 +121,6 @@ function hold(event: MouseEvent) {
 	if (!(event.target instanceof Element)) return;
 	const link = event.target.closest<HTMLElement>("a, button");
 	link?.focus({ preventScroll: true });
-	if (current && link instanceof HTMLAnchorElement) picked = true;
 }
 
 const sizes = $derived(
