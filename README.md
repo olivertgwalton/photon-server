@@ -6,6 +6,14 @@ Official support is at [photon.oliverwalton.uk](https://photon.oliverwalton.uk).
 Mac, Apple TV and Apple Vision Pro, play from it with
 [Photon Player](https://apps.apple.com/gb/app/photon-player/id6804291311) on the App Store.
 
+![Home](docs/images/home.webp)
+
+| Films | A film | A show |
+|---|---|---|
+| ![Films](docs/images/films.webp) | ![Inception](docs/images/film.webp) | ![Grey's Anatomy](docs/images/show.webp) |
+
+https://github.com/user-attachments/assets/6e3b3d94-8076-4d41-aa39-83e45a2d9409
+
 ## Tech stack
 
 - **Server**: Go, PostgreSQL (pgx, goose migrations), Valkey
@@ -14,6 +22,11 @@ Mac, Apple TV and Apple Vision Pro, play from it with
   from ThemerrDB
 - **Web**: SvelteKit (static build served by the Go server), Tailwind, bits-ui, Bun, Biome,
   Playwright
+
+## Performance
+
+[docs/comparison.md](docs/comparison.md) measures photon against Jellyfin, Plex and silo on one host
+with one library: API latency and throughput, page data and memory.
 
 ## Deploy
 
