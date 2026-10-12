@@ -61,6 +61,7 @@ func TestARefusedPlayIsNoStart(t *testing.T) {
 # TYPE photon_transcode_refusals_total counter
 photon_transcode_refusals_total{reason="full"} 1
 photon_transcode_refusals_total{reason="no_encoder"} 0
+photon_transcode_refusals_total{reason="no_space"} 0
 `
 	if err := testutil.CollectAndCompare(placer, strings.NewReader(refused)); err != nil {
 		t.Error(err)

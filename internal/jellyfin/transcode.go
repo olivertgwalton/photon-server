@@ -35,7 +35,7 @@ type placer interface {
 	Deliverers(ctx context.Context, network domain.ClientNetwork) ([]domain.Node, error)
 	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o playback.Opening) error
 	Self() domain.Node
-	Refuse(candidates []domain.Node) error
+	Refuse(candidates []domain.Node, refused error) error
 }
 
 // owners say which node of the cluster runs a playback's HLS.
@@ -208,7 +208,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 		// to the node that runs it.
 		return false
 	case errors.Is(err, hls.ErrTranscodeLimit):
-		a.logger.InfoContext(r.Context(), "jellyfin transcode refused", slog.Any("err", a.svc.Placer.Refuse(candidates)))
+		a.logger.InfoContext(r.Context(), "jellyfin transcode refused", slog.Any("err", a.svc.Placer.Refuse(candidates, err)))
 		w.Header().Set("Retry-After", "30")
 		a.refuse(w, http.StatusServiceUnavailable)
 		return true

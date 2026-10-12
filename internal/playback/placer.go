@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -211,8 +212,8 @@ type Opening struct {
 }
 
 // Open opens a playback of c, as o says, on node: on this one, or by asking it. A node that
-// delivers as many streams as it may answers ErrStreamLimit, and one that has every transcode slot
-// held hls.ErrTranscodeLimit.
+// delivers as many streams as it may answers ErrStreamLimit, one that has every transcode slot
+// held hls.ErrTranscodeLimit, and one short of space to transcode into hls.ErrNoSpace.
 func (p *Placer) Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o Opening) error {
 	if self := p.self(); node.ID == self.ID {
 		if !streamRoom(self) {
@@ -258,6 +259,8 @@ func (p *Placer) Open(ctx context.Context, node domain.Node, playback uuid.UUID,
 			return ErrStreamLimit
 		}
 		return hls.ErrTranscodeLimit
+	case http.StatusInsufficientStorage:
+		return hls.ErrNoSpace
 	}
 	return fmt.Errorf("node %s answered %s", node.Name, resp.Status)
 }
@@ -276,8 +279,13 @@ func RemotePath(playback uuid.UUID) string {
 	return "/api/v1/internal/playbacks/" + playback.String() + "/delivery"
 }
 
-// Refuse counts, and answers, the refusal of a playback every one of candidates refused.
-func (p *Placer) Refuse(candidates []domain.Node) error {
+// Refuse counts, and answers, the refusal of a playback every one of candidates refused, as
+// refused says.
+func (p *Placer) Refuse(candidates []domain.Node, refused error) error {
+	if len(candidates) > 0 && errors.Is(refused, hls.ErrNoSpace) {
+		p.refusals.WithLabelValues(string(refusedNoSpace)).Inc()
+		return errors.New("every node is transcoding as many videos at once as it may, or is short of space to")
+	}
 	reason := refusedFull
 	if len(candidates) == 0 {
 		reason = refusedNoEncoder

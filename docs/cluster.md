@@ -47,9 +47,10 @@ those with a slot free and room for another stream, one in the group of the node
 first, then one set to transcode first, then one with no limit. The node a client asks decides how
 the copy is played with that node's encoder, starts the playback there, and answers the client: the
 client's every request for its HLS, to whichever node, is handed to the node making it. A node with
-no slot free by the time it is asked refuses, and the next is asked; when every one refuses, the
-client is told the server is transcoding as many videos at once as it may, and how many that is
-across the nodes.
+no slot free by the time it is asked refuses, as does one with less than 2 GiB free in its
+transcode cache, and the next is asked; when every one refuses, the client is told the server is
+transcoding as many videos at once as it may, and how many that is across the nodes, or, where one
+was short of space, that it is full or short of space.
 
 A playback that copies its video, or is played as it is, is delivered by the node asked, or by
 another the client reaches itself, at its local or public URL, that is not drained: of those, one
@@ -161,7 +162,7 @@ Each node says what is its own:
 | `photon_sent_bytes_total{delivery}` | the bytes of media it sent players, a `file` as it is or HLS `segment`s (playlists among them), by either API; a request handed to another node is counted there |
 | `photon_transcodes{kind}` | the videos it encodes now, for a `playback` or a download's `conversion` |
 | `photon_transcode_slots` | the most it encodes at once; absent with no limit |
-| `photon_transcode_refusals_total{reason}` | plays it refused for want of a node to encode them: every one `full`, or `no_encoder` taking it |
+| `photon_transcode_refusals_total{reason}` | plays it refused for want of a node to encode them: every one `full`, `no_space` where one or more was short of space in its transcode cache, or `no_encoder` taking it |
 | `photon_hls_segment_wait_seconds` | how long a request for a segment waits for it to be made |
 | `photon_jobs_finished_total{kind, outcome}` | runs of jobs it ended, `done` or `failed` (a failed run may be tried again) |
 

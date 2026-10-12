@@ -189,7 +189,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	}
 	d, err := playback.Decide(p.hlsProfile(t, segments, c, limit), playback.CopyOf(c), chosen, playback.EncodingOf(encoder))
 	if err == nil && d.Video != nil && d.Video.Encode != nil && len(candidates) == 0 {
-		err = a.svc.Placer.Refuse(candidates)
+		err = a.svc.Placer.Refuse(candidates, nil)
 	}
 	if err != nil {
 		a.logger.InfoContext(r.Context(), "jellyfin transcode refused", slog.Any("reasons", d.Reasons), slog.Any("err", err))
