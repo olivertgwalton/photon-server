@@ -487,9 +487,7 @@ const poster = $derived(art("poster"));
 					<svelte:boundary>
 						{#if await data.themeMusic}
 							<!-- An episode of the same show goes on with the tune already playing. -->
-							{#key themes.join()}
-								<ThemeTune {themes} />
-							{/key}
+							<ThemeTune {themes} />
 						{/if}
 						{#snippet pending()}
 							<!-- Silent until the profile's answer comes. -->
