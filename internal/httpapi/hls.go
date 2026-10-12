@@ -24,6 +24,7 @@ type hlsFiles interface {
 	Has(playback uuid.UUID) bool
 	Resource(ctx context.Context, playback uuid.UUID, name string) (hls.Resource, error)
 	Transcodes() (active, conversions, limit int)
+	Hardware() hls.Hardware
 	WebVTT(ctx context.Context, open func() (media.Input, error), language string) (string, error)
 	Extracted(ctx context.Context, src hls.SubtitleSource, want string) (string, error)
 }

@@ -68,7 +68,7 @@ func TestADownloadIsTheFileOrAConversionServedInRanges(t *testing.T) {
 		Copies: noCopies{}, Discover: noDiscoveries{},
 		Sent: playback.NewSent(),
 		Auth: fakeAuth{}, Playing: fakePlaying{}, Downloads: fakeDownloads{},
-		Conversions: fakeConversions{path: converted}, Signer: signer, Setup: Setup{Encoder: hls.Hardware{HEVC: domain.HEVCAllow}},
+		Conversions: fakeConversions{path: converted}, Signer: signer, HLS: fakeHLS{hw: hls.Hardware{HEVC: domain.HEVCAllow}},
 	})
 	ask := func(body string) (int, downloadJSON) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/downloads", strings.NewReader(body))

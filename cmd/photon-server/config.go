@@ -146,22 +146,26 @@ func encoders() ([]hls.Hardware, error) {
 	return out, nil
 }
 
-// hardware is the first of the encoders that encodes a test picture, as the node starts, or
-// software where none does. HEVC is encoded too where the device, and software for a subtitle
-// drawn in, encode it; otherwise H.264 alone, which is reported.
-func hardware(ctx context.Context, ffmpeg string, logger *slog.Logger) (hls.Hardware, error) {
-	tried, err := encoders()
+// hardware is the first of the encoders choice allows that encodes a test picture, or software
+// where none does; one an admin set that encodes none is reported, and the first of all that does
+// taken instead. HEVC is encoded too where the device, and software for a subtitle drawn in,
+// encode it; otherwise H.264 alone, which is reported.
+func hardware(ctx context.Context, ffmpeg string, choice domain.EncoderChoice, logger *slog.Logger) (hls.Hardware, error) {
+	all, err := encoders()
 	if err != nil {
 		return hls.Hardware{}, err
 	}
-	hw := hls.Hardware{Accel: domain.AccelSoftware}
-	for _, e := range tried {
-		if err := e.Check(ctx, ffmpeg, domain.VideoH264); err != nil {
-			logger.DebugContext(ctx, "not encoding on", slog.String("acceleration", string(e.Accel)), slog.String("device", e.Device), slog.Any("err", err))
-			continue
-		}
-		hw = e
-		break
+	tried := all
+	switch choice.Source {
+	case domain.EncoderSet:
+		tried = chosen(all, choice)
+	case domain.EncoderAutomatic:
+	}
+	hw, found := first(ctx, ffmpeg, tried, logger)
+	if !found && choice.Source == domain.EncoderSet && choice.Acceleration != domain.AccelSoftware {
+		logger.ErrorContext(ctx, "the encoder set encodes no test picture: encoding on the first that does",
+			slog.String("acceleration", string(choice.Acceleration)), slog.String("device", choice.Device))
+		hw, _ = first(ctx, ffmpeg, all, logger)
 	}
 	if hw.Accel == domain.AccelSoftware {
 		if err := hw.Check(ctx, ffmpeg, domain.VideoH264); err != nil {
@@ -179,6 +183,34 @@ func hardware(ctx context.Context, ffmpeg string, logger *slog.Logger) (hls.Hard
 	}
 	logger.InfoContext(ctx, "encoding video", slog.String("on", string(hw.Accel)), slog.String("device", hw.Device), slog.String("hevc", string(hw.HEVC)))
 	return hw, nil
+}
+
+// chosen are the encoders of all on the acceleration choice sets, on its device where it names
+// one, which may be one not tried of itself, as a second NVIDIA card is not; none where it sets
+// software.
+func chosen(all []hls.Hardware, choice domain.EncoderChoice) []hls.Hardware {
+	if choice.Acceleration == domain.AccelSoftware {
+		return nil
+	}
+	out := slices.DeleteFunc(slices.Clone(all), func(h hls.Hardware) bool {
+		return h.Accel != choice.Acceleration || choice.Device != "" && h.Device != choice.Device
+	})
+	if len(out) == 0 && choice.Device != "" {
+		out = []hls.Hardware{{Accel: choice.Acceleration, Device: choice.Device}}
+	}
+	return out
+}
+
+// first is the first of tried that encodes a test picture, or software, false, where none does.
+func first(ctx context.Context, ffmpeg string, tried []hls.Hardware, logger *slog.Logger) (hls.Hardware, bool) {
+	for _, e := range tried {
+		if err := e.Check(ctx, ffmpeg, domain.VideoH264); err != nil {
+			logger.DebugContext(ctx, "not encoding on", slog.String("acceleration", string(e.Accel)), slog.String("device", e.Device), slog.Any("err", err))
+			continue
+		}
+		return e, true
+	}
+	return hls.Hardware{Accel: domain.AccelSoftware}, false
 }
 
 const (

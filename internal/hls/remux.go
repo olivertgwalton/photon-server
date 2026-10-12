@@ -75,14 +75,15 @@ type Remuxer struct {
 	tools     media.Tools
 	dir       string
 	subtitles string
-	hw        Hardware
 	limit     int
 	idle      time.Duration
 	log       *slog.Logger
 	// segmentWait is how long each request for a segment waits for it to be made.
 	segmentWait prometheus.Histogram
 
-	mu          sync.Mutex
+	mu sync.Mutex
+	// hw is what new remuxes encode on; each keeps what it opened with.
+	hw          Hardware
 	sessions    map[uuid.UUID]*session
 	conversions map[*conversion]struct{}
 	extractions map[uuid.UUID]*extraction
@@ -143,6 +144,7 @@ type Variant struct {
 
 // session is one playback's remux: its plan, the segments made so far, and the ffmpeg making more.
 type session struct {
+	hw        Hardware
 	dir       string
 	root      *os.Root
 	format    domain.SegmentFormat
@@ -239,6 +241,7 @@ func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 	s.root = root
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	s.hw = r.hw
 	if s.encodes() && r.full() && !r.preempt() {
 		if err := s.remove(); err != nil {
 			r.log.WarnContext(ctx, "remux folder not removed", slog.String("dir", s.dir), slog.Any("err", err))
@@ -260,6 +263,21 @@ func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 		r.change()
 	}
 	return nil
+}
+
+// Hardware is what new remuxes, and conversions, encode on.
+func (r *Remuxer) Hardware() Hardware {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.hw
+}
+
+// SetHardware has new remuxes encode on hw; those open keep what they opened with, so a seek never
+// changes what a stream is encoded with.
+func (r *Remuxer) SetHardware(hw Hardware) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.hw = hw
 }
 
 // encodes is whether a remux encodes video; every part of a copy is played to the same plan.

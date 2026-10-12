@@ -133,7 +133,7 @@ func TestTwoProfilesShareOneConversionUntilBothRemoveIt(t *testing.T) {
 
 	runs := filepath.Join(t.TempDir(), "runs")
 	dir := t.TempDir()
-	conv, err := NewConversions(st, library.Parts{Places: st}, noNodes{}, slots(t), countingFFmpeg(t, runs), hls.Hardware{Accel: domain.AccelSoftware}, dir, uuid.NewV7())
+	conv, err := NewConversions(st, library.Parts{Places: st}, noNodes{}, slots(t), countingFFmpeg(t, runs), dir, uuid.NewV7())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestAConversionWaitsForASlotAndGivesItUpToAPlay(t *testing.T) {
 		"printf converted > \"$out\"\necho out_time_us=4000000\necho progress=end\n")
 	r := slots(t)
 	dir := t.TempDir()
-	conv, err := NewConversions(st, library.Parts{Places: st}, noNodes{}, r, ffmpeg, hls.Hardware{Accel: domain.AccelSoftware}, dir, uuid.NewV7())
+	conv, err := NewConversions(st, library.Parts{Places: st}, noNodes{}, r, ffmpeg, dir, uuid.NewV7())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +290,7 @@ func TestARestartedNodeKeepsItsReadyDownloads(t *testing.T) {
 	}
 	dir, node := t.TempDir(), uuid.NewV7()
 	ffmpeg := countingFFmpeg(t, filepath.Join(t.TempDir(), "runs"))
-	before, err := NewConversions(st, library.Parts{Places: st}, noNodes{}, slots(t), ffmpeg, hls.Hardware{Accel: domain.AccelSoftware}, dir, node)
+	before, err := NewConversions(st, library.Parts{Places: st}, noNodes{}, slots(t), ffmpeg, dir, node)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func TestARestartedNodeKeepsItsReadyDownloads(t *testing.T) {
 	}
 
 	// The node as it starts again, with its id and its cache, prunes first.
-	after, err := NewConversions(st, library.Parts{Places: st}, noNodes{}, slots(t), ffmpeg, hls.Hardware{Accel: domain.AccelSoftware}, dir, node)
+	after, err := NewConversions(st, library.Parts{Places: st}, noNodes{}, slots(t), ffmpeg, dir, node)
 	if err != nil {
 		t.Fatal(err)
 	}

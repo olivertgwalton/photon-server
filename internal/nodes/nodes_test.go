@@ -17,7 +17,7 @@ import (
 // An operator's metrics say what the node is set to, and that it drains as it stops.
 func TestANodesMetricsSayItsRoleAndWhetherItTakesWork(t *testing.T) {
 	settings := &kept{set: domain.NodeSettings{Role: domain.NodeTranscode, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}}
-	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", domain.Encoder{}, 8, &slots{}, &slots{}, &slots{}, slog.New(slog.DiscardHandler))
+	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", parts(&slots{}), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +78,53 @@ func (s *slots) SetLimit(limit int) {
 	s.limit = limit
 }
 
+// parts are a node's, whose encoder, wherever it is found, keeps up with 8 videos at once, or 12 on
+// a card an admin sets.
+func parts(s *slots) Parts {
+	return Parts{Transcodes: s, Deliveries: s, Egress: s, Retool: func(_ context.Context, choice domain.EncoderChoice) (domain.Encoder, int, error) {
+		switch choice.Source {
+		case domain.EncoderSet:
+			return domain.Encoder{Acceleration: choice.Acceleration, Device: choice.Device}, 12, nil
+		case domain.EncoderAutomatic:
+		}
+		return domain.Encoder{Acceleration: domain.AccelSoftware}, 8, nil
+	}}
+}
+
+// A node set to encode on another device encodes on it from then, its limit worked out again, and
+// tells the others at once.
+func TestANodeEncodesOnTheDeviceAnAdminSets(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		settings := &kept{set: domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}}
+		self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", parts(&slots{}), slog.New(slog.DiscardHandler))
+		if err != nil {
+			t.Fatal(err)
+		}
+		<-self.Changes()
+		events := make(chan domain.Event)
+		ctx, stop := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			self.Run(ctx, func() (<-chan domain.Event, func()) { return events, func() {} })
+		}()
+		card := domain.EncoderChoice{Source: domain.EncoderSet, Acceleration: domain.AccelNVENC, Device: "1"}
+		settings.change(domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive, Encoding: card})
+		events <- domain.Event{Kind: domain.EventNodesChanged}
+		synctest.Wait()
+		if n := self.Node(); n.Encoder.Acceleration != domain.AccelNVENC || n.Encoder.Device != "1" || n.Limit != 12 {
+			t.Errorf("set to the second card: %+v, want NVENC on 1, its limit 12", n)
+		}
+		select {
+		case <-self.Changes():
+		default:
+			t.Error("its new encoder was not told, for the others to be told at once")
+		}
+		stop()
+		<-done
+	})
+}
+
 // A node takes up what an admin sets of it as it is told: its role, which says whether it
 // encodes, its limit, its encoder's own where none is set, where the others reach it, and whether
 // it is drained.
@@ -85,7 +132,7 @@ func TestANodeTakesUpWhatIsSetOfItAsItIsTold(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		settings := &kept{set: domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}}
 		t8 := &slots{}
-		self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", domain.Encoder{}, 8, t8, t8, t8, slog.New(slog.DiscardHandler))
+		self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", parts(t8), slog.New(slog.DiscardHandler))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -129,7 +176,7 @@ func TestANodeTakesUpWhatIsSetOfItAsItIsTold(t *testing.T) {
 // is draining, at once.
 func TestANodeStoppingTellsTheOthersItIsDraining(t *testing.T) {
 	settings := &kept{set: domain.NodeSettings{Role: domain.NodeAll, LimitSource: domain.LimitAutomatic, Availability: domain.NodeActive}}
-	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", domain.Encoder{}, 8, &slots{}, &slots{}, &slots{}, slog.New(slog.DiscardHandler))
+	self, err := Join(t.Context(), settings, uuid.NewV7(), "gpu-1", parts(&slots{}), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

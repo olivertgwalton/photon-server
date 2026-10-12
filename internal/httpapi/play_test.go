@@ -375,7 +375,12 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 }
 
 // fakeHLS remuxes into a playlist and one segment, of the playback it was opened for.
-type fakeHLS struct{ dir string }
+type fakeHLS struct {
+	dir string
+	hw  hls.Hardware
+}
+
+func (f fakeHLS) Hardware() hls.Hardware { return f.hw }
 
 func (fakeHLS) Open(context.Context, uuid.UUID, store.PlayCopy, domain.VideoPlan, *domain.AudioPlan, domain.SegmentFormat, time.Duration) error {
 	return nil
